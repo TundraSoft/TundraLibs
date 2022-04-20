@@ -22,7 +22,7 @@ jobs:
         run: deno lint
       -
         name: Run tests
-        run: deno test -A --coverage=cov
+        run: deno test -A --coverage=cov #--doc
       -
         name: Generate coverage report
         run: deno coverage --lcov cov > cov.lcov
