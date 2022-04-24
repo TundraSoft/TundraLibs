@@ -10,56 +10,66 @@ Typed usage:
 
 ```ts
 import { Options } from "./mod.ts";
-interface iOptionTest {
+//#region Typed Options
+type iTypedOptions = {
   value1: string;
   value2: number;
   value3: {
     value31: boolean;
   };
-}
-
-class Test extends Options<iOptionTest> {
-  constructor(options: iOptionTest) {
-    super(options, true);
+  value44?: Array<string>;
+};
+class TypedOption extends Options<iTypedOptions> {
+  constructor(
+    options: NonNullable<iTypedOptions> | Partial<iTypedOptions>,
+    defaults?: Partial<iTypedOptions>,
+  ) {
+    super(options, defaults);
   }
 
-  public someOtherFunc() {
-    console.log(this._getOption("value1")); // returns value1's value
-    console.log(this._getOption("value3").value31); // returns value3 -> value31's boolean output
-    console.log(this._options.value3.value31);
+  // deno-lint-ignore no-explicit-any
+  public setOptions(name: keyof iTypedOptions, value: any) {
+    this._setOption(name, value);
+  }
+
+  public getOption(name: keyof iTypedOptions): unknown {
+    return this._getOption(name);
+  }
+
+  public getOptions() {
+    return this._options;
+  }
+
+  public hasOption(name: string): boolean {
+    return this._hasOption(name as keyof iTypedOptions);
   }
 }
-
-let a: Test = new Test({
-  value1: "dff",
-  value2: 23,
-  value3: { value31: true },
-});
-a.someOtherFunc();
 ```
 
 Untyped Usage:
 
 ```ts
-import { Options } from "./mod.ts";
-class Test extends Options {
-  constructor(options: iOptionTest) {
-    super(options, true);
+class UnTypedOption extends Options {
+  constructor(options: OptionsType, defaults?: OptionsType) {
+    super(options, defaults);
   }
 
-  public someOtherFunc() {
-    console.log(this._getOption("value1")); // returns value1's value
-    console.log(this._getOption("value3").value31); // returns value3 -> value31's boolean output
-    console.log(this._options.value3.value31);
+  public setOptions(name: OptionsKey, value: unknown) {
+    this._setOption(name, value);
+  }
+
+  public getOption(name: OptionsKey): unknown {
+    return this._getOption(name);
+  }
+
+  public getOptions() {
+    return this._options;
+  }
+
+  public hasOption(name: OptionsKey): boolean {
+    return this._hasOption(name);
   }
 }
-
-let a: Test = new Test({
-  value1: "dff",
-  value2: 23,
-  value3: { value31: true },
-});
-a.someOtherFunc();
 ```
 
 ### Methods
@@ -67,22 +77,25 @@ a.someOtherFunc();
 #### constructor
 
 ```ts
-super(options: any, editable: boolean = true)
+constructor(
+    options: Record<OptionsKey, unknown>,
+    defaults?: Record<OptionsKey, unknown>,
+  )
 ```
 
-`options: any`: The options list which needs to be loaded when initializing the
-class. If it is a typed implementation then this will be a typed entry.
+`options: Record<OptionsKey, unknown>`: The options list which needs to be
+loaded when initializing the class. If it is a typed implementation then this
+will be a typed entry.
 
-`editable: boolean = true`: Can the options (post constructor initialization) be
-edited post initialization?
+`defaults?: Record<OptionsKey, unknown>`: Default value for the options in case
+not passed in the options variable
 
-_Note_: The methods will not allow the values to be edited, however one can
-directly edit the values
+The options and defaults value will be deep cloned and not referenced.
 
 #### _hasOption
 
 ```ts
-_hasOption(name: string): boolean;
+protected _hasOption(name: OptionsKey): boolean
 ```
 
 Checks if a particular option exists. Returns True if it exists false if it does
@@ -90,30 +103,29 @@ not
 
 _NOTE_: Search is case sensitive. So option name TesT is not same as test
 
-`name: string` The option name for which to check
+`name: OptionsKey` The option name for which to check
 
 #### _getOption
 
 ```ts
-_getOption(name: string | number): any
+protected _getOption(name: OptionsKey): unknown
 ```
 
 Gets a particular option value
 
-`name: string | number`: The option key for which value is required
+`name: OptionsKey`: The option key for which value is required
 
 _NOTE_: Does not support nested keys yet.
 
 #### _setOption
 
 ```ts
-_setOption(name: string | number, value: any): this
+protected _setOption(name: OptionsKey, value: unknown): this
 ```
 
-Sets a particular option key's value. Unless it is being called during
-initialization, it will check if the editable value is true.
+Sets a particular option key's value.
 
-`name: string | number`: The option key for which value has to be set.
+`name: OptionsKey`: The option key for which value has to be set.
 
 `value: any`: The value
 
@@ -121,8 +133,6 @@ initialization, it will check if the editable value is true.
 
 ## TODO
 
-- [x] Protect/disallow editablity of options (Make all methods protected)
-- [ ] More elegant/simpler untyped definition
-- [ ] Editable option must ensure that direct edits (example
-      `this._options['A'] = 'asd'`) are not possible
+- [ ] Protect/disallow editablity of options (Make all methods protected) - Is
+      this needed?
 - [ ] Multi level Option manipulation
