@@ -6,7 +6,11 @@ export * as yaml from "https://deno.land/std@0.121.0/encoding/yaml.ts";
 export * as toml from "https://deno.land/std@0.121.0/encoding/toml.ts";
 // export { encode, decode } from "https://deno.land/std@0.121.0/encoding/base64url.ts"
 // End Core
-// PolySQL
+//#region Database Clients
+export { Client as postgres } from "https://deno.land/x/postgres@v0.16.1/mod.ts";
+//#endregion Database Clients
+
+//#region PolySQL
 export
 {	mysqlQuote,
 	pgsqlQuote,
@@ -37,4 +41,4 @@ export
 	SqlSettings,
 	SqlMode
 } from 'https://deno.land/x/polysql@v0.0.9/mod.ts';
-// End PolySQL
+//#endregion PolySQL

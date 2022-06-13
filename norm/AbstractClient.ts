@@ -1,7 +1,10 @@
+import {ConnectionOptions} from "./types.ts"
+import { Events } from "../events/mod.ts";
 
-export abstract class AbstractClient {
-  protected _connection: unknown;
-  protected _connectionStatus!: boolean;
+export abstract class AbstractClient extends Events {
+  protected _client: unknown;
+  protected _connected: boolean = false;
+  protected _serverVersion!: string;
   protected _queries = {
     total: {
       executed: 0, 
@@ -24,7 +27,11 @@ export abstract class AbstractClient {
       error: 0
     }, 
   }
-  constructor() {}
+
+  constructor(options: ConnectionOptions) {
+    super();
+    // Parse the options
+  }
 
   async test(): Promise<boolean> {
     let retVal: boolean = true;
@@ -44,32 +51,33 @@ export abstract class AbstractClient {
 
   async connect(): Promise<boolean> {
     try {
-      await this._connect();
-      return true;
+      if(this._connected === false) {
+        await this._connect();
+        this._connected = true;
+      }
     }
     catch(e) {
-      
-      return false;
+      this._connected = false;
+    }
+    finally {
+      return this._connected;
     }
   }
 
   async close(): Promise<boolean> {
-    if(this._connectionStatus === true) {
-      try {
-        await this._close();
-        this._connectionStatus = false;
-        return true;
-      }
-      catch(e) {
-
-        return false;
-      }
+    if(this._connected === true) {
+      this._close();
+      this._connected = false;
     }
-    return true;
+    return this._connected;
   }
 
   async version(): Promise<string> {
-    return '';
+    if(this._serverVersion !== undefined) {
+      this.connect();
+      this._serverVersion = await this._version();
+    }
+    return this._serverVersion;
   }
 
   async execute(sql: string, ...args: unknown[]) {
@@ -90,11 +98,13 @@ export abstract class AbstractClient {
   // abstract commit(): void;
   // abstract rollback(): void;
 
-  stats() {}
+  stats(name?: string) {
+    
+  }
 
-  protected abstract _connect(): Promise<boolean>;
+  protected abstract _connect(): Promise<void>;
 
-  protected abstract _close(): Promise<boolean>;
+  protected abstract _close(): Promise<void>;
 
   protected abstract _version(): Promise<string>;
 
@@ -102,5 +112,14 @@ export abstract class AbstractClient {
 
 }
 
-import { Options } from "../options/mod.ts";
-import { Events } from "../events/mod.ts";
+// import { Options } from "../options/mod.ts";
+// import { Events } from "../events/mod.ts";
+
+
+// type TestEvents = {
+//   event1(a: string): unknown;
+// };
+
+// export class EventOption<O> extends Events<TestEvents>{
+
+// }

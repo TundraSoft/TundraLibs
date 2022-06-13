@@ -1,24 +1,24 @@
-import {DBTable, DBFields} from "./types.ts"
+// import {DBTable, DBFields} from "./types.ts"
 
-export class BaseModel<T extends DBTable> {
-  constructor() {}
+// export class BaseModel<T extends DBTable> {
+//   constructor() {}
 
-  fetchAll() {}
+//   fetchAll() {}
 
-  fetchOne() {}
+//   fetchOne() {}
 
-  insertOne() {}
+//   insertOne() {}
 
-  insertMany() {}
+//   insertMany() {}
 
-  updateOne() {}
+//   updateOne() {}
 
-  updateMany() {}
+//   updateMany() {}
 
-  deleteOne() {}
+//   deleteOne() {}
 
-  deleteMany() {}
+//   deleteMany() {}
   
-  validate() {}
+//   validate() {}
 
-}
+// }

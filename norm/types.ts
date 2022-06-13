@@ -1,3 +1,26 @@
+export type TLSOptions = {
+  enabled: boolean, 
+  ca: string[], 
+  enforce: boolean
+}
+export type ConnectionOptions = {
+  dialect: "POSTGRES" | "MYSQL", 
+  database?: string, 
+  hostname: string, 
+  user: string, 
+  password?: string, 
+  port?: number, 
+  poolSize?: number, 
+  tls?: Partial<TLSOptions>, 
+}
+
+export type ClientEvents = {
+  connect(): void;
+  close(): void;
+  error(message: string): void;
+  longQuery(query: string): void;
+}
+
 const enum JsTypes {
   "VARCHAR" = "string", 
   "CHARACTER" = "string", 
@@ -37,7 +60,7 @@ type DBField = {
   nullable?: boolean, // Is this nullable
   primary?: boolean, // Is this primary key
   unique?: boolean, // Is this unique key (will become true if PK)
-  default?: Function, // default value
+  generator?: string, // Use a generator for value
   validation?: ValidationFunction, // Validation
 }
 
@@ -68,10 +91,13 @@ type UserSchema = {
   mobile: number, 
   firstName?: string, 
   middleName?: string, 
+  lastName?: string, 
   dob?: Date, 
   email?: string, 
   createdDate: Date
 }
+
+type UserRegister = Pick<UserSchema, "countryId" | "mobile" | "email">;
 
 const UserSchemaConfig: DBTable = {
   schema: "public", 
@@ -99,6 +125,10 @@ const UserSchemaConfig: DBTable = {
       type: "STRING", 
       name: "FirstName", 
     }, 
+    middleName: {
+      type: "STRING", 
+      name: "MiddleName", 
+    }, 
     lastName: {
       type: "STRING", 
       name: "LastName", 
@@ -120,6 +150,7 @@ class BaseModel<T> {
   protected _schema: DBTable;
   protected _primaryKeys: Array<string> = [];
   protected _uniqueKeys: Array<string> = [];
+  protected _notNullKeys: Array<string> = [];
   
   constructor(schema: DBTable) {
     this._schema = schema;
@@ -127,16 +158,38 @@ class BaseModel<T> {
     this.__processSchema();
   }
 
-  insert(data: Partial<T>|Partial<T>[]) {
+  select() {}
+
+  insert(data: T|T[]) {
     // Check if all required data is present
-    // Validate
+    
+    // Generate insert statement
+
   }
 
-  validate(data: Partial<T>): boolean {
+  update() {}
+
+  delete() {}
+
+  validate(data: T[]): boolean[];
+  validate(data: T): boolean;
+
+  validate(data: T | T[]): boolean | boolean[] {
+    if(Array.isArray(data)) {
+      const retval: boolean[] = []
+      data.forEach((value) => retval.push(this.validate(value)));
+      return retval;
+    }
     // Check if all validation requirements are met
-    // Check if all PK's are filled
     // Check if all not nulls are filled
-    // Check if 
+    this._notNullKeys.forEach((value, key) => {
+    })
+    // Check if unique keys are filled
+    this._uniqueKeys.forEach((value, key) => {
+    })
+    // Check if all PK's are filled
+    this._primaryKeys.forEach((value, key) => {
+    })
     return true;
   }
   
@@ -147,15 +200,13 @@ class BaseModel<T> {
   protected _postProcess() {}
 
   private __processSchema() {
-
     for(const key in this._schema.fields) {
       if(this._schema.fields[key].primary) {
         this._primaryKeys.push(key);
       }
-      if(this._schema.fields[key].unique) {
+      if(this._schema.fields[key].unique && this._uniqueKeys.indexOf(key) == -1) {
         this._uniqueKeys.push(key);
       }
-      
     }
   }
 }
