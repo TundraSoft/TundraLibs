@@ -1,30 +1,46 @@
-import { LogLevel, BaseLogObject } from "./types.ts";
+import {
+  LogFacility,
+  LogFormats,
+  LogHandlerConfig,
+  LogLevel,
+  LogObject,
+} from "./types.ts";
 
 export abstract class BaseHandler {
-  protected _level: LogLevel = LogLevel.ERROR;
-  protected _logFormat: string = '{id} {datetime} {levelName} {message}';
-  constructor(level: LogLevel = LogLevel.ERROR) {
-    this._level = level;
+  // protected options: LogHandlerConfig;
+  protected _logLevel: LogLevel;
+  protected _facility: LogFacility = LogFacility.LOCAL0;
+  protected _logFormat: string = LogFormats.SimpleLogFormat;
+
+  constructor(options: LogHandlerConfig) {
+    this._logLevel = options.level;
+    if (options.facility) {
+      this._facility = options.facility;
+    }
+    this._logFormat = options.format as string;
   }
-  
-  handle(logObject: BaseLogObject) {
-    if (logObject.level > this._level) return;
-    // Ok we can write it
-    const message = this._format(logObject)
+
+  handle(logObject: LogObject) {
+    if (logObject.level > this._logLevel) return;
+    // Overload with defaults
+    if (!logObject.facility) {
+      logObject.facility = this._facility;
+    }
+    const message = this._format(logObject);
     return this._handleLog(message);
   }
 
-  protected _format(logRecord: BaseLogObject): string {
-    // if(this._format instanceof Function) {
-    //   return this._format(logRecord);
-    // }
+  protected _format(logRecord: LogObject) {
     return this._logFormat.replaceAll(/{([^\s}]+)}/g, (match, name): string => {
-      const value = logRecord[name as keyof BaseLogObject];
-      if(value == null) return match;
+      let value = logRecord[name as keyof LogObject];
+      if (name === "datetime") {
+        value = new Date(value as number).toISOString();
+      }
+      if (value == null) return match;
       return String(value);
-    })
+    });
   }
-  
+
   protected abstract _handleLog(message: string): void;
 
   async init() {}
