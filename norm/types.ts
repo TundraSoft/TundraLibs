@@ -1,214 +1,226 @@
-export type TLSOptions = {
-  enabled: boolean, 
-  ca: string[], 
-  enforce: boolean
-}
-export type ConnectionOptions = {
-  dialect: "POSTGRES" | "MYSQL", 
-  database?: string, 
-  hostname: string, 
-  user: string, 
-  password?: string, 
-  port?: number, 
-  poolSize?: number, 
-  tls?: Partial<TLSOptions>, 
-}
+//#region Database
+/**
+ * Dialect
+ * The dialects supported
+ */
+export type Dialect = "POSTGRES" | "MYSQL" | "MONGODB";
 
+/**
+ * ClientEvents
+ * Events which are emited by Client class
+ */
 export type ClientEvents = {
   connect(): void;
   close(): void;
-  error(message: string): void;
-  longQuery(query: string): void;
-}
-
-const enum JsTypes {
-  "VARCHAR" = "string", 
-  "CHARACTER" = "string", 
-  "NVARCHAR" = "string", 
-  "TEXT" = "string", 
-  "STRING" = "string", 
-  "UUID" = "string", 
-  "NUMERIC" = "number", 
-  "NUMBER" = "number", 
-  "DECIMAL" = "number", 
-  "INTEGER" = "number", 
-  "SMALLINT" = "number", 
-  "TINYINT" = "number", 
-  "FLOAT" = "number", 
-  "SERIAL" = "number", 
-  "BIGINTEGER" = "BigInt", 
-  "BIGSERIAL" = "BigInt", 
-  "BOOLEAN" = "boolean", 
-  "BINARY" = "boolean", 
-  "DATE" = "Date", 
-  "DATETIME" = "Date", 
-  "TIME" = "Date", 
-  "TIMESTAMP" = "Date", 
-  "JSON" = "json", 
+  query(sql: string): void;
+  error(error: Error): void;
 };
 
-type DBTypes = keyof typeof JsTypes;
-
-// Validations
-export type ValidationInput = string | number | BigInt | boolean | Date | JSON;
-export type ValidationFunction = (col: string, data: ValidationInput, ...args: unknown[]) => boolean;
-
-type DBField = {
-  name?: string, 
-  type: DBTypes, 
-  encrypt?: boolean, // Should value be encrypted?
-  nullable?: boolean, // Is this nullable
-  primary?: boolean, // Is this primary key
-  unique?: boolean, // Is this unique key (will become true if PK)
-  generator?: string, // Use a generator for value
-  validation?: ValidationFunction, // Validation
-}
-
-type DBTable = {
-  schema?: string, 
-  table: string, 
-  encryptionKey?: string, 
-  allowed?: {
-    insert?: boolean, 
-    update?: boolean, 
-    delete?: boolean, 
-  }
-  fields: {
-    [key: string]: DBField
-  }
-}
-
-// type TableSchema<T extends DBTable> = {
-//   // [Prop in Property]: string
-//   [Property in keyof T]: T[Property]['type'];
-// }
-
-import DataValidators from "./DataValidators.ts";
-
-type UserSchema = {
-  id: string, 
-  countryId: number, 
-  mobile: number, 
-  firstName?: string, 
-  middleName?: string, 
-  lastName?: string, 
-  dob?: Date, 
-  email?: string, 
-  createdDate: Date
-}
-
-type UserRegister = Pick<UserSchema, "countryId" | "mobile" | "email">;
-
-const UserSchemaConfig: DBTable = {
-  schema: "public", 
-  table: "Users", 
-  fields: {
-    id: {
-      name: "Id", 
-      type: "VARCHAR", 
-      encrypt: true, 
-      nullable: false, 
-      primary: true, 
-      unique: true, 
-      validation: DataValidators.notNull
-    }, 
-    countryId: {
-      type: "INTEGER", 
-      nullable: false, 
-    }, 
-    mobile: {
-      type: "INTEGER", 
-      encrypt: true, 
-      primary: true, 
-    }, 
-    firstName: {
-      type: "STRING", 
-      name: "FirstName", 
-    }, 
-    middleName: {
-      type: "STRING", 
-      name: "MiddleName", 
-    }, 
-    lastName: {
-      type: "STRING", 
-      name: "LastName", 
-    }, 
-    dob: {
-      name: "DOB", 
-      type: "DATE"
-    }, 
-    email: {
-      type: "VARCHAR", 
-    }, 
-    createdDate: {
-      type: "DATE"
-    }
-  }
+/**
+ * TLSOption
+ * TLS connection option for database
+ */
+export type TLSOption = {
+  enforce: boolean;
+  enabled: boolean;
+  ca: string[];
 };
 
-class BaseModel<T> {
-  protected _schema: DBTable;
-  protected _primaryKeys: Array<string> = [];
-  protected _uniqueKeys: Array<string> = [];
-  protected _notNullKeys: Array<string> = [];
-  
-  constructor(schema: DBTable) {
-    this._schema = schema;
-    // Process schema
-    this.__processSchema();
-  }
+/**
+ * ClientConfig
+ * The configuration for connecting to database
+ */
+export type ClientConfig = {
+  // The dialect
+  dialect: Dialect;
+  // The host
+  host: string;
+  // The port number
+  port: number;
+  // The username
+  username: string;
+  // The password
+  password: string;
+  // The database
+  database: string;
+  // Max Connection in the pool, defaults to 1 (no pool)
+  pool: number;
+  // TLS options
+  tls: Partial<TLSOption>;
+};
 
-  select() {}
-
-  insert(data: T|T[]) {
-    // Check if all required data is present
-    
-    // Generate insert statement
-
-  }
-
-  update() {}
-
-  delete() {}
-
-  validate(data: T[]): boolean[];
-  validate(data: T): boolean;
-
-  validate(data: T | T[]): boolean | boolean[] {
-    if(Array.isArray(data)) {
-      const retval: boolean[] = []
-      data.forEach((value) => retval.push(this.validate(value)));
-      return retval;
-    }
-    // Check if all validation requirements are met
-    // Check if all not nulls are filled
-    this._notNullKeys.forEach((value, key) => {
-    })
-    // Check if unique keys are filled
-    this._uniqueKeys.forEach((value, key) => {
-    })
-    // Check if all PK's are filled
-    this._primaryKeys.forEach((value, key) => {
-    })
-    return true;
-  }
-  
-  // Called when data is to be sent to db
-  protected _preProcess() {}
-
-  // Called when data fetched from db
-  protected _postProcess() {}
-
-  private __processSchema() {
-    for(const key in this._schema.fields) {
-      if(this._schema.fields[key].primary) {
-        this._primaryKeys.push(key);
-      }
-      if(this._schema.fields[key].unique && this._uniqueKeys.indexOf(key) == -1) {
-        this._uniqueKeys.push(key);
-      }
-    }
-  }
+/**
+ * QueryTypes
+ */
+export const enum QueryTypes {
+  "CREATE" = "CREATE",
+  "ALTER" = "ALTER",
+  "DROP" = "DROP",
+  "TRUNCATE" = "TRUNCATE",
+  "SHOW" = "SHOW",
+  "SELECT" = "SELECT",
+  "COUNT" = "COUNT",
+  "INSERT" = "INSERT",
+  "UPDATE" = "UPDATE",
+  "DELETE" = "DELETE",
+  "MERGE" = "MERGE",
+  "DESC" = "DESCRIBE",
+  "DESCRIBE" = "DESCRIBE",
+  "EXPLAIN" = "EXPLAIN",
+  "BEGIN" = "BEGIN",
+  "COMMIT" = "COMMIT",
+  "ROLLBACK" = "ROLLBACK",
+  "UNKNOWN" = "UNKNWON",
 }
 
-const a = new BaseModel<UserSchema>(UserSchemaConfig);
+export type QueryType = keyof typeof QueryTypes;
+
+/**
+ * FilterOperators<T>
+ * The filtering options allowed. This helps map a "column" to a certain filter condition
+ */
+export type FilterOperators<T> = T | {
+  $eq?: T;
+  $neq?: T;
+  $in?: Array<T>;
+  $nin?: Array<T>;
+  $lt?: T;
+  $lte?: T;
+  $gt?: T;
+  $gte?: T;
+  $between?: {
+    from: T;
+    to: T;
+  };
+  $null?: boolean;
+  $like?: T;
+  $nlike?: T;
+};
+
+/**
+ * QueryPagination
+ * Pagination of data. Used in Select only
+ */
+export type QueryPagination = {
+  size: number;
+  page: number;
+};
+
+/**
+ * QuerySorting<T>
+ * Sorting of data, used in Select only
+ */
+export type QuerySorting<T> = {
+  [Property in keyof T]?: "ASC" | "DESC";
+};
+
+/**
+ * Filters<T>
+ * Helps building complex filter condition sets without writing SQL statements
+ */
+export type Filters<T> =
+  | {
+    [Property in keyof T]?: FilterOperators<T[Property]>;
+  }
+    & {
+      $or?: Filters<T>;
+      $and?: Filters<T>;
+    }
+  | Array<
+    {
+      [Property in keyof T]?: FilterOperators<T[Property]>;
+    }
+  >;
+
+/**
+ * QueryOptions<T>
+ * The standard options set passed to create Select, Insert, Update and Delete statements
+ */
+export type QueryOptions<T> = {
+  // Table name
+  table: string;
+  // Schema name
+  schema?: string;
+  // Column names (for alias mapping)
+  columns: Record<keyof T, string>;
+  // PK
+  primary?: Array<keyof T>;
+  // Filters
+  filters?: Filters<T>;
+  // Paging
+  paging?: QueryPagination;
+  // Sort
+  sort?: QuerySorting<T>;
+  // Data used for insert or update
+  data?: Array<Partial<T>>;
+};
+
+/**
+ * QueryResult
+ * Standard return data set
+ */
+export type QueryResult<T = Record<string, unknown>> = {
+  type: QueryType;
+  time: number;
+  totalRows?: number;
+  paging?: {
+    size: number;
+    page?: number;
+  };
+  sort?: QuerySorting<T>;
+  rows?: Array<T>;
+};
+
+//#endregion Database
+
+//#region Model
+export const enum DataTypes {
+  "VARCHAR" = "VARCHAR",
+  "CHARACTER" = "CHARACTER",
+  "NVARCHAR" = "NVARCHAR",
+  "TEXT" = "TEXT",
+  "STRING" = "STRING",
+  "UUID" = "UUID",
+  "GUID" = "GUID",
+  "NUMERIC" = "NUMERIC",
+  "NUMBER" = "NUMBER",
+  "DECIMAL" = "DECIMAL",
+  "INTEGER" = "INTEGER",
+  "SMALLINT" = "SMALLINT",
+  "TINYINT" = "TINYINT",
+  "FLOAT" = "FLOAT",
+  "SERIAL" = "SERIAL",
+  "BIGINTEGER" = "BIGINTEGER",
+  "BIGSERIAL" = "BIGSERIAL",
+  "BOOLEAN" = "BOOLEAN",
+  "BINARY" = "BINARY",
+  "DATE" = "DATE",
+  "DATETIME" = "DATETIME",
+  "TIME" = "TIME",
+  "TIMESTAMP" = "TIMESTAMP",
+  "JSON" = "JSON",
+}
+
+export type DataType = keyof typeof DataTypes;
+
+export type FieldDefinition = {
+  dataType: DataType; // The data type
+  name?: string; // The actual column name
+  isPrimary?: boolean; // Is it a primary key
+  isUnique?: boolean; // Is it a unique key
+  isNullable?: boolean; // Is this nullable
+  validation?: unknown;
+  encrypt?: unknown;
+};
+
+export type ModelConfig<T> = {
+  connection: string;
+  schema: string;
+  table: string;
+  columns: {
+    [Property in keyof T]: FieldDefinition;
+  };
+  pagesize?: number;
+};
+
+//#endregion Model

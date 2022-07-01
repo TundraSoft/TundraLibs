@@ -1,4 +1,6 @@
 import { OptionsKey, OptionsType } from "./types.ts";
+import { EventName, Events, EventsType } from "../events/mod.ts";
+
 // Options.ts
 /**
  * Options
@@ -37,7 +39,11 @@ import { OptionsKey, OptionsType } from "./types.ts";
  * @todo Option value validation - Right now we only validate type and not value
  * @todo Nested options access. Currently only top level options can be access directly.
  */
-export class Options<T extends OptionsType = Record<OptionsKey, unknown>> {
+export class Options<
+  T extends OptionsType = Record<OptionsKey, unknown>,
+  // deno-lint-ignore no-explicit-any
+  E extends EventsType = Record<EventName, any>,
+> extends Events<E> {
   protected _options: Partial<T> = {};
 
   constructor(options: T | NonNullable<T> | Partial<T>, defaults?: Partial<T>);
@@ -52,6 +58,7 @@ export class Options<T extends OptionsType = Record<OptionsKey, unknown>> {
     options: Record<OptionsKey, unknown>,
     defaults?: Record<OptionsKey, unknown>,
   ) {
+    super();
     // First add defaults if present
     if (defaults) {
       this._setOptions(defaults);
