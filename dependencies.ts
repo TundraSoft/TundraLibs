@@ -8,12 +8,12 @@ export * as toml from "https://deno.land/std@0.121.0/encoding/toml.ts";
 // export { encode, decode } from "https://deno.land/std@0.121.0/encoding/base64url.ts"
 // End Core
 
-//#region norm
 export {
   Client as PGClient,
   Pool as PGPool,
 } from "https://deno.land/x/postgres@v0.16.1/mod.ts";
 export type { ClientOptions as PGClientOptions } from "https://deno.land/x/postgres@v0.16.1/mod.ts";
+
 // export { default as postgres } from "https://deno.land/x/postgresjs@v3.2.4/mod.js"
 
 // export { Client as MySQLClient } from "https://deno.land/x/mysql@v2.10.2/mod.ts";
