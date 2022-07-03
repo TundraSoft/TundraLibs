@@ -1,6 +1,7 @@
 export { Database } from "./Database.ts";
 export { BaseModel } from "./BaseModel.ts";
 export * from "./Errors.ts";
+export { DataTypes } from "./types.ts";
 export type {
   ClientConfig,
   DataType,
@@ -8,7 +9,7 @@ export type {
   FieldDefinition,
   FilterOperators,
   Filters,
-  ModelConfig,
+  ModelSchema,
   QueryOptions,
   QueryPagination,
   QueryResult,

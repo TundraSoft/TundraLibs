@@ -4,7 +4,7 @@ import { Database } from "./Database.ts";
 import type {
   FieldDefinition,
   Filters,
-  ModelConfig,
+  ModelSchema,
   QueryOptions,
   QueryPagination,
   QueryResult,
@@ -20,15 +20,15 @@ import {
 /**
  * BaseModel
  */
-export class BaseModel<T> extends Options<ModelConfig<T>> {
+export class BaseModel<T> extends Options<ModelSchema<T>> {
   protected _connection!: AbstractClient;
   protected _columns: Record<keyof T, string>;
   protected _primaryKeys: Array<string> = [];
   protected _uniqueKeys: Array<string> = [];
   protected _notNull: Array<string> = [];
 
-  constructor(schema: Partial<ModelConfig<T>>) {
-    const defaultConfig: Partial<ModelConfig<T>> = {
+  constructor(schema: Partial<ModelSchema<T>>) {
+    const defaultConfig: Partial<ModelSchema<T>> = {
       connection: "default",
       pagesize: 10,
       enabled: {
@@ -81,6 +81,7 @@ export class BaseModel<T> extends Options<ModelConfig<T>> {
     sort?: QuerySorting<T>,
     paging?: QueryPagination,
   ): Promise<QueryResult<T>> {
+    await this._init();
     if (!paging && (this._getOption("pagesize") || 0) > 0) {
       paging = {
         size: this._getOption("pagesize") || 0,
@@ -107,6 +108,7 @@ export class BaseModel<T> extends Options<ModelConfig<T>> {
    * @returns QueryResult<T>
    */
   public async insert(data: Array<Partial<T>>): Promise<QueryResult<T>> {
+    await this._init();
     if (this._getOption("enabled")?.insert === false) {
       throw new Error("Insert operation not allowed");
     }
@@ -133,6 +135,7 @@ export class BaseModel<T> extends Options<ModelConfig<T>> {
     data: Partial<T>,
     filter?: Filters<T>,
   ): Promise<QueryResult<T>> {
+    await this._init();
     if (this._getOption("enabled")?.update === false) {
       throw new Error("Update operation not allowed");
     }
@@ -180,6 +183,7 @@ export class BaseModel<T> extends Options<ModelConfig<T>> {
    * @returns QueryResult<T>
    */
   public async delete(filter?: Filters<T>): Promise<QueryResult<T>> {
+    await this._init();
     if (this._getOption("enabled")?.delete === false) {
       throw new Error("Delete operation not allowed");
     }

@@ -220,7 +220,7 @@ export type FieldDefinition = {
   encrypt?: unknown;
 };
 
-export type ModelConfig<T> = {
+export type ModelSchema<T> = {
   // DB Connection name
   connection: string;
   // Schema if present

@@ -156,6 +156,9 @@ export default abstract class AbstractClient
       };
     this.connect();
     try {
+      if (options.paging && options.paging.page < 1) {
+        options.paging.page = 1;
+      }
       const op = await this._select<T>(options);
       if (op.length > 0) {
         result.rows = op;
