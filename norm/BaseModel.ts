@@ -1,6 +1,6 @@
 import { Options } from "../options/mod.ts";
 import AbstractClient from "./AbstractClient.ts";
-import Database from "./Database.ts";
+import { Database } from "./Database.ts";
 import type {
   FieldDefinition,
   Filters,
@@ -17,7 +17,9 @@ import {
   PrimaryKeyUpdate,
 } from "./Errors.ts";
 
-// @TODO - Remove options and events.
+/**
+ * BaseModel
+ */
 export class BaseModel<T> extends Options<ModelConfig<T>> {
   protected _connection!: AbstractClient;
   protected _columns: Record<keyof T, string>;
@@ -29,6 +31,12 @@ export class BaseModel<T> extends Options<ModelConfig<T>> {
     const defaultConfig: Partial<ModelConfig<T>> = {
       connection: "default",
       pagesize: 10,
+      enabled: {
+        insert: true,
+        update: true,
+        delete: true,
+        truncate: true,
+      },
     };
     super(schema, defaultConfig);
     if (this._hasOption("table") === false) {
@@ -59,6 +67,15 @@ export class BaseModel<T> extends Options<ModelConfig<T>> {
     this._columns = columnAlias as Record<keyof T, string>;
   }
 
+  /**
+   * select
+   * Perform a select operation on the table
+   *
+   * @param filters Filters<T> Filter condition
+   * @param sort QuerySorting<T> Sorting options
+   * @param paging QueryPaging Pagination options
+   * @returns QueryResult<T>
+   */
   public async select(
     filters?: Filters<T>,
     sort?: QuerySorting<T>,
@@ -81,7 +98,18 @@ export class BaseModel<T> extends Options<ModelConfig<T>> {
     return await this._connection.select<T>(options);
   }
 
+  /**
+   * insert
+   * Insert record(s) into the table. If the schema definition has insert set to
+   * disabled, then insert will be blocked
+   *
+   * @param data Array<Partial<T>>> The data to be inserted
+   * @returns QueryResult<T>
+   */
   public async insert(data: Array<Partial<T>>): Promise<QueryResult<T>> {
+    if (this._getOption("enabled")?.insert === false) {
+      throw new Error("Insert operation not allowed");
+    }
     await this._init();
     const options: QueryOptions<T> = {
       schema: this._getOption("schema"),
@@ -92,10 +120,22 @@ export class BaseModel<T> extends Options<ModelConfig<T>> {
     return await this._connection.insert<T>(options);
   }
 
+  /**
+   * update
+   * Update record(s). Using filters either a single record or multiple records can
+   * be updated
+   *
+   * @param data Partial<T> Information to be updated
+   * @param filter Filters<T> The filter condition basis which to update
+   * @returns QueryResult<T>
+   */
   public async update(
     data: Partial<T>,
     filter?: Filters<T>,
   ): Promise<QueryResult<T>> {
+    if (this._getOption("enabled")?.update === false) {
+      throw new Error("Update operation not allowed");
+    }
     await this._init();
     const options: QueryOptions<T> = {
       schema: this._getOption("schema"),
@@ -132,7 +172,17 @@ export class BaseModel<T> extends Options<ModelConfig<T>> {
     return await this._connection.update<T>(options);
   }
 
+  /**
+   * delete
+   * Deletes records in the table.
+   *
+   * @param filter Filters<T> Filter condition basis which to delete
+   * @returns QueryResult<T>
+   */
   public async delete(filter?: Filters<T>): Promise<QueryResult<T>> {
+    if (this._getOption("enabled")?.delete === false) {
+      throw new Error("Delete operation not allowed");
+    }
     await this._init();
     const options: QueryOptions<T> = {
       schema: this._getOption("schema"),
@@ -169,6 +219,10 @@ export class BaseModel<T> extends Options<ModelConfig<T>> {
   //   throw new Error("sdfdf");
   // }
 
+  /**
+   * _init
+   * Initialize the model
+   */
   protected async _init() {
     if (!this._connection) {
       this._connection = await Database.getDatabase(

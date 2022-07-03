@@ -2,6 +2,28 @@ import { IN_MOBILE_REGEX } from "./constants.ts";
 
 export default {
   /**
+   * minLength
+   * Checks if the string is greater than minimum length
+   *
+   * @param data string The data to check
+   * @param len number Length
+   * @returns boolean True if the length of the string is greater than provided
+   */
+  minLength(data: string, len: number): boolean {
+    return (data.length > len);
+  },
+  /**
+   * maxLength
+   * Checks if the string is lesser than maximum length
+   *
+   * @param data string The data to check
+   * @param len number Length
+   * @returns boolean True if the length of the string is lesser than provided
+   */
+  maxLength(data: string, len: number): boolean {
+    return (data.length < len);
+  },
+  /**
    * regexMatch
    * Matches data against a provided pattern
    *

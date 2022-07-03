@@ -203,24 +203,47 @@ export const enum DataTypes {
 
 export type DataType = keyof typeof DataTypes;
 
+export type Validator = (...args: unknown[]) => boolean | Promise<boolean>;
+
+export type FieldValidator = {
+  cb: Validator;
+  args: Array<unknown>;
+};
+
 export type FieldDefinition = {
   dataType: DataType; // The data type
   name?: string; // The actual column name
   isPrimary?: boolean; // Is it a primary key
   isUnique?: boolean; // Is it a unique key
   isNullable?: boolean; // Is this nullable
-  validation?: unknown;
+  validators?: Array<FieldValidator>; // Validation functions for each field
   encrypt?: unknown;
 };
 
 export type ModelConfig<T> = {
+  // DB Connection name
   connection: string;
+  // Schema if present
   schema: string;
+  // Table name
   table: string;
+  // Column definition
   columns: {
     [Property in keyof T]: FieldDefinition;
   };
+  // Page size (defaults to 10)
   pagesize?: number;
+  // Enabled functionalities - By default all are enabled, SELECT can never be disabled
+  enabled?: {
+    // Insert allowed
+    insert: boolean;
+    // Update allowed
+    update: boolean;
+    // Delete allowed
+    delete: boolean;
+    // Truncate allowed
+    truncate: boolean;
+  };
 };
 
 //#endregion Model
