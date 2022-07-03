@@ -3,10 +3,10 @@ import AbstractClient from "./AbstractClient.ts";
 import { PostgresClient } from "./clients/PostgresClient.ts";
 import { ClientConfig } from "./types.ts";
 
-export default class Database {
+export class Database {
   protected static _clients: Map<string, AbstractClient> = new Map();
 
-  public static async getDatabase(name: string): Promise<AbstractClient> {
+  public static async getDatabase(name = "default"): Promise<AbstractClient> {
     if (!Database._clients.has(name)) {
       await Config.load("database");
       const config = Config.get<ClientConfig>("database", name) as ClientConfig;
