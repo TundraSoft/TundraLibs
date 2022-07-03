@@ -3,6 +3,7 @@ export { BaseModel } from "./BaseModel.ts";
 export * from "./Errors.ts";
 export type {
   ClientConfig,
+  DataTypes, 
   DataType,
   Dialect,
   FieldDefinition,
