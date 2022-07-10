@@ -11,6 +11,7 @@ assignees: ''
 
 - [ ] Enhancement to existing module/library
 - [ ] New module/library
+- [ ] Integration with 3rd party library
 - [ ] Version bump of dependency
 
 **Additional context** Add any other context that needs to be conveyed to the

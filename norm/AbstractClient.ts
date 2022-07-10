@@ -109,6 +109,7 @@ export default abstract class AbstractClient
       result: QueryResult<T> = {
         type: this._getQueryType(sql),
         time: 0,
+        totalRows: 0
       };
     this.connect();
     try {
@@ -153,6 +154,7 @@ export default abstract class AbstractClient
       result: QueryResult<T> = {
         type: "SELECT",
         time: 0,
+        totalRows: 0
       };
     this.connect();
     try {
@@ -206,6 +208,7 @@ export default abstract class AbstractClient
       result: QueryResult<T> = {
         type: "INSERT",
         time: 0,
+        totalRows: 0
       };
     this.connect();
     try {
@@ -251,6 +254,7 @@ export default abstract class AbstractClient
       result: QueryResult<T> = {
         type: "COUNT",
         time: 0,
+        totalRows: 0
       };
     this.connect();
     try {
@@ -292,6 +296,7 @@ export default abstract class AbstractClient
       result: QueryResult<T> = {
         type: "UPDATE",
         time: 0,
+        totalRows: 0
       };
     this.connect();
     try {
@@ -334,6 +339,7 @@ export default abstract class AbstractClient
       result: QueryResult<T> = {
         type: "DELETE",
         time: 0,
+        totalRows: 0
       };
     this.connect();
     try {
@@ -375,6 +381,7 @@ export default abstract class AbstractClient
       result: QueryResult<T> = {
         type: "TRUNCATE",
         time: 0,
+        totalRows: 0
       };
     this.connect();
     try {

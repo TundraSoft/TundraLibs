@@ -11,20 +11,19 @@ assignees: ''
 
 **To Reproduce** Steps to reproduce the behavior:
 
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+1. Sample Data (if any) 
+2. Pseudo/part code scope where error occured
+3. Any other information
 
 **Expected behavior** A clear and concise description of what you expected to
 happen.
 
-**Screenshots** If applicable, add screenshots to help explain your problem.
+**Log/Console Dump** If applicable, add log/console dump for reference
 
-**Desktop (please complete the following information):**
+**Versions:**
 
-- OS: [e.g. iOS]
 - Deno Version [e.g. chrome, safari]
 - Version [e.g. 22]
+- Any 3rd party dependencies with their version
 
 **Additional context** Add any other context about the problem here.

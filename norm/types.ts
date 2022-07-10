@@ -162,7 +162,7 @@ export type QueryOptions<T> = {
 export type QueryResult<T = Record<string, unknown>> = {
   type: QueryType;
   time: number;
-  totalRows?: number;
+  totalRows: number;
   paging?: {
     size: number;
     page?: number;
