@@ -37,9 +37,9 @@ totp.validate(otpValue);
 #endregion TOTP
 ```
 
-### Methods
+## Methods
 
-#### newKey
+### newKey
 
 ```ts
 static newKey(length = 32): string
@@ -51,7 +51,7 @@ static newKey(length = 32): string
 
 Static method to generate key for the HMAC function
 
-#### constructor
+### constructor
 
 ```ts
 constructor(options: iOTPOptions)
@@ -70,7 +70,7 @@ type iOTPOptions = {
 };
 ```
 
-#### generate
+### generate
 
 ```ts
 generate(counter?: number): Promise<string>
@@ -80,7 +80,7 @@ generate(counter?: number): Promise<string>
 
 `returns - Promise<string>` - The generated OTP
 
-#### verify
+### verify
 
 ```ts
 validate(
@@ -96,7 +96,7 @@ validate(
 `returns - Promise<boolean>` - True if OTP value found within iteration
 parameters
 
-#### export
+### export
 
 ```ts
 export(): iOTPOptions
