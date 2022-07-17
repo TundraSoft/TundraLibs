@@ -39,6 +39,14 @@ Deno.test({
 });
 
 // Deno.test({
+//   name: "Test env variable",
+//   async fn() {
+//     await Config.load("json_ext", basePath);
+//     assertEquals(Config.get("json_ext", "userName", "TTT"), "TTT");
+//   },
+// });
+
+// Deno.test({
 //   name: "Test typed output",
 //   async fn() {
 //     /*const basePath = path.join(

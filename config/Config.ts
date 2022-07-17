@@ -1,4 +1,5 @@
 import { path, toml, yaml } from "../dependencies.ts";
+import { parseENV } from "./dotEnv.ts";
 import type { ConfigFile, ConfigMode } from "./types.ts";
 
 export class Config {
@@ -17,7 +18,7 @@ export class Config {
    * @returns boolean True if file was found and loaded, else false
    */
   static async load(name: string, path = "./configs"): Promise<boolean> {
-    Config.initEnv();
+    Config._initEnv();
     //#region Test read permission
     const readPerm =
       await (await Deno.permissions.query({ name: "read", path: path })).state;
@@ -68,7 +69,7 @@ export class Config {
     //#region Load the file
     for (const configFile of configFiles) {
       try {
-        const data = await Config.loadConfig(configFile);
+        const data = await Config._loadConfig(configFile);
         this.#configFiles.set(name, configFile);
         this.#configs.set(name, data);
         return true;
@@ -89,10 +90,10 @@ export class Config {
    * @param name string The config section name (file)
    * @param items string[] Specific sub item
    */
-  static get<T extends Record<string, unknown> | string | number | boolean>(
+  static get<T>(
     name: string,
     ...items: string[]
-  ): T | null;
+  ): T;
 
   /**
    * get
@@ -104,18 +105,18 @@ export class Config {
    * @param items Array<string> Specific sub item
    * @returns Record<string, unknown> | undefined The config data, null if not found
    */
-  static get(
+  static get<T = Record<string, unknown> | string | number | boolean | Date>(
     name: string,
     ...items: string[]
-  ): unknown {
-    Config.initEnv();
+  ): T {
+    Config._initEnv();
     name = name.toLowerCase().trim();
     let config: Record<string, unknown>;
     if (Config.#configs.has(name)) {
       config = Config.#configs.get(name) as Record<string, unknown>;
       //#region Replace env variables
       let data = JSON.stringify(config);
-      if (Config.#envEnabled) {
+      if (Config.#env.size > 0) {
         Config.#env.forEach((value, key) => {
           const regex = new RegExp("\\$" + key + "", "g");
           data = data.replaceAll(regex, value);
@@ -127,13 +128,35 @@ export class Config {
       for (const item of items) {
         if (final[item]) {
           final = final[item];
+        } else {
+          throw new Error(
+            `Requested config item ${item} not found in config ${name}.`,
+          );
         }
       }
-      return final;
+      return final as T;
     }
-    return undefined;
+    throw new Error(`Could not find configuration by the name ${name}.`);
   }
 
+  static has(name: string, ...items: string[]): boolean {
+    Config._initEnv();
+    name = name.toLowerCase().trim();
+    let config: Record<string, unknown>;
+    if (Config.#configs.has(name)) {
+      config = Config.#configs.get(name) as Record<string, unknown>;
+      let final = JSON.parse(JSON.stringify(config));
+      for (const item of items) {
+        if (final[item]) {
+          final = final[item];
+        } else {
+          return false;
+        }
+      }
+      return true;
+    }
+    return false;
+  }
   /**
    * loadConfig
    * Actually loads the config data from the file. Basis file type, it will parse and return the data
@@ -142,7 +165,7 @@ export class Config {
    * @param data ConfigFile The config file to search for & load
    * @returns Promise<Record<string, unknown>> The parsed config information
    */
-  protected static async loadConfig(
+  protected static async _loadConfig(
     data: ConfigFile,
   ): Promise<Record<string, unknown>> {
     const fileName =
@@ -174,7 +197,10 @@ export class Config {
    * initEnv
    * Initializes and checks if environment variable access is available
    */
-  protected static async initEnv() {
+  protected static async _initEnv() {
+    if (Config.#env === undefined) {
+      Config.#env = await parseENV();
+    }
     if (Config.#envEnabled === undefined || Config.#envEnabled === null) {
       Config.#envEnabled =
         ((await Deno.permissions.query({ name: "env" })).state === "granted")
@@ -182,7 +208,9 @@ export class Config {
           : false;
       if (Config.#envEnabled) {
         //#region  Get all ENV args
-        Config.#env = new Map(Object.entries(Deno.env.toObject()));
+        // Config.#env = new Map(Object.entries(Deno.env.toObject()));
+        const env = new Map(Object.entries(Deno.env.toObject()));
+        Config.#env = new Map([...Config.#env, ...env]);
         //#endregion Get all ENV args
       }
     }

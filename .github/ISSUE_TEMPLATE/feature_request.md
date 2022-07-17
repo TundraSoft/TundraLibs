@@ -1,20 +1,18 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
-title: ''
-labels: ''
+about: Describe you feature
+title: "[FEAT]"
+labels: enhancement
 assignees: ''
 
 ---
 
-**Is your feature request related to a problem? Please describe.** A clear and
-concise description of what the problem is. Ex. I'm always frustrated when [...]
+**Type of feature**
 
-**Describe the solution you'd like** A clear and concise description of what you
-want to happen.
+- [ ] Enhancement to existing module/library
+- [ ] New module/library
+- [ ] Integration with 3rd party library
+- [ ] Version bump of dependency
 
-**Describe alternatives you've considered** A clear and concise description of
-any alternative solutions or features you've considered.
-
-**Additional context** Add any other context or screenshots about the feature
-request here.
+**Additional context** Add any other context that needs to be conveyed to the
+team
