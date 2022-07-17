@@ -173,6 +173,7 @@ export class OTP extends Options<iOTPOptions> {
 
   /**
    * _toInt8Array(data: number)
+   *
    * @param data number Number to convert to Uint8Array
    * @returns Uint8Array encoded data
    */
@@ -193,6 +194,7 @@ export class OTP extends Options<iOTPOptions> {
 
   /**
    * _importKey()
+   *
    * Imports the provided key
    */
   protected async _importKey() {
