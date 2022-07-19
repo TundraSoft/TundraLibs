@@ -8,7 +8,8 @@ import type {
   QueryOptions,
   QueryPagination,
   QueryResult,
-  QuerySorting,
+  QuerySorting, 
+  FieldValidator, 
 } from "./types.ts";
 
 import {
@@ -26,6 +27,7 @@ export class BaseModel<T> extends Options<ModelSchema<T>> {
   protected _primaryKeys: Array<string> = [];
   protected _uniqueKeys: Array<string> = [];
   protected _notNull: Array<string> = [];
+  protected _validations: Map<keyof T, Array<FieldValidator>> = new Map();
 
   constructor(schema: Partial<ModelSchema<T>>) {
     const defaultConfig: Partial<ModelSchema<T>> = {
@@ -63,6 +65,8 @@ export class BaseModel<T> extends Options<ModelSchema<T>> {
         this._notNull.push(column);
       }
       // Process validations
+      if(cd.validators)
+        this._validations.set(column as keyof T, cd.validators);
     }
     this._columns = columnAlias as Record<keyof T, string>;
   }
@@ -112,7 +116,6 @@ export class BaseModel<T> extends Options<ModelSchema<T>> {
     if (this._getOption("enabled")?.insert === false) {
       throw new Error("Insert operation not allowed");
     }
-    await this._init();
     const options: QueryOptions<T> = {
       schema: this._getOption("schema"),
       table: this._getOption("table"),
@@ -139,7 +142,6 @@ export class BaseModel<T> extends Options<ModelSchema<T>> {
     if (this._getOption("enabled")?.update === false) {
       throw new Error("Update operation not allowed");
     }
-    await this._init();
     const options: QueryOptions<T> = {
       schema: this._getOption("schema"),
       table: this._getOption("table"),
@@ -187,7 +189,6 @@ export class BaseModel<T> extends Options<ModelSchema<T>> {
     if (this._getOption("enabled")?.delete === false) {
       throw new Error("Delete operation not allowed");
     }
-    await this._init();
     const options: QueryOptions<T> = {
       schema: this._getOption("schema"),
       table: this._getOption("table"),
@@ -197,6 +198,30 @@ export class BaseModel<T> extends Options<ModelSchema<T>> {
     return await this._connection.delete<T>(options);
   }
 
+  public validate(data: T) {
+    for(const [key, value] of Object.entries(data)) {
+      // Check if column exists
+      if(!this._columns[key as keyof T]) {
+        throw new Error(`[module=norm] Column ${key} not present in ${this._getOption("table")}`);
+      } else {
+        // It is present! Validate other aspects
+        const validations = this._validations.get(key as keyof T);
+        if(validations && validations.length > 0) {
+          for(const validation of validations) {
+            const args = [];
+            args.push(value);
+            const op = validation.cb.apply(null, args.concat(validation.args))
+            console.log(op)
+          }
+        }
+      }
+    }
+  }
+
+  public async checkUnique(): Promise<boolean> {
+    return true;
+  }
+  
   // public validate(record: Partial<T>): boolean {
   //   return true;
   // }

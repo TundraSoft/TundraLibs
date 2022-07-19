@@ -1,1 +1,1 @@
-export * as Validator from "./Validator.ts";
+export { Validator } from "./Validator.ts";

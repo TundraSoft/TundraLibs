@@ -81,9 +81,16 @@ export class PostgresClient extends AbstractClient {
   protected async _select<T>(options: QueryOptions<T>): Promise<Array<T>> {
     const qry = sql`SELECT `;
     // Generate column names
-    const columns = Object.entries(options.columns).map((value) => {
-      return `${value[1]} AS ${value[1]}`;
-    });
+    if(!options.project) {
+      options.project = Object.keys(options.columns);
+    }
+    const columns = options.project.map((value) => {
+      const colName = options.columns[value as keyof T];
+      return `${colName} AS ${value}`
+    })
+    // const columns = Object.entries(options.columns).map((value) => {
+    //   return `${value[1]} AS ${value[1]}`;
+    // });
     qry.append(sql` ${columns}`);
     // Set table
     qry.append(
@@ -119,12 +126,12 @@ export class PostgresClient extends AbstractClient {
   }
 
   protected async _count<T>(options: QueryOptions<T>): Promise<number> {
-    const qry = sql`SELECT `;
+    const qry = sql`SELECT COUNT(1) as cnt`;
     // Generate column names
-    const columns = Object.entries(options.columns).map((value) => {
-      return `${value[1]} AS ${value[1]}`;
-    });
-    qry.append(sql` ${columns}`);
+    // const columns = Object.entries(options.columns).map((value) => {
+    //   return `${value[1]} AS ${value[1]}`;
+    // });
+    // qry.append(sql` ${columns}`);
     // Set table
     qry.append(
       (options.schema)
@@ -138,9 +145,9 @@ export class PostgresClient extends AbstractClient {
       qry.append(filt);
     }
     const conn = await this._client.connect(),
-      result = await conn.queryObject<T>("" + qry);
+      result = await conn.queryObject<{cnt: number}>("" + qry);
     conn.release();
-    return result.rowCount || 0;
+    return result.rows[0].cnt;
   }
 
   protected async _insert<T>(options: QueryOptions<T>): Promise<Array<T>> {
@@ -263,6 +270,8 @@ export class PostgresClient extends AbstractClient {
               (columnName === "$or") ? "OR" : "AND",
             ),
           );
+        // } else if (!columns[columnName]) {
+        //   throw new Error(`[module=norm] Column ${columnName} is not part of column list for filtering`)
         } else {
           // No its a variable
           if (typeof operation === "object") {

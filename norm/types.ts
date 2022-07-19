@@ -143,6 +143,8 @@ export type QueryOptions<T> = {
   schema?: string;
   // Column names (for alias mapping)
   columns: Record<keyof T, string>;
+  // Project - The actual columns to select
+  project?: Array<string>;
   // PK
   primary?: Array<keyof T>;
   // Filters
@@ -206,17 +208,19 @@ export type DataType = keyof typeof DataTypes;
 export type Validator = (...args: unknown[]) => boolean | Promise<boolean>;
 
 export type FieldValidator = {
-  cb: Validator;
-  args: Array<unknown>;
+  cb: Function;
+  args?: Array<unknown>;
+  msg?: string;
 };
 
 export type FieldDefinition = {
   dataType: DataType; // The data type
   name?: string; // The actual column name
-  isPrimary?: boolean; // Is it a primary key
-  isUnique?: boolean; // Is it a unique key
+  isPrimary?: boolean; // Is it a primary key. String for compound
+  isUnique?: boolean; // Is it a unique key. String here for compound
   isNullable?: boolean; // Is this nullable
   validators?: Array<FieldValidator>; // Validation functions for each field
+  default?: unknown;
   encrypt?: unknown;
 };
 

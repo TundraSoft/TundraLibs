@@ -1,6 +1,6 @@
 import { IN_MOBILE_REGEX } from "./constants.ts";
 
-export default {
+export const Validator = {
   /**
    * minLength
    * Checks if the string is greater than minimum length
@@ -43,7 +43,7 @@ export default {
    * @returns boolean - True if it matches, false if it does not
    */
   mobile(data: number, format: RegExp = IN_MOBILE_REGEX): boolean {
-    return this.regexMatch(data.toString(), format);
+    return Validator.regexMatch(data.toString(), format);
   },
   /**
    * email
@@ -53,7 +53,7 @@ export default {
    * @returns boolean - True if it matches, false if it does not
    */
   email(data: string): boolean {
-    return this.regexMatch(
+    return Validator.regexMatch(
       data,
       /^[a-zA-Z0-9_+&*-]+(?:\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,7}$/,
     );
@@ -67,7 +67,7 @@ export default {
    * @returns boolean - True if it matches, false if it does not
    */
   pan(data: string): boolean {
-    return this.regexMatch(data, /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/);
+    return Validator.regexMatch(data, /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/);
   },
   /**
    * aadhaar
@@ -78,7 +78,7 @@ export default {
    * @returns boolean - True if it matches, false if it does not
    */
   aadhaar(data: string): boolean {
-    return this.regexMatch(data, /^[2-9]{1}[0-9]{3}\\s[0-9]{4}\\s[0-9]{4}$/);
+    return Validator.regexMatch(data, /^[2-9]{1}[0-9]{3}\\s[0-9]{4}\\s[0-9]{4}$/);
   },
   /**
    * ifsc
@@ -89,7 +89,7 @@ export default {
    * @returns boolean - True if it matches, false if it does not
    */
   ifsc(data: string): boolean {
-    return this.regexMatch(data, /^[A-Z]{4}0[A-Z0-9]{6}$/);
+    return Validator.regexMatch(data, /^[A-Z]{4}0[A-Z0-9]{6}$/);
   },
   /**
    * gst
@@ -100,7 +100,7 @@ export default {
    * @returns boolean - True if it matches, false if it does not
    */
   gst(data: string): boolean {
-    return this.regexMatch(
+    return Validator.regexMatch(
       data,
       /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
     );
@@ -113,7 +113,7 @@ export default {
    * @returns boolean - True if it matches, false if it does not
    */
   ipv4(data: string): boolean {
-    return this.regexMatch(
+    return Validator.regexMatch(
       data,
       /^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)(\.(?!$)|$)){4}$/,
     );
