@@ -3,7 +3,7 @@ type Schema<T> = {
   [K in keyof T]: SchemaType<T[K]>
 }
 
-interface SchemaType<T> {
+type SchemaType<T> = {
   optional: boolean
   validate(t: T): boolean
 }

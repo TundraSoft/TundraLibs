@@ -176,6 +176,27 @@ export type QueryResult<T = Record<string, unknown>> = {
 //#endregion Database
 
 //#region Model
+export type Typeof = {
+  'string': string;
+  'number': number;
+  'object': object; // eslint-disable-line @typescript-eslint/ban-types
+  'boolean': boolean;
+  'symbol': symbol;
+  'bigint': bigint;
+  'date': Date;
+  'undefined': undefined;
+};
+
+type FunctionParameter = unknown;
+function typeCast<T extends keyof Typeof, P extends FunctionParameter = Typeof[T]> (type: T) {
+  return (arg: P): Typeof[T] => {
+    if(typeof arg !== type || arg === null) {
+      throw TypeError(`Expected ${type} got ${typeof arg}`)
+    }
+    return arg as Typeof[T];
+  }
+}
+
 export const enum DataTypes {
   "VARCHAR" = "VARCHAR",
   "CHARACTER" = "CHARACTER",
@@ -203,7 +224,77 @@ export const enum DataTypes {
   "JSON" = "JSON",
 }
 
+export const DataTypeMap = {
+  "VARCHAR": typeCast('string'),
+  "CHARACTER": typeCast('string'),
+  "NVARCHAR": typeCast('string'),
+  "TEXT": typeCast('string'),
+  "STRING": typeCast('string'),
+  "UUID": typeCast('string'),
+  "GUID": typeCast('string'),
+  "NUMERIC": typeCast('number'),
+  "NUMBER": typeCast('number'),
+  "DECIMAL": typeCast('number'),
+  "INTEGER": typeCast('number'),
+  "SMALLINT": typeCast('number'),
+  "TINYINT": typeCast('number'),
+  "FLOAT": typeCast('number'),
+  "SERIAL": typeCast('number'),
+  "BIGINTEGER": typeCast('number'),
+  "BIGSERIAL": typeCast('number'),
+  "BOOLEAN": typeCast('boolean'),
+  "BINARY": typeCast('boolean'),
+  "DATE": typeCast('date'),
+  "DATETIME": typeCast('date'),
+  "TIME": typeCast('date'),
+  "TIMESTAMP": typeCast('date'),
+  "JSON": typeCast('object'),
+}
+
 export type DataType = keyof typeof DataTypes;
+
+export type ValidatorFunction<T> = (value?: T, ...args: unknown[]) => boolean;
+
+export type SchemaColumnDefinition<T> = {
+  name?: string;
+  dataType: keyof typeof DataTypes; 
+  isNullable: boolean;
+  validators?: Array<ValidatorFunction<T>>, 
+}
+
+export type SchemaDefinition = {
+  connection?: string;
+  schema?: string;
+  table: string;
+  columns: {
+    [key: string]: SchemaColumnDefinition<unknown>
+  };
+  primaryKeys?: Array<keyof SchemaDefinition['columns']>;
+  uniqueKeys?: Record<string, Array<keyof SchemaDefinition['columns']>>;
+}
+
+
+type PartialPartial<T, K extends keyof T> = Partial<Pick<T, K>> & Omit<T, K> extends
+  infer O ? { [P in keyof O]: O[P] } : never;
+
+type KeysMatching<T, V> = { [K in keyof T]-?: T[K] extends V ? K : never }[keyof T];
+
+export type ExtractType<T extends { [K in keyof T]: SchemaColumnDefinition<any> }> = PartialPartial<{
+  [K in keyof T]: ReturnType<typeof DataTypeMap[T[K]['dataType']]>
+}, KeysMatching<T, { isNullable: true }>>
+
+// type ExtractColumns<T, K extends keyof T> = Pick<T, K>;
+
+export type Schema = <S extends SchemaDefinition>(s:S) => S;
+
+// const Schema = <S extends SchemaDefinition<unknown>>(
+//   s: S
+// ) => {
+//   // Validate definition here
+//   return s as S;
+// };
+
+//#region Old
 
 export type Validator = (...args: unknown[]) => boolean | Promise<boolean>;
 
@@ -249,5 +340,6 @@ export type ModelSchema<T> = {
     truncate: boolean;
   };
 };
+//#endregion Old
 
 //#endregion Model
