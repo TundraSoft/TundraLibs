@@ -10,8 +10,12 @@ import type {
   QuerySorting,
   SchemaDefinition,
   ValidationErrors,
-  Validator,
 } from "./types.ts";
+import {
+  DateValidator,
+  NumberValidator,
+  StringValidator,
+} from "../validator/mod.ts";
 // import { InvalidSchemaDefinition } from "./Errors.ts";
 
 /**
@@ -27,8 +31,7 @@ export class Model<T> {
   protected _uniqueKeys: Record<string, Array<keyof T>> = {};
   protected _columns: Record<keyof T, string>;
   protected _notNulls: Array<keyof T> = [];
-  // protected _validators: Partial<Record<keyof T, Array<Validator<unknown>>>> =
-  //   {};
+  protected _validators: Record<string, StringValidator | NumberValidator | DateValidator> = {}
 
   constructor(schema: SchemaDefinition) {
     this._schema = schema;
@@ -57,6 +60,9 @@ export class Model<T> {
         !definition.isNullable === undefined || definition.isNullable === false
       ) {
         this._notNulls.push(column as keyof T);
+      }
+      if(definition.validator) {
+        this._validators[column] = definition.validator;
       }
       // Lets add validation
       // if (definition.validators) {
@@ -144,10 +150,9 @@ export class Model<T> {
     data.forEach((row) => {
       this.validateRow(row);
       // Identity columns to be removed
-
-    })
+    });
     // All columns which are identity must be removed
-    
+
     // All columns which are not null must be present
 
     // Set generators
@@ -189,7 +194,7 @@ export class Model<T> {
         }`,
       );
     }
-    
+
     // Generators
 
     const options: QueryOptions<T> = {
@@ -207,7 +212,7 @@ export class Model<T> {
         // throw new Error(`[module=norm] Updating not permitted for ${this._schema.table}`);
       }
     }
-    
+
     if (rowCount.totalRows > 1) {
       // Cannot do a bulk update if unique key is present
       for (const [_name, keys] of Object.entries(this._uniqueKeys)) {
@@ -223,7 +228,7 @@ export class Model<T> {
 
     // Ok other validations to be put here
     options.data = [data];
-    console.log(options)
+    console.log(options);
     return await this._connection.update<T>(options);
   }
 
@@ -253,11 +258,11 @@ export class Model<T> {
 
   /**
    * truncate
-   * 
+   *
    * Truncates the table
    */
   public async truncate(): Promise<void> {
-    if(this._schema.feature && this._schema.feature.truncate === false) {
+    if (this._schema.feature && this._schema.feature.truncate === false) {
       throw new Error(
         `[module=norm] Delete not permitted for ${this._schema.table}`,
       );
@@ -333,12 +338,17 @@ export class Model<T> {
   public validateRow(data: T | Partial<T>): ValidationErrors {
     // Check column name
     const validationError: ValidationErrors = {};
-    for (const [colname, _colValue] of Object.entries(data)) {
+    for (const [colname, colValue] of Object.entries(data)) {
       const colName = colname as keyof T;
       if (!this._columns[colName]) {
         throw new Error(
           `[module=norm] Unknown column '${colName}' sent for ${this._schema.table}`,
         );
+      }
+
+      if(this._validators[colname]) {
+        const op = this._validators[colname].run(colValue);
+        console.log(op, 'adsf')
       }
       // Check data type quickly
       // DataTypeMap[this._schema.columns[colname].dataType].call(null, data[colName])

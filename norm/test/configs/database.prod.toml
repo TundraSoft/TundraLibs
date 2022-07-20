@@ -1,8 +1,8 @@
 [default]
 dialect = "POSTGRES"
-host = "***"
-username = "***"
-password = "***"
-database = "***"
+host = "****"
+username = "****"
+password = "****"
+database = "testdb"
   [default.tls]
     enabled = true

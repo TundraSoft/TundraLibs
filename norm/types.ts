@@ -260,19 +260,28 @@ export const DataTypeMap = {
 
 export type DataType = keyof typeof DataTypes;
 
-export type ValidatorFunction<T> = (value?: T, ...args: unknown[]) => boolean;
+// export type ValidatorFunction<T> = (value?: T, ...args: unknown[]) => boolean;
 
-export type Validator<T> = {
-  cb: ValidatorFunction<T>;
-  args?: Array<unknown>;
-  message: string;
-};
+// export type Validator<T> = {
+//   cb: ValidatorFunction<T>;
+//   args?: Array<unknown>;
+//   message: string;
+// };
 
 export type ValidationErrors = {
   [key: string]: Array<string>;
 };
 
-export type ColumnDefinition<T> = {
+import {
+  BaseValidator,
+  DateValidator,
+  NumberValidator,
+  StringValidator,
+} from "../validator/mod.ts";
+
+type Validators<T extends keyof Typeof> = BaseValidator<T>;
+
+export type ColumnDefinition = {
   // Actual column name
   name?: string;
   // The data type
@@ -283,7 +292,7 @@ export type ColumnDefinition<T> = {
   isIdentity?: boolean;
   // defaultValue: DBGenerators | GeneratorFunction<T>
   // Validations for the column
-  // validators?: Array<Validator<T>>;
+  validator?: StringValidator | NumberValidator | DateValidator;
   isPrimary?: boolean;
   uniqueKey?: string;
 };
@@ -297,7 +306,7 @@ export type SchemaDefinition = {
   table: string;
   // Column definition
   columns: {
-    [key: string]: ColumnDefinition<unknown>;
+    [key: string]: ColumnDefinition;
   };
   // Paging
   pageSize?: number;
@@ -321,8 +330,8 @@ type KeysMatching<T, V> = {
   [K in keyof T]-?: T[K] extends V ? K : never;
 }[keyof T];
 
-// deno-lint-ignore no-explicit-any
-type ExtractTypes<T extends { [K in keyof T]: ColumnDefinition<any> }> =
+//// deno-lint-ignore no-explicit-any
+type ExtractTypes<T extends { [K in keyof T]: ColumnDefinition }> =
   PartialPartial<
     {
       -readonly [K in keyof T]: ReturnType<

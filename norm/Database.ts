@@ -1,8 +1,8 @@
 import { Config } from "../config/mod.ts";
 import AbstractClient from "./AbstractClient.ts";
 import { PostgresClient } from "./clients/PostgresClient.ts";
-import { ClientConfig, SchemaDefinition, FilterColumns } from "./types.ts";
-import { Model } from "./Model.ts";
+import { ClientConfig } from "./types.ts";
+// import { Model } from "./Model.ts";
 
 export class Database {
   protected static _clients: Map<string, AbstractClient> = new Map();
