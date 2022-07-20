@@ -81,13 +81,13 @@ export class PostgresClient extends AbstractClient {
   protected async _select<T>(options: QueryOptions<T>): Promise<Array<T>> {
     const qry = sql`SELECT `;
     // Generate column names
-    if(!options.project) {
+    if (!options.project) {
       options.project = Object.keys(options.columns);
     }
     const columns = options.project.map((value) => {
       const colName = options.columns[value as keyof T];
-      return `${colName} AS ${value}`
-    })
+      return `${colName} AS ${value}`;
+    });
     // const columns = Object.entries(options.columns).map((value) => {
     //   return `${value[1]} AS ${value[1]}`;
     // });
@@ -119,6 +119,7 @@ export class PostgresClient extends AbstractClient {
         } `,
       );
     }
+    console.log("" + qry);
     const conn = await this._client.connect(),
       result = await conn.queryObject<T>("" + qry);
     conn.release();
@@ -127,11 +128,6 @@ export class PostgresClient extends AbstractClient {
 
   protected async _count<T>(options: QueryOptions<T>): Promise<number> {
     const qry = sql`SELECT COUNT(1) as cnt`;
-    // Generate column names
-    // const columns = Object.entries(options.columns).map((value) => {
-    //   return `${value[1]} AS ${value[1]}`;
-    // });
-    // qry.append(sql` ${columns}`);
     // Set table
     qry.append(
       (options.schema)
@@ -144,8 +140,9 @@ export class PostgresClient extends AbstractClient {
       qry.append(sql` WHERE `);
       qry.append(filt);
     }
+    console.log("" + qry);
     const conn = await this._client.connect(),
-      result = await conn.queryObject<{cnt: number}>("" + qry);
+      result = await conn.queryObject<{ cnt: number }>("" + qry);
     conn.release();
     return result.rows[0].cnt;
   }
@@ -169,6 +166,7 @@ export class PostgresClient extends AbstractClient {
     qry.append(sql` RETURNING`);
     qry.append(sql` ${columns}`);
 
+    console.log("" + qry);
     const conn = await this._client.connect(),
       result = await conn.queryObject<T>("" + qry);
     conn.release();
@@ -189,7 +187,7 @@ export class PostgresClient extends AbstractClient {
     if (options.data) {
       if (options.data.length == 1) {
         // Its an update, if filters are present, use them and pass update
-        qry.append(sql` <${options.data[0]}>`);
+        qry.append(sql` {${options.data[0]}}`);
         if (options.filters) {
           const theFilter = this._processFilters(
             options.columns,
@@ -207,6 +205,7 @@ export class PostgresClient extends AbstractClient {
     qry.append(sql` RETURNING`);
     qry.append(sql` ${columns}`);
 
+    console.log("" + qry);
     const conn = await this._client.connect(),
       result = await conn.queryObject<T>("" + qry);
     conn.release();
@@ -221,13 +220,13 @@ export class PostgresClient extends AbstractClient {
         ? sql` "${options.schema}"."${options.table}"`
         : sql` "${options.table}"`,
     );
-
     // Set filter
     if (options.filters) {
       qry.append(sql` WHERE `);
       qry.append(this._processFilters(options.columns, options.filters));
     }
 
+    console.log("" + qry);
     const conn = await this._client.connect(),
       result = await conn.queryObject<T>("" + qry);
     conn.release();
@@ -243,6 +242,7 @@ export class PostgresClient extends AbstractClient {
         : sql` "${options.table}"`,
     );
 
+    console.log("" + qry);
     const conn = await this._client.connect();
     await conn.queryObject<T>("" + qry);
     conn.release();
@@ -270,8 +270,8 @@ export class PostgresClient extends AbstractClient {
               (columnName === "$or") ? "OR" : "AND",
             ),
           );
-        // } else if (!columns[columnName]) {
-        //   throw new Error(`[module=norm] Column ${columnName} is not part of column list for filtering`)
+          // } else if (!columns[columnName]) {
+          //   throw new Error(`[module=norm] Column ${columnName} is not part of column list for filtering`)
         } else {
           // No its a variable
           if (typeof operation === "object") {

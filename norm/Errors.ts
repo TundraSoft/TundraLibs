@@ -1,36 +1,53 @@
 import type { Dialect } from "./types.ts";
 
-export class ConnectionError extends Error {
+export class NormError extends Error {
+  protected _module = "norm";
+
+  constructor(message: string, ...args: string[]) {
+    // Replace args
+    args.forEach((value, index) => {
+      const val = String(value),
+        rep = `\$\{${index}\}`;
+      message = message.replaceAll(rep, val);
+    });
+    super(`[module=norm] ${message}`);
+    Object.setPrototypeOf(this, NormError.prototype);
+  }
+}
+
+export class ConnectionError extends NormError {
   protected _configName: string;
   protected _dialect: Dialect;
-  protected _errorMessage: string;
+  protected _rawMessage: string;
 
   constructor(config: string, dialect: Dialect, msg: string) {
-    super(`Error connecting to ${dialect} server using config ${config}`);
+    super(
+      `Error connecting to ${dialect} server using config ${config}: ${msg}`,
+    );
     Object.setPrototypeOf(this, ConnectionError.prototype);
 
     this._configName = config;
     this._dialect = dialect;
-    this._errorMessage = msg;
+    this._rawMessage = msg;
   }
 }
 
-export class GenericQueryError extends Error {
+export class GenericQueryError extends NormError {
   protected _configName: string;
   protected _dialect: Dialect;
-  protected _errorMessage: string;
+  protected _rawMessage: string;
 
   constructor(config: string, dialect: Dialect, msg: string) {
-    super(`Error executing query in ${dialect} using config ${config}`);
+    super(`Error executing query in ${dialect} using config ${config}: ${msg}`);
     Object.setPrototypeOf(this, ConnectionError.prototype);
 
     this._configName = config;
     this._dialect = dialect;
-    this._errorMessage = msg;
+    this._rawMessage = msg;
   }
 }
 
-export class InvalidModelConfiguration extends Error {
+export class InvalidSchemaDefinition extends NormError {
   protected _modelName?: string;
   protected _missingConfig: string;
   protected _errorMessage: string;
@@ -49,7 +66,7 @@ export class InvalidModelConfiguration extends Error {
   }
 }
 
-export class PrimaryKeyUpdate extends Error {
+export class PrimaryKeyUpdate extends NormError {
   protected _modelName?: string;
   protected _primaryKey: string;
   protected _errorMessage: string;

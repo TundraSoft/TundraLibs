@@ -176,25 +176,32 @@ export type QueryResult<T = Record<string, unknown>> = {
 //#endregion Database
 
 //#region Model
+
 export type Typeof = {
-  'string': string;
-  'number': number;
-  'object': object; // eslint-disable-line @typescript-eslint/ban-types
-  'boolean': boolean;
-  'symbol': symbol;
-  'bigint': bigint;
-  'date': Date;
-  'undefined': undefined;
+  "string": string;
+  "number": number;
+  // deno-lint-ignore ban-types
+  "object": object;
+  "boolean": boolean;
+  "symbol": symbol;
+  "bigint": bigint;
+  "date": Date;
+  "undefined": undefined;
+  "unknown": unknown;
 };
 
 type FunctionParameter = unknown;
-function typeCast<T extends keyof Typeof, P extends FunctionParameter = Typeof[T]> (type: T) {
+
+function typeCast<
+  T extends keyof Typeof,
+  P extends FunctionParameter = Typeof[T],
+>(type: T) {
   return (arg: P): Typeof[T] => {
-    if(typeof arg !== type || arg === null) {
-      throw TypeError(`Expected ${type} got ${typeof arg}`)
+    if (typeof arg !== type || arg === null) {
+      throw TypeError(`Expected ${type} got ${typeof arg}`);
     }
     return arg as Typeof[T];
-  }
+  };
 }
 
 export const enum DataTypes {
@@ -225,121 +232,115 @@ export const enum DataTypes {
 }
 
 export const DataTypeMap = {
-  "VARCHAR": typeCast('string'),
-  "CHARACTER": typeCast('string'),
-  "NVARCHAR": typeCast('string'),
-  "TEXT": typeCast('string'),
-  "STRING": typeCast('string'),
-  "UUID": typeCast('string'),
-  "GUID": typeCast('string'),
-  "NUMERIC": typeCast('number'),
-  "NUMBER": typeCast('number'),
-  "DECIMAL": typeCast('number'),
-  "INTEGER": typeCast('number'),
-  "SMALLINT": typeCast('number'),
-  "TINYINT": typeCast('number'),
-  "FLOAT": typeCast('number'),
-  "SERIAL": typeCast('number'),
-  "BIGINTEGER": typeCast('number'),
-  "BIGSERIAL": typeCast('number'),
-  "BOOLEAN": typeCast('boolean'),
-  "BINARY": typeCast('boolean'),
-  "DATE": typeCast('date'),
-  "DATETIME": typeCast('date'),
-  "TIME": typeCast('date'),
-  "TIMESTAMP": typeCast('date'),
-  "JSON": typeCast('object'),
-}
+  "VARCHAR": typeCast("string"),
+  "CHARACTER": typeCast("string"),
+  "NVARCHAR": typeCast("string"),
+  "TEXT": typeCast("string"),
+  "STRING": typeCast("string"),
+  "UUID": typeCast("string"),
+  "GUID": typeCast("string"),
+  "NUMERIC": typeCast("number"),
+  "NUMBER": typeCast("number"),
+  "DECIMAL": typeCast("number"),
+  "INTEGER": typeCast("number"),
+  "SMALLINT": typeCast("number"),
+  "TINYINT": typeCast("number"),
+  "FLOAT": typeCast("number"),
+  "SERIAL": typeCast("number"),
+  "BIGINTEGER": typeCast("number"),
+  "BIGSERIAL": typeCast("number"),
+  "BOOLEAN": typeCast("boolean"),
+  "BINARY": typeCast("boolean"),
+  "DATE": typeCast("date"),
+  "DATETIME": typeCast("date"),
+  "TIME": typeCast("date"),
+  "TIMESTAMP": typeCast("date"),
+  "JSON": typeCast("object"),
+};
 
 export type DataType = keyof typeof DataTypes;
 
 export type ValidatorFunction<T> = (value?: T, ...args: unknown[]) => boolean;
 
-export type SchemaColumnDefinition<T> = {
+export type Validator<T> = {
+  cb: ValidatorFunction<T>;
+  args?: Array<unknown>;
+  message: string;
+};
+
+export type ValidationErrors = {
+  [key: string]: Array<string>;
+};
+
+export type ColumnDefinition<T> = {
+  // Actual column name
   name?: string;
-  dataType: keyof typeof DataTypes; 
-  isNullable: boolean;
-  validators?: Array<ValidatorFunction<T>>, 
-}
+  // The data type
+  dataType: keyof typeof DataTypes;
+  // isNullable - Is column nullable, if true then null is valid. Defaults to false
+  isNullable?: boolean;
+  // Denotes if the column is derived from identity column, if so insert on column will be blocked
+  isIdentity?: boolean;
+  // defaultValue: DBGenerators | GeneratorFunction<T>
+  // Validations for the column
+  // validators?: Array<Validator<T>>;
+  isPrimary?: boolean;
+  uniqueKey?: string;
+};
 
 export type SchemaDefinition = {
+  // Connection to use, defaults to 'default'
   connection?: string;
+  // Schema name. If blank will resolve to Client's default ex public in postgres
   schema?: string;
-  table: string;
-  columns: {
-    [key: string]: SchemaColumnDefinition<unknown>
-  };
-  primaryKeys?: Array<keyof SchemaDefinition['columns']>;
-  uniqueKeys?: Record<string, Array<keyof SchemaDefinition['columns']>>;
-}
-
-
-type PartialPartial<T, K extends keyof T> = Partial<Pick<T, K>> & Omit<T, K> extends
-  infer O ? { [P in keyof O]: O[P] } : never;
-
-type KeysMatching<T, V> = { [K in keyof T]-?: T[K] extends V ? K : never }[keyof T];
-
-export type ExtractType<T extends { [K in keyof T]: SchemaColumnDefinition<any> }> = PartialPartial<{
-  [K in keyof T]: ReturnType<typeof DataTypeMap[T[K]['dataType']]>
-}, KeysMatching<T, { isNullable: true }>>
-
-// type ExtractColumns<T, K extends keyof T> = Pick<T, K>;
-
-export type Schema = <S extends SchemaDefinition>(s:S) => S;
-
-// const Schema = <S extends SchemaDefinition<unknown>>(
-//   s: S
-// ) => {
-//   // Validate definition here
-//   return s as S;
-// };
-
-//#region Old
-
-export type Validator = (...args: unknown[]) => boolean | Promise<boolean>;
-
-export type FieldValidator = {
-  cb: Function;
-  args?: Array<unknown>;
-  msg?: string;
-};
-
-export type FieldDefinition = {
-  dataType: DataType; // The data type
-  name?: string; // The actual column name
-  isPrimary?: boolean; // Is it a primary key. String for compound
-  isUnique?: boolean; // Is it a unique key. String here for compound
-  isNullable?: boolean; // Is this nullable
-  validators?: Array<FieldValidator>; // Validation functions for each field
-  default?: unknown;
-  encrypt?: unknown;
-};
-
-export type ModelSchema<T> = {
-  // DB Connection name
-  connection: string;
-  // Schema if present
-  schema: string;
-  // Table name
+  // The table name
   table: string;
   // Column definition
   columns: {
-    [Property in keyof T]: FieldDefinition;
+    [key: string]: ColumnDefinition<unknown>;
   };
-  // Page size (defaults to 10)
-  pagesize?: number;
-  // Enabled functionalities - By default all are enabled, SELECT can never be disabled
-  enabled?: {
-    // Insert allowed
-    insert: boolean;
-    // Update allowed
-    update: boolean;
-    // Delete allowed
-    delete: boolean;
-    // Truncate allowed
-    truncate: boolean;
+  // Paging
+  pageSize?: number;
+  // Features to be enabled
+  feature?: {
+    insert?: boolean;
+    bulkInsert?: boolean;
+    update?: boolean;
+    bulkUpdate?: boolean;
+    delete?: boolean;
+    bulkDelete?: boolean;
+    truncate?: boolean;
   };
 };
-//#endregion Old
+
+type PartialPartial<T, K extends keyof T> =
+  Partial<Pick<T, K>> & Omit<T, K> extends infer O ? { [P in keyof O]: O[P] }
+    : never;
+
+type KeysMatching<T, V> = {
+  [K in keyof T]-?: T[K] extends V ? K : never;
+}[keyof T];
+
+// deno-lint-ignore no-explicit-any
+type ExtractTypes<T extends { [K in keyof T]: ColumnDefinition<any> }> =
+  PartialPartial<
+    {
+      -readonly [K in keyof T]: ReturnType<
+        typeof DataTypeMap[T[K]["dataType"]]
+      >;
+    },
+    KeysMatching<T, { isNullable: true }>
+  >;
+
+type Picker<P extends SchemaDefinition, V> = ExtractTypes<
+  {
+    [X in keyof P["columns"]]: P["columns"][X];
+  }
+>;
+
+export type FilterColumns<P extends SchemaDefinition> = Picker<
+  P,
+  { nullable: true }
+>;
 
 //#endregion Model

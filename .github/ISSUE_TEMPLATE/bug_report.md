@@ -11,7 +11,7 @@ assignees: ''
 
 **To Reproduce** Steps to reproduce the behavior:
 
-1. Sample Data (if any) 
+1. Sample Data (if any)
 2. Pseudo/part code scope where error occured
 3. Any other information
 

@@ -1,0 +1,8 @@
+[default]
+dialect = "POSTGRES"
+host = "***"
+username = "***"
+password = "***"
+database = "***"
+  [default.tls]
+    enabled = true

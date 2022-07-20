@@ -1,18 +1,20 @@
 export { Database } from "./Database.ts";
-export { BaseModel } from "./BaseModel.ts";
+export { Model } from "./Model.ts";
 export * from "./Errors.ts";
-export { DataTypes } from "./types.ts";
+export { DataTypeMap, DataTypes } from "./types.ts";
 export type {
   ClientConfig,
+  ColumnDefinition,
   DataType,
   Dialect,
-  FieldDefinition,
+  FilterColumns,
   FilterOperators,
   Filters,
-  ModelSchema,
   QueryOptions,
   QueryPagination,
   QueryResult,
   QuerySorting,
   QueryType,
+  SchemaDefinition,
+  ValidationErrors,
 } from "./types.ts";
