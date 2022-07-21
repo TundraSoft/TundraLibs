@@ -1,25 +1,37 @@
-import { BaseValidator } from "./BaseValidator.ts";
+import { Validator } from "./BaseValidator.ts";
+import { type } from "./utils.ts";
+import type { FunctionType, ValidatorProxy, FunctionParameters } from "./types.ts";
 
-import { IN_MOBILE_REGEX } from "./constants.ts";
+export class BigintValidator<
+  P extends FunctionParameters = [bigint],
+> extends Validator<FunctionType<bigint, P>> {
 
-export class BigintValidator extends BaseValidator<bigint> {
-  isInteger(message: string) {
-    this._addTest((value: bigint) => Number.isInteger(value), message);
+  //#region Validators
+  min(len: bigint, message?: string): ValidatorProxy<this>  {
+    return this.test((num: bigint) => num >= len, message || `Expect number to be at least ${len}`);
   }
-  min(len: number, message: string) {
-    this._addTest((value: bigint) => value >= len, message);
-    return this;
+  
+  max(len: bigint, message?: string): ValidatorProxy<this>  {
+    return this.test((num: bigint) => num <= len, message || `Expect number to be at most ${len}`);
   }
-  max(len: number, message: string) {
-    this._addTest((value: bigint) => value <= len, message);
-    return this;
+
+  between(min: bigint, max: bigint, message?: string): ValidatorProxy<this>  {
+    return this.test((num: bigint) => num >= min && num <= max, message || `Expect number to be between ${min} and ${max}`);
   }
-  between(from: number, to: number, message: string) {
-    this._addTest((value: bigint) => value >= from && value <= to, message);
-    return this;
+
+  gte = this.min;
+
+  lte = this.max;
+
+  gt(len: bigint, message?: string): ValidatorProxy<this>  {
+    return this.test((num: bigint) => num > len, message || `Expect number to be greater than ${len}`);
   }
-  mobile(format = IN_MOBILE_REGEX, message: string) {
-    this._addTest((value: bigint) => format.test(value.toString()), message);
-    return this;
+
+  lt(len: bigint, message?: string): ValidatorProxy<this>  {
+    return this.test((num: bigint) => num < len, message || `Expect number to be less than ${len}`);
   }
+
+  //#endregion Validators
 }
+
+export const BigintType = new BigintValidator(type('bigint')).proxy();

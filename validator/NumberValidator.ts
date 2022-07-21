@@ -1,25 +1,44 @@
-import { BaseValidator } from "./BaseValidator.ts";
+import { Validator } from "./BaseValidator.ts";
+import { type } from "./utils.ts";
+import type { FunctionType, ValidatorProxy, FunctionParameters } from "./types.ts";
 
-import { IN_MOBILE_REGEX } from "./constants.ts";
+export class NumberValidator<
+  P extends FunctionParameters = [number],
+> extends Validator<FunctionType<number, P>> {
 
-export class NumberValidator extends BaseValidator<number> {
-  isInteger(message: string) {
-    this._addTest((value: number) => Number.isInteger(value), message);
+  //#region Validators
+  float(message?: string): ValidatorProxy<this>  {
+    return this.test((num: number) => Number.isFinite(num), message || "Expect number to be a float");
   }
-  min(len: number, message: string) {
-    this._addTest((value: number) => value >= len, message);
-    return this;
+
+  integer(message?: string): ValidatorProxy<this>  {
+    return this.test((num: number) => Number.isInteger(num), message || "Expect number to be an integer");
   }
-  max(len: number, message: string) {
-    this._addTest((value: number) => value <= len, message);
-    return this;
+
+  min(len: number, message?: string): ValidatorProxy<this>  {
+    return this.test((num: number) => num >= len, message || `Expect number to be at least ${len}`);
   }
-  between(from: number, to: number, message: string) {
-    this._addTest((value: number) => value >= from && value <= to, message);
-    return this;
+
+  max(len: number, message?: string): ValidatorProxy<this>  {
+    return this.test((num: number) => num <= len, message || `Expect number to be at most ${len}`);
   }
-  mobile(format = IN_MOBILE_REGEX, message: string) {
-    this._addTest((value: number) => format.test(value.toString()), message);
-    return this;
+
+  gte = this.min;
+
+  lte = this.max;
+  
+  gt(len: number, message?: string): ValidatorProxy<this>  {
+    return this.test((num: number) => num > len, message || `Expect number to be greater than ${len}`);
   }
+
+  lt(len: number, message?: string): ValidatorProxy<this>  {
+    return this.test((num: number) => num < len, message || `Expect number to be less than ${len}`);
+  }
+
+  between(min: number, max: number, message?: string): ValidatorProxy<this>  {
+    return this.test((num: number) => num >= min && num <= max, message || `Expect number to be between ${min} and ${max}`);
+  }
+  //#endregion Validators
 }
+
+export const NumberType = new NumberValidator(type('number')).proxy();

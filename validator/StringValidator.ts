@@ -1,113 +1,89 @@
-import { BaseValidator } from "./BaseValidator.ts";
+import { Validator } from "./BaseValidator.ts";
+import { type } from "./utils.ts";
+import type { FunctionType, ValidatorProxy, FunctionParameters } from "./types.ts";
 
-export class StringValidator extends BaseValidator<string> {
-  /**
-   * minLength
-   *
-   * Checks if the string is greater than minimum length
-   *
-   * @param len number Length
-   * @param data string The error message
-   */
-  minLength(len: number, message: string) {
-    this._addTest((value: string) => value.length >= len, message);
-    return this;
+
+export class StringValidator<
+  P extends FunctionParameters = [string],
+> extends Validator<FunctionType<string, P>> {
+
+  //#region Generators
+  genUUID(): ValidatorProxy<this>  {
+    return this.transform(() => crypto.randomUUID().toString());
   }
-  /**
-   * maxLength
-   *
-   * Checks if the string is lesser than maximum length
-   *
-   * @param len number Length
-   * @param message string The error message
-   */
-  maxLength(len: number, message: string) {
-    this._addTest((value: string) => value.length <= len, message);
-    return this;
+
+  //#region Manipulators
+  capitalize(): ValidatorProxy<this> {
+    return this.transform((str: string) => str.charAt(0).toUpperCase() + str.slice(1));
   }
-  /**
-   * regexMatch
-   *
-   * Matches data against a provided pattern
-   *
-   * @param pattern RegExp - The pattern to match against
-   * @param message string - The error message
-   */
-  pattern(pattern: RegExp, message: string) {
-    this._addTest((value: string) => pattern.test(value), message);
-    return this;
+  //#endregion Manipulators
+
+  //#region Validators
+  min(len: number, message?: string): ValidatorProxy<this>  {
+    return this.test((str: string) => str.length >= len, message || `Expect string to be at least ${len} characters long`);
   }
-  /**
-   * email
-   *
-   * Validates if given string is valid email address or not
-   *
-   * @param message string - The error message
-   */
-  email(message: string) {
-    return this.pattern(
-      /^[a-zA-Z0-9_+&*-]+(?:\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,7}$/,
-      message,
-    );
+
+  max(len: number, message?: string): ValidatorProxy<this>  { 
+    return this.test((str: string) => str.length <= len, message || `Expect string to be at most ${len} characters long`);
   }
-  /**
-   * pan
-   *
-   * Checks if the provided data is a valid Permanent Account Number (PAN)
-   * *NOTE* Does not check if it is actual PAN, just if it matches the format
-   *
-   * @param message string - The error message
-   */
-  pan(message: string) {
-    return this.pattern(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, message);
+
+  pattern(reg: RegExp, message?: string): ValidatorProxy<this>  {
+    return this.test((str: string) => reg.test(str), message || `Expect string to match pattern ${reg.toString()}`);
   }
-  /**
-   * aadhaar
-   *
-   * Checks if provided data is valid AADHAAR number
-   * *NOTE* Does not check if AADHAAR exists, only if it matches pattern
-   *
-   * @param message string - The error message
-   */
-  aadhaar(message: string) {
-    return this.pattern(/^[2-9]{1}[0-9]{3}\\s[0-9]{4}\\s[0-9]{4}$/, message);
+
+  pan(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^[a-zA-Z]{2}[0-9]{2}[a-zA-Z]{1}[0-9]{6}$/, message || `Expect string to be a valid PAN`);
   }
-  /**
-   * ifsc
-   *
-   * Checks if the provided data matches valid IFSC code
-   * *NOTE* Does not check if IFSC exists
-   *
-   * @param message string - The error message
-   */
-  ifsc(message: string) {
-    return this.pattern(/^[A-Z]{4}0[A-Z0-9]{6}$/, message);
+
+  aadhaar(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^\d{4} \d{4} \d{4}$/, message || `Expect string to be a valid Aadhaar`);
   }
-  /**
-   * gst
-   *
-   * Checks if provided data matches valid GST code
-   * *NOTE* Does not check if GST number exists.
-   *
-   * @param message string - The error message
-   */
-  gst(message: string) {
-    return this.pattern(
-      /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
-      message,
-    );
+
+  email(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/, message || `Expect string to be a valid email`);
   }
-  /**
-   * ipv4
-   *
-   * Checks if provided data is a valid IPV4 address
-   *
-   * @param message string - The error message
-   */
-  ipv4(message: string) {
-    return this.pattern(
-      /^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)(\.(?!$)|$)){4}$/,
-      message,
-    );
+
+  phone(pattern = /^[9|8|7|6][0-9]{9}$/, message?: string): ValidatorProxy<this>  {
+    return this.pattern(pattern, message || `Expect string to be a valid phone number`);
   }
+
+  ifsc(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^[A-Z]{4}0[A-Z0-9]{6}$/, message || `Expect string to be a valid IFSC code`);
+  }
+
+  gst(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, message || `Expect string to be a valid GST number`);
+  }
+
+  ipv4(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/, message || `Expect string to be a valid IPv4 address`);
+  }
+
+  // ipv6(message?: string): ValidatorProxy<this>  {
+  //   return this.pattern(/^(?:(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,7}:|(?:[0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|(?:[0-9a-fA-F]{1,4}:){1,5}(?::[0-9a-fA-F]{1,4}){1,2}|(?:[0-9a-fA-F]{1,4}:){1,4}(?::[0-9a-fA-F]{1,4}){1,3}|(?:[0-9a-fA-F]{1,4}:){1,3}(?::[0-9a-fA-F]{1,4}){1,4}|(?:[0-9a-fA-F]{1,4}:){1,2}(?::[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:(?:(?::[0-9a-fA-F]{1,4}){1,6})|:(?:(?::[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(?::[0-9a-fA-F]{0,4}%[0-9a-zA-Z]{1,}|:(?::[0-9a-fA-F]{1,4}){0,2}%[0-9a-zA-Z]{1,})$/, message || `Expect string to be a valid IPv6 address`);
+  // }
+
+  url(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^(?:http(s)?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&'\(\)\*\+,;=.]+$/, message || `Expect string to be a valid URL`);
+  }
+
+  domain(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^(?:http(s)?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&'\(\)\*\+,;=.]+$/, message || `Expect string to be a valid domain`);
+  }
+
+  hostName(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$/, message || `Expect string to be a valid host name`);
+  }
+
+  uuid(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/, message || `Expect string to be a valid UUID`);
+  }
+  
+  //#endregion Validators
 }
+
+export const StringType = new StringValidator(type("string")).proxy();
+
+const a = StringType.genUUID().max(36).optional();
+
+console.log(a());
