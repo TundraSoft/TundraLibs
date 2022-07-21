@@ -31,7 +31,10 @@ export class Model<T> {
   protected _uniqueKeys: Record<string, Array<keyof T>> = {};
   protected _columns: Record<keyof T, string>;
   protected _notNulls: Array<keyof T> = [];
-  protected _validators: Record<string, StringValidator | NumberValidator | DateValidator> = {}
+  protected _validators: Record<
+    string,
+    StringValidator | NumberValidator | DateValidator
+  > = {};
 
   constructor(schema: SchemaDefinition) {
     this._schema = schema;
@@ -61,7 +64,7 @@ export class Model<T> {
       ) {
         this._notNulls.push(column as keyof T);
       }
-      if(definition.validator) {
+      if (definition.validator) {
         this._validators[column] = definition.validator;
       }
       // Lets add validation
@@ -185,7 +188,50 @@ export class Model<T> {
       );
     }
     await this._init();
-    // Validate rows
+    // Only data is passed so we create filter if PK is present in data
+    if (filter === undefined) {
+      // Check if PK is passed
+      let pkPresent = true;
+      this._primaryKeys.forEach((pk) => {
+        if (data[pk] === undefined || data[pk] === null) {
+          pkPresent = false;
+        }
+      });
+      if (pkPresent) {
+        // remove PK from data & set filter
+        const pkFilter: { [key: string]: unknown } = {};
+        this._primaryKeys.forEach((pk) => {
+          pkFilter[String(pk)] = {
+            $eq: data[pk as keyof T],
+          };
+          delete data[pk];
+        });
+        filter = pkFilter as Filters<T>;
+      }
+    }
+    // For sanity sake, we check updated row count, if it is > 1 then we check if unique keys are being updated
+    const options: QueryOptions<T> = {
+      schema: this._schema.schema,
+      table: this._schema.table,
+      columns: this._columns,
+      filters: filter,
+    };
+    // Check data, we cannot update primary keys
+    const rowCount = await this._connection.count<T>(options);
+    if (rowCount.totalRows > 1) {
+      // Check unique key violation
+      // let ukPresent = false;
+      for (const [name, keys] of Object.entries(this._uniqueKeys)) {
+        keys.forEach((columnName) => {
+          if (data[columnName] !== undefined) {
+            throw new Error(
+              `[module=norm] Unique key column "${columnName}" of "${name}" present in a bulk update!`,
+            );
+          }
+        });
+      }
+    }
+    // Validate row and update!
     const errors = this.validateRow(data);
     if (Object.keys(errors).length > 0) {
       throw new Error(
@@ -195,38 +241,8 @@ export class Model<T> {
       );
     }
 
-    // Generators
-
-    const options: QueryOptions<T> = {
-      schema: this._schema.schema,
-      table: this._schema.table,
-      columns: this._columns,
-      filters: filter,
-    };
-    // Check data, we cannot update primary keys
-    const rowCount = await this._connection.count<T>(options);
-    // We never allow updating PK, if it is present, remove from update
-    for (const key of this._primaryKeys) {
-      if (data[key as keyof T]) {
-        delete data[key as keyof T];
-        // throw new Error(`[module=norm] Updating not permitted for ${this._schema.table}`);
-      }
-    }
-
-    if (rowCount.totalRows > 1) {
-      // Cannot do a bulk update if unique key is present
-      for (const [_name, keys] of Object.entries(this._uniqueKeys)) {
-        keys.forEach((columnName) => {
-          if (data[columnName as keyof T]) {
-            throw new Error(
-              `[module=norm] Cannot perform bulk update on columns marked as unique`,
-            );
-          }
-        });
-      }
-    }
-
     // Ok other validations to be put here
+
     options.data = [data];
     console.log(options);
     return await this._connection.update<T>(options);
@@ -346,30 +362,9 @@ export class Model<T> {
         );
       }
 
-      if(this._validators[colname]) {
+      if (this._validators[colname]) {
         const op = this._validators[colname].run(colValue);
-        console.log(op, 'adsf')
       }
-      // Check data type quickly
-      // DataTypeMap[this._schema.columns[colname].dataType].call(null, data[colName])
-
-      // DataTypeMap[]
-      // Validate the columns
-      // this._validators[colName]?.forEach(async (validator) => {
-      //   let args: Array<unknown> = [];
-      //   args.push(data[colName]);
-      //   if (validator.args) {
-      //     args = args.concat(validator.args);
-      //   }
-      //   const op = await validator.cb.apply(null, args);
-      //   if (op === false) {
-      //     // Error
-      //     if (!validationError[colname]) {
-      //       validationError[colname] = [];
-      //     }
-      //     validationError[colname].push(validator.message);
-      //   }
-      // });
     }
     return validationError;
   }
