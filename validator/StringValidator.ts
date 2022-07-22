@@ -43,7 +43,7 @@ export class StringValidator<
     return this.pattern(/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/, message || `Expect string to be a valid email`);
   }
 
-  phone(pattern = /^[9|8|7|6][0-9]{9}$/, message?: string): ValidatorProxy<this>  {
+  mobile(pattern = /^[9|8|7|6][0-9]{9}$/, message?: string): ValidatorProxy<this>  {
     return this.pattern(pattern, message || `Expect string to be a valid phone number`);
   }
 
@@ -79,11 +79,39 @@ export class StringValidator<
     return this.pattern(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/, message || `Expect string to be a valid UUID`);
   }
   
+  card(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|6(?:011|5[0-9][0-9])[0-9]{12}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|(?:2131|1800|35\d{3})\d{11})$/, message || `Expect string to be a valid card number`);
+  }
+
+  cvv(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^[0-9]{3,4}$/, message || `Expect string to be a valid CVV`);
+  }
+
+  visa(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^4[0-9]{12}(?:[0-9]{3})?$/, message || `Expect string to be a valid Visa card number`);
+  }
+
+  mastercard(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^5[1-5][0-9]{14}$/, message || `Expect string to be a valid Mastercard card number`);
+  }
+
+  amex(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^3[47][0-9]{13}$/, message || `Expect string to be a valid American Express card number`);
+  }
+
+  discover(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^6(?:011|5[0-9]{2})[0-9]{12}$/, message || `Expect string to be a valid Discover card number`);
+  }
+
+  diners(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^3(?:0[0-5]|[68][0-9])[0-9]{11}$/, message || `Expect string to be a valid Diners card number`);
+  }
+
+  jcb(message?: string): ValidatorProxy<this>  {
+    return this.pattern(/^(?:2131|1800|35\d{3})\d{11}$/, message || `Expect string to be a valid JCB card number`);
+  }
+
   //#endregion Validators
 }
 
 export const StringType = new StringValidator(type("string")).proxy();
-
-const a = StringType.genUUID().max(36).optional();
-
-console.log(a());
