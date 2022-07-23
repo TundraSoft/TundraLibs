@@ -272,15 +272,7 @@ export type ValidationErrors = {
   [key: string]: Array<string>;
 };
 
-import {
-  BaseValidator,
-  DateValidator,
-  NumberValidator,
-  StringValidator,
-} from "../validator/mod.ts";
-
-type Validators<T extends keyof Typeof> = BaseValidator<T>;
-
+import { GuardianProxy } from "../guardian/mod.ts";
 export type ColumnDefinition = {
   // Actual column name
   name?: string;
@@ -292,7 +284,7 @@ export type ColumnDefinition = {
   isIdentity?: boolean;
   // defaultValue: DBGenerators | GeneratorFunction<T>
   // Validations for the column
-  validator?: StringValidator | NumberValidator | DateValidator;
+  validator?: GuardianProxy<any>;
   isPrimary?: boolean;
   uniqueKey?: string;
 };

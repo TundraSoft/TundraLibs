@@ -11,11 +11,8 @@ import type {
   SchemaDefinition,
   ValidationErrors,
 } from "./types.ts";
-import {
-  DateValidator,
-  NumberValidator,
-  StringValidator,
-} from "../validator/mod.ts";
+import type { GuardianProxy } from "../guardian/mod.ts";
+import Guardian, { Struct } from "../guardian/mod.ts";
 // import { InvalidSchemaDefinition } from "./Errors.ts";
 
 /**
@@ -33,7 +30,7 @@ export class Model<T> {
   protected _notNulls: Array<keyof T> = [];
   protected _validators: Record<
     string,
-    StringValidator | NumberValidator | DateValidator
+    GuardianProxy<any>
   > = {};
 
   constructor(schema: SchemaDefinition) {
