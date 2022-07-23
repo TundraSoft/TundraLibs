@@ -1,7 +1,7 @@
 import { Model } from "../Model.ts";
 import type { FilterColumns, Filters } from "../types.ts";
 import { DataTypes } from "../types.ts";
-import { StringValidator } from "../../validator/mod.ts";
+import Guardian from "../../guardian/mod.ts";
 
 const testSchema = {
   table: "dummy",
@@ -18,7 +18,7 @@ const testSchema = {
     email: {
       dataType: DataTypes.VARCHAR,
       uniqueKey: "p12",
-      validator: new StringValidator().email("Invalid email address"),
+      validator: Guardian.string().email("Invalid email address provided"),
     },
   },
 } as const;
