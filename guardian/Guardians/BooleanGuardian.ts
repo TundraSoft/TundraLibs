@@ -1,6 +1,6 @@
-import { BaseGuardian } from "./BaseGuardian.ts";
-import { type } from "./utils.ts";
-import type { FunctionParameters, FunctionType } from "./types.ts";
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { type } from "../utils.ts";
+import type { FunctionParameters, FunctionType } from "../types.ts";
 
 /**
  * BooleanGuardian

@@ -1,5 +1,5 @@
-import { BaseGuardian } from "./BaseGuardian.ts";
-import { array } from "./utils.ts";
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { array, compile } from "../utils.ts";
 import type {
   FunctionParameters,
   FunctionType,
@@ -7,7 +7,7 @@ import type {
   ResolvedValue,
   StructResolveType,
   StructReturnType,
-} from "./types.ts";
+} from "../types.ts";
 
 /**
  * ArrayGuardian
@@ -29,19 +29,20 @@ export class ArrayGuardian<
    * @param type S Must be a GuardianProxy class. You can add validations as part of this and it will be executed
    * @returns GuardianProxy<ArrayGuardian>
    */
-  // deno-lint-ignore no-explicit-any
-  of<S extends GuardianProxy<any>>(type: S): GuardianProxy<
+  of<S>(type: S): GuardianProxy<
     ArrayGuardian<StructReturnType<S, StructReturnType<S>[]>, P>
   > {
     // deno-lint-ignore no-explicit-any
-    const validator = type as GuardianProxy<any>;
+    const validator = compile(type) as GuardianProxy<any>;
     const retFunc = (
       arr: ResolvedValue<R>,
     ): StructResolveType<S>[] | PromiseLike<StructResolveType<S>[]> => {
       let isAsync;
       const items = arr.map(
         (value): StructResolveType<S> | PromiseLike<StructResolveType<S>> => {
+          console.log(validator);
           const ret = validator(value);
+          console.log("sdgg");
           if (ret instanceof Promise) {
             isAsync = true;
           }

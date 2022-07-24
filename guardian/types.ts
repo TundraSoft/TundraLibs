@@ -37,6 +37,13 @@ export type MergeParameters<P extends FunctionParameters> = [P] extends [
 
 export type ObjectProperty = string | number | symbol;
 
+export type ObjectPath = Array<ObjectProperty>;
+
+export type PathError = {
+  path: ObjectPath;
+  error: Error;
+};
+
 // The proxy object
 export type GuardianProxy<
   V extends { guardian: FunctionType },
@@ -58,6 +65,12 @@ export type IsAsync<S> = ResolvedValue<S> extends S
 export type MaybeAsync<T, V> = unknown extends IsAsync<T> ? PromiseLike<V> | V
   : true extends IsAsync<T> ? PromiseLike<V>
   : V;
+
+export type StructOptions = {
+  message?: string;
+  mode: "STRICT" | "PARTIAL" | "ANY";
+  path: string[];
+};
 
 type IsStructAsync<S> = S extends FunctionType ? IsAsync<ReturnType<S>>
   : // deno-lint-ignore ban-types

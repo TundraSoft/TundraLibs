@@ -5,7 +5,7 @@ import type {
   MergeParameters,
   ResolvedValue,
 } from "./types.ts";
-import { equals, optional, test } from "./utils.ts";
+import { equals, isPromiseLike, optional, test } from "./utils.ts";
 
 export interface GuardianConstructor<
   V extends BaseGuardian<F>,
@@ -101,11 +101,13 @@ export class BaseGuardian<F extends FunctionType> {
     return new constructor(
       ((...args): T | PromiseLike<T> => {
         const res = guardian(...args);
-        if (typeof res.then === "function") {
-          return res.then((ret: ResolvedValue<ReturnType<F>>) => fn(ret));
-        } else {
+        if (!isPromiseLike(res)) {
           return fn(res);
         }
+
+        return res.then((ret) =>
+          fn(ret as ResolvedValue<ReturnType<F>>)
+        ) as PromiseLike<T>;
       }) as FunctionType<MaybeAsync<ReturnType<F>, T>, Parameters<F>>,
     ).proxy();
   }

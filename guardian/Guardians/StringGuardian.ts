@@ -1,10 +1,10 @@
-import { BaseGuardian } from "./BaseGuardian.ts";
-import { type } from "./utils.ts";
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { type } from "../utils.ts";
 import type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
-} from "./types.ts";
+} from "../types.ts";
 
 /**
  * StringGuardian
@@ -122,6 +122,21 @@ export class StringGuardian<
 
   //#region Validators
   /**
+   * notEmpty
+   *
+   * Ensures the string is not empty
+   *
+   * @param message string Message to use when validation fails
+   * @returns GuardianProxy<this>
+   */
+  notEmpty(message?: string): GuardianProxy<this> {
+    return this.test(
+      (str: string) => str.length > 0,
+      message || `Expect string to be not empty`,
+    );
+  }
+
+  /**
    * min
    *
    * Checks if the string is at least `len` characters long
@@ -153,6 +168,23 @@ export class StringGuardian<
     );
   }
 
+  /**
+   * between
+   *
+   * Checks if the string is between `min` and `max` characters long
+   *
+   * @param min number Minimum length of the string
+   * @param max number Maximum length of the string
+   * @param message string Message to use when validation fails
+   * @returns GuardianProxy<this>
+   */
+  between(min: number, max: number, message?: string): GuardianProxy<this> {
+    return this.test(
+      (str: string) => str.length >= min && str.length <= max,
+      message ||
+        `Expect string to be between ${min} and ${max} characters long`,
+    );
+  }
   /**
    * pattern
    *

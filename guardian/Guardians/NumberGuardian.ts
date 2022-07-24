@@ -1,10 +1,10 @@
-import { BaseGuardian } from "./BaseGuardian.ts";
-import { type } from "./utils.ts";
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { type } from "../utils.ts";
 import type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
-} from "./types.ts";
+} from "../types.ts";
 
 /**
  * NumberGuardian

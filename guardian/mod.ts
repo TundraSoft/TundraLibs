@@ -8,15 +8,18 @@ export type {
   Type,
 } from "./types.ts";
 
-import { Guardian } from "./UnknownGuardian.ts";
+import { Guardian } from "./Guardians/UnknownGuardian.ts";
 
 export default Guardian;
 
-export { objectGuard } from "./ObjectGuardian.ts";
-export { arrayGuard } from "./ArrayGuardian.ts";
-export { stringGuard } from "./StringGuardian.ts";
-export { numberGuard } from "./NumberGuardian.ts";
-export { bigintGuard } from "./BigintGuardian.ts";
-export { dateGuard } from "./DateGuardian.ts";
-export { booleanGuard } from "./BooleanGuardian.ts";
-export { Struct } from "./StructGuardian.ts";
+export { objectGuard } from "./Guardians/ObjectGuardian.ts";
+export { arrayGuard } from "./Guardians/ArrayGuardian.ts";
+export { stringGuard } from "./Guardians/StringGuardian.ts";
+export { numberGuard } from "./Guardians/NumberGuardian.ts";
+export { bigintGuard } from "./Guardians/BigintGuardian.ts";
+export { dateGuard } from "./Guardians/DateGuardian.ts";
+export { booleanGuard } from "./Guardians/BooleanGuardian.ts";
+export { Struct } from "./Guardians/StructGuardian.ts";
+
+export { ValidationError } from "./Error.ts";
+export type { ErrorList } from "./Error.ts";

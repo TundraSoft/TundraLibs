@@ -3,7 +3,7 @@
  * Dialect
  * The dialects supported
  */
-export type Dialect = "POSTGRES" | "MYSQL" | "MONGODB";
+export type Dialect = "POSTGRES" | "MYSQL" | "MONGODB" | "SQLITE";
 
 /**
  * ClientEvents
@@ -33,6 +33,8 @@ export type TLSOption = {
 export type ClientConfig = {
   // The dialect
   dialect: Dialect;
+  // File Path (SQLite)
+  filePath: string;
   // The host
   host: string;
   // The port number
@@ -219,9 +221,10 @@ export const enum DataTypes {
   "SMALLINT" = "SMALLINT",
   "TINYINT" = "TINYINT",
   "FLOAT" = "FLOAT",
-  "SERIAL" = "SERIAL",
   "BIGINTEGER" = "BIGINTEGER",
+  "SERIAL" = "SERIAL",
   "BIGSERIAL" = "BIGSERIAL",
+  "AUTO_INCREMENT" = "AUTO_INCREMENT",
   "BOOLEAN" = "BOOLEAN",
   "BINARY" = "BINARY",
   "DATE" = "DATE",
@@ -246,9 +249,10 @@ export const DataTypeMap = {
   "SMALLINT": typeCast("number"),
   "TINYINT": typeCast("number"),
   "FLOAT": typeCast("number"),
-  "SERIAL": typeCast("number"),
   "BIGINTEGER": typeCast("number"),
+  "SERIAL": typeCast("number"),
   "BIGSERIAL": typeCast("number"),
+  "AUTO_INCREMENT": typeCast("number"),
   "BOOLEAN": typeCast("boolean"),
   "BINARY": typeCast("boolean"),
   "DATE": typeCast("date"),
@@ -268,9 +272,9 @@ export type DataType = keyof typeof DataTypes;
 //   message: string;
 // };
 
-export type ValidationErrors = {
-  [key: string]: Array<string>;
-};
+// export type ValidationErrors = {
+//   [key: string]: Array<string>;
+// };
 
 import { GuardianProxy } from "../guardian/mod.ts";
 export type ColumnDefinition = {
@@ -284,6 +288,7 @@ export type ColumnDefinition = {
   isIdentity?: boolean;
   // defaultValue: DBGenerators | GeneratorFunction<T>
   // Validations for the column
+  // deno-lint-ignore no-explicit-any
   validator?: GuardianProxy<any>;
   isPrimary?: boolean;
   uniqueKey?: string;

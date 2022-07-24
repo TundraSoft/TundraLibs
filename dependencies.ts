@@ -34,6 +34,8 @@ export {
 } from "https://deno.land/x/postgres@v0.16.1/mod.ts";
 export type { ClientOptions as PGClientOptions } from "https://deno.land/x/postgres@v0.16.1/mod.ts";
 
+export { DB as SQLite } from "https://deno.land/x/sqlite@v3.4.0/mod.ts";
+
 // export { default as postgres } from "https://deno.land/x/postgresjs@v3.2.4/mod.js"
 
 // export { Client as MySQLClient } from "https://deno.land/x/mysql@v2.10.2/mod.ts";

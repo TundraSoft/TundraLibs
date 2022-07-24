@@ -3,6 +3,8 @@ import type { FilterColumns, Filters } from "../types.ts";
 import { DataTypes } from "../types.ts";
 import Guardian from "../../guardian/mod.ts";
 
+// console.log(`${new URL('', import.meta.url).pathname}`);
+
 const testSchema = {
   table: "dummy",
   columns: {
@@ -10,10 +12,12 @@ const testSchema = {
       name: "id",
       dataType: DataTypes.INTEGER,
       isPrimary: true,
+      validator: Guardian.number().integer().min(1),
     },
     name: {
       dataType: DataTypes.VARCHAR,
       uniqueKey: "p1",
+      validator: Guardian.string().min(3),
     },
     email: {
       dataType: DataTypes.VARCHAR,
@@ -36,8 +40,12 @@ for (let i = 0; i < 100; i++) {
     email: `abhai2k+${i}@gmail.com`,
   });
 }
-const insOp = await testModal.insert(insData);
-console.log(insOp);
+try {
+  const insOp = await testModal.insert(insData);
+  console.log(insOp);
+} catch (e) {
+  console.log(e);
+}
 
 const selFilters: Filters<Test> = {
   name: {
@@ -53,8 +61,12 @@ const updData: Test = {
   name: "Bharath V",
   email: "bharath.v@gmail.com",
 };
-
-console.log(await testModal.update(updData));
+console.log("df");
+try {
+  console.log(await testModal.update(updData));
+} catch (e) {
+  console.log(e);
+}
 
 // Lets try a bulk update on UK
 // const updDataBlk: Partial<Test> = {

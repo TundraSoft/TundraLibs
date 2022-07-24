@@ -9,10 +9,14 @@ import type {
   QueryResult,
   QuerySorting,
   SchemaDefinition,
-  ValidationErrors,
 } from "./types.ts";
-import type { GuardianProxy } from "../guardian/mod.ts";
-import Guardian, { Struct } from "../guardian/mod.ts";
+
+import type {
+  ErrorList,
+  GuardianProxy,
+  StructValidatorFunction,
+} from "../guardian/mod.ts";
+import { Struct } from "../guardian/mod.ts";
 // import { InvalidSchemaDefinition } from "./Errors.ts";
 
 /**
@@ -25,13 +29,12 @@ export class Model<T> {
   protected _connection!: AbstractClient;
   protected _schema: SchemaDefinition;
   protected _primaryKeys: Array<keyof T> = [];
+  protected _identityKeys: Array<keyof T> = [];
   protected _uniqueKeys: Record<string, Array<keyof T>> = {};
   protected _columns: Record<keyof T, string>;
   protected _notNulls: Array<keyof T> = [];
-  protected _validators: Record<
-    string,
-    GuardianProxy<any>
-  > = {};
+  // deno-lint-ignore no-explicit-any
+  protected _validators: StructValidatorFunction<any>;
 
   constructor(schema: SchemaDefinition) {
     this._schema = schema;
@@ -41,6 +44,8 @@ export class Model<T> {
     }
     // Create column alias mapping
     const columnAlias: Partial<Record<keyof T, string>> = {};
+    // deno-lint-ignore no-explicit-any
+    const validator: { [key: string]: GuardianProxy<any> } = {};
     for (const [column, definition] of Object.entries(this._schema.columns)) {
       columnAlias[column as keyof T] = (definition.name)
         ? definition.name
@@ -48,6 +53,11 @@ export class Model<T> {
       // Is it a PK
       if (definition.isPrimary === true) {
         this._primaryKeys.push(column as keyof T);
+      }
+      if (
+        ["AUTO_INCREMENT", "SERIAL", "BIGSERIAL"].includes(definition.dataType)
+      ) {
+        this._identityKeys.push(column as keyof T);
       }
       if (definition.uniqueKey !== undefined) {
         if (this._uniqueKeys[definition.uniqueKey] === undefined) {
@@ -62,14 +72,15 @@ export class Model<T> {
         this._notNulls.push(column as keyof T);
       }
       if (definition.validator) {
-        this._validators[column] = definition.validator;
+        validator[column] = definition.validator;
       }
-      // Lets add validation
-      // if (definition.validators) {
-      //   this._validators[column as keyof T] = definition.validators;
-      // }
     }
     this._columns = columnAlias as Record<keyof T, string>;
+    this._validators = Struct(
+      validator,
+      "Data does not conform to the schema",
+      "PARTIAL",
+    );
   }
 
   /**
@@ -105,8 +116,9 @@ export class Model<T> {
   }
 
   /**
-   * select
-   * Perform a select operation on the table
+   * count
+   *
+   * Count the number of rows in the table. Supports filtering.
    *
    * @param filters Filters<T> Filter condition
    * @param sort QuerySorting<T> Sorting options
@@ -115,7 +127,6 @@ export class Model<T> {
    */
   public async count(
     filters?: Filters<T>,
-    sort?: QuerySorting<T>,
   ): Promise<QueryResult<T>> {
     await this._init();
     const options: QueryOptions<T> = {
@@ -123,7 +134,6 @@ export class Model<T> {
       table: this._schema.table,
       columns: this._columns,
       filters: filters,
-      sort: sort,
     };
     return await this._connection.count<T>(options);
   }
@@ -146,17 +156,39 @@ export class Model<T> {
     // Check bulk insert
 
     // Validate data
-    // Check column name
-    data.forEach((row) => {
-      this.validateRow(row);
-      // Identity columns to be removed
+    const errors: { [key: number]: ErrorList } = {};
+    data.forEach((row, ind) => {
+      try {
+        data[ind] = this._validators(row);
+        // Identity columns to be removed
+        if (this._identityKeys.length > 0) {
+          this._identityKeys.forEach((key) => {
+            delete row[key];
+          });
+        }
+        // All columns which are not null must be present
+        this._notNulls.forEach((key) => {
+          if (row[key] === undefined) {
+            throw new Error(
+              `[module=norm] Column ${key} cannot be set as null`,
+            );
+          }
+        });
+        // Unique key check
+      } catch (e) {
+        // push all errors
+        errors[ind] = e.toJSON();
+      }
     });
-    // All columns which are identity must be removed
-
-    // All columns which are not null must be present
-
-    // Set generators
-
+    console.log("daf");
+    if (Object.keys(errors).length > 0) {
+      // @TODO - Make this better
+      throw new Error(
+        `[module=norm] Data does not conform to the schema definition. ${
+          JSON.stringify(errors)
+        }`,
+      );
+    }
     const options: QueryOptions<T> = {
       schema: this._schema.schema,
       table: this._schema.table,
@@ -185,6 +217,7 @@ export class Model<T> {
       );
     }
     await this._init();
+
     // Only data is passed so we create filter if PK is present in data
     if (filter === undefined) {
       // Check if PK is passed
@@ -229,7 +262,9 @@ export class Model<T> {
       }
     }
     // Validate row and update!
+    console.log("adsf");
     const errors = this.validateRow(data);
+    console.log("af44");
     if (Object.keys(errors).length > 0) {
       throw new Error(
         `[module=norm] Validation of data passed for insert failed. ${
@@ -348,22 +383,13 @@ export class Model<T> {
     return op.totalRows == 0;
   }
 
-  public validateRow(data: T | Partial<T>): ValidationErrors {
-    // Check column name
-    const validationError: ValidationErrors = {};
-    for (const [colname, colValue] of Object.entries(data)) {
-      const colName = colname as keyof T;
-      if (!this._columns[colName]) {
-        throw new Error(
-          `[module=norm] Unknown column '${colName}' sent for ${this._schema.table}`,
-        );
-      }
-
-      if (this._validators[colname]) {
-        const op = this._validators[colname].run(colValue);
-      }
+  public validateRow(data: T | Partial<T>): ErrorList {
+    try {
+      this._validators(data);
+    } catch (e) {
+      return e.toJSON();
     }
-    return validationError;
+    return {} as ErrorList;
   }
   /**
    * _init

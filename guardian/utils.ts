@@ -3,15 +3,19 @@ import {
   FunctionType,
   GuardianProxy,
   MergeParameters,
+  ObjectPath,
   ObjectProperty,
+  PathError,
+  StructOptions,
   StructParameters,
   StructResolveType,
   StructValidatorFunction,
-  StructValues,
   Typeof,
 } from "./types.ts";
 
-import { Guardian } from "./UnknownGuardian.ts";
+import { Guardian } from "./Guardians/UnknownGuardian.ts";
+import { ValidationError } from "./Error.ts";
+import type { ErrorLike } from "./Error.ts";
 
 /**
  * type
@@ -29,7 +33,7 @@ export function type<
 >(type: T, error?: string): FunctionType<Typeof[T], P> {
   return (...args: P): Typeof[T] => {
     if (typeof args[0] !== type || args[0] === null) {
-      throw new Error(error || `Expect value to be of type ${type}`);
+      throw makeError(error || `Expect value to be of type "${type}"`, ...args);
     }
     return args[0] as Typeof[T];
   };
@@ -50,7 +54,7 @@ export function array<
 >(len: number | null = null, error?: string): FunctionType<R, P> {
   const isArray = (...args: P): R => {
     if (!Array.isArray(args[0])) {
-      throw new Error(error || `Expecting value to be an array`);
+      throw makeError(error || `Expect value to be an array`, ...args);
     }
     return args[0] as R;
   };
@@ -63,9 +67,7 @@ export function array<
     const arr = isArray(...args);
 
     if (arr.length !== len) {
-      throw new Error(
-        error || `Expected array length ${len} (given: ${arr.length})`,
-      );
+      throw makeError(error || `Expect array length to be ${len}`, ...args);
     }
     return arr;
   };
@@ -86,7 +88,10 @@ export function equals<T, P extends FunctionParameters = [T]>(
 ): FunctionType<T, P> {
   return (...args: P): T => {
     if (args[0] !== expected) {
-      throw new Error(error || `Expect value to be equal to ${expected}`);
+      throw makeError(
+        error || `Expect array length to be ${expected}`,
+        ...args,
+      );
     }
     return args[0] as T;
   };
@@ -107,8 +112,9 @@ export function oneOf<T, P extends FunctionParameters = [T]>(
 ): FunctionType<T, P> {
   return (...args: P): T => {
     if (!expected.includes(args[0] as T)) {
-      throw new Error(
+      throw makeError(
         error || `Expect value to be one of ${expected.join(", ")}`,
+        ...args,
       );
     }
     return args[0] as T;
@@ -130,7 +136,7 @@ export function test<P extends FunctionParameters>(
 ): FunctionType<P[0], P> {
   return (...args: P): unknown => {
     if (!fn(...args)) {
-      throw new Error(error || `Expect value to pass test`);
+      throw makeError(error || `Validation test failed`, ...args);
     }
     return args[0];
   };
@@ -153,54 +159,177 @@ export function optional<F extends FunctionType, R = undefined>(
   };
 }
 
-export function compileStruct<S extends { [key: string]: StructValues | S }>(
-  schema: S,
-  error?: string,
-) {
-  // ensure it is of type object
-  const keys = Object.keys(schema);
-  // deno-lint-ignore no-explicit-any
-  const validators: { [K in ObjectProperty]: GuardianProxy<any> } = {};
-  for (const key of keys) {
-    const val = schema[key];
-    // Detect the type of the value
-    if (val instanceof Function && val.guardian !== undefined) {
-      // Its a validator
-      validators[key] = val;
-    } else if (val instanceof Date) {
-      validators[key] = Guardian.date();
-    } else if (val instanceof Array || Array.isArray(val)) {
-      // Since this is an array, we check the contents (first element) and then set it to this
-      const innerType = compileStruct(val[0]);
-      validators[key] = Guardian.array().of(innerType);
-    } else if (typeof val === "object") {
-      // It looks like a sub object, so send it to struct function
-      validators[key] = compileStruct(val, error);
-    } else if (typeof val === "bigint") {
-      validators[key] = Guardian.bigint();
-    } else if (typeof val === "number") {
-      validators[key] = Guardian.number();
-    } else if (typeof val === "string") {
-      validators[key] = Guardian.string();
-    } else if (typeof val === "boolean") {
-      validators[key] = Guardian.boolean();
+//#region Struct - TODO - Refactor
+export function makeError<P extends FunctionParameters>(
+  error: ErrorLike<P>,
+  ...args: P
+): ValidationError {
+  if (typeof error === "string") {
+    return new ValidationError(error);
+  } else if (typeof error === "function") {
+    return makeError(error(...args));
+  }
+  return error;
+}
+
+export function pathErrors(errors: ErrorLike, path: ObjectPath): PathError[] {
+  const error = makeError(errors);
+  if (Array.isArray(error.path)) {
+    path = error.path;
+  }
+  if (error.errors?.length) {
+    return ([] as PathError[]).concat(
+      ...error.errors.map((e) => pathErrors(e.error, [...path, ...e.path])),
+    );
+  }
+  return [{ error, path }];
+}
+
+export function createValidationError<P extends FunctionParameters>(
+  errors: PathError[],
+  error: ErrorLike<P> | null | undefined,
+  ...args: P
+): ValidationError {
+  if (!error) {
+    if (errors[0]) {
+      const { path, error: err } = errors[0];
+      const message = String((err && err.message) || err);
+
+      error = path ? `${path.join(".")}: ${message}` : message;
     } else {
-      throw new Error(error || `Invalid type for ${key}`);
+      error = "Unknown Validation Error";
     }
   }
 
-  return ((
-    ...obj: StructParameters<S>
-  ): StructResolveType<S> | Promise<StructResolveType<S>> => {
-    const retObj: Record<string, unknown> = {};
-    const o = obj[0];
-    for (const key of keys) {
-      retObj[key] = validators[key](o[key]);
-      // Do not create a property if it is undefined
-      if (retObj[key] === undefined) {
-        delete retObj[key];
-      }
-    }
-    return retObj as StructResolveType<S>;
-  }) as StructValidatorFunction<S>;
+  const err: ValidationError = makeError(error, ...args);
+  err.errors = errors;
+
+  return err;
 }
+
+export function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return !!value && typeof (value as PromiseLike<unknown>).then === "function";
+}
+
+/**
+ * Composes a guardian for the provided value.
+ * Modes - (valid for struct)
+ * STRICT - Return object will match definition provided (all). Undefined will be ignored
+ * PARTIAL - Same as strict, but allows all properties to be optional
+ * ANY - Most loosely typed of the lot, will validate for properties for which definition is there, if defined but no value then it will ignore. Any junk will be passed as is
+ *
+ * @param struct
+ * @param options
+ * @returns : StructValidatorFunction<S>
+ */
+export function compile<S>(struct: S, options?: Partial<StructOptions>) {
+  const defOptions = {
+    mode: "STRICT",
+    path: [],
+    message: "Validation Error",
+  };
+  const opts = { ...defOptions, ...options } as StructOptions,
+    { mode, path, message } = opts;
+  if (typeof struct === "bigint") {
+    return Guardian.bigint() as unknown as StructValidatorFunction<S>;
+  } else if (typeof struct === "number") {
+    return Guardian.number() as unknown as StructValidatorFunction<S>;
+  } else if (typeof struct === "string") {
+    return Guardian.string() as unknown as StructValidatorFunction<S>;
+  } else if (typeof struct === "boolean") {
+    return Guardian.boolean() as unknown as StructValidatorFunction<S>;
+  } else if (struct instanceof RegExp) {
+    return Guardian.string().pattern(
+      struct,
+    ) as unknown as StructValidatorFunction<S>;
+  } else if (struct instanceof Date) {
+    return Guardian.date() as unknown as StructValidatorFunction<S>;
+  } else if (struct instanceof Array) {
+    const ar = Guardian.array();
+    if (struct.length > 0) {
+      ar.of(compile(struct[0], { message: "Array type validation error" }));
+    }
+    return ar as unknown as StructValidatorFunction<S>;
+  } else if (struct instanceof Function) {
+    return struct as unknown as StructValidatorFunction<S>;
+  } else if (typeof struct === "object") {
+    // Ok, now we have to do the magic
+    const structKeys: Set<string> = new Set(Object.keys(struct)),
+      // deno-lint-ignore no-explicit-any
+      validators: { [K in ObjectProperty]: GuardianProxy<any> } = {};
+    structKeys.forEach((key) => {
+      validators[key] = compile(struct[key as keyof S], {
+        mode: opts.mode,
+        path: [...opts.path, key],
+      });
+    });
+    // Return a function that will validate the value
+    return ((
+      ...objs: StructParameters<S>
+    ): StructResolveType<S> | Promise<StructResolveType<S>> => {
+      // If strict mode, we have to
+      const retObj: Record<string, unknown> = {},
+        obj = objs[0],
+        objKeys: Set<string> = new Set(Object.keys(obj)),
+        errors: PathError[] = [],
+        promises: Promise<unknown>[] = [];
+      objKeys.forEach((key) => {
+        try {
+          // If it is Strict or Partial, only defined properties are allowed
+          if (mode !== "ANY" && !structKeys.has(key)) {
+            // pathErrors(`${key} is not a valid property`, [...opts.path, key]);
+            throw makeError(`Unknown property passed "${key}"`, ...objs);
+          }
+          const retVal = (validators[key] !== undefined)
+            ? validators[key](obj[key])
+            : obj[key];
+          if (isPromiseLike(retVal)) {
+            promises.push(retVal as Promise<unknown>);
+            retVal.then((v) => retObj[key] = v, (e) => {
+              // const err = makeError(e)
+              errors.push({
+                error: makeError(e.message),
+                path: [...path, key],
+              });
+            });
+          } else {
+            retObj[key] = retVal;
+          }
+        } catch (e) {
+          // errors.push(...toPathErrors(error as Error, path));
+          errors.push({ error: e, path: [...path, key] });
+        }
+      });
+      // Properties defined but not passed needs to be handled for strict
+      if (mode === "STRICT") {
+        structKeys.forEach((key) => {
+          if (!objKeys.has(key)) {
+            errors.push({
+              error: makeError(`Missing property "${key}"`, ...objs),
+              path: [...path, key],
+            });
+          }
+        });
+      }
+      // Done Now we return
+      if (promises.length === 0) {
+        // No promises found, so return
+        if (errors.length > 0) {
+          throw createValidationError(errors, message, ...objs);
+        }
+        return retObj as StructResolveType<S>;
+      }
+
+      return Promise.all(promises).then(() => {
+        if (errors.length > 0) {
+          throw createValidationError(errors, message, ...objs);
+        }
+        return retObj as StructResolveType<S>;
+      }) as StructResolveType<S>;
+    });
+  }
+
+  throw makeError(`Unsupported ${typeof struct} type`);
+}
+
+//#endregion Struct
