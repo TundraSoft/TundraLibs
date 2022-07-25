@@ -27,7 +27,7 @@ export class ValidationError extends Error {
   }
 
   public toJSON?(): Record<string, unknown> {
-    console.log(JSON.stringify(this.errors));
+    // console.log(JSON.stringify(this.errors));
     return {
       message: this.message,
       errors: this.errors?.map(({ path, error }) => ({
