@@ -236,17 +236,3 @@ export class JWT extends Options<JWTOptions> {
     return Math.floor((Date.now() + difference) / 1000);
   }
 }
-
-const key = "1AEqUQThWaUarxLIv6l0SzH6ZpIS44xWsAM5xOhi7p76h44NqZfSAM7Hi3afG6wS";
-const j = new JWT({
-  algo: "HS256",
-  key: key,
-  issuer: "AV",
-});
-const jwtSign = await j.sign({
-  "userid": "abhinav",
-  exp: JWT.setDate(60 * 60),
-});
-// eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJBViIsIm5iZiI6MTY1ODAxMTM2MTQxNCwiaWF0IjoxNjU4MDExMzYxNDE0LCJqdGkiOiI5Y0JJanpaY2RqOW5ZcHJtIiwidXNlcmlkIjoiYWJoaW5hdiJ9.vX5cXkB_QWDzcTqW65ASekUoo67GYRSYLz2HliI9An8
-console.log(jwtSign);
-console.log(await j.verify(jwtSign));

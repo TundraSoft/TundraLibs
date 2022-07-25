@@ -1,5 +1,5 @@
-import Guardian, { Struct, ValidationError } from "../mod.ts";
-// import type { Type } from "../mod.ts";
+import { Guardian, Struct, ValidationError } from "../mod.ts";
+import type { Type } from "../mod.ts";
 
 import { assertEquals, assertThrows } from "../../dev_dependencies.ts";
 
@@ -15,6 +15,7 @@ const userSchema = Struct({
     },
   ],
 });
+type A = Type<typeof userSchema>;
 const userSchemaPartial = Struct(
   {
     id: Guardian.number().gt(0).lte(100),

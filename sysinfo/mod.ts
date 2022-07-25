@@ -1,3 +1,5 @@
+import { path } from "../dependencies.ts";
+
 const __envData: Map<string, string> = new Map();
 
 export type MemoryInfo = {
@@ -228,8 +230,35 @@ export const Sysinfo = {
    *
    * @protected
    */
-  _loadEnv: async function () {
+  _loadEnv: async function (location = "./") {
     if (__envData.size === 0) {
+      // First load from .env file if found
+      const file = path.join(location, ".env");
+      const checkRun = await Deno.permissions.query({
+        name: "read",
+        path: file,
+      });
+      if (checkRun.state === "granted") {
+        try {
+          const data = new TextDecoder().decode(await Deno.readFile(file)),
+            lines = data.split("\n"),
+            pattern = new RegExp(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/),
+            isQuoted = new RegExp(/^('|")[^\1].*(\1)$/);
+          lines.forEach((line) => {
+            if (pattern.test(line)) {
+              const record = line.match(pattern),
+                [_, key, value] = record as string[];
+              __envData.set(
+                key,
+                (((isQuoted.test(value)) ? value.slice(1, -1) : value) || "")
+                  .trim(),
+              );
+            }
+          });
+        } catch {
+          // Suppress error
+        }
+      }
       try {
         const checkEnv = await Deno.permissions.query({ name: "env" });
         if (checkEnv.state === "granted") {
