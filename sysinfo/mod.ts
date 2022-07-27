@@ -288,6 +288,10 @@ export const Sysinfo = {
     return undefined;
   },
 
+  getAllEnv: async function (): Promise<Map<string, string>> {
+    await this._loadEnv();
+    return __envData;
+  },
   /**
    * hasEnv
    *

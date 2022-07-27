@@ -13,7 +13,6 @@
       "runtimeExecutable": "deno",
       "runtimeArgs": [
         "run",
-        "--unstable",
         "--inspect-brk=127.0.0.1:3001",
         "--allow-net"
       ],

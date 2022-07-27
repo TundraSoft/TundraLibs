@@ -8,8 +8,8 @@ import { Callback, EventName, EventsType, Listeners } from "./types.ts";
  * Based out of eventemitter class for nodejs.
  */
 // deno-lint-ignore no-explicit-any
-export class Events<T extends EventsType = Record<EventName, any>> {
-  protected _events: Map<keyof T, Set<Listeners>> = new Map();
+export class Events<E extends EventsType = Record<EventName, any>> {
+  protected _events: Map<keyof E, Set<Listeners>> = new Map();
 
   /**
    * on
@@ -19,7 +19,7 @@ export class Events<T extends EventsType = Record<EventName, any>> {
    * @param callback Callback to call
    * @returns self refernce for chaining
    */
-  public on<K extends keyof T>(event: K, callback: T[K]): this;
+  public on<K extends keyof E>(event: K, callback: E[K]): this;
 
   /**
    * on
@@ -46,7 +46,7 @@ export class Events<T extends EventsType = Record<EventName, any>> {
    * @param callback Callback to call
    * @returns self refernce for chaining
    */
-  public once<K extends keyof T>(event: K, callback: T[K]): this;
+  public once<K extends keyof E>(event: K, callback: E[K]): this;
 
   /**
    * once
@@ -71,7 +71,7 @@ export class Events<T extends EventsType = Record<EventName, any>> {
    * @param event Key of Typed event definition
    * @param callback Callback to remove
    */
-  public off<K extends keyof T>(event: K, callback: T[K]): this;
+  public off<K extends keyof E>(event: K, callback: E[K]): this;
 
   /**
    * off
@@ -79,7 +79,7 @@ export class Events<T extends EventsType = Record<EventName, any>> {
    *
    * @param event Key of typed event definition
    */
-  public off<K extends keyof T>(event: K): this;
+  public off<K extends keyof E>(event: K): this;
 
   /**
    * off
@@ -126,10 +126,10 @@ export class Events<T extends EventsType = Record<EventName, any>> {
    * @param event Key of typed event definition
    * @param args Array<Parameters> Typed Arguments to pass to the callback
    */
-  protected async emit<K extends keyof T>(
+  protected async emit<K extends keyof E>(
     event: K,
-    ...args: Parameters<T[K]>
-  ): Promise<ReturnType<T[K]>[]>;
+    ...args: Parameters<E[K]>
+  ): Promise<ReturnType<E[K]>[]>;
 
   /**
    * emit
@@ -173,10 +173,10 @@ export class Events<T extends EventsType = Record<EventName, any>> {
    * @param event Key of typed event definition
    * @param args Array<Parameters> Typed Arguments to pass to the callback
    */
-  protected emitSync<K extends keyof T>(
+  protected emitSync<K extends keyof E>(
     event: K,
-    ...args: Parameters<T[K]>
-  ): ReturnType<T[K]>[];
+    ...args: Parameters<E[K]>
+  ): ReturnType<E[K]>[];
 
   /**
    * emitSync

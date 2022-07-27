@@ -22,8 +22,8 @@ happen.
 
 **Versions:**
 
-- Deno Version [e.g. chrome, safari]
-- Version [e.g. 22]
+- Library version
+- Deno Version [1.1]
 - Any 3rd party dependencies with their version
 
 **Additional context** Add any other context about the problem here.

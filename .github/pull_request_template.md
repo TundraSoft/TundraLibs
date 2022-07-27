@@ -6,6 +6,8 @@ for this change.
 
 Fixes # (issue)
 
+### Known downstream dependencies
+
 ### Type of change
 
 - [ ] Bug fix (non-breaking change which fixes an issue)
@@ -16,11 +18,11 @@ Fixes # (issue)
 
 ### Checklist:
 
-- [ ] My code follows the style guidelines of this project
-- [ ] I have performed a self-review of my own code
-- [ ] I have commented my code, particularly in hard-to-understand areas
-- [ ] I have made corresponding changes to the documentation
-- [ ] My changes generate no new warnings
-- [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] New and existing unit tests pass locally with my changes
+- [ ] Code follows the style guidelines of this project
+- [ ] Code has been self reviewed before raising PR
+- [ ] Code is well commented
+- [ ] Documentation has been updated
+- [ ] No new warnings are generated
+- [ ] Test cases have been updated to reflect the changes/fixes
+- [ ] New and existing unit tests pass locally with changes
 - [ ] Any dependent changes have been merged and published in downstream modules

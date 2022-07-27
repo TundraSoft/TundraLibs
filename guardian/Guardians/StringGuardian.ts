@@ -16,18 +16,6 @@ import type {
 export class StringGuardian<
   P extends FunctionParameters = [string],
 > extends BaseGuardian<FunctionType<string, P>> {
-  //#region Generators
-  /**
-   * genUUID
-   *
-   * Generates a random UUID
-   *
-   * @returns GuardianProxy<this>
-   */
-  genUUID(): GuardianProxy<StringGuardian<P>> {
-    return this.transform(() => crypto.randomUUID().toString(), StringGuardian);
-  }
-
   //#region Manipulators
   /**
    * capitalize

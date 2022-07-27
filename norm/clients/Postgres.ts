@@ -1,28 +1,33 @@
-import AbstractClient from "../AbstractClient.ts";
+import { AbstractClient } from "../AbstractClient.ts";
 import type {
-  ClientConfig,
+  CountQueryOptions,
+  CreateTableOptions,
+  DeleteQueryOptions,
   Filters,
+  InsertQueryOptions,
+  PostgresConfig,
   QueryOptions,
   QueryType,
-} from "../types.ts";
+  SelectQueryOptions,
+  UpdateQueryOptions,
+} from "../types/mod.ts";
 
-import { PGPool } from "../../dependencies.ts";
+import { PGPool, pgsql as sql, Sql } from "../../dependencies.ts";
 import type { PGClientOptions } from "../../dependencies.ts";
-import { pgsql as sql, Sql } from "../../dependencies.ts";
 
-export class PostgresClient extends AbstractClient {
+export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
   declare protected _client: PGPool;
 
-  constructor(name: string, config: Partial<ClientConfig>) {
-    const configDefault: Partial<ClientConfig> = {
+  constructor(name: string, config: Partial<T>) {
+    const configDefault: Partial<PostgresConfig> = {
       dialect: "POSTGRES",
       port: 5432,
-      pool: 5,
+      poolSize: 10,
     };
-    super(name, config, configDefault);
+    super(name, config, configDefault as Partial<T>);
     // Ensure we have atleast > 1 connection available
-    if (this._getOption("pool") < 1) {
-      this._setOption("pool", 5);
+    if (this._getOption("poolSize") < 1) {
+      this._setOption("poolSize", 10);
     }
   }
 
@@ -31,7 +36,7 @@ export class PostgresClient extends AbstractClient {
       const pgProps: PGClientOptions = {
         database: this._getOption("database"),
         password: this._getOption("password"),
-        user: this._getOption("username"),
+        user: this._getOption("user"),
         port: this._getOption("port"),
         hostname: this._getOption("host"),
         tls: {
@@ -40,14 +45,14 @@ export class PostgresClient extends AbstractClient {
           caCertificates: this._getOption("tls").ca,
         },
       };
-      this._client = new PGPool(pgProps, this._getOption("pool"));
+      this._client = new PGPool(pgProps, this._getOption("poolSize"), true);
       // Hack to test the connection, if there is something wrong it will throw immediately
       await (await this._client.connect()).release();
     }
   }
 
   protected async _close() {
-    if (this._client.available > 0) {
+    if (this._client && this._client.available > 0) {
       await this._client.end();
     }
   }
@@ -78,7 +83,9 @@ export class PostgresClient extends AbstractClient {
     return res.rows;
   }
 
-  protected async _select<T>(options: QueryOptions<T>): Promise<Array<T>> {
+  protected async _select<T>(
+    options: SelectQueryOptions<T>,
+  ): Promise<Array<T>> {
     const qry = sql`SELECT `;
     // Generate column names
     if (!options.project) {
@@ -126,7 +133,7 @@ export class PostgresClient extends AbstractClient {
     return result.rows;
   }
 
-  protected async _count<T>(options: QueryOptions<T>): Promise<number> {
+  protected async _count<T>(options: CountQueryOptions<T>): Promise<number> {
     const qry = sql`SELECT COUNT(1) as cnt`;
     // Set table
     qry.append(
@@ -147,7 +154,9 @@ export class PostgresClient extends AbstractClient {
     return result.rows[0].cnt;
   }
 
-  protected async _insert<T>(options: QueryOptions<T>): Promise<Array<T>> {
+  protected async _insert<T>(
+    options: InsertQueryOptions<T>,
+  ): Promise<Array<T>> {
     const qry = sql`INSERT INTO `;
     // Set table
     qry.append(
@@ -163,6 +172,7 @@ export class PostgresClient extends AbstractClient {
     const columns = Object.entries(options.columns).map((value) => {
       return `${value[1]} AS ${value[1]}`;
     });
+
     qry.append(sql` RETURNING`);
     qry.append(sql` ${columns}`);
 
@@ -173,7 +183,9 @@ export class PostgresClient extends AbstractClient {
     return result.rows;
   }
 
-  protected async _update<T>(options: QueryOptions<T>): Promise<Array<T>> {
+  protected async _update<T>(
+    options: UpdateQueryOptions<T>,
+  ): Promise<Array<T>> {
     const qry = sql`UPDATE `;
     // Set table
     qry.append(
@@ -184,19 +196,14 @@ export class PostgresClient extends AbstractClient {
 
     qry.append(sql` SET`);
     // Set Data
-    if (options.data) {
-      if (options.data.length == 1) {
-        // Its an update, if filters are present, use them and pass update
-        qry.append(sql` {${options.data[0]}}`);
-        if (options.filters) {
-          const theFilter = this._processFilters(
-            options.columns,
-            options.filters,
-          );
-          qry.append(sql` WHERE `);
-          qry.append(theFilter);
-        }
-      }
+    qry.append(sql` {${options.data}}`);
+    if (options.filters) {
+      const theFilter = this._processFilters(
+        options.columns,
+        options.filters,
+      );
+      qry.append(sql` WHERE `);
+      qry.append(theFilter);
     }
     // Generate return column names
     const columns = Object.entries(options.columns).map((value) => {
@@ -212,7 +219,7 @@ export class PostgresClient extends AbstractClient {
     return result.rows;
   }
 
-  protected async _delete<T>(options: QueryOptions<T>): Promise<number> {
+  protected async _delete<T>(options: DeleteQueryOptions<T>): Promise<number> {
     const qry = sql`DELETE FROM`;
     // Set table
     qry.append(
@@ -249,6 +256,37 @@ export class PostgresClient extends AbstractClient {
     return true;
   }
 
+  protected _createTable(options: CreateTableOptions) {
+    const query: Array<string> = [];
+    query.push(`CREATE TABLE IF NOT EXISTS ${(options.schema !== undefined) ? '"' + options.schema + '"."' + options.table + '"' : '"' + options.table + '"'} (`);
+    const columns = []
+    const constrains: Array<string> = []
+    // PK
+    if(options.primaryKeys && options.primaryKeys.length > 0) {
+      constrains.push(` PRIMARY KEY ("${options.primaryKeys.join('", "')}")`);
+    }
+    if(options.uniqueKeys) {
+      for(const [name, keys] of Object.entries(options.uniqueKeys)) {
+        constrains.push(` CONSTRAINT "${options.table}_${name}" UNIQUE ("${keys.join('", "')}")`);
+      }
+    }
+    // The columns
+    for(const [name, define] of Object.entries(options.columns)) {
+      columns.push(` "${name}" ${define.type}${define.isNullable === true ? '' : ' NOT NULL'}`);
+    }
+    if(constrains.length > 0)
+      query.push(columns.join(', \n') + ', ');
+    else 
+      query.push(columns.join(', \n'));
+    query.push(constrains.join(', \n'));
+    query.push(');');
+    console.log(query.join('\n'));
+  }
+
+  protected _dropTable() {}
+
+  protected _syncTable() {}
+  
   protected _processFilters<T>(
     columns: Record<string, string>,
     filter: Filters<T>,

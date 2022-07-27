@@ -8,6 +8,7 @@ let op: unknown[] = [];
 type TestEvents = {
   event1(a: string): unknown;
 };
+
 class EventTester extends Events<TestEvents> {
   getEventCount(): number {
     return this._events.get("event1")?.size || 0;

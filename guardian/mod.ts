@@ -8,6 +8,7 @@ export type {
   Type,
 } from "./types.ts";
 
+export { type } from "./utils.ts";
 export { Guardian } from "./Guardians/UnknownGuardian.ts";
 export { objectGuard } from "./Guardians/ObjectGuardian.ts";
 export { arrayGuard } from "./Guardians/ArrayGuardian.ts";

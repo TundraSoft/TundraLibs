@@ -1,2 +1,2 @@
 export { Config } from "./Config.ts";
-export type { ConfigFile, ConfigMode, ConfigType } from "./types.ts";
+export type { ConfigFile, ConfigType } from "./types.ts";
