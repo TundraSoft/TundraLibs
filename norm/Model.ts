@@ -374,7 +374,7 @@ export class Model<T> {
     await this._connection.truncate(options);
   }
 
-  public async create(dropCreate?: boolean, backup?: string): Promise<void> {
+  public async createTable(dropCreate?: boolean, backup?: string): Promise<void> {
     // create the table structure
     const options: CreateTableOptions = {
       schema: this._model.schema,
@@ -409,6 +409,11 @@ export class Model<T> {
     }
     await this._init();
     this._connection.createTable(options);
+  }
+
+  public async drop(): Promise<void> {
+    await this._init();
+    await this._connection.dropTable(this.table, this.schema);
   }
 
   // public async drop(): Promise<void> {}

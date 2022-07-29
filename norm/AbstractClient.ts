@@ -395,11 +395,32 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     }
   }
 
-  public createTable(options: CreateTableOptions) {
-    this._createTable(options);
+  public async createTable(options: CreateTableOptions): Promise<void> {
+    const start = performance.now()
+    await this.connect();
+    try {
+      await this._createTable(options);
+      // Set end time
+      const end = performance.now();
+      const time = end - start;
+    } catch (e) {
+      throw new QueryError(e.message, "CREATE", this.name, this.dialect);
+    }
   }
 
-  public dropTable() {}
+  public async dropTable(table: string, schema?: string): Promise<boolean> {
+    const start = performance.now()
+    await this.connect();
+    try {
+      await this._dropTable(table, schema);
+      // Set end time
+      const end = performance.now();
+      const time = end - start;
+      return true;
+    } catch (e) {
+      throw new QueryError(e.message, "DROP", this.name, this.dialect);
+    }
+  }
 
   protected abstract _connect(): void;
 
@@ -432,5 +453,8 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
 
   protected abstract _truncate<T>(options: QueryOptions<T>): Promise<boolean>;
 
-  protected abstract _createTable(options: CreateTableOptions): void;
+  protected abstract _createTable(options: CreateTableOptions): Promise<void>; 
+
+  protected abstract _dropTable(table: string, schema?: string): Promise<void>;
+  
 }

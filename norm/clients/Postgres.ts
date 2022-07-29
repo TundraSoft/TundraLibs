@@ -185,12 +185,39 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
     return true;
   }
 
-  protected _createTable(options: CreateTableOptions) {
-    
+  protected async _createTable(options: CreateTableOptions): Promise<void> {
+    const table = (options.schema !== undefined) ? options.schema + "." + options.table : options.table,
+      columns = Object.keys(options.columns).map((value) => {
+          const colName = value;
+          return `${this._quoteColumn(colName)} ${options.columns[value].type} ${options.columns[value].isNullable ? "NULL" : "NOT NULL"}`;
+        }), 
+      constraints: Array<string> = [], 
+      qry: Array<string> = [`CREATE TABLE IF NOT EXISTS ${this._quoteColumn(table)} (`];
+    if(options.primaryKeys) {
+      constraints.push(`PRIMARY KEY (${options.primaryKeys.map((value) => { return this._quoteColumn(value); }).join(", ")})`);
+    }
+    if(options.uniqueKeys) {
+      Object.entries(options.uniqueKeys).forEach((keys, name) => {
+        constraints.push(`CONSTRAINT ${name} UNIQUE (${keys.join(", ")})`);
+      });
+    }
+    // FK we will see later
+    qry.push(...columns);
+    qry.push(...constraints);
+    qry.push(")");
+    console.log(qry.join(", \n"));
+    const conn = await this._client.connect();
+    await conn.queryObject("" + qry);
+    conn.release();
   }
 
-  protected _dropTable() {
-
+  protected async _dropTable(table: string, schema?: string): Promise<void> {
+    const qry = `DROP TABLE IF EXISTS ${this._quoteColumn(schema ? schema + "." + table : table)}`;
+    // Well no going back
+    console.log(qry);
+    const conn = await this._client.connect();
+    await conn.queryObject("" + qry);
+    conn.release();
   }
 
   protected _syncTable() {
