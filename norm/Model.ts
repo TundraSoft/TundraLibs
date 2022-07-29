@@ -44,18 +44,28 @@ import {
 
 export class Model<T> {
   protected _connection!: AbstractClient;
+  protected _schema?: string;
+  protected _table: string;
+  protected _pageSize?: number;
+  
+  
   protected _model: ModelDefinition;
   protected _primaryKeys: Array<keyof T> = [];
   protected _identityKeys: Array<keyof T> = [];
   protected _uniqueKeys: Record<string, Array<keyof T>> = {};
   protected _columns: Record<keyof T, string>;
   protected _notNulls: Array<keyof T> = [];
+  // deno-lint-ignore no-explicit-any
   protected _validator: GuardianProxy<any>;
 
   constructor(model: ModelDefinition) {
     this._model = model;
+    this._schema = model.schema;
+    this._table = model.table;
+    this._pageSize = model.pageSize;
 
     const columnAlias: Partial<Record<keyof T, string>> = {};
+    // deno-lint-ignore no-explicit-any
     const validator: { [key: string]: GuardianProxy<any> } = {};
     for (const [column, definition] of Object.entries(this._model.columns)) {
       const hasValidation = (definition.validator !== undefined);
@@ -68,11 +78,13 @@ export class Model<T> {
       if (definition.isPrimary) {
         this._primaryKeys.push(column as keyof T);
       }
+
       if (
         ["AUTO_INCREMENT", "SERIAL", "BIGSERIAL"].includes(definition.dataType)
       ) {
         this._identityKeys.push(column as keyof T);
       }
+
       if (definition.uniqueKey !== undefined) {
         if (this._uniqueKeys[definition.uniqueKey] === undefined) {
           this._uniqueKeys[definition.uniqueKey] = [];
@@ -91,6 +103,18 @@ export class Model<T> {
       `Validation failed for model ${this._model.table}`,
       "PARTIAL",
     );
+  }
+
+  get schema(): string | undefined {
+    return this._schema;
+  }
+
+  get table(): string {
+    return this._table;
+  }
+
+  get schemaTable(): string {
+    return `${this._schema !== undefined ? `${this._schema}.` : ""}${this._table}`;
   }
 
   /**
@@ -203,6 +227,7 @@ export class Model<T> {
       schema: this._model.schema,
       table: this._model.table,
       columns: this._columns,
+      insertColumns: this._notNulls, 
       data: data,
     };
     return await this._connection.insert<T>(options);

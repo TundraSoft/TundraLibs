@@ -1,4 +1,4 @@
-import { DataTypes, DataType } from "./DataTypes.ts";
+import { DataType } from "./DataTypes.ts";
 /**
  * QueryTypes
  */
@@ -112,6 +112,7 @@ export type UpdateQueryOptions<T> = QueryOptions<T> & {
 };
 
 export type InsertQueryOptions<T> = QueryOptions<T> & {
+  insertColumns: Array<keyof T>;
   data: Array<Partial<T>>;
   merge?: boolean;
 };
@@ -119,31 +120,6 @@ export type InsertQueryOptions<T> = QueryOptions<T> & {
 export type DeleteQueryOptions<T> = QueryOptions<T> & {
   filters?: Filters<T>;
 };
-
-/**
- * QueryOptions<T>
- * The standard options set passed to create Select, Insert, Update and Delete statements
- */
-// export type QueryOptions<T> = {
-//   // Table name
-//   table: string;
-//   // Schema name
-//   schema?: string;
-//   // Column names (for alias mapping)
-//   columns: Record<keyof T, string>;
-//   // Project - The actual columns to select
-//   project?: Array<string>;
-//   // PK
-//   primary?: Array<keyof T>;
-//   // Filters
-//   filters?: Filters<T>;
-//   // Paging
-//   paging?: QueryPagination;
-//   // Sort
-//   sort?: QuerySorting<T>;
-//   // Data used for insert or update
-//   data?: Array<Partial<T>>;
-// };
 
 /**
  * QueryResult

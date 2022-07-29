@@ -6,10 +6,12 @@ export type ColumnDefinition = {
   name?: string;
   // The data type
   dataType: keyof typeof DataTypes;
+  length?: {
+    precision: number, 
+    scale: number
+  } | number;
   // isNullable - Is column nullable, if true then null is valid. Defaults to false
   isNullable?: boolean;
-  // Denotes if the column is derived from identity column, if so insert on column will be blocked
-  // isIdentity?: boolean;
   // defaultValue: DBGenerators | GeneratorFunction<T>
   // Validations for the column
   // deno-lint-ignore no-explicit-any

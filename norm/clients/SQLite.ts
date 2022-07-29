@@ -75,66 +75,31 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
   protected async _select<T>(
     options: SelectQueryOptions<T>,
   ): Promise<Array<T>> {
-    const qry = sql`SELECT `;
-    // Generate column names
-    if (!options.project) {
-      options.project = Object.keys(options.columns);
-    }
-    const columns = options.project.map((value) => {
-      const colName = options.columns[value as keyof T];
-      return `${colName} AS ${value}`;
-    });
-    // const columns = Object.entries(options.columns).map((value) => {
-    //   return `${value[1]} AS ${value[1]}`;
-    // });
-    qry.append(sql` ${columns}`);
-    // Set table
-    qry.append(
-      (options.schema)
-        ? sql` FROM "${options.schema}"."${options.table}"`
-        : sql` FROM "${options.table}"`,
-    );
-    // Filters
-    if (options.filters) {
-      const filt = this._processFilters(options.columns, options.filters);
-      qry.append(sql` WHERE `);
-      qry.append(filt);
-    }
-    // Sort
-    if (options.sort) {
-      const sort = Object.entries(options.sort).map((value) => {
-        return `${options.columns[value[0] as keyof T]} ${value[1]} `;
-      });
-      qry.append(sql` ORDER BY ${sort}`);
-    }
-    // Paging
-    if (options.paging) {
-      qry.append(
-        sql` LIMIT ${options.paging.size} OFFSET ${
-          (options.paging.page - 1 || 0) * options.paging.size
-        } `,
-      );
-    }
+
+    const project = (options.project !== undefined) ? options.project : Object.keys(options.columns), 
+        columns = project.map((value) => {
+          const colName = options.columns[value as keyof T];
+          return `${this._quoteColumn(colName)} AS ${this._quoteColumn(value)}`;
+        }), 
+      table = (options.schema !== undefined) ? options.schema + "." + options.table : options.table, 
+      paging = (options.paging)? ` LIMIT ${options.paging.size} OFFSET ${(options.paging.page - 1 || 0) * options.paging.size} ` : "", 
+      sort = (options.sort)? ` ORDER BY ${Object.entries(options.sort).map((value) => { return `${this._quoteColumn(options.columns[value[0] as keyof T])} ${value[1]} `; }).join(", ")} ` : "", 
+      filter = (options.filters)? ` WHERE ${this._processFilters(options.columns, options.filters)}` : "", 
+      qry = `SELECT ${columns} FROM ${this._quoteColumn(table)}${filter}${sort}${paging}`;
+
+    // Log the generated query
+    console.log(qry);
     console.log("" + qry);
     const result = await this._client?.queryEntries(qry.toString());
     return result as T[];
   }
 
   protected async _count<T>(options: CountQueryOptions<T>): Promise<number> {
-    const qry = sql`SELECT COUNT(1) as cnt`;
-    // Set table
-    qry.append(
-      (options.schema)
-        ? sql` FROM "${options.schema}"."${options.table}"`
-        : sql` FROM "${options.table}"`,
-    );
-    // Filters
-    if (options.filters) {
-      const filt = this._processFilters(options.columns, options.filters);
-      qry.append(sql` WHERE `);
-      qry.append(filt);
-    }
-    console.log("" + qry);
+    const table = (options.schema !== undefined) ? options.schema + "." + options.table : options.table, 
+      filter = (options.filters)? ` WHERE ${this._processFilters(options.columns, options.filters)}` : "", 
+      qry = `SELECT COUNT(1) as cnt FROM ${this._quoteColumn(table)}${filter}`;
+
+    console.log(qry);
     const result = await this._client?.queryEntries(qry.toString());
     console.log(result);
     return 0 as number;
@@ -143,24 +108,21 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
   protected async _insert<T>(
     options: InsertQueryOptions<T>,
   ): Promise<Array<T>> {
-    const qry = sql`INSERT INTO `;
-    // Set table
-    qry.append(
-      (options.schema)
-        ? sql` "${options.schema}"."${options.table}"`
-        : sql` "${options.table}"`,
-    );
-
-    // Set Data
-    qry.append(sql` <${options.data}>`);
-    // Generate return column names
-    const columns = Object.entries(options.columns).map((value) => {
-      return `${value[1]} AS ${value[1]}`;
-    });
-    qry.append(sql` RETURNING`);
-    qry.append(sql` ${columns}`);
-
-    console.log("" + qry);
+    const table = (options.schema !== undefined) ? options.schema + "." + options.table : options.table, 
+      columns: Array<string> = options.insertColumns.map((value) => {
+          return this._quoteColumn(options.columns[value as keyof T]);
+        }), 
+      values: Array<string> = options.data.map((insertRow) => {
+          return "(" + options.insertColumns.map((value) => {
+              return this._quoteValue(insertRow[value as keyof T] || undefined);
+            }).join(", ") + ")"
+        }), 
+      returning = Object.entries(options.columns).map((value) => {
+          return `this._quoteColumn(${value[1]}) AS this._quoteColumn(${value[0]})`;
+        }), 
+      qry = `INSERT INTO ${this._quoteColumn(table)} (${columns.join(",")}) VALUES ${values.join(",")} RETURNING ${returning}`;
+    
+    console.log(qry);
     const result = await this._client?.queryEntries(qry.toString());
     return result as T[];
   }
@@ -168,33 +130,17 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
   protected async _update<T>(
     options: UpdateQueryOptions<T>,
   ): Promise<Array<T>> {
-    const qry = sql`UPDATE `;
-    // Set table
-    qry.append(
-      (options.schema)
-        ? sql` "${options.schema}"."${options.table}"`
-        : sql` "${options.table}"`,
-    );
+    const table = (options.schema !== undefined) ? options.schema + "." + options.table : options.table, 
+      filter = (options.filters)? ` WHERE ${this._processFilters(options.columns, options.filters)}` : "", 
+      keyVal = Object.entries(options.data).map((value) => {
+          return `${this._quoteColumn(options.columns[value[0] as keyof T])} = ${this._quoteValue(value[1])}`;
+        }), 
+      returning = Object.entries(options.columns).map((value) => {
+          return `${this._quoteColumn(value[1] as string)} AS ${this._quoteColumn(value[0])}`;
+        }), 
+      qry = `UPDATE ${this._quoteColumn(table)} SET ${keyVal}${filter} RETURNING ${returning}`;
 
-    qry.append(sql` SET`);
-    // Set Data
-    qry.append(sql` {${options.data}}`);
-    if (options.filters) {
-      const theFilter = this._processFilters(
-        options.columns,
-        options.filters,
-      );
-      qry.append(sql` WHERE `);
-      qry.append(theFilter);
-    }
-    // Generate return column names
-    const columns = Object.entries(options.columns).map((value) => {
-      return `${value[1]} AS ${value[1]}`;
-    });
-    qry.append(sql` RETURNING`);
-    qry.append(sql` ${columns}`);
-
-    console.log("" + qry);
+    console.log(qry);
     const result = await this._client?.queryEntries(qry.toString());
     return result as T[];
   }
@@ -202,35 +148,21 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
   protected async _delete<T>(
     options: DeleteQueryOptions<T>,
   ): Promise<number> {
-    const qry = sql`DELETE FROM`;
-    // Set table
-    qry.append(
-      (options.schema)
-        ? sql` "${options.schema}"."${options.table}"`
-        : sql` "${options.table}"`,
-    );
-    // Set filter
-    if (options.filters) {
-      qry.append(sql` WHERE `);
-      qry.append(this._processFilters(options.columns, options.filters));
-    }
+    const table = (options.schema !== undefined) ? options.schema + "." + options.table : options.table, 
+      filter = (options.filters)? ` WHERE ${this._processFilters(options.columns, options.filters)}` : "", 
+      qry = `DELETE FROM ${this._quoteColumn(table)}${filter}`;
 
-    console.log("" + qry);
+    console.log(qry);
     const result = await this._client?.queryEntries(qry.toString());
     console.log(result);
     return this._client?.changes || 0;
   }
 
   protected async _truncate<T>(options: QueryOptions<T>): Promise<boolean> {
-    const qry = sql`TRUNCATE TABLE "${options.table}"`;
-    // Set table
-    qry.append(
-      (options.schema)
-        ? sql` "${options.schema}"."${options.table}"`
-        : sql` "${options.table}"`,
-    );
+    const table = (options.schema !== undefined) ? options.schema + "." + options.table : options.table, 
+      qry = `TRUNCATE TABLE ${this._quoteColumn(table)}`;
 
-    console.log("" + qry);
+    console.log(qry);
     await this._client?.execute(qry.toString());
     return true;
   }
@@ -264,8 +196,8 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
     columns: Record<string, string>,
     filter: Filters<T>,
     joiner = "AND",
-  ): Sql {
-    const ret: Array<Sql> = [];
+  ): string {
+    const ret: Array<string> = [];
     if (Array.isArray(filter)) {
       filter.forEach((value) => {
         ret.push(this._processFilters(columns, value, "AND"));
@@ -292,55 +224,55 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
               switch (operator) {
                 default:
                 case "$eq":
-                  ret.push(sql`${columns[columnName]} = '${operatorValue}'`);
+                  ret.push(`${this._quoteColumn(columns[columnName])} = ${this._quoteValue(operatorValue)}`);
                   break;
                 case "$neq":
-                  ret.push(sql`${columns[columnName]} != '${operatorValue}'`);
+                  ret.push(`${this._quoteColumn(columns[columnName])} != ${this._quoteValue(operatorValue)}`);
                   break;
                 case "$in":
-                  ret.push(sql`${columns[columnName]} IN [${operatorValue}]`);
+                  ret.push(`${this._quoteColumn(columns[columnName])} IN ${this._quoteValue(operatorValue)}`);
                   break;
                 case "$nin":
                   ret.push(
-                    sql`${columns[columnName]} NOT IN [${operatorValue}]`,
+                    `${this._quoteColumn(columns[columnName])} NOT IN ${this._quoteValue(operatorValue)}`,
                   );
                   break;
                 case "$lt":
-                  ret.push(sql`${columns[columnName]} < '${operatorValue}'`);
+                  ret.push(`${this._quoteColumn(columns[columnName])} < ${this._quoteValue(operatorValue)}`);
                   break;
                 case "$lte":
-                  ret.push(sql`${columns[columnName]} <= '${operatorValue}'`);
+                  ret.push(`${this._quoteColumn(columns[columnName])} <= ${this._quoteValue(operatorValue)}`);
                   break;
                 case "$gt":
-                  ret.push(sql`${columns[columnName]} > '${operatorValue}'`);
+                  ret.push(`${this._quoteColumn(columns[columnName])} > ${this._quoteValue(operatorValue)}`);
                   break;
                 case "$gte":
-                  ret.push(sql`${columns[columnName]} >= '${operatorValue}'`);
+                  ret.push(`${this._quoteColumn(columns[columnName])} >= ${this._quoteValue(operatorValue)}`);
                   break;
                 // deno-lint-ignore no-case-declarations
                 case "$between":
                   const opval = operatorValue as { from: unknown; to: unknown };
                   ret.push(
-                    sql`${
-                      columns[columnName]
-                    } BETWEEN '${opval.from}' AND '${opval.to}'`,
+                    `${
+                      this._quoteColumn(columns[columnName])
+                    } BETWEEN '${this._quoteValue(operatorValue)}' AND '${this._quoteValue(operatorValue)}'`,
                   );
                   break;
                 case "$null":
                   if (operatorValue === true) {
-                    ret.push(sql`${columns[columnName]} IS NULL`);
+                    ret.push(`${this._quoteColumn(columns[columnName])} IS NULL`);
                   } else {
-                    ret.push(sql`${columns[columnName]} IS NOT NULL`);
+                    ret.push(`${this._quoteColumn(columns[columnName])} IS NOT NULL`);
                   }
                   break;
                 case "$like":
                   ret.push(
-                    sql`${columns[columnName]} LIKE '${operatorValue}'`,
+                    `${this._quoteColumn(columns[columnName])} LIKE ${this._quoteValue(operatorValue)}`,
                   );
                   break;
                 case "$nlike":
                   ret.push(
-                    sql`${columns[columnName]} NOT LIKE '${operatorValue}'`,
+                    `${this._quoteColumn(columns[columnName])} NOT LIKE ${this._quoteValue(operatorValue)}`,
                   );
                   break;
               }
@@ -348,25 +280,51 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
           } else {
             // No operator means it is equal to
             // @TODO, even this will be an argument.
-            ret.push(sql`${columns[columnName]} = '${operation}'`);
+            ret.push(`${this._quoteColumn(columns[columnName])} = '${this._quoteValue(operation)}'`);
           }
         }
       }
     }
     // return "(" + ret.join(` ${joiner} `) + ")";
-    const retVal = sql`( `;
-    retVal.append(ret.reduce((prev, curr, index) => {
+    let retVal = `( `;
+    retVal += (ret.reduce((prev, curr, index) => {
       // console.log(curr.toString());
       if (index === 0) {
         return curr;
       } else {
-        prev.append(sql` ${joiner} `);
-        prev.append(curr);
+        prev += ` ${joiner} ` + curr;
         return prev;
       }
     }));
-    retVal.append(sql` )`);
+    retVal += ` )`;
     return retVal;
+  }
+
+  // deno-lint-ignore no-explicit-any
+  protected _quoteValue(value: any): string {
+    if(typeof value == null || typeof(value) == 'function' || typeof(value) == 'symbol')
+      return 'NULL';
+    if (value === false)
+      return 'FALSE'
+    if (value === true)
+      return 'TRUE'
+    if(typeof value === 'number' || typeof value === 'bigint')
+      return value + '';
+    if(value instanceof Date)
+      return `'${value.toISOString()}'`;
+    if (value instanceof Array || Array.isArray(value))
+      return '(' + value.map((v) => this._quoteValue(v)).join(',') + ')';
+    if(typeof value === 'object')
+      value = JSON.stringify(value);
+    else
+      value += '';
+    
+    return `'${value.replace(/'/g, "''")}'`;
+
+  }
+
+  protected _quoteColumn(column: string) {
+    return `"${column.replace(/\./g, '"."')}"`;
   }
 }
 
