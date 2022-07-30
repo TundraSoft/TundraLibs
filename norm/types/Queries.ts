@@ -146,10 +146,10 @@ export type CreateTableOptions = {
     [key: string]: {
       type: DataType;
       isNullable?: boolean;
-    }
-  }, 
+    };
+  };
   primaryKeys?: Array<string>;
   uniqueKeys?: {
     [key: string]: Array<string>;
-  }
+  };
 };

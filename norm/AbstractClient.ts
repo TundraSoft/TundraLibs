@@ -5,6 +5,7 @@ import type {
   ClientEvents,
   // ColumnDefinition,
   CountQueryOptions,
+  CreateTableOptions,
   DeleteQueryOptions,
   Dialect,
   InsertQueryOptions,
@@ -14,7 +15,6 @@ import type {
   QueryType,
   SelectQueryOptions,
   UpdateQueryOptions,
-  CreateTableOptions,
 } from "./types/mod.ts";
 
 import { ConnectionError, QueryError } from "./Errors.ts";
@@ -62,6 +62,9 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     return this._name;
   }
 
+  get stats(): Map<QueryType, { count: number; time: number; error: number }> {
+    return this._stats;
+  }
   /**
    * connect
    *
@@ -140,7 +143,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
    * select
    *
    * Helps select data from a specific table. Supports filtering, paging and sorting
-   * 
+   *
    * @param options options SelectQueryOptions<T> The options or specs basis which data is to be selected
    * @returns Promise<QueryResult<T>>
    */
@@ -195,7 +198,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
 
   /**
    * insert
-   * 
+   *
    * Helps insert data to a specific table. It wil return the rows which have been inserted.
    *
    * @param options InsertQueryOptions<T> The options
@@ -395,27 +398,57 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     }
   }
 
+  public async createSchema(name: string, ifExists = true): Promise<void> {
+    const start = performance.now();
+    await this.connect();
+    try {
+      await this._createSchema(name, ifExists);
+      // Set end time
+      const end = performance.now();
+      const _time = end - start;
+    } catch (e) {
+      throw new QueryError(e.message, "CREATE", this.name, this.dialect);
+    }
+  }
+
+  public async dropSchema(
+    name: string,
+    ifExists = true,
+    cascade = true,
+  ): Promise<void> {
+    const start = performance.now();
+    await this.connect();
+    try {
+      await this._dropSchema(name, ifExists, cascade);
+      // Set end time
+      const end = performance.now();
+      const _time = end - start;
+    } catch (e) {
+      throw new QueryError(e.message, "DROP", this.name, this.dialect);
+    }
+  }
+
   public async createTable(options: CreateTableOptions): Promise<void> {
-    const start = performance.now()
+    const start = performance.now();
     await this.connect();
     try {
       await this._createTable(options);
       // Set end time
       const end = performance.now();
-      const time = end - start;
+      const _time = end - start;
     } catch (e) {
       throw new QueryError(e.message, "CREATE", this.name, this.dialect);
     }
   }
 
   public async dropTable(table: string, schema?: string): Promise<boolean> {
-    const start = performance.now()
+    const start = performance.now();
     await this.connect();
     try {
       await this._dropTable(table, schema);
       // Set end time
       const end = performance.now();
-      const time = end - start;
+      const _time = end - start;
       return true;
     } catch (e) {
       throw new QueryError(e.message, "DROP", this.name, this.dialect);
@@ -453,8 +486,18 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
 
   protected abstract _truncate<T>(options: QueryOptions<T>): Promise<boolean>;
 
-  protected abstract _createTable(options: CreateTableOptions): Promise<void>; 
+  protected abstract _createTable(options: CreateTableOptions): Promise<void>;
 
   protected abstract _dropTable(table: string, schema?: string): Promise<void>;
-  
+
+  protected abstract _createSchema(
+    name: string,
+    ifExists?: boolean,
+  ): Promise<void>;
+
+  protected abstract _dropSchema(
+    name: string,
+    ifExists?: boolean,
+    cascade?: boolean,
+  ): Promise<void>;
 }

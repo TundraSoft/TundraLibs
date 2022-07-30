@@ -16,9 +16,9 @@ need to do such operations, custom queries can be written.
 
 ## Supported Databases
 
-- [X] PostgreSQL
+- [x] PostgreSQL
 - [ ] MySQL/MariaDB
-- [X] SQLite
+- [x] SQLite
 - [ ] MongoDB
 
 ## Usage
@@ -26,11 +26,9 @@ need to do such operations, custom queries can be written.
 @TODO - Need to fill up documentation
 
 ```ts
-
 // Standard no frills, connect query and move on
 
 const test = newPostgresClient("test", {
-
   username: "**********",
 
   password: "**********",
@@ -42,17 +40,13 @@ const test = newPostgresClient("test", {
   host: "**********",
 
   tls: {
-
     enabled: true,
-
   },
-
 });
 
 await test.connect();
 
 type testModal = {
-
   Id: string;
 
   Name: string;
@@ -60,18 +54,14 @@ type testModal = {
   Check?: boolean;
 
   TimeStamp: Date;
-
 };
 
-
 const option: Partial<QueryOptions<testModal>> = {
-
   table: "test",
 
   schema: "CurrencyTracker",
 
   columns: {
-
     Id: "id",
 
     Name: "name",
@@ -79,89 +69,58 @@ const option: Partial<QueryOptions<testModal>> = {
     Check: "chk",
 
     TimeStamp: "tstamp",
-
   },
 
   primary: ["Id"],
-
 };
 
-
 const filter: Filters<testModal> = {
-
   Check: true,
 
   $or: [{
-
     Name: ";' select 1",
 
     Check: { $null: true },
-
   }, {
-
     Name: "sdf",
-
   }, {
-
     Check: true,
-
   }],
-
 };
 
-
 const insData: Array<Partial<testModal>> = [{
-
   Name: "dffdas",
 
   Check: true,
-
 }, {
-
   Name: "sdfsdf",
-
 }];
 
-
 const delFilter: Filters<testModal> = {
-
   Id: {
-
     $in: [
+      "3e85fcf5-b0a0-4110-a937-991aba25eb9e",
 
-"3e85fcf5-b0a0-4110-a937-991aba25eb9e",
-
-"b736ecb9-b0fc-40a1-be8f-c49339d15fac",
-
+      "b736ecb9-b0fc-40a1-be8f-c49339d15fac",
     ],
-
   },
-
 };
 
-
 const res = await test.select<testModal>(
-
   {
-
     ...option,
 
     ...{
-
       filters: filter,
 
       sort: { Name: "DESC" },
 
       paging: { size: 10, page: 1 },
-
     },
-
   } as QueryOptions<testModal>,
-
 );
 
 console.log(res);
-
 ```
 
 ### Types
@@ -171,51 +130,45 @@ console.log(res);
 This is used to create a connection
 
 ```ts
-
 type ClientConfig = {
-
-// The dialect
+  // The dialect
 
   dialect: Dialect;
 
-// The host
+  // The host
 
   host: string;
 
-// The port number
+  // The port number
 
   port: number;
 
-// The username
+  // The username
 
   username: string;
 
-// The password
+  // The password
 
   password: string;
 
-// The database
+  // The database
 
   database: string;
 
-// Max Connection in the pool, defaults to 1 (no pool)
+  // Max Connection in the pool, defaults to 1 (no pool)
 
   pool: number;
 
-// TLS options
+  // TLS options
 
   tls: Partial<{
-
     enforce: boolean;
 
     enabled: boolean;
 
     ca: string[];
-
   }>;
-
 };
-
 ```
 
 #### QueryOptions
@@ -238,43 +191,39 @@ NOTES:
   class, paging is set to 10 by default.
 
 ```ts
-
 type QueryOptions<T> = {
-
-// Table name
+  // Table name
 
   table: string;
 
-// Schema name
+  // Schema name
 
   schema?: string;
 
-// Column names (for alias mapping)
+  // Column names (for alias mapping)
 
   columns: Record<keyof T, string>;
 
-// PK
+  // PK
 
   primary?: Array<keyof T>;
 
-// Filters
+  // Filters
 
   filters?: Filters<T>;
 
-// Paging
+  // Paging
 
   paging?: QueryPagination;
 
-// Sort
+  // Sort
 
   sort?: QuerySorting<T>;
 
-// Data used for insert or update
+  // Data used for insert or update
 
   data?: Array<Partial<T>>;
-
 };
-
 ```
 
 #### QueryResult
@@ -282,52 +231,46 @@ type QueryOptions<T> = {
 The default object used when returning data from query.
 
 ```ts
-
 type QueryResult<T = Record<string, unknown>> = {
-
-// The type of Query
+  // The type of Query
 
   type: QueryType;
 
-// Amount of time taken to run query
+  // Amount of time taken to run query
 
   time: number;
 
-// Total rows (in select with filter and paging, this ignores the paging value)
+  // Total rows (in select with filter and paging, this ignores the paging value)
 
   totalRows?: number;
 
-// Pagination details
+  // Pagination details
 
   paging?: {
-
-// Per page count
+    // Per page count
 
     size: number;
 
-// Page number
+    // Page number
 
     page?: number;
-
   };
 
-// Sort options,
+  // Sort options,
 
   sort?: QuerySorting<T>;
 
-// The rows (returned in Select, Insert and Update only)
+  // The rows (returned in Select, Insert and Update only)
 
   rows?: Array<T>;
-
 };
-
 ```
 
 ## ToDO
 
 - [ ] Better documentation
 - [ ] Driver(s) support
-- [X] Finish Model to support validation and Generators
+- [x] Finish Model to support validation and Generators
 - [ ] Test suit
 - [ ] Better error classes
 - [ ] Migrate away from polysql if there is no development there

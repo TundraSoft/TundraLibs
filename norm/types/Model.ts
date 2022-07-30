@@ -1,4 +1,4 @@
-import { DataTypes, DataTypeMap } from "./DataTypes.ts";
+import { DataTypeMap, DataTypes } from "./DataTypes.ts";
 import type { GuardianProxy } from "../../guardian/mod.ts";
 
 export type ColumnDefinition = {
@@ -7,8 +7,8 @@ export type ColumnDefinition = {
   // The data type
   dataType: keyof typeof DataTypes;
   length?: {
-    precision: number, 
-    scale: number
+    precision: number;
+    scale: number;
   } | number;
   // isNullable - Is column nullable, if true then null is valid. Defaults to false
   isNullable?: boolean;
@@ -64,13 +64,14 @@ type ExtractTypes<T extends { [K in keyof T]: ColumnDefinition }> =
     KeysMatching<T, { isNullable: true }>
   >;
 
-type Picker<P extends ModelDefinition, V> = ExtractTypes<
+// type Picker<P extends ModelDefinition> = ExtractTypes<
+//   {
+//     [X in keyof P["columns"]]: P["columns"][X];
+//   }
+// >;
+
+export type ModelType<P extends ModelDefinition> = ExtractTypes<
   {
     [X in keyof P["columns"]]: P["columns"][X];
   }
->;
-
-export type ModelType<P extends ModelDefinition> = Picker<
-  P,
-  { nullable: true }
 >;

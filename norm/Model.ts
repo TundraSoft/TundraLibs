@@ -8,13 +8,13 @@ import type {
   Filters,
   InsertQueryOptions,
   ModelDefinition,
+  ModelType,
   QueryOptions,
   QueryPagination,
   QueryResult,
   QuerySorting,
   SelectQueryOptions,
   UpdateQueryOptions,
-  // ModelType,
 } from "./types/mod.ts";
 
 import type {
@@ -42,13 +42,16 @@ import {
 // export class Models<S extends ModelDefinition, T extends ModelType<S> = ModelType<S>> {
 // }
 
-export class Model<T> {
+// export class Model<T> {
+export class Model<
+  S extends ModelDefinition,
+  T extends ModelType<S> = ModelType<S>,
+> {
   protected _connection!: AbstractClient;
   protected _schema?: string;
   protected _table: string;
   protected _pageSize?: number;
-  
-  
+
   protected _model: ModelDefinition;
   protected _primaryKeys: Array<keyof T> = [];
   protected _identityKeys: Array<keyof T> = [];
@@ -58,7 +61,7 @@ export class Model<T> {
   // deno-lint-ignore no-explicit-any
   protected _validator: GuardianProxy<any>;
 
-  constructor(model: ModelDefinition) {
+  constructor(model: S) {
     this._model = model;
     this._schema = model.schema;
     this._table = model.table;
@@ -92,7 +95,9 @@ export class Model<T> {
         this._uniqueKeys[definition.uniqueKey].push(column as keyof T);
       }
       if (
-        definition.isNullable === undefined || definition.isNullable === false
+        (definition.isNullable === undefined ||
+          definition.isNullable === false) &&
+        !this._identityKeys.includes(column as keyof T)
       ) {
         this._notNulls.push(column as keyof T);
       }
@@ -114,7 +119,9 @@ export class Model<T> {
   }
 
   get schemaTable(): string {
-    return `${this._schema !== undefined ? `${this._schema}.` : ""}${this._table}`;
+    return `${
+      this._schema !== undefined ? `${this._schema}.` : ""
+    }${this._table}`;
   }
 
   /**
@@ -130,7 +137,7 @@ export class Model<T> {
     filters?: Filters<T>,
     sort?: QuerySorting<T>,
     paging?: QueryPagination,
-  ) {
+  ): Promise<QueryResult<T>> {
     await this._init();
     if (!paging && (this._model.pageSize || 0) > 0) {
       paging = {
@@ -199,15 +206,17 @@ export class Model<T> {
       );
     }
     const errors: { [key: number]: ErrorList } = {};
+    let insertColumns: Array<keyof T> = this._notNulls;
     data.forEach((element, index) => {
       try {
         data[index] = this._validator(element);
+        // Remove identity columns
         this._identityKeys.forEach((key) => {
           delete data[index][key];
         });
-        // Check not null
+        // Check not null columns are present
         this._notNulls.forEach((key) => {
-          if (data[index][key] === undefined) {
+          if (data[index][key] === undefined || data[index][key] === null) {
             throw new ModelNotNull(
               String(key),
               this._model.table,
@@ -215,6 +224,11 @@ export class Model<T> {
             );
           }
         });
+        // Add the rest of the keys as insert columns
+        const keys = Object.keys(data[index]) as Array<keyof T>;
+        insertColumns = Array.from(
+          new Set<keyof T>([...insertColumns, ...keys]).values(),
+        );
       } catch (e) {
         // Set error
         errors[index] = e;
@@ -227,7 +241,7 @@ export class Model<T> {
       schema: this._model.schema,
       table: this._model.table,
       columns: this._columns,
-      insertColumns: this._notNulls, 
+      insertColumns: insertColumns,
       data: data,
     };
     return await this._connection.insert<T>(options);
@@ -236,7 +250,11 @@ export class Model<T> {
   /**
    * update
    * Update record(s). Using filters either a single record or multiple records can
-   * be updated
+   * be updated.
+   * If only data is passed, it will check if PK column is present, if so it will move
+   * the same as filter and attempt and update.
+   * PrimaryKey column (PK Column) cannot be updated! Pass them only if you want to generate
+   * the filter (and pass filter as null)
    *
    * @param data Partial<T> Information to be updated
    * @param filter Filters<T> The filter condition basis which to update
@@ -268,7 +286,9 @@ export class Model<T> {
       });
     } catch (e) {
       // Set error
+      console.log(e);
     }
+
     if (filter === undefined) {
       // Check if filter can be built (PK columns)
       const pkFilter: { [key: string]: unknown } = {};
@@ -276,10 +296,12 @@ export class Model<T> {
         pkFilter[String(pk)] = {
           $eq: data[pk as keyof T],
         };
+        // Delete from filter
         delete data[pk];
       });
       filter = pkFilter as Filters<T>;
     }
+
     // Disallow PK from being updated
     this._primaryKeys.forEach((pk) => {
       if (data[pk as keyof T] !== undefined) {
@@ -374,7 +396,10 @@ export class Model<T> {
     await this._connection.truncate(options);
   }
 
-  public async createTable(dropCreate?: boolean, backup?: string): Promise<void> {
+  public async createTable(
+    dropCreate?: boolean,
+    backup?: string,
+  ): Promise<void> {
     // create the table structure
     const options: CreateTableOptions = {
       schema: this._model.schema,
@@ -408,10 +433,10 @@ export class Model<T> {
       });
     }
     await this._init();
-    this._connection.createTable(options);
+    await this._connection.createTable(options);
   }
 
-  public async drop(): Promise<void> {
+  public async dropTable(): Promise<void> {
     await this._init();
     await this._connection.dropTable(this.table, this.schema);
   }

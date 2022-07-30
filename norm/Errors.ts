@@ -6,7 +6,7 @@ export class NormError extends Error {
   protected _config: string;
 
   constructor(message: string, config = "-", dialect = "-") {
-    super(`[module='norm' config='${config}' dialect='${dialect}] ${message}`);
+    super(`[module='norm' config='${config}' dialect='${dialect}'] ${message}`);
     this._dialect = dialect;
     this._config = config;
     Object.setPrototypeOf(this, NormError.prototype);
@@ -46,7 +46,7 @@ export class QueryError extends NormError {
     config: string,
     dialect: string,
   ) {
-    super(dialect, config, `Error executing ${type} query: ${query}`);
+    super(`Error executing ${type} query: ${query}`, config, dialect);
     Object.setPrototypeOf(this, QueryError.prototype);
   }
 }
@@ -97,6 +97,13 @@ export class ModelNotNull extends ModelError {
 export class ModelPrimaryKeyUpdate extends ModelError {
   constructor(column: string, model: string, dbConn: string) {
     super(`Primary key column ${column} cannot be updated`, model, dbConn);
+    Object.setPrototypeOf(this, ModelPrimaryKeyUpdate.prototype);
+  }
+}
+
+export class ModelUniqueKeyViolation extends ModelError {
+  constructor(uniqueKey: string, model: string, dbConn: string) {
+    super(`Unique Key ${uniqueKey} violation`, model, dbConn);
     Object.setPrototypeOf(this, ModelPrimaryKeyUpdate.prototype);
   }
 }

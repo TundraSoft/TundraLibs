@@ -8,6 +8,7 @@ export type { ClientEvents } from "./ClientEvents.ts";
 
 export type {
   CountQueryOptions,
+  CreateTableOptions,
   DeleteQueryOptions,
   FilterOperators,
   Filters,
@@ -20,13 +21,8 @@ export type {
   QueryTypes,
   SelectQueryOptions,
   UpdateQueryOptions,
-  CreateTableOptions, 
 } from "./Queries.ts";
 
 export { DataTypes } from "./DataTypes.ts";
 
-export type {
-  ColumnDefinition,
-  ModelDefinition,
-  ModelType,
-} from "./Model.ts";
+export type { ColumnDefinition, ModelDefinition, ModelType } from "./Model.ts";
