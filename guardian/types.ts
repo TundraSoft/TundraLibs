@@ -1,3 +1,5 @@
+// deno-lint-ignore-file
+// deno-lint-ignore-file ban-types
 export type Primitive =
   | string
   | number
@@ -11,7 +13,6 @@ export type Primitive =
 export type Typeof = {
   string: string;
   number: number;
-  // deno-lint-ignore ban-types
   object: object;
   boolean: boolean;
   symbol: symbol;
@@ -22,7 +23,6 @@ export type Typeof = {
 
 export type FunctionParameters = unknown[];
 
-// deno-lint-ignore no-explicit-any
 export type FunctionType<R = any, P extends FunctionParameters = any[]> = (
   ...args: P
 ) => R;
@@ -53,7 +53,6 @@ export type GuardianProxy<
 // do not escape T to [T] to support `number | Promise<string>`
 export type ResolvedValue<T> = T extends PromiseLike<infer R> ? R : T;
 
-// deno-lint-ignore no-explicit-any
 export type RemoveAsync<T> = T extends PromiseLike<any> ? never : T;
 
 export type IsAsync<S> = ResolvedValue<S> extends S
@@ -73,9 +72,8 @@ export type StructOptions = {
 };
 
 type IsStructAsync<S> = S extends FunctionType ? IsAsync<ReturnType<S>>
-  : // deno-lint-ignore ban-types
-  S extends object ? S extends RegExp ? false
-  : { [K in keyof S]: IsStructAsync<S[K]> }[keyof S]
+  : S extends object ? S extends RegExp ? false
+    : { [K in keyof S]: IsStructAsync<S[K]> }[keyof S]
   : IsAsync<S>;
 
 export type StructReturnType<
@@ -88,8 +86,7 @@ export type StructReturnType<
 type StructResolveTypeUndefinedKeys<S> = Exclude<
   {
     [K in keyof S]: [S[K]] extends [FunctionType]
-      ? [undefined] extends [ResolvedValue<ReturnType<S[K]>>] ? K
-      : never
+      ? [undefined] extends [ResolvedValue<ReturnType<S[K]>>] ? K : never
       : [undefined] extends [S[K]] ? K
       : never;
   }[keyof S],
@@ -113,16 +110,13 @@ export type StructResolveType<S> = S extends FunctionType
   ? ResolvedValue<ReturnType<S>>
   : S extends Primitive ? S
   : S extends RegExp ? string
-  : // deno-lint-ignore no-explicit-any
-  [S] extends [Array<any>] ? { [K in keyof S]: StructResolveType<S[K]> }
-  : // deno-lint-ignore ban-types
-  S extends object
+  : [S] extends [Array<any>] ? { [K in keyof S]: StructResolveType<S[K]> }
+  : S extends object
     ? { [K in keyof StructResolveTypeKeys<S>]: StructResolveType<S[K]> }
   : unknown extends S ? unknown
   : never;
 
 export type StructValues =
-  // deno-lint-ignore no-explicit-any
   | GuardianProxy<any>
   | string
   | boolean
@@ -155,14 +149,12 @@ type StructKeysObject<S> =
 export type StructParameters<S> = [S] extends [FunctionType] ? Parameters<S>
   : [S] extends [Primitive] ? [S]
   : [S] extends [RegExp] ? [string]
-  : // deno-lint-ignore no-explicit-any
-  [S] extends [Array<any>] ? [
-    {
-      [K in keyof S]: StructParameters<S[K]>[0];
-    },
-  ]
-  : // deno-lint-ignore ban-types
-  [S] extends [object]
+  : [S] extends [Array<any>] ? [
+      {
+        [K in keyof S]: StructParameters<S[K]>[0];
+      },
+    ]
+  : [S] extends [object]
     ? [{ [K in keyof StructKeysObject<S>]: StructParameters<S[K]>[0] }]
   : [unknown] extends [S] ? [unknown]
   : never;

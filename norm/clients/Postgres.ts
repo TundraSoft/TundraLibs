@@ -39,12 +39,10 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
         user: this._getOption("user"),
         port: this._getOption("port"),
         hostname: this._getOption("host"),
-        tls: {
-          enabled: this._getOption("tls").enabled,
-          enforce: this._getOption("tls").enforce,
-          caCertificates: this._getOption("tls").ca,
-        },
       };
+      if (this._hasOption("tls")) {
+        pgProps.tls = this._getOption("tls");
+      }
       this._client = new PGPool(pgProps, this._getOption("poolSize"), true);
       // Hack to test the connection, if there is something wrong it will throw immediately
       await (await this._client.connect()).release();

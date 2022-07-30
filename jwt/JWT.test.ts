@@ -6,12 +6,12 @@ import { assertEquals } from "../dev_dependencies.ts";
 Deno.test({
   name: "[module='JWT'] Test signature & Validation - HS256",
   async fn(): Promise<void> {
-    const JWTOptions: JWTOptions = {
+    const opt: JWTOptions = {
       algo: "HS256",
       key: nanoid(64, alphaNumeric),
       issuer: undefined,
     };
-    const j = new JWT(JWTOptions),
+    const j = new JWT(opt),
       claim: JWTClaims = {
         iat: 1658015086,
         nbf: 1658015086,
@@ -32,12 +32,12 @@ Deno.test({
 Deno.test({
   name: "[module='JWT'] Test signature & Validation - HS384",
   async fn(): Promise<void> {
-    const JWTOptions: JWTOptions = {
+    const opt: JWTOptions = {
       algo: "HS384",
       key: nanoid(64, alphaNumeric),
       issuer: undefined,
     };
-    const j = new JWT(JWTOptions),
+    const j = new JWT(opt),
       claim: JWTClaims = {
         iat: 1658015086,
         nbf: 1658015086,
@@ -58,12 +58,12 @@ Deno.test({
 Deno.test({
   name: "[module='JWT'] Test signature & Validation - HS512",
   async fn(): Promise<void> {
-    const JWTOptions: JWTOptions = {
+    const opt: JWTOptions = {
       algo: "HS512",
       key: nanoid(64, alphaNumeric),
       issuer: undefined,
     };
-    const j = new JWT(JWTOptions),
+    const j = new JWT(opt),
       claim: JWTClaims = {
         iat: 1658015086,
         nbf: 1658015086,

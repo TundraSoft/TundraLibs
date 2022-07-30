@@ -34,7 +34,7 @@ export class ConfigNotFound extends NormError {
 
 export class ConnectionError extends NormError {
   constructor(message: string, config: string, dialect: string) {
-    super(dialect, config, message);
+    super(message, config, dialect);
     Object.setPrototypeOf(this, ConnectionError.prototype);
   }
 }
