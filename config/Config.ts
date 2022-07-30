@@ -1,6 +1,6 @@
 import { path, toml, yaml } from "../dependencies.ts";
-import { parseENV } from "./dotEnv.ts";
-import type { ConfigFile, ConfigMode } from "./types.ts";
+import type { ConfigFile } from "./types.ts";
+import { Sysinfo } from "../sysinfo/mod.ts";
 
 export class Config {
   static #configs: Map<string, Record<string, unknown>> = new Map();
@@ -26,40 +26,40 @@ export class Config {
       throw new Error(`Read permission is required for path: ${path}`);
     }
     //#endregion
-    let mode: ConfigMode = "PROD";
-    if (Config.#envEnabled && Config.#env.has("ENV")) {
-      if (Config.#env.get("ENV") as ConfigMode === "DEV") {
-        mode = "DEV";
-      }
-    }
+    // let mode: ConfigMode = "PROD";
+    // if (Config.#envEnabled && Config.#env.has("ENV")) {
+    //   if (Config.#env.get("ENV") as ConfigMode === "DEV") {
+    //     mode = "DEV";
+    //   }
+    // }
     name = name.toLowerCase().trim();
     //#region Handle different extentions
     const configFiles: ReadonlyArray<ConfigFile> = [
       {
         basePath: path,
         fileName: name,
-        configMode: mode,
+        // configMode: mode,
         type: "JSON",
         extention: "json",
       },
       {
         basePath: path,
         fileName: name,
-        configMode: mode,
+        // configMode: mode,
         type: "YAML",
         extention: "yaml",
       },
       {
         basePath: path,
         fileName: name,
-        configMode: mode,
+        // configMode: mode,
         type: "YAML",
         extention: "yml",
       },
       {
         basePath: path,
         fileName: name,
-        configMode: mode,
+        // configMode: mode,
         type: "TOML",
         extention: "toml",
       },
@@ -116,7 +116,7 @@ export class Config {
       config = Config.#configs.get(name) as Record<string, unknown>;
       //#region Replace env variables
       let data = JSON.stringify(config);
-      if (Config.#env.size > 0) {
+      if (Config.#env && Config.#env.size > 0) {
         Config.#env.forEach((value, key) => {
           const regex = new RegExp("\\$" + key + "", "g");
           data = data.replaceAll(regex, value);
@@ -157,6 +157,7 @@ export class Config {
     }
     return false;
   }
+
   /**
    * loadConfig
    * Actually loads the config data from the file. Basis file type, it will parse and return the data
@@ -168,8 +169,7 @@ export class Config {
   protected static async _loadConfig(
     data: ConfigFile,
   ): Promise<Record<string, unknown>> {
-    const fileName =
-      `${data.fileName}.${data.configMode.toLowerCase()}.${data.extention}`;
+    const fileName = `${data.fileName}.${data.extention}`;
     const filePath = path.join(data.basePath, fileName);
     let config: Record<string, unknown>,
       content: string;
@@ -199,20 +199,7 @@ export class Config {
    */
   protected static async _initEnv() {
     if (Config.#env === undefined) {
-      Config.#env = await parseENV();
-    }
-    if (Config.#envEnabled === undefined || Config.#envEnabled === null) {
-      Config.#envEnabled =
-        ((await Deno.permissions.query({ name: "env" })).state === "granted")
-          ? true
-          : false;
-      if (Config.#envEnabled) {
-        //#region  Get all ENV args
-        // Config.#env = new Map(Object.entries(Deno.env.toObject()));
-        const env = new Map(Object.entries(Deno.env.toObject()));
-        Config.#env = new Map([...Config.#env, ...env]);
-        //#endregion Get all ENV args
-      }
+      Config.#env = await Sysinfo.getAllEnv();
     }
   }
 }

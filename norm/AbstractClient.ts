@@ -1,84 +1,96 @@
-import { Options } from "../options/mod.ts";
-import { ConnectionError, GenericQueryError } from "./Errors.ts";
+import { Options } from "../options/Options.ts";
 
 import type {
   ClientConfig,
   ClientEvents,
+  // ColumnDefinition,
+  CountQueryOptions,
+  CreateTableOptions,
+  DeleteQueryOptions,
   Dialect,
+  InsertQueryOptions,
   QueryOptions,
+  // QueryPagination,
   QueryResult,
   QueryType,
-} from "./types.ts";
+  SelectQueryOptions,
+  UpdateQueryOptions,
+} from "./types/mod.ts";
 
-export default abstract class AbstractClient
-  extends Options<ClientConfig, ClientEvents> {
+import { ConnectionError, QueryError } from "./Errors.ts";
+
+export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
+  extends Options<T, ClientEvents> {
   protected _name: string;
-  declare protected _client: unknown;
+  declare protected _client: unknown | undefined;
+  protected _stats: Map<
+    QueryType,
+    { count: number; time: number; error: number }
+  > = new Map();
 
   /**
    * constructor
+   *
    * @param name string The configuration name
    * @param config ClientConfig The configuration for DB connection
    * @param configDefault ClientConfigg Config defaults to be passed
    */
-  constructor(
-    name: string,
-    config: Partial<ClientConfig>,
-    configDefault: Partial<ClientConfig>,
-  ) {
-    super(config, configDefault);
-    this._name = name.trim();
+  constructor(name: string, options: Partial<T>, defaultConfig?: Partial<T>) {
+    super(options, defaultConfig);
+    this._name = name.toLowerCase().trim();
   }
 
   /**
+   * dialect
+   *
+   * Returns the dialect currently in use
+   *
+   * @getter
+   */
+  get dialect(): Dialect {
+    return this._getOption("dialect");
+  }
+
+  /**
+   * name
+   *
+   * Returns the Configuration name
+   *
+   * @getter
+   */
+  get name(): string {
+    return this._name;
+  }
+
+  get stats(): Map<QueryType, { count: number; time: number; error: number }> {
+    return this._stats;
+  }
+  /**
    * connect
+   *
    * Initializes a connection to the database
    */
   public async connect(): Promise<void> {
     try {
       await this._connect();
-      // Should be connected now
-      await this.emit("connect");
+      this.emit("connect", "dsf");
     } catch (e) {
-      // Connection error. Just throw a connection error
-      throw new ConnectionError(
-        this._name,
-        this._getOption("dialect"),
-        e.message,
-      );
+      // Throw error
+      throw new ConnectionError(e.message, this.name, this.dialect);
     }
   }
 
   /**
    * close
+   *
    * Closes all open connection to the database
    */
-  public async close() {
+  public async close(): Promise<void> {
     try {
-      // Check for transactions
       await this._close();
-      this.emit("close");
     } catch (e) {
-      throw e;
+      throw new ConnectionError(e.message, this.name, this.dialect);
     }
-  }
-
-  /**
-   * name
-   * Returns the Configuration name
-   * @getter
-   */
-  public get name(): string {
-    return this._name;
-  }
-
-  /**
-   * dialect
-   * Returns the dialect currently in use
-   * @getter
-   */
-  public get dialect(): Dialect {
-    return this._getOption("dialect");
   }
 
   /**
@@ -109,12 +121,12 @@ export default abstract class AbstractClient
       result: QueryResult<T> = {
         type: this._getQueryType(sql),
         time: 0,
-        totalRows: 0
+        totalRows: 0,
       };
-    this.connect();
+    await this.connect();
     try {
       const op = await this._query<T>(sql, args);
-      if (op.length > 0) {
+      if (op && op.length > 0) {
         result.rows = op;
         result.totalRows = op.length;
       }
@@ -123,41 +135,45 @@ export default abstract class AbstractClient
       result.time = end - start;
       return result;
     } catch (e) {
-      throw new GenericQueryError(
-        this._name,
-        this._getOption("dialect"),
-        e.message,
-      );
+      throw new QueryError(e.message, result.type, this.name, this.dialect);
     }
   }
 
   /**
-   * select (Typed)
+   * select
+   *
    * Helps select data from a specific table. Supports filtering, paging and sorting
    *
-   * @param options QueryOptions<T> The options or specs basis which data is to be selected
+   * @param options options SelectQueryOptions<T> The options or specs basis which data is to be selected
    * @returns Promise<QueryResult<T>>
    */
-  public async select<T>(options: QueryOptions<T>): Promise<QueryResult<T>>;
+  public async select<T>(
+    options: SelectQueryOptions<T>,
+  ): Promise<QueryResult<T>>;
 
   /**
-   * select (UnTyped)
+   * select
+   *
    * Helps select data from a specific table. Supports filtering, paging and sorting
    *
-   * @param options QueryOptions<T> The options or specs basis which data is to be selected
+   * @param options SelectQueryOptions<T> The options or specs basis which data is to be selected
    * @returns Promise<QueryResult<T>>
    */
   public async select<T = Record<string, unknown>>(
-    options: QueryOptions<T>,
+    options: SelectQueryOptions<T>,
   ): Promise<QueryResult<T>> {
     const start = performance.now(),
       result: QueryResult<T> = {
         type: "SELECT",
         time: 0,
-        totalRows: 0
+        totalRows: 0,
       };
-    this.connect();
+    await this.connect();
     try {
+      // Ensure its not < 1
+      if (options.paging && options.paging.size < 1) {
+        delete options.paging;
+      }
       if (options.paging && options.paging.page < 1) {
         options.paging.page = 1;
       }
@@ -167,50 +183,48 @@ export default abstract class AbstractClient
         result.totalRows = op.length;
       }
       // If paging variable found in query options, run count also and get the output
-      // if (option.paging) {
-      //   result.paging = option.paging;
-      //   result.totalRows = await this._count(option);
-      // }
+      if (options.paging) {
+        result.paging = options.paging;
+        result.totalRows = await this._count(options);
+      }
       // Set end time
       const end = performance.now();
       result.time = end - start;
       return result;
     } catch (e) {
-      console.log(e);
-      throw new GenericQueryError(
-        this._name,
-        this.dialect,
-        e.message,
-      );
+      throw new QueryError(e.message, result.type, this.name, this.dialect);
     }
   }
 
   /**
    * insert
+   *
    * Helps insert data to a specific table. It wil return the rows which have been inserted.
    *
-   * @param options QueryOptions<T> The options
+   * @param options InsertQueryOptions<T> The options
    * @returns Promise<QueryResult<T>>
    */
-  public async insert<T>(options: QueryOptions<T>): Promise<QueryResult<T>>;
+  public async insert<T>(
+    options: InsertQueryOptions<T>,
+  ): Promise<QueryResult<T>>;
 
   /**
    * insert
    * Helps insert data to a specific table. It wil return the rows which have been inserted.
    *
-   * @param options QueryOptions<T> The options
+   * @param options InsertQueryOptions<T> The options
    * @returns Promise<QueryResult<T>>
    */
   public async insert<T = Record<string, unknown>>(
-    options: QueryOptions<T>,
+    options: InsertQueryOptions<T>,
   ): Promise<QueryResult<T>> {
     const start = performance.now(),
       result: QueryResult<T> = {
         type: "INSERT",
         time: 0,
-        totalRows: 0
+        totalRows: 0,
       };
-    this.connect();
+    await this.connect();
     try {
       const op = await this._insert<T>(options);
       if (op.length > 0) {
@@ -222,12 +236,7 @@ export default abstract class AbstractClient
       result.time = end - start;
       return result;
     } catch (e) {
-      console.log(e);
-      throw new GenericQueryError(
-        this._name,
-        this.dialect,
-        e.message,
-      );
+      throw new QueryError(e.message, result.type, this.name, this.dialect);
     }
   }
 
@@ -235,28 +244,28 @@ export default abstract class AbstractClient
    * count
    * Gets the count of records in a particular table
    *
-   * @param options QueryOptions<T> The options
+   * @param options CountQueryOptions<T> The options
    * @returns Promise<QueryResult<T>>
    */
-  public async count<T>(options: QueryOptions<T>): Promise<QueryResult<T>>;
+  public async count<T>(options: CountQueryOptions<T>): Promise<QueryResult<T>>;
 
   /**
    * count
    * Gets the count of records in a particular table
    *
-   * @param options QueryOptions<T> The options
+   * @param options CountQueryOptions<T> The options
    * @returns Promise<QueryResult<T>>
    */
   public async count<T = Record<string, unknown>>(
-    options: QueryOptions<T>,
+    options: CountQueryOptions<T>,
   ): Promise<QueryResult<T>> {
     const start = performance.now(),
       result: QueryResult<T> = {
         type: "COUNT",
         time: 0,
-        totalRows: 0
+        totalRows: 0,
       };
-    this.connect();
+    await this.connect();
     try {
       const op = await this._count<T>(options);
       result.totalRows = op;
@@ -265,11 +274,7 @@ export default abstract class AbstractClient
       result.time = end - start;
       return result;
     } catch (e) {
-      throw new GenericQueryError(
-        this._name,
-        this.dialect,
-        e.message,
-      );
+      throw new QueryError(e.message, result.type, this.name, this.dialect);
     }
   }
 
@@ -277,28 +282,30 @@ export default abstract class AbstractClient
    * update
    * Performs an update on specific table. Supports single row or bulk update of row
    *
-   * @param options QueryOptions<T> The options
+   * @param options UpdateQueryOptions<T> The options
    * @returns Promise<QueryResult<T>>
    */
-  public async update<T>(options: QueryOptions<T>): Promise<QueryResult<T>>;
+  public async update<T>(
+    options: UpdateQueryOptions<T>,
+  ): Promise<QueryResult<T>>;
 
   /**
    * update
    * Performs an update on specific table. Supports single row or bulk update of row
    *
-   * @param options QueryOptions<T> The options
+   * @param options UpdateQueryOptions<T> The options
    * @returns Promise<QueryResult<T>>
    */
   public async update<T = Record<string, unknown>>(
-    options: QueryOptions<T>,
+    options: UpdateQueryOptions<T>,
   ): Promise<QueryResult<T>> {
     const start = performance.now(),
       result: QueryResult<T> = {
         type: "UPDATE",
         time: 0,
-        totalRows: 0
+        totalRows: 0,
       };
-    this.connect();
+    await this.connect();
     try {
       const op = await this._update<T>(options);
       result.rows = op;
@@ -308,11 +315,7 @@ export default abstract class AbstractClient
       result.time = end - start;
       return result;
     } catch (e) {
-      throw new GenericQueryError(
-        this._name,
-        this.dialect,
-        e.message,
-      );
+      throw new QueryError(e.message, result.type, this.name, this.dialect);
     }
   }
 
@@ -320,28 +323,30 @@ export default abstract class AbstractClient
    * delete
    * Performs an delete operation on specific table. Supports single row or bulk deletion of row
    *
-   * @param options QueryOptions<T> The options
+   * @param options DeleteQueryOptions<T> The options
    * @returns Promise<QueryResult<T>>
    */
-  public async delete<T>(options: QueryOptions<T>): Promise<QueryResult<T>>;
+  public async delete<T>(
+    options: DeleteQueryOptions<T>,
+  ): Promise<QueryResult<T>>;
 
   /**
    * delete
    * Performs an delete operation on specific table. Supports single row or bulk deletion of row
    *
-   * @param options QueryOptions<T> The options
+   * @param options DeleteQueryOptions<T> The options
    * @returns Promise<QueryResult<T>>
    */
   public async delete<T = Record<string, unknown>>(
-    options: QueryOptions<T>,
+    options: DeleteQueryOptions<T>,
   ): Promise<QueryResult<T>> {
     const start = performance.now(),
       result: QueryResult<T> = {
         type: "DELETE",
         time: 0,
-        totalRows: 0
+        totalRows: 0,
       };
-    this.connect();
+    await this.connect();
     try {
       const op = await this._delete<T>(options);
       result.totalRows = op;
@@ -350,11 +355,7 @@ export default abstract class AbstractClient
       result.time = end - start;
       return result;
     } catch (e) {
-      throw new GenericQueryError(
-        this._name,
-        this.dialect,
-        e.message,
-      );
+      throw new QueryError(e.message, result.type, this.name, this.dialect);
     }
   }
 
@@ -381,9 +382,9 @@ export default abstract class AbstractClient
       result: QueryResult<T> = {
         type: "TRUNCATE",
         time: 0,
-        totalRows: 0
+        totalRows: 0,
       };
-    this.connect();
+    await this.connect();
     try {
       const count = await this._count<T>(options);
       await this._truncate<T>(options);
@@ -393,44 +394,110 @@ export default abstract class AbstractClient
       result.time = end - start;
       return result;
     } catch (e) {
-      throw new GenericQueryError(
-        this._name,
-        this.dialect,
-        e.message,
-      );
+      throw new QueryError(e.message, result.type, this.name, this.dialect);
     }
   }
 
-  /**
-   * _connect
-   * Abstract method implementation to connect to database
-   * @abstract
-   */
-  protected abstract _connect(): Promise<void>;
+  public async createSchema(name: string, ifExists = true): Promise<void> {
+    const start = performance.now();
+    await this.connect();
+    try {
+      await this._createSchema(name, ifExists);
+      // Set end time
+      const end = performance.now();
+      const _time = end - start;
+    } catch (e) {
+      throw new QueryError(e.message, "CREATE", this.name, this.dialect);
+    }
+  }
 
-  /**
-   * _close
-   * Abstract method implementation to close connection to database
-   * @abstract
-   */
-  protected abstract _close(): Promise<void>;
+  public async dropSchema(
+    name: string,
+    ifExists = true,
+    cascade = true,
+  ): Promise<void> {
+    const start = performance.now();
+    await this.connect();
+    try {
+      await this._dropSchema(name, ifExists, cascade);
+      // Set end time
+      const end = performance.now();
+      const _time = end - start;
+    } catch (e) {
+      throw new QueryError(e.message, "DROP", this.name, this.dialect);
+    }
+  }
+
+  public async createTable(options: CreateTableOptions): Promise<void> {
+    const start = performance.now();
+    await this.connect();
+    try {
+      await this._createTable(options);
+      // Set end time
+      const end = performance.now();
+      const _time = end - start;
+    } catch (e) {
+      throw new QueryError(e.message, "CREATE", this.name, this.dialect);
+    }
+  }
+
+  public async dropTable(table: string, schema?: string): Promise<boolean> {
+    const start = performance.now();
+    await this.connect();
+    try {
+      await this._dropTable(table, schema);
+      // Set end time
+      const end = performance.now();
+      const _time = end - start;
+      return true;
+    } catch (e) {
+      throw new QueryError(e.message, "DROP", this.name, this.dialect);
+    }
+  }
+
+  protected abstract _connect(): void;
+
+  protected abstract _close(): void;
 
   protected abstract _getQueryType(sql: string): QueryType;
 
   protected abstract _query<T>(
     sql: string,
     queryArgs?: Record<string, unknown>,
+  ): Promise<Array<T> | undefined>;
+
+  protected abstract _select<T>(
+    options: SelectQueryOptions<T>,
   ): Promise<Array<T>>;
 
-  protected abstract _select<T>(options: QueryOptions<T>): Promise<Array<T>>;
+  protected abstract _count<T>(options: CountQueryOptions<T>): Promise<number>;
 
-  protected abstract _count<T>(options: QueryOptions<T>): Promise<number>;
+  protected abstract _insert<T>(
+    options: InsertQueryOptions<T>,
+  ): Promise<Array<T>>;
 
-  protected abstract _insert<T>(options: QueryOptions<T>): Promise<Array<T>>;
+  protected abstract _update<T>(
+    options: UpdateQueryOptions<T>,
+  ): Promise<Array<T>>;
 
-  protected abstract _update<T>(options: QueryOptions<T>): Promise<Array<T>>;
-
-  protected abstract _delete<T>(options: QueryOptions<T>): Promise<number>;
+  protected abstract _delete<T>(
+    options: DeleteQueryOptions<T>,
+  ): Promise<number>;
 
   protected abstract _truncate<T>(options: QueryOptions<T>): Promise<boolean>;
+
+  protected abstract _createTable(options: CreateTableOptions): Promise<void>;
+
+  protected abstract _dropTable(table: string, schema?: string): Promise<void>;
+
+  protected abstract _createSchema(
+    name: string,
+    ifExists?: boolean,
+  ): Promise<void>;
+
+  protected abstract _dropSchema(
+    name: string,
+    ifExists?: boolean,
+    cascade?: boolean,
+  ): Promise<void>;
 }

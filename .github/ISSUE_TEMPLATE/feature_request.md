@@ -4,7 +4,6 @@ about: Describe you feature
 title: "[FEAT]"
 labels: enhancement
 assignees: ''
-
 ---
 
 **Type of feature**
@@ -14,5 +13,6 @@ assignees: ''
 - [ ] Integration with 3rd party library
 - [ ] Version bump of dependency
 
-**Additional context** Add any other context that needs to be conveyed to the
-team
+**Additional context**
+
+Add any other context that needs to be conveyed to the team

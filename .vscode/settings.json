@@ -12,4 +12,7 @@
     "https://crux.land": true,
     "http://deno.land": false
   }
+  // "workbench.editorAssociations": {
+  //   "*.md": "default"
+  // }
 }

@@ -1,7 +1,7 @@
 export type Context = {
-  request: Request
-  response: Response
-}
+  request: Request;
+  response: Response;
+};
 export interface Middleware {
-  (context: Context, next: () => Promise<unknown>): Promise<unknown> | unknown
+  (context: Context, next: () => Promise<unknown>): Promise<unknown> | unknown;
 }

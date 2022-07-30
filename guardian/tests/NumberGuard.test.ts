@@ -1,0 +1,29 @@
+import { numberGuard, ValidationError } from "../mod.ts";
+
+import { assertEquals, assertThrows } from "../../dev_dependencies.ts";
+
+Deno.test({
+  name: "Number - Test basic string validation",
+  fn(): void {
+    assertEquals(numberGuard.integer()(123123), 123123);
+    assertEquals(numberGuard.min(10)(15), 15);
+    assertEquals(numberGuard.equals(10)(10), 10);
+    assertEquals(numberGuard.optional()(), undefined);
+    assertThrows(
+      () => numberGuard.integer()(234233241234.123412341234),
+      ValidationError,
+    );
+  },
+});
+
+Deno.test({
+  name: "Number - Check if correct error message is coming",
+  fn(): void {
+    assertThrows(
+      () =>
+        numberGuard.integer("Value is not a valid Integer")(123456789.234234),
+      ValidationError,
+      "Value is not a valid Integer",
+    );
+  },
+});
