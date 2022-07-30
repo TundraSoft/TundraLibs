@@ -13,6 +13,7 @@ import type {
 } from "../types/mod.ts";
 
 import { SQLiteClient } from "../../dependencies.ts";
+import {ColumnDefinition} from "../types/mod.ts";
 
 export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
   protected _client: SQLiteClient | undefined = undefined;
@@ -196,6 +197,10 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
     // Well no going back
     console.log(qry);
     await this._client?.execute(qry.toString());
+  }
+
+  public async _getTableDefinition(table: string, schema?: string):Promise<Array<ColumnDefinition>> {
+    return []
   }
 
   protected _processFilters<T>(
