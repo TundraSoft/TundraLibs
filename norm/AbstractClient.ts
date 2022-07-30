@@ -3,18 +3,17 @@ import {Options} from "../options/Options.ts";
 import type {
     ClientConfig,
     ClientEvents,
-    // ColumnDefinition,
     CountQueryOptions,
     DeleteQueryOptions,
     Dialect,
     InsertQueryOptions,
     QueryOptions,
-    // QueryPagination,
     QueryResult,
     QueryType,
     SelectQueryOptions,
     UpdateQueryOptions,
-    CreateTableOptions, ColumnDefinition,
+    CreateTableOptions,
+    SchemaDefinition
 } from "./types/mod.ts";
 
 import {ConnectionError, QueryError} from "./Errors.ts";
@@ -420,7 +419,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
         }
     }
 
-    public async getTableDefinition(table: string, schema?: string): Promise<Array<ColumnDefinition>> {
+    public async getTableDefinition(table: string, schema?: string): Promise<SchemaDefinition> {
         const start = performance.now()
         await this.connect();
         try {
@@ -469,6 +468,6 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
 
     protected abstract _dropTable(table: string, schema?: string): Promise<void>;
 
-    protected abstract _getTableDefinition(table: string, schema?: string): Promise<Array<ColumnDefinition>>;
+    protected abstract _getTableDefinition(table: string, schema?: string): Promise<SchemaDefinition>;
 
 }

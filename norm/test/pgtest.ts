@@ -121,12 +121,11 @@ Deno.test({
     name: "pgDescribeTest",
     async fn() {
         const result = await db.getTableDefinition("city");
-        assertEquals(result.length, 5)
-        assertEquals(result[0].isPrimary, true)
-        assertEquals(result[1].uniqueKey, "city_unique")
-        assertEquals(result[2].length, 3)
-        assertEquals(result[3].name, "district")
-        assertEquals(result[4].dataType, "INTEGER")
+        assertEquals(result.columns.name.name,"name");
+        assertEquals(result.columns.id.isPrimary, true);
+        assertEquals(result.columns.district.uniqueKey, "city_unique");
+        assertEquals(result.columns.countrycode.length, 3);
+        assertEquals(result.columns.population.dataType, "INTEGER");
         await db.close();
     }
 })
@@ -166,18 +165,17 @@ const WaitlistModelDefinition: ModelDefinition = {
   },
 };
 
-type Waitlist = ModelType<typeof WaitlistModelDefinition>;
-
-const WaitlistModel = new Model(WaitlistModelDefinition);
+// type Waitlist = ModelType<typeof WaitlistModelDefinition>;
+//
+// const WaitlistModel = new Model(WaitlistModelDefinition);
 // WaitlistModel.create();
-const op = await WaitlistModel.select({
-  id: {
-    $nin: [1, 2, 3],
-  },
-} as Filters<Waitlist>);
-
-console.log(op);
-
+// const op = await WaitlistModel.select({
+//   id: {
+//     $nin: [1, 2, 3],
+//   },
+// } as Filters<Waitlist>);
+//
+// console.log(op);
 // const model: ModelDefinition = {
 //   connection: "default",
 //   schema: "public",

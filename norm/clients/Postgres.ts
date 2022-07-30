@@ -1,6 +1,6 @@
 import {AbstractClient} from "../AbstractClient.ts";
 import type {
-    ColumnDefinition,
+    SchemaDefinition,
     CountQueryOptions,
     CreateTableOptions,
     DeleteQueryOptions,
@@ -12,12 +12,11 @@ import type {
     SelectQueryOptions,
     UpdateQueryOptions,
 } from "../types/mod.ts";
+import {DataType} from "../types/DataTypes.ts";
+import {PGPool,PGClientOptions} from "../../dependencies.ts";
 
-import {PGPool} from "../../dependencies.ts";
-import type {PGClientOptions} from "../../dependencies.ts";
-import {DataType, DataTypeMapString} from "../types/DataTypes.ts";
 
-export const DataTypeMapString = {
+const DataTypeMapString = {
     "VARCHAR": "string",
     "CHARACTER": "string",
     "NVARCHAR": "string",
@@ -264,7 +263,7 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
 
     }
 
-    protected async _getTableDefinition(table: string, schema?: string): Promise<Array<ColumnDefinition>> {
+    protected async _getTableDefinition(table: string, schema?: string): Promise<SchemaDefinition> {
         const filter = `C.table_name = ${this._quoteValue(table)}` + (schema ? `' AND C.table_schema = ${this._quoteValue(schema)}` : "");
         const field_qry = `SELECT column_name,
                                   ordinal_position,
@@ -316,7 +315,7 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
         }).map((value) => {
             return [value.column_name, {name: value.constraint_name, position: value.ordinal_position}]
         }))
-        const result = fields_result.rows.map((value) => {
+        const column_definitions = fields_result.rows.map((value) => {
             return {
                 name: value.column_name,
                 dataType: value.data_type.toUpperCase() as DataType,
@@ -329,7 +328,13 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
                 uniqueKey: (unique_keys[value.column_name]) ? unique_keys[value.column_name].name : undefined
             };
         })
-        return result
+        return {
+            table: table,
+            schema: schema,
+            columns: Object.fromEntries(column_definitions.map((value) => {
+                return [value.name, value];
+            }))
+        }
     }
 
     protected _processFilters<T>(
