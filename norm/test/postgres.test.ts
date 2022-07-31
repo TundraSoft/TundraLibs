@@ -127,7 +127,7 @@ Deno.test({
 
 const WaitlistModelDefinition = {
   name: "WaitList",
-  connection: "default",
+  connection: "postgres",
   schema: "public",
   table: "waitlist",
   columns: {
