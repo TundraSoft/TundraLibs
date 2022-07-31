@@ -145,6 +145,10 @@ export type CreateTableOptions = {
   columns: {
     [key: string]: {
       type: DataType;
+      length?: {
+        precision: number;
+        scale: number
+      } | number;
       isNullable?: boolean;
     };
   };

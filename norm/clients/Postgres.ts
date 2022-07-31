@@ -248,7 +248,7 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
       })`);
     }
     if (options.uniqueKeys) {
-      console.log(options.uniqueKeys);
+      // console.log(options.uniqueKeys);
       Object.entries(options.uniqueKeys).forEach((name) => {
         constraints.push(
           `CONSTRAINT ${options.table + "_" + name[0] + "_unique"} UNIQUE (${

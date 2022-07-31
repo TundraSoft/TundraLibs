@@ -23,6 +23,8 @@ export type {
   UpdateQueryOptions,
 } from "./Queries.ts";
 
+export type { DataTypeMap, DataType } from "./DataTypes.ts";
+
 export { DataTypes } from "./DataTypes.ts";
 
-export type { ColumnDefinition, ModelDefinition, ModelType } from "./Model.ts";
+export type { ColumnDefinition, ModelDefinition, ModelType, ModelFeatures } from "./Model.ts";

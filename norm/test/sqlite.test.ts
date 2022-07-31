@@ -11,6 +11,7 @@ await Database.load("sqlite", {
 });
 
 const WaitlistModelDefinition = {
+  name: 'WaitList',
   connection: "sqlite",
   table: "waitlist",
   columns: {
@@ -21,18 +22,18 @@ const WaitlistModelDefinition = {
     },
     mobile: {
       dataType: DataTypes.VARCHAR,
-      uniqueKey: "mobile",
+      uniqueKey: new Set(["mobile"]),
       validator: Guardian.string().mobile(),
     },
     name: {
       dataType: DataTypes.VARCHAR,
       validator: Guardian.string().min(3),
-      uniqueKey: "name_email",
+      uniqueKey: new Set(["name_email"]),
     },
     email: {
       dataType: DataTypes.VARCHAR,
       validator: Guardian.string().email(),
-      uniqueKey: "name_email",
+      uniqueKey: new Set(["name_email"]),
     },
     hasCrypto: {
       dataType: DataTypes.BOOLEAN,
