@@ -142,13 +142,6 @@ export class Model<
         });
       }
 
-      // Relationships are present primarily to handle indexes. norm will not
-      // create foreign keys to avoid table alter/creation hierarchy. Indexes will be maintained for performance.
-      // In the future, this could be used to select using joins or create views
-      // if(definition.relatesTo) {
-
-      // }
-
       if (
         (definition.isNullable === undefined ||
           definition.isNullable === false) &&
@@ -158,6 +151,9 @@ export class Model<
       }
 
       // Relationships
+      // Relationships are present primarily to handle indexes. norm will not
+      // create foreign keys to avoid table alter/creation hierarchy. Indexes will be maintained for performance.
+      // In the future, this could be used to select using joins or create views
       if (definition.relatesTo) {
         Object.entries(definition.relatesTo).forEach(
           ([modelName, modelColumn]) => {
@@ -202,6 +198,24 @@ export class Model<
     return `${
       this._schema !== undefined ? `${this._schema}.` : ""
     }${this._table}`;
+  }
+
+  public getColumnType(
+    name: keyof T,
+  ): {
+    type: DataType;
+    length?: { precision: number; scale: number } | number;
+  } {
+    return this._columnType[name];
+  }
+
+  public isColumnNullable(name: keyof T): boolean {
+    return (!this._notNulls.includes(name as keyof T) &&
+      !this._identityKeys.includes(name as keyof T));
+  }
+
+  public getRelationships(): Record<string, Record<keyof T, string>> {
+    return this._relationships;
   }
 
   /**
@@ -497,8 +511,7 @@ export class Model<
       options.columns[name as string] = {
         type: this._columnType[alias as keyof T].type,
         length: this._columnType[alias as keyof T].length || undefined,
-        isNullable: (!this._notNulls.includes(alias as keyof T) &&
-          !this._identityKeys.includes(alias as keyof T)),
+        isNullable: this.isColumnNullable(alias as keyof T),
       };
     }
     // Get the actual column names

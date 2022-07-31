@@ -1,4 +1,4 @@
-import { DataTypeMap, DataTypes } from "./DataTypes.ts";
+import { DataTypeMap } from "./DataTypes.ts";
 import type { DataType } from "./DataTypes.ts";
 import type { GuardianProxy } from "../../guardian/mod.ts";
 
