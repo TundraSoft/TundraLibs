@@ -32,4 +32,5 @@ export type {
   ModelDefinition,
   ModelFeatures,
   ModelType,
+  SchemaDefinition,
 } from "./Model.ts";

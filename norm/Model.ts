@@ -35,6 +35,7 @@ import {
   ModelPermission,
   ModelPrimaryKeyUpdate,
 } from "./Errors.ts";
+
 /**
  * Model
  *
@@ -101,13 +102,10 @@ export class Model<
 
     const columnAlias: Partial<Record<keyof T, string>> = {};
     const columnDefinition: Partial<
-      Record<
-        keyof T,
-        {
-          type: DataType;
-          length?: { precision: number; scale: number } | number;
-        }
-      >
+      Record<keyof T, {
+        type: DataType;
+        length?: { precision: number; scale: number } | number;
+      }>
     > = {};
     // deno-lint-ignore no-explicit-any
     const validator: { [key: string]: GuardianProxy<any> } = {};

@@ -1,8 +1,13 @@
 import { assertEquals } from "../../dev_dependencies.ts";
+// import { path } from "../../dependencies.ts";
 import { Guardian } from "../../guardian/mod.ts";
 import { Database } from "../Database.ts";
 import { Model } from "../Model.ts";
-import { DataTypes } from "../types/mod.ts";
+import {
+  // CountQueryOptions,
+  DataTypes,
+  // SelectQueryOptions,
+} from "../types/mod.ts";
 import type { Filters, ModelType } from "../types/mod.ts";
 
 await Database.load("postgres", {
@@ -15,6 +20,110 @@ await Database.load("postgres", {
   //   enabled: true,
   // },
 });
+const db = Database.get("postgres");
+// db.createTable({
+
+// })
+
+type cityModel = {
+  id: number;
+  name: string;
+  countrycode: string;
+  district: string;
+  population: number;
+};
+
+Deno.test({
+  name: "[module='norm' dialect='postgres'] Test connection to DB",
+  async fn() {
+    await db.connect();
+  },
+});
+
+// Deno.test({
+//   name: "[module='norm' dialect='postgres'] Test count query",
+//   async fn() {
+//     const result = await db.count({
+//       table: "city",
+//       columns: {
+//         name: "name",
+//       },
+//     } as CountQueryOptions<cityModel>);
+//     assertEquals(Number(result.totalRows), 4079);
+//   },
+// });
+
+// Deno.test({
+//   name: "[module='norm' dialect='postgres'] Test count query with filters",
+//   async fn() {
+//     const result = await db.count({
+//       table: "city",
+//       columns: {
+//         name: "name",
+//         district: "district",
+//       },
+//       filters: {
+//         district: "Karnataka",
+//       },
+//     } as CountQueryOptions<cityModel>);
+//     assertEquals(Number(result.totalRows), 17);
+//   },
+// });
+
+// Deno.test({
+//   name: "[module='norm' dialect='postgres'] Test selection with sorting",
+//   async fn() {
+//     const result = await db.select({
+//       table: "city",
+//       columns: {
+//         name: "name",
+//         population: "population",
+//       },
+//       sort: { population: "DESC" },
+//     } as SelectQueryOptions<cityModel>);
+//     assertEquals(Number(result.totalRows), 4079);
+//     if (result && result.rows && result.rows.length > 0) {
+//       assertEquals(result.rows[0].population, 10500000);
+//     }
+//   },
+// });
+
+// Deno.test({
+//   name: "[module='norm' dialect='postgres'] Test pagination functionality with select",
+//   async fn() {
+//     const result = await db.select({
+//       table: "city",
+//       columns: {
+//         name: "name",
+//         population: "population",
+//       },
+//       sort: { population: "DESC" },
+//       paging: { size: 10, page: 2 },
+//     } as SelectQueryOptions<cityModel>);
+//     assertEquals(Number(result.totalRows), 4079);
+//     if (result && result.rows && result.rows.length > 0) {
+//       assertEquals(result.rows[0].name, "Tokyo");
+//     }
+//   },
+// });
+
+// Deno.test({
+//   name: "[module='norm' dialect='postgres'] Test table describe functionality",
+//   async fn() {
+//     const result = await db.getTableDefinition("city");
+//     assertEquals(result.columns.name.name, "name");
+//     assertEquals(result.columns.id.isPrimary, true);
+//     assertEquals(
+//       result.columns.district.uniqueKey &&
+//         result.columns.district.uniqueKey.has("city_unique"),
+//       true,
+//     );
+//     assertEquals(result.columns.countrycode.length, 3);
+//     assertEquals(result.columns.population.dataType, "INTEGER");
+//   },
+// });
+
+// await db.close();
 
 const WaitlistModelDefinition = {
   name: "WaitList",

@@ -40,13 +40,17 @@ const test = newPostgresClient("test", {
   host: "**********",
 
   tls: {
+
     enabled: true,
+
   },
+
 });
 
 await test.connect();
 
 type testModal = {
+
   Id: string;
 
   Name: string;
@@ -54,14 +58,18 @@ type testModal = {
   Check?: boolean;
 
   TimeStamp: Date;
+
 };
 
+
 const option: Partial<QueryOptions<testModal>> = {
+
   table: "test",
 
   schema: "CurrencyTracker",
 
   columns: {
+
     Id: "id",
 
     Name: "name",
@@ -69,55 +77,80 @@ const option: Partial<QueryOptions<testModal>> = {
     Check: "chk",
 
     TimeStamp: "tstamp",
+
   },
 
   primary: ["Id"],
+
 };
 
+
 const filter: Filters<testModal> = {
+
   Check: true,
 
   $or: [{
+
     Name: ";' select 1",
 
     Check: { $null: true },
+
   }, {
+
     Name: "sdf",
+
   }, {
+
     Check: true,
+
   }],
+
 };
 
+
 const insData: Array<Partial<testModal>> = [{
+
   Name: "dffdas",
 
   Check: true,
+
 }, {
+
   Name: "sdfsdf",
+
 }];
 
+
 const delFilter: Filters<testModal> = {
+
   Id: {
-    $in: [
-      "3e85fcf5-b0a0-4110-a937-991aba25eb9e",
 
       "b736ecb9-b0fc-40a1-be8f-c49339d15fac",
     ],
+
   },
+
 };
 
+
 const res = await test.select<testModal>(
+
   {
+
     ...option,
 
     ...{
+
       filters: filter,
 
       sort: { Name: "DESC" },
 
       paging: { size: 10, page: 1 },
+
     },
+
   } as QueryOptions<testModal>,
+
 );
 
 console.log(res);

@@ -7,6 +7,7 @@ import type {
   InsertQueryOptions,
   QueryOptions,
   QueryType,
+  SchemaDefinition,
   SelectQueryOptions,
   SQLiteConfig,
   UpdateQueryOptions,
@@ -102,9 +103,8 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
       filter = (options.filters)
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
-      qry = `SELECT ${columns} FROM ${
-        this._quoteColumn(table)
-      }${filter}${sort}${paging}`;
+      qry = `SELECT ${columns}
+                   FROM ${this._quoteColumn(table)} ${filter}${sort}${paging}`;
 
     // Log the generated query
     // console.log(qry);
@@ -119,7 +119,8 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
       filter = (options.filters)
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
-      qry = `SELECT COUNT(1) as cnt FROM ${this._quoteColumn(table)}${filter}`;
+      qry = `SELECT COUNT(1) as cnt
+                   FROM ${this._quoteColumn(table)} ${filter}`;
 
     // console.log(qry);
     const result = await this._client?.queryEntries(qry.toString());
@@ -148,9 +149,10 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
           this._quoteColumn(value[0])
         }`;
       }),
-      qry = `INSERT INTO ${this._quoteColumn(table)} (${
-        columns.join(",")
-      })\n VALUES ${values.join(",\n")}\n RETURNING ${returning.join(",\n")};`;
+      qry = `INSERT INTO ${this._quoteColumn(table)} (${columns.join(",")})
+                   VALUES ${values.join(",\n")} RETURNING ${
+        returning.join(",\n")
+      };`;
 
     // console.log(qry);
     const result = await this._client?.queryEntries(qry.toString());
@@ -176,8 +178,10 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
           this._quoteColumn(value[0])
         }`;
       }),
-      qry = `UPDATE ${this._quoteColumn(table)} SET ${keyVal}${filter}`,
-      select = `SELECT ${returning} FROM ${this._quoteColumn(table)}${filter}`;
+      qry = `UPDATE ${this._quoteColumn(table)}
+                   SET ${keyVal}${filter}`,
+      select = `SELECT ${returning}
+                      FROM ${this._quoteColumn(table)} ${filter}`;
 
     // console.log(qry);
     // Returning is not available in update
@@ -195,7 +199,8 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
       filter = (options.filters)
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
-      qry = `DELETE FROM ${this._quoteColumn(table)}${filter}`;
+      qry = `DELETE
+                   FROM ${this._quoteColumn(table)} ${filter}`;
 
     // console.log(qry);
     const _result = await this._client?.queryEntries(qry.toString());
@@ -207,7 +212,8 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
     const table = (options.schema !== undefined)
         ? options.schema + "." + options.table
         : options.table,
-      qry = `DELETE FROM ${this._quoteColumn(table)}`;
+      qry = `DELETE
+                   FROM ${this._quoteColumn(table)}`;
 
     // console.log(qry);
     await this._client?.execute(qry.toString());
@@ -252,9 +258,10 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
     // FK we will see later
     sql.push(...columns);
     sql.push(...constraints);
-    const qry = `CREATE TABLE IF NOT EXISTS ${this._quoteColumn(table)} (\n${
-      sql.join(", \n")
-    } \n);`;
+    const qry = `CREATE TABLE IF NOT EXISTS ${this._quoteColumn(table)}
+                     (
+                         ${sql.join(", \n")}
+                     );`;
     // console.log(qry);
     await this._client?.execute(qry.toString());
   }
@@ -441,6 +448,18 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
     });
     retVal += ` )`;
     return retVal;
+  }
+
+  public async _getTableDefinition(
+    table: string,
+    schema?: string,
+  ): Promise<SchemaDefinition> {
+    //TODO Implement
+    return await {
+      table: table,
+      schema: schema,
+      columns: {},
+    };
   }
 
   // deno-lint-ignore no-explicit-any

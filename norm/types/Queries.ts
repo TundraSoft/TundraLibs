@@ -1,4 +1,5 @@
 import { DataType } from "./DataTypes.ts";
+
 /**
  * QueryTypes
  */

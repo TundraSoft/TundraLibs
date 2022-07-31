@@ -36,11 +36,7 @@ export type ModelFeatures = {
   drop: boolean;
 };
 
-export type ModelDefinition = {
-  // The model name - Friendly identifier. Used for Relationship etc
-  name: string;
-  // Connection to use, defaults to 'default'
-  connection: string;
+export type SchemaDefinition = {
   // Schema name. If blank will resolve to Client's default ex public in postgres
   schema?: string;
   // The table name
@@ -49,6 +45,13 @@ export type ModelDefinition = {
   columns: {
     [key: string]: ColumnDefinition;
   };
+};
+
+export type ModelDefinition = SchemaDefinition & {
+  // The model name - Friendly identifier. Used for Relationship etc
+  name: string;
+  // Connection to use, defaults to 'default'
+  connection: string;
   // Paging
   pageSize?: number;
   // Features to be enabled

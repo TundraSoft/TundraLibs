@@ -3,7 +3,6 @@ import { Options } from "../options/Options.ts";
 import type {
   ClientConfig,
   ClientEvents,
-  // ColumnDefinition,
   CountQueryOptions,
   CreateTableOptions,
   DeleteQueryOptions,
@@ -13,6 +12,7 @@ import type {
   // QueryPagination,
   QueryResult,
   QueryType,
+  SchemaDefinition,
   SelectQueryOptions,
   UpdateQueryOptions,
 } from "./types/mod.ts";
@@ -65,6 +65,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   get stats(): Map<QueryType, { count: number; time: number; error: number }> {
     return this._stats;
   }
+
   /**
    * connect
    *
@@ -455,6 +456,23 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     }
   }
 
+  public async getTableDefinition(
+    table: string,
+    schema?: string,
+  ): Promise<SchemaDefinition> {
+    // const start = performance.now()
+    await this.connect();
+    try {
+      const result = await this._getTableDefinition(table, schema);
+      // Set end time
+      // const end = performance.now();
+      // const time = end - start;
+      return result;
+    } catch (e) {
+      throw new QueryError(e.message, "DESCRIBE", this.name, this.dialect);
+    }
+  }
+
   protected abstract _connect(): void;
 
   protected abstract _close(): void;
@@ -489,6 +507,11 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   protected abstract _createTable(options: CreateTableOptions): Promise<void>;
 
   protected abstract _dropTable(table: string, schema?: string): Promise<void>;
+
+  protected abstract _getTableDefinition(
+    table: string,
+    schema?: string,
+  ): Promise<SchemaDefinition>;
 
   protected abstract _createSchema(
     name: string,

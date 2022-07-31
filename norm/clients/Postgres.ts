@@ -2,15 +2,45 @@ import { AbstractClient } from "../AbstractClient.ts";
 import type {
   CountQueryOptions,
   CreateTableOptions,
+  DataType,
   DeleteQueryOptions,
   Filters,
   InsertQueryOptions,
   PostgresConfig,
   QueryOptions,
   QueryType,
+  SchemaDefinition,
   SelectQueryOptions,
   UpdateQueryOptions,
 } from "../types/mod.ts";
+
+const DataTypeMapString = {
+  "VARCHAR": "string",
+  "CHARACTER": "string",
+  "NVARCHAR": "string",
+  "TEXT": "string",
+  "STRING": "string",
+  "UUID": "string",
+  "GUID": "string",
+  "NUMERIC": "number",
+  "NUMBER": "number",
+  "DECIMAL": "number",
+  "INTEGER": "number",
+  "SMALLINT": "number",
+  "TINYINT": "number",
+  "FLOAT": "number",
+  "BIGINTEGER": "number",
+  "SERIAL": "number",
+  "BIGSERIAL": "number",
+  "AUTO_INCREMENT": "number",
+  "BOOLEAN": "boolean",
+  "BINARY": "boolean",
+  "DATE": "date",
+  "DATETIME": "date",
+  "TIME": "date",
+  "TIMESTAMP": "date",
+  "JSON": "object",
+};
 
 import { PGPool } from "../../dependencies.ts";
 import type { PGClientOptions } from "../../dependencies.ts";
@@ -111,9 +141,8 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
       filter = (options.filters)
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
-      qry = `SELECT ${columns} FROM ${
-        this._quoteColumn(table)
-      }${filter}${sort}${paging}`;
+      qry = `SELECT ${columns}
+                   FROM ${this._quoteColumn(table)} ${filter}${sort}${paging}`;
 
     // Log the generated query
     // console.log(qry);
@@ -130,7 +159,8 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
       filter = (options.filters)
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
-      qry = `SELECT COUNT(1) as cnt FROM ${this._quoteColumn(table)}${filter}`;
+      qry = `SELECT COUNT(1) as cnt
+                   FROM ${this._quoteColumn(table)} ${filter}`;
 
     // console.log(qry);
     const conn = await this._client.connect(),
@@ -158,9 +188,10 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
           this._quoteColumn(value[0])
         }`;
       }),
-      qry = `INSERT INTO ${this._quoteColumn(table)} (${
-        columns.join(",")
-      })\n VALUES ${values.join(",\n")}\n RETURNING ${returning.join(",\n")};`;
+      qry = `INSERT INTO ${this._quoteColumn(table)} (${columns.join(",")})
+                   VALUES ${values.join(",\n")} RETURNING ${
+        returning.join(",\n")
+      };`;
 
     // console.log(qry);
     const conn = await this._client.connect(),
@@ -188,9 +219,8 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
           this._quoteColumn(value[0])
         }`;
       }),
-      qry = `UPDATE ${
-        this._quoteColumn(table)
-      } SET ${keyVal}${filter} RETURNING ${returning}`;
+      qry = `UPDATE ${this._quoteColumn(table)}
+                   SET ${keyVal}${filter} RETURNING ${returning}`;
 
     // console.log(qry);
     const conn = await this._client.connect(),
@@ -206,7 +236,8 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
       filter = (options.filters)
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
-      qry = `DELETE FROM ${this._quoteColumn(table)}${filter}`;
+      qry = `DELETE
+                   FROM ${this._quoteColumn(table)} ${filter}`;
 
     // console.log(qry);
     const conn = await this._client.connect(),
@@ -262,9 +293,10 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
     // FK we will see later
     sql.push(...columns);
     sql.push(...constraints);
-    const qry = `CREATE TABLE IF NOT EXISTS ${this._quoteColumn(table)} (\n${
-      sql.join(", \n")
-    } \n);`;
+    const qry = `CREATE TABLE IF NOT EXISTS ${this._quoteColumn(table)}
+                     (
+                         ${sql.join(", \n")}
+                     );`;
     // console.log(qry);
     const conn = await this._client.connect();
     const _p = await conn.queryObject(qry);
@@ -310,6 +342,98 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
     const conn = await this._client.connect();
     await conn.queryObject(qry);
     conn.release();
+  }
+
+  protected async _getTableDefinition(
+    table: string,
+    schema?: string,
+  ): Promise<SchemaDefinition> {
+    const filter = `C.table_name = ${this._quoteValue(table)}` +
+      (schema ? `' AND C.table_schema = ${this._quoteValue(schema)}` : "");
+    const field_qry = `SELECT column_name,
+                                  ordinal_position,
+                                  data_type,
+                                  character_maximum_length,
+                                  numeric_precision,
+                                  numeric_scale,
+                                  is_nullable
+                           FROM information_schema.columns C
+                           WHERE ${filter}
+                           ORDER BY ordinal_position`;
+    const constr_col_qry = `SELECT C.column_name,
+                                       C.ordinal_position,
+                                       C.constraint_name,
+                                       U.constraint_type
+                                FROM information_schema.key_column_usage C
+                                         INNER JOIN
+                                     information_schema.table_constraints U
+                                     ON
+                                         C.constraint_name = U.constraint_name
+                                WHERE ${filter}
+                                ORDER BY U.constraint_type, C.constraint_name, C.ordinal_position`;
+    console.log(field_qry);
+    const conn = await this._client.connect();
+    const fields_result = await conn.queryObject<{
+      column_name: string;
+      ordinal_position: number;
+      data_type: string;
+      character_maximum_length: number;
+      numeric_precision: number;
+      numeric_scale: number;
+      is_nullable: string;
+    }>("" + field_qry);
+    const dt_constraints = await conn.queryObject<{
+      constraint_name: string;
+      constraint_type: string;
+      column_name: string;
+      ordinal_position: number;
+    }>("" + constr_col_qry);
+    conn.release();
+
+    const primary_keys = Object.fromEntries(
+      dt_constraints.rows.filter((value) => {
+        return value.constraint_type === "PRIMARY KEY";
+      }).map((value) => {
+        return [value.column_name, true];
+      }),
+    );
+    const unique_keys = Object.fromEntries(
+      Object.entries(
+        dt_constraints.rows.filter((value) => {
+          return value.constraint_type === "UNIQUE";
+        }).reduce((acc, { column_name, constraint_name }) => {
+          (acc[column_name] || (acc[column_name] = [])).push(constraint_name);
+          return acc;
+        }, {} as { [key: string]: string[] }),
+      ).map(([key, value]) => [key, new Set(value)]),
+    );
+
+    const column_definitions = fields_result.rows.map((value) => {
+      return {
+        name: value.column_name,
+        dataType: value.data_type.toUpperCase() as DataType,
+        length: (DataTypeMapString[value.data_type.toUpperCase() as DataType] ==
+            "number")
+          ? {
+            precision: value.numeric_precision,
+            scale: value.numeric_scale,
+          }
+          : ((DataTypeMapString[value.data_type.toUpperCase() as DataType] ==
+              "string")
+            ? value.character_maximum_length
+            : undefined),
+        isNullable: (value.is_nullable != "NO"),
+        isPrimary: (primary_keys[value.column_name] === true),
+        uniqueKey: unique_keys[value.column_name],
+      };
+    });
+    return {
+      table: table,
+      schema: schema,
+      columns: Object.fromEntries(column_definitions.map((value) => {
+        return [value.name, value];
+      })),
+    };
   }
 
   protected _processFilters<T>(
