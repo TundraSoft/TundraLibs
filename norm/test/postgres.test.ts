@@ -17,6 +17,7 @@ await Database.load("postgres", {
 });
 
 const WaitlistModelDefinition = {
+  name: "WaitList",
   connection: "postgres",
   schema: "public",
   table: "waitlist",
@@ -28,18 +29,21 @@ const WaitlistModelDefinition = {
     },
     mobile: {
       dataType: DataTypes.VARCHAR,
-      uniqueKey: "mobile",
+      uniqueKey: new Set(["mobile"]),
       validator: Guardian.string().mobile(),
+      relatesTo: {
+        mobileType: "id",
+      },
     },
     name: {
       dataType: DataTypes.VARCHAR,
       validator: Guardian.string().min(3),
-      uniqueKey: "name_email",
+      uniqueKey: new Set(["name_email"]),
     },
     email: {
       dataType: DataTypes.VARCHAR,
       validator: Guardian.string().email(),
-      uniqueKey: "name_email",
+      uniqueKey: new Set(["name_email"]),
     },
     hasCrypto: {
       dataType: DataTypes.BOOLEAN,
