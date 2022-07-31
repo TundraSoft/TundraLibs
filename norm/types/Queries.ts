@@ -147,7 +147,7 @@ export type CreateTableOptions = {
       type: DataType;
       length?: {
         precision: number;
-        scale: number
+        scale: number;
       } | number;
       isNullable?: boolean;
     };

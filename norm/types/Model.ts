@@ -1,5 +1,5 @@
 import { DataTypeMap, DataTypes } from "./DataTypes.ts";
-import type { DataType } from "./DataTypes.ts"
+import type { DataType } from "./DataTypes.ts";
 import type { GuardianProxy } from "../../guardian/mod.ts";
 
 export type ColumnDefinition = {
@@ -21,8 +21,8 @@ export type ColumnDefinition = {
   uniqueKey?: Set<string>;
   relatesTo?: {
     // Model name: Column Name
-    [key: string]: string
-  }
+    [key: string]: string;
+  };
 };
 
 export type ModelFeatures = {
@@ -34,11 +34,11 @@ export type ModelFeatures = {
   bulkDelete: boolean;
   create: boolean;
   drop: boolean;
-}
+};
 
 export type ModelDefinition = {
   // The model name - Friendly identifier. Used for Relationship etc
-  name: string, 
+  name: string;
   // Connection to use, defaults to 'default'
   connection: string;
   // Schema name. If blank will resolve to Client's default ex public in postgres

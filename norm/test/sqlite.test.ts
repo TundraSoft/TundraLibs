@@ -11,7 +11,7 @@ await Database.load("sqlite", {
 });
 
 const WaitlistModelDefinition = {
-  name: 'WaitList',
+  name: "WaitList",
   connection: "sqlite",
   table: "waitlist",
   columns: {
