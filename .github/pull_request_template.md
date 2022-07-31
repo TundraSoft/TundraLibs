@@ -19,7 +19,7 @@ Fixes # (issue)
 ### Checklist:
 
 - [ ] Code follows the style guidelines of this project
-- [ ] Code has been self reviewed before raising PR
+- [ ] Executed deno --fmt and deno --test locally before pushing
 - [ ] Code is well commented
 - [ ] Documentation has been updated
 - [ ] No new warnings are generated

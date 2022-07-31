@@ -1,102 +1,109 @@
-import { QueryType } from "./types/mod.ts";
+import {QueryType} from "./types/mod.ts";
 
 export class NormError extends Error {
-  protected _module = "norm";
-  protected _dialect: string;
-  protected _config: string;
+    protected _module = "norm";
+    protected _dialect: string;
+    protected _config: string;
 
-  constructor(message: string, config = "-", dialect = "-") {
-    super(`[module='norm' config='${config}' dialect='${dialect}] ${message}`);
-    this._dialect = dialect;
-    this._config = config;
-    Object.setPrototypeOf(this, NormError.prototype);
-  }
+    constructor(message: string, config = "-", dialect = "-") {
+        super(`[module='norm' config='${config}' dialect='${dialect}'] ${message}`);
+        this._dialect = dialect;
+        this._config = config;
+        Object.setPrototypeOf(this, NormError.prototype);
+    }
 
-  get module(): string {
-    return this._module;
-  }
+    get module(): string {
+        return this._module;
+    }
 
-  get dialect(): string {
-    return this._dialect;
-  }
+    get dialect(): string {
+        return this._dialect;
+    }
 
-  get config(): string {
-    return this._config;
-  }
+    get config(): string {
+        return this._config;
+    }
 }
 
 export class ConfigNotFound extends NormError {
-  constructor(config: string) {
-    super(`Could not find connection config with the name ${config}`, config);
-    Object.setPrototypeOf(this, ConfigNotFound.prototype);
-  }
+    constructor(config: string) {
+        super(`Could not find connection config with the name ${config}`, config);
+        Object.setPrototypeOf(this, ConfigNotFound.prototype);
+    }
 }
 
 export class ConnectionError extends NormError {
-  constructor(message: string, config: string, dialect: string) {
-    super(dialect, config, message);
-    Object.setPrototypeOf(this, ConnectionError.prototype);
-  }
+    constructor(message: string, config: string, dialect: string) {
+        super(message, config, dialect);
+        Object.setPrototypeOf(this, ConnectionError.prototype);
+    }
 }
 
 export class QueryError extends NormError {
-  constructor(
-    query: string,
-    type: QueryType,
-    config: string,
-    dialect: string,
-  ) {
-    super(dialect, config, `Error executing ${type} query: ${query}`);
-    Object.setPrototypeOf(this, QueryError.prototype);
-  }
+    constructor(
+        query: string,
+        type: QueryType,
+        config: string,
+        dialect: string,
+    ) {
+        super(`Error executing ${type} query: ${query}`, config, dialect);
+        Object.setPrototypeOf(this, QueryError.prototype);
+    }
 }
 
 export class ModelError extends Error {
-  protected _module = "norm";
-  protected _model: string;
-  protected _dbConn: string;
+    protected _module = "norm";
+    protected _model: string;
+    protected _dbConn: string;
 
-  constructor(message: string, model = "-", dbConn = "-") {
-    super(`[module='norm' model='${model}' conn='${dbConn}] ${message}`);
-    this._model = model;
-    this._dbConn = dbConn;
-    Object.setPrototypeOf(this, ModelError.prototype);
-  }
+    constructor(message: string, model = "-", dbConn = "-") {
+        super(`[module='norm' model='${model}' conn='${dbConn}] ${message}`);
+        this._model = model;
+        this._dbConn = dbConn;
+        Object.setPrototypeOf(this, ModelError.prototype);
+    }
 
-  get module(): string {
-    return this._module;
-  }
+    get module(): string {
+        return this._module;
+    }
 
-  get model(): string {
-    return this._model;
-  }
+    get model(): string {
+        return this._model;
+    }
 
-  get dbConn(): string {
-    return this._dbConn;
-  }
+    get dbConn(): string {
+        return this._dbConn;
+    }
 }
 
 export class ModelPermission extends ModelError {
-  constructor(permission: string, model: string, dbConn: string) {
-    super(
-      `Permission to perform ${permission} is not available`,
-      model,
-      dbConn,
-    );
-    Object.setPrototypeOf(this, ModelPermission.prototype);
-  }
+    constructor(permission: string, model: string, dbConn: string) {
+        super(
+            `Permission to perform ${permission} is not available`,
+            model,
+            dbConn,
+        );
+        Object.setPrototypeOf(this, ModelPermission.prototype);
+    }
 }
 
 export class ModelNotNull extends ModelError {
-  constructor(column: string, model: string, dbConn: string) {
-    super(`Column ${column} is not nullable`, model, dbConn);
-    Object.setPrototypeOf(this, ModelNotNull.prototype);
-  }
+    constructor(column: string, model: string, dbConn: string) {
+        super(`Column ${column} is not nullable`, model, dbConn);
+        Object.setPrototypeOf(this, ModelNotNull.prototype);
+    }
 }
 
 export class ModelPrimaryKeyUpdate extends ModelError {
-  constructor(column: string, model: string, dbConn: string) {
-    super(`Primary key column ${column} cannot be updated`, model, dbConn);
-    Object.setPrototypeOf(this, ModelPrimaryKeyUpdate.prototype);
-  }
+    constructor(column: string, model: string, dbConn: string) {
+        super(`Primary key column ${column} cannot be updated`, model, dbConn);
+        Object.setPrototypeOf(this, ModelPrimaryKeyUpdate.prototype);
+    }
+}
+
+export class ModelUniqueKeyViolation extends ModelError {
+    constructor(uniqueKey: string, model: string, dbConn: string) {
+        super(`Unique Key ${uniqueKey} violation`, model, dbConn);
+        Object.setPrototypeOf(this, ModelPrimaryKeyUpdate.prototype);
+    }
 }

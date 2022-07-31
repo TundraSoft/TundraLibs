@@ -3,17 +3,18 @@ import {Options} from "../options/Options.ts";
 import type {
     ClientConfig,
     ClientEvents,
+    SchemaDefinition,
     CountQueryOptions,
+    CreateTableOptions,
     DeleteQueryOptions,
     Dialect,
     InsertQueryOptions,
     QueryOptions,
+    // QueryPagination,
     QueryResult,
     QueryType,
     SelectQueryOptions,
     UpdateQueryOptions,
-    CreateTableOptions,
-    SchemaDefinition
 } from "./types/mod.ts";
 
 import {ConnectionError, QueryError} from "./Errors.ts";
@@ -57,6 +58,10 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
      */
     get name(): string {
         return this._name;
+    }
+
+    get stats(): Map<QueryType, { count: number; time: number; error: number }> {
+        return this._stats;
     }
 
     /**
@@ -392,27 +397,57 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
         }
     }
 
+    public async createSchema(name: string, ifExists = true): Promise<void> {
+        const start = performance.now();
+        await this.connect();
+        try {
+            await this._createSchema(name, ifExists);
+            // Set end time
+            const end = performance.now();
+            const _time = end - start;
+        } catch (e) {
+            throw new QueryError(e.message, "CREATE", this.name, this.dialect);
+        }
+    }
+
+    public async dropSchema(
+        name: string,
+        ifExists = true,
+        cascade = true,
+    ): Promise<void> {
+        const start = performance.now();
+        await this.connect();
+        try {
+            await this._dropSchema(name, ifExists, cascade);
+            // Set end time
+            const end = performance.now();
+            const _time = end - start;
+        } catch (e) {
+            throw new QueryError(e.message, "DROP", this.name, this.dialect);
+        }
+    }
+
     public async createTable(options: CreateTableOptions): Promise<void> {
-        const start = performance.now()
+        const start = performance.now();
         await this.connect();
         try {
             await this._createTable(options);
             // Set end time
             const end = performance.now();
-            const time = end - start;
+            const _time = end - start;
         } catch (e) {
             throw new QueryError(e.message, "CREATE", this.name, this.dialect);
         }
     }
 
     public async dropTable(table: string, schema?: string): Promise<boolean> {
-        const start = performance.now()
+        const start = performance.now();
         await this.connect();
         try {
             await this._dropTable(table, schema);
             // Set end time
             const end = performance.now();
-            const time = end - start;
+            const _time = end - start;
             return true;
         } catch (e) {
             throw new QueryError(e.message, "DROP", this.name, this.dialect);
@@ -420,13 +455,13 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     }
 
     public async getTableDefinition(table: string, schema?: string): Promise<SchemaDefinition> {
-        const start = performance.now()
+        // const start = performance.now()
         await this.connect();
         try {
             const result = await this._getTableDefinition(table, schema)
             // Set end time
-            const end = performance.now();
-            const time = end - start;
+            // const end = performance.now();
+            // const time = end - start;
             return result
         } catch (e) {
             throw new QueryError(e.message, "DESCRIBE", this.name, this.dialect);
@@ -470,4 +505,14 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
 
     protected abstract _getTableDefinition(table: string, schema?: string): Promise<SchemaDefinition>;
 
+    protected abstract _createSchema(
+        name: string,
+        ifExists?: boolean,
+    ): Promise<void>;
+
+    protected abstract _dropSchema(
+        name: string,
+        ifExists?: boolean,
+        cascade?: boolean,
+    ): Promise<void>;
 }

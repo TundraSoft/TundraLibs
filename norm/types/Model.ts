@@ -1,14 +1,15 @@
-import {DataTypes, DataTypeMap} from "./DataTypes.ts";
+import {DataTypeMap} from "./DataTypes.ts";
+import type {DataType} from "./DataTypes.ts";
 import type {GuardianProxy} from "../../guardian/mod.ts";
 
 export type ColumnDefinition = {
     // Actual column name
     name?: string;
     // The data type
-    dataType: keyof typeof DataTypes;
+    dataType: DataType;
     length?: {
-        precision: number,
-        scale: number
+        precision: number;
+        scale: number;
     } | number;
     // isNullable - Is column nullable, if true then null is valid. Defaults to false
     isNullable?: boolean;
@@ -17,7 +18,22 @@ export type ColumnDefinition = {
     // deno-lint-ignore no-explicit-any
     validator?: GuardianProxy<any>;
     isPrimary?: boolean;
-    uniqueKey?: string;
+    uniqueKey?: Set<string>;
+    relatesTo?: {
+        // Model name: Column Name
+        [key: string]: string;
+    };
+};
+
+export type ModelFeatures = {
+    insert: boolean;
+    bulkInsert: boolean;
+    update: boolean;
+    bulkUpdate: boolean;
+    delete: boolean;
+    bulkDelete: boolean;
+    create: boolean;
+    drop: boolean;
 };
 
 export type SchemaDefinition = {
@@ -31,7 +47,10 @@ export type SchemaDefinition = {
     };
 }
 
+
 export type ModelDefinition = SchemaDefinition & {
+    // The model name - Friendly identifier. Used for Relationship etc
+    name: string;
     // Connection to use, defaults to 'default'
     connection: string;
     // Paging
@@ -63,9 +82,12 @@ type ExtractTypes<T extends { [K in keyof T]: ColumnDefinition }> =
     },
         KeysMatching<T, { isNullable: true }>>;
 
-type Picker<P extends ModelDefinition, V> = ExtractTypes<{
+// type Picker<P extends ModelDefinition> = ExtractTypes<
+//   {
+//     [X in keyof P["columns"]]: P["columns"][X];
+//   }
+// >;
+
+export type ModelType<P extends ModelDefinition> = ExtractTypes<{
     [X in keyof P["columns"]]: P["columns"][X];
 }>;
-
-export type ModelType<P extends ModelDefinition> = Picker<P,
-    { nullable: true }>;

@@ -116,7 +116,7 @@ export class Config {
       config = Config.#configs.get(name) as Record<string, unknown>;
       //#region Replace env variables
       let data = JSON.stringify(config);
-      if (Config.#env.size > 0) {
+      if (Config.#env && Config.#env.size > 0) {
         Config.#env.forEach((value, key) => {
           const regex = new RegExp("\\$" + key + "", "g");
           data = data.replaceAll(regex, value);

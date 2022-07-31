@@ -4,15 +4,17 @@ A collection of libraries written in Deno which I use in different projects.
 
 ## Libraries
 
-- [x] [nanoid](./nanoid/README.md)
-- [x] [Events](./events/README.md)
-- [x] [Options](./options/README.md)
 - [x] [Config](./config/README.md)
+- [x] [Events](./events/README.md)
 - [x] [Guardian](./guardian/README.md)
 - [x] [JWT](./jwt/README.md)
-- [x] [Syslog](./syslog/README.md)
-- [x] [Slogger](./slogger/README.md)
+- [x] [nanoid](./nanoid/README.md)
 - [x] [NORM](./norm/README.md)
+- [x] [Options](./options/README.md)
+- [x] [OTP](./otp/README.md)
+- [x] [Slogger](./slogger/README.md)
+- [x] [sysinfo](./sysinfo/README.md)
+- [x] [Syslog](./syslog/README.md)
 
 ### NOTES
 
