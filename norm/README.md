@@ -154,7 +154,6 @@ const res = await test.select<testModal>(
 );
 
 console.log(res);
-
 ```
 
 ### Types
@@ -164,7 +163,6 @@ console.log(res);
 This is used to create a connection
 
 ```ts
-
 type ClientConfig = {
   // The dialect
 
@@ -197,17 +195,13 @@ type ClientConfig = {
   // TLS options
 
   tls: Partial<{
-
     enforce: boolean;
 
     enabled: boolean;
 
     ca: string[];
-
   }>;
-
 };
-
 ```
 
 #### QueryOptions
@@ -230,7 +224,6 @@ NOTES:
   class, paging is set to 10 by default.
 
 ```ts
-
 type QueryOptions<T> = {
   // Table name
 
@@ -263,9 +256,7 @@ type QueryOptions<T> = {
   // Data used for insert or update
 
   data?: Array<Partial<T>>;
-
 };
-
 ```
 
 #### QueryResult
@@ -273,7 +264,6 @@ type QueryOptions<T> = {
 The default object used when returning data from query.
 
 ```ts
-
 type QueryResult<T = Record<string, unknown>> = {
   // The type of Query
 
@@ -297,7 +287,6 @@ type QueryResult<T = Record<string, unknown>> = {
     // Page number
 
     page?: number;
-
   };
 
   // Sort options,
@@ -307,9 +296,7 @@ type QueryResult<T = Record<string, unknown>> = {
   // The rows (returned in Select, Insert and Update only)
 
   rows?: Array<T>;
-
 };
-
 ```
 
 ## ToDO

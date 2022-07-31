@@ -165,4 +165,3 @@ export type StructValidatorFunction<S> = FunctionType<
 >;
 
 export type Type<S> = StructResolveType<S>;
-
