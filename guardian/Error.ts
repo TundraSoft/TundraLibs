@@ -17,11 +17,11 @@ export type ErrorList = {
 
 export class ValidationError extends Error {
   public path?: ObjectPath;
-  public errors?: PathError[];
+  public validations?: PathError[];
 
   constructor(message: string, errors?: PathError[]) {
     super(message);
-    this.errors = errors;
+    this.validations = errors;
 
     Object.setPrototypeOf(this, ValidationError.prototype);
   }
@@ -30,7 +30,7 @@ export class ValidationError extends Error {
     // console.log(JSON.stringify(this.errors));
     return {
       message: this.message,
-      errors: this.errors?.map(({ path, error }) => ({
+      errors: this.validations?.map(({ path, error }) => ({
         path,
         // error: ValidationError.prototype.toJSON?.apply(error) || error,
         error: ValidationError.prototype.toJSON?.apply(error),

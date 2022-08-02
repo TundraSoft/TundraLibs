@@ -5,7 +5,7 @@ import type {
   MergeParameters,
   ResolvedValue,
 } from "./types.ts";
-import { equals, isPromiseLike, optional, test } from "./utils.ts";
+import { equals, isPromiseLike, oneOf, optional, test } from "./utils.ts";
 
 export interface GuardianConstructor<
   V extends BaseGuardian<F>,
@@ -61,6 +61,12 @@ export class BaseGuardian<F extends FunctionType> {
     return this.transform(equals(value, error));
   }
 
+  public oneOf<T extends ResolvedValue<ReturnType<F>>>(
+    values: T[],
+    error?: string,
+  ): GuardianProxy<this, FunctionType<T, Parameters<F>>> {
+    return this.transform(oneOf(values, error));
+  }
   /**
    * test
    *

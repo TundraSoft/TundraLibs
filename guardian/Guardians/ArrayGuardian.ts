@@ -40,7 +40,7 @@ export class ArrayGuardian<
       let isAsync;
       const items = arr.map(
         (value): StructResolveType<S> | PromiseLike<StructResolveType<S>> => {
-          console.log(validator);
+          // console.log(validator);
           const ret = validator(value);
           // console.log("sdgg");
           if (ret instanceof Promise) {
