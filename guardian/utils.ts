@@ -177,9 +177,11 @@ export function pathErrors(errors: ErrorLike, path: ObjectPath): PathError[] {
   if (Array.isArray(error.path)) {
     path = error.path;
   }
-  if (error.errors?.length) {
+  if (error.validations?.length) {
     return ([] as PathError[]).concat(
-      ...error.errors.map((e) => pathErrors(e.error, [...path, ...e.path])),
+      ...error.validations.map((e) =>
+        pathErrors(e.error, [...path, ...e.path])
+      ),
     );
   }
   return [{ error, path }];
@@ -201,8 +203,8 @@ export function createValidationError<P extends FunctionParameters>(
     }
   }
 
-  const err: ValidationError = makeError(error, ...args);
-  err.errors = errors;
+  const err: ValidationError = makeError(error?.toString() || error, ...args);
+  err.validations = errors;
 
   return err;
 }
@@ -261,6 +263,7 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
       validators[key] = compile(struct[key as keyof S], {
         mode: opts.mode,
         path: [...opts.path, key],
+        message: `Validating failed for key: ${key}`,
       });
     });
     // Return a function that will validate the value
@@ -272,13 +275,14 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
         obj = objs[0],
         objKeys: Set<string> = new Set(Object.keys(obj)),
         errors: PathError[] = [],
+        // errors: {error: string, path: ObjectPath}[] = [],
         promises: Promise<unknown>[] = [];
       objKeys.forEach((key) => {
         try {
           // If it is Strict or Partial, only defined properties are allowed
           if (mode !== "ANY" && !structKeys.has(key)) {
             // pathErrors(`${key} is not a valid property`, [...opts.path, key]);
-            throw makeError(`Unknown property passed "${key}"`, ...objs);
+            throw makeError(`Unknown property passed "${key}"`);
           }
           const retVal = (validators[key] !== undefined)
             ? validators[key](obj[key])
@@ -288,7 +292,7 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
             retVal.then((v) => retObj[key] = v, (e) => {
               // const err = makeError(e)
               errors.push({
-                error: makeError(e.message),
+                error: e,
                 path: [...path, key],
               });
             });
@@ -297,7 +301,12 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
           }
         } catch (e) {
           // errors.push(...toPathErrors(error as Error, path));
-          errors.push({ error: e, path: [...path, key] });
+          // errors.push({ error: e, path: [...path, key] });
+          // errors.push(...pathErrors(e, [...path, key]));
+          errors.push({
+            error: e,
+            path: [...path, key],
+          });
         }
       });
       // Properties defined but not passed needs to be handled for strict
@@ -305,7 +314,7 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
         structKeys.forEach((key) => {
           if (!objKeys.has(key)) {
             errors.push({
-              error: makeError(`Missing property "${key}"`, ...objs),
+              error: makeError(`Missing property "${key}"`),
               path: [...path, key],
             });
           }
