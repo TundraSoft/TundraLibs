@@ -54,7 +54,7 @@ export class QueryGenerator {
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
       qry = `SELECT COUNT(1) as cnt
-                   FROM ${this._makeTable(options.table, options.schema)} ${filter}`;
+                   FROM ${this._makeTable(options.table, options.schema)}${filter}`;
     return qry;
   }
 
@@ -224,7 +224,34 @@ export class QueryGenerator {
   // createView(): string {}
   // dropView(): string {}
 
+  getTableDefinition(table: string, schema?: string): string {
+    return `SELECT column_name,
+        ordinal_position,
+        data_type,
+        character_maximum_length,
+        numeric_precision,
+        numeric_scale,
+        is_nullable
+        FROM information_schema.columns C
+      WHERE C.table_name = '${table}'
+      ${schema ? `AND C.table_schema = '${schema}'` : ""}
+      ORDER BY ordinal_position`
+  }
 
+  getTableConstraints(table: string, schema?: string): string {
+    return `SELECT C.column_name,
+        C.ordinal_position,
+        C.constraint_name,
+        U.constraint_type
+    FROM information_schema.key_column_usage C
+          INNER JOIN
+      information_schema.table_constraints U
+      ON
+          C.constraint_name = U.constraint_name
+    WHERE C.table_name = '${table}'
+    ${schema ? `AND C.table_schema = '${schema}'` : ""}
+    ORDER BY U.constraint_type, C.constraint_name, C.ordinal_position`
+  }
 
   protected _makeTable(name: string, schema?: string): string {
     return this._quoteColumn(schema ? `${schema}.${name}` : name);
