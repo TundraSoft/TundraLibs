@@ -495,7 +495,7 @@ export class QueryGenerator {
 
   protected _quoteColumn(column: string) {
     return `${this.COL_QUOTE}${
-      column.replace(/\./g, "${this.COL_QUOTE}.${this.COL_QUOTE}")
+      column.replace(/\./g, `${this.COL_QUOTE}.${this.COL_QUOTE}`)
     }${this.COL_QUOTE}`;
   }
 }
