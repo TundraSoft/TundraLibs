@@ -1,9 +1,10 @@
 import { AbstractClient } from "./AbstractClient.ts";
 import { Database } from "./Database.ts";
-import type {
+import {
   CountQueryOptions,
   CreateTableOptions,
   DataType,
+  DataTypes,
   DeleteQueryOptions,
   // FilterOperators,
   Filters,
@@ -47,7 +48,7 @@ import {
 
 // export class Model<T> {
 export class Model<
-  S extends ModelDefinition,
+  S extends ModelDefinition = ModelDefinition,
   T extends ModelType<S> = ModelType<S>,
 > {
   // protected _model: ModelDefinition;

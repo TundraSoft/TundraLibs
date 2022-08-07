@@ -1,4 +1,6 @@
 import { AbstractClient } from "../AbstractClient.ts";
+import { QueryGenerator } from "../QueryGenerator.ts";
+
 import type {
   CountQueryOptions,
   CreateTableOptions,
@@ -47,6 +49,7 @@ import type { PGClientOptions } from "../../dependencies.ts";
 
 export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
   declare protected _client: PGPool;
+  declare protected _queryGenerator: QueryGenerator;
 
   constructor(name: string, config: Partial<T>) {
     const configDefault: Partial<PostgresConfig> = {
@@ -55,6 +58,7 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
       poolSize: 10,
     };
     super(name, config, configDefault as Partial<T>);
+    this._queryGenerator = new QueryGenerator("POSTGRES");
     // Ensure we have atleast > 1 connection available
     if (this._getOption("poolSize") < 1) {
       this._setOption("poolSize", 10);
@@ -111,152 +115,41 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
     return res.rows;
   }
 
+  protected async _execute(sql: string): Promise<void> {
+    const client = await this._client.connect();
+    await client.queryObject(sql);
+    client.release();
+  }
+
   protected async _select<T>(
     options: SelectQueryOptions<T>,
   ): Promise<Array<T>> {
-    const project = (options.project !== undefined)
-        ? options.project
-        : Object.keys(options.columns),
-      columns = project.map((value) => {
-        const colName = options.columns[value as keyof T];
-        return `${this._quoteColumn(colName)} AS ${this._quoteColumn(value)}`;
-      }),
-      table = (options.schema !== undefined)
-        ? options.schema + "." + options.table
-        : options.table,
-      paging = (options.paging)
-        ? ` LIMIT ${options.paging.size} OFFSET ${
-          (options.paging.page - 1 || 0) * options.paging.size
-        } `
-        : "",
-      sort = (options.sort)
-        ? ` ORDER BY ${
-          Object.entries(options.sort).map((value) => {
-            return `${
-              this._quoteColumn(options.columns[value[0] as keyof T])
-            } ${value[1]} `;
-          }).join(", ")
-        } `
-        : "",
-      filter = (options.filters)
-        ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
-        : "",
-      qry = `SELECT ${columns}
-                   FROM ${this._quoteColumn(table)} ${filter}${sort}${paging}`;
-
-    // Log the generated query
-    // console.log(qry);
-    const conn = await this._client.connect(),
-      result = await conn.queryObject<T>(qry);
-    conn.release();
-    return result.rows;
+    return await this._query<T>(this._queryGenerator.select(options));
   }
 
   protected async _count<T>(options: CountQueryOptions<T>): Promise<number> {
-    const table = (options.schema !== undefined)
-        ? options.schema + "." + options.table
-        : options.table,
-      filter = (options.filters)
-        ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
-        : "",
-      qry = `SELECT COUNT(1) as cnt
-                   FROM ${this._quoteColumn(table)} ${filter}`;
-
-    // console.log(qry);
-    const conn = await this._client.connect(),
-      result = await conn.queryObject<{ cnt: number }>(qry);
-    conn.release();
-    return result.rows[0].cnt;
+    await this._query<T>(this._queryGenerator.delete(options));
   }
 
   protected async _insert<T>(
     options: InsertQueryOptions<T>,
   ): Promise<Array<T>> {
-    const table = (options.schema !== undefined)
-        ? options.schema + "." + options.table
-        : options.table,
-      columns: Array<string> = options.insertColumns.map((value) => {
-        return this._quoteColumn(options.columns[value as keyof T]);
-      }),
-      values: Array<string> = options.data.map((insertRow) => {
-        return "(" + options.insertColumns.map((value) => {
-          return this._quoteValue(insertRow[value as keyof T]);
-        }).join(", ") + ")";
-      }),
-      returning = Object.entries(options.columns).map((value) => {
-        return `${this._quoteColumn(value[1] as string)} AS ${
-          this._quoteColumn(value[0])
-        }`;
-      }),
-      qry = `INSERT INTO ${this._quoteColumn(table)} (${columns.join(",")})
-                   VALUES ${values.join(",\n")} RETURNING ${
-        returning.join(",\n")
-      };`;
-
-    // console.log(qry);
-    const conn = await this._client.connect(),
-      result = await conn.queryObject<T>("" + qry);
-    conn.release();
-    return result.rows;
+    return await this._query<T>(this._queryGenerator.insert(options));
   }
 
   protected async _update<T>(
     options: UpdateQueryOptions<T>,
   ): Promise<Array<T>> {
-    const table = (options.schema !== undefined)
-        ? options.schema + "." + options.table
-        : options.table,
-      filter = (options.filters)
-        ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
-        : "",
-      keyVal = Object.entries(options.data).map((value) => {
-        return `${this._quoteColumn(options.columns[value[0] as keyof T])} = ${
-          this._quoteValue(value[1])
-        }`;
-      }),
-      returning = Object.entries(options.columns).map((value) => {
-        return `${this._quoteColumn(value[1] as string)} AS ${
-          this._quoteColumn(value[0])
-        }`;
-      }),
-      qry = `UPDATE ${this._quoteColumn(table)}
-                   SET ${keyVal}${filter} RETURNING ${returning}`;
-
-    // console.log(qry);
-    const conn = await this._client.connect(),
-      result = await conn.queryObject<T>("" + qry);
-    conn.release();
-    return result.rows;
+    return await this._query<T>(this._queryGenerator.update(options));
   }
 
   protected async _delete<T>(options: DeleteQueryOptions<T>): Promise<number> {
-    const table = (options.schema !== undefined)
-        ? options.schema + "." + options.table
-        : options.table,
-      filter = (options.filters)
-        ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
-        : "",
-      qry = `DELETE
-                   FROM ${this._quoteColumn(table)} ${filter}`;
-
-    // console.log(qry);
-    const conn = await this._client.connect(),
-      result = await conn.queryObject<T>(qry);
-    conn.release();
-    return result.rowCount || 0;
+    await this._query<T>(this._queryGenerator.delete(options));
+    
   }
 
   protected async _truncate<T>(options: QueryOptions<T>): Promise<boolean> {
-    const table = (options.schema !== undefined)
-        ? options.schema + "." + options.table
-        : options.table,
-      qry = `TRUNCATE TABLE ${this._quoteColumn(table)}`;
-
-    // console.log(qry);
-    const conn = await this._client.connect();
-    await conn.queryObject<T>("" + qry);
-    conn.release();
-    return true;
+    await this._query<T>(this._queryGenerator.truncate(options));
   }
 
   protected async _createTable(options: CreateTableOptions): Promise<void> {
@@ -434,191 +327,5 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
         return [value.name, value];
       })),
     };
-  }
-
-  protected _processFilters<T>(
-    columns: Record<string, string>,
-    filter: Filters<T>,
-    joiner = "AND",
-  ): string {
-    const ret: Array<string> = [];
-    if (Array.isArray(filter)) {
-      filter.forEach((value) => {
-        ret.push(this._processFilters(columns, value, "AND"));
-      });
-    } else if (typeof filter === "object") {
-      // Parse through the object
-      for (const [columnName, operation] of Object.entries(filter)) {
-        if (columnName === "$and" || columnName === "$or") {
-          ret.push(
-            this._processFilters(
-              columns,
-              operation,
-              (columnName === "$or") ? "OR" : "AND",
-            ),
-          );
-          // } else if (!columns[columnName]) {
-          //   throw new Error(`[module=norm] Column ${columnName} is not part of column list for filtering`)
-        } else {
-          // No its a variable
-          if (typeof operation === "object") {
-            // Parse the operator
-            for (const [operator, operatorValue] of Object.entries(operation)) {
-              // Hack for boolean
-              switch (operator) {
-                default:
-                case "$eq":
-                  ret.push(
-                    `${this._quoteColumn(columns[columnName])} = ${
-                      this._quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case "$neq":
-                  ret.push(
-                    `${this._quoteColumn(columns[columnName])} != ${
-                      this._quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case "$in":
-                  ret.push(
-                    `${this._quoteColumn(columns[columnName])} IN ${
-                      this._quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case "$nin":
-                  ret.push(
-                    `${this._quoteColumn(columns[columnName])} NOT IN ${
-                      this._quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case "$lt":
-                  ret.push(
-                    `${this._quoteColumn(columns[columnName])} < ${
-                      this._quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case "$lte":
-                  ret.push(
-                    `${this._quoteColumn(columns[columnName])} <= ${
-                      this._quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case "$gt":
-                  ret.push(
-                    `${this._quoteColumn(columns[columnName])} > ${
-                      this._quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case "$gte":
-                  ret.push(
-                    `${this._quoteColumn(columns[columnName])} >= ${
-                      this._quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                // deno-lint-ignore no-case-declarations
-                case "$between":
-                  const opval = operatorValue as { from: unknown; to: unknown };
-                  ret.push(
-                    `${this._quoteColumn(columns[columnName])} BETWEEN '${
-                      this._quoteValue(opval.from)
-                    }' AND '${this._quoteValue(opval.to)}'`,
-                  );
-                  break;
-                case "$null":
-                  if (operatorValue === true) {
-                    ret.push(
-                      `${this._quoteColumn(columns[columnName])} IS NULL`,
-                    );
-                  } else {
-                    ret.push(
-                      `${this._quoteColumn(columns[columnName])} IS NOT NULL`,
-                    );
-                  }
-                  break;
-                case "$like":
-                  ret.push(
-                    `${this._quoteColumn(columns[columnName])} LIKE ${
-                      this._quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case "$nlike":
-                  ret.push(
-                    `${this._quoteColumn(columns[columnName])} NOT LIKE ${
-                      this._quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-              }
-            }
-          } else {
-            // No operator means it is equal to
-            // @TODO, even this will be an argument.
-            ret.push(
-              `${this._quoteColumn(columns[columnName])} = ${
-                this._quoteValue(operation)
-              }`,
-            );
-          }
-        }
-      }
-    }
-    // return "(" + ret.join(` ${joiner} `) + ")";
-    let retVal = `( `;
-    retVal += ret.reduce((prev, curr, index) => {
-      // console.log(curr.toString());
-      if (index === 0) {
-        return curr;
-      } else {
-        prev += ` ${joiner} ` + curr;
-        return prev;
-      }
-    });
-    retVal += ` )`;
-    return retVal;
-  }
-
-  // deno-lint-ignore no-explicit-any
-  protected _quoteValue(value: any): string {
-    if (
-      typeof value === null || typeof (value) === "function" ||
-      typeof (value) === "symbol" || typeof (value) === "undefined"
-    ) {
-      return "NULL";
-    }
-    if (value === false) {
-      return "FALSE";
-    }
-    if (value === true) {
-      return "TRUE";
-    }
-    if (typeof value === "number" || typeof value === "bigint") {
-      return value + "";
-    }
-    if (value instanceof Date) {
-      return `'${value.toISOString()}'`;
-    }
-    if (value instanceof Array || Array.isArray(value)) {
-      return "(" + value.map((v) => this._quoteValue(v)).join(",") + ")";
-    }
-    if (typeof value === "object") {
-      value = JSON.stringify(value);
-    } else {
-      value += "";
-    }
-
-    return `'${value.replace(/'/g, "''")}'`;
-  }
-
-  protected _quoteColumn(column: string) {
-    return `"${column.replace(/\./g, '"."')}"`;
   }
 }

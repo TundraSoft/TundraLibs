@@ -29,7 +29,7 @@ export class Database {
   public static load<T extends ClientConfig>(name: string, config: T): void {
     name = name.toLowerCase().trim();
     // Initialize a database connection
-    switch (config.dialect) {
+    switch (config.dialect.toUpperCase()) {
       case "SQLITE":
         Database._clients.set(name, new SQLite(name, config));
         break;

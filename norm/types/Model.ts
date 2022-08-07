@@ -19,6 +19,7 @@ export type ColumnDefinition = {
   validator?: GuardianProxy<any>;
   isPrimary?: boolean;
   uniqueKey?: Set<string>;
+  defaultValue?: unknown;
   relatesTo?: {
     // Model name: Column Name
     [key: string]: string;

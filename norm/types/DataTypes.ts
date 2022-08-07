@@ -2,8 +2,10 @@ import { type } from "../../guardian/mod.ts";
 
 export const enum DataTypes {
   "VARCHAR" = "VARCHAR",
+  "CHARACTER VARYING" = "VARCHAR",
   "CHARACTER" = "CHARACTER",
-  "NVARCHAR" = "NVARCHAR",
+  "CHAR" = "CHARACTER", 
+  "NVARCHAR" = "VARCHAR",
   "TEXT" = "TEXT",
   "STRING" = "STRING",
   "UUID" = "UUID",
@@ -30,7 +32,9 @@ export const enum DataTypes {
 
 export const DataTypeMap = {
   "VARCHAR": type("string"),
+  "CHARACTER VARYING": type("string"),
   "CHARACTER": type("string"),
+  "CHAR": type("string"),
   "NVARCHAR": type("string"),
   "TEXT": type("string"),
   "STRING": type("string"),
