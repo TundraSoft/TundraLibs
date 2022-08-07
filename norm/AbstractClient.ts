@@ -336,8 +336,15 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     await this.query(this._queryGenerator.createTable(options));
   }
 
-  public async dropTable(table: string, schema?: string): Promise<void> {
-    await this.query(this._queryGenerator.dropTable(table, schema));
+  public async dropTable(
+    table: string,
+    schema?: string,
+    ifExists = true,
+    cascade = false,
+  ): Promise<void> {
+    await this.query(
+      this._queryGenerator.dropTable(table, schema, ifExists, cascade),
+    );
   }
 
   public async getTableDefinition(

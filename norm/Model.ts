@@ -535,7 +535,7 @@ export class Model<
     await this._connection.createTable(options);
   }
 
-  public async dropTable(): Promise<void> {
+  public async dropTable(ifExists = true, cascade = false): Promise<void> {
     if (this.capability("drop") === false) {
       throw new ModelPermission(
         "drop",
@@ -544,12 +544,13 @@ export class Model<
       );
     }
     await this._init();
-    await this._connection.dropTable(this.table, this.schema);
+    await this._connection.dropTable(
+      this.table,
+      this.schema,
+      ifExists,
+      cascade,
+    );
   }
-
-  // public async drop(): Promise<void> {}
-
-  // public async sync(): Promise<void> {}
 
   /**
    * _init
