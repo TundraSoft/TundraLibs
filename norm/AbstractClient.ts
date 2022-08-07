@@ -190,6 +190,9 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     retVal.totalRows = count.totalRows;
     // Time taken is sum of both
     retVal.time += count.time;
+    if (options.paging) {
+      retVal.paging = options.paging;
+    }
     return retVal;
   }
 
@@ -292,7 +295,10 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async delete<T = Record<string, unknown>>(
     options: DeleteQueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    return await this.query<T>(this._queryGenerator.delete(options));
+    const count = await this.count(options),
+      retVal = await this.query<T>(this._queryGenerator.delete(options));
+    retVal.totalRows = count.totalRows;
+    return retVal;
   }
 
   /**
