@@ -1,16 +1,16 @@
 import { AbstractClient } from "../AbstractClient.ts";
 import type {
-  CountQueryOptions,
-  CreateTableOptions,
-  DeleteQueryOptions,
-  Filters,
-  InsertQueryOptions,
-  QueryOptions,
+  // CountQueryOptions,
+  // CreateTableOptions,
+  // DeleteQueryOptions,
+  // Filters,
+  // InsertQueryOptions,
+  // QueryOptions,
   QueryType,
   SchemaDefinition,
-  SelectQueryOptions,
+  // SelectQueryOptions,
   SQLiteConfig,
-  UpdateQueryOptions,
+  // UpdateQueryOptions,
 } from "../types/mod.ts";
 
 import { SQLiteClient } from "../../dependencies.ts";
@@ -84,7 +84,6 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
       columns: {},
     };
   }
-
 }
 
 // const Test = new SQLite('test.db', {memory: true});

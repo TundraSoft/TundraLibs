@@ -185,9 +185,9 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     if (options.paging && options.paging.page < 1) {
       options.paging.page = 1;
     }
-    const count = await this.count(options), 
+    const count = await this.count(options),
       retVal = await this.query<T>(this._queryGenerator.select(options));
-    retVal.totalRows = count.totalRows
+    retVal.totalRows = count.totalRows;
     // Time taken is sum of both
     retVal.time += count.time;
     return retVal;
@@ -237,8 +237,10 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async count<T = Record<string, unknown>>(
     options: CountQueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    const ret = await this.query<{cnt: number}>(this._queryGenerator.count(options));
-    if(ret.rows) {
+    const ret = await this.query<{ cnt: number }>(
+      this._queryGenerator.count(options),
+    );
+    if (ret.rows) {
       ret.totalRows = ret.rows[0].cnt;
       delete ret.rows;
     }
@@ -312,9 +314,9 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async truncate<T = Record<string, unknown>>(
     options: QueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    const count = await this.count(options), 
+    const count = await this.count(options),
       retVal = await this.query<T>(this._queryGenerator.truncate(options));
-    retVal.totalRows = count.totalRows
+    retVal.totalRows = count.totalRows;
     return retVal;
   }
 

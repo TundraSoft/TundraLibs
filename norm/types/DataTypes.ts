@@ -4,7 +4,7 @@ export const enum DataTypes {
   "VARCHAR" = "VARCHAR",
   "CHARACTER VARYING" = "VARCHAR",
   "CHARACTER" = "CHARACTER",
-  "CHAR" = "CHARACTER", 
+  "CHAR" = "CHARACTER",
   "NVARCHAR" = "VARCHAR",
   "TEXT" = "TEXT",
   "STRING" = "STRING",

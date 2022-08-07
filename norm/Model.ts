@@ -4,7 +4,7 @@ import {
   CountQueryOptions,
   CreateTableOptions,
   DataType,
-  DataTypes,
+  // DataTypes,
   DeleteQueryOptions,
   // FilterOperators,
   Filters,

@@ -5,6 +5,10 @@ import type {
   // CountQueryOptions,
   // CreateTableOptions,
   DataType,
+  // SelectQueryOptions,
+  // UpdateQueryOptions,
+  // DataTypeMap,
+  // DataTypes,
   // DeleteQueryOptions,
   // Filters,
   // InsertQueryOptions,
@@ -12,39 +16,35 @@ import type {
   // QueryOptions,
   QueryType,
   SchemaDefinition,
-  // SelectQueryOptions,
-  // UpdateQueryOptions,
-  DataTypeMap, 
-  DataTypes
 } from "../types/mod.ts";
 
-const DataTypeMapString = {
-  "VARCHAR": "string",
-  "CHARACTER": "string",
-  "NVARCHAR": "string",
-  "TEXT": "string",
-  "STRING": "string",
-  "UUID": "string",
-  "GUID": "string",
-  "NUMERIC": "number",
-  "NUMBER": "number",
-  "DECIMAL": "number",
-  "INTEGER": "number",
-  "SMALLINT": "number",
-  "TINYINT": "number",
-  "FLOAT": "number",
-  "BIGINTEGER": "number",
-  "SERIAL": "number",
-  "BIGSERIAL": "number",
-  "AUTO_INCREMENT": "number",
-  "BOOLEAN": "boolean",
-  "BINARY": "boolean",
-  "DATE": "date",
-  "DATETIME": "date",
-  "TIME": "date",
-  "TIMESTAMP": "date",
-  "JSON": "object",
-};
+// const DataTypeMapString = {
+//   "VARCHAR": "string",
+//   "CHARACTER": "string",
+//   "NVARCHAR": "string",
+//   "TEXT": "string",
+//   "STRING": "string",
+//   "UUID": "string",
+//   "GUID": "string",
+//   "NUMERIC": "number",
+//   "NUMBER": "number",
+//   "DECIMAL": "number",
+//   "INTEGER": "number",
+//   "SMALLINT": "number",
+//   "TINYINT": "number",
+//   "FLOAT": "number",
+//   "BIGINTEGER": "number",
+//   "SERIAL": "number",
+//   "BIGSERIAL": "number",
+//   "AUTO_INCREMENT": "number",
+//   "BOOLEAN": "boolean",
+//   "BINARY": "boolean",
+//   "DATE": "date",
+//   "DATETIME": "date",
+//   "TIME": "date",
+//   "TIMESTAMP": "date",
+//   "JSON": "object",
+// };
 
 import { PGPool } from "../../dependencies.ts";
 import type { PGClientOptions } from "../../dependencies.ts";
@@ -200,10 +200,12 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
         //       "string")
         //     ? value.character_maximum_length
         //     : undefined),
-        length: (value.character_maximum_length > 0) ? value.character_maximum_length : {
-          precision: value.numeric_precision,
-          scale: value.numeric_scale,
-        }, 
+        length: (value.character_maximum_length > 0)
+          ? value.character_maximum_length
+          : {
+            precision: value.numeric_precision,
+            scale: value.numeric_scale,
+          },
         isNullable: value.is_nullable,
         isPrimary: (primary_keys[value.column_name] === true),
         uniqueKey: unique_keys[value.column_name],

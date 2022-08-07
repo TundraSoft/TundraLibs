@@ -1,4 +1,14 @@
-import type { CountQueryOptions, CreateTableOptions, DeleteQueryOptions, Dialect, Filters, InsertQueryOptions, QueryOptions, SelectQueryOptions, UpdateQueryOptions } from './types/mod.ts';
+import type {
+  CountQueryOptions,
+  CreateTableOptions,
+  DeleteQueryOptions,
+  Dialect,
+  Filters,
+  InsertQueryOptions,
+  QueryOptions,
+  SelectQueryOptions,
+  UpdateQueryOptions,
+} from "./types/mod.ts";
 
 export class QueryGenerator {
   protected _dialect: Dialect;
@@ -7,16 +17,16 @@ export class QueryGenerator {
 
   constructor(dialect: Dialect) {
     this._dialect = dialect;
-    switch(this._dialect) {
+    switch (this._dialect) {
       default:
-      case 'POSTGRES':
+      case "POSTGRES":
         this.COL_QUOTE = '"';
         break;
-      case 'SQLITE':
+      case "SQLITE":
         this.COL_QUOTE = '"';
         break;
-      case 'MYSQL':
-        this.COL_QUOTE = '`';
+      case "MYSQL":
+        this.COL_QUOTE = "`";
         break;
     }
   }
@@ -30,7 +40,11 @@ export class QueryGenerator {
         return `${this._quoteColumn(colName)} AS ${this._quoteColumn(value)}`;
       }),
       paging = (options.paging)
-        ? ` ` + this.limit(options.paging.size, (options.paging.page - 1 || 0) * options.paging.size)
+        ? ` ` +
+          this.limit(
+            options.paging.size,
+            (options.paging.page - 1 || 0) * options.paging.size,
+          )
         : "",
       sort = (options.sort)
         ? ` ORDER BY ${
@@ -45,8 +59,10 @@ export class QueryGenerator {
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
       qry = `SELECT ${columns}
-                   FROM ${this._makeTable(options.table, options.schema)} ${filter}${sort}${paging}`;
-      return qry;
+                   FROM ${
+        this._makeTable(options.table, options.schema)
+      } ${filter}${sort}${paging}`;
+    return qry;
   }
 
   count<T>(options: CountQueryOptions<T>): string {
@@ -54,7 +70,9 @@ export class QueryGenerator {
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
       qry = `SELECT COUNT(1) as cnt
-                   FROM ${this._makeTable(options.table, options.schema)}${filter}`;
+                   FROM ${
+        this._makeTable(options.table, options.schema)
+      }${filter}`;
     return qry;
   }
 
@@ -72,14 +90,16 @@ export class QueryGenerator {
           this._quoteColumn(value[0])
         }`;
       }),
-      qry = `INSERT INTO ${this._makeTable(options.table, options.schema)} (${columns.join(",")})
+      qry = `INSERT INTO ${this._makeTable(options.table, options.schema)} (${
+        columns.join(",")
+      })
                    VALUES ${values.join(",\n")} RETURNING ${
         returning.join(",\n")
       };`;
     return qry;
   }
 
-  update<T>(options: UpdateQueryOptions<T>,): string {
+  update<T>(options: UpdateQueryOptions<T>): string {
     const filter = (options.filters)
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
@@ -103,15 +123,19 @@ export class QueryGenerator {
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
       qry = `DELETE
-                   FROM ${this._makeTable(options.table, options.schema)} ${filter}`;
+                   FROM ${
+        this._makeTable(options.table, options.schema)
+      } ${filter}`;
     return qry;
   }
 
   truncate<T>(options: QueryOptions<T>): string {
-    const qry = `TRUNCATE TABLE ${this._makeTable(options.table, options.schema)}`;
+    const qry = `TRUNCATE TABLE ${
+      this._makeTable(options.table, options.schema)
+    }`;
     return qry;
   }
-  
+
   limit(limit: number, offset?: number): string {
     return `LIMIT ${limit}${offset ? ` OFFSET ${offset}` : ""}`;
   }
@@ -121,15 +145,21 @@ export class QueryGenerator {
   }
 
   dropDatabase(name: string, ifExists = true, cascase = true): string {
-    return `DROP DATABASE ${ifExists? "IF EXISTS " : ""}${name}${cascase? " CASCADE" : ""}`;
+    return `DROP DATABASE ${ifExists ? "IF EXISTS " : ""}${name}${
+      cascase ? " CASCADE" : ""
+    }`;
   }
-  
+
   createSchema(name: string, ifNotExists?: boolean): string {
-    return `CREATE SCHEMA ${ifNotExists ? "IF NOT EXISTS" : ""} ${this._quoteColumn(name)}`;
+    return `CREATE SCHEMA ${ifNotExists ? "IF NOT EXISTS" : ""} ${
+      this._quoteColumn(name)
+    }`;
   }
 
   dropSchema(name: string, cascade = true, ifExists?: boolean): string {
-    return `DROP SCHEMA ${ifExists ? "IF EXISTS " : ""}${this._quoteColumn(name)}${cascade ? " CASCADE" : ""}`;
+    return `DROP SCHEMA ${ifExists ? "IF EXISTS " : ""}${
+      this._quoteColumn(name)
+    }${cascade ? " CASCADE" : ""}`;
   }
 
   createTable(options: CreateTableOptions): string {
@@ -163,17 +193,25 @@ export class QueryGenerator {
     // FK we will see later
     sql.push(...columns);
     sql.push(...constraints);
-    const qry = `CREATE TABLE IF NOT EXISTS ${this._makeTable(options.table, options.schema)}
+    const qry = `CREATE TABLE IF NOT EXISTS ${
+      this._makeTable(options.table, options.schema)
+    }
                      (
                          ${sql.join(", \n")}
                      );`;
     return qry;
   }
 
-  dropTable(table: string, schema?: string, ifExists?: boolean, cascade?: boolean): string {
-    return `DROP TABLE ${ifExists ? "IF EXISTS " : ""}${this._makeTable(table, schema)}${cascade ? " CASCADE" : ""}`;
+  dropTable(
+    table: string,
+    schema?: string,
+    ifExists?: boolean,
+    cascade?: boolean,
+  ): string {
+    return `DROP TABLE ${ifExists ? "IF EXISTS " : ""}${
+      this._makeTable(table, schema)
+    }${cascade ? " CASCADE" : ""}`;
   }
-
 
   // addColumn(): string {}
   // dropColumn(): string {}
@@ -185,14 +223,14 @@ export class QueryGenerator {
 
   enableForeignKeyConstraints(): string {
     let qry: string;
-    switch(this._dialect) {
-      case 'POSTGRES':
+    switch (this._dialect) {
+      case "POSTGRES":
         qry = "SET session_replication_role = 'origin'";
         break;
-      case 'MYSQL':
+      case "MYSQL":
         qry = "SET FOREIGN_KEY_CHECKS = 1";
         break;
-      case 'SQLITE':
+      case "SQLITE":
         qry = "PRAGMA foreign_keys = ON";
         break;
       default:
@@ -204,14 +242,14 @@ export class QueryGenerator {
 
   disableForeignKeyConstraints(): string {
     let qry: string;
-    switch(this._dialect) {
-      case 'POSTGRES':
+    switch (this._dialect) {
+      case "POSTGRES":
         qry = "SET session_replication_role = 'replica'";
         break;
-      case 'MYSQL':
+      case "MYSQL":
         qry = "SET FOREIGN_KEY_CHECKS = 0";
         break;
-      case 'SQLITE':
+      case "SQLITE":
         qry = "PRAGMA foreign_keys = OFF";
         break;
       default:
@@ -235,7 +273,7 @@ export class QueryGenerator {
         FROM information_schema.columns C
       WHERE C.table_name = '${table}'
       ${schema ? `AND C.table_schema = '${schema}'` : ""}
-      ORDER BY ordinal_position`
+      ORDER BY ordinal_position`;
   }
 
   getTableConstraints(table: string, schema?: string): string {
@@ -250,13 +288,13 @@ export class QueryGenerator {
           C.constraint_name = U.constraint_name
     WHERE C.table_name = '${table}'
     ${schema ? `AND C.table_schema = '${schema}'` : ""}
-    ORDER BY U.constraint_type, C.constraint_name, C.ordinal_position`
+    ORDER BY U.constraint_type, C.constraint_name, C.ordinal_position`;
   }
 
   protected _makeTable(name: string, schema?: string): string {
     return this._quoteColumn(schema ? `${schema}.${name}` : name);
   }
-  
+
   protected _processFilters<T>(
     columns: Record<string, string>,
     filter: Filters<T>,
@@ -456,6 +494,8 @@ export class QueryGenerator {
   }
 
   protected _quoteColumn(column: string) {
-    return `${this.COL_QUOTE}${column.replace(/\./g, '${this.COL_QUOTE}.${this.COL_QUOTE}')}${this.COL_QUOTE}`;
+    return `${this.COL_QUOTE}${
+      column.replace(/\./g, "${this.COL_QUOTE}.${this.COL_QUOTE}")
+    }${this.COL_QUOTE}`;
   }
 }
