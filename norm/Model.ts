@@ -4,10 +4,12 @@ import {
   CountQueryOptions,
   CreateTableOptions,
   DataType,
+  DefaultValues,
   // DataTypes,
   DeleteQueryOptions,
   // FilterOperators,
   Filters,
+  Generators,
   InsertQueryOptions,
   ModelDefinition,
   ModelFeatures,
@@ -35,6 +37,7 @@ import {
   ModelNotNull,
   ModelPermission,
   ModelPrimaryKeyUpdate,
+  ModelValidationError,
 } from "./Errors.ts";
 
 /**
@@ -81,6 +84,11 @@ export class Model<
   protected _identityKeys: Array<keyof T> = [];
   // Columns which are marked as not null
   protected _notNulls: Array<keyof T> = [];
+  // Default generators
+  protected _insertGenerators: Partial<Record<keyof T, DefaultValues>> = {};
+  // Update generators
+  protected _updateGenerators: Partial<Record<keyof T, DefaultValues>> = {};
+
   // Record of Unique key name to array of columns which form the unique key
   protected _uniqueKeys: Record<string, Array<keyof T>> = {};
   protected _relationships: Record<string, Record<keyof T, string>> = {};
@@ -147,6 +155,12 @@ export class Model<
         !this._identityKeys.includes(column as keyof T)
       ) {
         this._notNulls.push(column as keyof T);
+      }
+      if (definition.insertDefault !== undefined) {
+        this._insertGenerators[column as keyof T] = definition.insertDefault;
+      }
+      if (definition.updateDefault !== undefined) {
+        this._updateGenerators[column as keyof T] = definition.updateDefault;
       }
 
       // Relationships
@@ -297,8 +311,11 @@ export class Model<
     }
     const errors: { [key: number]: ErrorList } = {};
     let insertColumns: Array<keyof T> = this._notNulls;
+    const generated = this._extractGenerators(this._insertGenerators);
     data.forEach((element, index) => {
       try {
+        // Set the generated values. We dont add DB generated values here...
+        element = { ...generated, ...element };
         data[index] = this._validator(element);
         // Remove identity columns
         this._identityKeys.forEach((key) => {
@@ -321,11 +338,16 @@ export class Model<
         );
       } catch (e) {
         // Set error
+        // TODO: Handle not null errors and validation errors gracefully
         errors[index] = e;
+        // console.log(e.toJSON());
       }
     });
     // Check if there is error
-
+    if (Object.keys(errors).length > 0) {
+      // console.log(errors);
+      throw new ModelValidationError(errors, this.name, this._connection.name);
+    }
     await this._init();
     const options: InsertQueryOptions<T> = {
       schema: this.schema,
@@ -361,24 +383,26 @@ export class Model<
         this._connection.name,
       );
     }
-
+    // let errors: ErrorList;
+    const generated = this._extractGenerators(this._updateGenerators);
     // Validate row
     try {
+      data = { ...generated, ...data };
       data = this._validator(data);
-      // Check if not null columns if present is not set to null
-      this._notNulls.forEach((key) => {
-        if (data[key] && data[key] === null) {
-          throw new ModelNotNull(
-            String(key),
-            this.name,
-            this._connection.name,
-          );
-        }
-      });
     } catch (e) {
       // Set error
-      console.log(e);
+      throw new ModelValidationError(e, this.name, this._connection.name);
     }
+    // Check if not null columns if present is not set to null
+    this._notNulls.forEach((key) => {
+      if (data[key] && data[key] === null) {
+        throw new ModelNotNull(
+          String(key),
+          this.name,
+          this._connection.name,
+        );
+      }
+    });
 
     if (filter === undefined) {
       // Check if filter can be built (PK columns)
@@ -561,5 +585,37 @@ export class Model<
     if (!this._connection) {
       this._connection = await Database.get(this._connectionName);
     }
+  }
+
+  protected _extractGenerators(
+    generators: Partial<Record<keyof T, DefaultValues>>,
+  ) {
+    const generated: Partial<Record<keyof T, unknown>> = {};
+    Object.entries(generators).forEach(([key, value]) => {
+      if (value instanceof Function) {
+        generated[key as keyof T] = value();
+      } else if (value instanceof Date) {
+        generated[key as keyof T] = value;
+      } else if (typeof value === "number") {
+        generated[key as keyof T] = value;
+      } else if (typeof value === "bigint") {
+        generated[key as keyof T] = value;
+      } else if (typeof value === "boolean") {
+        generated[key as keyof T] = value;
+      } else {
+        const gen = this._connection.getGenerator(value as keyof Generators);
+        if (gen) {
+          if (gen instanceof Function) {
+            generated[key as keyof T] = gen();
+          }
+        } else {
+          generated[key as keyof T] = value;
+        }
+        // if (gen === undefined || gen !instanceof Function) {
+        //   generated[key as keyof T] = value;
+        // }
+      }
+    });
+    return generated;
   }
 }

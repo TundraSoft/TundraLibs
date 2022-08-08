@@ -18,7 +18,13 @@ const WaitlistModelDefinition = {
     id: {
       dataType: DataTypes.SERIAL,
       isPrimary: true,
-      validator: Guardian.number().min(1),
+      validator: Guardian.number().min(0),
+    },
+    sid: {
+      dataType: DataTypes.UUID,
+      isNullable: false,
+      validator: Guardian.string().uuid(),
+      insertDefault: "UUID",
     },
     mobile: {
       dataType: DataTypes.VARCHAR,
@@ -39,6 +45,7 @@ const WaitlistModelDefinition = {
       dataType: DataTypes.BOOLEAN,
       isNullable: true,
       validator: Guardian.boolean().optional(),
+      insertDefault: true,
     },
     createdDate: {
       dataType: DataTypes.TIMESTAMP,
@@ -70,11 +77,11 @@ Deno.test({
 Deno.test({
   name: "[module='norm' dialect='sqlite'] Insertion into table",
   async fn(): Promise<void> {
-    const data: Array<Waitlist> = [];
+    const data: Array<Partial<Waitlist>> = [];
     for (let i = 0; i < 100; i++) {
       data.push({
-        id: i,
-        mobile: "9" + Math.floor(Math.random() * 1000000000),
+        // id: i,
+        mobile: ("9" + Math.floor(Math.random() * 100000000000)).substr(0, 10),
         email: "testemail" + i + "@gmail.com",
         name: "testname" + i,
         hasCrypto: (Math.random() >= 0.5),

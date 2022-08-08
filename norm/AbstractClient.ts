@@ -7,6 +7,7 @@ import type {
   CreateTableOptions,
   DeleteQueryOptions,
   Dialect,
+  Generators,
   InsertQueryOptions,
   QueryOptions,
   // QueryPagination,
@@ -71,6 +72,9 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     return this._stats;
   }
 
+  getGenerator(value: keyof Generators): unknown | undefined {
+    return this._dialectHelper.getGenerator(value);
+  }
   /**
    * connect
    *

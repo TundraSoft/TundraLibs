@@ -144,7 +144,7 @@ export const SqliteDataMap = {
   "TIMESTAMP": "TIMESTAMP",
   "BYTEA": "TEXT",
   "TEXT": "TEXT",
-  "UUID": "UUID",
+  "UUID": "VARCHAR",
   "JSON": "TEXT",
   "ARRAY": "TEXT",
   "AUTO_INCREMENT": "INTEGER",

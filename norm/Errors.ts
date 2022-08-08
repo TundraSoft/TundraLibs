@@ -1,3 +1,4 @@
+import { ErrorList } from "../guardian/mod.ts";
 import { QueryType } from "./types/mod.ts";
 
 export class NormError extends Error {
@@ -105,5 +106,19 @@ export class ModelUniqueKeyViolation extends ModelError {
   constructor(uniqueKey: string, model: string, dbConn: string) {
     super(`Unique Key ${uniqueKey} violation`, model, dbConn);
     Object.setPrototypeOf(this, ModelPrimaryKeyUpdate.prototype);
+  }
+}
+
+// @TODO, have method to return all errors
+export class ModelValidationError extends ModelError {
+  protected errList: ErrorList | { [key: number]: ErrorList };
+  constructor(
+    message: ErrorList | { [key: number]: ErrorList },
+    model: string,
+    dbConn: string,
+  ) {
+    super(`Error validating data`, model, dbConn);
+    this.errList = message;
+    Object.setPrototypeOf(this, ModelValidationError.prototype);
   }
 }

@@ -4,12 +4,16 @@ import {
   DeleteQueryOptions,
   Dialect,
   Filters,
+  Generators,
   InsertQueryOptions,
   MySQLDataMap,
+  MySQLGenerators,
   PostgresDataMap,
+  PostgresGenerators,
   QueryOptions,
   SelectQueryOptions,
   SqliteDataMap,
+  SqliteGenerators,
   UpdateQueryOptions,
 } from "./types/mod.ts";
 
@@ -17,6 +21,7 @@ export class DialectHelper {
   protected _dialect: Dialect;
   protected COL_QUOTE: string;
   protected VALUE_QUOTE = "'";
+  protected _generators: Generators;
 
   constructor(dialect: Dialect) {
     this._dialect = dialect;
@@ -24,14 +29,22 @@ export class DialectHelper {
       default:
       case "POSTGRES":
         this.COL_QUOTE = '"';
+        this._generators = PostgresGenerators;
         break;
       case "SQLITE":
         this.COL_QUOTE = '"';
+        this._generators = SqliteGenerators;
         break;
       case "MYSQL":
         this.COL_QUOTE = "`";
+        this._generators = MySQLGenerators;
         break;
     }
+  }
+
+  getGenerator(value: keyof Generators): unknown | undefined {
+    console.log(value);
+    return this._generators[value] || undefined;
   }
 
   select<T>(options: SelectQueryOptions<T>): string {

@@ -134,7 +134,7 @@ const WaitlistModelDefinition = {
     id: {
       dataType: DataTypes.SERIAL,
       isPrimary: true,
-      validator: Guardian.number().min(1),
+      validator: Guardian.number().min(0),
     },
     mobile: {
       dataType: DataTypes.VARCHAR,
@@ -193,7 +193,7 @@ Deno.test({
     for (let i = 0; i < 100; i++) {
       data.push({
         id: i,
-        mobile: "9" + Math.floor(Math.random() * 1000000000),
+        mobile: ("9" + Math.floor(Math.random() * 100000000000)).substr(0, 10),
         email: "testemail" + i + "@gmail.com",
         name: "testname" + i,
         hasCrypto: (Math.random() >= 0.5),
