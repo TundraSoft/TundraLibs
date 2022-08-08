@@ -66,8 +66,7 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
     sql: string,
     _queryArgs?: Record<string, unknown>,
   ): Promise<Array<T> | undefined> {
-    const result = await this._client?.query(sql);
-    console.log(result);
+    const result = await this._client?.queryEntries(sql);
     if (result) {
       return result as unknown as T[];
     }

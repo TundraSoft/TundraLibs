@@ -25,7 +25,12 @@ export type {
 
 export type { DataType, DataTypeMap } from "./DataTypes.ts";
 
-export { DataTypes } from "./DataTypes.ts";
+export {
+  DataTypes,
+  MySQLDataMap,
+  PostgresDataMap,
+  SqliteDataMap,
+} from "./DataTypes.ts";
 
 export type {
   ColumnDefinition,

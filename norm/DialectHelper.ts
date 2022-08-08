@@ -1,16 +1,19 @@
-import type {
+import {
   CountQueryOptions,
   CreateTableOptions,
   DeleteQueryOptions,
   Dialect,
   Filters,
   InsertQueryOptions,
+  MySQLDataMap,
+  PostgresDataMap,
   QueryOptions,
   SelectQueryOptions,
+  SqliteDataMap,
   UpdateQueryOptions,
 } from "./types/mod.ts";
 
-export class QueryGenerator {
+export class DialectHelper {
   protected _dialect: Dialect;
   protected COL_QUOTE: string;
   protected VALUE_QUOTE = "'";
@@ -130,6 +133,9 @@ export class QueryGenerator {
   }
 
   truncate<T>(options: QueryOptions<T>): string {
+    if (this._dialect === "SQLITE") {
+      return `DELETE FROM ${this._makeTable(options.table, options.schema)}`;
+    }
     const qry = `TRUNCATE TABLE ${
       this._makeTable(options.table, options.schema)
     }`;
@@ -163,11 +169,23 @@ export class QueryGenerator {
   }
 
   createTable(options: CreateTableOptions): string {
+    let type = PostgresDataMap;
+    switch (this._dialect) {
+      case "POSTGRES":
+        type = PostgresDataMap;
+        break;
+      case "SQLITE":
+        type = SqliteDataMap;
+        break;
+      case "MYSQL":
+        type = MySQLDataMap;
+        break;
+    }
     const columns = Object.keys(options.columns).map((value) => {
         const colName = value;
-        return `${this._quoteColumn(colName)} ${options.columns[value].type} ${
-          options.columns[value].isNullable ? "NULL" : "NOT NULL"
-        }`;
+        return `${this._quoteColumn(colName)} ${
+          type[options.columns[value].type]
+        } ${options.columns[value].isNullable ? "NULL" : "NOT NULL"}`;
       }),
       constraints: Array<string> = [],
       sql: Array<string> = [];

@@ -18,13 +18,13 @@ import type {
 } from "./types/mod.ts";
 
 import { ConnectionError, QueryError } from "./Errors.ts";
-import { QueryGenerator } from "./QueryGenerator.ts";
+import { DialectHelper } from "./DialectHelper.ts";
 
 export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   extends Options<T, ClientEvents> {
   protected _name: string;
   declare protected _client: unknown | undefined;
-  declare protected _queryGenerator: QueryGenerator;
+  declare protected _dialectHelper: DialectHelper;
   protected _stats: Map<
     QueryType,
     { count: number; time: number; error: number }
@@ -40,7 +40,9 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   constructor(name: string, options: Partial<T>, defaultConfig?: Partial<T>) {
     super(options, defaultConfig);
     this._name = name.toLowerCase().trim();
-    this._queryGenerator = new QueryGenerator("POSTGRES");
+    if (this.dialect !== "MONGODB") {
+      this._dialectHelper = new DialectHelper(this.dialect);
+    }
   }
 
   /**
@@ -186,7 +188,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
       options.paging.page = 1;
     }
     const count = await this.count(options),
-      retVal = await this.query<T>(this._queryGenerator.select(options));
+      retVal = await this.query<T>(this._dialectHelper.select(options));
     retVal.totalRows = count.totalRows;
     // Time taken is sum of both
     retVal.time += count.time;
@@ -218,7 +220,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async insert<T = Record<string, unknown>>(
     options: InsertQueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    return await this.query<T>(this._queryGenerator.insert(options));
+    return await this.query<T>(this._dialectHelper.insert(options));
   }
 
   /**
@@ -241,7 +243,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     options: CountQueryOptions<T>,
   ): Promise<QueryResult<T>> {
     const ret = await this.query<{ cnt: number }>(
-      this._queryGenerator.count(options),
+      this._dialectHelper.count(options),
     );
     if (ret.rows) {
       ret.totalRows = ret.rows[0].cnt;
@@ -271,7 +273,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async update<T = Record<string, unknown>>(
     options: UpdateQueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    return await this.query<T>(this._queryGenerator.update(options));
+    return await this.query<T>(this._dialectHelper.update(options));
   }
 
   /**
@@ -296,7 +298,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     options: DeleteQueryOptions<T>,
   ): Promise<QueryResult<T>> {
     const count = await this.count(options),
-      retVal = await this.query<T>(this._queryGenerator.delete(options));
+      retVal = await this.query<T>(this._dialectHelper.delete(options));
     retVal.totalRows = count.totalRows;
     return retVal;
   }
@@ -321,13 +323,13 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     options: QueryOptions<T>,
   ): Promise<QueryResult<T>> {
     const count = await this.count(options),
-      retVal = await this.query<T>(this._queryGenerator.truncate(options));
+      retVal = await this.query<T>(this._dialectHelper.truncate(options));
     retVal.totalRows = count.totalRows;
     return retVal;
   }
 
   public async createSchema(name: string, ifNotExists = true): Promise<void> {
-    await this.query(this._queryGenerator.createSchema(name, ifNotExists));
+    await this.query(this._dialectHelper.createSchema(name, ifNotExists));
   }
 
   public async dropSchema(
@@ -335,11 +337,11 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     ifExists = true,
     cascade = true,
   ): Promise<void> {
-    await this.query(this._queryGenerator.dropSchema(name, ifExists, cascade));
+    await this.query(this._dialectHelper.dropSchema(name, ifExists, cascade));
   }
 
   public async createTable(options: CreateTableOptions): Promise<void> {
-    await this.query(this._queryGenerator.createTable(options));
+    await this.query(this._dialectHelper.createTable(options));
   }
 
   public async dropTable(
@@ -349,7 +351,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     cascade = false,
   ): Promise<void> {
     await this.query(
-      this._queryGenerator.dropTable(table, schema, ifExists, cascade),
+      this._dialectHelper.dropTable(table, schema, ifExists, cascade),
     );
   }
 

@@ -159,13 +159,13 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
       numeric_precision: number;
       numeric_scale: number;
       is_nullable: boolean;
-    }>(this._queryGenerator.getTableDefinition(table, schema));
+    }>(this._dialectHelper.getTableDefinition(table, schema));
     const dt_constraints = await conn.queryObject<{
       constraint_name: string;
       constraint_type: string;
       column_name: string;
       ordinal_position: number;
-    }>(this._queryGenerator.getTableConstraints(table, schema));
+    }>(this._dialectHelper.getTableConstraints(table, schema));
     conn.release();
 
     const primary_keys = Object.fromEntries(
