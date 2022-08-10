@@ -1,5 +1,7 @@
 import { DataTypeMap } from "./DataTypes.ts";
 import type { DataType } from "./DataTypes.ts";
+import type { DefaultValues } from "./Generators.ts";
+// import { Generators } from './Generators.ts'
 import type { GuardianProxy } from "../../guardian/mod.ts";
 
 export type ColumnDefinition = {
@@ -19,6 +21,8 @@ export type ColumnDefinition = {
   validator?: GuardianProxy<any>;
   isPrimary?: boolean;
   uniqueKey?: Set<string>;
+  insertDefault?: DefaultValues;
+  updateDefault?: DefaultValues;
   relatesTo?: {
     // Model name: Column Name
     [key: string]: string;

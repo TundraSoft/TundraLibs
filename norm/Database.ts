@@ -5,9 +5,11 @@ import type { ClientConfig } from "./types/mod.ts";
 import { ConfigNotFound } from "./Errors.ts";
 
 import { Config } from "../config/mod.ts";
+import { Model } from "./Model.ts";
 
 export class Database {
   protected static _clients: Map<string, AbstractClient> = new Map();
+  protected static _models: Map<string, Model> = new Map();
 
   public static async init(): Promise<void> {
     await Config.load("database");
@@ -29,7 +31,7 @@ export class Database {
   public static load<T extends ClientConfig>(name: string, config: T): void {
     name = name.toLowerCase().trim();
     // Initialize a database connection
-    switch (config.dialect) {
+    switch (config.dialect.toUpperCase()) {
       case "SQLITE":
         Database._clients.set(name, new SQLite(name, config));
         break;

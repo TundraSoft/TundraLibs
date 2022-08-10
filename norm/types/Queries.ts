@@ -46,6 +46,8 @@ export type FilterOperators<T> = T | {
   $null?: boolean;
   $like?: T;
   $nlike?: T;
+  $ilike?: T;
+  $nilike?: T;
 };
 
 /**

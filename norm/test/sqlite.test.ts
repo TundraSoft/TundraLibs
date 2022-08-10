@@ -1,198 +1,141 @@
 import { assertEquals } from "../../dev_dependencies.ts";
-import { Guardian } from "../../guardian/mod.ts";
 import { Database } from "../Database.ts";
-import { Model } from "../Model.ts";
-import { DataTypes } from "../types/mod.ts";
-import type { Filters, ModelType } from "../types/mod.ts";
+import { Filters } from "../mod.ts";
+import { TestModel, TestType } from "./TestModel.ts";
 
-await Database.load("sqlite", {
+await Database.load("default", {
   dialect: "SQLITE",
   memory: true,
 });
 
-const WaitlistModelDefinition = {
-  name: "WaitList",
-  connection: "sqlite",
-  table: "waitlist",
-  columns: {
-    id: {
-      dataType: DataTypes.SERIAL,
-      isPrimary: true,
-      validator: Guardian.number().min(1),
-    },
-    mobile: {
-      dataType: DataTypes.VARCHAR,
-      uniqueKey: new Set(["mobile"]),
-      validator: Guardian.string().mobile(),
-    },
-    name: {
-      dataType: DataTypes.VARCHAR,
-      validator: Guardian.string().min(3),
-      uniqueKey: new Set(["name_email"]),
-    },
-    email: {
-      dataType: DataTypes.VARCHAR,
-      validator: Guardian.string().email(),
-      uniqueKey: new Set(["name_email"]),
-    },
-    hasCrypto: {
-      dataType: DataTypes.BOOLEAN,
-      isNullable: true,
-      validator: Guardian.boolean().optional(),
-    },
-    createdDate: {
-      dataType: DataTypes.TIMESTAMP,
-      validator: Guardian.date(),
-    },
-  },
-  pageSize: 5,
-} as const;
-
-type Waitlist = ModelType<typeof WaitlistModelDefinition>;
-
-const WaitlistModel = new Model(WaitlistModelDefinition);
-
-// Deno.test({
-//   name: "[module='norm' dialect='sqlite'] Test creation of schema",
-//   fn(): void {
-
-//   },
-// });
-await WaitlistModel.dropTable();
-
+// await TestModel.createTable();
 Deno.test({
-  name: "[module='norm' dialect='sqlite'] Test creation of table",
+  name: "[module='norm' dialect='postgres'] Test creation of table",
   async fn(): Promise<void> {
-    await WaitlistModel.createTable();
+    await TestModel.createTable();
   },
+  sanitizeResources: false,
+  sanitizeOps: false,
 });
 
 Deno.test({
-  name: "[module='norm' dialect='sqlite'] Insertion into table",
+  name: "[module='norm' dialect='postgres'] Insertion into table",
   async fn(): Promise<void> {
-    const data: Array<Waitlist> = [];
+    const data: Array<Partial<TestType>> = [];
     for (let i = 0; i < 100; i++) {
       data.push({
-        id: i,
-        mobile: "9" + Math.floor(Math.random() * 1000000000),
-        email: "testemail" + i + "@gmail.com",
-        name: "testname" + i,
+        Name: `Test User ${i}`,
+        Email: `Testuser${i}@gmail.com`,
         hasCrypto: (Math.random() >= 0.5),
-        createdDate: new Date(),
       });
     }
-    const result = await WaitlistModel.insert(data);
-    assertEquals(100, result.totalRows);
+    const result = await TestModel.insert(data);
+    assertEquals(result.totalRows, 100);
     // Check randomly if data matches
     if (result.rows) {
       for (let i = 0; i < 10; i++) {
         const id = Math.floor(Math.random() * 100);
-        assertEquals(data[id].mobile, result.rows[id].mobile);
+        assertEquals(data[id].Name, result.rows[id].Name);
       }
     }
   },
 });
 
 Deno.test({
-  name: "[module='norm' dialect='sqlite'] Selection from table",
+  name: "[module='norm' dialect='postgres'] Selection from table",
   async fn(): Promise<void> {
-    const sel = await WaitlistModel.select();
+    const sel = await TestModel.select();
+    console.log(sel);
     assertEquals(
-      WaitlistModelDefinition.pageSize.toString(),
       sel.paging?.size.toString(),
+      "10",
     );
-    assertEquals("100", sel.totalRows.toString());
+    assertEquals(sel.totalRows.toString(), "100");
   },
 });
 
 Deno.test({
-  name: "[module='norm' dialect='sqlite'] Update single row",
+  name: "[module='norm' dialect='postgres'] Update single row",
   async fn(): Promise<void> {
-    const updFilter: Filters<Waitlist> = {
-      id: {
+    const updFilter: Filters<TestType> = {
+      Id: {
         $eq: Math.floor(Math.random() * 100),
       },
     };
-    const update: Partial<Waitlist> = {
-      name: "newName1",
+    const update: Partial<TestType> = {
+      Name: "newName1",
     };
-    const upd = await WaitlistModel.update(update, updFilter);
-    assertEquals("1", upd.totalRows.toString());
+    const upd = await TestModel.update(update, updFilter);
+    assertEquals(upd.totalRows.toString(), "1");
     if (upd.rows) {
-      assertEquals("newName1", upd.rows[0].name);
+      assertEquals(upd.rows[0].Name, "newName1");
     }
   },
 });
 
 Deno.test({
-  name: "[module='norm' dialect='sqlite'] Update multiple rows",
+  name: "[module='norm' dialect='postgres'] Update multiple rows",
   async fn(): Promise<void> {
-    const updFilter: Filters<Waitlist> = {
+    const updFilter: Filters<TestType> = {
       hasCrypto: {
         $eq: false,
       },
     };
-    const update: Partial<Waitlist> = {
-      name: "noCryptoName",
+    const update: Partial<TestType> = {
+      Name: "noCryptoName",
     };
-    const upd = await WaitlistModel.update(update, updFilter);
+    const upd = await TestModel.update(update, updFilter);
     if (upd.rows) {
-      assertEquals("noCryptoName", upd.rows[0].name);
+      assertEquals(upd.rows[0].Name, "noCryptoName");
     }
   },
 });
 
 Deno.test({
-  name: "[module='norm' dialect='sqlite'] Delete single row",
+  name: "[module='norm' dialect='postgres'] Delete single row",
   async fn(): Promise<void> {
-    const delFilter: Filters<Waitlist> = {
-      id: {
+    const delFilter: Filters<TestType> = {
+      Id: {
         $eq: Math.floor(Math.random() * 100),
       },
     };
-    const del = await WaitlistModel.delete(delFilter);
-    assertEquals("1", del.totalRows.toString());
+    const del = await TestModel.delete(delFilter);
+    assertEquals(del.totalRows.toString(), "1");
     // check if it exists
-    const sel = await WaitlistModel.select(delFilter);
-    assertEquals("0", sel.totalRows.toString());
+    const sel = await TestModel.select(delFilter);
+    assertEquals(sel.totalRows.toString(), "0");
   },
 });
 
 Deno.test({
-  name: "[module='norm' dialect='sqlite'] Delete multiple rows",
+  name: "[module='norm' dialect='postgres'] Delete multiple rows",
   async fn(): Promise<void> {
-    const delFilter: Filters<Waitlist> = {
-      name: {
+    const delFilter: Filters<TestType> = {
+      Name: {
         $eq: "noCryptoName",
       },
     };
-    const cnt = await WaitlistModel.count(delFilter);
-    const del = await WaitlistModel.delete(delFilter);
+    const cnt = await TestModel.count(delFilter);
+    const del = await TestModel.delete(delFilter);
     assertEquals(cnt.totalRows.toString(), del.totalRows.toString());
     // check if it exists
-    const sel = await WaitlistModel.select(delFilter);
+    const sel = await TestModel.select(delFilter);
     assertEquals("0", sel.totalRows.toString());
   },
 });
 
 Deno.test({
-  name: "[module='norm' dialect='sqlite'] Truncate table",
+  name: "[module='norm' dialect='postgres'] Truncate table",
   async fn(): Promise<void> {
-    const _del = await WaitlistModel.truncate();
-    const sel = await WaitlistModel.count();
+    const _del = await TestModel.truncate();
+    const sel = await TestModel.count();
     assertEquals("0", sel.totalRows.toString());
   },
 });
 
 Deno.test({
-  name: "[module='norm' dialect='sqlite'] Drop table",
+  name: "[module='norm' dialect='postgres'] Drop table",
   async fn(): Promise<void> {
-    await WaitlistModel.dropTable();
+    await TestModel.dropTable();
   },
 });
-
-// // Deno.test({
-// //   name: "[module='norm' dialect='sqlite'] Drop schema",
-// //   async fn(): Promise<void> {
-// //   },
-// // });

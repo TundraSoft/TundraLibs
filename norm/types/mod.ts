@@ -25,7 +25,25 @@ export type {
 
 export type { DataType, DataTypeMap } from "./DataTypes.ts";
 
-export { DataTypes } from "./DataTypes.ts";
+export {
+  DataTypes,
+  DefaultValidator,
+  MySQLDataMap,
+  PostgresDataMap,
+  SqliteDataMap,
+} from "./DataTypes.ts";
+
+export type {
+  DefaultValues,
+  GeneratorFunction,
+  Generators,
+} from "./Generators.ts";
+
+export {
+  MySQLGenerators,
+  PostgresGenerators,
+  SqliteGenerators,
+} from "./Generators.ts";
 
 export type {
   ColumnDefinition,

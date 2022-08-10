@@ -7,6 +7,7 @@ import type {
   CreateTableOptions,
   DeleteQueryOptions,
   Dialect,
+  Generators,
   InsertQueryOptions,
   QueryOptions,
   // QueryPagination,
@@ -18,11 +19,13 @@ import type {
 } from "./types/mod.ts";
 
 import { ConnectionError, QueryError } from "./Errors.ts";
+import { DialectHelper } from "./DialectHelper.ts";
 
 export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   extends Options<T, ClientEvents> {
   protected _name: string;
   declare protected _client: unknown | undefined;
+  declare protected _dialectHelper: DialectHelper;
   protected _stats: Map<
     QueryType,
     { count: number; time: number; error: number }
@@ -38,6 +41,9 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   constructor(name: string, options: Partial<T>, defaultConfig?: Partial<T>) {
     super(options, defaultConfig);
     this._name = name.toLowerCase().trim();
+    if (this.dialect !== "MONGODB") {
+      this._dialectHelper = new DialectHelper(this.dialect);
+    }
   }
 
   /**
@@ -66,6 +72,9 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     return this._stats;
   }
 
+  getGenerator(value: keyof Generators): unknown | undefined {
+    return this._dialectHelper.getGenerator(value);
+  }
   /**
    * connect
    *
@@ -140,6 +149,19 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     }
   }
 
+  // public async execute(sql: string, args?: Record<string, unknown>): Promise<void> {
+  //   const start = performance.now();
+  //   await this.connect();
+  //   try {
+  //     await this._execute(sql, args);
+  //     // Set end time
+  //     const end = performance.now();
+  //     const _time = end - start;
+  //   } catch (e) {
+  //     throw new QueryError(e.message, "EXECUTE", this.name, this.dialect);
+  //   }
+  // }
+
   /**
    * select
    *
@@ -163,38 +185,21 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async select<T = Record<string, unknown>>(
     options: SelectQueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    const start = performance.now(),
-      result: QueryResult<T> = {
-        type: "SELECT",
-        time: 0,
-        totalRows: 0,
-      };
-    await this.connect();
-    try {
-      // Ensure its not < 1
-      if (options.paging && options.paging.size < 1) {
-        delete options.paging;
-      }
-      if (options.paging && options.paging.page < 1) {
-        options.paging.page = 1;
-      }
-      const op = await this._select<T>(options);
-      if (op.length > 0) {
-        result.rows = op;
-        result.totalRows = op.length;
-      }
-      // If paging variable found in query options, run count also and get the output
-      if (options.paging) {
-        result.paging = options.paging;
-        result.totalRows = await this._count(options);
-      }
-      // Set end time
-      const end = performance.now();
-      result.time = end - start;
-      return result;
-    } catch (e) {
-      throw new QueryError(e.message, result.type, this.name, this.dialect);
+    if (options.paging && options.paging.size < 1) {
+      delete options.paging;
     }
+    if (options.paging && options.paging.page < 1) {
+      options.paging.page = 1;
+    }
+    const count = await this.count(options),
+      retVal = await this.query<T>(this._dialectHelper.select(options));
+    retVal.totalRows = count.totalRows;
+    // Time taken is sum of both
+    retVal.time += count.time;
+    if (options.paging) {
+      retVal.paging = options.paging;
+    }
+    return retVal;
   }
 
   /**
@@ -219,26 +224,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async insert<T = Record<string, unknown>>(
     options: InsertQueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    const start = performance.now(),
-      result: QueryResult<T> = {
-        type: "INSERT",
-        time: 0,
-        totalRows: 0,
-      };
-    await this.connect();
-    try {
-      const op = await this._insert<T>(options);
-      if (op.length > 0) {
-        result.rows = op;
-        result.totalRows = op.length;
-      }
-      // Set end time
-      const end = performance.now();
-      result.time = end - start;
-      return result;
-    } catch (e) {
-      throw new QueryError(e.message, result.type, this.name, this.dialect);
-    }
+    return await this.query<T>(this._dialectHelper.insert(options));
   }
 
   /**
@@ -260,23 +246,14 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async count<T = Record<string, unknown>>(
     options: CountQueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    const start = performance.now(),
-      result: QueryResult<T> = {
-        type: "COUNT",
-        time: 0,
-        totalRows: 0,
-      };
-    await this.connect();
-    try {
-      const op = await this._count<T>(options);
-      result.totalRows = op;
-      // Set end time
-      const end = performance.now();
-      result.time = end - start;
-      return result;
-    } catch (e) {
-      throw new QueryError(e.message, result.type, this.name, this.dialect);
+    const ret = await this.query<{ cnt: number }>(
+      this._dialectHelper.count(options),
+    );
+    if (ret.rows) {
+      ret.totalRows = ret.rows[0].cnt;
+      delete ret.rows;
     }
+    return ret as QueryResult<T>;
   }
 
   /**
@@ -300,24 +277,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async update<T = Record<string, unknown>>(
     options: UpdateQueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    const start = performance.now(),
-      result: QueryResult<T> = {
-        type: "UPDATE",
-        time: 0,
-        totalRows: 0,
-      };
-    await this.connect();
-    try {
-      const op = await this._update<T>(options);
-      result.rows = op;
-      result.totalRows = op.length;
-      // Set end time
-      const end = performance.now();
-      result.time = end - start;
-      return result;
-    } catch (e) {
-      throw new QueryError(e.message, result.type, this.name, this.dialect);
-    }
+    return await this.query<T>(this._dialectHelper.update(options));
   }
 
   /**
@@ -341,23 +301,10 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async delete<T = Record<string, unknown>>(
     options: DeleteQueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    const start = performance.now(),
-      result: QueryResult<T> = {
-        type: "DELETE",
-        time: 0,
-        totalRows: 0,
-      };
-    await this.connect();
-    try {
-      const op = await this._delete<T>(options);
-      result.totalRows = op;
-      // Set end time
-      const end = performance.now();
-      result.time = end - start;
-      return result;
-    } catch (e) {
-      throw new QueryError(e.message, result.type, this.name, this.dialect);
-    }
+    const count = await this.count(options),
+      retVal = await this.query<T>(this._dialectHelper.delete(options));
+    retVal.totalRows = count.totalRows;
+    return retVal;
   }
 
   /**
@@ -379,37 +326,14 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async truncate<T = Record<string, unknown>>(
     options: QueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    const start = performance.now(),
-      result: QueryResult<T> = {
-        type: "TRUNCATE",
-        time: 0,
-        totalRows: 0,
-      };
-    await this.connect();
-    try {
-      const count = await this._count<T>(options);
-      await this._truncate<T>(options);
-      result.totalRows = count;
-      // Set end time
-      const end = performance.now();
-      result.time = end - start;
-      return result;
-    } catch (e) {
-      throw new QueryError(e.message, result.type, this.name, this.dialect);
-    }
+    const count = await this.count(options),
+      retVal = await this.query<T>(this._dialectHelper.truncate(options));
+    retVal.totalRows = count.totalRows;
+    return retVal;
   }
 
-  public async createSchema(name: string, ifExists = true): Promise<void> {
-    const start = performance.now();
-    await this.connect();
-    try {
-      await this._createSchema(name, ifExists);
-      // Set end time
-      const end = performance.now();
-      const _time = end - start;
-    } catch (e) {
-      throw new QueryError(e.message, "CREATE", this.name, this.dialect);
-    }
+  public async createSchema(name: string, ifNotExists = true): Promise<void> {
+    await this.query(this._dialectHelper.createSchema(name, ifNotExists));
   }
 
   public async dropSchema(
@@ -417,43 +341,22 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     ifExists = true,
     cascade = true,
   ): Promise<void> {
-    const start = performance.now();
-    await this.connect();
-    try {
-      await this._dropSchema(name, ifExists, cascade);
-      // Set end time
-      const end = performance.now();
-      const _time = end - start;
-    } catch (e) {
-      throw new QueryError(e.message, "DROP", this.name, this.dialect);
-    }
+    await this.query(this._dialectHelper.dropSchema(name, ifExists, cascade));
   }
 
   public async createTable(options: CreateTableOptions): Promise<void> {
-    const start = performance.now();
-    await this.connect();
-    try {
-      await this._createTable(options);
-      // Set end time
-      const end = performance.now();
-      const _time = end - start;
-    } catch (e) {
-      throw new QueryError(e.message, "CREATE", this.name, this.dialect);
-    }
+    await this.query(this._dialectHelper.createTable(options));
   }
 
-  public async dropTable(table: string, schema?: string): Promise<boolean> {
-    const start = performance.now();
-    await this.connect();
-    try {
-      await this._dropTable(table, schema);
-      // Set end time
-      const end = performance.now();
-      const _time = end - start;
-      return true;
-    } catch (e) {
-      throw new QueryError(e.message, "DROP", this.name, this.dialect);
-    }
+  public async dropTable(
+    table: string,
+    schema?: string,
+    ifExists = true,
+    cascade = false,
+  ): Promise<void> {
+    await this.query(
+      this._dialectHelper.dropTable(table, schema, ifExists, cascade),
+    );
   }
 
   public async getTableDefinition(
@@ -484,43 +387,8 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     queryArgs?: Record<string, unknown>,
   ): Promise<Array<T> | undefined>;
 
-  protected abstract _select<T>(
-    options: SelectQueryOptions<T>,
-  ): Promise<Array<T>>;
-
-  protected abstract _count<T>(options: CountQueryOptions<T>): Promise<number>;
-
-  protected abstract _insert<T>(
-    options: InsertQueryOptions<T>,
-  ): Promise<Array<T>>;
-
-  protected abstract _update<T>(
-    options: UpdateQueryOptions<T>,
-  ): Promise<Array<T>>;
-
-  protected abstract _delete<T>(
-    options: DeleteQueryOptions<T>,
-  ): Promise<number>;
-
-  protected abstract _truncate<T>(options: QueryOptions<T>): Promise<boolean>;
-
-  protected abstract _createTable(options: CreateTableOptions): Promise<void>;
-
-  protected abstract _dropTable(table: string, schema?: string): Promise<void>;
-
   protected abstract _getTableDefinition(
     table: string,
     schema?: string,
   ): Promise<SchemaDefinition>;
-
-  protected abstract _createSchema(
-    name: string,
-    ifExists?: boolean,
-  ): Promise<void>;
-
-  protected abstract _dropSchema(
-    name: string,
-    ifExists?: boolean,
-    cascade?: boolean,
-  ): Promise<void>;
 }
