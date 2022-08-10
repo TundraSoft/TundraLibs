@@ -5,9 +5,11 @@ import type { ClientConfig } from "./types/mod.ts";
 import { ConfigNotFound } from "./Errors.ts";
 
 import { Config } from "../config/mod.ts";
+import { Model } from "./Model.ts";
 
 export class Database {
   protected static _clients: Map<string, AbstractClient> = new Map();
+  protected static _models: Map<string, Model> = new Map();
 
   public static async init(): Promise<void> {
     await Config.load("database");

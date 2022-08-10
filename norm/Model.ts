@@ -4,6 +4,7 @@ import {
   CountQueryOptions,
   CreateTableOptions,
   DataType,
+  DefaultValidator,
   DefaultValues,
   // DataTypes,
   DeleteQueryOptions,
@@ -22,7 +23,7 @@ import {
   UpdateQueryOptions,
 } from "./types/mod.ts";
 
-import type {
+import {
   ErrorList,
   GuardianProxy,
   // StructValidatorFunction,
@@ -122,6 +123,8 @@ export class Model<
       const hasValidation = (definition.validator !== undefined);
       if (hasValidation) {
         validator[column] = definition.validator;
+      } else {
+        validator[column] = DefaultValidator[definition.dataType];
       }
       // Define validations
       // const validator: GuardianProxy<any> = hasValidation ? definition.validator : Guardian;
@@ -149,18 +152,24 @@ export class Model<
         });
       }
 
-      if (
-        (definition.isNullable === undefined ||
-          definition.isNullable === false) &&
-        !this._identityKeys.includes(column as keyof T)
-      ) {
-        this._notNulls.push(column as keyof T);
-      }
       if (definition.insertDefault !== undefined) {
         this._insertGenerators[column as keyof T] = definition.insertDefault;
       }
       if (definition.updateDefault !== undefined) {
         this._updateGenerators[column as keyof T] = definition.updateDefault;
+      }
+
+      /**
+       * If it is defined as nullable, or no definition present and if not present of identity (Auto Incriment)
+       * column, or present as autogenrator then it is not null.
+       */
+      if (
+        (definition.isNullable === undefined ||
+          definition.isNullable === false) &&
+        (!this._identityKeys.includes(column as keyof T) &&
+          !Object.keys(this._insertGenerators).includes(column))
+      ) {
+        this._notNulls.push(column as keyof T);
       }
 
       // Relationships
@@ -302,7 +311,8 @@ export class Model<
         this._connection.name,
       );
     }
-    if (this.capability("bulkInsert") === false) {
+    await this._init();
+    if (this.capability("bulkInsert") === false && data.length > 1) {
       throw new ModelPermission(
         "bulk-insert",
         this.name,
@@ -311,7 +321,7 @@ export class Model<
     }
     const errors: { [key: number]: ErrorList } = {};
     let insertColumns: Array<keyof T> = this._notNulls;
-    const generated = this._extractGenerators(this._insertGenerators);
+    const [generated, dbGenerated] = this._generate(this._insertGenerators);
     data.forEach((element, index) => {
       try {
         // Set the generated values. We dont add DB generated values here...
@@ -331,6 +341,7 @@ export class Model<
             );
           }
         });
+        data[index] = { ...dbGenerated, ...data[index] };
         // Add the rest of the keys as insert columns
         const keys = Object.keys(data[index]) as Array<keyof T>;
         insertColumns = Array.from(
@@ -348,7 +359,7 @@ export class Model<
       // console.log(errors);
       throw new ModelValidationError(errors, this.name, this._connection.name);
     }
-    await this._init();
+
     const options: InsertQueryOptions<T> = {
       schema: this.schema,
       table: this.table,
@@ -384,11 +395,12 @@ export class Model<
       );
     }
     // let errors: ErrorList;
-    const generated = this._extractGenerators(this._updateGenerators);
+    const [generated, dbGenerated] = this._generate(this._updateGenerators);
     // Validate row
     try {
       data = { ...generated, ...data };
       data = this._validator(data);
+      data = { ...dbGenerated, ...data };
     } catch (e) {
       // Set error
       throw new ModelValidationError(e, this.name, this._connection.name);
@@ -408,11 +420,13 @@ export class Model<
       // Check if filter can be built (PK columns)
       const pkFilter: { [key: string]: unknown } = {};
       this._primaryKeys.forEach((pk) => {
-        pkFilter[String(pk)] = {
-          $eq: data[pk as keyof T],
-        };
-        // Delete from filter
-        delete data[pk];
+        if (data[pk] !== undefined) {
+          pkFilter[String(pk)] = {
+            $eq: data[pk as keyof T],
+          };
+          // Delete from filter
+          delete data[pk];
+        }
       });
       filter = pkFilter as Filters<T>;
     }
@@ -441,6 +455,7 @@ export class Model<
       }
     }
 
+    // console.log('sdf')
     const options: UpdateQueryOptions<T> = {
       schema: this.schema,
       table: this.table,
@@ -587,10 +602,11 @@ export class Model<
     }
   }
 
-  protected _extractGenerators(
+  protected _generate(
     generators: Partial<Record<keyof T, DefaultValues>>,
   ) {
-    const generated: Partial<Record<keyof T, unknown>> = {};
+    const generated: Partial<Record<keyof T, unknown>> = {},
+      dbGenerated: Partial<Record<keyof T, unknown>> = {};
     Object.entries(generators).forEach(([key, value]) => {
       if (value instanceof Function) {
         generated[key as keyof T] = value();
@@ -607,15 +623,14 @@ export class Model<
         if (gen) {
           if (gen instanceof Function) {
             generated[key as keyof T] = gen();
+          } else if (typeof gen === "string" && gen.match(/^\$\{.*\}$/)) {
+            dbGenerated[key as keyof T] = gen;
           }
         } else {
           generated[key as keyof T] = value;
         }
-        // if (gen === undefined || gen !instanceof Function) {
-        //   generated[key as keyof T] = value;
-        // }
       }
     });
-    return generated;
+    return [generated, dbGenerated];
   }
 }

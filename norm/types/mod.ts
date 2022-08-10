@@ -27,6 +27,7 @@ export type { DataType, DataTypeMap } from "./DataTypes.ts";
 
 export {
   DataTypes,
+  DefaultValidator,
   MySQLDataMap,
   PostgresDataMap,
   SqliteDataMap,

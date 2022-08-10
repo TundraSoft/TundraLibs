@@ -43,7 +43,6 @@ export class DialectHelper {
   }
 
   getGenerator(value: keyof Generators): unknown | undefined {
-    console.log(value);
     return this._generators[value] || undefined;
   }
 
@@ -82,7 +81,7 @@ export class DialectHelper {
   }
 
   count<T>(options: CountQueryOptions<T>): string {
-    const filter = (options.filters)
+    const filter = (options.filters && Object.keys(options.filters).length > 0)
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
       qry = `SELECT COUNT(1) as cnt
@@ -108,15 +107,13 @@ export class DialectHelper {
       }),
       qry = `INSERT INTO ${this._makeTable(options.table, options.schema)} (${
         columns.join(",")
-      })
-                   VALUES ${values.join(",\n")} RETURNING ${
-        returning.join(",\n")
-      };`;
+      }) VALUES ${values.join(",\n")} RETURNING ${returning.join(",\n")};`;
     return qry;
   }
 
   update<T>(options: UpdateQueryOptions<T>): string {
-    const filter = (options.filters)
+    // console.log(options)
+    const filter = (options.filters && Object.keys(options.filters).length > 0)
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
       keyVal = Object.entries(options.data).map((value) => {
@@ -131,11 +128,12 @@ export class DialectHelper {
       }),
       qry = `UPDATE ${this._makeTable(options.table, options.schema)}
                    SET ${keyVal}${filter} RETURNING ${returning}`;
+    // console.log(qry);
     return qry;
   }
 
   delete<T>(options: DeleteQueryOptions<T>): string {
-    const filter = (options.filters)
+    const filter = (options.filters && Object.keys(options.filters).length > 0)
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
       qry = `DELETE
@@ -520,11 +518,14 @@ export class DialectHelper {
     } else {
       value += "";
     }
-
+    if (value.substr(0, 2) === "${") {
+      return value.substr(2, value.length - 3);
+    }
     return `'${value.replace(/'/g, "''")}'`;
   }
 
   protected _quoteColumn(column: string) {
+    // console.log(column.replace(/\./g, `${this.COL_QUOTE}.${this.COL_QUOTE}`))
     return `${this.COL_QUOTE}${
       column.replace(/\./g, `${this.COL_QUOTE}.${this.COL_QUOTE}`)
     }${this.COL_QUOTE}`;

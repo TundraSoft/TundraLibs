@@ -42,7 +42,7 @@ export const SqliteGenerators: Generators = {
   "UUID": genUUID,
 };
 
-const aa: DefaultValues = "CURRENT_DATE";
-if (aa in PostgresGenerators) {
-  console.log(PostgresGenerators[aa as keyof typeof PostgresGenerators]);
-}
+// const aa: DefaultValues = "CURRENT_DATE";
+// if (aa in PostgresGenerators) {
+//   console.log(PostgresGenerators[aa as keyof typeof PostgresGenerators]);
+// }

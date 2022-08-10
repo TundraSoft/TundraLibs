@@ -1,4 +1,4 @@
-import { array, type } from "../../guardian/mod.ts";
+import { array, Guardian, type } from "../../guardian/mod.ts";
 
 export const enum DataTypes {
   "INT" = "INT",
@@ -74,6 +74,43 @@ export const DataTypeMap = {
   "JSON": type("object"),
   "ARRAY": array(),
   "AUTO_INCREMENT": type("number"),
+};
+
+export const DefaultValidator = {
+  "INT": Guardian.number().integer(),
+  "INTEGER": Guardian.number().integer(),
+  "SMALLINT": Guardian.number().integer(),
+  "TINYINT": Guardian.number().integer(),
+  "SERIAL": Guardian.number().integer(),
+  "SMALLSERIAL": Guardian.number().integer(),
+  "BIGSERIAL": Guardian.bigint(),
+  "BIGINT": Guardian.bigint(),
+  "BIT": Guardian.boolean(),
+  "BOOLEAN": Guardian.boolean(),
+  "BINARY": Guardian.boolean(),
+  "REAL": Guardian.number(),
+  "FLOAT": Guardian.number(),
+  "DOUBLE PRECISION": Guardian.number(),
+  "NUMERIC": Guardian.number(),
+  "NUMBER": Guardian.number(),
+  "DECIMAL": Guardian.number(),
+  "MONEY": Guardian.number(),
+  "CHAR": Guardian.string(),
+  "CHARACTER": Guardian.string(),
+  "VARCHAR": Guardian.string(),
+  "NVARCHAR": Guardian.string(),
+  "NCHAR": Guardian.string(),
+  "CHARACTER VARYING": Guardian.string(),
+  "DATE": Guardian.date(),
+  "TIME": Guardian.date(),
+  "DATETIME": Guardian.date(),
+  "TIMESTAMP": Guardian.date(),
+  "BYTEA": Guardian.string(),
+  "TEXT": Guardian.string(),
+  "UUID": Guardian.string().uuid(),
+  "JSON": Guardian.object(),
+  "ARRAY": Guardian.array(),
+  "AUTO_INCREMENT": Guardian.number().integer(),
 };
 
 export const PostgresDataMap = {
