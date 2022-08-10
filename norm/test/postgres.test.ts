@@ -2,14 +2,15 @@ import { assertEquals } from "../../dev_dependencies.ts";
 import { Database } from "../Database.ts";
 import { Filters } from "../mod.ts";
 import { TestModel, TestType } from "./TestModel.ts";
+import { Sysinfo } from "../../sysinfo/mod.ts";
 
 await Database.load("default", {
   dialect: "POSTGRES",
-  host: "localhost",
-  user: "postgres",
-  password: "postgrespw",
+  host: await Sysinfo.getEnv("POSTGRES_HOST") || "localhost",
+  user: await Sysinfo.getEnv("POSTGRES_USER") || "postgres",
+  password: await Sysinfo.getEnv("POSTGRES_PASS") || "postgrespw",
   database: "postgres",
-  port: 49153,
+  port: await Sysinfo.getEnv("POSTGRES_PORT") || 49153,
   // tls: {
   //   enabled: true,
   // },
