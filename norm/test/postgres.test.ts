@@ -1,8 +1,10 @@
 import { assertEquals } from "../../dev_dependencies.ts";
 import { Database } from "../Database.ts";
-import { Filters } from "../mod.ts";
+import { CountQueryOptions, Filters, SelectQueryOptions } from "../mod.ts";
 import { TestModel, TestType } from "./TestModel.ts";
 import { Sysinfo } from "../../sysinfo/mod.ts";
+import { CityModel, CityRawType } from "./CityModel.ts";
+import { path } from "../../dependencies.ts";
 
 await Database.load("default", {
   dialect: "POSTGRES",
@@ -11,12 +13,8 @@ await Database.load("default", {
   password: await Sysinfo.getEnv("POSTGRES_PASS") || "postgrespw",
   database: "postgres",
   port: await Sysinfo.getEnv("POSTGRES_PORT") || 49153,
-  // tls: {
-  //   enabled: true,
-  // },
 });
 
-// await TestModel.createTable();
 Deno.test({
   name: "[module='norm' dialect='postgres'] Test creation of table",
   async fn(): Promise<void> {
@@ -145,5 +143,111 @@ Deno.test({
   name: "[module='norm' dialect='postgres'] Drop table",
   async fn(): Promise<void> {
     await TestModel.dropTable();
+  },
+});
+
+Deno.test({
+  name: "[module='norm' dialect='postgres'] Test creation of table with seed",
+  async fn(): Promise<void> {
+    await CityModel.dropTable();
+    await CityModel.createTable(
+      undefined,
+      undefined,
+      path.join(
+        path.dirname(path.fromFileUrl(new URL("", import.meta.url))),
+        "fixtures",
+        "CityData.json",
+      ),
+    );
+    const cnt = await CityModel.count();
+    assertEquals(cnt.totalRows.toString(), "50");
+  },
+  sanitizeResources: false,
+  sanitizeOps: false,
+});
+
+Deno.test({
+  name: "[module='norm' dialect='postgres'] Test count query",
+  async fn() {
+    const result = await Database.get("default").count({
+      table: "City",
+      columns: {
+        Name: "Name",
+      },
+    } as CountQueryOptions<CityRawType>);
+    assertEquals(Number(result.totalRows), 50);
+  },
+});
+
+Deno.test({
+  name: "[module='norm' dialect='postgres'] Test count query with filters",
+  async fn() {
+    const result = await Database.get("default").count({
+      table: "City",
+      columns: {
+        Name: "Name",
+        District: "District",
+      },
+      filters: {
+        District: "Karnataka",
+      },
+    } as CountQueryOptions<CityRawType>);
+    assertEquals(Number(result.totalRows), 2);
+  },
+});
+
+Deno.test({
+  name: "[module='norm' dialect='postgres'] Test selection with sorting",
+  async fn() {
+    const result = await Database.get("default").select({
+      table: "City",
+      columns: {
+        Name: "Name",
+        Population: "Population",
+      },
+      sort: { Population: "DESC" },
+    } as SelectQueryOptions<CityRawType>);
+    assertEquals(Number(result.totalRows), 50);
+    if (result && result.rows && result.rows.length > 0) {
+      assertEquals(String(result.rows[0].Population), "10500000");
+    }
+  },
+});
+
+Deno.test({
+  name:
+    "[module='norm' dialect='postgres'] Test pagination functionality with select",
+  async fn() {
+    const result = await Database.get("default").select({
+      table: "City",
+      columns: {
+        Name: "Name",
+        Population: "Population",
+      },
+      sort: { Population: "DESC" },
+      paging: { size: 10, page: 2 },
+    } as SelectQueryOptions<CityRawType>);
+    assertEquals(Number(result.totalRows), 50);
+    if (result && result.rows && result.rows.length > 0) {
+      assertEquals(result.rows[0].Name, "Pune");
+    }
+  },
+});
+
+Deno.test({
+  name: "[module='norm' dialect='postgres'] Test table describe functionality",
+  async fn() {
+    const result = await Database.get("default").getTableDefinition("City");
+    assertEquals(result.columns.Name.name, "Name");
+    assertEquals(result.columns.Id.isPrimary, true);
+    assertEquals(
+      result.columns.District.uniqueKey &&
+        result.columns.District.uniqueKey.has("city_cu_unique"),
+      true,
+    );
+    // TODO: Implement
+    // assertEquals(result.columns.CountryCode.length, 3);
+    assertEquals(result.columns.Population.dataType, "BIGINT");
+    await CityModel.dropTable();
   },
 });

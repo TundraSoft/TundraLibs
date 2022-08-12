@@ -319,55 +319,7 @@ export class Model<
         this._connection.name,
       );
     }
-    const errors: { [key: number]: ErrorList } = {};
-    let insertColumns: Array<keyof T> = this._notNulls;
-    const [generated, dbGenerated] = this._generate(this._insertGenerators);
-    data.forEach((element, index) => {
-      try {
-        // Set the generated values. We dont add DB generated values here...
-        element = { ...generated, ...element };
-        data[index] = this._validator(element);
-        // Remove identity columns
-        this._identityKeys.forEach((key) => {
-          delete data[index][key];
-        });
-        // Check not null columns are present
-        this._notNulls.forEach((key) => {
-          if (data[index][key] === undefined || data[index][key] === null) {
-            throw new ModelNotNull(
-              String(key),
-              this.table,
-              this._connection.name,
-            );
-          }
-        });
-        data[index] = { ...dbGenerated, ...data[index] };
-        // Add the rest of the keys as insert columns
-        const keys = Object.keys(data[index]) as Array<keyof T>;
-        insertColumns = Array.from(
-          new Set<keyof T>([...insertColumns, ...keys]).values(),
-        );
-      } catch (e) {
-        // Set error
-        // TODO: Handle not null errors and validation errors gracefully
-        errors[index] = e;
-        // console.log(e.toJSON());
-      }
-    });
-    // Check if there is error
-    if (Object.keys(errors).length > 0) {
-      // console.log(errors);
-      throw new ModelValidationError(errors, this.name, this._connection.name);
-    }
-
-    const options: InsertQueryOptions<T> = {
-      schema: this.schema,
-      table: this.table,
-      columns: this._columns,
-      insertColumns: insertColumns,
-      data: data,
-    };
-    return await this._connection.insert<T>(options);
+    return await this._connection.insert<T>(this._buildInsert(data));
   }
 
   /**
@@ -529,6 +481,7 @@ export class Model<
   public async createTable(
     dropCreate?: boolean,
     backup?: string,
+    seedFilePath?: string,
   ): Promise<void> {
     if (this.capability("create") === false) {
       throw new ModelPermission(
@@ -572,6 +525,11 @@ export class Model<
     }
     await this._init();
     await this._connection.createTable(options);
+    if (seedFilePath) {
+      await this._connection.insert<T>(
+        this._buildInsert(JSON.parse(await Deno.readTextFile(seedFilePath))),
+      );
+    }
   }
 
   public async dropTable(ifExists = true, cascade = false): Promise<void> {
@@ -589,6 +547,59 @@ export class Model<
       ifExists,
       cascade,
     );
+  }
+
+  protected _buildInsert(
+    data: Array<Partial<T>>,
+  ): InsertQueryOptions<T> {
+    const errors: { [key: number]: ErrorList } = {};
+    let insertColumns: Array<keyof T> = this._notNulls;
+    const [generated, dbGenerated] = this._generate(this._insertGenerators);
+    data.forEach((element, index) => {
+      try {
+        // Set the generated values. We dont add DB generated values here...
+        element = { ...generated, ...element };
+        data[index] = this._validator(element);
+        // Remove identity columns
+        this._identityKeys.forEach((key) => {
+          delete data[index][key];
+        });
+        // Check not null columns are present
+        this._notNulls.forEach((key) => {
+          if (data[index][key] === undefined || data[index][key] === null) {
+            throw new ModelNotNull(
+              String(key),
+              this.table,
+              this._connection.name,
+            );
+          }
+        });
+        data[index] = { ...dbGenerated, ...data[index] };
+        // Add the rest of the keys as insert columns
+        const keys = Object.keys(data[index]) as Array<keyof T>;
+        insertColumns = Array.from(
+          new Set<keyof T>([...insertColumns, ...keys]).values(),
+        );
+      } catch (e) {
+        // Set error
+        // TODO: Handle not null errors and validation errors gracefully
+        errors[index] = e;
+        // console.log(e.toJSON());
+      }
+    });
+    // Check if there is error
+    if (Object.keys(errors).length > 0) {
+      // console.log(errors);
+      throw new ModelValidationError(errors, this.name, this._connection.name);
+    }
+
+    return {
+      schema: this.schema,
+      table: this.table,
+      columns: this._columns,
+      insertColumns: insertColumns,
+      data: data,
+    };
   }
 
   /**
