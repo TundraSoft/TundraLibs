@@ -95,6 +95,10 @@ export class UnknownGuardian<
       }
       const value = BigInt(String(input));
 
+      if (typeof value === "bigint") {
+        return value;
+      }
+
       if ((input as unknown) !== "NaN") {
         throw new Error(message || `Expect value to be a BigInt`);
       }
