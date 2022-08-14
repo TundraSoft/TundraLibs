@@ -200,7 +200,7 @@ export class StringGuardian<
    */
   pan(message?: string): GuardianProxy<this> {
     return this.pattern(
-      /^[a-zA-Z]{2}[0-9]{2}[a-zA-Z]{1}[0-9]{6}$/,
+      /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
       message || `Expect string to be a valid PAN`,
     );
   }
@@ -216,7 +216,7 @@ export class StringGuardian<
    */
   aadhaar(message?: string): GuardianProxy<this> {
     return this.pattern(
-      /^\d{4} \d{4} \d{4}$/,
+      /^[2-9]{1}[0-9]{3}\\s[0-9]{4}\\s[0-9]{4}$/,
       message || `Expect string to be a valid Aadhaar`,
     );
   }
@@ -248,7 +248,7 @@ export class StringGuardian<
    * @returns GuardianProxy<this>
    */
   mobile(
-    pattern = /^[9|8|7|6][0-9]{9}$/,
+    pattern = /^[6-9][0-9]{9}$/,
     message?: string,
   ): GuardianProxy<this> {
     return this.pattern(
@@ -528,6 +528,25 @@ export class StringGuardian<
     return this.pattern(
       /^[a-zA-Z0-9]{12}$/,
       message || `Expect string to be a valid UPI ID`,
+    );
+  }
+
+  /**
+   * pinCode
+   *
+   * Validates if the provided value is a valid pincode
+   *
+   * @param regex RegExp The pin code pattern to match
+   * @param message String The message to use when validation fails
+   * @returns GuardianProxy<this>
+   */
+  pinCode(
+    regex = /^[1-9]{1}[0-9]{2}\\s{0, 1}[0-9]{3}$/,
+    message?: string,
+  ): GuardianProxy<this> {
+    return this.pattern(
+      regex,
+      message || `Expect string to be a valid pin code`,
     );
   }
   //#endregion Validators
