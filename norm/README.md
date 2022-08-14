@@ -1,17 +1,12 @@
 # norm
 
 NORM - Not an ORM is a simple db connectivity library which helps building fast
-
 API. It is not meant to be a real ORM, but more of an abstraction layer which
-
 helps in automation of generating queries for supported databases including some
-
 complex filters.
 
 This will never be meant for complex joins or complicated aggregations as in a
-
 microservice api eco-systems these are rarely performed. If however there is a
-
 need to do such operations, custom queries can be written.
 
 ## Supported Databases
@@ -304,6 +299,6 @@ type QueryResult<T = Record<string, unknown>> = {
 - [ ] Better documentation
 - [ ] Driver(s) support
 - [x] Finish Model to support validation and Generators
-- [ ] Test suit
+- [x] Test suit
 - [ ] Better error classes
-- [ ] Migrate away from polysql if there is no development there
+- [x] Migrate away from polysql if there is no development there
