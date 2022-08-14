@@ -533,15 +533,21 @@ export class StringGuardian<
 
   /**
    * pinCode
-   * 
+   *
    * Validates if the provided value is a valid pincode
-   * 
+   *
    * @param regex RegExp The pin code pattern to match
    * @param message String The message to use when validation fails
    * @returns GuardianProxy<this>
    */
-  pinCode(regex = /^[1-9]{1}[0-9]{2}\\s{0, 1}[0-9]{3}$/, message?: string): GuardianProxy<this> {
-    return this.pattern(regex, message || `Expect string to be a valid pin code`);
+  pinCode(
+    regex = /^[1-9]{1}[0-9]{2}\\s{0, 1}[0-9]{3}$/,
+    message?: string,
+  ): GuardianProxy<this> {
+    return this.pattern(
+      regex,
+      message || `Expect string to be a valid pin code`,
+    );
   }
   //#endregion Validators
 }
