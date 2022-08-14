@@ -200,7 +200,7 @@ export class StringGuardian<
    */
   pan(message?: string): GuardianProxy<this> {
     return this.pattern(
-      /^[a-zA-Z]{2}[0-9]{2}[a-zA-Z]{1}[0-9]{6}$/,
+      /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/,
       message || `Expect string to be a valid PAN`,
     );
   }
