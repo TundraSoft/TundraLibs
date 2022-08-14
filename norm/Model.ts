@@ -478,6 +478,15 @@ export class Model<
     await this._connection.truncate(options);
   }
 
+  /**
+   * createTable
+   * Creates the table according to the SchemaDefinition.
+   *
+   * @param dropCreate boolean Whether to drop and create the table or not (Default false)
+   * @param backup boolean Whether to back up the table or not (Default false)
+   * @param seedFilePath string The path to the seed file (Optional)
+   * @returns Promise<void>
+   */
   public async createTable(
     dropCreate?: boolean,
     backup?: string,
@@ -494,7 +503,7 @@ export class Model<
     const options: CreateTableOptions = {
       schema: this.schema,
       table: this.table,
-      dropCreate: (dropCreate === true) ? true : false,
+      dropCreate: (dropCreate === true),
       backup: backup,
       columns: {},
     };
