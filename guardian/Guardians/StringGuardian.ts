@@ -248,7 +248,7 @@ export class StringGuardian<
    * @returns GuardianProxy<this>
    */
   mobile(
-    pattern = /^[9|8|7|6][0-9]{9}$/,
+    pattern = /^[6-9][0-9]{9}$/,
     message?: string,
   ): GuardianProxy<this> {
     return this.pattern(
