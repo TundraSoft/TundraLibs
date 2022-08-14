@@ -216,7 +216,7 @@ export class StringGuardian<
    */
   aadhaar(message?: string): GuardianProxy<this> {
     return this.pattern(
-      /^\d{4} \d{4} \d{4}$/,
+      /^[2-9]{1}[0-9]{3}\\s[0-9]{4}\\s[0-9]{4}$/,
       message || `Expect string to be a valid Aadhaar`,
     );
   }
