@@ -27,3 +27,12 @@ Deno.test({
     );
   },
 });
+
+Deno.test({
+  name: "Number - Transform to Date",
+  fn(): void {
+    const ts = 1661066144083,
+      dt = new Date(ts);
+    assertEquals(numberGuard.toDate()(ts), dt);
+  },
+});
