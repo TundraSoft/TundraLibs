@@ -195,7 +195,7 @@ export class Model<
     this._validator = Struct(
       validator,
       `Validation failed for model ${model.name}`,
-      "PARTIAL",
+      "DEFINED",
     );
   }
 
