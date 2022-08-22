@@ -14,7 +14,7 @@ import type { GuardianProxy, StructValidatorFunction } from "../types.ts";
 export const Struct = function <S>(
   struct: S,
   message?: string,
-  mode: "STRICT" | "DEFINED" | "ALL" = "STRICT",
+  mode: "STRICT" | "DEFINED" | "PARTIAL" | "ALL" = "STRICT",
 ): GuardianProxy<BaseGuardian<StructValidatorFunction<S>>> {
   return new BaseGuardian(
     compile(struct, {

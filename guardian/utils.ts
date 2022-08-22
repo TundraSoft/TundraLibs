@@ -218,6 +218,7 @@ export function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
  * Modes - (valid for struct)
  * STRICT - Definition must match the provided, i.e Only defined keys allowed. Any "extra" keys will throw an error.
  * DEFINED - Only defined keys will be processed, any "extra" keys will be ignored.
+ * PARTIAL - This will only validate values which are present (irrespective of they are defined as mandatory or optional). Will only return defined keys
  * ALL - Most loosely typed of the lot, will validate for properties for which definition is there, if defined but no value then it will ignore. Any junk will be passed as is
  *
  * @param struct
@@ -274,12 +275,14 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
         obj = objs[0];
       // We inject defined keys which are not passed. This helps validate optional keys.
       // Properties defined but not passed needs to be handled for strict
-      const tempKeys = new Set(Object.keys(obj));
-      structKeys.forEach((key) => {
-        if (!tempKeys.has(key)) {
-          obj[key] = undefined;
-        }
-      });
+      if (mode !== "PARTIAL") {
+        const tempKeys = new Set(Object.keys(obj));
+        structKeys.forEach((key) => {
+          if (!tempKeys.has(key)) {
+            obj[key] = undefined;
+          }
+        });
+      }
       // if (mode === "STRICT" || mode === 'DEFINED') {
       //   structKeys.forEach((key) => {
       //     if (!objKeys.has(key)) {

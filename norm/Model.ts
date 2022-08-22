@@ -198,7 +198,7 @@ export class Model<
     this._validator = Struct(
       validator,
       `Validation failed for model ${model.name}`,
-      "DEFINED",
+      "PARTIAL",
     );
   }
 
@@ -595,7 +595,7 @@ export class Model<
       } catch (e) {
         // Set error
         // TODO: Handle not null errors and validation errors gracefully
-        console.log(data[index])
+        console.log(data[index]);
         errors[index] = e;
         console.log(e.toJSON());
       }

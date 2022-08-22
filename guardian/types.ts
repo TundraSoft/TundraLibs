@@ -67,7 +67,7 @@ export type MaybeAsync<T, V> = unknown extends IsAsync<T> ? PromiseLike<V> | V
 
 export type StructOptions = {
   message?: string;
-  mode: "STRICT" | "DEFINED" | "ALL";
+  mode: "STRICT" | "DEFINED" | "PARTIAL" | "ALL";
   path: string[];
 };
 
