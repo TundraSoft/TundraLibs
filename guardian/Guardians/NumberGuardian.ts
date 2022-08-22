@@ -1,4 +1,5 @@
 import { BaseGuardian } from "../BaseGuardian.ts";
+import { DateGuardian } from "./DateGuardian.ts";
 import { type } from "../utils.ts";
 import type {
   FunctionParameters,
@@ -16,6 +17,14 @@ import type {
 export class NumberGuardian<
   P extends FunctionParameters = [number],
 > extends BaseGuardian<FunctionType<number, P>> {
+  //#region Manipulators
+  toDate(): GuardianProxy<DateGuardian<P>> {
+    return this.transform(
+      (num: number) => new Date(String(num).length === 10 ? num * 1000 : num),
+      DateGuardian,
+    );
+  }
+  //#endregion Manipulators
   //#region Validators
   /**
    * float

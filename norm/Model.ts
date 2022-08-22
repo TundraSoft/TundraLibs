@@ -126,6 +126,9 @@ export class Model<
       } else {
         validator[column] = DefaultValidator[definition.dataType];
       }
+
+      // validator[column].optional();
+
       // Define validations
       // const validator: GuardianProxy<any> = hasValidation ? definition.validator : Guardian;
       columnAlias[column as keyof T] = definition.name || column;
@@ -592,8 +595,9 @@ export class Model<
       } catch (e) {
         // Set error
         // TODO: Handle not null errors and validation errors gracefully
+        console.log(data[index]);
         errors[index] = e;
-        // console.log(e.toJSON());
+        console.log(e.toJSON());
       }
     });
     // Check if there is error

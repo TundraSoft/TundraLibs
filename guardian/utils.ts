@@ -216,9 +216,10 @@ export function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 /**
  * Composes a guardian for the provided value.
  * Modes - (valid for struct)
- * STRICT - Return object will match definition provided (all). Undefined will be ignored
- * PARTIAL - Same as strict, but allows all properties to be optional
- * ANY - Most loosely typed of the lot, will validate for properties for which definition is there, if defined but no value then it will ignore. Any junk will be passed as is
+ * STRICT - Definition must match the provided, i.e Only defined keys allowed. Any "extra" keys will throw an error.
+ * DEFINED - Only defined keys will be processed, any "extra" keys will be ignored.
+ * PARTIAL - This will only validate values which are present (irrespective of they are defined as mandatory or optional). Will only return defined keys
+ * ALL - Most loosely typed of the lot, will validate for properties for which definition is there, if defined but no value then it will ignore. Any junk will be passed as is
  *
  * @param struct
  * @param options
@@ -270,34 +271,55 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
     return ((
       ...objs: StructParameters<S>
     ): StructResolveType<S> | Promise<StructResolveType<S>> => {
-      // If strict mode, we have to
       const retObj: Record<string, unknown> = {},
-        obj = objs[0],
-        objKeys: Set<string> = new Set(Object.keys(obj)),
+        obj = objs[0];
+      // We inject defined keys which are not passed. This helps validate optional keys.
+      // Properties defined but not passed needs to be handled for strict
+      if (mode !== "PARTIAL") {
+        const tempKeys = new Set(Object.keys(obj));
+        structKeys.forEach((key) => {
+          if (!tempKeys.has(key)) {
+            obj[key] = undefined;
+          }
+        });
+      }
+      // if (mode === "STRICT" || mode === 'DEFINED') {
+      //   structKeys.forEach((key) => {
+      //     if (!objKeys.has(key)) {
+      //       errors.push({
+      //         error: makeError(`Missing property "${key}"`),
+      //         path: [...path, key],
+      //       });
+      //     }
+      //   });
+      // }
+      const objKeys: Set<string> = new Set(Object.keys(obj)),
         errors: PathError[] = [],
         // errors: {error: string, path: ObjectPath}[] = [],
         promises: Promise<unknown>[] = [];
       objKeys.forEach((key) => {
         try {
           // If it is Strict or Partial, only defined properties are allowed
-          if (mode !== "ANY" && !structKeys.has(key)) {
+          if (mode === "STRICT" && !structKeys.has(key)) {
             // pathErrors(`${key} is not a valid property`, [...opts.path, key]);
             throw makeError(`Unknown property passed "${key}"`);
           }
-          const retVal = (validators[key] !== undefined)
-            ? validators[key](obj[key])
-            : obj[key];
-          if (isPromiseLike(retVal)) {
-            promises.push(retVal as Promise<unknown>);
-            retVal.then((v) => retObj[key] = v, (e) => {
-              // const err = makeError(e)
-              errors.push({
-                error: e,
-                path: [...path, key],
+          if (structKeys.has(key) || mode === "ALL") {
+            const retVal = (validators[key] !== undefined)
+              ? validators[key](obj[key])
+              : obj[key];
+            if (isPromiseLike(retVal)) {
+              promises.push(retVal as Promise<unknown>);
+              retVal.then((v) => retObj[key] = v, (e) => {
+                // const err = makeError(e)
+                errors.push({
+                  error: e,
+                  path: [...path, key],
+                });
               });
-            });
-          } else {
-            retObj[key] = retVal;
+            } else {
+              retObj[key] = retVal;
+            }
           }
         } catch (e) {
           // errors.push(...toPathErrors(error as Error, path));
@@ -309,17 +331,6 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
           });
         }
       });
-      // Properties defined but not passed needs to be handled for strict
-      if (mode === "STRICT") {
-        structKeys.forEach((key) => {
-          if (!objKeys.has(key)) {
-            errors.push({
-              error: makeError(`Missing property "${key}"`),
-              path: [...path, key],
-            });
-          }
-        });
-      }
       // Done Now we return
       if (promises.length === 0) {
         // No promises found, so return

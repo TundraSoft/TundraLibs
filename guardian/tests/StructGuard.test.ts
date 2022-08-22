@@ -8,29 +8,30 @@ const userSchema = Struct({
   name: Guardian.string().min(3),
   email: Guardian.string().email(),
   dob: Guardian.date().min(new Date("01-01-1975")),
-  orders: [
+  orders: Guardian.array().of(
     {
       id: Guardian.number().gt(0).lte(100),
       name: Guardian.string().min(3),
     },
-  ],
+  ).optional(),
 });
 type A = Type<typeof userSchema>;
+
 const userSchemaPartial = Struct(
   {
     id: Guardian.number().gt(0).lte(100),
     name: Guardian.string().min(3),
     email: Guardian.string().email(),
     dob: Guardian.date().min(new Date("01-01-1975")),
-    orders: [
+    orders: Guardian.array().of(
       {
         id: Guardian.number().gt(0).lte(100),
         name: Guardian.string().min(3),
       },
-    ],
+    ).optional(),
   },
   undefined,
-  "PARTIAL",
+  "DEFINED",
 );
 
 const userSchemaAny = Struct(
@@ -39,15 +40,15 @@ const userSchemaAny = Struct(
     name: Guardian.string().min(3),
     email: Guardian.string().email(),
     dob: Guardian.date().min(new Date("01-01-1975")),
-    orders: [
+    orders: Guardian.array().of(
       {
         id: Guardian.number().gt(0).lte(100),
         name: Guardian.string().min(3),
       },
-    ],
+    ).optional(),
   },
   undefined,
-  "ANY",
+  "ALL",
 );
 
 const data: string[] = [];
@@ -69,6 +70,7 @@ data.push(JSON.stringify({
   email: "adsf@gmail.com",
   dob: new Date("01-01-1975"),
 }));
+
 data.push(JSON.stringify({
   id: 1,
   name: "Abhinav",
@@ -87,14 +89,17 @@ data.push(JSON.stringify({
  * Check if option is initialized correctly (Typed)
  */
 Deno.test({
-  name: "Struct - Check strict mode",
+  name: "Struct - Check STRICT mode",
   fn(): void {
     assertEquals(
       JSON.parse(JSON.stringify(userSchema(JSON.parse(data[0])))),
       JSON.parse(data[0]),
     );
     // Check error
-    assertThrows(() => userSchema(JSON.parse(data[1])), ValidationError);
+    assertEquals(
+      JSON.parse(JSON.stringify(userSchema(JSON.parse(data[1])))),
+      JSON.parse(data[1]),
+    );
     // Passimg junk should throw error
     assertThrows(() => userSchema(JSON.parse(data[2])), ValidationError);
   },
@@ -104,7 +109,7 @@ Deno.test({
  * Partial Mode
  */
 Deno.test({
-  name: "Struct - Check partial mode",
+  name: "Struct - Check DEFINED mode",
   fn(): void {
     assertEquals(
       JSON.parse(JSON.stringify(userSchemaPartial(JSON.parse(data[0])))),
@@ -114,16 +119,22 @@ Deno.test({
       JSON.parse(JSON.stringify(userSchemaPartial(JSON.parse(data[1])))),
       JSON.parse(data[1]),
     );
-    // Passimg junk should throw error
-    assertThrows(() => userSchemaPartial(JSON.parse(data[2])), ValidationError);
+    // Junk will be ignored
+    const op = JSON.parse(data[2]);
+    delete op["sex"];
+    assertEquals(
+      JSON.parse(JSON.stringify(userSchemaPartial(JSON.parse(data[2])))),
+      op,
+    );
+    // assertThrows(() => userSchemaPartial(JSON.parse(data[2])), ValidationError);
   },
 });
 
 /**
- * Partial Mode
+ * ALL Mode
  */
 Deno.test({
-  name: "Struct - Check ANY mode",
+  name: "Struct - Check ALL mode",
   fn(): void {
     assertEquals(
       JSON.parse(JSON.stringify(userSchemaAny(JSON.parse(data[0])))),
