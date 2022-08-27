@@ -4,15 +4,18 @@ import type { DefaultValues } from "./Generators.ts";
 // import { Generators } from './Generators.ts'
 import type { GuardianProxy } from "../../guardian/mod.ts";
 
+export type DecimalLengthSpec = {
+  precision: number;
+  scale: number;
+};
+
 export type ColumnDefinition = {
   // Actual column name
   name?: string;
   // The data type
   dataType: DataType;
-  length?: {
-    precision: number;
-    scale: number;
-  } | number;
+  // Length of the column
+  length?: DecimalLengthSpec | number;
   // isNullable - Is column nullable, if true then null is valid. Defaults to false
   isNullable?: boolean;
   // defaultValue: DBGenerators | GeneratorFunction<T>
