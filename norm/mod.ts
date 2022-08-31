@@ -17,6 +17,7 @@ export type {
   QuerySorting,
   QueryType,
   QueryTypes,
+  SchemaComparisonOptions,
   SelectQueryOptions,
   SQLiteConfig,
   UpdateQueryOptions,

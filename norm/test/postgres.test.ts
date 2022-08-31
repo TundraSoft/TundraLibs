@@ -1,6 +1,11 @@
 import { assertEquals } from "../../dev_dependencies.ts";
 import { Database } from "../Database.ts";
-import { CountQueryOptions, Filters, SelectQueryOptions } from "../mod.ts";
+import {
+  CountQueryOptions,
+  Filters,
+  SchemaComparisonOptions,
+  SelectQueryOptions,
+} from "../mod.ts";
 import { TestModel, TestType } from "./TestModel.ts";
 import { Sysinfo } from "../../sysinfo/mod.ts";
 import { CityModel, CityRawType } from "./CityModel.ts";
@@ -167,6 +172,24 @@ Deno.test({
 });
 
 Deno.test({
+  name: "[module='norm' dialect='postgres'] Schema consistency",
+  async fn(): Promise<void> {
+    assertEquals(
+      true,
+      await CityModel.isConsistent({
+        ignoreSchema: true,
+        ignoreTable: true,
+        ignoreType: true,
+        ignoreLength: true,
+        ignoreNullable: true,
+        ignorePrimary: true,
+        ignoreUnique: true,
+      } as SchemaComparisonOptions),
+    );
+  },
+});
+
+Deno.test({
   name: "[module='norm' dialect='postgres'] Test count query",
   async fn() {
     const result = await Database.get("default").count({
@@ -240,6 +263,7 @@ Deno.test({
     const result = await Database.get("default").getTableDefinition("City");
     assertEquals(result.columns.Name.name, "Name");
     assertEquals(result.columns.Id.isPrimary, true);
+    assertEquals(result.columns.Id.isNullable, false);
     assertEquals(
       result.columns.District.uniqueKey &&
         result.columns.District.uniqueKey.has("city_cu_unique"),

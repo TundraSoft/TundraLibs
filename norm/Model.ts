@@ -227,6 +227,10 @@ export class Model<
     return this._columnType[name];
   }
 
+  public isColumnPrimary(name: keyof T): boolean {
+    return this._primaryKeys.includes(name);
+  }
+
   public isColumnNullable(name: keyof T): boolean {
     return (!this._notNulls.includes(name as keyof T) &&
       !this._identityKeys.includes(name as keyof T));
@@ -566,12 +570,12 @@ export class Model<
    *
    * Is the schema consistent with the DB schema?
    */
-  protected async isConsistent(
+  public async isConsistent(
     options: SchemaComparisonOptions,
   ): Promise<boolean> {
     await this._init();
     const sDelta = await this._getSchemaDelta(options);
-    let result: boolean = true;
+    let result = true;
     result &&= sDelta.schemaMatch;
     result &&= sDelta.tableMatch;
     result &&= Object.keys(sDelta.addedColumns).length === 0;
@@ -666,13 +670,15 @@ export class Model<
     }
     const columnDefs = {} as { [key: string]: ColumnDefinition };
     for (const [alias, name] of Object.entries(this._columns)) {
+      console.log(alias, name);
       columnDefs[name as string] = {
         name: alias,
         dataType: this._columnType[alias as keyof T].type,
         length: this._columnType[alias as keyof T].length || undefined,
         isNullable: this.isColumnNullable(alias as keyof T),
-        isPrimary: this._primaryKeys.includes(alias as keyof T),
-        uniqueKey: uniqueKeyMap[name as string].size > 0
+        isPrimary: this.isColumnPrimary(alias as keyof T),
+        uniqueKey: (uniqueKeyMap[name as string] &&
+            uniqueKeyMap[name as string].size > 0)
           ? uniqueKeyMap[name as string]
           : undefined,
       } as ColumnDefinition;
@@ -714,10 +720,23 @@ export class Model<
       const matchingLengths = options.ignoreLength ||
         (!modelSchema.columns[key].length && !dbSchema.columns[key].length) ||
         (modelSchema.columns[key].length === dbSchema.columns[key].length);
+      const primaryMatch = options.ignorePrimary ||
+        (!modelSchema.columns[key].isPrimary &&
+          !!dbSchema.columns[key].isPrimary) ||
+        (modelSchema.columns[key].isPrimary ===
+          dbSchema.columns[key].isPrimary);
+      const uniqueMatch = options.ignoreUnique ||
+        (!modelSchema.columns[key].uniqueKey &&
+          !!dbSchema.columns[key].uniqueKey) ||
+        (modelSchema.columns[key].uniqueKey ===
+          dbSchema.columns[key].uniqueKey);
       const nullableMatch = options.ignoreNullable ||
         modelSchema.columns[key].isNullable ===
           dbSchema.columns[key].isNullable;
-      if (!matchingTypes || !matchingLengths || !nullableMatch) {
+      if (
+        !matchingTypes || !matchingLengths || !nullableMatch || !primaryMatch ||
+        !uniqueMatch
+      ) {
         modifiedCols[key] = dbSchema.columns[key];
       }
     }
