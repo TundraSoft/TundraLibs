@@ -158,7 +158,7 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
       character_maximum_length: number;
       numeric_precision: number;
       numeric_scale: number;
-      is_nullable: boolean;
+      is_nullable: string;
     }>(this._dialectHelper.getTableDefinition(table, schema));
     const dt_constraints = await conn.queryObject<{
       constraint_name: string;
@@ -206,7 +206,7 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
             precision: value.numeric_precision,
             scale: value.numeric_scale,
           },
-        isNullable: value.is_nullable,
+        isNullable: value.is_nullable === "YES",
         isPrimary: (primary_keys[value.column_name] === true),
         uniqueKey: unique_keys[value.column_name],
       };
