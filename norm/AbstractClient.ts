@@ -13,6 +13,7 @@ import type {
   // QueryPagination,
   QueryResult,
   QueryType,
+  Rules,
   SchemaDefinition,
   SelectQueryOptions,
   UpdateQueryOptions,
@@ -70,6 +71,14 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
 
   get stats(): Map<QueryType, { count: number; time: number; error: number }> {
     return this._stats;
+  }
+
+  get typeMap(): { [key: string]: string } {
+    return this._dialectHelper.typeMap;
+  }
+
+  get dialectRules(): Rules {
+    return this._dialectHelper.rules;
   }
 
   getGenerator(value: keyof Generators): unknown | undefined {

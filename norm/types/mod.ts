@@ -23,14 +23,17 @@ export type {
   UpdateQueryOptions,
 } from "./Queries.ts";
 
-export type { DataType, DataTypeMap } from "./DataTypes.ts";
+export type { DataType, DataTypeMap, Rules } from "./DataTypes.ts";
 
 export {
   DataTypes,
   DefaultValidator,
   MySQLDataMap,
+  MySQLRules,
   PostgresDataMap,
+  PostgresRules,
   SqliteDataMap,
+  SqliteRules,
 } from "./DataTypes.ts";
 
 export type {

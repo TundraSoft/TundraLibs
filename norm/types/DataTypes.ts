@@ -149,6 +149,29 @@ export const PostgresDataMap = {
   "ARRAY": "ARRAY",
   "AUTO_INCREMENT": "SERIAL",
 };
+export type Rules = {
+  typeEquivalences: { [key: string]: string };
+  varcharTypes: string[];
+  decimalTypes: string[];
+};
+
+export const PostgresRules: Rules = {
+  typeEquivalences: {
+    "SERIAL": "INTEGER",
+    "SMALLSERIAL": "INTEGER",
+    "BIGSERIAL": "BIGINT",
+  } as { [key: string]: string },
+  varcharTypes: [
+    "CHAR",
+    "CHARACTER",
+    "VARCHAR",
+    "NVARCHAR",
+  ] as string[],
+  decimalTypes: [
+    "DECIMAL",
+    "NUMERIC",
+  ],
+};
 
 export const SqliteDataMap = {
   "INT": "INTEGER",
@@ -187,6 +210,22 @@ export const SqliteDataMap = {
   "AUTO_INCREMENT": "INTEGER",
 };
 
+export const SqliteRules: Rules = {
+  typeEquivalences: {
+    //TODO add more
+  },
+  varcharTypes: [
+    "CHAR",
+    "CHARACTER",
+    "VARCHAR",
+    "NVARCHAR",
+  ] as string[],
+  decimalTypes: [
+    "DECIMAL",
+    "NUMERIC",
+  ],
+};
+
 export const MySQLDataMap = {
   "INT": "INTEGER",
   "INTEGER": "INTEGER",
@@ -222,4 +261,20 @@ export const MySQLDataMap = {
   "JSON": "TEXT",
   "ARRAY": "TEXT",
   "AUTO_INCREMENT": "AUTO_INCREMENT",
+};
+
+export const MySQLRules: Rules = {
+  typeEquivalences: {
+    //TODO add more
+  },
+  varcharTypes: [
+    "CHAR",
+    "CHARACTER",
+    "VARCHAR",
+    "NVARCHAR",
+  ] as string[],
+  decimalTypes: [
+    "DECIMAL",
+    "NUMERIC",
+  ],
 };

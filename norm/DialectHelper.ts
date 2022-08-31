@@ -9,16 +9,22 @@ import {
   InsertQueryOptions,
   MySQLDataMap,
   MySQLGenerators,
+  MySQLRules,
   PostgresDataMap,
   PostgresGenerators,
+  PostgresRules,
   QueryOptions,
+  Rules,
   SelectQueryOptions,
   SqliteDataMap,
   SqliteGenerators,
+  SqliteRules,
   UpdateQueryOptions,
 } from "./types/mod.ts";
 
 export class DialectHelper {
+  protected _rules: Rules;
+  protected _typeMap: { [key: string]: string };
   protected _dialect: Dialect;
   protected COL_QUOTE: string;
   protected VALUE_QUOTE = "'";
@@ -29,18 +35,32 @@ export class DialectHelper {
     switch (this._dialect) {
       default:
       case "POSTGRES":
+        this._rules = PostgresRules;
+        this._typeMap = PostgresDataMap;
         this.COL_QUOTE = '"';
         this._generators = PostgresGenerators;
         break;
       case "SQLITE":
+        this._rules = SqliteRules;
+        this._typeMap = SqliteDataMap;
         this.COL_QUOTE = '"';
         this._generators = SqliteGenerators;
         break;
       case "MYSQL":
+        this._rules = MySQLRules;
+        this._typeMap = MySQLDataMap;
         this.COL_QUOTE = "`";
         this._generators = MySQLGenerators;
         break;
     }
+  }
+
+  get typeMap(): { [key: string]: string } {
+    return this._typeMap;
+  }
+
+  get rules(): Rules {
+    return this._rules;
   }
 
   getGenerator(value: keyof Generators): unknown | undefined {
@@ -185,21 +205,9 @@ export class DialectHelper {
   }
 
   createTable(options: CreateTableOptions): string {
-    let type = PostgresDataMap;
-    switch (this._dialect) {
-      case "POSTGRES":
-        type = PostgresDataMap;
-        break;
-      case "SQLITE":
-        type = SqliteDataMap;
-        break;
-      case "MYSQL":
-        type = MySQLDataMap;
-        break;
-    }
     const columns = Object.keys(options.columns).map((value) => {
         const colName = value;
-        const colType = type[options.columns[value].type];
+        const colType = this._typeMap[options.columns[value].type];
         const nullSpec = options.columns[value].isNullable
           ? "NULL"
           : "NOT NULL";

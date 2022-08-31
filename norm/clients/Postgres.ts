@@ -18,39 +18,14 @@ import type {
   SchemaDefinition,
 } from "../types/mod.ts";
 
-// const DataTypeMapString = {
-//   "VARCHAR": "string",
-//   "CHARACTER": "string",
-//   "NVARCHAR": "string",
-//   "TEXT": "string",
-//   "STRING": "string",
-//   "UUID": "string",
-//   "GUID": "string",
-//   "NUMERIC": "number",
-//   "NUMBER": "number",
-//   "DECIMAL": "number",
-//   "INTEGER": "number",
-//   "SMALLINT": "number",
-//   "TINYINT": "number",
-//   "FLOAT": "number",
-//   "BIGINTEGER": "number",
-//   "SERIAL": "number",
-//   "BIGSERIAL": "number",
-//   "AUTO_INCREMENT": "number",
-//   "BOOLEAN": "boolean",
-//   "BINARY": "boolean",
-//   "DATE": "date",
-//   "DATETIME": "date",
-//   "TIME": "date",
-//   "TIMESTAMP": "date",
-//   "JSON": "object",
-// };
+import { PostgresDataMap, PostgresRules } from "../types/mod.ts";
 
 import { PGPool } from "../../dependencies.ts";
 import type { PGClientOptions } from "../../dependencies.ts";
 
 export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
   declare protected _client: PGPool;
+
   // declare protected _queryGenerator: QueryGenerator;
 
   constructor(name: string, config: Partial<T>) {
@@ -180,7 +155,12 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
         dt_constraints.rows.filter((value) => {
           return value.constraint_type === "UNIQUE";
         }).reduce((acc, { column_name, constraint_name }) => {
-          (acc[column_name] || (acc[column_name] = [])).push(constraint_name);
+          (acc[column_name] || (acc[column_name] = [])).push(
+            constraint_name.replace("_unique", "").replace(
+              table.toLowerCase() + "_",
+              "",
+            ),
+          );
           return acc;
         }, {} as { [key: string]: string[] }),
       ).map(([key, value]) => [key, new Set(value)]),
@@ -189,7 +169,9 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
     const column_definitions = fields_result.rows.map((value) => {
       return {
         name: value.column_name,
-        dataType: value.data_type.toUpperCase() as DataType,
+        dataType: PostgresDataMap[
+          value.data_type.toUpperCase() as DataType
+        ] as DataType,
         // length: (DataTypeMapString[value.data_type.toUpperCase() as DataType] ==
         //     "number")
         //   ? {
@@ -200,12 +182,24 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
         //       "string")
         //     ? value.character_maximum_length
         //     : undefined),
-        length: (value.character_maximum_length > 0)
-          ? value.character_maximum_length
-          : {
-            precision: value.numeric_precision,
-            scale: value.numeric_scale,
-          },
+        length: (PostgresRules.varcharTypes.includes(
+            PostgresDataMap[
+              value.data_type.toUpperCase() as DataType
+            ],
+          ))
+          ? (value.character_maximum_length > 0
+            ? value.character_maximum_length
+            : undefined)
+          : ((PostgresRules.decimalTypes.includes(
+              PostgresDataMap[
+                value.data_type.toUpperCase() as DataType
+              ],
+            ))
+            ? {
+              precision: value.numeric_precision,
+              scale: value.numeric_scale,
+            }
+            : undefined),
         isNullable: value.is_nullable === "YES",
         isPrimary: (primary_keys[value.column_name] === true),
         uniqueKey: unique_keys[value.column_name],
