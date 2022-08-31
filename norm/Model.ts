@@ -673,7 +673,8 @@ export class Model<
       console.log(alias, name);
       columnDefs[name as string] = {
         name: alias,
-        dataType: this._columnType[alias as keyof T].type,
+        dataType:
+          this._connection.typeMap[this._columnType[alias as keyof T].type],
         length: this._columnType[alias as keyof T].length || undefined,
         isNullable: this.isColumnNullable(alias as keyof T),
         isPrimary: this.isColumnPrimary(alias as keyof T),
@@ -698,6 +699,11 @@ export class Model<
   protected async _getSchemaDelta(
     options: SchemaComparisonOptions,
   ): Promise<SchemaDelta> {
+    const eqSet = (xs: Set<string> | undefined, ys: Set<string> | undefined) =>
+      (xs && ys) &&
+      (xs.size === ys.size) &&
+      ([...xs].every((x) => ys.has(x)));
+    const rules = this._connection.dialectRules;
     const modelSchema = this._getModelSchema();
     const dbSchema = await this._getDBSchema();
     const mSet = Object.keys(modelSchema.columns);
@@ -716,20 +722,25 @@ export class Model<
     }
     for (const key of both) {
       const matchingTypes = options.ignoreType ||
-        modelSchema.columns[key].dataType === dbSchema.columns[key].dataType;
+        modelSchema.columns[key].dataType === dbSchema.columns[key].dataType ||
+        (rules.typeEquivalences[modelSchema.columns[key].dataType] &&
+          rules.typeEquivalences[modelSchema.columns[key].dataType] ===
+            dbSchema.columns[key].dataType);
       const matchingLengths = options.ignoreLength ||
         (!modelSchema.columns[key].length && !dbSchema.columns[key].length) ||
         (modelSchema.columns[key].length === dbSchema.columns[key].length);
       const primaryMatch = options.ignorePrimary ||
         (!modelSchema.columns[key].isPrimary &&
-          !!dbSchema.columns[key].isPrimary) ||
+          !dbSchema.columns[key].isPrimary) ||
         (modelSchema.columns[key].isPrimary ===
           dbSchema.columns[key].isPrimary);
       const uniqueMatch = options.ignoreUnique ||
         (!modelSchema.columns[key].uniqueKey &&
-          !!dbSchema.columns[key].uniqueKey) ||
-        (modelSchema.columns[key].uniqueKey ===
-          dbSchema.columns[key].uniqueKey);
+          !dbSchema.columns[key].uniqueKey) ||
+        eqSet(
+          modelSchema.columns[key].uniqueKey,
+          dbSchema.columns[key].uniqueKey,
+        );
       const nullableMatch = options.ignoreNullable ||
         modelSchema.columns[key].isNullable ===
           dbSchema.columns[key].isNullable;

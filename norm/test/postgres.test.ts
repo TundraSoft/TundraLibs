@@ -176,15 +176,7 @@ Deno.test({
   async fn(): Promise<void> {
     assertEquals(
       true,
-      await CityModel.isConsistent({
-        ignoreSchema: true,
-        ignoreTable: true,
-        ignoreType: true,
-        ignoreLength: true,
-        ignoreNullable: true,
-        ignorePrimary: true,
-        ignoreUnique: true,
-      } as SchemaComparisonOptions),
+      await CityModel.isConsistent({} as SchemaComparisonOptions),
     );
   },
 });
@@ -266,7 +258,7 @@ Deno.test({
     assertEquals(result.columns.Id.isNullable, false);
     assertEquals(
       result.columns.District.uniqueKey &&
-        result.columns.District.uniqueKey.has("city_cu_unique"),
+        result.columns.District.uniqueKey.has("cu"),
       true,
     );
     assertEquals(result.columns.CountryCode.length, 3);
