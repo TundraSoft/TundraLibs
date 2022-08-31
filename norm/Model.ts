@@ -659,7 +659,7 @@ export class Model<
    * Helper function to get the current schema as in the DB
    */
   protected _getModelSchema(): SchemaDefinition {
-    const uniqueKeyMap = {} as { [key: string]: Set<String> };
+    const uniqueKeyMap = {} as { [key: string]: Set<string> };
     for (const [key, value] of Object.entries(this._uniqueKeys)) {
       for (const column of value) {
         if (uniqueKeyMap[column as string] === undefined) {
