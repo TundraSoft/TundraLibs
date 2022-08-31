@@ -73,6 +73,24 @@ export type ModelDefinition = SchemaDefinition & {
   };
 };
 
+export type SchemaComparisonOptions = {
+  ignoreSchema?: boolean;
+  ignoreTable?: boolean;
+  ignoreType?: boolean;
+  ignoreLength?: boolean;
+  ignoreNullable?: boolean;
+  ignorePrimary?: boolean;
+  ignoreUnique?: boolean;
+};
+
+export type SchemaDelta = {
+  schemaMatch: boolean;
+  tableMatch: boolean;
+  deletedColumns: { [key: string]: ColumnDefinition };
+  addedColumns: { [key: string]: ColumnDefinition };
+  modifiedColumns: { [key: string]: ColumnDefinition };
+};
+
 type PartialPartial<T, K extends keyof T> =
   Partial<Pick<T, K>> & Omit<T, K> extends infer O ? { [P in keyof O]: O[P] }
     : never;

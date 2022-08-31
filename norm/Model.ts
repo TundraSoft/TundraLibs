@@ -1,14 +1,13 @@
 import { AbstractClient } from "./AbstractClient.ts";
 import { Database } from "./Database.ts";
 import {
+  ColumnDefinition,
   CountQueryOptions,
   CreateTableOptions,
   DataType,
   DefaultValidator,
   DefaultValues,
-  // DataTypes,
   DeleteQueryOptions,
-  // FilterOperators,
   Filters,
   Generators,
   InsertQueryOptions,
@@ -19,20 +18,14 @@ import {
   QueryPagination,
   QueryResult,
   QuerySorting,
+  SchemaComparisonOptions,
+  SchemaDefinition,
+  SchemaDelta,
   SelectQueryOptions,
   UpdateQueryOptions,
 } from "./types/mod.ts";
 
-import {
-  ErrorList,
-  GuardianProxy,
-  // StructValidatorFunction,
-} from "../guardian/mod.ts";
-import {
-  // Guardian,
-  Struct,
-  // type
-} from "../guardian/mod.ts";
+import { ErrorList, GuardianProxy, Struct } from "../guardian/mod.ts";
 
 import {
   ModelNotNull,
@@ -81,7 +74,7 @@ export class Model<
   >;
   // Array of columns marked as Primary Key
   protected _primaryKeys: Array<keyof T> = [];
-  // Columns which function as Identity columns (auto incriment). This is to avoid inserting/updating values to them
+  // Columns which function as Identity columns (auto increment). This is to avoid inserting/updating values to them
   protected _identityKeys: Array<keyof T> = [];
   // Columns which are marked as not null
   protected _notNulls: Array<keyof T> = [];
@@ -163,8 +156,8 @@ export class Model<
       }
 
       /**
-       * If it is defined as nullable, or no definition present and if not present of identity (Auto Incriment)
-       * column, or present as autogenrator then it is not null.
+       * If it is defined as nullable, or no definition present and if not present of identity (Auto Increment)
+       * column, or present as auto generator then it is not null.
        */
       if (
         (definition.isNullable === undefined ||
@@ -176,7 +169,7 @@ export class Model<
       }
 
       // Relationships
-      // Relationships are present primarily to handle indexes. norm will not
+      // Present primarily to handle indexes. norm will not
       // create foreign keys to avoid table alter/creation hierarchy. Indexes will be maintained for performance.
       // In the future, this could be used to select using joins or create views
       if (definition.relatesTo) {
@@ -544,6 +537,13 @@ export class Model<
     }
   }
 
+  /**
+   * dropTable
+   *
+   * @param ifExists boolean Whether to drop the table if it exists or not (Default true)
+   * @param cascade boolean Whether to cascade the drop or not (Default false)
+   * Drop the DB Table
+   */
   public async dropTable(ifExists = true, cascade = false): Promise<void> {
     if (this.capability("drop") === false) {
       throw new ModelPermission(
@@ -561,6 +561,30 @@ export class Model<
     );
   }
 
+  /**
+   * isConsistent
+   *
+   * Is the schema consistent with the DB schema?
+   */
+  protected async isConsistent(
+    options: SchemaComparisonOptions,
+  ): Promise<boolean> {
+    await this._init();
+    const sDelta = await this._getSchemaDelta(options);
+    let result: boolean = true;
+    result &&= sDelta.schemaMatch;
+    result &&= sDelta.tableMatch;
+    result &&= Object.keys(sDelta.addedColumns).length === 0;
+    result &&= Object.keys(sDelta.modifiedColumns).length === 0;
+    result &&= Object.keys(sDelta.deletedColumns).length === 0;
+    return result;
+  }
+
+  /**
+   * _buildInsert
+   *
+   * Helper function to build the insert query given the data
+   */
   protected _buildInsert(
     data: Array<Partial<T>>,
   ): InsertQueryOptions<T> {
@@ -613,6 +637,98 @@ export class Model<
       insertColumns: insertColumns,
       data: data,
     };
+  }
+
+  /**
+   * _getDBSchema
+   *
+   * Helper function to get the current schema as in the DB
+   */
+  protected async _getDBSchema(): Promise<SchemaDefinition> {
+    await this._init();
+    return await this._connection.getTableDefinition(this.table, this.schema);
+  }
+
+  /**
+   * _getModelSchema
+   *
+   * Helper function to get the current schema as in the DB
+   */
+  protected _getModelSchema(): SchemaDefinition {
+    const uniqueKeyMap = {} as { [key: string]: Set<String> };
+    for (const [key, value] of Object.entries(this._uniqueKeys)) {
+      for (const column of value) {
+        if (uniqueKeyMap[column as string] === undefined) {
+          uniqueKeyMap[column as string] = new Set<string>();
+        }
+        uniqueKeyMap[column as string].add(key);
+      }
+    }
+    const columnDefs = {} as { [key: string]: ColumnDefinition };
+    for (const [alias, name] of Object.entries(this._columns)) {
+      columnDefs[name as string] = {
+        name: alias,
+        dataType: this._columnType[alias as keyof T].type,
+        length: this._columnType[alias as keyof T].length || undefined,
+        isNullable: this.isColumnNullable(alias as keyof T),
+        isPrimary: this._primaryKeys.includes(alias as keyof T),
+        uniqueKey: uniqueKeyMap[name as string].size > 0
+          ? uniqueKeyMap[name as string]
+          : undefined,
+      } as ColumnDefinition;
+    }
+    return {
+      schema: this.schema,
+      table: this.table,
+      columns: columnDefs,
+    };
+  }
+
+  /**
+   * _getSchemaDelta
+   *
+   * Get the differences between the Modelschema and the DB schema
+   */
+  protected async _getSchemaDelta(
+    options: SchemaComparisonOptions,
+  ): Promise<SchemaDelta> {
+    const modelSchema = this._getModelSchema();
+    const dbSchema = await this._getDBSchema();
+    const mSet = Object.keys(modelSchema.columns);
+    const dSet = Object.keys(dbSchema.columns);
+    const mOnly = mSet.filter((key) => !dSet.includes(key));
+    const dOnly = dSet.filter((key) => !mSet.includes(key));
+    const both = mSet.filter((key) => dSet.includes(key));
+    const addedCols = {} as { [key: string]: ColumnDefinition };
+    const modifiedCols = {} as { [key: string]: ColumnDefinition };
+    const deletedCols = {} as { [key: string]: ColumnDefinition };
+    for (const key of mOnly) {
+      deletedCols[key] = modelSchema.columns[key];
+    }
+    for (const key of dOnly) {
+      addedCols[key] = dbSchema.columns[key];
+    }
+    for (const key of both) {
+      const matchingTypes = options.ignoreType ||
+        modelSchema.columns[key].dataType === dbSchema.columns[key].dataType;
+      const matchingLengths = options.ignoreLength ||
+        (!modelSchema.columns[key].length && !dbSchema.columns[key].length) ||
+        (modelSchema.columns[key].length === dbSchema.columns[key].length);
+      const nullableMatch = options.ignoreNullable ||
+        modelSchema.columns[key].isNullable ===
+          dbSchema.columns[key].isNullable;
+      if (!matchingTypes || !matchingLengths || !nullableMatch) {
+        modifiedCols[key] = dbSchema.columns[key];
+      }
+    }
+    return {
+      schemaMatch: options.ignoreSchema || (!modelSchema && !dbSchema) ||
+        modelSchema && dbSchema && modelSchema.schema === dbSchema.schema,
+      tableMatch: options.ignoreTable || modelSchema.table === dbSchema.table,
+      deletedColumns: deletedCols,
+      addedColumns: addedCols,
+      modifiedColumns: modifiedCols,
+    } as SchemaDelta;
   }
 
   /**

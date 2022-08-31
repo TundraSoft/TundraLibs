@@ -51,5 +51,7 @@ export type {
   ModelDefinition,
   ModelFeatures,
   ModelType,
+  SchemaComparisonOptions,
   SchemaDefinition,
+  SchemaDelta,
 } from "./Model.ts";
