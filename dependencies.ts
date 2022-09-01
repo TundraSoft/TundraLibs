@@ -59,7 +59,7 @@ export {
   isSuccessfulStatus,
   Status,
   STATUS_TEXT,
-} from "http://deno.land/std@0.150.0/http/mod.ts";
+} from "https://deno.land/std@0.150.0/http/mod.ts";
 
 export type HTTPMethods =
   | "HEAD"
@@ -77,9 +77,9 @@ export type {
   RedirectStatus,
   ServerErrorStatus,
   SuccessfulStatus,
-} from "http://deno.land/std@0.150.0/http/mod.ts";
+} from "https://deno.land/std@0.150.0/http/mod.ts";
 
-export type { Middleware } from "http://deno.land/x/oak@v11.1.0/mod.ts";
-export { Context } from "http://deno.land/x/oak@v11.1.0/mod.ts";
+export type { Middleware } from "https://deno.land/x/oak@v11.1.0/mod.ts";
+export { Context } from "https://deno.land/x/oak@v11.1.0/mod.ts";
 
 //#endregion Endpoint
