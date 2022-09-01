@@ -7,7 +7,7 @@ import type {
   GuardianProxy,
 } from "../types.ts";
 
-import { parseDate } from '../../dependencies.ts';
+import { parseDate } from "../../dependencies.ts";
 /**
  * StringGuardian
  *
@@ -108,7 +108,7 @@ export class StringGuardian<
     return this.transform((str: string) => str.replace(search, replace));
   }
 
-  toDate(format = 'YYYY-MM-dd'): GuardianProxy<DateGuardian<P>> {
+  toDate(format = "YYYY-MM-dd"): GuardianProxy<DateGuardian<P>> {
     return this.transform((str: string) => parseDate(str, format));
   }
   //#endregion Manipulators

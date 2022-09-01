@@ -1,7 +1,10 @@
 // Begin Core
 export * as path from "https://deno.land/std@0.150.0/path/mod.ts";
 export { ensureDir, ensureFile } from "https://deno.land/std@0.150.0/fs/mod.ts";
-export { format as dateFormat, parse as parseDate } from "https://deno.land/std@0.150.0/datetime/mod.ts";
+export {
+  format as dateFormat,
+  parse as parseDate,
+} from "https://deno.land/std@0.150.0/datetime/mod.ts";
 export {
   BufWriter,
   BufWriterSync,
@@ -58,7 +61,14 @@ export {
   STATUS_TEXT,
 } from "http://deno.land/std@0.150.0/http/mod.ts";
 
-export type HTTPMethods = "HEAD" | "OPTIONS"| "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type HTTPMethods =
+  | "HEAD"
+  | "OPTIONS"
+  | "GET"
+  | "POST"
+  | "PUT"
+  | "PATCH"
+  | "DELETE";
 
 export type {
   ClientErrorStatus,
