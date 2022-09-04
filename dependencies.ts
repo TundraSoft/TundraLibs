@@ -80,6 +80,11 @@ export type {
 } from "https://deno.land/std@0.150.0/http/mod.ts";
 
 export type { Middleware } from "https://deno.land/x/oak@v11.1.0/mod.ts";
-export { Context } from "https://deno.land/x/oak@v11.1.0/mod.ts";
+export {
+  Context,
+  helpers as oakHelpers,
+  Request,
+  Response,
+} from "https://deno.land/x/oak@v11.1.0/mod.ts";
 
 //#endregion Endpoint

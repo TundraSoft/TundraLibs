@@ -1,4 +1,4 @@
-import { Context } from "../Middleware.ts";
+import { Context } from "../../dependencies.ts";
 import { requestId } from "./requestId.ts";
 import { assertEquals } from "../../dev_dependencies.ts";
 
