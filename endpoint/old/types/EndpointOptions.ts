@@ -9,7 +9,7 @@ export type EndpointOptions = {
   // @TODO - Both these must be Map<string, string> where we have alias - actual name #HasH9
   routeIdentifiers: string[];
   // Identifiers coming in through OAK's State object
-  stateParams: boolean;
+  stateIdentifiers?: string[];
   // Permission settings
   allowedMethods: {
     GET: boolean;

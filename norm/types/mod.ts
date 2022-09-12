@@ -48,7 +48,7 @@ export {
 export type {
   ColumnDefinition,
   ModelDefinition,
-  ModelFeatures,
+  ModelPermissions,
   ModelType,
   SchemaDefinition,
 } from "./Model.ts";

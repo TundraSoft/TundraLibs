@@ -13,7 +13,7 @@ import {
   Generators,
   InsertQueryOptions,
   ModelDefinition,
-  ModelFeatures,
+  ModelPermissions,
   ModelType,
   QueryOptions,
   QueryPagination,
@@ -40,6 +40,7 @@ import {
   ModelPrimaryKeyUpdate,
   ModelValidationError,
 } from "./Errors.ts";
+// import { ModelManager } from "./ModelManager.ts";
 
 /**
  * Model
@@ -63,7 +64,7 @@ export class Model<
   protected _schema?: string;
   protected _table: string;
   protected _pageSize?: number;
-  protected _features: ModelFeatures = {
+  protected _features: ModelPermissions = {
     insert: true,
     bulkInsert: true,
     update: true,
@@ -99,16 +100,18 @@ export class Model<
 
   constructor(model: S) {
     // this._model = model;
-    this._name = model.name;
+    this._name = model.name.trim().toLowerCase();
     this._connectionName = model.connection;
     this._schema = model.schema;
     this._table = model.table;
     this._pageSize = model.pageSize;
 
     // Set features
-    Object.entries(this._features).forEach(([key, value]) => {
-      this._features[key as keyof ModelFeatures] = value;
-    });
+    if(model.feature) {
+      Object.entries(model.feature).forEach(([key, value]) => {
+        this._features[key as keyof ModelPermissions] = value;
+      });
+    }
 
     const columnAlias: Partial<Record<keyof T, string>> = {};
     const columnDefinition: Partial<
@@ -200,6 +203,7 @@ export class Model<
       `Validation failed for model ${model.name}`,
       "PARTIAL",
     );
+    // ModelManager.register(this);
   }
 
   // The model name
@@ -207,7 +211,11 @@ export class Model<
     return this._name;
   }
 
-  public capability(name: keyof ModelFeatures): boolean {
+  // get permissions(): ModelPermissions {
+  //   return this._features;
+  // }
+  
+  public capability(name: keyof ModelPermissions): boolean {
     return this._features[name];
   }
 
@@ -223,6 +231,19 @@ export class Model<
     return `${
       this._schema !== undefined ? `${this._schema}.` : ""
     }${this._table}`;
+  }
+
+  // deno-lint-ignore no-explicit-any
+  get validator(): GuardianProxy<any> {
+    return this._validator;
+  }
+
+  get primaryKeys(): Array<keyof T> {
+    return this._primaryKeys;
+  }
+
+  public getRealName(column: keyof T): string {
+    return this._columns[column];
   }
 
   public getColumnType(
@@ -355,12 +376,15 @@ export class Model<
     try {
       data = { ...generated, ...data };
       data = this._validator(data);
+      // Check unique
+      // TODO - Check Unique
+      
       data = { ...dbGenerated, ...data };
     } catch (e) {
       // Set error
       throw new ModelValidationError(e, this.name, this._connection.name);
     }
-    // Check if not null columns if present is not set to null
+    // Check if not null columns is present and is not set to null
     this._notNulls.forEach((key) => {
       if (data[key] && data[key] === null) {
         throw new ModelNotNull(
@@ -586,6 +610,8 @@ export class Model<
             );
           }
         });
+        // Check unique key
+
         data[index] = { ...dbGenerated, ...data[index] };
         // Add the rest of the keys as insert columns
         const keys = Object.keys(data[index]) as Array<keyof T>;

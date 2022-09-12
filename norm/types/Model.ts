@@ -29,7 +29,7 @@ export type ColumnDefinition = {
   };
 };
 
-export type ModelFeatures = {
+export type ModelPermissions = {
   insert: boolean;
   bulkInsert: boolean;
   update: boolean;

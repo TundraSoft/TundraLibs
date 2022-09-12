@@ -1,10 +1,3 @@
-/**
- * Scenarios for endpoints:
- * 1. Straight model endpoint - This is interaction with a single entity (table) where the route manipulates a specific table
- * 2. Multiple model endpoint - This is an interaction with multiple entities (tables). Example would be Group - Permission (creation of group and setting its permissions)
- * 3. Process endpoint - This type of endpoint simply processes data sent to it and returns a response. Example - accept input params send to a 3rd party endpoint, wait for response then return it
- */
-
 import { Options } from "../options/mod.ts";
 import { Context, oakHelpers, path } from "../dependencies.ts";
 import type {
@@ -12,25 +5,27 @@ import type {
   FileUploadInfo,
   PagingParam,
   ParsedRequest,
-  SortingParam, 
-  HTTPResponse
+  SortingParam,
 } from "./types/mod.ts";
-// import { EndpointManager } from "./EndpointManager.ts";
+import { EndpointManager } from "./EndpointManager.ts";
 import type { HTTPMethods } from "../dependencies.ts";
+
 import {
   MissingNameError,
   MissingRoutePathError,
 } from "./Errors.ts";
+import { Value } from "https://deno.land/std@0.150.0/encoding/_toml/parser.ts";
 
-/**
- * This is the base endpoint, acts like a base template
- */
+export type EndpointEvents = {
+  error: (error: Error, ctx: Context) => void;
+  handle: (method: HTTPMethods, request: ParsedRequest) => void;
+};
+
 export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
-extends Options<T> {
+  extends Options<T> {
 
   constructor(options: Partial<EndpointOptions>) {
     const defOptions: Partial<EndpointOptions> = {
-      stateParams: true, 
       allowedMethods: {
         GET: true,
         POST: true,
@@ -51,7 +46,7 @@ extends Options<T> {
 
     super(options as T, defOptions as Partial<T>);
     // Register the endpoint
-    // EndpointManager.register(this);
+    EndpointManager.register(this);
   }
 
   public get route() {
@@ -79,14 +74,6 @@ extends Options<T> {
     });
   }
 
-  /**
-   * handle
-   * 
-   * Helper function which handles all request verbs and calls the appropriate handler
-   * 
-   * @param ctx Context The Context from OAK
-   * @returns void
-   */
   public async handle(ctx: Context): Promise<void> {
     const method = ctx.request.method;
     if (method === "GET") {
@@ -109,7 +96,6 @@ extends Options<T> {
     }
   }
 
-  //#region Handle Methods
   /**
    * GET
    *
@@ -125,7 +111,7 @@ extends Options<T> {
     if (this.allowedMethods.indexOf("GET") === -1) {
       ctx.response.status = 405;
       ctx.response.body = {
-        message: `GET method not supported by this endpoint`,
+        message: `GET Method not supported by this endpoint`,
       };
       return;
     }
@@ -134,14 +120,7 @@ extends Options<T> {
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
     // Call the actual handler
-    const op = await this._fetch(req);
-    ctx.response.status = op.status;
-    ctx.response.body = op.body;
-    if(op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
+    await this._GET(req, ctx);
     // Call post response hook
     this._postHandle(ctx);
     // All done
@@ -161,29 +140,15 @@ extends Options<T> {
     if (this.allowedMethods.indexOf("POST") === -1) {
       ctx.response.status = 405;
       ctx.response.body = {
-        message: `POST method not supported by this endpoint`,
+        message: `This endpoint does not support the POST method`,
       };
       return;
     }
     const req = await this._parseRequest(ctx);
-    if(this._hasIdentifier(req)) {
-      ctx.response.status = 405;
-      ctx.response.body = {
-        message: `POST method not supported by this endpoint`,
-      };
-      return;
-    }
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
-    const op = await this._insert(req);
-    ctx.response.status = op.status;
-    ctx.response.body = op.body;
-    if(op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
+    await this._POST(req, ctx);
     // Call post response hook
     this._postHandle(ctx);
   }
@@ -202,7 +167,7 @@ extends Options<T> {
     if (this.allowedMethods.indexOf("PUT") === -1) {
       ctx.response.status = 405;
       ctx.response.body = {
-        message: `PUT method not supported by this endpoint`,
+        message: `This endpoint does not support the PUT method`,
       };
       return;
     }
@@ -210,14 +175,7 @@ extends Options<T> {
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
-    const op = await this._update(req);
-    ctx.response.status = op.status;
-    ctx.response.body = op.body;
-    if(op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
+    await this._PUT(req, ctx);
     // Call post response hook
     this._postHandle(ctx);
   }
@@ -236,7 +194,7 @@ extends Options<T> {
     if (this.allowedMethods.indexOf("PATCH") === -1) {
       ctx.response.status = 405;
       ctx.response.body = {
-        message: `PATCH method not supported by this endpoint`,
+        message: `This endpoint does not support the PATCH method`,
       };
       return;
     }
@@ -244,14 +202,7 @@ extends Options<T> {
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
-    const op = await this._update(req);
-    ctx.response.status = op.status;
-    ctx.response.body = op.body;
-    if(op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
+    await this._PATCH(req, ctx);
     // Call post response hook
     this._postHandle(ctx);
   }
@@ -270,7 +221,7 @@ extends Options<T> {
     if (this.allowedMethods.indexOf("DELETE") === -1) {
       ctx.response.status = 405;
       ctx.response.body = {
-        message: `DELETE method not supported by this endpoint`,
+        message: `This endpoint does not support the DELETE method`,
       };
       return;
     }
@@ -278,15 +229,7 @@ extends Options<T> {
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
-    const op = await this._delete(req);
-    ctx.response.status = op.status;
-    // There is no body in DELETE response
-    // ctx.response.body = op.body;
-    if(op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
+    await this._DELETE(req, ctx);
     // Call post response hook
     this._postHandle(ctx);
   }
@@ -305,7 +248,7 @@ extends Options<T> {
     if (this.allowedMethods.indexOf("HEAD") === -1) {
       ctx.response.status = 405;
       ctx.response.body = {
-        message: `HEAD method not supported by this endpoint`,
+        message: `This endpoint does not support the HEAD method`,
       };
       return;
     }
@@ -313,13 +256,8 @@ extends Options<T> {
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
-    const op = await this._fetch(req);
-    ctx.response.status = op.status;
-    if(op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
+    await this._GET(req, ctx);
+    ctx.response.body = null;
     // Call post response hook
     this._postHandle(ctx);
   }
@@ -336,64 +274,13 @@ extends Options<T> {
     this._setDefaultHeaders(ctx);
     // Options are alwats allowed
     ctx.response.headers.set("Allow", this.allowedMethods.join(", "));
-    // Await injected here to prevent error
-    ctx.response.status = await 200;
+    ctx.response.status = 200;
+
+    // Process the request
+    const req = await this._parseRequest(ctx, false); // Do not parse body for options
   }
 
-  //#endregion Handle Methods
-  
   // Protected methods
-
-  //#region Begin Protected Methods
-
-  //#region Implementation methods
-
-  /**
-   * _fetch
-   * 
-   * Perform a "fetch" operation. Return an array of entities which are to be returned basis parameters 
-   * (filters) provided.
-   * 
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected abstract _fetch(request: ParsedRequest): Promise<HTTPResponse>;
-  
-  /**
-   * _insert
-   * 
-   * Perform an "insert" operation. Return the entity which was inserted.
-   * 
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected abstract _insert(request: ParsedRequest): Promise<HTTPResponse>;
-
-  /**
-   * _update
-   * 
-   * Perform an "update" operation. Return an array of entities which are to be returned basis parameters
-   * (filters) provided.
-   * 
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected abstract _update(request: ParsedRequest): Promise<HTTPResponse>;
-  
-  /**
-   * _delete
-   * 
-   * Perform a "Delete" operation. This should ideally return just the status code along with any headers.
-   * 
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected abstract _delete(request: ParsedRequest): Promise<HTTPResponse>;
-
-  // protected abstract _count<T = Record<string, unknown>>(request: ParsedRequest): number;
-
-  //#endregion Implementation methods
-
   /**
    * _setDefaultHeaders
    *
@@ -402,7 +289,7 @@ extends Options<T> {
    * @protected
    * @param ctx Context Set default headers
    */
-   protected _setDefaultHeaders(ctx: Context): void {
+  protected _setDefaultHeaders(ctx: Context): void {
     ctx.response.headers.set("X-ROUTE-NAME", this.name);
     ctx.response.headers.set("X-ROUTE-GROUP", this.group);
     ctx.response.headers.set("X-ROUTE-PATH", this.route);
@@ -470,11 +357,6 @@ extends Options<T> {
       delete params["sortdesc"];
     }
     //#endregion Split paging and sorting params
-    //#region Inject state params
-    if(ctx.state.params) {
-      Object.assign(params, ctx.state.params);
-    }
-    //#endregion Inject state params
     
     //#region Parse Body
     // Ok lets parse it
@@ -564,17 +446,8 @@ extends Options<T> {
     return;
   }
 
-  /**
-   * _buildIdentifiers
-   * 
-   * Builds the identifiers for the route. Identifiers are the "Primary Keys" identifying a specific 
-   * record in the entity. This is used to build the URL for the route.
-   * 
-   * @returns string The identifiers for the route
-   */
   protected _buildIdentifiers(): string {
-    const routeIdentifiers = this._getOption('routeIdentifiers');
-    if(routeIdentifiers && routeIdentifiers.length > 0) {
+    if(this._hasOption('routeIdentifiers')) {
       // return ':' + this._getOption('routeIdentifiers').join(',:') + '?';
       return ':' + this._getOption('routeIdentifiers').join('\\::') + '?';
     } else {
@@ -582,22 +455,208 @@ extends Options<T> {
     }
   }
 
+  //#region Begin abstract functions
+
   /**
-   * _hasIdentifier
-   * 
-   * Checks if the Identifier is present in the request.
-   * 
+   * _GET
+   *
+   * The actual handler for GET requests
+   *
+   * @protected
+   * @abstract
    * @param req ParsedRequest The parsed request
-   * @returns boolean True if Identifier is present in the request
+   * @param ctx Context The context passed by OAK
    */
-  protected _hasIdentifier(req: ParsedRequest): boolean {
-    if(this._hasOption('routeIdentifiers')) {
-      return this._getOption('routeIdentifiers').every((identifier) => {
-        return req.params[identifier] !== undefined;
-      });
-    } else {
-      return false;
-    }
-  }
-  //#endregion End Protected Methods
+  protected abstract _GET(req: ParsedRequest, ctx: Context): void;
+
+  /**
+   * _POST
+   *
+   * The actual handler for POST requests
+   *
+   * @protected
+   * @abstract
+   * @param req ParsedRequest The parsed request
+   * @param ctx Context The context passed by OAK
+   */
+  protected abstract _POST(req: ParsedRequest, ctx: Context): void;
+
+  /**
+   * _PUT
+   *
+   * The actual handler for PUT requests
+   *
+   * @protected
+   * @abstract
+   * @param req ParsedRequest The parsed request
+   * @param ctx Context The context passed by OAK
+   */
+  protected abstract _PUT(req: ParsedRequest, ctx: Context): void;
+
+  /**
+   * _PATCH
+   *
+   * The actual handler for PATCH requests
+   *
+   * @protected
+   * @abstract
+   * @param req ParsedRequest The parsed request
+   * @param ctx Context The context passed by OAK
+   */
+  protected abstract _PATCH(req: ParsedRequest, ctx: Context): void;
+
+  /**
+   * _DELETE
+   *
+   * The actual handler for DELETE requests
+   *
+   * @protected
+   * @abstract
+   * @param req ParsedRequest The parsed request
+   * @param ctx Context The context passed by OAK
+   */
+  protected abstract _DELETE(req: ParsedRequest, ctx: Context): void;
+  //#endregion End abstract functions
+
+  // public async handle2(ctx: Context) {
+  //   const { request, response } = ctx;
+  //   /* Setup basic response headers */
+  //   // response.headers.append("X-ROUTE-NAME", this.name);
+  //   // response.headers.append("X-ROUTE-GROUP", this.group);
+  //   // response.headers.append("X-ROUTE-PATH", this.route);
+  //   // response.headers.append("X-ALLOWED-METHODS", this.allowedMethods.join(","));
+  //   response.headers.set("Allow", this.allowedMethods.join(", "));
+  //   // Check if the method is allowed
+  //   if (!this.allowedMethods.includes(request.method)) {
+  //     response.status = 405;
+  //     response.body = {
+  //       error: `Method ${request.method} not allowed in this route`,
+  //     };
+  //     return;
+  //   }
+  //   if (request.method === "OPTIONS") {
+  //     response.status = 204;
+  //   } else {
+  //     const req = await this._parseRequest(ctx);
+  //     if (request.method === "HEAD" || request.method === "GET") {
+  //       response.status = 200;
+  //       await this._GET(req, ctx);
+  //       if (request.method === "HEAD") {
+  //         // Remove the body
+  //         response.body = null;
+  //       }
+  //     } else if (request.method === "POST") {
+  //       response.status = 201;
+  //       await this._POST(req, ctx);
+  //     } else if (request.method === "PUT") {
+  //       response.status = 200;
+  //       await this._PUT(req, ctx);
+  //     } else if (request.method === "PATCH") {
+  //       response.status = 200;
+  //       await this._PATCH(req, ctx);
+  //     } else if (request.method === "DELETE") {
+  //       response.status = 204;
+  //       await this._DELETE(req, ctx);
+  //     }
+  //   }
+  // }
+
+  // protected async _parseRequest2(ctx: Context): Promise<ParsedRequest> {
+  //   const params = oakHelpers.getQuery(ctx, { mergeParams: true }),
+  //     paging: PagingParam = {},
+  //     sorting: SortingParam = {};
+  //   //#region Handle param details
+  //   if (params["page"]) {
+  //     paging.page = Number(params["page"]) || undefined;
+  //     delete params["page"];
+  //   }
+  //   if (params["pagesize"]) {
+  //     paging.size = Number(params["pagesize"]) || undefined;
+  //     delete params["pagesize"];
+  //   }
+  //   // Sorting
+  //   if (params["sort"]) {
+  //     const sort = params["sort"].split(",");
+  //     sort.forEach((s) => {
+  //       const [key, value] = s.split(":");
+  //       sorting[key.trim()] = (value.trim().toUpperCase() as "ASC" | "DESC") ||
+  //         "ASC";
+  //     });
+  //     delete params["sort"];
+  //   } else if (params["sortasc"]) {
+  //     const sort = params["sortasc"].split(",");
+  //     sort.forEach((s) => {
+  //       sorting[s] = "ASC";
+  //     });
+  //     delete params["sortasc"];
+  //   } else if (params["sortdesc"]) {
+  //     const sort = params["sortdesc"].split(",");
+  //     sort.forEach((s) => {
+  //       sorting[s] = "DESC";
+  //     });
+  //     delete params["sortdesc"];
+  //   }
+  //   //#endregion Handle param details
+  //   const body = await ctx.request.body();
+  //   let bodyContent: ParsedBody = {
+  //     type: "JSON",
+  //     value: undefined,
+  //   };
+  //   switch (body.type) {
+  //     case "form":
+  //       bodyContent = { type: "FORM", value: await body.value as unknown as {[key: string]: unknown} };
+  //       console.log(bodyContent);
+  //       break;
+  //     // deno-lint-ignore no-case-declarations
+  //     case "form-data":
+  //       const formData = await body.value.read({
+  //           maxFileSize: ctx.app.state.maxFileSize || 10485760,
+  //           outPath: ctx.app.state.uploadPath || undefined,
+  //         }),
+  //         fields: Record<string, unknown> = formData.fields,
+  //         files: Record<string, string> = {};
+  //       if (formData.files) {
+  //         formData.files.forEach((file) => {
+  //           files[file.originalName] = String(file.filename);
+  //           if (!fields[file.name]) {
+  //             fields[file.name] = [];
+  //           }
+  //           fields[file.name].push(file.name);
+  //         });
+  //         fields["_files"] = files;
+  //       }
+  //       bodyContent = { type: "FORM", value: fields };
+  //       // const op = await body.value.read();
+  //       // console.log(op);
+  //       break;
+  //     case "json":
+  //       bodyContent = { type: "JSON", value: await body.value as unknown as {[key: string]: unknown} };
+  //       console.log(bodyContent);
+  //       break;
+  //     case "bytes":
+  //       bodyContent = { type: "BYTES", value: new TextDecoder().decode(await body.value) as unknown as string} ;
+  //       console.log(bodyContent);
+  //       break;
+  //     default:
+  //     case "text":
+  //       bodyContent = { type: "TEXT", value: await body.value as unknown as string };
+  //       console.log(bodyContent);
+  //       break;
+  //   }
+  //   return {
+  //     params: params,
+  //     paging: paging,
+  //     sorting: sorting,
+  //     body: bodyContent,
+  //   }
+  //   // if (body.type === "form-data") {
+  //   //   const formatData = await body.value.read({
+  //   //     customContentTypes: {
+  //   //       "text/vnd.custom": "txt"
+  //   //     },
+  //   //     outPath: 'path to write file',
+  //   //     maxFileSize: 'max size of file',
+  //   //   });
+  //   // }
+  // }
 }
