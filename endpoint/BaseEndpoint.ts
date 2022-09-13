@@ -15,7 +15,7 @@ import type {
   SortingParam, 
   HTTPResponse
 } from "./types/mod.ts";
-// import { EndpointManager } from "./EndpointManager.ts";
+import { EndpointManager } from "./EndpointManager.ts";
 import type { HTTPMethods } from "../dependencies.ts";
 import {
   MissingNameError,
@@ -57,7 +57,7 @@ extends Options<T> {
 
     super(options as T, defOptions as Partial<T>);
     // Register the endpoint
-    // EndpointManager.register(this);
+    EndpointManager.register(this);
   }
 
   public get route() {
