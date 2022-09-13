@@ -39,6 +39,12 @@ extends Options<T> {
         DELETE: true,
         HEAD: true,
       },
+      pageLimit: 10, 
+      totalRowHeaderName: 'X-Total-Rows',
+      paginationPageHeaderName: 'X-Pagination-Page',
+      paginationLimitHeaderName: 'X-Pagination-Limit', 
+      notFoundMessage: `Requested resource could not be found`,
+      notSupportedMessage: `Method not supported by this endpoint`,
     };
     // Check if mandatory options are provided
     if (!options.name) {
@@ -125,7 +131,7 @@ extends Options<T> {
     if (this.allowedMethods.indexOf("GET") === -1) {
       ctx.response.status = 405;
       ctx.response.body = {
-        message: `GET method not supported by this endpoint`,
+        message: this._getOption("notSupportedMessage"),
       };
       return;
     }
@@ -136,12 +142,33 @@ extends Options<T> {
     // Call the actual handler
     const op = await this._fetch(req);
     ctx.response.status = op.status;
-    ctx.response.body = op.body;
+    // If there is identifier, then we are fetching a single record
+    if(this._hasIdentifier(req)) {
+      // If no rows throw 404
+      if(!op.payload || op.totalRows === 0) {
+        ctx.response.status = 404;
+        ctx.response.body = { message: this._getOption('notFoundMessage') };
+        // Return as we do not want to set other info
+        return;
+      } else {
+        ctx.response.body = op.payload[0];
+      }
+    } else {
+      ctx.response.body = op.payload;
+    }
+    // Set pagination headers
+    ctx.response.headers.set(this._getOption('totalRowHeaderName'), op.totalRows.toString());
+    if(op.pagination) {
+      ctx.response.headers.set(this._getOption('paginationPageHeaderName'), op.pagination.page.toString());
+      ctx.response.headers.set(this._getOption('paginationLimitHeaderName'), op.pagination.limit.toString());
+    }
+
     if(op.headers) {
       op.headers.forEach(([key, value]) => {
         ctx.response.headers.set(key, value);
       });
     }
+
     // Call post response hook
     this._postHandle(ctx);
     // All done
@@ -161,24 +188,28 @@ extends Options<T> {
     if (this.allowedMethods.indexOf("POST") === -1) {
       ctx.response.status = 405;
       ctx.response.body = {
-        message: `POST method not supported by this endpoint`,
+        message: this._getOption("notSupportedMessage"),
       };
       return;
     }
+
     const req = await this._parseRequest(ctx);
     if(this._hasIdentifier(req)) {
       ctx.response.status = 405;
       ctx.response.body = {
-        message: `POST method not supported by this endpoint`,
+        message: this._getOption("notSupportedMessage"),
       };
       return;
     }
+
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
     const op = await this._insert(req);
     ctx.response.status = op.status;
-    ctx.response.body = op.body;
+    ctx.response.body = op.payload;
+    ctx.response.headers.set('X-Total-Rows', op.totalRows.toString());
+
     if(op.headers) {
       op.headers.forEach(([key, value]) => {
         ctx.response.headers.set(key, value);
@@ -202,7 +233,7 @@ extends Options<T> {
     if (this.allowedMethods.indexOf("PUT") === -1) {
       ctx.response.status = 405;
       ctx.response.body = {
-        message: `PUT method not supported by this endpoint`,
+        message: this._getOption("notSupportedMessage"),
       };
       return;
     }
@@ -210,9 +241,26 @@ extends Options<T> {
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
+    // TODO - Handle array of objects
+    
     const op = await this._update(req);
+
     ctx.response.status = op.status;
-    ctx.response.body = op.body;
+    if(this._hasIdentifier(req)) {
+      // If no rows throw 404
+      if(!op.payload || op.totalRows === 0) {
+        ctx.response.status = 404;
+        ctx.response.body = { message: this._getOption('notFoundMessage') };
+        // Return as we do not want to set other info
+        return;
+      } else {
+        ctx.response.body = op.payload[0];
+      }
+    } else {
+      ctx.response.body = op.payload;
+    }
+    ctx.response.headers.set(this._getOption('totalRowHeaderName'), op.totalRows.toString());
+
     if(op.headers) {
       op.headers.forEach(([key, value]) => {
         ctx.response.headers.set(key, value);
@@ -236,7 +284,7 @@ extends Options<T> {
     if (this.allowedMethods.indexOf("PATCH") === -1) {
       ctx.response.status = 405;
       ctx.response.body = {
-        message: `PATCH method not supported by this endpoint`,
+        message: this._getOption("notSupportedMessage"),
       };
       return;
     }
@@ -244,9 +292,26 @@ extends Options<T> {
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
+    // TODO - Handle array of objects
+    
     const op = await this._update(req);
     ctx.response.status = op.status;
-    ctx.response.body = op.body;
+    // If there is identifier, then we are fetching a single record
+    if(this._hasIdentifier(req)) {
+      // If no rows throw 404
+      if(!op.payload || op.totalRows === 0) {
+        ctx.response.status = 404;
+        ctx.response.body = { message: this._getOption('notFoundMessage') };
+        // Return as we do not want to set other info
+        return;
+      } else {
+        ctx.response.body = op.payload[0];
+      }
+    } else {
+      ctx.response.body = op.payload;
+    }
+    ctx.response.headers.set(this._getOption('totalRowHeaderName'), op.totalRows.toString());
+
     if(op.headers) {
       op.headers.forEach(([key, value]) => {
         ctx.response.headers.set(key, value);
@@ -270,7 +335,7 @@ extends Options<T> {
     if (this.allowedMethods.indexOf("DELETE") === -1) {
       ctx.response.status = 405;
       ctx.response.body = {
-        message: `DELETE method not supported by this endpoint`,
+        message: this._getOption("notSupportedMessage"),
       };
       return;
     }
@@ -280,6 +345,23 @@ extends Options<T> {
     this._postBodyParse(req, ctx);
     const op = await this._delete(req);
     ctx.response.status = op.status;
+
+    // If there is identifier, then we are fetching a single record
+    if(this._hasIdentifier(req)) {
+      // If no rows throw 404
+      if(!op.payload || op.payload.length === 0) {
+        ctx.response.status = 404;
+        ctx.response.body = { message: this._getOption('notFoundMessage') };
+        // Return as we do not want to set other info
+        return;
+      } else {
+        ctx.response.body = op.payload[0];
+      }
+    } else {
+      ctx.response.body = op.payload;
+    }
+    ctx.response.headers.set(this._getOption('totalRowHeaderName'), op.totalRows.toString());
+
     // There is no body in DELETE response
     // ctx.response.body = op.body;
     if(op.headers) {

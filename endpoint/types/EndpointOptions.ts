@@ -19,4 +19,11 @@ export type EndpointOptions = {
     DELETE: boolean;
     HEAD: boolean;
   };
+  pageLimit: number;
+  totalRowHeaderName: string;
+  paginationLimitHeaderName: string;
+  paginationPageHeaderName: string;
+  // Messages to use
+  notFoundMessage: string;
+  notSupportedMessage: string;
 };

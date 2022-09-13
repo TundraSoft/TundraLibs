@@ -42,58 +42,60 @@ T extends ModelType<S> = ModelType<S>,
     if(request.payload) {
       // It is possible specific "filters" (complex filters). If present, then this will override the params
     }
-    const queryOutput = await this._model.select(request.params as Filters<T>, request.sorting as QuerySorting<T>, request.paging as QueryPagination), 
-      hasIdentifier = this._hasIdentifier(request), 
+    const queryOutput = await this._model.select(filters, request.sorting as QuerySorting<T>, request.paging as QueryPagination), 
+      // hasIdentifier = this._hasIdentifier(request), 
       response: HTTPResponse = {
         status: Status.OK, 
-        headers: new Headers()
+        totalRows: 0, 
+        headers: new Headers(), 
+        payload: queryOutput.rows, 
       };
     
-    if(hasIdentifier) {
-      if(queryOutput.rows && queryOutput.rows.length > 0) {
-        response.body = queryOutput.rows[0];
-      } else {
-        response.status = Status.NotFound;
-      }
-    } else {
-      response.body = queryOutput;
-      response.headers?.set('Pagination-Count', queryOutput.totalRows.toString());
-      response.headers?.set('X-Pagination-Count', queryOutput.totalRows.toString());
-      if(queryOutput.paging) {
-        response.headers?.set('X-Pagination-Page', (queryOutput.paging.page || 1).toString());
-        response.headers?.set('Pagination-Page', (queryOutput.paging.page || 1).toString());
-        response.headers?.set('X-Pagination-Limit', queryOutput.paging.size.toString());
-        response.headers?.set('Pagination-Limit', queryOutput.paging.size.toString());
-      }
+    if(queryOutput.paging) {
+      response.pagination = {
+        limit: queryOutput.paging.size, 
+        page: queryOutput.paging.page || 1
+      };
     }
+
     return response;
   }
 
   protected async _insert(request: ParsedRequest): Promise<HTTPResponse> {
-    // Prepare data for insert
-
-    // Insert
-
+    
+    // Perform Insert
+    const queryOutput = await this._model.insert(request.payload as Array<Partial<T>>), 
+      response: HTTPResponse = {
+        status: Status.Created,
+        payload: queryOutput.rows,
+        totalRows: queryOutput.totalRows
+      };
     // Return the data
+    return response;
 
   }
 
   protected async _update(request: ParsedRequest): Promise<HTTPResponse> {
     // Prepare data for update
-
+    const filters = request.params as Filters<T>;
     // Perform update
-
+    const queryOutput = await this._model.update(request.payload as Partial<T>, filters), 
+      response: HTTPResponse = {
+        status: Status.OK,
+        payload: queryOutput.rows,
+        totalRows: queryOutput.totalRows
+      };
     // Return the data
-
+    return response;
   }
 
   protected async _delete(request: ParsedRequest): Promise<HTTPResponse> {
     const queryOutput = await this._model.delete(request.params as Filters<T>), 
       response: HTTPResponse = {
         status: Status.NoContent, 
-        headers: new Headers()
+        headers: new Headers(), 
+        totalRows: queryOutput.totalRows
       };
-    response.headers?.set('X-Deleted-Count', queryOutput.totalRows.toString());
     return response;
   }
 }
