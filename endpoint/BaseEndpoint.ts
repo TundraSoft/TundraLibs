@@ -530,7 +530,7 @@ extends Options<T> {
       paging.size = Number(params["pagesize"]) || undefined;
       delete params["pagesize"];
     }
-    if (params["sort"]) {
+    if (params["sort"] && params["sort"].length > 0) {
       const sort = params["sort"].split(",");
       sort.forEach((s) => {
         const [key, value] = s.split(":");
@@ -556,6 +556,12 @@ extends Options<T> {
     if(ctx.state.params) {
       Object.assign(params, ctx.state.params);
     }
+    // Handle Null value of Identifier and state params
+    Object.keys(params).forEach((key) => {
+      if(params[key] === null) {
+        delete params[key];
+      }
+    });
     //#endregion Inject state params
     
     //#region Parse Body

@@ -61,7 +61,7 @@ export class DialectHelper {
             (options.paging.page - 1 || 0) * options.paging.size,
           )
         : "",
-      sort = (options.sort)
+      sort = (options.sort && Object.keys(options.sort).length > 0)
         ? ` ORDER BY ${
           Object.entries(options.sort).map((value) => {
             return `${
