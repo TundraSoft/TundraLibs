@@ -62,7 +62,10 @@ T extends ModelType<S> = ModelType<S>,
   }
 
   protected async _insert(request: ParsedRequest): Promise<HTTPResponse> {
-    
+    // NORM accepts only array for input. So we must convert payload to array
+    if(request.payload && !Array.isArray(request.payload)) {
+      request.payload = [request.payload];
+    }
     // Perform Insert
     const queryOutput = await this._model.insert(request.payload as Array<Partial<T>>), 
       response: HTTPResponse = {

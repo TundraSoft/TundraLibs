@@ -21,6 +21,7 @@ import {
   MissingNameError,
   MissingRoutePathError,
 } from "./Errors.ts";
+import { Status } from "https://deno.land/std@0.152.0/http/http_status.ts";
 
 /**
  * This is the base endpoint, acts like a base template
@@ -194,6 +195,10 @@ extends Options<T> {
     }
 
     const req = await this._parseRequest(ctx);
+    if((!req.payload || Object.keys(req.payload).length === 0) && (!req.files || Object.keys(req.files).length === 0)) {
+      ctx.response.status = Status.BadRequest;
+      ctx.response.body = { message: `Missing/No POST body` };
+    }
     if(this._hasIdentifier(req)) {
       ctx.response.status = 405;
       ctx.response.body = {
@@ -238,6 +243,10 @@ extends Options<T> {
       return;
     }
     const req = await this._parseRequest(ctx);
+    if((!req.payload || Object.keys(req.payload).length === 0) && (!req.files || Object.keys(req.files).length === 0)) {
+      ctx.response.status = Status.BadRequest;
+      ctx.response.body = { message: `Missing/No PUT body` };
+    }
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
@@ -289,6 +298,10 @@ extends Options<T> {
       return;
     }
     const req = await this._parseRequest(ctx);
+    if((!req.payload || Object.keys(req.payload).length === 0) && (!req.files || Object.keys(req.files).length === 0)) {
+      ctx.response.status = Status.BadRequest;
+      ctx.response.body = { message: `Missing/No PATCH body` };
+    }
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
