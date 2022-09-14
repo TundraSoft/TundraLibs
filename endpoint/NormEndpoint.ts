@@ -46,7 +46,7 @@ T extends ModelType<S> = ModelType<S>,
       // hasIdentifier = this._hasIdentifier(request), 
       response: HTTPResponse = {
         status: Status.OK, 
-        totalRows: 0, 
+        totalRows: queryOutput.totalRows, 
         headers: new Headers(), 
         payload: queryOutput.rows, 
       };
