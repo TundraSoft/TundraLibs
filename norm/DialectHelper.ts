@@ -70,7 +70,7 @@ export class DialectHelper {
           }).join(", ")
         } `
         : "",
-      filter = (options.filters)
+      filter = (options.filters && Object.keys(options.filters).length > 0)
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
       qry = `SELECT ${columns}
@@ -475,6 +475,10 @@ export class DialectHelper {
       }
     }
     // return "(" + ret.join(` ${joiner} `) + ")";
+    // Ensure we have processed a filter
+    if(ret.length === 0) {
+      return '';
+    }
     let retVal = `( `;
     retVal += ret.reduce((prev, curr, index) => {
       // console.log(curr.toString());
