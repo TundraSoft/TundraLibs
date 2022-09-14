@@ -58,12 +58,12 @@ export class EndpointManager {
     // Go through a directoy and load all the endpoints
     // We assume the "paths" will contain either EndpointConfig or BaseEndpoint class (or extensions of it)
     location = Deno.realPathSync(location);
-    console.log(location);
+    // console.log(location);
     const files = Deno.readDirSync(location);
     for (const file of files) {
       if (file.isFile) {
         const realPath = Deno.realPathSync(`${location}/${file.name}`);
-        console.log(realPath);
+        // console.log(realPath);
         await import(`file://${realPath}`);
       } else if (file.isDirectory && includeSubfolder) {
         await EndpointManager.loadEndpoints(`${location}/${file.name}`);
