@@ -521,8 +521,7 @@ extends Options<T> {
    * @returns ParsedRequest The parsed request
    */
   protected async _parseRequest(
-    ctx: Context,
-    parseBody = true,
+    ctx: Context
   ): Promise<ParsedRequest> {
 
     const params = oakHelpers.getQuery(ctx, { mergeParams: true }),
@@ -579,8 +578,8 @@ extends Options<T> {
     //#endregion Inject state params
     
     //#region Parse Body
-    // Ok lets parse it
-    if (parseBody) {
+    // TODO - Check if body exists in http 2.0
+    if (ctx.request.hasBody) {
       if (body.type === "bytes") {
         payload = {
           data: new TextDecoder().decode(await body.value),
