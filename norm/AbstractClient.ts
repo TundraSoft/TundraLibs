@@ -130,11 +130,13 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     const start = performance.now(),
       result: QueryResult<T> = {
         type: this._getQueryType(sql),
+        sql: sql,
         time: 0,
         totalRows: 0,
       };
     await this.connect();
     try {
+      console.log(sql);
       const op = await this._query<T>(sql, args);
       if (op && op.length > 0) {
         result.rows = op;

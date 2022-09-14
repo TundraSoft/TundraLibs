@@ -13,7 +13,6 @@ export class EndpointManager {
    * @param endpoint BaseEndpoint Register a new Endpoint
    */
   public static register(endpoint: BaseEndpoint) {
-    console.log('In Register')
     const name = endpoint.name,
       group = endpoint.group;
     // route = endpoint.route,

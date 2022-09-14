@@ -130,6 +130,7 @@ export type DeleteQueryOptions<T> = QueryOptions<T> & {
  */
 export type QueryResult<T = Record<string, unknown>> = {
   type: QueryType;
+  sql: string;
   time: number;
   totalRows: number;
   paging?: {

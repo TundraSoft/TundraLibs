@@ -54,7 +54,7 @@ export class DialectHelper {
         const colName = options.columns[value as keyof T];
         return `${this._quoteColumn(colName)} AS ${this._quoteColumn(value)}`;
       }),
-      paging = (options.paging)
+      paging = (options.paging && options.paging.size > 0)
         ? ` ` +
           this.limit(
             options.paging.size,
