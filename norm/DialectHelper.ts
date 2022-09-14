@@ -1,6 +1,7 @@
 import {
   CountQueryOptions,
   CreateTableOptions,
+  DecimalLengthSpec,
   DeleteQueryOptions,
   Dialect,
   Filters,
@@ -87,7 +88,7 @@ export class DialectHelper {
       qry = `SELECT COUNT(1) as cnt
                    FROM ${
         this._makeTable(options.table, options.schema)
-      }${filter}`;
+      } ${filter}`;
     return qry;
   }
 
@@ -107,7 +108,10 @@ export class DialectHelper {
       }),
       qry = `INSERT INTO ${this._makeTable(options.table, options.schema)} (${
         columns.join(",")
-      }) VALUES ${values.join(",\n")} RETURNING ${returning.join(",\n")};`;
+      })
+                   VALUES ${values.join(",\n")} RETURNING ${
+        returning.join(",\n")
+      };`;
     return qry;
   }
 
@@ -145,7 +149,8 @@ export class DialectHelper {
 
   truncate<T>(options: QueryOptions<T>): string {
     if (this._dialect === "SQLITE") {
-      return `DELETE FROM ${this._makeTable(options.table, options.schema)}`;
+      return `DELETE
+                    FROM ${this._makeTable(options.table, options.schema)}`;
     }
     const qry = `TRUNCATE TABLE ${
       this._makeTable(options.table, options.schema)
@@ -194,9 +199,27 @@ export class DialectHelper {
     }
     const columns = Object.keys(options.columns).map((value) => {
         const colName = value;
-        return `${this._quoteColumn(colName)} ${
-          type[options.columns[value].type]
-        } ${options.columns[value].isNullable ? "NULL" : "NOT NULL"}`;
+        const colType = type[options.columns[value].type];
+        const nullSpec = options.columns[value].isNullable
+          ? "NULL"
+          : "NOT NULL";
+        const colTypeArgsRaw = options.columns[value].length;
+        let colTypeArgs = "";
+        if (colTypeArgsRaw) {
+          if (colType == "DECIMAL" || colType == "NUMERIC") { // TODO: handle this better
+            const decSpec = colTypeArgsRaw as DecimalLengthSpec;
+            colTypeArgs = `(${decSpec.scale},${decSpec.precision})`;
+          } else if (
+            colType == "VARCHAR" || colType == "NVARCHAR" ||
+            colType == "CHARACTER VARYING"
+          ) {
+            const vcSpec = colTypeArgsRaw as number;
+            colTypeArgs = `(${vcSpec})`;
+          }
+        }
+        return `${
+          this._quoteColumn(colName)
+        } ${colType}${colTypeArgs} ${nullSpec}`;
       }),
       constraints: Array<string> = [],
       sql: Array<string> = [];
@@ -293,31 +316,31 @@ export class DialectHelper {
 
   getTableDefinition(table: string, schema?: string): string {
     return `SELECT column_name,
-        ordinal_position,
-        data_type,
-        character_maximum_length,
-        numeric_precision,
-        numeric_scale,
-        is_nullable
-        FROM information_schema.columns C
-      WHERE C.table_name = '${table}'
-      ${schema ? `AND C.table_schema = '${schema}'` : ""}
-      ORDER BY ordinal_position`;
+                       ordinal_position,
+                       data_type,
+                       character_maximum_length,
+                       numeric_precision,
+                       numeric_scale,
+                       is_nullable
+                FROM information_schema.columns C
+                WHERE C.table_name = '${table}'
+                    ${schema ? `AND C.table_schema = '${schema}'` : ""}
+                ORDER BY ordinal_position`;
   }
 
   getTableConstraints(table: string, schema?: string): string {
     return `SELECT C.column_name,
-        C.ordinal_position,
-        C.constraint_name,
-        U.constraint_type
-    FROM information_schema.key_column_usage C
-          INNER JOIN
-      information_schema.table_constraints U
-      ON
-          C.constraint_name = U.constraint_name
-    WHERE C.table_name = '${table}'
-    ${schema ? `AND C.table_schema = '${schema}'` : ""}
-    ORDER BY U.constraint_type, C.constraint_name, C.ordinal_position`;
+                       C.ordinal_position,
+                       C.constraint_name,
+                       U.constraint_type
+                FROM information_schema.key_column_usage C
+                         INNER JOIN
+                     information_schema.table_constraints U
+                     ON
+                         C.constraint_name = U.constraint_name
+                WHERE C.table_name = '${table}'
+                    ${schema ? `AND C.table_schema = '${schema}'` : ""}
+                ORDER BY U.constraint_type, C.constraint_name, C.ordinal_position`;
   }
 
   protected _makeTable(name: string, schema?: string): string {
