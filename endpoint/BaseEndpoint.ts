@@ -142,6 +142,7 @@ extends Options<T> {
     this._postBodyParse(req, ctx);
     // Call the actual handler
     const op = await this._fetch(req);
+    console.log(op)
     ctx.response.status = op.status;
     // If there is identifier, then we are fetching a single record
     if(this._hasIdentifier(req)) {
@@ -571,7 +572,7 @@ extends Options<T> {
     }
     // Handle Null value of Identifier and state params
     Object.keys(params).forEach((key) => {
-      if(params[key] === null) {
+      if(params[key] === null || params[key] === undefined) {
         delete params[key];
       }
     });
