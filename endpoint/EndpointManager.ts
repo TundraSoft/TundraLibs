@@ -64,7 +64,7 @@ export class EndpointManager {
       if (file.isFile) {
         const realPath = Deno.realPathSync(`${location}/${file.name}`);
         console.log(realPath);
-        await import(realPath);
+        await import(`file://${realPath}`);
       } else if (file.isDirectory && includeSubfolder) {
         await EndpointManager.loadEndpoints(`${location}/${file.name}`);
       }
