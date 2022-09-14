@@ -525,7 +525,6 @@ extends Options<T> {
   ): Promise<ParsedRequest> {
 
     const params = oakHelpers.getQuery(ctx, { mergeParams: true }),
-      body = await ctx.request.body(),
       paging: PagingParam = {},
       sorting: SortingParam = {};
     let payload:
@@ -579,7 +578,9 @@ extends Options<T> {
     
     //#region Parse Body
     // TODO - Check if body exists in http 2.0
-    if (ctx.request.hasBody) {
+    if (ctx.request.hasBody === true) {
+      const body = await ctx.request.body();
+      console.log('Body Parsed', body);
       if (body.type === "bytes") {
         payload = {
           data: new TextDecoder().decode(await body.value),
