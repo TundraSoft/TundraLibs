@@ -55,7 +55,7 @@ export type FilterOperators<T> = T | {
  * Pagination of data. Used in Select only
  */
 export type QueryPagination = {
-  size: number;
+  limit: number;
   page: number;
 };
 
@@ -134,7 +134,7 @@ export type QueryResult<T = Record<string, unknown>> = {
   time: number;
   totalRows: number;
   paging?: {
-    size: number;
+    limit: number;
     page?: number;
   };
   sort?: QuerySorting<T>;

@@ -281,7 +281,7 @@ export class Model<
     await this._init();
     if (!paging && (this._pageSize || 0) > 0) {
       paging = {
-        size: this._pageSize || 0,
+        limit: this._pageSize || 0,
         page: 1,
       };
     }
@@ -585,6 +585,20 @@ export class Model<
     );
   }
 
+  public validateFilters(filters: Filters<T>): void {
+    if (filters === undefined || Object.keys(filters).length === 0) {
+      return;
+    }
+    for (const [key, value] of Object.entries(filters)) {
+      if (typeof value === "object") {
+        this.validateFilters(value as Filters<T>);
+      } else {
+        if (this._columns[key as keyof T] === undefined) {
+          throw new Error(key);
+        }
+      }
+    }
+  }
   protected _buildInsert(
     data: Array<Partial<T>>,
   ): InsertQueryOptions<T> {

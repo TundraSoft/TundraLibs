@@ -67,7 +67,7 @@ export class NormEndpoint<
 
     if (queryOutput.paging) {
       response.pagination = {
-        limit: queryOutput.paging.size,
+        limit: queryOutput.paging.limit,
         page: queryOutput.paging.page || 1,
       };
     }

@@ -26,7 +26,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   protected _name: string;
   declare protected _client: unknown | undefined;
   declare protected _dialectHelper: DialectHelper;
-  protected _testQuery: string = "SELECT 1";
+  protected _testQuery = "SELECT 1";
   protected _stats: Map<
     QueryType,
     { count: number; time: number; error: number }
@@ -196,7 +196,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async select<T = Record<string, unknown>>(
     options: SelectQueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    if (options.paging && options.paging.size < 1) {
+    if (options.paging && options.paging.limit < 1) {
       delete options.paging;
     }
     if (options.paging && options.paging.page < 1) {

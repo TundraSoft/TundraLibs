@@ -54,11 +54,11 @@ export class DialectHelper {
         const colName = options.columns[value as keyof T];
         return `${this._quoteColumn(colName)} AS ${this._quoteColumn(value)}`;
       }),
-      paging = (options.paging && options.paging.size > 0)
+      paging = (options.paging && options.paging.limit > 0)
         ? ` ` +
           this.limit(
-            options.paging.size,
-            (options.paging.page - 1 || 0) * options.paging.size,
+            options.paging.limit,
+            (options.paging.page - 1 || 0) * options.paging.limit,
           )
         : "",
       sort = (options.sort && Object.keys(options.sort).length > 0)
