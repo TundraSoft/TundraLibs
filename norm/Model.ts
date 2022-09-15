@@ -107,7 +107,7 @@ export class Model<
     this._pageSize = model.pageSize;
 
     // Set features
-    if(model.feature) {
+    if (model.feature) {
       Object.entries(model.feature).forEach(([key, value]) => {
         this._features[key as keyof ModelPermissions] = value;
       });
@@ -214,7 +214,7 @@ export class Model<
   // get permissions(): ModelPermissions {
   //   return this._features;
   // }
-  
+
   public capability(name: keyof ModelPermissions): boolean {
     return this._features[name];
   }
@@ -378,7 +378,7 @@ export class Model<
       data = this._validator(data);
       // Check unique
       // TODO - Check Unique
-      
+
       data = { ...dbGenerated, ...data };
     } catch (e) {
       // Set error
@@ -619,6 +619,7 @@ export class Model<
           new Set<keyof T>([...insertColumns, ...keys]).values(),
         );
       } catch (e) {
+        console.log(e);
         // Set error
         // TODO: Handle not null errors and validation errors gracefully
         console.log(data[index]);

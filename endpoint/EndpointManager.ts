@@ -6,9 +6,9 @@ export class EndpointManager {
 
   /**
    * register
-   * 
+   *
    * Register a new endpoint to the manager
-   * 
+   *
    * @static
    * @param endpoint BaseEndpoint Register a new Endpoint
    */
@@ -27,10 +27,10 @@ export class EndpointManager {
 
   /**
    * getEndpoints
-   * 
-   * Get registered endpoints belonging to a group (if specified) or all of 
-   * them (if group is not specified). 
-   * 
+   *
+   * Get registered endpoints belonging to a group (if specified) or all of
+   * them (if group is not specified).
+   *
    * @static
    * @param group string The group name of which to fetch endpoints
    * @returns Array<BaseEndpoint> List of endpoints in the group
@@ -47,9 +47,9 @@ export class EndpointManager {
 
   /**
    * loadEndpoints
-   * 
+   *
    * Load endpoints from a directory
-   * 
+   *
    * @static
    * @param location string Path from which to load endpoints
    */

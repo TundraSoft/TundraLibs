@@ -9,7 +9,7 @@ export type {
   Filters,
   InsertQueryOptions,
   ModelDefinition,
-  ModelPermissions, 
+  ModelPermissions,
   ModelType,
   PostgresConfig,
   QueryOptions,

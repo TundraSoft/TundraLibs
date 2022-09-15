@@ -1,3 +1,8 @@
 export type { EndpointOptions } from "./EndpointOptions.ts";
-export type { PagingParam, SortingParam, ParsedRequest, FileUploadInfo } from "./ParsedRequest.ts";
+export type {
+  FileUploadInfo,
+  PagingParam,
+  ParsedRequest,
+  SortingParam,
+} from "./ParsedRequest.ts";
 export type { HTTPResponse } from "./HTTPResponse.ts";

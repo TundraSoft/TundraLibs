@@ -1,37 +1,32 @@
-/**
- * Scenarios for endpoints:
- * 1. Straight model endpoint - This is interaction with a single entity (table) where the route manipulates a specific table
- * 2. Multiple model endpoint - This is an interaction with multiple entities (tables). Example would be Group - Permission (creation of group and setting its permissions)
- * 3. Process endpoint - This type of endpoint simply processes data sent to it and returns a response. Example - accept input params send to a 3rd party endpoint, wait for response then return it
- */
-
 import { Options } from "../options/mod.ts";
-import { Context, oakHelpers, path } from "../dependencies.ts";
+import {
+  Context,
+  oakHelpers,
+  path,
+  RouterMiddleware,
+  Status,
+} from "../dependencies.ts";
+import type { RouterContext } from "../dependencies.ts";
 import type {
   EndpointOptions,
   FileUploadInfo,
+  HTTPResponse,
   PagingParam,
   ParsedRequest,
-  SortingParam, 
-  HTTPResponse
+  SortingParam,
 } from "./types/mod.ts";
 import { EndpointManager } from "./EndpointManager.ts";
-import type { HTTPMethods } from "../dependencies.ts";
-import {
-  MissingNameError,
-  MissingRoutePathError,
-} from "./Errors.ts";
-import { Status } from "https://deno.land/std@0.152.0/http/http_status.ts";
+// import type { HTTPMethods } from "../dependencies.ts";
+import { MissingNameError, MissingRoutePathError } from "./Errors.ts";
 
 /**
  * This is the base endpoint, acts like a base template
  */
 export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
-extends Options<T> {
-
+  extends Options<T> {
   constructor(options: Partial<EndpointOptions>) {
     const defOptions: Partial<EndpointOptions> = {
-      stateParams: true, 
+      stateParams: true,
       allowedMethods: {
         GET: true,
         POST: true,
@@ -40,10 +35,10 @@ extends Options<T> {
         DELETE: true,
         HEAD: true,
       },
-      pageLimit: 10, 
-      totalRowHeaderName: 'X-Total-Rows',
-      paginationPageHeaderName: 'X-Pagination-Page',
-      paginationLimitHeaderName: 'X-Pagination-Limit', 
+      pageLimit: 10,
+      totalRowHeaderName: "X-Total-Rows",
+      paginationPageHeaderName: "X-Pagination-Page",
+      paginationLimitHeaderName: "X-Pagination-Limit",
       notFoundMessage: `Requested resource could not be found`,
       notSupportedMessage: `Method not supported by this endpoint`,
     };
@@ -66,7 +61,7 @@ extends Options<T> {
     return path.join(
       this._getOption("routePath"),
       this._getOption("name"),
-      this._buildIdentifiers(), 
+      this._buildIdentifiers(),
       // (this._getOption("routeParams") || "") + "?",
     );
   }
@@ -88,32 +83,34 @@ extends Options<T> {
 
   /**
    * handle
-   * 
+   *
    * Helper function which handles all request verbs and calls the appropriate handler
-   * 
+   *
    * @param ctx Context The Context from OAK
    * @returns void
    */
-  public async handle(ctx: Context): Promise<void> {
-    const method = ctx.request.method;
-    if (method === "GET") {
-      await this.GET(ctx);
-    } else if (method === "POST") {
-      await this.POST(ctx);
-    } else if (method === "PUT") {
-      await this.PUT(ctx);
-    } else if (method === "PATCH") {
-      await this.PATCH(ctx);
-    } else if (method === "DELETE") {
-      await this.DELETE(ctx);
-    } else if (method === "HEAD") {
-      await this.HEAD(ctx);
-    } else if (method === "OPTIONS") {
-      await this.OPTIONS(ctx);
-    } else {
-      ctx.response.status = 405;
-      ctx.response.body = { message: `Method ${method} not supported` };
-    }
+  public handle<R extends string>(): RouterMiddleware<R> {
+    return async (ctx: Context) => {
+      const method = ctx.request.method;
+      if (method === "GET") {
+        await this.GET(ctx);
+      } else if (method === "POST") {
+        await this.POST(ctx);
+      } else if (method === "PUT") {
+        await this.PUT(ctx);
+      } else if (method === "PATCH") {
+        await this.PATCH(ctx);
+      } else if (method === "DELETE") {
+        await this.DELETE(ctx);
+      } else if (method === "HEAD") {
+        await this.HEAD(ctx);
+      } else if (method === "OPTIONS") {
+        await this.OPTIONS(ctx);
+      } else {
+        ctx.response.status = 405;
+        ctx.response.body = { message: `Method ${method} not supported` };
+      }
+    };
   }
 
   //#region Handle Methods
@@ -142,14 +139,14 @@ extends Options<T> {
     this._postBodyParse(req, ctx);
     // Call the actual handler
     const op = await this._fetch(req);
-    console.log(op)
+    console.log(op);
     ctx.response.status = op.status;
     // If there is identifier, then we are fetching a single record
-    if(this._hasIdentifier(req)) {
+    if (this._hasIdentifier(req)) {
       // If no rows throw 404
-      if(!op.payload || op.totalRows === 0) {
+      if (!op.payload || op.totalRows === 0) {
         ctx.response.status = 404;
-        ctx.response.body = { message: this._getOption('notFoundMessage') };
+        ctx.response.body = { message: this._getOption("notFoundMessage") };
         // Return as we do not want to set other info
         return;
       } else {
@@ -159,13 +156,22 @@ extends Options<T> {
       ctx.response.body = op.payload;
     }
     // Set pagination headers
-    ctx.response.headers.set(this._getOption('totalRowHeaderName'), op.totalRows.toString());
-    if(op.pagination) {
-      ctx.response.headers.set(this._getOption('paginationPageHeaderName'), op.pagination.page.toString());
-      ctx.response.headers.set(this._getOption('paginationLimitHeaderName'), op.pagination.limit.toString());
+    ctx.response.headers.set(
+      this._getOption("totalRowHeaderName"),
+      op.totalRows.toString(),
+    );
+    if (op.pagination) {
+      ctx.response.headers.set(
+        this._getOption("paginationPageHeaderName"),
+        op.pagination.page.toString(),
+      );
+      ctx.response.headers.set(
+        this._getOption("paginationLimitHeaderName"),
+        op.pagination.limit.toString(),
+      );
     }
 
-    if(op.headers) {
+    if (op.headers) {
       op.headers.forEach(([key, value]) => {
         ctx.response.headers.set(key, value);
       });
@@ -196,11 +202,15 @@ extends Options<T> {
     }
 
     const req = await this._parseRequest(ctx);
-    if((!req.payload || Object.keys(req.payload).length === 0) && (!req.files || Object.keys(req.files).length === 0)) {
+    if (
+      (req.payload === undefined || Object.keys(req.payload).length === 0) &&
+      (req.files === undefined || Object.keys(req.files).length === 0)
+    ) {
       ctx.response.status = Status.BadRequest;
       ctx.response.body = { message: `Missing/No POST body` };
+      return;
     }
-    if(this._hasIdentifier(req)) {
+    if (this._hasIdentifier(req)) {
       ctx.response.status = 405;
       ctx.response.body = {
         message: this._getOption("notSupportedMessage"),
@@ -214,9 +224,9 @@ extends Options<T> {
     const op = await this._insert(req);
     ctx.response.status = op.status;
     ctx.response.body = op.payload;
-    ctx.response.headers.set('X-Total-Rows', op.totalRows.toString());
+    ctx.response.headers.set("X-Total-Rows", op.totalRows.toString());
 
-    if(op.headers) {
+    if (op.headers) {
       op.headers.forEach(([key, value]) => {
         ctx.response.headers.set(key, value);
       });
@@ -244,23 +254,27 @@ extends Options<T> {
       return;
     }
     const req = await this._parseRequest(ctx);
-    if((!req.payload || Object.keys(req.payload).length === 0) && (!req.files || Object.keys(req.files).length === 0)) {
+    if (
+      (req.payload === undefined || Object.keys(req.payload).length === 0) &&
+      (req.files === undefined || Object.keys(req.files).length === 0)
+    ) {
       ctx.response.status = Status.BadRequest;
       ctx.response.body = { message: `Missing/No PUT body` };
+      return;
     }
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
     // TODO - Handle array of objects
-    
+
     const op = await this._update(req);
 
     ctx.response.status = op.status;
-    if(this._hasIdentifier(req)) {
+    if (this._hasIdentifier(req)) {
       // If no rows throw 404
-      if(!op.payload || op.totalRows === 0) {
+      if (!op.payload || op.totalRows === 0) {
         ctx.response.status = 404;
-        ctx.response.body = { message: this._getOption('notFoundMessage') };
+        ctx.response.body = { message: this._getOption("notFoundMessage") };
         // Return as we do not want to set other info
         return;
       } else {
@@ -269,9 +283,12 @@ extends Options<T> {
     } else {
       ctx.response.body = op.payload;
     }
-    ctx.response.headers.set(this._getOption('totalRowHeaderName'), op.totalRows.toString());
+    ctx.response.headers.set(
+      this._getOption("totalRowHeaderName"),
+      op.totalRows.toString(),
+    );
 
-    if(op.headers) {
+    if (op.headers) {
       op.headers.forEach(([key, value]) => {
         ctx.response.headers.set(key, value);
       });
@@ -299,23 +316,27 @@ extends Options<T> {
       return;
     }
     const req = await this._parseRequest(ctx);
-    if((!req.payload || Object.keys(req.payload).length === 0) && (!req.files || Object.keys(req.files).length === 0)) {
+    if (
+      (req.payload === undefined || Object.keys(req.payload).length === 0) &&
+      (req.files === undefined || Object.keys(req.files).length === 0)
+    ) {
       ctx.response.status = Status.BadRequest;
       ctx.response.body = { message: `Missing/No PATCH body` };
+      return;
     }
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
     // TODO - Handle array of objects
-    
+
     const op = await this._update(req);
     ctx.response.status = op.status;
     // If there is identifier, then we are fetching a single record
-    if(this._hasIdentifier(req)) {
+    if (this._hasIdentifier(req)) {
       // If no rows throw 404
-      if(!op.payload || op.totalRows === 0) {
+      if (!op.payload || op.totalRows === 0) {
         ctx.response.status = 404;
-        ctx.response.body = { message: this._getOption('notFoundMessage') };
+        ctx.response.body = { message: this._getOption("notFoundMessage") };
         // Return as we do not want to set other info
         return;
       } else {
@@ -324,9 +345,12 @@ extends Options<T> {
     } else {
       ctx.response.body = op.payload;
     }
-    ctx.response.headers.set(this._getOption('totalRowHeaderName'), op.totalRows.toString());
+    ctx.response.headers.set(
+      this._getOption("totalRowHeaderName"),
+      op.totalRows.toString(),
+    );
 
-    if(op.headers) {
+    if (op.headers) {
       op.headers.forEach(([key, value]) => {
         ctx.response.headers.set(key, value);
       });
@@ -361,11 +385,11 @@ extends Options<T> {
     ctx.response.status = op.status;
 
     // If there is identifier, then we are fetching a single record
-    if(this._hasIdentifier(req)) {
+    if (this._hasIdentifier(req)) {
       // If no rows throw 404
-      if(!op.payload || op.payload.length === 0) {
+      if (!op.payload || op.payload.length === 0) {
         ctx.response.status = 404;
-        ctx.response.body = { message: this._getOption('notFoundMessage') };
+        ctx.response.body = { message: this._getOption("notFoundMessage") };
         // Return as we do not want to set other info
         return;
       } else {
@@ -374,11 +398,14 @@ extends Options<T> {
     } else {
       ctx.response.body = op.payload;
     }
-    ctx.response.headers.set(this._getOption('totalRowHeaderName'), op.totalRows.toString());
+    ctx.response.headers.set(
+      this._getOption("totalRowHeaderName"),
+      op.totalRows.toString(),
+    );
 
     // There is no body in DELETE response
     // ctx.response.body = op.body;
-    if(op.headers) {
+    if (op.headers) {
       op.headers.forEach(([key, value]) => {
         ctx.response.headers.set(key, value);
       });
@@ -411,7 +438,7 @@ extends Options<T> {
     this._postBodyParse(req, ctx);
     const op = await this._fetch(req);
     ctx.response.status = op.status;
-    if(op.headers) {
+    if (op.headers) {
       op.headers.forEach(([key, value]) => {
         ctx.response.headers.set(key, value);
       });
@@ -437,7 +464,7 @@ extends Options<T> {
   }
 
   //#endregion Handle Methods
-  
+
   // Protected methods
 
   //#region Begin Protected Methods
@@ -446,20 +473,20 @@ extends Options<T> {
 
   /**
    * _fetch
-   * 
-   * Perform a "fetch" operation. Return an array of entities which are to be returned basis parameters 
+   *
+   * Perform a "fetch" operation. Return an array of entities which are to be returned basis parameters
    * (filters) provided.
-   * 
+   *
    * @param request ParsedRequest The parsed request object
    * @returns Promise<HTTPResponse<T>> The response object
    */
   protected abstract _fetch(request: ParsedRequest): Promise<HTTPResponse>;
-  
+
   /**
    * _insert
-   * 
+   *
    * Perform an "insert" operation. Return the entity which was inserted.
-   * 
+   *
    * @param request ParsedRequest The parsed request object
    * @returns Promise<HTTPResponse<T>> The response object
    */
@@ -467,20 +494,20 @@ extends Options<T> {
 
   /**
    * _update
-   * 
+   *
    * Perform an "update" operation. Return an array of entities which are to be returned basis parameters
    * (filters) provided.
-   * 
+   *
    * @param request ParsedRequest The parsed request object
    * @returns Promise<HTTPResponse<T>> The response object
    */
   protected abstract _update(request: ParsedRequest): Promise<HTTPResponse>;
-  
+
   /**
    * _delete
-   * 
+   *
    * Perform a "Delete" operation. This should ideally return just the status code along with any headers.
-   * 
+   *
    * @param request ParsedRequest The parsed request object
    * @returns Promise<HTTPResponse<T>> The response object
    */
@@ -498,7 +525,7 @@ extends Options<T> {
    * @protected
    * @param ctx Context Set default headers
    */
-   protected _setDefaultHeaders(ctx: Context): void {
+  protected _setDefaultHeaders(ctx: Context): void {
     ctx.response.headers.set("X-ROUTE-NAME", this.name);
     ctx.response.headers.set("X-ROUTE-GROUP", this.group);
     ctx.response.headers.set("X-ROUTE-PATH", this.route);
@@ -521,18 +548,20 @@ extends Options<T> {
    * @returns ParsedRequest The parsed request
    */
   protected async _parseRequest(
-    ctx: Context
+    ctx: Context,
   ): Promise<ParsedRequest> {
-
     const params = oakHelpers.getQuery(ctx, { mergeParams: true }),
       paging: PagingParam = {},
-      sorting: SortingParam = {};
+      sorting: SortingParam = {},
+      contentLength: number = ctx.request.headers.get("content-length")
+        ? parseInt(ctx.request.headers.get("content-length") as string)
+        : 0;
     let payload:
       | Record<string, unknown>
       | Array<Record<string, unknown>>
       | undefined = undefined;
     let files: { [key: string]: Array<FileUploadInfo> } | undefined = undefined;
-    
+
     //#region Split paging and sorting params
     if (params["page"]) {
       paging.page = Number(params["page"]) || undefined;
@@ -565,22 +594,21 @@ extends Options<T> {
     }
     //#endregion Split paging and sorting params
     //#region Inject state params
-    if(ctx.state.params) {
+    if (ctx.state.params) {
       Object.assign(params, ctx.state.params);
     }
     // Handle Null value of Identifier and state params
     Object.keys(params).forEach((key) => {
-      if(params[key] === null || params[key] === undefined) {
+      if (params[key] === null || params[key] === undefined) {
         delete params[key];
       }
     });
     //#endregion Inject state params
-    
+
     //#region Parse Body
     // TODO - Check if body exists in http 2.0
-    if (ctx.request.hasBody === true) {
+    if (ctx.request.hasBody === true && contentLength > 0) {
       const body = await ctx.request.body();
-      console.log('Body Parsed', body);
       if (body.type === "bytes") {
         payload = {
           data: new TextDecoder().decode(await body.value),
@@ -654,7 +682,7 @@ extends Options<T> {
   /**
    * _postHandle
    *
-   * This hook is called once the request has been handled. The response and response body is available. 
+   * This hook is called once the request has been handled. The response and response body is available.
    * This is useful when trying to handle HMAC signatures for response body.
    *
    * @protected
@@ -668,33 +696,33 @@ extends Options<T> {
 
   /**
    * _buildIdentifiers
-   * 
-   * Builds the identifiers for the route. Identifiers are the "Primary Keys" identifying a specific 
+   *
+   * Builds the identifiers for the route. Identifiers are the "Primary Keys" identifying a specific
    * record in the entity. This is used to build the URL for the route.
-   * 
+   *
    * @returns string The identifiers for the route
    */
   protected _buildIdentifiers(): string {
-    const routeIdentifiers = this._getOption('routeIdentifiers');
-    if(routeIdentifiers && routeIdentifiers.length > 0) {
+    const routeIdentifiers = this._getOption("routeIdentifiers");
+    if (routeIdentifiers && routeIdentifiers.length > 0) {
       // return ':' + this._getOption('routeIdentifiers').join(',:') + '?';
-      return ':' + this._getOption('routeIdentifiers').join('\\::') + '?';
+      return ":" + this._getOption("routeIdentifiers").join("\\::") + "?";
     } else {
-      return '';
+      return "";
     }
   }
 
   /**
    * _hasIdentifier
-   * 
+   *
    * Checks if the Identifier is present in the request.
-   * 
+   *
    * @param req ParsedRequest The parsed request
    * @returns boolean True if Identifier is present in the request
    */
   protected _hasIdentifier(req: ParsedRequest): boolean {
-    if(this._hasOption('routeIdentifiers')) {
-      return this._getOption('routeIdentifiers').every((identifier) => {
+    if (this._hasOption("routeIdentifiers")) {
+      return this._getOption("routeIdentifiers").every((identifier) => {
         return req.params[identifier] !== undefined;
       });
     } else {

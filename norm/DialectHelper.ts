@@ -476,8 +476,8 @@ export class DialectHelper {
     }
     // return "(" + ret.join(` ${joiner} `) + ")";
     // Ensure we have processed a filter
-    if(ret.length === 0) {
-      return '';
+    if (ret.length === 0) {
+      return "";
     }
     let retVal = `( `;
     retVal += ret.reduce((prev, curr, index) => {

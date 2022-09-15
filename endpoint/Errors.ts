@@ -1,5 +1,5 @@
 export class BaseEndpointError extends Error {
-  protected _module = 'Endpoint';
+  protected _module = "Endpoint";
 
   constructor(message: string) {
     message = `[module='Endpoint'] ${message}`;
@@ -10,14 +10,14 @@ export class BaseEndpointError extends Error {
 
 export class MissingNameError extends BaseEndpointError {
   constructor() {
-    super('Route name must be provided');
+    super("Route name must be provided");
     Object.setPrototypeOf(this, MissingNameError.prototype);
   }
 }
 
 export class DuplicateNameError extends BaseEndpointError {
-  protected _name: string
-  
+  protected _name: string;
+
   constructor(name: string) {
     super(`There is already an endpoint with the name: ${name}`);
     this._name = name;
@@ -26,8 +26,8 @@ export class DuplicateNameError extends BaseEndpointError {
 }
 
 export class DuplicateRouteError extends BaseEndpointError {
-  protected _route: string
-  
+  protected _route: string;
+
   constructor(route: string) {
     super(`There is already an endpoint with the route: ${route}`);
     this._route = route;
@@ -54,4 +54,3 @@ export class UnsupportedContentTypeError extends BaseEndpointError {
     Object.setPrototypeOf(this, UnsupportedContentTypeError.prototype);
   }
 }
-

@@ -26,6 +26,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   protected _name: string;
   declare protected _client: unknown | undefined;
   declare protected _dialectHelper: DialectHelper;
+  protected _testQuery: string = "SELECT 1";
   protected _stats: Map<
     QueryType,
     { count: number; time: number; error: number }
@@ -103,6 +104,14 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     }
   }
 
+  public async test(): Promise<boolean> {
+    try {
+      await this.query(this._testQuery);
+      return true
+    } catch(_) {
+      return false
+    }
+  }
   /**
    * query (Typed)
    * Execute an SQL query. Supports named argument substitution
@@ -136,7 +145,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
       };
     await this.connect();
     try {
-      console.log(sql);
+      // console.log(sql);
       const op = await this._query<T>(sql, args);
       if (op && op.length > 0) {
         result.rows = op;

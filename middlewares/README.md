@@ -4,11 +4,11 @@ Collection of useful middlewares for OAK framework.
 
 ## Middlewares
 
-- [X] [Timing](./timing/README.md)
-- [X] [Throttle](./throttle/README.md)
-- [X] [RequestId](./requestId/README.md)
-- [X] [ErrorHandler](./errorHandler/README.md)
-- [X] [Endpoint Security](./endpointSecurity/README.md)
+- [x] [Timing](./timing/README.md)
+- [x] [Throttle](./throttle/README.md)
+- [x] [RequestId](./requestId/README.md)
+- [x] [ErrorHandler](./errorHandler/README.md)
+- [x] [Endpoint Security](./endpointSecurity/README.md)
 
 ## Usage
 
