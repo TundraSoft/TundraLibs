@@ -9,8 +9,7 @@
   "deno.suggest.imports.hosts": {
     "https://deno.land": true,
     "https://x.nest.land": true,
-    "https://crux.land": true,
-    "http://deno.land": false
+    "https://crux.land": true
   }
   // "workbench.editorAssociations": {
   //   "*.md": "default"

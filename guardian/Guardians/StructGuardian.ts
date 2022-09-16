@@ -1,6 +1,6 @@
 import { BaseGuardian } from "../BaseGuardian.ts";
-import { compile } from "../utils.ts";
-import type { GuardianProxy, StructValidatorFunction } from "../types.ts";
+import { compile } from "../utils/mod.ts";
+import type { GuardianProxy, StructValidatorFunction } from "../types/mod.ts";
 
 /**
  * Struct

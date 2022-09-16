@@ -107,9 +107,9 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async test(): Promise<boolean> {
     try {
       await this.query(this._testQuery);
-      return true
-    } catch(_) {
-      return false
+      return true;
+    } catch (_) {
+      return false;
     }
   }
   /**

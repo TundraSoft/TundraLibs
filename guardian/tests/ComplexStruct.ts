@@ -1,6 +1,48 @@
 import { Guardian, Struct } from "../mod.ts";
 // import type { Type } from "../mod.ts";
 
+const stG = Struct({
+  name: Guardian.string().max(10),
+  age: Guardian.number().integer().min(18),
+  profile: {
+    facebook: Guardian.string().url(),
+  },
+});
+
+// const data = [
+//   {
+//     name: "Abhinav Ariyanayakipuram Venkatachalam",
+//     age: 17,
+//     profile: { facebook: "df" },
+//   },
+//   {
+//     name: "Abhinav",
+//     age: 18,
+//     profile: {
+//       facebook: "https://facebook.com/abhinavariyanayakipuramvenkatachalam",
+//     },
+//   },
+//   {
+//     name: "Lalitha Venkatachalam",
+//     age: 61,
+//     profile: { facebook: "https://facebook.com/lalithavenkatachalam" },
+//   },
+// ];
+// const valid = stG.validate();
+const [error, dat] = stG.validate({
+  name: "Abhinav Ariyanayakipuram Venkatachalam",
+  age: 17,
+  profile: { facebook: "df" },
+});
+
+console.log(error?.toJSON());
+console.log(dat);
+
+// const a = stringGuard.trim().between(4, 40).email();
+// const [errors, val] = a.validate('asd@asd.com');
+// console.log(errors)
+// console.log(`value is: ${val}`)
+
 const PhoneNumbers = Struct({
   number: Guardian.string().mobile(),
   type: Guardian.array().of(Guardian.string().max(1).oneOf(["M", "P", "H"])),

@@ -6,7 +6,7 @@ import {
   RouterMiddleware,
   Status,
 } from "../dependencies.ts";
-import type { RouterContext } from "../dependencies.ts";
+
 import type {
   EndpointOptions,
   FileUploadInfo,
@@ -674,6 +674,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @param ctx Context The context passed by OAK
    * @returns void
    */
+  // deno-lint-ignore no-unused-vars
   protected _postBodyParse(req: ParsedRequest, ctx: Context): void {
     // Do nothing by default
     return;
@@ -689,6 +690,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @param ctx Context The context passed by OAK
    * @returns void
    */
+  // deno-lint-ignore no-unused-vars
   protected _postHandle(ctx: Context): void {
     // Do nothing by default
     return;

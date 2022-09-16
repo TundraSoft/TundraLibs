@@ -1,69 +1,7 @@
-// deno-lint-ignore-file
-// deno-lint-ignore-file ban-types
-export type Primitive =
-  | string
-  | number
-  | symbol
-  | boolean
-  | null
-  | undefined
-  | void
-  | bigint;
-
-export type Typeof = {
-  string: string;
-  number: number;
-  object: object;
-  boolean: boolean;
-  symbol: symbol;
-  bigint: bigint;
-  undefined: undefined;
-  date: Date;
-};
-
-export type FunctionParameters = unknown[];
-
-export type FunctionType<R = any, P extends FunctionParameters = any[]> = (
-  ...args: P
-) => R;
-
-export type MergeParameters<P extends FunctionParameters> = [P] extends [
-  never,
-] ? [never]
-  : [P] extends [[]] ? []
-  : [P] extends [[unknown]] ? [P[0]]
-  : [P] extends [[unknown?]] ? [P[0]?]
-  : P;
-
-export type ObjectProperty = string | number | symbol;
-
-export type ObjectPath = Array<ObjectProperty>;
-
-export type PathError = {
-  path: ObjectPath;
-  error: Error;
-};
-
-// The proxy object
-export type GuardianProxy<
-  V extends { guardian: FunctionType },
-  F extends FunctionType = V["guardian"],
-> = Omit<V, "guardian" | "proxy"> & { guardian: F } & F;
-
-// do not escape T to [T] to support `number | Promise<string>`
-export type ResolvedValue<T> = T extends PromiseLike<infer R> ? R : T;
-
-export type RemoveAsync<T> = T extends PromiseLike<any> ? never : T;
-
-export type IsAsync<S> = ResolvedValue<S> extends S
-  ? unknown extends S ? unknown
-  : false
-  : RemoveAsync<S> extends never ? true
-  : unknown;
-
-export type MaybeAsync<T, V> = unknown extends IsAsync<T> ? PromiseLike<V> | V
-  : true extends IsAsync<T> ? PromiseLike<V>
-  : V;
+// deno-lint-ignore-file ban-types no-explicit-any
+import { FunctionType, IsAsync, ResolvedValue } from "./Function.ts";
+import { Primitive } from "./Primitive.ts";
+import { GuardianProxy } from "./GuardianProxy.ts";
 
 export type StructOptions = {
   message?: string;

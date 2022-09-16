@@ -1,11 +1,11 @@
-import { Context, Status } from "../dependencies.ts";
+import { Status } from "../dependencies.ts";
 import { BaseEndpoint } from "./BaseEndpoint.ts";
 import { EndpointOptions, HTTPResponse, ParsedRequest } from "./types/mod.ts";
 import { Model } from "../norm/mod.ts";
 import type {
   Filters,
   ModelDefinition,
-  ModelPermissions,
+  // ModelPermissions,
   ModelType,
   QueryPagination,
   QuerySorting,
@@ -13,7 +13,7 @@ import type {
 
 export type ErrorList = {
   [key: string]: string;
-}
+};
 
 export class NormEndpoint<
   S extends ModelDefinition = ModelDefinition,
@@ -123,12 +123,13 @@ export class NormEndpoint<
   protected _validateParams(params: ParsedRequest): [ErrorList, ParsedRequest] {
     // Check if the params are valid
     const errors: ErrorList = {
-      'id': 'Invalid ID',
+      "id": "Invalid ID",
     };
     return [errors, params];
   }
+
   // protected _parseParams(request: ParsedRequest) {
-    
+
   // }
 
   // protected _parsePayload(data: Array<Partial<T>>): Array<Partial<T>>;
@@ -141,6 +142,6 @@ export class NormEndpoint<
   //     })
   //     return result;
   //   }
-    
+
   // }
 }

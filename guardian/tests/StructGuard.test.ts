@@ -1,4 +1,4 @@
-import { Guardian, Struct, ValidationError } from "../mod.ts";
+import { Guardian, GuardianError, Struct } from "../mod.ts";
 import type { Type } from "../mod.ts";
 
 import { assertEquals, assertThrows } from "../../dev_dependencies.ts";
@@ -101,7 +101,7 @@ Deno.test({
       JSON.parse(data[1]),
     );
     // Passimg junk should throw error
-    assertThrows(() => userSchema(JSON.parse(data[2])), ValidationError);
+    assertThrows(() => userSchema(JSON.parse(data[2])), GuardianError);
   },
 });
 

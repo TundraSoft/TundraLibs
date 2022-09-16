@@ -11,9 +11,12 @@ export class Database {
   protected static _clients: Map<string, AbstractClient> = new Map();
   protected static _models: Map<string, Model> = new Map();
 
-  public static async init(config = 'Database', configPath?: string): Promise<void> {
-    await Config.load("database", configPath);
-    const dbConfigs = Config.get<{ [key: string]: ClientConfig }>("database");
+  public static async init(
+    config = "Database",
+    configPath?: string,
+  ): Promise<void> {
+    await Config.load(config, configPath);
+    const dbConfigs = Config.get<{ [key: string]: ClientConfig }>(config);
     for (const name in dbConfigs) {
       const config = dbConfigs[name] as ClientConfig;
       Database.load(name, config);
@@ -36,7 +39,7 @@ export class Database {
       return true;
     }
   }
-  
+
   public static get(name: string): AbstractClient {
     name = name.toLowerCase().trim();
     if (!Database._clients.has(name)) {
