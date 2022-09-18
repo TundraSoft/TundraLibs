@@ -13,7 +13,15 @@ export function makeError<P extends FunctionParameters>(
 ): GuardianError {
   if (error instanceof GuardianError) {
     // console.log(error.children.length)
-    return error;
+    if(error.path) {
+      if(!path)
+        path = [];
+      path = [...path, ...error.path.split('.')];
+    }
+    return new GuardianError(error.message, path, error.children)
+    // return error;
+  } else if (error instanceof Error) {
+    return new GuardianError(error.message, path)
   } else if (typeof error === "string") {
     return new GuardianError(error, path);
   } else if (typeof error === "function") {

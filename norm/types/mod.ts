@@ -50,5 +50,6 @@ export type {
   ModelDefinition,
   ModelPermissions,
   ModelType,
+  ModelValidation,
   SchemaDefinition,
 } from "./Model.ts";

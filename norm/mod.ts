@@ -21,6 +21,7 @@ export type {
   SelectQueryOptions,
   SQLiteConfig,
   UpdateQueryOptions,
+  ModelValidation, 
 } from "./types/mod.ts";
 
 export { DataTypes } from "./types/mod.ts";

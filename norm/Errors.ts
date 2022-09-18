@@ -1,5 +1,4 @@
-import { ErrorList } from "../guardian/mod.ts";
-import { QueryType } from "./types/mod.ts";
+import { ModelValidation, QueryType } from "./types/mod.ts";
 
 export class NormError extends Error {
   protected _module = "norm";
@@ -111,9 +110,9 @@ export class ModelUniqueKeyViolation extends ModelError {
 
 // @TODO, have method to return all errors
 export class ModelValidationError extends ModelError {
-  protected errList: ErrorList | { [key: number]: ErrorList };
+  protected errList: ModelValidation | { [key: number]: ModelValidation };
   constructor(
-    message: ErrorList | { [key: number]: ErrorList },
+    message: ModelValidation | { [key: number]: ModelValidation },
     model: string,
     dbConn: string,
   ) {

@@ -35,7 +35,7 @@ const [error, dat] = stG.validate({
   profile: { facebook: "df" },
 });
 
-console.log(error?.toJSON());
+console.log(JSON.stringify(error?.toJSON()));
 console.log(dat);
 
 // const a = stringGuard.trim().between(4, 40).email();

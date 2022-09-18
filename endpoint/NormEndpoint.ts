@@ -9,7 +9,10 @@ import type {
   ModelType,
   QueryPagination,
   QuerySorting,
+  ModelValidation, 
 } from "../norm/mod.ts";
+import data from "https://deno.land/std@0.141.0/_wasm_crypto/crypto.wasm.mjs";
+import { Value } from "https://deno.land/std@0.150.0/encoding/_toml/parser.ts";
 
 export type ErrorList = {
   [key: string]: string;
@@ -35,15 +38,6 @@ export class NormEndpoint<
     };
     super({ ...defOptions, ...options });
     this._model = model;
-    // Override allowed methods
-    // this._options['allowedMethods'] = {
-    //   GET: this._options['allowedMethods']?.GET || true,
-    //   POST: this._model.capability("insert"),
-    //   PUT: this._model.capability('update'),
-    //   PATCH: this._model.capability('update'),
-    //   DELETE: this._model.capability('delete'),
-    //   HEAD: true
-    // };
   }
 
   protected async _fetch(request: ParsedRequest): Promise<HTTPResponse> {
@@ -51,6 +45,16 @@ export class NormEndpoint<
     const filters = request.params as Filters<T>;
     if (request.payload) {
       // It is possible specific "filters" (complex filters). If present, then this will override the params
+    }
+    // Set page size and limit
+    if (
+      (!request.paging || !request.paging.limit) &&
+      this._getOption("pageLimit") !== undefined &&
+      this._getOption("pageLimit") > 0
+    ) {
+      request.paging = request.paging || {};
+      request.paging.limit = this._getOption("pageLimit");
+      request.paging.page = request.paging.page || 1;
     }
     const queryOutput = await this._model.select(
         filters,
@@ -81,8 +85,37 @@ export class NormEndpoint<
       request.payload = [request.payload];
     }
     // Perform Insert
+    // validate data
+    const validatedData: Array<Partial<T>> = [], 
+      errorRecords: Array<{row: number, errors: ModelValidation<T>}> = [];
+
+    for(const [index, item] of request.payload?.entries() || []) {
+      const [err, dat] = await this._model.validateData(item as Partial<T>);
+      if (err) {
+        console.log(err)
+        errorRecords.push({
+          row: index,
+          errors: err,
+        })
+      } else {
+        validatedData.push(dat as Partial<T>);
+      }
+    }
+    console.log('Async check done')
+    if(errorRecords.length > 0) {
+      console.log(errorRecords)
+      const errHead = new Headers();
+      errHead.set('X-Error-Rows', errorRecords.length.toString());
+      return {
+        status: Status.BadRequest,
+        payload: errorRecords, 
+        headers: errHead, 
+        totalRows: data.length, 
+      }
+    }
+
     const queryOutput = await this._model.insert(
-        request.payload as Array<Partial<T>>,
+        validatedData,
       ),
       response: HTTPResponse = {
         status: Status.Created,

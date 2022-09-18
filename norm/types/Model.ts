@@ -100,3 +100,9 @@ export type ModelType<P extends ModelDefinition> = ExtractTypes<
     [X in keyof P["columns"]]: P["columns"][X];
   }
 >;
+
+export type ModelValidation<
+  T extends Record<string, unknown> = Record<never, never>,
+> = {
+  [X in keyof T]?: string[];
+};

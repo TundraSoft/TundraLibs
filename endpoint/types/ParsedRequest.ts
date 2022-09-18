@@ -3,7 +3,7 @@ import { HTTPMethods } from "../../dependencies.ts";
 // export type BodyType = "JSON" | "TEXT" | "FORM" | "BYTES";
 
 export type PagingParam = {
-  size?: number;
+  limit?: number;
   page?: number;
 };
 

@@ -1,4 +1,4 @@
-export type { ErrorFormat, ErrorLike, ErrorList, PathError } from "./Errors.ts";
+export type { ErrorFormat, ErrorLike } from "./Errors.ts";
 export type {
   FunctionParameters,
   FunctionType,

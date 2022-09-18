@@ -139,7 +139,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     const start = performance.now(),
       result: QueryResult<T> = {
         type: this._getQueryType(sql),
-        sql: sql,
+        sql: sql.trim().replaceAll(/\r\n|\n|\r/g, " ").replaceAll(/\s+|\t/g, ' '),
         time: 0,
         totalRows: 0,
       };
