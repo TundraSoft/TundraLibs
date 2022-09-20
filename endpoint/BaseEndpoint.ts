@@ -18,6 +18,7 @@ import type {
 import { EndpointManager } from "./EndpointManager.ts";
 // import type { HTTPMethods } from "../dependencies.ts";
 import { MissingNameError, MissingRoutePathError } from "./Errors.ts";
+import { badRequest, methodNotAllowed, resourceNotFound } from "./HTTPErrors.ts";
 
 /**
  * This is the base endpoint, acts like a base template
@@ -107,8 +108,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       } else if (method === "OPTIONS") {
         await this.OPTIONS(ctx);
       } else {
-        ctx.response.status = 405;
-        ctx.response.body = { message: `Method ${method} not supported` };
+        throw methodNotAllowed(this._getOption("notSupportedMessage"));
       }
     };
   }
@@ -127,11 +127,12 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
 
     // First check if method is even allowed
     if (this.allowedMethods.indexOf("GET") === -1) {
-      ctx.response.status = 405;
-      ctx.response.body = {
-        message: this._getOption("notSupportedMessage"),
-      };
-      return;
+      // ctx.response.status = 405;
+      // ctx.response.body = {
+      //   message: this._getOption("notSupportedMessage"),
+      // };
+      // return;
+      throw methodNotAllowed(this._getOption("notSupportedMessage"), ctx.response.headers);
     }
     const req = await this._parseRequest(ctx);
     // Call postBodyParse hook
@@ -145,10 +146,11 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     if (this._hasIdentifier(req)) {
       // If no rows throw 404
       if (!op.payload || op.totalRows === 0) {
-        ctx.response.status = 404;
-        ctx.response.body = { message: this._getOption("notFoundMessage") };
-        // Return as we do not want to set other info
-        return;
+        // ctx.response.status = 404;
+        // ctx.response.body = { message: this._getOption("notFoundMessage") };
+        // // Return as we do not want to set other info
+        // return;
+        throw resourceNotFound(this._getOption("notFoundMessage"), ctx.response.headers);
       } else {
         ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
       }
@@ -194,11 +196,12 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     this._setDefaultHeaders(ctx);
 
     if (this.allowedMethods.indexOf("POST") === -1) {
-      ctx.response.status = 405;
-      ctx.response.body = {
-        message: this._getOption("notSupportedMessage"),
-      };
-      return;
+      // ctx.response.status = 405;
+      // ctx.response.body = {
+      //   message: this._getOption("notSupportedMessage"),
+      // };
+      // return;
+      throw methodNotAllowed(this._getOption("notSupportedMessage"), ctx.response.headers);
     }
 
     const req = await this._parseRequest(ctx);
@@ -206,17 +209,19 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       (req.payload === undefined || Object.keys(req.payload).length === 0) &&
       (req.files === undefined || Object.keys(req.files).length === 0)
     ) {
-      ctx.response.status = Status.BadRequest;
-      ctx.response.body = { message: `Missing/No POST body` };
-      return;
+      // ctx.response.status = Status.BadRequest;
+      // ctx.response.body = { message: `Missing/No POST body` };
+      // return;
+      throw badRequest(`Missing/No POST body`, ctx.response.headers);
     }
 
     if (this._hasIdentifier(req)) {
-      ctx.response.status = 405;
-      ctx.response.body = {
-        message: this._getOption("notSupportedMessage"),
-      };
-      return;
+      // ctx.response.status = 405;
+      // ctx.response.body = {
+      //   message: this._getOption("notSupportedMessage"),
+      // };
+      // return;
+      throw resourceNotFound(this._getOption("notFoundMessage"), ctx.response.headers);
     }
 
     // Call postBodyParse hook
@@ -259,20 +264,22 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     this._setDefaultHeaders(ctx);
 
     if (this.allowedMethods.indexOf("PUT") === -1) {
-      ctx.response.status = 405;
-      ctx.response.body = {
-        message: this._getOption("notSupportedMessage"),
-      };
-      return;
+      // ctx.response.status = 405;
+      // ctx.response.body = {
+      //   message: this._getOption("notSupportedMessage"),
+      // };
+      // return;
+      throw methodNotAllowed(this._getOption("notSupportedMessage"), ctx.response.headers);
     }
     const req = await this._parseRequest(ctx);
     if (
       (req.payload === undefined || Object.keys(req.payload).length === 0) &&
       (req.files === undefined || Object.keys(req.files).length === 0)
     ) {
-      ctx.response.status = Status.BadRequest;
-      ctx.response.body = { message: `Missing/No PUT body` };
-      return;
+      // ctx.response.status = Status.BadRequest;
+      // ctx.response.body = { message: `Missing/No PUT body` };
+      // return;
+      throw badRequest(`Missing/No PUT body`, ctx.response.headers);
     }
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
@@ -285,10 +292,11 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     if (this._hasIdentifier(req)) {
       // If no rows throw 404
       if (!op.payload || op.totalRows === 0) {
-        ctx.response.status = 404;
-        ctx.response.body = { message: this._getOption("notFoundMessage") };
-        // Return as we do not want to set other info
-        return;
+        // ctx.response.status = 404;
+        // ctx.response.body = { message: this._getOption("notFoundMessage") };
+        // // Return as we do not want to set other info
+        // return;
+        throw resourceNotFound(this._getOption("notFoundMessage"), ctx.response.headers);
       } else {
         ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
       }
@@ -321,20 +329,22 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     this._setDefaultHeaders(ctx);
 
     if (this.allowedMethods.indexOf("PATCH") === -1) {
-      ctx.response.status = 405;
-      ctx.response.body = {
-        message: this._getOption("notSupportedMessage"),
-      };
-      return;
+      // ctx.response.status = 405;
+      // ctx.response.body = {
+      //   message: this._getOption("notSupportedMessage"),
+      // };
+      // return;
+      throw methodNotAllowed(this._getOption("notSupportedMessage"), ctx.response.headers);
     }
     const req = await this._parseRequest(ctx);
     if (
       (req.payload === undefined || Object.keys(req.payload).length === 0) &&
       (req.files === undefined || Object.keys(req.files).length === 0)
     ) {
-      ctx.response.status = Status.BadRequest;
-      ctx.response.body = { message: `Missing/No PATCH body` };
-      return;
+      // ctx.response.status = Status.BadRequest;
+      // ctx.response.body = { message: `Missing/No PATCH body` };
+      // return;
+      throw badRequest(`Missing/No PATCH body`, ctx.response.headers);
     }
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
@@ -347,10 +357,11 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     if (this._hasIdentifier(req)) {
       // If no rows throw 404
       if (!op.payload || op.totalRows === 0) {
-        ctx.response.status = 404;
-        ctx.response.body = { message: this._getOption("notFoundMessage") };
-        // Return as we do not want to set other info
-        return;
+        // ctx.response.status = 404;
+        // ctx.response.body = { message: this._getOption("notFoundMessage") };
+        // // Return as we do not want to set other info
+        // return;
+        throw resourceNotFound(this._getOption("notFoundMessage"), ctx.response.headers);
       } else {
         ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
       }
@@ -383,11 +394,12 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     this._setDefaultHeaders(ctx);
 
     if (this.allowedMethods.indexOf("DELETE") === -1) {
-      ctx.response.status = 405;
-      ctx.response.body = {
-        message: this._getOption("notSupportedMessage"),
-      };
-      return;
+      // ctx.response.status = 405;
+      // ctx.response.body = {
+      //   message: this._getOption("notSupportedMessage"),
+      // };
+      // return;
+      throw methodNotAllowed(this._getOption("notSupportedMessage"), ctx.response.headers);
     }
     const req = await this._parseRequest(ctx);
     // Call postBodyParse hook
@@ -400,10 +412,11 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     if (this._hasIdentifier(req)) {
       // If no rows throw 404
       if (!op.payload || op.payload.length === 0) {
-        ctx.response.status = 404;
-        ctx.response.body = { message: this._getOption("notFoundMessage") };
-        // Return as we do not want to set other info
-        return;
+        // ctx.response.status = 404;
+        // ctx.response.body = { message: this._getOption("notFoundMessage") };
+        // // Return as we do not want to set other info
+        // return;
+        throw resourceNotFound(this._getOption("notFoundMessage"), ctx.response.headers);
       } else {
         ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
       }
@@ -438,11 +451,12 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     this._setDefaultHeaders(ctx);
 
     if (this.allowedMethods.indexOf("HEAD") === -1) {
-      ctx.response.status = 405;
-      ctx.response.body = {
-        message: `HEAD method not supported by this endpoint`,
-      };
-      return;
+      // ctx.response.status = 405;
+      // ctx.response.body = {
+      //   message: `HEAD method not supported by this endpoint`,
+      // };
+      // return;
+      throw methodNotAllowed(`HEAD method not supported by this endpoint`, ctx.response.headers);
     }
 
     const req = await this._parseRequest(ctx);
@@ -450,13 +464,15 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
     const op = await this._count(req);
+    // ctx.response.status = Status.OK;
+    // ctx.response.headers.set(this._getOption("totalRowHeaderName"), op.toString());
     ctx.response.status = Status.OK;
     ctx.response.headers.set(this._getOption("totalRowHeaderName"), op.toString());
-    // if (op.headers) {
-    //   op.headers.forEach(([key, value]) => {
-    //     ctx.response.headers.set(key, value);
-    //   });
-    // }
+    if (op.headers) {
+      op.headers.forEach(([key, value]) => {
+        ctx.response.headers.set(key, value);
+      });
+    }
     // Call post response hook
     this._postHandle(ctx);
   }
@@ -527,7 +543,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    */
   protected abstract _delete(request: ParsedRequest): Promise<HTTPResponse>;
 
-  protected abstract _count(request: ParsedRequest): Promise<number>;
+  protected abstract _count(request: ParsedRequest): Promise<HTTPResponse>;
 
   //#endregion Implementation methods
 

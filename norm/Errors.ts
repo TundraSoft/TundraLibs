@@ -125,3 +125,14 @@ export class ModelValidationError extends ModelError {
     return this.errList;
   }
 }
+
+export class ModelFilterError extends ModelError {
+  constructor(
+    message: string,
+    model?: string,
+    dbConn?: string,
+  ) {
+    super(`Malformed/Unknown filter: ${message}`, model, dbConn);
+    Object.setPrototypeOf(this, ModelFilterError.prototype);
+  }
+}

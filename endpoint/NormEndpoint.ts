@@ -1,7 +1,7 @@
 import { Status } from "../dependencies.ts";
 import { BaseEndpoint } from "./BaseEndpoint.ts";
 import { EndpointOptions, HTTPResponse, ParsedRequest } from "./types/mod.ts";
-import { Model, ModelValidationError } from "../norm/mod.ts";
+import { Model, ModelFilterError, ModelValidationError } from "../norm/mod.ts";
 import type {
   Filters,
   ModelDefinition,
@@ -9,9 +9,8 @@ import type {
   ModelType,
   QueryPagination,
   QuerySorting,
-  ModelValidation, 
 } from "../norm/mod.ts";
-import data from "https://deno.land/std@0.141.0/_wasm_crypto/crypto.wasm.mjs";
+import { badRequest,internalServerError } from "./HTTPErrors.ts";
 
 export type ErrorList = {
   [key: string]: string;
@@ -40,10 +39,19 @@ export class NormEndpoint<
   }
 
   protected async _fetch(request: ParsedRequest): Promise<HTTPResponse> {
-    // Ok we create the filter first
-    const filters = request.params as Filters<T>;
-    if (request.payload) {
-      // It is possible specific "filters" (complex filters). If present, then this will override the params
+    // Validate filters
+    let filters: Filters<T> | undefined;
+    try {
+      if (request.payload) {
+        // It is possible specific "filters" (complex filters). If present, then this will override the params
+      }
+      filters = this._model.validateFilters(request.params as Filters<T>);
+    } catch (e) {
+      if(e instanceof ModelFilterError) {
+        throw badRequest('Invalid filter conditions provided');
+      } else {
+        throw internalServerError(e.message)
+      }
     }
     // Set page size and limit
     if (
@@ -127,19 +135,14 @@ export class NormEndpoint<
     };
     try {
       // Perform update
-      const queryOutput = await this._model.insert(
-        (Array.isArray(request.payload) ? request.payload : [request.payload]) as Array<Partial<T>>,
-      );
+      const queryOutput = await this._model.insert(request.payload as Array<Partial<T>>);
       response.totalRows = queryOutput.totalRows;
       response.payload = queryOutput.rows;
     } catch (e) {
       if(e instanceof ModelValidationError) {
-        response.status = Status.BadRequest;
-        response.payload = e.errorList;
+        throw badRequest(e.errorList)
       } else {
-        // response.status = Status.InternalServerError;
-        // response.payload = e;
-        throw(e);
+        throw internalServerError(e.message)
       }
     }
     // Return the data
@@ -147,18 +150,22 @@ export class NormEndpoint<
   }
 
   protected async _update(request: ParsedRequest): Promise<HTTPResponse> {
-    // Prepare data for update
-    const filters = request.params as Filters<T>;
     // Validate filters
+    let filters: Filters<T> | undefined;
+    try {
+      filters = this._model.validateFilters(request.params as Filters<T>);
+    } catch (e) {
+      if(e instanceof ModelFilterError) {
+        throw badRequest('Invalid filter conditions provided')
+      } else {
+        throw internalServerError(e.message)
+      }
+    }
+    
+    
 
     if(Array.isArray(request.payload) && request.payload.length > 1) {
-      return {
-        status: Status.BadRequest,
-        totalRows: 0, 
-        payload: {
-          message: "Cannot pass multiple data for update",
-        }
-      }
+      throw badRequest(`Cannot update multiple records at once`)
     }
     // TODO Process filters
 
@@ -176,12 +183,9 @@ export class NormEndpoint<
       response.payload = queryOutput.rows;
     } catch (e) {
       if(e instanceof ModelValidationError) {
-        response.status = Status.BadRequest;
-        response.payload = e.errorList;
+        throw badRequest(e.errorList)
       } else {
-        // response.status = Status.InternalServerError;
-        // response.payload = e;
-        throw(e);
+        throw internalServerError(e.message)
       }
     }
     // Return the data
@@ -189,9 +193,17 @@ export class NormEndpoint<
   }
 
   protected async _delete(request: ParsedRequest): Promise<HTTPResponse> {
-    // Prepare data for update
-    const filters = request.params as Filters<T>;
     // Validate filters
+    let filters: Filters<T> | undefined;
+    try {
+      filters = this._model.validateFilters(request.params as Filters<T>);
+    } catch (e) {
+      if(e instanceof ModelFilterError) {
+        throw badRequest('Invalid filter conditions provided')
+      } else {
+        throw internalServerError(e.message)
+      }
+    }
 
     const queryOutput = await this._model.delete(filters),
       response: HTTPResponse = {
@@ -202,11 +214,23 @@ export class NormEndpoint<
     return response;
   }
 
-  protected async _count(request: ParsedRequest): Promise<number> {
-    // Prepare data for update
-    const filters = request.params as Filters<T>;
+  protected async _count(request: ParsedRequest): Promise<HTTPResponse> {
+    // Validate filters
+    let filters: Filters<T> | undefined;
+    try {
+      filters = this._model.validateFilters(request.params as Filters<T>);
+    } catch (e) {
+      if(e instanceof ModelFilterError) {
+        throw badRequest('Invalid filter conditions provided')
+      } else {
+        throw internalServerError(e.message)
+      }
+    }
     // Validate filters
     const queryOutput = await this._model.count(filters);
-    return queryOutput.totalRows;
+    return {
+      status: Status.OK,
+      totalRows: queryOutput.totalRows,
+    }
   }
 }

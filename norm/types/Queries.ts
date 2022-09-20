@@ -40,8 +40,8 @@ export type FilterOperators<T> = T | {
   $gt?: T;
   $gte?: T;
   $between?: {
-    from: T;
-    to: T;
+    $from: T;
+    $to: T;
   };
   $null?: boolean;
   $like?: T;

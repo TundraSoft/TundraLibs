@@ -1,20 +1,60 @@
-import { createHttpError } from "https://deno.land/std@0.150.0/http/http_errors.ts";
-import { Status } from "../dependencies.ts";
+// import { createHttpError } from "https://deno.land/std@0.150.0/http/http_errors.ts";
+import { ErrorStatus, isClientErrorStatus, Status, STATUS_TEXT } from "../dependencies.ts";
 
-export const resourceNotFound = (message: string) => {
-  return createHttpError(Status.NotFound, message);
+export type HTTPErrorData = string | Record<string, unknown> | Array<Record<string, unknown>>;
+export class HTTPError extends Error {
+  #status: ErrorStatus;
+  #data: HTTPErrorData
+  #headers: Headers = new Headers;
+  // #internal = true;
+
+  constructor(data: string | Record<string, unknown> | Array<Record<string, unknown>>, status = Status.InternalServerError, headers?: Headers) {
+    // Refine this
+    super(`HTTP Error: ${status} ${STATUS_TEXT[status]}`);
+    this.#data = data;
+    this.#status = status as ErrorStatus;
+    if(headers)
+      this.#headers = headers;
+  }
+
+  get status(): Status {
+    return this.#status;
+  }
+  
+  get headers(): Headers {
+    return this.#headers;
+  }
+
+  get data(): string | Record<string, unknown> | Array<Record<string, unknown>> {
+    return this.#data;
+  }
+
+  get internal(): boolean {
+    // Consider anything outside 400 as internal error
+    if(isClientErrorStatus(this.#status)) {
+      return false;
+    }
+    return true;
+  }
+}
+
+
+export const resourceNotFound = (data: HTTPErrorData, headers?: Headers) => {
+  return new HTTPError(data, Status.NotFound, headers);
 };
 
-// export class ResourceNotFound extends HttpError {
+export const badRequest = (data: HTTPErrorData, headers?: Headers) => {
+  return new HTTPError(data, Status.BadRequest, headers);
+};
 
-//   constructor(message: string) {
-//     super(message, {
-//       expose: true,
-//     });
-//   }
-// }
+export const internalServerError = (data: HTTPErrorData, headers?: Headers) => {
+  return new HTTPError(data, Status.InternalServerError, headers);
+};
 
-// const a = createHttpError(Status.NotFound, "Not found", {expose: true});
-// console.log(a.status)
-// console.log(a.message)
-// console.log(a.headers)
+export const unauthorized = (data: HTTPErrorData, headers?: Headers) => {
+  return new HTTPError(data, Status.Unauthorized, headers);
+};
+
+export const methodNotAllowed = (data: HTTPErrorData, headers?: Headers) => {
+  return new HTTPError(data, Status.MethodNotAllowed, headers);
+}

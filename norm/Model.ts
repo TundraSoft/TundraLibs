@@ -36,6 +36,7 @@ import {
 } from "../guardian/mod.ts";
 
 import {
+  ModelFilterError,
   // ModelError,
   // ModelNotNull,
   ModelPermission,
@@ -396,7 +397,7 @@ export class Model<
               if (errors[index][column] === undefined) {
                 errors[index][column] = [];
               }
-              errors[index][column]?.push(`Unique key violation ${key}`);
+              errors[index][column]?.push(`${key} must be unique.`);
             });
           }
           uniqueKeys[key].push(ukValue.join("|"));
@@ -677,19 +678,61 @@ export class Model<
     );
   }
 
-  public validateFilters(filters: Filters<T>): void {
+  public validateFilters(filters: Filters<T>): Filters<T> | undefined {
     if (filters === undefined || Object.keys(filters).length === 0) {
       return;
     }
+    const allowedKeys: string[] = [
+        "$and",
+        "$or",
+        "$eq",
+        "$neq",
+        "$in",
+        "$nin",
+        "$lt",
+        "$lte",
+        "$gt",
+        "$gte",
+        "$between",
+        "$from",
+        "$to",
+        "$null",
+        "$like",
+        "$nlike",
+        "$ilike",
+        "$nilike",
+      ],
+      columnList: Record<string, string> = {},
+      processedFilter: Record<string, unknown> = {};
+    Object.keys(this._columns).forEach((key) => {
+      columnList[key.toLowerCase()] = key;
+    });
+
     for (const [key, value] of Object.entries(filters)) {
-      if (typeof value === "object") {
-        this.validateFilters(value as Filters<T>);
+      const keyLower = key.toLowerCase();
+      let properKey: string;
+      if (allowedKeys.includes(keyLower)) {
+        properKey = keyLower;
+      } else if (Object.keys(columnList).includes(keyLower)) {
+        properKey = columnList[keyLower];
       } else {
-        if (this._columns[key as keyof T] === undefined) {
-          throw new Error(key);
-        }
+        throw new ModelFilterError(
+          `Unknown filter operator: ${key}`,
+          this._name,
+          this._connection.name,
+        );
+      }
+      // Check value
+      if (Array.isArray(value)) {
+        processedFilter[properKey] = value;
+      } else if (typeof value === "object") {
+        processedFilter[properKey] = this.validateFilters(value as Filters<T>);
+      } else {
+        processedFilter[properKey] = value;
       }
     }
+
+    return processedFilter as Filters<T>;
   }
 
   public async validateData(

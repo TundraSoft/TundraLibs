@@ -36,6 +36,7 @@ export {
   ConfigNotFound,
   ConnectionError,
   ModelError,
+  ModelFilterError,
   ModelNotNull,
   ModelPermission,
   ModelPrimaryKeyUpdate,

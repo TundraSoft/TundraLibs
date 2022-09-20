@@ -1,3 +1,4 @@
+import { ModelFilterError } from "./Errors.ts";
 import {
   CountQueryOptions,
   CreateTableOptions,
@@ -412,11 +413,14 @@ export class DialectHelper {
                   break;
                 // deno-lint-ignore no-case-declarations
                 case "$between":
-                  const opval = operatorValue as { from: unknown; to: unknown };
+                  const opval = operatorValue as {
+                    $from: unknown;
+                    $to: unknown;
+                  };
                   ret.push(
                     `${this._quoteColumn(columns[columnName])} BETWEEN '${
-                      this._quoteValue(opval.from)
-                    }' AND '${this._quoteValue(opval.to)}'`,
+                      this._quoteValue(opval.$from)
+                    }' AND '${this._quoteValue(opval.$to)}'`,
                   );
                   break;
                 case "$null":
@@ -459,7 +463,7 @@ export class DialectHelper {
                   );
                   break;
                 default:
-                  throw new Error(`[module=norm] Unknown operator ${operator}`);
+                  throw new ModelFilterError(`Unknown operator ${operator}`);
               }
             }
           } else {
