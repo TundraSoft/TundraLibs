@@ -229,9 +229,17 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     this._postBodyParse(req, ctx);
     // Check if it is a single record or multiple records
     let single = false;
-    if (!Array.isArray(req.payload)) {
+    if (req.payload && !Array.isArray(req.payload)) {
       single = true;
+      req.payload = [req.payload]
     }
+    // Inject state params
+    const injectedPayload: Array<Record<string, unknown>> = [];
+    req.payload?.forEach((payload) => {
+      injectedPayload.push({ ...ctx.state.params || {}, ...payload });
+    });
+    req.payload = injectedPayload;
+
     const op = await this._insert(req);
     ctx.response.status = op.status;
     if (op.payload) {
@@ -624,6 +632,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     }
     //#endregion Split paging and sorting params
     //#region Inject state params
+    // Ensure params is defined in ApplicationState
     if (ctx.state.params) {
       Object.assign(params, ctx.state.params);
     }
