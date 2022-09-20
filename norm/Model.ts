@@ -464,6 +464,11 @@ export class Model<
       data: {},
     };
 
+    // Validate row
+    const [err, op] = await this.validateData(data, false),
+      errors: ModelValidation<T> = err || {};
+    
+    // We remove the PK and Identity columns after validation
     if (!filters || Object.keys(filters).length == 0) {
       // Filters are present, we check data and move on
       const pkFilter: { [key: string]: unknown } = {};
@@ -483,10 +488,6 @@ export class Model<
 
     // Get the count which will be updated
     const cntop = await this.count(filters);
-
-    // Validate row
-    const [err, op] = await this.validateData(data, false),
-      errors: ModelValidation<T> = err || {};
 
     // If count of updated row is > 1 and Unique Key is present, then throw error
     if (op) {

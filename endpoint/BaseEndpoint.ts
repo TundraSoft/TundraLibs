@@ -455,26 +455,6 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     const op = await this._delete(req);
     ctx.response.status = op.status;
 
-    // If there is identifier, then we are fetching a single record
-    if (this._hasIdentifier(req)) {
-      // If no rows throw 404
-      if (!op.payload || op.payload.length === 0) {
-        // ctx.response.status = 404;
-        // ctx.response.body = { message: this._getOption("notFoundMessage") };
-        // // Return as we do not want to set other info
-        // return;
-        throw resourceNotFound(
-          this._getOption("notFoundMessage"),
-          ctx.response.headers,
-        );
-      } else {
-        ctx.response.body = Array.isArray(op.payload)
-          ? op.payload[0]
-          : op.payload;
-      }
-    } else {
-      ctx.response.body = op.payload;
-    }
     ctx.response.headers.set(
       this._getOption("totalRowHeaderName"),
       op.totalRows.toString(),
@@ -741,6 +721,18 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     }
     //#endregion Parse Body
 
+    //#region Inject params into payload
+    if (ctx.request.method === "POST" || ctx.request.method === "PUT" || ctx.request.method === "PATCH") {
+      if(payload) {
+        if(Array.isArray(payload)) {
+          payload = payload.map((p) => Object.assign(p, params));
+        } else {
+          Object.assign(payload, params);
+        }
+      }
+    }
+    
+    //#endregion Inject params into payload
     return {
       method: ctx.request.method,
       params: params,
