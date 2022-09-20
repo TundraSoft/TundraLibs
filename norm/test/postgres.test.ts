@@ -51,7 +51,6 @@ Deno.test({
   name: "[module='norm' dialect='postgres'] Selection from table",
   async fn(): Promise<void> {
     const sel = await TestModel.select();
-    console.log(sel);
     assertEquals(
       sel.paging?.limit.toString(),
       "10",
@@ -88,11 +87,11 @@ Deno.test({
       },
     };
     const update: Partial<TestType> = {
-      Name: "noCryptoName",
+      Status: false,
     };
     const upd = await TestModel.update(update, updFilter);
     if (upd.rows) {
-      assertEquals(upd.rows[0].Name, "noCryptoName");
+      assertEquals(upd.rows[0].Status, false);
     }
   },
 });
