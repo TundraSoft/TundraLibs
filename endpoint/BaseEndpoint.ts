@@ -722,16 +722,19 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     //#endregion Parse Body
 
     //#region Inject params into payload
-    if (ctx.request.method === "POST" || ctx.request.method === "PUT" || ctx.request.method === "PATCH") {
-      if(payload) {
-        if(Array.isArray(payload)) {
+    if (
+      ctx.request.method === "POST" || ctx.request.method === "PUT" ||
+      ctx.request.method === "PATCH"
+    ) {
+      if (payload) {
+        if (Array.isArray(payload)) {
           payload = payload.map((p) => Object.assign(p, params));
         } else {
           Object.assign(payload, params);
         }
       }
     }
-    
+
     //#endregion Inject params into payload
     return {
       method: ctx.request.method,

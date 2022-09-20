@@ -362,7 +362,7 @@ export class Model<
       );
     }
     await this._init();
-    
+
     const rows: Array<Partial<T>> =
       (Array.isArray(data) ? data : [data]) as Array<Partial<T>>;
 
@@ -467,7 +467,7 @@ export class Model<
     // Validate row
     const [err, op] = await this.validateData(data, false),
       errors: ModelValidation<T> = err || {};
-    
+
     // We remove the PK and Identity columns after validation
     if (!filters || Object.keys(filters).length == 0) {
       // Filters are present, we check data and move on
@@ -600,7 +600,7 @@ export class Model<
       table: this.table,
       columns: this._columns,
     };
-    
+
     await this._connection.truncate(options);
   }
 
@@ -747,7 +747,7 @@ export class Model<
     forInsert = true,
   ): Promise<[ModelValidation<T> | null, Partial<T>?]> {
     await this._init();
-    
+
     const errors: ModelValidation<T> = {},
       [generated, dbGenerated] = this._generate(
         forInsert === true ? this._insertGenerators : this._updateGenerators,
