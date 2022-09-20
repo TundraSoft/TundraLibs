@@ -120,4 +120,8 @@ export class ModelValidationError extends ModelError {
     this.errList = message;
     Object.setPrototypeOf(this, ModelValidationError.prototype);
   }
+
+  get errorList(): ModelValidation | { [key: number]: ModelValidation } {
+    return this.errList;
+  }
 }

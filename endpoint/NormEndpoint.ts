@@ -1,13 +1,12 @@
 import { Status } from "../dependencies.ts";
 import { BaseEndpoint } from "./BaseEndpoint.ts";
 import { EndpointOptions, HTTPResponse, ParsedRequest } from "./types/mod.ts";
-import { Model } from "../norm/mod.ts";
+import { Model, ModelValidationError } from "../norm/mod.ts";
 import type {
   Filters,
   ModelDefinition,
   // ModelPermissions,
   ModelType,
-  ModelValidation,
   QueryPagination,
   QuerySorting,
   ModelValidation, 
@@ -86,42 +85,63 @@ export class NormEndpoint<
     }
     // Perform Insert
     // validate data
-    const validatedData: Array<Partial<T>> = [],
-      errorRecords: Array<{ row: number; errors: ModelValidation<T> }> = [];
+    // const validatedData: Array<Partial<T>> = [],
+    //   errorRecords: Array<{ row: number; errors: ModelValidation<T> }> = [];
 
-    for (const [index, item] of request.payload?.entries() || []) {
-      const [err, dat] = await this._model.validateData(item as Partial<T>);
-      if (err) {
-        console.log(err);
-        errorRecords.push({
-          row: index,
-          errors: err,
-        });
+    // for (const [index, item] of request.payload?.entries() || []) {
+    //   const [err, dat] = await this._model.validateData(item as Partial<T>);
+    //   if (err) {
+    //     // console.log(err);
+    //     errorRecords.push({
+    //       row: index,
+    //       errors: err,
+    //     });
+    //   } else {
+    //     validatedData.push(dat as Partial<T>);
+    //   }
+    // }
+    // // console.log("Async check done");
+    // if (errorRecords.length > 0) {
+    //   // console.log(errorRecords);
+    //   const errHead = new Headers();
+    //   errHead.set("X-Error-Rows", errorRecords.length.toString());
+    //   return {
+    //     status: Status.BadRequest,
+    //     payload: errorRecords,
+    //     headers: errHead,
+    //     totalRows: data.length,
+    //   };
+    // }
+
+    // const queryOutput = await this._model.insert(
+    //     validatedData,
+    //   ),
+    //   response: HTTPResponse = {
+    //     status: Status.Created,
+    //     payload: queryOutput.rows,
+    //     totalRows: queryOutput.totalRows,
+    //   };
+    const response: HTTPResponse = {
+      status: Status.Created,
+      totalRows: 0, 
+    };
+    try {
+      // Perform update
+      const queryOutput = await this._model.insert(
+        (Array.isArray(request.payload) ? request.payload : [request.payload]) as Array<Partial<T>>,
+      );
+      response.totalRows = queryOutput.totalRows;
+      response.payload = queryOutput.rows;
+    } catch (e) {
+      if(e instanceof ModelValidationError) {
+        response.status = Status.BadRequest;
+        response.payload = e.errorList;
       } else {
-        validatedData.push(dat as Partial<T>);
+        // response.status = Status.InternalServerError;
+        // response.payload = e;
+        throw(e);
       }
     }
-    console.log("Async check done");
-    if (errorRecords.length > 0) {
-      console.log(errorRecords);
-      const errHead = new Headers();
-      errHead.set("X-Error-Rows", errorRecords.length.toString());
-      return {
-        status: Status.BadRequest,
-        payload: errorRecords,
-        headers: errHead,
-        totalRows: data.length,
-      };
-    }
-
-    const queryOutput = await this._model.insert(
-        validatedData,
-      ),
-      response: HTTPResponse = {
-        status: Status.Created,
-        payload: queryOutput.rows,
-        totalRows: queryOutput.totalRows,
-      };
     // Return the data
     return response;
   }
@@ -129,22 +149,51 @@ export class NormEndpoint<
   protected async _update(request: ParsedRequest): Promise<HTTPResponse> {
     // Prepare data for update
     const filters = request.params as Filters<T>;
-    // Perform update
-    const queryOutput = await this._model.update(
-        request.payload as Partial<T>,
+    // Validate filters
+
+    if(Array.isArray(request.payload) && request.payload.length > 1) {
+      return {
+        status: Status.BadRequest,
+        totalRows: 0, 
+        payload: {
+          message: "Cannot pass multiple data for update",
+        }
+      }
+    }
+    // TODO Process filters
+
+    const response: HTTPResponse = {
+      status: Status.OK,
+      totalRows: 0,
+    };
+    try {
+      // Perform update
+      const queryOutput = await this._model.update(
+        (Array.isArray(request.payload)? request.payload[0] : request.payload) as Partial<T>,
         filters,
-      ),
-      response: HTTPResponse = {
-        status: Status.OK,
-        payload: queryOutput.rows,
-        totalRows: queryOutput.totalRows,
-      };
+      );
+      response.totalRows = queryOutput.totalRows;
+      response.payload = queryOutput.rows;
+    } catch (e) {
+      if(e instanceof ModelValidationError) {
+        response.status = Status.BadRequest;
+        response.payload = e.errorList;
+      } else {
+        // response.status = Status.InternalServerError;
+        // response.payload = e;
+        throw(e);
+      }
+    }
     // Return the data
     return response;
   }
 
   protected async _delete(request: ParsedRequest): Promise<HTTPResponse> {
-    const queryOutput = await this._model.delete(request.params as Filters<T>),
+    // Prepare data for update
+    const filters = request.params as Filters<T>;
+    // Validate filters
+
+    const queryOutput = await this._model.delete(filters),
       response: HTTPResponse = {
         status: Status.NoContent,
         headers: new Headers(),
@@ -153,28 +202,11 @@ export class NormEndpoint<
     return response;
   }
 
-  protected _validateParams(params: ParsedRequest): [ErrorList, ParsedRequest] {
-    // Check if the params are valid
-    const errors: ErrorList = {
-      "id": "Invalid ID",
-    };
-    return [errors, params];
+  protected async _count(request: ParsedRequest): Promise<number> {
+    // Prepare data for update
+    const filters = request.params as Filters<T>;
+    // Validate filters
+    const queryOutput = await this._model.count(filters);
+    return queryOutput.totalRows;
   }
-
-  // protected _parseParams(request: ParsedRequest) {
-
-  // }
-
-  // protected _parsePayload(data: Array<Partial<T>>): Array<Partial<T>>;
-  // protected _parsePayload(data: Partial<T>): Partial<T>;
-  // protected _parsePayload(data: Partial<T> | Array<Partial<T>>): Partial<T> | Array<Partial<T>> {
-  //   if(Array.isArray(data)) {
-  //     const result: Array<Partial<T>> = [];
-  //     data.forEach((d) => {
-  //       result.push(this._parsePayload(d));
-  //     })
-  //     return result;
-  //   }
-
-  // }
 }

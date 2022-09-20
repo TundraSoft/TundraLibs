@@ -129,8 +129,7 @@ export class Model<
       if (hasValidation) {
         validator[column] = definition.validator;
       } else {
-        validator[column] =
-          DefaultValidator[definition.dataType];
+        validator[column] = DefaultValidator[definition.dataType];
       }
 
       // validator[column].optional();
@@ -502,6 +501,28 @@ export class Model<
             }
           });
         });
+
+        this._primaryKeys.forEach((pk) => {
+          if (op[pk] !== undefined) {
+            if (!errors[pk]) {
+              errors[pk] = [];
+            }
+            errors[pk]?.push(
+              `Trying to perform bulk update with primary key column ${pk as string}`,
+            );
+          }
+        });
+
+        this._identityKeys.forEach((ik) => {
+          if (op[ik] !== undefined) {
+            if (!errors[ik]) {
+              errors[ik] = [];
+            }
+            errors[ik]?.push(
+              `Trying to perform bulk update with identity column ${ik as string}`,
+            );
+          }
+        });
       }
 
       // Check if PK exists
@@ -511,6 +532,10 @@ export class Model<
         // }
         // errors[pk]?.push(`Cannot update primary key column ${pk as string}`);
         delete op[pk];
+      });
+      // Delete identity columns
+      this._identityKeys.forEach((ik) => {
+        delete op[ik];
       });
     }
 
@@ -742,7 +767,7 @@ export class Model<
             errors[key] = [];
           }
           errors[key as keyof T]?.push(
-            `${key as string} is already in use`,
+            `Primary key value "${key as string}" is already in use`,
           );
         });
       }
@@ -773,9 +798,9 @@ export class Model<
     }
 
     // Delete all Identity columns for both insert and update as we do not want to touch them
-    this._identityKeys.forEach((key) => {
-      delete finalData[key];
-    });
+    // this._identityKeys.forEach((key) => {
+    //   delete finalData[key];
+    // });
 
     return [(Object.keys(errors).length > 0) ? errors : null, finalData];
   }

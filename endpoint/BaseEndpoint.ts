@@ -150,7 +150,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         // Return as we do not want to set other info
         return;
       } else {
-        ctx.response.body = op.payload[0];
+        ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
       }
     } else {
       ctx.response.body = op.payload;
@@ -231,7 +231,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     ctx.response.status = op.status;
     if (op.payload) {
       if (single) {
-        ctx.response.body = op.payload[0];
+        ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
       } else {
         ctx.response.body = op.payload;
       }
@@ -290,7 +290,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         // Return as we do not want to set other info
         return;
       } else {
-        ctx.response.body = op.payload[0];
+        ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
       }
     } else {
       ctx.response.body = op.payload;
@@ -352,7 +352,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         // Return as we do not want to set other info
         return;
       } else {
-        ctx.response.body = op.payload[0];
+        ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
       }
     } else {
       ctx.response.body = op.payload;
@@ -405,7 +405,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         // Return as we do not want to set other info
         return;
       } else {
-        ctx.response.body = op.payload[0];
+        ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
       }
     } else {
       ctx.response.body = op.payload;
@@ -444,17 +444,19 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       };
       return;
     }
+
     const req = await this._parseRequest(ctx);
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
-    const op = await this._fetch(req);
-    ctx.response.status = op.status;
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
+    const op = await this._count(req);
+    ctx.response.status = Status.OK;
+    ctx.response.headers.set(this._getOption("totalRowHeaderName"), op.toString());
+    // if (op.headers) {
+    //   op.headers.forEach(([key, value]) => {
+    //     ctx.response.headers.set(key, value);
+    //   });
+    // }
     // Call post response hook
     this._postHandle(ctx);
   }
@@ -525,7 +527,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    */
   protected abstract _delete(request: ParsedRequest): Promise<HTTPResponse>;
 
-  // protected abstract _count<T = Record<string, unknown>>(request: ParsedRequest): number;
+  protected abstract _count(request: ParsedRequest): Promise<number>;
 
   //#endregion Implementation methods
 

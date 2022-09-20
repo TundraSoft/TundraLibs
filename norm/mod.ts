@@ -22,7 +22,6 @@ export type {
   SelectQueryOptions,
   SQLiteConfig,
   UpdateQueryOptions,
-  ModelValidation, 
 } from "./types/mod.ts";
 
 export { DataTypes } from "./types/mod.ts";
@@ -41,6 +40,7 @@ export {
   ModelPermission,
   ModelPrimaryKeyUpdate,
   ModelUniqueKeyViolation,
+  ModelValidationError,
   NormError,
   QueryError,
 } from "./Errors.ts";
