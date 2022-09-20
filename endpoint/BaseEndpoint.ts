@@ -139,7 +139,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     this._postBodyParse(req, ctx);
     // Call the actual handler
     const op = await this._fetch(req);
-    
+
     ctx.response.status = op.status;
     // If there is identifier, then we are fetching a single record
     if (this._hasIdentifier(req)) {
@@ -224,13 +224,13 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     this._postBodyParse(req, ctx);
     // Check if it is a single record or multiple records
     let single = false;
-    if(!Array.isArray(req.payload)) {
+    if (!Array.isArray(req.payload)) {
       single = true;
     }
     const op = await this._insert(req);
     ctx.response.status = op.status;
-    if(op.payload) {
-      if(single) {
+    if (op.payload) {
+      if (single) {
         ctx.response.body = op.payload[0];
       } else {
         ctx.response.body = op.payload;

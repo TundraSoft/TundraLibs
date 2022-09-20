@@ -139,7 +139,10 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     const start = performance.now(),
       result: QueryResult<T> = {
         type: this._getQueryType(sql),
-        sql: sql.trim().replaceAll(/\r\n|\n|\r/g, " ").replaceAll(/\s+|\t/g, ' '),
+        sql: sql.trim().replaceAll(/\r\n|\n|\r/g, " ").replaceAll(
+          /\s+|\t/g,
+          " ",
+        ),
         time: 0,
         totalRows: 0,
       };
@@ -156,6 +159,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
       result.time = end - start;
       return result;
     } catch (e) {
+      // TODO Handle different errors and throw appropriate error
       throw new QueryError(e.message, result.type, this.name, this.dialect);
     }
   }
