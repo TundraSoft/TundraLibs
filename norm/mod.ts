@@ -11,6 +11,7 @@ export type {
   ModelDefinition,
   ModelPermissions,
   ModelType,
+  ModelValidation,
   PostgresConfig,
   QueryOptions,
   QueryPagination,

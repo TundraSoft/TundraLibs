@@ -30,12 +30,11 @@ export type ColumnDefinition = {
 };
 
 export type ModelPermissions = {
+  select: boolean;
   insert: boolean;
-  bulkInsert: boolean;
   update: boolean;
-  bulkUpdate: boolean;
   delete: boolean;
-  bulkDelete: boolean;
+  truncate: boolean;
   create: boolean;
   drop: boolean;
 };
@@ -59,15 +58,7 @@ export type ModelDefinition = SchemaDefinition & {
   // Paging
   pageSize?: number;
   // Features to be enabled
-  feature?: {
-    insert?: boolean;
-    bulkInsert?: boolean;
-    update?: boolean;
-    bulkUpdate?: boolean;
-    delete?: boolean;
-    bulkDelete?: boolean;
-    truncate?: boolean;
-  };
+  feature?: ModelPermissions;
 };
 
 type PartialPartial<T, K extends keyof T> =
@@ -100,3 +91,9 @@ export type ModelType<P extends ModelDefinition> = ExtractTypes<
     [X in keyof P["columns"]]: P["columns"][X];
   }
 >;
+
+export type ModelValidation<
+  T extends Record<string, unknown> = Record<never, never>,
+> = {
+  [X in keyof T]?: string[];
+};

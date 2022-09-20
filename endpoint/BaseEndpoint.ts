@@ -139,7 +139,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     this._postBodyParse(req, ctx);
     // Call the actual handler
     const op = await this._fetch(req);
-    console.log(op);
+
     ctx.response.status = op.status;
     // If there is identifier, then we are fetching a single record
     if (this._hasIdentifier(req)) {
@@ -210,6 +210,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       ctx.response.body = { message: `Missing/No POST body` };
       return;
     }
+
     if (this._hasIdentifier(req)) {
       ctx.response.status = 405;
       ctx.response.body = {
@@ -221,9 +222,20 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
+    // Check if it is a single record or multiple records
+    let single = false;
+    if (!Array.isArray(req.payload)) {
+      single = true;
+    }
     const op = await this._insert(req);
     ctx.response.status = op.status;
-    ctx.response.body = op.payload;
+    if (op.payload) {
+      if (single) {
+        ctx.response.body = op.payload[0];
+      } else {
+        ctx.response.body = op.payload;
+      }
+    }
     ctx.response.headers.set("X-Total-Rows", op.totalRows.toString());
 
     if (op.headers) {
@@ -568,7 +580,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       delete params["page"];
     }
     if (params["pagesize"]) {
-      paging.size = Number(params["pagesize"]) || undefined;
+      paging.limit = Number(params["pagesize"]) || undefined;
       delete params["pagesize"];
     }
     if (params["sort"] && params["sort"].length > 0) {

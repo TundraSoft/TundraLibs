@@ -1,5 +1,5 @@
 import { FunctionParameters } from "./Function.ts";
-import { ObjectPath } from "./Object.ts";
+// import { ObjectPath } from "./Object.ts";
 import { GuardianError } from "../error/mod.ts";
 
 export type ErrorLike<P extends FunctionParameters = never> =
@@ -13,17 +13,17 @@ export type ErrorFormat = {
   children?: ErrorFormat[];
 };
 
-export type ErrorList = {
-  message: string;
-  errors: [
-    {
-      path: ObjectPath;
-      error: ErrorList;
-    },
-  ];
-};
+// export type ErrorList = {
+//   message: string;
+//   errors: [
+//     {
+//       path: ObjectPath;
+//       error: ErrorList;
+//     },
+//   ];
+// };
 
-export type PathError = {
-  path: ObjectPath;
-  error: Error;
-};
+// export type PathError = {
+//   path: ObjectPath;
+//   error: Error;
+// };

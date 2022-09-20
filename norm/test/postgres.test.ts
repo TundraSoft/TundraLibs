@@ -51,9 +51,8 @@ Deno.test({
   name: "[module='norm' dialect='postgres'] Selection from table",
   async fn(): Promise<void> {
     const sel = await TestModel.select();
-    console.log(sel);
     assertEquals(
-      sel.paging?.size.toString(),
+      sel.paging?.limit.toString(),
       "10",
     );
     assertEquals(sel.totalRows.toString(), "100");
@@ -88,11 +87,11 @@ Deno.test({
       },
     };
     const update: Partial<TestType> = {
-      Name: "noCryptoName",
+      Status: false,
     };
     const upd = await TestModel.update(update, updFilter);
     if (upd.rows) {
-      assertEquals(upd.rows[0].Name, "noCryptoName");
+      assertEquals(upd.rows[0].Status, false);
     }
   },
 });
@@ -225,7 +224,7 @@ Deno.test({
         Population: "Population",
       },
       sort: { Population: "DESC" },
-      paging: { size: 10, page: 2 },
+      paging: { limit: 10, page: 2 },
     } as SelectQueryOptions<CityRawType>);
     assertEquals(Number(result.totalRows), 50);
     if (result && result.rows && result.rows.length > 0) {
