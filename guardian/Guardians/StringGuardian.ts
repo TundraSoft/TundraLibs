@@ -1,11 +1,13 @@
 import { BaseGuardian } from "../BaseGuardian.ts";
-import { type } from "../utils/mod.ts";
+import { DateGuardian } from "./DateGuardian.ts";
+import { type } from "../utils.ts";
 import type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
 } from "../types/mod.ts";
 
+import { parseDate } from "../../dependencies.ts";
 /**
  * StringGuardian
  *
@@ -106,6 +108,9 @@ export class StringGuardian<
     return this.transform((str: string) => str.replace(search, replace));
   }
 
+  toDate(format = "YYYY-MM-dd"): GuardianProxy<DateGuardian<P>> {
+    return this.transform((str: string) => parseDate(str, format));
+  }
   //#endregion Manipulators
 
   //#region Validators

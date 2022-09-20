@@ -244,8 +244,7 @@ Deno.test({
         result.columns.District.uniqueKey.has("city_cu_unique"),
       true,
     );
-    // TODO: Implement
-    // assertEquals(result.columns.CountryCode.length, 3);
+    assertEquals(result.columns.CountryCode.length, 3);
     assertEquals(result.columns.Population.dataType, "BIGINT");
     await CityModel.dropTable();
   },

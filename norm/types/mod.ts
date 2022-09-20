@@ -47,6 +47,7 @@ export {
 
 export type {
   ColumnDefinition,
+  DecimalLengthSpec,
   ModelDefinition,
   ModelPermissions,
   ModelType,
