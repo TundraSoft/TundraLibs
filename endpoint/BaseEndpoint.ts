@@ -18,7 +18,11 @@ import type {
 import { EndpointManager } from "./EndpointManager.ts";
 // import type { HTTPMethods } from "../dependencies.ts";
 import { MissingNameError, MissingRoutePathError } from "./Errors.ts";
-import { badRequest, methodNotAllowed, resourceNotFound } from "./HTTPErrors.ts";
+import {
+  badRequest,
+  methodNotAllowed,
+  resourceNotFound,
+} from "./HTTPErrors.ts";
 
 /**
  * This is the base endpoint, acts like a base template
@@ -132,7 +136,10 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       //   message: this._getOption("notSupportedMessage"),
       // };
       // return;
-      throw methodNotAllowed(this._getOption("notSupportedMessage"), ctx.response.headers);
+      throw methodNotAllowed(
+        this._getOption("notSupportedMessage"),
+        ctx.response.headers,
+      );
     }
     const req = await this._parseRequest(ctx);
     // Call postBodyParse hook
@@ -150,9 +157,14 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         // ctx.response.body = { message: this._getOption("notFoundMessage") };
         // // Return as we do not want to set other info
         // return;
-        throw resourceNotFound(this._getOption("notFoundMessage"), ctx.response.headers);
+        throw resourceNotFound(
+          this._getOption("notFoundMessage"),
+          ctx.response.headers,
+        );
       } else {
-        ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
+        ctx.response.body = Array.isArray(op.payload)
+          ? op.payload[0]
+          : op.payload;
       }
     } else {
       ctx.response.body = op.payload;
@@ -201,7 +213,10 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       //   message: this._getOption("notSupportedMessage"),
       // };
       // return;
-      throw methodNotAllowed(this._getOption("notSupportedMessage"), ctx.response.headers);
+      throw methodNotAllowed(
+        this._getOption("notSupportedMessage"),
+        ctx.response.headers,
+      );
     }
 
     const req = await this._parseRequest(ctx);
@@ -221,7 +236,10 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       //   message: this._getOption("notSupportedMessage"),
       // };
       // return;
-      throw resourceNotFound(this._getOption("notFoundMessage"), ctx.response.headers);
+      throw resourceNotFound(
+        this._getOption("notFoundMessage"),
+        ctx.response.headers,
+      );
     }
 
     // Call postBodyParse hook
@@ -231,7 +249,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     let single = false;
     if (req.payload && !Array.isArray(req.payload)) {
       single = true;
-      req.payload = [req.payload]
+      req.payload = [req.payload];
     }
     // Inject state params
     const injectedPayload: Array<Record<string, unknown>> = [];
@@ -244,7 +262,9 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     ctx.response.status = op.status;
     if (op.payload) {
       if (single) {
-        ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
+        ctx.response.body = Array.isArray(op.payload)
+          ? op.payload[0]
+          : op.payload;
       } else {
         ctx.response.body = op.payload;
       }
@@ -277,7 +297,10 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       //   message: this._getOption("notSupportedMessage"),
       // };
       // return;
-      throw methodNotAllowed(this._getOption("notSupportedMessage"), ctx.response.headers);
+      throw methodNotAllowed(
+        this._getOption("notSupportedMessage"),
+        ctx.response.headers,
+      );
     }
     const req = await this._parseRequest(ctx);
     if (
@@ -304,9 +327,14 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         // ctx.response.body = { message: this._getOption("notFoundMessage") };
         // // Return as we do not want to set other info
         // return;
-        throw resourceNotFound(this._getOption("notFoundMessage"), ctx.response.headers);
+        throw resourceNotFound(
+          this._getOption("notFoundMessage"),
+          ctx.response.headers,
+        );
       } else {
-        ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
+        ctx.response.body = Array.isArray(op.payload)
+          ? op.payload[0]
+          : op.payload;
       }
     } else {
       ctx.response.body = op.payload;
@@ -342,7 +370,10 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       //   message: this._getOption("notSupportedMessage"),
       // };
       // return;
-      throw methodNotAllowed(this._getOption("notSupportedMessage"), ctx.response.headers);
+      throw methodNotAllowed(
+        this._getOption("notSupportedMessage"),
+        ctx.response.headers,
+      );
     }
     const req = await this._parseRequest(ctx);
     if (
@@ -369,9 +400,14 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         // ctx.response.body = { message: this._getOption("notFoundMessage") };
         // // Return as we do not want to set other info
         // return;
-        throw resourceNotFound(this._getOption("notFoundMessage"), ctx.response.headers);
+        throw resourceNotFound(
+          this._getOption("notFoundMessage"),
+          ctx.response.headers,
+        );
       } else {
-        ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
+        ctx.response.body = Array.isArray(op.payload)
+          ? op.payload[0]
+          : op.payload;
       }
     } else {
       ctx.response.body = op.payload;
@@ -407,7 +443,10 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       //   message: this._getOption("notSupportedMessage"),
       // };
       // return;
-      throw methodNotAllowed(this._getOption("notSupportedMessage"), ctx.response.headers);
+      throw methodNotAllowed(
+        this._getOption("notSupportedMessage"),
+        ctx.response.headers,
+      );
     }
     const req = await this._parseRequest(ctx);
     // Call postBodyParse hook
@@ -424,9 +463,14 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         // ctx.response.body = { message: this._getOption("notFoundMessage") };
         // // Return as we do not want to set other info
         // return;
-        throw resourceNotFound(this._getOption("notFoundMessage"), ctx.response.headers);
+        throw resourceNotFound(
+          this._getOption("notFoundMessage"),
+          ctx.response.headers,
+        );
       } else {
-        ctx.response.body = (Array.isArray(op.payload) ? op.payload[0] : op.payload);
+        ctx.response.body = Array.isArray(op.payload)
+          ? op.payload[0]
+          : op.payload;
       }
     } else {
       ctx.response.body = op.payload;
@@ -464,7 +508,10 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       //   message: `HEAD method not supported by this endpoint`,
       // };
       // return;
-      throw methodNotAllowed(`HEAD method not supported by this endpoint`, ctx.response.headers);
+      throw methodNotAllowed(
+        `HEAD method not supported by this endpoint`,
+        ctx.response.headers,
+      );
     }
 
     const req = await this._parseRequest(ctx);
@@ -475,7 +522,10 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     // ctx.response.status = Status.OK;
     // ctx.response.headers.set(this._getOption("totalRowHeaderName"), op.toString());
     ctx.response.status = Status.OK;
-    ctx.response.headers.set(this._getOption("totalRowHeaderName"), op.toString());
+    ctx.response.headers.set(
+      this._getOption("totalRowHeaderName"),
+      op.toString(),
+    );
     if (op.headers) {
       op.headers.forEach(([key, value]) => {
         ctx.response.headers.set(key, value);

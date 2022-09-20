@@ -10,7 +10,7 @@ import type {
   QueryPagination,
   QuerySorting,
 } from "../norm/mod.ts";
-import { badRequest,internalServerError } from "./HTTPErrors.ts";
+import { badRequest, internalServerError } from "./HTTPErrors.ts";
 
 export type ErrorList = {
   [key: string]: string;
@@ -47,10 +47,10 @@ export class NormEndpoint<
       }
       filters = this._model.validateFilters(request.params as Filters<T>);
     } catch (e) {
-      if(e instanceof ModelFilterError) {
-        throw badRequest('Invalid filter conditions provided');
+      if (e instanceof ModelFilterError) {
+        throw badRequest("Invalid filter conditions provided");
       } else {
-        throw internalServerError(e.message)
+        throw internalServerError(e.message);
       }
     }
     // Set page size and limit
@@ -131,18 +131,20 @@ export class NormEndpoint<
     //   };
     const response: HTTPResponse = {
       status: Status.Created,
-      totalRows: 0, 
+      totalRows: 0,
     };
     try {
       // Perform update
-      const queryOutput = await this._model.insert(request.payload as Array<Partial<T>>);
+      const queryOutput = await this._model.insert(
+        request.payload as Array<Partial<T>>,
+      );
       response.totalRows = queryOutput.totalRows;
       response.payload = queryOutput.rows;
     } catch (e) {
-      if(e instanceof ModelValidationError) {
-        throw badRequest(e.errorList)
+      if (e instanceof ModelValidationError) {
+        throw badRequest(e.errorList);
       } else {
-        throw internalServerError(e.message)
+        throw internalServerError(e.message);
       }
     }
     // Return the data
@@ -155,17 +157,15 @@ export class NormEndpoint<
     try {
       filters = this._model.validateFilters(request.params as Filters<T>);
     } catch (e) {
-      if(e instanceof ModelFilterError) {
-        throw badRequest('Invalid filter conditions provided')
+      if (e instanceof ModelFilterError) {
+        throw badRequest("Invalid filter conditions provided");
       } else {
-        throw internalServerError(e.message)
+        throw internalServerError(e.message);
       }
     }
-    
-    
 
-    if(Array.isArray(request.payload) && request.payload.length > 1) {
-      throw badRequest(`Cannot update multiple records at once`)
+    if (Array.isArray(request.payload) && request.payload.length > 1) {
+      throw badRequest(`Cannot update multiple records at once`);
     }
     // TODO Process filters
 
@@ -176,16 +176,18 @@ export class NormEndpoint<
     try {
       // Perform update
       const queryOutput = await this._model.update(
-        (Array.isArray(request.payload)? request.payload[0] : request.payload) as Partial<T>,
+        (Array.isArray(request.payload)
+          ? request.payload[0]
+          : request.payload) as Partial<T>,
         filters,
       );
       response.totalRows = queryOutput.totalRows;
       response.payload = queryOutput.rows;
     } catch (e) {
-      if(e instanceof ModelValidationError) {
-        throw badRequest(e.errorList)
+      if (e instanceof ModelValidationError) {
+        throw badRequest(e.errorList);
       } else {
-        throw internalServerError(e.message)
+        throw internalServerError(e.message);
       }
     }
     // Return the data
@@ -198,10 +200,10 @@ export class NormEndpoint<
     try {
       filters = this._model.validateFilters(request.params as Filters<T>);
     } catch (e) {
-      if(e instanceof ModelFilterError) {
-        throw badRequest('Invalid filter conditions provided')
+      if (e instanceof ModelFilterError) {
+        throw badRequest("Invalid filter conditions provided");
       } else {
-        throw internalServerError(e.message)
+        throw internalServerError(e.message);
       }
     }
 
@@ -220,10 +222,10 @@ export class NormEndpoint<
     try {
       filters = this._model.validateFilters(request.params as Filters<T>);
     } catch (e) {
-      if(e instanceof ModelFilterError) {
-        throw badRequest('Invalid filter conditions provided')
+      if (e instanceof ModelFilterError) {
+        throw badRequest("Invalid filter conditions provided");
       } else {
-        throw internalServerError(e.message)
+        throw internalServerError(e.message);
       }
     }
     // Validate filters
@@ -231,6 +233,6 @@ export class NormEndpoint<
     return {
       status: Status.OK,
       totalRows: queryOutput.totalRows,
-    }
+    };
   }
 }

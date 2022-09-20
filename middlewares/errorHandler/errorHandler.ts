@@ -8,10 +8,10 @@ export const errorHandler: Middleware = async function (ctx, next) {
   } catch (e) {
     if (isHTTPError(e)) {
       ctx.response.status = e.status;
-      if(e.internal) {
+      if (e.internal) {
         ctx.response.body = {
           message: `${STATUS_TEXT[e.status]}`,
-        }
+        };
       } else {
         ctx.response.body = e.data;
       }
@@ -23,14 +23,14 @@ export const errorHandler: Middleware = async function (ctx, next) {
       }
     } else if (isHttpError(e)) {
       ctx.response.status = e.status;
-      if(e.expose) {
+      if (e.expose) {
         ctx.response.body = {
           message: e.message,
-        }
+        };
       } else {
         ctx.response.body = {
           message: `${STATUS_TEXT[e.status]}`,
-        }
+        };
       }
       // Append all headers
       if (e.headers) {

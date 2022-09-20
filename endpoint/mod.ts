@@ -16,14 +16,14 @@ export {
 } from "./Errors.ts";
 
 export {
-  HTTPError, 
-  isHTTPError, 
-  resourceNotFound, 
-  badRequest, 
-  internalServerError, 
-  unauthorized, 
-  methodNotAllowed
-} from './HTTPErrors.ts';
+  badRequest,
+  HTTPError,
+  internalServerError,
+  isHTTPError,
+  methodNotAllowed,
+  resourceNotFound,
+  unauthorized,
+} from "./HTTPErrors.ts";
 
 export type { HTTPErrorData } from "./HTTPErrors.ts";
 
