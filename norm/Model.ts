@@ -361,7 +361,8 @@ export class Model<
         this._connection.name,
       );
     }
-
+    await this._init();
+    
     const rows: Array<Partial<T>> =
       (Array.isArray(data) ? data : [data]) as Array<Partial<T>>;
 
@@ -454,6 +455,7 @@ export class Model<
         this._connection.name,
       );
     }
+    await this._init();
 
     const options: UpdateQueryOptions<T> = {
       table: this.table,
@@ -566,6 +568,7 @@ export class Model<
         this._connection.name,
       );
     }
+    await this._init();
 
     const options: DeleteQueryOptions<T> = {
       schema: this.schema,
@@ -574,7 +577,6 @@ export class Model<
       filters: filter,
     };
 
-    await this._init();
     return await this._connection.delete<T>(options);
   }
 
@@ -591,12 +593,13 @@ export class Model<
         this._connection.name,
       );
     }
+    await this._init();
     const options: QueryOptions<T> = {
       schema: this.schema,
       table: this.table,
       columns: this._columns,
     };
-    await this._init();
+    
     await this._connection.truncate(options);
   }
 
@@ -621,6 +624,8 @@ export class Model<
         this._connection.name,
       );
     }
+    await this._init();
+
     // create the table structure
     const options: CreateTableOptions = {
       schema: this.schema,
@@ -654,7 +659,7 @@ export class Model<
         options.uniqueKeys[name].push(this._columns[key as keyof T]);
       });
     }
-    await this._init();
+
     await this._connection.createTable(options);
     if (seedFilePath) {
       await this.insert(JSON.parse(await Deno.readTextFile(seedFilePath)));
@@ -670,6 +675,7 @@ export class Model<
       );
     }
     await this._init();
+
     await this._connection.dropTable(
       this.table,
       this.schema,
@@ -739,6 +745,8 @@ export class Model<
     data: Partial<T>,
     forInsert = true,
   ): Promise<[ModelValidation<T> | null, Partial<T>?]> {
+    await this._init();
+    
     const errors: ModelValidation<T> = {},
       [generated, dbGenerated] = this._generate(
         forInsert === true ? this._insertGenerators : this._updateGenerators,
