@@ -49,7 +49,8 @@ export type {
   ColumnDefinition,
   DecimalLengthSpec,
   ModelDefinition,
-  ModelFeatures,
+  ModelPermissions,
   ModelType,
+  ModelValidation,
   SchemaDefinition,
 } from "./Model.ts";

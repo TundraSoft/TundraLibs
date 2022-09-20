@@ -1,5 +1,4 @@
-import { ErrorList } from "../guardian/mod.ts";
-import { QueryType } from "./types/mod.ts";
+import { ModelValidation, QueryType } from "./types/mod.ts";
 
 export class NormError extends Error {
   protected _module = "norm";
@@ -111,14 +110,29 @@ export class ModelUniqueKeyViolation extends ModelError {
 
 // @TODO, have method to return all errors
 export class ModelValidationError extends ModelError {
-  protected errList: ErrorList | { [key: number]: ErrorList };
+  protected errList: ModelValidation | { [key: number]: ModelValidation };
   constructor(
-    message: ErrorList | { [key: number]: ErrorList },
+    message: ModelValidation | { [key: number]: ModelValidation },
     model: string,
     dbConn: string,
   ) {
     super(`Error validating data`, model, dbConn);
     this.errList = message;
     Object.setPrototypeOf(this, ModelValidationError.prototype);
+  }
+
+  get errorList(): ModelValidation | { [key: number]: ModelValidation } {
+    return this.errList;
+  }
+}
+
+export class ModelFilterError extends ModelError {
+  constructor(
+    message: string,
+    model?: string,
+    dbConn?: string,
+  ) {
+    super(`Malformed/Unknown filter: ${message}`, model, dbConn);
+    Object.setPrototypeOf(this, ModelFilterError.prototype);
   }
 }

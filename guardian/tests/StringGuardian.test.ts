@@ -1,4 +1,4 @@
-import { stringGuard, ValidationError } from "../mod.ts";
+import { GuardianError, stringGuard } from "../mod.ts";
 
 import { assertEquals, assertThrows } from "../../dev_dependencies.ts";
 
@@ -12,7 +12,7 @@ Deno.test({
     );
     assertEquals(stringGuard(" asd sd asd asd "), " asd sd asd asd ");
     assertEquals(stringGuard.optional()(), undefined);
-    assertThrows(() => stringGuard.aadhaar()("123456789"), ValidationError);
+    assertThrows(() => stringGuard.aadhaar()("123456789"), GuardianError);
   },
 });
 
@@ -21,7 +21,7 @@ Deno.test({
   fn(): void {
     assertThrows(
       () => stringGuard.aadhaar("Value is not a valid AADHAAR")("123456789"),
-      ValidationError,
+      GuardianError,
       "Value is not a valid AADHAAR",
     );
   },

@@ -40,8 +40,8 @@ export type FilterOperators<T> = T | {
   $gt?: T;
   $gte?: T;
   $between?: {
-    from: T;
-    to: T;
+    $from: T;
+    $to: T;
   };
   $null?: boolean;
   $like?: T;
@@ -55,7 +55,7 @@ export type FilterOperators<T> = T | {
  * Pagination of data. Used in Select only
  */
 export type QueryPagination = {
-  size: number;
+  limit: number;
   page: number;
 };
 
@@ -130,10 +130,11 @@ export type DeleteQueryOptions<T> = QueryOptions<T> & {
  */
 export type QueryResult<T = Record<string, unknown>> = {
   type: QueryType;
+  sql: string;
   time: number;
   totalRows: number;
   paging?: {
-    size: number;
+    limit: number;
     page?: number;
   };
   sort?: QuerySorting<T>;

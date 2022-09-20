@@ -49,7 +49,7 @@ export { DB as SQLiteClient } from "https://deno.land/x/sqlite@v3.4.0/mod.ts";
 //#region Endpoint
 export {
   createHttpError,
-  HttpError,
+  // HttpError,
   isClientErrorStatus,
   isErrorStatus,
   isHttpError,
@@ -79,7 +79,18 @@ export type {
   SuccessfulStatus,
 } from "https://deno.land/std@0.150.0/http/mod.ts";
 
-export type { Middleware } from "https://deno.land/x/oak@v11.1.0/mod.ts";
-export { Context } from "https://deno.land/x/oak@v11.1.0/mod.ts";
+export type {
+  Middleware,
+  RouterContext,
+  RouterMiddleware,
+} from "https://deno.land/x/oak@v11.1.0/mod.ts";
+
+export {
+  Context,
+  helpers as oakHelpers,
+  Request,
+  Response,
+} from "https://deno.land/x/oak@v11.1.0/mod.ts";
+
 
 //#endregion Endpoint

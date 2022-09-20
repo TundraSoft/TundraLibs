@@ -26,6 +26,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   protected _name: string;
   declare protected _client: unknown | undefined;
   declare protected _dialectHelper: DialectHelper;
+  protected _testQuery = "SELECT 1";
   protected _stats: Map<
     QueryType,
     { count: number; time: number; error: number }
@@ -103,6 +104,14 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     }
   }
 
+  public async test(): Promise<boolean> {
+    try {
+      await this.query(this._testQuery);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
   /**
    * query (Typed)
    * Execute an SQL query. Supports named argument substitution
@@ -130,11 +139,16 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     const start = performance.now(),
       result: QueryResult<T> = {
         type: this._getQueryType(sql),
+        sql: sql.trim().replaceAll(/\r\n|\n|\r/g, " ").replaceAll(
+          /\s+|\t/g,
+          " ",
+        ),
         time: 0,
         totalRows: 0,
       };
     await this.connect();
     try {
+      // console.log(sql);
       const op = await this._query<T>(sql, args);
       if (op && op.length > 0) {
         result.rows = op;
@@ -145,6 +159,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
       result.time = end - start;
       return result;
     } catch (e) {
+      // TODO Handle different errors and throw appropriate error
       throw new QueryError(e.message, result.type, this.name, this.dialect);
     }
   }
@@ -185,7 +200,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async select<T = Record<string, unknown>>(
     options: SelectQueryOptions<T>,
   ): Promise<QueryResult<T>> {
-    if (options.paging && options.paging.size < 1) {
+    if (options.paging && options.paging.limit < 1) {
       delete options.paging;
     }
     if (options.paging && options.paging.page < 1) {

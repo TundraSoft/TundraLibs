@@ -11,12 +11,32 @@ export class Database {
   protected static _clients: Map<string, AbstractClient> = new Map();
   protected static _models: Map<string, Model> = new Map();
 
-  public static async init(): Promise<void> {
-    await Config.load("database");
-    const dbConfigs = Config.get<{ [key: string]: ClientConfig }>("database");
+  public static async init(
+    config = "Database",
+    configPath?: string,
+  ): Promise<void> {
+    await Config.load(config, configPath);
+    const dbConfigs = Config.get<{ [key: string]: ClientConfig }>(config);
     for (const name in dbConfigs) {
       const config = dbConfigs[name] as ClientConfig;
       Database.load(name, config);
+    }
+  }
+
+  public static async test(name?: string): Promise<boolean> {
+    if (name) {
+      name = name.toLowerCase().trim();
+      if (!Database._clients.has(name)) {
+        throw new ConfigNotFound(name);
+      }
+      return await Database._clients.get(name)!.test();
+    } else {
+      for (const client of Database._clients.values()) {
+        if (!client.test()) {
+          return false;
+        }
+      }
+      return true;
     }
   }
 

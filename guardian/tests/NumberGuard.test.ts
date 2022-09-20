@@ -1,4 +1,4 @@
-import { numberGuard, ValidationError } from "../mod.ts";
+import { GuardianError, numberGuard } from "../mod.ts";
 
 import { assertEquals, assertThrows } from "../../dev_dependencies.ts";
 
@@ -11,7 +11,7 @@ Deno.test({
     assertEquals(numberGuard.optional()(), undefined);
     assertThrows(
       () => numberGuard.integer()(234233241234.123412341234),
-      ValidationError,
+      GuardianError,
     );
   },
 });
@@ -22,7 +22,7 @@ Deno.test({
     assertThrows(
       () =>
         numberGuard.integer("Value is not a valid Integer")(123456789.234234),
-      ValidationError,
+      GuardianError,
       "Value is not a valid Integer",
     );
   },

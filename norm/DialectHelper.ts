@@ -1,3 +1,4 @@
+import { ModelFilterError } from "./Errors.ts";
 import {
   CountQueryOptions,
   CreateTableOptions,
@@ -55,14 +56,14 @@ export class DialectHelper {
         const colName = options.columns[value as keyof T];
         return `${this._quoteColumn(colName)} AS ${this._quoteColumn(value)}`;
       }),
-      paging = (options.paging)
+      paging = (options.paging && options.paging.limit > 0)
         ? ` ` +
           this.limit(
-            options.paging.size,
-            (options.paging.page - 1 || 0) * options.paging.size,
+            options.paging.limit,
+            (options.paging.page - 1 || 0) * options.paging.limit,
           )
         : "",
-      sort = (options.sort)
+      sort = (options.sort && Object.keys(options.sort).length > 0)
         ? ` ORDER BY ${
           Object.entries(options.sort).map((value) => {
             return `${
@@ -71,7 +72,7 @@ export class DialectHelper {
           }).join(", ")
         } `
         : "",
-      filter = (options.filters)
+      filter = (options.filters && Object.keys(options.filters).length > 0)
         ? ` WHERE ${this._processFilters(options.columns, options.filters)}`
         : "",
       qry = `SELECT ${columns}
@@ -435,11 +436,14 @@ export class DialectHelper {
                   break;
                 // deno-lint-ignore no-case-declarations
                 case "$between":
-                  const opval = operatorValue as { from: unknown; to: unknown };
+                  const opval = operatorValue as {
+                    $from: unknown;
+                    $to: unknown;
+                  };
                   ret.push(
                     `${this._quoteColumn(columns[columnName])} BETWEEN '${
-                      this._quoteValue(opval.from)
-                    }' AND '${this._quoteValue(opval.to)}'`,
+                      this._quoteValue(opval.$from)
+                    }' AND '${this._quoteValue(opval.$to)}'`,
                   );
                   break;
                 case "$null":
@@ -482,7 +486,7 @@ export class DialectHelper {
                   );
                   break;
                 default:
-                  throw new Error(`[module=norm] Unknown operator ${operator}`);
+                  throw new ModelFilterError(`Unknown operator ${operator}`);
               }
             }
           } else {
@@ -498,6 +502,10 @@ export class DialectHelper {
       }
     }
     // return "(" + ret.join(` ${joiner} `) + ")";
+    // Ensure we have processed a filter
+    if (ret.length === 0) {
+      return "";
+    }
     let retVal = `( `;
     retVal += ret.reduce((prev, curr, index) => {
       // console.log(curr.toString());

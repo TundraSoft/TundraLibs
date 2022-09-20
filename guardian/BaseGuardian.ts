@@ -1,11 +1,14 @@
 import type {
+  ErrorLike,
   FunctionType,
   GuardianProxy,
   MaybeAsync,
   MergeParameters,
   ResolvedValue,
-} from "./types.ts";
-import { equals, isPromiseLike, oneOf, optional, test } from "./utils.ts";
+} from "./types/mod.ts";
+import { equals, isPromiseLike, oneOf, optional, test } from "./utils/mod.ts";
+
+import { GuardianError } from "./error/mod.ts";
 
 export interface GuardianConstructor<
   V extends BaseGuardian<F>,
@@ -61,6 +64,11 @@ export class BaseGuardian<F extends FunctionType> {
     return this.transform(equals(value, error));
   }
 
+  /**
+   * @param values T[] Array of values which can be present
+   * @param error string Error message to show if the value is not present
+   * @returns GuardianProxy<this>
+   */
   public oneOf<T extends ResolvedValue<ReturnType<F>>>(
     values: T[],
     error?: string,
@@ -141,5 +149,40 @@ export class BaseGuardian<F extends FunctionType> {
     const Class = (this as any).constructor;
     const { guardian } = this;
     return new Class(optional<F, R>(guardian, defaultValue)).proxy();
+  }
+
+  /**
+   * validate
+   *
+   * Validates the data. If any errors found it will pass the errors without throwing the same
+   *
+   * @param value T The value to validate
+   * @returns [Error | null, ResolvedValue<ReturnType<F>>] Returns errors (if any) and the validated output
+   */
+  // public validate(...value: Parameters<F>):
+  //   | [GuardianError | null, ResolvedValue<ReturnType<F>>?]
+  //   | PromiseLike<[GuardianError | null, ResolvedValue<ReturnType<F>>?]> {
+  //   const { guardian } = this;
+  //   const validator = validate(guardian);
+  //   return validator(...value);
+  // }
+  public validate(
+    ...value: Parameters<F>
+  ): [GuardianError | null, ResolvedValue<ReturnType<F>>?] {
+    const { guardian } = this;
+    let res: ResolvedValue<ReturnType<F>> | undefined,
+      err: GuardianError | null = null;
+    try {
+      res = guardian(...value);
+      if (isPromiseLike(res)) {
+        res.then(
+          (ret: ResolvedValue<ReturnType<F>>) => [null, ret],
+          (ex: ErrorLike) => [ex, undefined],
+        );
+      }
+    } catch (e) {
+      err = e;
+    }
+    return [err, res];
   }
 }

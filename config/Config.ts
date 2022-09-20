@@ -18,7 +18,7 @@ export class Config {
    * @returns boolean True if file was found and loaded, else false
    */
   static async load(name: string, path = "./configs"): Promise<boolean> {
-    Config._initEnv();
+    await Config._initEnv();
     //#region Test read permission
     const readPerm =
       await (await Deno.permissions.query({ name: "read", path: path })).state;

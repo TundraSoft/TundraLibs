@@ -6,18 +6,22 @@ export type {
   StructReturnType,
   StructValidatorFunction,
   Type,
-} from "./types.ts";
+} from "./types/mod.ts";
 
-export { array, type } from "./utils.ts";
-export { Guardian } from "./Guardians/UnknownGuardian.ts";
-export { objectGuard } from "./Guardians/ObjectGuardian.ts";
-export { arrayGuard } from "./Guardians/ArrayGuardian.ts";
-export { stringGuard } from "./Guardians/StringGuardian.ts";
-export { numberGuard } from "./Guardians/NumberGuardian.ts";
-export { bigintGuard } from "./Guardians/BigintGuardian.ts";
-export { dateGuard } from "./Guardians/DateGuardian.ts";
-export { booleanGuard } from "./Guardians/BooleanGuardian.ts";
-export { Struct } from "./Guardians/StructGuardian.ts";
+export { array, type } from "./utils/mod.ts";
 
-export { ValidationError } from "./Error.ts";
-export type { ErrorList } from "./Error.ts";
+export { BaseGuardian } from "./BaseGuardian.ts";
+
+export {
+  arrayGuard,
+  bigintGuard,
+  booleanGuard,
+  dateGuard,
+  Guardian,
+  numberGuard,
+  objectGuard,
+  stringGuard,
+  Struct,
+} from "./Guardians/mod.ts";
+
+export { GuardianError } from "./error/mod.ts";

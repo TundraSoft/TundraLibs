@@ -1,4 +1,4 @@
-import { Context } from "../Middleware.ts";
+import { Context } from "../../dependencies.ts";
 import { timing } from "./timing.ts";
 import { assert, assertEquals } from "../../dev_dependencies.ts";
 

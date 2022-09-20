@@ -1,11 +1,11 @@
 import { BaseGuardian } from "../BaseGuardian.ts";
 import { DateGuardian } from "./DateGuardian.ts";
-import { type } from "../utils.ts";
+import { type } from "../utils/mod.ts";
 import type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
-} from "../types.ts";
+} from "../types/mod.ts";
 
 /**
  * NumberGuardian

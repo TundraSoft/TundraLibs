@@ -1,4 +1,4 @@
-import { Middleware } from "../Middleware.ts";
+import { Middleware } from "../../dependencies.ts";
 
 export const requestId: Middleware = async function (ctx, next) {
   let requestID = ctx.request.headers.get("X-Request-Id");

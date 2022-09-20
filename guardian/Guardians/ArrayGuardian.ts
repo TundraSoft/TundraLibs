@@ -1,5 +1,5 @@
 import { BaseGuardian } from "../BaseGuardian.ts";
-import { array, compile } from "../utils.ts";
+import { array, compile } from "../utils/mod.ts";
 import type {
   FunctionParameters,
   FunctionType,
@@ -7,7 +7,7 @@ import type {
   ResolvedValue,
   StructResolveType,
   StructReturnType,
-} from "../types.ts";
+} from "../types/mod.ts";
 
 /**
  * ArrayGuardian

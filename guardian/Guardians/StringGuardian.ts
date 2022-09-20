@@ -5,7 +5,7 @@ import type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
-} from "../types.ts";
+} from "../types/mod.ts";
 
 import { parseDate } from "../../dependencies.ts";
 /**

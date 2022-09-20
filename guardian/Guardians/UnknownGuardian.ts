@@ -1,4 +1,3 @@
-import { GuardianProxy } from "../types.ts";
 import { BaseGuardian } from "../BaseGuardian.ts";
 import { StringGuardian } from "./StringGuardian.ts";
 import { NumberGuardian } from "./NumberGuardian.ts";
@@ -7,9 +6,13 @@ import { DateGuardian } from "./DateGuardian.ts";
 import { BooleanGuardian } from "./BooleanGuardian.ts";
 import { ObjectGuardian } from "./ObjectGuardian.ts";
 import { ArrayGuardian } from "./ArrayGuardian.ts";
-import { array, type } from "../utils.ts";
+import { array, type } from "../utils/mod.ts";
 
-import type { FunctionParameters, FunctionType } from "../types.ts";
+import type {
+  FunctionParameters,
+  FunctionType,
+  GuardianProxy,
+} from "../types/mod.ts";
 
 const BooleanMap = {
   true: true,
