@@ -2,6 +2,7 @@
 import { ErrorStatus, isClientErrorStatus, Status, STATUS_TEXT } from "../dependencies.ts";
 
 export type HTTPErrorData = string | Record<string, unknown> | Array<Record<string, unknown>>;
+
 export class HTTPError extends Error {
   #status: ErrorStatus;
   #data: HTTPErrorData
@@ -38,6 +39,9 @@ export class HTTPError extends Error {
   }
 }
 
+export const isHTTPError = (error: unknown): error is HTTPError => {
+  return error instanceof HTTPError;
+}
 
 export const resourceNotFound = (data: HTTPErrorData, headers?: Headers) => {
   return new HTTPError(data, Status.NotFound, headers);

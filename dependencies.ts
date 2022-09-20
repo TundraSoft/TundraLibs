@@ -52,7 +52,7 @@ export {
   // HttpError,
   isClientErrorStatus,
   isErrorStatus,
-  // isHttpError,
+  isHttpError,
   isInformationalStatus,
   isRedirectStatus,
   isServerErrorStatus,
