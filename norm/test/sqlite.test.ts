@@ -47,7 +47,7 @@ Deno.test({
     const sel = await TestModel.select();
     console.log(sel);
     assertEquals(
-      sel.paging?.size.toString(),
+      sel.paging?.limit.toString(),
       "10",
     );
     assertEquals(sel.totalRows.toString(), "100");
