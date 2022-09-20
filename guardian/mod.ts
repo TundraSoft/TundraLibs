@@ -1,5 +1,4 @@
 export type {
-  ErrorList,
   GuardianProxy,
   MergeParameters,
   ResolvedValue,

@@ -7,12 +7,12 @@ import type {
   ModelDefinition,
   // ModelPermissions,
   ModelType,
+  ModelValidation,
   QueryPagination,
   QuerySorting,
   ModelValidation, 
 } from "../norm/mod.ts";
 import data from "https://deno.land/std@0.141.0/_wasm_crypto/crypto.wasm.mjs";
-import { Value } from "https://deno.land/std@0.150.0/encoding/_toml/parser.ts";
 
 export type ErrorList = {
   [key: string]: string;
@@ -28,7 +28,7 @@ export class NormEndpoint<
     const defOptions: Partial<EndpointOptions> = {
       routeIdentifiers: model.primaryKeys as Array<string>,
       allowedMethods: {
-        GET: true,
+        GET: model.capability("insert"),
         POST: model.capability("insert"),
         PUT: model.capability("update"),
         PATCH: model.capability("update"),
@@ -86,32 +86,32 @@ export class NormEndpoint<
     }
     // Perform Insert
     // validate data
-    const validatedData: Array<Partial<T>> = [], 
-      errorRecords: Array<{row: number, errors: ModelValidation<T>}> = [];
+    const validatedData: Array<Partial<T>> = [],
+      errorRecords: Array<{ row: number; errors: ModelValidation<T> }> = [];
 
-    for(const [index, item] of request.payload?.entries() || []) {
+    for (const [index, item] of request.payload?.entries() || []) {
       const [err, dat] = await this._model.validateData(item as Partial<T>);
       if (err) {
-        console.log(err)
+        console.log(err);
         errorRecords.push({
           row: index,
           errors: err,
-        })
+        });
       } else {
         validatedData.push(dat as Partial<T>);
       }
     }
-    console.log('Async check done')
-    if(errorRecords.length > 0) {
-      console.log(errorRecords)
+    console.log("Async check done");
+    if (errorRecords.length > 0) {
+      console.log(errorRecords);
       const errHead = new Headers();
-      errHead.set('X-Error-Rows', errorRecords.length.toString());
+      errHead.set("X-Error-Rows", errorRecords.length.toString());
       return {
         status: Status.BadRequest,
-        payload: errorRecords, 
-        headers: errHead, 
-        totalRows: data.length, 
-      }
+        payload: errorRecords,
+        headers: errHead,
+        totalRows: data.length,
+      };
     }
 
     const queryOutput = await this._model.insert(
