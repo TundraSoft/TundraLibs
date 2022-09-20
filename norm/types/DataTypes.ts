@@ -35,6 +35,12 @@ export const enum DataTypes {
   "UUID" = "UUID",
   "JSON" = "JSON",
   "ARRAY" = "ARRAY",
+  "ARRAY_STRING" = "ARRAY_STRING",
+  "ARRAY_INTEGER" = "ARRAY_INTEGER", 
+  "ARRAY_BIGINT" = "ARRAY_BIGINT", 
+  "ARRAY_DECIMAL" = "ARRAY_DECIMAL", 
+  "ARRAY_BOOLEAN" = "ARRAY_BOOLEAN", 
+  "ARRAY_DATE" = "ARRAY_DATE", 
   "AUTO_INCREMENT" = "AUTO_INCREMENT",
 }
 
@@ -47,8 +53,8 @@ export const DataTypeMap = {
   "TINYINT": type("number"),
   "SERIAL": type("number"),
   "SMALLSERIAL": type("number"),
-  "BIGSERIAL": type("number"),
-  "BIGINT": type("number"),
+  "BIGSERIAL": type("bigint"),
+  "BIGINT": type("bigint"),
   "BIT": type("boolean"),
   "BOOLEAN": type("boolean"),
   "BINARY": type("boolean"),
@@ -75,6 +81,12 @@ export const DataTypeMap = {
   "UUID": type("string"),
   "JSON": type("object"),
   "ARRAY": array(),
+  "ARRAY_STRING": array(), 
+  "ARRAY_INTEGER": array(), 
+  "ARRAY_BIGINT": array(), 
+  "ARRAY_DECIMAL": array(), 
+  "ARRAY_BOOLEAN": array(), 
+  "ARRAY_DATE": array(), 
   "AUTO_INCREMENT": type("number"),
 };
 
@@ -112,7 +124,13 @@ export const DefaultValidator = {
   "TEXT": Guardian.string(),
   "UUID": Guardian.string().uuid(),
   "JSON": Guardian.object(),
-  "ARRAY": Guardian.array(),
+  "ARRAY": Guardian.array(), 
+  "ARRAY_STRING": Guardian.array().of(Guardian.string()), 
+  "ARRAY_INTEGER": Guardian.array().of(Guardian.number().integer()), 
+  "ARRAY_BIGINT": Guardian.array().of(Guardian.bigint()), 
+  "ARRAY_DECIMAL": Guardian.array().of(Guardian.number()), 
+  "ARRAY_BOOLEAN": Guardian.array().of(Guardian.boolean()), 
+  "ARRAY_DATE": Guardian.array().of(Guardian.date()), 
   "AUTO_INCREMENT": Guardian.number().integer(),
 };
 
@@ -150,7 +168,13 @@ export const PostgresDataMap = {
   "TEXT": "TEXT",
   "UUID": "UUID",
   "JSON": "JSON",
-  "ARRAY": "ARRAY",
+  "ARRAY": "VARCHAR[]",
+  "ARRAY_STRING": "VARCHAR[]", 
+  "ARRAY_INTEGER": "INTEGER[]]", 
+  "ARRAY_BIGINT": "BIGINT[]", 
+  "ARRAY_DECIMAL": "DECIMAL[]", 
+  "ARRAY_BOOLEAN": "BOOLEAN[]", 
+  "ARRAY_DATE": "DATE[]", 
   "AUTO_INCREMENT": "SERIAL",
 };
 
@@ -189,6 +213,12 @@ export const SqliteDataMap = {
   "UUID": "VARCHAR",
   "JSON": "TEXT",
   "ARRAY": "TEXT",
+  "ARRAY_STRING": "TEXT", 
+  "ARRAY_INTEGER": "TEXT", 
+  "ARRAY_BIGINT": "TEXT", 
+  "ARRAY_DECIMAL": "TEXT", 
+  "ARRAY_BOOLEAN": "TEXT", 
+  "ARRAY_DATE": "TEXT", 
   "AUTO_INCREMENT": "INTEGER",
 };
 
@@ -227,5 +257,11 @@ export const MySQLDataMap = {
   "UUID": "UUID",
   "JSON": "TEXT",
   "ARRAY": "TEXT",
+  "ARRAY_STRING": "TEXT", 
+  "ARRAY_INTEGER": "TEXT", 
+  "ARRAY_BIGINT": "TEXT", 
+  "ARRAY_DECIMAL": "TEXT", 
+  "ARRAY_BOOLEAN": "TEXT", 
+  "ARRAY_DATE": "TEXT", 
   "AUTO_INCREMENT": "AUTO_INCREMENT",
 };

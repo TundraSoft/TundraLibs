@@ -18,6 +18,8 @@ export type ColumnDefinition = {
   length?: DecimalLengthSpec | number;
   // isNullable - Is column nullable, if true then null is valid. Defaults to false
   isNullable?: boolean;
+  // Not nullable - This will ensure if value is already present, it cannot be made into null. 
+  // notNullable?: boolean;
   // defaultValue: DBGenerators | GeneratorFunction<T>
   // Validations for the column
   // deno-lint-ignore no-explicit-any
