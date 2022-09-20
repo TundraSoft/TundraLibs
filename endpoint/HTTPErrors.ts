@@ -27,7 +27,13 @@ export class HTTPError extends Error {
   }
 
   get data(): string | Record<string, unknown> | Array<Record<string, unknown>> {
-    return this.#data;
+    if(typeof this.#data === "string") {
+      return {
+        message: this.#data,
+      }
+    } else {
+      return this.#data;
+    }
   }
 
   get internal(): boolean {

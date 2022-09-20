@@ -668,8 +668,8 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         // Ok this gets a little complicated as there will be both fields and files
         // @TODO - Figure out a better way to do this?
         const formData = await body.value.read({
-          maxFileSize: ctx.app.state.maxFileSize || 10485760, // default of 10MiB
-          outPath: ctx.app.state.uploadPath || undefined, // default of undefined
+          maxFileSize: ctx.app.state.MAX_FILE_UPLOAD_SIZE || 10485760, // default of 10MiB
+          outPath: ctx.app.state.FILE_UPLOAD_PATH || undefined, // default of undefined
         });
         payload = formData.fields;
         // Add files
