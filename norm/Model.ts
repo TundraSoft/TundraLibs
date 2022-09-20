@@ -749,7 +749,7 @@ export class Model<
     await this._init();
 
     const errors: ModelValidation<T> = {},
-      [generated, dbGenerated] = this._generate(
+      [generated, dbGenerated] = await this._generate(
         forInsert === true ? this._insertGenerators : this._updateGenerators,
       );
 
@@ -868,14 +868,14 @@ export class Model<
     }
   }
 
-  protected _generate(
+  protected async _generate(
     generators: Partial<Record<keyof T, DefaultValues>>,
   ) {
     const generated: Partial<Record<keyof T, unknown>> = {},
       dbGenerated: Partial<Record<keyof T, unknown>> = {};
-    Object.entries(generators).forEach(([key, value]) => {
+    await Object.entries(generators).forEach(async ([key, value]) => {
       if (value instanceof Function) {
-        generated[key as keyof T] = value();
+        generated[key as keyof T] = await value();
       } else if (value instanceof Date) {
         generated[key as keyof T] = value;
       } else if (typeof value === "number") {
