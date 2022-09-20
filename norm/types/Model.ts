@@ -61,7 +61,7 @@ export type ModelDefinition = SchemaDefinition & {
   // Paging
   pageSize?: number;
   // Features to be enabled
-  feature?: ModelPermissions;
+  feature?: Partial<ModelPermissions>;
 };
 
 type PartialPartial<T, K extends keyof T> =
