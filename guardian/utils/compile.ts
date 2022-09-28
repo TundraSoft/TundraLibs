@@ -77,6 +77,7 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
         obj = objs[0];
       // We inject defined keys which are not passed. This helps validate optional keys.
       // Properties defined but not passed needs to be handled for strict
+      // Add DEFINED also to this list.
       if (mode !== "PARTIAL") {
         const tempKeys = new Set(Object.keys(obj));
         structKeys.forEach((key) => {
@@ -140,6 +141,14 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
             undefined,
             errors,
           );
+        }
+        // Remove all undefined
+        if (mode === "DEFINED" || mode === "PARTIAL") {
+          Object.keys(retObj).forEach((key) => {
+            if (retObj[key] === undefined) {
+              delete retObj[key];
+            }
+          });
         }
         return retObj as StructResolveType<S>;
       }

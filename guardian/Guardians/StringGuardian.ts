@@ -178,6 +178,7 @@ export class StringGuardian<
         `Expect string to be between ${min} and ${max} characters long`,
     );
   }
+
   /**
    * pattern
    *
@@ -221,7 +222,7 @@ export class StringGuardian<
    */
   aadhaar(message?: string): GuardianProxy<this> {
     return this.pattern(
-      /^[2-9]{1}[0-9]{3}\\s[0-9]{4}\\s[0-9]{4}$/,
+      /^[2-9]{1}[0-9]{3}\s*[0-9]{4}\s*[0-9]{4}$/,
       message || `Expect string to be a valid Aadhaar`,
     );
   }

@@ -102,6 +102,37 @@ export class BigintGuardian<
     );
   }
 
+  /**
+   * pattern
+   *
+   * Checks if the string matches the pattern
+   *
+   * @param reg RegExp Pattern to match
+   * @param message string Message to use when validation fails
+   * @returns GuardianProxy<this>
+   */
+  pattern(reg: RegExp, message?: string): GuardianProxy<this> {
+    return this.test(
+      (num: bigint) => reg.test(num.toString()),
+      message || `Expected value to match pattern ${reg.toString()}`,
+    );
+  }
+
+  /**
+   * aadhaar
+   *
+   * Checks if the string is a valid AADHAAR number (INDIA)
+   * *NOTE* - It actually does not confirm the validity, just checks the format
+   *
+   * @param message string Message to use when validation fails
+   * @returns GuardianProxy<this>
+   */
+  aadhaar(message?: string): GuardianProxy<this> {
+    return this.pattern(
+      /^[2-9]{1}[0-9]{3}\\s*[0-9]{4}\\s*[0-9]{4}$/,
+      message || `Expect value to be a valid Aadhaar`,
+    );
+  }
   //#endregion Validators
 }
 

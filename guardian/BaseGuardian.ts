@@ -75,6 +75,7 @@ export class BaseGuardian<F extends FunctionType> {
   ): GuardianProxy<this, FunctionType<T, Parameters<F>>> {
     return this.transform(oneOf(values, error));
   }
+
   /**
    * test
    *

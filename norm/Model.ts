@@ -207,12 +207,12 @@ export class Model<
       `Validation failed for model ${model.name}`,
       "PARTIAL",
     );
-    // ModelManager.register(this);
+    // ModelManager.register(this, model);
   }
 
   // The model name
   get name(): string {
-    return this._name;
+    return this._name.trim().toLowerCase();
   }
 
   get schema(): string | undefined {

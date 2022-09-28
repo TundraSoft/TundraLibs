@@ -22,4 +22,3 @@ export function type<
     return args[0] as Typeof[T];
   };
 }
-
