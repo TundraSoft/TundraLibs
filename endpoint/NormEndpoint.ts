@@ -209,8 +209,9 @@ export class NormEndpoint<
       if (name === undefined) {
         delete params[key];
       } else {
-        params[name as string] = params[key];
+        const value = params[key];
         delete params[key];
+        params[name as string] = value;
       }
     });
     return super._injectStateParams(req, params);
