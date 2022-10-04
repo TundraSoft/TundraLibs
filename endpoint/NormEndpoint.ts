@@ -91,44 +91,7 @@ export class NormEndpoint<
     if (request.payload && !Array.isArray(request.payload)) {
       request.payload = [request.payload];
     }
-    // Perform Insert
-    // validate data
-    // const validatedData: Array<Partial<T>> = [],
-    //   errorRecords: Array<{ row: number; errors: ModelValidation<T> }> = [];
 
-    // for (const [index, item] of request.payload?.entries() || []) {
-    //   const [err, dat] = await this._model.validateData(item as Partial<T>);
-    //   if (err) {
-    //     // console.log(err);
-    //     errorRecords.push({
-    //       row: index,
-    //       errors: err,
-    //     });
-    //   } else {
-    //     validatedData.push(dat as Partial<T>);
-    //   }
-    // }
-    // // console.log("Async check done");
-    // if (errorRecords.length > 0) {
-    //   // console.log(errorRecords);
-    //   const errHead = new Headers();
-    //   errHead.set("X-Error-Rows", errorRecords.length.toString());
-    //   return {
-    //     status: Status.BadRequest,
-    //     payload: errorRecords,
-    //     headers: errHead,
-    //     totalRows: data.length,
-    //   };
-    // }
-
-    // const queryOutput = await this._model.insert(
-    //     validatedData,
-    //   ),
-    //   response: HTTPResponse = {
-    //     status: Status.Created,
-    //     payload: queryOutput.rows,
-    //     totalRows: queryOutput.totalRows,
-    //   };
     const response: HTTPResponse = {
       status: Status.Created,
       totalRows: 0,
@@ -234,5 +197,22 @@ export class NormEndpoint<
       status: Status.OK,
       totalRows: queryOutput.totalRows,
     };
+  }
+
+  protected override _injectStateParams(
+    req: ParsedRequest,
+    params: Record<string, unknown>,
+  ): ParsedRequest {
+    // Check if the params exist in model
+    Object.keys(params).forEach((key) => {
+      const name: keyof T | undefined = this._model.normaliseColumn(key);
+      if (name === undefined) {
+        delete params[key];
+      } else {
+        params[name as string] = params[key];
+        delete params[key];
+      }
+    });
+    return super._injectStateParams(req, params);
   }
 }

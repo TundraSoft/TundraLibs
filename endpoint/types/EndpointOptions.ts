@@ -1,3 +1,7 @@
+// import { Context } from "../../dependencies.ts";
+// import { HTTPResponse } from "./HTTPResponse.ts";
+// import { ParsedRequest } from "./ParsedRequest.ts";
+
 export type EndpointOptions = {
   // Name of the endpoint - For quick reference
   name: string;

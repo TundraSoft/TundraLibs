@@ -239,7 +239,25 @@ export class Model<
   }
 
   public hasColumn(name: keyof T | string): boolean {
-    return this._columns[name as keyof T] !== undefined;
+    name = String(name).toLowerCase();
+    const columns: Record<string, string> = {};
+    Object.entries(this._columns).forEach(([key]) => {
+      columns[key.toLowerCase()] = key;
+    });
+    // return this._columns[name as keyof T] !== undefined;
+    return columns[name] !== undefined;
+  }
+
+  public normaliseColumn(name: keyof T | string): keyof T | undefined {
+    name = String(name).toLowerCase();
+    const columns: Record<string, string> = {};
+    Object.entries(this._columns).forEach(([key]) => {
+      columns[key.toLowerCase()] = key;
+    });
+    if(columns[name] !== undefined) {
+      return columns[name] as keyof T;
+    }
+    return undefined;
   }
 
   public capability(name: keyof ModelPermissions): boolean {

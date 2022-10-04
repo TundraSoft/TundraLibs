@@ -51,9 +51,11 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     if (!options.name) {
       throw new MissingNameError();
     }
+
     if (!options.routePath) {
       throw new MissingRoutePathError(options.name);
     }
+
     options.name = options.name.trim().toLowerCase();
 
     super(options as T, defOptions as Partial<T>);
@@ -145,6 +147,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     this._postBodyParse(req, ctx);
+
     // Call the actual handler
     const op = await this._fetch(req);
 
@@ -661,18 +664,6 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       delete params["sortdesc"];
     }
     //#endregion Split paging and sorting params
-    //#region Inject state params
-    // Ensure params is defined in ApplicationState
-    if (ctx.state.params) {
-      Object.assign(params, ctx.state.params);
-    }
-    // Handle Null value of Identifier and state params
-    Object.keys(params).forEach((key) => {
-      if (params[key] === null || params[key] === undefined) {
-        delete params[key];
-      }
-    });
-    //#endregion Inject state params
 
     //#region Parse Body
     // TODO - Check if body exists in http 2.0
@@ -719,24 +710,14 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         }
       }
     }
-    //#endregion Parse Body
-
-    //#region Inject params into payload
-    if (
-      ctx.request.method === "POST" || ctx.request.method === "PUT" ||
-      ctx.request.method === "PATCH"
-    ) {
-      if (payload) {
-        if (Array.isArray(payload)) {
-          payload = payload.map((p) => Object.assign(p, params));
-        } else {
-          Object.assign(payload, params);
-        }
+    // Handle Null value of Identifier and state params
+    Object.keys(params).forEach((key) => {
+      if (params[key] === null || params[key] === undefined) {
+        delete params[key];
       }
-    }
-
-    //#endregion Inject params into payload
-    return {
+    });
+    //#endregion Parse Body
+    const parseReq: ParsedRequest = {
       method: ctx.request.method,
       params: params,
       paging: paging,
@@ -744,6 +725,39 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       payload: payload,
       files: files,
     };
+
+    // Call Inject params
+    return this._injectStateParams(parseReq, ctx.state.params);
+  }
+
+  protected _injectStateParams(
+    req: ParsedRequest,
+    params?: Record<string, unknown>,
+  ): ParsedRequest {
+    if (params) {
+      // Delete null and undefined values
+      Object.keys(params).forEach((key) => {
+        if (params[key] !== null && params[key] !== undefined) {
+          delete params[key];
+        }
+      });
+      Object.assign(req.params, params);
+      //#region Inject params into payload
+      if (
+        req.method === "POST" || req.method === "PUT" ||
+        req.method === "PATCH"
+      ) {
+        if (req.payload) {
+          if (Array.isArray(req.payload)) {
+            req.payload = req.payload.map((p) => Object.assign(p, params));
+          } else {
+            Object.assign(req.payload, params);
+          }
+        }
+      }
+      //#endregion Inject params into payload
+    }
+    return req;
   }
 
   /**
