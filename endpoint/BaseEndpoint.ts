@@ -716,6 +716,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         delete params[key];
       }
     });
+    
     //#endregion Parse Body
     const parseReq: ParsedRequest = {
       method: ctx.request.method,
@@ -749,9 +750,9 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       ) {
         if (req.payload) {
           if (Array.isArray(req.payload)) {
-            req.payload = req.payload.map((p) => Object.assign(p, params));
+            req.payload = req.payload.map((p) => Object.assign(p, req.params));
           } else {
-            Object.assign(req.payload, params);
+            Object.assign(req.payload, req.params);
           }
         }
       }
