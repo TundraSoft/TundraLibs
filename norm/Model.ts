@@ -254,7 +254,7 @@ export class Model<
     Object.entries(this._columns).forEach(([key]) => {
       columns[key.toLowerCase()] = key;
     });
-    if(columns[name] !== undefined) {
+    if (columns[name] !== undefined) {
       return columns[name] as keyof T;
     }
     return undefined;
