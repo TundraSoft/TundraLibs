@@ -29,6 +29,7 @@ import {
  */
 export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
   extends Options<T> {
+  
   constructor(options: Partial<EndpointOptions>) {
     const defOptions: Partial<EndpointOptions> = {
       stateParams: true,
@@ -146,7 +147,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     const req = await this._parseRequest(ctx);
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
-    this._postBodyParse(req, ctx);
+    // await this._postBodyParse(req, ctx);
 
     // Call the actual handler
     const op = await this._fetch(req);
@@ -195,7 +196,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     }
 
     // Call post response hook
-    this._postHandle(ctx);
+    await this._postHandle(ctx);
     // All done
   }
 
@@ -247,7 +248,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
 
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
-    this._postBodyParse(req, ctx);
+    // await this._postBodyParse(req, ctx);
     // Check if it is a single record or multiple records
     let single = false;
     if (req.payload && !Array.isArray(req.payload)) {
@@ -280,7 +281,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       });
     }
     // Call post response hook
-    this._postHandle(ctx);
+    await this._postHandle(ctx);
   }
 
   /**
@@ -317,7 +318,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     }
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
-    this._postBodyParse(req, ctx);
+    // await this._postBodyParse(req, ctx);
     // TODO - Handle array of objects
 
     const op = await this._update(req);
@@ -353,7 +354,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       });
     }
     // Call post response hook
-    this._postHandle(ctx);
+    await this._postHandle(ctx);
   }
 
   /**
@@ -390,7 +391,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     }
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
-    this._postBodyParse(req, ctx);
+    // await this._postBodyParse(req, ctx);
     // TODO - Handle array of objects
 
     const op = await this._update(req);
@@ -426,7 +427,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       });
     }
     // Call post response hook
-    this._postHandle(ctx);
+    await this._postHandle(ctx);
   }
 
   /**
@@ -454,7 +455,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     const req = await this._parseRequest(ctx);
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
-    this._postBodyParse(req, ctx);
+    // await this._postBodyParse(req, ctx);
     const op = await this._delete(req);
     ctx.response.status = op.status;
 
@@ -471,7 +472,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       });
     }
     // Call post response hook
-    this._postHandle(ctx);
+    await this._postHandle(ctx);
   }
 
   /**
@@ -500,7 +501,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     const req = await this._parseRequest(ctx);
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
-    this._postBodyParse(req, ctx);
+    // await this._postBodyParse(req, ctx);
     const op = await this._count(req);
     // ctx.response.status = Status.OK;
     // ctx.response.headers.set(this._getOption("totalRowHeaderName"), op.toString());
@@ -515,7 +516,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       });
     }
     // Call post response hook
-    this._postHandle(ctx);
+    await this._postHandle(ctx);
   }
 
   /**
@@ -726,6 +727,8 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       payload: payload,
       files: files,
     };
+
+    await this._postBodyParse(parseReq, ctx);
 
     // Call Inject params
     return this._injectStateParams(parseReq, ctx.state.params);
