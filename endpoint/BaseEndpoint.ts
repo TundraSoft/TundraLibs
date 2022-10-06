@@ -29,7 +29,6 @@ import {
  */
 export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
   extends Options<T> {
-  
   constructor(options: Partial<EndpointOptions>) {
     const defOptions: Partial<EndpointOptions> = {
       stateParams: true,
@@ -442,11 +441,6 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     this._setDefaultHeaders(ctx);
 
     if (this.allowedMethods.indexOf("DELETE") === -1) {
-      // ctx.response.status = 405;
-      // ctx.response.body = {
-      //   message: this._getOption("notSupportedMessage"),
-      // };
-      // return;
       throw methodNotAllowed(
         this._getOption("notSupportedMessage"),
         ctx.response.headers,
@@ -458,6 +452,16 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     // await this._postBodyParse(req, ctx);
     const op = await this._delete(req);
     ctx.response.status = op.status;
+
+    if (this._hasIdentifier(req)) {
+      // If no rows throw 404
+      if (op.totalRows === 0) {
+        throw resourceNotFound(
+          this._getOption("notFoundMessage"),
+          ctx.response.headers,
+        );
+      }
+    }
 
     ctx.response.headers.set(
       this._getOption("totalRowHeaderName"),
@@ -508,7 +512,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     ctx.response.status = Status.OK;
     ctx.response.headers.set(
       this._getOption("totalRowHeaderName"),
-      op.toString(),
+      op.totalRows.toString(),
     );
     if (op.headers) {
       op.headers.forEach(([key, value]) => {
@@ -552,7 +556,11 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @param request ParsedRequest The parsed request object
    * @returns Promise<HTTPResponse<T>> The response object
    */
-  protected abstract _fetch(request: ParsedRequest): Promise<HTTPResponse>;
+  protected _fetch(_request: ParsedRequest): Promise<HTTPResponse> {
+    throw methodNotAllowed(
+      this._getOption("notSupportedMessage"),
+    );
+  }
 
   /**
    * _insert
@@ -562,7 +570,11 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @param request ParsedRequest The parsed request object
    * @returns Promise<HTTPResponse<T>> The response object
    */
-  protected abstract _insert(request: ParsedRequest): Promise<HTTPResponse>;
+  protected _insert(_request: ParsedRequest): Promise<HTTPResponse> {
+    throw methodNotAllowed(
+      this._getOption("notSupportedMessage"),
+    );
+  }
 
   /**
    * _update
@@ -573,7 +585,11 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @param request ParsedRequest The parsed request object
    * @returns Promise<HTTPResponse<T>> The response object
    */
-  protected abstract _update(request: ParsedRequest): Promise<HTTPResponse>;
+  protected _update(_request: ParsedRequest): Promise<HTTPResponse> {
+    throw methodNotAllowed(
+      this._getOption("notSupportedMessage"),
+    );
+  }
 
   /**
    * _delete
@@ -583,9 +599,25 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @param request ParsedRequest The parsed request object
    * @returns Promise<HTTPResponse<T>> The response object
    */
-  protected abstract _delete(request: ParsedRequest): Promise<HTTPResponse>;
+  protected _delete(_request: ParsedRequest): Promise<HTTPResponse> {
+    throw methodNotAllowed(
+      this._getOption("notSupportedMessage"),
+    );
+  }
 
-  protected abstract _count(request: ParsedRequest): Promise<HTTPResponse>;
+  /**
+   * _count
+   *
+   * Perform a count check. This will provide information for HEAD calls
+   *
+   * @param request ParsedRequest The parsed request object
+   * @returns Promise<HTTPResponse<T>> The response object
+   */
+  protected _count(_request: ParsedRequest): Promise<HTTPResponse> {
+    throw methodNotAllowed(
+      this._getOption("notSupportedMessage"),
+    );
+  }
 
   //#endregion Implementation methods
 
@@ -717,7 +749,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         delete params[key];
       }
     });
-    
+
     //#endregion Parse Body
     const parseReq: ParsedRequest = {
       method: ctx.request.method,
