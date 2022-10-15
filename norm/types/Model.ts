@@ -19,8 +19,9 @@ export type ColumnDefinition = {
   // isNullable - Is column nullable, if true then null is valid. Defaults to false
   isNullable?: boolean;
   // Not nullable - This will ensure if value is already present, it cannot be made into null.
-  // notNullable?: boolean;
-  // defaultValue: DBGenerators | GeneratorFunction<T>
+  notNullOnce?: boolean;
+  // Disable update on this column. If passed, value is ignored
+  disableUpdate?: boolean;
   // Validations for the column
   // deno-lint-ignore no-explicit-any
   validator?: GuardianProxy<any>;
@@ -28,10 +29,10 @@ export type ColumnDefinition = {
   uniqueKey?: Set<string>;
   insertDefault?: DefaultValues;
   updateDefault?: DefaultValues;
-  relatesTo?: {
-    // Model name: Column Name
-    [key: string]: string;
-  };
+  // relatesTo?: {
+  //   // Model name: Column Name
+  //   [key: string]: string;
+  // };
 };
 
 export type ModelPermissions = {
@@ -53,6 +54,19 @@ export type SchemaDefinition = {
   columns: {
     [key: string]: ColumnDefinition;
   };
+
+  relationships?: {
+    [modelName: string]: Set<{
+      [sourceColumn: string]: string;
+    }>;
+  };
+
+  isView?: boolean;
+  viewDefinition?: {
+    [model: string]: {
+      columns: string[]; // Columns to be selected
+    }
+  }
 };
 
 export type ModelDefinition = SchemaDefinition & {

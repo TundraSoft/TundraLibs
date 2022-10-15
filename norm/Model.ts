@@ -66,6 +66,7 @@ export class Model<
   protected _connection!: AbstractClient;
   protected _schema?: string;
   protected _table: string;
+  protected _isView: boolean;
   protected _pageSize?: number;
   protected _features: ModelPermissions = {
     select: true,
@@ -95,7 +96,11 @@ export class Model<
 
   // Record of Unique key name to array of columns which form the unique key
   protected _uniqueKeys: Record<string, Array<keyof T>> = {};
-  protected _relationships: Record<string, Record<keyof T, string>> = {};
+  // protected _relationships: Record<string, Record<keyof T, string>> = {};
+  // Update disabled columns
+  protected _disableUpdate: Array<keyof T> = [];
+  // Columns which are actually set as nullable, but once value is entered cannot be updated to null
+  protected _notNullOnce: Array<keyof T> = [];
   // The validator object
   // deno-lint-ignore no-explicit-any
   protected _validator: GuardianProxy<any>;
@@ -107,7 +112,21 @@ export class Model<
     this._schema = model.schema;
     this._table = model.table;
     this._pageSize = model.pageSize;
-
+    model.isView = (model.viewDefinition !== undefined || model.isView);
+    this._isView = model.isView as boolean;
+    
+    if(this._isView) {
+      // If it is a view, disable insert, update and delete
+      model.feature = {
+        select: true,
+        insert: false,
+        update: false,
+        delete: false,
+        truncate: false, 
+        create: false,
+        drop: false,
+      };
+    }
     // Set features
     if (model.feature) {
       Object.entries(model.feature).forEach(([key, value]) => {
@@ -142,6 +161,7 @@ export class Model<
         type: definition.dataType,
         length: definition.length,
       };
+      
       if (definition.isPrimary) {
         this._primaryKeys.push(column as keyof T);
       }
@@ -182,20 +202,28 @@ export class Model<
         this._notNulls.push(column as keyof T);
       }
 
+      if (definition.notNullOnce === true) {
+        this._notNullOnce.push(column as keyof T);
+      }
+
+      if (definition.disableUpdate === true) {
+        this._disableUpdate.push(column as keyof T);
+      }
+
       // Relationships
       // Relationships are present primarily to handle indexes. norm will not
       // create foreign keys to avoid table alter/creation hierarchy. Indexes will be maintained for performance.
       // In the future, this could be used to select using joins or create views
-      if (definition.relatesTo) {
-        Object.entries(definition.relatesTo).forEach(
-          ([modelName, modelColumn]) => {
-            if (this._relationships[modelName] === undefined) {
-              this._relationships[modelName] = {} as Record<keyof T, string>;
-            }
-            this._relationships[modelName][column as keyof T] = modelColumn;
-          },
-        );
-      }
+      // if (definition.relatesTo) {
+      //   Object.entries(definition.relatesTo).forEach(
+      //     ([modelName, modelColumn]) => {
+      //       if (this._relationships[modelName] === undefined) {
+      //         this._relationships[modelName] = {} as Record<keyof T, string>;
+      //       }
+      //       this._relationships[modelName][column as keyof T] = modelColumn;
+      //     },
+      //   );
+      // }
     }
     this._columns = columnAlias as Record<keyof T, string>;
     this._columnType = columnDefinition as Record<
@@ -208,11 +236,12 @@ export class Model<
       "PARTIAL",
     );
     // ModelManager.register(this, model);
+    Database.registerModel(this as Model, model);
   }
 
   // The model name
   get name(): string {
-    return this._name.trim().toLowerCase();
+    return this._name.trim();
   }
 
   get schema(): string | undefined {
@@ -227,6 +256,10 @@ export class Model<
     return `${
       this._schema !== undefined ? `${this._schema}.` : ""
     }${this._table}`;
+  }
+
+  get connection(): string {
+    return this._connectionName;
   }
 
   // deno-lint-ignore no-explicit-any
@@ -282,9 +315,9 @@ export class Model<
       !this._identityKeys.includes(name as keyof T));
   }
 
-  public getRelationships(): Record<string, Record<keyof T, string>> {
-    return this._relationships;
-  }
+  // public getRelationships(): Record<string, Record<keyof T, string>> {
+  //   return this._relationships;
+  // }
 
   /**
    * select
@@ -482,6 +515,23 @@ export class Model<
       data: {},
     };
 
+    // Remove disable update columns
+    this._disableUpdate.forEach((column) => {
+      delete data[column];
+    });
+
+    // Handle notNullOnce columns
+    this._notNullOnce.forEach((column) => {
+      // Is it there?
+      if (data[column] !== undefined) {
+        // Is it null?
+        if (data[column] === null) {
+          // Remove it
+          delete data[column];
+        }
+      }
+    });
+    
     // Validate row
     const [err, op] = await this.validateData(data, false),
       errors: ModelValidation<T> = err || {};

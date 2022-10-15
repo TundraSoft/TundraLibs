@@ -1,6 +1,13 @@
 import { assertEquals } from "../../dev_dependencies.ts";
 import { Database } from "../Database.ts";
-import { CountQueryOptions, Filters, SelectQueryOptions } from "../mod.ts";
+import {
+  CountQueryOptions,
+  Filters,
+  // Model,
+  // ModelDefinition,
+  // ModelType,
+  SelectQueryOptions,
+} from "../mod.ts";
 import { TestModel, TestType } from "./TestModel.ts";
 import { Sysinfo } from "../../sysinfo/mod.ts";
 import { CityModel, CityRawType } from "./CityModel.ts";
@@ -14,6 +21,13 @@ await Database.load("default", {
   database: "postgres",
   port: await Sysinfo.getEnv("POSTGRES_PORT") || 49153,
 });
+
+// const a = Database.getModel('CityModel'),
+//   b = Database.getModelDefinition('CityModel'),
+//   c = a as Model<typeof b, ModelType<typeof b>>;
+// const res = await c.select({
+//   Id: 1
+// });
 
 Deno.test({
   name: "[module='norm' dialect='postgres'] Test creation of table",

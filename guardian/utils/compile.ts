@@ -57,7 +57,7 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
     return ar as unknown as StructValidatorFunction<S>;
   } else if (struct instanceof Function) {
     return struct as unknown as StructValidatorFunction<S>;
-  } else if (typeof struct === "object") {
+  } else if (struct && typeof struct === "object") {
     // Ok, now we have to do the magic
     const structKeys: Set<string> = new Set(Object.keys(struct)),
       // deno-lint-ignore no-explicit-any
