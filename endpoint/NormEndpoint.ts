@@ -19,20 +19,22 @@ export type ErrorList = {
 export class NormEndpoint<
   S extends ModelDefinition = ModelDefinition,
   T extends ModelType<S> = ModelType<S>,
-> extends BaseEndpoint<EndpointOptions> {
+  O extends EndpointOptions = EndpointOptions,
+> extends BaseEndpoint<O> {
   protected _model: Model<S, T>;
 
-  constructor(model: Model<S, T>, options: Partial<EndpointOptions>) {
+  constructor(model: Model<S, T>, options: Partial<O>) {
     const defOptions: Partial<EndpointOptions> = {
       routeIdentifiers: model.primaryKeys as Array<string>,
-      allowedMethods: {
-        GET: model.capability("insert"),
-        POST: model.capability("insert"),
-        PUT: model.capability("update"),
-        PATCH: model.capability("update"),
-        DELETE: model.capability("delete"),
-        HEAD: true,
-      },
+      // Disabled as methods must be manually enabled as config
+      // allowedMethods: {
+      //   GET: model.capability("insert"),
+      //   POST: model.capability("insert"),
+      //   PUT: model.capability("update"),
+      //   PATCH: model.capability("update"),
+      //   DELETE: model.capability("delete"),
+      //   HEAD: true,
+      // },
     };
     super({ ...defOptions, ...options });
     this._model = model;

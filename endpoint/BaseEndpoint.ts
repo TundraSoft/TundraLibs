@@ -32,15 +32,17 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
   constructor(options: Partial<EndpointOptions>) {
     const defOptions: Partial<EndpointOptions> = {
       stateParams: true,
-      allowedMethods: {
-        GET: false,
-        POST: false,
-        PUT: false,
-        PATCH: false,
-        DELETE: false,
-        HEAD: false,
-      },
-      pageLimit: 10,
+      // Disabled as we do not want to allow all methods by default
+      // allowedMethods: {
+      //   GET: false,
+      //   POST: false,
+      //   PUT: false,
+      //   PATCH: false,
+      //   DELETE: false,
+      //   HEAD: false,
+      // },
+      // Disabled so it can be set per endpoint
+      // pageLimit: 10,
       totalRowHeaderName: "X-Total-Rows",
       paginationPageHeaderName: "X-Pagination-Page",
       paginationLimitHeaderName: "X-Pagination-Limit",
