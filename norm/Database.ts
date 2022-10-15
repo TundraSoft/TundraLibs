@@ -18,7 +18,7 @@ export class Database {
       definition: ModelDefinition;
       model: Model;
     };
-  } = {}
+  } = {};
 
   public static async init(
     config = "Database",
@@ -123,5 +123,4 @@ export class Database {
 
   // protected static _parseDefinition(definition: ModelDefinition): void {
   // }
-
 }

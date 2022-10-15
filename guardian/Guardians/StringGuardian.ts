@@ -265,15 +265,18 @@ export class StringGuardian<
 
   /**
    * phone
-   * 
+   *
    * Checks if the string is a valid phone number as per E.164 format
    * *NOTE* - It actually does not confirm the validity, just checks the format
-   * 
+   *
    * @param message string Message to use when validation fails
    * @returns GuardianProxy<this>
    */
   phone(message?: string): GuardianProxy<this> {
-    return this.pattern(/^\+?[1-9]\d{1,14}$/, message || `Expect string to be a valid phone number (E.164)`);
+    return this.pattern(
+      /^\+?[1-9]\d{1,14}$/,
+      message || `Expect string to be a valid phone number (E.164)`,
+    );
   }
 
   /**

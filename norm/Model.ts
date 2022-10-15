@@ -112,17 +112,17 @@ export class Model<
     this._schema = model.schema;
     this._table = model.table;
     this._pageSize = model.pageSize;
-    model.isView = (model.viewDefinition !== undefined || model.isView);
+    model.isView = model.viewDefinition !== undefined || model.isView;
     this._isView = model.isView as boolean;
-    
-    if(this._isView) {
+
+    if (this._isView) {
       // If it is a view, disable insert, update and delete
       model.feature = {
         select: true,
         insert: false,
         update: false,
         delete: false,
-        truncate: false, 
+        truncate: false,
         create: false,
         drop: false,
       };
@@ -161,7 +161,7 @@ export class Model<
         type: definition.dataType,
         length: definition.length,
       };
-      
+
       if (definition.isPrimary) {
         this._primaryKeys.push(column as keyof T);
       }
@@ -531,7 +531,7 @@ export class Model<
         }
       }
     });
-    
+
     // Validate row
     const [err, op] = await this.validateData(data, false),
       errors: ModelValidation<T> = err || {};

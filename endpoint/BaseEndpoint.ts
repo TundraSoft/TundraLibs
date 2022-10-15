@@ -40,7 +40,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         DELETE: false,
         HEAD: false,
       },
-      pageLimit: 10, 
+      pageLimit: 10,
       totalRowHeaderName: "X-Total-Rows",
       paginationPageHeaderName: "X-Pagination-Page",
       paginationLimitHeaderName: "X-Pagination-Limit",
@@ -60,10 +60,10 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
 
     super(options as T, defOptions as Partial<T>);
     // If GET is allowed, head is also alowed
-    if(this._getOption('allowedMethods').GET === true) {
-      const perm = this._getOption('allowedMethods');
+    if (this._getOption("allowedMethods").GET === true) {
+      const perm = this._getOption("allowedMethods");
       perm.HEAD = true;
-      this._setOption('allowedMethods', perm);
+      this._setOption("allowedMethods", perm);
     }
     // Register the endpoint
     EndpointManager.register(this);

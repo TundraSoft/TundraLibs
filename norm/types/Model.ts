@@ -65,8 +65,8 @@ export type SchemaDefinition = {
   viewDefinition?: {
     [model: string]: {
       columns: string[]; // Columns to be selected
-    }
-  }
+    };
+  };
 };
 
 export type ModelDefinition = SchemaDefinition & {
