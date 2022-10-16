@@ -16,6 +16,28 @@ export type ErrorList = {
   [key: string]: string;
 };
 
+const defaultGetHandler = async function (
+    this: NormEndpoint,
+    req: ParsedRequest,
+  ) {
+    return await this._fetch(req);
+  },
+  defaultPostHandler = async function (this: NormEndpoint, req: ParsedRequest) {
+    return await this._insert(req);
+  },
+  defaultPutHandler = async function (this: NormEndpoint, req: ParsedRequest) {
+    return await this._update(req);
+  },
+  defaultDeleteHandler = async function (
+    this: NormEndpoint,
+    req: ParsedRequest,
+  ) {
+    return await this._delete(req);
+  },
+  defaultHeadHandler = async function (this: NormEndpoint, req: ParsedRequest) {
+    return await this._count(req);
+  };
+
 export class NormEndpoint<
   S extends ModelDefinition = ModelDefinition,
   T extends ModelType<S> = ModelType<S>,
@@ -24,8 +46,17 @@ export class NormEndpoint<
   protected _model: Model<S, T>;
 
   constructor(model: Model<S, T>, options: Partial<O>) {
+    // We set routeIdentifiers as PK by default
     const defOptions: Partial<EndpointOptions> = {
       routeIdentifiers: model.primaryKeys as Array<string>,
+      hooks: {
+        get: defaultGetHandler,
+        post: defaultPostHandler,
+        put: defaultPutHandler,
+        patch: defaultPutHandler,
+        delete: defaultDeleteHandler,
+        head: defaultHeadHandler,
+      },
       // Disabled as methods must be manually enabled as config
       // allowedMethods: {
       //   GET: model.capability("insert"),
@@ -40,7 +71,7 @@ export class NormEndpoint<
     this._model = model;
   }
 
-  protected async _fetch(request: ParsedRequest): Promise<HTTPResponse> {
+  protected async _fetch(request: ParsedRequest): Promise<HTTPResponse<T>> {
     // Validate filters
     let filters: Filters<T> | undefined;
     try {
@@ -58,8 +89,8 @@ export class NormEndpoint<
     // Set page size and limit
     if (
       (!request.paging || !request.paging.limit) &&
-      this._getOption("pageLimit") !== undefined &&
-      this._getOption("pageLimit") > 0
+      (this._getOption("pageLimit") !== undefined &&
+          this._getOption("pageLimit") || 0 > 0)
     ) {
       request.paging = request.paging || {};
       request.paging.limit = this._getOption("pageLimit");
@@ -71,7 +102,7 @@ export class NormEndpoint<
         request.paging as QueryPagination,
       ),
       // hasIdentifier = this._hasIdentifier(request),
-      response: HTTPResponse = {
+      response: HTTPResponse<T> = {
         status: Status.OK,
         totalRows: queryOutput.totalRows,
         headers: new Headers(),
@@ -88,13 +119,13 @@ export class NormEndpoint<
     return response;
   }
 
-  protected async _insert(request: ParsedRequest): Promise<HTTPResponse> {
+  protected async _insert(request: ParsedRequest): Promise<HTTPResponse<T>> {
     // NORM accepts only array for input. So we must convert payload to array
     if (request.payload && !Array.isArray(request.payload)) {
       request.payload = [request.payload];
     }
 
-    const response: HTTPResponse = {
+    const response: HTTPResponse<T> = {
       status: Status.Created,
       totalRows: 0,
     };
@@ -116,7 +147,7 @@ export class NormEndpoint<
     return response;
   }
 
-  protected async _update(request: ParsedRequest): Promise<HTTPResponse> {
+  protected async _update(request: ParsedRequest): Promise<HTTPResponse<T>> {
     // Validate filters
     let filters: Filters<T> | undefined;
     try {
@@ -134,7 +165,7 @@ export class NormEndpoint<
     }
     // TODO Process filters
 
-    const response: HTTPResponse = {
+    const response: HTTPResponse<T> = {
       status: Status.OK,
       totalRows: 0,
     };
@@ -159,7 +190,7 @@ export class NormEndpoint<
     return response;
   }
 
-  protected async _delete(request: ParsedRequest): Promise<HTTPResponse> {
+  protected async _delete(request: ParsedRequest): Promise<HTTPResponse<T>> {
     // Validate filters
     let filters: Filters<T> | undefined;
     try {
@@ -173,7 +204,7 @@ export class NormEndpoint<
     }
 
     const queryOutput = await this._model.delete(filters),
-      response: HTTPResponse = {
+      response: HTTPResponse<T> = {
         status: Status.NoContent,
         headers: new Headers(),
         totalRows: queryOutput.totalRows,
@@ -181,7 +212,7 @@ export class NormEndpoint<
     return response;
   }
 
-  protected async _count(request: ParsedRequest): Promise<HTTPResponse> {
+  protected async _count(request: ParsedRequest): Promise<HTTPResponse<T>> {
     // Validate filters
     let filters: Filters<T> | undefined;
     try {

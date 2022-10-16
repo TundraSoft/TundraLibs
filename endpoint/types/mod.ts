@@ -1,4 +1,10 @@
-export type { EndpointOptions } from "./EndpointOptions.ts";
+export type {
+  EndpointHooks,
+  EndpointOptions,
+  MethodHook,
+  PostBodyHook,
+  PostHandleHook,
+} from "./EndpointOptions.ts";
 export type {
   FileUploadInfo,
   PagingParam,

@@ -1,29 +1,51 @@
-// import { Context } from "../../dependencies.ts";
-// import { HTTPResponse } from "./HTTPResponse.ts";
-// import { ParsedRequest } from "./ParsedRequest.ts";
+import { Context } from "../../dependencies.ts";
+import type { HTTPMethods } from "../../dependencies.ts";
+import { ParsedRequest } from "./ParsedRequest.ts";
+import type { HTTPResponse } from "./HTTPResponse.ts";
+
+export type PostBodyHook = (req: ParsedRequest, ctx: Context) => Promise<void>;
+export type PostHandleHook = (ctx: Context) => Promise<void>;
+export type MethodHook = (request: ParsedRequest) => Promise<HTTPResponse>;
+// export type NormMethodHook = (request: ParsedRequest) => Promise<HTTPResponse>;
+
+// export interface iBaseEndpoint {
+//   _hasIdentifier: (req: ParsedRequest) => boolean;
+//   _getOption: (name: string) => unknown | undefined;
+//   _hasOption: (name: string) => boolean;
+// }
+
+// export interface iNormEndpoint extends iBaseEndpoint {
+//   _fetch: NormMethodHook;
+//   _insert: NormMethodHook;
+//   _update: NormMethodHook;
+//   _delete: NormMethodHook;
+//   _count: NormMethodHook;
+// }
+
+export type EndpointHooks = {
+  postBodyParse: PostBodyHook;
+  postHandle: PostHandleHook;
+  get: MethodHook;
+  head: MethodHook;
+  post: MethodHook;
+  put: MethodHook;
+  patch: MethodHook;
+  delete: MethodHook;
+};
 
 export type EndpointOptions = {
-  // Name of the endpoint - For quick reference
   name: string;
-  // The route path, example /users
   routePath: string;
-  // The route group - Useful for deployment. Has no use case in app execution
   routeGroup: string;
-  // Route Identifiers are the Primary Key values basis which a specific (single) record can be identified
-  // @TODO - Both these must be Map<string, string> where we have alias - actual name #HasH9
   routeIdentifiers: string[];
-  // Identifiers coming in through OAK's State object
   stateParams: boolean;
-  // Permission settings
-  allowedMethods: {
-    GET: boolean;
-    POST: boolean;
-    PUT: boolean;
-    PATCH: boolean;
-    DELETE: boolean;
-    HEAD: boolean;
-  };
-  pageLimit: number;
+  allowedMethods: Array<HTTPMethods>;
+  hooks: Partial<EndpointHooks>;
+  // handlers: Partial<EndpointHandlers>;
+  // postBodyParse?: (req: ParsedRequest, ctx: Context) => Promise<void>;
+  // postHandle?: (ctx: Context) => Promise<void>;
+  // Few header names
+  pageLimit?: number;
   totalRowHeaderName: string;
   paginationLimitHeaderName: string;
   paginationPageHeaderName: string;

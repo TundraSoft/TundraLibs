@@ -1,9 +1,13 @@
 export type {
+  EndpointHooks,
   EndpointOptions,
   FileUploadInfo,
   HTTPResponse,
+  MethodHook,
   PagingParam,
   ParsedRequest,
+  PostBodyHook,
+  PostHandleHook,
   SortingParam,
 } from "./types/mod.ts";
 

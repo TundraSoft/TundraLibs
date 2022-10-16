@@ -113,6 +113,24 @@ export class Database {
     }
   }
 
+  public static generateDDL(location: string, connection: string, forceCreate: boolean): void {
+    // Is the connection info present?
+    if (!Database._clients.has(connection)) {
+      throw new ConfigNotFound(connection);
+    }
+    // Ok get all models which use this connection
+    const models: string[] = [];
+    for (const name in Database._modelInfo) {
+      if (Database._modelInfo[name].connection === connection) {
+        models.push(name);
+      }
+    }
+    // Generate insert table in hierarchial order (ones without FK gets created first, then all tables which refer to them, and so on)
+    
+    // Generate insert statements
+
+    // Done
+  }
   // Check data types
   // public static validateModels(connection?: string, schema?: string): void {
   //   // Validate particular set of models - filtered by connection or schema

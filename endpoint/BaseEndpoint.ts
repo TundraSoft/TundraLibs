@@ -7,15 +7,19 @@ import {
   Status,
 } from "../dependencies.ts";
 
+import type { HTTPMethods } from "../dependencies.ts";
+
 import type {
   EndpointOptions,
   FileUploadInfo,
-  HTTPResponse,
+  // HTTPResponse,
   PagingParam,
   ParsedRequest,
   SortingParam,
 } from "./types/mod.ts";
+
 import { EndpointManager } from "./EndpointManager.ts";
+
 // import type { HTTPMethods } from "../dependencies.ts";
 import { MissingNameError, MissingRoutePathError } from "./Errors.ts";
 import {
@@ -23,33 +27,34 @@ import {
   methodNotAllowed,
   resourceNotFound,
 } from "./HTTPErrors.ts";
+import { EndpointHooks } from "./types/EndpointOptions.ts";
 
-/**
- * This is the base endpoint, acts like a base template
- */
-export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
-  extends Options<T> {
+export class BaseEndpoint<
+  T extends Record<string, unknown>,
+  O extends EndpointOptions = EndpointOptions,
+> extends Options<O> {
+  protected _allowedMethods: Array<HTTPMethods> = [];
+
   constructor(options: Partial<EndpointOptions>) {
     const defOptions: Partial<EndpointOptions> = {
       stateParams: true,
-      // Disabled as we do not want to allow all methods by default
-      // allowedMethods: {
-      //   GET: false,
-      //   POST: false,
-      //   PUT: false,
-      //   PATCH: false,
-      //   DELETE: false,
-      //   HEAD: false,
-      // },
-      // Disabled so it can be set per endpoint
-      // pageLimit: 10,
+      hooks: {
+        get: undefined,
+        head: undefined,
+        post: undefined,
+        put: undefined,
+        patch: undefined,
+        delete: undefined,
+        postHandle: undefined,
+        postBodyParse: undefined,
+      },
       totalRowHeaderName: "X-Total-Rows",
       paginationPageHeaderName: "X-Pagination-Page",
       paginationLimitHeaderName: "X-Pagination-Limit",
       notFoundMessage: `Requested resource could not be found`,
       notSupportedMessage: `Method not supported by this endpoint`,
     };
-    // Check if mandatory options are provided
+
     if (!options.name) {
       throw new MissingNameError();
     }
@@ -60,19 +65,53 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
 
     options.name = options.name.trim().toLowerCase();
 
-    super(options as T, defOptions as Partial<T>);
-    // If GET is allowed, head is also alowed
-    if (this._getOption("allowedMethods").GET === true) {
-      const perm = this._getOption("allowedMethods");
-      perm.HEAD = true;
-      this._setOption("allowedMethods", perm);
+    super(options as O, defOptions as Partial<O>);
+    // Check handlers which are present
+    const handlers: EndpointHooks = this._getOption(
+      "hooks",
+    ) as EndpointHooks;
+    if (
+      handlers.get !== undefined &&
+      this._getOption("allowedMethods").indexOf("GET") !== -1
+    ) {
+      this._allowedMethods.push("GET");
     }
+    if (
+      handlers.post !== undefined &&
+      this._getOption("allowedMethods").indexOf("POST") !== -1
+    ) {
+      this._allowedMethods.push("POST");
+    }
+    if (
+      handlers.put !== undefined &&
+      this._getOption("allowedMethods").indexOf("PUT") !== -1
+    ) {
+      this._allowedMethods.push("PUT");
+    }
+    if (
+      handlers.patch !== undefined &&
+      this._getOption("allowedMethods").indexOf("PATCH") !== -1
+    ) {
+      this._allowedMethods.push("PATCH");
+    }
+    if (
+      handlers.delete !== undefined &&
+      this._getOption("allowedMethods").indexOf("DELETE") !== -1
+    ) {
+      this._allowedMethods.push("DELETE");
+    }
+    if (
+      handlers.head !== undefined &&
+      this._getOption("allowedMethods").indexOf("HEAD") !== -1
+    ) {
+      this._allowedMethods.push("HEAD");
+    }
+
     // Register the endpoint
     EndpointManager.register(this);
   }
 
-  public get route() {
-    // Final route is - routePath + routeGroup + routeName
+  public get route(): string {
     return path.join(
       this._getOption("routePath"),
       this._getOption("name"),
@@ -90,10 +129,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
   }
 
   public get allowedMethods(): string[] {
-    const permissions = this._getOption("allowedMethods");
-    return Object.keys(permissions).filter((method) => {
-      return permissions[method as keyof typeof permissions] ? method : null;
-    });
+    return this._allowedMethods;
   }
 
   /**
@@ -127,7 +163,8 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     };
   }
 
-  //#region Handle Methods
+  //#region HTTP Base Handlers
+
   /**
    * GET
    *
@@ -137,10 +174,13 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns void
    */
   public async GET(ctx: Context): Promise<void> {
+    const handler = this._getOption("hooks").get,
+      postHandle = this._getOption("hooks").postHandle;
+
     this._setDefaultHeaders(ctx);
 
     // First check if method is even allowed
-    if (this.allowedMethods.indexOf("GET") === -1) {
+    if (this._allowedMethods.indexOf("GET") === -1 || handler === undefined) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -151,13 +191,14 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         ctx.response.headers,
       );
     }
+
     const req = await this._parseRequest(ctx);
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     // await this._postBodyParse(req, ctx);
 
     // Call the actual handler
-    const op = await this._fetch(req);
+    const op = await handler?.apply(this, [req]);
 
     ctx.response.status = op.status;
     // If there is identifier, then we are fetching a single record
@@ -182,16 +223,17 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     }
     // Set pagination headers
     ctx.response.headers.set(
-      this._getOption("totalRowHeaderName"),
+      this._getOption("totalRowHeaderName") as string,
       op.totalRows.toString(),
     );
+
     if (op.pagination) {
       ctx.response.headers.set(
         this._getOption("paginationPageHeaderName"),
         op.pagination.page.toString(),
       );
       ctx.response.headers.set(
-        this._getOption("paginationLimitHeaderName"),
+        this._getOption("paginationLimitHeaderName") as string,
         op.pagination.limit.toString(),
       );
     }
@@ -203,7 +245,9 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     }
 
     // Call post response hook
-    await this._postHandle(ctx);
+    if (postHandle !== undefined) {
+      await postHandle.apply(this, [ctx]);
+    }
     // All done
   }
 
@@ -216,9 +260,12 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns void
    */
   public async POST(ctx: Context): Promise<void> {
+    const handler = this._getOption("hooks").post,
+      postHandle = this._getOption("hooks").postHandle;
+
     this._setDefaultHeaders(ctx);
 
-    if (this.allowedMethods.indexOf("POST") === -1) {
+    if (this._allowedMethods.indexOf("POST") === -1 || handler === undefined) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -269,7 +316,8 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     });
     req.payload = injectedPayload;
 
-    const op = await this._insert(req);
+    const op = await handler.apply(this, [req]);
+
     ctx.response.status = op.status;
     if (op.payload) {
       if (single) {
@@ -280,15 +328,22 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         ctx.response.body = op.payload;
       }
     }
-    ctx.response.headers.set("X-Total-Rows", op.totalRows.toString());
+
+    ctx.response.headers.set(
+      this._getOption("totalRowHeaderName") as string,
+      op.totalRows.toString(),
+    );
 
     if (op.headers) {
       op.headers.forEach(([key, value]) => {
         ctx.response.headers.set(key, value);
       });
     }
+
     // Call post response hook
-    await this._postHandle(ctx);
+    if (postHandle !== undefined) {
+      await postHandle.apply(this, [ctx]);
+    }
   }
 
   /**
@@ -300,9 +355,12 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns void
    */
   public async PUT(ctx: Context): Promise<void> {
+    const handler = this._getOption("hooks").put,
+      postHandle = this._getOption("hooks").postHandle;
+
     this._setDefaultHeaders(ctx);
 
-    if (this.allowedMethods.indexOf("PUT") === -1) {
+    if (this._allowedMethods.indexOf("PUT") === -1 || handler === undefined) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -328,7 +386,7 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     // await this._postBodyParse(req, ctx);
     // TODO - Handle array of objects
 
-    const op = await this._update(req);
+    const op = await handler.apply(this, [req]);
 
     ctx.response.status = op.status;
     if (this._hasIdentifier(req)) {
@@ -350,8 +408,9 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     } else {
       ctx.response.body = op.payload;
     }
+
     ctx.response.headers.set(
-      this._getOption("totalRowHeaderName"),
+      this._getOption("totalRowHeaderName") as string,
       op.totalRows.toString(),
     );
 
@@ -360,8 +419,11 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         ctx.response.headers.set(key, value);
       });
     }
+
     // Call post response hook
-    await this._postHandle(ctx);
+    if (postHandle !== undefined) {
+      await postHandle.apply(this, [ctx]);
+    }
   }
 
   /**
@@ -373,9 +435,12 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns void
    */
   public async PATCH(ctx: Context): Promise<void> {
+    const handler = this._getOption("hooks").patch,
+      postHandle = this._getOption("hooks").postHandle;
+
     this._setDefaultHeaders(ctx);
 
-    if (this.allowedMethods.indexOf("PATCH") === -1) {
+    if (this._allowedMethods.indexOf("PATCH") === -1 || handler === undefined) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -401,7 +466,8 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     // await this._postBodyParse(req, ctx);
     // TODO - Handle array of objects
 
-    const op = await this._update(req);
+    const op = await handler.apply(this, [req]);
+
     ctx.response.status = op.status;
     // If there is identifier, then we are fetching a single record
     if (this._hasIdentifier(req)) {
@@ -434,7 +500,9 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       });
     }
     // Call post response hook
-    await this._postHandle(ctx);
+    if (postHandle !== undefined) {
+      await postHandle.apply(this, [ctx]);
+    }
   }
 
   /**
@@ -446,9 +514,14 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns void
    */
   public async DELETE(ctx: Context): Promise<void> {
+    const handler = this._getOption("hooks").delete,
+      postHandle = this._getOption("hooks").postHandle;
+
     this._setDefaultHeaders(ctx);
 
-    if (this.allowedMethods.indexOf("DELETE") === -1) {
+    if (
+      this._allowedMethods.indexOf("DELETE") === -1 || handler === undefined
+    ) {
       throw methodNotAllowed(
         this._getOption("notSupportedMessage"),
         ctx.response.headers,
@@ -458,7 +531,9 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     // await this._postBodyParse(req, ctx);
-    const op = await this._delete(req);
+
+    const op = await handler.apply(this, [req]);
+
     ctx.response.status = op.status;
 
     if (this._hasIdentifier(req)) {
@@ -484,7 +559,9 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       });
     }
     // Call post response hook
-    await this._postHandle(ctx);
+    if (postHandle !== undefined) {
+      await postHandle.apply(this, [ctx]);
+    }
   }
 
   /**
@@ -496,9 +573,12 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns void
    */
   public async HEAD(ctx: Context): Promise<void> {
+    const handler = this._getOption("hooks").head,
+      postHandle = this._getOption("hooks").postHandle;
+
     this._setDefaultHeaders(ctx);
 
-    if (this.allowedMethods.indexOf("HEAD") === -1) {
+    if (this._allowedMethods.indexOf("HEAD") === -1 || handler === undefined) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: `HEAD method not supported by this endpoint`,
@@ -514,7 +594,9 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     // Call postBodyParse hook
     // We can handle things like HMAC signature check, User access check etc
     // await this._postBodyParse(req, ctx);
-    const op = await this._count(req);
+
+    const op = await handler.apply(this, [req]);
+
     // ctx.response.status = Status.OK;
     // ctx.response.headers.set(this._getOption("totalRowHeaderName"), op.toString());
     ctx.response.status = Status.OK;
@@ -528,7 +610,9 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       });
     }
     // Call post response hook
-    await this._postHandle(ctx);
+    if (postHandle !== undefined) {
+      await postHandle.apply(this, [ctx]);
+    }
   }
 
   /**
@@ -547,103 +631,9 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     ctx.response.status = await 200;
   }
 
-  //#endregion Handle Methods
+  //#endregion HTTP Base Handlers
 
-  // Protected methods
-
-  //#region Begin Protected Methods
-
-  //#region Implementation methods
-
-  /**
-   * _fetch
-   *
-   * Perform a "fetch" operation. Return an array of entities which are to be returned basis parameters
-   * (filters) provided.
-   *
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected _fetch(_request: ParsedRequest): Promise<HTTPResponse> {
-    throw methodNotAllowed(
-      this._getOption("notSupportedMessage"),
-    );
-  }
-
-  /**
-   * _insert
-   *
-   * Perform an "insert" operation. Return the entity which was inserted.
-   *
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected _insert(_request: ParsedRequest): Promise<HTTPResponse> {
-    throw methodNotAllowed(
-      this._getOption("notSupportedMessage"),
-    );
-  }
-
-  /**
-   * _update
-   *
-   * Perform an "update" operation. Return an array of entities which are to be returned basis parameters
-   * (filters) provided.
-   *
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected _update(_request: ParsedRequest): Promise<HTTPResponse> {
-    throw methodNotAllowed(
-      this._getOption("notSupportedMessage"),
-    );
-  }
-
-  /**
-   * _delete
-   *
-   * Perform a "Delete" operation. This should ideally return just the status code along with any headers.
-   *
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected _delete(_request: ParsedRequest): Promise<HTTPResponse> {
-    throw methodNotAllowed(
-      this._getOption("notSupportedMessage"),
-    );
-  }
-
-  /**
-   * _count
-   *
-   * Perform a count check. This will provide information for HEAD calls
-   *
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected _count(_request: ParsedRequest): Promise<HTTPResponse> {
-    throw methodNotAllowed(
-      this._getOption("notSupportedMessage"),
-    );
-  }
-
-  //#endregion Implementation methods
-
-  /**
-   * _setDefaultHeaders
-   *
-   * Set default headers in the response
-   *
-   * @protected
-   * @param ctx Context Set default headers
-   */
-  protected _setDefaultHeaders(ctx: Context): void {
-    ctx.response.headers.set("X-ROUTE-NAME", this.name);
-    ctx.response.headers.set("X-ROUTE-GROUP", this.group);
-    ctx.response.headers.set("X-ROUTE-PATH", this.route);
-    ctx.response.headers.set("Allow", this.allowedMethods.join(", "));
-  }
-
+  //#region Protected methods
   /**
    * _parseRequest
    *
@@ -768,12 +758,20 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       files: files,
     };
 
-    await this._postBodyParse(parseReq, ctx);
+    const postBodyParseHook = this._getOption("hooks").postBodyParse;
+    if (postBodyParseHook !== undefined) {
+      await postBodyParseHook.apply(this, [parseReq, ctx]);
+    }
 
     // Call Inject params
     return this._injectStateParams(parseReq, ctx.state.params);
   }
 
+  /**
+   * @param req ParsedRequest The data parsed from request
+   * @param params Record<string, unknown> Params to inject
+   * @returns ParsedRequest The parsed request with injected params
+   */
   protected _injectStateParams(
     req: ParsedRequest,
     params?: Record<string, unknown>,
@@ -805,37 +803,18 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
   }
 
   /**
-   * _postBodyParse
+   * _setDefaultHeaders
    *
-   * This hook is called just after the body is parsed. It can be overridden to do any additional processing either the
-   * params or the body. This is called before the request is passed to the specific handler.
-   * A good example would be parsing HMAC signature of the body for authentication
+   * Set default headers in the response
    *
    * @protected
-   * @param req ParsedRequest The parsed request
-   * @param ctx Context The context passed by OAK
-   * @returns void
+   * @param ctx Context Set default headers
    */
-  // deno-lint-ignore no-unused-vars
-  protected _postBodyParse(req: ParsedRequest, ctx: Context): void {
-    // Do nothing by default
-    return;
-  }
-
-  /**
-   * _postHandle
-   *
-   * This hook is called once the request has been handled. The response and response body is available.
-   * This is useful when trying to handle HMAC signatures for response body.
-   *
-   * @protected
-   * @param ctx Context The context passed by OAK
-   * @returns void
-   */
-  // deno-lint-ignore no-unused-vars
-  protected _postHandle(ctx: Context): void {
-    // Do nothing by default
-    return;
+  protected _setDefaultHeaders(ctx: Context): void {
+    ctx.response.headers.set("X-ROUTE-NAME", this.name);
+    ctx.response.headers.set("X-ROUTE-GROUP", this.group);
+    ctx.response.headers.set("X-ROUTE-PATH", this.route);
+    ctx.response.headers.set("Allow", this.allowedMethods.join(", "));
   }
 
   /**
@@ -873,5 +852,5 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
       return false;
     }
   }
-  //#endregion End Protected Methods
+  //#endregion Protected methods
 }
