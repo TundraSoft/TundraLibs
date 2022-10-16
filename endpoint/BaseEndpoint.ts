@@ -38,6 +38,7 @@ export class BaseEndpoint<
   constructor(options: Partial<EndpointOptions>) {
     const defOptions: Partial<EndpointOptions> = {
       stateParams: true,
+      allowedMethods: [],
       hooks: {
         get: undefined,
         head: undefined,
@@ -68,45 +69,38 @@ export class BaseEndpoint<
     super(options as O, defOptions as Partial<O>);
     // Check handlers which are present
     const handlers: EndpointHooks = this._getOption(
-      "hooks",
-    ) as EndpointHooks;
-    if (
-      handlers.get !== undefined &&
-      this._getOption("allowedMethods").indexOf("GET") !== -1
-    ) {
+        "hooks",
+      ) as EndpointHooks,
+      allowedMethods: Array<HTTPMethods> = this._getOption(
+        "allowedMethods",
+      ) as Array<HTTPMethods>;
+    if (allowedMethods.indexOf("GET") !== -1 && handlers.get !== undefined) {
       this._allowedMethods.push("GET");
     }
-    if (
-      handlers.post !== undefined &&
-      this._getOption("allowedMethods").indexOf("POST") !== -1
-    ) {
+    if (allowedMethods.indexOf("POST") !== -1 && handlers.post !== undefined) {
       this._allowedMethods.push("POST");
     }
-    if (
-      handlers.put !== undefined &&
-      this._getOption("allowedMethods").indexOf("PUT") !== -1
-    ) {
+    if (allowedMethods.indexOf("PUT") !== -1 && handlers.put !== undefined) {
       this._allowedMethods.push("PUT");
     }
     if (
-      handlers.patch !== undefined &&
-      this._getOption("allowedMethods").indexOf("PATCH") !== -1
+      allowedMethods.indexOf("PATCH") !== -1 && handlers.patch !== undefined
     ) {
       this._allowedMethods.push("PATCH");
     }
     if (
-      handlers.delete !== undefined &&
-      this._getOption("allowedMethods").indexOf("DELETE") !== -1
+      allowedMethods.indexOf("DELETE") !== -1 && handlers.delete !== undefined
     ) {
       this._allowedMethods.push("DELETE");
     }
-    if (
-      handlers.head !== undefined &&
-      this._getOption("allowedMethods").indexOf("HEAD") !== -1
-    ) {
+    if (allowedMethods.indexOf("HEAD") !== -1 && handlers.head !== undefined) {
       this._allowedMethods.push("HEAD");
     }
-
+    if (this._allowedMethods.length === 0) {
+      // There are no methods which are allowed. Mark this endpoint as useless
+      // TODO handle this
+    }
+    this._allowedMethods.push("OPTIONS");
     // Register the endpoint
     EndpointManager.register(this);
   }
