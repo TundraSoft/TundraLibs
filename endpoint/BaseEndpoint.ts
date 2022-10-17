@@ -221,8 +221,7 @@ export class BaseEndpoint<
       op.totalRows.toString(),
     );
 
-    if (op.pagination) {
-      console.log(op.pagination);
+    if (op.pagination && op.pagination.limit) {
       ctx.response.headers.set(
         this._getOption("paginationPageHeaderName"),
         op.pagination.page.toString(),
