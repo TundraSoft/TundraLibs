@@ -77,7 +77,7 @@ export class Options<
    * @returns Boolean, true if exists false if it does not
    */
   protected _hasOption(name: OptionsKey): boolean {
-    if (this._options[name]) {
+    if (this._options[name] !== undefined) {
       return true;
     }
     return false;
