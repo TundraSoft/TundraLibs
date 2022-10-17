@@ -135,7 +135,7 @@ export type QueryResult<T = Record<string, unknown>> = {
   totalRows: number;
   paging?: {
     limit: number;
-    page?: number;
+    page: number;
   };
   sort?: QuerySorting<T>;
   rows?: Array<T>;

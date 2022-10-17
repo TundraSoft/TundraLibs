@@ -222,6 +222,7 @@ export class BaseEndpoint<
     );
 
     if (op.pagination) {
+      console.log(op.pagination);
       ctx.response.headers.set(
         this._getOption("paginationPageHeaderName"),
         op.pagination.page.toString(),
