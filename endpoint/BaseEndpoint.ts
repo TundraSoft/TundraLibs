@@ -106,7 +106,7 @@ export class BaseEndpoint<
   }
 
   public get route(): string {
-    return path.join(
+    return path.posix.join(
       this._getOption("routePath"),
       this._getOption("name"),
       this._buildIdentifiers(),
