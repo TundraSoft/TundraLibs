@@ -252,6 +252,10 @@ export class Model<
     return this._table;
   }
 
+  get isView(): boolean {
+    return this._isView;
+  }
+
   get schemaTable(): string {
     return `${
       this._schema !== undefined ? `${this._schema}.` : ""

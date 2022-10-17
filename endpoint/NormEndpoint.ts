@@ -1,4 +1,4 @@
-import { Status } from "../dependencies.ts";
+import { HTTPMethods, Status } from "../dependencies.ts";
 import { BaseEndpoint } from "./BaseEndpoint.ts";
 import { EndpointOptions, HTTPResponse, ParsedRequest } from "./types/mod.ts";
 import { Model, ModelFilterError, ModelValidationError } from "../norm/mod.ts";
@@ -17,32 +17,41 @@ export type ErrorList = {
 };
 
 const defaultGetHandler = async function (
-    this: NormEndpoint,
+    this: NormEndpoint<EndpointOptions>,
     req: ParsedRequest,
   ) {
     return await this._fetch(req);
   },
-  defaultPostHandler = async function (this: NormEndpoint, req: ParsedRequest) {
+  defaultPostHandler = async function (
+    this: NormEndpoint<EndpointOptions>,
+    req: ParsedRequest,
+  ) {
     return await this._insert(req);
   },
-  defaultPutHandler = async function (this: NormEndpoint, req: ParsedRequest) {
+  defaultPutHandler = async function (
+    this: NormEndpoint<EndpointOptions>,
+    req: ParsedRequest,
+  ) {
     return await this._update(req);
   },
   defaultDeleteHandler = async function (
-    this: NormEndpoint,
+    this: NormEndpoint<EndpointOptions>,
     req: ParsedRequest,
   ) {
     return await this._delete(req);
   },
-  defaultHeadHandler = async function (this: NormEndpoint, req: ParsedRequest) {
+  defaultHeadHandler = async function (
+    this: NormEndpoint<EndpointOptions>,
+    req: ParsedRequest,
+  ) {
     return await this._count(req);
   };
 
 export class NormEndpoint<
+  O extends EndpointOptions,
   S extends ModelDefinition = ModelDefinition,
   T extends ModelType<S> = ModelType<S>,
-  O extends EndpointOptions = EndpointOptions,
-> extends BaseEndpoint<O> {
+> extends BaseEndpoint<O, T> {
   protected _model: Model<S, T>;
 
   constructor(model: Model<S, T>, options: Partial<O>) {
@@ -67,6 +76,17 @@ export class NormEndpoint<
       //   HEAD: true,
       // },
     };
+    if (model.isView) {
+      // Disable post, put, patch and delete
+      const newMethods: Array<HTTPMethods> = [];
+      if (options.allowedMethods?.includes("GET")) {
+        newMethods.push("GET");
+      }
+      if (options.allowedMethods?.includes("HEAD")) {
+        newMethods.push("HEAD");
+      }
+      options.allowedMethods = newMethods;
+    }
     super({ ...defOptions, ...options });
     this._model = model;
   }

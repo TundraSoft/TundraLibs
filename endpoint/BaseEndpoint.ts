@@ -30,8 +30,8 @@ import {
 import { EndpointHooks } from "./types/EndpointOptions.ts";
 
 export class BaseEndpoint<
-  T extends Record<string, unknown>,
-  O extends EndpointOptions = EndpointOptions,
+  O extends EndpointOptions,
+  T extends Record<string, unknown> = Record<string, unknown>,
 > extends Options<O> {
   protected _allowedMethods: Array<HTTPMethods> = [];
 
