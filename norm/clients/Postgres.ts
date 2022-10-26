@@ -4,7 +4,7 @@ import { AbstractClient } from "../AbstractClient.ts";
 import type {
   // CountQueryOptions,
   // CreateTableOptions,
-  DataType,
+  // DataType,
   // SelectQueryOptions,
   // UpdateQueryOptions,
   // DataTypeMap,
@@ -15,7 +15,6 @@ import type {
   PostgresConfig,
   // QueryOptions,
   QueryType,
-  SchemaDefinition,
 } from "../types/mod.ts";
 
 // const DataTypeMapString = {
@@ -122,101 +121,101 @@ export class Postgres<T extends PostgresConfig> extends AbstractClient<T> {
     client.release();
   }
 
-  protected async _getTableDefinition(
-    table: string,
-    schema?: string,
-  ): Promise<SchemaDefinition> {
-    // const filter = `C.table_name = ${this._quoteValue(table)}` +
-    //   (schema ? `' AND C.table_schema = ${this._quoteValue(schema)}` : "");
-    // const field_qry = `SELECT column_name,
-    //                               ordinal_position,
-    //                               data_type,
-    //                               character_maximum_length,
-    //                               numeric_precision,
-    //                               numeric_scale,
-    //                               is_nullable
-    //                        FROM information_schema.columns C
-    //                        WHERE ${filter}
-    //                        ORDER BY ordinal_position`;
-    // const constr_col_qry = `SELECT C.column_name,
-    //                                    C.ordinal_position,
-    //                                    C.constraint_name,
-    //                                    U.constraint_type
-    //                             FROM information_schema.key_column_usage C
-    //                                      INNER JOIN
-    //                                  information_schema.table_constraints U
-    //                                  ON
-    //                                      C.constraint_name = U.constraint_name
-    //                             WHERE ${filter}
-    //                             ORDER BY U.constraint_type, C.constraint_name, C.ordinal_position`;
-    // console.log(field_qry);
-    const conn = await this._client.connect();
-    const fields_result = await conn.queryObject<{
-      column_name: string;
-      ordinal_position: number;
-      data_type: string;
-      character_maximum_length: number;
-      numeric_precision: number;
-      numeric_scale: number;
-      is_nullable: boolean;
-    }>(this._dialectHelper.getTableDefinition(table, schema));
-    const dt_constraints = await conn.queryObject<{
-      constraint_name: string;
-      constraint_type: string;
-      column_name: string;
-      ordinal_position: number;
-    }>(this._dialectHelper.getTableConstraints(table, schema));
-    conn.release();
+  // protected async _getTableDefinition(
+  //   table: string,
+  //   schema?: string,
+  // ): Promise<SchemaDefinition> {
+  //   // const filter = `C.table_name = ${this._quoteValue(table)}` +
+  //   //   (schema ? `' AND C.table_schema = ${this._quoteValue(schema)}` : "");
+  //   // const field_qry = `SELECT column_name,
+  //   //                               ordinal_position,
+  //   //                               data_type,
+  //   //                               character_maximum_length,
+  //   //                               numeric_precision,
+  //   //                               numeric_scale,
+  //   //                               is_nullable
+  //   //                        FROM information_schema.columns C
+  //   //                        WHERE ${filter}
+  //   //                        ORDER BY ordinal_position`;
+  //   // const constr_col_qry = `SELECT C.column_name,
+  //   //                                    C.ordinal_position,
+  //   //                                    C.constraint_name,
+  //   //                                    U.constraint_type
+  //   //                             FROM information_schema.key_column_usage C
+  //   //                                      INNER JOIN
+  //   //                                  information_schema.table_constraints U
+  //   //                                  ON
+  //   //                                      C.constraint_name = U.constraint_name
+  //   //                             WHERE ${filter}
+  //   //                             ORDER BY U.constraint_type, C.constraint_name, C.ordinal_position`;
+  //   // console.log(field_qry);
+  //   const conn = await this._client.connect();
+  //   const fields_result = await conn.queryObject<{
+  //     column_name: string;
+  //     ordinal_position: number;
+  //     data_type: string;
+  //     character_maximum_length: number;
+  //     numeric_precision: number;
+  //     numeric_scale: number;
+  //     is_nullable: boolean;
+  //   }>(this._dialectHelper.getTableDefinition(table, schema));
+  //   const dt_constraints = await conn.queryObject<{
+  //     constraint_name: string;
+  //     constraint_type: string;
+  //     column_name: string;
+  //     ordinal_position: number;
+  //   }>(this._dialectHelper.getTableConstraints(table, schema));
+  //   conn.release();
 
-    const primary_keys = Object.fromEntries(
-      dt_constraints.rows.filter((value) => {
-        return value.constraint_type === "PRIMARY KEY";
-      }).map((value) => {
-        return [value.column_name, true];
-      }),
-    );
-    const unique_keys = Object.fromEntries(
-      Object.entries(
-        dt_constraints.rows.filter((value) => {
-          return value.constraint_type === "UNIQUE";
-        }).reduce((acc, { column_name, constraint_name }) => {
-          (acc[column_name] || (acc[column_name] = [])).push(constraint_name);
-          return acc;
-        }, {} as { [key: string]: string[] }),
-      ).map(([key, value]) => [key, new Set(value)]),
-    );
+  //   const primary_keys = Object.fromEntries(
+  //     dt_constraints.rows.filter((value) => {
+  //       return value.constraint_type === "PRIMARY KEY";
+  //     }).map((value) => {
+  //       return [value.column_name, true];
+  //     }),
+  //   );
+  //   const unique_keys = Object.fromEntries(
+  //     Object.entries(
+  //       dt_constraints.rows.filter((value) => {
+  //         return value.constraint_type === "UNIQUE";
+  //       }).reduce((acc, { column_name, constraint_name }) => {
+  //         (acc[column_name] || (acc[column_name] = [])).push(constraint_name);
+  //         return acc;
+  //       }, {} as { [key: string]: string[] }),
+  //     ).map(([key, value]) => [key, new Set(value)]),
+  //   );
 
-    const column_definitions = fields_result.rows.map((value) => {
-      return {
-        name: value.column_name,
-        dataType: value.data_type.toUpperCase() as DataType,
-        // length: (DataTypeMapString[value.data_type.toUpperCase() as DataType] ==
-        //     "number")
-        //   ? {
-        //     precision: value.numeric_precision,
-        //     scale: value.numeric_scale,
-        //   }
-        //   : ((DataTypeMapString[value.data_type.toUpperCase() as DataType] ==
-        //       "string")
-        //     ? value.character_maximum_length
-        //     : undefined),
-        length: (value.character_maximum_length > 0)
-          ? value.character_maximum_length
-          : {
-            precision: value.numeric_precision,
-            scale: value.numeric_scale,
-          },
-        isNullable: value.is_nullable,
-        isPrimary: (primary_keys[value.column_name] === true),
-        uniqueKey: unique_keys[value.column_name],
-      };
-    });
-    return {
-      table: table,
-      schema: schema,
-      columns: Object.fromEntries(column_definitions.map((value) => {
-        return [value.name, value];
-      })),
-    };
-  }
+  //   const column_definitions = fields_result.rows.map((value) => {
+  //     return {
+  //       name: value.column_name,
+  //       dataType: value.data_type.toUpperCase() as DataType,
+  //       // length: (DataTypeMapString[value.data_type.toUpperCase() as DataType] ==
+  //       //     "number")
+  //       //   ? {
+  //       //     precision: value.numeric_precision,
+  //       //     scale: value.numeric_scale,
+  //       //   }
+  //       //   : ((DataTypeMapString[value.data_type.toUpperCase() as DataType] ==
+  //       //       "string")
+  //       //     ? value.character_maximum_length
+  //       //     : undefined),
+  //       length: (value.character_maximum_length > 0)
+  //         ? value.character_maximum_length
+  //         : {
+  //           precision: value.numeric_precision,
+  //           scale: value.numeric_scale,
+  //         },
+  //       isNullable: value.is_nullable,
+  //       isPrimary: (primary_keys[value.column_name] === true),
+  //       uniqueKey: unique_keys[value.column_name],
+  //     };
+  //   });
+  //   return {
+  //     table: table,
+  //     schema: schema,
+  //     columns: Object.fromEntries(column_definitions.map((value) => {
+  //       return [value.name, value];
+  //     })),
+  //   };
+  // }
 }

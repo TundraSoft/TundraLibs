@@ -45,12 +45,14 @@ export {
   SqliteGenerators,
 } from "./Generators.ts";
 
+export type { DataLength } from "./DataLength.ts";
+
 export type {
   ColumnDefinition,
-  DecimalLengthSpec,
   ModelDefinition,
   ModelPermissions,
   ModelType,
   ModelValidation,
-  SchemaDefinition,
+  // StripedColumnDefinition,
+  // StripedModelDefinition,
 } from "./Model.ts";

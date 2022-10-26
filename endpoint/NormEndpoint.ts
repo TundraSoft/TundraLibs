@@ -57,7 +57,7 @@ export class NormEndpoint<
   constructor(model: Model<S, T>, options: Partial<O>) {
     // We set routeIdentifiers as PK by default
     const defOptions: Partial<EndpointOptions> = {
-      routeIdentifiers: model.primaryKeys as Array<string>,
+      routeIdentifiers: Array.from(model.primaryKeys) as Array<string>,
       hooks: {
         get: defaultGetHandler,
         post: defaultPostHandler,

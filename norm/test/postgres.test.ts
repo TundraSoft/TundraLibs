@@ -164,8 +164,6 @@ Deno.test({
   async fn(): Promise<void> {
     await CityModel.dropTable();
     await CityModel.createTable(
-      undefined,
-      undefined,
       path.join(
         path.dirname(path.fromFileUrl(new URL("", import.meta.url))),
         "fixtures",
@@ -247,19 +245,19 @@ Deno.test({
   },
 });
 
-Deno.test({
-  name: "[module='norm' dialect='postgres'] Test table describe functionality",
-  async fn() {
-    const result = await Database.get("default").getTableDefinition("City");
-    assertEquals(result.columns.Name.name, "Name");
-    assertEquals(result.columns.Id.isPrimary, true);
-    assertEquals(
-      result.columns.District.uniqueKey &&
-        result.columns.District.uniqueKey.has("city_cu_unique"),
-      true,
-    );
-    assertEquals(result.columns.CountryCode.length, 3);
-    assertEquals(result.columns.Population.dataType, "BIGINT");
-    await CityModel.dropTable();
-  },
-});
+// Deno.test({
+//   name: "[module='norm' dialect='postgres'] Test table describe functionality",
+//   async fn() {
+//     const result = await Database.get("default").getTableDefinition("City");
+//     assertEquals(result.columns.Name.name, "Name");
+//     assertEquals(result.columns.Id.isPrimary, true);
+//     assertEquals(
+//       result.columns.District.uniqueKey &&
+//         result.columns.District.uniqueKey.has("city_cu_unique"),
+//       true,
+//     );
+//     assertEquals(result.columns.CountryCode.length, 3);
+//     assertEquals(result.columns.Population.dataType, "BIGINT");
+//     await CityModel.dropTable();
+//   },
+// });

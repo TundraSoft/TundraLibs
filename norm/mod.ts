@@ -35,6 +35,7 @@ export { Model } from "./Model.ts";
 export {
   ConfigNotFound,
   ConnectionError,
+  ConstraintColumnNotFound,
   ModelError,
   ModelFilterError,
   ModelNotNull,

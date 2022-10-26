@@ -7,7 +7,7 @@ import type {
   // InsertQueryOptions,
   // QueryOptions,
   QueryType,
-  SchemaDefinition,
+  // SchemaDefinition,
   // SelectQueryOptions,
   SQLiteConfig,
   // UpdateQueryOptions,
@@ -72,17 +72,17 @@ export class SQLite<T extends SQLiteConfig> extends AbstractClient<T> {
     }
   }
 
-  public async _getTableDefinition(
-    table: string,
-    schema?: string,
-  ): Promise<SchemaDefinition> {
-    //TODO Implement
-    return await {
-      table: table,
-      schema: schema,
-      columns: {},
-    };
-  }
+  // public async _getTableDefinition(
+  //   table: string,
+  //   schema?: string,
+  // ): Promise<SchemaDefinition> {
+  //   //TODO Implement
+  //   return await {
+  //     table: table,
+  //     schema: schema,
+  //     columns: {},
+  //   };
+  // }
 }
 
 // const Test = new SQLite('test.db', {memory: true});

@@ -1,38 +1,37 @@
 import { DataTypeMap } from "./DataTypes.ts";
 import type { DataType } from "./DataTypes.ts";
+import type { DataLength } from "./DataLength.ts";
 import type { DefaultValues } from "./Generators.ts";
 // import { Generators } from './Generators.ts'
 import type { GuardianProxy } from "../../guardian/mod.ts";
 
-export type DecimalLengthSpec = {
-  precision: number;
-  scale: number;
-};
-
 export type ColumnDefinition = {
   // Actual column name
   name?: string;
-  // The data type
-  dataType: DataType;
-  // Length of the column
-  length?: DecimalLengthSpec | number;
-  // isNullable - Is column nullable, if true then null is valid. Defaults to false
+  // The Data Type
+  type: DataType;
+  // The data legth
+  length?: DataLength;
+  // Is the column nullable
   isNullable?: boolean;
-  // Not nullable - This will ensure if value is already present, it cannot be made into null.
+  // Can the column be updated to null once value is present
   notNullOnce?: boolean;
-  // Disable update on this column. If passed, value is ignored
+  // Disable column from being updated
   disableUpdate?: boolean;
-  // Validations for the column
+  // Validation on the column
   // deno-lint-ignore no-explicit-any
   validator?: GuardianProxy<any>;
-  isPrimary?: boolean;
-  uniqueKey?: Set<string>;
+  // Default value on insert
   insertDefault?: DefaultValues;
+  // Default value on update
   updateDefault?: DefaultValues;
-  // relatesTo?: {
-  //   // Model name: Column Name
-  //   [key: string]: string;
-  // };
+  // Encrypt column
+  encryptKey?: string; // NOTE - this will force data type to string. Will encrypt only if key is present
+  // Hooks
+  // onSelect: Array<Function>;
+  // onInsert: Array<Function>;
+  // onUpdate: Array<Function>;
+  // onDelete: Array<Function>;
 };
 
 export type ModelPermissions = {
@@ -41,43 +40,44 @@ export type ModelPermissions = {
   update: boolean;
   delete: boolean;
   truncate: boolean;
-  create: boolean;
-  drop: boolean;
 };
 
-export type SchemaDefinition = {
-  // Schema name. If blank will resolve to Client's default ex public in postgres
+export type ModelDefinition = {
+  // The Model name
+  name: string;
+  // Connection to use
+  connection: string;
+  // Schema name
   schema?: string;
-  // The table name
+  // Table name
   table: string;
-  // Column definition
-  columns: {
-    [key: string]: ColumnDefinition;
-  };
-
-  relationships?: {
-    [modelName: string]: Set<{
-      [sourceColumn: string]: string;
-    }>;
-  };
-
+  // Is this a view
   isView?: boolean;
-  viewDefinition?: {
-    [model: string]: {
-      columns: string[]; // Columns to be selected
+  // Column definitions
+  columns: {
+    [name: string]: ColumnDefinition;
+  };
+  // Primary keys
+  primaryKeys?: Set<string>;
+  // Unique keys
+  uniqueKeys?: {
+    [name: string]: Set<string>;
+  };
+  // Foreign keys
+  foreignKeys?: {
+    [name: string]: {
+      model: string;
+      columns: Record<string, string>;
     };
   };
-};
-
-export type ModelDefinition = SchemaDefinition & {
-  // The model name - Friendly identifier. Used for Relationship etc
-  name: string;
-  // Connection to use, defaults to 'default'
-  connection: string;
-  // Paging
+  // Indexes
+  indexes?: {
+    [name: string]: Array<string>;
+  };
+  // Permissions
+  permissions?: ModelPermissions;
+  // Page Size
   pageSize?: number;
-  // Features to be enabled
-  feature?: Partial<ModelPermissions>;
 };
 
 type PartialPartial<T, K extends keyof T> =
@@ -93,7 +93,7 @@ type ExtractTypes<T extends { [K in keyof T]: ColumnDefinition }> =
   PartialPartial<
     {
       -readonly [K in keyof T]: ReturnType<
-        typeof DataTypeMap[T[K]["dataType"]]
+        typeof DataTypeMap[T[K]["type"]]
       >;
     },
     KeysMatching<T, { isNullable: true }>

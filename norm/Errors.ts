@@ -76,6 +76,20 @@ export class ModelError extends Error {
   }
 }
 
+export class ConstraintColumnNotFound extends ModelError {
+  protected _column: string;
+  protected _type: string;
+  constructor(column: string, type: string, model: string, dbConn: string) {
+    super(
+      `Column ${column} used to define constraint ${type} not found in model ${model}`,
+      model,
+      dbConn,
+    );
+    this._column = column;
+    this._type = type;
+  }
+}
+
 export class ModelPermission extends ModelError {
   constructor(permission: string, model: string, dbConn: string) {
     super(

@@ -13,7 +13,6 @@ import type {
   // QueryPagination,
   QueryResult,
   QueryType,
-  SchemaDefinition,
   SelectQueryOptions,
   UpdateQueryOptions,
 } from "./types/mod.ts";
@@ -347,16 +346,15 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     return retVal;
   }
 
-  public async createSchema(name: string, ifNotExists = true): Promise<void> {
-    await this.query(this._dialectHelper.createSchema(name, ifNotExists));
+  public async createSchema(name: string): Promise<void> {
+    await this.query(this._dialectHelper.createSchema(name));
   }
 
   public async dropSchema(
     name: string,
-    ifExists = true,
     cascade = true,
   ): Promise<void> {
-    await this.query(this._dialectHelper.dropSchema(name, ifExists, cascade));
+    await this.query(this._dialectHelper.dropSchema(name, cascade));
   }
 
   public async createTable(options: CreateTableOptions): Promise<void> {
@@ -366,30 +364,29 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   public async dropTable(
     table: string,
     schema?: string,
-    ifExists = true,
     cascade = false,
   ): Promise<void> {
     await this.query(
-      this._dialectHelper.dropTable(table, schema, ifExists, cascade),
+      this._dialectHelper.dropTable(table, schema, cascade),
     );
   }
 
-  public async getTableDefinition(
-    table: string,
-    schema?: string,
-  ): Promise<SchemaDefinition> {
-    // const start = performance.now()
-    await this.connect();
-    try {
-      const result = await this._getTableDefinition(table, schema);
-      // Set end time
-      // const end = performance.now();
-      // const time = end - start;
-      return result;
-    } catch (e) {
-      throw new QueryError(e.message, "DESCRIBE", this.name, this.dialect);
-    }
-  }
+  // public async getTableDefinition(
+  //   table: string,
+  //   schema?: string,
+  // ): Promise<SchemaDefinition> {
+  //   // const start = performance.now()
+  //   await this.connect();
+  //   try {
+  //     const result = await this._getTableDefinition(table, schema);
+  //     // Set end time
+  //     // const end = performance.now();
+  //     // const time = end - start;
+  //     return result;
+  //   } catch (e) {
+  //     throw new QueryError(e.message, "DESCRIBE", this.name, this.dialect);
+  //   }
+  // }
 
   protected abstract _connect(): void;
 
@@ -402,8 +399,8 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
     queryArgs?: Record<string, unknown>,
   ): Promise<Array<T> | undefined>;
 
-  protected abstract _getTableDefinition(
-    table: string,
-    schema?: string,
-  ): Promise<SchemaDefinition>;
+  // protected abstract _getTableDefinition(
+  //   table: string,
+  //   schema?: string,
+  // ): Promise<SchemaDefinition>;
 }

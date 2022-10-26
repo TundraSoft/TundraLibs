@@ -13,40 +13,41 @@ const TestDefinition = {
   table: "Test",
   columns: {
     Id: {
-      dataType: DataTypes.SERIAL,
-      isPrimary: true,
+      type: DataTypes.SERIAL,
     },
     UId: {
       name: "uid",
-      dataType: DataTypes.UUID,
+      type: DataTypes.UUID,
       validator: Guardian.string().uuid(),
       insertDefault: "UUID",
     },
     Name: {
-      dataType: DataTypes.VARCHAR,
+      type: DataTypes.VARCHAR,
       validator: Guardian.string().max(255),
-      uniqueKey: new Set(["name_email"]),
     },
     Email: {
-      dataType: DataTypes.VARCHAR,
+      type: DataTypes.VARCHAR,
       validator: Guardian.string().email(),
-      uniqueKey: new Set(["name_email"]),
     },
     Status: {
-      dataType: DataTypes.BOOLEAN,
+      type: DataTypes.BOOLEAN,
       insertDefault: true,
       updateDefault: false,
     },
     hasCrypto: {
-      dataType: DataTypes.BOOLEAN,
+      type: DataTypes.BOOLEAN,
       isNullable: true,
     },
     CreatedDate: {
-      dataType: DataTypes.TIMESTAMP,
+      type: DataTypes.TIMESTAMP,
       validator: Guardian.date(),
       isNullable: false,
       insertDefault: "CURRENT_TIMESTAMP",
     },
+  },
+  primaryKeys: new Set(["Id"]),
+  uniqueKeys: {
+    "name_email": new Set(["Name", "Email"]),
   },
   pageSize: 10,
 } as const;

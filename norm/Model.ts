@@ -36,6 +36,7 @@ import {
 } from "../guardian/mod.ts";
 
 import {
+  ConstraintColumnNotFound,
   ModelFilterError,
   // ModelError,
   // ModelNotNull,
@@ -68,14 +69,14 @@ export class Model<
   protected _table: string;
   protected _isView: boolean;
   protected _pageSize?: number;
-  protected _features: ModelPermissions = {
+  protected _permissions: ModelPermissions = {
     select: true,
     insert: true,
     update: true,
     delete: true,
     truncate: true,
-    create: true,
-    drop: true,
+    // create: true,
+    // drop: true,
   };
   // Record of column name (alias) to actual column name
   protected _columns: Record<keyof T, string>;
@@ -84,7 +85,7 @@ export class Model<
     { type: DataType; length?: { precision: number; scale: number } | number }
   >;
   // Array of columns marked as Primary Key
-  protected _primaryKeys: Array<keyof T> = [];
+  protected _primaryKeys: Set<keyof T> = new Set();
   // Columns which function as Identity columns (auto incriment). This is to avoid inserting/updating values to them
   protected _identityKeys: Array<keyof T> = [];
   // Columns which are marked as not null
@@ -95,7 +96,7 @@ export class Model<
   protected _updateGenerators: Partial<Record<keyof T, DefaultValues>> = {};
 
   // Record of Unique key name to array of columns which form the unique key
-  protected _uniqueKeys: Record<string, Array<keyof T>> = {};
+  protected _uniqueKeys: Record<string, Set<keyof T>> = {};
   // protected _relationships: Record<string, Record<keyof T, string>> = {};
   // Update disabled columns
   protected _disableUpdate: Array<keyof T> = [];
@@ -105,32 +106,30 @@ export class Model<
   // deno-lint-ignore no-explicit-any
   protected _validator: GuardianProxy<any>;
 
+  protected _indexes: Record<string, Array<keyof T>> = {};
+
   constructor(model: S) {
-    // this._model = model;
-    this._name = model.name.trim().toLowerCase();
+    this._name = model.name;
     this._connectionName = model.connection;
     this._schema = model.schema;
     this._table = model.table;
     this._pageSize = model.pageSize;
-    model.isView = model.viewDefinition !== undefined || model.isView;
-    this._isView = model.isView as boolean;
-
+    this._isView = (model.isView && model.isView === true) ? true : false;
     if (this._isView) {
-      // If it is a view, disable insert, update and delete
-      model.feature = {
+      // Override the permissions
+      model.permissions = {
         select: true,
         insert: false,
         update: false,
         delete: false,
         truncate: false,
-        create: false,
-        drop: false,
       };
     }
-    // Set features
-    if (model.feature) {
-      Object.entries(model.feature).forEach(([key, value]) => {
-        this._features[key as keyof ModelPermissions] = value;
+
+    // Set permissions
+    if (model.permissions) {
+      Object.entries(model.permissions).forEach(([key, value]) => {
+        this._permissions[key as keyof ModelPermissions] = value;
       });
     }
 
@@ -149,37 +148,35 @@ export class Model<
       if (hasValidation) {
         validator[column] = definition.validator;
       } else {
-        validator[column] = DefaultValidator[definition.dataType];
+        validator[column] = DefaultValidator[definition.type];
+
+        // Add length spec if possible
+        if (definition.length && typeof definition.length === "number") {
+          validator[column].max(definition.length);
+        }
+
+        // Finally add optional
+        if (definition.isNullable) {
+          validator[column].optional();
+        }
       }
 
-      // validator[column].optional();
-
       // Define validations
-      // const validator: GuardianProxy<any> = hasValidation ? definition.validator : Guardian;
       columnAlias[column as keyof T] = definition.name || column;
       columnDefinition[column as keyof T] = {
-        type: definition.dataType,
+        type: definition.type,
         length: definition.length,
       };
 
-      if (definition.isPrimary) {
-        this._primaryKeys.push(column as keyof T);
-      }
-
+      // if (model.primaryKeys && model.primaryKeys.has(column)) {
+      //   // this._primaryKeys.push(column as keyof T);
+      //   this._primaryKeys.add(column as keyof T);
+      // }
       if (
-        ["AUTO_INCREMENT", "SERIAL", "BIGSERIAL"].includes(definition.dataType)
+        ["AUTO_INCREMENT", "SERIAL", "BIGSERIAL"].includes(definition.type)
       ) {
         this._identityKeys.push(column as keyof T);
         // TODO - Technically identity columns are also PK, ensure they are present in PK. NEED to do impact analysis
-      }
-
-      if (definition.uniqueKey !== undefined) {
-        definition.uniqueKey.forEach((key) => {
-          if (this._uniqueKeys[key] === undefined) {
-            this._uniqueKeys[key] = [];
-          }
-          this._uniqueKeys[key].push(column as keyof T);
-        });
       }
 
       if (definition.insertDefault !== undefined) {
@@ -209,39 +206,95 @@ export class Model<
       if (definition.disableUpdate === true) {
         this._disableUpdate.push(column as keyof T);
       }
-
-      // Relationships
-      // Relationships are present primarily to handle indexes. norm will not
-      // create foreign keys to avoid table alter/creation hierarchy. Indexes will be maintained for performance.
-      // In the future, this could be used to select using joins or create views
-      // if (definition.relatesTo) {
-      //   Object.entries(definition.relatesTo).forEach(
-      //     ([modelName, modelColumn]) => {
-      //       if (this._relationships[modelName] === undefined) {
-      //         this._relationships[modelName] = {} as Record<keyof T, string>;
-      //       }
-      //       this._relationships[modelName][column as keyof T] = modelColumn;
-      //     },
-      //   );
-      // }
     }
+
     this._columns = columnAlias as Record<keyof T, string>;
     this._columnType = columnDefinition as Record<
       keyof T,
       { type: DataType; length?: { precision: number; scale: number } | number }
     >;
+
     this._validator = Struct(
       validator,
       `Validation failed for model ${model.name}`,
       "PARTIAL",
     );
-    // ModelManager.register(this, model);
-    Database.registerModel(this as Model, model);
+
+    // Validate PK, UK and FK
+    if (model.primaryKeys) {
+      // Check if all PK are present in the columns
+      model.primaryKeys.forEach((key) => {
+        if (this._columns[key as keyof T] === undefined) {
+          throw new ConstraintColumnNotFound(
+            key,
+            "primary",
+            model.name,
+            model.connection,
+          );
+        }
+        // TODO Ensure PK is not nullable!
+      });
+
+      this._primaryKeys = model.primaryKeys as Set<keyof T>;
+    }
+
+    if (model.uniqueKeys) {
+      // Check if each Unique key set has all columns present
+      Object.entries(model.uniqueKeys).forEach(([key, columns]) => {
+        columns.forEach((column) => {
+          if (this._columns[column as keyof T] === undefined) {
+            throw new ConstraintColumnNotFound(
+              column,
+              "unique",
+              model.name,
+              model.connection,
+            );
+          }
+        });
+        this._uniqueKeys[key] = columns as Set<keyof T>;
+      });
+    }
+
+    // if (model.indexes) {
+    //   // Check if each index set has all columns present
+    //   Object.entries(model.indexes).forEach(([key, columns]) => {
+    //     columns.forEach((column) => {
+    //       if (this._columns[column as keyof T] === undefined) {
+    //         throw new ConstraintColumnNotFound(
+    //           column,
+    //           "index",
+    //           model.name,
+    //           model.connection,
+    //         );
+    //       }
+    //     });
+    //     this._indexes[key] = columns as Array<keyof T>;
+    //   });
+    // }
+
+    // if (model.foreignKeys) {
+    //   // Check if each FK set has all columns present
+    //   Object.entries(model.foreignKeys).forEach(([_key, columns]) => {
+    //     // const c = columns as Set<{[key: string]: string}>;
+    //     columns.forEach((column) => {
+    //       Object.keys(column).forEach((col) => {
+    //         if (this._columns[col as keyof T] === undefined) {
+    //           throw new ConstraintColumnNotFound(
+    //             col,
+    //             "foreign",
+    //             model.name,
+    //             model.connection,
+    //           );
+    //         }
+    //       });
+    //     });
+    //   });
+    // }
   }
 
   // The model name
   get name(): string {
-    return this._name.trim();
+    return this._name;
   }
 
   get schema(): string | undefined {
@@ -256,11 +309,11 @@ export class Model<
     return this._isView;
   }
 
-  get schemaTable(): string {
-    return `${
-      this._schema !== undefined ? `${this._schema}.` : ""
-    }${this._table}`;
-  }
+  // get schemaTable(): string {
+  //   return `${
+  //     this._schema !== undefined ? `${this._schema}.` : ""
+  //   }${this._table}`;
+  // }
 
   get connection(): string {
     return this._connectionName;
@@ -271,20 +324,21 @@ export class Model<
     return this._validator;
   }
 
-  get primaryKeys(): Array<keyof T> {
+  get primaryKeys(): Set<keyof T> {
     return this._primaryKeys;
   }
 
+  // TODO Normalise this
   public hasColumn(name: keyof T | string): boolean {
     name = String(name).toLowerCase();
     const columns: Record<string, string> = {};
     Object.entries(this._columns).forEach(([key]) => {
       columns[key.toLowerCase()] = key;
     });
-    // return this._columns[name as keyof T] !== undefined;
     return columns[name] !== undefined;
   }
 
+  // TODO Re-write this
   public normaliseColumn(name: keyof T | string): keyof T | undefined {
     name = String(name).toLowerCase();
     const columns: Record<string, string> = {};
@@ -297,8 +351,8 @@ export class Model<
     return undefined;
   }
 
-  public capability(name: keyof ModelPermissions): boolean {
-    return this._features[name];
+  public permission(name: keyof ModelPermissions): boolean {
+    return this._permissions[name];
   }
 
   public getRealName(column: keyof T): string {
@@ -314,7 +368,7 @@ export class Model<
     return this._columnType[name];
   }
 
-  public isColumnNullable(name: keyof T): boolean {
+  public isNullable(name: keyof T): boolean {
     return (!this._notNulls.includes(name as keyof T) &&
       !this._identityKeys.includes(name as keyof T));
   }
@@ -337,7 +391,7 @@ export class Model<
     sort?: QuerySorting<T>,
     paging?: QueryPagination,
   ): Promise<QueryResult<T>> {
-    if (this.capability("select") === false) {
+    if (this.permission("select") === false) {
       throw new ModelPermission(
         "select",
         this.name,
@@ -376,7 +430,7 @@ export class Model<
   public async count(
     filters?: Filters<T>,
   ): Promise<QueryResult<T>> {
-    if (this.capability("select") === false) {
+    if (this.permission("select") === false) {
       throw new ModelPermission(
         "select",
         this.name,
@@ -409,7 +463,7 @@ export class Model<
     data: Partial<T> | Array<Partial<T>>,
   ): Promise<QueryResult<T>> {
     // Check permission
-    if (this.capability("insert") === false) {
+    if (this.permission("insert") === false) {
       throw new ModelPermission(
         "insert",
         this.name,
@@ -503,7 +557,7 @@ export class Model<
     data: Partial<T>,
     filters?: Filters<T>,
   ): Promise<QueryResult<T>> {
-    if (this.capability("update") === false) {
+    if (this.permission("update") === false) {
       throw new ModelPermission(
         "update",
         this.name,
@@ -549,7 +603,7 @@ export class Model<
         pkFilter[pk as string] = data[pk];
       });
 
-      if (Object.keys(pkFilter).length === this._primaryKeys.length) {
+      if (Object.keys(pkFilter).length === this._primaryKeys.size) {
         filters = pkFilter as Filters<T>;
         // Delete PK in data
         this._primaryKeys.forEach((pk) => {
@@ -634,7 +688,7 @@ export class Model<
    * @returns QueryResult<T>
    */
   public async delete(filter?: Filters<T>): Promise<QueryResult<T>> {
-    if (this.capability("delete") === false) {
+    if (this.permission("delete") === false) {
       throw new ModelPermission(
         "delete",
         this.name,
@@ -659,7 +713,7 @@ export class Model<
    * Truncates the table
    */
   public async truncate(): Promise<void> {
-    if (this.capability("truncate") === false) {
+    if (this.permission("truncate") === false) {
       throw new ModelPermission(
         "truncate",
         this.name,
@@ -686,32 +740,29 @@ export class Model<
    * @returns Promise<void>
    */
   public async createTable(
-    dropCreate?: boolean,
-    backup?: string,
     seedFilePath?: string,
   ): Promise<void> {
-    if (this.capability("create") === false) {
-      throw new ModelPermission(
-        "create",
-        this.name,
-        this._connection.name,
-      );
-    }
+    // if (this.permission("create") === false) {
+    //   throw new ModelPermission(
+    //     "create",
+    //     this.name,
+    //     this._connection.name,
+    //   );
+    // }
     await this._init();
 
     // create the table structure
     const options: CreateTableOptions = {
       schema: this.schema,
       table: this.table,
-      dropCreate: (dropCreate === true),
-      backup: backup,
       columns: {},
     };
+
     for (const [alias, name] of Object.entries(this._columns)) {
       options.columns[name as string] = {
         type: this._columnType[alias as keyof T].type,
         length: this._columnType[alias as keyof T].length || undefined,
-        isNullable: this.isColumnNullable(alias as keyof T),
+        isNullable: this.isNullable(alias as keyof T),
       };
     }
     // Get the actual column names
@@ -732,27 +783,25 @@ export class Model<
         options.uniqueKeys[name].push(this._columns[key as keyof T]);
       });
     }
-
     await this._connection.createTable(options);
     if (seedFilePath) {
       await this.insert(JSON.parse(await Deno.readTextFile(seedFilePath)));
     }
   }
 
-  public async dropTable(ifExists = true, cascade = false): Promise<void> {
-    if (this.capability("drop") === false) {
-      throw new ModelPermission(
-        "drop",
-        this.name,
-        this._connection.name,
-      );
-    }
+  public async dropTable(cascade = false): Promise<void> {
+    // if (this.permission("drop") === false) {
+    //   throw new ModelPermission(
+    //     "drop",
+    //     this.name,
+    //     this._connection.name,
+    //   );
+    // }
     await this._init();
 
     await this._connection.dropTable(
       this.table,
       this.schema,
-      ifExists,
       cascade,
     );
   }
@@ -898,7 +947,7 @@ export class Model<
     }
 
     for (const key of Object.keys(this._uniqueKeys)) {
-      const columns = this._uniqueKeys[key];
+      const columns = Array.from(this._uniqueKeys[key].values());
       const values = columns.map((column) => {
         return data[column as keyof T];
       });

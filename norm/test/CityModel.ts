@@ -8,27 +8,27 @@ const CityModelDefinition = {
   table: "City",
   columns: {
     Id: {
-      dataType: DataTypes.SERIAL,
-      isPrimary: true,
+      type: DataTypes.SERIAL,
     },
     Name: {
-      dataType: DataTypes.VARCHAR,
+      type: DataTypes.VARCHAR,
       validator: Guardian.string().max(255),
-      uniqueKey: new Set(["cu"]),
     },
     CountryCode: {
-      dataType: DataTypes.VARCHAR,
+      type: DataTypes.VARCHAR,
       length: 3,
       validator: Guardian.string().max(3),
-      uniqueKey: new Set(["cu"]),
     },
     District: {
-      dataType: DataTypes.TEXT,
-      uniqueKey: new Set(["cu"]),
+      type: DataTypes.TEXT,
     },
     Population: {
-      dataType: DataTypes.BIGINT,
+      type: DataTypes.BIGINT,
     },
+  },
+  primaryKeys: new Set(["Id"]),
+  uniqueKeys: {
+    "name": new Set(["Name", "CountryCode", "District"]),
   },
   pageSize: 10,
 } as const;

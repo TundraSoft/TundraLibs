@@ -1,11 +1,18 @@
 import { AbstractClient } from "./AbstractClient.ts";
 import { SQLite } from "./clients/SQLite.ts";
 import { Postgres } from "./clients/Postgres.ts";
-import type { ClientConfig, ModelDefinition, ModelType } from "./types/mod.ts";
+import type { ClientConfig, ModelDefinition } from "./types/mod.ts";
 import { ConfigNotFound } from "./Errors.ts";
 
 import { Config } from "../config/mod.ts";
 import { Model } from "./Model.ts";
+
+export type ModelGeneratorOptions = {
+  modelPath: string; // Where are the models stored?
+  connection?: string; // Generate definitions for a specific connection
+  schema?: string; // Generate definitions for a specific schema
+  dropCreate: boolean; // Drop and create the tables
+};
 
 export class Database {
   protected static _clients: Map<string, AbstractClient> = new Map();
@@ -69,82 +76,4 @@ export class Database {
         break;
     }
   }
-
-  public static registerModel(
-    model: Model,
-    definition: ModelDefinition,
-  ): void {
-    const name: string = model.name,
-      indexName: string = name.toLowerCase();
-    if (Database._modelIndex.has(indexName)) {
-      const existingName = Database._modelIndex.get(indexName) as string;
-      // Check if the config is same as the one registered
-      if (
-        model.schema === Database._modelInfo[existingName].schema &&
-        model.table === Database._modelInfo[existingName].table
-      ) {
-        // If same, then just return
-        return;
-      } else {
-        // If different, then throw error
-        throw new Error(`Model ${name} already registered`);
-      }
-    }
-    Database._modelIndex.set(indexName, name);
-    Database._modelInfo[name] = {
-      connection: model.connection,
-      schema: model.schema,
-      table: model.table,
-      definition: definition,
-      model: model,
-    };
-  }
-
-  public static getModel<
-    T extends ModelType<S>,
-    S extends ModelDefinition = ModelDefinition,
-  >(name: string): Model<S, T> {
-    name = name.trim().toLowerCase();
-    if (Database._modelIndex.has(name)) {
-      const modelName = Database._modelIndex.get(name) as string;
-      return Database._modelInfo[modelName].model as Model<S, T>;
-    } else {
-      throw new Error("Unknown model");
-    }
-  }
-
-  public static generateDDL(
-    location: string,
-    connection: string,
-    forceCreate: boolean,
-  ): void {
-    // Is the connection info present?
-    if (!Database._clients.has(connection)) {
-      throw new ConfigNotFound(connection);
-    }
-    // Ok get all models which use this connection
-    const models: string[] = [];
-    for (const name in Database._modelInfo) {
-      if (Database._modelInfo[name].connection === connection) {
-        models.push(name);
-      }
-    }
-    // Generate insert table in hierarchial order (ones without FK gets created first, then all tables which refer to them, and so on)
-
-    // Generate insert statements
-
-    // Done
-  }
-
-  public static async generateMigration() {}
-  // Check data types
-  // public static validateModels(connection?: string, schema?: string): void {
-  //   // Validate particular set of models - filtered by connection or schema
-  // }
-
-  // public static verifyRelations(connection?: string, schema?: string): void {
-  // }
-
-  // protected static _parseDefinition(definition: ModelDefinition): void {
-  // }
 }

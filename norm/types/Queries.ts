@@ -1,4 +1,5 @@
 import { DataType } from "./DataTypes.ts";
+import type { DataLength } from "./DataLength.ts";
 
 /**
  * QueryTypes
@@ -144,20 +145,22 @@ export type QueryResult<T = Record<string, unknown>> = {
 export type CreateTableOptions = {
   schema?: string;
   table: string;
-  dropCreate: boolean;
-  backup?: string;
   columns: {
     [key: string]: {
       type: DataType;
-      length?: {
-        precision: number;
-        scale: number;
-      } | number;
+      length?: DataLength;
       isNullable?: boolean;
     };
   };
   primaryKeys?: Array<string>;
   uniqueKeys?: {
     [key: string]: Array<string>;
+  };
+  foreignKeys?: {
+    [name: string]: {
+      schema?: string;
+      table: string;
+      columns: Record<string, string>;
+    };
   };
 };

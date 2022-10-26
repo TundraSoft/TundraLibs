@@ -1,8 +1,10 @@
+import { path } from "../dependencies.ts";
 import { BaseEndpoint } from "./BaseEndpoint.ts";
 
 export class EndpointManager {
-  protected static _endPoints: Map<string, BaseEndpoint> = new Map();
   protected static _endPointGroups = new Map<string, string[]>();
+
+  protected static _endPoints: Map<string, BaseEndpoint> = new Map();
 
   /**
    * register
@@ -62,8 +64,10 @@ export class EndpointManager {
     for (const file of files) {
       if (file.isFile) {
         const realPath = Deno.realPathSync(`${location}/${file.name}`);
-        // console.log(realPath);
-        await import(`file://${realPath}`);
+        // Check if it is .ts extension
+        if (path.extname(realPath) === ".ts") {
+          await import(`file://${realPath}`);
+        }
       } else if (file.isDirectory && includeSubfolder) {
         await EndpointManager.loadEndpoints(`${location}/${file.name}`);
       }

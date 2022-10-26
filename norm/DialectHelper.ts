@@ -1,8 +1,9 @@
 import { ModelFilterError } from "./Errors.ts";
+
 import {
   CountQueryOptions,
   CreateTableOptions,
-  DecimalLengthSpec,
+  // DataLength,
   DeleteQueryOptions,
   Dialect,
   Filters,
@@ -107,12 +108,10 @@ export class DialectHelper {
           this._quoteColumn(value[0])
         }`;
       }),
-      qry = `INSERT INTO ${this._makeTable(options.table, options.schema)} (${
-        columns.join(",")
-      })
-                   VALUES ${values.join(",\n")} RETURNING ${
-        returning.join(",\n")
-      };`;
+      qry = `INSERT INTO ${this._makeTable(options.table, options.schema)} 
+(${columns.join(", ")})
+VALUES ${values.join(", \n")} 
+RETURNING ${returning.join(",\n    ")};`;
     return qry;
   }
 
@@ -163,26 +162,24 @@ export class DialectHelper {
     return `LIMIT ${limit}${offset ? ` OFFSET ${offset}` : ""}`;
   }
 
-  createDatabase(name: string, ifNotExists = true): string {
-    return `CREATE DATABASE ${ifNotExists ? "IF NOT EXISTS " : ""}${name}`;
+  createDatabase(name: string): string {
+    return `CREATE DATABASE IF NOT EXISTS ${this._quoteColumn(name)};`;
   }
 
-  dropDatabase(name: string, ifExists = true, cascase = true): string {
-    return `DROP DATABASE ${ifExists ? "IF EXISTS " : ""}${name}${
+  dropDatabase(name: string, cascase = true): string {
+    return `DROP DATABASE IF EXISTS ${this._quoteColumn(name)}${
       cascase ? " CASCADE" : ""
-    }`;
+    };`;
   }
 
-  createSchema(name: string, ifNotExists?: boolean): string {
-    return `CREATE SCHEMA ${ifNotExists ? "IF NOT EXISTS" : ""} ${
-      this._quoteColumn(name)
-    }`;
+  createSchema(name: string): string {
+    return `CREATE SCHEMA IF NOT EXISTS ${this._quoteColumn(name)};`;
   }
 
-  dropSchema(name: string, cascade = true, ifExists?: boolean): string {
-    return `DROP SCHEMA ${ifExists ? "IF EXISTS " : ""}${
-      this._quoteColumn(name)
-    }${cascade ? " CASCADE" : ""}`;
+  dropSchema(name: string, cascade = true): string {
+    return `DROP SCHEMA IF EXISTS ${this._quoteColumn(name)}${
+      cascade ? " CASCADE" : ""
+    };`;
   }
 
   createTable(options: CreateTableOptions): string {
@@ -208,7 +205,10 @@ export class DialectHelper {
         let colTypeArgs = "";
         if (colTypeArgsRaw) {
           if (colType == "DECIMAL" || colType == "NUMERIC") { // TODO: handle this better
-            const decSpec = colTypeArgsRaw as DecimalLengthSpec;
+            const decSpec = colTypeArgsRaw as {
+              scale: number;
+              precision: number;
+            };
             colTypeArgs = `(${decSpec.scale},${decSpec.precision})`;
           } else if (
             colType == "VARCHAR" || colType == "NVARCHAR" ||
@@ -235,8 +235,25 @@ export class DialectHelper {
       // console.log(options.uniqueKeys);
       Object.entries(options.uniqueKeys).forEach((name) => {
         constraints.push(
-          `CONSTRAINT ${options.table + "_" + name[0] + "_unique"} UNIQUE (${
+          `CONSTRAINT "UK_${options.table}_${name[0]}" UNIQUE (${
             name[1].map((value) => {
+              return this._quoteColumn(value);
+            }).join(", ")
+          })`,
+        );
+      });
+    }
+    if (options.foreignKeys) {
+      Object.entries(options.foreignKeys).forEach(([name, fkDefn]) => {
+        const srcColumns = Object.keys(fkDefn.columns),
+          destColumns = Object.values(fkDefn.columns);
+        constraints.push(
+          `CONSTRAINT "FK_${options.table}_${name}" FOREIGN KEY (${
+            srcColumns.map((value) => {
+              return this._quoteColumn(value);
+            }).join(", ")
+          }) REFERENCES ${this._makeTable(fkDefn.table, fkDefn.schema)} (${
+            destColumns.map((value) => {
               return this._quoteColumn(value);
             }).join(", ")
           })`,
@@ -249,21 +266,20 @@ export class DialectHelper {
     const qry = `CREATE TABLE IF NOT EXISTS ${
       this._makeTable(options.table, options.schema)
     }
-                     (
-                         ${sql.join(", \n")}
-                     );`;
+(
+    ${sql.join(", \n    ")}
+);`;
     return qry;
   }
 
   dropTable(
     table: string,
     schema?: string,
-    ifExists?: boolean,
     cascade?: boolean,
   ): string {
-    return `DROP TABLE ${ifExists ? "IF EXISTS " : ""}${
-      this._makeTable(table, schema)
-    }${cascade ? " CASCADE" : ""}`;
+    return `DROP TABLE IF EXISTS ${this._makeTable(table, schema)}${
+      cascade ? " CASCADE" : ""
+    };`;
   }
 
   // addColumn(): string {}
@@ -278,13 +294,13 @@ export class DialectHelper {
     let qry: string;
     switch (this._dialect) {
       case "POSTGRES":
-        qry = "SET session_replication_role = 'origin'";
+        qry = "SET session_replication_role = 'origin';";
         break;
       case "MYSQL":
-        qry = "SET FOREIGN_KEY_CHECKS = 1";
+        qry = "SET FOREIGN_KEY_CHECKS = 1;";
         break;
       case "SQLITE":
-        qry = "PRAGMA foreign_keys = ON";
+        qry = "PRAGMA foreign_keys = ON;";
         break;
       default:
         throw new Error(`Unsupported dialect: ${this._dialect}`);
@@ -297,13 +313,13 @@ export class DialectHelper {
     let qry: string;
     switch (this._dialect) {
       case "POSTGRES":
-        qry = "SET session_replication_role = 'replica'";
+        qry = "SET session_replication_role = 'replica';";
         break;
       case "MYSQL":
-        qry = "SET FOREIGN_KEY_CHECKS = 0";
+        qry = "SET FOREIGN_KEY_CHECKS = 0;";
         break;
       case "SQLITE":
-        qry = "PRAGMA foreign_keys = OFF";
+        qry = "PRAGMA foreign_keys = OFF;";
         break;
       default:
         throw new Error(`Unsupported dialect: ${this._dialect}`);
@@ -326,7 +342,7 @@ export class DialectHelper {
                 FROM information_schema.columns C
                 WHERE C.table_name = '${table}'
                     ${schema ? `AND C.table_schema = '${schema}'` : ""}
-                ORDER BY ordinal_position`;
+                ORDER BY ordinal_position;`;
   }
 
   getTableConstraints(table: string, schema?: string): string {
@@ -341,7 +357,7 @@ export class DialectHelper {
                          C.constraint_name = U.constraint_name
                 WHERE C.table_name = '${table}'
                     ${schema ? `AND C.table_schema = '${schema}'` : ""}
-                ORDER BY U.constraint_type, C.constraint_name, C.ordinal_position`;
+                ORDER BY U.constraint_type, C.constraint_name, C.ordinal_position;`;
   }
 
   protected _makeTable(name: string, schema?: string): string {
