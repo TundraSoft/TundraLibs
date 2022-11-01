@@ -25,7 +25,7 @@ export type Sorting<
 export type RawQuery = {
   type: QueryTypes.RAW;
   sql: string;
-  params: unknown[];
+  params?: unknown[];
 };
 
 export type SelectQuery<
@@ -50,7 +50,7 @@ export type InsertQuery<
   // type: QueryTypes.INSERT;
   data: NonNullable<T>[];
   project: Array<keyof T>;
-  returning: boolean;
+  // returning: boolean;
 } & BaseQueryOptions<T>;
 
 export type UpdateQuery<
@@ -60,7 +60,7 @@ export type UpdateQuery<
   filters?: QueryFilter<T>;
   data: Partial<T>;
   project: Array<keyof T>;
-  returning: boolean;
+  // returning: boolean;
 } & BaseQueryOptions<T>;
 
 export type DeleteQuery<

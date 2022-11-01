@@ -90,15 +90,28 @@ export abstract class AbstractClient<
           type: sql.type,
           time: 0,
           count: 0,
-        },
-        result = await this._query(sql);
+        };
+      // Ensure projection has same column names as columns
+      if (sql.type === QueryTypes.INSERT) {
+        if((sql as InsertQuery<Entity>).data.length === 0) {
+          throw new Error("No data to insert");
+        }
+      } else if (sql.type === QueryTypes.UPDATE) {
+        if((sql as UpdateQuery<Entity>).data.length === 0) {
+          throw new Error("No data to update");
+        }
+      }
+      // console.log(sql);
+      const result = await this._query(sql);
       if (result) {
-        retVal.data = result;
-        retVal.count = result.length;
+        retVal.data = result.data;
+        retVal.count = result.count || 0;
       }
       retVal.time = performance.now() - start;
+      // console.log('Done')
       return retVal;
     } catch (e) {
+      // console.log('In Error')
       // Handle all errors
       throw e;
     }
@@ -206,6 +219,6 @@ export abstract class AbstractClient<
   protected abstract _ping(): Promise<boolean>;
   protected abstract _query<
     Entity extends Record<string, unknown> = Record<string, unknown>,
-  >(query: QueryOption<Entity>): Promise<Entity[] | undefined>;
+  >(query: QueryOption<Entity>): Promise<{ data?: Entity[], count?: number }>;
   //#endregion Abstract Methods
 }

@@ -162,6 +162,7 @@ export class QueryTranslator {
     const tableName = this.quoteColumn(
         (query.schema ? query.schema + "." : "") + query.table,
       ),
+      project = (query.project && query.project.length > 0) ? query.project : Object.keys(query.columns), 
       columns = Object.keys(query.columns).map((alias) => {
         return `${this.quoteColumn(query.columns[alias])}`;
       }),
@@ -170,20 +171,14 @@ export class QueryTranslator {
           return this.quoteValue(row[key]);
         });
       }),
-      returning = (query.returning === true)
-        ? " \nRETURNING " + Object.keys(query.columns).map((alias) => {
-          if (
-            !query.project || (query.project && query.project.includes(alias))
-          ) {
-            return `${this.quoteColumn(query.columns[alias])} AS ${
-              this.quoteColumn(alias)
-            }`;
-          }
-        }).join(", \n")
-        : "";
+      returning = " \nRETURNING " + project.map((alias) => {
+          return `${this.quoteColumn(query.columns[alias])} AS ${
+            this.quoteColumn(alias as string)
+          }`;
+        }).join(", \n");
     return `INSERT INTO ${tableName} \n(${columns.join(", ")}) \nVALUES (${
       values.join("), \n(")
-    })${returning};`;
+    });`;
   }
 
   public update<
@@ -192,6 +187,7 @@ export class QueryTranslator {
     const tableName = this.quoteColumn(
         (query.schema ? query.schema + "." : "") + query.table,
       ),
+      project = (query.project && query.project.length > 0) ? query.project : Object.keys(query.columns), 
       columns = Object.keys(query.data).map((columnName) => {
         return `${this.quoteColumn(query.columns[columnName])} = ${
           this.quoteValue(query.data[columnName])
@@ -200,17 +196,11 @@ export class QueryTranslator {
       filter = (query.filters)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
         : "",
-      returning = (query.returning === true)
-        ? " \nRETURNING " + Object.keys(query.columns).map((alias) => {
-          if (
-            !query.project || (query.project && query.project.includes(alias))
-          ) {
-            return `${this.quoteColumn(query.columns[alias])} AS ${
-              this.quoteColumn(alias)
-            }`;
-          }
-        }).join(", \n")
-        : "";
+      returning = " \nRETURNING " + project.map((alias) => {
+        return `${this.quoteColumn(query.columns[alias])} AS ${
+          this.quoteColumn(alias as string)
+        }`;
+        }).join(", \n");
     return `UPDATE ${tableName} \nSET ${
       columns.join(", \n")
     }${filter}${returning};`;
