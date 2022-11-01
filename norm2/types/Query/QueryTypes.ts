@@ -16,6 +16,7 @@ export const enum QueryTypes {
   "BEGIN" = "BEGIN",
   "COMMIT" = "COMMIT",
   "ROLLBACK" = "ROLLBACK",
+  "SAVEPOINT" = "SAVEPOINT", 
   "UNKNOWN" = "UNKNWON",
 }
 

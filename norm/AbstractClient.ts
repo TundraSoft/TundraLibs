@@ -75,6 +75,7 @@ export abstract class AbstractClient<T extends ClientConfig = ClientConfig>
   getGenerator(value: keyof Generators): unknown | undefined {
     return this._dialectHelper.getGenerator(value);
   }
+  
   /**
    * connect
    *

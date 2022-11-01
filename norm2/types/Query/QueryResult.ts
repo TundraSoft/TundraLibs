@@ -1,17 +1,15 @@
 import { QueryPagination } from "./QueryPagination.ts";
+import { QuerySorting } from "./QuerySorting.ts";
 
 export type QueryResult<T> = {
   type: string;
-  sql: string;
+  sql?: string;
   time: number;
   count: number;
-  data: Array<T>;
 };
 
-// export type DataQueryResult<T> = {
-//   data: Array<T>;
-// } & QueryResult<T>;
-
-export type SelectQueryResult<T> = {
-  pagination: QueryPagination;
+export type DataQueryResult<T> = {
+  data: Array<T>;
+  paging?: QueryPagination;
 } & QueryResult<T>;
+

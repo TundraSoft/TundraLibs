@@ -18,26 +18,18 @@ export type FilterOperators<T> = T | {
   $nilike?: T;
 };
 
-export type Filters<T extends Record<string, unknown> = Record<string, unknown>> =
+export type QueryFilter<
+  T extends Record<string, unknown> = Record<string, unknown>,
+> =
   | {
     [Property in keyof T]?: FilterOperators<T[Property]>;
   }
     & {
-      $or?: Filters<T>;
-      $and?: Filters<T>;
+      $or?: QueryFilter<T>;
+      $and?: QueryFilter<T>;
     }
   | Array<
     {
       [Property in keyof T]?: FilterOperators<T[Property]>;
     }
   >;
-
-// const a: Filters<{id: string, name: string, age: number}> = {
-//   id: {
-//     $eq: '123',
-//   }, 
-//   name: {
-//     $like: 'abc',
-//   }, 
-//   age: '12'
-// }

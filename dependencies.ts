@@ -34,15 +34,16 @@ export {
 export {
   Client as PGClient,
   Pool as PGPool,
-} from "https://deno.land/x/postgres@v0.16.1/mod.ts";
-export type { ClientOptions as PGClientOptions } from "https://deno.land/x/postgres@v0.16.1/mod.ts";
+} from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+export type { ClientOptions as PGClientOptions } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 
 export { DB as SQLiteClient } from "https://deno.land/x/sqlite@v3.4.0/mod.ts";
 
-// export { default as postgres } from "https://deno.land/x/postgresjs@v3.2.4/mod.js"
+export { MongoClient as MongoDBClient, Bson } from 'https://deno.land/x/mongo@v0.31.1/mod.ts';
+export { Client as MySQL } from "https://deno.land/x/mysql@v2.10.3/mod.ts";
+export type { ClientConfig as MySQLClientConfig } from "https://deno.land/x/mysql@v2.10.3/mod.ts";
 
-// export { Client as MySQLClient } from "https://deno.land/x/mysql@v2.10.2/mod.ts";
-// export type { ClientConfig as MySQLClientConfig } from "https://deno.land/x/mysql@v2.10.2/mod.ts";
+// export { default as postgresjs } from "https://deno.land/x/postgresjs@v3.3.1/mod.js"
 // export * as MySQLClient from "https://deno.land/x/mysql2@v1.0.5/mod.ts";
 //#endregion norm
 

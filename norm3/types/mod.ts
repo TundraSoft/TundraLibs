@@ -1,24 +1,25 @@
+export { Dialect } from "./Dialects.ts";
 export type { Dialects } from "./Dialects.ts";
-export type { ClientEvents } from "./ClientEvents.ts";
 export type {
   ClientConfig,
-  MongoConfig,
+  MongoDBConfig,
   MySQLConfig,
   PostgresConfig,
   SQLiteConfig,
 } from "./ClientConfig.ts";
+export type { ClientEvents } from "./ClientEvents.ts";
+
 export { QueryTypes } from "./Query/mod.ts";
 export type {
-  DeleteQueryOptions,
-  FilterOperators,
-  Filters,
-  InsertQueryOptions,
-  QueryOptions,
-  QueryPagination,
+  BaseQueryOptions,
+  CountQuery,
+  DeleteQuery,
+  InsertQuery,
+  QueryFilter,
+  QueryOption,
   QueryResult,
-  QuerySorting,
   QueryType,
-  SelectQueryOptions,
-  DataQueryResult,
-  UpdateQueryOptions,
+  RawQuery,
+  SelectQuery,
+  UpdateQuery,
 } from "./Query/mod.ts";

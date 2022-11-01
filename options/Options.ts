@@ -44,7 +44,7 @@ export class Options<
   // deno-lint-ignore no-explicit-any
   E extends EventsType = Record<EventName, any>,
 > extends Events<E> {
-  protected _options: Partial<T> = {};
+  protected _options: T | NonNullable<T>;
 
   constructor(options: T | NonNullable<T> | Partial<T>, defaults?: Partial<T>);
 
@@ -59,6 +59,8 @@ export class Options<
     defaults?: Record<OptionsKey, unknown>,
   ) {
     super();
+    // Initialize Options
+    this._options = {} as T;
     // First add defaults if present
     if (defaults) {
       this._setOptions(defaults);

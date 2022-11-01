@@ -13,4 +13,4 @@ export type {
   SelectQueryOptions,
   UpdateQueryOptions,
 } from "./QueryOptions.ts";
-export type { QueryResult, SelectQueryResult } from "./QueryResult.ts";
+export type { QueryResult, DataQueryResult } from "./QueryResult.ts";
