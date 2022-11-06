@@ -1,3 +1,3 @@
 export { PostgresClient } from "./PostgresClient.ts";
-export { MySQLClient } from "./MySQLClient.ts";
+export { MariaClient } from "./MariaClient.ts";
 export { MongoClient } from "./MongoClient.ts";

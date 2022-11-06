@@ -1,29 +1,51 @@
 import { QueryTypes, RawQuery } from "./types/mod.ts";
 import type {
+  BaseColumnDefinition,
+  CountQuery,
+  CreateSchemaQuery,
+  CreateTableQuery,
   DeleteQuery,
   Dialects,
+  DropSchemaQuery,
+  DropTableQuery,
   InsertQuery,
   QueryFilter,
   QueryOption,
   SelectQuery,
+  TranslatorConfig,
+  TruncateTableQuery,
   UpdateQuery,
 } from "./types/mod.ts";
-import { CountQuery } from "./types/Query/QueryOptions.ts";
 
-const POSTGRES_CONFIG = {
-  quote: {
-    column: '"',
-    value: "'",
-  },
-};
+import {
+  MariaTranslatorConfig,
+  PostgresTranslatorConfig,
+  SQLiteTranslatorConfig,
+} from "./types/mod.ts";
+
 export class QueryTranslator {
   protected _dialect: Dialects;
-  protected _valueQuote = "'";
-  protected _columnQuote = '"';
+  // protected _valueQuote = "'";
+  // protected _columnQuote = '`';
+  protected _config: TranslatorConfig;
 
   constructor(dialect: Dialects) {
     this._dialect = dialect;
     // Load few defaults of the dialects
+    switch (dialect) {
+      case "POSTGRES":
+        this._config = PostgresTranslatorConfig;
+        break;
+      case "MARIADB":
+      case "MYSQL":
+        this._config = MariaTranslatorConfig;
+        break;
+      case "SQLITE":
+        this._config = SQLiteTranslatorConfig;
+        break;
+      default:
+        throw new Error(`Unknown dialect: ${dialect}`);
+    }
   }
 
   public get dialect(): Dialects {
@@ -48,7 +70,7 @@ export class QueryTranslator {
       return value + "";
     }
     if (value instanceof Date) {
-      return `'${value.toISOString()}'`;
+      return this.quoteValue(`${value.toISOString()}`);
     }
     if (value instanceof Array || Array.isArray(value)) {
       return "(" + value.map((v) => this.quoteValue(v)).join(",") + ")";
@@ -63,17 +85,19 @@ export class QueryTranslator {
       return value.substr(2, value.length - 3);
     }
     // Escape quotes already present
-    const findRegEx = new RegExp(this._valueQuote, "g"),
-      replace = this._valueQuote + this._valueQuote;
+    const findRegEx = new RegExp(this._config.quote.value, "g"),
+      replace = this._config.quote.value + this._config.quote.value;
     // return `'${value.replace(/'/g, "''")}'`;
-    return `'${value.replace(findRegEx, replace)}'`;
+    return `${this._config.quote.value}${
+      value.replace(findRegEx, replace)
+    }${this._config.quote.value}`;
   }
 
   public quoteColumn(value: string): string {
     const split = value.split(".");
-    return `${this._columnQuote}${
-      split.join(this._columnQuote + "." + this._columnQuote)
-    }${this._columnQuote}`;
+    return `${this._config.quote.column}${
+      split.join(this._config.quote.column + "." + this._config.quote.column)
+    }${this._config.quote.column}`;
   }
 
   public translate<
@@ -86,17 +110,27 @@ export class QueryTranslator {
 
     switch (query.type) {
       case QueryTypes.SELECT:
-        return this.select(query as SelectQuery<Entity>);
+        return this.select<Entity>(query as SelectQuery<Entity>);
       case QueryTypes.COUNT:
-        return this.count(query as CountQuery<Entity>);
+        return this.count<Entity>(query as CountQuery<Entity>);
       case QueryTypes.INSERT:
-        return this.insert(query as InsertQuery<Entity>);
+        return this.insert<Entity>(query as InsertQuery<Entity>);
       case QueryTypes.UPDATE:
-        return this.update(query as UpdateQuery<Entity>);
+        return this.update<Entity>(query as UpdateQuery<Entity>);
       case QueryTypes.DELETE:
-        return this.delete(query as DeleteQuery<Entity>);
+        return this.delete<Entity>(query as DeleteQuery<Entity>);
+      //#region DDL
+      case QueryTypes.CREATE_SCHEMA:
+        return this.createSchema(query as CreateSchemaQuery);
+      case QueryTypes.DROP_SCHEMA:
+        return this.dropSchema(query as DropSchemaQuery);
+      case QueryTypes.CREATE_TABLE:
+        return this.createTable<Entity>(query as CreateTableQuery<Entity>);
+      case QueryTypes.DROP_TABLE:
+        return this.dropTable(query as DropTableQuery);
       case QueryTypes.TRUNCATE:
-        return this.truncate(query.table, query.schema);
+        return this.truncate(query as TruncateTableQuery);
+      //#endregion DDL
       default:
         throw new Error(`Unknown query type: ${query.type}`);
     }
@@ -162,7 +196,9 @@ export class QueryTranslator {
     const tableName = this.quoteColumn(
         (query.schema ? query.schema + "." : "") + query.table,
       ),
-      project = (query.project && query.project.length > 0) ? query.project : Object.keys(query.columns), 
+      project = (query.project && query.project.length > 0)
+        ? query.project
+        : Object.keys(query.columns),
       columns = Object.keys(query.columns).map((alias) => {
         return `${this.quoteColumn(query.columns[alias])}`;
       }),
@@ -172,13 +208,13 @@ export class QueryTranslator {
         });
       }),
       returning = " \nRETURNING " + project.map((alias) => {
-          return `${this.quoteColumn(query.columns[alias])} AS ${
-            this.quoteColumn(alias as string)
-          }`;
-        }).join(", \n");
+        return `${this.quoteColumn(query.columns[alias])} AS ${
+          this.quoteColumn(alias as string)
+        }`;
+      }).join(", \n");
     return `INSERT INTO ${tableName} \n(${columns.join(", ")}) \nVALUES (${
       values.join("), \n(")
-    });`;
+    })${returning};`;
   }
 
   public update<
@@ -187,7 +223,9 @@ export class QueryTranslator {
     const tableName = this.quoteColumn(
         (query.schema ? query.schema + "." : "") + query.table,
       ),
-      project = (query.project && query.project.length > 0) ? query.project : Object.keys(query.columns), 
+      project = (query.project && query.project.length > 0)
+        ? query.project
+        : Object.keys(query.columns),
       columns = Object.keys(query.data).map((columnName) => {
         return `${this.quoteColumn(query.columns[columnName])} = ${
           this.quoteValue(query.data[columnName])
@@ -200,7 +238,7 @@ export class QueryTranslator {
         return `${this.quoteColumn(query.columns[alias])} AS ${
           this.quoteColumn(alias as string)
         }`;
-        }).join(", \n");
+      }).join(", \n");
     return `UPDATE ${tableName} \nSET ${
       columns.join(", \n")
     }${filter}${returning};`;
@@ -218,12 +256,95 @@ export class QueryTranslator {
     return `DELETE FROM ${tableName}${filter}};`;
   }
 
+  public createSchema(query: CreateSchemaQuery): string {
+    return `CREATE SCHEMA IF NOT EXISTS ${this.quoteColumn(query.schema)};`;
+  }
+
+  public dropSchema(query: DropSchemaQuery): string {
+    return `DROP SCHEMA IF EXISTS ${this.quoteColumn(query.schema)}${
+      query.cascade === true ? ` CASCADE` : ""
+    };`;
+  }
+
+  public createTable<
+    Entity extends Record<string, unknown> = Record<string, unknown>,
+  >(query: CreateTableQuery<Entity>): string {
+    const table = `${query.schema ? query.schema + "." : ""}${query.table}`,
+      body = Object.keys(query.columns).map((columnName) => {
+        return `${this.quoteColumn(columnName)} ${
+          this._processColumnType(
+            query.columns[columnName],
+          )
+        }`;
+      });
+    if (query.primaryKey) {
+      body.push(
+        `PRIMARY KEY ${
+          Array.from(query.primaryKey).map((columnName) => {
+            return this.quoteColumn(columnName as string);
+          }).join(", ")
+        }`,
+      );
+    }
+    if (query.uniqueKeys) {
+      Object.entries(query.uniqueKeys).forEach(([name, columns]) => {
+        body.push(
+          `UNIQUE ${this.quoteColumn(`UK_${table}_${name}`)}(${
+            Array.from(columns).map((columnName) => {
+              return this.quoteColumn(columnName as string);
+            }).join(", ")
+          })`,
+        );
+      });
+    }
+    if (query.foreignKeys) {
+      Object.entries(query.foreignKeys).forEach(([name, foreignKey]) => {
+        body.push(
+          `CONSTRAINT ${this.quoteColumn(`FK_${table}_${name}`)} FOREIGN KEY (${
+            Object.keys(foreignKey.columnMap).map((col) =>
+              this.quoteColumn(col)
+            ).join(", ")
+          }) REFERENCES ${
+            this.quoteColumn(
+              `${
+                foreignKey.schema ? foreignKey.schema + "." : ""
+              }${foreignKey.table}`,
+            )
+          } (${
+            Object.values(foreignKey.columnMap).map((col) =>
+              this.quoteColumn(col)
+            ).join(", ")
+          })`,
+        );
+      });
+    }
+    return `CREATE TABLE IF NOT EXISTS ${this.quoteColumn(table)}\n(\n    ${
+      body.join(", \n    ")
+    }\n);`;
+  }
+
+  public dropTable<
+    Entyty extends Record<string, unknown> = Record<string, unknown>,
+  >(query: DropTableQuery): string {
+    return `DROP TABLE IF EXISTS ${
+      this.quoteColumn(query.schema ? query.schema + "." : "") + query.table
+    }${query.cascade === true ? ` CASCADE` : ""};`;
+  }
+
   public truncate<
     Entity extends Record<string, unknown> = Record<string, unknown>,
-  >(table: string, schema?: string): string {
+  >(query: TruncateTableQuery): string {
     return `TRUNCATE TABLE ${
-      this.quoteColumn((schema ? schema + "." : "") + table)
+      this.quoteColumn((query.schema ? query.schema + "." : "") + query.table)
     };`;
+  }
+
+  protected _processColumnType(column: BaseColumnDefinition): string {
+    const type = this._config.dataTypes[column.type],
+      length = (column.length) ? `(${column.length})` : "",
+      nullable = (column.isNullable === true) ? "" : " NOT NULL";
+    // defaultValue = (column.defaults?.insert !== undefined) ? ` DEFAULT ${this.quoteValue(column.defaults?.insert)}` : "";
+    return `${type}${length}${nullable}`;
   }
 
   protected _processFilters<

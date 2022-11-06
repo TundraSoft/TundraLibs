@@ -1,15 +1,29 @@
 import { QueryTypes } from "./QueryTypes.ts";
 import type { QueryType } from "./QueryTypes.ts";
 import type { QueryFilter } from "./Filters.ts";
+import type { DataLength, DataType } from "../DataTypes.ts";
+import type { GeneratorFunction, Generators } from "../Translator/mod.ts";
+export type BaseColumnDefinition = {
+  type: DataType;
+  length?: DataLength;
+  isNullable: boolean;
+  defaults?: {
+    insert?: Generators | GeneratorFunction;
+    update?: string;
+  };
+};
 
-export type BaseQueryOptions<
-  T extends Record<string, unknown> = Record<string, unknown>,
-> = {
+export type BaseQueryOptions = {
   type: QueryType;
   table: string;
   schema?: string;
-  columns: Record<keyof T, string>;
 };
+
+export type BaseColumnQueryOptions<
+  T extends Record<string, unknown> = Record<string, unknown>,
+> = {
+  columns: Record<keyof T, string>;
+} & BaseQueryOptions;
 
 export type Pagination = {
   limit: number;
@@ -36,13 +50,13 @@ export type SelectQuery<
   project?: Array<keyof T>;
   pagination?: Pagination;
   sorting?: Sorting<T>;
-} & BaseQueryOptions<T>;
+} & BaseColumnQueryOptions<T>;
 
 export type CountQuery<
   T extends Record<string, unknown> = Record<string, unknown>,
 > = {
   filters?: QueryFilter<T>;
-} & BaseQueryOptions<T>;
+} & BaseColumnQueryOptions<T>;
 
 export type InsertQuery<
   T extends Record<string, unknown> = Record<string, unknown>,
@@ -51,7 +65,7 @@ export type InsertQuery<
   data: NonNullable<T>[];
   project: Array<keyof T>;
   // returning: boolean;
-} & BaseQueryOptions<T>;
+} & BaseColumnQueryOptions<T>;
 
 export type UpdateQuery<
   T extends Record<string, unknown> = Record<string, unknown>,
@@ -61,14 +75,48 @@ export type UpdateQuery<
   data: Partial<T>;
   project: Array<keyof T>;
   // returning: boolean;
-} & BaseQueryOptions<T>;
+} & BaseColumnQueryOptions<T>;
 
 export type DeleteQuery<
   T extends Record<string, unknown> = Record<string, unknown>,
 > = {
   // type: QueryTypes.DELETE;
   filters?: QueryFilter<T>;
-} & BaseQueryOptions<T>;
+} & BaseColumnQueryOptions<T>;
+
+export type CreateSchemaQuery = {
+  type: QueryTypes.CREATE_SCHEMA;
+  schema: string;
+};
+
+export type DropSchemaQuery = {
+  type: QueryType;
+  schema: string;
+  cascade?: boolean;
+};
+
+export type CreateTableQuery<
+  T extends Record<string, unknown> = Record<string, unknown>,
+> = {
+  // Column Definition
+  columns: {
+    [Property in keyof T]: BaseColumnDefinition;
+  };
+  // Constraints
+  primaryKey?: Set<keyof T>;
+  uniqueKeys?: Record<string, Set<keyof T>>;
+  foreignKeys?: Record<string, {
+    table: string;
+    schema?: string;
+    columnMap: Record<keyof T, string>;
+  }>;
+} & BaseQueryOptions;
+
+export type DropTableQuery = {
+  cascade?: boolean;
+} & BaseQueryOptions;
+
+export type TruncateTableQuery = BaseQueryOptions;
 
 export type QueryOption<
   T extends Record<string, unknown> = Record<string, unknown>,
@@ -78,4 +126,9 @@ export type QueryOption<
   | CountQuery<T>
   | InsertQuery<T>
   | UpdateQuery<T>
-  | DeleteQuery<T>;
+  | DeleteQuery<T>
+  | CreateSchemaQuery
+  | DropSchemaQuery
+  | CreateTableQuery<T>
+  | DropTableQuery
+  | TruncateTableQuery;

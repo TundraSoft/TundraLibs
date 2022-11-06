@@ -1,18 +1,25 @@
 import { Options } from "../options/mod.ts";
 import { QueryTranslator } from "./QueryTranslator.ts";
 
-import {
+import type {
   ClientConfig,
   ClientEvents,
+  CountQuery,
+  CreateSchemaQuery,
+  CreateTableQuery,
+  DeleteQuery,
   Dialects,
+  DropSchemaQuery,
+  DropTableQuery,
   InsertQuery,
   QueryOption,
   QueryResult,
-  QueryTypes,
+  QueryType,
   SelectQuery,
   UpdateQuery,
 } from "./types/mod.ts";
-import { CountQuery } from "./types/Query/QueryOptions.ts";
+
+import { QueryTypes } from "./types/mod.ts";
 
 export abstract class AbstractClient<
   O extends ClientConfig = ClientConfig,
@@ -93,17 +100,18 @@ export abstract class AbstractClient<
         };
       // Ensure projection has same column names as columns
       if (sql.type === QueryTypes.INSERT) {
-        if((sql as InsertQuery<Entity>).data.length === 0) {
+        if ((sql as InsertQuery<Entity>).data.length === 0) {
           throw new Error("No data to insert");
         }
       } else if (sql.type === QueryTypes.UPDATE) {
-        if((sql as UpdateQuery<Entity>).data.length === 0) {
+        if ((sql as UpdateQuery<Entity>).data.length === 0) {
           throw new Error("No data to update");
         }
       }
       // console.log(sql);
       const result = await this._query(sql);
       if (result) {
+        retVal.type = result.type;
         retVal.data = result.data;
         retVal.count = result.count || 0;
       }
@@ -122,27 +130,6 @@ export abstract class AbstractClient<
   >(sql: SelectQuery<Entity>): Promise<QueryResult<Entity>> {
     try {
       const retVal = await this.query<Entity>(sql);
-      // Get count
-      if (sql.pagination) {
-      }
-      // await this.connect();
-      // // sql.type = QueryTypes.SELECT;
-      // const start = performance.now(),
-      //   retVal: QueryResult<Entity> = {
-      //     type: QueryTypes.SELECT,
-      //     time: 0,
-      //     count: 0,
-      //   },
-      //   result = await this._query(sql);
-      // if(result) {
-      //   retVal.data = result;
-      //   // Check pagination
-      //   if(sql.pagination) {
-
-      //   }
-      //   retVal.count = result.length;
-      // }
-      // retVal.time = performance.now() - start;
       return retVal;
     } catch (e) {
       // Handle all errors
@@ -153,20 +140,14 @@ export abstract class AbstractClient<
   public async count<
     Entity extends Record<string, unknown> = Record<string, unknown>,
   >(sql: CountQuery<Entity>): Promise<number> {
-    return 1;
+    try {
+      const retVal = await this.query<Entity>(sql);
+      return retVal.count;
+    } catch (e) {
+      // Handle all errors
+      throw e;
+    }
   }
-
-  // public async count<Entity extends Record<string, unknown> = Record<string, unknown>>(sql: SelectQuery<Entity>): Promise<number> {
-  //   try {
-  //     // sql.type = QueryTypes.COUNT;
-  //     // sql.pagination = undefined;
-  //     // const retVal = await this.query<Entity>(sql);
-  //     // return retVal.data?[0].TotalRows
-  //   } catch (e) {
-  //     // Handle all errors
-  //     throw e;
-  //   }
-  // }
 
   public async insert<
     Entity extends Record<string, unknown> = Record<string, unknown>,
@@ -202,7 +183,7 @@ export abstract class AbstractClient<
 
   public async delete<
     Entity extends Record<string, unknown> = Record<string, unknown>,
-  >(sql: SelectQuery<Entity>): Promise<QueryResult<Entity>> {
+  >(sql: DeleteQuery<Entity>): Promise<QueryResult<Entity>> {
     try {
       sql.type = QueryTypes.DELETE;
       // Pre-checks
@@ -213,12 +194,61 @@ export abstract class AbstractClient<
     }
   }
 
+  public async createSchema(sql: CreateSchemaQuery): Promise<void> {
+    sql.type = QueryTypes.CREATE_SCHEMA;
+    await this._query(sql);
+  }
+  public async dropSchema(sql: DropSchemaQuery) {
+    sql.type = QueryTypes.DROP_SCHEMA;
+    await this._query(sql);
+  }
+
+  public async createTable<
+    Entity extends Record<string, unknown> = Record<string, unknown>,
+  >(sql: CreateTableQuery<Entity>) {
+    sql.type = QueryTypes.CREATE_TABLE;
+    await this._query(sql);
+  }
+
+  public async dropTable(sql: DropTableQuery) {
+    sql.type = QueryTypes.DROP_TABLE;
+    await this._query(sql);
+  }
+
+  // public async updateTableStructure<
+  //   Entity extends Record<string, unknown> = Record<string, unknown>,
+  // >(sql: CreateTableQuery<Entity>) {
+  //   // Ok this is the complicated part, we need to fetch the structure, compare, then generate the alter script.
+  // }
+
+  public generateQuery<
+    Entity extends Record<string, unknown> = Record<string, unknown>,
+  >(
+    sql: QueryOption<Entity>,
+  ): string {
+    return this._queryTranslator.translate(sql);
+  }
+
+  protected _queryType(sql: string): QueryType {
+    const regEx = new RegExp(
+        /^(CREATE|ALTER|DROP|TRUNCATE|SHOW|SELECT|INSERT|UPDATE|DELETE|DESC|DESCRIBE|EXPLAIN|BEGIN|COMMIT|ROLLBACK)?/i,
+      ),
+      match = sql.match(regEx);
+    let qt: QueryType = "UNKNOWN";
+    if (match && match.length > 0) {
+      qt = match[0].trim().toUpperCase() as QueryType;
+    }
+    return qt;
+  }
+
   //#region Abstract Methods
   protected abstract _connect(): Promise<void>;
   protected abstract _disconnect(): Promise<void>;
   protected abstract _ping(): Promise<boolean>;
   protected abstract _query<
     Entity extends Record<string, unknown> = Record<string, unknown>,
-  >(query: QueryOption<Entity>): Promise<{ data?: Entity[], count?: number }>;
+  >(
+    query: QueryOption<Entity>,
+  ): Promise<{ type: QueryType; data?: Entity[]; count?: number }>;
   //#endregion Abstract Methods
 }

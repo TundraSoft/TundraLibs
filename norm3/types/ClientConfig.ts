@@ -32,7 +32,7 @@ export type PostgresConfig = BasicConnection & {
   tls?: Partial<TLSConfig>;
 };
 
-export type MySQLConfig = BasicConnection & {
+export type MariaConfig = BasicConnection & {
   poolSize?: number;
   idleTimeout?: number;
   connectionTimeout?: number;

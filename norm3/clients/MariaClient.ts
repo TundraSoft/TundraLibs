@@ -2,72 +2,69 @@ import { AbstractClient } from "../AbstractClient.ts";
 import { Dialect, QueryTypes } from "../types/mod.ts";
 import type {
   CountQuery,
-  PostgresConfig,
+  MariaConfig,
   QueryOption,
   QueryType,
   SelectQuery,
 } from "../types/mod.ts";
-import { PGPool } from "../../dependencies.ts";
-import type { PGClientOptions } from "../../dependencies.ts";
+import { MySQL } from "../../dependencies.ts";
+import type { MySQLClientConfig } from "../../dependencies.ts";
 
-export class PostgresClient<O extends PostgresConfig = PostgresConfig>
+export class MariaClient<O extends MariaConfig = MariaConfig>
   extends AbstractClient<O> {
-  declare protected _client: PGPool;
-
+  declare protected _client: MySQL;
   constructor(name: string, options: NonNullable<O> | O) {
-    const defaults: Partial<PostgresConfig> = {
-      dialect: "POSTGRES",
-      port: 5432,
-      poolSize: 1, // Lets default to 1
-      idleTimeout: 5, // 5 seconds
-      connectionTimeout: 30, // 30 seconds
+    const defaults: Partial<MariaConfig> = {
+      dialect: "MARIADB",
+      port: 3306,
+      poolSize: 10,
+      idleTimeout: 5,
+      connectionTimeout: 30,
     };
     super(name, { ...defaults, ...options });
   }
 
   protected async _connect(): Promise<void> {
-    const pgConfig: PGClientOptions = {
-        applicationName: this._name,
-        hostname: this._options.host,
-        port: this._options.port,
-        user: this._options.userName,
-        password: this._options.password,
-        database: this._options.database,
-      },
-      poolSize = this._getOption("poolSize") || 1;
-    this._client = new PGPool(pgConfig, poolSize, true);
+    const mysqlConfig: MySQLClientConfig = {
+      hostname: this._options.host,
+      port: this._options.port,
+      username: this._options.userName,
+      password: this._options.password,
+      db: this._options.database,
+      timeout: this._options.connectionTimeout,
+      poolSize: this._options.poolSize,
+      idleTimeout: this._options.idleTimeout,
+    };
+    this._client = await new MySQL().connect(mysqlConfig);
     // Hack to test the connection, if there is something wrong it will throw immediately
-    await (await this._client.connect()).release();
+    this._state = "CONNECTED";
   }
 
   protected async _disconnect(): Promise<void> {
-    await this._client.end();
+    await this._client.close();
   }
 
   protected async _ping(): Promise<boolean> {
     const sql = `SELECT 1+1 AS result`,
-      client = await this._client.connect(),
-      { result } = (await client.queryObject<{ result: number }>(sql)).rows[0];
-    await client.release();
-    return result === 2;
+      result = (await this._client.execute(sql)).rows;
+    return (result && result.length > 0 && result[0].result === 2)
+      ? true
+      : false;
   }
 
   protected async _query<
-    Entity extends Record<string, unknown> = Record<string, unknown>,
-  >(
-    query: QueryOption<Entity>,
-  ): Promise<{ type: QueryType; data?: Entity[]; count?: number }> {
+  Entity extends Record<string, unknown> = Record<string, unknown>,
+>(
+  query: QueryOption<Entity>,
+): Promise<{ type: QueryType; data?: Entity[]; count?: number }> {
     try {
-      // first get the client
-      const client = await this._client.connect(),
-        sql = this._queryTranslator.translate(query),
-        queryType = this._queryType(sql),
+      const sql = this._queryTranslator.translate(query),
         countQuery = this._queryTranslator.translate({
           ...query as CountQuery<Entity>,
           type: QueryTypes.COUNT,
         }),
         retVal: { type: QueryType; data?: Entity[]; count?: number } = {
-          type: queryType,
+          type: this._queryType(sql),
         };
       let actualRows = -1;
 
@@ -76,22 +73,20 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
         (query.type === QueryTypes.SELECT &&
           (query as SelectQuery).pagination) || query.type === QueryTypes.DELETE
       ) {
-        const result =
-          (await client.queryObject<{ TotalRows: number }>(countQuery)).rows[0];
+        const result = (await this._client.query(countQuery)).rows[0];
         actualRows = result.TotalRows;
       }
 
       // Run the actual query
       // console.log(sql);
-      const result = (await client.queryObject<Entity>(sql));
+      const result = (await this._client.execute(sql));
       // console.log(result);
       retVal.data = result.rows;
-      retVal.count = result.rowCount;
+      retVal.count = (result.rows) ? result.rows.length : result.affectedRows;
       if (actualRows > -1) {
         retVal.count = actualRows;
       }
 
-      client.release();
       return retVal;
     } catch (error) {
       console.log("Here");
@@ -101,17 +96,17 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
 }
 
 // const workingConfig = {
-//     dialect: Dialect.POSTGRES,
+//     dialect: Dialect.MARIADB,
 //     host: "localhost",
-//     port: 50732,
-//     userName: "postgres",
-//     password: "postgrespw",
-//     database: "postgres",
+//     port: 54840,
+//     userName: "root",
+//     password: "mariapw",
+//     database: "mysql",
 //   },
 //   invalidDBConfig = {
-//     dialect: Dialect.POSTGRES,
+//     dialect: "POSTGRES",
 //     host: "localhost",
-//     port: 54842,
+//     port: 54841,
 //     userName: "postgres",
 //     password: "postgrespw",
 //     database: "postgrfes",
@@ -149,26 +144,9 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
 //     database: "postgres",
 //   };
 
-// const client = new PostgresClient("test", workingConfig);
+// const client = new MariaClient("test", workingConfig as MariaConfig);
 // console.log(await client.ping());
-// const create = await client.generateQuery({
-//   type: QueryTypes.CREATE_TABLE,
-//   table: "test",
-//   columns: {
-//     Id: {
-//       type: "INTEGER",
-//       isNullable: false,
-//       defaults: {
-//         insert: "CURRENT_DATE",
-//       },
-//     },
-//     Name: {
-//       type: "VARCHAR",
-//       isNullable: true,
-//     },
-//   },
-// });
-// console.log(create);
+
 // const res = await client.query({
 //   type: QueryTypes.RAW,
 //   sql:
@@ -180,7 +158,6 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
 // const ins = await client.query({
 //   type: QueryTypes.INSERT,
 //   table: "test",
-//   schema: "public",
 //   columns: {
 //     id: "id",
 //     name: "name",
@@ -202,6 +179,8 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
 // });
 
 // console.log(resDel);
+
+// // console.log(await client.query("SELECT 1+1 AS result"));
 // // const client = new PostgresClient("test", {
 // //   dialect: "POSTGRES",
 // //   host: 'localhost',
@@ -211,6 +190,6 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
 // //   database: 'postgres',
 // // });
 // // await client.connect();
-
+// console.log(await client.ping() === true);
 // // await client.query('SELECT 1+1 AS result');
 // // console.log('OK')

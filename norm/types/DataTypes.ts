@@ -170,7 +170,7 @@ export const PostgresDataMap = {
   "JSON": "JSON",
   "ARRAY": "VARCHAR[]",
   "ARRAY_STRING": "VARCHAR[]",
-  "ARRAY_INTEGER": "INTEGER[]]",
+  "ARRAY_INTEGER": "INTEGER[]",
   "ARRAY_BIGINT": "BIGINT[]",
   "ARRAY_DECIMAL": "DECIMAL[]",
   "ARRAY_BOOLEAN": "BOOLEAN[]",

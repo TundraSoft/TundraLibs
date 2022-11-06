@@ -5,7 +5,7 @@
  * Based on nodejs nanoid project (https://github.com/ai/nanoid)
  */
 
-import { webSafe } from "./dictionary.ts";
+import { alphaNumeric, webSafe } from "./dictionary.ts";
 
 /**
  * Generates an array of random numbers basis the length specified
@@ -40,3 +40,12 @@ export function nanoid(size = 21, base: string = webSafe): string {
   }
   return id;
 }
+
+// Another idea
+/**
+ * This will be unique as long as we can manage to get server_id (PID), server_startup_time_in_seconds (to an extent consistent)
+ * https://mariadb.com/kb/en/uuid_short/
+ *   (server_id & 255) << 56
++ (server_startup_time_in_seconds << 24)
++ incremented_variable++;
+ */
