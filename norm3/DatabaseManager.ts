@@ -1,10 +1,11 @@
 import { Config } from "../config/Config.ts";
 import { AbstractClient } from "./AbstractClient.ts";
-import { MySQLClient, PostgresClient } from "./clients/mod.ts";
+import { MariaClient, PostgresClient } from "./clients/mod.ts";
 import {
   ClientConfig,
   Dialect,
   Dialects,
+  MariaConfig,
   PostgresConfig,
 } from "./types/mod.ts";
 
@@ -25,22 +26,22 @@ export class DatabaseManager {
         DatabaseManager._configs.set(nameClean, config);
         dbConn = new PostgresClient(nameClean, config as T & PostgresConfig);
         break;
-      case Dialect.MYSQL:
-        DatabaseManager._configs.set(nameClean, config);
-        dbConn = new PostgresClient(nameClean, config as T & PostgresConfig);
-        break;
+      // case Dialect.MYSQL:
+      //   DatabaseManager._configs.set(nameClean, config);
+      //   dbConn = new PostgresClient(nameClean, config as T & PostgresConfig);
+      //   break;
       case Dialect.MARIADB:
         DatabaseManager._configs.set(nameClean, config);
-        dbConn = new PostgresClient(nameClean, config as T & PostgresConfig);
+        dbConn = new MariaClient(nameClean, config as T & MariaConfig);
         break;
-      case Dialect.SQLITE:
-        DatabaseManager._configs.set(nameClean, config);
-        dbConn = new PostgresClient(nameClean, config as T & PostgresConfig);
-        break;
-      case Dialect.MONGODB:
-        DatabaseManager._configs.set(nameClean, config);
-        dbConn = new PostgresClient(nameClean, config as T & PostgresConfig);
-        break;
+      // case Dialect.SQLITE:
+      //   DatabaseManager._configs.set(nameClean, config);
+      //   dbConn = new PostgresClient(nameClean, config as T & PostgresConfig);
+      //   break;
+      // case Dialect.MONGODB:
+      //   DatabaseManager._configs.set(nameClean, config);
+      //   dbConn = new PostgresClient(nameClean, config as T & PostgresConfig);
+      //   break;
       default:
         throw new Error(`Unsupported dialect: ${dialect}`);
     }

@@ -1,5 +1,5 @@
 import { AbstractClient } from "../AbstractClient.ts";
-import { Dialect, QueryTypes } from "../types/mod.ts";
+import { QueryTypes } from "../types/mod.ts";
 import type {
   CountQuery,
   MariaConfig,
@@ -53,10 +53,10 @@ export class MariaClient<O extends MariaConfig = MariaConfig>
   }
 
   protected async _query<
-  Entity extends Record<string, unknown> = Record<string, unknown>,
->(
-  query: QueryOption<Entity>,
-): Promise<{ type: QueryType; data?: Entity[]; count?: number }> {
+    Entity extends Record<string, unknown> = Record<string, unknown>,
+  >(
+    query: QueryOption<Entity>,
+  ): Promise<{ type: QueryType; data?: Entity[]; count?: number }> {
     try {
       const sql = this._queryTranslator.translate(query),
         countQuery = this._queryTranslator.translate({

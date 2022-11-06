@@ -1,5 +1,5 @@
 import { AbstractClient } from "../AbstractClient.ts";
-import { Dialect, QueryTypes } from "../types/mod.ts";
+import { QueryTypes } from "../types/mod.ts";
 import type {
   CountQuery,
   PostgresConfig,
