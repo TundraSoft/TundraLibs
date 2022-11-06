@@ -39,6 +39,7 @@ export type ModelDefinition = {
     truncate?: boolean;
   }
   pageSize?: number;
+  seedFile?: string;
 };
 
 type PartialPartial<T, K extends keyof T> =
