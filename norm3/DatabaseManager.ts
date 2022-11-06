@@ -67,4 +67,8 @@ export class DatabaseManager {
       throw new Error(`Database ${name} is not registered`);
     }
   }
+
+  static has(name: string): boolean {
+    return this._configs.has(name.trim().toLowerCase());
+  }
 }

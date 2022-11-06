@@ -16,7 +16,9 @@ export type {
   RawQuery,
   SelectQuery,
   TruncateTableQuery,
-  UpdateQuery,
+  UpdateQuery, 
+  Pagination, 
+  Sorting, 
 } from "./QueryOptions.ts";
 
 export type { QueryResult } from "./QueryResult.ts";

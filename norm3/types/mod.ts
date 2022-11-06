@@ -9,6 +9,9 @@ export type {
 } from "./ClientConfig.ts";
 export type { ClientEvents } from "./ClientEvents.ts";
 
+export { DataTypes, DataTypeMap, DefaultValidator } from "./DataTypes.ts";
+export type { DataType, DataLength } from './DataTypes.ts';
+
 export { QueryTypes } from "./Query/mod.ts";
 export type {
   BaseColumnDefinition,
@@ -28,6 +31,8 @@ export type {
   SelectQuery,
   TruncateTableQuery,
   UpdateQuery,
+  Pagination, 
+  Sorting, 
 } from "./Query/mod.ts";
 
 export type {
@@ -43,3 +48,5 @@ export {
   PostgresTranslatorConfig,
   SQLiteTranslatorConfig,
 } from "./Translator/mod.ts";
+
+export type { ModelDefinition, ModelType } from './Model.ts'

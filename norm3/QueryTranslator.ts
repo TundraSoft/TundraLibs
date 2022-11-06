@@ -280,7 +280,7 @@ export class QueryTranslator {
     if (query.primaryKey) {
       body.push(
         `PRIMARY KEY ${
-          Array.from(query.primaryKey).map((columnName) => {
+          query.primaryKey.map((columnName) => {
             return this.quoteColumn(columnName as string);
           }).join(", ")
         }`,
@@ -290,7 +290,7 @@ export class QueryTranslator {
       Object.entries(query.uniqueKeys).forEach(([name, columns]) => {
         body.push(
           `UNIQUE ${this.quoteColumn(`UK_${table}_${name}`)}(${
-            Array.from(columns).map((columnName) => {
+           columns.map((columnName) => {
               return this.quoteColumn(columnName as string);
             }).join(", ")
           })`,

@@ -3,10 +3,11 @@ import type { QueryType } from "./QueryTypes.ts";
 import type { QueryFilter } from "./Filters.ts";
 import type { DataLength, DataType } from "../DataTypes.ts";
 import type { GeneratorFunction, Generators } from "../Translator/mod.ts";
+
 export type BaseColumnDefinition = {
   type: DataType;
   length?: DataLength;
-  isNullable: boolean;
+  isNullable?: boolean;
   defaults?: {
     insert?: Generators | GeneratorFunction;
     update?: string;
@@ -103,8 +104,8 @@ export type CreateTableQuery<
     [Property in keyof T]: BaseColumnDefinition;
   };
   // Constraints
-  primaryKey?: Set<keyof T>;
-  uniqueKeys?: Record<string, Set<keyof T>>;
+  primaryKey?: Array<keyof T>;
+  uniqueKeys?: Record<string, Array<keyof T>>;
   foreignKeys?: Record<string, {
     table: string;
     schema?: string;

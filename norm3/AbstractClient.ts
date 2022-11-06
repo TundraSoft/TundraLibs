@@ -16,7 +16,8 @@ import type {
   QueryResult,
   QueryType,
   SelectQuery,
-  UpdateQuery,
+  UpdateQuery, 
+  TruncateTableQuery
 } from "./types/mod.ts";
 
 import { QueryTypes } from "./types/mod.ts";
@@ -139,10 +140,10 @@ export abstract class AbstractClient<
 
   public async count<
     Entity extends Record<string, unknown> = Record<string, unknown>,
-  >(sql: CountQuery<Entity>): Promise<number> {
+  >(sql: CountQuery<Entity>): Promise<QueryResult<Entity>> {
     try {
       const retVal = await this.query<Entity>(sql);
-      return retVal.count;
+      return retVal;
     } catch (e) {
       // Handle all errors
       throw e;
@@ -198,6 +199,7 @@ export abstract class AbstractClient<
     sql.type = QueryTypes.CREATE_SCHEMA;
     await this._query(sql);
   }
+
   public async dropSchema(sql: DropSchemaQuery) {
     sql.type = QueryTypes.DROP_SCHEMA;
     await this._query(sql);
@@ -220,6 +222,11 @@ export abstract class AbstractClient<
   // >(sql: CreateTableQuery<Entity>) {
   //   // Ok this is the complicated part, we need to fetch the structure, compare, then generate the alter script.
   // }
+
+  public async truncateTable(sql: TruncateTableQuery) {
+    sql.type = QueryTypes.TRUNCATE;
+    await this._query(sql);
+  }
 
   public generateQuery<
     Entity extends Record<string, unknown> = Record<string, unknown>,
