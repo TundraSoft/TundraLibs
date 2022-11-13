@@ -3,14 +3,29 @@ import type { QueryType } from "./QueryTypes.ts";
 import type { QueryFilter } from "./Filters.ts";
 import type { DataLength, DataType } from "../DataTypes.ts";
 import type { GeneratorFunction, Generators } from "../Translator/mod.ts";
+// import { Generator } from '../Translator/mod.ts'
 
 export type BaseColumnDefinition = {
   type: DataType;
   length?: DataLength;
   isNullable?: boolean;
   defaults?: {
-    insert?: Generators | GeneratorFunction;
-    update?: string;
+    insert?:
+      | Generators
+      | GeneratorFunction
+      | string
+      | number
+      | bigint
+      | boolean
+      | Date;
+    update?:
+      | Generators
+      | GeneratorFunction
+      | string
+      | number
+      | bigint
+      | boolean
+      | Date;
   };
 };
 
@@ -64,7 +79,7 @@ export type InsertQuery<
 > = {
   // type: QueryTypes.INSERT;
   data: NonNullable<T>[];
-  project: Array<keyof T>;
+  project?: Array<keyof T>;
   // returning: boolean;
 } & BaseColumnQueryOptions<T>;
 
@@ -74,7 +89,7 @@ export type UpdateQuery<
   // type: QueryTypes.UPDATE;
   filters?: QueryFilter<T>;
   data: Partial<T>;
-  project: Array<keyof T>;
+  project?: Array<keyof T>;
   // returning: boolean;
 } & BaseColumnQueryOptions<T>;
 

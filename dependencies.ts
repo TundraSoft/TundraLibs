@@ -39,7 +39,10 @@ export type { ClientOptions as PGClientOptions } from "https://deno.land/x/postg
 
 export { DB as SQLiteClient } from "https://deno.land/x/sqlite@v3.4.0/mod.ts";
 
-export { MongoClient as MongoDBClient, Bson } from 'https://deno.land/x/mongo@v0.31.1/mod.ts';
+export {
+  Bson,
+  MongoClient as MongoDBClient,
+} from "https://deno.land/x/mongo@v0.31.1/mod.ts";
 export { Client as MySQL } from "https://deno.land/x/mysql@v2.10.3/mod.ts";
 export type { ClientConfig as MySQLClientConfig } from "https://deno.land/x/mysql@v2.10.3/mod.ts";
 

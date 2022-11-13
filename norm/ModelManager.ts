@@ -30,7 +30,7 @@ export class ModelManager {
   // This (once snapshots are ready) be used only to "build" the models. i.e generate
   // the DDLs.
   // public static loadModels(path: string) {
-    
+
   // }
 
   public static register(

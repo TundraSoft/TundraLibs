@@ -9,8 +9,8 @@ export type {
 } from "./ClientConfig.ts";
 export type { ClientEvents } from "./ClientEvents.ts";
 
-export { DataTypes, DataTypeMap, DefaultValidator } from "./DataTypes.ts";
-export type { DataType, DataLength } from './DataTypes.ts';
+export { DataTypeMap, DataTypes, DefaultValidator } from "./DataTypes.ts";
+export type { DataLength, DataType } from "./DataTypes.ts";
 
 export { QueryTypes } from "./Query/mod.ts";
 export type {
@@ -23,16 +23,16 @@ export type {
   DropSchemaQuery,
   DropTableQuery,
   InsertQuery,
+  Pagination,
   QueryFilter,
   QueryOption,
   QueryResult,
   QueryType,
   RawQuery,
   SelectQuery,
+  Sorting,
   TruncateTableQuery,
   UpdateQuery,
-  Pagination, 
-  Sorting, 
 } from "./Query/mod.ts";
 
 export type {
@@ -49,4 +49,4 @@ export {
   SQLiteTranslatorConfig,
 } from "./Translator/mod.ts";
 
-export type { ModelDefinition, ModelType } from './Model.ts'
+export type { ModelDefinition, ModelType, ModelValidation } from "./Model.ts";

@@ -1,8 +1,9 @@
 TODO:
+
 - [ ] Insert & Update with validation
 - [ ] Generator implementation
-- [ ] Error Messaging 
-- [ ] Events 
+- [ ] Error Messaging
+- [ ] Events
 - [ ] Foreign Key validation
 - [ ] ModelManager
   - [ ] Handle FK lookup

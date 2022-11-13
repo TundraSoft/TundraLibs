@@ -11,16 +11,17 @@ import type {
   Dialects,
   DropSchemaQuery,
   DropTableQuery,
+  GeneratorOutput,
   InsertQuery,
   QueryOption,
   QueryResult,
   QueryType,
   SelectQuery,
-  UpdateQuery, 
-  TruncateTableQuery
+  TruncateTableQuery,
+  UpdateQuery,
 } from "./types/mod.ts";
 
-import { QueryTypes } from "./types/mod.ts";
+import { Generator, QueryTypes } from "./types/mod.ts";
 
 export abstract class AbstractClient<
   O extends ClientConfig = ClientConfig,
@@ -234,6 +235,23 @@ export abstract class AbstractClient<
     sql: QueryOption<Entity>,
   ): string {
     return this._queryTranslator.translate(sql);
+  }
+
+  // DB Generators
+  public hasGenerator(name: string): boolean {
+    return this._queryTranslator.hasGenerator(name);
+  }
+
+  public async isDBGenerator(name: keyof typeof Generator): Promise<boolean> {
+    const ret = await this._queryTranslator.getGenerator(name),
+      match = /^\$\{(.*)\}$/.exec(String(ret));
+    return (match && match.length > 0) || false;
+  }
+
+  public async getGenerator(
+    name: keyof typeof Generator,
+  ): Promise<GeneratorOutput> {
+    return await this._queryTranslator.getGenerator(name);
   }
 
   protected _queryType(sql: string): QueryType {

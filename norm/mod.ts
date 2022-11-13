@@ -32,7 +32,7 @@ export { Database } from "./Database.ts";
 
 export { Model } from "./Model.ts";
 
-export { ModelManager } from './ModelManager.ts';
+export { ModelManager } from "./ModelManager.ts";
 
 export {
   ConfigNotFound,

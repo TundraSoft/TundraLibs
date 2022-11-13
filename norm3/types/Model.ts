@@ -1,28 +1,34 @@
-import { BaseColumnDefinition } from './Query/mod.ts'
-import { DataTypeMap } from './DataTypes.ts';
+import { BaseColumnDefinition } from "./Query/mod.ts";
+import { DataTypeMap } from "./DataTypes.ts";
+// import type { DataType } from './DataTypes.ts';
 import type { GuardianProxy } from "../../guardian/mod.ts";
 
 export type ModelColumnDefinition = {
-  name: string;
+  name?: string;
   notNullOnce?: boolean;
   disableUpdate?: boolean;
   // deno-lint-ignore no-explicit-any
   validation?: GuardianProxy<any>;
-  encryption?: {
-    key: string;
-    decryptOnSelect?: boolean;
-  };
-}  & BaseColumnDefinition;
+  // computed?: (row: Record<string, unknown>) => typeof DataTypeMap[BaseColumnDefinition['type']] | Promise<typeof DataTypeMap[BaseColumnDefinition['type']]>;
+  encrypt?: boolean; // Encrypt value?
+  // decryptOnRead?: boolean; // Decrypt data on read?
+  project?: boolean; // Select this column? (on select, insert and update)
+} & BaseColumnDefinition;
 
 export type ModelDefinition = {
   name: string; // Name of the model
   connection: string; // The connection config name
-  schema?: string; // The schema name
+  schema?: string; // The schema name. This will be used as "Database" in mongodb
   table: string; // The table name
   isView?: boolean; // Is this a view?
   columns: {
     [key: string]: ModelColumnDefinition;
   };
+  audit?: {
+    schema?: string;
+    table: string;
+  };
+  encryptionKey?: string; // The encryption key
   primaryKey?: Set<string>;
   uniqueKeys?: Record<string, Set<string>>;
   foreignKeys?: Record<string, {
@@ -37,9 +43,9 @@ export type ModelDefinition = {
     update?: boolean;
     delete?: boolean;
     truncate?: boolean;
-  }
+  };
   pageSize?: number;
-  seedFile?: string;
+  seedFile?: string; // When "installing" or "creating" this data will be injected into the table
 };
 
 type PartialPartial<T, K extends keyof T> =
@@ -72,3 +78,9 @@ export type ModelType<P extends ModelDefinition> = ExtractTypes<
     [X in keyof P["columns"]]: P["columns"][X];
   }
 >;
+
+export type ModelValidation<
+  T extends Record<string, unknown>,
+> = {
+  [X in keyof T]?: string[];
+};

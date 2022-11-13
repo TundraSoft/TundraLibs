@@ -1,4 +1,4 @@
-import { QueryTypes, RawQuery } from "./types/mod.ts";
+import { GeneratorOutput, QueryTypes, RawQuery } from "./types/mod.ts";
 import type {
   BaseColumnDefinition,
   CountQuery,
@@ -18,6 +18,7 @@ import type {
 } from "./types/mod.ts";
 
 import {
+  Generator,
   MariaTranslatorConfig,
   PostgresTranslatorConfig,
   SQLiteTranslatorConfig,
@@ -50,6 +51,17 @@ export class QueryTranslator {
 
   public get dialect(): Dialects {
     return this._dialect;
+  }
+
+  public hasGenerator(name: string): boolean {
+    return (Object.keys(this._config.generators).includes(name));
+  }
+
+  public async getGenerator(
+    name: keyof typeof Generator,
+  ): Promise<GeneratorOutput> {
+    const retval = this._config.generators[name];
+    return (retval instanceof Function) ? await retval() : retval;
   }
 
   // deno-lint-ignore no-explicit-any
@@ -204,7 +216,7 @@ export class QueryTranslator {
       }),
       values = query.data.map((row) => {
         return Object.keys(query.columns).map((key) => {
-          return this.quoteValue(row[key]);
+          return this.quoteValue(row[key] || "NULL");
         });
       }),
       returning = " \nRETURNING " + project.map((alias) => {
@@ -290,7 +302,7 @@ export class QueryTranslator {
       Object.entries(query.uniqueKeys).forEach(([name, columns]) => {
         body.push(
           `UNIQUE ${this.quoteColumn(`UK_${table}_${name}`)}(${
-           columns.map((columnName) => {
+            columns.map((columnName) => {
               return this.quoteColumn(columnName as string);
             }).join(", ")
           })`,

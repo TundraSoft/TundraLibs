@@ -1,5 +1,9 @@
 import { DataTypes } from "../DataTypes.ts";
-import type { GeneratorFunction, GeneratorOutput } from "./Generators.ts";
+import type {
+  GeneratorFunction,
+  GeneratorOutput,
+  Generators,
+} from "./Generators.ts";
 import { Generator } from "./Generators.ts";
 
 export type TranslatorConfig = {
@@ -10,11 +14,10 @@ export type TranslatorConfig = {
   dataTypes: {
     [Property in keyof typeof DataTypes]: string;
   };
-  generators:
-    & {
-      [key in Generator]: GeneratorOutput | GeneratorFunction;
-    }
-    & { [key: string]: GeneratorOutput | GeneratorFunction };
+  generators: {
+    [Property in Generators]: GeneratorOutput | GeneratorFunction;
+  };
+  // & { [key: string]: GeneratorOutput | GeneratorFunction };
 };
 
 export const PostgresTranslatorConfig: TranslatorConfig = {

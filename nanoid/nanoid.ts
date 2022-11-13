@@ -5,7 +5,7 @@
  * Based on nodejs nanoid project (https://github.com/ai/nanoid)
  */
 
-import { alphaNumeric, webSafe } from "./dictionary.ts";
+import { webSafe } from "./dictionary.ts";
 
 /**
  * Generates an array of random numbers basis the length specified

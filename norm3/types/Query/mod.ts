@@ -12,13 +12,13 @@ export type {
   DropSchemaQuery,
   DropTableQuery,
   InsertQuery,
+  Pagination,
   QueryOption,
   RawQuery,
   SelectQuery,
+  Sorting,
   TruncateTableQuery,
-  UpdateQuery, 
-  Pagination, 
-  Sorting, 
+  UpdateQuery,
 } from "./QueryOptions.ts";
 
 export type { QueryResult } from "./QueryResult.ts";
