@@ -589,6 +589,8 @@ export class Model<
     }
     await this._init();
 
+    // CHANGE THIS
+    // - If Filter is present & count of rows > 1, then PK & UK should not be present. If Filter is present & count of rows = 1, then PK & UK can be present. If Filter is not present, then PK & UK should not be present.
     const options: UpdateQuery<T> = {
       type: "UPDATE",
       table: this.table,
@@ -613,10 +615,6 @@ export class Model<
     // Validate row
     const [err, op] = await this.validateData(data),
       errors: ModelValidation<T> = err || {};
-
-    // Check UK is actually Unique
-
-    // Remove PK and Identity from update
 
     // We remove the PK and Identity columns after validation
     if (!filters || Object.keys(filters).length == 0) {

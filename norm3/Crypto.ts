@@ -1,36 +1,11 @@
-// import { encode as hexEncode, decode as hexDecode } from 'https://deno.land/std@0.163.0/encoding/hex.ts';
-
-export enum CryptTypes {
-  "AES-GCM" = "AES-GCM",
-  "AES-CBC" = "AES-CBC",
-  "AES-CTR" = "AES-CTR",
-  "AES-OFB" = "AES-OFB",
-}
-
-export const KeyLength = {
-  128: 128,
-  192: 192,
-  256: 256,
-};
-
-export class Crypt {
-  encryptAES(data: string, key: string): string {
-  }
-
-  decryptAES(data: string, key: string): string {
-  }
-
-  generateKey(mode: CryptTypes): string {
-    const key = await crypto.subtle.generateKey(
-      {
-        name: "AES-GCM",
-        length: 256,
-      },
-      true,
-      ["encrypt", "decrypt"],
-    );
-  }
-}
+// import {
+//   decode as hexDecode,
+//   encode as hexEncode,
+// } from "https://deno.land/std@0.163.0/encoding/hex.ts";
+import {
+  decode as b64Decode,
+  encode as b64Encode,
+} from "https://deno.land/std@0.163.0/encoding/base64.ts";
 
 const encrypt = async (key: string, data: string | number): Promise<string> => {
   const iv = crypto.getRandomValues(new Uint8Array(16)),
@@ -51,15 +26,18 @@ const encrypt = async (key: string, data: string | number): Promise<string> => {
       cryptKey,
       encoded,
     );
-  console.log(...iv);
+  console.log(...iv, iv.length);
+  // console.log(new TextDecoder().decode(hexEncode(new Uint8Array(encrypted))));
+  console.log(b64Encode(new Uint8Array(encrypted)));
   return btoa(String.fromCharCode(...new Uint8Array(encrypted))) + ":" +
     btoa(String.fromCharCode(...iv));
   // return new TextDecoder().decode(hexEncode(new Uint8Array(encrypted)) + ':' + hexEncode(iv));
 };
-
 const decrypt = async (key: string, data: string): Promise<string> => {
-  const [encrypted, iv] = data.split(":").map((d) => atob(d));
-  console.log("d -> ", new TextEncoder().encode(iv));
+  const [encrypted, iv] = data.split(":").map((d) => b64Decode(d));
+  console.log(encrypted, iv);
+  // console.log(new Uint8Array(new TextEncoder().encode(iv), 16))
+  // // console.log("d -> ", new TextEncoder().encode(iv));
   const decoder = new TextDecoder(),
     encoder = new TextEncoder(),
     cryptKey = await crypto.subtle.importKey(
@@ -70,9 +48,9 @@ const decrypt = async (key: string, data: string): Promise<string> => {
       ["decrypt"],
     ),
     decrypted = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: new Uint8Array(encoder.encode(iv)) },
+      { name: "AES-GCM", iv: iv },
       cryptKey,
-      new Uint8Array(encoder.encode(encrypted)),
+      encrypted,
     );
   return decoder.decode(decrypted);
 };
@@ -82,7 +60,7 @@ const key = "12345678901234567890123456789012",
   encrypted = await encrypt(key, data);
 
 console.log(encrypted);
-await decrypt(key, encrypted);
+console.log(await decrypt(key, encrypted));
 // console.log(await decrypt('12345678901234567890123456789012', 'Q8kNLQGFt07b3O4SWmfiEOu3Q/kGbYHosrWBYA==:cfkJ8eyXd3cmupLD'))
 // Q8kNLQGFt07b3O4SWmfiEOu3Q/kGbYHosrWBYA==:cfkJ8eyXd3cmupLD
 
