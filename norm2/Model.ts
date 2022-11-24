@@ -1,11 +1,11 @@
 import { AbstractClient } from "./AbstractClient.ts";
 import { DatabaseManager } from "./DatabaseManager.ts";
-import { Generator } from "./types/mod.ts";
+// import { Generator } from "./types/mod.ts";
 import type {
   DeleteQuery,
   GeneratorFunction,
   GeneratorOutput,
-  Generators,
+  // Generators,
   InsertQuery,
   ModelDefinition,
   ModelType,
@@ -18,7 +18,12 @@ import type {
   TruncateTableQuery,
   UpdateQuery,
 } from "./types/mod.ts";
+
 import { DefaultValidator } from "./types/mod.ts";
+
+// import { ErrorCodes, ModelError } from "./errors/mod.ts";
+
+import { decrypt, encrypt, hash } from "./utils/mod.ts";
 
 import { GuardianError, GuardianProxy, Struct } from "../guardian/mod.ts";
 
@@ -54,6 +59,9 @@ export class Model<
     table?: string;
     columnMap: Record<string, string>;
   }> = {};
+  protected _encryptionKey?: string;
+  protected _encryptedColumns: Array<keyof T> = [];
+  protected _hashColumns: Array<keyof T> = [];
   // deno-lint-ignore no-explicit-any
   protected _validator: GuardianProxy<any>;
   protected _permissions: {
@@ -75,6 +83,7 @@ export class Model<
     this._connectionName = definition.connection;
     // Check if it exists
     if (DatabaseManager.has(this._connectionName) === false) {
+      // throw new ModelError(definition.name, ErrorCodes.ModelConfigError, '', this._connectionName);
       throw new Error(`Connection ${this._connectionName} does not exist`);
     }
     // Process and validate the model definition
@@ -99,7 +108,9 @@ export class Model<
     // deno-lint-ignore no-explicit-any
     const validator: Record<string, GuardianProxy<any>> = {};
     // Cycle through the columns and validate the definition
-    for (const [name, columnDefinition] of Object.entries(definition.columns)) {
+    // for (const [name, columnDefinition] of Object.entries(definition.columns)) {
+    Object.keys(definition.columns).forEach((name) => {
+      const columnDefinition = definition.columns[name];
       // Add to column map
       this._aliasMap[name as keyof T] =
         (columnDefinition.name || name) as string;
@@ -122,7 +133,10 @@ export class Model<
         }
       }
       // Columns where updates are disabled
-      if (columnDefinition.disableUpdate === true) {
+      if (
+        columnDefinition.disableUpdate === true ||
+        this._identityColumns.includes(name as keyof T)
+      ) {
         this._disableUpdate.push(name as keyof T);
       }
       // Not null once data is available
@@ -141,6 +155,27 @@ export class Model<
         if (columnDefinition.defaults.update) {
           this._updateDefaults[name as keyof T] =
             columnDefinition.defaults.update;
+        }
+      }
+      // Encryption
+      if (columnDefinition.security) {
+        // if(definition.encryptionKey === undefined || definition.encryptionKey === "") {
+        //   throw new Error(`Encryption key is not defined for model ${this._name}`);
+        // }
+        // this._encryptionKey = definition.encryptionKey;
+        // this._encryptedColumns.push(name as keyof T);
+        if (columnDefinition.security === "ENCRYPT") {
+          // Check if encryptionkey is defined
+          if (definition.encryptionKey === undefined) {
+            // throw new Error('Encryption key is not provided for model ' + this._name);
+            throw new Error(
+              `Encryption key is not defined for model ${this._name}`,
+            );
+          }
+          this._encryptedColumns.push(name as keyof T);
+        }
+        if (columnDefinition.security === "HASH") {
+          this._hashColumns.push(name as keyof T);
         }
       }
       // Validator
@@ -162,23 +197,40 @@ export class Model<
           validator[name].optional();
         }
       }
-    }
+    });
+
     this._validator = Struct(
       validator,
       `Validation failed for model ${this.name}`,
       "PARTIAL",
     );
+    // Encryption key
+    if (definition.encryptionKey) {
+      if (
+        definition.encryptionKey.length !== 32 &&
+        definition.encryptionKey.length !== 16
+      ) {
+        throw new Error(`Encryption key for model ${this._name} is not valid`);
+      }
+      this._encryptionKey = definition.encryptionKey;
+    }
+
     // Primary key
-    if (definition.primaryKey) {
-      definition.primaryKey.forEach((key) => {
+    if (definition.primaryKeys) {
+      definition.primaryKeys.forEach((key) => {
         if (this._aliasMap[key as keyof T] === undefined) {
           throw new Error(
             `Primary key ${key} is not defined in model ${this.name}`,
           );
         }
         this._primaryKeys.push(key as keyof T);
+        // Make PK non Updatable
+        if (!this._disableUpdate.includes(key as keyof T)) {
+          this._disableUpdate.push(key as keyof T);
+        }
       });
     }
+
     if (definition.uniqueKeys) {
       for (const [key, value] of Object.entries(definition.uniqueKeys)) {
         value.forEach((column) => {
@@ -244,6 +296,26 @@ export class Model<
     return this._table;
   }
 
+  /**
+   * getConnection
+   * 
+   * Gets the DB connection being used 
+   * 
+   * @returns Promise<AbstractClient> The connection being used
+   */
+  async getConnection(): Promise<AbstractClient> {
+    await this._init();
+    return this._connection;
+  }
+
+  /**
+   * hasColumn
+   * 
+   * Checks if the column is present in the model
+   * 
+   * @param name string The name of the column
+   * @returns boolean True if exists, false if not
+   */
   hasColumn(name: string): boolean {
     name = name.trim().toLowerCase();
     const colNames = Object.keys(this._aliasMap).map((key) =>
@@ -252,6 +324,14 @@ export class Model<
     return colNames.includes(name);
   }
 
+  /**
+   * getColumnName
+   * 
+   * Returns the real column name.
+   * 
+   * @param name keyof T The name of the column
+   * @returns string The real column name (in case alias is present)
+   */
   getColumnName(name: keyof T): string {
     const colName = this._aliasMap[name];
     if (colName === undefined) {
@@ -262,10 +342,26 @@ export class Model<
     return colName;
   }
 
+  /**
+   * isNullable
+   * 
+   * Checks if the column is nullable
+   * 
+   * @param name keyof T The name of the column
+   * @returns boolean True if nullable false if not
+   */
   isNullable(name: keyof T): boolean {
     return this._notNulls.includes(name);
   }
 
+  /**
+   * isIdentity
+   * 
+   * Checks if a column is of type identity (AUTO_INCREMENT, SERIAL etc)
+   * 
+   * @param name keyof T The name of the column
+   * @returns boolean True if its identity false if not
+   */
   isIdentity(name: keyof T): boolean {
     return this._identityColumns.includes(name);
   }
@@ -308,7 +404,24 @@ export class Model<
       pagination: paging,
     };
     await this._init();
-    return await this._connection.select<T>(options);
+    const result = await this._connection.select<T>(options);
+    // Decrypt if required
+    if (
+      this._encryptedColumns.length > 0 &&
+      (result.data && result.data?.length > 0)
+    ) {
+      result.data = result.data.map((row) => {
+        const newRow = { ...row };
+        this._encryptedColumns.forEach(async (col) => {
+          newRow[col] = await decrypt(
+            this._encryptionKey as string,
+            String(newRow[col]),
+          ) as unknown as T[keyof T];
+        });
+        return newRow;
+      });
+    }
+    return result;
   }
 
   /**
@@ -350,9 +463,8 @@ export class Model<
    * @returns QueryResult<T>
    */
   public async insert(
-    data: NonNullable<T> | Array<NonNullable<T>>,
+    data: Partial<T> | Array<Partial<T>>,
   ): Promise<QueryResult<T>> {
-    // Check permission
     if (this._permissions.insert === false) {
       // throw new ModelPermission(
       //   "insert",
@@ -361,68 +473,65 @@ export class Model<
       // );
       throw new Error("Permission denied");
     }
-    await this._init();
 
-    const rows: Array<NonNullable<T>> = (Array.isArray(data) ? data : [data]);
-    // Validate data (as per Guardian)
-    const errors: { [key: number]: ModelValidation<T> } = {},
-      insertColumns: Array<keyof T> = this._notNulls,
-      uk: { [key: string]: Array<string> } = {},
-      ukQuery: Array<Promise<QueryResult<T>>> = [],
-      ukErrors: { [row: number]: ModelValidation<T> } = {};
+    const rows: Array<Partial<T>> =
+        (Array.isArray(data) ? data : [data]) as Array<Partial<T>>,
+      insertedColumns: Array<keyof T> = this._notNulls as Array<keyof T>,
+      errors: { [key: number]: ModelValidation<T> } = {},
+      ukHash: { [key: string]: string[] } = {},
+      ukQueries: Array<Promise<QueryResult<T>>> = [],
+      ukErrors: Array<Record<keyof T, string>> = [];
 
     rows.forEach(async (row, index) => {
-      // Inject Defaults
+      //#region Generators (Default)
+      // Generator
       const dbGenerated: Record<keyof T, string> = {} as Record<
         keyof T,
         string
       >;
-
-      Object.entries(this._insertDefaults).forEach(async ([key, value]) => {
-        if (row[key as keyof T] === undefined) {
-          // If this is DB generated,
-          if (this._connection.hasGenerator(value as string)) {
-            // Yes!
-            const genVal = await this._connection.getGenerator(
-              value as keyof typeof Generator,
-            );
-            if (/^\$\{(.*)\}$/.test(genVal as string) === false) {
-              // Its not a DB generated value
-              row[key as keyof T] = genVal as T[keyof T];
-            } else {
-              // Its a DB generated value
-              dbGenerated[key as keyof T] = genVal as string;
-            }
+      // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
+      Object.keys(this._insertDefaults).forEach((column) => {
+        if (row[column as keyof T] === undefined) {
+          const generated = this._insertDefaults[column as keyof T] as
+            | GeneratorFunction
+            | GeneratorOutput;
+          // Ok check what type of generator it is
+          if (generated instanceof Function) {
+            row[column as keyof T] = generated() as unknown as T[keyof T];
+          } // If Generated contains ${(.*))} then it is DB generated
+          else if (/^\$\{(.*)\}$/.test(generated as string)) {
+            dbGenerated[column as keyof T] = generated as string;
           } else {
-            const genVal = (value instanceof Function) ? await value() : value;
-            if (/^\$\{(.*)\}$/.test(genVal as string) === false) {
-              row[key as keyof T] = genVal as T[keyof T];
-            } else {
-              dbGenerated[key as keyof T] = genVal as string;
-            }
+            row[column as keyof T] = generated as unknown as T[keyof T];
           }
         }
       });
+      //#endregion Generators (Default)
 
+      // Remove Identity key columns
+      //#region Remove Identity key columns
+      this._identityColumns.forEach((column) => {
+        delete row[column];
+      });
+      //#endregion Identity key columns
+
+      //#region Guardian
+      // Guardian Validator
       const [error, validRow] = await this.validateData(row);
       if (error) {
         errors[index] = error;
       } else {
         row = validRow as NonNullable<T>;
       }
+      //#endregion Guardian
 
-      // Check PK
-      this._primaryKeys.forEach((column) => {
-        // If it is identity, then delete from row
-        if (this._identityColumns.includes(column)) {
-          delete row[column as keyof T];
-        }
-      });
-
-      // Check not null
+      //#region Not Nulls
+      // Check not nulls
       this._notNulls.forEach((column) => {
-        if (row[column as keyof T] === undefined) {
-          // TODO Check if it is DB generated, if so ignore
+        if (
+          (row[column] === undefined || row[column] === null) &&
+          !this._identityColumns.includes(column)
+        ) {
           if (!errors[index]) {
             errors[index] = {} as ModelValidation<T>;
           }
@@ -434,134 +543,149 @@ export class Model<
           );
         }
       });
+      //#endregion Not Nulls
 
-      // Check Unique Keys
-      // TODO - Handle scenarios - Unique key is generated (DB)
-      Object.entries(this._uniqueKeys).forEach(([key, value]) => {
-        const ukValue = value.map((col) => row[col as keyof T]).join("::"),
-          ukFilter: { [name: string]: unknown }[] = value.map((col) => {
-            const retVal: { [key: string]: unknown } = {};
-            retVal[col as string] = row[col as keyof T];
-            return retVal;
-          });
-        if (uk[key] === undefined) {
-          uk[key] = [];
-        }
-        if (uk[key].includes(ukValue)) {
-          // UK Violation
-        }
-        uk[key].push(ukValue);
-
-        ukQuery.push(this.count(ukFilter as QueryFilter<T>));
-        ukErrors[index] = {};
+      //#region Primary Key (non Identity)
+      // Check PK uniqueness
+      const pkFilter: QueryFilter = {};
+      this._primaryKeys.forEach((column) => {
+        pkFilter[column as string] = row[column];
       });
-
-      // Encrypt
-      // TODO - Implement this
-
-      // Inject DB generators
-      Object.entries(dbGenerated).forEach(([key, value]) => {
-        if (row[key as keyof T] === undefined) {
-          row[key as keyof T] = value as T[keyof T];
-        }
-      });
-
-      // Set columns inserted
-      const colInsert = Object.keys(row).filter((col) =>
-        !insertColumns.includes(col as keyof T)
-      );
-      if (colInsert.length > 0) {
-        insertColumns.push(...colInsert as Array<keyof T>);
+      if (Object.keys(pkFilter).length > 0) {
+        // Yes we have PK, check if it is unique
+        // TODO: Finish this
       }
+      //#endregion Primary Key (non Identity)
+
+      //#region Encrypt Columns
+      // Encryption
+      this._encryptedColumns.forEach((column) => {
+        if (row[column] !== undefined || row[column] !== null) {
+          row[column] = encrypt(
+            this._encryptionKey as string,
+            String(row[column]),
+          ) as unknown as T[keyof T];
+        }
+      });
+      this._hashColumns.forEach((column) => {
+        if (row[column] !== undefined || row[column] !== null) {
+          row[column] = hash(String(row[column])) as unknown as T[keyof T];
+        }
+      });
+      // this._encryptedColumns.forEach((column) => {
+      //   if (row[column] !== undefined) {
+      //     row[column] = await this._encrypt(row[column] as string);
+      //   }
+      // });
+      //#endregion Encrypt Columns
+
+      //#region Unique Keys check
+      Object.keys(this._uniqueKeys).forEach((key) => {
+        if (ukHash[key] === undefined) {
+          ukHash[key] = [];
+        }
+        //#region Check if the key is unique in the array provided
+        // Create hash
+        const hash = this._uniqueKeys[key].map((column) => {
+          return row[column];
+        }).join("::");
+        if (ukHash[key].includes(hash)) {
+          // Its not unique in the batch itself
+          if (!errors[index]) {
+            errors[index] = {} as ModelValidation<T>;
+          }
+          this._uniqueKeys[key].forEach((column) => {
+            if (errors[index][column] === undefined) {
+              errors[index][column] = [];
+            }
+            errors[index][column]?.push(
+              `Column ${column as string} is not unique`,
+            );
+          });
+        } else {
+          ukHash[key].push(hash);
+        }
+        //#endregion Check if the key is unique in the array provided
+        //#region Check if it is unique in the table
+        const ukFilter: QueryFilter = {},
+          ukErrorMessages: Record<keyof T, string> = {} as Record<
+            keyof T,
+            string
+          >;
+        this._uniqueKeys[key].forEach((column) => {
+          ukFilter[column as string] = row[column];
+          ukErrorMessages[column] = `Column ${column as string} is not unique`;
+        });
+        ukQueries.push(this.count(ukFilter as QueryFilter<T>));
+        ukErrors[index] = ukErrorMessages;
+        //#endregion Check if it is unique in the table
+      });
+      //#endregion Unique Keys check
+
+      //#region Generators (DB)
+      Object.keys(dbGenerated).forEach((column) => {
+        if (row[column as keyof T] === undefined) {
+          row[column as keyof T] =
+            dbGenerated[column as keyof T] as unknown as T[keyof T];
+        }
+      });
+      //#endregion Generators (DB)
+
+      // Set insert columns
+      const insertColumns = (Object.keys(row) as Array<keyof T>).filter(
+        (column) => {
+          return !insertedColumns.includes(column);
+        },
+      );
+      insertedColumns.push(...insertColumns);
 
       // Set the row
-      if (Object.keys(errors).length > 0) {
-        rows[index] = row;
-      } else {
-        delete rows[index];
-      }
+      rows[index] = row;
     });
 
-    Promise.all(ukQuery).then((results) => {
+    // Check all async queries for output
+    Promise.all(ukQueries).then((results) => {
       results.forEach((result, index) => {
         if (result.count > 0) {
-          const ukError: { [row: number]: ModelValidation<T> } = {};
-          ukError[index] = {};
-          ukErrors.push(ukError);
+          // Its not unique in the table
+          if (!errors[index]) {
+            errors[index] = {} as ModelValidation<T>;
+          }
+          Object.keys(ukErrors[index]).forEach((column) => {
+            if (errors[index][column as keyof T] === undefined) {
+              errors[index][column as keyof T] = [];
+            }
+            if (
+              !errors[index][column as keyof T]?.includes(
+                ukErrors[index][column as keyof T],
+              )
+            ) {
+              errors[index][column as keyof T]?.push(
+                ukErrors[index][column as keyof T],
+              );
+            }
+          });
         }
       });
     });
-
-    /**
-    await this._init();
-
-    const rows: Array<Partial<T>> =
-      (Array.isArray(data) ? data : [data]) as Array<Partial<T>>;
-
-    const errors: { [key: number]: ModelValidation<T> } = {},
-      uniqueKeys: { [key: string]: Array<string> } = {};
-    let insertColumns: Array<keyof T> = this._notNulls;
-    Object.entries(this._uniqueKeys).forEach(([key]) => {
-      uniqueKeys[key] = [];
-    });
-
-    for (const [index, row] of rows.entries()) {
-      const [err, op] = await this.validateData(row, true);
-
-      if (err && Object.keys(err).length > 0) {
-        errors[index] = err;
-      }
-
-      if (op) {
-        // Check Unique keys
-        Object.entries(this._uniqueKeys).forEach(([key, columns]) => {
-          const ukValue: Array<string> = [];
-          columns.forEach((column) => {
-            ukValue.push(String(op[column]));
-          });
-
-          // Check if it already exists in the list
-          if (uniqueKeys[key].includes(ukValue.join("|"))) {
-            if (!errors[index]) {
-              errors[index] = {};
-            }
-            // Add it to the list
-            columns.forEach((column) => {
-              if (errors[index][column] === undefined) {
-                errors[index][column] = [];
-              }
-              errors[index][column]?.push(`${key} must be unique.`);
-            });
-          }
-          uniqueKeys[key].push(ukValue.join("|"));
-        });
-      }
-
-      // Add to insert list only if there is no error
-      if (op && (!errors || Object.keys(errors).length === 0)) {
-        rows[index] = op;
-        const keys = Object.keys(rows[index]) as Array<keyof T>;
-        insertColumns = Array.from(
-          new Set<keyof T>([...insertColumns, ...keys]).values(),
-        );
-      }
-    }
-    // Check if there is error
-
-    if (errors && Object.keys(errors).length > 0) {
-      // console.log(errors);
-      throw new ModelValidationError(errors, this.name, this._connection.name);
+    
+    // If error is present, throw and end
+    if (Object.keys(errors).length > 0) {
+      // throw new ModelValidationError(errors, this.name, this._connection.name);
+      throw new Error("Cannot insert due to errors");
     }
 
-    return await this._connection.insert<T>({
-      type: 'INSERT',
+    const options: InsertQuery<T> = {
+      type: "INSERT",
       schema: this.schema,
       table: this.table,
       columns: this._aliasMap,
-      insertColumns: insertColumns,
       data: rows,
-    });
-    */
+    };
+
+    await this._init();
+    // console.log(this._connection.generateQuery(options));
+    return this._connection.insert<T>(options);
   }
 
   /**
@@ -587,121 +711,126 @@ export class Model<
       // );
       throw new Error("Permission denied");
     }
-    await this._init();
+    // If Filter is present, then get row count
+    let rowCnt = 0;
+    if (filters) {
+      rowCnt = (await this.count(filters)).count;
+    }
 
-    // CHANGE THIS
-    // - If Filter is present & count of rows > 1, then PK & UK should not be present. If Filter is present & count of rows = 1, then PK & UK can be present. If Filter is not present, then PK & UK should not be present.
-    const options: UpdateQuery<T> = {
-      type: "UPDATE",
-      table: this.table,
-      schema: this.schema,
-      columns: this._aliasMap,
-      data: {},
-    };
-
-    // Remove disable update columns
-    this._disableUpdate.forEach((column) => {
+    // Delete Identity Columns from update
+    this._identityColumns.forEach((column) => {
+      delete data[column];
+    });
+    // Delete PK
+    this._primaryKeys.forEach((column) => {
       delete data[column];
     });
 
-    // Handle notNullOnce columns
-    this._notNullOnce.forEach((column) => {
-      // Is it there?
-      if (data[column] !== undefined && data[column] === null) {
-        delete data[column];
+    // Guardian Validator
+    const [error, op] = await this.validateData(data);
+    if (op) {
+      data = op;
+    }
+    const errors: ModelValidation<T> = (error !== null)
+        ? error
+        : {} as ModelValidation<T>,
+      ukQueries: Array<Promise<QueryResult<T>>> = [],
+      ukErrors: Array<Record<keyof T, string>> = [];
+
+    // Encryption
+    //#region Encryption
+    this._encryptedColumns.forEach((column) => {
+      if (data[column] !== undefined) {
+        data[column] = encrypt(
+          this._encryptionKey as string,
+          String(data[column]),
+        ) as unknown as T[keyof T];
       }
     });
+    //#endregion Encryption
 
-    // Validate row
-    const [err, op] = await this.validateData(data),
-      errors: ModelValidation<T> = err || {};
+    //#region Hash
+    this._hashColumns.forEach((column) => {
+      if (data[column] !== undefined) {
+        data[column] = hash(String(data[column])) as unknown as T[keyof T];
+      }
+    });
+    //#endregion Hash
 
-    // We remove the PK and Identity columns after validation
-    if (!filters || Object.keys(filters).length == 0) {
-      // Filters are present, we check data and move on
-      const pkFilter: { [key: string]: unknown } = {};
-      this._primaryKeys.forEach((pk) => {
-        // All PK must be present
-        pkFilter[pk as string] = data[pk];
-      });
-
-      if (Object.keys(pkFilter).length === this._primaryKeys.length) {
-        filters = pkFilter as QueryFilter<T>;
-        // Delete PK in data
-        this._primaryKeys.forEach((pk) => {
-          delete data[pk];
+    //#region Unique Keys
+    Object.keys(this._uniqueKeys).forEach((key) => {
+      // If unique key is part of update and roeCount > 1, throw error
+      if (rowCnt > 1) {
+        this._uniqueKeys[key].forEach((column) => {
+          if (data[column] !== undefined) {
+            // throw new ModelValidationError({
+            //   [column]: [`Column ${column as string} is not unique`],
+            // }, this.name, this._connection.name);
+            // throw new Error(`Cannot perform bulk update as column ${column as string} is unique`);
+            if (errors[column] === undefined) {
+              errors[column] = [];
+            }
+            errors[column]?.push(
+              `Cannot perform bulk update as column ${column as string} is unique`,
+            );
+          }
         });
       }
-    }
 
-    // Get the count which will be updated
-    const cntop = await this.count(filters);
+      // Check if the new value is actually unique in table
+      const ukFilter: QueryFilter = {},
+        ukErrorMessages: Record<keyof T, string> = {} as Record<
+          keyof T,
+          string
+        >;
+      this._uniqueKeys[key].forEach((column) => {
+        ukFilter[column as string] = data[column];
+        ukErrorMessages[column] = `Column ${column as string} is not unique`;
+      });
+      ukQueries.push(this.count(ukFilter as QueryFilter<T>));
+      ukErrors.push(ukErrorMessages);
+    });
 
-    // If count of updated row is > 1 and Unique Key is present, then throw error
-    if (op) {
-      if (cntop.count > 1) {
-        // Loop through unique keys and check
-        Object.entries(this._uniqueKeys).forEach(([_key, columns]) => {
-          columns.forEach((column) => {
-            if (op[column] !== undefined) {
-              if (!errors[column]) {
-                errors[column] = [];
-              }
-              errors[column]?.push(
-                `Trying to perform bulk update with unique key column ${column as string}`,
+    Promise.all(ukQueries).then((results) => {
+      results.forEach((result, index) => {
+        if (result.count > 0) {
+          // Its not unique in the table
+          Object.keys(ukErrors[index]).forEach((column) => {
+            if (errors[column as keyof T] === undefined) {
+              errors[column as keyof T] = [];
+            }
+            if (
+              !errors[column as keyof T]?.includes(
+                ukErrors[index][column as keyof T],
+              )
+            ) {
+              errors[column as keyof T]?.push(
+                ukErrors[index][column as keyof T],
               );
             }
           });
-        });
-
-        this._primaryKeys.forEach((pk) => {
-          if (op[pk] !== undefined) {
-            if (!errors[pk]) {
-              errors[pk] = [];
-            }
-            errors[pk]?.push(
-              `Trying to perform bulk update with primary key column ${pk as string}`,
-            );
-          }
-        });
-
-        this._identityColumns.forEach((ik) => {
-          if (op[ik] !== undefined) {
-            if (!errors[ik]) {
-              errors[ik] = [];
-            }
-            errors[ik]?.push(
-              `Trying to perform bulk update with identity column ${ik as string}`,
-            );
-          }
-        });
-      }
-
-      // Check if PK exists
-      this._primaryKeys.forEach((pk) => {
-        // if(!errors[pk]) {
-        //   errors[pk] = [];
-        // }
-        // errors[pk]?.push(`Cannot update primary key column ${pk as string}`);
-        delete op[pk];
+        }
       });
-      // Delete identity columns
-      this._identityColumns.forEach((ik) => {
-        delete op[ik];
-      });
-    }
+    });
+    //#endregion Unique Keys
 
+    // If error is present, throw and end
     if (Object.keys(errors).length > 0) {
-      throw new ModelValidationError(errors, this.name, this._connection.name);
+      // throw new ModelValidationError(errors, this.name, this._connection.name);
+      throw new Error("Cannot update due to errors");
     }
 
-    options.data = op as Partial<T>;
-    options.filters = filters;
-
-    return await this._connection.update<T>(options);
+    const options: UpdateQuery<T> = {
+      type: "UPDATE",
+      schema: this.schema,
+      table: this.table,
+      columns: this._aliasMap,
+      data: data,
+      filters: filters,
+    };
+    await this._init();
+    return this._connection.update<T>(options);
   }
-
-  public async bulkUpdate() {}
 
   /**
    * delete
@@ -757,6 +886,15 @@ export class Model<
     await this._connection.truncateTable(options);
   }
 
+  /**
+   * validateFilters
+   * 
+   * Checks if the filters are valid. It does basic validation such as disable search on hashed 
+   * column or encrypted column. It also checks if the column is part of the table.
+   * 
+   * @param filters QueryFilter<T> The filter condition to validate
+   * @returns 
+   */
   public validateFilters(filters: QueryFilter<T>): QueryFilter<T> | undefined {
     if (filters === undefined || Object.keys(filters).length === 0) {
       return;
@@ -794,6 +932,15 @@ export class Model<
         properKey = keyLower;
       } else if (Object.keys(columnList).includes(keyLower)) {
         properKey = columnList[keyLower];
+        if (
+          this._encryptedColumns.includes(properKey as keyof T) ||
+          this._hashColumns.includes(properKey as keyof T)
+        ) {
+          // TODO - Support encrypted columns by decrypting the value in filter (once we move to DB encryption)
+          throw new Error(
+            `Cannot use encrypted/hashed column ${properKey} in filter`,
+          );
+        }
       } else {
         // throw new ModelFilterError(
         //   `Unknown filter operator: ${key}`,
@@ -817,6 +964,15 @@ export class Model<
     return processedFilter as QueryFilter<T>;
   }
 
+  /**
+   * validateData
+   * 
+   * Performs all validation defined (Guardian) and returns the validated data. 
+   * NOTE - This does not perform DB checks such as Unique Keys, Foreign Keys etc.
+   * 
+   * @param data Partial<T> The data to validate
+   * @returns [ModelValidation<T>, null] | [null, Partial<T>] Returns object of errors (if any) or the data if no errors
+   */
   public async validateData(
     data: Partial<T>,
   ): Promise<[ModelValidation<T>, null] | [null, Partial<T>]> {
@@ -834,124 +990,12 @@ export class Model<
     }
 
     return [errors, op];
-
-    /**
-    await this._init();
-
-    const errors: ModelValidation<T> = {},
-      [generated, dbGenerated] = await this._generate(
-        forInsert === true ? this._insertGenerators : this._updateGenerators,
-      );
-
-    // Add normally generated data
-    data = { ...generated, ...data };
-    // First check if nullable columns are set to null
-    this._notNulls.forEach((key) => {
-      // If insert, the value cannot be null
-      if (forInsert && (data[key] === undefined || data[key] === null)) {
-        if (errors[key] === undefined) {
-          errors[key] = [];
-        }
-        errors[key as keyof T]?.push(
-          `${key as string} is required and cannot be null`,
-        );
-      } else if (!forInsert && data[key] === null) {
-        // If update, the value can be null
-        if (errors[key] === undefined) {
-          errors[key] = [];
-        }
-        errors[key as keyof T]?.push(
-          `${key as string} is required and cannot be null`,
-        );
-      }
-    });
-
-    const [err, op] = this._validator.validate(data);
-
-    if (err && err instanceof GuardianError) {
-      // loop through each and add to the errors
-      err.children.forEach((child) => {
-        if (errors[child.path as keyof T] === undefined) {
-          errors[child.path as keyof T] = [];
-        }
-        errors[child.path as keyof T]?.push(child.message);
-        // TODO: Handle children
-      });
-    }
-
-    let finalData!: Partial<T>;
-    // Add the DB Generated info
-    if (op && Object.keys(op).length > 0) {
-      finalData = { ...dbGenerated, ...op };
-    }
-
-    const pkFilter: { [key: string]: unknown } = {};
-    if (forInsert === false) {
-      this._primaryKeys.forEach((key) => {
-        if (data[key] !== undefined) {
-          pkFilter[key as string] = {
-            $neq: data[key as keyof T],
-          };
-        }
-      });
-    }
-
-    // If it is for insert, check if PK is also unique
-    if (forInsert === true) {
-      const pkCheck: { [key: string]: unknown } = {};
-      this._primaryKeys.forEach((key) => {
-        pkCheck[key as string] = { $eq: data[key as keyof T] };
-      });
-      const cnt = await this.count(pkCheck as QueryFilter<T>);
-      if (cnt.totalRows > 0) {
-        this._primaryKeys.forEach((key) => {
-          if (errors[key] === undefined) {
-            errors[key] = [];
-          }
-          errors[key as keyof T]?.push(
-            `Primary key value "${key as string}" is already in use`,
-          );
-        });
-      }
-    }
-
-    for (const key of Object.keys(this._uniqueKeys)) {
-      const columns = Array.from(this._uniqueKeys[key].values());
-      const values = columns.map((column) => {
-        return data[column as keyof T];
-      });
-      const ukFilter: { [key: string]: unknown } = {};
-      columns.forEach((column, index) => {
-        ukFilter[column as string] = values[index];
-      });
-      const cnt = await this.count({ ...pkFilter, ...ukFilter } as QueryFilter<T>);
-      if (cnt.totalRows > 0) {
-        columns.forEach((column, index) => {
-          if (errors[column as keyof T] === undefined) {
-            errors[column as keyof T] = [];
-          }
-          errors[column as keyof T]?.push(
-            `${column as string} must be unique. Value ${
-              values[index]
-            } already exists`,
-          );
-        });
-      }
-    }
-
-    // Delete all Identity columns for both insert and update as we do not want to touch them
-    // this._identityKeys.forEach((key) => {
-    //   delete finalData[key];
-    // });
-
-    return [(Object.keys(errors).length > 0) ? errors : null, finalData];
-    */
   }
 
   /**
    * _init
    *
-   * Initialize the model
+   * Initialize the connection to DB
    */
   protected async _init() {
     if (!this._connection) {

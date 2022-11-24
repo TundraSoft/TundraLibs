@@ -34,7 +34,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
         password: this._options.password,
         database: this._options.database,
       },
-      poolSize = this._getOption("poolSize") || 1;
+      poolSize = this._getOption("poolSize") as number || 1;
     this._client = new PGPool(pgConfig, poolSize, true);
     // Hack to test the connection, if there is something wrong it will throw immediately
     await (await this._client.connect()).release();
@@ -83,10 +83,15 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
 
       // Run the actual query
       // console.log(sql);
-      const result = (await client.queryObject<Entity>(sql));
+      const result = await client.queryObject<Entity>(sql);
       // console.log(result);
-      retVal.data = result.rows;
-      retVal.count = result.rowCount;
+      if(query.type === QueryTypes.COUNT) {
+        const dt: {totalrows: number} = result.rows[0] as unknown as {totalrows: number};
+        retVal.count = dt.totalrows;
+      } else {
+        retVal.data = result.rows;
+        retVal.count = result.rowCount;
+      }
       if (actualRows > -1) {
         retVal.count = actualRows;
       }

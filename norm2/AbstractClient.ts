@@ -113,6 +113,7 @@ export abstract class AbstractClient<
       // console.log(sql);
       const result = await this._query(sql);
       if (result) {
+        console.log(result)
         retVal.type = result.type;
         retVal.data = result.data;
         retVal.count = result.count || 0;
@@ -256,12 +257,16 @@ export abstract class AbstractClient<
 
   protected _queryType(sql: string): QueryType {
     const regEx = new RegExp(
-        /^(CREATE|ALTER|DROP|TRUNCATE|SHOW|SELECT|INSERT|UPDATE|DELETE|DESC|DESCRIBE|EXPLAIN|BEGIN|COMMIT|ROLLBACK)?/i,
+        /^(CREATE|ALTER|DROP|TRUNCATE|SHOW|SELECT\s+COUNT|SELECT|INSERT|UPDATE|DELETE|DESC|DESCRIBE|EXPLAIN|BEGIN|COMMIT|ROLLBACK)?/i,
       ),
       match = sql.match(regEx);
     let qt: QueryType = "UNKNOWN";
     if (match && match.length > 0) {
-      qt = match[0].trim().toUpperCase() as QueryType;
+      if(match[0].trim().toUpperCase() === 'SELECT COUNT') {
+        qt = 'COUNT';
+      } else {
+        qt = match[0].trim().toUpperCase() as QueryType;
+      }
     }
     return qt;
   }

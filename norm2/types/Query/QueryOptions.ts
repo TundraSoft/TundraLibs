@@ -2,6 +2,7 @@ import { QueryTypes } from "./QueryTypes.ts";
 import type { QueryType } from "./QueryTypes.ts";
 import type { QueryFilter } from "./Filters.ts";
 import type { DataLength, DataType } from "../DataTypes.ts";
+// import { DataTypes } from '../DataTypes.ts';
 import type { GeneratorFunction, Generators } from "../Translator/mod.ts";
 // import { Generator } from '../Translator/mod.ts'
 
@@ -78,8 +79,9 @@ export type InsertQuery<
   T extends Record<string, unknown> = Record<string, unknown>,
 > = {
   // type: QueryTypes.INSERT;
-  data: NonNullable<T>[];
+  data: Partial<T>[];
   project?: Array<keyof T>;
+  insertColumns?: Array<keyof T>;
   // returning: boolean;
 } & BaseColumnQueryOptions<T>;
 

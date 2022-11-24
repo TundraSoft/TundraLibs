@@ -1,7 +1,7 @@
 TODO:
 
-- [ ] Insert & Update with validation
-- [ ] Generator implementation
+- [x] Insert & Update with validation
+- [x] Generator implementation
 - [ ] Error Messaging
 - [ ] Events
 - [ ] Foreign Key validation

@@ -211,7 +211,10 @@ export class QueryTranslator {
       project = (query.project && query.project.length > 0)
         ? query.project
         : Object.keys(query.columns),
-      columns = Object.keys(query.columns).map((alias) => {
+      insertColumns = (query.insertColumns)
+        ? query.insertColumns
+        : Object.keys(query.columns),
+      columns = insertColumns.map((alias) => {
         return `${this.quoteColumn(query.columns[alias])}`;
       }),
       values = query.data.map((row) => {
@@ -265,7 +268,7 @@ export class QueryTranslator {
       filter = (query.filters)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
         : "";
-    return `DELETE FROM ${tableName}${filter}};`;
+    return `DELETE FROM ${tableName}${filter};`;
   }
 
   public createSchema(query: CreateSchemaQuery): string {

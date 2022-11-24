@@ -28,6 +28,8 @@ export {
   yellow,
 } from "https://deno.land/std@0.150.0/fmt/colors.ts";
 
+export * as base64 from "https://deno.land/std@0.163.0/encoding/base64.ts";
+
 // export { encode, decode } from "https://deno.land/std@0.121.0/encoding/base64url.ts"
 // End Core
 

@@ -42,3 +42,16 @@ export class NormError extends Error {
     return this.#dialect;
   }
 }
+
+export class ModelError extends NormError {
+  #model: string;
+
+  constructor(model: string, code: ErrorCodes, message: string, configName: string, dialect: Dialects) {
+    super(code, message, configName, dialect);
+    this.#model = model;
+  }
+
+  public get model(): string {
+    return this.#model;
+  }
+}
