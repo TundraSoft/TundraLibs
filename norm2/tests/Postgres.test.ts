@@ -3,13 +3,13 @@ import type { ModelType } from "../types/mod.ts";
 import { Model } from "../Model.ts";
 import { DatabaseManager } from "../DatabaseManager.ts";
 
-DatabaseManager.register('default', {
-  dialect: 'POSTGRES',
-  host: 'localhost',
+DatabaseManager.register("default", {
+  dialect: "POSTGRES",
+  host: "localhost",
   port: 49153,
-  userName: 'postgres',
-  password: 'postgrespw',
-  database: 'postgres',
+  userName: "postgres",
+  password: "postgrespw",
+  database: "postgres",
 });
 
 const Test = {
@@ -33,9 +33,9 @@ const Test = {
     table: "test_audit",
   },
   permissions: {
-    delete: true, 
+    delete: true,
     truncate: true,
-  }
+  },
 } as const;
 
 export type a = ModelType<typeof Test>;
@@ -47,20 +47,19 @@ const test = new Model(Test);
 const insertResult = await test.insert([{
   id: 1,
   name: "test",
-}, 
-{
-  id: 2, 
-  name: 'test2'
+}, {
+  id: 2,
+  name: "test2",
 }]);
-console.log('insert', insertResult);
+console.log("insert", insertResult);
 
 const selectRes = await test.select();
-console.log('select', selectRes);
+console.log("select", selectRes);
 
 const selectFilt = await test.select({
-  id: 3
+  id: 3,
 });
-console.log('selectFilt', selectFilt);
+console.log("selectFilt", selectFilt);
 
 // const count = await test.count({
 //   name: {
@@ -76,7 +75,7 @@ console.log('selectFilt', selectFilt);
 // console.log('pdate', update);
 
 // const update2 = await test.update({
-//   name: 'test3', 
+//   name: 'test3',
 // }, {
 //   id: 1
 // })

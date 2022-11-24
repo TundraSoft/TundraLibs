@@ -41,10 +41,10 @@ export type ModelDefinition = {
   }>;
   // TODO - Replace above with this
   foreignKey?: Record<string, {
-    relationShip: Record<string, string> // The join condition
+    relationShip: Record<string, string>; // The join condition
     type: "MANY" | "ONE"; // Many to one or one to many
     columns?: Array<string>; // The columns that are part of the foreign table (if blank, it will fetch from model)
-  }>; 
+  }>;
   permissions?: {
     select?: boolean;
     insert?: boolean;

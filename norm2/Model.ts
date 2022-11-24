@@ -298,9 +298,9 @@ export class Model<
 
   /**
    * getConnection
-   * 
-   * Gets the DB connection being used 
-   * 
+   *
+   * Gets the DB connection being used
+   *
    * @returns Promise<AbstractClient> The connection being used
    */
   async getConnection(): Promise<AbstractClient> {
@@ -310,9 +310,9 @@ export class Model<
 
   /**
    * hasColumn
-   * 
+   *
    * Checks if the column is present in the model
-   * 
+   *
    * @param name string The name of the column
    * @returns boolean True if exists, false if not
    */
@@ -326,9 +326,9 @@ export class Model<
 
   /**
    * getColumnName
-   * 
+   *
    * Returns the real column name.
-   * 
+   *
    * @param name keyof T The name of the column
    * @returns string The real column name (in case alias is present)
    */
@@ -344,9 +344,9 @@ export class Model<
 
   /**
    * isNullable
-   * 
+   *
    * Checks if the column is nullable
-   * 
+   *
    * @param name keyof T The name of the column
    * @returns boolean True if nullable false if not
    */
@@ -356,9 +356,9 @@ export class Model<
 
   /**
    * isIdentity
-   * 
+   *
    * Checks if a column is of type identity (AUTO_INCREMENT, SERIAL etc)
-   * 
+   *
    * @param name keyof T The name of the column
    * @returns boolean True if its identity false if not
    */
@@ -668,7 +668,7 @@ export class Model<
         }
       });
     });
-    
+
     // If error is present, throw and end
     if (Object.keys(errors).length > 0) {
       // throw new ModelValidationError(errors, this.name, this._connection.name);
@@ -888,12 +888,12 @@ export class Model<
 
   /**
    * validateFilters
-   * 
-   * Checks if the filters are valid. It does basic validation such as disable search on hashed 
+   *
+   * Checks if the filters are valid. It does basic validation such as disable search on hashed
    * column or encrypted column. It also checks if the column is part of the table.
-   * 
+   *
    * @param filters QueryFilter<T> The filter condition to validate
-   * @returns 
+   * @returns
    */
   public validateFilters(filters: QueryFilter<T>): QueryFilter<T> | undefined {
     if (filters === undefined || Object.keys(filters).length === 0) {
@@ -966,10 +966,10 @@ export class Model<
 
   /**
    * validateData
-   * 
-   * Performs all validation defined (Guardian) and returns the validated data. 
+   *
+   * Performs all validation defined (Guardian) and returns the validated data.
    * NOTE - This does not perform DB checks such as Unique Keys, Foreign Keys etc.
-   * 
+   *
    * @param data Partial<T> The data to validate
    * @returns [ModelValidation<T>, null] | [null, Partial<T>] Returns object of errors (if any) or the data if no errors
    */

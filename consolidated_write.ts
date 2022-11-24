@@ -6,17 +6,17 @@ export const consolidated = {
     "connection": "default",
     "columns": {
       "id": {
-        "type": "INTEGER"
+        "type": "INTEGER",
       },
       "name": {
         "type": "VARCHAR",
-        "isNullable": true
+        "isNullable": true,
       },
       "email": {
         "type": "VARCHAR",
-        "isNullable": true
-      }
-    }
+        "isNullable": true,
+      },
+    },
   },
   "Groups": {
     "name": "Groups",
@@ -25,15 +25,15 @@ export const consolidated = {
     "connection": "default",
     "columns": {
       "id": {
-        "type": "INTEGER"
+        "type": "INTEGER",
       },
       "name": {
         "type": "VARCHAR",
-        "isNullable": true
-      }
+        "isNullable": true,
+      },
     },
     "primaryKeys": [
-      "id"
-    ]
-  }
-}
+      "id",
+    ],
+  },
+};

@@ -46,7 +46,13 @@ export class NormError extends Error {
 export class ModelError extends NormError {
   #model: string;
 
-  constructor(model: string, code: ErrorCodes, message: string, configName: string, dialect: Dialects) {
+  constructor(
+    model: string,
+    code: ErrorCodes,
+    message: string,
+    configName: string,
+    dialect: Dialects,
+  ) {
     super(code, message, configName, dialect);
     this.#model = model;
   }

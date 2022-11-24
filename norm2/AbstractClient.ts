@@ -113,7 +113,7 @@ export abstract class AbstractClient<
       // console.log(sql);
       const result = await this._query(sql);
       if (result) {
-        console.log(result)
+        console.log(result);
         retVal.type = result.type;
         retVal.data = result.data;
         retVal.count = result.count || 0;
@@ -262,8 +262,8 @@ export abstract class AbstractClient<
       match = sql.match(regEx);
     let qt: QueryType = "UNKNOWN";
     if (match && match.length > 0) {
-      if(match[0].trim().toUpperCase() === 'SELECT COUNT') {
-        qt = 'COUNT';
+      if (match[0].trim().toUpperCase() === "SELECT COUNT") {
+        qt = "COUNT";
       } else {
         qt = match[0].trim().toUpperCase() as QueryType;
       }

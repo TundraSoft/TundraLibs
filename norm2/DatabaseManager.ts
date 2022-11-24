@@ -34,7 +34,7 @@ export class DatabaseManager {
   static async get(name: string): Promise<AbstractClient> {
     name = name.trim().toLowerCase();
     if (this._configs.has(name)) {
-      if(this._instance.has(name) === false) {
+      if (this._instance.has(name) === false) {
         await this._initialize(name);
       }
       return this._instance.get(name) as AbstractClient;
@@ -49,13 +49,16 @@ export class DatabaseManager {
 
   protected static async _initialize(name: string) {
     name = name.trim().toLowerCase();
-    const config = this._configs.get(name) as ClientConfig, 
+    const config = this._configs.get(name) as ClientConfig,
       dialect = config.dialect.trim().toUpperCase() as Dialects;
     // Check if the dialect is valid
     let dbConn: AbstractClient;
     switch (dialect) {
       case Dialect.POSTGRES:
-        dbConn = new PostgresClient(name, config as ClientConfig & PostgresConfig);
+        dbConn = new PostgresClient(
+          name,
+          config as ClientConfig & PostgresConfig,
+        );
         break;
       // case Dialect.MYSQL:
       //   DatabaseManager._configs.set(nameClean, config);
