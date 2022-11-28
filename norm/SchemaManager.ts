@@ -47,9 +47,9 @@ export class SchemaManager<
    * @param schema SchemaDefinition The schema to validate
    * @returns SchemaDefinition - The validated schema
    */
-  public static validateSchema(schemas: SchemaDefinition): SchemaDefinition {
+  public static validateSchema(schema: SchemaDefinition): SchemaDefinition {
     // It is possible that the input is actually an import, so we tread lightly
-    const schema = JSON.parse(JSON.stringify((schemas))) as SchemaDefinition;
+    // const schema = JSON.parse(JSON.stringify((schemas))) as SchemaDefinition;
     Object.entries(schema).forEach(([modelName, model]) => {
       if (modelName !== model.name) {
         throw new Error(
@@ -57,7 +57,7 @@ export class SchemaManager<
         );
       }
       // Validate the model
-      schema[modelName] = Model.validateModel(model);
+      // schema[modelName] = Model.validateModel(model);
       // Check FK
       if (model.foreignKeys) {
         // Check if referenced FK's exist
