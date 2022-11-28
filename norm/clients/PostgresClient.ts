@@ -1,16 +1,16 @@
-import { AbstractClient } from "../AbstractClient.ts";
-import { QueryTypes } from "../types/mod.ts";
+import { AbstractClient } from '../AbstractClient.ts';
+import { QueryTypes } from '../types/mod.ts';
 import type {
   CountQuery,
   PostgresConfig,
   QueryOption,
   QueryType,
   SelectQuery,
-} from "../types/mod.ts";
-import { PGPool } from "../../dependencies.ts";
-import type { PGClientOptions } from "../../dependencies.ts";
+} from '../types/mod.ts';
+import { PGPool } from '/root/dependencies.ts';
+import type { PGClientOptions } from '/root/dependencies.ts';
 
-import { NormError, QueryError } from "../errors/mod.ts";
+import { NormError, QueryError } from '../errors/mod.ts';
 
 export class PostgresClient<O extends PostgresConfig = PostgresConfig>
   extends AbstractClient<O> {
@@ -18,7 +18,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
 
   constructor(name: string, options: NonNullable<O> | O) {
     const defaults: Partial<PostgresConfig> = {
-      dialect: "POSTGRES",
+      dialect: 'POSTGRES',
       port: 5432,
       poolSize: 1, // Lets default to 1
       idleTimeout: 5, // 5 seconds
@@ -36,7 +36,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
         password: this._options.password,
         database: this._options.database,
       },
-      poolSize = this._getOption("poolSize") as number || 1;
+      poolSize = this._getOption('poolSize') as number || 1;
     this._client = new PGPool(pgConfig, poolSize, true);
     // Hack to test the connection, if there is something wrong it will throw immediately
     await (await this._client.connect()).release();

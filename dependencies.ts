@@ -1,19 +1,16 @@
 // Begin Core
-export * as path from "https://deno.land/std@0.150.0/path/mod.ts";
-export { ensureDir, ensureFile } from "https://deno.land/std@0.150.0/fs/mod.ts";
+export * as path from '/DenoStd/path/mod.ts';
+export * as fs from '/DenoStd/fs/mod.ts';
 export {
   format as dateFormat,
   parse as parseDate,
-} from "https://deno.land/std@0.150.0/datetime/mod.ts";
-export {
-  BufWriter,
-  BufWriterSync,
-} from "https://deno.land/std@0.150.0/io/mod.ts";
-// export * as fs from "https://deno.land/std@0.150.0/fs/mod.ts"
-export { printf, sprintf } from "https://deno.land/std@0.150.0/fmt/printf.ts";
-export * as yaml from "https://deno.land/std@0.150.0/encoding/yaml.ts";
-export * as toml from "https://deno.land/std@0.150.0/encoding/toml.ts";
-export * as base64url from "https://deno.land/std@0.150.0/encoding/base64url.ts";
+} from '/DenoStd/datetime/mod.ts';
+export { BufWriter, BufWriterSync } from '/DenoStd/io/mod.ts';
+
+export { printf, sprintf } from '/DenoStd/fmt/printf.ts';
+export * as yaml from '/DenoStd/encoding/yaml.ts';
+export * as toml from '/DenoStd/encoding/toml.ts';
+export * as base64url from '/DenoStd/encoding/base64url.ts';
 export {
   blue,
   bold,
@@ -26,27 +23,26 @@ export {
   red,
   underline,
   yellow,
-} from "https://deno.land/std@0.150.0/fmt/colors.ts";
+} from '/DenoStd/fmt/colors.ts';
 
-export * as base64 from "https://deno.land/std@0.163.0/encoding/base64.ts";
+export * as base64 from '/DenoStd/encoding/base64.ts';
 
-// export { encode, decode } from "https://deno.land/std@0.121.0/encoding/base64url.ts"
 // End Core
 
 export {
   Client as PGClient,
   Pool as PGPool,
-} from "https://deno.land/x/postgres@v0.17.0/mod.ts";
-export type { ClientOptions as PGClientOptions } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
+} from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
+export type { ClientOptions as PGClientOptions } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
 
-export { DB as SQLiteClient } from "https://deno.land/x/sqlite@v3.4.0/mod.ts";
+export { DB as SQLiteClient } from 'https://deno.land/x/sqlite@v3.4.0/mod.ts';
 
 export {
   Bson,
   MongoClient as MongoDBClient,
-} from "https://deno.land/x/mongo@v0.31.1/mod.ts";
-export { Client as MySQL } from "https://deno.land/x/mysql@v2.10.3/mod.ts";
-export type { ClientConfig as MySQLClientConfig } from "https://deno.land/x/mysql@v2.10.3/mod.ts";
+} from 'https://deno.land/x/mongo@v0.31.1/mod.ts';
+export { Client as MySQL } from 'https://deno.land/x/mysql@v2.10.3/mod.ts';
+export type { ClientConfig as MySQLClientConfig } from 'https://deno.land/x/mysql@v2.10.3/mod.ts';
 
 // export { default as postgresjs } from "https://deno.land/x/postgresjs@v3.3.1/mod.js"
 // export * as MySQLClient from "https://deno.land/x/mysql2@v1.0.5/mod.ts";
@@ -65,16 +61,16 @@ export {
   isSuccessfulStatus,
   Status,
   STATUS_TEXT,
-} from "https://deno.land/std@0.150.0/http/mod.ts";
+} from '/DenoStd/http/mod.ts';
 
 export type HTTPMethods =
-  | "HEAD"
-  | "OPTIONS"
-  | "GET"
-  | "POST"
-  | "PUT"
-  | "PATCH"
-  | "DELETE";
+  | 'HEAD'
+  | 'OPTIONS'
+  | 'GET'
+  | 'POST'
+  | 'PUT'
+  | 'PATCH'
+  | 'DELETE';
 
 export type {
   ClientErrorStatus,
@@ -83,19 +79,10 @@ export type {
   RedirectStatus,
   ServerErrorStatus,
   SuccessfulStatus,
-} from "https://deno.land/std@0.150.0/http/mod.ts";
+} from '/DenoStd/http/mod.ts';
 
-export type {
-  Middleware,
-  RouterContext,
-  RouterMiddleware,
-} from "https://deno.land/x/oak@v11.1.0/mod.ts";
+export type { Middleware, RouterContext, RouterMiddleware } from '/Oak/mod.ts';
 
-export {
-  Context,
-  helpers as oakHelpers,
-  Request,
-  Response,
-} from "https://deno.land/x/oak@v11.1.0/mod.ts";
+export { Context, helpers as oakHelpers, Request, Response } from '/Oak/mod.ts';
 
 //#endregion Endpoint

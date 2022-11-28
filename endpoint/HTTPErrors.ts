@@ -4,7 +4,7 @@ import {
   isClientErrorStatus,
   Status,
   STATUS_TEXT,
-} from "../dependencies.ts";
+} from '/root/dependencies.ts';
 
 export type HTTPErrorData =
   | string
@@ -43,7 +43,7 @@ export class HTTPError extends Error {
     | string
     | Record<string, unknown>
     | Array<Record<string, unknown>> {
-    if (typeof this.#data === "string") {
+    if (typeof this.#data === 'string') {
       return {
         message: this.#data,
       };

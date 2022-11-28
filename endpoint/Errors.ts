@@ -1,5 +1,5 @@
 export class BaseEndpointError extends Error {
-  protected _module = "Endpoint";
+  protected _module = 'Endpoint';
 
   constructor(message: string) {
     message = `[module='Endpoint'] ${message}`;
@@ -10,7 +10,7 @@ export class BaseEndpointError extends Error {
 
 export class MissingNameError extends BaseEndpointError {
   constructor() {
-    super("Route name must be provided");
+    super('Route name must be provided');
     Object.setPrototypeOf(this, MissingNameError.prototype);
   }
 }

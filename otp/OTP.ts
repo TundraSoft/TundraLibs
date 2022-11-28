@@ -1,7 +1,7 @@
-import type { iOTPOptions } from "./types.ts";
-import { Options } from "../options/mod.ts";
-import { alphaNumericCase, nanoid } from "../nanoid/mod.ts";
-import { sprintf } from "../dependencies.ts";
+import type { iOTPOptions } from './types.ts';
+import { Options } from '/root/options/mod.ts';
+import { alphaNumericCase, nanoid } from '/root/nanoid/mod.ts';
+import { sprintf } from '/root/dependencies.ts';
 
 export class OTP extends Options<iOTPOptions> {
   #key!: CryptoKey;
@@ -62,8 +62,8 @@ export class OTP extends Options<iOTPOptions> {
       await this._importKey();
     }
     if (counter === undefined) {
-      switch (this._getOption("type")) {
-        case "HOTP":
+      switch (this._getOption('type')) {
+        case 'HOTP':
           if (this._options.counter === undefined) {
             counter = 0;
           } else {
@@ -72,18 +72,18 @@ export class OTP extends Options<iOTPOptions> {
           // Set the counter value to current
           this._options.counter = counter;
           break;
-        case "TOTP":
+        case 'TOTP':
           counter = Math.floor(
-            Date.now() / 1000 / (this._getOption("period") || 30),
+            Date.now() / 1000 / (this._getOption('period') || 30),
           );
           break;
       }
     }
     const digest = new Uint8Array(
-      await crypto.subtle.sign("HMAC", this.#key, this._toInt8Array(counter)),
+      await crypto.subtle.sign('HMAC', this.#key, this._toInt8Array(counter)),
     );
     const offset = digest[digest.byteLength - 1] & 15;
-    const len = this._getOption("length");
+    const len = this._getOption('length');
     const op = ((
       ((digest[offset] & 127) << 24) |
       ((digest[offset + 1] & 255) << 16) |
@@ -91,7 +91,7 @@ export class OTP extends Options<iOTPOptions> {
       (digest[offset + 3] & 255)
     ) % (10 ** len)).toString();
     // return op.toString();
-    return sprintf("%0" + len + "s", op);
+    return sprintf('%0' + len + 's', op);
   }
 
   /**
@@ -113,13 +113,13 @@ export class OTP extends Options<iOTPOptions> {
       await this._importKey();
     }
     let counter: number;
-    switch (this._getOption("type")) {
-      case "HOTP":
-        counter = this._getOption("counter") || 0;
+    switch (this._getOption('type')) {
+      case 'HOTP':
+        counter = this._getOption('counter') || 0;
         break;
-      case "TOTP":
+      case 'TOTP':
         counter = Math.floor(
-          Date.now() / 1000 / (this._getOption("period") || 30),
+          Date.now() / 1000 / (this._getOption('period') || 30),
         );
         break;
     }
@@ -151,10 +151,10 @@ export class OTP extends Options<iOTPOptions> {
       counter: this._options.counter,
       period: this._options.period,
     };
-    if (this._options.type === "HOTP") {
+    if (this._options.type === 'HOTP') {
       delete config.period;
     }
-    if (this._options.type === "TOTP") {
+    if (this._options.type === 'TOTP') {
       delete config.counter;
     }
     return config as iOTPOptions;
@@ -199,11 +199,11 @@ export class OTP extends Options<iOTPOptions> {
    */
   protected async _importKey() {
     this.#key = await crypto.subtle.importKey(
-      "raw",
-      this._encode(this._getOption("key")),
-      { name: "HMAC", hash: this._getOption("algo") },
+      'raw',
+      this._encode(this._getOption('key')),
+      { name: 'HMAC', hash: this._getOption('algo') },
       false,
-      ["sign", "verify"],
+      ['sign', 'verify'],
     );
   }
 }

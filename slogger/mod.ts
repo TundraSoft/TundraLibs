@@ -1,4 +1,4 @@
-export { Slogger } from "./Slogger.ts";
+export { Slogger } from './Slogger.ts';
 export type {
   ConsoleHandlerOptions,
   CustomHandlerOptions,
@@ -7,4 +7,4 @@ export type {
   LogConfig,
   POSTHandlerOptions,
   SyslogOptions,
-} from "./types.ts";
+} from './types.ts';

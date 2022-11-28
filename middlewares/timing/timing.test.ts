@@ -1,9 +1,9 @@
-import { Context } from "../../dependencies.ts";
-import { timing } from "./timing.ts";
-import { assert, assertEquals } from "../../dev_dependencies.ts";
+import { Context } from '/root/dependencies.ts';
+import { timing } from './timing.ts';
+import { assert, assertEquals } from '/root/dev.dependencies.ts';
 
 Deno.test({
-  name: "responseTime",
+  name: 'responseTime',
   async fn() {
     const mockContext = {
       response: {
@@ -18,9 +18,9 @@ Deno.test({
       });
     };
     await timing(mockContext, mockNext);
-    assertEquals(mockContext.response.headers.has("x-response-time"), true);
+    assertEquals(mockContext.response.headers.has('x-response-time'), true);
     const value = parseInt(
-      mockContext.response.headers.get("x-response-time")!,
+      mockContext.response.headers.get('x-response-time')!,
       10,
     );
     assert(value >= 50);

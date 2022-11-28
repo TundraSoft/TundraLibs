@@ -1,23 +1,23 @@
-import { AbstractClient } from "../AbstractClient.ts";
-import { QueryTypes } from "../types/mod.ts";
+import { AbstractClient } from '../AbstractClient.ts';
+import { QueryTypes } from '../types/mod.ts';
 import type {
   CountQuery,
   MariaConfig,
   QueryOption,
   QueryType,
   SelectQuery,
-} from "../types/mod.ts";
-import { MySQL } from "../../dependencies.ts";
-import type { MySQLClientConfig } from "../../dependencies.ts";
+} from '../types/mod.ts';
+import { MySQL } from '/root/dependencies.ts';
+import type { MySQLClientConfig } from '/root/dependencies.ts';
 
-import { NormError, QueryError } from "../errors/mod.ts";
+import { NormError, QueryError } from '../errors/mod.ts';
 
 export class MariaClient<O extends MariaConfig = MariaConfig>
   extends AbstractClient<O> {
   declare protected _client: MySQL;
   constructor(name: string, options: NonNullable<O> | O) {
     const defaults: Partial<MariaConfig> = {
-      dialect: "MARIADB",
+      dialect: 'MARIADB',
       port: 3306,
       poolSize: 10,
       idleTimeout: 5,
@@ -39,7 +39,7 @@ export class MariaClient<O extends MariaConfig = MariaConfig>
     };
     this._client = await new MySQL().connect(mysqlConfig);
     // Hack to test the connection, if there is something wrong it will throw immediately
-    this._state = "CONNECTED";
+    this._state = 'CONNECTED';
   }
 
   protected async _disconnect(): Promise<void> {

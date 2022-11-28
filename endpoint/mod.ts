@@ -9,7 +9,7 @@ export type {
   PostBodyHook,
   PostHandleHook,
   SortingParam,
-} from "./types/mod.ts";
+} from './types/mod.ts';
 
 export {
   DuplicateNameError,
@@ -17,7 +17,7 @@ export {
   MissingNameError,
   MissingRoutePathError,
   UnsupportedContentTypeError,
-} from "./Errors.ts";
+} from './Errors.ts';
 
 export {
   badRequest,
@@ -27,10 +27,10 @@ export {
   methodNotAllowed,
   resourceNotFound,
   unauthorized,
-} from "./HTTPErrors.ts";
+} from './HTTPErrors.ts';
 
-export type { HTTPErrorData } from "./HTTPErrors.ts";
+export type { HTTPErrorData } from './HTTPErrors.ts';
 
-export { BaseEndpoint } from "./BaseEndpoint.ts";
+export { BaseEndpoint } from './BaseEndpoint.ts';
 // export { NormEndpoint } from "./NormEndpoint.ts";
-export { EndpointManager } from "./EndpointManager.ts";
+export { EndpointManager } from './EndpointManager.ts';

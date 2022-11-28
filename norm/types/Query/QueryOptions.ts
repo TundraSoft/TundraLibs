@@ -1,9 +1,9 @@
-import { QueryTypes } from "./QueryTypes.ts";
-import type { QueryType } from "./QueryTypes.ts";
-import type { QueryFilter } from "./Filters.ts";
-import type { DataLength, DataType } from "../DataTypes.ts";
+import { QueryTypes } from './QueryTypes.ts';
+import type { QueryType } from './QueryTypes.ts';
+import type { QueryFilter } from './Filters.ts';
+import type { DataLength, DataType } from '../DataTypes.ts';
 // import { DataTypes } from '../DataTypes.ts';
-import type { GeneratorFunction, Generators } from "../Translator/mod.ts";
+import type { GeneratorFunction, Generators } from '../Translator/mod.ts';
 // import { Generator } from '../Translator/mod.ts'
 
 export type BaseColumnDefinition = {
@@ -50,7 +50,7 @@ export type Pagination = {
 export type Sorting<
   T extends Record<string, unknown> = Record<string, unknown>,
 > = {
-  [Property in keyof T]?: "ASC" | "DESC";
+  [Property in keyof T]?: 'ASC' | 'DESC';
 };
 
 export type RawQuery = {
@@ -127,8 +127,8 @@ export type CreateTableQuery<
     table: string;
     schema?: string;
     columnMap: Record<keyof T, string>;
-    onDelete?: "RESTRICT" | "CASCADE";
-    onUpdate?: "RESTRICT" | "CASCADE";
+    onDelete?: 'RESTRICT' | 'CASCADE';
+    onUpdate?: 'RESTRICT' | 'CASCADE';
   }>;
 } & BaseQueryOptions;
 

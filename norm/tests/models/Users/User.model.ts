@@ -1,27 +1,27 @@
 // import { Guardian } from "../../../../guardian/mod.ts";
 
 export default {
-  name: "Users",
-  table: "Users",
-  schema: "TestSchema",
-  connection: "default",
+  name: 'Users',
+  table: 'Users',
+  schema: 'TestSchema',
+  connection: 'default',
   columns: {
     Id: {
-      type: "INTEGER",
+      type: 'INTEGER',
     },
     Name: {
-      type: "VARCHAR",
+      type: 'VARCHAR',
       isNullable: true,
       disableUpdate: true,
     },
     Email: {
-      type: "VARCHAR",
+      type: 'VARCHAR',
       isNullable: true,
       notNullOnce: true,
     },
   },
-  primaryKeys: new Set(["Id"]),
+  primaryKeys: new Set(['Id']),
   uniqueKeys: {
-    "name_email": new Set(["Name", "Email"]),
+    'name_email': new Set(['Name', 'Email']),
   },
 } as const;

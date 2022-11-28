@@ -1,13 +1,13 @@
-import { JWT } from "./JWT.ts";
-import type { JWTClaims, JWTOptions } from "./types.ts";
-import { alphaNumeric, nanoid } from "../nanoid/mod.ts";
-import { assertEquals } from "../dev_dependencies.ts";
+import { JWT } from './JWT.ts';
+import type { JWTClaims, JWTOptions } from './types.ts';
+import { alphaNumeric, nanoid } from '/root/nanoid/mod.ts';
+import { assertEquals } from '/root/dev.dependencies.ts';
 
 Deno.test({
-  name: "[module='JWT'] Test signature & Validation - HS256",
+  name: '[module=\'JWT\'] Test signature & Validation - HS256',
   async fn(): Promise<void> {
     const opt: JWTOptions = {
-      algo: "HS256",
+      algo: 'HS256',
       key: nanoid(64, alphaNumeric),
       issuer: undefined,
     };
@@ -15,8 +15,8 @@ Deno.test({
       claim: JWTClaims = {
         iat: 1658015086,
         nbf: 1658015086,
-        jti: "test",
-        name: "Abhinav",
+        jti: 'test',
+        name: 'Abhinav',
         abc: [
           1,
           3,
@@ -30,10 +30,10 @@ Deno.test({
 });
 
 Deno.test({
-  name: "[module='JWT'] Test signature & Validation - HS384",
+  name: '[module=\'JWT\'] Test signature & Validation - HS384',
   async fn(): Promise<void> {
     const opt: JWTOptions = {
-      algo: "HS384",
+      algo: 'HS384',
       key: nanoid(64, alphaNumeric),
       issuer: undefined,
     };
@@ -41,8 +41,8 @@ Deno.test({
       claim: JWTClaims = {
         iat: 1658015086,
         nbf: 1658015086,
-        jti: "test",
-        name: "Abhinav",
+        jti: 'test',
+        name: 'Abhinav',
         abc: [
           1,
           3,
@@ -56,10 +56,10 @@ Deno.test({
 });
 
 Deno.test({
-  name: "[module='JWT'] Test signature & Validation - HS512",
+  name: '[module=\'JWT\'] Test signature & Validation - HS512',
   async fn(): Promise<void> {
     const opt: JWTOptions = {
-      algo: "HS512",
+      algo: 'HS512',
       key: nanoid(64, alphaNumeric),
       issuer: undefined,
     };
@@ -67,8 +67,8 @@ Deno.test({
       claim: JWTClaims = {
         iat: 1658015086,
         nbf: 1658015086,
-        jti: "test",
-        name: "Abhinav",
+        jti: 'test',
+        name: 'Abhinav',
         abc: [
           1,
           3,

@@ -1,24 +1,25 @@
 export default {
-  name: "Groups",
-  table: "Groups",
-  schema: "SuperSchema",
-  connection: "default",
+  name: 'Groups',
+  table: 'Groups',
+  schema: 'SuperSchema',
+  connection: 'default',
   columns: {
     Id: {
-      type: "INTEGER",
+      type: 'INTEGER',
     },
     Name: {
-      type: "VARCHAR",
+      type: 'VARCHAR',
       isNullable: true,
       disableUpdate: true,
     },
     Enabled: {
-      type: "BOOLEAN",
+      type: 'BOOLEAN',
       isNullable: true,
+      security: 'ENCRYPT',
     },
   },
-  primaryKeys: new Set(["Id"]),
+  primaryKeys: new Set(['Id']),
   uniqueKeys: {
-    "name": new Set(["Name"]),
+    'name': new Set(['Name']),
   },
 } as const;

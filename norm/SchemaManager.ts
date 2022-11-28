@@ -1,17 +1,17 @@
-import { path } from "../dependencies.ts";
+import { path } from '/root/dependencies.ts';
 import type {
   CreateTableQuery,
   Dialects,
   ModelDefinition,
   SchemaDefinition,
   SchemaType,
-} from "./types/mod.ts";
+} from './types/mod.ts';
 
-import { Model } from "./Model.ts";
+import { Model } from './Model.ts';
 // import { DatabaseManager } from "./DatabaseManager.ts";
-import { QueryTranslator } from "./QueryTranslator.ts";
+import { QueryTranslator } from './QueryTranslator.ts';
 
-import { ModelConfigError } from "./errors/mod.ts";
+import { ModelConfigError } from './errors/mod.ts';
 
 export class SchemaManager<
   SD extends SchemaDefinition = SchemaDefinition,
@@ -57,7 +57,7 @@ export class SchemaManager<
         );
       }
       // Validate the model
-      // schema[modelName] = Model.validateModel(model);
+      Model.validateModel(model);
       // Check FK
       if (model.foreignKeys) {
         // Check if referenced FK's exist
@@ -125,15 +125,15 @@ export class SchemaManager<
    * @param location string Path where the model files are stored.
    */
   public static async generateImports(location: string) {
+    const currDir = await Deno.realPath('./');
     Deno.chdir(await Deno.realPath(location));
     // Generate the export statements
-    const exports = (await SchemaManager._getModelExports("./")).sort((a, b) =>
-      a.localeCompare(b)
-    );
+    const exports = (await SchemaManager._getModelExports('./'));
+    Deno.chdir(currDir);
     // Write to mod.ts in the path
     await Deno.writeFile(
-      "mod.ts",
-      new TextEncoder().encode(exports.join("\n")),
+      'mod.ts',
+      new TextEncoder().encode(exports.join('\n')),
       {
         create: true,
         append: false,
@@ -182,7 +182,7 @@ export class SchemaManager<
       }
       // Clean up the model
       const cleanModel: CreateTableQuery = {
-        type: "CREATE_TABLE",
+        type: 'CREATE_TABLE',
         table: model.table,
         schema: model.schema,
         columns: {},
@@ -227,7 +227,7 @@ export class SchemaManager<
       // Generate Column details
       Object.entries(model.columns).forEach(([name, column]) => {
         cleanModel.columns[column.name || name] = {
-          type: (column.security) ? "VARCHAR" : column.type,
+          type: (column.security) ? 'VARCHAR' : column.type,
           length: (column.security) ? undefined : column.length,
           isNullable: column.isNullable,
         };
@@ -239,18 +239,18 @@ export class SchemaManager<
     const translator = new QueryTranslator(dialect);
     schemas.map((schema) =>
       finalSQL.push(translator.translate({
-        type: "CREATE_SCHEMA",
+        type: 'CREATE_SCHEMA',
         schema,
       }))
     );
-    finalSQL.push(""); // Add a new line
+    finalSQL.push(''); // Add a new line
     tableStructure.map((table) => finalSQL.push(translator.translate(table)));
-    finalSQL.push("");
+    finalSQL.push('');
     // Insert statements
     // console.log(db.generateQuery(tableStructure[0]));
     Deno.writeFileSync(
       path.join(writePath, `DDL.${dialect}.sql`),
-      new TextEncoder().encode(finalSQL.join("\n")),
+      new TextEncoder().encode(finalSQL.join('\n')),
       { create: true, append: false },
     );
   }
@@ -269,13 +269,15 @@ export class SchemaManager<
       modelExports: string[] = [];
     for await (const modelFile of Deno.readDir(realPath)) {
       if (modelFile.isDirectory) {
+        modelExports.push(`// #region Begin ${modelFile.name}`);
         modelExports.push(
           ...await SchemaManager._getModelExports(
             `${location}/${modelFile.name}`,
           ),
         );
+        modelExports.push(`// #region End ${modelFile.name}`);
       } else {
-        if (modelFile.name.endsWith("model.ts")) {
+        if (modelFile.name.endsWith('model.ts')) {
           // Its a model definition
           // console.log(`file://${path.join(realPath, modelFile.name)}`);
           const tm = await import(

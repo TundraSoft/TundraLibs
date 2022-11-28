@@ -1,5 +1,5 @@
-import { path } from "../dependencies.ts";
-import { BaseEndpoint } from "./BaseEndpoint.ts";
+import { path } from '/root/dependencies.ts';
+import { BaseEndpoint } from './BaseEndpoint.ts';
 
 export class EndpointManager {
   protected static _endPointGroups = new Map<string, string[]>();
@@ -65,7 +65,7 @@ export class EndpointManager {
       if (file.isFile) {
         const realPath = Deno.realPathSync(`${location}/${file.name}`);
         // Check if it is .ts extension
-        if (path.extname(realPath) === ".ts") {
+        if (path.extname(realPath) === '.ts') {
           await import(`file://${realPath}`);
         }
       } else if (file.isDirectory && includeSubfolder) {

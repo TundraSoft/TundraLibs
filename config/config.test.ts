@@ -1,40 +1,41 @@
-import { Config } from "./mod.ts";
-import { path } from "../dependencies.ts";
-import { assertEquals } from "../dev_dependencies.ts";
+import { Config } from './mod.ts';
+import { path } from '/root/dependencies.ts';
+import { assertEquals } from '/root/dev.dependencies.ts';
 
 const basePath = path.join(
-  path.dirname(path.fromFileUrl(new URL("", import.meta.url))),
-  "configs",
+  path.dirname(path.fromFileUrl(new URL('', import.meta.url))),
+  'configs',
 );
+
 Deno.test({
-  name: "Test json file format",
+  name: 'Test json file format',
   async fn() {
-    await Config.load("json_ext", basePath);
-    assertEquals(Config.get("json_ext", "owner", "name"), "Tom Preston-Werner");
+    await Config.load('json_ext', basePath);
+    assertEquals(Config.get('json_ext', 'owner', 'name'), 'Tom Preston-Werner');
   },
 });
 
 Deno.test({
-  name: "Test yaml (yml) file format",
+  name: 'Test yaml (yml) file format',
   async fn() {
-    await Config.load("yml_ext", basePath);
-    assertEquals(Config.get("yml_ext", "owner", "name"), "Tom Preston-Werner");
+    await Config.load('yml_ext', basePath);
+    assertEquals(Config.get('yml_ext', 'owner', 'name'), 'Tom Preston-Werner');
   },
 });
 
 Deno.test({
-  name: "Test yaml (yaml) file format",
+  name: 'Test yaml (yaml) file format',
   async fn() {
-    await Config.load("yaml_ext", basePath);
-    assertEquals(Config.get("yaml_ext", "owner", "name"), "Tom Preston-Werner");
+    await Config.load('yaml_ext', basePath);
+    assertEquals(Config.get('yaml_ext', 'owner', 'name'), 'Tom Preston-Werner');
   },
 });
 
 Deno.test({
-  name: "Test toml_ext file format",
+  name: 'Test toml_ext file format',
   async fn() {
-    await Config.load("toml_ext", basePath);
-    assertEquals(Config.get("toml_ext", "owner", "name"), "Tom Preston-Werner");
+    await Config.load('toml_ext', basePath);
+    assertEquals(Config.get('toml_ext', 'owner', 'name'), 'Tom Preston-Werner');
   },
 });
 

@@ -4,7 +4,7 @@ import {
   patterns,
   StructuredData,
   SyslogObject,
-} from "./types.ts";
+} from './types.ts';
 // import { alphaNumeric, nanoid } from "../nanoid/mod.ts";
 
 /**
@@ -18,7 +18,7 @@ import {
  * @TODO - Handle just message without prival - Mar 15 11:22:40 myhost.com     0    11,03/15/12,11:22:38,§ó·s,10.10.10.171,,40C6A91373B6,
  */
 export class Syslog {
-  protected _version = "1";
+  protected _version = '1';
   protected _severity!: LogSeverities;
   protected _facility!: LogFacilities;
   protected _msgId!: string | undefined;
@@ -125,8 +125,8 @@ export class Syslog {
     return this._msgId;
   }
 
-  set msgId(value: string | "-" | undefined) {
-    if (value === "-") {
+  set msgId(value: string | '-' | undefined) {
+    if (value === '-') {
       value = undefined;
     }
     this._msgId = value;
@@ -143,8 +143,8 @@ export class Syslog {
     return this._message;
   }
 
-  set message(value: string | "-" | undefined) {
-    if (value === "-") {
+  set message(value: string | '-' | undefined) {
+    if (value === '-') {
       value = undefined;
     }
     this._message = value;
@@ -161,12 +161,12 @@ export class Syslog {
     return this._appName;
   }
 
-  set appName(value: string | "-" | undefined) {
-    if (value === "-") {
+  set appName(value: string | '-' | undefined) {
+    if (value === '-') {
       value = undefined;
     } else if (value && value.match(/\s+/)) {
       // replace space with -
-      value = value.replaceAll(/\s+/g, "-");
+      value = value.replaceAll(/\s+/g, '-');
     }
     this._appName = value;
   }
@@ -182,8 +182,8 @@ export class Syslog {
     return this._procId;
   }
 
-  set procId(value: number | "-" | undefined) {
-    if (value === "-") {
+  set procId(value: number | '-' | undefined) {
+    if (value === '-') {
       value = undefined;
     }
     this._procId = value;
@@ -200,12 +200,12 @@ export class Syslog {
     return this._hostName;
   }
 
-  set hostName(value: string | "-" | undefined) {
-    if (value === "-") {
+  set hostName(value: string | '-' | undefined) {
+    if (value === '-') {
       value = undefined;
     } else if (value && value.match(/\s+/)) {
       // replace space with -
-      value = value.replaceAll(/\s+/g, "-");
+      value = value.replaceAll(/\s+/g, '-');
     }
     this._hostName = value;
   }
@@ -353,33 +353,33 @@ export class Syslog {
    */
   toString(
     format =
-      "<{prival}>{version} {dateTime} {hostName} {appName} {procId} {msgId} {structuredData} {message}",
+      '<{prival}>{version} {dateTime} {hostName} {appName} {procId} {msgId} {structuredData} {message}',
   ): string {
     const matchList = [
-      "prival",
-      "version",
-      "dateTime",
-      "hostName",
-      "appName",
-      "procId",
-      "msgId",
-      "message",
-      "severityName",
-      "facilityName",
-      "structuredData",
+      'prival',
+      'version',
+      'dateTime',
+      'hostName',
+      'appName',
+      'procId',
+      'msgId',
+      'message',
+      'severityName',
+      'facilityName',
+      'structuredData',
     ];
     return format.replaceAll(/{([^\s}]+)}/g, (match, name): string => {
       let value: string;
       match = match.substring(1, match.length - 1);
       if (matchList.indexOf(match.trim()) >= 0) {
         value = this[name as keyof Syslog] as string;
-        if (name === "dateTime") {
+        if (name === 'dateTime') {
           value = this.dateTime.toISOString();
         } else if (
-          name === "structuredData" &&
+          name === 'structuredData' &&
           Object.entries(this._structuredData).length > 0
         ) {
-          value = "";
+          value = '';
           // Loop through
           for (const [key, data] of Object.entries(this._structuredData)) {
             value += `[${key} `;
@@ -394,11 +394,11 @@ export class Syslog {
             // })
             // value = `[${key} ]`
           }
-        } else if (name === "message" && !value) {
-          value = "";
+        } else if (name === 'message' && !value) {
+          value = '';
         }
         if (value === undefined) {
-          value = "-";
+          value = '-';
         }
       } else {
         value = match;
@@ -421,16 +421,16 @@ export class Syslog {
       BSDMatch = log.match(patterns.RFC3164),
       RFCMatch = log.match(patterns.RFC5424);
     if (RFCMatch) {
-      console.log("RFC", log);
+      console.log('RFC', log);
     } else if (BSDMatch) {
-      console.log("BSD", log);
+      console.log('BSD', log);
     }
     if (RFCMatch) {
       logObj.prival = parseInt(RFCMatch[1]);
       logObj.dateTime = new Date(Date.parse(RFCMatch[2].trim()));
       logObj.hostName = RFCMatch[3];
       logObj.appName = RFCMatch[4];
-      logObj.procId = (RFCMatch[5] === "-")
+      logObj.procId = (RFCMatch[5] === '-')
         ? RFCMatch[5]
         : parseInt(RFCMatch[5]);
       logObj.msgId = RFCMatch[6];
@@ -478,7 +478,7 @@ export class Syslog {
           year = parseInt(BSDMatch[6]);
         }
         logObj.dateTime = new Date(
-          year + " " + BSDMatch[4] + " " + BSDMatch[5] + " " + BSDMatch[7],
+          year + ' ' + BSDMatch[4] + ' ' + BSDMatch[5] + ' ' + BSDMatch[7],
         );
       } else {
         // No Date :(
@@ -501,7 +501,7 @@ export class Syslog {
    */
   public toJSON(): SyslogObject {
     const obj: Partial<SyslogObject> = {};
-    obj.version = "1";
+    obj.version = '1';
     obj.pri = this.prival;
     obj.dateTime = this.dateTime;
     obj.severity = this.severity;

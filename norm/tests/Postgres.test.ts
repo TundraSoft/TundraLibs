@@ -1,22 +1,22 @@
-import { DataTypes } from "../types/mod.ts";
-import type { ModelType } from "../types/mod.ts";
-import { Model } from "../Model.ts";
-import { DatabaseManager } from "../DatabaseManager.ts";
+import { DataTypes } from '../types/mod.ts';
+import type { ModelType } from '../types/mod.ts';
+import { Model } from '../Model.ts';
+import { DatabaseManager } from '../DatabaseManager.ts';
 
-DatabaseManager.register("default", {
-  dialect: "POSTGRES",
-  host: "localhost",
+DatabaseManager.register('default', {
+  dialect: 'POSTGRES',
+  host: 'localhost',
   port: 49153,
-  userName: "postgres",
-  password: "postgrespw",
-  database: "postgres",
+  userName: 'postgres',
+  password: 'postgrespw',
+  database: 'postgres',
 });
 
 const Test = {
-  name: "Test",
-  connection: "default",
-  schema: "public",
-  table: "test",
+  name: 'Test',
+  connection: 'default',
+  schema: 'public',
+  table: 'test',
   columns: {
     id: {
       type: DataTypes.INTEGER,
@@ -29,8 +29,8 @@ const Test = {
     },
   },
   audit: {
-    schema: "public",
-    table: "test_audit",
+    schema: 'public',
+    table: 'test_audit',
   },
   permissions: {
     delete: true,
@@ -46,20 +46,20 @@ const test = new Model(Test);
 
 const insertResult = await test.insert([{
   id: 1,
-  name: "test",
+  name: 'test',
 }, {
   id: 2,
-  name: "test2",
+  name: 'test2',
 }]);
-console.log("insert", insertResult);
+console.log('insert', insertResult);
 
 const selectRes = await test.select();
-console.log("select", selectRes);
+console.log('select', selectRes);
 
 const selectFilt = await test.select({
   id: 3,
 });
-console.log("selectFilt", selectFilt);
+console.log('selectFilt', selectFilt);
 
 // const count = await test.count({
 //   name: {

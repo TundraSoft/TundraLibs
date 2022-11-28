@@ -1,14 +1,14 @@
-import { Syslog } from "./Syslog.ts";
-import { assertEquals } from "../dev_dependencies.ts";
+import { Syslog } from './Syslog.ts';
+import { assertEquals } from '/root/dev.dependencies.ts';
 
 Deno.test({
-  name: "Check if log is generated successfully",
+  name: 'Check if log is generated successfully',
   fn() {
-    const obj = new Syslog("Log message entry"),
+    const obj = new Syslog('Log message entry'),
       dt = new Date();
     obj.prival = 164;
-    obj.hostName = "serv1.google.com";
-    obj.msgId = "123";
+    obj.hostName = 'serv1.google.com';
+    obj.msgId = '123';
     obj.dateTime = dt;
     assertEquals(
       `<164>1 ${dt.toISOString()} serv1.google.com - - 123 - Log message entry`,

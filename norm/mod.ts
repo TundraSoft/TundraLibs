@@ -1,9 +1,9 @@
-export { DatabaseManager } from "./DatabaseManager.ts";
-export { Model } from "./Model.ts";
-export { SchemaManager } from "./SchemaManager.ts";
-export { DataTypes } from "./types/mod.ts";
+export { DatabaseManager } from './DatabaseManager.ts';
+export { Model } from './Model.ts';
+export { SchemaManager } from './SchemaManager.ts';
+export { DataTypes } from './types/mod.ts';
 
-export * from "./errors/mod.ts";
+export * from './errors/mod.ts';
 
 export type {
   ClientConfig,
@@ -34,7 +34,7 @@ export type {
   TranslatorConfig,
   TruncateTableQuery,
   UpdateQuery,
-} from "./types/mod.ts";
+} from './types/mod.ts';
 
 // export type {
 //   BaseColumnDefinition,

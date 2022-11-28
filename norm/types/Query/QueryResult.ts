@@ -1,5 +1,5 @@
-import type { QueryType } from "./QueryTypes.ts";
-import type { Pagination, Sorting } from "./QueryOptions.ts";
+import type { QueryType } from './QueryTypes.ts';
+import type { Pagination, Sorting } from './QueryOptions.ts';
 
 export type QueryResult<
   T extends Record<string, unknown> = Record<string, unknown>,

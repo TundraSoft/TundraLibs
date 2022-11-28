@@ -1,5 +1,5 @@
-import { Options } from "../options/mod.ts";
-import { QueryTranslator } from "./QueryTranslator.ts";
+import { Options } from '/root/options/mod.ts';
+import { QueryTranslator } from './QueryTranslator.ts';
 
 import type {
   ClientConfig,
@@ -19,11 +19,11 @@ import type {
   SelectQuery,
   TruncateTableQuery,
   UpdateQuery,
-} from "./types/mod.ts";
+} from './types/mod.ts';
 
-import { Generator, QueryTypes } from "./types/mod.ts";
+import { Generator, QueryTypes } from './types/mod.ts';
 
-import { ConnectionError, NormError, QueryError } from "./errors/mod.ts";
+import { ConnectionError, NormError, QueryError } from './errors/mod.ts';
 
 export abstract class AbstractClient<
   O extends ClientConfig = ClientConfig,
@@ -31,7 +31,7 @@ export abstract class AbstractClient<
 > extends Options<O, E> {
   protected _dialect: Dialects;
   protected _name: string;
-  protected _state: "CONNECTED" | "CLOSED" = "CLOSED";
+  protected _state: 'CONNECTED' | 'CLOSED' = 'CLOSED';
 
   declare protected _client: unknown;
   protected _queryTranslator: QueryTranslator;
@@ -47,7 +47,7 @@ export abstract class AbstractClient<
     return this._name;
   }
 
-  get status(): "CONNECTED" | "CLOSED" {
+  get status(): 'CONNECTED' | 'CLOSED' {
     return this._state;
   }
 
@@ -57,13 +57,13 @@ export abstract class AbstractClient<
 
   public async connect(): Promise<void> {
     try {
-      if (this._state === "CLOSED") {
+      if (this._state === 'CLOSED') {
         await this._connect();
         // Test if it is actually connected
-        this._state = "CONNECTED";
+        this._state = 'CONNECTED';
       }
     } catch (e) {
-      this._state = "CLOSED";
+      this._state = 'CLOSED';
       console.log(e);
       // Handle all errors
       throw new ConnectionError(e.message, this.name, this.dialect);
@@ -72,9 +72,9 @@ export abstract class AbstractClient<
 
   public async disconnect(): Promise<void> {
     try {
-      if (this._state === "CONNECTED") {
+      if (this._state === 'CONNECTED') {
         await this._disconnect();
-        this._state = "CLOSED";
+        this._state = 'CLOSED';
       }
     } catch (_e) {
       // Nothing to do
@@ -105,7 +105,7 @@ export abstract class AbstractClient<
       if (sql.type === QueryTypes.INSERT) {
         if ((sql as InsertQuery<Entity>).data.length === 0) {
           throw new QueryError(
-            "No data to insert",
+            'No data to insert',
             sql,
             this.name,
             this.dialect,
@@ -114,7 +114,7 @@ export abstract class AbstractClient<
       } else if (sql.type === QueryTypes.UPDATE) {
         if ((sql as UpdateQuery<Entity>).data.length === 0) {
           throw new QueryError(
-            "No data to update",
+            'No data to update',
             sql,
             this.name,
             this.dialect,
@@ -161,7 +161,7 @@ export abstract class AbstractClient<
     sql.type = QueryTypes.INSERT;
     // pre-checks
     if (sql.data.length === 0) {
-      throw new Error("No data to insert");
+      throw new Error('No data to insert');
     }
     return await this.query<Entity>(sql);
   }
@@ -172,7 +172,7 @@ export abstract class AbstractClient<
     sql.type = QueryTypes.UPDATE;
     // Pre-checks
     if (sql.data.length === 0) {
-      throw new Error("No data to Update");
+      throw new Error('No data to Update');
     }
     return await this.query<Entity>(sql);
   }
@@ -242,10 +242,10 @@ export abstract class AbstractClient<
         /^(CREATE|ALTER|DROP|TRUNCATE|SHOW|SELECT\s+COUNT|SELECT|INSERT|UPDATE|DELETE|DESC|DESCRIBE|EXPLAIN|BEGIN|COMMIT|ROLLBACK)?/i,
       ),
       match = sql.match(regEx);
-    let qt: QueryType = "UNKNOWN";
+    let qt: QueryType = 'UNKNOWN';
     if (match && match.length > 0) {
-      if (match[0].trim().toUpperCase() === "SELECT COUNT") {
-        qt = "COUNT";
+      if (match[0].trim().toUpperCase() === 'SELECT COUNT') {
+        qt = 'COUNT';
       } else {
         qt = match[0].trim().toUpperCase() as QueryType;
       }

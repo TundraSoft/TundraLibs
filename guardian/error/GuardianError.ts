@@ -1,5 +1,5 @@
-import { ObjectPath } from "../types/mod.ts";
-import type { ErrorFormat } from "../types/mod.ts";
+import { ObjectPath } from '../types/mod.ts';
+import type { ErrorFormat } from '../types/mod.ts';
 export class GuardianError extends Error {
   #path?: ObjectPath;
   #message: string;
@@ -14,7 +14,7 @@ export class GuardianError extends Error {
   }
 
   public get path(): string | undefined {
-    return this.#path?.join(".");
+    return this.#path?.join('.');
   }
 
   public get message(): string {
@@ -30,10 +30,10 @@ export class GuardianError extends Error {
       message: this.message,
     };
     if (this.path) {
-      err["path"] = this.path;
+      err['path'] = this.path;
     }
     if (this.children.length > 0) {
-      err["children"] = this.children.map((e) => e.toJSON());
+      err['children'] = this.children.map((e) => e.toJSON());
     }
     return err;
   }

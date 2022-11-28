@@ -1,5 +1,5 @@
-import { AbstractClient } from "./AbstractClient.ts";
-import { DatabaseManager } from "./DatabaseManager.ts";
+import { AbstractClient } from './AbstractClient.ts';
+import { DatabaseManager } from './DatabaseManager.ts';
 // import { Generator } from "./types/mod.ts";
 import {
   DataType,
@@ -19,15 +19,15 @@ import {
   Sorting,
   TruncateTableQuery,
   UpdateQuery,
-} from "./types/mod.ts";
+} from './types/mod.ts';
 
-import { DefaultValidator } from "./types/mod.ts";
+import { DefaultValidator } from './types/mod.ts';
 
 // import { ErrorCodes, ModelError } from "./errors/mod.ts";
 
-import { decrypt, encrypt, hash } from "./utils/mod.ts";
+import { decrypt, encrypt, hash } from './utils/mod.ts';
 
-import { GuardianError, GuardianProxy, Struct } from "../guardian/mod.ts";
+import { GuardianError, GuardianProxy, Struct } from '/root/guardian/mod.ts';
 
 import {
   ModelColumnNotDefined,
@@ -36,7 +36,7 @@ import {
   ModelFilterSecureColumn,
   ModelPermissionError,
   ModelValidationError,
-} from "./errors/mod.ts";
+} from './errors/mod.ts';
 
 export class Model<
   S extends ModelDefinition = ModelDefinition,
@@ -124,7 +124,7 @@ export class Model<
         (columnDefinition.name || name) as string;
       // Now we go through the data type
       if (
-        ["SERIAL", "SMALLSERIAL", "BIGSERIAL", "AUTO_INCRIEMENT"].includes(
+        ['SERIAL', 'SMALLSERIAL', 'BIGSERIAL', 'AUTO_INCRIEMENT'].includes(
           columnDefinition.type.toUpperCase(),
         )
       ) {
@@ -172,10 +172,10 @@ export class Model<
         // }
         // this._encryptionKey = definition.encryptionKey;
         // this._encryptedColumns.push(name as keyof T);
-        if (columnDefinition.security === "ENCRYPT") {
+        if (columnDefinition.security === 'ENCRYPT') {
           this._encryptedColumns.push(name as keyof T);
         }
-        if (columnDefinition.security === "HASH") {
+        if (columnDefinition.security === 'HASH') {
           this._hashColumns.push(name as keyof T);
         }
       }
@@ -188,7 +188,7 @@ export class Model<
 
         // Add length spec if possible
         if (
-          columnDefinition.length && typeof columnDefinition.length === "number"
+          columnDefinition.length && typeof columnDefinition.length === 'number'
         ) {
           validator[name].max(columnDefinition.length);
         }
@@ -203,7 +203,7 @@ export class Model<
     this._validator = Struct(
       validator,
       `Validation failed for model ${this.name}`,
-      "PARTIAL",
+      'PARTIAL',
     );
 
     // Paging
@@ -356,7 +356,7 @@ export class Model<
       //   this.name,
       //   this._connection.name,
       // );
-      throw new ModelPermissionError("SELECT", this.name, this._connectionName);
+      throw new ModelPermissionError('SELECT', this.name, this._connectionName);
     }
     if (!paging && (this._pageSize || 0) > 0) {
       paging = {
@@ -365,7 +365,7 @@ export class Model<
       };
     }
     const options: SelectQuery<T> = {
-      type: "SELECT",
+      type: 'SELECT',
       schema: this.schema,
       table: this.table,
       columns: this._aliasMap,
@@ -411,10 +411,10 @@ export class Model<
       //   this.name,
       //   this._connection.name,
       // );
-      throw new ModelPermissionError("SELECT", this.name, this._connectionName);
+      throw new ModelPermissionError('SELECT', this.name, this._connectionName);
     }
     const options: SelectQuery<T> = {
-      type: "COUNT",
+      type: 'COUNT',
       schema: this.schema,
       table: this.table,
       columns: this._aliasMap,
@@ -441,7 +441,7 @@ export class Model<
       //   this.name,
       //   this._connection.name,
       // );
-      throw new ModelPermissionError("INSERT", this.name, this._connectionName);
+      throw new ModelPermissionError('INSERT', this.name, this._connectionName);
     }
 
     const rows: Array<Partial<T>> =
@@ -449,6 +449,7 @@ export class Model<
       insertedColumns: Array<keyof T> = this._notNulls as Array<keyof T>,
       errors: { [key: number]: ModelValidation<T> } = {},
       ukHash: { [key: string]: string[] } = {},
+      pkQueries: Array<Promise<QueryResult<T>>> = [],
       ukQueries: Array<Promise<QueryResult<T>>> = [],
       ukErrors: Array<Record<keyof T, string>> = [];
 
@@ -523,7 +524,7 @@ export class Model<
       });
       if (Object.keys(pkFilter).length > 0) {
         // Yes we have PK, check if it is unique
-        // TODO: Finish this
+        pkQueries.push(this.count(pkFilter as QueryFilter<T>));
       }
       //#endregion Primary Key (non Identity)
 
@@ -558,7 +559,7 @@ export class Model<
         // Create hash
         const hash = this._uniqueKeys[key].map((column) => {
           return row[column];
-        }).join("::");
+        }).join('::');
         if (ukHash[key].includes(hash)) {
           // Its not unique in the batch itself
           if (!errors[index]) {
@@ -613,31 +614,53 @@ export class Model<
       rows[index] = row;
     });
 
-    // Check all async queries for output
-    Promise.all(ukQueries).then((results) => {
-      results.forEach((result, index) => {
-        if (result.count > 0) {
-          // Its not unique in the table
-          if (!errors[index]) {
-            errors[index] = {} as ModelValidation<T>;
-          }
-          Object.keys(ukErrors[index]).forEach((column) => {
-            if (errors[index][column as keyof T] === undefined) {
-              errors[index][column as keyof T] = [];
+    if (pkQueries.length > 0) {
+      Promise.all(pkQueries).then((results) => {
+        results.forEach((result, index) => {
+          if (result.count > 0) {
+            if (!errors[index]) {
+              errors[index] = {} as ModelValidation<T>;
             }
-            if (
-              !errors[index][column as keyof T]?.includes(
-                ukErrors[index][column as keyof T],
-              )
-            ) {
-              errors[index][column as keyof T]?.push(
-                ukErrors[index][column as keyof T],
+            this._primaryKeys.forEach((column) => {
+              if (errors[index][column] === undefined) {
+                errors[index][column] = [];
+              }
+              errors[index][column]?.push(
+                `Column ${column as string} is not unique`,
               );
-            }
-          });
-        }
+            });
+          }
+        });
       });
-    });
+    }
+
+    // Check all async queries for output
+    if (ukQueries.length > 0) {
+      Promise.all(ukQueries).then((results) => {
+        results.forEach((result, index) => {
+          if (result.count > 0) {
+            // Its not unique in the table
+            if (!errors[index]) {
+              errors[index] = {} as ModelValidation<T>;
+            }
+            Object.keys(ukErrors[index]).forEach((column) => {
+              if (errors[index][column as keyof T] === undefined) {
+                errors[index][column as keyof T] = [];
+              }
+              if (
+                !errors[index][column as keyof T]?.includes(
+                  ukErrors[index][column as keyof T],
+                )
+              ) {
+                errors[index][column as keyof T]?.push(
+                  ukErrors[index][column as keyof T],
+                );
+              }
+            });
+          }
+        });
+      });
+    }
 
     // If error is present, throw and end
     if (Object.keys(errors).length > 0) {
@@ -647,7 +670,7 @@ export class Model<
     }
 
     const options: InsertQuery<T> = {
-      type: "INSERT",
+      type: 'INSERT',
       schema: this.schema,
       table: this.table,
       columns: this._aliasMap,
@@ -680,7 +703,7 @@ export class Model<
       //   this.name,
       //   this._connection.name,
       // );
-      throw new ModelPermissionError("UPDATE", this.name, this._connectionName);
+      throw new ModelPermissionError('UPDATE', this.name, this._connectionName);
     }
     // If Filter is present, then get row count
     let rowCnt = 0;
@@ -792,7 +815,7 @@ export class Model<
     }
 
     const options: UpdateQuery<T> = {
-      type: "UPDATE",
+      type: 'UPDATE',
       schema: this.schema,
       table: this.table,
       columns: this._aliasMap,
@@ -818,12 +841,12 @@ export class Model<
       //   this.name,
       //   this._connection.name,
       // );
-      throw new ModelPermissionError("DELETE", this.name, this._connectionName);
+      throw new ModelPermissionError('DELETE', this.name, this._connectionName);
     }
     await this._init();
 
     const options: DeleteQuery<T> = {
-      type: "DELETE",
+      type: 'DELETE',
       schema: this.schema,
       table: this.table,
       columns: this._aliasMap,
@@ -846,14 +869,14 @@ export class Model<
       //   this._connection.name,
       // );
       throw new ModelPermissionError(
-        "TRUNCATE",
+        'TRUNCATE',
         this.name,
         this._connectionName,
       );
     }
     await this._init();
     const options: TruncateTableQuery = {
-      type: "TRUNCATE",
+      type: 'TRUNCATE',
       schema: this.schema,
       table: this.table,
     };
@@ -875,24 +898,24 @@ export class Model<
       return;
     }
     const allowedKeys: string[] = [
-        "$and",
-        "$or",
-        "$eq",
-        "$neq",
-        "$in",
-        "$nin",
-        "$lt",
-        "$lte",
-        "$gt",
-        "$gte",
-        "$between",
-        "$from",
-        "$to",
-        "$null",
-        "$like",
-        "$nlike",
-        "$ilike",
-        "$nilike",
+        '$and',
+        '$or',
+        '$eq',
+        '$neq',
+        '$in',
+        '$nin',
+        '$lt',
+        '$lte',
+        '$gt',
+        '$gte',
+        '$between',
+        '$from',
+        '$to',
+        '$null',
+        '$like',
+        '$nlike',
+        '$ilike',
+        '$nilike',
       ],
       columnList: Record<string, string> = {},
       processedFilter: Record<string, unknown> = {};
@@ -911,7 +934,7 @@ export class Model<
           this._encryptedColumns.includes(properKey as keyof T) ||
           this._hashColumns.includes(properKey as keyof T)
         ) {
-          // TODO - Support encrypted columns by decrypting the value in filter (once we move to DB encryption)
+          // TODO(@abhinav) - Support encrypted columns by decrypting the value in filter (once we move to DB encryption)
           // throw new Error(
           //   `Cannot use encrypted/hashed column ${properKey} in filter`,
           // );
@@ -932,7 +955,7 @@ export class Model<
       // Check value
       if (Array.isArray(value)) {
         processedFilter[properKey] = value;
-      } else if (typeof value === "object") {
+      } else if (typeof value === 'object') {
         processedFilter[properKey] = this.validateFilters(
           value as QueryFilter<T>,
         );
@@ -1021,13 +1044,13 @@ export class Model<
       if (
         (model.primaryKeys &&
           Array.from(model.primaryKeys).includes(colName as string)) ||
-        (["SERIAL", "SMALLSERIAL", "BIGSERIAL", "AUTO_INCRIEMENT"].includes(
+        (['SERIAL', 'SMALLSERIAL', 'BIGSERIAL', 'AUTO_INCRIEMENT'].includes(
           col.type.toUpperCase(),
         ))
       ) {
         col.disableUpdate = true;
       }
-      if (col.security && col.security === "ENCRYPT") {
+      if (col.security && col.security === 'ENCRYPT') {
         if (model.encryptionKey === undefined) {
           throw new ModelConfigError(
             `Encryption key not defined`,

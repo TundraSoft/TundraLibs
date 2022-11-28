@@ -1,15 +1,15 @@
-import { LogFacilities, LogSeverities, Syslog } from "../syslog/mod.ts";
-import { alphaNumeric, nanoid } from "../nanoid/mod.ts";
-import { Sysinfo } from "../sysinfo/mod.ts";
+import { LogFacilities, LogSeverities, Syslog } from '/root/syslog/mod.ts';
+import { alphaNumeric, nanoid } from '/root/nanoid/mod.ts';
+import { Sysinfo } from '/root/sysinfo/mod.ts';
 
-import type { HandlerOptions, LogConfig } from "./types.ts";
-import { BaseHandler } from "./BaseHandler.ts";
-import { ConsoleHandler } from "./handlers/ConsoleHandler.ts";
-import { FileHandler } from "./handlers/FileHandler.ts";
-import { POSTHandler } from "./handlers/POSTHandler.ts";
-import { SyslogHandler } from "./handlers/SyslogHandler.ts";
-import { BlackholeHandler } from "./handlers/BlackholeHandler.ts";
-import { CustomHandler } from "./handlers/CustomHandler.ts";
+import type { HandlerOptions, LogConfig } from './types.ts';
+import { BaseHandler } from './BaseHandler.ts';
+import { ConsoleHandler } from './handlers/ConsoleHandler.ts';
+import { FileHandler } from './handlers/FileHandler.ts';
+import { POSTHandler } from './handlers/POSTHandler.ts';
+import { SyslogHandler } from './handlers/SyslogHandler.ts';
+import { BlackholeHandler } from './handlers/BlackholeHandler.ts';
+import { CustomHandler } from './handlers/CustomHandler.ts';
 
 export class Slogger {
   protected static _handlers: Array<BaseHandler<HandlerOptions>> = [];
@@ -32,7 +32,7 @@ export class Slogger {
       await Slogger.registerHandler(handler);
     }
     // Add event to cleanup all handers
-    addEventListener("unload", async () => await Slogger.unloadHandlers());
+    addEventListener('unload', async () => await Slogger.unloadHandlers());
   }
 
   public static async registerHandler(
@@ -46,22 +46,22 @@ export class Slogger {
     };
     handlerConfig = { ...defaults, ...handlerConfig };
     switch (handlerConfig.type) {
-      case "CONSOLE":
+      case 'CONSOLE':
         handle = new ConsoleHandler(handlerConfig);
         break;
-      case "FILE":
+      case 'FILE':
         handle = new FileHandler(handlerConfig);
         break;
-      case "POST":
+      case 'POST':
         handle = new POSTHandler(handlerConfig);
         break;
-      case "SYSLOG":
+      case 'SYSLOG':
         handle = new SyslogHandler(handlerConfig);
         break;
-      case "BLACKHOLE":
+      case 'BLACKHOLE':
         handle = new BlackholeHandler(handlerConfig);
         break;
-      case "CUSTOM":
+      case 'CUSTOM':
         handle = new CustomHandler(handlerConfig);
         break;
       default:

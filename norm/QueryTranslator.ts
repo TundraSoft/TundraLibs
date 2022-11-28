@@ -1,4 +1,4 @@
-import { GeneratorOutput, QueryTypes, RawQuery } from "./types/mod.ts";
+import { GeneratorOutput, QueryTypes, RawQuery } from './types/mod.ts';
 import type {
   BaseColumnDefinition,
   CountQuery,
@@ -15,14 +15,14 @@ import type {
   TranslatorConfig,
   TruncateTableQuery,
   UpdateQuery,
-} from "./types/mod.ts";
+} from './types/mod.ts';
 
 import {
   Generator,
   MariaTranslatorConfig,
   PostgresTranslatorConfig,
   SQLiteTranslatorConfig,
-} from "./types/mod.ts";
+} from './types/mod.ts';
 
 export class QueryTranslator {
   protected _dialect: Dialects;
@@ -34,14 +34,14 @@ export class QueryTranslator {
     this._dialect = dialect;
     // Load few defaults of the dialects
     switch (dialect) {
-      case "POSTGRES":
+      case 'POSTGRES':
         this._config = PostgresTranslatorConfig;
         break;
-      case "MARIADB":
-      case "MYSQL":
+      case 'MARIADB':
+      case 'MYSQL':
         this._config = MariaTranslatorConfig;
         break;
-      case "SQLITE":
+      case 'SQLITE':
         this._config = SQLiteTranslatorConfig;
         break;
       default:
@@ -67,37 +67,37 @@ export class QueryTranslator {
   // deno-lint-ignore no-explicit-any
   public quoteValue(value: any): string {
     if (
-      typeof value === null || typeof (value) === "function" ||
-      typeof (value) === "symbol" || typeof (value) === "undefined"
+      typeof value === null || typeof (value) === 'function' ||
+      typeof (value) === 'symbol' || typeof (value) === 'undefined'
     ) {
-      return "NULL";
+      return 'NULL';
     }
     if (value === false) {
-      return "FALSE";
+      return 'FALSE';
     }
     if (value === true) {
-      return "TRUE";
+      return 'TRUE';
     }
-    if (typeof value === "number" || typeof value === "bigint") {
-      return value + "";
+    if (typeof value === 'number' || typeof value === 'bigint') {
+      return value + '';
     }
     if (value instanceof Date) {
       return this.quoteValue(`${value.toISOString()}`);
     }
     if (value instanceof Array || Array.isArray(value)) {
-      return "(" + value.map((v) => this.quoteValue(v)).join(",") + ")";
+      return '(' + value.map((v) => this.quoteValue(v)).join(',') + ')';
     }
-    if (typeof value === "object") {
+    if (typeof value === 'object') {
       value = JSON.stringify(value);
     } else {
-      value += "";
+      value += '';
     }
     // This handles DB Function calls
-    if (value.substr(0, 2) === "${") {
+    if (value.substr(0, 2) === '${') {
       return value.substr(2, value.length - 3);
     }
     // Escape quotes already present
-    const findRegEx = new RegExp(this._config.quote.value, "g"),
+    const findRegEx = new RegExp(this._config.quote.value, 'g'),
       replace = this._config.quote.value + this._config.quote.value;
     // return `'${value.replace(/'/g, "''")}'`;
     return `${this._config.quote.value}${
@@ -106,16 +106,16 @@ export class QueryTranslator {
   }
 
   public quoteColumn(value: string): string {
-    const split = value.split(".");
+    const split = value.split('.');
     return `${this._config.quote.column}${
-      split.join(this._config.quote.column + "." + this._config.quote.column)
+      split.join(this._config.quote.column + '.' + this._config.quote.column)
     }${this._config.quote.column}`;
   }
 
   public translate<
     Entity extends Record<string, unknown> = Record<string, unknown>,
   >(query: QueryOption<Entity>): string {
-    if (query.type === "RAW") {
+    if (query.type === 'RAW') {
       // Mayhaps replace the params?
       return (query as RawQuery).sql;
     }
@@ -158,7 +158,7 @@ export class QueryTranslator {
       query.pagination.page = 1;
     }
     const tableName = this.quoteColumn(
-        (query.schema ? query.schema + "." : "") + query.table,
+        (query.schema ? query.schema + '.' : '') + query.table,
       ),
       columns = Object.keys(query.columns).map((alias) => {
         if (
@@ -168,25 +168,25 @@ export class QueryTranslator {
             this.quoteColumn(alias)
           }`;
         }
-        return "";
+        return '';
       }),
       paging = (query.pagination && query.pagination.limit > 0)
         ? `LIMIT ${query.pagination.limit} OFFSET ${
           (query.pagination.page - 1) * query.pagination.limit
         } `
-        : "",
+        : '',
       sort = (query.sorting && Object.keys(query.sorting).length > 0)
         ? ` ORDER BY ${
           Object.entries(query.sorting).map((value) => {
             return `${this.quoteColumn(query.columns[value[0]])} ${value[1]} `;
-          }).join(", ")
+          }).join(', ')
         }`
-        : "",
+        : '',
       filter = (query.filters)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
-        : "";
+        : '';
     return `SELECT ${
-      columns.join(", ")
+      columns.join(', ')
     } FROM ${tableName}${filter}${sort}${paging};`;
   }
 
@@ -194,11 +194,11 @@ export class QueryTranslator {
     Entity extends Record<string, unknown> = Record<string, unknown>,
   >(query: CountQuery<Entity>): string {
     const tableName = this.quoteColumn(
-        (query.schema ? query.schema + "." : "") + query.table,
+        (query.schema ? query.schema + '.' : '') + query.table,
       ),
       filter = (query.filters)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
-        : "";
+        : '';
     return `SELECT COUNT(1) AS TotalRows FROM ${tableName}${filter};`;
   }
 
@@ -206,7 +206,7 @@ export class QueryTranslator {
     Entity extends Record<string, unknown> = Record<string, unknown>,
   >(query: InsertQuery<Entity>): string {
     const tableName = this.quoteColumn(
-        (query.schema ? query.schema + "." : "") + query.table,
+        (query.schema ? query.schema + '.' : '') + query.table,
       ),
       project = (query.project && query.project.length > 0)
         ? query.project
@@ -219,16 +219,16 @@ export class QueryTranslator {
       }),
       values = query.data.map((row) => {
         return Object.keys(query.columns).map((key) => {
-          return this.quoteValue(row[key] || "NULL");
+          return this.quoteValue(row[key] || 'NULL');
         });
       }),
-      returning = " \nRETURNING " + project.map((alias) => {
+      returning = ' \nRETURNING ' + project.map((alias) => {
         return `${this.quoteColumn(query.columns[alias])} AS ${
           this.quoteColumn(alias as string)
         }`;
-      }).join(", \n");
-    return `INSERT INTO ${tableName} \n(${columns.join(", ")}) \nVALUES (${
-      values.join("), \n(")
+      }).join(', \n');
+    return `INSERT INTO ${tableName} \n(${columns.join(', ')}) \nVALUES (${
+      values.join('), \n(')
     })${returning};`;
   }
 
@@ -236,7 +236,7 @@ export class QueryTranslator {
     Entity extends Record<string, unknown> = Record<string, unknown>,
   >(query: UpdateQuery<Entity>): string {
     const tableName = this.quoteColumn(
-        (query.schema ? query.schema + "." : "") + query.table,
+        (query.schema ? query.schema + '.' : '') + query.table,
       ),
       project = (query.project && query.project.length > 0)
         ? query.project
@@ -248,14 +248,14 @@ export class QueryTranslator {
       }),
       filter = (query.filters)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
-        : "",
-      returning = " \nRETURNING " + project.map((alias) => {
+        : '',
+      returning = ' \nRETURNING ' + project.map((alias) => {
         return `${this.quoteColumn(query.columns[alias])} AS ${
           this.quoteColumn(alias as string)
         }`;
-      }).join(", \n");
+      }).join(', \n');
     return `UPDATE ${tableName} \nSET ${
-      columns.join(", \n")
+      columns.join(', \n')
     }${filter}${returning};`;
   }
 
@@ -263,11 +263,11 @@ export class QueryTranslator {
     Entity extends Record<string, unknown> = Record<string, unknown>,
   >(query: DeleteQuery<Entity>): string {
     const tableName = this.quoteColumn(
-        (query.schema ? query.schema + "." : "") + query.table,
+        (query.schema ? query.schema + '.' : '') + query.table,
       ),
       filter = (query.filters)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
-        : "";
+        : '';
     return `DELETE FROM ${tableName}${filter};`;
   }
 
@@ -277,14 +277,14 @@ export class QueryTranslator {
 
   public dropSchema(query: DropSchemaQuery): string {
     return `DROP SCHEMA IF EXISTS ${this.quoteColumn(query.schema)}${
-      query.cascade === true ? ` CASCADE` : ""
+      query.cascade === true ? ` CASCADE` : ''
     };`;
   }
 
   public createTable<
     Entity extends Record<string, unknown> = Record<string, unknown>,
   >(query: CreateTableQuery<Entity>): string {
-    const table = `${query.schema ? query.schema + "." : ""}${query.table}`,
+    const table = `${query.schema ? query.schema + '.' : ''}${query.table}`,
       body = Object.keys(query.columns).map((columnName) => {
         return `${this.quoteColumn(columnName)} ${
           this._processColumnType(
@@ -297,7 +297,7 @@ export class QueryTranslator {
         `PRIMARY KEY (${
           query.primaryKey.map((columnName) => {
             return this.quoteColumn(columnName as string);
-          }).join(", ")
+          }).join(', ')
         })`,
       );
     }
@@ -305,42 +305,42 @@ export class QueryTranslator {
       Object.entries(query.uniqueKeys).forEach(([name, columns]) => {
         body.push(
           `CONSTRAINT ${
-            this.quoteColumn(`UK_${table.replace(".", "_")}_${name}`)
+            this.quoteColumn(`UK_${table.replace('.', '_')}_${name}`)
           } UNIQUE (${
             columns.map((columnName) => {
               return this.quoteColumn(columnName as string);
-            }).join(", ")
+            }).join(', ')
           })`,
         );
       });
     }
     if (query.foreignKeys) {
       Object.entries(query.foreignKeys).forEach(([name, foreignKey]) => {
-        const onDelete = foreignKey.onDelete || "RESTRICT",
-          onUpdate = foreignKey.onUpdate || "RESTRICT";
+        const onDelete = foreignKey.onDelete || 'RESTRICT',
+          onUpdate = foreignKey.onUpdate || 'RESTRICT';
         body.push(
           `CONSTRAINT ${
-            this.quoteColumn(`FK_${table.replace(".", "_")}_${name}`)
+            this.quoteColumn(`FK_${table.replace('.', '_')}_${name}`)
           } FOREIGN KEY (${
             Object.keys(foreignKey.columnMap).map((col) =>
               this.quoteColumn(col)
-            ).join(", ")
+            ).join(', ')
           }) REFERENCES ${
             this.quoteColumn(
               `${
-                foreignKey.schema ? foreignKey.schema + "." : ""
+                foreignKey.schema ? foreignKey.schema + '.' : ''
               }${foreignKey.table}`,
             )
           } (${
             Object.values(foreignKey.columnMap).map((col) =>
               this.quoteColumn(col)
-            ).join(", ")
+            ).join(', ')
           }) ON UPDATE ${onUpdate} ONDELETE ${onDelete}`,
         );
       });
     }
     return `CREATE TABLE IF NOT EXISTS ${this.quoteColumn(table)}\n(\n    ${
-      body.join(", \n    ")
+      body.join(', \n    ')
     }\n);`;
   }
 
@@ -348,22 +348,22 @@ export class QueryTranslator {
     Entyty extends Record<string, unknown> = Record<string, unknown>,
   >(query: DropTableQuery): string {
     return `DROP TABLE IF EXISTS ${
-      this.quoteColumn(query.schema ? query.schema + "." : "") + query.table
-    }${query.cascade === true ? ` CASCADE` : ""};`;
+      this.quoteColumn(query.schema ? query.schema + '.' : '') + query.table
+    }${query.cascade === true ? ` CASCADE` : ''};`;
   }
 
   public truncate<
     Entity extends Record<string, unknown> = Record<string, unknown>,
   >(query: TruncateTableQuery): string {
     return `TRUNCATE TABLE ${
-      this.quoteColumn((query.schema ? query.schema + "." : "") + query.table)
+      this.quoteColumn((query.schema ? query.schema + '.' : '') + query.table)
     };`;
   }
 
   protected _processColumnType(column: BaseColumnDefinition): string {
     const type = this._config.dataTypes[column.type],
-      length = (column.length) ? `(${column.length})` : "",
-      nullable = (column.isNullable === true) ? "" : " NOT NULL";
+      length = (column.length) ? `(${column.length})` : '',
+      nullable = (column.isNullable === true) ? '' : ' NOT NULL';
     // defaultValue = (column.defaults?.insert !== undefined) ? ` DEFAULT ${this.quoteValue(column.defaults?.insert)}` : "";
     return `${type}${length}${nullable}`;
   }
@@ -373,29 +373,29 @@ export class QueryTranslator {
   >(
     columns: Record<keyof Entity, string>,
     filter: QueryFilter<Entity>,
-    joiner = "AND",
+    joiner = 'AND',
   ): string {
     const ret: Array<string> = [];
     if (Array.isArray(filter)) {
       filter.forEach((value) => {
-        ret.push(this._processFilters(columns, value, "AND"));
+        ret.push(this._processFilters(columns, value, 'AND'));
       });
-    } else if (typeof filter === "object") {
+    } else if (typeof filter === 'object') {
       // Parse through the object
       for (const [columnName, operation] of Object.entries(filter)) {
-        if (columnName === "$and" || columnName === "$or") {
+        if (columnName === '$and' || columnName === '$or') {
           ret.push(
             this._processFilters(
               columns,
               operation as QueryFilter<Entity>,
-              (columnName === "$or") ? "OR" : "AND",
+              (columnName === '$or') ? 'OR' : 'AND',
             ),
           );
           // } else if (!columns[columnName]) {
           //   throw new Error(`[module=norm] Column ${columnName} is not part of column list for filtering`)
         } else {
           // No its a variable
-          if (typeof operation === "object") {
+          if (typeof operation === 'object') {
             // Parse the operator
             for (
               const [operator, operatorValue] of Object.entries(
@@ -404,56 +404,56 @@ export class QueryTranslator {
             ) {
               // Hack for boolean
               switch (operator) {
-                case "$eq":
+                case '$eq':
                   ret.push(
                     `${this.quoteColumn(columns[columnName])} = ${
                       this.quoteValue(operatorValue)
                     }`,
                   );
                   break;
-                case "$neq":
+                case '$neq':
                   ret.push(
                     `${this.quoteColumn(columns[columnName])} != ${
                       this.quoteValue(operatorValue)
                     }`,
                   );
                   break;
-                case "$in":
+                case '$in':
                   ret.push(
                     `${this.quoteColumn(columns[columnName])} IN ${
                       this.quoteValue(operatorValue)
                     }`,
                   );
                   break;
-                case "$nin":
+                case '$nin':
                   ret.push(
                     `${this.quoteColumn(columns[columnName])} NOT IN ${
                       this.quoteValue(operatorValue)
                     }`,
                   );
                   break;
-                case "$lt":
+                case '$lt':
                   ret.push(
                     `${this.quoteColumn(columns[columnName])} < ${
                       this.quoteValue(operatorValue)
                     }`,
                   );
                   break;
-                case "$lte":
+                case '$lte':
                   ret.push(
                     `${this.quoteColumn(columns[columnName])} <= ${
                       this.quoteValue(operatorValue)
                     }`,
                   );
                   break;
-                case "$gt":
+                case '$gt':
                   ret.push(
                     `${this.quoteColumn(columns[columnName])} > ${
                       this.quoteValue(operatorValue)
                     }`,
                   );
                   break;
-                case "$gte":
+                case '$gte':
                   ret.push(
                     `${this.quoteColumn(columns[columnName])} >= ${
                       this.quoteValue(operatorValue)
@@ -461,7 +461,7 @@ export class QueryTranslator {
                   );
                   break;
                 // deno-lint-ignore no-case-declarations
-                case "$between":
+                case '$between':
                   const opval = operatorValue as {
                     $from: unknown;
                     $to: unknown;
@@ -472,7 +472,7 @@ export class QueryTranslator {
                     }' AND '${this.quoteValue(opval.$to)}'`,
                   );
                   break;
-                case "$null":
+                case '$null':
                   if (operatorValue === true) {
                     ret.push(
                       `${this.quoteColumn(columns[columnName])} IS NULL`,
@@ -483,28 +483,28 @@ export class QueryTranslator {
                     );
                   }
                   break;
-                case "$like":
+                case '$like':
                   ret.push(
                     `${this.quoteColumn(columns[columnName])} LIKE ${
                       this.quoteValue(operatorValue)
                     }`,
                   );
                   break;
-                case "$nlike":
+                case '$nlike':
                   ret.push(
                     `${this.quoteColumn(columns[columnName])} NOT LIKE ${
                       this.quoteValue(operatorValue)
                     }`,
                   );
                   break;
-                case "$ilike":
+                case '$ilike':
                   ret.push(
                     `${this.quoteColumn(columns[columnName])} ILIKE ${
                       this.quoteValue(operatorValue)
                     }`,
                   );
                   break;
-                case "$nilike":
+                case '$nilike':
                   ret.push(
                     `${this.quoteColumn(columns[columnName])} NOT ILIKE ${
                       this.quoteValue(operatorValue)
@@ -512,7 +512,7 @@ export class QueryTranslator {
                   );
                   break;
                 default:
-                  // TODO - Handle this
+                  // TODO(@abhinav) - Handle this
                   throw new Error(`Unknown operator ${operator}`);
               }
             }
@@ -531,7 +531,7 @@ export class QueryTranslator {
     // return "(" + ret.join(` ${joiner} `) + ")";
     // Ensure we have processed a filter
     if (ret.length === 0) {
-      return "";
+      return '';
     }
     let retVal = `( `;
     retVal += ret.reduce((prev, curr, index) => {

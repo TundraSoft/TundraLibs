@@ -1,4 +1,4 @@
-export type JWTAlgo = "HS256" | "HS384" | "HS512";
+export type JWTAlgo = 'HS256' | 'HS384' | 'HS512';
 
 export type JWTOptions = {
   algo: JWTAlgo;
@@ -7,7 +7,7 @@ export type JWTOptions = {
 };
 
 export type JWTHeaders = {
-  typ: "JWT";
+  typ: 'JWT';
   alg: JWTAlgo;
 };
 

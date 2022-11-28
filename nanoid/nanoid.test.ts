@@ -6,8 +6,8 @@ import {
   numbers,
   password,
   webSafe,
-} from "./mod.ts";
-import { assertEquals, assertMatch } from "../dev_dependencies.ts";
+} from './mod.ts';
+import { assertEquals, assertMatch } from '/root/dev.dependencies.ts';
 
 //#region Begin variable definition
 const sampleSize = 10000,
@@ -29,7 +29,7 @@ const sampleSize = 10000,
  * Check if the length of the generated id matches requested length
  */
 Deno.test({
-  name: "Check for length consistency on sample set of " + sampleSize,
+  name: 'Check for length consistency on sample set of ' + sampleSize,
   fn() {
     for (let i = minLength; i <= maxLength; i++) {
       dictionary.forEach((dict) => {
@@ -48,7 +48,7 @@ Deno.test({
  * Checks if the generated ID uses the characters present in dictionary
  */
 Deno.test({
-  name: "Ensure only allowed characters are present on sample set of " +
+  name: 'Ensure only allowed characters are present on sample set of ' +
     sampleSize,
   fn() {
     for (let i = minLength; i <= maxLength; i++) {

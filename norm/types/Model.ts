@@ -1,7 +1,7 @@
-import { BaseColumnDefinition } from "./Query/mod.ts";
-import { DataTypeMap } from "./DataTypes.ts";
-import type { DataType } from "./DataTypes.ts";
-import type { GuardianProxy } from "../../guardian/mod.ts";
+import { BaseColumnDefinition } from './Query/mod.ts';
+import { DataTypeMap } from './DataTypes.ts';
+import type { DataType } from './DataTypes.ts';
+import type { GuardianProxy } from '/root/guardian/mod.ts';
 // import { StringGuardian } from "../../guardian/Guardians/StringGuardian.ts";
 
 export type ModelColumnDefinition = {
@@ -11,7 +11,7 @@ export type ModelColumnDefinition = {
   // deno-lint-ignore no-explicit-any
   validation?: GuardianProxy<any>;
   // computed?: (row: Record<string, unknown>) => typeof DataTypeMap[BaseColumnDefinition['type']] | Promise<typeof DataTypeMap[BaseColumnDefinition['type']]>;
-  security?: "ENCRYPT" | "HASH"; // encrypt will encrypt the value while hash will perform a SHA-256 on the value. NOTE, hash is one way, i.e cannot decrypt
+  security?: 'ENCRYPT' | 'HASH'; // encrypt will encrypt the value while hash will perform a SHA-256 on the value. NOTE, hash is one way, i.e cannot decrypt
   // decryptOnRead?: boolean; // Decrypt data on read?
   project?: boolean; // Select this column? (on select, insert and update)
 } & BaseColumnDefinition;
@@ -25,7 +25,7 @@ export type ModelDefinition = {
   columns: {
     [key: string]: ModelColumnDefinition;
   };
-  // TODO - Not implemented
+  // TODO(@abhinav) - Not implemented
   audit?: {
     schema?: string;
     table: string;
@@ -63,7 +63,7 @@ type ExtractTypes<T extends { [K in keyof T]: ModelColumnDefinition }> =
   PartialPartial<
     {
       -readonly [K in keyof T]: ReturnType<
-        typeof DataTypeMap[T[K]["type"]]
+        typeof DataTypeMap[T[K]['type']]
       >;
     },
     KeysMatching<T, { isNullable: true }>
@@ -77,7 +77,7 @@ type ExtractTypes<T extends { [K in keyof T]: ModelColumnDefinition }> =
 
 export type ModelType<P extends ModelDefinition> = ExtractTypes<
   {
-    [X in keyof P["columns"]]: P["columns"][X];
+    [X in keyof P['columns']]: P['columns'][X];
   }
 > //  & {
 ; //   [X in keyof P['foreignKeys']]?: string

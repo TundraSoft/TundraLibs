@@ -1,6 +1,6 @@
-import { BaseHandler } from "../BaseHandler.ts";
-import type { CustomHandlerOptions } from "../types.ts";
-import { Syslog } from "../../syslog/mod.ts";
+import { BaseHandler } from '../BaseHandler.ts';
+import type { CustomHandlerOptions } from '../types.ts';
+import { Syslog } from '/root/syslog/mod.ts';
 
 /**
  * CustomHandler

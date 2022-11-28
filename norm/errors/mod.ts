@@ -1,4 +1,4 @@
-export { NormError } from "./NormError.ts";
+export { NormError } from './NormError.ts';
 export {
   CommunicationError,
   ConnectionError,
@@ -11,4 +11,4 @@ export {
   ModelPermissionError,
   ModelValidationError,
   QueryError,
-} from "./NormError.ts";
+} from './NormError.ts';

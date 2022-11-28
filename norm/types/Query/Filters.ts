@@ -39,4 +39,4 @@ type TT = {
   b: number;
 };
 const a: QueryFilter<TT> = {};
-a["a"] = "123";
+a['a'] = '123';

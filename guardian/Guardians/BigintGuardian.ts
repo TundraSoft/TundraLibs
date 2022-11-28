@@ -1,10 +1,10 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { type } from "../utils/mod.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { type } from '../utils/mod.ts';
 import type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
-} from "../types/mod.ts";
+} from '../types/mod.ts';
 
 /**
  * BigintGuardian
@@ -136,4 +136,4 @@ export class BigintGuardian<
   //#endregion Validators
 }
 
-export const bigintGuard = new BigintGuardian(type("bigint")).proxy();
+export const bigintGuard = new BigintGuardian(type('bigint')).proxy();

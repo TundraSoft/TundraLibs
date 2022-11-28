@@ -1,9 +1,9 @@
-import { GuardianError, numberGuard } from "../mod.ts";
+import { GuardianError, numberGuard } from '../mod.ts';
 
-import { assertEquals, assertThrows } from "../../dev_dependencies.ts";
+import { assertEquals, assertThrows } from '/root/dev.dependencies.ts';
 
 Deno.test({
-  name: "Number - Test basic string validation",
+  name: 'Number - Test basic string validation',
   fn(): void {
     assertEquals(numberGuard.integer()(123123), 123123);
     assertEquals(numberGuard.min(10)(15), 15);
@@ -17,19 +17,19 @@ Deno.test({
 });
 
 Deno.test({
-  name: "Number - Check if correct error message is coming",
+  name: 'Number - Check if correct error message is coming',
   fn(): void {
     assertThrows(
       () =>
-        numberGuard.integer("Value is not a valid Integer")(123456789.234234),
+        numberGuard.integer('Value is not a valid Integer')(123456789.234234),
       GuardianError,
-      "Value is not a valid Integer",
+      'Value is not a valid Integer',
     );
   },
 });
 
 Deno.test({
-  name: "Number - Transform to Date",
+  name: 'Number - Transform to Date',
   fn(): void {
     const ts = 1661066144083,
       dt = new Date(ts);

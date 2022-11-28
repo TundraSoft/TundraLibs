@@ -1,30 +1,30 @@
 export default {
-  name: "UserGroups",
-  table: "UserGroups",
-  schema: "DuperSchema",
-  connection: "default",
+  name: 'UserGroups',
+  table: 'UserGroups',
+  schema: 'DuperSchema',
+  connection: 'default',
   columns: {
     UserId: {
-      type: "INTEGER",
+      type: 'INTEGER',
     },
     GroupId: {
-      type: "INTEGER",
+      type: 'INTEGER',
     },
   },
   uniqueKeys: {
-    "user_group": new Set(["UserId", "GroupId"]),
+    'user_group': new Set(['UserId', 'GroupId']),
   },
   foreignKeys: {
-    "user": {
-      model: "User",
+    'user': {
+      model: 'Users',
       relationShip: {
-        UserId: "Id",
+        UserId: 'Id',
       },
     },
-    "group": {
-      model: "Groups",
+    'group': {
+      model: 'Groups',
       relationShip: {
-        GroupId: "Id",
+        GroupId: 'Id',
       },
     },
   },

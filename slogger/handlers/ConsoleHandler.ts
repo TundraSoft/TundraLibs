@@ -1,6 +1,6 @@
-import { BaseHandler } from "../BaseHandler.ts";
-import type { ConsoleHandlerOptions } from "../types.ts";
-import { Syslog } from "../../syslog/mod.ts";
+import { BaseHandler } from '../BaseHandler.ts';
+import type { ConsoleHandlerOptions } from '../types.ts';
+import { Syslog } from '/root/syslog/mod.ts';
 
 import {
   blue,
@@ -11,7 +11,7 @@ import {
   red,
   underline,
   yellow,
-} from "../../dependencies.ts";
+} from '/root/dependencies.ts';
 
 /**
  * ConsoleHandler

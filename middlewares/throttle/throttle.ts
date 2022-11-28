@@ -1,5 +1,5 @@
-import { Middleware } from "../../dependencies.ts";
-import { ThrottleOptions } from "./types.ts";
+import { Middleware } from '/root/dependencies.ts';
+import { ThrottleOptions } from './types.ts';
 
 type ThrottleStorage = {
   count: number;
@@ -8,9 +8,9 @@ type ThrottleStorage = {
 
 export const throttle = (options: Partial<ThrottleOptions>): Middleware => {
   const defOptions = {
-      limitHeader: "X-RateLimit-Limit",
-      remainingHeader: "X-RateLimit-Remaining",
-      resetHeader: "X-RateLimit-Reset",
+      limitHeader: 'X-RateLimit-Limit',
+      remainingHeader: 'X-RateLimit-Remaining',
+      resetHeader: 'X-RateLimit-Reset',
       window: 60,
       limit: 30,
     },
@@ -19,9 +19,9 @@ export const throttle = (options: Partial<ThrottleOptions>): Middleware => {
   return async (ctx, next) => {
     // Get identifier
     //#region Identifier
-    const id = ctx.request.headers.get("X-Forwarded-For") || ctx.request.ip;
+    const id = ctx.request.headers.get('X-Forwarded-For') || ctx.request.ip;
     // IP Based
-    ctx.request.headers.get("X-Forwarded-For") || ctx.request.ip;
+    ctx.request.headers.get('X-Forwarded-For') || ctx.request.ip;
     // Header then we use X-Client-Id or equivalent
     if (opt.trackingHeader) {
       ctx.request.headers.get(opt.trackingHeader);
@@ -62,11 +62,11 @@ export const throttle = (options: Partial<ThrottleOptions>): Middleware => {
         `${ts - (usage.lastRequest + window)}`,
       );
       ctx.response.headers.set(
-        "Retry-After",
+        'Retry-After',
         `${ts - (usage.lastRequest + window)}`,
       );
       ctx.response.status = 429;
-      ctx.response.body = "Rate limit exceeded";
+      ctx.response.body = 'Rate limit exceeded';
       ctx.respond = true;
       return;
     }

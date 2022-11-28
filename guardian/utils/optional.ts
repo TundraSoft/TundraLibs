@@ -1,4 +1,4 @@
-import { FunctionType, MergeParameters } from "../types/mod.ts";
+import { FunctionType, MergeParameters } from '../types/mod.ts';
 
 export function optional<F extends FunctionType, R = undefined>(
   guardian: F,
@@ -10,7 +10,7 @@ export function optional<F extends FunctionType, R = undefined>(
   return (
     ...args: MergeParameters<Parameters<F> | [(undefined | null)?]>
   ): ReturnType<F> | R => {
-    if (args[0] == null || args[0] === "") {
+    if (args[0] == null || args[0] === '') {
       return defaultValue as R;
     }
     return guardian(...args);

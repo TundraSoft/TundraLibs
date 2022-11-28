@@ -1,6 +1,6 @@
-import { path, toml, yaml } from "../dependencies.ts";
-import type { ConfigFile } from "./types.ts";
-import { Sysinfo } from "../sysinfo/mod.ts";
+import { fs, path, toml, yaml } from '/root/dependencies.ts';
+import type { ConfigFile } from './types.ts';
+import { Sysinfo } from '/root/sysinfo/mod.ts';
 
 export class Config {
   static #configs: Map<string, Record<string, unknown>> = new Map();
@@ -17,62 +17,19 @@ export class Config {
    * @param path string Config path, defaults to ./configs
    * @returns boolean True if file was found and loaded, else false
    */
-  static async load(name: string, path = "./configs"): Promise<boolean> {
+  static async load(name: string, path = './configs'): Promise<void> {
     await Config._initEnv();
     //#region Test read permission
     const readPerm =
-      await (await Deno.permissions.query({ name: "read", path: path })).state;
-    if (readPerm !== "granted") {
+      await (await Deno.permissions.query({ name: 'read', path: path })).state;
+    if (readPerm !== 'granted') {
       throw new Error(`Read permission is required for path: ${path}`);
     }
     //#endregion
     name = name.toLowerCase().trim();
-    //#region Handle different extentions
-    const configFiles: ReadonlyArray<ConfigFile> = [
-      {
-        basePath: path,
-        fileName: name,
-        // configMode: mode,
-        type: "JSON",
-        extention: "json",
-      },
-      {
-        basePath: path,
-        fileName: name,
-        // configMode: mode,
-        type: "YAML",
-        extention: "yaml",
-      },
-      {
-        basePath: path,
-        fileName: name,
-        // configMode: mode,
-        type: "YAML",
-        extention: "yml",
-      },
-      {
-        basePath: path,
-        fileName: name,
-        // configMode: mode,
-        type: "TOML",
-        extention: "toml",
-      },
-    ];
-    //#endregion Handle different extentions
 
-    //#region Load the file
-    for (const configFile of configFiles) {
-      try {
-        const data = await Config._loadConfig(configFile);
-        this.#configFiles.set(name, configFile);
-        this.#configs.set(name, data);
-        return true;
-      } catch {
-        // continue regardless of error
-      }
-    }
-    return false;
-    //#endregion Load the file
+    const data = await Config._loadConfig(path, name);
+    this.#configs.set(name, data);
   }
 
   /**
@@ -112,7 +69,7 @@ export class Config {
       let data = JSON.stringify(config);
       if (Config.#env && Config.#env.size > 0) {
         Config.#env.forEach((value, key) => {
-          const regex = new RegExp("\\$" + key + "", "g");
+          const regex = new RegExp('\\$' + key + '', 'g');
           data = data.replaceAll(regex, value);
         });
       }
@@ -157,34 +114,39 @@ export class Config {
    * Actually loads the config data from the file. Basis file type, it will parse and return the data
    * as a json object.
    *
-   * @param data ConfigFile The config file to search for & load
+   * @param basePath string The base path to the config file
+   * @param name string The name of the config file
    * @returns Promise<Record<string, unknown>> The parsed config information
    */
   protected static async _loadConfig(
-    data: ConfigFile,
+    basePath: string,
+    fileName: string,
   ): Promise<Record<string, unknown>> {
-    const fileName = `${data.fileName}.${data.extention}`;
-    const filePath = path.join(data.basePath, fileName);
-    let config: Record<string, unknown>,
-      content: string;
-    switch (data.type) {
-      case "JSON":
-        content = await Deno.readTextFile(filePath);
-        config = JSON.parse(content);
-        break;
-      case "TOML":
-        content = await Deno.readTextFile(filePath);
-        config = toml.parse(content);
-        break;
-      case "YAML":
-        content = await Deno.readTextFile(filePath);
-        config = yaml.parse(content) as Record<string, unknown>;
-        break;
-      default:
-        config = {};
-        break;
+    // Loop through and find the file
+    let content: string;
+    for await (const file of Deno.readDir(basePath)) {
+      if (file.isFile) {
+        const st = path.parse(file.name);
+        if (st.name.toLowerCase() === fileName) {
+          switch (st.ext.toUpperCase()) {
+            case '.JSON':
+            case '.JS':
+              content = await Deno.readTextFile(path.join(basePath, file.name));
+              return JSON.parse(content);
+            case '.TOML':
+              content = await Deno.readTextFile(path.join(basePath, file.name));
+              return toml.parse(content);
+            case '.YAML':
+            case '.YML':
+              content = await Deno.readTextFile(path.join(basePath, file.name));
+              return yaml.parse(content) as Record<string, unknown>;
+            default:
+              throw new Error(`Unknown file type: ${st.ext}`);
+          }
+        }
+      }
     }
-    return config as Record<string, unknown>;
+    throw new Error(`Could not find config file: ${fileName}`);
   }
 
   /**

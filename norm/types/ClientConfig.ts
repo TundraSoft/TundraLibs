@@ -1,4 +1,4 @@
-import { Dialects } from "./Dialects.ts";
+import { Dialects } from './Dialects.ts';
 
 export type ClientConfig = {
   dialect: Dialects;
@@ -8,7 +8,7 @@ export type ClientConfig = {
 export type SQLiteConfig = ClientConfig & {
   dbPath: string;
   memory?: boolean;
-  mode?: "read" | "write" | "create";
+  mode?: 'read' | 'write' | 'create';
 };
 
 type BasicConnection = {
@@ -39,5 +39,5 @@ export type MariaConfig = BasicConnection & {
 };
 
 export type MongoDBConfig = BasicConnection & {
-  authMechanism?: "SCRAM-SHA-1" | "SCRAM-SHA-256" | "MONGODB-X509";
+  authMechanism?: 'SCRAM-SHA-1' | 'SCRAM-SHA-256' | 'MONGODB-X509';
 };

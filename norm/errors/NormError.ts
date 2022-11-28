@@ -1,12 +1,16 @@
-import type { ModelValidation } from "../types/mod.ts";
-import type { Dialects, QueryOption, QueryType } from "../types/mod.ts";
+import type {
+  Dialects,
+  ModelValidation,
+  QueryOption,
+  QueryType,
+} from '../types/mod.ts';
 
 export class NormError extends Error {
-  protected static _module = "norm";
+  protected static _module = 'norm';
   protected _dialect: string;
   protected _connectionName: string;
 
-  constructor(message: string, connectionName = "-", dialect = "-") {
+  constructor(message: string, connectionName = '-', dialect = '-') {
     super(NormError._makeMessage(message, connectionName, dialect));
     this._dialect = dialect;
     this._connectionName = connectionName;
@@ -101,8 +105,8 @@ export class ModelError extends NormError {
   constructor(
     message: string,
     model: string,
-    connectionName = "-",
-    dialect = "-",
+    connectionName = '-',
+    dialect = '-',
   ) {
     super(message, connectionName, dialect);
     this._model = model;
@@ -141,9 +145,9 @@ export class ModelColumnNotDefined extends ModelError {
 }
 
 export class ModelPermissionError extends ModelError {
-  protected _permission: "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "TRUNCATE";
+  protected _permission: 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'TRUNCATE';
   constructor(
-    permission: "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "TRUNCATE",
+    permission: 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'TRUNCATE',
     model: string,
     connectionName: string,
   ) {
@@ -156,7 +160,7 @@ export class ModelPermissionError extends ModelError {
     Object.setPrototypeOf(this, ModelPermissionError.prototype);
   }
 
-  get permission(): "SELECT" | "INSERT" | "UPDATE" | "DELETE" | "TRUNCATE" {
+  get permission(): 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'TRUNCATE' {
     return this._permission;
   }
 }

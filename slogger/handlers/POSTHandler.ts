@@ -1,6 +1,6 @@
-import { BaseHandler } from "../BaseHandler.ts";
-import { Syslog } from "../../syslog/mod.ts";
-import type { POSTHandlerOptions } from "../types.ts";
+import { BaseHandler } from '../BaseHandler.ts';
+import { Syslog } from '/root/syslog/mod.ts';
+import type { POSTHandlerOptions } from '../types.ts';
 
 /**
  * POSTHandler
@@ -17,7 +17,7 @@ export class POSTHandler extends BaseHandler<POSTHandlerOptions> {
     let formData: FormData;
     let header: Headers;
     if (this._options.headers) {
-      if (typeof this._options.headers === "function") {
+      if (typeof this._options.headers === 'function') {
         header = await this._options.headers();
       } else {
         header = this._options.headers;
@@ -35,7 +35,7 @@ export class POSTHandler extends BaseHandler<POSTHandlerOptions> {
     }
     // Headers
     await fetch(this._options.url, {
-      method: "POST",
+      method: 'POST',
       headers: header,
       body: formData,
     });

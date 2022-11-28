@@ -5,14 +5,14 @@ import type {
   MaybeAsync,
   MergeParameters,
   ResolvedValue,
-} from "./types/mod.ts";
-import { equals, isPromiseLike, oneOf, optional, test } from "./utils/mod.ts";
+} from './types/mod.ts';
+import { equals, isPromiseLike, oneOf, optional, test } from './utils/mod.ts';
 
-import { GuardianError } from "./error/mod.ts";
+import { GuardianError } from './error/mod.ts';
 
 export interface GuardianConstructor<
   V extends BaseGuardian<F>,
-  F extends FunctionType = V["guardian"],
+  F extends FunctionType = V['guardian'],
 > {
   new (guardian: F): V;
 }

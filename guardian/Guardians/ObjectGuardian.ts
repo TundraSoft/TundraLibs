@@ -1,6 +1,6 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { type } from "../utils/mod.ts";
-import type { FunctionParameters, FunctionType } from "../types/mod.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { type } from '../utils/mod.ts';
+import type { FunctionParameters, FunctionType } from '../types/mod.ts';
 
 /**
  * ObjectGuardian
@@ -16,4 +16,4 @@ export class ObjectGuardian<
   extends BaseGuardian<FunctionType<object, P>> {
 }
 
-export const objectGuard = new ObjectGuardian(type("object")).proxy();
+export const objectGuard = new ObjectGuardian(type('object')).proxy();

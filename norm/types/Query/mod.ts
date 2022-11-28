@@ -1,7 +1,7 @@
-export { QueryTypes } from "./QueryTypes.ts";
-export type { QueryType } from "./QueryTypes.ts";
+export { QueryTypes } from './QueryTypes.ts';
+export type { QueryType } from './QueryTypes.ts';
 
-export type { FilterOperators, QueryFilter } from "./Filters.ts";
+export type { FilterOperators, QueryFilter } from './Filters.ts';
 export type {
   BaseColumnDefinition,
   BaseQueryOptions,
@@ -19,6 +19,6 @@ export type {
   Sorting,
   TruncateTableQuery,
   UpdateQuery,
-} from "./QueryOptions.ts";
+} from './QueryOptions.ts';
 
-export type { QueryResult } from "./QueryResult.ts";
+export type { QueryResult } from './QueryResult.ts';

@@ -1,10 +1,10 @@
 export const enum Dialect {
-  POSTGRES = "POSTGRES",
-  MYSQL = "MYSQL",
-  SQLITE = "SQLITE",
-  MARIADB = "MARIADB",
+  POSTGRES = 'POSTGRES',
+  MYSQL = 'MYSQL',
+  SQLITE = 'SQLITE',
+  MARIADB = 'MARIADB',
   // MSSQL = "MSSQL",
-  MONGODB = "MONGODB",
+  MONGODB = 'MONGODB',
 }
 
 export type Dialects = keyof typeof Dialect;

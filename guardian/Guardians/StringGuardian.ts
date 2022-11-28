@@ -1,13 +1,13 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { DateGuardian } from "./DateGuardian.ts";
-import { type } from "../utils/mod.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { DateGuardian } from './DateGuardian.ts';
+import { type } from '../utils/mod.ts';
 import type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
-} from "../types/mod.ts";
+} from '../types/mod.ts';
 
-import { parseDate } from "../../dependencies.ts";
+import { parseDate } from '../../dependencies.ts';
 /**
  * StringGuardian
  *
@@ -63,9 +63,9 @@ export class StringGuardian<
    */
   camelCase(): GuardianProxy<this> {
     return this.transform((str: string) =>
-      str.replace(/[^a-zA-Z0-9]/g, " ").split(" ").map((word) =>
+      str.replace(/[^a-zA-Z0-9]/g, ' ').split(' ').map((word) =>
         word.charAt(0).toUpperCase() + word.slice(1)
-      ).join("")
+      ).join('')
     );
   }
 
@@ -78,9 +78,9 @@ export class StringGuardian<
    */
   snakeCase(): GuardianProxy<this> {
     return this.transform((str: string) =>
-      str.replace(/[^a-zA-Z0-9]/g, " ").split(" ").map((word) =>
+      str.replace(/[^a-zA-Z0-9]/g, ' ').split(' ').map((word) =>
         word.charAt(0).toLowerCase() + word.slice(1)
-      ).join("_")
+      ).join('_')
     );
   }
 
@@ -108,7 +108,7 @@ export class StringGuardian<
     return this.transform((str: string) => str.replace(search, replace));
   }
 
-  toDate(format = "YYYY-MM-dd"): GuardianProxy<DateGuardian<P>> {
+  toDate(format = 'YYYY-MM-dd'): GuardianProxy<DateGuardian<P>> {
     return this.transform((str: string) => parseDate(str, format));
   }
   //#endregion Manipulators
@@ -574,4 +574,4 @@ export class StringGuardian<
   //#endregion Validators
 }
 
-export const stringGuard = new StringGuardian(type("string")).proxy();
+export const stringGuard = new StringGuardian(type('string')).proxy();

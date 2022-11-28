@@ -1,4 +1,4 @@
-import type { ModelDefinition, ModelType } from "./Model.ts";
+import type { ModelDefinition, ModelType } from './Model.ts';
 
 export type SchemaDefinition = Record<string, ModelDefinition>;
 

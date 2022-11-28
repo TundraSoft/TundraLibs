@@ -1,13 +1,13 @@
-import { Guardian, GuardianError, Struct } from "../mod.ts";
-import type { Type } from "../mod.ts";
+import { Guardian, GuardianError, Struct } from '../mod.ts';
+import type { Type } from '../mod.ts';
 
-import { assertEquals, assertThrows } from "../../dev_dependencies.ts";
+import { assertEquals, assertThrows } from '/root/dev.dependencies.ts';
 
 const userSchema = Struct({
   id: Guardian.number().gt(0).lte(100),
   name: Guardian.string().min(3),
   email: Guardian.string().email(),
-  dob: Guardian.date().min(new Date("01-01-1975")),
+  dob: Guardian.date().min(new Date('01-01-1975')),
   orders: Guardian.array().of(
     {
       id: Guardian.number().gt(0).lte(100),
@@ -22,7 +22,7 @@ const userSchemaPartial = Struct(
     id: Guardian.number().gt(0).lte(100),
     name: Guardian.string().min(3),
     email: Guardian.string().email(),
-    dob: Guardian.date().min(new Date("01-01-1975")),
+    dob: Guardian.date().min(new Date('01-01-1975')),
     orders: Guardian.array().of(
       {
         id: Guardian.number().gt(0).lte(100),
@@ -31,7 +31,7 @@ const userSchemaPartial = Struct(
     ).optional(),
   },
   undefined,
-  "DEFINED",
+  'DEFINED',
 );
 
 const userSchemaAny = Struct(
@@ -39,7 +39,7 @@ const userSchemaAny = Struct(
     id: Guardian.number().gt(0).lte(100),
     name: Guardian.string().min(3),
     email: Guardian.string().email(),
-    dob: Guardian.date().min(new Date("01-01-1975")),
+    dob: Guardian.date().min(new Date('01-01-1975')),
     orders: Guardian.array().of(
       {
         id: Guardian.number().gt(0).lte(100),
@@ -48,39 +48,39 @@ const userSchemaAny = Struct(
     ).optional(),
   },
   undefined,
-  "ALL",
+  'ALL',
 );
 
 const data: string[] = [];
 data.push(JSON.stringify({
   id: 1,
-  name: "Abhinav",
-  email: "aaa@aaa.com",
-  dob: new Date("01-01-1975"),
+  name: 'Abhinav',
+  email: 'aaa@aaa.com',
+  dob: new Date('01-01-1975'),
   orders: [
     {
       id: 1,
-      name: "Order 1",
+      name: 'Order 1',
     },
   ],
 }));
 data.push(JSON.stringify({
   id: 10,
-  name: "Abhinav",
-  email: "adsf@gmail.com",
-  dob: new Date("01-01-1975"),
+  name: 'Abhinav',
+  email: 'adsf@gmail.com',
+  dob: new Date('01-01-1975'),
 }));
 
 data.push(JSON.stringify({
   id: 1,
-  name: "Abhinav",
-  email: "aaa@aaa.com",
-  dob: new Date("01-01-1975"),
-  sex: "male",
+  name: 'Abhinav',
+  email: 'aaa@aaa.com',
+  dob: new Date('01-01-1975'),
+  sex: 'male',
   orders: [
     {
       id: 1,
-      name: "Order 1",
+      name: 'Order 1',
     },
   ],
 }));
@@ -89,7 +89,7 @@ data.push(JSON.stringify({
  * Check if option is initialized correctly (Typed)
  */
 Deno.test({
-  name: "Struct - Check STRICT mode",
+  name: 'Struct - Check STRICT mode',
   fn(): void {
     assertEquals(
       JSON.parse(JSON.stringify(userSchema(JSON.parse(data[0])))),
@@ -109,7 +109,7 @@ Deno.test({
  * Partial Mode
  */
 Deno.test({
-  name: "Struct - Check DEFINED mode",
+  name: 'Struct - Check DEFINED mode',
   fn(): void {
     assertEquals(
       JSON.parse(JSON.stringify(userSchemaPartial(JSON.parse(data[0])))),
@@ -121,7 +121,7 @@ Deno.test({
     );
     // Junk will be ignored
     const op = JSON.parse(data[2]);
-    delete op["sex"];
+    delete op['sex'];
     assertEquals(
       JSON.parse(JSON.stringify(userSchemaPartial(JSON.parse(data[2])))),
       op,
@@ -134,7 +134,7 @@ Deno.test({
  * ALL Mode
  */
 Deno.test({
-  name: "Struct - Check ALL mode",
+  name: 'Struct - Check ALL mode',
   fn(): void {
     assertEquals(
       JSON.parse(JSON.stringify(userSchemaAny(JSON.parse(data[0])))),

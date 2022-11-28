@@ -1,7 +1,7 @@
-import { Context } from "../../dependencies.ts";
+import { Context } from '../../dependencies.ts';
 // import type { HTTPMethods } from "../../dependencies.ts";
-import { ParsedRequest } from "./ParsedRequest.ts";
-import type { HTTPResponse } from "./HTTPResponse.ts";
+import { ParsedRequest } from './ParsedRequest.ts';
+import type { HTTPResponse } from './HTTPResponse.ts';
 
 export type PostBodyParseHandler = (
   req: ParsedRequest,

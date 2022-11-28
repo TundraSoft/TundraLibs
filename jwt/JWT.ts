@@ -1,8 +1,8 @@
-import { Options } from "../options/mod.ts";
-import { alphaNumeric, nanoid } from "../nanoid/mod.ts";
-import { base64url } from "../dependencies.ts";
+import { Options } from '/root/options/mod.ts';
+import { alphaNumeric, nanoid } from '/root/nanoid/mod.ts';
+import { base64url } from '/root/dependencies.ts';
 
-import { JWTClaims, JWTHeaders, JWTOptions } from "./types.ts";
+import { JWTClaims, JWTHeaders, JWTOptions } from './types.ts';
 
 export class JWT extends Options<JWTOptions> {
   #key!: CryptoKey;
@@ -16,12 +16,12 @@ export class JWT extends Options<JWTOptions> {
    */
   constructor(options: Partial<JWTOptions>) {
     const defaults: Partial<JWTOptions> = {
-      algo: "HS256",
-      issuer: "Tundrasoft",
+      algo: 'HS256',
+      issuer: 'Tundrasoft',
     };
     super(options, defaults);
-    if (!this._hasOption("key")) {
-      throw new Error("[module='JWT'] Encryption key must be provided");
+    if (!this._hasOption('key')) {
+      throw new Error('[module=\'JWT\'] Encryption key must be provided');
     }
   }
 
@@ -42,7 +42,7 @@ export class JWT extends Options<JWTOptions> {
   async sign(claim: JWTClaims): Promise<string> {
     await this._importKey();
     const defaults: Partial<JWTClaims> = {
-      iss: this._getOption("issuer"),
+      iss: this._getOption('issuer'),
       nbf: JWT.setDate(),
       iat: JWT.setDate(),
       jti: nanoid(16, alphaNumeric),
@@ -50,13 +50,13 @@ export class JWT extends Options<JWTOptions> {
     claim = { ...defaults, ...claim };
     this._validateClaims(claim);
     const headers: JWTHeaders = {
-        typ: "JWT",
-        alg: this._getOption("algo"),
+        typ: 'JWT',
+        alg: this._getOption('algo'),
       },
       input = `${base64url.encode(JSON.stringify(headers))}.${
         base64url.encode(JSON.stringify(claim))
       }`,
-      sign = await crypto.subtle.sign("HMAC", this.#key, this._encode(input));
+      sign = await crypto.subtle.sign('HMAC', this.#key, this._encode(input));
     return `${input}.${base64url.encode(sign)}`;
   }
 
@@ -73,7 +73,7 @@ export class JWT extends Options<JWTOptions> {
     await this._importKey();
     const { headers, claim, signature } = this.parseToken(token),
       verify = await crypto.subtle.verify(
-        "HMAC",
+        'HMAC',
         this.#key,
         base64url.decode(signature),
         this._encode(
@@ -84,7 +84,9 @@ export class JWT extends Options<JWTOptions> {
       );
 
     if (!verify) {
-      throw new Error("[module='JWT'] Signature verification of token failed");
+      throw new Error(
+        '[module=\'JWT\'] Signature verification of token failed',
+      );
     }
     this._validateClaims(claim);
     return claim;
@@ -101,9 +103,9 @@ export class JWT extends Options<JWTOptions> {
   parseToken(
     token: string,
   ): { headers: JWTHeaders; claim: JWTClaims; signature: string } {
-    const tokenParts = token.split(".");
+    const tokenParts = token.split('.');
     if (tokenParts.length != 3) {
-      throw new Error("[module='JWT'] Invalid token provided");
+      throw new Error('[module=\'JWT\'] Invalid token provided');
     }
     const headers = JSON.parse(
         new TextDecoder().decode(base64url.decode(tokenParts[0])),
@@ -131,12 +133,12 @@ export class JWT extends Options<JWTOptions> {
         // Check if issued at is in the future
       } catch {
         throw new Error(
-          "[module='JWT'] Claim issue at is not a valid timestamp epoch",
+          '[module=\'JWT\'] Claim issue at is not a valid timestamp epoch',
         );
       }
       if (new Date(claim.iat) > new Date()) {
         throw new Error(
-          "[module='JWT'] Cannot have claim issue at in the future",
+          '[module=\'JWT\'] Cannot have claim issue at in the future',
         );
       }
     }
@@ -145,12 +147,12 @@ export class JWT extends Options<JWTOptions> {
         new Date(claim.nbf);
       } catch {
         throw new Error(
-          "[module='JWT'] Claim not before at is not a valid timestamp epoch",
+          '[module=\'JWT\'] Claim not before at is not a valid timestamp epoch',
         );
       }
       if (new Date(claim.nbf) > new Date()) {
         throw new Error(
-          "[module='JWT'] Claim Not Before is found to be in the future",
+          '[module=\'JWT\'] Claim Not Before is found to be in the future',
         );
       }
     }
@@ -159,11 +161,11 @@ export class JWT extends Options<JWTOptions> {
         new Date(claim.exp);
       } catch {
         throw new Error(
-          "[module='JWT'] Claim expiry is not a valid timestamp epoch",
+          '[module=\'JWT\'] Claim expiry is not a valid timestamp epoch',
         );
       }
       if (new Date(claim.exp) > new Date()) {
-        throw new Error("[module='JWT'] Claim has expired!");
+        throw new Error('[module=\'JWT\'] Claim has expired!');
       }
     }
   }
@@ -175,36 +177,36 @@ export class JWT extends Options<JWTOptions> {
    */
   protected async _importKey() {
     if (!this.#key) {
-      switch (this._getOption("algo")) {
-        case "HS256":
+      switch (this._getOption('algo')) {
+        case 'HS256':
           this.#key = await crypto.subtle.importKey(
-            "raw",
-            this._encode(this._getOption("key")),
-            { name: "HMAC", hash: "SHA-256" },
+            'raw',
+            this._encode(this._getOption('key')),
+            { name: 'HMAC', hash: 'SHA-256' },
             false,
-            ["sign", "verify"],
+            ['sign', 'verify'],
           );
           break;
-        case "HS384":
+        case 'HS384':
           this.#key = await crypto.subtle.importKey(
-            "raw",
-            this._encode(this._getOption("key")),
-            { name: "HMAC", hash: "SHA-384" },
+            'raw',
+            this._encode(this._getOption('key')),
+            { name: 'HMAC', hash: 'SHA-384' },
             false,
-            ["sign", "verify"],
+            ['sign', 'verify'],
           );
           break;
-        case "HS512":
+        case 'HS512':
           this.#key = await crypto.subtle.importKey(
-            "raw",
-            this._encode(this._getOption("key")),
-            { name: "HMAC", hash: "SHA-512" },
+            'raw',
+            this._encode(this._getOption('key')),
+            { name: 'HMAC', hash: 'SHA-512' },
             false,
-            ["sign", "verify"],
+            ['sign', 'verify'],
           );
           break;
         default:
-          throw new Error("[module='JWT'] Unknown algo specified");
+          throw new Error('[module=\'JWT\'] Unknown algo specified');
       }
     }
   }

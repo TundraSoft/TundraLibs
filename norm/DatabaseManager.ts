@@ -1,19 +1,19 @@
-import { Config } from "../config/Config.ts";
-import { AbstractClient } from "./AbstractClient.ts";
-import { MariaClient, PostgresClient } from "./clients/mod.ts";
+import { Config } from '/root/config/Config.ts';
+import { AbstractClient } from './AbstractClient.ts';
+import { MariaClient, PostgresClient } from './clients/mod.ts';
 import {
   ClientConfig,
   Dialect,
   Dialects,
   MariaConfig,
   PostgresConfig,
-} from "./types/mod.ts";
+} from './types/mod.ts';
 
 import {
   CommunicationError,
   ConnectionNotFound,
   DialectNotSupported,
-} from "./errors/mod.ts";
+} from './errors/mod.ts';
 export class DatabaseManager {
   private static _configs: Map<string, ClientConfig> = new Map();
   private static _instance: Map<string, AbstractClient> = new Map();
@@ -27,7 +27,7 @@ export class DatabaseManager {
     // await DatabaseManager._initialize(nameClean);
   }
 
-  static async loadConfig(name = "database", basePath = "./configs/") {
+  static async loadConfig(name = 'database', basePath = './configs/') {
     await Config.load(name, basePath);
     const dbConfigs = Config.get<{ [key: string]: ClientConfig }>(name);
     for (const name in dbConfigs) {

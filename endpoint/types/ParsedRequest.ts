@@ -1,4 +1,4 @@
-import { HTTPMethods } from "../../dependencies.ts";
+import { HTTPMethods } from '../../dependencies.ts';
 
 // export type BodyType = "JSON" | "TEXT" | "FORM" | "BYTES";
 
@@ -8,7 +8,7 @@ export type PagingParam = {
 };
 
 export type SortingParam = {
-  [key: string]: "ASC" | "DESC";
+  [key: string]: 'ASC' | 'DESC';
 };
 
 export type FileUploadInfo = {
