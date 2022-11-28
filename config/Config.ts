@@ -26,12 +26,6 @@ export class Config {
       throw new Error(`Read permission is required for path: ${path}`);
     }
     //#endregion
-    // let mode: ConfigMode = "PROD";
-    // if (Config.#envEnabled && Config.#env.has("ENV")) {
-    //   if (Config.#env.get("ENV") as ConfigMode === "DEV") {
-    //     mode = "DEV";
-    //   }
-    // }
     name = name.toLowerCase().trim();
     //#region Handle different extentions
     const configFiles: ReadonlyArray<ConfigFile> = [

@@ -6,21 +6,6 @@ import type { HTTPResponse } from "./HTTPResponse.ts";
 export type PostBodyHook = (req: ParsedRequest, ctx: Context) => Promise<void>;
 export type PostHandleHook = (ctx: Context) => Promise<void>;
 export type MethodHook = (request: ParsedRequest) => Promise<HTTPResponse>;
-// export type NormMethodHook = (request: ParsedRequest) => Promise<HTTPResponse>;
-
-// export interface iBaseEndpoint {
-//   _hasIdentifier: (req: ParsedRequest) => boolean;
-//   _getOption: (name: string) => unknown | undefined;
-//   _hasOption: (name: string) => boolean;
-// }
-
-// export interface iNormEndpoint extends iBaseEndpoint {
-//   _fetch: NormMethodHook;
-//   _insert: NormMethodHook;
-//   _update: NormMethodHook;
-//   _delete: NormMethodHook;
-//   _count: NormMethodHook;
-// }
 
 export type EndpointHooks = {
   postBodyParse: PostBodyHook;

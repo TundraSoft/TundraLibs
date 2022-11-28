@@ -1,83 +1,53 @@
+import { BaseColumnDefinition } from "./Query/mod.ts";
 import { DataTypeMap } from "./DataTypes.ts";
 import type { DataType } from "./DataTypes.ts";
-import type { DataLength } from "./DataLength.ts";
-import type { DefaultValues } from "./Generators.ts";
-// import { Generators } from './Generators.ts'
 import type { GuardianProxy } from "../../guardian/mod.ts";
+// import { StringGuardian } from "../../guardian/Guardians/StringGuardian.ts";
 
-export type ColumnDefinition = {
-  // Actual column name
+export type ModelColumnDefinition = {
   name?: string;
-  // The Data Type
-  type: DataType;
-  // The data legth
-  length?: DataLength;
-  // Is the column nullable
-  isNullable?: boolean;
-  // Can the column be updated to null once value is present
   notNullOnce?: boolean;
-  // Disable column from being updated
   disableUpdate?: boolean;
-  // Validation on the column
   // deno-lint-ignore no-explicit-any
-  validator?: GuardianProxy<any>;
-  // Default value on insert
-  insertDefault?: DefaultValues;
-  // Default value on update
-  updateDefault?: DefaultValues;
-  // Encrypt column
-  encryptKey?: string; // NOTE - this will force data type to string. Will encrypt only if key is present
-  // Hooks
-  // onSelect: Array<Function>;
-  // onInsert: Array<Function>;
-  // onUpdate: Array<Function>;
-  // onDelete: Array<Function>;
-};
-
-export type ModelPermissions = {
-  select: boolean;
-  insert: boolean;
-  update: boolean;
-  delete: boolean;
-  truncate: boolean;
-};
+  validation?: GuardianProxy<any>;
+  // computed?: (row: Record<string, unknown>) => typeof DataTypeMap[BaseColumnDefinition['type']] | Promise<typeof DataTypeMap[BaseColumnDefinition['type']]>;
+  security?: "ENCRYPT" | "HASH"; // encrypt will encrypt the value while hash will perform a SHA-256 on the value. NOTE, hash is one way, i.e cannot decrypt
+  // decryptOnRead?: boolean; // Decrypt data on read?
+  project?: boolean; // Select this column? (on select, insert and update)
+} & BaseColumnDefinition;
 
 export type ModelDefinition = {
-  // The Model name
-  name: string;
-  // Connection to use
-  connection: string;
-  // Schema name
-  schema?: string;
-  // Table name
-  table: string;
-  // Is this a view
-  isView?: boolean;
-  // Column definitions
+  name: string; // Name of the model
+  connection: string; // The connection config name
+  schema?: string; // The schema name. This will be used as "Database" in mongodb
+  table: string; // The table name
+  isView?: boolean; // Is this a view? TODO - Query definition for generating views
   columns: {
-    [name: string]: ColumnDefinition;
+    [key: string]: ModelColumnDefinition;
   };
-  // Primary keys
+  // TODO - Not implemented
+  audit?: {
+    schema?: string;
+    table: string;
+  };
+  encryptionKey?: string; // The encryption key
   primaryKeys?: Set<string>;
-  // Unique keys
-  uniqueKeys?: {
-    [name: string]: Set<string>;
+  uniqueKeys?: Record<string, Set<string>>;
+  // Foreign keys are only used for validation. Maybe add support to fetch result from related table?
+  foreignKeys?: Record<string, {
+    model: string;
+    relationShip: Record<string, string>; // The join condition
+    columns?: Set<string> | Record<string, DataType>; // The columns that are part of the foreign table (if blank, it will fetch from model)
+  }>;
+  permissions?: {
+    select?: boolean;
+    insert?: boolean;
+    update?: boolean;
+    delete?: boolean;
+    truncate?: boolean;
   };
-  // Foreign keys
-  foreignKeys?: {
-    [name: string]: {
-      model: string;
-      columns: Record<string, string>;
-    };
-  };
-  // Indexes
-  indexes?: {
-    [name: string]: Array<string>;
-  };
-  // Permissions
-  permissions?: ModelPermissions;
-  // Page Size
   pageSize?: number;
+  seedFile?: string; // When "installing" or "creating" this data will be injected into the table
 };
 
 type PartialPartial<T, K extends keyof T> =
@@ -89,7 +59,7 @@ type KeysMatching<T, V> = {
 }[keyof T];
 
 //// deno-lint-ignore no-explicit-any
-type ExtractTypes<T extends { [K in keyof T]: ColumnDefinition }> =
+type ExtractTypes<T extends { [K in keyof T]: ModelColumnDefinition }> =
   PartialPartial<
     {
       -readonly [K in keyof T]: ReturnType<
@@ -109,10 +79,12 @@ export type ModelType<P extends ModelDefinition> = ExtractTypes<
   {
     [X in keyof P["columns"]]: P["columns"][X];
   }
->;
+> //  & {
+; //   [X in keyof P['foreignKeys']]?: string
+// }
 
 export type ModelValidation<
-  T extends Record<string, unknown> = Record<never, never>,
+  T extends Record<string, unknown> = Record<string, unknown>,
 > = {
   [X in keyof T]?: string[];
 };

@@ -1,7 +1,8 @@
-import { Dialect } from "./Dialect.ts";
+import { Dialects } from "./Dialects.ts";
 
 export type ClientConfig = {
-  dialect: Dialect;
+  dialect: Dialects;
+  longQueryWarningTime?: number; // in seconds
 };
 
 export type SQLiteConfig = ClientConfig & {
@@ -10,14 +11,13 @@ export type SQLiteConfig = ClientConfig & {
   mode?: "read" | "write" | "create";
 };
 
-type StandardDBConfig = ClientConfig & {
+type BasicConnection = {
   host: string;
-  database: string;
-  port: number;
-  user: string;
+  port?: number;
+  userName: string;
   password: string;
-  poolSize: number;
-};
+  database: string;
+} & ClientConfig;
 
 type TLSConfig = {
   enforce: boolean;
@@ -25,6 +25,19 @@ type TLSConfig = {
   ca: string[];
 };
 
-export type PostgresConfig = StandardDBConfig & {
-  tls: Partial<TLSConfig>;
+export type PostgresConfig = BasicConnection & {
+  poolSize?: number;
+  idleTimeout?: number;
+  connectionTimeout?: number;
+  tls?: Partial<TLSConfig>;
+};
+
+export type MariaConfig = BasicConnection & {
+  poolSize?: number;
+  idleTimeout?: number;
+  connectionTimeout?: number;
+};
+
+export type MongoDBConfig = BasicConnection & {
+  authMechanism?: "SCRAM-SHA-1" | "SCRAM-SHA-256" | "MONGODB-X509";
 };
