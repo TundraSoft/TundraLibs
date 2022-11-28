@@ -37,21 +37,21 @@ export class BaseEndpoint<
 
   constructor(options: Partial<EndpointOptions>) {
     const defOptions: Partial<EndpointOptions> = {
-      stateParams: true, 
-      getHandler: undefined, 
+      stateParams: true,
+      getHandler: undefined,
       postHandler: undefined,
       putHandler: undefined,
       patchHandler: undefined,
       deleteHandler: undefined,
       headHandler: undefined,
-      postBodyParse: undefined, 
-      preResponseHandler: undefined, 
-      authHandler: undefined, 
+      postBodyParse: undefined,
+      preResponseHandler: undefined,
+      authHandler: undefined,
       headers: {
-        totalRows: 'X-Total-Rows', 
-        paginationLimit: 'X-Pagination-Limit',
-        paginationPage: 'X-Pagination-Page',
-      }, 
+        totalRows: "X-Total-Rows",
+        paginationLimit: "X-Pagination-Limit",
+        paginationPage: "X-Pagination-Page",
+      },
       notFoundMessage: `Requested resource could not be found`,
       notSupportedMessage: `Method not supported by this endpoint`,
     };
@@ -68,23 +68,41 @@ export class BaseEndpoint<
 
     super(options as O, defOptions as Partial<O>);
     // Check handlers which are present
-    if(this._getOption('getHandler') !== undefined && this._getOption('getHandler') instanceof Function) {
-      this._allowedMethods.push('GET');
+    if (
+      this._getOption("getHandler") !== undefined &&
+      this._getOption("getHandler") instanceof Function
+    ) {
+      this._allowedMethods.push("GET");
     }
-    if(this._getOption('postHandler') !== undefined && this._getOption('postHandler') instanceof Function) {
-      this._allowedMethods.push('POST');
+    if (
+      this._getOption("postHandler") !== undefined &&
+      this._getOption("postHandler") instanceof Function
+    ) {
+      this._allowedMethods.push("POST");
     }
-    if(this._getOption('putHandler') !== undefined && this._getOption('putHandler') instanceof Function) {
-      this._allowedMethods.push('PUT');
+    if (
+      this._getOption("putHandler") !== undefined &&
+      this._getOption("putHandler") instanceof Function
+    ) {
+      this._allowedMethods.push("PUT");
     }
-    if(this._getOption('patchHandler') !== undefined && this._getOption('patchHandler') instanceof Function) {
-      this._allowedMethods.push('PATCH');
+    if (
+      this._getOption("patchHandler") !== undefined &&
+      this._getOption("patchHandler") instanceof Function
+    ) {
+      this._allowedMethods.push("PATCH");
     }
-    if(this._getOption('deleteHandler') !== undefined && this._getOption('deleteHandler') instanceof Function) {
-      this._allowedMethods.push('DELETE');
+    if (
+      this._getOption("deleteHandler") !== undefined &&
+      this._getOption("deleteHandler") instanceof Function
+    ) {
+      this._allowedMethods.push("DELETE");
     }
-    if(this._getOption('headHandler') !== undefined && this._getOption('headHandler') instanceof Function) {
-      this._allowedMethods.push('HEAD');
+    if (
+      this._getOption("headHandler") !== undefined &&
+      this._getOption("headHandler") instanceof Function
+    ) {
+      this._allowedMethods.push("HEAD");
     }
     this._allowedMethods.push("OPTIONS");
     // Register the endpoint
@@ -160,7 +178,9 @@ export class BaseEndpoint<
     this._setDefaultHeaders(ctx);
 
     // First check if method is even allowed
-    if (this._allowedMethods.includes('GET') === false || handler === undefined) {
+    if (
+      this._allowedMethods.includes("GET") === false || handler === undefined
+    ) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -178,7 +198,7 @@ export class BaseEndpoint<
 
       // Call the actual handler
       const op = await handler.apply(this, [req]);
-      
+
       ctx.response.status = op.status;
       // If there is identifier, then we are fetching a single record
       if (this._hasIdentifier(req)) {
@@ -201,7 +221,7 @@ export class BaseEndpoint<
         ctx.response.body = op.payload;
       }
       // Set pagination headers
-      const headerNames = this._getOption('headers');
+      const headerNames = this._getOption("headers");
       ctx.response.headers.set(
         headerNames.totalRows as string,
         op.totalRows.toString(),
@@ -247,7 +267,9 @@ export class BaseEndpoint<
     this._setDefaultHeaders(ctx);
 
     // First check if method is even allowed
-    if (this._allowedMethods.includes('POST') === false || handler === undefined) {
+    if (
+      this._allowedMethods.includes("POST") === false || handler === undefined
+    ) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -310,7 +332,7 @@ export class BaseEndpoint<
         }
       }
 
-      const headerNames = this._getOption('headers');
+      const headerNames = this._getOption("headers");
       ctx.response.headers.set(
         headerNames.totalRows as string,
         op.totalRows.toString(),
@@ -344,7 +366,9 @@ export class BaseEndpoint<
     this._setDefaultHeaders(ctx);
 
     // First check if method is even allowed
-    if (this._allowedMethods.includes('PUT') === false || handler === undefined) {
+    if (
+      this._allowedMethods.includes("PUT") === false || handler === undefined
+    ) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -393,7 +417,7 @@ export class BaseEndpoint<
         ctx.response.body = op.payload;
       }
 
-      const headerNames = this._getOption('headers');
+      const headerNames = this._getOption("headers");
       ctx.response.headers.set(
         headerNames.totalRows as string,
         op.totalRows.toString(),
@@ -427,7 +451,9 @@ export class BaseEndpoint<
     this._setDefaultHeaders(ctx);
 
     // First check if method is even allowed
-    if (this._allowedMethods.includes('PATCH') === false || handler === undefined) {
+    if (
+      this._allowedMethods.includes("PATCH") === false || handler === undefined
+    ) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -476,8 +502,8 @@ export class BaseEndpoint<
       } else {
         ctx.response.body = op.payload;
       }
-      
-      const headerNames = this._getOption('headers');
+
+      const headerNames = this._getOption("headers");
       ctx.response.headers.set(
         headerNames.totalRows as string,
         op.totalRows.toString(),
@@ -510,7 +536,9 @@ export class BaseEndpoint<
     this._setDefaultHeaders(ctx);
 
     // First check if method is even allowed
-    if (this._allowedMethods.includes('PATCH') === false || handler === undefined) {
+    if (
+      this._allowedMethods.includes("PATCH") === false || handler === undefined
+    ) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -540,7 +568,7 @@ export class BaseEndpoint<
         }
       }
 
-      const headerNames = this._getOption('headers');
+      const headerNames = this._getOption("headers");
       ctx.response.headers.set(
         headerNames.totalRows as string,
         op.totalRows.toString(),
@@ -575,7 +603,9 @@ export class BaseEndpoint<
     this._setDefaultHeaders(ctx);
 
     // First check if method is even allowed
-    if (this._allowedMethods.includes('PATCH') === false || handler === undefined) {
+    if (
+      this._allowedMethods.includes("PATCH") === false || handler === undefined
+    ) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -586,7 +616,6 @@ export class BaseEndpoint<
         ctx.response.headers,
       );
     } else {
-
       const req = await this._parseRequest(ctx);
       // Call postBodyParse hook
       // We can handle things like HMAC signature check, User access check etc
@@ -597,8 +626,8 @@ export class BaseEndpoint<
       // ctx.response.status = Status.OK;
       // ctx.response.headers.set(this._getOption("totalRowHeaderName"), op.toString());
       ctx.response.status = Status.OK;
-      
-      const headerNames = this._getOption('headers');
+
+      const headerNames = this._getOption("headers");
       ctx.response.headers.set(
         headerNames.totalRows as string,
         op.totalRows.toString(),

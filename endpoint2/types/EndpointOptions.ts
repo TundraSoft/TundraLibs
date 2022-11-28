@@ -1,9 +1,12 @@
 import { Context } from "../../dependencies.ts";
-import type { HTTPMethods } from "../../dependencies.ts";
+// import type { HTTPMethods } from "../../dependencies.ts";
 import { ParsedRequest } from "./ParsedRequest.ts";
 import type { HTTPResponse } from "./HTTPResponse.ts";
 
-export type PostBodyParseHandler = (req: ParsedRequest, ctx: Context) => Promise<void>;
+export type PostBodyParseHandler = (
+  req: ParsedRequest,
+  ctx: Context,
+) => Promise<void>;
 export type PreResponseHandler = (ctx: Context) => Promise<void>;
 export type MethodHandler = (request: ParsedRequest) => Promise<HTTPResponse>;
 
@@ -39,10 +42,10 @@ export type EndpointOptions = {
   // Few header names
   pageLimit?: number;
   headers: {
-    totalRows: string, 
-    paginationLimit: string, 
-    paginationPage: string
-  }
+    totalRows: string;
+    paginationLimit: string;
+    paginationPage: string;
+  };
   // Messages to use
   notFoundMessage: string;
   notSupportedMessage: string;

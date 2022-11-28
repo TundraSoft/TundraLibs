@@ -294,17 +294,17 @@ export class QueryTranslator {
       });
     if (query.primaryKey) {
       body.push(
-        `PRIMARY KEY ${
+        `PRIMARY KEY (${
           query.primaryKey.map((columnName) => {
             return this.quoteColumn(columnName as string);
           }).join(", ")
-        }`,
+        })`,
       );
     }
     if (query.uniqueKeys) {
       Object.entries(query.uniqueKeys).forEach(([name, columns]) => {
         body.push(
-          `UNIQUE ${this.quoteColumn(`UK_${table}_${name}`)}(${
+          `CONSTRAINT ${this.quoteColumn(`UK_${table.replace('.', '_')}_${name}`)} UNIQUE (${
             columns.map((columnName) => {
               return this.quoteColumn(columnName as string);
             }).join(", ")
@@ -317,7 +317,7 @@ export class QueryTranslator {
         const onDelete = foreignKey.onDelete || "RESTRICT",
           onUpdate = foreignKey.onUpdate || "RESTRICT";
         body.push(
-          `CONSTRAINT ${this.quoteColumn(`FK_${table}_${name}`)} FOREIGN KEY (${
+          `CONSTRAINT ${this.quoteColumn(`FK_${table.replace('.', '_')}_${name}`)} FOREIGN KEY (${
             Object.keys(foreignKey.columnMap).map((col) =>
               this.quoteColumn(col)
             ).join(", ")
@@ -331,7 +331,7 @@ export class QueryTranslator {
             Object.values(foreignKey.columnMap).map((col) =>
               this.quoteColumn(col)
             ).join(", ")
-          }) ONDELETE ${onDelete} ON UPDATE ${onUpdate}`,
+          }) ON UPDATE ${onUpdate} ONDELETE ${onDelete}`,
         );
       });
     }
