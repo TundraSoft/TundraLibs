@@ -32,5 +32,5 @@ export {
 export type { HTTPErrorData } from "./HTTPErrors.ts";
 
 export { BaseEndpoint } from "./BaseEndpoint.ts";
-export { NormEndpoint } from "./NormEndpoint.ts";
+// export { NormEndpoint } from "./NormEndpoint.ts";
 export { EndpointManager } from "./EndpointManager.ts";

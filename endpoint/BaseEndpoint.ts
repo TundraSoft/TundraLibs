@@ -27,7 +27,7 @@ import {
   methodNotAllowed,
   resourceNotFound,
 } from "./HTTPErrors.ts";
-import { EndpointHooks } from "./types/EndpointOptions.ts";
+// import { EndpointHooks } from "./types/EndpointOptions.ts";
 
 export class BaseEndpoint<
   O extends EndpointOptions = EndpointOptions,
@@ -38,20 +38,20 @@ export class BaseEndpoint<
   constructor(options: Partial<EndpointOptions>) {
     const defOptions: Partial<EndpointOptions> = {
       stateParams: true,
-      allowedMethods: [],
-      hooks: {
-        get: undefined,
-        head: undefined,
-        post: undefined,
-        put: undefined,
-        patch: undefined,
-        delete: undefined,
-        postHandle: undefined,
-        postBodyParse: undefined,
+      getHandler: undefined,
+      postHandler: undefined,
+      putHandler: undefined,
+      patchHandler: undefined,
+      deleteHandler: undefined,
+      headHandler: undefined,
+      postBodyParse: undefined,
+      preResponseHandler: undefined,
+      authHandler: undefined,
+      headers: {
+        totalRows: "X-Total-Rows",
+        paginationLimit: "X-Pagination-Limit",
+        paginationPage: "X-Pagination-Page",
       },
-      totalRowHeaderName: "X-Total-Rows",
-      paginationPageHeaderName: "X-Pagination-Page",
-      paginationLimitHeaderName: "X-Pagination-Limit",
       notFoundMessage: `Requested resource could not be found`,
       notSupportedMessage: `Method not supported by this endpoint`,
     };
@@ -68,37 +68,41 @@ export class BaseEndpoint<
 
     super(options as O, defOptions as Partial<O>);
     // Check handlers which are present
-    const handlers: EndpointHooks = this._getOption(
-        "hooks",
-      ) as EndpointHooks,
-      allowedMethods: Array<HTTPMethods> = this._getOption(
-        "allowedMethods",
-      ) as Array<HTTPMethods>;
-    if (allowedMethods.indexOf("GET") !== -1 && handlers.get !== undefined) {
+    if (
+      this._getOption("getHandler") !== undefined &&
+      this._getOption("getHandler") instanceof Function
+    ) {
       this._allowedMethods.push("GET");
     }
-    if (allowedMethods.indexOf("POST") !== -1 && handlers.post !== undefined) {
+    if (
+      this._getOption("postHandler") !== undefined &&
+      this._getOption("postHandler") instanceof Function
+    ) {
       this._allowedMethods.push("POST");
     }
-    if (allowedMethods.indexOf("PUT") !== -1 && handlers.put !== undefined) {
+    if (
+      this._getOption("putHandler") !== undefined &&
+      this._getOption("putHandler") instanceof Function
+    ) {
       this._allowedMethods.push("PUT");
     }
     if (
-      allowedMethods.indexOf("PATCH") !== -1 && handlers.patch !== undefined
+      this._getOption("patchHandler") !== undefined &&
+      this._getOption("patchHandler") instanceof Function
     ) {
       this._allowedMethods.push("PATCH");
     }
     if (
-      allowedMethods.indexOf("DELETE") !== -1 && handlers.delete !== undefined
+      this._getOption("deleteHandler") !== undefined &&
+      this._getOption("deleteHandler") instanceof Function
     ) {
       this._allowedMethods.push("DELETE");
     }
-    if (allowedMethods.indexOf("HEAD") !== -1 && handlers.head !== undefined) {
+    if (
+      this._getOption("headHandler") !== undefined &&
+      this._getOption("headHandler") instanceof Function
+    ) {
       this._allowedMethods.push("HEAD");
-    }
-    if (this._allowedMethods.length === 0) {
-      // There are no methods which are allowed. Mark this endpoint as useless
-      // TODO handle this
     }
     this._allowedMethods.push("OPTIONS");
     // Register the endpoint
@@ -168,13 +172,15 @@ export class BaseEndpoint<
    * @returns void
    */
   public async GET(ctx: Context): Promise<void> {
-    const handler = this._getOption("hooks").get,
-      postHandle = this._getOption("hooks").postHandle;
+    const handler = this._getOption("getHandler"),
+      postHandle = this._getOption("preResponseHandler");
 
     this._setDefaultHeaders(ctx);
 
     // First check if method is even allowed
-    if (this._allowedMethods.indexOf("GET") === -1 || handler === undefined) {
+    if (
+      this._allowedMethods.includes("GET") === false || handler === undefined
+    ) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -184,63 +190,64 @@ export class BaseEndpoint<
         this._getOption("notSupportedMessage"),
         ctx.response.headers,
       );
-    }
-
-    const req = await this._parseRequest(ctx);
-    // Call postBodyParse hook
-    // We can handle things like HMAC signature check, User access check etc
-    // await this._postBodyParse(req, ctx);
-
-    // Call the actual handler
-    const op = await handler?.apply(this, [req]);
-
-    ctx.response.status = op.status;
-    // If there is identifier, then we are fetching a single record
-    if (this._hasIdentifier(req)) {
-      // If no rows throw 404
-      if (!op.payload || op.totalRows === 0) {
-        // ctx.response.status = 404;
-        // ctx.response.body = { message: this._getOption("notFoundMessage") };
-        // // Return as we do not want to set other info
-        // return;
-        throw resourceNotFound(
-          this._getOption("notFoundMessage"),
-          ctx.response.headers,
-        );
-      } else {
-        ctx.response.body = Array.isArray(op.payload)
-          ? op.payload[0]
-          : op.payload;
-      }
     } else {
-      ctx.response.body = op.payload;
-    }
-    // Set pagination headers
-    ctx.response.headers.set(
-      this._getOption("totalRowHeaderName") as string,
-      op.totalRows.toString(),
-    );
+      const req = await this._parseRequest(ctx);
+      // Call postBodyParse hook
+      // We can handle things like HMAC signature check, User access check etc
+      // await this._postBodyParse(req, ctx);
 
-    if (op.pagination && op.pagination.limit) {
+      // Call the actual handler
+      const op = await handler.apply(this, [req]);
+
+      ctx.response.status = op.status;
+      // If there is identifier, then we are fetching a single record
+      if (this._hasIdentifier(req)) {
+        // If no rows throw 404
+        if (!op.payload || op.totalRows === 0) {
+          // ctx.response.status = 404;
+          // ctx.response.body = { message: this._getOption("notFoundMessage") };
+          // // Return as we do not want to set other info
+          // return;
+          throw resourceNotFound(
+            this._getOption("notFoundMessage"),
+            ctx.response.headers,
+          );
+        } else {
+          ctx.response.body = Array.isArray(op.payload)
+            ? op.payload[0]
+            : op.payload;
+        }
+      } else {
+        ctx.response.body = op.payload;
+      }
+      // Set pagination headers
+      const headerNames = this._getOption("headers");
       ctx.response.headers.set(
-        this._getOption("paginationPageHeaderName"),
-        op.pagination.page.toString(),
+        headerNames.totalRows as string,
+        op.totalRows.toString(),
       );
-      ctx.response.headers.set(
-        this._getOption("paginationLimitHeaderName") as string,
-        op.pagination.limit.toString(),
-      );
-    }
 
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
+      if (op.pagination && op.pagination.limit) {
+        ctx.response.headers.set(
+          headerNames.paginationPage as string,
+          op.pagination.page.toString(),
+        );
+        ctx.response.headers.set(
+          headerNames.paginationLimit as string,
+          op.pagination.limit.toString(),
+        );
+      }
 
-    // Call post response hook
-    if (postHandle !== undefined) {
-      await postHandle.apply(this, [ctx]);
+      if (op.headers) {
+        op.headers.forEach(([key, value]) => {
+          ctx.response.headers.set(key, value);
+        });
+      }
+
+      // Call post response hook
+      if (postHandle !== undefined) {
+        await postHandle.apply(this, [ctx]);
+      }
     }
     // All done
   }
@@ -254,12 +261,15 @@ export class BaseEndpoint<
    * @returns void
    */
   public async POST(ctx: Context): Promise<void> {
-    const handler = this._getOption("hooks").post,
-      postHandle = this._getOption("hooks").postHandle;
+    const handler = this._getOption("postHandler"),
+      postHandle = this._getOption("preResponseHandler");
 
     this._setDefaultHeaders(ctx);
 
-    if (this._allowedMethods.indexOf("POST") === -1 || handler === undefined) {
+    // First check if method is even allowed
+    if (
+      this._allowedMethods.includes("POST") === false || handler === undefined
+    ) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -269,74 +279,75 @@ export class BaseEndpoint<
         this._getOption("notSupportedMessage"),
         ctx.response.headers,
       );
-    }
-
-    const req = await this._parseRequest(ctx);
-    if (
-      (req.payload === undefined || Object.keys(req.payload).length === 0) &&
-      (req.files === undefined || Object.keys(req.files).length === 0)
-    ) {
-      // ctx.response.status = Status.BadRequest;
-      // ctx.response.body = { message: `Missing/No POST body` };
-      // return;
-      throw badRequest(`Missing/No POST body`, ctx.response.headers);
-    }
-
-    if (this._hasIdentifier(req)) {
-      // ctx.response.status = 405;
-      // ctx.response.body = {
-      //   message: this._getOption("notSupportedMessage"),
-      // };
-      // return;
-      throw resourceNotFound(
-        this._getOption("notFoundMessage"),
-        ctx.response.headers,
-      );
-    }
-
-    // Call postBodyParse hook
-    // We can handle things like HMAC signature check, User access check etc
-    // await this._postBodyParse(req, ctx);
-    // Check if it is a single record or multiple records
-    let single = false;
-    if (req.payload && !Array.isArray(req.payload)) {
-      single = true;
-      req.payload = [req.payload];
-    }
-    // Inject state params
-    const injectedPayload: Array<Record<string, unknown>> = [];
-    req.payload?.forEach((payload) => {
-      injectedPayload.push({ ...ctx.state.params || {}, ...payload });
-    });
-    req.payload = injectedPayload;
-
-    const op = await handler.apply(this, [req]);
-
-    ctx.response.status = op.status;
-    if (op.payload) {
-      if (single) {
-        ctx.response.body = Array.isArray(op.payload)
-          ? op.payload[0]
-          : op.payload;
-      } else {
-        ctx.response.body = op.payload;
+    } else {
+      const req = await this._parseRequest(ctx);
+      if (
+        (req.payload === undefined || Object.keys(req.payload).length === 0) &&
+        (req.files === undefined || Object.keys(req.files).length === 0)
+      ) {
+        // ctx.response.status = Status.BadRequest;
+        // ctx.response.body = { message: `Missing/No POST body` };
+        // return;
+        throw badRequest(`Missing/No POST body`, ctx.response.headers);
       }
-    }
 
-    ctx.response.headers.set(
-      this._getOption("totalRowHeaderName") as string,
-      op.totalRows.toString(),
-    );
+      if (this._hasIdentifier(req)) {
+        // ctx.response.status = 405;
+        // ctx.response.body = {
+        //   message: this._getOption("notSupportedMessage"),
+        // };
+        // return;
+        throw resourceNotFound(
+          this._getOption("notFoundMessage"),
+          ctx.response.headers,
+        );
+      }
 
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
+      // Call postBodyParse hook
+      // We can handle things like HMAC signature check, User access check etc
+      // await this._postBodyParse(req, ctx);
+      // Check if it is a single record or multiple records
+      let single = false;
+      if (req.payload && !Array.isArray(req.payload)) {
+        single = true;
+        req.payload = [req.payload];
+      }
+      // Inject state params
+      const injectedPayload: Array<Record<string, unknown>> = [];
+      req.payload?.forEach((payload) => {
+        injectedPayload.push({ ...ctx.state.params || {}, ...payload });
       });
-    }
+      req.payload = injectedPayload;
 
-    // Call post response hook
-    if (postHandle !== undefined) {
-      await postHandle.apply(this, [ctx]);
+      const op = await handler.apply(this, [req]);
+
+      ctx.response.status = op.status;
+      if (op.payload) {
+        if (single) {
+          ctx.response.body = Array.isArray(op.payload)
+            ? op.payload[0]
+            : op.payload;
+        } else {
+          ctx.response.body = op.payload;
+        }
+      }
+
+      const headerNames = this._getOption("headers");
+      ctx.response.headers.set(
+        headerNames.totalRows as string,
+        op.totalRows.toString(),
+      );
+
+      if (op.headers) {
+        op.headers.forEach(([key, value]) => {
+          ctx.response.headers.set(key, value);
+        });
+      }
+
+      // Call post response hook
+      if (postHandle !== undefined) {
+        await postHandle.apply(this, [ctx]);
+      }
     }
   }
 
@@ -349,12 +360,15 @@ export class BaseEndpoint<
    * @returns void
    */
   public async PUT(ctx: Context): Promise<void> {
-    const handler = this._getOption("hooks").put,
-      postHandle = this._getOption("hooks").postHandle;
+    const handler = this._getOption("putHandler"),
+      postHandle = this._getOption("preResponseHandler");
 
     this._setDefaultHeaders(ctx);
 
-    if (this._allowedMethods.indexOf("PUT") === -1 || handler === undefined) {
+    // First check if method is even allowed
+    if (
+      this._allowedMethods.includes("PUT") === false || handler === undefined
+    ) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -364,59 +378,61 @@ export class BaseEndpoint<
         this._getOption("notSupportedMessage"),
         ctx.response.headers,
       );
-    }
-    const req = await this._parseRequest(ctx);
-    if (
-      (req.payload === undefined || Object.keys(req.payload).length === 0) &&
-      (req.files === undefined || Object.keys(req.files).length === 0)
-    ) {
-      // ctx.response.status = Status.BadRequest;
-      // ctx.response.body = { message: `Missing/No PUT body` };
-      // return;
-      throw badRequest(`Missing/No PUT body`, ctx.response.headers);
-    }
-    // Call postBodyParse hook
-    // We can handle things like HMAC signature check, User access check etc
-    // await this._postBodyParse(req, ctx);
-    // TODO - Handle array of objects
-
-    const op = await handler.apply(this, [req]);
-
-    ctx.response.status = op.status;
-    if (this._hasIdentifier(req)) {
-      // If no rows throw 404
-      if (!op.payload || op.totalRows === 0) {
-        // ctx.response.status = 404;
-        // ctx.response.body = { message: this._getOption("notFoundMessage") };
-        // // Return as we do not want to set other info
-        // return;
-        throw resourceNotFound(
-          this._getOption("notFoundMessage"),
-          ctx.response.headers,
-        );
-      } else {
-        ctx.response.body = Array.isArray(op.payload)
-          ? op.payload[0]
-          : op.payload;
-      }
     } else {
-      ctx.response.body = op.payload;
-    }
+      const req = await this._parseRequest(ctx);
+      if (
+        (req.payload === undefined || Object.keys(req.payload).length === 0) &&
+        (req.files === undefined || Object.keys(req.files).length === 0)
+      ) {
+        // ctx.response.status = Status.BadRequest;
+        // ctx.response.body = { message: `Missing/No PUT body` };
+        // return;
+        throw badRequest(`Missing/No PUT body`, ctx.response.headers);
+      }
+      // Call postBodyParse hook
+      // We can handle things like HMAC signature check, User access check etc
+      // await this._postBodyParse(req, ctx);
+      // TODO - Handle array of objects
 
-    ctx.response.headers.set(
-      this._getOption("totalRowHeaderName") as string,
-      op.totalRows.toString(),
-    );
+      const op = await handler.apply(this, [req]);
 
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
+      ctx.response.status = op.status;
+      if (this._hasIdentifier(req)) {
+        // If no rows throw 404
+        if (!op.payload || op.totalRows === 0) {
+          // ctx.response.status = 404;
+          // ctx.response.body = { message: this._getOption("notFoundMessage") };
+          // // Return as we do not want to set other info
+          // return;
+          throw resourceNotFound(
+            this._getOption("notFoundMessage"),
+            ctx.response.headers,
+          );
+        } else {
+          ctx.response.body = Array.isArray(op.payload)
+            ? op.payload[0]
+            : op.payload;
+        }
+      } else {
+        ctx.response.body = op.payload;
+      }
 
-    // Call post response hook
-    if (postHandle !== undefined) {
-      await postHandle.apply(this, [ctx]);
+      const headerNames = this._getOption("headers");
+      ctx.response.headers.set(
+        headerNames.totalRows as string,
+        op.totalRows.toString(),
+      );
+
+      if (op.headers) {
+        op.headers.forEach(([key, value]) => {
+          ctx.response.headers.set(key, value);
+        });
+      }
+
+      // Call post response hook
+      if (postHandle !== undefined) {
+        await postHandle.apply(this, [ctx]);
+      }
     }
   }
 
@@ -429,12 +445,15 @@ export class BaseEndpoint<
    * @returns void
    */
   public async PATCH(ctx: Context): Promise<void> {
-    const handler = this._getOption("hooks").patch,
-      postHandle = this._getOption("hooks").postHandle;
+    const handler = this._getOption("patchHandler"),
+      postHandle = this._getOption("preResponseHandler");
 
     this._setDefaultHeaders(ctx);
 
-    if (this._allowedMethods.indexOf("PATCH") === -1 || handler === undefined) {
+    // First check if method is even allowed
+    if (
+      this._allowedMethods.includes("PATCH") === false || handler === undefined
+    ) {
       // ctx.response.status = 405;
       // ctx.response.body = {
       //   message: this._getOption("notSupportedMessage"),
@@ -444,58 +463,61 @@ export class BaseEndpoint<
         this._getOption("notSupportedMessage"),
         ctx.response.headers,
       );
-    }
-    const req = await this._parseRequest(ctx);
-    if (
-      (req.payload === undefined || Object.keys(req.payload).length === 0) &&
-      (req.files === undefined || Object.keys(req.files).length === 0)
-    ) {
-      // ctx.response.status = Status.BadRequest;
-      // ctx.response.body = { message: `Missing/No PATCH body` };
-      // return;
-      throw badRequest(`Missing/No PATCH body`, ctx.response.headers);
-    }
-    // Call postBodyParse hook
-    // We can handle things like HMAC signature check, User access check etc
-    // await this._postBodyParse(req, ctx);
-    // TODO - Handle array of objects
-
-    const op = await handler.apply(this, [req]);
-
-    ctx.response.status = op.status;
-    // If there is identifier, then we are fetching a single record
-    if (this._hasIdentifier(req)) {
-      // If no rows throw 404
-      if (!op.payload || op.totalRows === 0) {
-        // ctx.response.status = 404;
-        // ctx.response.body = { message: this._getOption("notFoundMessage") };
-        // // Return as we do not want to set other info
-        // return;
-        throw resourceNotFound(
-          this._getOption("notFoundMessage"),
-          ctx.response.headers,
-        );
-      } else {
-        ctx.response.body = Array.isArray(op.payload)
-          ? op.payload[0]
-          : op.payload;
-      }
     } else {
-      ctx.response.body = op.payload;
-    }
-    ctx.response.headers.set(
-      this._getOption("totalRowHeaderName"),
-      op.totalRows.toString(),
-    );
+      const req = await this._parseRequest(ctx);
+      if (
+        (req.payload === undefined || Object.keys(req.payload).length === 0) &&
+        (req.files === undefined || Object.keys(req.files).length === 0)
+      ) {
+        // ctx.response.status = Status.BadRequest;
+        // ctx.response.body = { message: `Missing/No PATCH body` };
+        // return;
+        throw badRequest(`Missing/No PATCH body`, ctx.response.headers);
+      }
+      // Call postBodyParse hook
+      // We can handle things like HMAC signature check, User access check etc
+      // await this._postBodyParse(req, ctx);
+      // TODO - Handle array of objects
 
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
-    // Call post response hook
-    if (postHandle !== undefined) {
-      await postHandle.apply(this, [ctx]);
+      const op = await handler.apply(this, [req]);
+
+      ctx.response.status = op.status;
+      // If there is identifier, then we are fetching a single record
+      if (this._hasIdentifier(req)) {
+        // If no rows throw 404
+        if (!op.payload || op.totalRows === 0) {
+          // ctx.response.status = 404;
+          // ctx.response.body = { message: this._getOption("notFoundMessage") };
+          // // Return as we do not want to set other info
+          // return;
+          throw resourceNotFound(
+            this._getOption("notFoundMessage"),
+            ctx.response.headers,
+          );
+        } else {
+          ctx.response.body = Array.isArray(op.payload)
+            ? op.payload[0]
+            : op.payload;
+        }
+      } else {
+        ctx.response.body = op.payload;
+      }
+
+      const headerNames = this._getOption("headers");
+      ctx.response.headers.set(
+        headerNames.totalRows as string,
+        op.totalRows.toString(),
+      );
+
+      if (op.headers) {
+        op.headers.forEach(([key, value]) => {
+          ctx.response.headers.set(key, value);
+        });
+      }
+      // Call post response hook
+      if (postHandle !== undefined) {
+        await postHandle.apply(this, [ctx]);
+      }
     }
   }
 
@@ -508,53 +530,61 @@ export class BaseEndpoint<
    * @returns void
    */
   public async DELETE(ctx: Context): Promise<void> {
-    const handler = this._getOption("hooks").delete,
-      postHandle = this._getOption("hooks").postHandle;
+    const handler = this._getOption("deleteHandler"),
+      postHandle = this._getOption("preResponseHandler");
 
     this._setDefaultHeaders(ctx);
 
+    // First check if method is even allowed
     if (
-      this._allowedMethods.indexOf("DELETE") === -1 || handler === undefined
+      this._allowedMethods.includes("PATCH") === false || handler === undefined
     ) {
+      // ctx.response.status = 405;
+      // ctx.response.body = {
+      //   message: this._getOption("notSupportedMessage"),
+      // };
+      // return;
       throw methodNotAllowed(
         this._getOption("notSupportedMessage"),
         ctx.response.headers,
       );
-    }
-    const req = await this._parseRequest(ctx);
-    // Call postBodyParse hook
-    // We can handle things like HMAC signature check, User access check etc
-    // await this._postBodyParse(req, ctx);
+    } else {
+      const req = await this._parseRequest(ctx);
+      // Call postBodyParse hook
+      // We can handle things like HMAC signature check, User access check etc
+      // await this._postBodyParse(req, ctx);
 
-    const op = await handler.apply(this, [req]);
+      const op = await handler.apply(this, [req]);
 
-    ctx.response.status = op.status;
+      ctx.response.status = op.status;
 
-    if (this._hasIdentifier(req)) {
-      // If no rows throw 404
-      if (op.totalRows === 0) {
-        throw resourceNotFound(
-          this._getOption("notFoundMessage"),
-          ctx.response.headers,
-        );
+      if (this._hasIdentifier(req)) {
+        // If no rows throw 404
+        if (op.totalRows === 0) {
+          throw resourceNotFound(
+            this._getOption("notFoundMessage"),
+            ctx.response.headers,
+          );
+        }
       }
-    }
 
-    ctx.response.headers.set(
-      this._getOption("totalRowHeaderName"),
-      op.totalRows.toString(),
-    );
+      const headerNames = this._getOption("headers");
+      ctx.response.headers.set(
+        headerNames.totalRows as string,
+        op.totalRows.toString(),
+      );
 
-    // There is no body in DELETE response
-    // ctx.response.body = op.body;
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
-    // Call post response hook
-    if (postHandle !== undefined) {
-      await postHandle.apply(this, [ctx]);
+      // There is no body in DELETE response
+      // ctx.response.body = op.body;
+      if (op.headers) {
+        op.headers.forEach(([key, value]) => {
+          ctx.response.headers.set(key, value);
+        });
+      }
+      // Call post response hook
+      if (postHandle !== undefined) {
+        await postHandle.apply(this, [ctx]);
+      }
     }
   }
 
@@ -567,45 +597,51 @@ export class BaseEndpoint<
    * @returns void
    */
   public async HEAD(ctx: Context): Promise<void> {
-    const handler = this._getOption("hooks").head,
-      postHandle = this._getOption("hooks").postHandle;
+    const handler = this._getOption("patchHandler"),
+      postHandle = this._getOption("preResponseHandler");
 
     this._setDefaultHeaders(ctx);
 
-    if (this._allowedMethods.indexOf("HEAD") === -1 || handler === undefined) {
+    // First check if method is even allowed
+    if (
+      this._allowedMethods.includes("PATCH") === false || handler === undefined
+    ) {
       // ctx.response.status = 405;
       // ctx.response.body = {
-      //   message: `HEAD method not supported by this endpoint`,
+      //   message: this._getOption("notSupportedMessage"),
       // };
       // return;
       throw methodNotAllowed(
-        `HEAD method not supported by this endpoint`,
+        this._getOption("notSupportedMessage"),
         ctx.response.headers,
       );
-    }
+    } else {
+      const req = await this._parseRequest(ctx);
+      // Call postBodyParse hook
+      // We can handle things like HMAC signature check, User access check etc
+      // await this._postBodyParse(req, ctx);
 
-    const req = await this._parseRequest(ctx);
-    // Call postBodyParse hook
-    // We can handle things like HMAC signature check, User access check etc
-    // await this._postBodyParse(req, ctx);
+      const op = await handler.apply(this, [req]);
 
-    const op = await handler.apply(this, [req]);
+      // ctx.response.status = Status.OK;
+      // ctx.response.headers.set(this._getOption("totalRowHeaderName"), op.toString());
+      ctx.response.status = Status.OK;
 
-    // ctx.response.status = Status.OK;
-    // ctx.response.headers.set(this._getOption("totalRowHeaderName"), op.toString());
-    ctx.response.status = Status.OK;
-    ctx.response.headers.set(
-      this._getOption("totalRowHeaderName"),
-      op.totalRows.toString(),
-    );
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
-    // Call post response hook
-    if (postHandle !== undefined) {
-      await postHandle.apply(this, [ctx]);
+      const headerNames = this._getOption("headers");
+      ctx.response.headers.set(
+        headerNames.totalRows as string,
+        op.totalRows.toString(),
+      );
+
+      if (op.headers) {
+        op.headers.forEach(([key, value]) => {
+          ctx.response.headers.set(key, value);
+        });
+      }
+      // Call post response hook
+      if (postHandle !== undefined) {
+        await postHandle.apply(this, [ctx]);
+      }
     }
   }
 
@@ -752,7 +788,7 @@ export class BaseEndpoint<
       files: files,
     };
 
-    const postBodyParseHook = this._getOption("hooks").postBodyParse;
+    const postBodyParseHook = this._getOption("postBodyParse");
     if (postBodyParseHook !== undefined) {
       await postBodyParseHook.apply(this, [parseReq, ctx]);
     }

@@ -304,7 +304,9 @@ export class QueryTranslator {
     if (query.uniqueKeys) {
       Object.entries(query.uniqueKeys).forEach(([name, columns]) => {
         body.push(
-          `CONSTRAINT ${this.quoteColumn(`UK_${table.replace('.', '_')}_${name}`)} UNIQUE (${
+          `CONSTRAINT ${
+            this.quoteColumn(`UK_${table.replace(".", "_")}_${name}`)
+          } UNIQUE (${
             columns.map((columnName) => {
               return this.quoteColumn(columnName as string);
             }).join(", ")
@@ -317,7 +319,9 @@ export class QueryTranslator {
         const onDelete = foreignKey.onDelete || "RESTRICT",
           onUpdate = foreignKey.onUpdate || "RESTRICT";
         body.push(
-          `CONSTRAINT ${this.quoteColumn(`FK_${table.replace('.', '_')}_${name}`)} FOREIGN KEY (${
+          `CONSTRAINT ${
+            this.quoteColumn(`FK_${table.replace(".", "_")}_${name}`)
+          } FOREIGN KEY (${
             Object.keys(foreignKey.columnMap).map((col) =>
               this.quoteColumn(col)
             ).join(", ")
