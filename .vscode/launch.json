@@ -7,7 +7,7 @@
     {
       "name": "Deno: Run",
       "request": "launch",
-      "type": "pwa-node",
+      "type": "node",
       "program": "dependencies.ts",
       "cwd": "${workspaceFolder}",
       "runtimeExecutable": "deno",

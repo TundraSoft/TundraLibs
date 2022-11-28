@@ -46,7 +46,7 @@
     }
   },
   "tasks": {
-    "build": "deno fmt && deno lint && deno run -A build.ts",
+    "build": "deno fmt && deno lint && deno cache --reload ./dependencies.ts",
     "test": "deno task build && deno test -A"
   },
   "test": {

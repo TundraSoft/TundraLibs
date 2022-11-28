@@ -277,7 +277,7 @@ export class SchemaManager<
         );
         modelExports.push(`// #region End ${modelFile.name}`);
       } else {
-        if (modelFile.name.endsWith('model.ts')) {
+        if (modelFile.name.toLowerCase().endsWith('.model.ts')) {
           // Its a model definition
           // console.log(`file://${path.join(realPath, modelFile.name)}`);
           const tm = await import(

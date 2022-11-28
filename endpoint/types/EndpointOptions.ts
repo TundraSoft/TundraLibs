@@ -14,7 +14,7 @@ export type EndpointOptions = {
   name: string;
   routePath: string;
   routeGroup: string;
-  routeIdentifiers: string[];
+  routeIdentifiers?: string[];
   stateParams: boolean;
   // Method handlers
   getHandler?: MethodHandler;

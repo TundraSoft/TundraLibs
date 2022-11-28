@@ -18,7 +18,7 @@ import type {
   SortingParam,
 } from './types/mod.ts';
 
-import { EndpointManager } from './EndpointManager.ts';
+// import { EndpointManager } from './EndpointManager.ts';
 
 // import type { HTTPMethods } from "../dependencies.ts";
 import { MissingNameError, MissingRoutePathError } from './Errors.ts';
@@ -106,7 +106,7 @@ export class BaseEndpoint<
     }
     this._allowedMethods.push('OPTIONS');
     // Register the endpoint
-    EndpointManager.register(this);
+    // EndpointManager.register(this);
   }
 
   public get route(): string {
@@ -859,7 +859,7 @@ export class BaseEndpoint<
     const routeIdentifiers = this._getOption('routeIdentifiers');
     if (routeIdentifiers && routeIdentifiers.length > 0) {
       // return ':' + this._getOption('routeIdentifiers').join(',:') + '?';
-      return ':' + this._getOption('routeIdentifiers').join('\\::') + '?';
+      return ':' + routeIdentifiers.join('\\::') + '?';
     } else {
       return '';
     }
@@ -874,8 +874,9 @@ export class BaseEndpoint<
    * @returns boolean True if Identifier is present in the request
    */
   protected _hasIdentifier(req: ParsedRequest): boolean {
-    if (this._hasOption('routeIdentifiers')) {
-      return this._getOption('routeIdentifiers').every((identifier) => {
+    const routeIdentifiers = this._getOption('routeIdentifiers');
+    if (routeIdentifiers && routeIdentifiers.length > 0) {
+      return routeIdentifiers.every((identifier) => {
         return req.params[identifier] !== undefined;
       });
     } else {
