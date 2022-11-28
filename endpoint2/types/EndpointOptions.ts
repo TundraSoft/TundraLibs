@@ -7,16 +7,16 @@ export type PostBodyHook = (req: ParsedRequest, ctx: Context) => Promise<void>;
 export type PostHandleHook = (ctx: Context) => Promise<void>;
 export type MethodHook = (request: ParsedRequest) => Promise<HTTPResponse>;
 
-export type EndpointHooks = {
-  postBodyParse: PostBodyHook;
-  postHandle: PostHandleHook;
-  get: MethodHook;
-  head: MethodHook;
-  post: MethodHook;
-  put: MethodHook;
-  patch: MethodHook;
-  delete: MethodHook;
-};
+// export type EndpointHooks = {
+//   postBodyParse: PostBodyHook;
+//   postHandle: PostHandleHook;
+//   get: MethodHook;
+//   head: MethodHook;
+//   post: MethodHook;
+//   put: MethodHook;
+//   patch: MethodHook;
+//   delete: MethodHook;
+// };
 
 export type EndpointOptions = {
   name: string;
@@ -24,21 +24,24 @@ export type EndpointOptions = {
   routeGroup: string;
   routeIdentifiers: string[];
   stateParams: boolean;
+  // Method handlers
   getHandler?: MethodHook;
   postHandler?: MethodHook;
   putHandler?: MethodHook;
   patchHandler?: MethodHook;
   deleteHandler?: MethodHook;
   headHandler?: MethodHook;
-  // hooks: Partial<EndpointHooks>;
-  // handlers: Partial<EndpointHandlers>;
-  // postBodyParse?: (req: ParsedRequest, ctx: Context) => Promise<void>;
-  // postHandle?: (ctx: Context) => Promise<void>;
+  // Post body parse handler (After body is parsed)
+  postBodyParse?: PostBodyHook;
+  // Auth handler - Called before actual method handlers
+  authHandler?: PostBodyHook;
   // Few header names
   pageLimit?: number;
-  totalRowHeaderName: string;
-  paginationLimitHeaderName: string;
-  paginationPageHeaderName: string;
+  headers: {
+    totalRows: string, 
+    paginationLimit: string, 
+    paginationPage: string
+  }
   // Messages to use
   notFoundMessage: string;
   notSupportedMessage: string;
