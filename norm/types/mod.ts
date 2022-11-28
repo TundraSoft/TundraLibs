@@ -51,4 +51,4 @@ export {
 
 export type { ModelDefinition, ModelType, ModelValidation } from "./Model.ts";
 
-export type { SchemaDefinition, SchemaType } from "./Schema.ts";
+export type { SchemaDefinition, SchemaType } from "./SchemaManager.ts";

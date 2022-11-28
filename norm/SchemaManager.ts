@@ -11,7 +11,9 @@ import { Model } from "./Model.ts";
 // import { DatabaseManager } from "./DatabaseManager.ts";
 import { QueryTranslator } from "./QueryTranslator.ts";
 
-export class Schema<
+import { ModelConfigError } from "./errors/mod.ts";
+
+export class SchemaManager<
   SD extends SchemaDefinition = SchemaDefinition,
   ST extends SchemaType<SD> = SchemaType<SD>,
 > {
@@ -19,7 +21,7 @@ export class Schema<
   private _schema: SchemaDefinition = {};
 
   constructor(schema: SD) {
-    this._schema = Schema.validateSchema(schema);
+    this._schema = SchemaManager.validateSchema(schema);
     //this._init();
   }
 
@@ -59,28 +61,32 @@ export class Schema<
         // Check if referenced FK's exist
         Object.entries(model.foreignKeys).forEach(([fkName, fk]) => {
           if (!schema[fk.model]) {
-            throw new Error(
-              `Foreign key ${fkName} references a model that does not exist: ${fk.model}`,
-            );
+            // throw new Error(
+            //   `Foreign key ${fkName} references a model that does not exist: ${fk.model}`,
+            // );
+            throw new ModelConfigError(`Foreign key ${fkName} references a model that does not exist: ${fk.model}`, model.name, model.connection);
           }
           // Check data types of the columns
           Object.entries(fk.relationShip).forEach(([fkCol, pkCol]) => {
             if (model.columns[fkCol] === undefined) {
-              throw new Error(
-                `Foreign key ${fkName} is using a column which is not defined in ${modelName}`,
-              );
+              // throw new Error(
+              //   `Foreign key ${fkName} is using a column which is not defined in ${modelName}`,
+              // );
+              throw new ModelConfigError(`Foreign key ${fkName} is using a column which is not defined in ${modelName}`, model.name, model.connection);
             }
             if (schema[fk.model].columns[pkCol] === undefined) {
-              throw new Error(
-                `Foreign key ${fkName} references a column that does not exist: ${fk.model}.${pkCol}`,
-              );
+              // throw new Error(
+              //   `Foreign key ${fkName} references a column that does not exist: ${fk.model}.${pkCol}`,
+              // );
+              throw new ModelConfigError(`Foreign key ${fkName} references a column that does not exist: ${fk.model}.${pkCol}`, model.name, model.connection);
             }
             if (
               schema[fk.model].columns[pkCol].type !== model.columns[fkCol].type
             ) {
-              throw new Error(
-                `Foreign key ${fkName} references a column with a different data type: ${modelName}.${fkCol} -> ${fk.model}.${pkCol}`,
-              );
+              // throw new Error(
+              //   `Foreign key ${fkName} references a column with a different data type: ${modelName}.${fkCol} -> ${fk.model}.${pkCol}`,
+              // );
+              throw new ModelConfigError(`Foreign key ${fkName} references a column with a different data type: ${modelName}.${fkCol} -> ${fk.model}.${pkCol}`, model.name, model.connection);
             }
             // Maybe check the length also?
           });
@@ -103,7 +109,7 @@ export class Schema<
   public static async generateImports(location: string) {
     Deno.chdir(await Deno.realPath(location));
     // Generate the export statements
-    const exports = (await Schema._getModelExports("./")).sort((a, b) =>
+    const exports = (await SchemaManager._getModelExports("./")).sort((a, b) =>
       a.localeCompare(b)
     );
     // Write to mod.ts in the path
@@ -123,7 +129,7 @@ export class Schema<
     dialect: Dialects,
     writePath: string,
   ) {
-    models = Schema.validateSchema(models);
+    models = SchemaManager.validateSchema(models);
     const modelNames = Object.keys(models),
       hierarchy: ModelDefinition[] = [];
 
@@ -246,7 +252,7 @@ export class Schema<
     for await (const modelFile of Deno.readDir(realPath)) {
       if (modelFile.isDirectory) {
         modelExports.push(
-          ...await Schema._getModelExports(
+          ...await SchemaManager._getModelExports(
             `${location}/${modelFile.name}`,
           ),
         );
