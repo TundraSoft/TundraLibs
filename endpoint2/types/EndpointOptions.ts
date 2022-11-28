@@ -24,12 +24,12 @@ export type EndpointOptions = {
   routeGroup: string;
   routeIdentifiers: string[];
   stateParams: boolean;
-  getHandler?: MethodHook, 
-  postHandler?: MethodHook, 
-  putHandler?: MethodHook,
-  patchHandler?: MethodHook, 
-  deleteHandler?: MethodHook, 
-  headHandler?: MethodHook, 
+  getHandler?: MethodHook;
+  postHandler?: MethodHook;
+  putHandler?: MethodHook;
+  patchHandler?: MethodHook;
+  deleteHandler?: MethodHook;
+  headHandler?: MethodHook;
   // hooks: Partial<EndpointHooks>;
   // handlers: Partial<EndpointHandlers>;
   // postBodyParse?: (req: ParsedRequest, ctx: Context) => Promise<void>;

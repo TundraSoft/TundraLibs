@@ -64,7 +64,11 @@ export class SchemaManager<
             // throw new Error(
             //   `Foreign key ${fkName} references a model that does not exist: ${fk.model}`,
             // );
-            throw new ModelConfigError(`Foreign key ${fkName} references a model that does not exist: ${fk.model}`, model.name, model.connection);
+            throw new ModelConfigError(
+              `Foreign key ${fkName} references a model that does not exist: ${fk.model}`,
+              model.name,
+              model.connection,
+            );
           }
           // Check data types of the columns
           Object.entries(fk.relationShip).forEach(([fkCol, pkCol]) => {
@@ -72,13 +76,21 @@ export class SchemaManager<
               // throw new Error(
               //   `Foreign key ${fkName} is using a column which is not defined in ${modelName}`,
               // );
-              throw new ModelConfigError(`Foreign key ${fkName} is using a column which is not defined in ${modelName}`, model.name, model.connection);
+              throw new ModelConfigError(
+                `Foreign key ${fkName} is using a column which is not defined in ${modelName}`,
+                model.name,
+                model.connection,
+              );
             }
             if (schema[fk.model].columns[pkCol] === undefined) {
               // throw new Error(
               //   `Foreign key ${fkName} references a column that does not exist: ${fk.model}.${pkCol}`,
               // );
-              throw new ModelConfigError(`Foreign key ${fkName} references a column that does not exist: ${fk.model}.${pkCol}`, model.name, model.connection);
+              throw new ModelConfigError(
+                `Foreign key ${fkName} references a column that does not exist: ${fk.model}.${pkCol}`,
+                model.name,
+                model.connection,
+              );
             }
             if (
               schema[fk.model].columns[pkCol].type !== model.columns[fkCol].type
@@ -86,7 +98,11 @@ export class SchemaManager<
               // throw new Error(
               //   `Foreign key ${fkName} references a column with a different data type: ${modelName}.${fkCol} -> ${fk.model}.${pkCol}`,
               // );
-              throw new ModelConfigError(`Foreign key ${fkName} references a column with a different data type: ${modelName}.${fkCol} -> ${fk.model}.${pkCol}`, model.name, model.connection);
+              throw new ModelConfigError(
+                `Foreign key ${fkName} references a column with a different data type: ${modelName}.${fkCol} -> ${fk.model}.${pkCol}`,
+                model.name,
+                model.connection,
+              );
             }
             // Maybe check the length also?
           });

@@ -1,6 +1,6 @@
 export { DatabaseManager } from "./DatabaseManager.ts";
 export { Model } from "./Model.ts";
-export { Schema } from "./Schema.ts";
+export { SchemaManager } from "./SchemaManager.ts";
 export { DataTypes } from "./types/mod.ts";
 
 export * from "./errors/mod.ts";
