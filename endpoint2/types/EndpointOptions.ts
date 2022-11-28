@@ -3,9 +3,9 @@ import type { HTTPMethods } from "../../dependencies.ts";
 import { ParsedRequest } from "./ParsedRequest.ts";
 import type { HTTPResponse } from "./HTTPResponse.ts";
 
-export type PostBodyHook = (req: ParsedRequest, ctx: Context) => Promise<void>;
-export type PostHandleHook = (ctx: Context) => Promise<void>;
-export type MethodHook = (request: ParsedRequest) => Promise<HTTPResponse>;
+export type PostBodyParseHandler = (req: ParsedRequest, ctx: Context) => Promise<void>;
+export type PreResponseHandler = (ctx: Context) => Promise<void>;
+export type MethodHandler = (request: ParsedRequest) => Promise<HTTPResponse>;
 
 // export type EndpointHooks = {
 //   postBodyParse: PostBodyHook;
@@ -25,16 +25,17 @@ export type EndpointOptions = {
   routeIdentifiers: string[];
   stateParams: boolean;
   // Method handlers
-  getHandler?: MethodHook;
-  postHandler?: MethodHook;
-  putHandler?: MethodHook;
-  patchHandler?: MethodHook;
-  deleteHandler?: MethodHook;
-  headHandler?: MethodHook;
+  getHandler?: MethodHandler;
+  postHandler?: MethodHandler;
+  putHandler?: MethodHandler;
+  patchHandler?: MethodHandler;
+  deleteHandler?: MethodHandler;
+  headHandler?: MethodHandler;
   // Post body parse handler (After body is parsed)
-  postBodyParse?: PostBodyHook;
+  postBodyParse?: PostBodyParseHandler;
+  preResponseHandler?: PreResponseHandler;
   // Auth handler - Called before actual method handlers
-  authHandler?: PostBodyHook;
+  authHandler?: PreResponseHandler;
   // Few header names
   pageLimit?: number;
   headers: {

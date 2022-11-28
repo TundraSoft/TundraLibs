@@ -1019,7 +1019,7 @@ export class Model<
 
       // Disable update if the column is PK or Identity Column
       if (
-        (model.primaryKeys && model.primaryKeys.has(colName as string)) ||
+        (model.primaryKeys && Array.from(model.primaryKeys).includes(colName as string)) ||
         (["SERIAL", "SMALLSERIAL", "BIGSERIAL", "AUTO_INCRIEMENT"].includes(
           col.type.toUpperCase(),
         ))
