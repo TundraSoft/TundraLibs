@@ -49,7 +49,7 @@ export class SchemaManager<
    */
   public static validateSchema(schemas: SchemaDefinition): SchemaDefinition {
     // It is possible that the input is actually an import, so we tread lightly
-    const schema = structuredClone(schemas) as SchemaDefinition;
+    const schema = JSON.parse(JSON.stringify((schemas))) as SchemaDefinition;
     Object.entries(schema).forEach(([modelName, model]) => {
       if (modelName !== model.name) {
         throw new Error(
