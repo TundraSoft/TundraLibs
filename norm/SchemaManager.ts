@@ -125,7 +125,8 @@ export class SchemaManager<
    * @param location string Path where the model files are stored.
    */
   public static async generateImports(location: string) {
-    const currDir = await Deno.realPath('./');
+    const currDir = await Deno.realPath(import.meta.url);
+    console.log(currDir);
     Deno.chdir(await Deno.realPath(location));
     // Generate the export statements
     const exports = (await SchemaManager._getModelExports('./'));
