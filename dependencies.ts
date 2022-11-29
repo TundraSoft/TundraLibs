@@ -11,19 +11,19 @@ export { printf, sprintf } from '/DenoStd/fmt/printf.ts';
 export * as yaml from '/DenoStd/encoding/yaml.ts';
 export * as toml from '/DenoStd/encoding/toml.ts';
 export * as base64url from '/DenoStd/encoding/base64url.ts';
-export {
-  blue,
-  bold,
-  brightGreen,
-  brightRed,
-  cyan,
-  green,
-  italic,
-  magenta,
-  red,
-  underline,
-  yellow,
-} from '/DenoStd/fmt/colors.ts';
+// export {
+//   blue,
+//   bold,
+//   brightGreen,
+//   brightRed,
+//   cyan,
+//   green,
+//   italic,
+//   magenta,
+//   red,
+//   underline,
+//   yellow,
+// } from '/DenoStd/fmt/colors.ts';
 
 export * as base64 from '/DenoStd/encoding/base64.ts';
 

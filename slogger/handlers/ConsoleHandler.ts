@@ -2,16 +2,16 @@ import { BaseHandler } from '../BaseHandler.ts';
 import type { ConsoleHandlerOptions } from '../types.ts';
 import { Syslog } from '/root/syslog/mod.ts';
 
-import {
-  blue,
-  bold,
-  brightRed,
-  green,
-  magenta,
-  red,
-  underline,
-  yellow,
-} from '/root/dependencies.ts';
+// import {
+//   blue,
+//   bold,
+//   brightRed,
+//   green,
+//   magenta,
+//   red,
+//   underline,
+//   yellow,
+// } from '/root/dependencies.ts';
 
 /**
  * ConsoleHandler
@@ -36,32 +36,32 @@ export class ConsoleHandler extends BaseHandler<ConsoleHandlerOptions> {
   override _format(log: Syslog): string {
     let message = log.toString(this._options.format);
     if (this._options.colorFormat) {
-      switch (log.severity) {
-        case 0:
-          message = bold(underline(brightRed(message)));
-          break;
-        case 1:
-          message = bold(brightRed(message));
-          break;
-        case 2:
-          message = bold(brightRed(message));
-          break;
-        case 3:
-          message = bold(red(message));
-          break;
-        case 4:
-          message = yellow(message);
-          break;
-        case 5:
-          message = blue(message);
-          break;
-        case 6:
-          message = magenta(message);
-          break;
-        case 7:
-          message = green(message);
-          break;
-      }
+      // switch (log.severity) {
+      //   case 0:
+      //     message = bold(underline(brightRed(message)));
+      //     break;
+      //   case 1:
+      //     message = bold(brightRed(message));
+      //     break;
+      //   case 2:
+      //     message = bold(brightRed(message));
+      //     break;
+      //   case 3:
+      //     message = bold(red(message));
+      //     break;
+      //   case 4:
+      //     message = yellow(message);
+      //     break;
+      //   case 5:
+      //     message = blue(message);
+      //     break;
+      //   case 6:
+      //     message = magenta(message);
+      //     break;
+      //   case 7:
+      //     message = green(message);
+      //     break;
+      // }
     }
     return message;
   }
