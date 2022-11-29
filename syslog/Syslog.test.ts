@@ -1,5 +1,5 @@
 import { Syslog } from './Syslog.ts';
-import { assertEquals } from '/root/dev.dependencies.ts';
+import { assertEquals } from '../dev.dependencies.ts';
 
 Deno.test({
   name: 'Check if log is generated successfully',

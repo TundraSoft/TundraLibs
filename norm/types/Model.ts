@@ -1,7 +1,7 @@
 import { BaseColumnDefinition } from './Query/mod.ts';
 import { DataTypeMap } from './DataTypes.ts';
 import type { DataType } from './DataTypes.ts';
-import type { GuardianProxy } from '/root/guardian/mod.ts';
+import type { GuardianProxy } from '../../guardian/mod.ts';
 // import { StringGuardian } from "../../guardian/Guardians/StringGuardian.ts";
 
 export type ModelColumnDefinition = {

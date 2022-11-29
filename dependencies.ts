@@ -1,31 +1,34 @@
 // Begin Core
-export * as path from '/DenoStd/path/mod.ts';
-export * as fs from '/DenoStd/fs/mod.ts';
+export * as path from 'https://deno.land/std@0.163.0/path/mod.ts';
+export * as fs from 'https://deno.land/std@0.163.0/fs/mod.ts';
 export {
   format as dateFormat,
   parse as parseDate,
-} from '/DenoStd/datetime/mod.ts';
-export { BufWriter, BufWriterSync } from '/DenoStd/io/mod.ts';
+} from 'https://deno.land/std@0.163.0/datetime/mod.ts';
+export {
+  BufWriter,
+  BufWriterSync,
+} from 'https://deno.land/std@0.163.0/io/mod.ts';
 
-export { printf, sprintf } from '/DenoStd/fmt/printf.ts';
-export * as yaml from '/DenoStd/encoding/yaml.ts';
-export * as toml from '/DenoStd/encoding/toml.ts';
-export * as base64url from '/DenoStd/encoding/base64url.ts';
-// export {
-//   blue,
-//   bold,
-//   brightGreen,
-//   brightRed,
-//   cyan,
-//   green,
-//   italic,
-//   magenta,
-//   red,
-//   underline,
-//   yellow,
-// } from '/DenoStd/fmt/colors.ts';
+export { printf, sprintf } from 'https://deno.land/std@0.163.0/fmt/printf.ts';
+export * as yaml from 'https://deno.land/std@0.163.0/encoding/yaml.ts';
+export * as toml from 'https://deno.land/std@0.163.0/encoding/toml.ts';
+export * as base64url from 'https://deno.land/std@0.163.0/encoding/base64url.ts';
+export {
+  blue,
+  bold,
+  brightGreen,
+  brightRed,
+  cyan,
+  green,
+  italic,
+  magenta,
+  red,
+  underline,
+  yellow,
+} from 'https://deno.land/std@0.163.0/fmt/colors.ts';
 
-export * as base64 from '/DenoStd/encoding/base64.ts';
+export * as base64 from 'https://deno.land/std@0.163.0/encoding/base64.ts';
 
 // End Core
 
@@ -61,7 +64,7 @@ export {
   isSuccessfulStatus,
   Status,
   STATUS_TEXT,
-} from '/DenoStd/http/mod.ts';
+} from 'https://deno.land/std@0.163.0/http/mod.ts';
 
 export type HTTPMethods =
   | 'HEAD'
@@ -79,10 +82,19 @@ export type {
   RedirectStatus,
   ServerErrorStatus,
   SuccessfulStatus,
-} from '/DenoStd/http/mod.ts';
+} from 'https://deno.land/std@0.163.0/http/mod.ts';
 
-export type { Middleware, RouterContext, RouterMiddleware } from '/Oak/mod.ts';
+export type {
+  Middleware,
+  RouterContext,
+  RouterMiddleware,
+} from 'https://deno.land/x/oak@v11.1.0/mod.ts';
 
-export { Context, helpers as oakHelpers, Request, Response } from '/Oak/mod.ts';
+export {
+  Context,
+  helpers as oakHelpers,
+  Request,
+  Response,
+} from 'https://deno.land/x/oak@v11.1.0/mod.ts';
 
 //#endregion Endpoint

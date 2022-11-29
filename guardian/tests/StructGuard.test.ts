@@ -1,7 +1,7 @@
 import { Guardian, GuardianError, Struct } from '../mod.ts';
 import type { Type } from '../mod.ts';
 
-import { assertEquals, assertThrows } from '/root/dev.dependencies.ts';
+import { assertEquals, assertThrows } from '../../dev.dependencies.ts';
 
 const userSchema = Struct({
   id: Guardian.number().gt(0).lte(100),

@@ -1,4 +1,4 @@
-import { Config } from '/root/config/Config.ts';
+import { Config } from '../config/Config.ts';
 import { AbstractClient } from './AbstractClient.ts';
 import { MariaClient, PostgresClient } from './clients/mod.ts';
 import {

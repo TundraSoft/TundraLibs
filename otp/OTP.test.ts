@@ -1,6 +1,6 @@
 import { OTP } from './mod.ts';
 import type { iOTPOptions } from './mod.ts';
-import { assertEquals } from '/root/dev.dependencies.ts';
+import { assertEquals } from '../dev.dependencies.ts';
 
 //#region TOTP
 Deno.test({

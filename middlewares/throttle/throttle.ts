@@ -1,4 +1,4 @@
-import { Middleware } from '/root/dependencies.ts';
+import { Middleware } from '../../dependencies.ts';
 import { ThrottleOptions } from './types.ts';
 
 type ThrottleStorage = {

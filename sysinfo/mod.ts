@@ -1,4 +1,4 @@
-import { path } from '/root/dependencies.ts';
+import { path } from '../dependencies.ts';
 
 const __envData: Map<string, string> = new Map();
 

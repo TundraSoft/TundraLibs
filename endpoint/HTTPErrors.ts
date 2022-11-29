@@ -4,7 +4,7 @@ import {
   isClientErrorStatus,
   Status,
   STATUS_TEXT,
-} from '/root/dependencies.ts';
+} from '../dependencies.ts';
 
 export type HTTPErrorData =
   | string

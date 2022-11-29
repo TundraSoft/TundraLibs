@@ -1,5 +1,5 @@
 import { BaseHandler } from '../BaseHandler.ts';
-import { Syslog } from '/root/syslog/mod.ts';
+import { Syslog } from '../../syslog/mod.ts';
 import type { SyslogOptions } from '../types.ts';
 
 /**

@@ -1,7 +1,7 @@
 import { JWT } from './JWT.ts';
 import type { JWTClaims, JWTOptions } from './types.ts';
-import { alphaNumeric, nanoid } from '/root/nanoid/mod.ts';
-import { assertEquals } from '/root/dev.dependencies.ts';
+import { alphaNumeric, nanoid } from '../nanoid/mod.ts';
+import { assertEquals } from '../dev.dependencies.ts';
 
 Deno.test({
   name: '[module=\'JWT\'] Test signature & Validation - HS256',

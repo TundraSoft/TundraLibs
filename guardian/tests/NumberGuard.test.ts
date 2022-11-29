@@ -1,6 +1,6 @@
 import { GuardianError, numberGuard } from '../mod.ts';
 
-import { assertEquals, assertThrows } from '/root/dev.dependencies.ts';
+import { assertEquals, assertThrows } from '../../dev.dependencies.ts';
 
 Deno.test({
   name: 'Number - Test basic string validation',

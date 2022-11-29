@@ -1,13 +1,13 @@
-import { Options } from '/root/options/mod.ts';
+import { Options } from '../options/mod.ts';
 import {
   Context,
   oakHelpers,
   path,
   RouterMiddleware,
   Status,
-} from '/root/dependencies.ts';
+} from '../dependencies.ts';
 
-import type { HTTPMethods } from '/root/dependencies.ts';
+import type { HTTPMethods } from '../dependencies.ts';
 
 import type {
   EndpointOptions,

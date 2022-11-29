@@ -7,7 +7,7 @@ import {
   password,
   webSafe,
 } from './mod.ts';
-import { assertEquals, assertMatch } from '/root/dev.dependencies.ts';
+import { assertEquals, assertMatch } from '../dev.dependencies.ts';
 
 //#region Begin variable definition
 const sampleSize = 10000,

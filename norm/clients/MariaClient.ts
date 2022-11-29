@@ -7,8 +7,8 @@ import type {
   QueryType,
   SelectQuery,
 } from '../types/mod.ts';
-import { MySQL } from '/root/dependencies.ts';
-import type { MySQLClientConfig } from '/root/dependencies.ts';
+import { MySQL } from '../../dependencies.ts';
+import type { MySQLClientConfig } from '../../dependencies.ts';
 
 import { NormError, QueryError } from '../errors/mod.ts';
 

@@ -6,7 +6,6 @@
     ],
     "strict": true
   },
-  "importMap": "import_map.json",
   "lint": {
     "files": {
       "include": [
@@ -47,7 +46,7 @@
   },
   "tasks": {
     "build": "deno fmt && deno lint && deno cache --reload ./dependencies.ts",
-    "test": "deno task build && deno test -A"
+    "test": "deno task build && deno cache --reload ./dev.dependencies.ts && deno test -A"
   },
   "test": {
     "files": {

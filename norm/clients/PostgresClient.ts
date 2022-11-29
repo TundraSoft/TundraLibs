@@ -7,8 +7,8 @@ import type {
   QueryType,
   SelectQuery,
 } from '../types/mod.ts';
-import { PGPool } from '/root/dependencies.ts';
-import type { PGClientOptions } from '/root/dependencies.ts';
+import { PGPool } from '../../dependencies.ts';
+import type { PGClientOptions } from '../../dependencies.ts';
 
 import { NormError, QueryError } from '../errors/mod.ts';
 

@@ -1,4 +1,4 @@
-import { Options } from '/root/options/mod.ts';
+import { Options } from '../options/mod.ts';
 import { QueryTranslator } from './QueryTranslator.ts';
 
 import type {

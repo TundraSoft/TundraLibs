@@ -27,7 +27,7 @@ import { DefaultValidator } from './types/mod.ts';
 
 import { decrypt, encrypt, hash } from './utils/mod.ts';
 
-import { GuardianError, GuardianProxy, Struct } from '/root/guardian/mod.ts';
+import { GuardianError, GuardianProxy, Struct } from '../guardian/mod.ts';
 
 import {
   ModelColumnNotDefined,

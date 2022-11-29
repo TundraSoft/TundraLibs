@@ -1,6 +1,6 @@
 import { GuardianError, stringGuard } from '../mod.ts';
 
-import { assertEquals, assertThrows } from '/root/dev.dependencies.ts';
+import { assertEquals, assertThrows } from '../../dev.dependencies.ts';
 
 Deno.test({
   name: 'String - Test basic string validation',

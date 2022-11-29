@@ -1,7 +1,7 @@
 import type { iOTPOptions } from './types.ts';
-import { Options } from '/root/options/mod.ts';
-import { alphaNumericCase, nanoid } from '/root/nanoid/mod.ts';
-import { sprintf } from '/root/dependencies.ts';
+import { Options } from '../options/mod.ts';
+import { alphaNumericCase, nanoid } from '../nanoid/mod.ts';
+import { sprintf } from '../dependencies.ts';
 
 export class OTP extends Options<iOTPOptions> {
   #key!: CryptoKey;

@@ -1,6 +1,6 @@
 import { bigintGuard } from '../mod.ts';
 
-import { assertEquals } from '/root/dev.dependencies.ts';
+import { assertEquals } from '../../dev.dependencies.ts';
 
 Deno.test({
   name: 'Bigint - Test basic string validation',

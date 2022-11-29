@@ -1,6 +1,6 @@
 import { Options } from './mod.ts';
 import type { OptionsKey, OptionsType } from './mod.ts';
-import { assertEquals, assertNotEquals } from '/root/dev.dependencies.ts';
+import { assertEquals, assertNotEquals } from '../dev.dependencies.ts';
 
 //#region Typed Options
 type iTypedOptions = {

@@ -1,6 +1,6 @@
-import { LogFacilities, LogSeverities, Syslog } from '/root/syslog/mod.ts';
-import { alphaNumeric, nanoid } from '/root/nanoid/mod.ts';
-import { Sysinfo } from '/root/sysinfo/mod.ts';
+import { LogFacilities, LogSeverities, Syslog } from '../syslog/mod.ts';
+import { alphaNumeric, nanoid } from '../nanoid/mod.ts';
+import { Sysinfo } from '../sysinfo/mod.ts';
 
 import type { HandlerOptions, LogConfig } from './types.ts';
 import { BaseHandler } from './BaseHandler.ts';

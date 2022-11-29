@@ -1,4 +1,4 @@
-import { Middleware } from '/root/dependencies.ts';
+import { Middleware } from '../../dependencies.ts';
 
 export const timing: Middleware = async function (ctx, next) {
   const start = performance.now();

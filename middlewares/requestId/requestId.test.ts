@@ -1,6 +1,6 @@
-import { Context } from '/root/dependencies.ts';
+import { Context } from '../../dependencies.ts';
 import { requestId } from './requestId.ts';
-import { assertEquals } from '/root/dev.dependencies.ts';
+import { assertEquals } from '../../dev.dependencies.ts';
 
 Deno.test({
   name: 'RequestId - Check if request id gets generated',

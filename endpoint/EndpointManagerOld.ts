@@ -1,4 +1,4 @@
-import { path } from '/root/dependencies.ts';
+import { path } from '../dependencies.ts';
 import { BaseEndpoint } from './BaseEndpoint.ts';
 
 export class EndpointManager {

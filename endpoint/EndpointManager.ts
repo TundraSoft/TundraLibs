@@ -1,4 +1,4 @@
-import { path } from '/root/dependencies.ts';
+import { path } from '../dependencies.ts';
 import type { EndpointOptions } from './types/mod.ts';
 import { BaseEndpoint } from './BaseEndpoint.ts';
 

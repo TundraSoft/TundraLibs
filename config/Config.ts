@@ -1,6 +1,6 @@
-import { fs, path, toml, yaml } from '/root/dependencies.ts';
+import { fs, path, toml, yaml } from '../dependencies.ts';
 import type { ConfigFile } from './types.ts';
-import { Sysinfo } from '/root/sysinfo/mod.ts';
+import { Sysinfo } from '../sysinfo/mod.ts';
 
 export class Config {
   static #configs: Map<string, Record<string, unknown>> = new Map();

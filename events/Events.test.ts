@@ -1,5 +1,5 @@
 import { Events } from './Events.ts';
-import { assertEquals } from '/root/dev.dependencies.ts';
+import { assertEquals } from '../dev.dependencies.ts';
 
 const delay = (ms: number) =>
   new Promise<true>((resolve) => setTimeout(() => resolve(true), ms));

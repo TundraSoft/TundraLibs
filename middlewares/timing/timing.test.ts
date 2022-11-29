@@ -1,6 +1,6 @@
-import { Context } from '/root/dependencies.ts';
+import { Context } from '../../dependencies.ts';
 import { timing } from './timing.ts';
-import { assert, assertEquals } from '/root/dev.dependencies.ts';
+import { assert, assertEquals } from '../../dev.dependencies.ts';
 
 Deno.test({
   name: 'responseTime',

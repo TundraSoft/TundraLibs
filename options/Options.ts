@@ -1,5 +1,5 @@
 import { OptionsKey, OptionsType } from './types.ts';
-import { EventName, Events, EventsType } from '/root/events/mod.ts';
+import { EventName, Events, EventsType } from '../events/mod.ts';
 
 // Options.ts
 /**

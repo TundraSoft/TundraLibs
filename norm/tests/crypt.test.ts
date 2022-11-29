@@ -1,4 +1,4 @@
-import { assert } from '/root/dev.dependencies.ts';
+import { assert } from '../../dev.dependencies.ts';
 import { decrypt, encrypt } from '../utils/crypt.ts';
 
 Deno.test({

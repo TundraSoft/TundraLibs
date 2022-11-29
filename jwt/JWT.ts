@@ -1,6 +1,6 @@
-import { Options } from '/root/options/mod.ts';
-import { alphaNumeric, nanoid } from '/root/nanoid/mod.ts';
-import { base64url } from '/root/dependencies.ts';
+import { Options } from '../options/mod.ts';
+import { alphaNumeric, nanoid } from '../nanoid/mod.ts';
+import { base64url } from '../dependencies.ts';
 
 import { JWTClaims, JWTHeaders, JWTOptions } from './types.ts';
 
