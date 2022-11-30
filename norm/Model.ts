@@ -237,7 +237,7 @@ export class Model<
       for (const [key, value] of Object.entries(definition.foreignKeys)) {
         this._foreignKeys[key] = {
           model: value.model,
-          relationship: value.relationShip,
+          relationship: value.relationship,
           // columns:
         };
       }
@@ -1113,7 +1113,7 @@ export class Model<
       // Check if referenced FK's exist
       Object.entries(model.foreignKeys).forEach(([fkName, fk]) => {
         // Check data types of the columns
-        Object.entries(fk.relationShip).forEach(([fkCol, _pkCol]) => {
+        Object.entries(fk.relationship).forEach(([fkCol, _pkCol]) => {
           if (model.columns[fkCol] === undefined) {
             throw new ModelConfigError(
               `Foreign key ${fkName}  is using a column ${fkCol} which is not defined`,

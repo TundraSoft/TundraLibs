@@ -17,13 +17,13 @@ export default {
   foreignKeys: {
     'user': {
       model: 'Users',
-      relationShip: {
+      relationship: {
         UserId: 'Id',
       },
     },
     'group': {
       model: 'Groups',
-      relationShip: {
+      relationship: {
         GroupId: 'Id',
       },
     },

@@ -73,7 +73,7 @@ export class SchemaManager<
             );
           }
           // Check data types of the columns
-          Object.entries(fk.relationShip).forEach(([fkCol, pkCol]) => {
+          Object.entries(fk.relationship).forEach(([fkCol, pkCol]) => {
             if (model.columns[fkCol] === undefined) {
               // throw new Error(
               //   `Foreign key ${fkName} is using a column which is not defined in ${modelName}`,
@@ -213,7 +213,7 @@ export class SchemaManager<
             table: models[fk.model].table,
             schema: models[fk.model].schema,
             columnMap: Object.fromEntries(
-              Object.entries(fk.relationShip).map(([column, relatedColumn]) => {
+              Object.entries(fk.relationship).map(([column, relatedColumn]) => {
                 return [
                   model.columns[column].name || column,
                   models[fk.model].columns[relatedColumn].name || relatedColumn,
@@ -270,8 +270,9 @@ export class SchemaManager<
     for await (const modelFile of Deno.readDir(realPath)) {
       if (modelFile.isDirectory) {
         const imp = await SchemaManager._getModelExports(
-          `${location}/${modelFile.name}`);
-        if(imp.length > 0) {
+          `${location}/${modelFile.name}`,
+        );
+        if (imp.length > 0) {
           modelExports.push(`//#region Begin ${modelFile.name}`);
           modelExports.push(...imp);
           modelExports.push(`//#endregion End ${modelFile.name}`);
