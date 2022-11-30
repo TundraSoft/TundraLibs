@@ -269,13 +269,13 @@ export class SchemaManager<
       modelExports: string[] = [];
     for await (const modelFile of Deno.readDir(realPath)) {
       if (modelFile.isDirectory) {
-        modelExports.push(`// #region Begin ${modelFile.name}`);
-        modelExports.push(
-          ...await SchemaManager._getModelExports(
-            `${location}/${modelFile.name}`,
-          ),
-        );
-        modelExports.push(`// #region End ${modelFile.name}`);
+        const imp = await SchemaManager._getModelExports(
+          `${location}/${modelFile.name}`);
+        if(imp.length > 0) {
+          modelExports.push(`//#region Begin ${modelFile.name}`);
+          modelExports.push(...imp);
+          modelExports.push(`//#endregion End ${modelFile.name}`);
+        }
       } else {
         if (modelFile.name.toLowerCase().endsWith('.model.ts')) {
           // Its a model definition
