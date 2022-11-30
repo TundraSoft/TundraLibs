@@ -36,7 +36,7 @@ export type ModelDefinition = {
   // Foreign keys are only used for validation. Maybe add support to fetch result from related table?
   foreignKeys?: Record<string, {
     model: string;
-    relationShip: Record<string, string>; // The join condition
+    relationship: Record<string, string>; // The join condition
     columns?: Set<string> | Record<string, DataType>; // The columns that are part of the foreign table (if blank, it will fetch from model)
   }>;
   permissions?: {
