@@ -2,6 +2,7 @@ import { path } from '../dependencies.ts';
 import type {
   CreateTableQuery,
   Dialects,
+  InsertQuery,
   ModelDefinition,
   SchemaDefinition,
   SchemaType,
@@ -12,6 +13,7 @@ import { Model } from './Model.ts';
 import { QueryTranslator } from './QueryTranslator.ts';
 
 import { ModelConfigError } from './errors/mod.ts';
+import { Schema } from 'https://deno.land/std@0.163.0/encoding/_yaml/schema.ts';
 
 export class SchemaManager<
   SD extends SchemaDefinition = SchemaDefinition,
@@ -21,8 +23,13 @@ export class SchemaManager<
   private _schema: SchemaDefinition = {};
 
   constructor(schema: SD) {
-    this._schema = SchemaManager.validateSchema(schema);
+    // We do not validate now, we only validate later on
+    this._schema = schema;
     //this._init();
+  }
+
+  public init() {
+    this._schema = SchemaManager.validateSchema(this._schema);
   }
 
   public get<T extends keyof ST>(name: T): Model<ModelDefinition, ST[T]> {
@@ -142,15 +149,18 @@ export class SchemaManager<
     // const modFile = await Deno.open("mod.ts", { create: true, write: true });
   }
 
-  public static generateDDL(
-    models: SchemaDefinition,
+  public static async generateDDL(
+    modelPath: string,
+    seedPath: string,
     dialect: Dialects,
-    writePath: string,
+    outPath: string,
   ) {
-    models = SchemaManager.validateSchema(models);
-    const modelNames = Object.keys(models),
+    const mod = Deno.realPathSync(path.join(modelPath, 'mod.ts')),
+      realSeedPath = Deno.realPathSync(seedPath),
+      schema = await import(`file://${mod}`),
+      models: SchemaDefinition = schema,
+      modelNames = Object.keys(models),
       hierarchy: ModelDefinition[] = [];
-
     // We assume the FK scenario is validated!
     while (modelNames.length > 0) {
       const name = modelNames.shift() as string,
@@ -169,24 +179,30 @@ export class SchemaManager<
         }
       }
     }
-
     // Ok we have them in order, now we can generate
     const finalSQL: string[] = [],
       schemas: string[] = [],
-      tableStructure: CreateTableQuery[] = [];
+      tableStructure: CreateTableQuery[] = [],
+      insertSQL: InsertQuery[] = [];
 
-    // Loop
     hierarchy.forEach((model) => {
       if (model.schema && !schemas.includes(model.schema)) {
         schemas.push(model.schema);
       }
       // Clean up the model
       const cleanModel: CreateTableQuery = {
-        type: 'CREATE_TABLE',
-        table: model.table,
-        schema: model.schema,
-        columns: {},
-      };
+          type: 'CREATE_TABLE',
+          table: model.table,
+          schema: model.schema,
+          columns: {},
+        },
+        insert: InsertQuery = {
+          type: 'INSERT',
+          table: model.table,
+          schema: model.schema,
+          columns: {},
+          data: [],
+        };
 
       // Replace PK column names
       if (model.primaryKeys) {
@@ -231,26 +247,46 @@ export class SchemaManager<
           length: (column.security) ? undefined : column.length,
           isNullable: column.isNullable,
         };
+        insert.columns[name] = column.name || name;
       });
 
       tableStructure.push(cleanModel);
+      // Check if seed file is available
+      try {
+        const file = model.name + '.seed.json',
+          seedData = JSON.parse(
+            Deno.readTextFileSync(path.join(realSeedPath, file)),
+          );
+        insert.data = seedData;
+        insertSQL.push(insert);
+      } catch (_e) {
+        // Nothing to do
+      }
     });
 
     const translator = new QueryTranslator(dialect);
+
     schemas.map((schema) =>
       finalSQL.push(translator.translate({
         type: 'CREATE_SCHEMA',
         schema,
       }))
     );
+
     finalSQL.push(''); // Add a new line
     tableStructure.map((table) => finalSQL.push(translator.translate(table)));
     finalSQL.push('');
-    // Insert statements
     // console.log(db.generateQuery(tableStructure[0]));
     Deno.writeFileSync(
-      path.join(writePath, `DDL.${dialect}.sql`),
+      path.join(outPath, `DDL.${dialect}.sql`),
       new TextEncoder().encode(finalSQL.join('\n')),
+      { create: true, append: false },
+    );
+    const inserts = insertSQL.map((insert) => translator.translate(insert));
+    // Insert statements
+    Deno.writeFileSync(
+      path.join(outPath, `DML.${dialect}.sql`),
+      new TextEncoder().encode(inserts.join('\n')),
       { create: true, append: false },
     );
   }

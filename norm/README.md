@@ -12,8 +12,8 @@ need to do such operations, custom queries can be written.
 ## Supported Databases
 
 - [x] PostgreSQL
-- [ ] MySQL/MariaDB
-- [x] SQLite
+- [x] MariaDB
+- [ ] SQLite
 - [ ] MongoDB
 
 ## Usage
@@ -329,7 +329,6 @@ type ModelDefinition = {
     truncate?: boolean; // Truncate table
   };
   pageSize?: number; // Max rows per paging. Default to all
-  seedFile?: string; // Seed file used when creating table
 }
 
 type ModelColumnDefinition = {
@@ -376,6 +375,6 @@ type ModelColumnDefinition = {
 - [ ] Events
 - [x] Foreign Key validation
 - [x] ModelManager - Schema
-  - [ ] Handle FK lookup
+  - [x] Handle FK lookup
   - [x] Creation/sync of DB
 - [x] Cleanup of model & clients (types etc)

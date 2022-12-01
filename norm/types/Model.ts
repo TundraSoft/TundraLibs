@@ -47,7 +47,7 @@ export type ModelDefinition = {
     truncate?: boolean;
   };
   pageSize?: number;
-  seedFile?: string; // When "installing" or "creating" this data will be injected into the table
+  // seedFile?: string; // When "installing" or "creating" this data will be injected into the table
 };
 
 type PartialPartial<T, K extends keyof T> =
