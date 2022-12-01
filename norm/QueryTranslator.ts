@@ -23,7 +23,6 @@ import {
   PostgresTranslatorConfig,
   SQLiteTranslatorConfig,
 } from './types/mod.ts';
-import { Query } from 'https://deno.land/x/postgres@v0.17.0/query/query.ts';
 
 export class QueryTranslator {
   protected _dialect: Dialects;
