@@ -219,7 +219,7 @@ export class QueryTranslator {
       }),
       values = query.data.map((row) => {
         return Object.keys(query.columns).map((key) => {
-          return this.quoteValue(row[key] || 'NULL');
+          return this.quoteValue(row[key] || null);
         });
       }),
       returning = ' \nRETURNING ' + project.map((alias) => {
