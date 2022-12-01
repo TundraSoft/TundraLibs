@@ -274,7 +274,7 @@ export class SchemaManager<
     );
 
     finalSQL.push(''); // Add a new line
-    tableStructure.map((table) => finalSQL.push(translator.translate(table)));
+    tableStructure.map((table) => finalSQL.push(translator.translate(table) + '\n'));
     finalSQL.push('');
     // console.log(db.generateQuery(tableStructure[0]));
     Deno.writeFileSync(
@@ -282,7 +282,7 @@ export class SchemaManager<
       new TextEncoder().encode(finalSQL.join('\n')),
       { create: true, append: false },
     );
-    const inserts = insertSQL.map((insert) => translator.translate(insert));
+    const inserts = insertSQL.map((insert) => translator.translate(insert) + '\n\n');
     // Insert statements
     Deno.writeFileSync(
       path.join(outPath, `DML.${dialect}.sql`),
