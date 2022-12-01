@@ -341,7 +341,7 @@ export class StringGuardian<
    */
   url(message?: string): GuardianProxy<this> {
     return this.pattern(
-      /^(?:http(s)?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&'\(\)\*\+,;=.]+$/,
+      /^(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})$/i,
       message || `Expect string to be a valid URL`,
     );
   }
@@ -563,7 +563,7 @@ export class StringGuardian<
    * @returns GuardianProxy<this>
    */
   pinCode(
-    regex = /^[1-9]{1}[0-9]{2}\\s{0, 1}[0-9]{3}$/,
+    regex = /^[1-9]{1}[0-9]{2}\s?[0-9]{3}$/,
     message?: string,
   ): GuardianProxy<this> {
     return this.pattern(

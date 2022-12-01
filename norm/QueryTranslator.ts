@@ -23,6 +23,7 @@ import {
   PostgresTranslatorConfig,
   SQLiteTranslatorConfig,
 } from './types/mod.ts';
+import { Query } from 'https://deno.land/x/postgres@v0.17.0/query/query.ts';
 
 export class QueryTranslator {
   protected _dialect: Dialects;
@@ -68,7 +69,8 @@ export class QueryTranslator {
   public quoteValue(value: any): string {
     if (
       typeof value === null || typeof (value) === 'function' ||
-      typeof (value) === 'symbol' || typeof (value) === 'undefined'
+      typeof (value) === 'symbol' || typeof (value) === 'undefined' || 
+      String(value).toUpperCase() === 'NULL'
     ) {
       return 'NULL';
     }
@@ -219,7 +221,7 @@ export class QueryTranslator {
       }),
       values = query.data.map((row) => {
         return Object.keys(query.columns).map((key) => {
-          return this.quoteValue(row[key] || null);
+          return this.quoteValue(row[key] || 'NULL');
         });
       }),
       returning = ' \nRETURNING ' + project.map((alias) => {
