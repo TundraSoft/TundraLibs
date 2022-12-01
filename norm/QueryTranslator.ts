@@ -220,7 +220,7 @@ export class QueryTranslator {
       }),
       values = query.data.map((row) => {
         return Object.keys(query.columns).map((key) => {
-          return this.quoteValue(row[key] || 'NULL');
+          return this.quoteValue((row[key] === undefined) ? 'NULL' : row[key]);
         });
       }),
       returning = ' \nRETURNING ' + project.map((alias) => {
@@ -548,3 +548,6 @@ export class QueryTranslator {
     return retVal;
   }
 }
+
+const asdf = new QueryTranslator('POSTGRES');
+console.log(asdf.quoteValue(0))
