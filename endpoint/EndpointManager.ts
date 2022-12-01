@@ -42,7 +42,7 @@ export class EndpointManager {
               : '',
             routePath = path.posix.join(
               config.routePath.trim().toLowerCase(),
-              name,
+              // name,
               identifiers,
             );
           if (EndpointManager._endPointConfigs.has(name)) {
