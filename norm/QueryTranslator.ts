@@ -335,7 +335,7 @@ export class QueryTranslator {
             Object.values(foreignKey.columnMap).map((col) =>
               this.quoteColumn(col)
             ).join(', ')
-          }) ON UPDATE ${onUpdate} ONDELETE ${onDelete}`,
+          }) ON UPDATE ${onUpdate} ON DELETE ${onDelete}`,
         );
       });
     }

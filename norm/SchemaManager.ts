@@ -13,7 +13,6 @@ import { Model } from './Model.ts';
 import { QueryTranslator } from './QueryTranslator.ts';
 
 import { ModelConfigError } from './errors/mod.ts';
-import { Schema } from 'https://deno.land/std@0.163.0/encoding/_yaml/schema.ts';
 
 export class SchemaManager<
   SD extends SchemaDefinition = SchemaDefinition,
