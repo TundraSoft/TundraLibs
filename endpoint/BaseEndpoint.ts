@@ -175,7 +175,8 @@ export class BaseEndpoint<
     const handler = this._getOption('getHandler'),
       postHandle = this._getOption('preResponseHandler');
 
-    this._setDefaultHeaders(ctx);
+    // this._setDefaultHeaders(ctx);
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
 
     // First check if method is even allowed
     if (
@@ -264,7 +265,8 @@ export class BaseEndpoint<
     const handler = this._getOption('postHandler'),
       postHandle = this._getOption('preResponseHandler');
 
-    this._setDefaultHeaders(ctx);
+    // this._setDefaultHeaders(ctx);
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
 
     // First check if method is even allowed
     if (
@@ -313,11 +315,11 @@ export class BaseEndpoint<
         req.payload = [req.payload];
       }
       // Inject state params
-      const injectedPayload: Array<Record<string, unknown>> = [];
-      req.payload?.forEach((payload) => {
-        injectedPayload.push({ ...ctx.state.params || {}, ...payload });
-      });
-      req.payload = injectedPayload;
+      // const injectedPayload: Array<Record<string, unknown>> = [];
+      // req.payload?.forEach((payload) => {
+      //   injectedPayload.push({ ...ctx.state.params || {}, ...payload });
+      // });
+      // req.payload = injectedPayload;
 
       const op = await handler.apply(this, [req]);
 
@@ -363,7 +365,8 @@ export class BaseEndpoint<
     const handler = this._getOption('putHandler'),
       postHandle = this._getOption('preResponseHandler');
 
-    this._setDefaultHeaders(ctx);
+    // this._setDefaultHeaders(ctx);
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
 
     // First check if method is even allowed
     if (
@@ -448,7 +451,8 @@ export class BaseEndpoint<
     const handler = this._getOption('patchHandler'),
       postHandle = this._getOption('preResponseHandler');
 
-    this._setDefaultHeaders(ctx);
+    // this._setDefaultHeaders(ctx);
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
 
     // First check if method is even allowed
     if (
@@ -533,7 +537,8 @@ export class BaseEndpoint<
     const handler = this._getOption('deleteHandler'),
       postHandle = this._getOption('preResponseHandler');
 
-    this._setDefaultHeaders(ctx);
+    // this._setDefaultHeaders(ctx);
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
 
     // First check if method is even allowed
     if (
@@ -600,7 +605,8 @@ export class BaseEndpoint<
     const handler = this._getOption('patchHandler'),
       postHandle = this._getOption('preResponseHandler');
 
-    this._setDefaultHeaders(ctx);
+    // this._setDefaultHeaders(ctx);
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
 
     // First check if method is even allowed
     if (
@@ -654,7 +660,7 @@ export class BaseEndpoint<
    * @returns void
    */
   public async OPTIONS(ctx: Context): Promise<void> {
-    this._setDefaultHeaders(ctx);
+    // this._setDefaultHeaders(ctx);
     // Options are alwats allowed
     ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
     // Await injected here to prevent error
@@ -809,24 +815,24 @@ export class BaseEndpoint<
     if (params) {
       // Delete null and undefined values
       Object.keys(params).forEach((key) => {
-        if (params[key] !== null && params[key] !== undefined) {
+        if (params[key] === null || params[key] === undefined) {
           delete params[key];
         }
       });
-      Object.assign(req.params, params);
+      req.params = Object.assign(req.params, params);
       //#region Inject params into payload
-      if (
-        req.method === 'POST' || req.method === 'PUT' ||
-        req.method === 'PATCH'
-      ) {
-        if (req.payload) {
-          if (Array.isArray(req.payload)) {
-            req.payload = req.payload.map((p) => Object.assign(p, req.params));
-          } else {
-            Object.assign(req.payload, req.params);
-          }
-        }
-      }
+      // if (
+      //   req.method === 'POST' || req.method === 'PUT' ||
+      //   req.method === 'PATCH'
+      // ) {
+      //   if (req.payload) {
+      //     if (Array.isArray(req.payload)) {
+      //       req.payload = req.payload.map((p) => Object.assign(p, req.params));
+      //     } else {
+      //       req.payload = Object.assign(req.payload, req.params);
+      //     }
+      //   }
+      // }
       //#endregion Inject params into payload
     }
     return req;
@@ -837,6 +843,7 @@ export class BaseEndpoint<
    *
    * Set default headers in the response
    *
+   * @deprecated
    * @protected
    * @param ctx Context Set default headers
    */

@@ -548,6 +548,3 @@ export class QueryTranslator {
     return retVal;
   }
 }
-
-const asdf = new QueryTranslator('POSTGRES');
-console.log(asdf.quoteValue(0))
