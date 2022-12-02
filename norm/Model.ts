@@ -5,6 +5,7 @@ import {
   DataType,
   // DataTypes,
   DeleteQuery,
+  Generator,
   GeneratorFunction,
   GeneratorOutput,
   // Generators,
@@ -91,7 +92,6 @@ export class Model<
 
   constructor(definition: S) {
     definition = Model.validateModel(definition) as S;
-
     // this._definition = definition;
     this._connectionName = definition.connection;
     // Process and validate the model definition
@@ -452,7 +452,8 @@ export class Model<
       pkQueries: Array<Promise<QueryResult<T>>> = [],
       ukQueries: Array<Promise<QueryResult<T>>> = [],
       ukErrors: Array<Record<keyof T, string>> = [];
-
+    
+    await this._init();
     rows.forEach(async (row, index) => {
       //#region Generators (Default)
       // Generator
@@ -461,18 +462,29 @@ export class Model<
         string
       >;
       // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
-      Object.keys(this._insertDefaults).forEach((column) => {
+      Object.keys(this._insertDefaults).forEach(async (column) => {
         if (row[column as keyof T] === undefined) {
           const generated = this._insertDefaults[column as keyof T] as
             | GeneratorFunction
             | GeneratorOutput;
-          // Ok check what type of generator it is
+
           if (generated instanceof Function) {
-            row[column as keyof T] = generated() as unknown as T[keyof T];
-          } // If Generated contains ${(.*))} then it is DB generated
-          else if (/^\$\{(.*)\}$/.test(generated as string)) {
-            dbGenerated[column as keyof T] = generated as string;
-          } else {
+            row[column as keyof T] = await generated() as unknown as T[keyof T];
+          } else if (typeof generated === 'string') {
+            if (this._connection.hasGenerator(generated)) {
+              const gen = await this._connection.getGenerator(generated as keyof typeof Generator);
+              if (/^\$\{(.*)\}$/.test(gen as string)) {
+                dbGenerated[column as keyof T] = gen as string;
+              } else {
+                row[column as keyof T] = gen as unknown as T[keyof T];
+              }
+            } else if (/^\$\{(.*)\}$/.test(generated as string)) {
+              dbGenerated[column as keyof T] = generated as string;
+            } else {
+              row[column as keyof T] = generated as unknown as T[keyof T];
+            }
+          }
+           else {
             row[column as keyof T] = generated as unknown as T[keyof T];
           }
         }
@@ -720,12 +732,47 @@ export class Model<
       delete data[column];
     });
 
+    //#region Generators (Default)
+    // Generator
+    const dbGenerated: Record<keyof T, string> = {} as Record<
+      keyof T,
+      string
+    >;
+    // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
+    Object.keys(this._updateDefaults).forEach(async (column) => {
+      if (data[column as keyof T] === undefined) {
+        const generated = this._updateDefaults[column as keyof T] as
+          | GeneratorFunction
+          | GeneratorOutput;
+
+        if (generated instanceof Function) {
+          data[column as keyof T] = await generated() as unknown as T[keyof T];
+        } else if (typeof generated === 'string') {
+          if (this._connection.hasGenerator(generated)) {
+            const gen = await this._connection.getGenerator(generated as keyof typeof Generator);
+            if (/^\$\{(.*)\}$/.test(gen as string)) {
+              dbGenerated[column as keyof T] = gen as string;
+            } else {
+              data[column as keyof T] = gen as unknown as T[keyof T];
+            }
+          } else if (/^\$\{(.*)\}$/.test(generated as string)) {
+            dbGenerated[column as keyof T] = generated as string;
+          } else {
+            data[column as keyof T] = generated as unknown as T[keyof T];
+          }
+        }
+          else {
+          data[column as keyof T] = generated as unknown as T[keyof T];
+        }
+      }
+    });
+    //#endregion Generators (Default)
     // Guardian Validator
     const [error, op] = await this.validateData(data);
     if (op) {
       data = op;
     }
-    const errors: ModelValidation<T> = (error !== null)
+    const errors: ModelValidation<T> = (error !== undefined)
         ? error
         : {} as ModelValidation<T>,
       ukQueries: Array<Promise<QueryResult<T>>> = [],
@@ -807,12 +854,21 @@ export class Model<
       });
     });
     //#endregion Unique Keys
-
+    
     // If error is present, throw and end
     if (Object.keys(errors).length > 0) {
       // throw new Error("Cannot update due to errors");
       throw new ModelValidationError(errors, this.name, this._connection.name);
     }
+
+    //#region Generators (DB)
+    Object.keys(dbGenerated).forEach((column) => {
+      if (data[column as keyof T] === undefined) {
+        data[column as keyof T] =
+          dbGenerated[column as keyof T] as unknown as T[keyof T];
+      }
+    });
+    //#endregion Generators (DB)
 
     const options: UpdateQuery<T> = {
       type: 'UPDATE',
@@ -978,10 +1034,11 @@ export class Model<
    */
   public async validateData(
     data: Partial<T>,
-  ): Promise<[ModelValidation<T>, null] | [null, Partial<T>]> {
+  ): Promise<[ModelValidation<T>, undefined] | [undefined, Partial<T>]> {
     const errors: ModelValidation<T> = {};
     // First check what Guardian says
     const [err, op] = await this._validator.validate(data);
+    
     // If there is error, append it
     if (err && err instanceof GuardianError) {
       Object.entries(err).forEach(([key, value]) => {
@@ -991,8 +1048,11 @@ export class Model<
         errors[key as keyof T]?.push(value.message);
       });
     }
-
-    return [errors, op];
+    if(op) {
+      return [undefined, op];
+    } else {
+      return [errors, undefined];
+    }
   }
 
   /**

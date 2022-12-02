@@ -31,7 +31,6 @@ import {
 
 export class BaseEndpoint<
   O extends EndpointOptions = EndpointOptions,
-  T extends Record<string, unknown> = Record<string, unknown>,
 > extends Options<O> {
   protected _allowedMethods: Array<HTTPMethods> = [];
 

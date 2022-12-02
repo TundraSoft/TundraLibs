@@ -34,6 +34,7 @@ export type {
   TranslatorConfig,
   TruncateTableQuery,
   UpdateQuery,
+  QueryFilter,
 } from './types/mod.ts';
 
 // export type {

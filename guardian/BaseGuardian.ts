@@ -169,15 +169,15 @@ export class BaseGuardian<F extends FunctionType> {
   // }
   public validate(
     ...value: Parameters<F>
-  ): [GuardianError | null, ResolvedValue<ReturnType<F>>?] {
+  ): [GuardianError | undefined, ResolvedValue<ReturnType<F>>?] {
     const { guardian } = this;
     let res: ResolvedValue<ReturnType<F>> | undefined,
-      err: GuardianError | null = null;
+      err: GuardianError | undefined = undefined;
     try {
       res = guardian(...value);
       if (isPromiseLike(res)) {
         res.then(
-          (ret: ResolvedValue<ReturnType<F>>) => [null, ret],
+          (ret: ResolvedValue<ReturnType<F>>) => [undefined, ret],
           (ex: ErrorLike) => [ex, undefined],
         );
       }

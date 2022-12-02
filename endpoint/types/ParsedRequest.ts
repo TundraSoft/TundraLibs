@@ -16,6 +16,8 @@ export type FileUploadInfo = {
   path: string;
 };
 
+// For GET, HEAD and DELETE
+
 export type ParsedRequest = {
   method: HTTPMethods;
   params: { [key: string]: unknown };
