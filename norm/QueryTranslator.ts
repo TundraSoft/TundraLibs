@@ -68,7 +68,7 @@ export class QueryTranslator {
   public quoteValue(value: any): string {
     if (
       typeof value === null || typeof (value) === 'function' ||
-      typeof (value) === 'symbol' || typeof (value) === 'undefined' || 
+      typeof (value) === 'symbol' || typeof (value) === 'undefined' ||
       String(value).toUpperCase() === 'NULL'
     ) {
       return 'NULL';

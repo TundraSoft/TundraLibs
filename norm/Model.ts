@@ -452,7 +452,7 @@ export class Model<
       pkQueries: Array<Promise<QueryResult<T>>> = [],
       ukQueries: Array<Promise<QueryResult<T>>> = [],
       ukErrors: Array<Record<keyof T, string>> = [];
-    
+
     await this._init();
     rows.forEach(async (row, index) => {
       //#region Generators (Default)
@@ -472,7 +472,9 @@ export class Model<
             row[column as keyof T] = await generated() as unknown as T[keyof T];
           } else if (typeof generated === 'string') {
             if (this._connection.hasGenerator(generated)) {
-              const gen = await this._connection.getGenerator(generated as keyof typeof Generator);
+              const gen = await this._connection.getGenerator(
+                generated as keyof typeof Generator,
+              );
               if (/^\$\{(.*)\}$/.test(gen as string)) {
                 dbGenerated[column as keyof T] = gen as string;
               } else {
@@ -483,8 +485,7 @@ export class Model<
             } else {
               row[column as keyof T] = generated as unknown as T[keyof T];
             }
-          }
-           else {
+          } else {
             row[column as keyof T] = generated as unknown as T[keyof T];
           }
         }
@@ -749,7 +750,9 @@ export class Model<
           data[column as keyof T] = await generated() as unknown as T[keyof T];
         } else if (typeof generated === 'string') {
           if (this._connection.hasGenerator(generated)) {
-            const gen = await this._connection.getGenerator(generated as keyof typeof Generator);
+            const gen = await this._connection.getGenerator(
+              generated as keyof typeof Generator,
+            );
             if (/^\$\{(.*)\}$/.test(gen as string)) {
               dbGenerated[column as keyof T] = gen as string;
             } else {
@@ -760,8 +763,7 @@ export class Model<
           } else {
             data[column as keyof T] = generated as unknown as T[keyof T];
           }
-        }
-          else {
+        } else {
           data[column as keyof T] = generated as unknown as T[keyof T];
         }
       }
@@ -854,7 +856,7 @@ export class Model<
       });
     });
     //#endregion Unique Keys
-    
+
     // If error is present, throw and end
     if (Object.keys(errors).length > 0) {
       // throw new Error("Cannot update due to errors");
@@ -1038,7 +1040,7 @@ export class Model<
     const errors: ModelValidation<T> = {};
     // First check what Guardian says
     const [err, op] = await this._validator.validate(data);
-    
+
     // If there is error, append it
     if (err && err instanceof GuardianError) {
       Object.entries(err).forEach(([key, value]) => {
@@ -1048,7 +1050,7 @@ export class Model<
         errors[key as keyof T]?.push(value.message);
       });
     }
-    if(op) {
+    if (op) {
       return [undefined, op];
     } else {
       return [errors, undefined];

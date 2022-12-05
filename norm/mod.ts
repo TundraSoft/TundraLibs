@@ -26,6 +26,7 @@ export type {
   ModelValidation,
   MongoDBConfig,
   PostgresConfig,
+  QueryFilter,
   QueryOption,
   SchemaDefinition,
   SchemaType,
@@ -34,7 +35,6 @@ export type {
   TranslatorConfig,
   TruncateTableQuery,
   UpdateQuery,
-  QueryFilter,
 } from './types/mod.ts';
 
 // export type {
