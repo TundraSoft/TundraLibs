@@ -310,7 +310,7 @@ export class BaseEndpoint<
       // Check if it is a single record or multiple records
       let single = false;
       // if (req.payload && !Array.isArray(req.payload)) {
-      if(req.payload && req.payload.length === 1) {
+      if (req.payload && req.payload.length === 1) {
         single = true;
       }
       // Inject state params
@@ -789,7 +789,9 @@ export class BaseEndpoint<
       params: params,
       paging: paging,
       sorting: sorting,
-      payload: (Array.isArray(payload) ? payload : [payload]) as Array<Record<string, unknown>>,
+      payload: (Array.isArray(payload) ? payload : [payload]) as Array<
+        Record<string, unknown>
+      >,
       files: files,
     };
 
