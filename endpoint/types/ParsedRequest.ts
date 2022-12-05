@@ -24,7 +24,6 @@ export type ParsedRequest = {
   paging?: PagingParam;
   sorting?: SortingParam;
   payload?:
-    | Record<string, unknown>
     | Array<Record<string, unknown>>
     | undefined;
   files?: {

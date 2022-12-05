@@ -309,9 +309,9 @@ export class BaseEndpoint<
       // await this._postBodyParse(req, ctx);
       // Check if it is a single record or multiple records
       let single = false;
-      if (req.payload && !Array.isArray(req.payload)) {
+      // if (req.payload && !Array.isArray(req.payload)) {
+      if(req.payload && req.payload.length === 1) {
         single = true;
-        req.payload = [req.payload];
       }
       // Inject state params
       // const injectedPayload: Array<Record<string, unknown>> = [];
@@ -789,7 +789,7 @@ export class BaseEndpoint<
       params: params,
       paging: paging,
       sorting: sorting,
-      payload: payload,
+      payload: (Array.isArray(payload) ? payload : [payload]) as Array<Record<string, unknown>>,
       files: files,
     };
 
