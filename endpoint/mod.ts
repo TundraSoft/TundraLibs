@@ -25,6 +25,7 @@ export {
   isHTTPError,
   methodNotAllowed,
   resourceNotFound,
+  tooManyRequests,
   unauthorized,
 } from './HTTPErrors.ts';
 

@@ -282,15 +282,16 @@ export class BaseEndpoint<
       );
     } else {
       const req = await this._parseRequest(ctx);
-      if (
-        (req.payload === undefined || Object.keys(req.payload).length === 0) &&
-        (req.files === undefined || Object.keys(req.files).length === 0)
-      ) {
-        // ctx.response.status = Status.BadRequest;
-        // ctx.response.body = { message: `Missing/No POST body` };
-        // return;
-        throw badRequest(`Missing/No POST body`, ctx.response.headers);
-      }
+      // Moved below to parse Request
+      // if (
+      //   (req.payload === undefined || Object.keys(req.payload).length === 0) &&
+      //   (req.files === undefined || Object.keys(req.files).length === 0)
+      // ) {
+      //   // ctx.response.status = Status.BadRequest;
+      //   // ctx.response.body = { message: `Missing/No POST body` };
+      //   // return;
+      //   throw badRequest(`Missing/No POST body`, ctx.response.headers);
+      // }
 
       if (this._hasIdentifier(req)) {
         // ctx.response.status = 405;
@@ -382,15 +383,16 @@ export class BaseEndpoint<
       );
     } else {
       const req = await this._parseRequest(ctx);
-      if (
-        (req.payload === undefined || Object.keys(req.payload).length === 0) &&
-        (req.files === undefined || Object.keys(req.files).length === 0)
-      ) {
-        // ctx.response.status = Status.BadRequest;
-        // ctx.response.body = { message: `Missing/No PUT body` };
-        // return;
-        throw badRequest(`Missing/No PUT body`, ctx.response.headers);
-      }
+      // Moved below to parse request
+      // if (
+      //   (req.payload === undefined || Object.keys(req.payload).length === 0) &&
+      //   (req.files === undefined || Object.keys(req.files).length === 0)
+      // ) {
+      //   // ctx.response.status = Status.BadRequest;
+      //   // ctx.response.body = { message: `Missing/No PUT body` };
+      //   // return;
+      //   throw badRequest(`Missing/No PUT body`, ctx.response.headers);
+      // }
       // Call postBodyParse hook
       // We can handle things like HMAC signature check, User access check etc
       // await this._postBodyParse(req, ctx);
@@ -468,15 +470,16 @@ export class BaseEndpoint<
       );
     } else {
       const req = await this._parseRequest(ctx);
-      if (
-        (req.payload === undefined || Object.keys(req.payload).length === 0) &&
-        (req.files === undefined || Object.keys(req.files).length === 0)
-      ) {
-        // ctx.response.status = Status.BadRequest;
-        // ctx.response.body = { message: `Missing/No PATCH body` };
-        // return;
-        throw badRequest(`Missing/No PATCH body`, ctx.response.headers);
-      }
+      // Moved below to parse request
+      // if (
+      //   (req.payload === undefined || Object.keys(req.payload).length === 0) &&
+      //   (req.files === undefined || Object.keys(req.files).length === 0)
+      // ) {
+      //   // ctx.response.status = Status.BadRequest;
+      //   // ctx.response.body = { message: `Missing/No PATCH body` };
+      //   // return;
+      //   throw badRequest(`Missing/No PATCH body`, ctx.response.headers);
+      // }
       // Call postBodyParse hook
       // We can handle things like HMAC signature check, User access check etc
       // await this._postBodyParse(req, ctx);
@@ -782,7 +785,15 @@ export class BaseEndpoint<
         delete params[key];
       }
     });
-
+    // Check if payload is present, if not throw error
+    if (
+      (ctx.request.method === 'POST' || ctx.request.method === 'PUT' ||
+        ctx.request.method === 'PATCH') && payload === undefined
+    ) {
+      throw badRequest({
+        message: `Body is required for ${ctx.request.method} requests`,
+      });
+    }
     //#endregion Parse Body
     const parseReq: ParsedRequest = {
       method: ctx.request.method,

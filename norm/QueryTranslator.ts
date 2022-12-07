@@ -23,6 +23,7 @@ import {
   PostgresTranslatorConfig,
   SQLiteTranslatorConfig,
 } from './types/mod.ts';
+// import { QueryError } from "./errors/mod.ts";
 
 export class QueryTranslator {
   protected _dialect: Dialects;
@@ -392,8 +393,12 @@ export class QueryTranslator {
               (columnName === '$or') ? 'OR' : 'AND',
             ),
           );
-          // } else if (!columns[columnName]) {
-          //   throw new Error(`[module=norm] Column ${columnName} is not part of column list for filtering`)
+        } else if (!columns[columnName]) {
+          // TODO(@abhai2k): Handle this error correctly
+          throw new Error(
+            `[module=norm] Column ${columnName} is not part of column list for filtering`,
+          );
+          // throw new QueryError(`Column ${columnName} is not part of column list for filtering`);
         } else {
           // No its a variable
           if (typeof operation === 'object') {

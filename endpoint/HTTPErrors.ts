@@ -84,3 +84,7 @@ export const unauthorized = (data: HTTPErrorData, headers?: Headers) => {
 export const methodNotAllowed = (data: HTTPErrorData, headers?: Headers) => {
   return new HTTPError(data, Status.MethodNotAllowed, headers);
 };
+
+export const tooManyRequests = (data: HTTPErrorData, headers?: Headers) => {
+  return new HTTPError(data, Status.TooManyRequests, headers);
+};

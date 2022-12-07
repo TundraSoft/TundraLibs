@@ -364,6 +364,9 @@ export class Model<
         page: 1,
       };
     }
+    if (filters) {
+      this.validateFilters(filters);
+    }
     const options: SelectQuery<T> = {
       type: 'SELECT',
       schema: this.schema,
@@ -412,6 +415,9 @@ export class Model<
       //   this._connection.name,
       // );
       throw new ModelPermissionError('SELECT', this.name, this._connectionName);
+    }
+    if (filters) {
+      this.validateFilters(filters);
     }
     const options: SelectQuery<T> = {
       type: 'COUNT',
@@ -462,7 +468,7 @@ export class Model<
         string
       >;
       // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
-      Object.keys(this._insertDefaults).forEach(async (column) => {
+      await Object.keys(this._insertDefaults).forEach(async (column) => {
         if (row[column as keyof T] === undefined) {
           const generated = this._insertDefaults[column as keyof T] as
             | GeneratorFunction
@@ -501,6 +507,7 @@ export class Model<
 
       //#region Guardian
       // Guardian Validator
+      // console.log(row);
       const [error, validRow] = await this.validateData(row);
       if (error) {
         errors[index] = error;
@@ -682,6 +689,7 @@ export class Model<
       throw new ModelValidationError(errors, this.name, this._connection.name);
     }
 
+    // console.log('Inserting', rows);
     const options: InsertQuery<T> = {
       type: 'INSERT',
       schema: this.schema,
@@ -723,7 +731,6 @@ export class Model<
     if (filters) {
       rowCnt = (await this.count(filters)).count;
     }
-
     // Delete Identity Columns from update
     this._identityColumns.forEach((column) => {
       delete data[column];
@@ -871,7 +878,9 @@ export class Model<
       }
     });
     //#endregion Generators (DB)
-
+    if (filters) {
+      this.validateFilters(filters);
+    }
     const options: UpdateQuery<T> = {
       type: 'UPDATE',
       schema: this.schema,
@@ -892,7 +901,7 @@ export class Model<
    * @param filter Filters<T> Filter condition basis which to delete
    * @returns QueryResult<T>
    */
-  public async delete(filter?: QueryFilter<T>): Promise<QueryResult<T>> {
+  public async delete(filters?: QueryFilter<T>): Promise<QueryResult<T>> {
     if (this._permissions.delete === false) {
       // throw new ModelPermission(
       //   "delete",
@@ -902,13 +911,15 @@ export class Model<
       throw new ModelPermissionError('DELETE', this.name, this._connectionName);
     }
     await this._init();
-
+    if (filters) {
+      this.validateFilters(filters);
+    }
     const options: DeleteQuery<T> = {
       type: 'DELETE',
       schema: this.schema,
       table: this.table,
       columns: this._aliasMap,
-      filters: filter,
+      filters: filters,
     };
 
     return await this._connection.delete<T>(options);
@@ -993,9 +1004,6 @@ export class Model<
           this._hashColumns.includes(properKey as keyof T)
         ) {
           // TODO(@abhinav) - Support encrypted columns by decrypting the value in filter (once we move to DB encryption)
-          // throw new Error(
-          //   `Cannot use encrypted/hashed column ${properKey} in filter`,
-          // );
           throw new ModelFilterSecureColumn(
             properKey as string,
             this.name,
@@ -1040,14 +1048,14 @@ export class Model<
     const errors: ModelValidation<T> = {};
     // First check what Guardian says
     const [err, op] = await this._validator.validate(data);
-
     // If there is error, append it
     if (err && err instanceof GuardianError) {
-      Object.entries(err).forEach(([key, value]) => {
-        if (errors[key as keyof T] === undefined) {
-          errors[key as keyof T] = [];
+      // Object.entries(err.).forEach(([key, value]) => {
+      err.children.forEach((item) => {
+        if (errors[item.path as keyof T] === undefined) {
+          errors[item.path as keyof T] = [];
         }
-        errors[key as keyof T]?.push(value.message);
+        errors[item.path as keyof T]?.push(item.message);
       });
     }
     if (op) {

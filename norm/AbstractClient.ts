@@ -64,7 +64,7 @@ export abstract class AbstractClient<
       }
     } catch (e) {
       this._state = 'CLOSED';
-      console.log(e);
+      // console.log(e);
       // Handle all errors
       throw new ConnectionError(e.message, this.name, this.dialect);
     }
