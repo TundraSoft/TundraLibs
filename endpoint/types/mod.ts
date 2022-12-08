@@ -1,4 +1,5 @@
 export type {
+  EndpointManagerOptions,
   EndpointOptions,
   MethodHandler,
   PostBodyParseHandler,

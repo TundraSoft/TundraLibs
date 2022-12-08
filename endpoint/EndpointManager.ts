@@ -1,12 +1,32 @@
 import { path } from '../dependencies.ts';
-import type { EndpointOptions } from './types/mod.ts';
+import type { EndpointManagerOptions, EndpointOptions } from './types/mod.ts';
 import { BaseEndpoint } from './BaseEndpoint.ts';
 
-export class EndpointManager {
-  protected static _endPointGroups = new Map<string, string[]>();
-  protected static _endPointConfigs = new Map<string, EndpointOptions>();
-  protected static _endPoints = new Map<string, BaseEndpoint>();
-  protected static _endPointsPaths: string[] = [];
+export class EndpointManager<
+  S extends Record<string, unknown> = Record<string, unknown>,
+> {
+  protected _defaultEndpointOptions: EndpointManagerOptions;
+  protected _endPointGroups = new Map<string, string[]>();
+  protected _endPointConfigs = new Map<string, EndpointOptions>();
+  protected _endPoints = new Map<string, BaseEndpoint<S>>();
+  protected _endPointsPaths: string[] = [];
+
+  constructor(defaultOptions: EndpointManagerOptions) {
+    defaultOptions = {
+      ...{
+        headers: {
+          totalRows: 'X-Total-Rows',
+          paginationLimit: 'X-Pagination-Limit',
+          paginationPage: 'X-Pagination-Page',
+        },
+        notFoundMessage: 'Resource you are looking for is not found',
+        notSupportedMessage: 'Requested method is not supported',
+      },
+      ...defaultOptions,
+    };
+    this._defaultEndpointOptions = defaultOptions;
+    //this.loadEndpoints(location, includeSubfolder);
+  }
 
   /**
    * loadEndpoints
@@ -16,7 +36,7 @@ export class EndpointManager {
    * @static
    * @param location string Path from which to load endpoints
    */
-  public static async loadEndpoints(location: string, includeSubfolder = true) {
+  async loadEndpoints(location: string, includeSubfolder = true) {
     // Go through a directoy and load all the endpoints
     // We assume the "paths" will contain either EndpointConfig or BaseEndpoint class (or extensions of it)
     location = Deno.realPathSync(location);
@@ -45,24 +65,24 @@ export class EndpointManager {
               // name,
               identifiers,
             );
-          if (EndpointManager._endPointConfigs.has(name)) {
+          if (this._endPointConfigs.has(name)) {
             throw new Error(`Endpoint name ${name} already exists`);
           }
           // Check if the path is used
-          if (EndpointManager._endPointsPaths.includes(config.routePath)) {
+          if (this._endPointsPaths.includes(config.routePath)) {
             throw new Error(`Endpoint path ${config.routePath} already exists`);
           }
 
-          EndpointManager._endPointConfigs.set(name, config);
+          this._endPointConfigs.set(name, config);
           // Set the groups
-          EndpointManager._endPointGroups.set(group, [
-            ...(EndpointManager._endPointGroups.get(group) || []),
+          this._endPointGroups.set(group, [
+            ...(this._endPointGroups.get(group) || []),
             name,
           ]);
-          EndpointManager._endPointsPaths.push(routePath);
+          this._endPointsPaths.push(routePath);
         }
       } else if (file.isDirectory && includeSubfolder) {
-        await EndpointManager.loadEndpoints(`${location}/${file.name}`);
+        await this.loadEndpoints(`${location}/${file.name}`);
       }
     }
   }
@@ -77,27 +97,30 @@ export class EndpointManager {
    * @param group string The group name of which to fetch endpoints
    * @returns Array<BaseEndpoint> List of endpoints in the group
    */
-  public static getEndpoints(group?: string): BaseEndpoint[] {
+  public getEndpoints(group?: string): BaseEndpoint[] {
     const list = (group !== undefined)
-      ? EndpointManager._endPointGroups.get(group) || []
-      : Array.from(EndpointManager._endPointConfigs.keys());
+      ? this._endPointGroups.get(group) || []
+      : Array.from(this._endPointConfigs.keys());
     return list.map((name) => {
-      return EndpointManager.getEndpoint(name);
+      return this.getEndpoint(name);
     });
   }
 
-  public static getEndpoint(name: string): BaseEndpoint {
+  public getEndpoint(name: string): BaseEndpoint {
     name = name.toLowerCase().trim();
-    if (EndpointManager._endPointConfigs.has(name)) {
-      if (!EndpointManager._endPoints.has(name)) {
-        EndpointManager._endPoints.set(
+    if (this._endPointConfigs.has(name)) {
+      if (!this._endPoints.has(name)) {
+        this._endPoints.set(
           name,
-          new BaseEndpoint(
-            EndpointManager._endPointConfigs.get(name) as EndpointOptions,
+          new BaseEndpoint<S>(
+            {
+              ...this._defaultEndpointOptions,
+              ...this._endPointConfigs.get(name),
+            } as EndpointOptions,
           ),
         );
       }
-      return EndpointManager._endPoints.get(name) as BaseEndpoint;
+      return this._endPoints.get(name) as BaseEndpoint;
     }
     throw new Error(`Endpoint ${name} does not exist`);
   }

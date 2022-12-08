@@ -3,19 +3,27 @@ import { Context } from '../../dependencies.ts';
 import { ParsedRequest } from './ParsedRequest.ts';
 import type { HTTPResponse } from './HTTPResponse.ts';
 
-export type PostBodyParseHandler = (
-  req: ParsedRequest,
-  ctx: Context,
+export type PostBodyParseHandler = <
+  S extends Record<string, unknown> = Record<string, unknown>,
+>(
+  req: ParsedRequest<S>,
+  ctx: Context<S>,
 ) => Promise<void>;
-export type PreResponseHandler = (ctx: Context) => Promise<void>;
-export type MethodHandler = (request: ParsedRequest) => Promise<HTTPResponse>;
+export type PreResponseHandler = <
+  S extends Record<string, unknown> = Record<string, unknown>,
+>(ctx: Context<S>) => Promise<void>;
+export type MethodHandler = <
+  S extends Record<string, unknown> = Record<string, unknown>,
+>(request: ParsedRequest<S>) => Promise<HTTPResponse>;
 
 export type EndpointOptions = {
   name: string;
-  routePath: string;
   routeGroup: string;
+  routePath: string;
   routeIdentifiers?: string[];
-  stateParams: boolean;
+  uploadPath?: string;
+  uploadMaxFileSize?: number;
+  // stateParams: boolean;
   // Method handlers
   getHandler?: MethodHandler;
   postHandler?: MethodHandler;
@@ -27,7 +35,7 @@ export type EndpointOptions = {
   postBodyParse?: PostBodyParseHandler;
   preResponseHandler?: PreResponseHandler;
   // Auth handler - Called before actual method handlers
-  authHandler?: PreResponseHandler;
+  // authHandler?: PostBodyParseHandler;
   // Few header names
   pageLimit?: number;
   headers: {
@@ -39,3 +47,15 @@ export type EndpointOptions = {
   notFoundMessage: string;
   notSupportedMessage: string;
 };
+
+export type EndpointManagerOptions = Pick<
+  EndpointOptions,
+  | 'uploadPath'
+  | 'uploadMaxFileSize'
+  | 'postBodyParse'
+  | 'preResponseHandler'
+  | 'headers'
+  | 'notFoundMessage'
+  | 'notSupportedMessage'
+  | 'pageLimit'
+>;

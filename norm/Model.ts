@@ -1011,11 +1011,6 @@ export class Model<
           );
         }
       } else {
-        // throw new ModelFilterError(
-        //   `Unknown filter operator: ${key}`,
-        //   this._name,
-        //   this._connection.name,
-        // );
         throw new ModelFilterError(key, this._name, this._connectionName);
       }
       // Check value

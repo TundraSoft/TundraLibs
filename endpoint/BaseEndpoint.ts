@@ -30,13 +30,14 @@ import {
 // import { EndpointHooks } from "./types/EndpointOptions.ts";
 
 export class BaseEndpoint<
+  S extends Record<string, unknown> = Record<string, unknown>,
   O extends EndpointOptions = EndpointOptions,
 > extends Options<O> {
   protected _allowedMethods: Array<HTTPMethods> = [];
 
   constructor(options: Partial<EndpointOptions>) {
     const defOptions: Partial<EndpointOptions> = {
-      stateParams: true,
+      // stateParams: true,
       getHandler: undefined,
       postHandler: undefined,
       putHandler: undefined,
@@ -45,7 +46,7 @@ export class BaseEndpoint<
       headHandler: undefined,
       postBodyParse: undefined,
       preResponseHandler: undefined,
-      authHandler: undefined,
+      // authHandler: undefined,
       headers: {
         totalRows: 'X-Total-Rows',
         paginationLimit: 'X-Pagination-Limit',
@@ -170,7 +171,7 @@ export class BaseEndpoint<
    * @param ctx Context The Context from OAK
    * @returns void
    */
-  public async GET(ctx: Context): Promise<void> {
+  public async GET(ctx: Context<S>): Promise<void> {
     const handler = this._getOption('getHandler'),
       postHandle = this._getOption('preResponseHandler');
 
@@ -688,8 +689,8 @@ export class BaseEndpoint<
    * @returns ParsedRequest The parsed request
    */
   protected async _parseRequest(
-    ctx: Context,
-  ): Promise<ParsedRequest> {
+    ctx: Context<S>,
+  ): Promise<ParsedRequest<S>> {
     const params = oakHelpers.getQuery(ctx, { mergeParams: true }),
       paging: PagingParam = {},
       sorting: SortingParam = {},
@@ -737,7 +738,9 @@ export class BaseEndpoint<
     //#region Parse Body
     // TODO(@abhinav) - Check if body exists in http 2.0
     if (ctx.request.hasBody === true && contentLength > 0) {
-      const body = await ctx.request.body();
+      const body = await ctx.request.body(),
+        maxFileSize = this._getOption('uploadMaxFileSize') || 10485760, // default of 10MiB
+        uploadPath = this._getOption('uploadPath'); // default of undefined
       if (body.type === 'bytes') {
         payload = {
           data: new TextDecoder().decode(await body.value),
@@ -758,8 +761,8 @@ export class BaseEndpoint<
         // Ok this gets a little complicated as there will be both fields and files
         // @TODO - Figure out a better way to do this?
         const formData = await body.value.read({
-          maxFileSize: ctx.app.state.MAX_FILE_UPLOAD_SIZE || 10485760, // default of 10MiB
-          outPath: ctx.app.state.FILE_UPLOAD_PATH || undefined, // default of undefined
+          maxFileSize: maxFileSize,
+          outPath: uploadPath,
         });
         payload = formData.fields;
         // Add files
@@ -795,8 +798,10 @@ export class BaseEndpoint<
       });
     }
     //#endregion Parse Body
-    const parseReq: ParsedRequest = {
+
+    const parseReq: ParsedRequest<S> = {
       method: ctx.request.method,
+      state: ctx.state, // State is passed to the request
       params: params,
       paging: paging,
       sorting: sorting,
@@ -812,10 +817,12 @@ export class BaseEndpoint<
     }
 
     // Call Inject params
-    return this._injectStateParams(parseReq, ctx.state.params);
+    // return this._injectStateParams(parseReq, ctx.state.params);
+    return parseReq;
   }
 
   /**
+   * @deprecated
    * @param req ParsedRequest The data parsed from request
    * @param params Record<string, unknown> Params to inject
    * @returns ParsedRequest The parsed request with injected params
@@ -877,7 +884,7 @@ export class BaseEndpoint<
   protected _buildIdentifiers(): string {
     const routeIdentifiers = this._getOption('routeIdentifiers');
     if (routeIdentifiers && routeIdentifiers.length > 0) {
-      // return ':' + this._getOption('routeIdentifiers').join(',:') + '?';
+      // Only last identifier is optional
       return ':' + routeIdentifiers.join('\\::') + '?';
     } else {
       return '';

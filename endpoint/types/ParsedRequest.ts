@@ -18,8 +18,11 @@ export type FileUploadInfo = {
 
 // For GET, HEAD and DELETE
 
-export type ParsedRequest = {
+export type ParsedRequest<
+  S extends Record<string, unknown> = Record<string, unknown>,
+> = {
   method: HTTPMethods;
+  state: S;
   params: { [key: string]: unknown };
   paging?: PagingParam;
   sorting?: SortingParam;
