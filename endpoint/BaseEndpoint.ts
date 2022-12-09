@@ -240,9 +240,9 @@ export class BaseEndpoint<
       }
 
       if (op.headers) {
-        op.headers.forEach(([key, value]) => {
+        op.headers.forEach((value, key) => {
           ctx.response.headers.set(key, value);
-        });
+        })
       }
 
       // Call post response hook
@@ -342,9 +342,9 @@ export class BaseEndpoint<
       );
 
       if (op.headers) {
-        op.headers.forEach(([key, value]) => {
+        op.headers.forEach((value, key) => {
           ctx.response.headers.set(key, value);
-        });
+        })
       }
 
       // Call post response hook
@@ -429,9 +429,9 @@ export class BaseEndpoint<
       );
 
       if (op.headers) {
-        op.headers.forEach(([key, value]) => {
+        op.headers.forEach((value, key) => {
           ctx.response.headers.set(key, value);
-        });
+        })
       }
 
       // Call post response hook
@@ -517,9 +517,9 @@ export class BaseEndpoint<
       );
 
       if (op.headers) {
-        op.headers.forEach(([key, value]) => {
+        op.headers.forEach((value, key) => {
           ctx.response.headers.set(key, value);
-        });
+        })
       }
       // Call post response hook
       if (postHandle !== undefined) {
@@ -585,9 +585,9 @@ export class BaseEndpoint<
       // There is no body in DELETE response
       // ctx.response.body = op.body;
       if (op.headers) {
-        op.headers.forEach(([key, value]) => {
+        op.headers.forEach((value, key) => {
           ctx.response.headers.set(key, value);
-        });
+        })
       }
       // Call post response hook
       if (postHandle !== undefined) {
@@ -643,9 +643,9 @@ export class BaseEndpoint<
       );
 
       if (op.headers) {
-        op.headers.forEach(([key, value]) => {
+        op.headers.forEach((value, key) => {
           ctx.response.headers.set(key, value);
-        });
+        })
       }
       // Call post response hook
       if (postHandle !== undefined) {

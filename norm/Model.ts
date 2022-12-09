@@ -156,11 +156,11 @@ export class Model<
       }
       // Default
       if (columnDefinition.defaults) {
-        if (columnDefinition.defaults.insert) {
+        if (columnDefinition.defaults.insert !== undefined) {
           this._insertDefaults[name as keyof T] =
             columnDefinition.defaults.insert;
         }
-        if (columnDefinition.defaults.update) {
+        if (columnDefinition.defaults.update !== undefined) {
           this._updateDefaults[name as keyof T] =
             columnDefinition.defaults.update;
         }

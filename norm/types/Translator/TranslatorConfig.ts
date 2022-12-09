@@ -54,7 +54,7 @@ export const PostgresTranslatorConfig: TranslatorConfig = {
     'DATE': 'DATE',
     'TIME': 'TIME',
     'DATETIME': 'DATETIME',
-    'TIMESTAMP': 'TIMESTAMP',
+    'TIMESTAMP': 'TIMESTAMPTZ',
     'BYTEA': 'BYTEA',
     'TEXT': 'TEXT',
     'UUID': 'UUID',
