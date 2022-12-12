@@ -12,7 +12,7 @@ import { Model } from './Model.ts';
 // import { DatabaseManager } from "./DatabaseManager.ts";
 import { QueryTranslator } from './QueryTranslator.ts';
 
-import { ModelConfigError } from './errors/mod.ts';
+import { ModelConfigError, ModelValidationError } from './errors/mod.ts';
 
 export class SchemaManager<
   SD extends SchemaDefinition = SchemaDefinition,
@@ -56,7 +56,10 @@ export class SchemaManager<
   public static validateSchema(schema: SchemaDefinition): SchemaDefinition {
     // It is possible that the input is actually an import, so we tread lightly
     // const schema = JSON.parse(JSON.stringify((schemas))) as SchemaDefinition;
-    Object.entries(schema).forEach(([modelName, model]) => {
+    const models = Object.keys(schema);
+    // Object.entries(schema).forEach(([modelName, model]) => {
+    for (const modelName of models) {
+      const model = schema[modelName];
       if (modelName !== model.name) {
         throw new Error(
           `Model name ${modelName} does not match with name in model definition(${model.name})`,
@@ -117,7 +120,7 @@ export class SchemaManager<
         });
         // Inject columns for joining
       }
-    });
+    };
     return schema;
   }
 
@@ -161,6 +164,7 @@ export class SchemaManager<
       models: SchemaDefinition = schema,
       modelNames = Object.keys(models),
       hierarchy: ModelDefinition[] = [];
+    SchemaManager.validateSchema(models);
     // We assume the FK scenario is validated!
     while (modelNames.length > 0) {
       const name = modelNames.shift() as string,
@@ -183,9 +187,11 @@ export class SchemaManager<
     const finalSQL: string[] = [],
       schemas: string[] = [],
       tableStructure: CreateTableQuery[] = [],
-      insertSQL: InsertQuery[] = [];
+      // insertSQL: InsertQuery[] = [];
+      insertSQL: string[] = [];
 
-    hierarchy.forEach((model) => {
+    // await hierarchy.forEach(async (model) => {
+    for (const model of hierarchy) {
       if (model.schema && !schemas.includes(model.schema)) {
         schemas.push(model.schema);
       }
@@ -256,13 +262,19 @@ export class SchemaManager<
         const file = model.name + '.seed.json',
           seedData = JSON.parse(
             Deno.readTextFileSync(path.join(realSeedPath, file)),
-          );
-        insert.data = seedData;
-        insertSQL.push(insert);
+          ), 
+          theModel = new Model(model);
+        // insert.data = seedData;
+        insertSQL.push(await theModel.generateInsert(seedData));
+        insertSQL.push('');
       } catch (_e) {
         // Nothing to do
+        if(_e instanceof ModelValidationError) {
+          console.log(_e.model)
+          console.log(_e.errorList)
+        }
       }
-    });
+    }
 
     const translator = new QueryTranslator(dialect);
 
@@ -284,13 +296,13 @@ export class SchemaManager<
       new TextEncoder().encode(finalSQL.join('\n')),
       { create: true, append: false },
     );
-    const inserts = insertSQL.map((insert) =>
-      translator.translate(insert) + '\n\n'
-    );
+    // const inserts = insertSQL.map((insert) =>
+    //   translator.translate(insert) + '\n\n'
+    // );
     // Insert statements
     Deno.writeFileSync(
       path.join(outPath, `DML.${dialect}.sql`),
-      new TextEncoder().encode(inserts.join('\n')),
+      new TextEncoder().encode(insertSQL.join('\n')),
       { create: true, append: false },
     );
   }

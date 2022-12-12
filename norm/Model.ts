@@ -185,21 +185,20 @@ export class Model<
         validator[name] = columnDefinition.validation;
       } else {
         validator[name] = DefaultValidator[columnDefinition.type];
-
         // Add length spec if possible
-        if (
-          columnDefinition.length && typeof columnDefinition.length === 'number'
-        ) {
-          validator[name].max(columnDefinition.length);
-        }
+        // if (
+        //   columnDefinition.length && typeof columnDefinition.length === 'number'
+        // ) {
+        //   validator[name].max(columnDefinition.length);
+        // }
 
         // Finally add optional
-        if (columnDefinition.isNullable) {
-          validator[name].optional();
+        if (!this._notNulls.includes(name as keyof T)) {
+          validator[name] = validator[name].optional();
         }
       }
     });
-
+    
     this._validator = Struct(
       validator,
       `Validation failed for model ${this.name}`,
@@ -452,7 +451,7 @@ export class Model<
 
     const rows: Array<Partial<T>> =
         (Array.isArray(data) ? data : [data]) as Array<Partial<T>>,
-      insertedColumns: Array<keyof T> = this._notNulls as Array<keyof T>,
+      insertedColumns: Array<keyof T> = structuredClone(this._notNulls) as Array<keyof T>, 
       errors: { [key: number]: ModelValidation<T> } = {},
       ukHash: { [key: string]: string[] } = {},
       pkQueries: Array<Promise<QueryResult<T>>> = [],
@@ -521,7 +520,7 @@ export class Model<
       this._notNulls.forEach((column) => {
         if (
           (row[column] === undefined || row[column] === null) &&
-          !this._identityColumns.includes(column)
+          !this._identityColumns.includes(column) && !Object.keys(dbGenerated).includes(column as string)
         ) {
           if (!errors[index]) {
             errors[index] = {} as ModelValidation<T>;
@@ -563,11 +562,6 @@ export class Model<
           row[column] = hash(String(row[column])) as unknown as T[keyof T];
         }
       });
-      // this._encryptedColumns.forEach((column) => {
-      //   if (row[column] !== undefined) {
-      //     row[column] = await this._encrypt(row[column] as string);
-      //   }
-      // });
       //#endregion Encrypt Columns
 
       //#region Unique Keys check
@@ -1060,6 +1054,200 @@ export class Model<
     }
   }
 
+  //#region Few generators
+  // public async generateDDL(): Promise<string> {
+  // }
+
+  /**
+   * generateInsert
+   * This is primarily used for Seed data files. It takes care of most checks except for:
+   * 1. Foreign Keys
+   * 2. Unique keys on the entire table
+   *
+   * @param data Array<Partial<T>>> The data to be inserted
+   * @returns QueryResult<T>
+   */
+  public async generateInsert(
+    data: Partial<T> | Array<Partial<T>>,
+  ): Promise<string> {
+    const rows: Array<Partial<T>> =
+        (Array.isArray(data) ? data : [data]) as Array<Partial<T>>,
+      insertedColumns: Array<keyof T> = structuredClone(this._notNulls) as Array<keyof T>,
+      errors: { [key: number]: ModelValidation<T> } = {},
+      ukHash: { [key: string]: string[] } = {},
+      ukErrors: Array<Record<keyof T, string>> = [];
+
+    await this._init();
+    // await rows.forEach(async (row, index) => {
+    for (let index = 0; index < rows.length; index++) {
+      let row = rows[index];
+      //#region Generators (Default)
+      // Generator
+      const dbGenerated: Record<keyof T, string> = {} as Record<
+        keyof T,
+        string
+      >;
+      // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
+      await Object.keys(this._insertDefaults).forEach(async (column) => {
+        if (row[column as keyof T] === undefined) {
+          const generated = this._insertDefaults[column as keyof T] as
+            | GeneratorFunction
+            | GeneratorOutput;
+
+          if (generated instanceof Function) {
+            row[column as keyof T] = await generated() as unknown as T[keyof T];
+          } else if (typeof generated === 'string') {
+            if (this._connection.hasGenerator(generated)) {
+              const gen = await this._connection.getGenerator(
+                generated as keyof typeof Generator,
+              );
+              if (/^\$\{(.*)\}$/.test(gen as string)) {
+                dbGenerated[column as keyof T] = gen as string;
+              } else {
+                row[column as keyof T] = gen as unknown as T[keyof T];
+              }
+            } else if (/^\$\{(.*)\}$/.test(generated as string)) {
+              dbGenerated[column as keyof T] = generated as string;
+            } else {
+              row[column as keyof T] = generated as unknown as T[keyof T];
+            }
+          } else {
+            row[column as keyof T] = generated as unknown as T[keyof T];
+          }
+        }
+      });
+      //#endregion Generators (Default)
+
+      // Remove Identity key columns
+      //#region Remove Identity key columns
+      this._identityColumns.forEach((column) => {
+        delete row[column];
+      });
+      //#endregion Identity key columns
+
+      //#region Guardian
+      // Guardian Validator
+      const [error, validRow] = await this.validateData(row);
+      if (error) {
+        errors[index] = error;
+      } else {
+        row = validRow as NonNullable<T>;
+      }
+      //#endregion Guardian
+
+      //#region Not Nulls
+      // Check not nulls
+      this._notNulls.forEach((column) => {
+        if (
+          (row[column] === undefined || row[column] === null) &&
+          !this._identityColumns.includes(column) && !Object.keys(dbGenerated).includes(column as string)
+        ) {
+          if (!errors[index]) {
+            errors[index] = {} as ModelValidation<T>;
+          }
+          if (errors[index][column] === undefined) {
+            errors[index][column] = [];
+          }
+          errors[index][column]?.push(
+            `Column ${column as string} cannot be null`,
+          );
+        }
+      });
+      //#endregion Not Nulls
+
+      //#region Encrypt Columns
+      // Encryption
+      // this._encryptedColumns.forEach((column) => {
+      for (const column of this._encryptedColumns) {
+        if (row[column] !== undefined || row[column] !== null) {
+          row[column] = encrypt(
+            this._encryptionKey as string,
+            String(row[column]),
+          ) as unknown as T[keyof T];
+        }
+      }
+      // this._hashColumns.forEach((column) => {
+      for (const column of this._hashColumns) {
+        if (row[column] !== undefined || row[column] !== null) {
+          row[column] = await hash(String(row[column])) as unknown as T[keyof T];
+        }
+      }
+      // this._encryptedColumns.forEach((column) => {
+      //   if (row[column] !== undefined) {
+      //     row[column] = await this._encrypt(row[column] as string);
+      //   }
+      // });
+      //#endregion Encrypt Columns
+
+      //#region Unique Keys check
+      Object.keys(this._uniqueKeys).forEach((key) => {
+        if (ukHash[key] === undefined) {
+          ukHash[key] = [];
+        }
+        //#region Check if the key is unique in the array provided
+        // Create hash
+        const hash = this._uniqueKeys[key].map((column) => {
+          return row[column];
+        }).join('::');
+        if (ukHash[key].includes(hash)) {
+          // Its not unique in the batch itself
+          if (!errors[index]) {
+            errors[index] = {} as ModelValidation<T>;
+          }
+          this._uniqueKeys[key].forEach((column) => {
+            if (errors[index][column] === undefined) {
+              errors[index][column] = [];
+            }
+            errors[index][column]?.push(
+              `Column ${column as string} is not unique`,
+            );
+          });
+        } else {
+          ukHash[key].push(hash);
+        }
+        //#endregion Check if the key is unique in the array provided
+      });
+      //#endregion Unique Keys check
+
+      //#region Generators (DB)
+      Object.keys(dbGenerated).forEach((column) => {
+        if (row[column as keyof T] === undefined) {
+          row[column as keyof T] =
+            dbGenerated[column as keyof T] as unknown as T[keyof T];
+        }
+      });
+      //#endregion Generators (DB)
+
+      // Set insert columns
+      const insertColumns = (Object.keys(row) as Array<keyof T>).filter(
+        (column) => {
+          return !insertedColumns.includes(column);
+        },
+      );
+      insertedColumns.push(...insertColumns);
+
+      // Set the row
+      rows[index] = row;
+    }
+
+    
+    // If error is present, throw and end
+    if (Object.keys(errors).length > 0) {
+      // throw new ModelValidationError(errors, this.name, this._connection.name);
+      // throw new Error("Cannot insert due to errors");
+      throw new ModelValidationError(errors, this.name, this._connection.name);
+    }
+
+    await this._init();
+    return this._connection.generateQuery({
+      type: 'INSERT',
+      schema: this.schema,
+      table: this.table,
+      columns: this._aliasMap,
+      data: rows,
+    });
+  }
+  //#endregion
   /**
    * _init
    *
@@ -1116,7 +1304,8 @@ export class Model<
         col.disableUpdate = true;
       }
       if (col.security && col.security === 'ENCRYPT') {
-        if (model.encryptionKey === undefined) {
+        if (model.encryptionKey === undefined || model.encryptionKey.length === 0) {
+          console.log('sdafsdfdsf')
           throw new ModelConfigError(
             `Encryption key not defined`,
             model.name,
@@ -1136,9 +1325,6 @@ export class Model<
           model.name,
           model.connection,
         );
-        // throw new Error(
-        //   `Model ${model.name} has an encryption key that is not 32 bytes long`,
-        // );
       }
     }
     // Check PK

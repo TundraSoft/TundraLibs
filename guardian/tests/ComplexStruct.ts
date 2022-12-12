@@ -7,8 +7,24 @@ const stG = Struct({
   profile: {
     facebook: Guardian.string().url(),
   },
+  test: Guardian.string().min(10).notEmpty().optional()
 });
 
+try {
+  const [err, data] = stG.validate({
+    name: 'Abhinav',
+    age: 18,
+    profile: { facebook: 'https://google.com/' },
+    test: undefined
+  });
+  if (err) {
+    console.log(err.toJSON());
+  }
+} catch (e) {
+  console.log(e.toJSON());
+}
+
+Deno.exit(1);
 // const data = [
 //   {
 //     name: "Abhinav Ariyanayakipuram Venkatachalam",

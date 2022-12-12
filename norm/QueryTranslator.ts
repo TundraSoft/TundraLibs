@@ -67,6 +67,10 @@ export class QueryTranslator {
 
   // deno-lint-ignore no-explicit-any
   public quoteValue(value: any): string {
+    // Replace Generator
+    if(this.hasGenerator(value)) {
+      value = this.getGenerator(value);
+    }
     if (
       typeof value === null || typeof (value) === 'function' ||
       typeof (value) === 'symbol' || typeof (value) === 'undefined' ||
@@ -363,9 +367,66 @@ export class QueryTranslator {
   }
 
   protected _processColumnType(column: BaseColumnDefinition): string {
-    const type = this._config.dataTypes[column.type],
-      length = (column.length) ? `(${column.length})` : '',
-      nullable = (column.isNullable === true) ? '' : ' NOT NULL';
+    let type = this._config.dataTypes[column.type],
+      length = (column.length) ? `(${column.length})` : '';
+    const nullable = (column.isNullable === true) ? '' : ' NOT NULL', 
+      noLengthTypes = [  'INT',
+                        'INTEGER',
+                        'SMALLINT',
+                        'TINYINT',
+                        'SERIAL',
+                        'SMALLSERIAL',
+                        'BIGSERIAL',
+                        'BIGINT',
+                        'BIT',
+                        'BOOLEAN',
+                        'BINARY',
+                        'REAL',
+                        'FLOAT',
+                        'DATE',
+                        'TIME',
+                        'DATETIME',
+                        'TIMESTAMP',
+                        'BYTEA',
+                        'TEXT',
+                        'UUID',
+                        'JSON',
+                        'ARRAY',
+                        'ARRAY_STRING',
+                        'ARRAY_INTEGER',
+                        'ARRAY_BIGINT',
+                        'ARRAY_DECIMAL',
+                        'ARRAY_BOOLEAN',
+                        'ARRAY_DATE',
+                        'AUTO_INCREMENT',], 
+      dataLengthTypes = ['DOUBLE PRECISION',
+      'DOUBLE',
+      'NUMERIC',
+      'NUMBER',
+      'DECIMAL',
+      'MONEY']
+    // Do not define data length even if it is defined
+    if(noLengthTypes.includes(column.type)) {
+      length = '';
+    } else if (dataLengthTypes.includes(column.type)) {
+      // Ok these can have precision and scale
+      if (column.length) {
+        if(column.length instanceof Object) {
+          length = `(${column.length.precision}, ${column.length.scale || 0})`;
+        } else {
+          length = `(${column.length})`;
+        }
+      }
+    } else {
+      // Normal length
+      if (column.length) {
+        if (column.length instanceof Object) {
+          length = `(${column.length.precision})`;
+        } else {
+          length = `(${column.length})`;
+        }
+      }
+    }
     // defaultValue = (column.defaults?.insert !== undefined) ? ` DEFAULT ${this.quoteValue(column.defaults?.insert)}` : "";
     return `${type}${length}${nullable}`;
   }

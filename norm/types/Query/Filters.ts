@@ -1,21 +1,23 @@
-export type FilterOperators<PropVal> = PropVal | {
-  $eq?: PropVal;
-  $neq?: PropVal;
-  $in?: Array<PropVal>;
-  $nin?: Array<PropVal>;
-  $lt?: PropVal;
-  $lte?: PropVal;
-  $gt?: PropVal;
-  $gte?: PropVal;
+import type { Generators } from '../Translator/mod.ts';
+
+export type FilterOperators<PropVal> = PropVal | Generators | {
+  $eq?: PropVal | Generators;
+  $neq?: PropVal | Generators;
+  $in?: Array<PropVal | Generators>;
+  $nin?: Array<PropVal | Generators>;
+  $lt?: PropVal | Generators;
+  $lte?: PropVal | Generators;
+  $gt?: PropVal | Generators;
+  $gte?: PropVal | Generators;
   $between?: {
-    $from: PropVal;
-    $to: PropVal;
+    $from: PropVal | Generators;
+    $to: PropVal | Generators;
   };
   $null?: boolean;
-  $like?: PropVal;
-  $nlike?: PropVal;
-  $ilike?: PropVal;
-  $nilike?: PropVal;
+  $like?: PropVal | Generators;
+  $nlike?: PropVal | Generators;
+  $ilike?: PropVal | Generators;
+  $nilike?: PropVal | Generators;
 };
 
 export type QueryFilter<
@@ -33,10 +35,3 @@ export type QueryFilter<
       [Property in keyof T]?: FilterOperators<T[Property]>;
     }
   >;
-
-type TT = {
-  a: string;
-  b: number;
-};
-const a: QueryFilter<TT> = {};
-a['a'] = '123';
