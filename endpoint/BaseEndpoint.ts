@@ -242,7 +242,7 @@ export class BaseEndpoint<
       if (op.headers) {
         op.headers.forEach((value, key) => {
           ctx.response.headers.set(key, value);
-        })
+        });
       }
 
       // Call post response hook
@@ -344,7 +344,7 @@ export class BaseEndpoint<
       if (op.headers) {
         op.headers.forEach((value, key) => {
           ctx.response.headers.set(key, value);
-        })
+        });
       }
 
       // Call post response hook
@@ -431,7 +431,7 @@ export class BaseEndpoint<
       if (op.headers) {
         op.headers.forEach((value, key) => {
           ctx.response.headers.set(key, value);
-        })
+        });
       }
 
       // Call post response hook
@@ -519,7 +519,7 @@ export class BaseEndpoint<
       if (op.headers) {
         op.headers.forEach((value, key) => {
           ctx.response.headers.set(key, value);
-        })
+        });
       }
       // Call post response hook
       if (postHandle !== undefined) {
@@ -587,7 +587,7 @@ export class BaseEndpoint<
       if (op.headers) {
         op.headers.forEach((value, key) => {
           ctx.response.headers.set(key, value);
-        })
+        });
       }
       // Call post response hook
       if (postHandle !== undefined) {
@@ -645,7 +645,7 @@ export class BaseEndpoint<
       if (op.headers) {
         op.headers.forEach((value, key) => {
           ctx.response.headers.set(key, value);
-        })
+        });
       }
       // Call post response hook
       if (postHandle !== undefined) {

@@ -120,7 +120,7 @@ export class SchemaManager<
         });
         // Inject columns for joining
       }
-    };
+    }
     return schema;
   }
 
@@ -262,16 +262,16 @@ export class SchemaManager<
         const file = model.name + '.seed.json',
           seedData = JSON.parse(
             Deno.readTextFileSync(path.join(realSeedPath, file)),
-          ), 
+          ),
           theModel = new Model(model);
         // insert.data = seedData;
         insertSQL.push(await theModel.generateInsert(seedData));
         insertSQL.push('');
       } catch (_e) {
         // Nothing to do
-        if(_e instanceof ModelValidationError) {
-          console.log(_e.model)
-          console.log(_e.errorList)
+        if (_e instanceof ModelValidationError) {
+          console.log(_e.model);
+          console.log(_e.errorList);
         }
       }
     }
