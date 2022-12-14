@@ -9,12 +9,18 @@ export type PostBodyParseHandler = <
   req: ParsedRequest<S>,
   ctx: Context<S>,
 ) => Promise<void>;
+
 export type PreResponseHandler = <
   S extends Record<string, unknown> = Record<string, unknown>,
 >(ctx: Context<S>) => Promise<void>;
+
 export type MethodHandler = <
   S extends Record<string, unknown> = Record<string, unknown>,
 >(request: ParsedRequest<S>) => Promise<HTTPResponse>;
+
+export type HeadMethodHandler = <
+  S extends Record<string, unknown> = Record<string, unknown>,
+>(request: ParsedRequest<S>) => Promise<number>;
 
 export type EndpointOptions = {
   name: string;
@@ -30,7 +36,7 @@ export type EndpointOptions = {
   putHandler?: MethodHandler;
   patchHandler?: MethodHandler;
   deleteHandler?: MethodHandler;
-  headHandler?: MethodHandler;
+  headHandler?: HeadMethodHandler;
   // Post body parse handler (After body is parsed)
   postBodyParse?: PostBodyParseHandler;
   preResponseHandler?: PreResponseHandler;

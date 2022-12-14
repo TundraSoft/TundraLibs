@@ -59,7 +59,7 @@ type KeysMatching<T, V> = {
 }[keyof T];
 
 //// deno-lint-ignore no-explicit-any
-type ExtractTypes<T extends { [K in keyof T]: ModelColumnDefinition }> =
+type ExtractTypes2<T extends { [K in keyof T]: ModelColumnDefinition }> =
   PartialPartial<
     {
       -readonly [K in keyof T]: ReturnType<
@@ -69,18 +69,39 @@ type ExtractTypes<T extends { [K in keyof T]: ModelColumnDefinition }> =
     KeysMatching<T, { isNullable: true }>
   >;
 
-// type Picker<P extends ModelDefinition> = ExtractTypes<
-//   {
-//     [X in keyof P["columns"]]: P["columns"][X];
-//   }
-// >;
-
-export type ModelType<P extends ModelDefinition> = ExtractTypes<
+type ExtractNullable<
+  T extends { [K in keyof T]: ModelColumnDefinition },
+  K extends keyof T,
+> = Pick<
   {
-    [X in keyof P['columns']]: P['columns'][X];
-  }
-> //  & {
-; //   [X in keyof P['foreignKeys']]?: string
+    -readonly [P in keyof T]?: P extends K
+      ? ReturnType<typeof DataTypeMap[T[P]['type']]> | null
+      : never;
+  },
+  K
+>;
+
+type ExtractNotNullable<
+  T extends { [K in keyof T]: ModelColumnDefinition },
+  K extends keyof T,
+> = Omit<
+  {
+    -readonly [P in keyof T]: ReturnType<typeof DataTypeMap[T[P]['type']]>;
+  },
+  K
+>;
+
+type ExtractTypes<T extends { [K in keyof T]: ModelColumnDefinition }> =
+  & ExtractNotNullable<T, KeysMatching<T, { isNullable: true }>>
+  & ExtractNullable<T, KeysMatching<T, { isNullable: true }>>;
+
+export type ModelType<P extends ModelDefinition> = ExtractTypes<P['columns']>;
+// export type ModelType<P extends ModelDefinition> = ExtractTypes<
+//   {
+//     [X in keyof P['columns']]: P['columns'][X];
+//   }
+//> //  & {
+//; //   [X in keyof P['foreignKeys']]?: string
 // }
 
 export type ModelValidation<

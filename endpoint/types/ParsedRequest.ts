@@ -3,8 +3,8 @@ import { HTTPMethods } from '../../dependencies.ts';
 // export type BodyType = "JSON" | "TEXT" | "FORM" | "BYTES";
 
 export type PagingParam = {
-  limit?: number;
-  page?: number;
+  limit: number;
+  page: number;
 };
 
 export type SortingParam = {

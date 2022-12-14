@@ -271,10 +271,30 @@ export class QueryTranslator {
     const tableName = this.quoteColumn(
         (query.schema ? query.schema + '.' : '') + query.table,
       ),
+      project = (query.project && query.project.length > 0)
+        ? query.project
+        : Object.keys(query.columns),
+      paging = (query.pagination && query.pagination.limit > 0)
+        ? `LIMIT ${query.pagination.limit} OFFSET ${
+          (query.pagination.page - 1) * query.pagination.limit
+        } `
+        : '',
+      sort = (query.sorting && Object.keys(query.sorting).length > 0)
+        ? ` ORDER BY ${
+          Object.entries(query.sorting).map((value) => {
+            return `${this.quoteColumn(query.columns[value[0]])} ${value[1]} `;
+          }).join(', ')
+        }`
+        : '',
       filter = (query.filters)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
-        : '';
-    return `DELETE FROM ${tableName}${filter};`;
+        : '',
+      returning = ' \nRETURNING ' + project.map((alias) => {
+        return `${this.quoteColumn(query.columns[alias])} AS ${
+          this.quoteColumn(alias as string)
+        }`;
+      }).join(', \n');
+    return `DELETE FROM ${tableName}${filter}${sort}${paging}${returning};`;
   }
 
   public createSchema(query: CreateSchemaQuery): string {
