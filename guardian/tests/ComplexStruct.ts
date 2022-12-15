@@ -7,7 +7,7 @@ const stG = Struct({
   profile: {
     facebook: Guardian.string().url(),
   },
-  test: Guardian.string().min(10).notEmpty().optional()
+  test: Guardian.string().min(10).notEmpty().optional(),
 });
 
 try {
@@ -15,7 +15,7 @@ try {
     name: 'Abhinav',
     age: 18,
     profile: { facebook: 'https://google.com/' },
-    test: undefined
+    test: undefined,
   });
   if (err) {
     console.log(err.toJSON());

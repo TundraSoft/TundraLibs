@@ -3,8 +3,8 @@ import { HTTPMethods } from '../../dependencies.ts';
 // export type BodyType = "JSON" | "TEXT" | "FORM" | "BYTES";
 
 export type PagingParam = {
-  limit?: number;
-  page?: number;
+  limit: number;
+  page: number;
 };
 
 export type SortingParam = {
@@ -20,6 +20,7 @@ export type FileUploadInfo = {
 
 export type ParsedRequest<
   S extends Record<string, unknown> = Record<string, unknown>,
+  D extends Record<string, unknown> = Record<string, unknown>,
 > = {
   method: HTTPMethods;
   state: S;
@@ -27,7 +28,7 @@ export type ParsedRequest<
   paging?: PagingParam;
   sorting?: SortingParam;
   payload?:
-    | Array<Record<string, unknown>>
+    | Array<D>
     | undefined;
   files?: {
     [key: string]: Array<FileUploadInfo>;

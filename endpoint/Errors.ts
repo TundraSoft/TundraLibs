@@ -54,3 +54,12 @@ export class UnsupportedContentTypeError extends BaseEndpointError {
     Object.setPrototypeOf(this, UnsupportedContentTypeError.prototype);
   }
 }
+
+export class MissingHeadError extends BaseEndpointError {
+  protected _name: string;
+  constructor(name: string) {
+    super(`Head method must be provided for endpoint: ${name}`);
+    this._name = name;
+    Object.setPrototypeOf(this, MissingHeadError.prototype);
+  }
+}

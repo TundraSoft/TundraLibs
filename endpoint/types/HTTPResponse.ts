@@ -7,6 +7,6 @@ export type HTTPResponse<T = Record<string, unknown>> = {
     limit: number;
     page: number;
   };
-  totalRows: number;
+  // totalRows?: number;
   headers?: Headers;
 };

@@ -99,7 +99,10 @@ export type DeleteQuery<
   T extends Record<string, unknown> = Record<string, unknown>,
 > = {
   // type: QueryTypes.DELETE;
+  pagination?: Pagination;
+  sorting?: Sorting<T>;
   filters?: QueryFilter<T>;
+  project?: Array<keyof T>;
 } & BaseColumnQueryOptions<T>;
 
 export type CreateSchemaQuery = {

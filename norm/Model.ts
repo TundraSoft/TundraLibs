@@ -198,7 +198,7 @@ export class Model<
         }
       }
     });
-    
+
     this._validator = Struct(
       validator,
       `Validation failed for model ${this.name}`,
@@ -451,7 +451,9 @@ export class Model<
 
     const rows: Array<Partial<T>> =
         (Array.isArray(data) ? data : [data]) as Array<Partial<T>>,
-      insertedColumns: Array<keyof T> = structuredClone(this._notNulls) as Array<keyof T>, 
+      insertedColumns: Array<keyof T> = structuredClone(
+        this._notNulls,
+      ) as Array<keyof T>,
       errors: { [key: number]: ModelValidation<T> } = {},
       ukHash: { [key: string]: string[] } = {},
       pkQueries: Array<Promise<QueryResult<T>>> = [],
@@ -520,7 +522,8 @@ export class Model<
       this._notNulls.forEach((column) => {
         if (
           (row[column] === undefined || row[column] === null) &&
-          !this._identityColumns.includes(column) && !Object.keys(dbGenerated).includes(column as string)
+          !this._identityColumns.includes(column) &&
+          !Object.keys(dbGenerated).includes(column as string)
         ) {
           if (!errors[index]) {
             errors[index] = {} as ModelValidation<T>;
@@ -1072,7 +1075,9 @@ export class Model<
   ): Promise<string> {
     const rows: Array<Partial<T>> =
         (Array.isArray(data) ? data : [data]) as Array<Partial<T>>,
-      insertedColumns: Array<keyof T> = structuredClone(this._notNulls) as Array<keyof T>,
+      insertedColumns: Array<keyof T> = structuredClone(
+        this._notNulls,
+      ) as Array<keyof T>,
       errors: { [key: number]: ModelValidation<T> } = {},
       ukHash: { [key: string]: string[] } = {},
       ukErrors: Array<Record<keyof T, string>> = [];
@@ -1140,7 +1145,8 @@ export class Model<
       this._notNulls.forEach((column) => {
         if (
           (row[column] === undefined || row[column] === null) &&
-          !this._identityColumns.includes(column) && !Object.keys(dbGenerated).includes(column as string)
+          !this._identityColumns.includes(column) &&
+          !Object.keys(dbGenerated).includes(column as string)
         ) {
           if (!errors[index]) {
             errors[index] = {} as ModelValidation<T>;
@@ -1169,7 +1175,9 @@ export class Model<
       // this._hashColumns.forEach((column) => {
       for (const column of this._hashColumns) {
         if (row[column] !== undefined || row[column] !== null) {
-          row[column] = await hash(String(row[column])) as unknown as T[keyof T];
+          row[column] = await hash(
+            String(row[column]),
+          ) as unknown as T[keyof T];
         }
       }
       // this._encryptedColumns.forEach((column) => {
@@ -1230,7 +1238,6 @@ export class Model<
       rows[index] = row;
     }
 
-    
     // If error is present, throw and end
     if (Object.keys(errors).length > 0) {
       // throw new ModelValidationError(errors, this.name, this._connection.name);
@@ -1304,8 +1311,10 @@ export class Model<
         col.disableUpdate = true;
       }
       if (col.security && col.security === 'ENCRYPT') {
-        if (model.encryptionKey === undefined || model.encryptionKey.length === 0) {
-          console.log('sdafsdfdsf')
+        if (
+          model.encryptionKey === undefined || model.encryptionKey.length === 0
+        ) {
+          console.log('sdafsdfdsf');
           throw new ModelConfigError(
             `Encryption key not defined`,
             model.name,
