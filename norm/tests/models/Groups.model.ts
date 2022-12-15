@@ -49,6 +49,3 @@ const a = {
     'name': new Set(['Name']),
   },
 } as const;
-
-import { ModelType } from '../../types/mod.ts';
-type A = ModelType<typeof a>;
