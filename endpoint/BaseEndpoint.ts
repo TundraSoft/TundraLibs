@@ -805,7 +805,7 @@ export class BaseEndpoint<
       params: params,
       paging: paging,
       sorting: sorting,
-      payload: (Array.isArray(payload) ? payload : [payload]) as Array<
+      payload: (payload === undefined) ? undefined : (Array.isArray(payload) ? payload : [payload]) as Array<
         Record<string, unknown>
       >,
       files: files,
