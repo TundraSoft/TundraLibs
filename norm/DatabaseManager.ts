@@ -36,13 +36,13 @@ export class DatabaseManager {
     }
   }
 
-  static async get(name: string): Promise<AbstractClient> {
+  static get(name: string): AbstractClient {
     name = name.trim().toLowerCase();
     if (this._configs.has(name)) {
       if (this._instance.has(name) === false) {
-        await this._initialize(name);
+        this._initialize(name);
       }
-      return this._instance.get(name) as AbstractClient;
+      return DatabaseManager._instance.get(name) as AbstractClient;
     } else {
       throw new ConnectionNotFound(name);
     }
@@ -52,9 +52,23 @@ export class DatabaseManager {
     return this._configs.has(name.trim().toLowerCase());
   }
 
-  protected static async _initialize(name: string) {
+  static async test(name?: string) {
+    if (name === undefined) {
+      for (const name of DatabaseManager._configs.keys()) {
+        await DatabaseManager.test(name);
+      }
+    }
+    if (DatabaseManager.has(name as string)) {
+      const db = await DatabaseManager.get(name as string);
+      if (await db.ping() === false) {
+        throw new CommunicationError(db.name, db.dialect);
+      }
+    }
+  }
+
+  protected static _initialize(name: string) {
     name = name.trim().toLowerCase();
-    const config = this._configs.get(name) as ClientConfig,
+    const config = DatabaseManager._configs.get(name) as ClientConfig,
       dialect = config.dialect.trim().toUpperCase() as Dialects;
     // Check if the dialect is valid
     let dbConn: AbstractClient;
@@ -84,9 +98,9 @@ export class DatabaseManager {
         throw new DialectNotSupported(name, dialect);
     }
     // Test connection!
-    if (await dbConn.ping() === false) {
-      throw new CommunicationError(name, dialect);
-    }
+    // if (await dbConn.ping() === false) {
+    //   throw new CommunicationError(name, dialect);
+    // }
     DatabaseManager._instance.set(name, dbConn);
   }
 }

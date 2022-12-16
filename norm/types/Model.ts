@@ -74,10 +74,12 @@ type ExtractNullable<
   K extends keyof T,
 > = Pick<
   {
-    // -readonly [P in keyof T]?: P extends K
-    //   ? ReturnType<typeof DataTypeMap[T[P]['type']]> | null
-    //   : never;
-    -readonly [P in keyof T]?: ReturnType<typeof DataTypeMap[T[P]['type']]> | null;
+    -readonly [
+      // -readonly [P in keyof T]?: P extends K
+      //   ? ReturnType<typeof DataTypeMap[T[P]['type']]> | null
+      //   : never;
+      P in keyof T
+    ]?: ReturnType<typeof DataTypeMap[T[P]['type']]> | null;
   },
   K
 >;
@@ -93,8 +95,10 @@ type ExtractNotNullable<
 >;
 
 type ExtractTypes<T extends { [K in keyof T]: ModelColumnDefinition }> =
-  ExtractNotNullable<T, KeysMatching<T, { isNullable: true }>>
-  & ExtractNullable<T, KeysMatching<T, { isNullable: true }>> extends infer O ? { [P in keyof O]: O[P] }: never;
+  & ExtractNotNullable<T, KeysMatching<T, { isNullable: true }>>
+  & ExtractNullable<T, KeysMatching<T, { isNullable: true }>> extends infer O
+  ? { [P in keyof O]: O[P] }
+  : never;
 
 export type ModelType<P extends ModelDefinition> = ExtractTypes<P['columns']>;
 // export type ModelType<P extends ModelDefinition> = ExtractTypes<

@@ -717,9 +717,11 @@ export class BaseEndpoint<
       params: params,
       paging: (paging.limit !== undefined) ? paging as PagingParam : undefined,
       sorting: (Object.keys(sorting).length > 0) ? sorting : undefined,
-      payload: (payload === undefined) ? undefined : (Array.isArray(payload) ? payload : [payload]) as Array<
-        Record<string, unknown>
-      >,
+      payload: (payload === undefined)
+        ? undefined
+        : (Array.isArray(payload) ? payload : [payload]) as Array<
+          Record<string, unknown>
+        >,
       files: files,
     };
 

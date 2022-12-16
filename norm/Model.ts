@@ -1260,9 +1260,9 @@ export class Model<
    *
    * Initialize the connection to DB
    */
-  protected async _init() {
+  protected _init() {
     if (!this._connection) {
-      this._connection = await DatabaseManager.get(this._connectionName);
+      this._connection = DatabaseManager.get(this._connectionName);
     }
   }
 
