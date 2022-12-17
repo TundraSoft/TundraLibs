@@ -57,7 +57,9 @@ export class DatabaseManager {
       for (const name of DatabaseManager._configs.keys()) {
         await DatabaseManager.test(name);
       }
+      return;
     }
+    name = name.trim().toLowerCase();
     if (DatabaseManager.has(name as string)) {
       const db = await DatabaseManager.get(name as string);
       if (await db.ping() === false) {

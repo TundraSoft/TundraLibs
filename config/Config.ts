@@ -15,7 +15,6 @@ export class Config {
    *
    * @param name string Config file name
    * @param path string Config path, defaults to ./configs
-   * @returns boolean True if file was found and loaded, else false
    */
   static async load(name: string, path = './configs'): Promise<void> {
     await Config._initEnv();
