@@ -205,7 +205,7 @@ export class QueryTranslator {
       filter = (query.filters)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
         : '';
-    console.log(`SELECT COUNT(1) AS TotalRows FROM ${tableName}${filter};`)
+    console.log(`SELECT COUNT(1) AS TotalRows FROM ${tableName}${filter};`);
     return `SELECT COUNT(1) AS TotalRows FROM ${tableName}${filter};`;
   }
 

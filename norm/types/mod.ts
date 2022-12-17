@@ -22,6 +22,7 @@ export type {
   DeleteQuery,
   DropSchemaQuery,
   DropTableQuery,
+  FilterOperators,
   InsertQuery,
   Pagination,
   QueryFilter,
