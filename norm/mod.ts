@@ -16,6 +16,7 @@ export type {
   Dialects,
   DropSchemaQuery,
   DropTableQuery,
+  FilterOperators, 
   GeneratorFunction,
   GeneratorOutput,
   Generators,
