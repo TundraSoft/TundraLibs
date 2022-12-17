@@ -24,6 +24,7 @@ export class HTTPError extends Error {
   ) {
     // Refine this
     super(`HTTP Error: ${status} ${STATUS_TEXT[status]}`);
+    Object.setPrototypeOf(this, HTTPError.prototype);
     this.#data = data;
     this.#status = status as ErrorStatus;
     if (headers) {

@@ -58,11 +58,11 @@ export class QueryTranslator {
     return (Object.keys(this._config.generators).includes(name));
   }
 
-  public async getGenerator(
+  public getGenerator(
     name: keyof typeof Generator,
-  ): Promise<GeneratorOutput> {
+  ): GeneratorOutput {
     const retval = this._config.generators[name];
-    return (retval instanceof Function) ? await retval() : retval;
+    return (retval instanceof Function) ? retval() : retval;
   }
 
   // deno-lint-ignore no-explicit-any
@@ -205,6 +205,7 @@ export class QueryTranslator {
       filter = (query.filters)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
         : '';
+    console.log(`SELECT COUNT(1) AS TotalRows FROM ${tableName}${filter};`)
     return `SELECT COUNT(1) AS TotalRows FROM ${tableName}${filter};`;
   }
 
