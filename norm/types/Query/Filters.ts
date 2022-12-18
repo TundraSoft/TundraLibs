@@ -26,7 +26,7 @@ export type SimpleQueryFilter<
   | {
     [Property in keyof T]?: FilterOperators<T[Property]>;
   }
-  | {
+  & {
     $or?: SimpleQueryFilter<T>;
     $and?: SimpleQueryFilter<T>;
   };
