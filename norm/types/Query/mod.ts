@@ -1,7 +1,11 @@
 export { QueryTypes } from './QueryTypes.ts';
 export type { QueryType } from './QueryTypes.ts';
 
-export type { FilterOperators, QueryFilter } from './Filters.ts';
+export type {
+  FilterOperators,
+  QueryFilter,
+  SimpleQueryFilter,
+} from './Filters.ts';
 export type {
   BaseColumnDefinition,
   BaseQueryOptions,

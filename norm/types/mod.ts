@@ -31,6 +31,7 @@ export type {
   QueryType,
   RawQuery,
   SelectQuery,
+  SimpleQueryFilter,
   Sorting,
   TruncateTableQuery,
   UpdateQuery,
