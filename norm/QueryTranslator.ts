@@ -460,7 +460,7 @@ export class QueryTranslator {
     Entity extends Record<string, unknown> = Record<string, unknown>,
   >(
     columns: Record<keyof Entity, string>,
-    filter: QueryFilter<Entity>,
+    filter: QueryFilter<Entity> | QueryFilter<Entity>[],
     joiner = 'AND',
   ): string {
     const ret: Array<string> = [];

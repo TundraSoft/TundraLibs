@@ -22,14 +22,9 @@ export type FilterOperators<PropVal> = PropVal | Generators | {
 
 export type SimpleQueryFilter<
   T extends Record<string, unknown> = Record<string, unknown>,
-> =
-  | {
+> = {
     [Property in keyof T]?: FilterOperators<T[Property]>;
   }
-  & {
-    $or?: SimpleQueryFilter<T>;
-    $and?: SimpleQueryFilter<T>;
-  };
 
 export type QueryFilter<
   T extends Record<string, unknown> = Record<string, unknown>,
@@ -38,11 +33,11 @@ export type QueryFilter<
     [Property in keyof T]?: FilterOperators<T[Property]>;
   }
     & {
-      $or?: QueryFilter<T>;
-      $and?: QueryFilter<T>;
+      $or?: QueryFilter<T> | QueryFilter<T>[];
+      $and?: QueryFilter<T> | QueryFilter<T>[];
     }
-  | Array<
-    {
-      [Property in keyof T]?: FilterOperators<T[Property]>;
-    }
-  >;
+  // | Array<
+  //   {
+  //     [Property in keyof T]?: FilterOperators<T[Property]>;
+  //   }
+  // >;
