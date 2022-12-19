@@ -426,7 +426,12 @@ export class Model<
       filters: filters,
     };
     await this._init();
-    return await this._connection.count<T>(options);
+    try {
+      return await this._connection.count<T>(options);
+    } catch (e) {
+      console.log(filters);
+      throw e;
+    }
   }
 
   /**
@@ -470,7 +475,7 @@ export class Model<
       >;
       // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
       await Object.keys(this._insertDefaults).forEach(async (column) => {
-        if (row[column as keyof T] === undefined) {
+        if (row[column as keyof T] === undefined || row[column as keyof T] === null) {
           const generated = this._insertDefaults[column as keyof T] as
             | GeneratorFunction
             | GeneratorOutput;
@@ -601,11 +606,17 @@ export class Model<
             string
           >;
         this._uniqueKeys[key].forEach((column) => {
-          ukFilter[column as string] = row[column];
+          if (row[column] !== undefined || row[column] !== null) {
+            ukFilter[column as string] = row[column];
+          }
           ukErrorMessages[column] = `Column ${column as string} is not unique`;
         });
-        ukQueries.push(this.count(ukFilter as QueryFilter<T>));
-        ukErrors[index] = ukErrorMessages;
+        
+        // Do not run checks on NULL column values
+        if(!Object.values(ukFilter).includes(null)) {
+          ukQueries.push(this.count(ukFilter as QueryFilter<T>));
+          ukErrors[index] = ukErrorMessages;
+        }
         //#endregion Check if it is unique in the table
       });
       //#endregion Unique Keys check
@@ -809,7 +820,7 @@ export class Model<
       // If unique key is part of update and roeCount > 1, throw error
       if (rowCnt > 1) {
         this._uniqueKeys[key].forEach((column) => {
-          if (data[column] !== undefined) {
+          if (data[column] !== undefined || data[column] !== null) {
             // throw new ModelValidationError({
             //   [column]: [`Column ${column as string} is not unique`],
             // }, this.name, this._connection.name);
@@ -834,8 +845,12 @@ export class Model<
         ukFilter[column as string] = data[column];
         ukErrorMessages[column] = `Column ${column as string} is not unique`;
       });
-      ukQueries.push(this.count(ukFilter as QueryFilter<T>));
-      ukErrors.push(ukErrorMessages);
+      // Do not run checks on NULL column values
+      if(!Object.values(ukFilter).includes(null)) {
+        ukQueries.push(this.count(ukFilter as QueryFilter<T>));
+        ukErrors.push(ukErrorMessages);
+      }
+
     });
 
     Promise.all(ukQueries).then((results) => {
@@ -960,7 +975,7 @@ export class Model<
    * @returns
    */
   public validateFilters(filters: QueryFilter<T>): QueryFilter<T> | undefined {
-    if (filters === undefined || Object.keys(filters).length === 0) {
+    if (filters === undefined || filters === null || Object.keys(filters).length === 0) {
       return;
     }
     const allowedKeys: string[] = [

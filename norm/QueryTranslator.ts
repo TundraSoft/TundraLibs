@@ -188,7 +188,7 @@ export class QueryTranslator {
           }).join(', ')
         }`
         : '',
-      filter = (query.filters)
+      filter = (query.filters && Object.keys(query.filters).length > 0)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
         : '';
     return `SELECT ${
@@ -202,7 +202,7 @@ export class QueryTranslator {
     const tableName = this.quoteColumn(
         (query.schema ? query.schema + '.' : '') + query.table,
       ),
-      filter = (query.filters)
+      filter = (query.filters && Object.keys(query.filters).length > 0)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
         : '';
     return `SELECT COUNT(1) AS TotalRows FROM ${tableName}${filter};`;
@@ -252,7 +252,7 @@ export class QueryTranslator {
           this.quoteValue(query.data[columnName])
         }`;
       }),
-      filter = (query.filters)
+      filter = (query.filters && Object.keys(query.filters).length > 0)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
         : '',
       returning = ' \nRETURNING ' + project.map((alias) => {
@@ -286,7 +286,7 @@ export class QueryTranslator {
           }).join(', ')
         }`
         : '',
-      filter = (query.filters)
+      filter = (query.filters && Object.keys(query.filters).length > 0)
         ? ` WHERE ${this._processFilters(query.columns, query.filters)}`
         : '',
       returning = ' \nRETURNING ' + project.map((alias) => {
@@ -626,7 +626,6 @@ export class QueryTranslator {
     }
     let retVal = `( `;
     retVal += ret.reduce((prev, curr, index) => {
-      // console.log(curr.toString());
       if (index === 0) {
         return curr;
       } else {

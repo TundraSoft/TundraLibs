@@ -84,9 +84,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
       }
 
       // Run the actual query
-      // console.log(sql);
       const result = await client.queryObject<Entity>(sql);
-      // console.log(result);
       if (query.type === QueryTypes.COUNT) {
         const dt: { totalrows: number } = result.rows[0] as unknown as {
           totalrows: number;
