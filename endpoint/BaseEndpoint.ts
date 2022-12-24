@@ -186,7 +186,7 @@ export class BaseEndpoint<
     const handler = this._getOption('getHandler'),
       headHandler = this._getOption('headHandler'),
       postHandle = this._getOption('preResponseHandler');
-
+      
     // this._setDefaultHeaders(ctx);
     ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
 
@@ -300,7 +300,7 @@ export class BaseEndpoint<
       }
 
       const op = await handler.apply(this, [req]),
-        totalRows = op.payload?.length || 0;
+        totalRows = (op.payload) ? ((Array.isArray(op.payload)) ? op.payload.length : 1) : 0;
 
       ctx.response.status = op.status;
       if (op.payload) {
@@ -358,7 +358,7 @@ export class BaseEndpoint<
       // TODO(@abhinav) - Handle array of objects
 
       const op = await handler.apply(this, [req]),
-        totalRows = op.payload?.length || 0;
+        totalRows = (op.payload) ? ((Array.isArray(op.payload)) ? op.payload.length : 1) : 0;
 
       ctx.response.status = op.status;
       if (this._hasIdentifier(req)) {
@@ -423,7 +423,7 @@ export class BaseEndpoint<
       // TODO(@abhinav) - Handle array of objects
 
       const op = await handler.apply(this, [req]),
-        totalRows = op.payload?.length || 0;
+        totalRows = (op.payload) ? ((Array.isArray(op.payload)) ? op.payload.length : 1) : 0;
 
       ctx.response.status = op.status;
       // If there is identifier, then we are fetching a single record
@@ -469,6 +469,7 @@ export class BaseEndpoint<
    */
   public async DELETE(ctx: Context): Promise<void> {
     const handler = this._getOption('deleteHandler'),
+      headHandler = this._getOption('headHandler'),
       postHandle = this._getOption('preResponseHandler');
 
     ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
@@ -484,8 +485,12 @@ export class BaseEndpoint<
     } else {
       const req = await this._parseRequest(ctx);
 
+      let headRows = 0;
+      if(headHandler) {
+        headRows = await headHandler?.apply(this, [req])
+      }
       const op = await handler.apply(this, [req]),
-        totalRows = op.payload?.length || 0;
+        totalRows = headRows || (op.payload) ? ((Array.isArray(op.payload)) ? op.payload.length : 1) : 0;
 
       ctx.response.status = op.status;
 
