@@ -66,7 +66,7 @@ export class QueryTranslator {
   }
 
   // deno-lint-ignore no-explicit-any
-  public quoteValue(value: any): string {
+  public quoteValue(value: any, forFilter = true): string {
     // Replace Generator
     if (this.hasGenerator(value)) {
       value = this.getGenerator(value);
@@ -91,7 +91,11 @@ export class QueryTranslator {
       return this.quoteValue(`${value.toISOString()}`);
     }
     if (value instanceof Array || Array.isArray(value)) {
-      return '(' + value.map((v) => this.quoteValue(v)).join(',') + ')';
+      if(forFilter) {
+        return '(' + value.map((v) => this.quoteValue(v)).join(',') + ')';
+      } else {
+        return 'ARRAY [' + value.map((v) => this.quoteValue(v)).join(',') + ']';
+      }
     }
     if (typeof value === 'object') {
       value = JSON.stringify(value);
@@ -225,7 +229,7 @@ export class QueryTranslator {
       }),
       values = query.data.map((row) => {
         return Object.keys(query.columns).map((key) => {
-          return this.quoteValue((row[key] === undefined) ? 'NULL' : row[key]);
+          return this.quoteValue((row[key] === undefined) ? 'NULL' : row[key], false);
         });
       }),
       returning = ' \nRETURNING ' + project.map((alias) => {
@@ -249,7 +253,7 @@ export class QueryTranslator {
         : Object.keys(query.columns),
       columns = Object.keys(query.data).map((columnName) => {
         return `${this.quoteColumn(query.columns[columnName])} = ${
-          this.quoteValue(query.data[columnName])
+          this.quoteValue(query.data[columnName], false)
         }`;
       }),
       filter = (query.filters && Object.keys(query.filters).length > 0)
