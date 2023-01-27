@@ -173,7 +173,7 @@ export const Sysinfo = {
    * @returns Promise<string | undefined> The IP address assigned to the system
    */
   getIP: async function (): Promise<string | undefined> {
-    const isWin = (Deno.build.os === 'windows'),
+    const isWin = Deno.build.os === 'windows',
       command = isWin ? 'ipconfig' : 'ifconfig',
       checkRun = await Deno.permissions.query({ name: 'run' });
     let ip!: string;

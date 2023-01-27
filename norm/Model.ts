@@ -180,7 +180,7 @@ export class Model<
         }
       }
       // Validator
-      const hasValidation = (columnDefinition.validation !== undefined);
+      const hasValidation = columnDefinition.validation !== undefined;
       if (hasValidation) {
         validator[name] = columnDefinition.validation;
       } else {
@@ -475,7 +475,10 @@ export class Model<
       >;
       // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
       await Object.keys(this._insertDefaults).forEach(async (column) => {
-        if (row[column as keyof T] === undefined || row[column as keyof T] === null) {
+        if (
+          row[column as keyof T] === undefined ||
+          row[column as keyof T] === null
+        ) {
           const generated = this._insertDefaults[column as keyof T] as
             | GeneratorFunction
             | GeneratorOutput;
@@ -611,9 +614,9 @@ export class Model<
           }
           ukErrorMessages[column] = `Column ${column as string} is not unique`;
         });
-        
+
         // Do not run checks on NULL column values
-        if(!Object.values(ukFilter).includes(null)) {
+        if (!Object.values(ukFilter).includes(null)) {
           ukQueries.push(this.count(ukFilter as QueryFilter<T>));
           ukErrors[index] = ukErrorMessages;
         }
@@ -846,11 +849,10 @@ export class Model<
         ukErrorMessages[column] = `Column ${column as string} is not unique`;
       });
       // Do not run checks on NULL column values
-      if(!Object.values(ukFilter).includes(null)) {
+      if (!Object.values(ukFilter).includes(null)) {
         ukQueries.push(this.count(ukFilter as QueryFilter<T>));
         ukErrors.push(ukErrorMessages);
       }
-
     });
 
     Promise.all(ukQueries).then((results) => {
@@ -975,7 +977,10 @@ export class Model<
    * @returns
    */
   public validateFilters(filters: QueryFilter<T>): QueryFilter<T> | undefined {
-    if (filters === undefined || filters === null || Object.keys(filters).length === 0) {
+    if (
+      filters === undefined || filters === null ||
+      Object.keys(filters).length === 0
+    ) {
       return;
     }
     const allowedKeys: string[] = [

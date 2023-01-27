@@ -137,7 +137,7 @@ export class SchemaManager<
     const currDir = await Deno.realPath('./');
     Deno.chdir(await Deno.realPath(location));
     // Generate the export statements
-    const exports = (await SchemaManager._getModelExports('./'));
+    const exports = await SchemaManager._getModelExports('./');
     exports.push('');
     // Write to mod.ts in the path
     await Deno.writeFile(

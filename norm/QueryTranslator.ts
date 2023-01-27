@@ -91,7 +91,7 @@ export class QueryTranslator {
       return this.quoteValue(`${value.toISOString()}`);
     }
     if (value instanceof Array || Array.isArray(value)) {
-      if(forFilter) {
+      if (forFilter) {
         return '(' + value.map((v) => this.quoteValue(v)).join(',') + ')';
       } else {
         return 'ARRAY [' + value.map((v) => this.quoteValue(v)).join(',') + ']';
@@ -229,7 +229,10 @@ export class QueryTranslator {
       }),
       values = query.data.map((row) => {
         return Object.keys(query.columns).map((key) => {
-          return this.quoteValue((row[key] === undefined) ? 'NULL' : row[key], false);
+          return this.quoteValue(
+            (row[key] === undefined) ? 'NULL' : row[key],
+            false,
+          );
         });
       }),
       returning = ' \nRETURNING ' + project.map((alias) => {

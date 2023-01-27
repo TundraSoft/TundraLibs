@@ -81,7 +81,7 @@ export class MariaClient<O extends MariaConfig = MariaConfig>
 
       // Run the actual query
       // console.log(sql);
-      const result = (await this._client.execute(sql));
+      const result = await this._client.execute(sql);
       // console.log(result);
       retVal.data = result.rows;
       retVal.count = (result.rows) ? result.rows.length : result.affectedRows;
