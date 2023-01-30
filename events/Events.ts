@@ -1,5 +1,5 @@
 // Events.ts
-import { Callback, EventName, EventsType, Listeners } from "./types.ts";
+import { Callback, EventName, EventsType, Listeners } from './types.ts';
 
 /**
  * Events

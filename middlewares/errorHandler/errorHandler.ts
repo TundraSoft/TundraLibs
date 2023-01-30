@@ -1,6 +1,5 @@
-import { isHttpError, STATUS_TEXT } from "../../dependencies.ts";
-import { isHTTPError } from "../../endpoint/mod.ts";
-import { Middleware } from "../../dependencies.ts";
+import { isHttpError, Middleware, STATUS_TEXT } from '../../dependencies.ts';
+import { isHTTPError } from '../../endpoint/mod.ts';
 
 export const errorHandler: Middleware = async function (ctx, next) {
   try {

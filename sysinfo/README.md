@@ -7,7 +7,7 @@ and supressing errors and handle permission request.
 ## Usage
 
 ```ts
-import { Sysinfo } from "./mod.ts";
+import { Sysinfo } from './mod.ts';
 
 console.log(Sysinfo.getVendor());
 //

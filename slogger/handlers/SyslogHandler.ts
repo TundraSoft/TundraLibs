@@ -1,6 +1,6 @@
-import { BaseHandler } from "../BaseHandler.ts";
-import { Syslog } from "../../syslog/mod.ts";
-import type { SyslogOptions } from "../types.ts";
+import { BaseHandler } from '../BaseHandler.ts';
+import { Syslog } from '../../syslog/mod.ts';
+import type { SyslogOptions } from '../types.ts';
 
 /**
  * SyslogHandler
@@ -29,8 +29,8 @@ export class SyslogHandler extends BaseHandler<SyslogOptions> {
   async init(): Promise<void> {
     this._socket = await Deno.listenDatagram({
       port: 0,
-      transport: "udp",
-      hostname: "0.0.0.0",
+      transport: 'udp',
+      hostname: '0.0.0.0',
     });
     this._peer = {
       transport: this._options.serverType,

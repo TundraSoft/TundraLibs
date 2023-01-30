@@ -1,2 +1,2 @@
-export { Events } from "./Events.ts";
-export type { EventName, EventsType } from "./types.ts";
+export { Events } from './Events.ts';
+export type { EventName, EventsType } from './types.ts';

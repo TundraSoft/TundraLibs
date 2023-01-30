@@ -6,11 +6,11 @@ export type {
   StructReturnType,
   StructValidatorFunction,
   Type,
-} from "./types/mod.ts";
+} from './types/mod.ts';
 
-export { array, type } from "./utils/mod.ts";
+export { array, type } from './utils/mod.ts';
 
-export { BaseGuardian } from "./BaseGuardian.ts";
+export { BaseGuardian } from './BaseGuardian.ts';
 
 export {
   arrayGuard,
@@ -22,6 +22,6 @@ export {
   objectGuard,
   stringGuard,
   Struct,
-} from "./Guardians/mod.ts";
+} from './Guardians/mod.ts';
 
-export { GuardianError } from "./error/mod.ts";
+export { GuardianError } from './error/mod.ts';

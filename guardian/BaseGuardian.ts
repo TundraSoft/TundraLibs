@@ -5,14 +5,14 @@ import type {
   MaybeAsync,
   MergeParameters,
   ResolvedValue,
-} from "./types/mod.ts";
-import { equals, isPromiseLike, oneOf, optional, test } from "./utils/mod.ts";
+} from './types/mod.ts';
+import { equals, isPromiseLike, oneOf, optional, test } from './utils/mod.ts';
 
-import { GuardianError } from "./error/mod.ts";
+import { GuardianError } from './error/mod.ts';
 
 export interface GuardianConstructor<
   V extends BaseGuardian<F>,
-  F extends FunctionType = V["guardian"],
+  F extends FunctionType = V['guardian'],
 > {
   new (guardian: F): V;
 }
@@ -169,15 +169,15 @@ export class BaseGuardian<F extends FunctionType> {
   // }
   public validate(
     ...value: Parameters<F>
-  ): [GuardianError | null, ResolvedValue<ReturnType<F>>?] {
+  ): [GuardianError | undefined, ResolvedValue<ReturnType<F>>?] {
     const { guardian } = this;
     let res: ResolvedValue<ReturnType<F>> | undefined,
-      err: GuardianError | null = null;
+      err: GuardianError | undefined = undefined;
     try {
       res = guardian(...value);
       if (isPromiseLike(res)) {
         res.then(
-          (ret: ResolvedValue<ReturnType<F>>) => [null, ret],
+          (ret: ResolvedValue<ReturnType<F>>) => [undefined, ret],
           (ex: ErrorLike) => [ex, undefined],
         );
       }

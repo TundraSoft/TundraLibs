@@ -25,7 +25,7 @@ import {
   numbers,
   password,
   webSafe,
-} from "https://raw.githubusercontent.com/TundraSoft/TundraLibs/0.0.1/nanoid/mod.ts";
+} from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/0.0.1/nanoid/mod.ts';
 let key = nanoid(6); // By default it will use websafe dictionaty
 let pass = nanoid(6, password); // Use password dictionary
 ```

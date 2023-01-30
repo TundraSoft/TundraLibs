@@ -1,11 +1,11 @@
 // deno-lint-ignore-file ban-types no-explicit-any
-import { FunctionType, IsAsync, ResolvedValue } from "./Function.ts";
-import { Primitive } from "./Primitive.ts";
-import { GuardianProxy } from "./GuardianProxy.ts";
+import { FunctionType, IsAsync, ResolvedValue } from './Function.ts';
+import { Primitive } from './Primitive.ts';
+import { GuardianProxy } from './GuardianProxy.ts';
 
 export type StructOptions = {
   message?: string;
-  mode: "STRICT" | "DEFINED" | "PARTIAL" | "ALL";
+  mode: 'STRICT' | 'DEFINED' | 'PARTIAL' | 'ALL';
   path: string[];
 };
 

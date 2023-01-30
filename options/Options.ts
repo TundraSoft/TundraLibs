@@ -1,5 +1,5 @@
-import { OptionsKey, OptionsType } from "./types.ts";
-import { EventName, Events, EventsType } from "../events/mod.ts";
+import { OptionsKey, OptionsType } from './types.ts';
+import { EventName, Events, EventsType } from '../events/mod.ts';
 
 // Options.ts
 /**
@@ -44,7 +44,7 @@ export class Options<
   // deno-lint-ignore no-explicit-any
   E extends EventsType = Record<EventName, any>,
 > extends Events<E> {
-  protected _options: Partial<T> = {};
+  protected _options: T | NonNullable<T>;
 
   constructor(options: T | NonNullable<T> | Partial<T>, defaults?: Partial<T>);
 
@@ -59,6 +59,8 @@ export class Options<
     defaults?: Record<OptionsKey, unknown>,
   ) {
     super();
+    // Initialize Options
+    this._options = {} as T;
     // First add defaults if present
     if (defaults) {
       this._setOptions(defaults);
@@ -77,7 +79,7 @@ export class Options<
    * @returns Boolean, true if exists false if it does not
    */
   protected _hasOption(name: OptionsKey): boolean {
-    if (this._options[name]) {
+    if (this._options[name] !== undefined) {
       return true;
     }
     return false;

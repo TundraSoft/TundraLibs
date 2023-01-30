@@ -1,11 +1,11 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { DateGuardian } from "./DateGuardian.ts";
-import { type } from "../utils/mod.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { DateGuardian } from './DateGuardian.ts';
+import { type } from '../utils/mod.ts';
 import type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
-} from "../types/mod.ts";
+} from '../types/mod.ts';
 
 /**
  * NumberGuardian
@@ -37,7 +37,7 @@ export class NumberGuardian<
   float(message?: string): GuardianProxy<this> {
     return this.test(
       (num: number) => Number.isFinite(num),
-      message || "Expect number to be a float",
+      message || 'Expect number to be a float',
     );
   }
 
@@ -52,7 +52,7 @@ export class NumberGuardian<
   integer(message?: string): GuardianProxy<this> {
     return this.test(
       (num: number) => Number.isInteger(num),
-      message || "Expect number to be an integer",
+      message || 'Expect number to be an integer',
     );
   }
 
@@ -143,4 +143,4 @@ export class NumberGuardian<
   //#endregion Validators
 }
 
-export const numberGuard = new NumberGuardian(type("number")).proxy();
+export const numberGuard = new NumberGuardian(type('number')).proxy();

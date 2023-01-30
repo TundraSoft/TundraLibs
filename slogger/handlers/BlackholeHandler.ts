@@ -1,7 +1,7 @@
-import { BaseHandler } from "../BaseHandler.ts";
-import { HandlerOptions } from "../types.ts";
+import { BaseHandler } from '../BaseHandler.ts';
+import { HandlerOptions } from '../types.ts';
 
-import { Syslog } from "../../syslog/mod.ts";
+import { Syslog } from '../../syslog/mod.ts';
 
 /**
  * BlackholeHandler

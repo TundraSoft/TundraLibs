@@ -1,6 +1,6 @@
-import { FunctionParameters, FunctionType } from "../types/mod.ts";
+import { FunctionParameters, FunctionType } from '../types/mod.ts';
 
-import { makeError } from "../error/mod.ts";
+import { makeError } from '../error/mod.ts';
 
 /**
  * equals

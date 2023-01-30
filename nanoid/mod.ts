@@ -5,5 +5,5 @@ export {
   numbers,
   password,
   webSafe,
-} from "./dictionary.ts";
-export { nanoid } from "./nanoid.ts";
+} from './dictionary.ts';
+export { nanoid } from './nanoid.ts';

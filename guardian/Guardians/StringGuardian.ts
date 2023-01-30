@@ -1,13 +1,13 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { DateGuardian } from "./DateGuardian.ts";
-import { type } from "../utils/mod.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { DateGuardian } from './DateGuardian.ts';
+import { type } from '../utils/mod.ts';
 import type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
-} from "../types/mod.ts";
+} from '../types/mod.ts';
 
-import { parseDate } from "../../dependencies.ts";
+import { parseDate } from '../../dependencies.ts';
 /**
  * StringGuardian
  *
@@ -63,9 +63,9 @@ export class StringGuardian<
    */
   camelCase(): GuardianProxy<this> {
     return this.transform((str: string) =>
-      str.replace(/[^a-zA-Z0-9]/g, " ").split(" ").map((word) =>
+      str.replace(/[^a-zA-Z0-9]/g, ' ').split(' ').map((word) =>
         word.charAt(0).toUpperCase() + word.slice(1)
-      ).join("")
+      ).join('')
     );
   }
 
@@ -78,9 +78,9 @@ export class StringGuardian<
    */
   snakeCase(): GuardianProxy<this> {
     return this.transform((str: string) =>
-      str.replace(/[^a-zA-Z0-9]/g, " ").split(" ").map((word) =>
+      str.replace(/[^a-zA-Z0-9]/g, ' ').split(' ').map((word) =>
         word.charAt(0).toLowerCase() + word.slice(1)
-      ).join("_")
+      ).join('_')
     );
   }
 
@@ -108,7 +108,7 @@ export class StringGuardian<
     return this.transform((str: string) => str.replace(search, replace));
   }
 
-  toDate(format = "YYYY-MM-dd"): GuardianProxy<DateGuardian<P>> {
+  toDate(format = 'YYYY-MM-dd'): GuardianProxy<DateGuardian<P>> {
     return this.transform((str: string) => parseDate(str, format));
   }
   //#endregion Manipulators
@@ -264,6 +264,22 @@ export class StringGuardian<
   }
 
   /**
+   * phone
+   *
+   * Checks if the string is a valid phone number as per E.164 format
+   * *NOTE* - It actually does not confirm the validity, just checks the format
+   *
+   * @param message string Message to use when validation fails
+   * @returns GuardianProxy<this>
+   */
+  phone(message?: string): GuardianProxy<this> {
+    return this.pattern(
+      /^\+?[1-9]\d{1,14}$/,
+      message || `Expect string to be a valid phone number (E.164)`,
+    );
+  }
+
+  /**
    * ifsc
    *
    * Checks if the string is a valid banking IFSC code format.
@@ -325,7 +341,7 @@ export class StringGuardian<
    */
   url(message?: string): GuardianProxy<this> {
     return this.pattern(
-      /^(?:http(s)?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~:/?#[\]@!\$&'\(\)\*\+,;=.]+$/,
+      /^(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})$/i,
       message || `Expect string to be a valid URL`,
     );
   }
@@ -547,7 +563,7 @@ export class StringGuardian<
    * @returns GuardianProxy<this>
    */
   pinCode(
-    regex = /^[1-9]{1}[0-9]{2}\\s{0, 1}[0-9]{3}$/,
+    regex = /^[1-9]{1}[0-9]{2}\s?[0-9]{3}$/,
     message?: string,
   ): GuardianProxy<this> {
     return this.pattern(
@@ -558,4 +574,4 @@ export class StringGuardian<
   //#endregion Validators
 }
 
-export const stringGuard = new StringGuardian(type("string")).proxy();
+export const stringGuard = new StringGuardian(type('string')).proxy();

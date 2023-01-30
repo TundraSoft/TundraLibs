@@ -1,13 +1,8 @@
-import { BaseHandler } from "../BaseHandler.ts";
-import { FileHandlerOptions } from "../types.ts";
+import { BaseHandler } from '../BaseHandler.ts';
+import { FileHandlerOptions } from '../types.ts';
 
-import { Syslog } from "../../syslog/mod.ts";
-import {
-  BufWriterSync,
-  dateFormat,
-  ensureFile,
-  path,
-} from "../../dependencies.ts";
+import { Syslog } from '../../syslog/mod.ts';
+import { BufWriterSync, dateFormat, fs, path } from '../../dependencies.ts';
 
 export class FileHandler extends BaseHandler<FileHandlerOptions> {
   protected _file: Deno.FsFile | undefined;
@@ -17,15 +12,15 @@ export class FileHandler extends BaseHandler<FileHandlerOptions> {
 
   constructor(options: Partial<FileHandlerOptions>) {
     const defaults: Partial<FileHandlerOptions> = {
-      path: "./logs",
-      fileName: "{appName}-{date}.log",
+      path: './logs',
+      fileName: '{appName}-{date}.log',
       rotate: 5 * 1024 * 1024, // 5 MB
     };
     super(options, defaults);
   }
 
   protected _handleLog(log: Syslog) {
-    const msg = this._encoder.encode(this._format(log) + "\n");
+    const msg = this._encoder.encode(this._format(log) + '\n');
     if (msg.byteLength > this._buf.available()) {
       this._flush();
     }
@@ -40,7 +35,7 @@ export class FileHandler extends BaseHandler<FileHandlerOptions> {
         write: true,
       };
     // Ensure directory is present
-    await ensureFile(fileName);
+    await fs.ensureFile(fileName);
     this._file = await Deno.open(fileName, openOptions);
     this._buf = new BufWriterSync(this._file);
   }
@@ -57,13 +52,13 @@ export class FileHandler extends BaseHandler<FileHandlerOptions> {
     // Get the file name
     const variables: { [key: string]: string } = {
         appName: this._options.appName,
-        hostname: this._options.hostName || "",
-        date: dateFormat(new Date(), "yyyy-MM-dd"),
+        hostname: this._options.hostName || '',
+        date: dateFormat(new Date(), 'yyyy-MM-dd'),
       },
       basePath = this._options.path;
     let fileName = path.join(basePath, this._options.fileName);
     for (const [name, value] of Object.entries(variables)) {
-      const reg = new RegExp(`{${name}}`, "gi");
+      const reg = new RegExp(`{${name}}`, 'gi');
       fileName = fileName.replaceAll(reg, value);
     }
     if (this._options.rotate && this._options.rotate > 1) {

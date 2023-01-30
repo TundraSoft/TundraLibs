@@ -1,53 +1,65 @@
-import { Options } from "../options/mod.ts";
+import { Options } from '../options/mod.ts';
 import {
   Context,
   oakHelpers,
   path,
   RouterMiddleware,
   Status,
-} from "../dependencies.ts";
+} from '../dependencies.ts';
+
+import type { HTTPMethods } from '../dependencies.ts';
 
 import type {
   EndpointOptions,
   FileUploadInfo,
-  HTTPResponse,
+  // HTTPResponse,
   PagingParam,
   ParsedRequest,
   SortingParam,
-} from "./types/mod.ts";
-import { EndpointManager } from "./EndpointManager.ts";
+} from './types/mod.ts';
+
+// import { EndpointManager } from './EndpointManager.ts';
+
 // import type { HTTPMethods } from "../dependencies.ts";
-import { MissingNameError, MissingRoutePathError } from "./Errors.ts";
+import {
+  MissingHeadError,
+  MissingNameError,
+  MissingRoutePathError,
+} from './Errors.ts';
 import {
   badRequest,
   methodNotAllowed,
   resourceNotFound,
-} from "./HTTPErrors.ts";
+} from './HTTPErrors.ts';
+// import { EndpointHooks } from "./types/EndpointOptions.ts";
 
-/**
- * This is the base endpoint, acts like a base template
- */
-export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
-  extends Options<T> {
+export class BaseEndpoint<
+  S extends Record<string, unknown> = Record<string, unknown>,
+  O extends EndpointOptions = EndpointOptions,
+> extends Options<O> {
+  protected _allowedMethods: Array<HTTPMethods> = [];
+
   constructor(options: Partial<EndpointOptions>) {
     const defOptions: Partial<EndpointOptions> = {
-      stateParams: true,
-      allowedMethods: {
-        GET: true,
-        POST: true,
-        PUT: true,
-        PATCH: true,
-        DELETE: true,
-        HEAD: true,
+      // stateParams: true,
+      getHandler: undefined,
+      postHandler: undefined,
+      putHandler: undefined,
+      patchHandler: undefined,
+      deleteHandler: undefined,
+      headHandler: undefined,
+      postBodyParse: undefined,
+      preResponseHandler: undefined,
+      // authHandler: undefined,
+      headers: {
+        totalRows: 'X-Total-Rows',
+        paginationLimit: 'X-Pagination-Limit',
+        paginationPage: 'X-Pagination-Page',
       },
-      pageLimit: 10,
-      totalRowHeaderName: "X-Total-Rows",
-      paginationPageHeaderName: "X-Pagination-Page",
-      paginationLimitHeaderName: "X-Pagination-Limit",
       notFoundMessage: `Requested resource could not be found`,
       notSupportedMessage: `Method not supported by this endpoint`,
     };
-    // Check if mandatory options are provided
+
     if (!options.name) {
       throw new MissingNameError();
     }
@@ -58,34 +70,75 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
 
     options.name = options.name.trim().toLowerCase();
 
-    super(options as T, defOptions as Partial<T>);
+    super(options as O, defOptions as Partial<O>);
+    // Check handlers which are present
+    if (
+      this._getOption('getHandler') !== undefined &&
+      this._getOption('getHandler') instanceof Function
+    ) {
+      this._allowedMethods.push('GET');
+      if (
+        this._getOption('headHandler') === undefined &&
+        this._getOption('getHandler')! instanceof Function
+      ) {
+        // If get method is present, HEAD MUST be present
+        throw new MissingHeadError(options.name);
+      }
+    }
+    if (
+      this._getOption('postHandler') !== undefined &&
+      this._getOption('postHandler') instanceof Function
+    ) {
+      this._allowedMethods.push('POST');
+    }
+    if (
+      this._getOption('putHandler') !== undefined &&
+      this._getOption('putHandler') instanceof Function
+    ) {
+      this._allowedMethods.push('PUT');
+    }
+    if (
+      this._getOption('patchHandler') !== undefined &&
+      this._getOption('patchHandler') instanceof Function
+    ) {
+      this._allowedMethods.push('PATCH');
+    }
+    if (
+      this._getOption('deleteHandler') !== undefined &&
+      this._getOption('deleteHandler') instanceof Function
+    ) {
+      this._allowedMethods.push('DELETE');
+    }
+    if (
+      this._getOption('headHandler') !== undefined &&
+      this._getOption('headHandler') instanceof Function
+    ) {
+      this._allowedMethods.push('HEAD');
+    }
+    this._allowedMethods.push('OPTIONS');
     // Register the endpoint
-    EndpointManager.register(this);
+    // EndpointManager.register(this);
   }
 
-  public get route() {
-    // Final route is - routePath + routeGroup + routeName
-    return path.join(
-      this._getOption("routePath"),
-      this._getOption("name"),
+  public get route(): string {
+    return path.posix.join(
+      this._getOption('routePath'),
+      // this._getOption('name'),
       this._buildIdentifiers(),
       // (this._getOption("routeParams") || "") + "?",
     );
   }
 
   public get group() {
-    return this._getOption("routeGroup");
+    return this._getOption('routeGroup');
   }
 
   public get name() {
-    return this._getOption("name");
+    return this._getOption('name');
   }
 
   public get allowedMethods(): string[] {
-    const permissions = this._getOption("allowedMethods");
-    return Object.keys(permissions).filter((method) => {
-      return permissions[method as keyof typeof permissions] ? method : null;
-    });
+    return this._allowedMethods;
   }
 
   /**
@@ -99,27 +152,28 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
   public handle<R extends string>(): RouterMiddleware<R> {
     return async (ctx: Context) => {
       const method = ctx.request.method;
-      if (method === "GET") {
+      if (method === 'GET') {
         await this.GET(ctx);
-      } else if (method === "POST") {
+      } else if (method === 'POST') {
         await this.POST(ctx);
-      } else if (method === "PUT") {
+      } else if (method === 'PUT') {
         await this.PUT(ctx);
-      } else if (method === "PATCH") {
+      } else if (method === 'PATCH') {
         await this.PATCH(ctx);
-      } else if (method === "DELETE") {
+      } else if (method === 'DELETE') {
         await this.DELETE(ctx);
-      } else if (method === "HEAD") {
+      } else if (method === 'HEAD') {
         await this.HEAD(ctx);
-      } else if (method === "OPTIONS") {
+      } else if (method === 'OPTIONS') {
         await this.OPTIONS(ctx);
       } else {
-        throw methodNotAllowed(this._getOption("notSupportedMessage"));
+        throw methodNotAllowed(this._getOption('notSupportedMessage'));
       }
     };
   }
 
-  //#region Handle Methods
+  //#region HTTP Base Handlers
+
   /**
    * GET
    *
@@ -128,74 +182,76 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @param ctx Context The Context from OAK
    * @returns void
    */
-  public async GET(ctx: Context): Promise<void> {
-    this._setDefaultHeaders(ctx);
+  public async GET(ctx: Context<S>): Promise<void> {
+    const handler = this._getOption('getHandler'),
+      headHandler = this._getOption('headHandler'),
+      postHandle = this._getOption('preResponseHandler');
+
+    // this._setDefaultHeaders(ctx);
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
 
     // First check if method is even allowed
-    if (this.allowedMethods.indexOf("GET") === -1) {
-      // ctx.response.status = 405;
-      // ctx.response.body = {
-      //   message: this._getOption("notSupportedMessage"),
-      // };
-      // return;
+    if (
+      this._allowedMethods.includes('GET') === false || handler === undefined
+    ) {
       throw methodNotAllowed(
-        this._getOption("notSupportedMessage"),
+        this._getOption('notSupportedMessage'),
         ctx.response.headers,
       );
-    }
-    const req = await this._parseRequest(ctx);
-    // Call postBodyParse hook
-    // We can handle things like HMAC signature check, User access check etc
-    // await this._postBodyParse(req, ctx);
-
-    // Call the actual handler
-    const op = await this._fetch(req);
-
-    ctx.response.status = op.status;
-    // If there is identifier, then we are fetching a single record
-    if (this._hasIdentifier(req)) {
-      // If no rows throw 404
-      if (!op.payload || op.totalRows === 0) {
-        // ctx.response.status = 404;
-        // ctx.response.body = { message: this._getOption("notFoundMessage") };
-        // // Return as we do not want to set other info
-        // return;
-        throw resourceNotFound(
-          this._getOption("notFoundMessage"),
-          ctx.response.headers,
-        );
-      } else {
-        ctx.response.body = Array.isArray(op.payload)
-          ? op.payload[0]
-          : op.payload;
-      }
     } else {
-      ctx.response.body = op.payload;
-    }
-    // Set pagination headers
-    ctx.response.headers.set(
-      this._getOption("totalRowHeaderName"),
-      op.totalRows.toString(),
-    );
-    if (op.pagination) {
-      ctx.response.headers.set(
-        this._getOption("paginationPageHeaderName"),
-        op.pagination.page.toString(),
-      );
-      ctx.response.headers.set(
-        this._getOption("paginationLimitHeaderName"),
-        op.pagination.limit.toString(),
-      );
-    }
+      const req = await this._parseRequest(ctx);
 
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
+      // Call the actual handler
+      const op = await handler.apply(this, [req]),
+        totalRows = await headHandler?.apply(this, [req]) || 0;
+      ctx.response.status = op.status;
+      // If there is identifier, then we are fetching a single record
+      if (this._hasIdentifier(req)) {
+        // If no rows throw 404
+        if (!op.payload || op.payload.length === 0) {
+          throw resourceNotFound(
+            this._getOption('notFoundMessage'),
+            ctx.response.headers,
+          );
+        } else {
+          ctx.response.body = op.payload[0];
+        }
+      } else {
+        ctx.response.body = op.payload;
+      }
+      // Set pagination headers
+      const headerNames = this._getOption('headers');
+      ctx.response.headers.set(
+        headerNames.totalRows as string,
+        totalRows.toString(),
+      );
 
-    // Call post response hook
-    await this._postHandle(ctx);
+      if (req.paging) {
+        if (req.paging.limit) {
+          ctx.response.headers.set(
+            headerNames.paginationLimit as string,
+            req.paging.limit.toString(),
+          );
+        }
+        if (req.paging.page) {
+          ctx.response.headers.set(
+            headerNames.paginationPage as string,
+            req.paging.page.toString(),
+          );
+        }
+      }
+
+      if (op.headers) {
+        op.headers.forEach((value, key) => {
+          ctx.response.headers.set(key, value);
+        });
+      }
+
+      // Call post response hook
+      if (postHandle !== undefined) {
+        await postHandle.apply(this, [ctx]);
+      }
+    }
     // All done
   }
 
@@ -208,79 +264,72 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns void
    */
   public async POST(ctx: Context): Promise<void> {
-    this._setDefaultHeaders(ctx);
+    const handler = this._getOption('postHandler'),
+      postHandle = this._getOption('preResponseHandler');
 
-    if (this.allowedMethods.indexOf("POST") === -1) {
-      // ctx.response.status = 405;
-      // ctx.response.body = {
-      //   message: this._getOption("notSupportedMessage"),
-      // };
-      // return;
-      throw methodNotAllowed(
-        this._getOption("notSupportedMessage"),
-        ctx.response.headers,
-      );
-    }
+    // this._setDefaultHeaders(ctx);
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
 
-    const req = await this._parseRequest(ctx);
+    // First check if method is even allowed
     if (
-      (req.payload === undefined || Object.keys(req.payload).length === 0) &&
-      (req.files === undefined || Object.keys(req.files).length === 0)
+      this._allowedMethods.includes('POST') === false || handler === undefined
     ) {
-      // ctx.response.status = Status.BadRequest;
-      // ctx.response.body = { message: `Missing/No POST body` };
-      // return;
-      throw badRequest(`Missing/No POST body`, ctx.response.headers);
-    }
-
-    if (this._hasIdentifier(req)) {
-      // ctx.response.status = 405;
-      // ctx.response.body = {
-      //   message: this._getOption("notSupportedMessage"),
-      // };
-      // return;
-      throw resourceNotFound(
-        this._getOption("notFoundMessage"),
+      throw methodNotAllowed(
+        this._getOption('notSupportedMessage'),
         ctx.response.headers,
       );
-    }
+    } else {
+      const req = await this._parseRequest(ctx);
 
-    // Call postBodyParse hook
-    // We can handle things like HMAC signature check, User access check etc
-    // await this._postBodyParse(req, ctx);
-    // Check if it is a single record or multiple records
-    let single = false;
-    if (req.payload && !Array.isArray(req.payload)) {
-      single = true;
-      req.payload = [req.payload];
-    }
-    // Inject state params
-    const injectedPayload: Array<Record<string, unknown>> = [];
-    req.payload?.forEach((payload) => {
-      injectedPayload.push({ ...ctx.state.params || {}, ...payload });
-    });
-    req.payload = injectedPayload;
+      if (this._hasIdentifier(req)) {
+        // ctx.response.status = 405;
+        // ctx.response.body = {
+        //   message: this._getOption("notSupportedMessage"),
+        // };
+        // return;
+        throw resourceNotFound(
+          this._getOption('notFoundMessage'),
+          ctx.response.headers,
+        );
+      }
 
-    const op = await this._insert(req);
-    ctx.response.status = op.status;
-    if (op.payload) {
-      if (single) {
-        ctx.response.body = Array.isArray(op.payload)
-          ? op.payload[0]
-          : op.payload;
-      } else {
-        ctx.response.body = op.payload;
+      let single = false;
+      // if (req.payload && !Array.isArray(req.payload)) {
+      if (req.payload && req.payload.length === 1) {
+        single = true;
+      }
+
+      const op = await handler.apply(this, [req]),
+        totalRows = (op.payload)
+          ? ((Array.isArray(op.payload)) ? op.payload.length : 1)
+          : 0;
+
+      ctx.response.status = op.status;
+      if (op.payload) {
+        if (single) {
+          ctx.response.body = op.payload[0];
+        } else {
+          ctx.response.body = op.payload;
+        }
+      }
+
+      const headerNames = this._getOption('headers');
+      ctx.response.headers.set(
+        headerNames.totalRows as string,
+        totalRows.toString(),
+      );
+
+      if (op.headers) {
+        op.headers.forEach((value, key) => {
+          ctx.response.headers.set(key, value);
+        });
+      }
+
+      // Call post response hook
+      if (postHandle !== undefined) {
+        await postHandle.apply(this, [ctx]);
       }
     }
-    ctx.response.headers.set("X-Total-Rows", op.totalRows.toString());
-
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
-    // Call post response hook
-    await this._postHandle(ctx);
   }
 
   /**
@@ -292,68 +341,61 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns void
    */
   public async PUT(ctx: Context): Promise<void> {
-    this._setDefaultHeaders(ctx);
+    const handler = this._getOption('putHandler'),
+      postHandle = this._getOption('preResponseHandler');
 
-    if (this.allowedMethods.indexOf("PUT") === -1) {
-      // ctx.response.status = 405;
-      // ctx.response.body = {
-      //   message: this._getOption("notSupportedMessage"),
-      // };
-      // return;
+    // this._setDefaultHeaders(ctx);
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
+
+    // First check if method is even allowed
+    if (
+      this._allowedMethods.includes('PUT') === false || handler === undefined
+    ) {
       throw methodNotAllowed(
-        this._getOption("notSupportedMessage"),
+        this._getOption('notSupportedMessage'),
         ctx.response.headers,
       );
-    }
-    const req = await this._parseRequest(ctx);
-    if (
-      (req.payload === undefined || Object.keys(req.payload).length === 0) &&
-      (req.files === undefined || Object.keys(req.files).length === 0)
-    ) {
-      // ctx.response.status = Status.BadRequest;
-      // ctx.response.body = { message: `Missing/No PUT body` };
-      // return;
-      throw badRequest(`Missing/No PUT body`, ctx.response.headers);
-    }
-    // Call postBodyParse hook
-    // We can handle things like HMAC signature check, User access check etc
-    // await this._postBodyParse(req, ctx);
-    // TODO - Handle array of objects
-
-    const op = await this._update(req);
-
-    ctx.response.status = op.status;
-    if (this._hasIdentifier(req)) {
-      // If no rows throw 404
-      if (!op.payload || op.totalRows === 0) {
-        // ctx.response.status = 404;
-        // ctx.response.body = { message: this._getOption("notFoundMessage") };
-        // // Return as we do not want to set other info
-        // return;
-        throw resourceNotFound(
-          this._getOption("notFoundMessage"),
-          ctx.response.headers,
-        );
-      } else {
-        ctx.response.body = Array.isArray(op.payload)
-          ? op.payload[0]
-          : op.payload;
-      }
     } else {
-      ctx.response.body = op.payload;
-    }
-    ctx.response.headers.set(
-      this._getOption("totalRowHeaderName"),
-      op.totalRows.toString(),
-    );
+      const req = await this._parseRequest(ctx);
+      // TODO(@abhinav) - Handle array of objects
 
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
+      const op = await handler.apply(this, [req]),
+        totalRows = (op.payload)
+          ? ((Array.isArray(op.payload)) ? op.payload.length : 1)
+          : 0;
+
+      ctx.response.status = op.status;
+      if (this._hasIdentifier(req)) {
+        // If no rows throw 404
+        if (!op.payload || totalRows === 0) {
+          throw resourceNotFound(
+            this._getOption('notFoundMessage'),
+            ctx.response.headers,
+          );
+        } else {
+          ctx.response.body = op.payload[0];
+        }
+      } else {
+        ctx.response.body = op.payload;
+      }
+
+      const headerNames = this._getOption('headers');
+      ctx.response.headers.set(
+        headerNames.totalRows as string,
+        totalRows.toString(),
+      );
+
+      if (op.headers) {
+        op.headers.forEach((value, key) => {
+          ctx.response.headers.set(key, value);
+        });
+      }
+
+      // Call post response hook
+      if (postHandle !== undefined) {
+        await postHandle.apply(this, [ctx]);
+      }
     }
-    // Call post response hook
-    await this._postHandle(ctx);
   }
 
   /**
@@ -365,68 +407,62 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns void
    */
   public async PATCH(ctx: Context): Promise<void> {
-    this._setDefaultHeaders(ctx);
+    const handler = this._getOption('patchHandler'),
+      postHandle = this._getOption('preResponseHandler');
 
-    if (this.allowedMethods.indexOf("PATCH") === -1) {
-      // ctx.response.status = 405;
-      // ctx.response.body = {
-      //   message: this._getOption("notSupportedMessage"),
-      // };
-      // return;
+    // this._setDefaultHeaders(ctx);
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
+
+    // First check if method is even allowed
+    if (
+      this._allowedMethods.includes('PATCH') === false || handler === undefined
+    ) {
       throw methodNotAllowed(
-        this._getOption("notSupportedMessage"),
+        this._getOption('notSupportedMessage'),
         ctx.response.headers,
       );
-    }
-    const req = await this._parseRequest(ctx);
-    if (
-      (req.payload === undefined || Object.keys(req.payload).length === 0) &&
-      (req.files === undefined || Object.keys(req.files).length === 0)
-    ) {
-      // ctx.response.status = Status.BadRequest;
-      // ctx.response.body = { message: `Missing/No PATCH body` };
-      // return;
-      throw badRequest(`Missing/No PATCH body`, ctx.response.headers);
-    }
-    // Call postBodyParse hook
-    // We can handle things like HMAC signature check, User access check etc
-    // await this._postBodyParse(req, ctx);
-    // TODO - Handle array of objects
-
-    const op = await this._update(req);
-    ctx.response.status = op.status;
-    // If there is identifier, then we are fetching a single record
-    if (this._hasIdentifier(req)) {
-      // If no rows throw 404
-      if (!op.payload || op.totalRows === 0) {
-        // ctx.response.status = 404;
-        // ctx.response.body = { message: this._getOption("notFoundMessage") };
-        // // Return as we do not want to set other info
-        // return;
-        throw resourceNotFound(
-          this._getOption("notFoundMessage"),
-          ctx.response.headers,
-        );
-      } else {
-        ctx.response.body = Array.isArray(op.payload)
-          ? op.payload[0]
-          : op.payload;
-      }
     } else {
-      ctx.response.body = op.payload;
-    }
-    ctx.response.headers.set(
-      this._getOption("totalRowHeaderName"),
-      op.totalRows.toString(),
-    );
+      const req = await this._parseRequest(ctx);
 
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
+      // TODO(@abhinav) - Handle array of objects
+
+      const op = await handler.apply(this, [req]),
+        totalRows = (op.payload)
+          ? ((Array.isArray(op.payload)) ? op.payload.length : 1)
+          : 0;
+
+      ctx.response.status = op.status;
+      // If there is identifier, then we are fetching a single record
+      if (this._hasIdentifier(req)) {
+        // If no rows throw 404
+        if (!op.payload || totalRows === 0) {
+          throw resourceNotFound(
+            this._getOption('notFoundMessage'),
+            ctx.response.headers,
+          );
+        } else {
+          ctx.response.body = op.payload[0];
+        }
+      } else {
+        ctx.response.body = op.payload;
+      }
+
+      const headerNames = this._getOption('headers');
+      ctx.response.headers.set(
+        headerNames.totalRows as string,
+        totalRows.toString(),
+      );
+
+      if (op.headers) {
+        op.headers.forEach((value, key) => {
+          ctx.response.headers.set(key, value);
+        });
+      }
+      // Call post response hook
+      if (postHandle !== undefined) {
+        await postHandle.apply(this, [ctx]);
+      }
     }
-    // Call post response hook
-    await this._postHandle(ctx);
   }
 
   /**
@@ -438,45 +474,66 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns void
    */
   public async DELETE(ctx: Context): Promise<void> {
-    this._setDefaultHeaders(ctx);
+    const handler = this._getOption('deleteHandler'),
+      headHandler = this._getOption('headHandler'),
+      postHandle = this._getOption('preResponseHandler');
 
-    if (this.allowedMethods.indexOf("DELETE") === -1) {
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
+
+    // First check if method is even allowed
+    if (
+      this._allowedMethods.includes('PATCH') === false || handler === undefined
+    ) {
       throw methodNotAllowed(
-        this._getOption("notSupportedMessage"),
+        this._getOption('notSupportedMessage'),
         ctx.response.headers,
       );
-    }
-    const req = await this._parseRequest(ctx);
-    // Call postBodyParse hook
-    // We can handle things like HMAC signature check, User access check etc
-    // await this._postBodyParse(req, ctx);
-    const op = await this._delete(req);
-    ctx.response.status = op.status;
+    } else {
+      const req = await this._parseRequest(ctx);
 
-    if (this._hasIdentifier(req)) {
-      // If no rows throw 404
-      if (op.totalRows === 0) {
-        throw resourceNotFound(
-          this._getOption("notFoundMessage"),
-          ctx.response.headers,
-        );
+      let headRows = 0;
+      if (headHandler) {
+        headRows = await headHandler?.apply(this, [req]);
+      }
+      const op = await handler.apply(this, [req]),
+        totalRows = headRows || (op.payload)
+          ? ((Array.isArray(op.payload)) ? op.payload.length : 1)
+          : 0;
+
+      ctx.response.status = op.status;
+
+      if (this._hasIdentifier(req)) {
+        // If no rows throw 404
+        if (!op.payload || totalRows === 0) {
+          throw resourceNotFound(
+            this._getOption('notFoundMessage'),
+            ctx.response.headers,
+          );
+        } else {
+          ctx.response.body = op.payload[0];
+        }
+      } else {
+        ctx.response.body = op.payload;
+      }
+
+      const headerNames = this._getOption('headers');
+      ctx.response.headers.set(
+        headerNames.totalRows as string,
+        totalRows.toString(),
+      );
+
+      // There is no body in DELETE response
+      // ctx.response.body = op.body;
+      if (op.headers) {
+        op.headers.forEach((value, key) => {
+          ctx.response.headers.set(key, value);
+        });
+      }
+      // Call post response hook
+      if (postHandle !== undefined) {
+        await postHandle.apply(this, [ctx]);
       }
     }
-
-    ctx.response.headers.set(
-      this._getOption("totalRowHeaderName"),
-      op.totalRows.toString(),
-    );
-
-    // There is no body in DELETE response
-    // ctx.response.body = op.body;
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
-    }
-    // Call post response hook
-    await this._postHandle(ctx);
   }
 
   /**
@@ -488,39 +545,44 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns void
    */
   public async HEAD(ctx: Context): Promise<void> {
-    this._setDefaultHeaders(ctx);
+    const handler = this._getOption('headHandler'),
+      postHandle = this._getOption('preResponseHandler');
 
-    if (this.allowedMethods.indexOf("HEAD") === -1) {
-      // ctx.response.status = 405;
-      // ctx.response.body = {
-      //   message: `HEAD method not supported by this endpoint`,
-      // };
-      // return;
+    // this._setDefaultHeaders(ctx);
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
+
+    // First check if method is even allowed
+    if (
+      this._allowedMethods.includes('HEAD') === false || handler === undefined
+    ) {
       throw methodNotAllowed(
-        `HEAD method not supported by this endpoint`,
+        this._getOption('notSupportedMessage'),
         ctx.response.headers,
       );
-    }
+    } else {
+      const req = await this._parseRequest(ctx);
 
-    const req = await this._parseRequest(ctx);
-    // Call postBodyParse hook
-    // We can handle things like HMAC signature check, User access check etc
-    // await this._postBodyParse(req, ctx);
-    const op = await this._count(req);
-    // ctx.response.status = Status.OK;
-    // ctx.response.headers.set(this._getOption("totalRowHeaderName"), op.toString());
-    ctx.response.status = Status.OK;
-    ctx.response.headers.set(
-      this._getOption("totalRowHeaderName"),
-      op.totalRows.toString(),
-    );
-    if (op.headers) {
-      op.headers.forEach(([key, value]) => {
-        ctx.response.headers.set(key, value);
-      });
+      const op = await handler.apply(this, [req]);
+
+      // ctx.response.status = Status.OK;
+      ctx.response.status = Status.OK;
+
+      const headerNames = this._getOption('headers');
+      ctx.response.headers.set(
+        headerNames.totalRows as string,
+        op.toString(),
+      );
+
+      // if (op.headers) {
+      //   op.headers.forEach((value, key) => {
+      //     ctx.response.headers.set(key, value);
+      //   });
+      // }
+      // Call post response hook
+      if (postHandle !== undefined) {
+        await postHandle.apply(this, [ctx]);
+      }
     }
-    // Call post response hook
-    await this._postHandle(ctx);
   }
 
   /**
@@ -532,110 +594,15 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns void
    */
   public async OPTIONS(ctx: Context): Promise<void> {
-    this._setDefaultHeaders(ctx);
     // Options are alwats allowed
-    ctx.response.headers.set("Allow", this.allowedMethods.join(", "));
+    ctx.response.headers.set('Allow', this.allowedMethods.join(', '));
     // Await injected here to prevent error
     ctx.response.status = await 200;
   }
 
-  //#endregion Handle Methods
+  //#endregion HTTP Base Handlers
 
-  // Protected methods
-
-  //#region Begin Protected Methods
-
-  //#region Implementation methods
-
-  /**
-   * _fetch
-   *
-   * Perform a "fetch" operation. Return an array of entities which are to be returned basis parameters
-   * (filters) provided.
-   *
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected _fetch(_request: ParsedRequest): Promise<HTTPResponse> {
-    throw methodNotAllowed(
-      this._getOption("notSupportedMessage"),
-    );
-  }
-
-  /**
-   * _insert
-   *
-   * Perform an "insert" operation. Return the entity which was inserted.
-   *
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected _insert(_request: ParsedRequest): Promise<HTTPResponse> {
-    throw methodNotAllowed(
-      this._getOption("notSupportedMessage"),
-    );
-  }
-
-  /**
-   * _update
-   *
-   * Perform an "update" operation. Return an array of entities which are to be returned basis parameters
-   * (filters) provided.
-   *
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected _update(_request: ParsedRequest): Promise<HTTPResponse> {
-    throw methodNotAllowed(
-      this._getOption("notSupportedMessage"),
-    );
-  }
-
-  /**
-   * _delete
-   *
-   * Perform a "Delete" operation. This should ideally return just the status code along with any headers.
-   *
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected _delete(_request: ParsedRequest): Promise<HTTPResponse> {
-    throw methodNotAllowed(
-      this._getOption("notSupportedMessage"),
-    );
-  }
-
-  /**
-   * _count
-   *
-   * Perform a count check. This will provide information for HEAD calls
-   *
-   * @param request ParsedRequest The parsed request object
-   * @returns Promise<HTTPResponse<T>> The response object
-   */
-  protected _count(_request: ParsedRequest): Promise<HTTPResponse> {
-    throw methodNotAllowed(
-      this._getOption("notSupportedMessage"),
-    );
-  }
-
-  //#endregion Implementation methods
-
-  /**
-   * _setDefaultHeaders
-   *
-   * Set default headers in the response
-   *
-   * @protected
-   * @param ctx Context Set default headers
-   */
-  protected _setDefaultHeaders(ctx: Context): void {
-    ctx.response.headers.set("X-ROUTE-NAME", this.name);
-    ctx.response.headers.set("X-ROUTE-GROUP", this.group);
-    ctx.response.headers.set("X-ROUTE-PATH", this.route);
-    ctx.response.headers.set("Allow", this.allowedMethods.join(", "));
-  }
-
+  //#region Protected methods
   /**
    * _parseRequest
    *
@@ -652,13 +619,13 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns ParsedRequest The parsed request
    */
   protected async _parseRequest(
-    ctx: Context,
-  ): Promise<ParsedRequest> {
+    ctx: Context<S>,
+  ): Promise<ParsedRequest<S>> {
     const params = oakHelpers.getQuery(ctx, { mergeParams: true }),
-      paging: PagingParam = {},
+      paging: Partial<PagingParam> = {},
       sorting: SortingParam = {},
-      contentLength: number = ctx.request.headers.get("content-length")
-        ? parseInt(ctx.request.headers.get("content-length") as string)
+      contentLength: number = ctx.request.headers.get('content-length')
+        ? parseInt(ctx.request.headers.get('content-length') as string)
         : 0;
     let payload:
       | Record<string, unknown>
@@ -667,63 +634,69 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     let files: { [key: string]: Array<FileUploadInfo> } | undefined = undefined;
 
     //#region Split paging and sorting params
-    if (params["page"]) {
-      paging.page = Number(params["page"]) || undefined;
-      delete params["page"];
+    if (params['page']) {
+      paging.page = Number(params['page']) || 1;
+      delete params['page'];
     }
-    if (params["pagesize"]) {
-      paging.limit = Number(params["pagesize"]) || undefined;
-      delete params["pagesize"];
+    if (params['pagesize'] || this._getOption('pageLimit') !== undefined) {
+      paging.limit = Number(params['pagesize']) ||
+        this._getOption('pageLimit') as number;
+      if (paging.page === undefined) {
+        paging.page = 1;
+      }
+      delete params['pagesize'];
     }
-    if (params["sort"] && params["sort"].length > 0) {
-      const sort = params["sort"].split(",");
+    if (params['sort'] && params['sort'].length > 0) {
+      const sort = params['sort'].split(',');
       sort.forEach((s) => {
-        const [key, value] = s.split(":");
-        sorting[key.trim()] = (value.trim().toUpperCase() as "ASC" | "DESC") ||
-          "ASC";
+        const [key, value] = s.split(':');
+        sorting[key.trim()] = (value.trim().toUpperCase() as 'ASC' | 'DESC') ||
+          'ASC';
       });
-      delete params["sort"];
-    } else if (params["sortasc"]) {
-      const sort = params["sortasc"].split(",");
+      delete params['sort'];
+    } else if (params['sortasc']) {
+      const sort = params['sortasc'].split(',');
       sort.forEach((s) => {
-        sorting[s] = "ASC";
+        sorting[s] = 'ASC';
       });
-      delete params["sortasc"];
-    } else if (params["sortdesc"]) {
-      const sort = params["sortdesc"].split(",");
+      delete params['sortasc'];
+    } else if (params['sortdesc']) {
+      const sort = params['sortdesc'].split(',');
       sort.forEach((s) => {
-        sorting[s] = "DESC";
+        sorting[s] = 'DESC';
       });
-      delete params["sortdesc"];
+      delete params['sortdesc'];
     }
     //#endregion Split paging and sorting params
 
     //#region Parse Body
-    // TODO - Check if body exists in http 2.0
+    // TODO(@abhinav) - Check if body exists in http 2.0
     if (ctx.request.hasBody === true && contentLength > 0) {
-      const body = await ctx.request.body();
-      if (body.type === "bytes") {
+      const body = await ctx.request.body(),
+        maxFileSize = this._getOption('uploadMaxFileSize') || 10485760, // default of 10MiB
+        uploadPath = this._getOption('uploadPath'); // default of undefined
+      if (body.type === 'bytes') {
         payload = {
           data: new TextDecoder().decode(await body.value),
         };
-      } else if (body.type === "text") {
+      } else if (body.type === 'text') {
         payload = {
           data: await body.value,
         };
-      } else if (body.type === "json") {
+      } else if (body.type === 'json') {
         payload = await body.value;
-      } else if (body.type === "form") {
+      } else if (body.type === 'form') {
         payload = {};
         const formData = await body.value;
         for (const [key, value] of formData.entries()) {
           payload[key] = value;
         }
-      } else if (body.type === "form-data") {
+      } else if (body.type === 'form-data') {
         // Ok this gets a little complicated as there will be both fields and files
         // @TODO - Figure out a better way to do this?
         const formData = await body.value.read({
-          maxFileSize: ctx.app.state.MAX_FILE_UPLOAD_SIZE || 10485760, // default of 10MiB
-          outPath: ctx.app.state.FILE_UPLOAD_PATH || undefined, // default of undefined
+          maxFileSize: maxFileSize,
+          outPath: uploadPath,
         });
         payload = formData.fields;
         // Add files
@@ -749,23 +722,38 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
         delete params[key];
       }
     });
-
     //#endregion Parse Body
-    const parseReq: ParsedRequest = {
+
+    const parseReq: ParsedRequest<S> = {
       method: ctx.request.method,
+      state: ctx.state, // State is passed to the request
       params: params,
-      paging: paging,
-      sorting: sorting,
-      payload: payload,
+      paging: (paging.limit !== undefined) ? paging as PagingParam : undefined,
+      sorting: (Object.keys(sorting).length > 0) ? sorting : undefined,
+      payload: (payload === undefined)
+        ? undefined
+        : (Array.isArray(payload) ? payload : [payload]) as Array<
+          Record<string, unknown>
+        >,
       files: files,
     };
 
-    await this._postBodyParse(parseReq, ctx);
+    const postBodyParseHook = this._getOption('postBodyParse');
+    if (postBodyParseHook !== undefined) {
+      await postBodyParseHook.apply(this, [parseReq, ctx]);
+    }
 
     // Call Inject params
-    return this._injectStateParams(parseReq, ctx.state.params);
+    // return this._injectStateParams(parseReq, ctx.state.params);
+    return parseReq;
   }
 
+  /**
+   * @deprecated
+   * @param req ParsedRequest The data parsed from request
+   * @param params Record<string, unknown> Params to inject
+   * @returns ParsedRequest The parsed request with injected params
+   */
   protected _injectStateParams(
     req: ParsedRequest,
     params?: Record<string, unknown>,
@@ -773,61 +761,13 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
     if (params) {
       // Delete null and undefined values
       Object.keys(params).forEach((key) => {
-        if (params[key] !== null && params[key] !== undefined) {
+        if (params[key] === null || params[key] === undefined) {
           delete params[key];
         }
       });
-      Object.assign(req.params, params);
-      //#region Inject params into payload
-      if (
-        req.method === "POST" || req.method === "PUT" ||
-        req.method === "PATCH"
-      ) {
-        if (req.payload) {
-          if (Array.isArray(req.payload)) {
-            req.payload = req.payload.map((p) => Object.assign(p, req.params));
-          } else {
-            Object.assign(req.payload, req.params);
-          }
-        }
-      }
-      //#endregion Inject params into payload
+      req.params = Object.assign(req.params, params);
     }
     return req;
-  }
-
-  /**
-   * _postBodyParse
-   *
-   * This hook is called just after the body is parsed. It can be overridden to do any additional processing either the
-   * params or the body. This is called before the request is passed to the specific handler.
-   * A good example would be parsing HMAC signature of the body for authentication
-   *
-   * @protected
-   * @param req ParsedRequest The parsed request
-   * @param ctx Context The context passed by OAK
-   * @returns void
-   */
-  // deno-lint-ignore no-unused-vars
-  protected _postBodyParse(req: ParsedRequest, ctx: Context): void {
-    // Do nothing by default
-    return;
-  }
-
-  /**
-   * _postHandle
-   *
-   * This hook is called once the request has been handled. The response and response body is available.
-   * This is useful when trying to handle HMAC signatures for response body.
-   *
-   * @protected
-   * @param ctx Context The context passed by OAK
-   * @returns void
-   */
-  // deno-lint-ignore no-unused-vars
-  protected _postHandle(ctx: Context): void {
-    // Do nothing by default
-    return;
   }
 
   /**
@@ -839,12 +779,12 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns string The identifiers for the route
    */
   protected _buildIdentifiers(): string {
-    const routeIdentifiers = this._getOption("routeIdentifiers");
+    const routeIdentifiers = this._getOption('routeIdentifiers');
     if (routeIdentifiers && routeIdentifiers.length > 0) {
-      // return ':' + this._getOption('routeIdentifiers').join(',:') + '?';
-      return ":" + this._getOption("routeIdentifiers").join("\\::") + "?";
+      // Only last identifier is optional
+      return ':' + routeIdentifiers.join('\\::') + '?';
     } else {
-      return "";
+      return '';
     }
   }
 
@@ -857,13 +797,14 @@ export abstract class BaseEndpoint<T extends EndpointOptions = EndpointOptions>
    * @returns boolean True if Identifier is present in the request
    */
   protected _hasIdentifier(req: ParsedRequest): boolean {
-    if (this._hasOption("routeIdentifiers")) {
-      return this._getOption("routeIdentifiers").every((identifier) => {
+    const routeIdentifiers = this._getOption('routeIdentifiers');
+    if (routeIdentifiers && routeIdentifiers.length > 0) {
+      return routeIdentifiers.every((identifier) => {
         return req.params[identifier] !== undefined;
       });
     } else {
       return false;
     }
   }
-  //#endregion End Protected Methods
+  //#endregion Protected methods
 }

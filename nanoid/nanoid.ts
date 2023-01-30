@@ -5,7 +5,7 @@
  * Based on nodejs nanoid project (https://github.com/ai/nanoid)
  */
 
-import { webSafe } from "./dictionary.ts";
+import { webSafe } from './dictionary.ts';
 
 /**
  * Generates an array of random numbers basis the length specified
@@ -28,15 +28,24 @@ const random = function (length: number): Uint32Array {
  * @returns string - The unique id
  */
 export function nanoid(size = 21, base: string = webSafe): string {
-  let id = "",
+  let id = '',
     i = 0;
   const mask = (2 << (31 - Math.clz32((base.length - 1) | 1))) - 1,
     step = Math.ceil((1.6 * mask * size) / base.length),
     bytes: Uint32Array = random(step);
 
   while (id.length < size) {
-    id += base[bytes[i] & mask] || "";
+    id += base[bytes[i] & mask] || '';
     i++;
   }
   return id;
 }
+
+// Another idea
+/**
+ * This will be unique as long as we can manage to get server_id (PID), server_startup_time_in_seconds (to an extent consistent)
+ * https://mariadb.com/kb/en/uuid_short/
+ *   (server_id & 255) << 56
++ (server_startup_time_in_seconds << 24)
++ incremented_variable++;
+ */

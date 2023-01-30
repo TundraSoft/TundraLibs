@@ -12,8 +12,8 @@ need to do such operations, custom queries can be written.
 ## Supported Databases
 
 - [x] PostgreSQL
-- [ ] MySQL/MariaDB
-- [x] SQLite
+- [x] MariaDB
+- [ ] SQLite
 - [ ] MongoDB
 
 ## Usage
@@ -294,11 +294,87 @@ type QueryResult<T = Record<string, unknown>> = {
 };
 ```
 
-## ToDO
+## Model Definition
+
+```ts
+// Model Definition options
+type ModelDefinition = {
+  name: string; // Name of the model
+  connection: string; // The connection config name
+  schema?: string; // The schema name. This will be used as "Database" in mongodb
+  table: string; // The table name
+  isView?: boolean; // Is this a view? TODO - Query definition for generating views
+  columns: {
+    [key: string]: ModelColumnDefinition; // The key here is the Alias, real name is in the definition
+  };
+  // TODO - Not implemented
+  audit?: {
+    schema?: string;
+    table: string;
+  };
+  encryptionKey?: string; // The encryption key (only required if there is an encrypted column)
+  primaryKeys?: Set<string>; // List of primary keys (the alias must be used)
+  uniqueKeys?: Record<string, Set<string>>; // List of unique keys (the alias must be used)
+  // Foreign keys are only used for validation. Maybe add support to fetch result from related table?
+  foreignKeys?: Record<string, { // FK relationship name
+    model: string; // The model it refers to
+    relationShip: Record<string, string>; // The join condition
+    columns?: Set<string> | Record<string, DataType>; // The columns that are part of the foreign table (if blank, it will fetch from model)
+  }>;
+  permissions?: { // Permissions of the model, by default select, insert, update is set as true.
+    select?: boolean; // Select from table
+    insert?: boolean; // Insert into table
+    update?: boolean; // Update table
+    delete?: boolean; // Delete from table
+    truncate?: boolean; // Truncate table
+  };
+  pageSize?: number; // Max rows per paging. Default to all
+}
+
+type ModelColumnDefinition = {
+  type: DataType; // The data type
+  length?: DataLength; // Length of the column (if applicable)
+  isNullable?: boolean; // Can the column value be set as null
+  defaults?: { // Insert & update default value (if null is passed)
+    insert?:
+      | Generators
+      | GeneratorFunction
+      | string
+      | number
+      | bigint
+      | boolean
+      | Date;
+    update?:
+      | Generators
+      | GeneratorFunction
+      | string
+      | number
+      | bigint
+      | boolean
+      | Date;
+  name?: string; // The real name of the column
+  notNullOnce?: boolean; // Can the value be set to null once set?
+  disableUpdate?: boolean; // Disable updating this column
+  // deno-lint-ignore no-explicit-any
+  validation?: GuardianProxy<any>; // Validation protocol (Uses Guardian)
+  security?: "ENCRYPT" | "HASH"; // Should the value be encrypted or hashed. NOTE - This will set data type to VARCHAR no matter what is defined.
+  project?: boolean; // Select this column? (on select, insert and update)
+}
+```
+
+## TODO
 
 - [ ] Better documentation
 - [ ] Driver(s) support
 - [x] Finish Model to support validation and Generators
-- [x] Test suit
+- [ ] Test suit
 - [ ] Better error classes
 - [x] Migrate away from polysql if there is no development there
+- [x] Insert & Update with validation
+- [x] Generator implementation
+- [ ] Events
+- [x] Foreign Key validation
+- [x] ModelManager - Schema
+  - [x] Handle FK lookup
+  - [x] Creation/sync of DB
+- [x] Cleanup of model & clients (types etc)

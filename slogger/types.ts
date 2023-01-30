@@ -2,7 +2,7 @@ import type {
   LogFacilities,
   LogSeverities,
   SyslogObject,
-} from "../syslog/mod.ts";
+} from '../syslog/mod.ts';
 
 export type LogConfig = {
   appName: string;
@@ -13,12 +13,12 @@ export type LogConfig = {
 };
 
 export type HandlerType =
-  | "CONSOLE"
-  | "BLACKHOLE"
-  | "FILE"
-  | "POST"
-  | "SYSLOG"
-  | "CUSTOM";
+  | 'CONSOLE'
+  | 'BLACKHOLE'
+  | 'FILE'
+  | 'POST'
+  | 'SYSLOG'
+  | 'CUSTOM';
 
 export type HandlerOptions = {
   type: HandlerType;
@@ -42,7 +42,7 @@ export type FileHandlerOptions = HandlerOptions & {
 export type SyslogOptions = HandlerOptions & {
   serverHost: string;
   serverPort: number;
-  serverType: "udp"; // TCP we will support later
+  serverType: 'udp'; // TCP we will support later
   structureData: unknown;
 };
 

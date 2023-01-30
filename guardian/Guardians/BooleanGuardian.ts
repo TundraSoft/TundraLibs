@@ -1,6 +1,6 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { type } from "../utils/mod.ts";
-import type { FunctionParameters, FunctionType } from "../types/mod.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { type } from '../utils/mod.ts';
+import type { FunctionParameters, FunctionType } from '../types/mod.ts';
 
 /**
  * BooleanGuardian
@@ -14,4 +14,4 @@ export class BooleanGuardian<
 > extends BaseGuardian<FunctionType<boolean, P>> {
 }
 
-export const booleanGuard = new BooleanGuardian(type("boolean")).proxy();
+export const booleanGuard = new BooleanGuardian(type('boolean')).proxy();

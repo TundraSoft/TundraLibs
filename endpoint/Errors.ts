@@ -1,5 +1,5 @@
 export class BaseEndpointError extends Error {
-  protected _module = "Endpoint";
+  protected _module = 'Endpoint';
 
   constructor(message: string) {
     message = `[module='Endpoint'] ${message}`;
@@ -10,7 +10,7 @@ export class BaseEndpointError extends Error {
 
 export class MissingNameError extends BaseEndpointError {
   constructor() {
-    super("Route name must be provided");
+    super('Route name must be provided');
     Object.setPrototypeOf(this, MissingNameError.prototype);
   }
 }
@@ -52,5 +52,14 @@ export class UnsupportedContentTypeError extends BaseEndpointError {
     this._contentType = contentType;
     this._name = name;
     Object.setPrototypeOf(this, UnsupportedContentTypeError.prototype);
+  }
+}
+
+export class MissingHeadError extends BaseEndpointError {
+  protected _name: string;
+  constructor(name: string) {
+    super(`Head method must be provided for endpoint: ${name}`);
+    this._name = name;
+    Object.setPrototypeOf(this, MissingHeadError.prototype);
   }
 }

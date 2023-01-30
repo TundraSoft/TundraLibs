@@ -1,4 +1,4 @@
-import { Guardian, Struct } from "../mod.ts";
+import { Guardian, Struct } from '../mod.ts';
 // import type { Type } from "../mod.ts";
 
 const stG = Struct({
@@ -7,8 +7,24 @@ const stG = Struct({
   profile: {
     facebook: Guardian.string().url(),
   },
+  test: Guardian.string().min(10).notEmpty().optional(),
 });
 
+try {
+  const [err, data] = stG.validate({
+    name: 'Abhinav',
+    age: 18,
+    profile: { facebook: 'https://google.com/' },
+    test: undefined,
+  });
+  if (err) {
+    console.log(err.toJSON());
+  }
+} catch (e) {
+  console.log(e.toJSON());
+}
+
+Deno.exit(1);
 // const data = [
 //   {
 //     name: "Abhinav Ariyanayakipuram Venkatachalam",
@@ -30,9 +46,9 @@ const stG = Struct({
 // ];
 // const valid = stG.validate();
 const [error, dat] = stG.validate({
-  name: "Abhinav Ariyanayakipuram Venkatachalam",
+  name: 'Abhinav Ariyanayakipuram Venkatachalam',
   age: 17,
-  profile: { facebook: "df" },
+  profile: { facebook: 'df' },
 });
 
 console.log(JSON.stringify(error?.toJSON()));
@@ -45,11 +61,11 @@ console.log(dat);
 
 const PhoneNumbers = Struct({
   number: Guardian.string().mobile(),
-  type: Guardian.array().of(Guardian.string().max(1).oneOf(["M", "P", "H"])),
+  type: Guardian.array().of(Guardian.string().max(1).oneOf(['M', 'P', 'H'])),
 });
 
 const IdDetails = Struct({
-  type: Guardian.string().oneOf(["DL", "PASSPORT", "AADHAAR"]),
+  type: Guardian.string().oneOf(['DL', 'PASSPORT', 'AADHAAR']),
   number: Guardian.string().max(10),
 });
 
@@ -75,23 +91,23 @@ const CustomerInfo = Struct({
 });
 // try {
 CustomerInfo({
-  name: "John Doe",
+  name: 'John Doe',
   profile: {
     address: {
-      street: "123 Main St",
-      city: "New York",
-      state: "NY",
+      street: '123 Main St',
+      city: 'New York',
+      state: 'NY',
     },
     phoneNumbers: [
-      { number: "9886704501", type: ["M"] },
-      { number: "9886819090", type: ["P"] },
-      { number: "1234567890", type: ["H"] },
+      { number: '9886704501', type: ['M'] },
+      { number: '9886819090', type: ['P'] },
+      { number: '1234567890', type: ['H'] },
     ],
   },
   id: [
-    { type: "DL", number: "1234567890" },
-    { type: "PASSPORT", number: "1234567890" },
-    { type: "AADHAAR", number: "1234567890" },
+    { type: 'DL', number: '1234567890' },
+    { type: 'PASSPORT', number: '1234567890' },
+    { type: 'AADHAAR', number: '1234567890' },
   ],
 });
 // } catch (e) {

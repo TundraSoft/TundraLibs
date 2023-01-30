@@ -1,4 +1,4 @@
-export type { ErrorFormat, ErrorLike } from "./Errors.ts";
+export type { ErrorFormat, ErrorLike } from './Errors.ts';
 export type {
   FunctionParameters,
   FunctionType,
@@ -7,10 +7,10 @@ export type {
   MergeParameters,
   RemoveAsync,
   ResolvedValue,
-} from "./Function.ts";
-export type { GuardianProxy } from "./GuardianProxy.ts";
-export type { ObjectPath, ObjectProperty } from "./Object.ts";
-export type { Primitive } from "./Primitive.ts";
+} from './Function.ts';
+export type { GuardianProxy } from './GuardianProxy.ts';
+export type { ObjectPath, ObjectProperty } from './Object.ts';
+export type { Primitive } from './Primitive.ts';
 export type {
   StructOptions,
   StructParameters,
@@ -19,5 +19,5 @@ export type {
   StructValidatorFunction,
   StructValues,
   Type,
-} from "./struct.ts";
-export type { Typeof } from "./Typeof.ts";
+} from './struct.ts';
+export type { Typeof } from './Typeof.ts';

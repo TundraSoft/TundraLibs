@@ -9,7 +9,7 @@ class during initialization.
 Typed usage:
 
 ```ts
-import { Options } from "./mod.ts";
+import { Options } from './mod.ts';
 //#region Typed Options
 type iTypedOptions = {
   value1: string;

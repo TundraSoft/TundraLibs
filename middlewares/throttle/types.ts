@@ -1,4 +1,4 @@
-import { Context } from "../../dependencies.ts";
+import { Context } from '../../dependencies.ts';
 export type ThrottleOptions = {
   // Limit value
   limitHeader: string;

@@ -1,18 +1,18 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { StringGuardian } from "./StringGuardian.ts";
-import { NumberGuardian } from "./NumberGuardian.ts";
-import { BigintGuardian } from "./BigintGuardian.ts";
-import { DateGuardian } from "./DateGuardian.ts";
-import { BooleanGuardian } from "./BooleanGuardian.ts";
-import { ObjectGuardian } from "./ObjectGuardian.ts";
-import { ArrayGuardian } from "./ArrayGuardian.ts";
-import { array, type } from "../utils/mod.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { StringGuardian } from './StringGuardian.ts';
+import { NumberGuardian } from './NumberGuardian.ts';
+import { BigintGuardian } from './BigintGuardian.ts';
+import { DateGuardian } from './DateGuardian.ts';
+import { BooleanGuardian } from './BooleanGuardian.ts';
+import { ObjectGuardian } from './ObjectGuardian.ts';
+import { ArrayGuardian } from './ArrayGuardian.ts';
+import { array, type } from '../utils/mod.ts';
 
 import type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
-} from "../types/mod.ts";
+} from '../types/mod.ts';
 
 const BooleanMap = {
   true: true,
@@ -45,12 +45,12 @@ export class UnknownGuardian<
    */
   string(message?: string): GuardianProxy<StringGuardian<P>> {
     return this.transform((input) => {
-      if (typeof input === "string") {
+      if (typeof input === 'string') {
         return input;
       }
       if (
         input === null ||
-        (typeof input === "object" &&
+        (typeof input === 'object' &&
           // deno-lint-ignore ban-types
           (input as unknown as object).toString === Object.prototype.toString)
       ) {
@@ -70,12 +70,12 @@ export class UnknownGuardian<
    */
   number(message?: string): GuardianProxy<NumberGuardian<P>> {
     return this.transform((input) => {
-      if (typeof input === "number") {
+      if (typeof input === 'number') {
         return input;
       }
       const value = Number(input);
 
-      if (isNaN(value) && (input as unknown) !== "NaN") {
+      if (isNaN(value) && (input as unknown) !== 'NaN') {
         throw new Error(message || `Expect value to be a number`);
       }
 
@@ -93,16 +93,16 @@ export class UnknownGuardian<
    */
   bigint(message?: string): GuardianProxy<BigintGuardian<P>> {
     return this.transform((input) => {
-      if (typeof input === "bigint") {
+      if (typeof input === 'bigint') {
         return input;
       }
       const value = BigInt(String(input));
 
-      if (typeof value === "bigint") {
+      if (typeof value === 'bigint') {
         return value;
       }
 
-      if ((input as unknown) !== "NaN") {
+      if ((input as unknown) !== 'NaN') {
         throw new Error(message || `Expect value to be a BigInt`);
       }
 
@@ -123,7 +123,7 @@ export class UnknownGuardian<
       if (input instanceof Date) {
         return input;
       }
-      if (typeof input === "number" || typeof input === "string") {
+      if (typeof input === 'number' || typeof input === 'string') {
         const value = new Date(input);
 
         if (!isNaN(value.getTime())) {
@@ -144,7 +144,7 @@ export class UnknownGuardian<
    */
   boolean(message?: string): GuardianProxy<BooleanGuardian<P>> {
     return this.transform((input) => {
-      if (typeof input === "boolean") {
+      if (typeof input === 'boolean') {
         return input;
       }
       const key = String(input).trim().toLowerCase(),
@@ -165,7 +165,7 @@ export class UnknownGuardian<
    * @returns GuardianProxy<ObjectGuardian<P>> The guardian proxy for object
    */
   object(message?: string): GuardianProxy<ObjectGuardian<P>> {
-    return this.transform(type("object", message), ObjectGuardian);
+    return this.transform(type('object', message), ObjectGuardian);
   }
 
   /**

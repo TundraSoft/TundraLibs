@@ -1,5 +1,5 @@
-import { Syslog } from "../syslog/mod.ts";
-import type { HandlerOptions } from "./types.ts";
+import { Syslog } from '../syslog/mod.ts';
+import type { HandlerOptions } from './types.ts';
 
 export abstract class BaseHandler<T extends HandlerOptions> {
   protected _options: T;

@@ -1,4 +1,4 @@
-import { Status } from "../../dependencies.ts";
+import { Status } from '../../dependencies.ts';
 
 export type HTTPResponse<T = Record<string, unknown>> = {
   status: Status;
@@ -7,6 +7,6 @@ export type HTTPResponse<T = Record<string, unknown>> = {
     limit: number;
     page: number;
   };
-  totalRows: number;
+  // totalRows?: number;
   headers?: Headers;
 };

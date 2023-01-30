@@ -17,15 +17,15 @@ import {
   numberGuard,
   stringGuard,
   Struct,
-} from "./mod.ts";
-import type { Type } from "./mod.ts";
+} from './mod.ts';
+import type { Type } from './mod.ts';
 
 // Checkf if a string is between 1-100 characters and is a valid email
 const emailCheck = stringGuard.min(1).max(100).email();
 // To use it simply run
-const validatedEmail = emailCheck("testemail@provider.com");
+const validatedEmail = emailCheck('testemail@provider.com');
 // returns testemail@provider.com
-const invalidEmail = emailCheck("asdfdf");
+const invalidEmail = emailCheck('asdfdf');
 // throws invalid email error
 
 // Structured object
@@ -44,7 +44,7 @@ type testType = Type<typeof test>;
  }
  */
 // to validate
-const testOP = test({ name: "Abhinav A V", email: "my@email.com" });
+const testOP = test({ name: 'Abhinav A V', email: 'my@email.com' });
 ```
 
 ## TODO

@@ -18,11 +18,11 @@ password = $DATABASE_PASSWORD
 ```
 
 ```ts
-import { Config } from "./mod.ts";
-await Config.load("database");
-const user = Config.get("database", "username"); // returns test_user
-const pass = Config.get("database", "password"); // if env variable for $DATABASE_PASSWORD is found will substitute and return that value else returns $DATABASE_PASSWORD
-const db = Config.get("database"); // returns all items from database config file
+import { Config } from './mod.ts';
+await Config.load('database');
+const user = Config.get('database', 'username'); // returns test_user
+const pass = Config.get('database', 'password'); // if env variable for $DATABASE_PASSWORD is found will substitute and return that value else returns $DATABASE_PASSWORD
+const db = Config.get('database'); // returns all items from database config file
 ```
 
 ### Methods

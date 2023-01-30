@@ -1,8 +1,7 @@
-import { QueryType } from "./Queries.ts";
-
 export type ClientEvents = {
   connect(name: string): void;
-  close(name: string): void;
-  query(name: string, type: QueryType): void;
-  queryError(name: string, type: QueryType, error: Error): void;
+  disconnect(name: string): void;
+  error(name: string, error: Error): void;
+  query(name: string, query: string, params: unknown[]): void;
+  // longQuery(name: string, type: QueryType, query: string, time: number): void;
 };

@@ -1,6 +1,6 @@
-import { FunctionParameters, FunctionType, Typeof } from "../types/mod.ts";
+import { FunctionParameters, FunctionType, Typeof } from '../types/mod.ts';
 
-import { makeError } from "../error/mod.ts";
+import { makeError } from '../error/mod.ts';
 /**
  * type
  *
@@ -17,7 +17,9 @@ export function type<
 >(type: T, error?: string): FunctionType<Typeof[T], P> {
   return (...args: P): Typeof[T] => {
     if (typeof args[0] !== type || args[0] === null) {
-      throw makeError(error || `Expect value to be of type "${type}"`);
+      throw makeError(
+        error || `Expect value to be of type "${type}", got ${args[0]}`,
+      );
     }
     return args[0] as Typeof[T];
   };

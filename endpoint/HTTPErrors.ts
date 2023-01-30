@@ -4,7 +4,7 @@ import {
   isClientErrorStatus,
   Status,
   STATUS_TEXT,
-} from "../dependencies.ts";
+} from '../dependencies.ts';
 
 export type HTTPErrorData =
   | string
@@ -24,6 +24,7 @@ export class HTTPError extends Error {
   ) {
     // Refine this
     super(`HTTP Error: ${status} ${STATUS_TEXT[status]}`);
+    Object.setPrototypeOf(this, HTTPError.prototype);
     this.#data = data;
     this.#status = status as ErrorStatus;
     if (headers) {
@@ -43,7 +44,7 @@ export class HTTPError extends Error {
     | string
     | Record<string, unknown>
     | Array<Record<string, unknown>> {
-    if (typeof this.#data === "string") {
+    if (typeof this.#data === 'string') {
       return {
         message: this.#data,
       };
@@ -83,4 +84,8 @@ export const unauthorized = (data: HTTPErrorData, headers?: Headers) => {
 
 export const methodNotAllowed = (data: HTTPErrorData, headers?: Headers) => {
   return new HTTPError(data, Status.MethodNotAllowed, headers);
+};
+
+export const tooManyRequests = (data: HTTPErrorData, headers?: Headers) => {
+  return new HTTPError(data, Status.TooManyRequests, headers);
 };

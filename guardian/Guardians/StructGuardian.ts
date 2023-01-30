@@ -1,6 +1,6 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { compile } from "../utils/mod.ts";
-import type { GuardianProxy, StructValidatorFunction } from "../types/mod.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { compile } from '../utils/mod.ts';
+import type { GuardianProxy, StructValidatorFunction } from '../types/mod.ts';
 
 /**
  * Struct
@@ -14,7 +14,7 @@ import type { GuardianProxy, StructValidatorFunction } from "../types/mod.ts";
 export const Struct = function <S>(
   struct: S,
   message?: string,
-  mode: "STRICT" | "DEFINED" | "PARTIAL" | "ALL" = "STRICT",
+  mode: 'STRICT' | 'DEFINED' | 'PARTIAL' | 'ALL' = 'STRICT',
 ): GuardianProxy<BaseGuardian<StructValidatorFunction<S>>> {
   return new BaseGuardian(
     compile(struct, {

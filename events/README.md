@@ -13,34 +13,34 @@ type TestEvents = {
 };
 class TypedEvent extends Events<TestEvents> {
   getEventCount(): number {
-    return this._events.get("event1")?.size || 0;
+    return this._events.get('event1')?.size || 0;
   }
   run() {
-    this.emit("event1", "Run");
+    this.emit('event1', 'Run');
   }
   runSync() {
-    this.emitSync("event1", "RunAsync");
+    this.emitSync('event1', 'RunAsync');
   }
 }
 const test: TypedEvent = new EventTester();
-test.on("event1", "a");
+test.on('event1', 'a');
 
 // #endregion Typed Event
 
 // region UnTyped Event
 class UnTypedEvent extends Events {
   getEventCount(): number {
-    return this._events.get("event1")?.size || 0;
+    return this._events.get('event1')?.size || 0;
   }
   run() {
-    this.emit("event1", "Run");
+    this.emit('event1', 'Run');
   }
   runSync() {
-    this.emitSync("event1", "RunAsync");
+    this.emitSync('event1', 'RunAsync');
   }
 }
 const test2: UnTypedEvent = new UnTypedEvent();
-test.on("eventabc", "a");
+test.on('eventabc', 'a');
 // #endregion UnTyped Event
 ```
 

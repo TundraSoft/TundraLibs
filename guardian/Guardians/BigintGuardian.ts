@@ -1,10 +1,10 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { type } from "../utils/mod.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { type } from '../utils/mod.ts';
 import type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
-} from "../types/mod.ts";
+} from '../types/mod.ts';
 
 /**
  * BigintGuardian
@@ -133,7 +133,27 @@ export class BigintGuardian<
       message || `Expect value to be a valid Aadhaar`,
     );
   }
+
+  /**
+   * mobile
+   *
+   * Checks if the string is a valid mobile number.
+   * *NOTE* - It actually does not confirm the validity, just checks the format
+   *
+   * @param pattern RegExp Pattern of mobile number to match. Defaults to /^[9|8|7|6][0-9]{9}$/
+   * @param message string Message to use when validation fails
+   * @returns GuardianProxy<this>
+   */
+  mobile(
+    pattern = /^[6-9][0-9]{9}$/,
+    message?: string,
+  ): GuardianProxy<this> {
+    return this.pattern(
+      pattern,
+      message || `Expect string to be a valid phone number`,
+    );
+  }
   //#endregion Validators
 }
 
-export const bigintGuard = new BigintGuardian(type("bigint")).proxy();
+export const bigintGuard = new BigintGuardian(type('bigint')).proxy();

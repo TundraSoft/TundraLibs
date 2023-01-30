@@ -5,12 +5,12 @@ import {
   StructParameters,
   StructResolveType,
   StructValidatorFunction,
-} from "../types/mod.ts";
+} from '../types/mod.ts';
 
-import { GuardianError, makeError } from "../error/mod.ts";
+import { GuardianError, makeError } from '../error/mod.ts';
 
-import { Guardian } from "../Guardians/mod.ts";
-import { isPromiseLike } from "./isPromiseLike.ts";
+import { Guardian } from '../Guardians/mod.ts';
+import { isPromiseLike } from './isPromiseLike.ts';
 
 /**
  * Composes a guardian for the provided value.
@@ -26,22 +26,22 @@ import { isPromiseLike } from "./isPromiseLike.ts";
  */
 export function compile<S>(struct: S, options?: Partial<StructOptions>) {
   const defOptions = {
-    mode: "STRICT",
+    mode: 'STRICT',
     path: [],
-    message: "Validation failed",
+    message: 'Validation failed',
   };
   if (options?.message === undefined || options.message === null) {
     delete options?.message;
   }
   const opts = { ...defOptions, ...options } as StructOptions,
     { mode, path, message } = opts;
-  if (typeof struct === "bigint") {
+  if (typeof struct === 'bigint') {
     return Guardian.bigint() as unknown as StructValidatorFunction<S>;
-  } else if (typeof struct === "number") {
+  } else if (typeof struct === 'number') {
     return Guardian.number() as unknown as StructValidatorFunction<S>;
-  } else if (typeof struct === "string") {
+  } else if (typeof struct === 'string') {
     return Guardian.string() as unknown as StructValidatorFunction<S>;
-  } else if (typeof struct === "boolean") {
+  } else if (typeof struct === 'boolean') {
     return Guardian.boolean() as unknown as StructValidatorFunction<S>;
   } else if (struct instanceof RegExp) {
     return Guardian.string().pattern(
@@ -52,12 +52,12 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
   } else if (struct instanceof Array) {
     const ar = Guardian.array();
     if (struct.length > 0) {
-      ar.of(compile(struct[0], { message: "Array type validation failed" }));
+      ar.of(compile(struct[0], { message: 'Array type validation failed' }));
     }
     return ar as unknown as StructValidatorFunction<S>;
   } else if (struct instanceof Function) {
     return struct as unknown as StructValidatorFunction<S>;
-  } else if (typeof struct === "object") {
+  } else if (struct && typeof struct === 'object') {
     // Ok, now we have to do the magic
     const structKeys: Set<string> = new Set(Object.keys(struct)),
       // deno-lint-ignore no-explicit-any
@@ -78,7 +78,7 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
       // We inject defined keys which are not passed. This helps validate optional keys.
       // Properties defined but not passed needs to be handled for strict
       // Add DEFINED also to this list.
-      if (mode !== "PARTIAL") {
+      if (mode !== 'PARTIAL') {
         const tempKeys = new Set(Object.keys(obj));
         structKeys.forEach((key) => {
           if (!tempKeys.has(key)) {
@@ -95,12 +95,12 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
       objKeys.forEach((key) => {
         try {
           // If it is Strict or Partial, only defined properties are allowed
-          if (mode === "STRICT" && !structKeys.has(key)) {
+          if (mode === 'STRICT' && !structKeys.has(key)) {
             // pathErrors(`${key} is not a valid property`, [...opts.path, key]);
             // console.log(path, key)
             throw makeError(`Unknown property passed "${key}"`, [...path, key]);
           }
-          if (structKeys.has(key) || mode === "ALL") {
+          if (structKeys.has(key) || mode === 'ALL') {
             const retVal = (validators[key] !== undefined)
               ? validators[key](obj[key])
               : obj[key];
@@ -143,7 +143,7 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
           );
         }
         // Remove all undefined
-        if (mode === "DEFINED" || mode === "PARTIAL") {
+        if (mode === 'DEFINED' || mode === 'PARTIAL') {
           Object.keys(retObj).forEach((key) => {
             if (retObj[key] === undefined) {
               delete retObj[key];

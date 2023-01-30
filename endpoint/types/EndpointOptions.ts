@@ -1,33 +1,67 @@
-// import { Context } from "../../dependencies.ts";
-// import { HTTPResponse } from "./HTTPResponse.ts";
-// import { ParsedRequest } from "./ParsedRequest.ts";
+import { Context } from '../../dependencies.ts';
+// import type { HTTPMethods } from "../../dependencies.ts";
+import { ParsedRequest } from './ParsedRequest.ts';
+import type { HTTPResponse } from './HTTPResponse.ts';
+
+export type PostBodyParseHandler = <
+  S extends Record<string, unknown> = Record<string, unknown>,
+>(
+  req: ParsedRequest<S>,
+  ctx: Context<S>,
+) => Promise<void>;
+
+export type PreResponseHandler = <
+  S extends Record<string, unknown> = Record<string, unknown>,
+>(ctx: Context<S>) => Promise<void>;
+
+export type MethodHandler = <
+  S extends Record<string, unknown> = Record<string, unknown>,
+>(request: ParsedRequest<S>) => Promise<HTTPResponse>;
+
+export type HeadMethodHandler = <
+  S extends Record<string, unknown> = Record<string, unknown>,
+>(request: ParsedRequest<S>) => Promise<number>;
 
 export type EndpointOptions = {
-  // Name of the endpoint - For quick reference
   name: string;
-  // The route path, example /users
-  routePath: string;
-  // The route group - Useful for deployment. Has no use case in app execution
   routeGroup: string;
-  // Route Identifiers are the Primary Key values basis which a specific (single) record can be identified
-  // @TODO - Both these must be Map<string, string> where we have alias - actual name #HasH9
-  routeIdentifiers: string[];
-  // Identifiers coming in through OAK's State object
-  stateParams: boolean;
-  // Permission settings
-  allowedMethods: {
-    GET: boolean;
-    POST: boolean;
-    PUT: boolean;
-    PATCH: boolean;
-    DELETE: boolean;
-    HEAD: boolean;
+  routePath: string;
+  routeIdentifiers?: string[];
+  uploadPath?: string;
+  uploadMaxFileSize?: number;
+  // stateParams: boolean;
+  // Method handlers
+  getHandler?: MethodHandler;
+  postHandler?: MethodHandler;
+  putHandler?: MethodHandler;
+  patchHandler?: MethodHandler;
+  deleteHandler?: MethodHandler;
+  headHandler?: HeadMethodHandler;
+  // Post body parse handler (After body is parsed)
+  postBodyParse?: PostBodyParseHandler;
+  preResponseHandler?: PreResponseHandler;
+  // Auth handler - Called before actual method handlers
+  // authHandler?: PostBodyParseHandler;
+  // Few header names
+  pageLimit?: number;
+  headers: {
+    totalRows: string;
+    paginationLimit: string;
+    paginationPage: string;
   };
-  pageLimit: number;
-  totalRowHeaderName: string;
-  paginationLimitHeaderName: string;
-  paginationPageHeaderName: string;
   // Messages to use
   notFoundMessage: string;
   notSupportedMessage: string;
 };
+
+export type EndpointManagerOptions = Pick<
+  EndpointOptions,
+  | 'uploadPath'
+  | 'uploadMaxFileSize'
+  | 'postBodyParse'
+  | 'preResponseHandler'
+  | 'headers'
+  | 'notFoundMessage'
+  | 'notSupportedMessage'
+  | 'pageLimit'
+>;

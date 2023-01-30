@@ -1,1 +1,1 @@
-export { timing } from "./timing.ts";
+export { timing } from './timing.ts';

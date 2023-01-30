@@ -1,6 +1,6 @@
-import { FunctionParameters, FunctionType } from "../types/mod.ts";
+import { FunctionParameters, FunctionType } from '../types/mod.ts';
 
-import { makeError } from "../error/mod.ts";
+import { makeError } from '../error/mod.ts';
 
 /**
  * oneOf
@@ -18,7 +18,7 @@ export function oneOf<T, P extends FunctionParameters = [T]>(
   return (...args: P): T => {
     if (!expected.includes(args[0] as T)) {
       throw makeError(
-        error || `Expect value to be one of ${expected.join(", ")}`,
+        error || `Expect value to be one of ${expected.join(', ')}`,
       );
     }
     return args[0] as T;

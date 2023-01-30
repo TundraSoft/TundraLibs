@@ -1,14 +1,14 @@
-import { dateFormat } from "../../dependencies.ts";
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { StringGuardian } from "./StringGuardian.ts";
-import { NumberGuardian } from "./NumberGuardian.ts";
+import { dateFormat } from '../../dependencies.ts';
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { StringGuardian } from './StringGuardian.ts';
+import { NumberGuardian } from './NumberGuardian.ts';
 
-import { type } from "../utils/mod.ts";
+import { type } from '../utils/mod.ts';
 import type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
-} from "../types/mod.ts";
+} from '../types/mod.ts';
 
 /**
  * DateGuardian
@@ -146,4 +146,4 @@ export class DateGuardian<
 }
 
 // @TODO - Custom type implementation for date and allow parsing of date from number (epoch) or from string
-export const dateGuard = new DateGuardian(type("date")).proxy();
+export const dateGuard = new DateGuardian(type('date')).proxy();

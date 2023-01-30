@@ -1,14 +1,14 @@
-import { HTTPMethods } from "../../dependencies.ts";
+import { HTTPMethods } from '../../dependencies.ts';
 
 // export type BodyType = "JSON" | "TEXT" | "FORM" | "BYTES";
 
 export type PagingParam = {
-  limit?: number;
-  page?: number;
+  limit: number;
+  page: number;
 };
 
 export type SortingParam = {
-  [key: string]: "ASC" | "DESC";
+  [key: string]: 'ASC' | 'DESC';
 };
 
 export type FileUploadInfo = {
@@ -16,14 +16,19 @@ export type FileUploadInfo = {
   path: string;
 };
 
-export type ParsedRequest = {
+// For GET, HEAD and DELETE
+
+export type ParsedRequest<
+  S extends Record<string, unknown> = Record<string, unknown>,
+  D extends Record<string, unknown> = Record<string, unknown>,
+> = {
   method: HTTPMethods;
+  state: S;
   params: { [key: string]: unknown };
   paging?: PagingParam;
   sorting?: SortingParam;
   payload?:
-    | Record<string, unknown>
-    | Array<Record<string, unknown>>
+    | Array<D>
     | undefined;
   files?: {
     [key: string]: Array<FileUploadInfo>;

@@ -1,4 +1,4 @@
-import { path } from "../dependencies.ts";
+import { path } from '../dependencies.ts';
 
 const __envData: Map<string, string> = new Map();
 
@@ -12,7 +12,7 @@ export type MemoryInfo = {
   };
 };
 
-export type HumanSizes = "B" | "KB" | "MB" | "GB" | "TB";
+export type HumanSizes = 'B' | 'KB' | 'MB' | 'GB' | 'TB';
 
 export const Sysinfo = {
   /**
@@ -41,7 +41,7 @@ export const Sysinfo = {
    *
    * @returns string Returns the operating system name
    */
-  getOs: function (): "windows" | "darwin" | "linux" {
+  getOs: function (): 'windows' | 'darwin' | 'linux' {
     return Deno.build.os;
   },
 
@@ -140,13 +140,13 @@ export const Sysinfo = {
    * @returns string The hostname or blank if execution rights are not present
    */
   getHostname: async function () {
-    const checkRun = await Deno.permissions.query({ name: "run" });
+    const checkRun = await Deno.permissions.query({ name: 'run' });
     let hostName!: string;
-    if (checkRun.state === "granted") {
+    if (checkRun.state === 'granted') {
       try {
         const host = await Deno.run({
-          cmd: ["hostname"],
-          stdout: "piped",
+          cmd: ['hostname'],
+          stdout: 'piped',
         });
         const { success } = await host.status();
         if (success) {
@@ -173,15 +173,15 @@ export const Sysinfo = {
    * @returns Promise<string | undefined> The IP address assigned to the system
    */
   getIP: async function (): Promise<string | undefined> {
-    const isWin = (Deno.build.os === "windows"),
-      command = isWin ? "ipconfig" : "ifconfig",
-      checkRun = await Deno.permissions.query({ name: "run" });
+    const isWin = Deno.build.os === 'windows',
+      command = isWin ? 'ipconfig' : 'ifconfig',
+      checkRun = await Deno.permissions.query({ name: 'run' });
     let ip!: string;
-    if (checkRun.state === "granted") {
+    if (checkRun.state === 'granted') {
       try {
         const ifconfig = await Deno.run({
           cmd: [command],
-          stdout: "piped",
+          stdout: 'piped',
         });
         const { success } = await ifconfig.status();
         if (success) {
@@ -189,30 +189,30 @@ export const Sysinfo = {
           const text = new TextDecoder().decode(raw);
           if (isWin) {
             const addrs = text.match(
-              new RegExp("ipv4.+([0-9]+.){3}[0-9]+", "gi"),
+              new RegExp('ipv4.+([0-9]+.){3}[0-9]+', 'gi'),
             );
             const temp = addrs
-              ? addrs[0].match(new RegExp("([0-9]+.){3}[0-9]+", "g"))
+              ? addrs[0].match(new RegExp('([0-9]+.){3}[0-9]+', 'g'))
               : undefined;
             const addr = temp ? temp[0] : undefined;
             await Deno.close(ifconfig.rid);
             if (!addr) {
-              throw new Error("Could not resolve local adress.");
+              throw new Error('Could not resolve local adress.');
             }
             return addr;
           } else {
             const addrs = text.match(
-              new RegExp("inet (addr:)?([0-9]*.){3}[0-9]*", "g"),
+              new RegExp('inet (addr:)?([0-9]*.){3}[0-9]*', 'g'),
             );
             await Deno.close(ifconfig.rid);
-            if (!addrs || !addrs.some((x) => !x.startsWith("inet 127"))) {
-              throw new Error("Could not resolve local adress.");
+            if (!addrs || !addrs.some((x) => !x.startsWith('inet 127'))) {
+              throw new Error('Could not resolve local adress.');
             }
             return (
               addrs &&
               addrs
-                .find((addr: string) => !addr.startsWith("inet 127"))
-                ?.split("inet ")[1]
+                .find((addr: string) => !addr.startsWith('inet 127'))
+                ?.split('inet ')[1]
             );
           }
         }
@@ -230,18 +230,18 @@ export const Sysinfo = {
    *
    * @protected
    */
-  _loadEnv: async function (location = "./") {
+  _loadEnv: async function (location = './') {
     if (__envData.size === 0) {
       // First load from .env file if found
-      const file = path.join(location, ".env");
+      const file = path.join(location, '.env');
       const checkRun = await Deno.permissions.query({
-        name: "read",
+        name: 'read',
         path: file,
       });
-      if (checkRun.state === "granted") {
+      if (checkRun.state === 'granted') {
         try {
           const data = new TextDecoder().decode(await Deno.readFile(file)),
-            lines = data.split("\n"),
+            lines = data.split('\n'),
             pattern = new RegExp(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/),
             isQuoted = new RegExp(/^('|")[^\1].*(\1)$/);
           lines.forEach((line) => {
@@ -250,7 +250,7 @@ export const Sysinfo = {
                 [_, key, value] = record as string[];
               __envData.set(
                 key,
-                (((isQuoted.test(value)) ? value.slice(1, -1) : value) || "")
+                (((isQuoted.test(value)) ? value.slice(1, -1) : value) || '')
                   .trim(),
               );
             }
@@ -260,8 +260,8 @@ export const Sysinfo = {
         }
       }
       try {
-        const checkEnv = await Deno.permissions.query({ name: "env" });
-        if (checkEnv.state === "granted") {
+        const checkEnv = await Deno.permissions.query({ name: 'env' });
+        if (checkEnv.state === 'granted') {
           for (const [key, value] of Object.entries(Deno.env.toObject())) {
             __envData.set(key, value);
           }
