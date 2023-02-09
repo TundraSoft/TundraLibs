@@ -277,10 +277,11 @@ export abstract class AbstractClient<
     return await AbstractClient.hashValue(data);
   }
 
-  public static async encryptValue(data: string, key: string): Promise<string> {
+  // deno-lint-ignore no-explicit-any
+  public static async encryptValue(data: any, key: string): Promise<string> {
     const iv = crypto.getRandomValues(new Uint8Array(16)),
       encoder = new TextEncoder(),
-      encoded = encoder.encode(data),
+      encoded = encoder.encode(JSON.stringify(data)),
       cryptKey = await crypto.subtle.importKey(
         'raw',
         encoder.encode(key),
@@ -314,14 +315,14 @@ export abstract class AbstractClient<
         encrypted,
       );
 
-    return decoder.decode(decrypted);
+    return JSON.parse(decoder.decode(decrypted));
   }
 
-  public static async hashValue(data: string): Promise<string> {
-    if(data.startsWith('HASH:')) 
+  public static async hashValue(data: unknown): Promise<string> {
+    if(typeof data === 'string' && data.startsWith('HASH:')) 
       return data;
     const encoder = new TextEncoder(),
-      encoded = encoder.encode(data),
+      encoded = encoder.encode(JSON.stringify(data)),
       hashAlgo = 'SHA-256', 
       hash = await crypto.subtle.digest(hashAlgo, encoded);
     // return new TextDecoder().decode(hexEncode(new Uint8Array(hash)));
