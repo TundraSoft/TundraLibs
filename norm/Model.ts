@@ -26,8 +26,6 @@ import { DefaultValidator } from './types/mod.ts';
 
 // import { ErrorCodes, ModelError } from "./errors/mod.ts";
 
-import { decrypt, encrypt, hash } from './utils/mod.ts';
-
 import { GuardianError, GuardianProxy, Struct } from '../guardian/mod.ts';
 
 import {
@@ -70,7 +68,7 @@ export class Model<
     relationship: Record<string, string>;
     columns?: Record<string, DataType>;
   }> = {};
-  protected _encryptionKey?: string;
+  // protected _encryptionKey?: string;
   protected _encryptedColumns: Array<keyof T> = [];
   protected _hashColumns: Array<keyof T> = [];
   // deno-lint-ignore no-explicit-any
@@ -211,9 +209,9 @@ export class Model<
     }
 
     // Encryption key
-    if (definition.encryptionKey) {
-      this._encryptionKey = definition.encryptionKey;
-    }
+    // if (definition.encryptionKey) {
+    //   this._encryptionKey = definition.encryptionKey;
+    // }
 
     // Primary key
     if (definition.primaryKeys) {
@@ -380,22 +378,6 @@ export class Model<
     if (result.data && result.data.length > 0) {
       result.data = await this._decrypt(result.data);
     }
-    // // Decrypt if required
-    // if (
-    //   this._encryptedColumns.length > 0 &&
-    //   (result.data && result.data?.length > 0)
-    // ) {
-    //   result.data = result.data.map((row) => {
-    //     const newRow = { ...row };
-    //     this._encryptedColumns.forEach(async (col) => {
-    //       newRow[col] = await decrypt(
-    //         this._encryptionKey as string,
-    //         String(newRow[col]),
-    //       ) as unknown as T[keyof T];
-    //     });
-    //     return newRow;
-    //   });
-    // }
     return result;
   }
 
@@ -566,23 +548,24 @@ export class Model<
 
       //#region Encrypt Columns
       // Encryption
+      row = await this._encrypt(row);
       // this._encryptedColumns.forEach((column) => {
-      for (const column of this._encryptedColumns) {
-        if (row[column] !== undefined && row[column] !== null) {
-          row[column] = await encrypt(
-            this._encryptionKey as string,
-            String(row[column]),
-          ) as unknown as T[keyof T];
-        }
-      }
-      // this._hashColumns.forEach((column) => {
-      for (const column of this._hashColumns) {
-        if (row[column] !== undefined && row[column] !== null) {
-          row[column] = await hash(
-            String(row[column]),
-          ) as unknown as T[keyof T];
-        }
-      }
+      // for (const column of this._encryptedColumns) {
+      //   if (row[column] !== undefined && row[column] !== null) {
+      //     row[column] = await encrypt(
+      //       this._encryptionKey as string,
+      //       String(row[column]),
+      //     ) as unknown as T[keyof T];
+      //   }
+      // }
+      // // this._hashColumns.forEach((column) => {
+      // for (const column of this._hashColumns) {
+      //   if (row[column] !== undefined && row[column] !== null) {
+      //     row[column] = await hash(
+      //       String(row[column]),
+      //     ) as unknown as T[keyof T];
+      //   }
+      // }
       // this._encryptedColumns.forEach((column) => {
       //   if (row[column] !== undefined) {
       //     row[column] = await this._encrypt(row[column] as string);
@@ -821,27 +804,28 @@ export class Model<
       ukErrors: Array<Record<keyof T, string>> = [];
 
     // Encryption
+    data = await this._encrypt(data);
     //#region Encryption
-    // this._encryptedColumns.forEach((column) => {
-    for (const column of this._encryptedColumns) {
-      if (data[column] !== undefined && data[column] !== null) {
-        data[column] = encrypt(
-          this._encryptionKey as string,
-          String(data[column]),
-        ) as unknown as T[keyof T];
-      }
-    }
-    // });
-    //#endregion Encryption
+    // // this._encryptedColumns.forEach((column) => {
+    // for (const column of this._encryptedColumns) {
+    //   if (data[column] !== undefined && data[column] !== null) {
+    //     data[column] = encrypt(
+    //       this._encryptionKey as string,
+    //       String(data[column]),
+    //     ) as unknown as T[keyof T];
+    //   }
+    // }
+    // // });
+    // //#endregion Encryption
 
-    //#region Hash
-    // this._hashColumns.forEach((column) => {
-    for (const column of this._hashColumns) {
-      if (data[column] !== undefined && data[column] !== null) {
-        data[column] = hash(String(data[column])) as unknown as T[keyof T];
-      }
-    }
-    // });
+    // //#region Hash
+    // // this._hashColumns.forEach((column) => {
+    // for (const column of this._hashColumns) {
+    //   if (data[column] !== undefined && data[column] !== null) {
+    //     data[column] = hash(String(data[column])) as unknown as T[keyof T];
+    //   }
+    // }
+    // // });
     //#endregion Hash
 
     //#region Unique Keys
@@ -1214,23 +1198,24 @@ export class Model<
 
       //#region Encrypt Columns
       // Encryption
+      row = await this._encrypt(row);
       // this._encryptedColumns.forEach((column) => {
-      for (const column of this._encryptedColumns) {
-        if (row[column] !== undefined && row[column] !== null) {
-          row[column] = await encrypt(
-            this._encryptionKey as string,
-            String(row[column]),
-          ) as unknown as T[keyof T];
-        }
-      }
-      // this._hashColumns.forEach((column) => {
-      for (const column of this._hashColumns) {
-        if (row[column] !== undefined && row[column] !== null) {
-          row[column] = await hash(
-            String(row[column]),
-          ) as unknown as T[keyof T];
-        }
-      }
+      // for (const column of this._encryptedColumns) {
+      //   if (row[column] !== undefined && row[column] !== null) {
+      //     row[column] = await encrypt(
+      //       this._encryptionKey as string,
+      //       String(row[column]),
+      //     ) as unknown as T[keyof T];
+      //   }
+      // }
+      // // this._hashColumns.forEach((column) => {
+      // for (const column of this._hashColumns) {
+      //   if (row[column] !== undefined && row[column] !== null) {
+      //     row[column] = await hash(
+      //       String(row[column]),
+      //     ) as unknown as T[keyof T];
+      //   }
+      // }
       // this._encryptedColumns.forEach((column) => {
       //   if (row[column] !== undefined) {
       //     row[column] = await this._encrypt(row[column] as string);
@@ -1317,10 +1302,41 @@ export class Model<
     }
   }
 
+  protected async _encrypt(data: Partial<T>): Promise<Partial<T>>;
+  protected async _encrypt(data: Partial<T>[]): Promise<Partial<T>[]>;
+
+  protected async _encrypt(data: Partial<T> | Array<Partial<T>>): Promise<Partial<T> | Array<Partial<T>>> {
+    await this._init();
+    // const encryptionKey = this._connection.encryptionKey;
+    if(this._encryptedColumns.length === 0 && this._hashColumns.length === 0) {
+      return data;
+    }
+    if (Array.isArray(data)) {
+      return Promise.all(
+        data.map((row) => {
+          return this._encrypt(row);
+        }),
+      );
+    }
+    const row = data as T;
+    for (const column of this._encryptedColumns) {
+      if (row[column] !== undefined && row[column] !== null) {
+        row[column] = await this._connection.encrypt(String(row[column])) as unknown as T[keyof T];
+      }
+    }
+    for (const column of this._hashColumns) {
+      if (row[column] !== undefined && row[column] !== null) {
+        row[column] = await this._connection.hash(String(row[column])) as unknown as T[keyof T];
+      }
+    }
+    return row;
+  }
+
   protected async _decrypt(data: T): Promise<T>;
   protected async _decrypt(data: T[]): Promise<T[]>;
 
   protected async _decrypt(data: T | Array<T>): Promise<T | Array<T>> {
+    await this._init();
     if(this._encryptedColumns.length === 0) {
       return data;
     }
@@ -1334,10 +1350,7 @@ export class Model<
     const row = data as T;
     for (const column of this._encryptedColumns) {
       if (row[column] !== undefined && row[column] !== null) {
-        row[column] = await decrypt(
-          this._encryptionKey as string,
-          String(row[column]),
-        ) as unknown as T[keyof T];
+        row[column] = await this._connection.decrypt(String(row[column])) as unknown as T[keyof T];
       }
     }
     return row;
@@ -1387,32 +1400,33 @@ export class Model<
       ) {
         col.disableUpdate = true;
       }
-      if (col.security && col.security === 'ENCRYPT') {
-        if (
-          model.encryptionKey === undefined || model.encryptionKey.length === 0
-        ) {
-          // console.log('sdafsdfdsf');
-          throw new ModelConfigError(
-            `Encryption key not defined`,
-            model.name,
-            model.connection,
-          );
-          // throw new Error(
-          //   `Model ${model.name} has an encrypted column but does not have an encryption key defined`,
-          // );
-        }
-      }
+      // Encryption key is present in Database Config so this is depricated
+      // if (col.security && col.security === 'ENCRYPT') {
+      //   if (
+      //     model.encryptionKey === undefined || model.encryptionKey.length === 0
+      //   ) {
+      //     // console.log('sdafsdfdsf');
+      //     throw new ModelConfigError(
+      //       `Encryption key not defined`,
+      //       model.name,
+      //       model.connection,
+      //     );
+      //     // throw new Error(
+      //     //   `Model ${model.name} has an encrypted column but does not have an encryption key defined`,
+      //     // );
+      //   }
+      // }
     });
-
-    if (model.encryptionKey) {
-      if (model.encryptionKey.length !== 32) {
-        throw new ModelConfigError(
-          `Encryption key must be 32 bytes`,
-          model.name,
-          model.connection,
-        );
-      }
-    }
+    // Encryption key is present in database config so this is depricated
+    // if (model.encryptionKey) {
+    //   if (model.encryptionKey.length !== 32) {
+    //     throw new ModelConfigError(
+    //       `Encryption key must be 32 bytes`,
+    //       model.name,
+    //       model.connection,
+    //     );
+    //   }
+    // }
     // Check PK
     if (model.primaryKeys) {
       model.primaryKeys.forEach((pk) => {

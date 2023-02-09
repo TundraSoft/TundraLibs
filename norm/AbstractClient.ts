@@ -1,5 +1,9 @@
 import { Options } from '../options/mod.ts';
 import { QueryTranslator } from './QueryTranslator.ts';
+import {
+  // decode as b64Decode,
+  base64,
+} from '../dependencies.ts';
 
 import type {
   ClientConfig,
@@ -41,6 +45,9 @@ export abstract class AbstractClient<
     super(config);
     this._name = name.trim();
     this._dialect = config.dialect;
+    if(this._hasOption('encryptionKey')) {
+      this._encryptionKey = this._getOption('encryptionKey') as string;
+    }
     this._queryTranslator = new QueryTranslator(this._dialect);
   }
 
@@ -256,6 +263,70 @@ export abstract class AbstractClient<
       }
     }
     return qt;
+  }
+
+  public async encrypt(data: string): Promise<string> {
+    return await AbstractClient.encryptValue(data, this._encryptionKey);
+  }
+
+  public async decrypt(data: string): Promise<string> {
+    return await AbstractClient.decryptValue(data, this._encryptionKey);
+  }
+
+  public async hash(data: string): Promise<string> {
+    return await AbstractClient.hashValue(data);
+  }
+
+  public static async encryptValue(data: string, key: string): Promise<string> {
+    const iv = crypto.getRandomValues(new Uint8Array(16)),
+      encoder = new TextEncoder(),
+      encoded = encoder.encode(data),
+      cryptKey = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(key),
+        'AES-CBC',
+        false,
+        ['encrypt'],
+      ),
+      ecncrypted = await crypto.subtle.encrypt(
+        { name: 'AES-CBC', iv },
+        cryptKey,
+        encoded,
+      );
+
+    return base64.encode(new Uint8Array(ecncrypted)) + ':' + base64.encode(iv);
+  }
+
+  public static async decryptValue(data: string, key: string) {
+    const [encrypted, iv] = data.split(':').map((d) => base64.decode(d)),
+      decoder = new TextDecoder(),
+      encoder = new TextEncoder(),
+      cryptKey = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(key),
+        'AES-CBC',
+        false,
+        ['decrypt'],
+      ),
+      decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-CBC', iv },
+        cryptKey,
+        encrypted,
+      );
+
+    return decoder.decode(decrypted);
+  }
+
+  public static async hashValue(data: string): Promise<string> {
+    if(data.startsWith('HASH:')) 
+      return data;
+    const encoder = new TextEncoder(),
+      encoded = encoder.encode(data),
+      hashAlgo = 'SHA-256', 
+      hash = await crypto.subtle.digest(hashAlgo, encoded);
+    // return new TextDecoder().decode(hexEncode(new Uint8Array(hash)));
+    // return base64.encode(new Uint8Array(hash));
+    return `HASH:${base64.encode(new Uint8Array(hash))}`;
   }
 
   //#region Abstract Methods
