@@ -429,7 +429,7 @@ export class Model<
     try {
       return await this._connection.count<T>(options);
     } catch (e) {
-      console.log(filters);
+      // console.log(filters);
       throw e;
     }
   }
@@ -466,7 +466,9 @@ export class Model<
       ukErrors: Array<Record<keyof T, string>> = [];
 
     await this._init();
-    rows.forEach(async (row, index) => {
+    // rows.forEach(async (row, index) => {
+    for (let index = 0; index < rows.length; index++) {
+      let row = rows[index];
       //#region Generators (Default)
       // Generator
       const dbGenerated: Record<keyof T, string> = {} as Record<
@@ -474,7 +476,8 @@ export class Model<
         string
       >;
       // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
-      await Object.keys(this._insertDefaults).forEach(async (column) => {
+      // await Object.keys(this._insertDefaults).forEach(async (column) => {
+      for(const column of Object.keys(this._insertDefaults)) {
         if (
           row[column as keyof T] === undefined ||
           row[column as keyof T] === null
@@ -504,7 +507,7 @@ export class Model<
             row[column as keyof T] = generated as unknown as T[keyof T];
           }
         }
-      });
+      }//);
       //#endregion Generators (Default)
 
       // Remove Identity key columns
@@ -560,19 +563,28 @@ export class Model<
 
       //#region Encrypt Columns
       // Encryption
-      this._encryptedColumns.forEach((column) => {
-        if (row[column] !== undefined || row[column] !== null) {
-          row[column] = encrypt(
+      // this._encryptedColumns.forEach((column) => {
+      for (const column of this._encryptedColumns) {
+        if (row[column] !== undefined && row[column] !== null) {
+          row[column] = await encrypt(
             this._encryptionKey as string,
             String(row[column]),
           ) as unknown as T[keyof T];
         }
-      });
-      this._hashColumns.forEach((column) => {
-        if (row[column] !== undefined || row[column] !== null) {
-          row[column] = hash(String(row[column])) as unknown as T[keyof T];
+      }
+      // this._hashColumns.forEach((column) => {
+      for (const column of this._hashColumns) {
+        if (row[column] !== undefined && row[column] !== null) {
+          row[column] = await hash(
+            String(row[column]),
+          ) as unknown as T[keyof T];
         }
-      });
+      }
+      // this._encryptedColumns.forEach((column) => {
+      //   if (row[column] !== undefined) {
+      //     row[column] = await this._encrypt(row[column] as string);
+      //   }
+      // });
       //#endregion Encrypt Columns
 
       //#region Unique Keys check
@@ -643,7 +655,7 @@ export class Model<
 
       // Set the row
       rows[index] = row;
-    });
+    } //);
 
     if (pkQueries.length > 0) {
       Promise.all(pkQueries).then((results) => {
@@ -697,6 +709,8 @@ export class Model<
     if (Object.keys(errors).length > 0) {
       // throw new ModelValidationError(errors, this.name, this._connection.name);
       // throw new Error("Cannot insert due to errors");
+      // console.log(errors);
+      // console.log(rows);
       throw new ModelValidationError(errors, this.name, this._connection.name);
     }
 
@@ -758,7 +772,8 @@ export class Model<
       string
     >;
     // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
-    Object.keys(this._updateDefaults).forEach(async (column) => {
+    // Object.keys(this._updateDefaults).forEach(async (column) => {
+    for (const column of Object.keys(this._updateDefaults)) {
       if (data[column as keyof T] === undefined) {
         const generated = this._updateDefaults[column as keyof T] as
           | GeneratorFunction
@@ -785,7 +800,7 @@ export class Model<
           data[column as keyof T] = generated as unknown as T[keyof T];
         }
       }
-    });
+    }//);
     //#endregion Generators (Default)
     // Guardian Validator
     const [error, op] = await this.validateData(data);
@@ -800,22 +815,26 @@ export class Model<
 
     // Encryption
     //#region Encryption
-    this._encryptedColumns.forEach((column) => {
-      if (data[column] !== undefined) {
+    // this._encryptedColumns.forEach((column) => {
+    for (const column of this._encryptedColumns) {
+      if (data[column] !== undefined && data[column] !== null) {
         data[column] = encrypt(
           this._encryptionKey as string,
           String(data[column]),
         ) as unknown as T[keyof T];
       }
-    });
+    }
+    // });
     //#endregion Encryption
 
     //#region Hash
-    this._hashColumns.forEach((column) => {
-      if (data[column] !== undefined) {
+    // this._hashColumns.forEach((column) => {
+    for (const column of this._hashColumns) {
+      if (data[column] !== undefined && data[column] !== null) {
         data[column] = hash(String(data[column])) as unknown as T[keyof T];
       }
-    });
+    }
+    // });
     //#endregion Hash
 
     //#region Unique Keys
@@ -1113,7 +1132,8 @@ export class Model<
         string
       >;
       // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
-      await Object.keys(this._insertDefaults).forEach(async (column) => {
+      // await Object.keys(this._insertDefaults).forEach(async (column) => {
+      for (const column of Object.keys(this._insertDefaults)) {
         if (row[column as keyof T] === undefined) {
           const generated = this._insertDefaults[column as keyof T] as
             | GeneratorFunction
@@ -1140,7 +1160,7 @@ export class Model<
             row[column as keyof T] = generated as unknown as T[keyof T];
           }
         }
-      });
+      }//);
       //#endregion Generators (Default)
 
       // Remove Identity key columns
@@ -1185,8 +1205,8 @@ export class Model<
       // Encryption
       // this._encryptedColumns.forEach((column) => {
       for (const column of this._encryptedColumns) {
-        if (row[column] !== undefined || row[column] !== null) {
-          row[column] = encrypt(
+        if (row[column] !== undefined && row[column] !== null) {
+          row[column] = await encrypt(
             this._encryptionKey as string,
             String(row[column]),
           ) as unknown as T[keyof T];
@@ -1194,7 +1214,7 @@ export class Model<
       }
       // this._hashColumns.forEach((column) => {
       for (const column of this._hashColumns) {
-        if (row[column] !== undefined || row[column] !== null) {
+        if (row[column] !== undefined && row[column] !== null) {
           row[column] = await hash(
             String(row[column]),
           ) as unknown as T[keyof T];
@@ -1334,7 +1354,7 @@ export class Model<
         if (
           model.encryptionKey === undefined || model.encryptionKey.length === 0
         ) {
-          console.log('sdafsdfdsf');
+          // console.log('sdafsdfdsf');
           throw new ModelConfigError(
             `Encryption key not defined`,
             model.name,

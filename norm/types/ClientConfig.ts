@@ -17,6 +17,7 @@ type BasicConnection = {
   userName: string;
   password: string;
   database: string;
+  encryptionKey?: string;
 } & ClientConfig;
 
 type TLSConfig = {

@@ -32,6 +32,7 @@ export abstract class AbstractClient<
   protected _dialect: Dialects;
   protected _name: string;
   protected _state: 'CONNECTED' | 'CLOSED' = 'CLOSED';
+  protected _encryptionKey!: string;
 
   declare protected _client: unknown;
   protected _queryTranslator: QueryTranslator;
@@ -53,6 +54,10 @@ export abstract class AbstractClient<
 
   get dialect(): Dialects {
     return this._dialect;
+  }
+
+  get encryptionKey(): string | undefined {
+    return this._encryptionKey;
   }
 
   public async connect(): Promise<void> {
