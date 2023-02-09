@@ -377,22 +377,25 @@ export class Model<
     };
     await this._init();
     const result = await this._connection.select<T>(options);
-    // Decrypt if required
-    if (
-      this._encryptedColumns.length > 0 &&
-      (result.data && result.data?.length > 0)
-    ) {
-      result.data = result.data.map((row) => {
-        const newRow = { ...row };
-        this._encryptedColumns.forEach(async (col) => {
-          newRow[col] = await decrypt(
-            this._encryptionKey as string,
-            String(newRow[col]),
-          ) as unknown as T[keyof T];
-        });
-        return newRow;
-      });
+    if (result.data && result.data.length > 0) {
+      result.data = await this._decrypt(result.data);
     }
+    // // Decrypt if required
+    // if (
+    //   this._encryptedColumns.length > 0 &&
+    //   (result.data && result.data?.length > 0)
+    // ) {
+    //   result.data = result.data.map((row) => {
+    //     const newRow = { ...row };
+    //     this._encryptedColumns.forEach(async (col) => {
+    //       newRow[col] = await decrypt(
+    //         this._encryptionKey as string,
+    //         String(newRow[col]),
+    //       ) as unknown as T[keyof T];
+    //     });
+    //     return newRow;
+    //   });
+    // }
     return result;
   }
 
@@ -477,7 +480,7 @@ export class Model<
       >;
       // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
       // await Object.keys(this._insertDefaults).forEach(async (column) => {
-      for(const column of Object.keys(this._insertDefaults)) {
+      for (const column of Object.keys(this._insertDefaults)) {
         if (
           row[column as keyof T] === undefined ||
           row[column as keyof T] === null
@@ -507,7 +510,7 @@ export class Model<
             row[column as keyof T] = generated as unknown as T[keyof T];
           }
         }
-      }//);
+      } //);
       //#endregion Generators (Default)
 
       // Remove Identity key columns
@@ -725,7 +728,11 @@ export class Model<
 
     await this._init();
     // console.log(this._connection.generateQuery(options));
-    return this._connection.insert<T>(options);
+    const result = await this._connection.insert<T>(options);
+    if (result.data && result.data.length > 0) {
+      result.data = await this._decrypt(result.data);
+    }
+    return result;
   }
 
   /**
@@ -800,7 +807,7 @@ export class Model<
           data[column as keyof T] = generated as unknown as T[keyof T];
         }
       }
-    }//);
+    } //);
     //#endregion Generators (Default)
     // Guardian Validator
     const [error, op] = await this.validateData(data);
@@ -923,7 +930,11 @@ export class Model<
       filters: filters,
     };
     await this._init();
-    return this._connection.update<T>(options);
+    const result = await this._connection.update<T>(options);
+    if (result.data && result.data.length > 0) {
+      result.data = await this._decrypt(result.data);
+    }
+    return result;
   }
 
   /**
@@ -1160,7 +1171,7 @@ export class Model<
             row[column as keyof T] = generated as unknown as T[keyof T];
           }
         }
-      }//);
+      } //);
       //#endregion Generators (Default)
 
       // Remove Identity key columns
@@ -1304,6 +1315,29 @@ export class Model<
     if (!this._connection) {
       this._connection = DatabaseManager.get(this._connectionName);
     }
+  }
+
+  protected async _decrypt(data: T): Promise<T>;
+  protected async _decrypt(data: T[]): Promise<T[]>;
+
+  protected async _decrypt(data: T | Array<T>): Promise<T | Array<T>> {
+    if (Array.isArray(data)) {
+      return Promise.all(
+        data.map((row) => {
+          return this._decrypt(row);
+        }),
+      );
+    }
+    const row = data as T;
+    for (const column of this._encryptedColumns) {
+      if (row[column] !== undefined && row[column] !== null) {
+        row[column] = await decrypt(
+          this._encryptionKey as string,
+          String(row[column]),
+        ) as unknown as T[keyof T];
+      }
+    }
+    return row;
   }
 
   //#region Static methods
