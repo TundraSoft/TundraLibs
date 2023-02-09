@@ -1321,6 +1321,9 @@ export class Model<
   protected async _decrypt(data: T[]): Promise<T[]>;
 
   protected async _decrypt(data: T | Array<T>): Promise<T | Array<T>> {
+    if(this._encryptedColumns.length === 0) {
+      return data;
+    }
     if (Array.isArray(data)) {
       return Promise.all(
         data.map((row) => {
