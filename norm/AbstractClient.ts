@@ -265,15 +265,19 @@ export abstract class AbstractClient<
     return qt;
   }
 
-  public async encrypt(data: string): Promise<string> {
+  // deno-lint-ignore no-explicit-any
+  public async encrypt(data: any): Promise<string> {
     return await AbstractClient.encryptValue(data, this._encryptionKey);
   }
 
-  public async decrypt(data: string): Promise<string> {
+  public async decrypt<T = string | number | bigint | boolean | Date>(
+    data: string,
+  ): Promise<T> {
     return await AbstractClient.decryptValue(data, this._encryptionKey);
   }
 
-  public async hash(data: string): Promise<string> {
+  // deno-lint-ignore no-explicit-any
+  public async hash(data: any): Promise<string> {
     return await AbstractClient.hashValue(data);
   }
 

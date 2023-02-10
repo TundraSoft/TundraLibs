@@ -1343,14 +1343,14 @@ export class Model<
     for (const column of this._encryptedColumns) {
       if (row[column] !== undefined && row[column] !== null) {
         row[column] = await this._connection.encrypt(
-          String(row[column]),
+          row[column],
         ) as unknown as T[keyof T];
       }
     }
     for (const column of this._hashColumns) {
       if (row[column] !== undefined && row[column] !== null) {
         row[column] = await this._connection.hash(
-          String(row[column]),
+          row[column],
         ) as unknown as T[keyof T];
       }
     }
