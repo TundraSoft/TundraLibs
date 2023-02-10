@@ -376,7 +376,7 @@ export class Model<
     await this._init();
     const result = await this._connection.select<T>(options);
     if (result.data && result.data.length > 0) {
-      result.data = await this._decrypt(result.data);
+      result.data = await this._decryptRow(result.data);
     }
     return result;
   }
@@ -548,7 +548,7 @@ export class Model<
 
       //#region Encrypt Columns
       // Encryption
-      row = await this._encrypt(row);
+      row = await this._encryptRow(row);
       // this._encryptedColumns.forEach((column) => {
       // for (const column of this._encryptedColumns) {
       //   if (row[column] !== undefined && row[column] !== null) {
@@ -713,7 +713,7 @@ export class Model<
     // console.log(this._connection.generateQuery(options));
     const result = await this._connection.insert<T>(options);
     if (result.data && result.data.length > 0) {
-      result.data = await this._decrypt(result.data);
+      result.data = await this._decryptRow(result.data);
     }
     return result;
   }
@@ -804,7 +804,7 @@ export class Model<
       ukErrors: Array<Record<keyof T, string>> = [];
 
     // Encryption
-    data = await this._encrypt(data);
+    data = await this._encryptRow(data);
     //#region Encryption
     // // this._encryptedColumns.forEach((column) => {
     // for (const column of this._encryptedColumns) {
@@ -916,7 +916,7 @@ export class Model<
     await this._init();
     const result = await this._connection.update<T>(options);
     if (result.data && result.data.length > 0) {
-      result.data = await this._decrypt(result.data);
+      result.data = await this._decryptRow(result.data);
     }
     return result;
   }
@@ -1198,7 +1198,7 @@ export class Model<
 
       //#region Encrypt Columns
       // Encryption
-      row = await this._encrypt(row);
+      row = await this._encryptRow(row);
       // this._encryptedColumns.forEach((column) => {
       // for (const column of this._encryptedColumns) {
       //   if (row[column] !== undefined && row[column] !== null) {
@@ -1302,10 +1302,27 @@ export class Model<
     }
   }
 
-  protected async _encrypt(data: Partial<T>): Promise<Partial<T>>;
-  protected async _encrypt(data: Partial<T>[]): Promise<Partial<T>[]>;
+  // deno-lint-ignore no-explicit-any
+  public async encryptValue(value: any): Promise<string> {
+    await this._init();
+    return this._connection.encrypt(value);
+  }
 
-  protected async _encrypt(data: Partial<T> | Array<Partial<T>>): Promise<Partial<T> | Array<Partial<T>>> {
+  public async decryptValue<T = string | number | bigint | boolean | Date>(value: string): Promise<T> {
+    await this._init();
+    return this._connection.decrypt(value) as unknown as T;
+  }
+
+  // deno-lint-ignore no-explicit-any
+  public async hashValue(value: any): Promise<string> {
+    await this._init();
+    return this._connection.hash(value);
+  }
+
+  protected async _encryptRow(data: Partial<T>): Promise<Partial<T>>;
+  protected async _encryptRow(data: Partial<T>[]): Promise<Partial<T>[]>;
+
+  protected async _encryptRow(data: Partial<T> | Array<Partial<T>>): Promise<Partial<T> | Array<Partial<T>>> {
     await this._init();
     // const encryptionKey = this._connection.encryptionKey;
     if(this._encryptedColumns.length === 0 && this._hashColumns.length === 0) {
@@ -1314,7 +1331,7 @@ export class Model<
     if (Array.isArray(data)) {
       return Promise.all(
         data.map((row) => {
-          return this._encrypt(row);
+          return this._encryptRow(row);
         }),
       );
     }
@@ -1332,10 +1349,10 @@ export class Model<
     return row;
   }
 
-  protected async _decrypt(data: T): Promise<T>;
-  protected async _decrypt(data: T[]): Promise<T[]>;
+  protected async _decryptRow(data: T): Promise<T>;
+  protected async _decryptRow(data: T[]): Promise<T[]>;
 
-  protected async _decrypt(data: T | Array<T>): Promise<T | Array<T>> {
+  protected async _decryptRow(data: T | Array<T>): Promise<T | Array<T>> {
     await this._init();
     if(this._encryptedColumns.length === 0) {
       return data;
@@ -1343,7 +1360,7 @@ export class Model<
     if (Array.isArray(data)) {
       return Promise.all(
         data.map((row) => {
-          return this._decrypt(row);
+          return this._decryptRow(row);
         }),
       );
     }
