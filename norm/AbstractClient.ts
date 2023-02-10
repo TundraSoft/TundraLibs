@@ -45,7 +45,7 @@ export abstract class AbstractClient<
     super(config);
     this._name = name.trim();
     this._dialect = config.dialect;
-    if(this._hasOption('encryptionKey')) {
+    if (this._hasOption('encryptionKey')) {
       this._encryptionKey = this._getOption('encryptionKey') as string;
     }
     this._queryTranslator = new QueryTranslator(this._dialect);
@@ -319,11 +319,12 @@ export abstract class AbstractClient<
   }
 
   public static async hashValue(data: unknown): Promise<string> {
-    if(typeof data === 'string' && data.startsWith('HASH:')) 
+    if (typeof data === 'string' && data.startsWith('HASH:')) {
       return data;
+    }
     const encoder = new TextEncoder(),
       encoded = encoder.encode(JSON.stringify(data)),
-      hashAlgo = 'SHA-256', 
+      hashAlgo = 'SHA-256',
       hash = await crypto.subtle.digest(hashAlgo, encoded);
     // return new TextDecoder().decode(hexEncode(new Uint8Array(hash)));
     // return base64.encode(new Uint8Array(hash));

@@ -1308,7 +1308,9 @@ export class Model<
     return this._connection.encrypt(value);
   }
 
-  public async decryptValue<T = string | number | bigint | boolean | Date>(value: string): Promise<T> {
+  public async decryptValue<T = string | number | bigint | boolean | Date>(
+    value: string,
+  ): Promise<T> {
     await this._init();
     return this._connection.decrypt(value) as unknown as T;
   }
@@ -1322,10 +1324,12 @@ export class Model<
   protected async _encryptRow(data: Partial<T>): Promise<Partial<T>>;
   protected async _encryptRow(data: Partial<T>[]): Promise<Partial<T>[]>;
 
-  protected async _encryptRow(data: Partial<T> | Array<Partial<T>>): Promise<Partial<T> | Array<Partial<T>>> {
+  protected async _encryptRow(
+    data: Partial<T> | Array<Partial<T>>,
+  ): Promise<Partial<T> | Array<Partial<T>>> {
     await this._init();
     // const encryptionKey = this._connection.encryptionKey;
-    if(this._encryptedColumns.length === 0 && this._hashColumns.length === 0) {
+    if (this._encryptedColumns.length === 0 && this._hashColumns.length === 0) {
       return data;
     }
     if (Array.isArray(data)) {
@@ -1338,12 +1342,16 @@ export class Model<
     const row = data as T;
     for (const column of this._encryptedColumns) {
       if (row[column] !== undefined && row[column] !== null) {
-        row[column] = await this._connection.encrypt(String(row[column])) as unknown as T[keyof T];
+        row[column] = await this._connection.encrypt(
+          String(row[column]),
+        ) as unknown as T[keyof T];
       }
     }
     for (const column of this._hashColumns) {
       if (row[column] !== undefined && row[column] !== null) {
-        row[column] = await this._connection.hash(String(row[column])) as unknown as T[keyof T];
+        row[column] = await this._connection.hash(
+          String(row[column]),
+        ) as unknown as T[keyof T];
       }
     }
     return row;
@@ -1354,7 +1362,7 @@ export class Model<
 
   protected async _decryptRow(data: T | Array<T>): Promise<T | Array<T>> {
     await this._init();
-    if(this._encryptedColumns.length === 0) {
+    if (this._encryptedColumns.length === 0) {
       return data;
     }
     if (Array.isArray(data)) {
@@ -1367,7 +1375,9 @@ export class Model<
     const row = data as T;
     for (const column of this._encryptedColumns) {
       if (row[column] !== undefined && row[column] !== null) {
-        row[column] = await this._connection.decrypt(String(row[column])) as unknown as T[keyof T];
+        row[column] = await this._connection.decrypt(
+          String(row[column]),
+        ) as unknown as T[keyof T];
       }
     }
     return row;
