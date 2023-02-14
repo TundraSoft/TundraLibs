@@ -268,6 +268,7 @@ export class SchemaManager<
         insertSQL.push(await theModel.generateInsert(seedData));
         insertSQL.push('');
       } catch (_e) {
+        // console.log(_e);
         // Nothing to do
         if (_e instanceof ModelValidationError) {
           console.log(_e.model);
