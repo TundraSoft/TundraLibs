@@ -100,6 +100,9 @@ export {
 //#endregion Endpoint
 
 //#region BigDecimal
-export { BigDenary } from "https://deno.land/x/bigdenary/mod.ts";
-export type { BDNumberInput, BigDenaryRaw } from "https://deno.land/x/bigdenary/mod.ts";
+export { BigDenary } from 'https://deno.land/x/bigdenary/mod.ts';
+export type {
+  BDNumberInput,
+  BigDenaryRaw,
+} from 'https://deno.land/x/bigdenary/mod.ts';
 //#endregion BigDecimal

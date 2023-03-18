@@ -258,6 +258,14 @@ export class Model<
     return this._table;
   }
 
+  get primaryKeys(): Array<keyof T> {
+    return this._primaryKeys;
+  }
+
+  get uniqueKeys(): Record<string, Array<keyof T>> {
+    return this._uniqueKeys;
+  }
+
   /**
    * getConnection
    *

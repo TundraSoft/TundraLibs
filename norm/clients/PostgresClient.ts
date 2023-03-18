@@ -36,8 +36,8 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
         password: this._options.password,
         database: this._options.database,
         connection: {
-          attempts: 3, 
-        }
+          attempts: 3,
+        },
       },
       poolSize = this._getOption('poolSize') as number || 1;
     this._client = await new PGPool(pgConfig, poolSize, true);

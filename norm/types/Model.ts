@@ -100,7 +100,9 @@ type ExtractTypes<T extends { [K in keyof T]: ModelColumnDefinition }> =
   ? { [P in keyof O]: O[P] }
   : never;
 
+// Joins
 export type ModelType<P extends ModelDefinition> = ExtractTypes<P['columns']>;
+
 // export type ModelType<P extends ModelDefinition> = ExtractTypes<
 //   {
 //     [X in keyof P['columns']]: P['columns'][X];
