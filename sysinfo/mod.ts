@@ -41,7 +41,15 @@ export const Sysinfo = {
    *
    * @returns string Returns the operating system name
    */
-  getOs: function (): 'windows' | 'darwin' | 'linux' {
+  getOs: function ():
+    | 'windows'
+    | 'darwin'
+    | 'linux'
+    | 'freebsd'
+    | 'netbsd'
+    | 'aix'
+    | 'solaris'
+    | 'illumos' {
     return Deno.build.os;
   },
 
