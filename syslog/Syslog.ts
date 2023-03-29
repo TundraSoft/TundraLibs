@@ -472,7 +472,7 @@ export class Syslog {
     } else if (BSDMatch) {
       logObj.prival = parseInt(BSDMatch[2]);
       if (BSDMatch[3]) {
-        console.log(BSDMatch);
+        // console.log(BSDMatch);
         let year = new Date().getFullYear();
         if (!BSDMatch[6]) {
           year = parseInt(BSDMatch[6]);

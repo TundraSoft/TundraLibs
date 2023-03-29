@@ -648,7 +648,7 @@ export class BaseEndpoint<
     }
     if (params['sort'] && params['sort'].length > 0) {
       const sort = params['sort'].split(',');
-      sort.forEach((s) => {
+      sort.forEach((s: string) => {
         const [key, value] = s.split(':');
         sorting[key.trim()] = (value.trim().toUpperCase() as 'ASC' | 'DESC') ||
           'ASC';
@@ -656,13 +656,13 @@ export class BaseEndpoint<
       delete params['sort'];
     } else if (params['sortasc']) {
       const sort = params['sortasc'].split(',');
-      sort.forEach((s) => {
+      sort.forEach((s: string) => {
         sorting[s] = 'ASC';
       });
       delete params['sortasc'];
     } else if (params['sortdesc']) {
       const sort = params['sortdesc'].split(',');
-      sort.forEach((s) => {
+      sort.forEach((s: string) => {
         sorting[s] = 'DESC';
       });
       delete params['sortdesc'];

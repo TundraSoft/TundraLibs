@@ -3,6 +3,7 @@ import { Dialects } from './Dialects.ts';
 export type ClientConfig = {
   dialect: Dialects;
   longQueryWarningTime?: number; // in seconds
+  encryptionKey?: string;
 };
 
 export type SQLiteConfig = ClientConfig & {

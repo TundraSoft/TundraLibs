@@ -145,7 +145,7 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
         // Remove all undefined
         if (mode === 'DEFINED' || mode === 'PARTIAL') {
           Object.keys(retObj).forEach((key) => {
-            if (retObj[key] === undefined) {
+            if (retObj[key] === undefined || retObj[key] === null) {
               delete retObj[key];
             }
           });
