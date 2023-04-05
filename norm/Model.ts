@@ -967,10 +967,10 @@ export class Model<
     await this._connection.truncateTable(options);
   }
 
-  public async export(batchSize = 100): Promise<void> {
+  public async export(batchSize = 100): Promise<T[]> {
     await this._init();
     const batches: Promise<QueryResult<T>>[] = [];
-    let pages: number = 1;
+    let pages = 1;
     // Fetch all rows (in batches)
     if(batchSize) {
       const count = await this.count();
@@ -982,10 +982,13 @@ export class Model<
     for(let i=1; i<=pages; i++) {
       batches.push(this.select(undefined, undefined, {page: i, limit: batchSize}));
     }
-    const data = (await Promise.all(batches)).map((data) => {
-      return data.data
-    });
-    console.log(data);
+    const data: T[] = [], 
+      result = await Promise.all(batches);
+    result.forEach((batch) => {
+      if(batch.data)
+        data.push(...batch.data);
+    })
+    return data;
   }
   /**
    * validateFilters
