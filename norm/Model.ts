@@ -772,7 +772,7 @@ export class Model<
     // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
     // Object.keys(this._updateDefaults).forEach(async (column) => {
     for (const column of Object.keys(this._updateDefaults)) {
-      if (data[column as keyof T] === undefined) {
+      if (data[column as keyof T] === undefined || data[column as keyof T] === null) {
         const generated = this._updateDefaults[column as keyof T] as
           | GeneratorFunction
           | GeneratorOutput;
@@ -813,32 +813,10 @@ export class Model<
 
     // Encryption
     data = await this._encryptRow(data);
-    //#region Encryption
-    // // this._encryptedColumns.forEach((column) => {
-    // for (const column of this._encryptedColumns) {
-    //   if (data[column] !== undefined && data[column] !== null) {
-    //     data[column] = encrypt(
-    //       this._encryptionKey as string,
-    //       String(data[column]),
-    //     ) as unknown as T[keyof T];
-    //   }
-    // }
-    // // });
-    // //#endregion Encryption
-
-    // //#region Hash
-    // // this._hashColumns.forEach((column) => {
-    // for (const column of this._hashColumns) {
-    //   if (data[column] !== undefined && data[column] !== null) {
-    //     data[column] = hash(String(data[column])) as unknown as T[keyof T];
-    //   }
-    // }
-    // // });
-    //#endregion Hash
 
     //#region Unique Keys
     Object.keys(this._uniqueKeys).forEach((key) => {
-      // If unique key is part of update and roeCount > 1, throw error
+      // If unique key is part of update and rowCount > 1, throw error
       if (rowCnt > 1) {
         this._uniqueKeys[key].forEach((column) => {
           if (data[column] !== undefined || data[column] !== null) {
@@ -1298,6 +1276,7 @@ export class Model<
       data: rows,
     });
   }
+
   //#endregion
   /**
    * _init

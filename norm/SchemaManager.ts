@@ -44,6 +44,10 @@ export class SchemaManager<
     >;
   }
 
+  public getSchemaNames(): string[] {
+    return Object.keys(this._models);
+  }
+
   /**
    * validateSchema
    *
