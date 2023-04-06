@@ -985,7 +985,7 @@ export class Model<
       for (const file of files) {
         const filePath = path.posix.join(outPath, file), 
           fileContents = Deno.readTextFileSync(filePath);
-        Deno.writeTextFileSync(finalPath, fileContents.substring(1, fileContents.length - 2), { create: true, append: true });
+        Deno.writeTextFileSync(finalPath, fileContents.substring(1, fileContents.length - 1), { create: true, append: true });
         // data.push(...fileContents);
         Deno.remove(filePath);
       }
