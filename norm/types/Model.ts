@@ -116,6 +116,3 @@ export type ModelValidation<
 > = {
   [X in keyof T]?: string[];
 };
-
-/* Export callback */
-export type ExportCallback = <T extends Record<string, unknown>>(data: Array<T>, name: string) => void;

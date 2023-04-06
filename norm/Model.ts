@@ -978,16 +978,18 @@ export class Model<
         return fileName;
       }, 
     consolidate = (files: string[]) => {
-      const data: T[] = [];
+      const data: T[] = [], 
+        finalPath = path.posix.join(outPath, `${this.name}.data.json`)
       console.log(files.length)
+      Deno.writeTextFileSync(finalPath, '[', { create: true, append: false });
       for (const file of files) {
         const filePath = path.posix.join(outPath, file), 
-          fileContents: T[] = JSON.parse(Deno.readTextFileSync(filePath));
-        data.push(...fileContents);
+          fileContents = Deno.readTextFileSync(filePath);
+        Deno.writeTextFileSync(finalPath, fileContents.substring(1, fileContents.length - 2), { create: true, append: true });
+        // data.push(...fileContents);
         Deno.remove(filePath);
       }
-      const finalPath = path.posix.join(outPath, `${this.name}.data.json`);
-      Deno.writeFileSync(finalPath, new TextEncoder().encode(JSON.stringify(data)), { create: true, append: false });
+      Deno.writeTextFileSync(finalPath, ']', { create: true, append: true });
     };
     // Get info
     const count = Number((await this.count()).count), 

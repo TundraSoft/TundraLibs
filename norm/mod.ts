@@ -40,7 +40,6 @@ export type {
   TranslatorConfig,
   TruncateTableQuery,
   UpdateQuery,
-  ExportCallback, 
 } from './types/mod.ts';
 
 // export type {
