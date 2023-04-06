@@ -20,6 +20,7 @@ import {
   Sorting,
   TruncateTableQuery,
   UpdateQuery,
+  ExportCallback
 } from './types/mod.ts';
 
 import { DefaultValidator } from './types/mod.ts';
@@ -36,6 +37,8 @@ import {
   ModelPermissionError,
   ModelValidationError,
 } from './errors/mod.ts';
+
+import { fs, path } from '../dependencies.ts';
 
 export class Model<
   S extends ModelDefinition = ModelDefinition,
@@ -772,7 +775,7 @@ export class Model<
     // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
     // Object.keys(this._updateDefaults).forEach(async (column) => {
     for (const column of Object.keys(this._updateDefaults)) {
-      if (data[column as keyof T] === undefined) {
+      if (data[column as keyof T] === undefined || data[column as keyof T] === null) {
         const generated = this._updateDefaults[column as keyof T] as
           | GeneratorFunction
           | GeneratorOutput;
@@ -813,32 +816,10 @@ export class Model<
 
     // Encryption
     data = await this._encryptRow(data);
-    //#region Encryption
-    // // this._encryptedColumns.forEach((column) => {
-    // for (const column of this._encryptedColumns) {
-    //   if (data[column] !== undefined && data[column] !== null) {
-    //     data[column] = encrypt(
-    //       this._encryptionKey as string,
-    //       String(data[column]),
-    //     ) as unknown as T[keyof T];
-    //   }
-    // }
-    // // });
-    // //#endregion Encryption
-
-    // //#region Hash
-    // // this._hashColumns.forEach((column) => {
-    // for (const column of this._hashColumns) {
-    //   if (data[column] !== undefined && data[column] !== null) {
-    //     data[column] = hash(String(data[column])) as unknown as T[keyof T];
-    //   }
-    // }
-    // // });
-    //#endregion Hash
 
     //#region Unique Keys
     Object.keys(this._uniqueKeys).forEach((key) => {
-      // If unique key is part of update and roeCount > 1, throw error
+      // If unique key is part of update and rowCount > 1, throw error
       if (rowCnt > 1) {
         this._uniqueKeys[key].forEach((column) => {
           if (data[column] !== undefined || data[column] !== null) {
@@ -989,6 +970,53 @@ export class Model<
     await this._connection.truncateTable(options);
   }
 
+  public async export(outPath: string, batchSize?: number): Promise<void> {
+    const tempWrite = (data: T[]): string => {
+        const fileName = `${crypto.randomUUID()}.json`, 
+            content = new TextEncoder().encode(JSON.stringify(data));
+        Deno.writeFileSync(path.posix.join(outPath, fileName), content, { create: true, append: false });
+        return fileName;
+      }, 
+    consolidate = (files: string[]) => {
+      const data: T[] = [], 
+        finalPath = path.posix.join(outPath, `${this.name}.data.json`)
+      console.log(files.length)
+      Deno.writeTextFileSync(finalPath, '[', { create: true, append: false });
+      for (const file of files) {
+        const filePath = path.posix.join(outPath, file), 
+          fileContents = Deno.readTextFileSync(filePath);
+        Deno.writeTextFileSync(finalPath, fileContents.substring(1, fileContents.length - 2), { create: true, append: true });
+        // data.push(...fileContents);
+        Deno.remove(filePath);
+      }
+      Deno.writeTextFileSync(finalPath, ']', { create: true, append: true });
+    };
+    // Get info
+    const count = Number((await this.count()).count), 
+      batchFiles: string[] = [], 
+      batchRunners: Promise<string>[] = [];
+    if(count === 0) {
+      return;
+    }
+    let pages = 1;
+    if(!batchSize || batchSize > count) {
+      batchSize = count;
+    } else {
+      pages = Math.ceil(count/batchSize)
+    }
+    // Loop through and fetch
+    for(let i=1; i<= pages; i++) {
+      batchRunners.push(this.select(undefined, undefined, {page: i, limit: batchSize}).then((data) => { return tempWrite(data.data as T[])}));
+      if(i%5 === 0) {
+        batchFiles.push(...await Promise.all(batchRunners));
+        batchRunners.length = 0;
+      }
+    }
+    // consolidate
+    consolidate(batchFiles);
+  }
+
+  
   /**
    * validateFilters
    *
@@ -1134,6 +1162,18 @@ export class Model<
         keyof T,
         string
       >;
+      // Delete null and undefined
+      // if(this._name === 'Customers')
+      //   console.log(row);
+      for(const column of Object.keys(row)) {
+        if(row[column as keyof T] == undefined || row[column as keyof T] == null) {
+          // if(this._name === 'CustomerSearch')
+            // console.log(`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`, column)
+          delete row[column as keyof T]
+        }
+      }
+      // if(this._name === 'Customers')
+      //   console.log(row);
       // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
       // await Object.keys(this._insertDefaults).forEach(async (column) => {
       for (const column of Object.keys(this._insertDefaults)) {
@@ -1207,28 +1247,6 @@ export class Model<
       //#region Encrypt Columns
       // Encryption
       row = await this._encryptRow(row);
-      // this._encryptedColumns.forEach((column) => {
-      // for (const column of this._encryptedColumns) {
-      //   if (row[column] !== undefined && row[column] !== null) {
-      //     row[column] = await encrypt(
-      //       this._encryptionKey as string,
-      //       String(row[column]),
-      //     ) as unknown as T[keyof T];
-      //   }
-      // }
-      // // this._hashColumns.forEach((column) => {
-      // for (const column of this._hashColumns) {
-      //   if (row[column] !== undefined && row[column] !== null) {
-      //     row[column] = await hash(
-      //       String(row[column]),
-      //     ) as unknown as T[keyof T];
-      //   }
-      // }
-      // this._encryptedColumns.forEach((column) => {
-      //   if (row[column] !== undefined) {
-      //     row[column] = await this._encrypt(row[column] as string);
-      //   }
-      // });
       //#endregion Encrypt Columns
 
       //#region Unique Keys check
@@ -1239,7 +1257,8 @@ export class Model<
         //#region Check if the key is unique in the array provided
         // Create hash
         const hash = this._uniqueKeys[key].map((column) => {
-          return row[column];
+          // If it is null or undefined, we need to handle it
+          return (row[column] === undefined || row[column] === null) ? `${index}{NULLVALUE}${Math.random()}` : row[column];
         }).join('::');
         if (ukHash[key].includes(hash)) {
           // Its not unique in the batch itself
@@ -1251,7 +1270,7 @@ export class Model<
               errors[index][column] = [];
             }
             errors[index][column]?.push(
-              `Column ${column as string} is not unique`,
+              `Column ${column as string} (${hash}) is not unique`,
             );
           });
         } else {
@@ -1281,7 +1300,6 @@ export class Model<
       // Set the row
       rows[index] = row;
     }
-
     // If error is present, throw and end
     if (Object.keys(errors).length > 0) {
       // throw new ModelValidationError(errors, this.name, this._connection.name);
@@ -1298,6 +1316,7 @@ export class Model<
       data: rows,
     });
   }
+
   //#endregion
   /**
    * _init
@@ -1382,11 +1401,15 @@ export class Model<
     }
     const row = data as T;
     for (const column of this._encryptedColumns) {
-      if (row[column] !== undefined && row[column] !== null) {
-        row[column] = await this._connection.decrypt(
-          String(row[column]),
-        ) as unknown as T[keyof T];
-      }
+      // try {
+        if (row[column] !== undefined && row[column] !== null) {
+          row[column] = await this._connection.decrypt(
+            String(row[column]),
+          ) as unknown as T[keyof T];
+        }
+      // } catch (e) {
+        // console.log(`Failed to decrypt for row ${JSON.stringify(row)}. Column: ${column as string}`)
+      // }
     }
     return row;
   }
