@@ -13,6 +13,7 @@ import { Model } from './Model.ts';
 import { QueryTranslator } from './QueryTranslator.ts';
 
 import { ModelConfigError, ModelValidationError } from './errors/mod.ts';
+import { notFound } from '../endpoint/Response.ts';
 
 export class SchemaManager<
   SD extends SchemaDefinition = SchemaDefinition,
@@ -33,6 +34,9 @@ export class SchemaManager<
 
   public get<T extends keyof ST>(name: T): Model<ModelDefinition, ST[T]> {
     // Load only when called
+    if(this._schema[name as keyof SchemaDefinition] === undefined) {
+      throw new Error(`Cannot find definition for ${name as string}`)
+    }
     if (this._models[name as keyof SchemaDefinition] === undefined) {
       this._models[name as keyof SchemaDefinition] = new Model(
         this._schema[name as keyof SchemaDefinition],
@@ -45,7 +49,7 @@ export class SchemaManager<
   }
 
   public getSchemaNames(): string[] {
-    return Object.keys(this._models);
+    return Object.keys(this._schema);
   }
 
   /**
@@ -269,10 +273,17 @@ export class SchemaManager<
           ),
           theModel = new Model(model);
         // insert.data = seedData;
+        // if(model.name === 'Organisations') {
+        //   console.log(seedData)
+        //   console.log(await theModel.generateInsert(seedData))
+        // }
         insertSQL.push(await theModel.generateInsert(seedData));
         insertSQL.push('');
       } catch (_e) {
-        // console.log(_e);
+        // console.log(_e.message.toString().toLowerCase().trim());
+        if(_e.message.toString().toLowerCase().trim().startsWith('the system cannot find the file specified')) {
+          console.log(`No seed file found for ${model.name}`)
+        }
         // Nothing to do
         if (_e instanceof ModelValidationError) {
           console.log(_e.model);
@@ -285,11 +296,16 @@ export class SchemaManager<
 
     schemas.map((schema) =>
       finalSQL.push(translator.translate({
+        type: 'DROP_SCHEMA',
+        schema,
+      }))
+    );
+    schemas.map((schema) =>
+      finalSQL.push(translator.translate({
         type: 'CREATE_SCHEMA',
         schema,
       }))
     );
-
     finalSQL.push(''); // Add a new line
     tableStructure.map((table) =>
       finalSQL.push(translator.translate(table) + '\n')

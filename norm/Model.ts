@@ -20,6 +20,7 @@ import {
   Sorting,
   TruncateTableQuery,
   UpdateQuery,
+  ExportCallback
 } from './types/mod.ts';
 
 import { DefaultValidator } from './types/mod.ts';
@@ -36,6 +37,8 @@ import {
   ModelPermissionError,
   ModelValidationError,
 } from './errors/mod.ts';
+
+import { fs, path } from '../dependencies.ts';
 
 export class Model<
   S extends ModelDefinition = ModelDefinition,
@@ -967,29 +970,51 @@ export class Model<
     await this._connection.truncateTable(options);
   }
 
-  public async export(batchSize = 100): Promise<T[]> {
-    await this._init();
-    const batches: Promise<QueryResult<T>>[] = [];
+  public async export(outPath: string, batchSize?: number): Promise<void> {
+    const tempWrite = (data: T[]): string => {
+        const fileName = `${crypto.randomUUID()}.json`, 
+            content = new TextEncoder().encode(JSON.stringify(data));
+        Deno.writeFileSync(path.posix.join(outPath, fileName), content, { create: true, append: false });
+        return fileName;
+      }, 
+    consolidate = (files: string[]) => {
+      const data: T[] = [];
+      console.log(files.length)
+      for (const file of files) {
+        const filePath = path.posix.join(outPath, file), 
+          fileContents: T[] = JSON.parse(Deno.readTextFileSync(filePath));
+        data.push(...fileContents);
+        Deno.remove(filePath);
+      }
+      const finalPath = path.posix.join(outPath, `${this.name}.data.json`);
+      Deno.writeFileSync(finalPath, new TextEncoder().encode(JSON.stringify(data)), { create: true, append: false });
+    };
+    // Get info
+    const count = Number((await this.count()).count), 
+      batchFiles: string[] = [], 
+      batchRunners: Promise<string>[] = [];
+    if(count === 0) {
+      return;
+    }
     let pages = 1;
-    // Fetch all rows (in batches)
-    if(batchSize) {
-      const count = await this.count();
-      if(count.count <= batchSize) {
-        pages = Math.ceil(count.count/batchSize)
-        batchSize = count.count;
+    if(!batchSize || batchSize > count) {
+      batchSize = count;
+    } else {
+      pages = Math.ceil(count/batchSize)
+    }
+    // Loop through and fetch
+    for(let i=1; i<= pages; i++) {
+      batchRunners.push(this.select(undefined, undefined, {page: i, limit: batchSize}).then((data) => { return tempWrite(data.data as T[])}));
+      if(i%5 === 0) {
+        batchFiles.push(...await Promise.all(batchRunners));
+        batchRunners.length = 0;
       }
     }
-    for(let i=1; i<=pages; i++) {
-      batches.push(this.select(undefined, undefined, {page: i, limit: batchSize}));
-    }
-    const data: T[] = [], 
-      result = await Promise.all(batches);
-    result.forEach((batch) => {
-      if(batch.data)
-        data.push(...batch.data);
-    })
-    return data;
+    // consolidate
+    consolidate(batchFiles);
   }
+
+  
   /**
    * validateFilters
    *
@@ -1135,6 +1160,18 @@ export class Model<
         keyof T,
         string
       >;
+      // Delete null and undefined
+      // if(this._name === 'Customers')
+      //   console.log(row);
+      for(const column of Object.keys(row)) {
+        if(row[column as keyof T] == undefined || row[column as keyof T] == null) {
+          // if(this._name === 'CustomerSearch')
+            // console.log(`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`, column)
+          delete row[column as keyof T]
+        }
+      }
+      // if(this._name === 'Customers')
+      //   console.log(row);
       // Get Generators, ones which are Functions or normal values, inject them, store DB generated in variable to inject later
       // await Object.keys(this._insertDefaults).forEach(async (column) => {
       for (const column of Object.keys(this._insertDefaults)) {
@@ -1208,28 +1245,6 @@ export class Model<
       //#region Encrypt Columns
       // Encryption
       row = await this._encryptRow(row);
-      // this._encryptedColumns.forEach((column) => {
-      // for (const column of this._encryptedColumns) {
-      //   if (row[column] !== undefined && row[column] !== null) {
-      //     row[column] = await encrypt(
-      //       this._encryptionKey as string,
-      //       String(row[column]),
-      //     ) as unknown as T[keyof T];
-      //   }
-      // }
-      // // this._hashColumns.forEach((column) => {
-      // for (const column of this._hashColumns) {
-      //   if (row[column] !== undefined && row[column] !== null) {
-      //     row[column] = await hash(
-      //       String(row[column]),
-      //     ) as unknown as T[keyof T];
-      //   }
-      // }
-      // this._encryptedColumns.forEach((column) => {
-      //   if (row[column] !== undefined) {
-      //     row[column] = await this._encrypt(row[column] as string);
-      //   }
-      // });
       //#endregion Encrypt Columns
 
       //#region Unique Keys check
@@ -1240,7 +1255,8 @@ export class Model<
         //#region Check if the key is unique in the array provided
         // Create hash
         const hash = this._uniqueKeys[key].map((column) => {
-          return row[column];
+          // If it is null or undefined, we need to handle it
+          return (row[column] === undefined || row[column] === null) ? `${index}{NULLVALUE}${Math.random()}` : row[column];
         }).join('::');
         if (ukHash[key].includes(hash)) {
           // Its not unique in the batch itself
@@ -1252,7 +1268,7 @@ export class Model<
               errors[index][column] = [];
             }
             errors[index][column]?.push(
-              `Column ${column as string} is not unique`,
+              `Column ${column as string} (${hash}) is not unique`,
             );
           });
         } else {
@@ -1282,7 +1298,6 @@ export class Model<
       // Set the row
       rows[index] = row;
     }
-
     // If error is present, throw and end
     if (Object.keys(errors).length > 0) {
       // throw new ModelValidationError(errors, this.name, this._connection.name);
@@ -1384,11 +1399,15 @@ export class Model<
     }
     const row = data as T;
     for (const column of this._encryptedColumns) {
-      if (row[column] !== undefined && row[column] !== null) {
-        row[column] = await this._connection.decrypt(
-          String(row[column]),
-        ) as unknown as T[keyof T];
-      }
+      // try {
+        if (row[column] !== undefined && row[column] !== null) {
+          row[column] = await this._connection.decrypt(
+            String(row[column]),
+          ) as unknown as T[keyof T];
+        }
+      // } catch (e) {
+        // console.log(`Failed to decrypt for row ${JSON.stringify(row)}. Column: ${column as string}`)
+      // }
     }
     return row;
   }
