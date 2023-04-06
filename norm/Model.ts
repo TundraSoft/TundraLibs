@@ -1012,6 +1012,11 @@ export class Model<
         batchRunners.length = 0;
       }
     }
+    // Leftover
+    if(batchRunners.length > 0) {
+      batchFiles.push(...await Promise.all(batchRunners));
+      batchRunners.length = 0;
+    }
     // consolidate
     consolidate(batchFiles);
   }
