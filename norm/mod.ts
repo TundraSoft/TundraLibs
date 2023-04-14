@@ -25,6 +25,7 @@ export type {
   InsertQuery,
   MariaConfig,
   ModelDefinition,
+  ModelType,
   ModelValidation,
   MongoDBConfig,
   Pagination,
@@ -41,7 +42,6 @@ export type {
   TranslatorConfig,
   TruncateTableQuery,
   TypedModels,
-  ModelType, 
   UpdateQuery,
 } from './types/mod.ts';
 

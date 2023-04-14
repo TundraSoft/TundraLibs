@@ -11,8 +11,7 @@ import {
   // Generators,
   InsertQuery,
   ModelDefinition,
-  TypedModels,
-  ModelType, 
+  ModelType,
   ModelValidation,
   Pagination,
   QueryFilter,
@@ -20,6 +19,7 @@ import {
   SelectQuery,
   Sorting,
   TruncateTableQuery,
+  TypedModels,
   UpdateQuery,
 } from './types/mod.ts';
 
