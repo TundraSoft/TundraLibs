@@ -7,6 +7,7 @@ export { DataTypeMap } from './types/mod.ts';
 export * from './errors/mod.ts';
 
 export type {
+  BaseColumnDefinition,
   ClientConfig,
   ClientEvents,
   CreateSchemaQuery,
@@ -24,7 +25,6 @@ export type {
   InsertQuery,
   MariaConfig,
   ModelDefinition,
-  TypedModels,
   ModelValidation,
   MongoDBConfig,
   Pagination,
@@ -32,16 +32,17 @@ export type {
   QueryFilter,
   QueryOption,
   QueryResult,
-  SchemaDefinition,
-  SchemaType,
+  // SchemaDefinition,
+  // SchemaType,
   SelectQuery,
   SimpleQueryFilter,
   Sorting,
   SQLiteConfig,
   TranslatorConfig,
   TruncateTableQuery,
+  TypedModels,
+  ModelType, 
   UpdateQuery,
-  BaseColumnDefinition
 } from './types/mod.ts';
 
 // export type {
