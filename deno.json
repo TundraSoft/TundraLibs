@@ -57,5 +57,6 @@
         "*/testdata/"
       ]
     }
-  }
+  },
+  "lock": false
 }

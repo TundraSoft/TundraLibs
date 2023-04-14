@@ -51,6 +51,6 @@ export {
   SQLiteTranslatorConfig,
 } from './Translator/mod.ts';
 
-export type { ModelDefinition, ModelType, ModelValidation, ExportCallback } from './Model.ts';
+export type { ModelDefinition, TypedModels, ModelValidation } from './Model.ts';
 
-export type { SchemaDefinition, SchemaType } from './SchemaManager.ts';
+export type { SchemaDefinition, SchemaType } from './SchemaManagerOld.ts';

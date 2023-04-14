@@ -11,9 +11,7 @@ export {
 } from 'https://deno.land/std@0.163.0/io/mod.ts';
 
 export { printf, sprintf } from 'https://deno.land/std@0.163.0/fmt/printf.ts';
-export * as yaml from 'https://deno.land/std@0.163.0/encoding/yaml.ts';
-export * as toml from 'https://deno.land/std@0.163.0/encoding/toml.ts';
-export * as base64url from 'https://deno.land/std@0.163.0/encoding/base64url.ts';
+
 export {
   blue,
   bold,
@@ -28,8 +26,11 @@ export {
   yellow,
 } from 'https://deno.land/std@0.163.0/fmt/colors.ts';
 
+export * as hex from 'https://deno.land/std@0.163.0/encoding/hex.ts';
 export * as base64 from 'https://deno.land/std@0.163.0/encoding/base64.ts';
-
+export * as yaml from 'https://deno.land/std@0.163.0/encoding/yaml.ts';
+export * as toml from 'https://deno.land/std@0.163.0/encoding/toml.ts';
+export * as base64url from 'https://deno.land/std@0.163.0/encoding/base64url.ts';
 // End Core
 
 export {
@@ -100,9 +101,9 @@ export {
 //#endregion Endpoint
 
 //#region BigDecimal
-export { BigDenary } from 'https://deno.land/x/bigdenary/mod.ts';
+export { BigDenary } from 'https://deno.land/x/bigdenary@1.0.0/mod.ts';
 export type {
   BDNumberInput,
   BigDenaryRaw,
-} from 'https://deno.land/x/bigdenary/mod.ts';
+} from 'https://deno.land/x/bigdenary@1.0.0/mod.ts';
 //#endregion BigDecimal

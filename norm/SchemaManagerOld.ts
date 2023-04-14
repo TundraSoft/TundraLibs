@@ -132,6 +132,45 @@ export class SchemaManager<
     return schema;
   }
 
+  public static async build(location: string) {
+    const currDir = await Deno.realPath('./');
+    Deno.chdir(await Deno.realPath(location));
+    // Generate the export statements
+    const exports = await SchemaManager._getModelDefinition('./');
+    console.log(exports);
+  }
+
+  protected static async _getModelDefinition(location: string) {
+    const realPath = await Deno.realPath(location),
+      modelExports: string[] = [];
+    for await (const modelFile of Deno.readDir(realPath)) {
+      if (modelFile.isDirectory) {
+        const imp = await SchemaManager._getModelDefinition(
+          `${location}/${modelFile.name}`,
+        );
+        if (imp.length > 0) {
+          modelExports.push(`//#region Begin ${modelFile.name}`);
+          modelExports.push(...imp);
+          modelExports.push(`//#endregion End ${modelFile.name}`);
+        }
+      } else {
+        if (modelFile.name.toLowerCase().endsWith('.model.ts')) {
+          // Its a model definition
+          // console.log(`file://${path.join(realPath, modelFile.name)}`);
+          const tm = await import(
+            `file://${path.join(realPath, modelFile.name)}`
+          );
+          // modelExports.push(
+          //   `export { default as ${tm.default.name} } from './${
+          //     path.posix.join(`${location}`, `${modelFile.name}`)
+          //   }';`,
+          // );
+          console.log(tm.default.);
+        }
+      }
+    }
+    return modelExports;
+  }
   /**
    * generateImports
    *
@@ -200,6 +239,7 @@ export class SchemaManager<
 
     // await hierarchy.forEach(async (model) => {
     for (const model of hierarchy) {
+      const modelName = (model.schema) ? `${model.schema}.${model.table}` : `${model.table}`;
       if (model.schema && !schemas.includes(model.schema)) {
         schemas.push(model.schema);
       }
@@ -267,22 +307,17 @@ export class SchemaManager<
       tableStructure.push(cleanModel);
       // Check if seed file is available
       try {
-        const file = model.name + '.seed.json',
+        const file = modelName + '.seed.json',
           seedData = JSON.parse(
             Deno.readTextFileSync(path.join(realSeedPath, file)),
           ),
           theModel = new Model(model);
-        // insert.data = seedData;
-        // if(model.name === 'Organisations') {
-        //   console.log(seedData)
-        //   console.log(await theModel.generateInsert(seedData))
-        // }
         insertSQL.push(await theModel.generateInsert(seedData));
         insertSQL.push('');
       } catch (_e) {
         // console.log(_e.message.toString().toLowerCase().trim());
         if(_e.message.toString().toLowerCase().trim().startsWith('the system cannot find the file specified')) {
-          console.log(`No seed file found for ${model.name}`)
+          console.log(`No seed file found for ${modelName}`)
         }
         // Nothing to do
         if (_e instanceof ModelValidationError) {

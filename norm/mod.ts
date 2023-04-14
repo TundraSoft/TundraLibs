@@ -1,7 +1,8 @@
 export { DatabaseManager } from './DatabaseManager.ts';
 export { Model } from './Model.ts';
-export { SchemaManager } from './SchemaManager.ts';
+export { ModelManager } from './ModelManager.ts';
 export { DataTypes } from './types/mod.ts';
+export { DataTypeMap } from './types/mod.ts';
 
 export * from './errors/mod.ts';
 
@@ -23,7 +24,7 @@ export type {
   InsertQuery,
   MariaConfig,
   ModelDefinition,
-  ModelType,
+  TypedModels,
   ModelValidation,
   MongoDBConfig,
   Pagination,
@@ -40,6 +41,7 @@ export type {
   TranslatorConfig,
   TruncateTableQuery,
   UpdateQuery,
+  BaseColumnDefinition
 } from './types/mod.ts';
 
 // export type {
