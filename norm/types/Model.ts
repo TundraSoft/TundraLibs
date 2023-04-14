@@ -89,7 +89,7 @@ type ExtractTypes<T extends { [K in keyof T]: ModelColumnDefinition }> =
   : never;
 
 //#endregion Type Extraction
-type Models<T extends string = string> = {
+export type Models<T extends string = string> = {
   [Key in T]: ModelDefinition<T>;
 };
 
