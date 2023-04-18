@@ -53,10 +53,10 @@ export {
 
 export type {
   ModelDefinition,
+  Models,
   ModelType,
   ModelValidation,
   TypedModels,
-  Models
 } from './Model.ts';
 
 // export type { SchemaDefinition, SchemaType } from './SchemaManagerOld.ts';

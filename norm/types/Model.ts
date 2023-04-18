@@ -127,7 +127,7 @@ export type TypedModels<M extends Models> = {
   -readonly [K in keyof M]:
     & ColumnTypes<M, M[K]>
     & Related<M, M[K]['foreignKeys']>;
-};
+} extends infer O ? { [P in keyof O]: O[P] } : never;
 
 export type ModelType<P extends ModelDefinition> = ExtractTypes<P['columns']>;
 

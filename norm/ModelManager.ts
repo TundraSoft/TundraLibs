@@ -4,9 +4,9 @@ import type {
   Dialects,
   InsertQuery,
   ModelDefinition,
-  Models, 
-  TypedModels, 
-  // SchemaDefinition,
+  Models,
+  TypedModels,
+  // SchemaDefinition,5
   // SchemaType,
 } from './types/mod.ts';
 import { Model } from './Model.ts';
@@ -36,8 +36,8 @@ export class ModelManager<
 
   public get<T extends keyof MT>(name: T): Model<ModelDefinition, MT[T]> {
     // Load only when called
-    if(this._schema[name as keyof Models] === undefined) {
-      throw new Error(`Cannot find definition for ${name as string}`)
+    if (this._schema[name as keyof Models] === undefined) {
+      throw new Error(`Cannot find definition for ${name as string}`);
     }
     if (this._models[name as keyof Models] === undefined) {
       this._models[name as keyof Models] = new Model(

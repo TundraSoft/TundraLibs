@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "/root/": "./",
+    "/DenoStd/": "https://deno.land/std@0.163.0/",
+    "/Oak/": "https://deno.land/x/oak@v11.1.0/"
+  }
+}

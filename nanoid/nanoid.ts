@@ -41,6 +41,57 @@ export function nanoid(size = 21, base: string = webSafe): string {
   return id;
 }
 
+// export function nanoid2(size = 21, base: string = webSafe): string {
+//   const maskLength = (base.length - 1) | 1;
+//   const mask = (2 << (31 - Math.clz32(maskLength))) - 1;
+//   const step = Math.ceil((1.6 * mask * size) / base.length);
+//   const bytes: Uint32Array = random(step);
+//   const lookup: string[] = [];
+//   const limits: number[] = [];
+
+//   // Build lookup table and consecutive occurrence limits
+//   for (let i = 0; i <= mask; i++) {
+//     lookup[i] = base[i % base.length];
+//     limits[i] = (i > 0 && lookup[i] === lookup[i - 1]) ? limits[i - 1] + 1 : 0;
+//     if (limits[i] >= 2) {
+//       let j = i;
+//       while (j < base.length && lookup[j] === lookup[i]) {
+//         limits[j++] = limits[i];
+//       }
+//     }
+//   }
+
+//   let id = '',
+//     i = 0,
+//     length = bytes.length,
+//     lastChar = '',
+//     lastCount = 0;
+
+//   // Generate random ID with consecutive occurrence check
+//   while (id.length < size && i < length) {
+//     const byte = bytes[i] & mask;
+//     const char = lookup[byte];
+//     const count = (char === lastChar) ? lastCount + 1 : 0;
+//     if (count >= 3) {
+//       i++;
+//       continue;
+//     }
+//     id += char;
+//     lastChar = char;
+//     lastCount = count;
+//     i++;
+//   }
+
+//   return id;
+// }
+
+// const serverId = Math.round(12),
+//   st = Math.round(Date.now()/1000);
+// let seed = 100000;
+// export function shortId() {
+//   console.log(serverId, st, seed);
+//   return (((serverId & 255) << 56) + (st << 24)) + seed++;
+// }
 // Another idea
 /**
  * This will be unique as long as we can manage to get server_id (PID), server_startup_time_in_seconds (to an extent consistent)
