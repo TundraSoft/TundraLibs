@@ -19,4 +19,6 @@ export type TranslatorConfig = {
     [Property in Generators]: GeneratorOutput | GeneratorFunction;
   };
   // & { [key: string]: GeneratorOutput | GeneratorFunction };
+  //Condition Mapper
+  
 };

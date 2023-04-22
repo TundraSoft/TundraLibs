@@ -1,5 +1,7 @@
 import type { Generators } from '../Translator/mod.ts';
 
+type Unarray<T> = T extends Array<infer U> ? U : T;
+
 export type FilterOperators<ValueType> = ValueType | Generators | {
   $eq?: ValueType | Generators;
   $neq?: ValueType | Generators;
@@ -12,7 +14,7 @@ export type FilterOperators<ValueType> = ValueType | Generators | {
   $between?: {
     $from: ValueType | Generators;
     $to: ValueType | Generators;
-  };
+  }; 
   $null?: boolean;
   $like?: ValueType | Generators;
   $nlike?: ValueType | Generators;
@@ -20,6 +22,18 @@ export type FilterOperators<ValueType> = ValueType | Generators | {
   $nilike?: ValueType | Generators;
 };
 
+export type QueryFilter<T, Y = Required<T>> =
+  Y extends Record<string, unknown>
+    ? {
+        [K in keyof Y]?: Y[K] extends Array<Record<string, unknown>>
+          ? QueryFilter<Unarray<Y[K]>>
+          : FilterOperators<Y[K]>
+      } & {
+        $or?: QueryFilter<T>[] | QueryFilter<T>;
+        $and?: QueryFilter<T>[] | QueryFilter<T>;
+      }
+    : never
+ 
 // export type SimpleQueryFilter<
 //   T extends Record<string, unknown> = Record<string, unknown>,
 // > = {
@@ -53,28 +67,17 @@ export type FilterOperators<ValueType> = ValueType | Generators | {
 //     $and?: QueryFilter<T> | QueryFilter<T>[];
 //   };
 
-export type QueryFilter<T extends Record<string, unknown> = Record<string, unknown>> =
-  & {
-    [Property in keyof T]?: T[Property] extends Array<infer Item>
-      ? Item extends Record<string, unknown>
-        ? QueryFilter<Item>
-        : FilterOperators<Item>
-      : T[Property] extends Record<string, unknown>
-        ? QueryFilter<T[Property]>
-        : FilterOperators<T[Property]>;
-  }
-  & {
-    $or?: QueryFilter<T> | QueryFilter<T>[];
-    $and?: QueryFilter<T> | QueryFilter<T>[];
-  };
-
 // export type QueryFilter<T extends Record<string, unknown> = Record<string, unknown>> =
 //   & {
-//     [Property in keyof T]?: T[Property] extends Record<string, unknown>
-//       ? 'YES'
-//       : 'NO'
+//     [Property in keyof T]?: T[Property] extends Array<infer Item>
+//       ? Item extends Record<string, unknown>
+//         ? QueryFilter<Item>
+//         : FilterOperators<Item>
+//       : T[Property] extends Record<string, unknown>
+//         ? QueryFilter<T[Property]>
+//         : FilterOperators<T[Property]>;
 //   }
-//   // & {
-//   //   $or?: QueryFilter<T> | QueryFilter<T>[];
-//   //   $and?: QueryFilter<T> | QueryFilter<T>[];
-//   // };
+//   & {
+//     $or?: QueryFilter<T> | QueryFilter<T>[];
+//     $and?: QueryFilter<T> | QueryFilter<T>[];
+//   };

@@ -21,7 +21,7 @@ export type {
 //#endregion Model
 
 //#region Query
-export type { QueryFilter } from './Query/mod.ts';
+export type { QueryFilter, FilterOperators } from './Query/mod.ts';
 //#endregion Query
 
 //#region Translator

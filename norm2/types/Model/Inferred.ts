@@ -68,6 +68,6 @@ export type DataModelType<
     DM,
     M,
     DM[M]['links'] extends Record<string, LinkDefinition> ? DM[M]['links']
-      : never
+      : Record<never, never>
   > extends infer O ? { [P in keyof O]: O[P] }
   : never;

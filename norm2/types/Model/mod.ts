@@ -21,4 +21,4 @@ export type {
   NonNullableColumns,
   NullableColumns,
   PrimaryKeys,
-} from './Infered.ts';
+} from './Inferred.ts';

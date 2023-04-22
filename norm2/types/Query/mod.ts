@@ -1,1 +1,1 @@
-export type { QueryFilter } from './QueryFilter.ts';
+export type { QueryFilter, FilterOperators } from './QueryFilter.ts';
