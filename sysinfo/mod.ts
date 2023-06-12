@@ -56,58 +56,56 @@ export const Sysinfo = {
   /**
    * getMemory
    *
-   * Returns the memory information. this requires unstable `--unstable` flag to be set
-   * If it is not set, it will return undefined.
+   * Returns the memory information.
    *
    * @param size HumanSize Human understandable sizes.
    * @returns Promise<MemoryInfo>
    */
-  // Disabling to avoid --unstable
-  // getMemory: async function (size: HumanSizes = "B") {
-  //   const mem: MemoryInfo = {
-  //     total: 0,
-  //     free: 0,
-  //     available: 0,
-  //     swap: {
-  //       total: 0,
-  //       free: 0,
-  //     },
-  //   };
-  //   let sizeCalc = 1;
-  //   switch (size) {
-  //     case "TB":
-  //       sizeCalc = 1024 * 1024 * 1024;
-  //       break;
-  //     case "GB":
-  //       sizeCalc = 1024 * 1024;
-  //       break;
-  //     case "MB":
-  //       sizeCalc = 1024;
-  //       break;
-  //     case "KB":
-  //       sizeCalc = 1;
-  //       break;
-  //     default:
-  //     case "B":
-  //       sizeCalc = 1 / 1024;
-  //       break;
-  //   }
-  //   try {
-  //     const checkEnv = await Deno.permissions.query({ name: "env" });
-  //     if (checkEnv.state === "granted") {
-  //       const memInfo = Deno.systemMemoryInfo();
-  //       mem.available = memInfo.available / sizeCalc;
-  //       mem.free = memInfo.free / sizeCalc;
-  //       mem.total = memInfo.total / sizeCalc;
-  //       mem.swap.total = memInfo.swapTotal / sizeCalc;
-  //       mem.swap.free = memInfo.swapFree / sizeCalc;
-  //     }
-  //   } catch (e) {
-  //     // Supress error
-  //     console.log(e);
-  //   }
-  //   return (mem.total === 0) ? undefined : mem;
-  // },
+  getMemory: async function (size: HumanSizes = 'B') {
+    const mem: MemoryInfo = {
+      total: 0,
+      free: 0,
+      available: 0,
+      swap: {
+        total: 0,
+        free: 0,
+      },
+    };
+    let sizeCalc = 1;
+    switch (size) {
+      case 'TB':
+        sizeCalc = 1024 * 1024 * 1024;
+        break;
+      case 'GB':
+        sizeCalc = 1024 * 1024;
+        break;
+      case 'MB':
+        sizeCalc = 1024;
+        break;
+      case 'KB':
+        sizeCalc = 1;
+        break;
+      default:
+      case 'B':
+        sizeCalc = 1 / 1024;
+        break;
+    }
+    try {
+      const checkEnv = await Deno.permissions.query({ name: 'env' });
+      if (checkEnv.state === 'granted') {
+        const memInfo = Deno.systemMemoryInfo();
+        mem.available = memInfo.available / sizeCalc;
+        mem.free = memInfo.free / sizeCalc;
+        mem.total = memInfo.total / sizeCalc;
+        mem.swap.total = memInfo.swapTotal / sizeCalc;
+        mem.swap.free = memInfo.swapFree / sizeCalc;
+      }
+    } catch (e) {
+      // Supress error
+      console.log(e);
+    }
+    return (mem.total === 0) ? undefined : mem;
+  },
 
   /**
    * getLoad
