@@ -150,14 +150,15 @@ export const Sysinfo = {
     let hostName!: string;
     if (checkRun.state === 'granted') {
       try {
-        const host = await Deno.run({
-          cmd: ['hostname'],
+        const ifconfig = new Deno.Command(Deno.execPath(), {
+          args: ['hostname'],
           stdout: 'piped',
         });
-        const { success } = await host.status();
+        const child = await ifconfig.spawn();
+        const { success } = await child.status;
         if (success) {
-          const raw = await host.output();
-          hostName = new TextDecoder().decode(raw).trim();
+          const { stdout } = await child.output();
+          hostName = new TextDecoder().decode(stdout).trim();
         }
       } catch {
         // Supress error
@@ -185,14 +186,15 @@ export const Sysinfo = {
     let ip!: string;
     if (checkRun.state === 'granted') {
       try {
-        const ifconfig = await Deno.run({
-          cmd: [command],
+        const ifconfig = new Deno.Command(Deno.execPath(), {
+          args: [command],
           stdout: 'piped',
         });
-        const { success } = await ifconfig.status();
+        const child = await ifconfig.spawn();
+        const { success } = await child.status;
         if (success) {
-          const raw = await ifconfig.output();
-          const text = new TextDecoder().decode(raw);
+          const { code, stdout } = await child.output();
+          const text = new TextDecoder().decode(stdout);
           if (isWin) {
             const addrs = text.match(
               new RegExp('ipv4.+([0-9]+.){3}[0-9]+', 'gi'),
@@ -201,7 +203,7 @@ export const Sysinfo = {
               ? addrs[0].match(new RegExp('([0-9]+.){3}[0-9]+', 'g'))
               : undefined;
             const addr = temp ? temp[0] : undefined;
-            await Deno.close(ifconfig.rid);
+            await Deno.close(code);
             if (!addr) {
               throw new Error('Could not resolve local adress.');
             }
@@ -210,7 +212,7 @@ export const Sysinfo = {
             const addrs = text.match(
               new RegExp('inet (addr:)?([0-9]*.){3}[0-9]*', 'g'),
             );
-            await Deno.close(ifconfig.rid);
+            await Deno.close(code);
             if (!addrs || !addrs.some((x) => !x.startsWith('inet 127'))) {
               throw new Error('Could not resolve local adress.');
             }
