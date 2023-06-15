@@ -150,8 +150,8 @@ export const Sysinfo = {
     let hostName!: string;
     if (checkRun.state === 'granted') {
       try {
-        const ifconfig = new Deno.Command(Deno.execPath(), {
-          args: ['hostname'],
+        const ifconfig = new Deno.Command('cmd', {
+          args: ['cmd', '/c', 'hostname'],
           stdout: 'piped',
         });
         const child = await ifconfig.spawn();
@@ -181,13 +181,13 @@ export const Sysinfo = {
    */
   getIP: async function (): Promise<string | undefined> {
     const isWin = Deno.build.os === 'windows',
-      command = isWin ? 'ipconfig' : 'ifconfig',
+      command = isWin ? ['cmd', '/c', 'ipconfig'] : ['ifconfig'],
       checkRun = await Deno.permissions.query({ name: 'run' });
     let ip!: string;
     if (checkRun.state === 'granted') {
       try {
-        const ifconfig = new Deno.Command(Deno.execPath(), {
-          args: [command],
+        const ifconfig = new Deno.Command('cmd', {
+          args: command,
           stdout: 'piped',
         });
         const child = await ifconfig.spawn();
