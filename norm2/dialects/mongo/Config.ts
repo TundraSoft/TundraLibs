@@ -57,6 +57,6 @@ export const SQLiteTranslatorConfig: TranslatorConfig = {
     'CURRENT_MONTH': (): Date => { const date = new Date(); return new Date(date.getFullYear(), date.getMonth() + 1, 0)}, 
     'NOW': (): string => new Date().toISOString(),
     'UUID': crypto.randomUUID,
-    'SYS_GUID': crypto.randomUUID,
+    'SYS_GUID': crypto.randomUUID
   },
 };

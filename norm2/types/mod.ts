@@ -1,3 +1,9 @@
+//#region Base
+export type { Dialects } from './Dialects.ts';
+export { DataTypes, DataTypeMap, DefaultValidator } from './DataTypes.ts';
+export type { DataType, DataLength } from './DataTypes.ts';
+//#endregion Base
+
 //#region Model
 export type {
   ColumnDefinition,
