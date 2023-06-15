@@ -56,58 +56,56 @@ export const Sysinfo = {
   /**
    * getMemory
    *
-   * Returns the memory information. this requires unstable `--unstable` flag to be set
-   * If it is not set, it will return undefined.
+   * Returns the memory information.
    *
    * @param size HumanSize Human understandable sizes.
    * @returns Promise<MemoryInfo>
    */
-  // Disabling to avoid --unstable
-  // getMemory: async function (size: HumanSizes = "B") {
-  //   const mem: MemoryInfo = {
-  //     total: 0,
-  //     free: 0,
-  //     available: 0,
-  //     swap: {
-  //       total: 0,
-  //       free: 0,
-  //     },
-  //   };
-  //   let sizeCalc = 1;
-  //   switch (size) {
-  //     case "TB":
-  //       sizeCalc = 1024 * 1024 * 1024;
-  //       break;
-  //     case "GB":
-  //       sizeCalc = 1024 * 1024;
-  //       break;
-  //     case "MB":
-  //       sizeCalc = 1024;
-  //       break;
-  //     case "KB":
-  //       sizeCalc = 1;
-  //       break;
-  //     default:
-  //     case "B":
-  //       sizeCalc = 1 / 1024;
-  //       break;
-  //   }
-  //   try {
-  //     const checkEnv = await Deno.permissions.query({ name: "env" });
-  //     if (checkEnv.state === "granted") {
-  //       const memInfo = Deno.systemMemoryInfo();
-  //       mem.available = memInfo.available / sizeCalc;
-  //       mem.free = memInfo.free / sizeCalc;
-  //       mem.total = memInfo.total / sizeCalc;
-  //       mem.swap.total = memInfo.swapTotal / sizeCalc;
-  //       mem.swap.free = memInfo.swapFree / sizeCalc;
-  //     }
-  //   } catch (e) {
-  //     // Supress error
-  //     console.log(e);
-  //   }
-  //   return (mem.total === 0) ? undefined : mem;
-  // },
+  getMemory: async function (size: HumanSizes = 'B') {
+    const mem: MemoryInfo = {
+      total: 0,
+      free: 0,
+      available: 0,
+      swap: {
+        total: 0,
+        free: 0,
+      },
+    };
+    let sizeCalc = 1;
+    switch (size) {
+      case 'TB':
+        sizeCalc = 1024 * 1024 * 1024;
+        break;
+      case 'GB':
+        sizeCalc = 1024 * 1024;
+        break;
+      case 'MB':
+        sizeCalc = 1024;
+        break;
+      case 'KB':
+        sizeCalc = 1;
+        break;
+      default:
+      case 'B':
+        sizeCalc = 1 / 1024;
+        break;
+    }
+    try {
+      const checkEnv = await Deno.permissions.query({ name: 'env' });
+      if (checkEnv.state === 'granted') {
+        const memInfo = Deno.systemMemoryInfo();
+        mem.available = memInfo.available / sizeCalc;
+        mem.free = memInfo.free / sizeCalc;
+        mem.total = memInfo.total / sizeCalc;
+        mem.swap.total = memInfo.swapTotal / sizeCalc;
+        mem.swap.free = memInfo.swapFree / sizeCalc;
+      }
+    } catch (e) {
+      // Supress error
+      console.log(e);
+    }
+    return (mem.total === 0) ? undefined : mem;
+  },
 
   /**
    * getLoad
@@ -152,14 +150,15 @@ export const Sysinfo = {
     let hostName!: string;
     if (checkRun.state === 'granted') {
       try {
-        const host = await Deno.run({
-          cmd: ['hostname'],
+        const ifconfig = new Deno.Command('cmd', {
+          args: ['cmd', '/c', 'hostname'],
           stdout: 'piped',
         });
-        const { success } = await host.status();
+        const child = await ifconfig.spawn();
+        const { success } = await child.status;
         if (success) {
-          const raw = await host.output();
-          hostName = new TextDecoder().decode(raw).trim();
+          const { stdout } = await child.output();
+          hostName = new TextDecoder().decode(stdout).trim();
         }
       } catch {
         // Supress error
@@ -182,19 +181,20 @@ export const Sysinfo = {
    */
   getIP: async function (): Promise<string | undefined> {
     const isWin = Deno.build.os === 'windows',
-      command = isWin ? 'ipconfig' : 'ifconfig',
+      command = isWin ? ['cmd', '/c', 'ipconfig'] : ['ifconfig'],
       checkRun = await Deno.permissions.query({ name: 'run' });
     let ip!: string;
     if (checkRun.state === 'granted') {
       try {
-        const ifconfig = await Deno.run({
-          cmd: [command],
+        const ifconfig = new Deno.Command('cmd', {
+          args: command,
           stdout: 'piped',
         });
-        const { success } = await ifconfig.status();
+        const child = await ifconfig.spawn();
+        const { success } = await child.status;
         if (success) {
-          const raw = await ifconfig.output();
-          const text = new TextDecoder().decode(raw);
+          const { code, stdout } = await child.output();
+          const text = new TextDecoder().decode(stdout);
           if (isWin) {
             const addrs = text.match(
               new RegExp('ipv4.+([0-9]+.){3}[0-9]+', 'gi'),
@@ -203,7 +203,7 @@ export const Sysinfo = {
               ? addrs[0].match(new RegExp('([0-9]+.){3}[0-9]+', 'g'))
               : undefined;
             const addr = temp ? temp[0] : undefined;
-            await Deno.close(ifconfig.rid);
+            await Deno.close(code);
             if (!addr) {
               throw new Error('Could not resolve local adress.');
             }
@@ -212,7 +212,7 @@ export const Sysinfo = {
             const addrs = text.match(
               new RegExp('inet (addr:)?([0-9]*.){3}[0-9]*', 'g'),
             );
-            await Deno.close(ifconfig.rid);
+            await Deno.close(code);
             if (!addrs || !addrs.some((x) => !x.startsWith('inet 127'))) {
               throw new Error('Could not resolve local adress.');
             }

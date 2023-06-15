@@ -623,7 +623,7 @@ export class BaseEndpoint<
     ctx: Context<S>,
   ): Promise<ParsedRequest<S>> {
     const params = oakHelpers.getQuery(ctx, { mergeParams: true }),
-      paramKeys: string[] = ['page', 'pagesize', 'sort'], 
+      paramKeys: string[] = ['page', 'pagesize', 'sort'],
       paging: Partial<PagingParam> = {},
       sorting: SortingParam = {},
       contentLength: number = ctx.request.headers.get('content-length')
@@ -634,14 +634,14 @@ export class BaseEndpoint<
       | Array<Record<string, unknown>>
       | undefined = undefined;
     let files: { [key: string]: Array<FileUploadInfo> } | undefined = undefined;
-    
+
     Object.entries(params).forEach(([key, value]) => {
-      if(paramKeys.includes(key.trim().toLowerCase())) {
+      if (paramKeys.includes(key.trim().toLowerCase())) {
         delete params[key];
         params[key.trim().toLowerCase()] = value;
       }
     });
-    
+
     //#region Split paging and sorting params
     if (params['page']) {
       paging.page = Number(params['page']) || 1;
