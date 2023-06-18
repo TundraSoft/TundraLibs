@@ -141,94 +141,44 @@ export const Sysinfo = {
   getPid: function (): number {
     return Deno.pid;
   },
+
   /**
    * getHostname
    * Gets the hostname of the operating system
    *
    * @returns string The hostname or blank if execution rights are not present
    */
-  getHostname: async function () {
-    const checkRun = await Deno.permissions.query({ name: 'run' });
-    let hostName!: string;
-    if (checkRun.state === 'granted') {
-      try {
-        const host = await Deno.run({
-          cmd: ['hostname'],
-          stdout: 'piped',
-        });
-        const { success } = await host.status();
-        if (success) {
-          const raw = await host.output();
-          hostName = new TextDecoder().decode(raw).trim();
-        }
-      } catch {
-        // Supress error
-      }
-    }
-    // Disabling this to avoid --unstable
-    // else {
-    //   const checkEnv = await Deno.permissions.query({ name: "env" });
-    //   if (checkEnv.state === "granted") {
-    //     hostName = Deno.hostname();
-    //   }
-    // }
-    return hostName;
+  getHostname: function () {
+    return Deno.hostname();
   },
+
   /**
    * getIP
    * Returns the IP address assigned to the system.
    *
+   * @param onlyPublic {boolean} get only public ip address
    * @returns Promise<string | undefined> The IP address assigned to the system
    */
-  getIP: async function (): Promise<string | undefined> {
-    const isWin = Deno.build.os === 'windows',
-      command = isWin ? 'ipconfig' : 'ifconfig',
-      checkRun = await Deno.permissions.query({ name: 'run' });
-    let ip!: string;
-    if (checkRun.state === 'granted') {
-      try {
-        const ifconfig = await Deno.run({
-          cmd: [command],
-          stdout: 'piped',
-        });
-        const { success } = await ifconfig.status();
-        if (success) {
-          const raw = await ifconfig.output();
-          const text = new TextDecoder().decode(raw);
-          if (isWin) {
-            const addrs = text.match(
-              new RegExp('ipv4.+([0-9]+.){3}[0-9]+', 'gi'),
-            );
-            const temp = addrs
-              ? addrs[0].match(new RegExp('([0-9]+.){3}[0-9]+', 'g'))
-              : undefined;
-            const addr = temp ? temp[0] : undefined;
-            await Deno.close(ifconfig.rid);
-            if (!addr) {
-              throw new Error('Could not resolve local adress.');
-            }
-            return addr;
-          } else {
-            const addrs = text.match(
-              new RegExp('inet (addr:)?([0-9]*.){3}[0-9]*', 'g'),
-            );
-            await Deno.close(ifconfig.rid);
-            if (!addrs || !addrs.some((x) => !x.startsWith('inet 127'))) {
-              throw new Error('Could not resolve local adress.');
-            }
-            return (
-              addrs &&
-              addrs
-                .find((addr: string) => !addr.startsWith('inet 127'))
-                ?.split('inet ')[1]
-            );
+  getIP: function (onlyPublic = false): string[] {
+    const ipAddress: string[] = [],
+      networks = Deno.networkInterfaces();
+    for (const network of networks) {
+      if (onlyPublic === true) {
+        if (network.family === 'IPv4') {
+          const regex =
+            /(^192\.168\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)|(^172\.([1][6-9]|[2][0-9]|[3][0-1])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)|(^10\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)/;
+          if (regex.test(network.address)) {
+            ipAddress.push(network.address);
           }
+        } else if (network.family === 'IPv6') {
+          // @TODO - Add check here
+          ipAddress.push(network.address);
         }
-      } catch {
-        // Supress error
+      } else {
+        ipAddress.push(network.address);
       }
     }
-    return ip;
+    return ipAddress;
   },
 
   /**
@@ -300,6 +250,7 @@ export const Sysinfo = {
     await this._loadEnv();
     return __envData;
   },
+
   /**
    * hasEnv
    *

@@ -34,8 +34,8 @@ export class SchemaManager<
 
   public get<T extends keyof ST>(name: T): Model<ModelDefinition, ST[T]> {
     // Load only when called
-    if(this._schema[name as keyof SchemaDefinition] === undefined) {
-      throw new Error(`Cannot find definition for ${name as string}`)
+    if (this._schema[name as keyof SchemaDefinition] === undefined) {
+      throw new Error(`Cannot find definition for ${name as string}`);
     }
     if (this._models[name as keyof SchemaDefinition] === undefined) {
       this._models[name as keyof SchemaDefinition] = new Model(
@@ -281,8 +281,12 @@ export class SchemaManager<
         insertSQL.push('');
       } catch (_e) {
         // console.log(_e.message.toString().toLowerCase().trim());
-        if(_e.message.toString().toLowerCase().trim().startsWith('the system cannot find the file specified')) {
-          console.log(`No seed file found for ${model.name}`)
+        if (
+          _e.message.toString().toLowerCase().trim().startsWith(
+            'the system cannot find the file specified',
+          )
+        ) {
+          console.log(`No seed file found for ${model.name}`);
         }
         // Nothing to do
         if (_e instanceof ModelValidationError) {
