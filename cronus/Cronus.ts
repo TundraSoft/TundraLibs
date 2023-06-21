@@ -1,6 +1,6 @@
 import { Events } from '../events/mod.ts';
 
-import type { CronusEvents, CronusJob } from './types/mod.ts';
+import type { CronusEvents, CronusJob, CronusFields } from './types/mod.ts';
 import { CronusError } from './errors/mod.ts';
 
 export class Cronus extends Events<CronusEvents> {
@@ -12,24 +12,26 @@ export class Cronus extends Events<CronusEvents> {
   //#region Job management
   /**
    * Check if a job with the given name exists
+   * 
    * @param {string} name - The name of the job to check for
    * @return {boolean} - Returns true if the job exists, false otherwise
    * @public
    */
-  public has(name: string): boolean {
+  public hasJob(name: string): boolean {
     name = this._cleanJobName(name);
     return this._jobs.has(name);
   }
 
   /**
    * Find and return a job with the given name from the collection
+   * 
    * @param {string} name - The name of the job to find
    * @returns {CronusJob} - Returns the CronusJob object if found
    * @throws Will throw an error if the job with the specified name is not found
    * @public
    */
-  public get(name: string): CronusJob {
-    if (this.has(name)) {
+  public getJob(name: string): CronusJob {
+    if (this.hasJob(name)) {
       return this._jobs.get(this._cleanJobName(name)) as CronusJob;
     }
     throw new CronusError(`Could not find job with the name ${name}`, name);
@@ -37,15 +39,16 @@ export class Cronus extends Events<CronusEvents> {
 
   /**
    * Add a new job to the collection with the specified name and job details
+   * 
    * @param {string} name - The name of the job to add
    * @param {CronusJob} jobDetails - An object containing details about the job
    * @returns {Cronus} Returns the current Cronus instance
    * @throws Will throw an error if the job with the specified name already exists or the cron schedule is invalid
    * @public
    */
-  public add(name: string, jobDetails: CronusJob): Cronus {
+  public addJob(name: string, jobDetails: CronusJob): Cronus {
     name = this._cleanJobName(name);
-    if (this.has(name)) {
+    if (this.hasJob(name)) {
       throw new CronusError(
         `There is already a job with the same name ${name}`,
         name,
@@ -81,15 +84,16 @@ export class Cronus extends Events<CronusEvents> {
 
   /**
    * Removes a cron job from the scheduler
+   * 
    * @param {string} name - The name of the job to remove
    * @returns {Cronus} - Returns the Cronus instance
    * @public
    */
-  public remove(name: string): Cronus {
+  public removeJob(name: string): Cronus {
     name = this._cleanJobName(name);
-    if (this.has(name)) {
+    if (this.hasJob(name)) {
       // Remove from schedule first
-      const jobDetails = this.get(name),
+      const jobDetails = this.getJob(name),
         schedule: string[] = this._schedules.get(jobDetails.schedule) || [],
         updatedSchedule = schedule.filter((x) => x !== name);
       this._schedules.set(jobDetails.schedule, updatedSchedule);
@@ -106,9 +110,9 @@ export class Cronus extends Events<CronusEvents> {
    * @returns {Cronus} - The Cronus instance after updating the job.
    * @public
    */
-  public update(name: string, jobDetails: CronusJob): Cronus {
-    this.remove(name);
-    return this.add(name, jobDetails);
+  public updateJob(name: string, jobDetails: CronusJob): Cronus {
+    this.removeJob(name);
+    return this.addJob(name, jobDetails);
   }
 
   /**
@@ -118,9 +122,9 @@ export class Cronus extends Events<CronusEvents> {
    * @returns {Cronus} - The Cronus instance after enabling the job.
    * @public
    */
-  public enable(name: string): Cronus {
-    const jobDetails = this.get(name);
-    return this.update(name, { ...jobDetails, ...{ enable: true } });
+  public enableJob(name: string): Cronus {
+    const jobDetails = this.getJob(name);
+    return this.updateJob(name, { ...jobDetails, ...{ enable: true } });
   }
 
   /**
@@ -130,9 +134,9 @@ export class Cronus extends Events<CronusEvents> {
    * @returns {Cronus} - The Cronus instance after disabling the job.
    * @public
    */
-  public disable(name: string): Cronus {
-    const jobDetails = this.get(name);
-    return this.update(name, { ...jobDetails, ...{ enable: false } });
+  public disableJob(name: string): Cronus {
+    const jobDetails = this.getJob(name);
+    return this.updateJob(name, { ...jobDetails, ...{ enable: false } });
   }
 
   //#endregion Job Management
@@ -217,9 +221,123 @@ export class Cronus extends Events<CronusEvents> {
     // Can contain max of 5 entries
     const cronSyntax =
       /^(\*|(?:\*|(?:[0-9]|(?:[1-5][0-9])))\/(?:[0-9]|(?:[1-5][0-9]))|(?:[0-9]|(?:[1-5][0-9]))(?:(?:\-[0-9]|\-(?:[1-5][0-9]))?|(?:\,(?:[0-9]|(?:[1-5][0-9])))*)) (\*|(?:\*|(?:\*|(?:[0-9]|1[0-9]|2[0-3])))\/(?:[0-9]|1[0-9]|2[0-3])|(?:[0-9]|1[0-9]|2[0-3])(?:(?:\-(?:[0-9]|1[0-9]|2[0-3]))?|(?:\,(?:[0-9]|1[0-9]|2[0-3]))*)) (\*|\?|L(?:W|\-(?:[1-9]|(?:[12][0-9])|3[01]))?|(?:[1-9]|(?:[12][0-9])|3[01])(?:W|\/(?:[1-9]|(?:[12][0-9])|3[01]))?|(?:[1-9]|(?:[12][0-9])|3[01])(?:(?:\-(?:[1-9]|(?:[12][0-9])|3[01]))?|(?:\,(?:[1-9]|(?:[12][0-9])|3[01]))*)) (\*|(?:[1-9]|1[012]|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(?:(?:\-(?:[1-9]|1[012]|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC))?|(?:\,(?:[1-9]|1[012]|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC))*)) (\*|\?|[0-6](?:L|\#[1-5])?|(?:[0-6]|SUN|MON|TUE|WED|THU|FRI|SAT)(?:(?:\-(?:[0-6]|SUN|MON|TUE|WED|THU|FRI|SAT))?|(?:\,(?:[0-6]|SUN|MON|TUE|WED|THU|FRI|SAT))*))$/i;
+    // const cronSyntax = /^((\*|([0-5]?[0-9])(\-[0-5]?[0-9])?(,[0-5]?[0-9])(\-[0-5]?[0-9])*)|(\*\/[0-9]+|\*\/\*[0-9]+))\s+((\*|([01]?[0-9]|2[0-3])(\-[01]?[0-9]|2[0-3])?(,[01]?[0-9]|2[0-3])(\-[01]?[0-9]|2[0-3])*)|(\*\/[0-9]+|\*\/\*[0-9]+))\s+((\*|([1-9]|[12][0-9]|3[01])(\-[1-9]|[12][0-9]|3[01])?(,[1-9]|[12][0-9]|3[01])(\-[1-9]|[12][0-9]|3[01])*)|(\*\/[0-9]+|\*\/\*[0-9]+))\s+((\*|(0?[1-9]|1[0-2])(\-(0?[1-9]|1[0-2]))?(,(0?[1-9]|1[0-2]))(\-(0?[1-9]|1[0-2]))*)|(\*\/[0-9]+|\*\/\*[0-9]+))\s+((\*|([0-6]|sun|mon|tue|wed|thu|fri|sat)(\-[0-6]|-sun|-mon|-tue|-wed|-thu|-fri|-sat)?(,([0-6]|sun|mon|tue|wed|thu|fri|sat))(\-[0-6]|-sun|-mon|-tue|-wed|-thu|-fri|-sat)*)|(\*\/[0-6]|\*\/sun|\*\/mon|\*\/tue|\*\/wed|\*\/thu|\*\/fri|\*\/sat))$/i;
     return cronSyntax.test(schedule);
   }
 
+  public static validateCronSchedule(schedule: string): boolean {
+    const scheduleParts = schedule.trim().split(/\s+/);
+  
+    if (scheduleParts.length !== 5) {
+      console.log('here')
+      return false; // Invalid number of schedule parts
+    }
+
+    //#region Validate each item
+    if(Cronus._validateField(scheduleParts[0], 'MINUTE') === false) {
+      return false;
+    }
+    if(Cronus._validateField(scheduleParts[1], 'HOUR') === false) {
+      return false;
+    }
+    //#endregion Validate each item
+    return true;
+  
+    // if (!Cronus._validateField(scheduleParts[0], 0, 59)) {
+    //   console.log('here 1')
+    //   return false; // Invalid minutes field
+    // }
+  
+    // if (!Cronus._validateField(scheduleParts[1], 0, 23)) {
+    //   console.log('here 2')
+    //   return false; // Invalid hours field
+    // }
+  
+    // if (!Cronus._validateField(scheduleParts[2], 1, 31)) {
+    //   console.log('here 3')
+    //   return false; // Invalid day of month field
+    // }
+  
+    // if (!Cronus._validateMonthField(scheduleParts[3])) {
+    //   console.log('here 4')
+    //   return false; // Invalid month field
+    // }
+  
+    // if (!Cronus._validateDayOfWeekField(scheduleParts[4])) {
+    //   console.log('here 5')
+    //   return false; // Invalid day of week field
+    // }
+  
+    // return true; // Schedule is valid
+  }
+  
+  protected static _validateField(fieldValue: string, type: CronusFields): boolean {
+    const MONTH_NAMES = ['JAN', 'FRB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'], 
+      DAY_OF_WEEK = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    
+    // True if it is *
+    if(fieldValue === '*') {
+      return true;
+    }
+
+    // Ok if we are here then its just not a * so we check
+    let startRange: number, 
+      endRange: number, 
+      list: string[];
+    switch(type) {
+      case 'MINUTE':
+        startRange = 0;
+        endRange = 59;
+        break;
+      case 'HOUR':
+        startRange = 0;
+        endRange = 23
+        break;
+      case 'DAY':
+        startRange = 1;
+        endRange = 31;
+        break;
+      case 'MONTH':
+        startRange = 1;
+        endRange = 12;
+        list = MONTH_NAMES;
+        break;
+      case 'DAY_OF_WEEK':
+        startRange = 0;
+        endRange = 6
+        list = DAY_OF_WEEK;
+        break;
+      default:
+        return false;
+    }
+    const values = fieldValue.split(',');
+    for (const value of values) {
+      if(value.includes('/')) {
+        const [start, step] = value.split('/');
+        if(!Cronus._isValidRange(start, startRange, endRange) || !Cronus._isValidRange(step, startRange, endRange)) {
+          return false;
+        }
+      } else if (value.includes('-')) {
+        const [start, end] = value.split('-');
+        if (!Cronus._isValidRange(start, startRange, endRange) || !Cronus._isValidRange(end, startRange, endRange)) {
+          return false;
+        }
+      } else if (!Cronus._isValidRange(value, startRange, endRange)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  protected static _isValidRange(value: string, minValue: number, maxValue: number): boolean {
+    if(value.trim() === '*') {
+      return true;
+    }
+    console.log(`${value} - ${minValue} to ${maxValue}`)
+    const numValue = parseInt(value);
+    return !isNaN(numValue) && numValue >= minValue && numValue <= maxValue;
+  }
+    
   //#endregion Public Methods
   //#region Protected Methods
   /**
@@ -360,3 +478,6 @@ export class Cronus extends Events<CronusEvents> {
 
   //#endregion Protected Methods
 }
+
+console.log(Cronus.validateCronSchedule('* * * * *'));
+console.log(Cronus.validateCronSchedule('*/5 */10 */20 */2 1-3'))
