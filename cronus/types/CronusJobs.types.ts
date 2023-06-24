@@ -5,4 +5,6 @@ export type CronusJob = {
   schedule: string;
   action: Callback;
   enable?: boolean;
+  // deno-lint-ignore no-explicit-any
+  arguments?: any[];
 };

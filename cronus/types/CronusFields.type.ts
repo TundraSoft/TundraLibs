@@ -1,1 +1,1 @@
-export type CronusFields = 'MINUTE' | 'HOUR' | 'DAY' | 'MONTH' | 'DAY_OF_WEEK';
+export type CronusFields = 'MINUTE' | 'HOUR' | 'DATE' | 'MONTH' | 'DAY';
