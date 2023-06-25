@@ -985,8 +985,7 @@ export class Model<
       },
       consolidate = (files: string[]) => {
         const data: T[] = [],
-          finalPath = path.posix.join(outPath, `${this.name}.data.json`);
-        console.log(files.length);
+          finalPath = path.posix.join(outPath, `${this.name}.seed.json`);
         Deno.writeTextFileSync(finalPath, '[', { create: true, append: false });
         for (const file of files) {
           const filePath = path.posix.join(outPath, file),

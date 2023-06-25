@@ -56,8 +56,7 @@ export const Sysinfo = {
   /**
    * getMemory
    *
-   * Returns the memory information. this requires unstable `--unstable` flag to be set
-   * If it is not set, it will return undefined.
+   * Returns the memory information.
    *
    * @param size HumanSize Human understandable sizes.
    * @returns Promise<MemoryInfo>
