@@ -21,9 +21,12 @@ Additionally supports only 5 format syntax, i.e:
 |- Minute
 ```
 
-- Day - Supports *, 0-6 (0 is sunday, 6 is sat), Short name of day (SUN, MON, TUE etc), List of days (1,3,5 or MON,WED,FRI) and */2 (every 2 days)
-- Month - Supports *, 1-12, Short name of month (JAN, FEB, MAR), List (1,2,3 or JAN,FEB,MAR) and */2 (every 2 months)
-- Date - Supports *, 1-31, List (1,2,3 etc) and */2 (every 2nd day of month). _NOTE_ - Will not check if the day exists in a month example 30th Feb
+- Day - Supports *, 0-6 (0 is sunday, 6 is sat), Short name of day (SUN, MON,
+  TUE etc), List of days (1,3,5 or MON,WED,FRI) and */2 (every 2 days)
+- Month - Supports *, 1-12, Short name of month (JAN, FEB, MAR), List (1,2,3 or
+  JAN,FEB,MAR) and */2 (every 2 months)
+- Date - Supports *, 1-31, List (1,2,3 etc) and */2 (every 2nd day of month).
+  _NOTE_ - Will not check if the day exists in a month example 30th Feb
 - Hour - Supports *, 0-23, List(0, 1, 2) and */3 (every 3 hrs)
 - Minute - Supports *, 0-59, List(0, 1, 2) and */5 (every 5 min)
 

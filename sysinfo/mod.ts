@@ -163,20 +163,32 @@ export const Sysinfo = {
    * @param onlyPublic {boolean} get only public ip address
    * @returns Promise<string | undefined> The IP address assigned to the system
    */
-  getIP: function (onlyPublic = false): string[] {
-    const networks = Deno.networkInterfaces();
-    const ipAddress = Object.values(networks)
-      .flat()
-      .filter((network) => {
-        if (onlyPublic === true && network.family === 'IPv4') {
-          const regex =
-            /(^192\.168\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)|(^172\.([1][6-9]|[2][0-9]|[3][0-1])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)|(^10\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)/;
-          return regex.test(network.address);
-        }
-        return true;
-      })
-      .map((network) => network.address);
-    return ipAddress;
+  getIP: async function (onlyPublic = false): Promise<string[]> {
+    try {
+      const checkEnv = await Deno.permissions.query({
+        name: 'sys',
+        kind: 'networkInterfaces',
+      });
+      if (checkEnv.state === 'granted') {
+        const networks = Deno.networkInterfaces();
+        const ipAddress = Object.values(networks)
+          .flat()
+          .filter((network) => {
+            if (onlyPublic === true && network.family === 'IPv4') {
+              const regex =
+                /(^192\.168\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)|(^172\.([1][6-9]|[2][0-9]|[3][0-1])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)|(^10\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)/;
+              return regex.test(network.address);
+            }
+            return true;
+          })
+          .map((network) => network.address);
+        return ipAddress;
+      }
+    } catch (e) {
+      // supress error
+      console.log(e);
+    }
+    return [];
   },
 
   /**
