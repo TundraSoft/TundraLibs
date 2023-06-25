@@ -151,8 +151,20 @@ export const Sysinfo = {
    *
    * @returns string The hostname or blank if execution rights are not present
    */
-  getHostname: function () {
-    return Deno.hostname();
+  getHostname: async function(): Promise<string | undefined> {
+    try {
+      const checkEnv = await Deno.permissions.query({
+        name: 'sys',
+        kind: 'hostname',
+      });
+      if (checkEnv.state === 'granted') {
+        return Deno.hostname();
+      }
+    } catch (e) {
+      // supress error
+      console.log(e);
+    }
+    return undefined;
   },
 
   /**
