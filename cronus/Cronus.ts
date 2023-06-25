@@ -147,7 +147,8 @@ export class Cronus extends Events<CronusEvents> {
    * Returns an array of job names for a given schedule.
    *
    * @param {string} schedule - The cron schedule to get jobs for.
-   * @returns {string[]} An array of job names for the given schedule.
+   * @returns {string[]} An array of job names for the given schedule. Empty 
+array if schedule does not exist
    * @public
    */
   public getScheduledJobs(schedule: string): string[] {
@@ -483,7 +484,6 @@ export class Cronus extends Events<CronusEvents> {
    * @protected
    */
   protected _runJobs(): void {
-    const now = new Date();
     this._schedules.forEach((jobNames: string[], schedule: string) => {
       // Check if the schedule match
       if (Cronus.canRun(schedule) === true) {
@@ -506,10 +506,10 @@ export class Cronus extends Events<CronusEvents> {
             const timeTaken = (performance.now() - stTime) / 1000;
             if (error !== undefined) {
               // Call error event
-              this.emit('error', id, name, timeTaken, error);
+              this.emit('error', id, name, start, timeTaken, error);
             } else {
               // Call success event
-              this.emit('finish', id, name, timeTaken, output);
+              this.emit('finish', id, name, start, timeTaken, output);
             }
             // Call run event
             this.emit('run', id, name, start, timeTaken, output, error);
@@ -520,30 +520,3 @@ export class Cronus extends Events<CronusEvents> {
   }
   //#endregion Protected Methods
 }
-
-// console.log(Cronus.validateCronSchedule('* * * * *'));
-// console.log(Cronus.validateCronSchedule('*/5 */10 */20 */2 1-3'))
-
-// const a = new Cronus();
-// a.addJob('Test Every Minute', {
-//   schedule: '* * * * *',
-//   action: (a?: string) => { console.log(`Minute job ran at ${new Date().toISOString()} -- ${a}`) },
-//   arguments: ['sdasdfasdf']
-// });
-
-// a.addJob('Test Every Minute 2', {
-//   schedule: '* * * * *',
-//   action: (a?: number) => { console.log(`Minute job ran at ${new Date().toISOString()} -- ${a}`) },
-// });
-
-// a.addJob('Test 5 Minute', {
-//   schedule: '*/5 * * * *',
-//   action: () => console.log(`5 Minute job ran at ${new Date().toISOString()}`)
-// });
-
-// a.addJob('Test Fri 22 45 Minute', {
-//   schedule: '36 3 * * sat',
-//   action: () => { console.log(`Friday 22 45 job ran at ${new Date().toISOString()}`) }
-// });
-
-// a.start();

@@ -1,136 +1,392 @@
 # Cronus
 
-Crond implementation in deno. Has the ability to schedule tasks using cron
-syntax and it runs in the backgroud executing the tasks at the specified time.
+A simple Cron implementation which is capable of running both synchronus and 
+asynchronus functions at pre-determined schedule. 
 
 ## Limitations
 
-### Schedule
+### Supported Schedule
 
 Currently supports only upto minute scheduling, i.e run every minute. There is
-no plan to allow support for seconds.
+no plan to allow support for seconds or years
 
-Additionally supports only 5 format syntax, i.e:
+| Field   | Allowed Values | Allowed Values             |
+| ------- | -------------- | -------------------------- |
+| Minute  | 0-59           | * / , -                    |
+| Hour    | 0-23           | * / , -                    |
+| Date    | 1-31           | * / , -                    |
+| Month   | 1-12           | * / , - JAN,FEB...         |
+| Day     | 0-6            | * / , - SUN,MON...         |
 
-```bash
-* * * * *
-| | | | |- Day
-| | | |- Month
-| | |- Date
-| |- Hour
-|- Minute
-```
 
-- Day - Supports *, 0-6 (0 is sunday, 6 is sat), Short name of day (SUN, MON,
-  TUE etc), List of days (1,3,5 or MON,WED,FRI) and */2 (every 2 days)
-- Month - Supports *, 1-12, Short name of month (JAN, FEB, MAR), List (1,2,3 or
-  JAN,FEB,MAR) and */2 (every 2 months)
-- Date - Supports *, 1-31, List (1,2,3 etc) and */2 (every 2nd day of month).
-  _NOTE_ - Will not check if the day exists in a month example 30th Feb
-- Hour - Supports *, 0-23, List(0, 1, 2) and */3 (every 3 hrs)
-- Minute - Supports *, 0-59, List(0, 1, 2) and */5 (every 5 min)
+### Race condition
+
+Currently if a job has started executing and takes a long time to execute 
+example 10 minutes, and this job is scheduled to run every 5 minutes, then 
+cronus will start the second execution of the job after 5 minutes. This 
+could lead to race condition in the `action` function if it is not handled. 
 
 ## Usage
 
 ```ts
-// #region Typed Event
+import { Cronus } from "https://raw.githubusercontent.com/TundraSoft/TundraLibs/main/cronus/mod.ts"
 
-// #endregion UnTyped Event
+const a = new Cronus();
+
+async function delay(ms: number) {
+  return new Promise( resolve => setTimeout(resolve, ms) );
+}
+// #region Define monitoring events
+// Capture all job execution
+a.on('start', (id: string, name: string, start: Date) => {
+  console.log(`[cronus type='start'] running job ${name} with job id: ${id} at ${start}`)
+});
+
+// Capture errors (of the callback)
+a.on('error', (id: string, name: string, start: Date, timeTaken: number, error: Error) => {
+  console.log(`[cronus type='error'] error with ${name} with job id: ${id} at ${start}, ran for ${timeTaken}s . Error Message: ${error.message}`)
+});
+
+// Capture only finished executions (successful)
+a.on('finish', (id: string, name: string, start: Date, timeTaken: number, output?: any[]) => {
+  console.log(`[cronus type='finish'] Ran ${name} with job id: ${id} at ${start}, ran for ${timeTaken}s ${(output !== undefined)? ` with output: ${JSON.stringify(output)}.` : '.'}`)
+})
+
+// Or capture them all with one event
+a.on('run', (id: string, name: string, start: Date, timeTaken: number, output?: any, error?: Error) => {
+  console.log(`[cronus type='run'] Ran ${name} with job id: ${id} at ${start}, ran for ${timeTaken}s${(output !== undefined)? ` with output: ${JSON.stringify(output)}.` : '.'} Error Message: ${error?.message}`)
+})
+// #endregion Define monitoring events
+// Example of job with arguments and return output
+a.addJob('job-1', {
+  schedule: '* * * * *',
+  action: async (a: string) => { console.log(a); await delay(1000); return 'ddfe'; },
+  arguments: ['sdasdfasdf']
+});
+
+// Example of job with optional arguments defined in callback but none passed
+a.addJob('job-2', {
+  schedule: '*/2 * * * *',
+  action: async (a?: number) => { console.log(a); await delay(2000); return; },
+  arguments: [1]
+});
+
+// Example of job with arguments defined in callback but none or incorrect type passed. 
+// Wont throw error
+a.addJob('job-3', {
+  schedule: '*/2 * * * *',
+  action: async (a: number) => { console.log(a); await delay(3000); return; },
+  arguments: ['sdf']
+});
+
+// Run every 5th minutes
+a.addJob('job-4', {
+  schedule: '*/5 * * * *',
+  action: async() => { await delay(4000); return; },
+});
+
+// Run at a specific day and time
+a.addJob('job-5', {
+  schedule: '36 3 * * fri',
+  action: async() => { await delay(5000); return; },
+});
+
+// Error
+a.addJob('job-6', {
+  schedule: '*/2 * * * *',
+  action: async () => { await delay(6000); throw new Error('Boo'); },
+});
+
+// Race condition
+a.addJob('job-7', {
+  schedule: '* * * * *',
+  action: async () => { await delay(60*2*1000); return; },
+});
+
+// Lets start
+a.start();
+
+// Some time later
+await delay(5*60*1000);
+
+// Stop it
+a.stop();
+
 ```
 
+---
+### Types
+---
+
+#### Callback
+```ts
+type Callback = (...args: any[]) => unknown | Promise<unknown>;
+```
+
+This is the callback function used in Cronus -> CronusJab.action. 
+This is not exported and not available for update.
+
+`...args: any[]` - Arguments for the callback function
+
+`returns: unknown | Promise<unknown>` - Return from the callback
+
+#### CronusJob
+```ts
+CronusJob = {
+  schedule: string;
+  action: Callback;
+  enable?: boolean;
+  // deno-lint-ignore no-explicit-any
+  arguments?: any[];
+}
+```
+
+This defines a "job". Primarily used in addJob and updateJob. 
+
+`schedule: string` - The schedule at which to run
+
+`action: Callback` - Callback function to call (ref, callback type)
+
+`enable?: boolean` - If the job enabled
+
+`arguments?: any[]` - The arguments to pass to the callback function
+
+
+---
 ### Methods
+---
 
-#### on
-
+#### addJob
 ```ts
-on(event: EventName, callback: Callback)
+addJob(name: string, jobDetails: CronusJob): Cronus
 ```
 
-`event: EventName` - The event name in which callback is to be added
+Add a new job to the collection with the specified name and job details
 
-`callback: Callback` - The function to call when the event is triggered
+`name: string` - The name of the job to find
 
-Add a callback to the event loop
+`jobDetails: CronusJob` - An object containing details about the job
 
-#### once
-
+`returns: Cronus` - Returns the Cronus instance
+#### removeJob
 ```ts
-once(event: EventName, callback: Callback)
+public removeJob(name: string): Cronus
 ```
 
-`event: EventName` - The event name in which callback with once tag is to be
-added
+Removes a cron job from the scheduler
 
-`callback: Callback` - The function to call (once) when the event is triggered
+`name: string` - The name of the job to remove
 
-Adds a callback to the event loop which will be triggered only once. This means
-any callback marked as "once" will only be called one time irrespective of how
-many times the event is triggered.
+`returns: Cronus` - Returns the Cronus instance
 
-#### off
-
+#### updateJob
 ```ts
-off(event: EventName, callback: Callback);
-off(event: EventName);
-off();
+public updateJob(name: string, jobDetails: CronusJob): Cronus
 ```
 
-`event: EventName` - The event name
+Updates a Cronus job with the given name and job details.
 
-`callback: Callback` - The specific function to be removed
+`name: string` - The name of the job to update.
 
-Remove a specific callback (if event variable _and_ callback variable is passed)
-from the event loop. Remove all callbacks in for a specific event (if only event
-is specified). Remove _all_ callbacks across _all_ events if no event is
-specified.
+`jobDetails: CronusJob` - The updated details for the job.
 
-#### emit
+`returns: Cronus` - Returns the Cronus instance
 
+#### enableJob
 ```ts
-emit(
-    event: EventName,
-    ...args: Parameters<Callback>
-  ): Promise<ReturnType<Callback>[]>
+public enableJob(name: string): Cronus
 ```
 
-`@accessor - Protected`
+Enables a Cronus job with the given name.
 
-`event: EventName` - The event to "trigger"
+`name: string` - The name of the job to enable.
 
-`...args: Parameters<Callback>` - The parameters to pass to the callback
-function
+`returns: Cronus` - Returns the Cronus instance
 
-This is a **protected** method.
-
-Triggers an event passing the variables to the callback waiting for each
-callback to finish execution. This will return an array of all the return values
-
-#### emitSync
-
+#### disableJob
 ```ts
-emitSync(
-    event: EventName,
-    ...args: Parameters<Callback>
-  ): ReturnType<Callback>[]
+public disableJob(name: string): Cronus
 ```
 
-`@accessor - Protected`
+Disables a Cronus job with the given name.
 
-`event: EventName` - The event to "trigger"
+`name: string` - The name of the job to disable.
 
-`...args: Parameters<Callback>` - The parameters to pass to the callback
-function
+`returns: Cronus` - Returns the Cronus instance
 
-This is a **protected** method.
+#### getJob
+```ts
+public getJob(name: string): CronusJob
+```
 
-Triggers an event passing the variables to the callback without waiting for each
-callback to finish execution. This will return an array of all the return values
-(will contain promises)
+Find and return a job with the given name from the collection
 
+`name: string` - The name of the job to find.
+
+`returns: Cronus` - Returns the CronusJob object if found
+
+`throws: CronusError` - This error is thrown if the job by the name is not found
+
+#### hasJob
+```ts
+public hasJob(name: string): boolean
+```
+
+Check if a job with the given name exists
+
+`name: string` - The name of the job to check for.
+
+`returns: boolean` - Returns true if the job exists, false otherwise
+
+
+#### start
+```ts
+public start(): void 
+```
+
+Starts the Cronus scheduler. Runs active jobs every minute, starting from 
+the next full minute.
+
+#### stop
+```ts
+public stop(): void 
+```
+
+Stops the job scheduler if running
+
+#### validateSchedule
+```ts
+public static validateSchedule(schedule: string): boolean 
+```
+
+Validates a cron schedule syntax. Returns true if the schedule is valid, false otherwise.
+
+`schedule: string` - The cron schedule to validate.
+
+`returns: boolean` - Whether the schedule has a valid syntax.
+
+#### getScheduledJobs
+```ts
+public getScheduledJobs(schedule: string): string[]
+```
+
+Returns an array of job names for a given schedule.
+
+`schedule: string` - The cron schedule to get jobs for.
+
+`returns: string[]` - An array of job names for the given schedule. Empty 
+array if schedule does not exist
+
+#### canRun
+```ts
+public static canRun(cronExpression: string): boolean
+```
+
+Checks whether a given cron expression can run at the current date and time.
+
+`cronExpression: strin` - The cron expression to check.
+
+`returns: boolean` - Whether the expression can run at this moment.
+
+---
+### Events
+---
+
+There are a few events which can be used to check the execution of jobs 
+scheduled.
+
+#### run
+```ts
+Cronus.on('run', (id: string,
+    name: string,
+    start: Date,
+    timeTaken: number,
+    output?: unknown,
+    error?: Error,))
+```
+
+This event is triggered when a job is run. It is called after the callback has 
+finished execution (irrespective of wheather it throws and error or returns 
+an output)
+
+`id: string` - The Job ID generated for this execution (UUID)
+
+`name: string` - The name of the job as defined in Cronus
+
+`start: Date` - The timestamp when the job eas started
+
+`timeTaken: number` - Time taken for the job to execute
+
+`output?: unknown` - Output given by the callback function (if any)
+
+`error?: Error` - Error instances thrown by the callback (if any)
+
+### start
+```ts
+Cronus.on('start', (id: string,
+    name: string,
+    start: Date))
+```
+
+This event is triggered when a the callback is being called.
+
+`id: string` - The Job ID generated for this execution (UUID)
+
+`name: string` - The name of the job as defined in Cronus
+
+`start: Date` - The timestamp when the job eas started
+
+
+### error
+```ts
+Cronus.on('run', (id: string,
+    name: string,
+    start: Date,
+    timeTaken: number,
+    error?: Error))
+```
+
+This event is triggered when an error is thrown in the callback function.
+
+`id: string` - The Job ID generated for this execution (UUID)
+
+`name: string` - The name of the job as defined in Cronus
+
+`start: Date` - The timestamp when the job eas started
+
+`timeTaken: number` - Time taken for the job to execute
+
+`error?: Error` - Error instances thrown by the callback (if any)
+
+### finish
+```ts
+Cronus.on('run', (id: string,
+    name: string,
+    start: Date,
+    timeTaken: number,
+    output?: unknown))
+```
+
+This event is triggered when the callback function has finished executing 
+successfully
+
+`id: string` - The Job ID generated for this execution (UUID)
+
+`name: string` - The name of the job as defined in Cronus
+
+`start: Date` - The timestamp when the job eas started
+
+`timeTaken: number` - Time taken for the job to execute
+
+`output?: unknown` - Output given by the callback function (if any)
+
+---
 ## TODO
+---
 
-- [x] Synchronous and Asynchronous implementation
-- [x] Test cases to be implemented
-- [x] More elegant UnTyped event definition
-- [ ] Handle errors when calling callbacks or thrown by callbacks itself
-- [x] Return/Handle return values from callbacks
+- [x] Arguments support in callback
+- [ ] Dynamic arguments (atleast arguments like time, jobId etc)
+- [ ] Better test cases
+- [ ] Handle race condition (job is running but taking too long, prevent next 
+execution cycle from running same job)
+- [ ] Timezone & Custom Date option when running jobs

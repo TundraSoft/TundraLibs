@@ -235,7 +235,7 @@ Deno.test({
 });
 //#endregion Hour
 
-//#region Day
+//#region Date
 Deno.test({
   name: '[module="Cronus"] Test Day - Every X Day (Valid)',
   fn() {
@@ -344,7 +344,7 @@ Deno.test({
     }
   },
 });
-//#endregion Day
+//#endregion Date
 
 //#region Month
 Deno.test({
@@ -463,9 +463,9 @@ Deno.test({
 // });
 //#endregion Month
 
-//#region Day of Week
+//#region Day
 
-//#endregion Day of Week
+//#endregion Day
 
 Deno.test('validateSchedule should return true for a valid cron schedule', () => {
   const schedule = '0 0 * * *'; // Every day at midnight
