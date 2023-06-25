@@ -91,7 +91,10 @@ export const Sysinfo = {
         break;
     }
     try {
-      const checkEnv = await Deno.permissions.query({ name: 'env' });
+      const checkEnv = await Deno.permissions.query({
+        name: 'sys',
+        kind: 'systemMemoryInfo',
+      });
       if (checkEnv.state === 'granted') {
         const memInfo = Deno.systemMemoryInfo();
         mem.available = memInfo.available / sizeCalc;
@@ -115,19 +118,21 @@ export const Sysinfo = {
    *
    * @returns Promise<Array<number> | undefined> return 1, 5 and 15 minute load average
    */
-  // disabling to avoud --unstable
-  // getLoad: async function (): Promise<Array<number> | undefined> {
-  //   try {
-  //     const checkEnv = await Deno.permissions.query({ name: "env" });
-  //     if (checkEnv.state === "granted") {
-  //       return await Deno.loadavg();
-  //     }
-  //   } catch (e) {
-  //     // supress error
-  //     console.log(e);
-  //   }
-  //   return undefined;
-  // },
+  getLoad: async function (): Promise<Array<number> | undefined> {
+    try {
+      const checkEnv = await Deno.permissions.query({
+        name: 'sys',
+        kind: 'loadavg',
+      });
+      if (checkEnv.state === 'granted') {
+        return await Deno.loadavg();
+      }
+    } catch (e) {
+      // supress error
+      console.log(e);
+    }
+    return undefined;
+  },
 
   /**
    * getPid
@@ -139,96 +144,50 @@ export const Sysinfo = {
   getPid: function (): number {
     return Deno.pid;
   },
+
   /**
    * getHostname
    * Gets the hostname of the operating system
    *
    * @returns string The hostname or blank if execution rights are not present
    */
-  getHostname: async function () {
-    const checkRun = await Deno.permissions.query({ name: 'run' });
-    let hostName!: string;
-    if (checkRun.state === 'granted') {
-      try {
-        const ifconfig = new Deno.Command('cmd', {
-          args: ['cmd', '/c', 'hostname'],
-          stdout: 'piped',
-        });
-        const child = await ifconfig.spawn();
-        const { success } = await child.status;
-        if (success) {
-          const { stdout } = await child.output();
-          hostName = new TextDecoder().decode(stdout).trim();
-        }
-      } catch {
-        // Supress error
-      }
-    }
-    // Disabling this to avoid --unstable
-    // else {
-    //   const checkEnv = await Deno.permissions.query({ name: "env" });
-    //   if (checkEnv.state === "granted") {
-    //     hostName = Deno.hostname();
-    //   }
-    // }
-    return hostName;
+  getHostname: function () {
+    return Deno.hostname();
   },
+
   /**
    * getIP
    * Returns the IP address assigned to the system.
    *
+   * @param onlyPublic {boolean} get only public ip address
    * @returns Promise<string | undefined> The IP address assigned to the system
    */
-  getIP: async function (): Promise<string | undefined> {
-    const isWin = Deno.build.os === 'windows',
-      command = isWin ? ['cmd', '/c', 'ipconfig'] : ['ifconfig'],
-      checkRun = await Deno.permissions.query({ name: 'run' });
-    let ip!: string;
-    if (checkRun.state === 'granted') {
-      try {
-        const ifconfig = new Deno.Command('cmd', {
-          args: command,
-          stdout: 'piped',
-        });
-        const child = await ifconfig.spawn();
-        const { success } = await child.status;
-        if (success) {
-          const { code, stdout } = await child.output();
-          const text = new TextDecoder().decode(stdout);
-          if (isWin) {
-            const addrs = text.match(
-              new RegExp('ipv4.+([0-9]+.){3}[0-9]+', 'gi'),
-            );
-            const temp = addrs
-              ? addrs[0].match(new RegExp('([0-9]+.){3}[0-9]+', 'g'))
-              : undefined;
-            const addr = temp ? temp[0] : undefined;
-            await Deno.close(code);
-            if (!addr) {
-              throw new Error('Could not resolve local adress.');
+  getIP: async function (onlyPublic = false): Promise<string[]> {
+    try {
+      const checkEnv = await Deno.permissions.query({
+        name: 'sys',
+        kind: 'networkInterfaces',
+      });
+      if (checkEnv.state === 'granted') {
+        const networks = Deno.networkInterfaces();
+        const ipAddress = Object.values(networks)
+          .flat()
+          .filter((network) => {
+            if (onlyPublic === true && network.family === 'IPv4') {
+              const regex =
+                /(^192\.168\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)|(^172\.([1][6-9]|[2][0-9]|[3][0-1])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)|(^10\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)/;
+              return regex.test(network.address);
             }
-            return addr;
-          } else {
-            const addrs = text.match(
-              new RegExp('inet (addr:)?([0-9]*.){3}[0-9]*', 'g'),
-            );
-            await Deno.close(code);
-            if (!addrs || !addrs.some((x) => !x.startsWith('inet 127'))) {
-              throw new Error('Could not resolve local adress.');
-            }
-            return (
-              addrs &&
-              addrs
-                .find((addr: string) => !addr.startsWith('inet 127'))
-                ?.split('inet ')[1]
-            );
-          }
-        }
-      } catch {
-        // Supress error
+            return true;
+          })
+          .map((network) => network.address);
+        return ipAddress;
       }
+    } catch (e) {
+      // supress error
+      console.log(e);
     }
-    return ip;
+    return [];
   },
 
   /**
@@ -300,6 +259,7 @@ export const Sysinfo = {
     await this._loadEnv();
     return __envData;
   },
+
   /**
    * hasEnv
    *
@@ -314,3 +274,5 @@ export const Sysinfo = {
     return __envData.has(name);
   },
 };
+
+console.log(Sysinfo.getIP());

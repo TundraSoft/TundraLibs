@@ -5,6 +5,7 @@ A collection of libraries written in Deno which I use in different projects.
 ## Libraries
 
 - [x] [Config](./config/README.md)
+- [x] [Cronus](./cronus/README.md)
 - [x] [Events](./events/README.md)
 - [x] [Guardian](./guardian/README.md)
 - [x] [JWT](./jwt/README.md)
