@@ -8,6 +8,18 @@ export type CronusEvents = {
     error?: Error,
   ): void;
   start(id: string, name: string, start: Date): void;
-  finish(id: string, name: string, start: Date, timeTaken: number, output?: unknown): void;
-  error(id: string, name: string, start: Date, timeTaken: number, error: Error): void;
+  finish(
+    id: string,
+    name: string,
+    start: Date,
+    timeTaken: number,
+    output?: unknown,
+  ): void;
+  error(
+    id: string,
+    name: string,
+    start: Date,
+    timeTaken: number,
+    error: Error,
+  ): void;
 };
