@@ -672,6 +672,7 @@ export class Model<
           }
         });
       }).catch((error) => {
+        console.log(`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n${error.message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`);
         throw new ModelValidationError(error, this.name, this._connection.name);
       });
     }
@@ -702,6 +703,7 @@ export class Model<
           }
         });
       }).catch((error) => {
+        console.log(`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n${error.message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`);
         throw new ModelValidationError(error, this.name, this._connection.name);
       });
     }
@@ -882,6 +884,7 @@ export class Model<
         }
       });
     }).catch((error) => {
+      console.log(`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n${error.message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`);
       throw new ModelValidationError(error, this.name, this._connection.name);
     });
     //#endregion Unique Keys
