@@ -129,3 +129,31 @@ export class Options<
     return this;
   }
 }
+
+function extractJSDocComments(code: string): string[] {
+  const regex = /\/\*\*([\s\S]*?)\*\//g;
+  const matches = code.match(regex);
+  if (matches) {
+    return matches.map((match) => match.trim());
+  }
+  return [];
+}
+
+function generateREADME(jsdocComments: string[]): void {
+  let readmeContent = '';
+  jsdocComments.forEach((comment) => {
+    const lines = comment.split('\n');
+    const description = lines[1].trim();
+    const params = lines.slice(3, -2).map((line) => line.trim());
+    readmeContent += `## ${description}\n\n`;
+    params.forEach((param) => {
+      const [name, type, description] = param.split(' ');
+      readmeContent += `- **${name}** (${type}): ${description}\n`;
+    });
+    readmeContent += '\n';
+  });
+  Deno.writeFileSync('README2.md', new TextEncoder().encode(readmeContent));
+}
+
+const a = extractJSDocComments(await Deno.readTextFile('./Options.ts'));
+generateREADME(a);

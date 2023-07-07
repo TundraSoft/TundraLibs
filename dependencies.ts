@@ -1,19 +1,20 @@
 // Begin Core
-export * as path from 'https://deno.land/std@0.163.0/path/mod.ts';
-export * as fs from 'https://deno.land/std@0.163.0/fs/mod.ts';
+export * as path from 'https://deno.land/std@0.192.0/path/mod.ts';
+export * as fs from 'https://deno.land/std@0.192.0/fs/mod.ts';
 export {
   format as dateFormat,
   parse as parseDate,
-} from 'https://deno.land/std@0.163.0/datetime/mod.ts';
+} from 'https://deno.land/std@0.192.0/datetime/mod.ts';
 export {
   BufWriter,
   BufWriterSync,
-} from 'https://deno.land/std@0.163.0/io/mod.ts';
+} from 'https://deno.land/std@0.192.0/io/mod.ts';
 
-export { printf, sprintf } from 'https://deno.land/std@0.163.0/fmt/printf.ts';
-export * as yaml from 'https://deno.land/std@0.163.0/encoding/yaml.ts';
-export * as toml from 'https://deno.land/std@0.163.0/encoding/toml.ts';
-export * as base64url from 'https://deno.land/std@0.163.0/encoding/base64url.ts';
+export { printf, sprintf } from 'https://deno.land/std@0.192.0/fmt/printf.ts';
+export * as yaml from 'https://deno.land/std@0.192.0/yaml/mod.ts';
+export * as toml from 'https://deno.land/std@0.192.0/toml/mod.ts';
+export * as base64url from 'https://deno.land/std@0.192.0/encoding/base64url.ts';
+export * as base64 from 'https://deno.land/std@0.192.0/encoding/base64.ts';
 export {
   blue,
   bold,
@@ -26,10 +27,7 @@ export {
   red,
   underline,
   yellow,
-} from 'https://deno.land/std@0.163.0/fmt/colors.ts';
-
-export * as base64 from 'https://deno.land/std@0.163.0/encoding/base64.ts';
-
+} from 'https://deno.land/std@0.192.0/fmt/colors.ts';
 // End Core
 
 export {

@@ -1,2 +1,7 @@
 export { Config } from './Config.ts';
-export type { ConfigFile, ConfigType } from './types.ts';
+export {
+  ConfigItemNotFound,
+  ConfigNotFound,
+  ConfigNotSupported,
+  ConfigReadError,
+} from './errors/mod.ts';

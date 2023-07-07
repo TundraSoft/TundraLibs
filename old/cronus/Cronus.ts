@@ -147,7 +147,7 @@ export class Cronus extends Events<CronusEvents> {
    * Returns an array of job names for a given schedule.
    *
    * @param {string} schedule - The cron schedule to get jobs for.
-   * @returns {string[]} An array of job names for the given schedule. Empty 
+   * @returns {string[]} An array of job names for the given schedule. Empty
 array if schedule does not exist
    * @public
    */
@@ -509,7 +509,7 @@ array if schedule does not exist
               this.emit('error', id, name, start, timeTaken, error);
             } else {
               // Call success event
-              this.emit('finish', id, name, start, timeTaken, output);
+              this.emit('success', id, name, start, timeTaken, output);
             }
             // Call run event
             this.emit('run', id, name, start, timeTaken, output, error);

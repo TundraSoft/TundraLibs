@@ -1,6 +1,6 @@
-import { Config } from './mod.ts';
-import { path } from '../dependencies.ts';
-import { assertEquals } from '../dev.dependencies.ts';
+import { Config } from '../mod.ts';
+import { path } from '../../dependencies.ts';
+import { assertEquals } from '../../dev.dependencies.ts';
 
 const basePath = path.join(
   path.dirname(path.fromFileUrl(new URL('', import.meta.url))),
