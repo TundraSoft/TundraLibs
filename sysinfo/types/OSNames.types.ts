@@ -1,4 +1,3 @@
-
 export type OSNames =
   | 'windows'
   | 'darwin'

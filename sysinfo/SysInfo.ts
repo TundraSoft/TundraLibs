@@ -1,8 +1,4 @@
-import { path } from '../dependencies.ts';
-
 import { HumanSizes, MemoryInfo, OSNames } from './types/mod.ts';
-
-const __envData: Map<string, string> = new Map();
 
 export class SysInfo {
   /**
@@ -74,11 +70,11 @@ export class SysInfo {
       });
       if (checkEnv.state === 'granted') {
         const memInfo = Deno.systemMemoryInfo();
-        mem.available = memInfo.available / sizeCalc;
-        mem.free = memInfo.free / sizeCalc;
-        mem.total = memInfo.total / sizeCalc;
-        mem.swap.total = memInfo.swapTotal / sizeCalc;
-        mem.swap.free = memInfo.swapFree / sizeCalc;
+        mem.available = Math.round(memInfo.available / sizeCalc);
+        mem.free = Math.round(memInfo.free / sizeCalc);
+        mem.total = Math.round(memInfo.total / sizeCalc);
+        mem.swap.total = Math.round(memInfo.swapTotal / sizeCalc);
+        mem.swap.free = Math.round(memInfo.swapFree / sizeCalc);
       }
     } catch (_e) {
       // Supress error
@@ -166,8 +162,7 @@ export class SysInfo {
                 /(^192\.168\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)|(^172\.([1][6-9]|[2][0-9]|[3][0-1])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)|(^10\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])\.([0-9]|[0-9][0-9]|[0-2][0-5][0-5])$)/;
               return regex.test(network.address);
             } else if (onlyPublic === true && network.family === 'IPv6') {
-              const regex =
-                /(^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$)/;
+              const regex = /(^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$)/;
               return regex.test(network.address);
             }
             return true;
@@ -180,95 +175,6 @@ export class SysInfo {
       // console.log(_e);
     }
     return [];
-  }
-
-  /**
-   * Loads the environment variables. This requires permission --allow-env to be set
-   *
-   * @protected
-   * @static
-   */
-  protected static async _loadEnv(location = './') {
-    if (__envData.size === 0) {
-      // First load from .env file if found
-      const file = path.join(location, '.env');
-      const checkRun = await Deno.permissions.query({
-        name: 'read',
-        path: file,
-      });
-      if (checkRun.state === 'granted') {
-        try {
-          const data = new TextDecoder().decode(await Deno.readFile(file)),
-            lines = data.split('\n'),
-            pattern = new RegExp(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/),
-            isQuoted = new RegExp(/^('|")[^\1].*(\1)$/);
-          lines.forEach((line) => {
-            if (pattern.test(line)) {
-              const record = line.match(pattern),
-                [_, key, value] = record as string[];
-              __envData.set(
-                key,
-                (((isQuoted.test(value)) ? value.slice(1, -1) : value) || '')
-                  .trim(),
-              );
-            }
-          });
-        } catch {
-          // Suppress error
-        }
-      }
-      try {
-        const checkEnv = await Deno.permissions.query({ name: 'env' });
-        if (checkEnv.state === 'granted') {
-          for (const [key, value] of Object.entries(Deno.env.toObject())) {
-            __envData.set(key, value);
-          }
-        }
-      } catch {
-        // Supress error
-      }
-    }
-  }
-
-  /**
-   * Returns an Environment variable (if set). This requires permission --allow-env
-   * Environment variables are loaded from .env file (if found in root folder)
-   * and then the environment variables defined in the system
-   *
-   * @param {string} name The ENV parameter to get
-   * @returns {string | undefined} Value if found, else undefined
-   * @static
-   */
-  static async getEnv(name: string): Promise<string | undefined> {
-    await this._loadEnv();
-    if (__envData.has(name)) {
-      return __envData.get(name);
-    }
-    return undefined;
-  }
-
-  /**
-   * Gets all the environment variables
-   *
-   * @returns {Map<string, string>} Returns all environment variables
-   * @static
-   */
-  static async getAllEnv(): Promise<Map<string, string>> {
-    await this._loadEnv();
-    return __envData;
-  }
-
-  /**
-   * Check if an ENV parameter exists. This will load the env data and then check.
-   * It will require --allow-env to have been set
-   *
-   * @param {string} name The ENV parameter name to check
-   * @returns {boolean} True if exists, else false
-   * @static
-   */
-  static async hasEnv(name: string): Promise<boolean> {
-    await this._loadEnv();
-    return __envData.has(name);
   }
 
   // static async _init() {

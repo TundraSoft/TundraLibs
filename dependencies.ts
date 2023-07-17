@@ -1,20 +1,20 @@
 // Begin Core
-export * as path from 'https://deno.land/std@0.192.0/path/mod.ts';
-export * as fs from 'https://deno.land/std@0.192.0/fs/mod.ts';
+export * as path from 'https://deno.land/std@0.193.0/path/mod.ts';
+export * as fs from 'https://deno.land/std@0.193.0/fs/mod.ts';
 export {
   format as dateFormat,
   parse as parseDate,
-} from 'https://deno.land/std@0.192.0/datetime/mod.ts';
+} from 'https://deno.land/std@0.193.0/datetime/mod.ts';
 export {
   BufWriter,
   BufWriterSync,
-} from 'https://deno.land/std@0.192.0/io/mod.ts';
+} from 'https://deno.land/std@0.193.0/io/mod.ts';
 
-export { printf, sprintf } from 'https://deno.land/std@0.192.0/fmt/printf.ts';
-export * as yaml from 'https://deno.land/std@0.192.0/yaml/mod.ts';
-export * as toml from 'https://deno.land/std@0.192.0/toml/mod.ts';
-export * as base64url from 'https://deno.land/std@0.192.0/encoding/base64url.ts';
-export * as base64 from 'https://deno.land/std@0.192.0/encoding/base64.ts';
+export { printf, sprintf } from 'https://deno.land/std@0.193.0/fmt/printf.ts';
+export * as yaml from 'https://deno.land/std@0.193.0/yaml/mod.ts';
+export * as toml from 'https://deno.land/std@0.193.0/toml/mod.ts';
+export * as base64url from 'https://deno.land/std@0.193.0/encoding/base64url.ts';
+export * as base64 from 'https://deno.land/std@0.193.0/encoding/base64.ts';
 export {
   blue,
   bold,
@@ -27,7 +27,7 @@ export {
   red,
   underline,
   yellow,
-} from 'https://deno.land/std@0.192.0/fmt/colors.ts';
+} from 'https://deno.land/std@0.193.0/fmt/colors.ts';
 // End Core
 
 export {
@@ -47,6 +47,8 @@ export type { ClientConfig as MySQLClientConfig } from 'https://deno.land/x/mysq
 
 // export { default as postgresjs } from "https://deno.land/x/postgresjs@v3.3.1/mod.js"
 // export * as MySQLClient from "https://deno.land/x/mysql2@v1.0.5/mod.ts";
+export { connect as RedisConnect } from 'https://deno.land/x/redis@v0.30.0/mod.ts';
+export type { Redis } from 'https://deno.land/x/redis@v0.30.0/mod.ts';
 //#endregion norm
 
 //#region Endpoint
@@ -62,7 +64,7 @@ export {
   isSuccessfulStatus,
   Status,
   STATUS_TEXT,
-} from 'https://deno.land/std@0.163.0/http/mod.ts';
+} from 'https://deno.land/std@0.193.0/http/mod.ts';
 
 export type HTTPMethods =
   | 'HEAD'
@@ -80,27 +82,27 @@ export type {
   RedirectStatus,
   ServerErrorStatus,
   SuccessfulStatus,
-} from 'https://deno.land/std@0.163.0/http/mod.ts';
+} from 'https://deno.land/std@0.193.0/http/mod.ts';
 
 export type {
   Middleware,
   RouterContext,
   RouterMiddleware,
-} from 'https://deno.land/x/oak@v11.1.0/mod.ts';
+} from 'https://deno.land/x/oak@v12.6.0/mod.ts';
 
 export {
   Context,
   helpers as oakHelpers,
   Request,
   Response,
-} from 'https://deno.land/x/oak@v11.1.0/mod.ts';
+} from 'https://deno.land/x/oak@v12.6.0/mod.ts';
 
 //#endregion Endpoint
 
 //#region BigDecimal
-export { BigDenary } from 'https://deno.land/x/bigdenary/mod.ts';
+export { BigDenary } from 'https://deno.land/x/bigdenary@1.0.0/mod.ts';
 export type {
   BDNumberInput,
   BigDenaryRaw,
-} from 'https://deno.land/x/bigdenary/mod.ts';
+} from 'https://deno.land/x/bigdenary@1.0.0/mod.ts';
 //#endregion BigDecimal

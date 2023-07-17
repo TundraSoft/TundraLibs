@@ -1,4 +1,4 @@
-# TunrdaLibs Contributing guide
+# TunrdaLibs Contribution guide
 
 Find a feature which would be usefull? A bug you can fix? Maybe a better or
 smarter way to do things which leads to better reliability and performance? Fork
@@ -13,7 +13,7 @@ keep the usage of the libraries seamless throughout the ecosystem :)
 tundralibs
 │   README.md
 │   dependencies.ts
-|   dev_dependencies.ts
+|   dev.dependencies.ts
 │
 └───module1
 │   │   types.ts

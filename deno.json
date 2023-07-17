@@ -7,14 +7,8 @@
     "strict": true
   },
   "lint": {
-    "files": {
-      "include": [
-        "./"
-      ],
-      "exclude": [
-        "*/testdata/*"
-      ]
-    },
+    "include": ["./"],
+    "exclude": ["*/testdata/", "./old/*"],
     "rules": {
       "tags": [
         "recommended"
@@ -29,7 +23,7 @@
   },
   "fmt": {
     "include": ["./"],
-    "exclude": ["*/testdata/"],
+    "exclude": ["*/testdata/", "./old/*"],
     "semiColons": true,
     "lineWidth": 80,
     "indentWidth": 2,
@@ -41,14 +35,8 @@
     "test": "deno task build && deno cache --reload ./dev.dependencies.ts && deno test -A"
   },
   "test": {
-    "files": {
-      "include": [
-        "./"
-      ],
-      "exclude": [
-        "*/testdata/"
-      ]
-    }
+    "include": ["./*"],
+    "exclude": ["*/testdata/", "./old/*"]
   },
   "lock": false
 }

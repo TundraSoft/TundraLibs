@@ -9,6 +9,15 @@ import {
   ConfigReadError,
 } from './errors/mod.ts';
 
+/**
+ * The Config class is used to load and retrieve configuration data from
+ * files. It also takes care of replacing "Secrets" or environment variables
+ *
+ * It supports below formats:
+ * 1. JSON
+ * 2. YAML
+ * 3. TOML
+ */
 export class Config {
   protected static __configs: Map<string, Record<string, unknown>> = new Map();
   private static __env: Map<string, string>;
@@ -17,17 +26,37 @@ export class Config {
   private constructor() {
   }
 
-  public static async load(name: string, path = './configs'): Promise<void> {
+  /**
+   * Loads a configuration file from the provided path
+   *
+   * @param {string} name - The name of the configuration (no extension)
+   * @param {string} basePath - The path to the configuration file. Default is './configs'.
+   * @throws {ConfigReadError} - If read permission is not granted for the specified path.
+   * @public
+   * @static
+   */
+  public static async load(
+    name: string,
+    basePath = './configs',
+  ): Promise<void> {
     const readPerm =
-      (await Deno.permissions.query({ name: 'read', path: path })).state;
+      (await Deno.permissions.query({ name: 'read', path: basePath })).state;
     if (readPerm !== 'granted') {
-      throw new ConfigReadError({ config: name, path });
+      throw new ConfigReadError({ config: name, path: basePath });
     }
     name = name.toLowerCase().trim();
-    const data = await this._loadConfig(path, name);
+    const data = await this._loadConfig(basePath, name);
     this.__configs.set(name, data);
   }
 
+  /**
+   * Loads all configuration files in a given directory.
+   *
+   * @param {string} basePath - The base path of the directory to load configurations from. Default is './configs'.
+   * @throws {ConfigReadError} - If read permission is not granted for the specified base path.
+   * @public
+   * @static
+   */
   public static async loadAll(basePath = './configs'): Promise<void> {
     const readPerm =
       (await Deno.permissions.query({ name: 'read', path: basePath })).state;
@@ -43,11 +72,11 @@ export class Config {
     }
   }
 
-  public static has(name: string, ...items: string[]): boolean {
-    name = name.toLowerCase().trim();
+  public static has(...items: string[]): boolean {
+    const name = items[0].toLowerCase().trim();
+    items = items.slice(1);
     const path: string[] = [];
     if (this.__configs.has(name)) {
-      // let final = JSON.parse(JSON.stringify(this.__configs.get(name))) as Record<string, unknown>;;
       let final = this.__configs.get(name) as Record<string, unknown>;
       for (const item of items) {
         path.push(item);
@@ -62,8 +91,9 @@ export class Config {
     return false;
   }
 
-  public static get<T>(name: string, ...items: string[]): T {
-    name = name.toLowerCase().trim();
+  public static get<T>(...items: string[]): T {
+    const name = items[0].toLowerCase().trim();
+    items = items.slice(1);
     const path: string[] = [];
     if (this.__configs.has(name)) {
       // let final = JSON.parse(JSON.stringify(this.__configs.get(name))) as Record<string, unknown>;;
