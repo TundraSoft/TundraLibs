@@ -526,6 +526,3 @@ array if schedule does not exist
   }
   //#endregion Protected Methods
 }
-
-// const cron = new Cronus();
-// console.log(cron._checkField("0", 'MINUTE', 10), cron._checkField("1", 'HOUR', 0));
