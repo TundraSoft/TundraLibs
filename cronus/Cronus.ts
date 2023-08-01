@@ -377,7 +377,7 @@ array if schedule does not exist
         //   return false;
         // }
         // // If currval is present then the output should be 0 to run
-        // if (currVal && currVal % parseInt(step) !== 0) {
+        // if (currVal !== undefined && currVal !== null && currVal % parseInt(step) !== 0) {
         //   return false;
         // }
         // // Ok this is for validation
@@ -390,7 +390,7 @@ array if schedule does not exist
           const [from, to] = range.split('-');
           // If currVal is present, it must be within the range specified
           if (
-            currVal &&
+            currVal !== undefined && currVal !== null &&
             !Cronus._checkRange(
               currVal.toString(),
               parseInt(from),
@@ -417,7 +417,10 @@ array if schedule does not exist
             return false;
           }
           // If currval is present then the output should be 0 to run
-          if (currVal && currVal % parseInt(step) !== 0) {
+          if (
+            currVal !== undefined && currVal !== null &&
+            currVal % parseInt(step) !== 0
+          ) {
             return false;
           }
           // Ok this is for validation
@@ -430,7 +433,7 @@ array if schedule does not exist
         const [from, to] = value.split('-');
         // If currVal is present, it must be within the range specified
         if (
-          currVal &&
+          currVal !== undefined && currVal !== null &&
           !Cronus._checkRange(currVal.toString(), parseInt(from), parseInt(to))
         ) {
           return false;
@@ -444,7 +447,10 @@ array if schedule does not exist
         }
       } else {
         // Its a direct value
-        if (currVal && !Cronus._checkRange(value, currVal, currVal)) {
+        if (
+          currVal !== undefined && currVal !== null &&
+          !Cronus._checkRange(value, currVal, currVal)
+        ) {
           return false;
         }
         // Ok its for validation
@@ -520,3 +526,6 @@ array if schedule does not exist
   }
   //#endregion Protected Methods
 }
+
+// const cron = new Cronus();
+// console.log(cron._checkField("0", 'MINUTE', 10), cron._checkField("1", 'HOUR', 0));
