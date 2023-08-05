@@ -672,7 +672,9 @@ export class Model<
           }
         });
       }).catch((error) => {
-        console.log(`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n${error.message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`);
+        console.log(
+          `~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n${error.message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`,
+        );
         throw new ModelValidationError(error, this.name, this._connection.name);
       });
     }
@@ -686,24 +688,28 @@ export class Model<
             if (!errors[index]) {
               errors[index] = {} as ModelValidation<T>;
             }
-            Object.keys(ukErrors[index]).forEach((column) => {
-              if (errors[index][column as keyof T] === undefined) {
-                errors[index][column as keyof T] = [];
-              }
-              if (
-                !errors[index][column as keyof T]?.includes(
-                  ukErrors[index][column as keyof T],
-                )
-              ) {
-                errors[index][column as keyof T]?.push(
-                  ukErrors[index][column as keyof T],
-                );
-              }
-            });
+            if (ukErrors && ukErrors[index]) {
+              Object.keys(ukErrors[index]).forEach((column) => {
+                if (errors[index][column as keyof T] === undefined) {
+                  errors[index][column as keyof T] = [];
+                }
+                if (
+                  !errors[index][column as keyof T]?.includes(
+                    ukErrors[index][column as keyof T],
+                  )
+                ) {
+                  errors[index][column as keyof T]?.push(
+                    ukErrors[index][column as keyof T],
+                  );
+                }
+              });
+            }
           }
         });
       }).catch((error) => {
-        console.log(`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n${error.message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`);
+        console.log(
+          `~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n${error.message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`,
+        );
         throw new ModelValidationError(error, this.name, this._connection.name);
       });
     }
@@ -867,24 +873,28 @@ export class Model<
       results.forEach((result, index) => {
         if (result.count > 0) {
           // Its not unique in the table
-          Object.keys(ukErrors[index]).forEach((column) => {
-            if (errors[column as keyof T] === undefined) {
-              errors[column as keyof T] = [];
-            }
-            if (
-              !errors[column as keyof T]?.includes(
-                ukErrors[index][column as keyof T],
-              )
-            ) {
-              errors[column as keyof T]?.push(
-                ukErrors[index][column as keyof T],
-              );
-            }
-          });
+          if (ukErrors && ukErrors[index]) {
+            Object.keys(ukErrors[index]).forEach((column) => {
+              if (errors[column as keyof T] === undefined) {
+                errors[column as keyof T] = [];
+              }
+              if (
+                !errors[column as keyof T]?.includes(
+                  ukErrors[index][column as keyof T],
+                )
+              ) {
+                errors[column as keyof T]?.push(
+                  ukErrors[index][column as keyof T],
+                );
+              }
+            });
+          }
         }
       });
     }).catch((error) => {
-      console.log(`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n${error.message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`);
+      console.log(
+        `~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n${error.message}\n~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`,
+      );
       throw new ModelValidationError(error, this.name, this._connection.name);
     });
     //#endregion Unique Keys
