@@ -29,7 +29,7 @@ export class Events<E extends EventsType = Record<string, Callback>> {
   /**
    * The map that holds the events and their corresponding listeners.
    */
-  private _events: Map<keyof E, Set<Listeners>> = new Map();
+  protected _events: Map<keyof E, Set<Listeners>> = new Map();
 
   /**
    * Adds an event listener that executes a callback when the specified event occurs.

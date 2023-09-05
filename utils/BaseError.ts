@@ -16,7 +16,7 @@ export class BaseError extends Error {
   constructor(
     message: string,
     private _library: string,
-    private _metaTags?: ErrorMetaTags,
+    protected _metaTags?: ErrorMetaTags,
   ) {
     super(BaseError.makeMessage(message, _library, _metaTags));
     Object.setPrototypeOf(this, new.target.prototype);

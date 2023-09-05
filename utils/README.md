@@ -44,12 +44,12 @@ console.log(b.getVal()); // Will display Boo
 
 ### Sealed
 
-Sealed decorator function is used to seal the constructor and its prototype, 
-preventing further modifications to them. Sealing an object makes it 
-read-only and ensures that no new properties can be added or existing ones 
+Sealed decorator function is used to seal the constructor and its prototype,
+preventing further modifications to them. Sealing an object makes it
+read-only and ensures that no new properties can be added or existing ones
 deleted.
 
-This decorator might be used to enforce immutability or prevent accidental 
+This decorator might be used to enforce immutability or prevent accidental
 modifications to a class or its instances.
 
 ## BaseError

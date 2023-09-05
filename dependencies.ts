@@ -49,6 +49,8 @@ export type { ClientConfig as MySQLClientConfig } from 'https://deno.land/x/mysq
 // export * as MySQLClient from "https://deno.land/x/mysql2@v1.0.5/mod.ts";
 export { connect as RedisConnect } from 'https://deno.land/x/redis@v0.30.0/mod.ts';
 export type { Redis } from 'https://deno.land/x/redis@v0.30.0/mod.ts';
+export * as openpgp from 'https://cdn.skypack.dev/openpgp'; //'https://deno.land/x/openpgp@v5.9.0/src/index.js';
+
 //#endregion norm
 
 //#region Endpoint

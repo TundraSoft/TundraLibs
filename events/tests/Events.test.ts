@@ -7,7 +7,7 @@ const delay = (ms: number) =>
 let op: unknown[] = [];
 //#region Typed Events
 type TestEvents = {
-  event1(a: string): unknown;
+  event1(a: string, v: number): unknown;
 };
 
 class EventTester extends Events<TestEvents> {
@@ -15,10 +15,10 @@ class EventTester extends Events<TestEvents> {
     return this._events.get('event1')?.size || 0;
   }
   run() {
-    this.emit('event1', 'Run');
+    this.emit('event1', 'Run', 1);
   }
   runSync() {
-    this.emitSync('event1', 'RunAsync');
+    this.emitSync('event1', 'RunAsync', 0);
   }
 }
 

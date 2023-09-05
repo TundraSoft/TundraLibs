@@ -5,10 +5,10 @@ import { Callback, EventsType } from '../events/mod.ts';
 import { OptionKeys } from './types/mod.ts';
 
 /**
- * A core concept in tundralibs is to build reusable modules or libraris which 
- * can be easily extended and customized but also provide some consistant 
+ * A core concept in tundralibs is to build reusable modules or libraris which
+ * can be easily extended and customized but also provide some consistant
  * functionality such as managing secure options, events and logging.
- * The options class provides an easy and simple way of storing options for 
+ * The options class provides an easy and simple way of storing options for
  * the module and also allow creation of events.
  */
 export class Options<
@@ -127,48 +127,3 @@ export class Options<
     return this;
   }
 }
-
-// class A extends Options<
-//   { test: string; test2?: number; onTe: () => void },
-//   { load: () => void }
-// > {
-//   test() {
-//     const b = this._getOption('test2');
-//     console.log(this._getOption('test'));
-//   }
-// }
-// const a = new Options<
-//   { test: string; test2?: number; onTe: () => void },
-//   { load: () => void }
-// >(
-//   {
-//     test: 'test',
-//     onTe: () => {
-//       console.log('OK');
-//     }, //(a: string) => {console.log('OK')}
-//     _onload: () => {
-//       return 1;
-//     },
-//   },
-// );
-
-// console.log(a);
-
-const secureStore = function <T extends Record<string, unknown>>() {
-  const _data: T = {} as T;
-  return {
-    get: function <K extends keyof T>(key: K): T[K] {
-      return _data[key];
-    },
-    set: function <K extends keyof T>(key: K, value: T[K]): void {
-      _data[key] = value;
-    },
-  };
-};
-
-const store = secureStore<{ name: string }>();
-const store2 = secureStore<{ name: string }>();
-store.set('name', 'sdf');
-console.log(store.get('name'));
-console.log(store);
-console.log(store2.get('name'));
