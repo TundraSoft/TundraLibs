@@ -32,7 +32,10 @@ export {
 
 export {
   Client as PGClient,
+  ConnectionError,
   Pool as PGPool,
+  PostgresError,
+  TransactionError,
 } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
 export type { ClientOptions as PGClientOptions } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
 

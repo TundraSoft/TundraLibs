@@ -73,21 +73,21 @@ export type DataModel<T extends string = string> = {
 //   'Users': {
 //     name: 'Users'
 //     connection: 'a',
-//     table: 'Users', 
+//     table: 'Users',
 //     columns: {
 //       Id: {
-//         name: 'id', 
+//         name: 'id',
 //         type: 'VARCHAR'
 //       }
 //     }
-//   }, 
+//   },
 //   'D': {
 //     name: 'D'
 //     connection: 'a',
-//     table: 'D', 
+//     table: 'D',
 //     columns: {
 //       Id: {
-//         name: 'id', 
+//         name: 'id',
 //         type: 'VARCHAR'
 //       }
 //     }

@@ -1,7 +1,7 @@
 //#region Base
 export type { Dialects } from './Dialects.ts';
-export type { ClientOptions, PostgresClientOptions } from './ClientOptions.ts'
-export type { ClientEvents } from './ClientEvents.ts'
+export type { ClientOptions, PostgresClientOptions } from './ClientOptions.ts';
+export type { ClientEvents } from './ClientEvents.ts';
 
 export { DataTypeMap, DataTypes, DefaultValidator } from './DataTypes.ts';
 export type { DataLength, DataType } from './DataTypes.ts';
@@ -30,7 +30,15 @@ export type {
 //#endregion Model
 
 //#region Query
-export type { FilterOperators, QueryFilter, QueryResults } from './Query/mod.ts';
+export type {
+  DeleteQueryOptions,
+  FilterOperators,
+  InsertQueryOptions,
+  QueryFilter,
+  QueryResults,
+  SelectQueryOptions,
+  UpdateQueryOptions,
+} from './Query/mod.ts';
 //#endregion Query
 
 //#region Translator

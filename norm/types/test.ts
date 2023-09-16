@@ -67,8 +67,8 @@ const models = {
           userId: 'id',
         },
         hasMany: false,
-      }
-    }
+      },
+    },
   },
 } as const;
 
@@ -127,13 +127,17 @@ function generateWhereClause<T>(filter: QueryFilter<T> | undefined): string {
       }
     } else {
       const value = filter[key as keyof T];
-      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      if (
+        value !== null && typeof value === 'object' && !Array.isArray(value)
+      ) {
         for (const subKey in value) {
           const subValue = value[subKey];
           if (typeof subValue === 'object' && !Array.isArray(subValue)) {
             const operator = Object.keys(subValue)[0];
             const condition = Object.values(subValue)[0];
-            clauses.push(`${key}.${subKey} ${operator} ${JSON.stringify(condition)}`);
+            clauses.push(
+              `${key}.${subKey} ${operator} ${JSON.stringify(condition)}`,
+            );
           } else {
             clauses.push(`${key}.${subKey} = ${JSON.stringify(subValue)}`);
           }

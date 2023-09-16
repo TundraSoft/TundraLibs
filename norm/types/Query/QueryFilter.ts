@@ -22,7 +22,7 @@ export type FilterOperators<ValueType> = ValueType | Generators | {
   $nilike?: ValueType | Generators;
 };
 
-export type BaseQueryFilter<
+export type QueryFilter<
   T extends Record<string, unknown> = Record<string, unknown>,
 > =
   & {
@@ -33,18 +33,18 @@ export type BaseQueryFilter<
     $and?: QueryFilter<T> | QueryFilter<T>[];
   };
 
-export type QueryFilter<T, Y = Required<T>> = Y extends Record<string, unknown>
-  ?
-    & {
-      [K in keyof Y]?: Y[K] extends Array<Record<string, unknown>>
-        ? QueryFilter<Unarray<Y[K]>>
-        : FilterOperators<Y[K]>;
-    }
-    & {
-      $or?: QueryFilter<T>[] | QueryFilter<T>;
-      $and?: QueryFilter<T>[] | QueryFilter<T>;
-    }
-  : never;
+// export type QueryFilter<T, Y = Required<T>> = Y extends Record<string, unknown>
+//   ?
+//     & {
+//       [K in keyof Y]?: Y[K] extends Array<Record<string, unknown>>
+//         ? QueryFilter<Unarray<Y[K]>>
+//         : FilterOperators<Y[K]>;
+//     }
+//     & {
+//       $or?: QueryFilter<T>[] | QueryFilter<T>;
+//       $and?: QueryFilter<T>[] | QueryFilter<T>;
+//     }
+//   : never;
 
 // type Path<T> = T extends Record<string, unknown>
 //   ? {
@@ -54,12 +54,12 @@ export type QueryFilter<T, Y = Required<T>> = Y extends Record<string, unknown>
 
 //   export type QueryFilter<T, Y = Required<T>> = Y extends Record<string, unknown>
 //   ? {
-//       [K in keyof Y]?: Y[K] extends Array<infer U> 
-//         ? U extends Record<string, unknown> 
+//       [K in keyof Y]?: Y[K] extends Array<infer U>
+//         ? U extends Record<string, unknown>
 //           ? QueryFilter<U>[]
 //           : FilterOperators<Y[K]>
-//         : Y[K] extends Record<string, unknown> 
-//           ? QueryFilter<Y[K]> 
+//         : Y[K] extends Record<string, unknown>
+//           ? QueryFilter<Y[K]>
 //           : FilterOperators<Y[K]>;
 //     } & {
 //       $or?: QueryFilter<T>[] | QueryFilter<T>;
