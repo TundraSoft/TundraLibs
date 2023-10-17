@@ -67,12 +67,7 @@ export class Options<
    * @returns A boolean indicating whether the option exists or not.
    */
   protected _hasOption(name: string): boolean {
-    // deno-lint-ignore no-prototype-builtins
-    return this._options.hasOwnProperty(name);
-    // if (this._options[name] !== undefined) {
-    //   return true;
-    // }
-    // return false;
+    return this._options.has(name);
   }
 
   /**
