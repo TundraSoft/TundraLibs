@@ -122,10 +122,6 @@ export class Cors {
     } else {
       const requestOrigin = getRequestHeader('origin') ??
         getRequestHeader('Origin');
-      console.log(
-        'from calling',
-        Cors.isOriginAllowed(requestOrigin, corsOptions.origin),
-      );
       setResponseHeader(
         'Access-Control-Allow-Origin',
         Cors.isOriginAllowed(requestOrigin, corsOptions.origin)

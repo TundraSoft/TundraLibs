@@ -42,7 +42,6 @@ export const oakCors = <
 
       const corsOptions = Cors.produceCorsOptions(options || {});
       const originDelegate = Cors.produceOriginDelegate(corsOptions);
-      console.log('origin', request.headers.get('origin'));
       if (originDelegate) {
         const requestMethod = request.method;
         const getRequestHeader = (headerKey: string) =>
