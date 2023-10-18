@@ -1,20 +1,20 @@
 // Begin Core
-export * as path from 'https://deno.land/std@0.193.0/path/mod.ts';
-export * as fs from 'https://deno.land/std@0.193.0/fs/mod.ts';
+export * as path from 'https://deno.land/std@0.204.0/path/posix/mod.ts';
+export * as fs from 'https://deno.land/std@0.204.0/fs/mod.ts';
 export {
   format as dateFormat,
   parse as parseDate,
-} from 'https://deno.land/std@0.193.0/datetime/mod.ts';
+} from 'https://deno.land/std@0.204.0/datetime/mod.ts';
 export {
   BufWriter,
   BufWriterSync,
-} from 'https://deno.land/std@0.193.0/io/mod.ts';
+} from 'https://deno.land/std@0.204.0/io/mod.ts';
 
-export { printf, sprintf } from 'https://deno.land/std@0.193.0/fmt/printf.ts';
-export * as yaml from 'https://deno.land/std@0.193.0/yaml/mod.ts';
-export * as toml from 'https://deno.land/std@0.193.0/toml/mod.ts';
-export * as base64url from 'https://deno.land/std@0.193.0/encoding/base64url.ts';
-export * as base64 from 'https://deno.land/std@0.193.0/encoding/base64.ts';
+export { printf, sprintf } from 'https://deno.land/std@0.204.0/fmt/printf.ts';
+export * as yaml from 'https://deno.land/std@0.204.0/yaml/mod.ts';
+export * as toml from 'https://deno.land/std@0.204.0/toml/mod.ts';
+export * as base64url from 'https://deno.land/std@0.204.0/encoding/base64url.ts';
+export * as base64 from 'https://deno.land/std@0.204.0/encoding/base64.ts';
 export {
   blue,
   bold,
@@ -27,7 +27,7 @@ export {
   red,
   underline,
   yellow,
-} from 'https://deno.land/std@0.193.0/fmt/colors.ts';
+} from 'https://deno.land/std@0.204.0/fmt/colors.ts';
 // End Core
 
 export {
@@ -69,7 +69,7 @@ export {
   isSuccessfulStatus,
   Status,
   STATUS_TEXT,
-} from 'https://deno.land/std@0.193.0/http/mod.ts';
+} from 'https://deno.land/std@0.204.0/http/mod.ts';
 
 export type HTTPMethods =
   | 'HEAD'
@@ -87,7 +87,7 @@ export type {
   RedirectStatus,
   ServerErrorStatus,
   SuccessfulStatus,
-} from 'https://deno.land/std@0.193.0/http/mod.ts';
+} from 'https://deno.land/std@0.204.0/http/mod.ts';
 
 export type {
   Middleware,

@@ -1,7 +1,9 @@
+import type { RESTlerRequest, RESTlerResponse } from './mod.ts';
+
 export type RESTlerEvents = {
-  request: () => void;
-  response: () => void;
-  authFailre: () => void;
+  request: (request: RESTlerRequest) => void;
+  response: (request: RESTlerRequest, response: RESTlerResponse) => void;
+  authFailure: () => void;
   timeout: () => void;
   error: () => void;
 };

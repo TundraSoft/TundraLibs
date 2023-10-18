@@ -247,17 +247,19 @@ export abstract class AbstractClient<
         : this._quoteColumn(options.table),
       limit = options.limit ? ` LIMIT ${options.limit}` : '',
       offset = options.page
-          ? ` OFFSET ${(options.page - 1) * (options.limit || 0)}`
-          : '', 
+        ? ` OFFSET ${(options.page - 1) * (options.limit || 0)}`
+        : '',
       select = columnNames.map((c) =>
         `${this._quoteColumn(options.columns[c])} AS ${this._quoteColumn(c)}`
       ),
       filter = options.filter
         ? ` WHERE ${this._processFilters(options.columns, options.filter)}`
         : '',
-      sort = options.sort ? this._processSorting(options.columns, options.sort) : '', 
+      sort = options.sort
+        ? this._processSorting(options.columns, options.sort)
+        : '',
       group: string[] = [];
-      
+
     return `SELECT ${select} FROM ${tableName}${filter}${sort}${limit}${offset};`;
   }
 

@@ -4,4 +4,4 @@ export type RESTlerOptions = {
   maxAuthTries?: number;
   version?: string;
   defaultHeaders?: Record<string, string>;
-}
+};

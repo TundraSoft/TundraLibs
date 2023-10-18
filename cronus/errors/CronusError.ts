@@ -1,5 +1,5 @@
-import { BaseError } from '../../common/BaseError.ts';
-import type { ErrorMetaTags } from '../../common/BaseError.ts';
+import { BaseError } from '../../utils/BaseError.ts';
+import type { ErrorMetaTags } from '../../utils/BaseError.ts';
 
 export class CronusBaseError extends BaseError {
   constructor(message: string, metaTags?: ErrorMetaTags) {

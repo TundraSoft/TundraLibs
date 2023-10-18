@@ -71,5 +71,5 @@ const a: QueryFilter<M> = {
   'b.c': {
     $eq: 'a',
   },
-  'b.d': 1
+  'b.d': 1,
 };

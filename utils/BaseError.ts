@@ -1,6 +1,4 @@
-export type ErrorMetaTags = {
-  [key: string]: string | number | boolean | Date | undefined;
-};
+export type ErrorMetaTags = Record<string, unknown>
 
 /**
  * BaseError class for creating custom errors with additional metadata.
@@ -18,11 +16,11 @@ export class BaseError extends Error {
     private _library: string,
     protected _metaTags?: ErrorMetaTags,
   ) {
-    super(BaseError.makeMessage(message, _library, _metaTags));
+    super(BaseError._makeMessage(message, _library, _metaTags));
     Object.setPrototypeOf(this, new.target.prototype);
   }
 
-  private static makeMessage(
+  protected static _makeMessage(
     message: string,
     library: string,
     metaTags?: ErrorMetaTags,
