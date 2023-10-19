@@ -2,7 +2,7 @@
 
 ### Configuring CORS
 
-```typescript
+````typescript
 import the {oakCors}
 
 const app = new Application();
@@ -31,7 +31,7 @@ const corsOptions = {
     }
   },
 };
-```
+````
 
 ### Enabling CORS Pre-Flight
 
@@ -83,4 +83,3 @@ The default configuration is the equivalent of:
   "optionsSuccessStatus": 204
 }
 ```
-

@@ -1,1 +1,1 @@
-export { oakCors } from './oakCors.ts'
+export { oakCors } from './oakCors.ts';
