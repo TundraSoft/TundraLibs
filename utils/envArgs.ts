@@ -26,7 +26,7 @@ export const envArgs = async function (
   }
 
   try {
-    const envFile = path.posix.join(Deno.cwd(), envFilePath, '.env'),
+    const envFile = path.join(Deno.cwd(), envFilePath, '.env'),
       filePermission = await Deno.permissions.query({
         name: 'read',
         path: envFile,

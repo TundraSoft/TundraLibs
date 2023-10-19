@@ -9,7 +9,7 @@ export class RESTlerBaseError extends BaseError {
 
   constructor(name: string, message: string, metaTags: RESTlerEndpoint) {
     const mt: ErrorMetaTags = metaTags;
-    if(mt.searchParams) {
+    if (mt.searchParams) {
       const sp = new URLSearchParams(metaTags.searchParams);
       mt.path = `${metaTags.path}?${sp.toString()}`;
       delete mt.searchParams;
@@ -25,7 +25,11 @@ export class RESTlerBaseError extends BaseError {
   }
 
   get url(): string {
-    return path.join(this._metaTags?.baseURL as string, this._metaTags?.version as string || '', this._metaTags?.path as string);
+    return path.join(
+      this._metaTags?.baseURL as string,
+      this._metaTags?.version as string || '',
+      this._metaTags?.path as string,
+    );
   }
 
   get version(): string {

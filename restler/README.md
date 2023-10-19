@@ -6,18 +6,18 @@
 
 ### `constructor(name: string, config: OptionKeys<O, RESTlerEvents>)`
 
-This is the constructor method for the class, initializing essential properties such as `_name` and `_defaultHeaders`. 
+This is the constructor method for the class, initializing essential properties such as `_name` and `_defaultHeaders`.
 
 It takes two parameters:
 
 1. `name`: A string that represents the name of the instance.
 2. `config`: An object of type `OptionKeys`.
 
-___
+---
 
 ### `_buildEndpoint(method: HTTPMethods, location: string, searchParams?: Record<string, string>, version?: string)`
 
-This is a protected helper method to build the `RESTlerEndpoint` object. 
+This is a protected helper method to build the `RESTlerEndpoint` object.
 
 It takes four parameters:
 
@@ -26,7 +26,7 @@ It takes four parameters:
 3. `searchParams`: An optional parameter representing the URL search parameters.
 4. `version`: An optional parameter representing the API version.
 
-___
+---
 
 ### `_makeURL(endpoint: RESTlerEndpoint)`
 
@@ -34,7 +34,7 @@ This protected method creates a URL string from the given `RESTlerEndpoint` obje
 
 It takes one parameter `endpoint`: The `RESTlerEndpoint` object.
 
-___
+---
 
 ### `_makeRequest(request: RESTlerRequest<ReqBody>)`
 
@@ -42,11 +42,11 @@ This protected asynchronous method makes the API call based on provided configur
 
 It performs operation such as injection of default headers, performs auth injection and retries the request if authentication fails (401).
 
-It has only one parameter: 
+It has only one parameter:
 
 1. `request`: The `RESTlerRequest` object.
 
-___
+---
 
 ### `_handleResponse(request: RESTlerRequest<ReqBody>, response: RESTlerResponse<RespBody>)`
 
@@ -57,7 +57,7 @@ It accepts two parameters:
 1. `request`: The `RESTlerRequest` object.
 2. `response`: The `RESTlerResponse` object.
 
-___
+---
 
 ### `_authInjector(request: RESTlerRequest<ReqBody>)`
 
@@ -65,7 +65,7 @@ An abstract method for injecting authorization details into the request. This me
 
 It takes one argument `request`: The `RESTlerRequest` object.
 
-___
+---
 
 ### `_authenticate()`
 

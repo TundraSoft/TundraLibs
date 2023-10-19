@@ -147,7 +147,7 @@ export class Config {
 
   protected static async initEnv() {
     if (Config.__env === undefined) {
-      Config.__env = await SysInfo.getAllEnv();
+      Config.__env = new Map(); //await SysInfo.getAllEnv();
     }
   }
 }

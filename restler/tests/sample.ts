@@ -25,7 +25,7 @@ class Test extends RESTler<TestOptions> {
 
   async getUser(id: number): Promise<UserType> {
     const resp = await this._makeRequest<
-      never, 
+      never,
       { data: UserType }
     >({
       endpoint: this._buildEndpoint('GET', `/users/${id}`),

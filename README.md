@@ -13,6 +13,7 @@ A collection of libraries written in Deno which I use in different projects.
 - [x] [NORM](./norm/README.md)
 - [x] [Options](./options/README.md)
 - [x] [OTP](./otp/README.md)
+- [x] [RESTler](./restler/README.md)
 - [x] [Slogger](./slogger/README.md)
 - [x] [sysinfo](./sysinfo/README.md)
 - [x] [Syslog](./syslog/README.md)

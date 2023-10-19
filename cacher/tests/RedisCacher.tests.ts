@@ -1,4 +1,4 @@
-import { CacheValue, RedisCacher } from './RedisCacher';
+import { CacheValue, RedisCacher } from '../RedisCacher';
 
 describe('RedisCacher', () => {
   let cacher: RedisCacher;

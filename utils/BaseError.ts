@@ -1,4 +1,4 @@
-export type ErrorMetaTags = Record<string, unknown>
+export type ErrorMetaTags = Record<string, unknown>;
 
 /**
  * BaseError class for creating custom errors with additional metadata.

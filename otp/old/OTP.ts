@@ -3,7 +3,7 @@ import { Options } from '../../options/mod.ts';
 import type { OptionKeys } from '../../options/mod.ts';
 import { alphaNumericCase, nanoid } from '../../nanoid/mod.ts';
 import { sprintf } from '../../dependencies.ts';
-import { HOTPOptions, TOTPOptions, OTPOptions } from '../old/types/mod.ts';
+import { HOTPOptions, OTPOptions, TOTPOptions } from '../old/types/mod.ts';
 
 export class OTP extends Options<TOTPOptions | HOTPOptions> {
   #key!: CryptoKey;
@@ -46,14 +46,11 @@ export class OTP extends Options<TOTPOptions | HOTPOptions> {
   }
 
   public async generate(counter?: number): Promise<string> {
-    if(this.__mode === 'TOTP') {
+    if (this.__mode === 'TOTP') {
       const windd = this._getOption('period') || 30;
     }
   }
 }
-
-
-
 
 export class OTP2 extends Options<iOTPOptions> {
   #key!: CryptoKey;

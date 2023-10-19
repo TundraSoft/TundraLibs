@@ -36,7 +36,7 @@
   },
   "test": {
     "include": ["./*"],
-    "exclude": ["*/testdata/", "./old/*"]
+    "exclude": ["*/testdata/", "*old/*"]
   },
   "lock": false
 }

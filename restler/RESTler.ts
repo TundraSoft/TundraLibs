@@ -12,7 +12,13 @@ import type {
   RESTlerResponseBody,
 } from './types/mod.ts';
 
-import { RESTlerBaseError, RESTlerAuthFailure, RESTlerTimeoutError, RESTlerUnsupportedContentType, RESTlerUnknownError } from './errors/mod.ts';
+import {
+  RESTlerAuthFailure,
+  RESTlerBaseError,
+  RESTlerTimeoutError,
+  RESTlerUnknownError,
+  RESTlerUnsupportedContentType,
+} from './errors/mod.ts';
 export abstract class RESTler<
   O extends RESTlerOptions,
 > extends Options<O, RESTlerEvents> {
@@ -88,13 +94,16 @@ export abstract class RESTler<
   >(
     request: RESTlerRequest<ReqBody>,
   ): Promise<RESTlerResponse<RespBody>> {
-    Object.assign(request.endpoint, {baseURL: this._getOption('endpointURL'), version: this._getOption('version')});
-    request.headers = {...this._defaultHeaders, ...request.headers};
+    Object.assign(request.endpoint, {
+      baseURL: this._getOption('endpointURL'),
+      version: this._getOption('version'),
+    });
+    request.headers = { ...this._defaultHeaders, ...request.headers };
     // Inject auth here
     this._authInjector<ReqBody>(request);
 
     const endpoint = this._makeURL(request.endpoint as RESTlerEndpoint),
-      controller = new AbortController(), 
+      controller = new AbortController(),
       fetchOptions: RequestInit = {
         method: request.endpoint.method,
         headers: request.headers,
@@ -102,26 +111,27 @@ export abstract class RESTler<
         body: (request.body instanceof FormData)
           ? request.body
           : JSON.stringify(request.body),
-        }, 
+      },
       maxAuthTries = this._getOption('maxAuthTries') as number;
     // The response object, technically can be const but we override it like a moron so its not
-    let resp: RESTlerResponse<RespBody>, 
-        authCounter = 0;
+    let resp: RESTlerResponse<RespBody>,
+      authCounter = 0;
     this.emit('request', request as RESTlerRequest);
 
     // Emit the request event. We do it only once per request
     this.emit('request', request as RESTlerRequest);
     while (authCounter <= maxAuthTries) {
       try {
-        const start = performance.now(), 
+        const start = performance.now(),
           timeout = setTimeout(
             () => controller.abort(),
             this._getOption('timeout'),
           ),
           interimResp = await fetch(endpoint, fetchOptions);
-      
+
         clearTimeout(timeout);
-        const type = (interimResp.headers.get('content-type') as string).toLowerCase();
+        const type = (interimResp.headers.get('content-type') as string)
+          .toLowerCase();
         let body;
         if (type?.startsWith('application/json')) {
           body = await interimResp.json();
@@ -130,7 +140,11 @@ export abstract class RESTler<
         } else if (type?.startsWith('application/octet-stream')) {
           body = await interimResp.blob();
         } else {
-          throw new RESTlerUnsupportedContentType(this._name, type, request.endpoint as RESTlerEndpoint);
+          throw new RESTlerUnsupportedContentType(
+            this._name,
+            type,
+            request.endpoint as RESTlerEndpoint,
+          );
         }
         resp = {
           endpoint: request.endpoint as RESTlerEndpoint,
@@ -149,19 +163,31 @@ export abstract class RESTler<
           continue;
         }
         // Emit response event
-        this.emit('response', request as RESTlerRequest, resp as RESTlerResponse);
+        this.emit(
+          'response',
+          request as RESTlerRequest,
+          resp as RESTlerResponse,
+        );
         return resp;
       } catch (e) {
         // Handle error
         if (e.name === 'AbortError') {
           // Emit timeout event
           this.emit('timeout');
-          throw new RESTlerTimeoutError(this._name, this._getOption('timeout') as number, request.endpoint as RESTlerEndpoint);
+          throw new RESTlerTimeoutError(
+            this._name,
+            this._getOption('timeout') as number,
+            request.endpoint as RESTlerEndpoint,
+          );
         } else if (e instanceof RESTlerAuthFailure) {
           // Emit authFailure event
           this.emit('authFailure');
         } else if (!(e instanceof RESTlerBaseError)) {
-          throw new RESTlerUnknownError(this._name, e.message, request.endpoint as RESTlerEndpoint);
+          throw new RESTlerUnknownError(
+            this._name,
+            e.message,
+            request.endpoint as RESTlerEndpoint,
+          );
         }
         // Emit error event
         this.emit('error');
@@ -169,7 +195,10 @@ export abstract class RESTler<
       }
     }
     // If we've exited the while loop, we've exhausted auth retries.
-    throw new RESTlerAuthFailure(this._name, request.endpoint as RESTlerEndpoint);
+    throw new RESTlerAuthFailure(
+      this._name,
+      request.endpoint as RESTlerEndpoint,
+    );
   }
 
   protected async _handleResponse<
@@ -182,7 +211,9 @@ export abstract class RESTler<
   }
 
   //#region Override these methods
-  protected _authInjector<ReqBody extends RESTlerRequestBody = Record<string, unknown>>(
+  protected _authInjector<
+    ReqBody extends RESTlerRequestBody = Record<string, unknown>,
+  >(
     request: RESTlerRequest<ReqBody>,
   ): void {
     // Do nothing
@@ -193,4 +224,3 @@ export abstract class RESTler<
   }
   //#endregion
 }
-
