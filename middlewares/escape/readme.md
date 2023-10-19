@@ -1,11 +1,13 @@
 # Escape
+
 Simple library for escape or unescape HTML, String, SQL,... for Deno framework.
 
 ## API
 
 ### Escape HTML
+
 ```js
-import { escapeHtml } 
+import { escapeHtml }
 ```
 
 #### **1. escapeHtml(string: string): string**
@@ -32,8 +34,8 @@ import { escapeHtml }
 
 console.log(escapeHtml("<script>sample</script>"));
 // Result: '&lt;script&gt;sample&lt;/script&gt;'
-
 ```
+
 #### **2. isEscape(string: string): boolean**
 
 This function will check exist escape the following characters: `"`, `'`, `&`, `<`, and
@@ -46,12 +48,12 @@ import { isEscape }
 
 console.log(isEscape("<script>sample</script>"));
 // Result: true
-
 ```
 
 ### Un Escape HTML
+
 ```js
-import { unescapeHtml } 
+import { unescapeHtml }
 ```
 
 #### **1. unescapeHtml(string: string): string**
@@ -68,7 +70,6 @@ import { unescapeHtml }
 
 console.log(unescapeHtml("&amp;lt;script&amp;gt;sample&amp;lt;/script&amp;gt;"));
 // Result: '<script>sample</script>'
-
 ```
 
 #### **2. isUnescape(string: string): boolean**
@@ -83,12 +84,12 @@ import { isUnescape }
 
 console.log(isUnescape("&amp;lt;script&amp;gt;sample&amp;lt;/script&amp;gt;"));
 // Result: true
-
 ```
 
 ### Escape SQL
+
 ```js
-import { escapeSql } 
+import { escapeSql }
 ```
 
 #### **1. escapeSql(SqlString: string): string**
@@ -105,5 +106,4 @@ import { escapeSql }
 
 console.log(escapeSql("insert into table_exp values('hi, my name''s johnny.');"));
 // Result: 'insert into my_table values(\'hi, my name\'\'s johnny.\');'
-
 ```

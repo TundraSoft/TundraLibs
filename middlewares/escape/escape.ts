@@ -1,11 +1,11 @@
 export class Escape {
-  static matchEscHtmlRx: RegExp = /["'<>\;]/;
-  static matchUnEscRx: RegExp = /&(?:amp|#38|lt|#60|gt|#62|apos|#39|quot|#34);/g;
+  static matchEscHtmlRx = /["'<>\;]/;
+  static matchUnEscRx = /&(?:amp|#38|lt|#60|gt|#62|apos|#39|quot|#34);/g;
   // deno-lint-ignore no-control-regex
-  static matchEscSqlRx: RegExp = /[\0\b\t\n\r\x1a"'\\]/g;
+  static matchEscSqlRx = /[\0\b\t\n\r\x1a"'\\]/g;
 
   static isEscape(str: string): boolean {
-    const removeUnEscStr = str.replace(Escape.matchUnEscRx, "");
+    const removeUnEscStr = str.replace(Escape.matchUnEscRx, '');
     const matchEscHtml = Escape.matchEscHtmlRx.exec(removeUnEscStr);
 
     if (!matchEscHtml) {
@@ -21,25 +21,25 @@ export class Escape {
       return str;
     }
     let escape: string;
-    let html = "";
+    let html = '';
     let index = 0;
     let lastIndex = 0;
     for (index = matchEscHtml.index; index < str.length; index++) {
       switch (str.charCodeAt(index)) {
         case 34: // "
-          escape = "&quot;";
+          escape = '&quot;';
           break;
         case 38: // &
-          escape = "&amp;";
+          escape = '&amp;';
           break;
         case 39: // '
-          escape = "&#39;";
+          escape = '&#39;';
           break;
         case 60: // <
-          escape = "&lt;";
+          escape = '&lt;';
           break;
         case 62: // >
-          escape = "&gt;";
+          escape = '&gt;';
           break;
         default:
           continue;
@@ -72,11 +72,11 @@ export class Escape {
     }
 
     const res = str.replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&#x3A;/g, ":")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&amp;/g, "&");
+      .replace(/&#39;/g, '\'')
+      .replace(/&#x3A;/g, ':')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&');
 
     return Escape.unescapeHtml(res);
   }
@@ -84,54 +84,53 @@ export class Escape {
   static escapeSql(sqlStr: string): string {
     const matchEscSqlRx = Escape.matchEscSqlRx;
     let chunkIndex = 0;
-    let escapedSqlStr = "";
+    let escapedSqlStr = '';
     let matchChar: RegExpExecArray | null;
-  
+
     while ((matchChar = matchEscSqlRx.exec(sqlStr)) !== null) {
       switch (matchChar[0]) {
-        case "\0":
-          escapedSqlStr += "\\0";
+        case '\0':
+          escapedSqlStr += '\\0';
           break;
-        case "\x08":
-          escapedSqlStr += "\\b";
+        case '\x08':
+          escapedSqlStr += '\\b';
           break;
-        case "\x09":
-          escapedSqlStr += "\\t";
+        case '\x09':
+          escapedSqlStr += '\\t';
           break;
-        case "\x1a":
-          escapedSqlStr += "\\z";
+        case '\x1a':
+          escapedSqlStr += '\\z';
           break;
-        case "\n":
-          escapedSqlStr += "\\n";
+        case '\n':
+          escapedSqlStr += '\\n';
           break;
-        case "\r":
-          escapedSqlStr += "\\r";
+        case '\r':
+          escapedSqlStr += '\\r';
           break;
         case '"':
           escapedSqlStr += '\\"';
           break;
-        case "'":
-          escapedSqlStr += "\\'";
+        case '\'':
+          escapedSqlStr += '\\\'';
           break;
-        case "\\":
-          escapedSqlStr += "\\\\";
+        case '\\':
+          escapedSqlStr += '\\\\';
           break;
-        case "%":
-          escapedSqlStr += "\\%";
+        case '%':
+          escapedSqlStr += '\\%';
           break;
         default:
           continue;
       }
-  
+
       escapedSqlStr += sqlStr.slice(chunkIndex, matchChar.index);
       chunkIndex = matchChar.index + 1;
     }
-  
+
     if (chunkIndex < sqlStr.length) {
-      return "'" + escapedSqlStr + sqlStr.slice(chunkIndex) + "'";
+      return '\'' + escapedSqlStr + sqlStr.slice(chunkIndex) + '\'';
     }
-  
-    return "'" + escapedSqlStr + "'";
+
+    return '\'' + escapedSqlStr + '\'';
   }
-  
 }
