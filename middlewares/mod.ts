@@ -3,3 +3,4 @@ export { requestId } from './requestId/mod.ts';
 export { throttle } from './throttle/mod.ts';
 export type { ThrottleOptions } from './throttle/mod.ts';
 export { oakCors } from './cors/mod';
+export { Escape } from './escape/mod.ts';
