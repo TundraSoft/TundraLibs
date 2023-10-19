@@ -72,8 +72,8 @@ export class QueryTranslator {
       value = this.getGenerator(value);
     }
     if (
-      typeof value === null || typeof (value) === 'function' ||
-      typeof (value) === 'symbol' || typeof (value) === 'undefined' ||
+      typeof value === null || typeof value === 'function' ||
+      typeof value === 'symbol' || typeof value === 'undefined' ||
       String(value).toUpperCase() === 'NULL'
     ) {
       return 'NULL';
