@@ -95,7 +95,7 @@ export class Options<
    * @param value - The value of the option.
    * @returns The instance of the class for method chaining.
    */
-  private _setOption<K extends keyof O>(name: K, value: O[K]): this;
+  protected _setOption<K extends keyof O>(name: K, value: O[K]): this;
 
   /**
    * Sets an option with a specific name and unknown value.
@@ -104,7 +104,7 @@ export class Options<
    * @param value - The unknown value of the option.
    * @returns The instance of the class for method chaining.
    */
-  private _setOption(name: string, value: unknown): this {
+  protected _setOption(name: string, value: unknown): this {
     this._options.set(name, value as O[keyof O]);
     return this;
   }
