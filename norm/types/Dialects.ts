@@ -1,7 +1,1 @@
-export type Dialects =
-  | 'SQLITE'
-  | 'MYSQL'
-  | 'MARIADB'
-  | 'POSTGRESQL'
-  | 'POSTGRESQL2'
-  | 'MONGODB';
+export type Dialects = 'POSTGRES' | 'MARIADB' | 'MONGODB' | 'SQLITE';
