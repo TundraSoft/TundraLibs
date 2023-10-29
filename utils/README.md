@@ -6,8 +6,8 @@ Few simple utility functions which are used in Tundralibs.
 
 - [Decorators](#decorators)
 - [BaseError](#baseerror)
-- [privateObject](#privateObject)
 - [envArgs](#envargs)
+- [privateObject](#privateObject)
 
 ## Decorators
 
@@ -66,28 +66,6 @@ new BaseError(message: string, library: string, metaTags?: ErrorMetaTags)
 `metaTags?: ErrorMetaTags` - Extra information with regards to the error.
 This can be anything which can be used to help debug.
 
-## privateObject
-
-Provides a simple way to create "private" objects which can be used to store
-data somewhat safely. This was created to store sensitive information in class
-and preventing them from being displayed when console.log is used on the class.
-
-```ts
-const obj = privateObject<T extends Record<string, unknown> = Record<string, unknown>>(data?: T, enableMutations = true);
-console.log(obj); // prints { has: [Function] } etc
-```
-
-`T extends Record<string, unknown>` - The type definition for the object.
-Although not required, its nice to have it.
-
-`data?: T` - The data to be used as initialize the object
-
-`enableMutations = true` - Enable editing or deleting entries. Defaults to
-true, but when set to false, it will prevent editing
-
-When `enableMutations` is set to false, ensure `data` has been passed, if not
-the object becomes uneditable!
-
 ## envArgs
 
 An easy and simple way to access Environment variables, including secrets from
@@ -119,3 +97,26 @@ const env = envArgs(envFilePath = './', loadDockerSecrets = true);
 the root folder.
 
 `loadDockerSecrets: boolean` - Should the docker secrets be loaded
+
+
+## privateObject
+
+Provides a simple way to create "private" objects which can be used to store
+data somewhat safely. This was created to store sensitive information in class
+and preventing them from being displayed when console.log is used on the class.
+
+```ts
+const obj = privateObject<T extends Record<string, unknown> = Record<string, unknown>>(data?: T, enableMutations = true);
+console.log(obj); // prints { has: [Function] } etc
+```
+
+`T extends Record<string, unknown>` - The type definition for the object.
+Although not required, its nice to have it.
+
+`data?: T` - The data to be used as initialize the object
+
+`enableMutations = true` - Enable editing or deleting entries. Defaults to
+true, but when set to false, it will prevent editing
+
+When `enableMutations` is set to false, ensure `data` has been passed, if not
+the object becomes uneditable!

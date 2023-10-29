@@ -1,24 +1,25 @@
-import { Options } from '../../options/mod.ts';
 import type { OptionKeys } from '../../options/mod.ts';
-import { BaseCacher } from '../BaseCacher.ts';
-import type { CacheValue, MemoryCacherOptions } from '../types/mod.ts';
 
-/**
- * Cache implementation that stores data in memory.
- * @typeParam O - The options type.
- */
-export class MemoryCacher<O extends MemoryCacherOptions = MemoryCacherOptions>
-  extends BaseCacher<O> {
-  protected _cache: Map<string, CacheValue> = new Map();
+import type { CacheValue, MemoryCacherOptions } from '../types/mod.ts';
+import { AbstractCache } from '../AbstractCache.ts';
+
+export class MemoryCacher extends AbstractCache<MemoryCacherOptions> {
+  private _cache: Map<string, CacheValue> = new Map();
   protected _expiryTimers: Map<string, number> = new Map();
 
   /**
    * Constructs a new instance of the MemoryCacher class.
    *
+   * @param name - The name of the cache. This is used to namespace the cache.
    * @param options - The options to initialize the cache with.
    */
-  constructor(options: OptionKeys<O>) {
-    super(options);
+  constructor(name: string, options: OptionKeys<MemoryCacherOptions>) {
+    if (options.engine !== 'MEMORY') {
+      throw new Error(
+        `Invalid engine type '${options.engine}' for MemoryCacher.`,
+      );
+    }
+    super(name, options);
   }
 
   /**

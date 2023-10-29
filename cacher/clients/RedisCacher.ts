@@ -1,27 +1,27 @@
 import { RedisConnect } from '../../dependencies.ts';
 import type { Redis } from '../../dependencies.ts';
 
-import { Options } from '../../options/mod.ts';
 import type { OptionKeys } from '../../options/mod.ts';
-import { BaseCacher } from '../BaseCacher.ts';
 import type { CacheValue, RedisCacherOptions } from '../types/mod.ts';
+import { AbstractCache } from '../AbstractCache.ts';
+import { Cacher } from '../Cacher.ts';
 
-/**
- * Represents a Redis cache implementation.
- *
- * @template O - The options type for the RedisCacher.
- */
-export class RedisCacher<O extends RedisCacherOptions = RedisCacherOptions>
-  extends BaseCacher<O> {
+export class RedisCacher extends AbstractCache<RedisCacherOptions> {
   private _client: Redis | undefined = undefined;
-
   /**
-   * Creates an instance of the RedisCacher class.
+   * Constructs a new instance of the MemoryCacher class.
    *
-   * @param options - The partial options object for the RedisCacher.
+   * @param name - The name of the cache. This is used to namespace the cache.
+   * @param options - The options to initialize the cache with.
    */
-  constructor(options: Partial<OptionKeys<O>>) {
-    super(options as O);
+  constructor(name: string, options: OptionKeys<RedisCacherOptions>) {
+    if (options.engine !== 'REDIS') {
+      throw new Error(
+        `Invalid engine type '${options.engine}' for MemoryCacher.`,
+      );
+    }
+    super(name, options);
+    Cacher.register(name, this as unknown as AbstractCache);
   }
 
   /**
@@ -46,10 +46,10 @@ export class RedisCacher<O extends RedisCacherOptions = RedisCacherOptions>
   protected async _set(key: string, value: CacheValue): Promise<void> {
     await this._init();
     const expiry = value.expiry;
-    console.log(value);
+    // console.log(`~~~~~: value`, value);
 
     if (expiry > 0) {
-      console.log(expiry);
+      // console.log(`~~~~~ expiry:`, expiry);
       await this._client?.set(key, JSON.stringify(value), { ex: expiry });
     } else {
       await this._client?.set(key, JSON.stringify(value));
@@ -68,6 +68,7 @@ export class RedisCacher<O extends RedisCacherOptions = RedisCacherOptions>
   ): Promise<CacheValue<T> | undefined> {
     await this._init();
     const value = await this._client?.get(key);
+    // console.log(`~~~~~~~ get value: `, value);
     if (!value) {
       return undefined;
     }
@@ -93,8 +94,8 @@ export class RedisCacher<O extends RedisCacherOptions = RedisCacherOptions>
   protected async _clear(): Promise<void> {
     await this._init();
     // Get all keys belonging to this cache
-    const keys = await this._client?.keys(`${this._getOption('name')}:*`);
-    if (keys) {
+    const keys = await this._client?.keys(`${this._name}:*`);
+    if (keys && keys.length > 0) {
       await this._client?.del(...keys);
     }
   }
@@ -115,18 +116,13 @@ export class RedisCacher<O extends RedisCacherOptions = RedisCacherOptions>
       });
     }
   }
+
+  /**
+   * Helper function to close active redis connection
+   */
+  public async close(): Promise<void> {
+    if (this._client) {
+      await this._client?.close();
+    }
+  }
 }
-
-const a = new RedisCacher({
-  name: 'test',
-  mode: 'REDIS',
-  host: 'anq-test.redis.cache.windows.net',
-  port: 6380,
-  password: 'gJ0G0l1PKwxn9mhVJjkBVW7xI279NTL2KAzCaPKdtxk=',
-  db: 1,
-  tls: true,
-  defaultExpiry: 10,
-});
-
-// await a.set('USER:1', {a: Math.random()});
-console.log(await a.get('USER:1'));

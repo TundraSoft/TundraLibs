@@ -43,8 +43,8 @@ const generate = async (
 };
 
 /**
- * Generates a time based OTP compliant with RFC-6238. 
- * 
+ * Generates a time based OTP compliant with RFC-6238.
+ *
  * @param key string - The secret key
  * @param algo OTPAlgorithm - The algorithm to use. Accepted values are SHA-1 | SHA-256 | SHA-384 | SHA-512
  * @param length number - The length of the generated OTP
@@ -65,7 +65,7 @@ export const TOTP = async (
 
 /**
  * Generates a Hash based OTP compliant with RFC-4226
- * 
+ *
  * @param key string - The secret key
  * @param algo OTPAlgorithm - The algorithm to use. Accepted values are SHA-1 | SHA-256 | SHA-384 | SHA-512
  * @param length number - The length of the generated OTP
@@ -80,4 +80,3 @@ export const HOTP = async (
 ) => {
   return await generate(key, algo, length, counter);
 };
-

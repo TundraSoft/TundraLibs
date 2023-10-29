@@ -5,20 +5,22 @@ import {
 } from '../../dev.dependencies.ts';
 import { afterEach, beforeEach, describe, it } from '../../dev.dependencies.ts';
 
-import { MemoryCacher } from '../clients/mod.ts';
+import { RedisCacher } from '../clients/mod.ts';
 
-describe(`[library='Cacher' mode='Memory']`, () => {
-  let cacher: MemoryCacher;
+describe(`[library='Cacher' engine='REDIS']`, () => {
+  let cacher: RedisCacher;
 
   beforeEach(() => {
-    cacher = new MemoryCacher({
-      mode: 'MEMORY',
-      name: 'testCacher',
+    cacher = new RedisCacher('testCacher', {
+      engine: 'REDIS',
+      host: 'localhost',
+      port: 6379,
     });
   });
 
   afterEach(async () => {
     await cacher.clear();
+    await cacher.close();
   });
 
   it('should set and get values correctly', async () => {

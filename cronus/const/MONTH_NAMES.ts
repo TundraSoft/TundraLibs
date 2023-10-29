@@ -10,5 +10,5 @@ export const MONTH_NAMES = {
   SEP: 9,
   OCT: 10,
   NOV: 11,
-  DEV: 12,
+  DEC: 12,
 };

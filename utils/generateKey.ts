@@ -15,4 +15,4 @@ export const generateKey = (
 };
 
 // Example usage:
-console.log(generateKey(32, 'ANQ-'));
+// console.log(generateKey(32, 'ANQ-'));

@@ -89,10 +89,9 @@ export abstract class RESTler<
    * @returns RESTlerResponse - The RESTlerResponse object
    */
   protected async _makeRequest<
-    ReqBody extends RESTlerRequestBody = Record<string, unknown>,
     RespBody extends RESTlerResponseBody = Record<string, unknown>,
   >(
-    request: RESTlerRequest<ReqBody>,
+    request: RESTlerRequest,
   ): Promise<RESTlerResponse<RespBody>> {
     Object.assign(request.endpoint, {
       baseURL: this._getOption('endpointURL'),
@@ -100,7 +99,7 @@ export abstract class RESTler<
     });
     request.headers = { ...this._defaultHeaders, ...request.headers };
     // Inject auth here
-    this._authInjector<ReqBody>(request);
+    this._authInjector(request);
 
     const endpoint = this._makeURL(request.endpoint as RESTlerEndpoint),
       controller = new AbortController(),
@@ -202,19 +201,16 @@ export abstract class RESTler<
   }
 
   protected async _handleResponse<
-    ReqBody extends RESTlerRequestBody = Record<string, unknown>,
     RespBody extends RESTlerResponseBody = Record<string, unknown>,
   >(
-    request: RESTlerRequest<ReqBody>,
+    request: RESTlerRequest,
     response: RESTlerResponse<RespBody>,
   ): Promise<void> {
   }
 
   //#region Override these methods
-  protected _authInjector<
-    ReqBody extends RESTlerRequestBody = Record<string, unknown>,
-  >(
-    request: RESTlerRequest<ReqBody>,
+  protected _authInjector(
+    request: RESTlerRequest,
   ): void {
     // Do nothing
   }

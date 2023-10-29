@@ -10,4 +10,4 @@ export type ColumnDefinition = {
   };
   nullable?: boolean;
   validations?: ColumnValidations;
-}
+};

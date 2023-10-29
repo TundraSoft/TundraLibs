@@ -32,21 +32,24 @@ export {
 
 export {
   Client as PGClient,
-  ConnectionError,
+  ConnectionError as PGConnectionError,
   Pool as PGPool,
   PostgresError,
   TransactionError,
 } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
 export type { ClientOptions as PGClientOptions } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
 
-export { DB as SQLiteClient } from 'https://deno.land/x/sqlite@v3.4.0/mod.ts';
+export { DB as SQLiteDBClient } from 'https://deno.land/x/sqlite@v3.4.0/mod.ts';
+export type { SqliteOptions as SQLiteDBClientConfig } from 'https://deno.land/x/sqlite@v3.4.0/mod.ts';
 
 export {
   Bson,
   MongoClient as MongoDBClient,
 } from 'https://deno.land/x/mongo@v0.31.1/mod.ts';
-export { Client as MySQL } from 'https://deno.land/x/mysql@v2.10.3/mod.ts';
-export type { ClientConfig as MySQLClientConfig } from 'https://deno.land/x/mysql@v2.10.3/mod.ts';
+export type { ConnectOptions as MongoDBClientConfig } from 'https://deno.land/x/mongo@v0.31.1/mod.ts';
+
+export { Client as MySQL } from 'https://deno.land/x/mysql@v2.12.1/mod.ts';
+export type { ClientConfig as MySQLClientConfig } from 'https://deno.land/x/mysql@v2.12.1/mod.ts';
 
 // export { default as postgresjs } from "https://deno.land/x/postgresjs@v3.3.1/mod.js"
 // export * as MySQLClient from "https://deno.land/x/mysql2@v1.0.5/mod.ts";

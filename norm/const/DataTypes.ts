@@ -29,15 +29,15 @@ export const enum DataTypes {
   'TEXT' = 'TEXT',
   // Date & Time
   'DATE' = 'DATE',
-  'DATE_Z' = 'DATE_Z', 
+  'DATE_Z' = 'DATE_Z',
   'TIME' = 'TIME',
-  'TIME_Z' = 'TIME_Z', 
+  'TIME_Z' = 'TIME_Z',
   'DATETIME' = 'DATETIME',
   'DATETIME_Z' = 'DATETIME_Z',
   'TIMESTAMP' = 'TIMESTAMP',
   'TIMESTAMP_Z' = 'TIMESTAMP_Z',
   // Special
-  'BYTEA' = 'BYTEA',
+  'BLOB' = 'BLOB',
   'UUID' = 'UUID',
   'JSON' = 'JSON',
   'ARRAY' = 'ARRAY',
@@ -84,16 +84,16 @@ export const DataTypeMap = {
   'CHARACTER VARYING': type('string'),
   'TEXT': type('string'),
   // Date & Time
-  'DATE': type('date'), 
-  'DATE_Z': type('date'), 
-  'TIME': type('date'), 
-  'TIME_Z': type('date'), 
-  'DATETIME': type('date'), 
-  'DATETIME_Z': type('date'), 
-  'TIMESTAMP': type('date'), 
-  'TIMESTAMP_Z': type('date'), 
+  'DATE': type('date'),
+  'DATE_Z': type('date'),
+  'TIME': type('date'),
+  'TIME_Z': type('date'),
+  'DATETIME': type('date'),
+  'DATETIME_Z': type('date'),
+  'TIMESTAMP': type('date'),
+  'TIMESTAMP_Z': type('date'),
   // Special
-  'BYTEA': type('string'),
+  'BLOB': type('string'),
   'UUID': type('string'),
   'JSON': type('object'),
   'ARRAY': array(),
@@ -107,5 +107,5 @@ export const DataTypeMap = {
   'AUTO_INCREMENT': type('number'),
   'SERIAL': type('number'),
   'SMALLSERIAL': type('number'),
-  'BIGSERIAL': type('bigint')
-}
+  'BIGSERIAL': type('bigint'),
+};

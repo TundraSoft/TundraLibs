@@ -1,24 +1,41 @@
 import { Options } from '../options/mod.ts';
 import type { OptionKeys } from '../options/mod.ts';
-
 import type {
-  BaseCacherOptions,
+  AbstractCacherOptions,
   CacheSettings,
   CacheValue,
 } from './types/mod.ts';
+import { Cacher } from './Cacher.ts';
 
-/**
- * Base class for implementing a cache.
- * @typeParam O - The options type.
- */
-export abstract class BaseCacher<O extends BaseCacherOptions>
-  extends Options<O> {
+export abstract class AbstractCache<
+  O extends AbstractCacherOptions = AbstractCacherOptions,
+> extends Options<O> {
+  protected _name: string;
+
   /**
-   * Constructs a new instance of the BaseCacher class.
-   * @param options - The options to initialize the cache with.
+   * Creates a new AbstractCache instance.
+   *
+   * @param name - The name of the cache. Used to namespace keys.
+   * @param options - The cache settings.
    */
-  constructor(options: OptionKeys<O>) {
+  constructor(name: string, options: OptionKeys<O>) {
     super(options, { defaultExpiry: 10 * 60 } as Partial<O>);
+    this._name = name;
+    Cacher.register(name, this as unknown as AbstractCache);
+  }
+
+  /**
+   * The name of the cache.
+   */
+  get name(): string {
+    return this._name;
+  }
+
+  /**
+   * The cache engine.
+   */
+  get engine(): string {
+    return this._getOption('engine');
   }
 
   /**
@@ -28,6 +45,7 @@ export abstract class BaseCacher<O extends BaseCacherOptions>
    * @returns True if the key exists, false otherwise.
    */
   public async has(key: string): Promise<boolean> {
+    this._getOption('engine');
     const cleanedKey = this._cleanKey(key);
     return await this._has(cleanedKey);
   }
@@ -47,7 +65,7 @@ export abstract class BaseCacher<O extends BaseCacherOptions>
   ): Promise<void> {
     const cleanedKey = this._cleanKey(key);
     const valObj: CacheValue = {
-      value,
+      data: value,
       expiry: cacheOptions?.expiry ||
         this._getOption('defaultExpiry') as number,
       window: cacheOptions?.window || false,
@@ -64,7 +82,7 @@ export abstract class BaseCacher<O extends BaseCacherOptions>
    */
   public async get<T>(key: string): Promise<T | undefined> {
     const cleanedKey = this._cleanKey(key);
-    return (await this._get<T>(cleanedKey))?.value;
+    return (await this._get<T>(cleanedKey))?.data;
   }
 
   /**
@@ -84,6 +102,11 @@ export abstract class BaseCacher<O extends BaseCacherOptions>
     await this._clear();
   }
 
+  //#region Protected Methods
+  protected _cleanKey(key: string): string {
+    return `${this._name}:${key}`;
+  }
+  //#region Abstract Methods
   /**
    * Actual implementation of has method.
    *
@@ -122,15 +145,7 @@ export abstract class BaseCacher<O extends BaseCacherOptions>
    * Actual implementation of clear method
    */
   protected abstract _clear(): Promise<void> | void;
+  //#endregion Abstract Methods
 
-  /**
-   * Cleans the given key by prefixing it with the cache name.
-   *
-   * @param key - The key to clean.
-   * @returns The cleaned key.
-   */
-  protected _cleanKey(key: string): string {
-    const prefix = this._getOption('name');
-    return `${prefix}:${key}`;
-  }
+  //#endregion Protected Methods
 }

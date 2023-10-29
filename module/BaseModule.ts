@@ -49,7 +49,7 @@ class ModuleManager {
 
 export abstract class BaseModule<P extends Provides = Provides> {
   protected provides: P = {} as P;
-  protected _name: string;
+  declare protected _name: string;
 
   constructor() {
     this.do();

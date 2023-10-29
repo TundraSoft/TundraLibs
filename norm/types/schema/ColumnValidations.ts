@@ -1,7 +1,7 @@
 export type ColumnValidations = {
   required?: {
     message?: string;
-  }
+  };
   regex?: {
     pattern: RegExp;
     message?: string;
@@ -18,5 +18,5 @@ export type ColumnValidations = {
     min: number;
     max: number;
     message?: string;
-  }
+  };
 };

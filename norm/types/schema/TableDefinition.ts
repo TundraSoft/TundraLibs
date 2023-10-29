@@ -16,7 +16,7 @@ export type TableDefinition = {
       hasMany: boolean;
       relationship: {
         [name: string]: string;
-      }
+      };
     };
   };
   distrbutionKey?: string;
@@ -29,4 +29,4 @@ export type TableDefinition = {
     };
     list: Array<number>;
   };
-}
+};

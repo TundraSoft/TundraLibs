@@ -1,5 +1,3 @@
-import { StringBuilder } from 'https://deno.land/x/nonstd@v0.2.2/src/Strings/StringBuilder.ts';
-
 /**
  * nanoid
  *
