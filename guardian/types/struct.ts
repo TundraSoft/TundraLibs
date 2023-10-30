@@ -1,4 +1,4 @@
-// deno-lint-ignore-file ban-types no-explicit-any
+// deno-lint-ignore-file  no-explicit-any
 import { FunctionType, IsAsync, ResolvedValue } from './Function.ts';
 import { Primitive } from './Primitive.ts';
 import { GuardianProxy } from './GuardianProxy.ts';

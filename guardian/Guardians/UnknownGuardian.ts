@@ -51,7 +51,6 @@ export class UnknownGuardian<
       if (
         input === null ||
         (typeof input === 'object' &&
-          // deno-lint-ignore ban-types
           (input as unknown as object).toString === Object.prototype.toString)
       ) {
         throw new Error(message || `Expect value to be a string`);
