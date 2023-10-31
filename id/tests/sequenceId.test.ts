@@ -3,12 +3,11 @@ import {
   assertEquals,
   assertMatch,
   assertNotEquals,
-  describe, 
-  it
+  describe,
+  it,
 } from '../../dev.dependencies.ts';
 
 describe('[library="id" mode="sequenceId"]', () => {
-
   it('Ensure the values are in sequence', () => {
     for (let i = 0; i < 100; i++) {
       const res1 = sequenceId(),

@@ -2,11 +2,11 @@ import {
   alphabets,
   alphaNumeric,
   alphaNumericCase,
+  cryptoKey,
   nanoid,
   numbers,
   password,
-  sequenceId, 
-  cryptoKey
+  sequenceId,
 } from '../mod.ts';
 
 Deno.bench({
@@ -133,12 +133,6 @@ Deno.bench({
 }, () => {
   sequenceId(134);
 });
-
-
-
-
-
-
 
 Deno.bench({
   name:

@@ -16,7 +16,7 @@ cryptoKey = (length = 32, prefix = '', hyphenInterval = 0): string
 
 `length: number` - Length of the key to be generated. defaults to 32
 
-`prefix: string` - Prefix the key with said string. *NOTE* this will increase the length of the key. Defaults to empty string
+`prefix: string` - Prefix the key with said string. _NOTE_ this will increase the length of the key. Defaults to empty string
 
 `hyphenInterval: number` - Add hyphens after x characters. Defaults to 0 (no hyphen)
 
@@ -32,7 +32,7 @@ console.log(cryptoKey(32, 'TLIB-', 4)); // TLIB-9374-2723-001b-4013-6ee3-0ea8-ca
 
 ## nanoId
 
-Generates a random id of predefined x length using input data set. This utility is meant to be a fast and easy way to generate ID keeping performance in mind and not collision resistance. 
+Generates a random id of predefined x length using input data set. This utility is meant to be a fast and easy way to generate ID keeping performance in mind and not collision resistance.
 
 ### Predefined Data sets:
 
@@ -61,12 +61,10 @@ passwordGenerator(size = 21): string
 
 `size: number` - Length of the password. Calls nanoId internally using password as the data set
 
-
 ## sequenceId
 
 Generates a unique ID based on server information and a counter. This is based out of https://mariadb.com/kb/en/uuid_short/
 Uses PID of deno and current epoch (not the smartest, but for now this is all we have)
-
 
 ### Usage
 
@@ -75,4 +73,3 @@ sequenceId(counter?: number): Bigint
 ```
 
 `counter?: number` - Override the counter. By default everytime the "application" starts, the counter is set to 0. Use this to override that. Once it is overridden, all subsequent ID's will be generated from that value
-
