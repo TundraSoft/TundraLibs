@@ -10,10 +10,8 @@ import type { FunctionParameters, FunctionType } from '../types/mod.ts';
  * @class ObjectGuardian
  */
 export class ObjectGuardian<
-  // deno-lint-ignore ban-types
   P extends FunctionParameters = [object],
-> // deno-lint-ignore ban-types
-  extends BaseGuardian<FunctionType<object, P>> {
+> extends BaseGuardian<FunctionType<object, P>> {
 }
 
 export const objectGuard = new ObjectGuardian(type('object')).proxy();
