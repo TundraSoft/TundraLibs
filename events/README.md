@@ -1,7 +1,8 @@
 # Events
 
-A simple class with which any class can start emitting events. Supports both
-Typed and untyped events.
+Provides the ability to "emit" to events in a class. Supports both strongly typed and untyped events.
+
+Supports both synchronus and asynchronus event emitting.
 
 ## Usage
 
@@ -106,8 +107,6 @@ emit(
 `...args: Parameters<Callback>` - The parameters to pass to the callback
 function
 
-This is a **protected** method.
-
 Triggers an event passing the variables to the callback waiting for each
 callback to finish execution. This will return an array of all the return values
 
@@ -120,14 +119,10 @@ emitSync(
   ): ReturnType<Callback>[]
 ```
 
-`@accessor - Protected`
-
 `event: EventName` - The event to "trigger"
 
 `...args: Parameters<Callback>` - The parameters to pass to the callback
 function
-
-This is a **protected** method.
 
 Triggers an event passing the variables to the callback without waiting for each
 callback to finish execution. This will return an array of all the return values

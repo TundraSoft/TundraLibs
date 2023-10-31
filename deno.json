@@ -7,14 +7,12 @@
     "strict": true
   },
   "lint": {
-    "files": {
-      "include": [
-        "./"
-      ],
-      "exclude": [
-        "*/testdata/*"
-      ]
-    },
+    "include": [
+      "./"
+    ],
+    "exclude": [
+      "*/testdata/"
+    ],
     "rules": {
       "tags": [
         "recommended"
@@ -41,14 +39,12 @@
     "test": "deno task build && deno cache --reload ./dev.dependencies.ts && deno test -A"
   },
   "test": {
-    "files": {
-      "include": [
-        "./"
-      ],
-      "exclude": [
-        "*/testdata/"
-      ]
-    }
+    "include": [
+      "./"
+    ],
+    "exclude": [
+      "*/testdata/"
+    ]
   },
   "lock": false
 }

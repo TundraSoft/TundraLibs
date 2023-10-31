@@ -1,130 +1,123 @@
-import { OptionsKey, OptionsType } from './types.ts';
-import { EventName, Events, EventsType } from '../events/mod.ts';
+import { privateObject } from '../utils/privateObject.ts';
+import type { PrivateObject } from '../utils/privateObject.ts';
+import { Events } from '../events/mod.ts';
+import { EventCallback, EventType } from '../events/mod.ts';
+import { OptionKeys } from './types/mod.ts';
 
-// Options.ts
 /**
- * Options
- *
- * A helper class which helps manage class options. A class will typically extend this
- * class and provide the ability to load and manage options.
- * ```ts
- * import { Options } from "./mod.ts"
- *
- * type iOptionTest = {
- *  value1: string;
- *  value2: number;
- *  value3: {
- *    value31: boolean
- *  }
- *  value44?: string;
- * }
- *
- * class TypedOptions extends Options<iOptionTest> {
- *  constructor(options: NonNullable<iOptionTest>, defaults?: Partial<iOptionTest>) {
- *    super(options, defaults);
- *  }
- *
- *  public someOtherFunc() {
- *    console.log(this._getOption("value1")); // returns value1's value
- *    console.log(this._getOption("value3").value31); // returns value3 -> value31's boolean output
- *    console.log(this._options.value3?.value31);
- *    console.log(this._options.value44);
- *  }
- * }
- *
- * let typedOption: Test = new TypedOptions({value1: 'dff', value2: 23, value3: {value31: true}}, {value1: "abc"});
- * typedOption.someOtherFunc();
- * ```
- *
- * @todo Option value validation - Right now we only validate type and not value
- * @todo Nested options access. Currently only top level options can be access directly.
+ * A core concept in tundralibs is to build reusable modules or libraris which
+ * can be easily extended and customized but also provide some consistant
+ * functionality such as managing secure options, events and logging.
+ * The options class provides an easy and simple way of storing options for
+ * the module and also allow creation of events.
  */
 export class Options<
-  T extends OptionsType = Record<OptionsKey, unknown>,
-  // deno-lint-ignore no-explicit-any
-  E extends EventsType = Record<EventName, any>,
+  O extends Record<string, unknown> = Record<string, unknown>,
+  E extends EventType = Record<string, EventCallback>,
 > extends Events<E> {
-  protected _options: T | NonNullable<T>;
-
-  constructor(options: T | NonNullable<T> | Partial<T>, defaults?: Partial<T>);
+  private _options: PrivateObject<O> = privateObject<O>();
 
   /**
-   * Initialized the class. Sets the options sent during class initialization
+   * Process the options provided. If the key contains a _on prefix, and is a
+   * function, it is assumed to be an event. Defaults can be used to set
+   * the default value and will be gracefully overridden by the options.
    *
-   * @param options Object The actual options
-   * @param defaults Object Default values for options
+   * @param options - An object containing the options and events to be set.
+   * @param defaults - An optional object containing default values for the options.
    */
-  constructor(
-    options: Record<OptionsKey, unknown>,
-    defaults?: Record<OptionsKey, unknown>,
-  ) {
+  constructor(options: OptionKeys<O, E>, defaults?: Partial<O>) {
+    const { options: op, events: ev } = Object.entries(options || {}).reduce(
+      (acc: { options: O; events: E }, [key, value]) => {
+        if (key.startsWith('_on') && value instanceof Function) {
+          // deno-lint-ignore no-explicit-any
+          (acc.events as any)[key.slice(3)] = value;
+        } else {
+          // deno-lint-ignore no-explicit-any
+          (acc.options as any)[key] = value;
+        }
+        return acc;
+      },
+      { options: {} as O, events: {} as E }, // Initialize options and events with correct types
+    );
+
     super();
-    // Initialize Options
-    this._options = {} as T;
-    // First add defaults if present
     if (defaults) {
       this._setOptions(defaults);
     }
-    // Now set the options provided
-    this._setOptions(options);
+
+    this._setOptions(op);
+
+    Object.entries(ev).forEach(([key, value]) => {
+      this.on(key, value as E[keyof E]);
+    });
   }
 
-  protected _hasOption<K extends keyof T>(name: K): boolean;
+  /**
+   * Checks if the given option name exists and has value in the options object
+   *
+   * @param name - The name of the option to check.
+   * @returns A boolean indicating whether the option exists or not.
+   */
+  protected _hasOption<K extends keyof O>(name: K): boolean;
 
   /**
-   * A small helper function to check if a option key exists, and if it
-   * does, it also check if value is not null or undefined.
+   * Checks if the given option name exists and has value in the options object
    *
-   * @param name Option key to check
-   * @returns Boolean, true if exists false if it does not
+   * @param name - The name of the option to check.
+   * @returns A boolean indicating whether the option exists or not.
    */
-  protected _hasOption(name: OptionsKey): boolean {
-    if (this._options[name] !== undefined) {
-      return true;
-    }
-    return false;
+  protected _hasOption(name: string): boolean {
+    return this._options.has(name);
   }
 
-  protected _getOption<K extends keyof T>(name: K): T[K];
+  /**
+   * Retrieves the value of the specified option from the options object.
+   *
+   * @param name - The name of the option to retrieve.
+   * @returns The value of the specified option, or `undefined` if the option does not exist.
+   */
+  protected _getOption<K extends keyof O>(name: K): O[K];
 
   /**
-   * Gets an option value basis the key provided as input.
+   * Retrieves the value of the specified option from the options object.
    *
-   * @param name string The option name for which value is needed
-   * @returns any - Returns the option value
+   * @param name - The name of the option to retrieve.
+   * @returns The value of the specified option, or `undefined` if the option does not exist.
    */
-  protected _getOption(name: OptionsKey): unknown {
-    if (this._hasOption(name)) {
-      return this._options[name];
-    }
-    return undefined;
+  protected _getOption(name: string): unknown {
+    return this._options.get(name);
   }
 
-  protected _setOption<K extends keyof T>(name: K, value: T[K]): this;
+  /**
+   * Sets an option with a specific name and value.
+   *
+   * @param name - The name of the option.
+   * @param value - The value of the option.
+   * @returns The instance of the class for method chaining.
+   */
+  protected _setOption<K extends keyof O>(name: K, value: O[K]): this;
 
   /**
-   * Sets an option value.
+   * Sets an option with a specific name and unknown value.
    *
-   * @param name string The name of the option
-   * @param value the value which is to be set
-   * @returns reference to this class
+   * @param name - The name of the option.
+   * @param value - The unknown value of the option.
+   * @returns The instance of the class for method chaining.
    */
-  protected _setOption(name: OptionsKey, value: unknown): this {
-    // deno-lint-ignore no-explicit-any
-    this._options[name as keyof T] = value as any;
+  protected _setOption(name: string, value: unknown): this {
+    this._options.set(name, value as O[keyof O]);
     return this;
   }
 
   /**
-   * Bulk set options data by deep cloning the object.
+   * Sets multiple options at once. This is called by the class constructor.
    *
-   * @param options All option data
-   * @returns Reference to this class
+   * @param options - An object containing the options to be set.
+   * @returns The instance of the class for method chaining.
    */
-  protected _setOptions(options: Partial<T> | OptionsType): this {
-    for (const key in options) {
-      // deno-lint-ignore no-explicit-any
-      this._setOption(key, options[key] as any);
+  private _setOptions(options: Partial<O>): this {
+    for (const [key, value] of Object.entries(options)) {
+      this._setOption(key as keyof O, value as O[keyof O]);
     }
     return this;
   }

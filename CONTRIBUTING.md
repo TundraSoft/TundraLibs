@@ -11,18 +11,20 @@ keep the usage of the libraries seamless throughout the ecosystem :)
 
 ```
 tundralibs
+|   mod.ts
 │   README.md
 │   dependencies.ts
-|   dev_dependencies.ts
+|   dev.dependencies.ts
 │
 └───module1
-│   │   types.ts
+│   │   types
+|   |   | mod.ts
 │   │   module.ts
 |   |   mod.ts
 |   |   README.md
 │   
 └───module2
-    │   types.ts
+    │   types
     │   module2.ts
 ```
 
@@ -34,17 +36,18 @@ important files:
 - dependencies.ts - All dependencies of all libraries present here. Do check if
   the library is already present here. If it is and the version is different,
   you can change but run a through testing before raising a PR
-- dev_dependencies.ts - The dependencies required for testing and other
+- dev.dependencies.ts - The dependencies required for testing and other
   development activities.
 
-In each module, typically 4 core files are present:
+In each module:
 
 - README.md - A detailed readme file detailing the functionality of the module
 - mod.ts - The centralized export file. This is the file which will be
   referenced for all imports
+- types - This directory contains all the types defined and used in this module
 - Module file - The actual module logic. _Avoid writing the module logic in
   mod.ts directly_
-- Test files - Deno test files for your module.
+- Tests folder - Contain tests and benchmarks (if applicable). Store test data in sub directory
 
 ## Issue Creation
 

@@ -29,10 +29,10 @@ jobs:
     steps:
       -
         name: Setup
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
       -
         name: Setup Deno
-        uses: denoland/setup-deno@v1.1.3
+        uses: denoland/setup-deno@v1.1.2
         with:
           deno-version: v1.x
       -
@@ -43,7 +43,9 @@ jobs:
         run: deno lint
       -
         name: Run tests
-        run: deno test -A --coverage=cov #--doc
+        run: |
+          deno test -A --coverage=cov #--doc
+          
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432

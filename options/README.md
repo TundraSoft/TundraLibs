@@ -1,138 +1,140 @@
 # Options
 
-An abstract class to help manage typed & UnTyped "Options" when defining a
-library or a class. "Options" are paramaters passed onto the constructor of a
-class during initialization.
+A core concept in tundralibs is to build reusable modules or libraris which can be easily extended and customized but also provide some consistant functionality such as managing secure options, events and logging. The options class provides an easy and simple way of storing options for the module and also allow creation of events.
+
+The options are stored using privateObjects.
 
 ## Usage
 
-Typed usage:
-
 ```ts
-import { Options } from './mod.ts';
-//#region Typed Options
-type iTypedOptions = {
-  value1: string;
-  value2: number;
-  value3: {
-    value31: boolean;
-  };
-  value44?: Array<string>;
-};
-class TypedOption extends Options<iTypedOptions> {
-  constructor(
-    options: NonNullable<iTypedOptions> | Partial<iTypedOptions>,
-    defaults?: Partial<iTypedOptions>,
-  ) {
-    super(options, defaults);
+type TestOptions = { foo: string; bar?: number };
+type TestEvents = { baz: (value: string) => void };
+class TestClass extends Options<TestOptions, TestEvents> {
+  constructor(opt: OptionKeys<TestOptions, TestEvents>) {
+    super(opt);
   }
 
-  // deno-lint-ignore no-explicit-any
-  public setOptions(name: keyof iTypedOptions, value: any) {
-    this._setOption(name, value);
+  checkExistence(name: string): boolean {
+    return this._hasOption(name as keyof TestOptions);
   }
 
-  public getOption(name: keyof iTypedOptions): unknown {
+  getValue<K extends keyof TestOptions>(name: K): TestOptions[K] {
     return this._getOption(name);
   }
 
-  public getOptions() {
-    return this._options;
+  updateValue<K extends keyof TestOptions>(
+    name: K,
+    value: TestOptions[K],
+  ): void {
+    this._setOption(name, value);
   }
 
-  public hasOption(name: string): boolean {
-    return this._hasOption(name as keyof iTypedOptions);
+  hasEvent(name: string): boolean {
+    return this._events.has(name as keyof TestEvents);
   }
 }
-```
 
-Untyped Usage:
-
-```ts
-class UnTypedOption extends Options {
-  constructor(options: OptionsType, defaults?: OptionsType) {
-    super(options, defaults);
+// Untyped
+class TestClass extends Options {
+  constructor(opt: OptionKeys) {
+    super(opt);
   }
 
-  public setOptions(name: OptionsKey, value: unknown) {
-    this._setOption(name, value);
-  }
-
-  public getOption(name: OptionsKey): unknown {
-    return this._getOption(name);
-  }
-
-  public getOptions() {
-    return this._options;
-  }
-
-  public hasOption(name: OptionsKey): boolean {
+  checkExistence(name: string): boolean {
     return this._hasOption(name);
   }
+
+  getValue(name: string): unknown {
+    return this._getOption(name);
+  }
+
+  updateValue(name: string, value: unknown): void {
+    this._setOption(name, value);
+  }
+
+  hasEvent(name: string): boolean {
+    return this._events.has(name);
+  }
 }
+let test: TestClass;
 ```
 
-### Methods
+## Methods
 
-#### constructor
+### constructor
+
+Process the options provided. If the key contains a _on prefix, and is a function, it is assumed to be an event. Defaults can be used to set the default value and will be gracefully overridden by the options.
 
 ```ts
-constructor(
-    options: Record<OptionsKey, unknown>,
-    defaults?: Record<OptionsKey, unknown>,
-  )
+constructor(options: OptionKeys<O, E>, defaults?: Partial<O>)
 ```
 
-`options: Record<OptionsKey, unknown>`: The options list which needs to be
-loaded when initializing the class. If it is a typed implementation then this
-will be a typed entry.
+Types:
 
-`defaults?: Record<OptionsKey, unknown>`: Default value for the options in case
-not passed in the options variable
+`O` - The options type
 
-The options and defaults value will be deep cloned and not referenced.
+Params:
 
-#### _hasOption
+`E` - The events type
+
+`options: OptionKeys<O, E>` - This merges the keys in Option Types and keys in events (prefixing them with _on) allowing to initialize a class with both options and events
+
+`defaults?: Partial<O>` - Contains default overrides
+
+### _hasOption
+
+Checks if the given option name exists and has value in the options object
 
 ```ts
-protected _hasOption(name: OptionsKey): boolean
+protected _hasOption<K extends keyof O>(name: K): boolean;
 ```
 
-Checks if a particular option exists. Returns True if it exists false if it does
-not
+Types:
 
-_NOTE_: Search is case sensitive. So option name TesT is not same as test
+`K` - Key in options (if typed, else defaults to string)
 
-`name: OptionsKey` The option name for which to check
+Params:
 
-#### _getOption
+`name: K` - The option key to check
+
+### _getOption
+
+Retrieves the value of the specified option from the options object.
 
 ```ts
-protected _getOption(name: OptionsKey): unknown
+protected _getOption<K extends keyof O>(name: K): O[K];
 ```
 
-Gets a particular option value
+Types:
 
-`name: OptionsKey`: The option key for which value is required
+`K` - Key of options. Defaults to string in untyped
 
-_NOTE_: Does not support nested keys yet.
+Params:
 
-#### _setOption
+`name: K` - The name of the option key for which the value is to be fetched
+
+_NOTE_ Return type in untyped will alwasys be unknown
+
+### _setOption
+
+Sets an option with a specific name and value.
 
 ```ts
-protected _setOption(name: OptionsKey, value: unknown): this
+protected _setOption<K extends keyof O>(name: K, value: O[K]): this;
 ```
 
-Sets a particular option key's value.
+Type:
 
-`name: OptionsKey`: The option key for which value has to be set.
+`K` - Key of options. Defaults to string in untyped
 
-`value: any`: The value
+Params:
 
-`returns: Options class instance` Returns the class instance to enable chaining
+`name: K` - The name of the option key for which the value is to be set
+
+`value: O[K]` - The value, defaults to unknown in untype
 
 ## TODO
 
-- [ ] Protect/disallow editablity of options (Make all methods protected) - Is
-      this needed?
-- [ ] Multi level Option manipulation
+- [ ] Better more detailed test case
+- [ ] Validation of option value
+- [ ] Default events?
