@@ -6,6 +6,7 @@ export type TundraLibErrorMetaTags = ErrorMetaTags & { library: string };
  * BaseError class for creating custom errors with additional metadata.
  */
 export class TundraLibError extends BaseError {
+  name = 'TundraLibError';
   /**
    * Creates a new instance of BaseError.
    *

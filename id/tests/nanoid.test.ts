@@ -2,7 +2,7 @@ import {
   alphabets,
   alphaNumeric,
   alphaNumericCase,
-  nanoid,
+  nanoId,
   numbers,
   password,
   webSafe,
@@ -14,7 +14,7 @@ import {
   it,
 } from '../../dev.dependencies.ts';
 
-describe('[library="id" mode="nanoid"]', () => {
+describe('[library="id" mode="nanoId"]', () => {
   const sampleSize = 10000,
     minLength = 6,
     maxLength = 40,
@@ -31,7 +31,7 @@ describe('[library="id" mode="nanoid"]', () => {
     for (let i = minLength; i <= maxLength; i++) {
       dictionary.forEach((dict) => {
         for (let j = 0; j < sampleSize; j++) {
-          assertEquals(i, nanoid(i, dict.data).length);
+          assertEquals(i, nanoId(i, dict.data).length);
         }
       });
     }
@@ -40,7 +40,7 @@ describe('[library="id" mode="nanoid"]', () => {
       for (let i = minLength; i <= maxLength; i++) {
         dictionary.forEach((dict) => {
           for (let j = 0; j < sampleSize; j++) {
-            assertMatch(nanoid(6, dict.data), dict.reg);
+            assertMatch(nanoId(6, dict.data), dict.reg);
           }
         });
       }
@@ -51,7 +51,7 @@ describe('[library="id" mode="nanoid"]', () => {
         for (const dict of dictionary) { // 2. Use for...of loop
           const op: Set<string> = new Set(); // 1. Initialize op inside the loop
           for (let j = 0; j < sampleSize; j++) {
-            id = nanoid(i, dict.data); // 3. Declare and assign id inside the loop
+            id = nanoId(i, dict.data); // 3. Declare and assign id inside the loop
             if (!op.has(id)) {
               op.add(id);
             }
@@ -64,3 +64,5 @@ describe('[library="id" mode="nanoid"]', () => {
       }
     });
 });
+
+// Path: id/tests/nanoId.test.ts

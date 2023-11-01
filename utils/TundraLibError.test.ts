@@ -1,5 +1,5 @@
-import { TundraLibError } from './TundralibError.ts';
-import type { TundraLibErrorMetaTags } from './TundralibError.ts';
+import { TundraLibError } from './TundraLibError.ts';
+import type { TundraLibErrorMetaTags } from './TundraLibError.ts';
 import { assertEquals, describe, it } from '../dev.dependencies.ts';
 
 describe(`[library='utils' name='BaseError']`, () => {

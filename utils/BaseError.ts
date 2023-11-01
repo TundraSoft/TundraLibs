@@ -4,6 +4,7 @@ export type ErrorMetaTags = Record<string, unknown>;
  * BaseError class for creating custom errors with additional metadata.
  */
 export class BaseError extends Error {
+  name = 'BaseError';
   /**
    * Creates a new instance of BaseError.
    *
