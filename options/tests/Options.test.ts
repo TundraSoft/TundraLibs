@@ -1,7 +1,6 @@
 import { Options } from '../Options.ts';
 import type { OptionKeys } from '../types/mod.ts';
 import {
-  afterEach,
   assertEquals,
   beforeEach,
   describe,

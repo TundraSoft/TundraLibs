@@ -8,14 +8,14 @@ import { privateObject } from './privateObject.ts';
  * @param loadDockerSecrets - Determines whether to load Docker secrets. Defaults to true.
  * @returns An object containing environment variables.
  */
-export const envArgs = async function (
+export const envArgs = function (
   envFilePath = './',
   loadDockerSecrets = true,
 ) {
   const env: Record<string, string> = {};
 
   try {
-    const envPermission = await Deno.permissions.query({ name: 'env' });
+    const envPermission = Deno.permissions.querySync({ name: 'env' });
     if (envPermission.state === 'granted') {
       Object.entries(Deno.env.toObject()).forEach(([key, value]) => {
         env[key] = value;
@@ -27,7 +27,7 @@ export const envArgs = async function (
 
   try {
     const envFile = path.join(Deno.cwd(), envFilePath, '.env'),
-      filePermission = await Deno.permissions.query({
+      filePermission = Deno.permissions.querySync({
         name: 'read',
         path: envFile,
       });
@@ -50,7 +50,7 @@ export const envArgs = async function (
 
   if (loadDockerSecrets) {
     try {
-      const dockerSecretPermission = await Deno.permissions.query({
+      const dockerSecretPermission = Deno.permissions.querySync({
         name: 'read',
         path: '/run/secrets',
       });

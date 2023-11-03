@@ -10,6 +10,13 @@ A collection of libraries written in Deno which I use in different projects.
 - [x] [Options](./options/README.md)
 - [x] [Utils](./utils/README.md)
 
+## TODO
+
+- [ ] Cronus, Config, Metrics test cases and documentation to be refactored
+- [ ] NORM
+- [ ] Syslog
+- [ ] Slogger
+
 ### NOTES
 
 Prevent prompt by setting ENV variable `export DENO_NO_PROMPT=1`

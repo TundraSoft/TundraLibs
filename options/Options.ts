@@ -1,5 +1,5 @@
 import { privateObject } from '../utils/privateObject.ts';
-import type { PrivateObject } from '../utils/privateObject.ts';
+import type { PrivateObject } from '../utils/mod.ts';
 import { Events } from '../events/mod.ts';
 import { EventCallback, EventType } from '../events/mod.ts';
 import { OptionKeys } from './types/mod.ts';

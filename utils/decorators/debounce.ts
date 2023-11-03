@@ -27,15 +27,15 @@ function debounce(milliseconds: number) {
   };
 }
 
-class A {
-  @debounce(5000)
-  public doThis() {
-    console.log('doThis');
-  }
-}
+// class A {
+//   @debounce(5000)
+//   public doThis() {
+//     console.log('doThis');
+//   }
+// }
 
-const ad = new A();
+// const ad = new A();
 
-ad.doThis();
-ad.doThis();
-ad.doThis();
+// ad.doThis();
+// ad.doThis();
+// ad.doThis();
