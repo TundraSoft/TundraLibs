@@ -11,19 +11,19 @@ export class MariaClient extends AbstractClient<MariaConnectionOptions> {
     super(name, options, defaults);
   }
 
-  protected async _connect(): Promise<void> {
+  protected _connect(): Promise<void> {
     throw new Error('Method not implemented.');
   }
 
-  protected async _close(): Promise<void> {
+  protected _close(): Promise<void> {
     throw new Error('Method not implemented.');
   }
 
-  protected async _execute(sql: string): Promise<void> {
+  protected _execute(sql: string): Promise<void> {
     throw new Error('Method not implemented.');
   }
 
-  protected async _query<
+  protected _query<
     R extends Record<string, unknown> = Record<string, unknown>,
   >(query: string): Promise<R[]> {
     throw new Error('Method not implemented.');

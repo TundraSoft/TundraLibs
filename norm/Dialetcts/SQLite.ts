@@ -11,7 +11,7 @@ import {
 } from '../errors/mod.ts';
 
 import type { SQLiteDBClientConfig } from '../../dependencies.ts';
-import { SQLiteDBClient, path } from '../../dependencies.ts';
+import { path, SQLiteDBClient } from '../../dependencies.ts';
 
 export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
   private _client: SQLiteDBClient | undefined = undefined;
@@ -21,7 +21,7 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
     options: OptionKeys<SQLiteConnectionOptions, NormEvents>,
   ) {
     const defaults: Partial<SQLiteConnectionOptions> = {
-      mode: 'MEMORY', 
+      mode: 'MEMORY',
     };
     if (options.dialect !== 'SQLITE') {
       throw new NormConfigError('Invalid value for dialect passed', {
@@ -40,7 +40,7 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
       });
     }
     if (options.mode === 'FILE') {
-      if(!options.filePath) {
+      if (!options.filePath) {
         throw new NormConfigError('SQLite DB file must be set in FILE mode', {
           name: name,
           dialect: options.dialect,
@@ -50,13 +50,20 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
       }
       // Append DB name to the path
       const stat = Deno.statSync(options.filePath);
-      if(stat.isDirectory) {
+      if (stat.isDirectory) {
         options.filePath = path.join(options.filePath, name + '.sqlite');
       }
-      // Check permission 
+      // Check permission
       const dir = path.parse(options.filePath);
-      if(Deno.permissions.querySync({ name: 'write', path: dir.dir }).state !== 'granted') {
-        throw new NormSQLiteWritePermissionError({ name: name, dialect: options.dialect, path: dir.dir });
+      if (
+        Deno.permissions.querySync({ name: 'write', path: dir.dir }).state !==
+          'granted'
+      ) {
+        throw new NormSQLiteWritePermissionError({
+          name: name,
+          dialect: options.dialect,
+          path: dir.dir,
+        });
       }
     }
     if (options.mode !== 'FILE') {
@@ -71,14 +78,22 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
     }
     // Ok lets connect
     const opt: SQLiteDBClientConfig = {
-      mode: 'create', 
+      mode: 'create',
       memory: this._getOption('mode') === 'MEMORY' ? true : false,
     };
     // Test connection
     try {
-      this._client = new SQLiteDBClient(this._getOption('mode') === 'MEMORY' ? ':memory:' : this._getOption('filePath'), opt);
+      this._client = new SQLiteDBClient(
+        this._getOption('mode') === 'MEMORY'
+          ? ':memory:'
+          : this._getOption('filePath'),
+        opt,
+      );
     } catch (err) {
-      throw new NormConnectionError(err.message, { name: this._name, dialect: this.dialect });
+      throw new NormConnectionError(err.message, {
+        name: this._name,
+        dialect: this.dialect,
+      });
     }
   }
 
@@ -100,14 +115,20 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
       });
     }
     try {
-      const res = this._client.queryEntries<R>(sql, params as Record<string, boolean
-        | number
-        | bigint
-        | string
-        | null
-        | undefined
-        | Date
-        | Uint8Array>);
+      const res = this._client.queryEntries<R>(
+        sql,
+        params as Record<
+          string,
+          | boolean
+          | number
+          | bigint
+          | string
+          | null
+          | undefined
+          | Date
+          | Uint8Array
+        >,
+      );
       return res;
     } catch (err) {
       throw new NormQueryError(err.message, {

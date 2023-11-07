@@ -129,7 +129,10 @@ export abstract class AbstractClient<O extends ConnectionOptions>
     }
   }
 
-  public async execute(sql: string): Promise<QueryExecute> {
+  public async execute(
+    sql: string,
+    params?: Record<string, unknown>,
+  ): Promise<QueryExecute> {
     await this.connect();
     try {
       const st = performance.now();
@@ -138,7 +141,7 @@ export abstract class AbstractClient<O extends ConnectionOptions>
         type: this._detectQuery(sql),
         sql: sql,
       };
-      await this._execute(sql);
+      await this._execute(sql, params);
       const et = performance.now();
       res.time = et - st;
       this.emit('query', this.name, this.dialect, sql);
@@ -177,6 +180,9 @@ export abstract class AbstractClient<O extends ConnectionOptions>
   protected abstract _query<
     R extends Record<string, unknown> = Record<string, unknown>,
   >(query: string, params?: Record<string, unknown>): R[] | Promise<R[]>;
-  protected abstract _execute(sql: string): void | Promise<void>;
+  protected abstract _execute(
+    sql: string,
+    params?: Record<string, unknown>,
+  ): void | Promise<void>;
   //#endregion Abstract Methods
 }

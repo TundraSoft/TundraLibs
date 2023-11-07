@@ -2,7 +2,7 @@ export {
   NormConnectionError,
   NormInvalidConnectionPropertyError,
   NormNotConnectedError,
-  NormSQLiteWritePermissionError
+  NormSQLiteWritePermissionError,
 } from './Connection/mod.ts';
 export { NormMalformedQueryError, NormQueryError } from './Query/mod.ts';
 

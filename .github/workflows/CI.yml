@@ -13,13 +13,14 @@ jobs:
         image: redis
         ports:
           - 6379:6379
+      
       # Label used to access the service container
       postgres:
         # Docker Hub image
         image: postgres
         # Provide the password for postgres
         env:
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: postgrespw
         ports:
           # Maps tcp port 5432 on service container to the host
           - 5432:5432
@@ -50,11 +51,11 @@ jobs:
         run: |
           deno test -A --coverage=cov #--doc
           
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432
-          POSTGRES_USER: postgres
-          POSTGRES_PASS: postgres
+        # env:
+        #   POSTGRES_HOST: localhost
+        #   POSTGRES_PORT: 5432
+        #   POSTGRES_USER: postgres
+        #   POSTGRES_PASS: postgres
       -
         name: Generate coverage report
         run: deno coverage --lcov cov > cov.lcov

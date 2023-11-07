@@ -18,14 +18,14 @@ describe(`[library='norm' dialect='SQLite' type='unit']`, () => {
   let client: SQLiteClient;
   const clientOpt: SQLiteConnectionOptions = {
     dialect: 'SQLITE',
-    mode: 'MEMORY', 
+    mode: 'MEMORY',
   };
   const tableName = 'test_' + Math.floor(Math.random() * 1000000);
   const createTableQuery =
     `CREATE TABLE IF NOT EXISTS ${tableName} (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(255) NOT NULL, email VARCHAR(255));`;
   const insertQuery =
     `INSERT INTO ${tableName} (name, email) VALUES (:name, :email) RETURNING id, name, email;`;
-    const insertBulkQuery =
+  const insertBulkQuery =
     `INSERT INTO ${tableName} (name, email) VALUES (:name, :email) RETURNING id, name, email;`;
   const selectQuery = `SELECT * FROM ${tableName};`;
   const selectQuery1 = `SELECT * FROM ${tableName} WHERE id = 1;`;
@@ -57,7 +57,7 @@ describe(`[library='norm' dialect='SQLite' type='unit']`, () => {
     const opt = JSON.parse(
       JSON.stringify({
         dialect: 'SQLITE',
-        mode: 'something'
+        mode: 'something',
       }),
     );
     assertThrows(() => {
@@ -103,7 +103,10 @@ describe(`[library='norm' dialect='SQLite' type='unit']`, () => {
 
   it('should insert record', async () => {
     await client.execute(createTableQuery);
-    const res = await client.query(insertQuery, { name: 'John Doe', email: 'john.doe@gmail.com'});
+    const res = await client.query(insertQuery, {
+      name: 'John Doe',
+      email: 'john.doe@gmail.com',
+    });
     assertEquals(res.count, 1);
     assertEquals(res.data[0].id, 1);
     assertEquals(res.data[0].name, 'John Doe');
@@ -113,7 +116,10 @@ describe(`[library='norm' dialect='SQLite' type='unit']`, () => {
 
   it('should query record', async () => {
     await client.execute(createTableQuery);
-    await client.query(insertQuery, { name: 'John Doe', email: 'john.doe@gmail.com'});
+    await client.query(insertQuery, {
+      name: 'John Doe',
+      email: 'john.doe@gmail.com',
+    });
     const res = await client.query(selectQuery);
     assertEquals(res.count, 1);
     assertEquals(res.count, res.data.length);
@@ -133,4 +139,3 @@ describe(`[library='norm' dialect='SQLite' type='unit']`, () => {
     assertEquals(res.type, 'DROP');
   });
 });
-

@@ -155,7 +155,10 @@ export class PostgresClient extends AbstractClient<PostgresConnectionOptions> {
     }
   }
 
-  protected async _execute(sql: string): Promise<void> {
+  protected async _execute(
+    sql: string,
+    params?: Record<string, unknown>,
+  ): Promise<void> {
     if (this._status !== 'CONNECTED' || this._client === undefined) {
       throw new NormNotConnectedError({
         name: this._name,
@@ -165,7 +168,7 @@ export class PostgresClient extends AbstractClient<PostgresConnectionOptions> {
     let client: PGPoolClient | undefined = undefined;
     try {
       client = await this._client.connect();
-      const res = await client.queryArray(sql);
+      const res = await client.queryArray(sql, params);
     } catch (err) {
       if (err instanceof PostgresError) {
         throw new NormQueryError(err.message, {
