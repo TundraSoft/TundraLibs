@@ -7,6 +7,7 @@ export type TundraLibErrorMetaTags = ErrorMetaTags & { library: string };
  */
 export class TundraLibError extends BaseError {
   name = 'TundraLibError';
+  declare protected _metaTags: TundraLibErrorMetaTags;
   /**
    * Creates a new instance of BaseError.
    *
@@ -15,9 +16,9 @@ export class TundraLibError extends BaseError {
    */
   constructor(
     message: string,
-    protected _metaTags?: TundraLibErrorMetaTags,
+    metaTags?: TundraLibErrorMetaTags,
   ) {
-    super(BaseError._makeMessage(message, _metaTags));
+    super(BaseError._makeMessage(message, metaTags));
     Object.setPrototypeOf(this, new.target.prototype);
   }
 

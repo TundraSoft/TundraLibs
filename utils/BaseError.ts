@@ -5,6 +5,7 @@ export type ErrorMetaTags = Record<string, unknown>;
  */
 export class BaseError extends Error {
   name = 'BaseError';
+  declare protected _metaTags?: ErrorMetaTags;
   /**
    * Creates a new instance of BaseError.
    *
@@ -13,9 +14,10 @@ export class BaseError extends Error {
    */
   constructor(
     message: string,
-    protected _metaTags?: ErrorMetaTags,
+    metaTags?: ErrorMetaTags,
   ) {
-    super(BaseError._makeMessage(message, _metaTags));
+    super(BaseError._makeMessage(message, metaTags));
+    this._metaTags = metaTags;
     Object.setPrototypeOf(this, new.target.prototype);
   }
 

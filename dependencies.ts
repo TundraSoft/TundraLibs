@@ -25,4 +25,13 @@ export type HTTPMethods =
 //#region Databases
 export { connect as RedisConnect } from 'https://deno.land/x/redis@v0.30.0/mod.ts';
 export type { Redis } from 'https://deno.land/x/redis@v0.30.0/mod.ts';
+export {
+  Pool as PGClient,
+  PoolClient as PGPoolClient,
+  PostgresError,
+} from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
+export type { ClientOptions as PGClientOptions } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
+export { DB as SQLiteDBClient } from 'https://deno.land/x/sqlite@v3.8/mod.ts';
+export type { SqliteOptions as SQLiteDBClientConfig } from 'https://deno.land/x/sqlite@v3.8/mod.ts';
+
 //#endregion Databases
