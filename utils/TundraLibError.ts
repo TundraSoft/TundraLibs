@@ -18,7 +18,7 @@ export class TundraLibError extends BaseError {
     message: string,
     metaTags?: TundraLibErrorMetaTags,
   ) {
-    super(BaseError._makeMessage(message, metaTags));
+    super(message, metaTags);
     Object.setPrototypeOf(this, new.target.prototype);
   }
 
