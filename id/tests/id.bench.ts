@@ -3,7 +3,7 @@ import {
   alphaNumeric,
   alphaNumericCase,
   cryptoKey,
-  nanoid,
+  nanoId,
   numbers,
   password,
   sequenceId,
@@ -13,21 +13,21 @@ Deno.bench({
   name:
     `[library='id' mode='nanoid'] Generate nanoid of length 10 characters using alphabets`,
 }, () => {
-  nanoid(10, alphabets);
+  nanoId(10, alphabets);
 });
 
 Deno.bench({
   name:
     `[library='id' mode='nanoid'] Generate nanoid of length 16 characters using alphabets`,
 }, () => {
-  nanoid(16, alphabets);
+  nanoId(16, alphabets);
 });
 
 Deno.bench({
   name:
     `[library='id' mode='nanoid'] Generate nanoid of length 32 characters using alphabets`,
 }, () => {
-  nanoid(32, alphabets);
+  nanoId(32, alphabets);
 });
 
 // Numbers only
@@ -36,21 +36,21 @@ Deno.bench({
   name:
     `[library='id' mode='nanoid'] Generate nanoid of length 10 characters using nummeric`,
 }, () => {
-  nanoid(10, numbers);
+  nanoId(10, numbers);
 });
 
 Deno.bench({
   name:
     `[library='id' mode='nanoid'] Generate nanoid of length 16 characters using nummeric`,
 }, () => {
-  nanoid(16, numbers);
+  nanoId(16, numbers);
 });
 
 Deno.bench({
   name:
     `[library='id' mode='nanoid'] Generate nanoid of length 32 characters using nummeric`,
 }, () => {
-  nanoid(32, numbers);
+  nanoId(32, numbers);
 });
 
 // AlphaNumeric only
@@ -59,21 +59,21 @@ Deno.bench({
   name:
     `[library='id' mode='nanoid'] Generate nanoid of length 10 characters using alphaNumeric`,
 }, () => {
-  nanoid(10, alphaNumeric);
+  nanoId(10, alphaNumeric);
 });
 
 Deno.bench({
   name:
     `[library='id' mode='nanoid'] Generate nanoid of length 16 characters using alphaNumeric`,
 }, () => {
-  nanoid(16, alphaNumeric);
+  nanoId(16, alphaNumeric);
 });
 
 Deno.bench({
   name:
     `[library='id' mode='nanoid'] Generate nanoid of length 32 characters using alphaNumeric`,
 }, () => {
-  nanoid(32, alphaNumeric);
+  nanoId(32, alphaNumeric);
 });
 
 // AlphaNumeric only
@@ -82,21 +82,21 @@ Deno.bench({
   name:
     `[library='id' mode='nanoidCase'] Generate nanoid of length 10 characters using alphaNumericCase`,
 }, () => {
-  nanoid(10, alphaNumericCase);
+  nanoId(10, alphaNumericCase);
 });
 
 Deno.bench({
   name:
     `[library='id' mode='nanoidCase'] Generate nanoid of length 16 characters using alphaNumericCase`,
 }, () => {
-  nanoid(16, alphaNumericCase);
+  nanoId(16, alphaNumericCase);
 });
 
 Deno.bench({
   name:
     `[library='id' mode='nanoid'] Generate nanoid of length 32 characters using alphaNumericCase`,
 }, () => {
-  nanoid(32, alphaNumericCase);
+  nanoId(32, alphaNumericCase);
 });
 
 // AlphaNumeric only
@@ -105,21 +105,21 @@ Deno.bench({
   name:
     `[library='id' mode='nanoidCase'] Generate nanoid of length 10 characters using password`,
 }, () => {
-  nanoid(10, alphaNumericCase);
+  nanoId(10, alphaNumericCase);
 });
 
 Deno.bench({
   name:
     `[library='id' mode='nanoidCase'] Generate nanoid of length 16 characters using password`,
 }, () => {
-  nanoid(16, password);
+  nanoId(16, password);
 });
 
 Deno.bench({
   name:
     `[library='id' mode='nanoid'] Generate nanoid of length 32 characters using password`,
 }, () => {
-  nanoid(32, password);
+  nanoId(32, password);
 });
 
 Deno.bench({

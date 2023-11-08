@@ -2,10 +2,10 @@ import { OptionKeys } from '../../options/mod.ts';
 import { AbstractClient } from '../AbstractConnection.ts';
 import type { NormEvents, PostgresConnectionOptions } from '../types/mod.ts';
 import {
-  NormBaseError,
   NormConfigError,
   NormNotConnectedError,
   NormQueryError,
+  NormQueryMissingParamsError,
 } from '../errors/mod.ts';
 
 import { PGClient, PGPoolClient, PostgresError } from '../../dependencies.ts';
@@ -132,7 +132,7 @@ export class PostgresClient extends AbstractClient<PostgresConnectionOptions> {
     let client: PGPoolClient | undefined = undefined;
     try {
       client = await this._client.connect();
-      const res = await client.queryObject<R>(sql, params);
+      const res = await client.queryObject<R>(this._normaliseQuery(sql, params), params);
       return res.rows;
     } catch (err) {
       if (err instanceof PostgresError) {
@@ -168,7 +168,7 @@ export class PostgresClient extends AbstractClient<PostgresConnectionOptions> {
     let client: PGPoolClient | undefined = undefined;
     try {
       client = await this._client.connect();
-      const res = await client.queryArray(sql, params);
+      await client.queryArray(this._normaliseQuery(sql, params), params);
     } catch (err) {
       if (err instanceof PostgresError) {
         throw new NormQueryError(err.message, {
@@ -188,5 +188,42 @@ export class PostgresClient extends AbstractClient<PostgresConnectionOptions> {
         client.release();
       }
     }
+  }
+
+  protected _normaliseQuery(sql: string,params?: Record<string,unknown>|undefined): string {
+    if(params === undefined) {
+      return sql;
+    }
+    const keys = Object.keys(params);
+    // Replace :key: with :key
+    sql = sql.replace(/:(\w+):/g, '\$$1');
+    // Verify that any :key defined exists in params
+    const missing: string[] = [];
+    const matches = sql.match(/:(\w+)/g);
+    if(matches !== null) {
+      for(const match of matches) {
+        const key = match.substr(1);
+        if(!keys.includes(key)) {
+          missing.push(key);
+        }
+      }
+    }
+    if(missing.length > 0) {
+      throw new NormQueryMissingParamsError({ name: this._name, dialect: this.dialect, sql: sql, missing: missing.join(',') });
+    }
+    return sql;
+    // for(const key of keys) {
+    //   const value = params[key];
+    //   if(typeof value === 'string') {
+    //     params[key] = `'${value}'`;
+    //   }
+    // }
+    // return sql.replace(/\?/g, (match) => {
+    //   const key = keys.shift();
+    //   if(key === undefined) {
+    //     return match;
+    //   }
+    //   return params[key] as string;
+    // });
   }
 }

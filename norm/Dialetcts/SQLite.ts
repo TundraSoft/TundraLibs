@@ -8,10 +8,13 @@ import {
   NormNotConnectedError,
   NormQueryError,
   NormSQLiteWritePermissionError,
+  NormQueryMissingParamsError
 } from '../errors/mod.ts';
 
 import type { SQLiteDBClientConfig } from '../../dependencies.ts';
 import { path, SQLiteDBClient } from '../../dependencies.ts';
+
+type SQLiteParamType = Record<string, boolean | number | bigint | string | null | undefined | Date | Uint8Array>
 
 export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
   private _client: SQLiteDBClient | undefined = undefined;
@@ -115,19 +118,10 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
       });
     }
     try {
+      sql = this._normaliseQuery(sql, params);
       const res = this._client.queryEntries<R>(
         sql,
-        params as Record<
-          string,
-          | boolean
-          | number
-          | bigint
-          | string
-          | null
-          | undefined
-          | Date
-          | Uint8Array
-        >,
+        params as SQLiteParamType,
       );
       return res;
     } catch (err) {
@@ -139,7 +133,7 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
     }
   }
 
-  protected _execute(sql: string): void {
+  protected _execute(sql: string, params?: Record<string, unknown>): void {
     if (this._status !== 'CONNECTED' || this._client === undefined) {
       throw new NormNotConnectedError({
         name: this._name,
@@ -147,7 +141,8 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
       });
     }
     try {
-      const res = this._client.execute(sql);
+      sql = this._normaliseQuery(sql, params);
+      const res = this._client.queryEntries(sql, params as SQLiteParamType);
     } catch (err) {
       throw new NormQueryError(err.message, {
         name: this._name,
@@ -155,5 +150,42 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
         sql: sql,
       });
     }
+  }
+
+  protected _normaliseQuery(sql: string,params?: Record<string,unknown>|undefined): string {
+    if(params === undefined) {
+      return sql;
+    }
+    const keys = Object.keys(params);
+    // Replace :key: with :key
+    sql = sql.replace(/:(\w+):/g, ':$1');
+    // Verify that any :key defined exists in params
+    const missing: string[] = [];
+    const matches = sql.match(/:(\w+)/g);
+    if(matches !== null) {
+      for(const match of matches) {
+        const key = match.substr(1);
+        if(!keys.includes(key)) {
+          missing.push(key);
+        }
+      }
+    }
+    if(missing.length > 0) {
+      throw new NormQueryMissingParamsError({ name: this._name, dialect: this.dialect, sql: sql, missing: missing.join(',') });
+    }
+    return sql;
+    // for(const key of keys) {
+    //   const value = params[key];
+    //   if(typeof value === 'string') {
+    //     params[key] = `'${value}'`;
+    //   }
+    // }
+    // return sql.replace(/\?/g, (match) => {
+    //   const key = keys.shift();
+    //   if(key === undefined) {
+    //     return match;
+    //   }
+    //   return params[key] as string;
+    // });
   }
 }

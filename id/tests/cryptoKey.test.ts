@@ -2,7 +2,6 @@ import { cryptoKey } from '../mod.ts';
 import {
   assertEquals,
   assertMatch,
-  assertNotEquals,
   describe,
   it,
 } from '../../dev.dependencies.ts';

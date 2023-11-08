@@ -1,7 +1,5 @@
 import {
   assertEquals,
-  assertStrictEquals,
-  assertThrows,
 } from '../../dev.dependencies.ts';
 import { afterEach, beforeEach, describe, it } from '../../dev.dependencies.ts';
 

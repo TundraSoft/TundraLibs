@@ -1,4 +1,3 @@
-import { HTTPMethods, path } from '../../dependencies.ts';
 import { TundraLibError } from '../../utils/mod.ts';
 import type { ErrorMetaTags, TundraLibErrorMetaTags } from '../../utils/mod.ts';
 

@@ -13,7 +13,6 @@ import type {
 import {
   NormBaseError,
   NormConfigError,
-  NormMalformedQueryError,
   NormQueryError,
 } from './errors/mod.ts';
 

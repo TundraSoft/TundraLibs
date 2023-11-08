@@ -11,7 +11,7 @@ const stG = Struct({
 });
 
 try {
-  const [err, data] = stG.validate({
+  const [err, _data] = stG.validate({
     name: 'Abhinav',
     age: 18,
     profile: { facebook: 'https://google.com/' },

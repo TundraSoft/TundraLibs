@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertFalse } from '../../dev.dependencies.ts';
 import { Cronus } from '../Cronus.ts';
-import { DAY_NAMES, MONTH_NAMES } from '../const/mod.ts';
+import { MONTH_NAMES } from '../const/mod.ts';
 
 function getRandomArbitrary(min: number, max: number) {
   return Math.floor(Math.random() * (max - min) + min);
@@ -352,7 +352,7 @@ Deno.test({
   fn() {
     for (let i = 1; i <= 12; i++) {
       assert(Cronus.validateSchedule(`* * * */${i} *`));
-      const mn = Object.entries(MONTH_NAMES).find(([name, no]) => i === no)
+      const mn = Object.entries(MONTH_NAMES).find(([_name, no]) => i === no)
         ?.[0];
       assert(Cronus.validateSchedule(`* * * */${mn} *`));
       assertFalse(Cronus.validateSchedule(`* * * 0/${i} *`));
@@ -365,7 +365,7 @@ Deno.test({
   fn() {
     for (let i = 1; i <= 12; i++) {
       assert(Cronus.validateSchedule(`* * * ${i} *`));
-      const mn = Object.entries(MONTH_NAMES).find(([name, no]) => i === no)
+      const mn = Object.entries(MONTH_NAMES).find(([_name, no]) => i === no)
         ?.[0];
       assert(Cronus.validateSchedule(`* * * ${mn} *`));
     }

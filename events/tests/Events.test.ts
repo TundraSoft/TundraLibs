@@ -1,6 +1,5 @@
 import { Events } from '../Events.ts';
 import {
-  afterEach,
   assertEquals,
   beforeEach,
   describe,

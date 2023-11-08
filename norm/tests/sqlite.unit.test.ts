@@ -24,13 +24,13 @@ describe(`[library='norm' dialect='SQLite' type='unit']`, () => {
   const createTableQuery =
     `CREATE TABLE IF NOT EXISTS ${tableName} (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(255) NOT NULL, email VARCHAR(255));`;
   const insertQuery =
-    `INSERT INTO ${tableName} (name, email) VALUES (:name, :email) RETURNING id, name, email;`;
+    `INSERT INTO ${tableName} (name, email) VALUES (:name:, :email:) RETURNING id, name, email;`;
   const insertBulkQuery =
-    `INSERT INTO ${tableName} (name, email) VALUES (:name, :email) RETURNING id, name, email;`;
+    `INSERT INTO ${tableName} (name, email) VALUES (:name:, :email:) RETURNING id, name, email;`;
   const selectQuery = `SELECT * FROM ${tableName};`;
-  const selectQuery1 = `SELECT * FROM ${tableName} WHERE id = 1;`;
-  const selectQuery2 = `SELECT * FROM ${tableName} WHERE id = 10;`;
-  const selectQuery3 = `SELECT * FROM ${tableName} WHERE abc = 10;`;
+  const selectQuery1 = `SELECT * FROM ${tableName} WHERE id = :id:;`;
+  // const selectQuery2 = `SELECT * FROM ${tableName} WHERE id = 10;`;
+  // const selectQuery3 = `SELECT * FROM ${tableName} WHERE abc = 10;`;
   const dropTableQuery = `DROP TABLE IF EXISTS ${tableName};`;
 
   beforeEach(() => {
@@ -125,9 +125,9 @@ describe(`[library='norm' dialect='SQLite' type='unit']`, () => {
     assertEquals(res.count, res.data.length);
     assertEquals(res.data[0].id, 1);
     assertEquals(res.data[0].name, 'John Doe');
-    const res1 = await client.query(selectQuery1);
+    const res1 = await client.query(selectQuery1, { id: 1 });
     assertEquals(res1.count, 1);
-    const res2 = await client.query(selectQuery2);
+    const res2 = await client.query(selectQuery1, { id: 10 });
     assertEquals(res2.count, 0);
     assertEquals(res2.count, res2.data.length);
 
