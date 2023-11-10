@@ -5,6 +5,7 @@ export type {
   RESTlerRequest,
   RESTlerResponse,
   RESTlerResponseBody,
+  RESTlerEvents, 
 } from './types/mod.ts';
 export {
   RESTlerAuthFailure,
