@@ -131,11 +131,10 @@ export abstract class RESTler<
       status: 200,
       authFailure: false,
       body: {} as RespBody,
+      timeTaken: 0, 
     };
     let authCounter = 0;
-    this.emit('request', request as RESTlerRequest);
-
-    // Emit the request event. We do it only once per request
+    let finalError: RESTlerBaseError | undefined;
     this.emit('request', request as RESTlerRequest);
     while (authCounter <= maxAuthTries) {
       try {
@@ -177,45 +176,48 @@ export abstract class RESTler<
           }
         }
         const end = performance.now();
-
+        resp.timeTaken = end - start;
         if (resp.authFailure) {
           ++authCounter;
           await this._authenticate();
           continue;
         }
         // Emit response event
-        this.emit(
-          'response',
-          request as RESTlerRequest,
-          resp as RESTlerResponse,
-        );
+        // this.emit(
+        //   'response',
+        //   request as RESTlerRequest,
+        //   resp as RESTlerResponse,
+        // );
         return resp;
       } catch (e) {
         // Handle error
         if (e.name === 'AbortError') {
           // Emit timeout event
-          this.emit('timeout');
-          throw new RESTlerTimeoutError(
+          this.emit('timeout', request);
+          finalError = new RESTlerTimeoutError(
             this._name,
             this._getOption('timeout') as number,
             request.endpoint as RESTlerEndpoint,
           );
         } else if (e instanceof RESTlerAuthFailure) {
           // Emit authFailure event
-          this.emit('authFailure');
+          this.emit('authFailure', request);
+          finalError = e;
         } else if (!(e instanceof RESTlerBaseError)) {
-          throw new RESTlerUnhandledError(
+          finalError = new RESTlerUnhandledError(
             this._name,
             e.message,
             request.endpoint as RESTlerEndpoint,
           );
         }
         // Emit error event
-        this.emit('error');
-        throw e;
+        throw finalError;
+      } finally {
+        this.emit('response', request, resp as RESTlerResponse, finalError);
       }
     }
     // If we've exited the while loop, we've exhausted auth retries.
+    this.emit('authFailure', request);
     throw new RESTlerAuthFailure(
       this._name,
       request.endpoint as RESTlerEndpoint,
@@ -293,10 +295,11 @@ export abstract class RESTler<
    * by the child classes.
    *
    * @remarks
-   * This method is meant to be overridden by the child classes.
+   * This method is meant to be overridden by the child classes. **NOTE** You need to emit 'auth' event here!!!
    */
   protected _authenticate(): void | Promise<void> {
     // Do nothing
+    this.emit('auth', {});
   }
   //#endregion
 }

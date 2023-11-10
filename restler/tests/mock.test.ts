@@ -1,7 +1,8 @@
 import {
   RESTler,
   RESTlerAuthFailure,
-  RESTlerOptions,
+  RESTlerBaseError, 
+  RESTlerResponse,
   RESTlerRequest,
 } from '../mod.ts';
 import {
@@ -76,6 +77,24 @@ describe(`[library='RESTler' mode='mock example']`, () => {
           'content-type': 'application/json',
           'accept': 'application/json',
         },
+        _onauth: (v: number) => {
+          console.log(`Auth: ${v}`);
+        }, 
+        _onauthFailure: (req: RESTlerRequest) => {
+          console.log(`Auth failed: ${req.endpoint.method} ${req.endpoint.path}`);
+        }, 
+        _onrequest: (req: RESTlerRequest) => {
+          console.log(`Request: ${req.endpoint.method} ${req.endpoint.path}`);
+        }, 
+        _ontimeout: (req: RESTlerRequest) => {
+          console.log(`Timeout: ${req.endpoint.method} ${req.endpoint.path}`);
+        }, 
+        _onresponse: (req: RESTlerRequest, resp: RESTlerResponse, error?: RESTlerBaseError) => {
+          if(error !== undefined) 
+            console.log(`Error: ${error.name} ${error.message}`);
+          else
+            console.log(`Response: ${req.endpoint.method} ${req.endpoint.path} ${resp.status} in ${resp.timeTaken}`);
+        },
       });
     }
 
@@ -97,6 +116,7 @@ describe(`[library='RESTler' mode='mock example']`, () => {
       if (this.doAuth === true) {
         this._authKey = '123';
       }
+      this.emit('auth', this._authKey);
     }
 
     async createUser(email: string): Promise<{ id: number; email: string }> {

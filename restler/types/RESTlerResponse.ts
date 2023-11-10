@@ -12,4 +12,5 @@ export type RESTlerResponse<RESTlerResponseBody = Record<string, unknown>> = {
   status: Status;
   authFailure: boolean;
   body?: RESTlerResponseBody;
+  timeTaken: number;
 };
