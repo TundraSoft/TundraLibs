@@ -1,6 +1,4 @@
-import {
-  assertEquals,
-} from '../../dev.dependencies.ts';
+import { assertEquals } from '../../dev.dependencies.ts';
 import { afterEach, beforeEach, describe, it } from '../../dev.dependencies.ts';
 
 import { MemoryCacher } from '../clients/mod.ts';

@@ -1,53 +1,53 @@
 export const Post = {
-  name: 'posts', 
+  name: 'posts',
   columns: {
     Id: {
-      name: 'id', 
+      name: 'id',
       type: 'INTEGER',
-      nullable: false, 
-    }, 
+      nullable: false,
+    },
     Title: {
-      name: 'title', 
-      type: 'VARCHAR', 
-      length: 100, 
-      nullable: false
-    }, 
+      name: 'title',
+      type: 'VARCHAR',
+      length: 100,
+      nullable: false,
+    },
     Content: {
-      name: 'content', 
-      type: 'TEXT', 
-      nullable: false
+      name: 'content',
+      type: 'TEXT',
+      nullable: false,
     },
     CreatedBy: {
-      name: 'created_by', 
+      name: 'created_by',
       type: 'INTEGER',
-      nullable: false, 
-    }, 
-    ReviewdBy: {
-      name: 'reviewed_by', 
-      type: 'INTEGER',
-      nullable: true, 
-    }, 
-    CreatedAt: {
-      name: 'created_at', 
-      type: 'TIMESTAMP', 
-      nullable: false
+      nullable: false,
     },
-  }, 
-  primaryKeys: ['Id'], 
+    ReviewdBy: {
+      name: 'reviewed_by',
+      type: 'INTEGER',
+      nullable: true,
+    },
+    CreatedAt: {
+      name: 'created_at',
+      type: 'TIMESTAMP',
+      nullable: false,
+    },
+  },
+  primaryKeys: ['Id'],
   relationShips: {
     Author: {
-      model: 'User', 
-      hasMany: false, 
+      model: 'User',
+      hasMany: false,
       relation: {
-        'created_by': 'Id'
-      }
-    }, 
+        'created_by': 'Id',
+      },
+    },
     Reviewer: {
-      model: 'User', 
-      hasMany: false, 
+      model: 'User',
+      hasMany: false,
       relation: {
-        'reviewed_by': 'Id'
-      }
-    }
-  }
+        'reviewed_by': 'Id',
+      },
+    },
+  },
 } as const;

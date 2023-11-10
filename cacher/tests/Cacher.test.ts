@@ -2,9 +2,7 @@ import { Cacher } from '../Cacher.ts';
 import { MemoryCacher, RedisCacher } from '../clients/mod.ts';
 
 import { describe, it } from '../../dev.dependencies.ts';
-import {
-  assertEquals,
-} from '../../dev.dependencies.ts';
+import { assertEquals } from '../../dev.dependencies.ts';
 // Mock instances
 
 describe('Cacher class', () => {

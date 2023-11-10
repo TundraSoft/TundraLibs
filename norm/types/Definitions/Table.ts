@@ -20,14 +20,16 @@ export type TableDefinition = {
   distribute?: string;
 
   limit?: number;
-}
+};
 
 type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
 
-export type TablePrimaryKey<T extends TableDefinition> = T extends { primaryKeys: string[] } ? Extract<
-  keyof T['columns'],
-  T['primaryKeys'][number]
-> : never;
+export type TablePrimaryKey<T extends TableDefinition> = T extends
+  { primaryKeys: string[] } ? Extract<
+    keyof T['columns'],
+    T['primaryKeys'][number]
+  >
+  : never;
 
 const a = {
   name: 'a',

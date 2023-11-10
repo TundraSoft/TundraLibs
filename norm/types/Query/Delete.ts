@@ -6,6 +6,8 @@ import type { QueryFilters } from './Filters.ts';
 //   where: QueryFilters<DM[TN]>;
 // };
 
-export type DeleteQuery<TD extends TableDefinition = TableDefinition> = BaseQuery<TD> & {
-  where: QueryFilters<TD>;
-};
+export type DeleteQuery<TD extends TableDefinition = TableDefinition> =
+  & BaseQuery<TD>
+  & {
+    where: QueryFilters<TD>;
+  };

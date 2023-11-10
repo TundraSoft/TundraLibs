@@ -29,7 +29,10 @@ export class MariaClient extends AbstractClient<MariaConnectionOptions> {
     throw new Error('Method not implemented.');
   }
 
-  protected _normaliseQuery(sql: string,params?: Record<string,unknown>|undefined): string {
+  protected _normaliseQuery(
+    sql: string,
+    params?: Record<string, unknown> | undefined,
+  ): string {
     throw new Error('Method not implemented.');
   }
 }

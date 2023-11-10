@@ -1,9 +1,9 @@
 import {
   RESTler,
   RESTlerAuthFailure,
-  RESTlerBaseError, 
-  RESTlerResponse,
+  RESTlerBaseError,
   RESTlerRequest,
+  RESTlerResponse,
 } from '../mod.ts';
 import {
   afterEach,
@@ -79,21 +79,30 @@ describe(`[library='RESTler' mode='mock example']`, () => {
         },
         _onauth: (v: number) => {
           console.log(`Auth: ${v}`);
-        }, 
+        },
         _onauthFailure: (req: RESTlerRequest) => {
-          console.log(`Auth failed: ${req.endpoint.method} ${req.endpoint.path}`);
-        }, 
+          console.log(
+            `Auth failed: ${req.endpoint.method} ${req.endpoint.path}`,
+          );
+        },
         _onrequest: (req: RESTlerRequest) => {
           console.log(`Request: ${req.endpoint.method} ${req.endpoint.path}`);
-        }, 
+        },
         _ontimeout: (req: RESTlerRequest) => {
           console.log(`Timeout: ${req.endpoint.method} ${req.endpoint.path}`);
-        }, 
-        _onresponse: (req: RESTlerRequest, resp: RESTlerResponse, error?: RESTlerBaseError) => {
-          if(error !== undefined) 
+        },
+        _onresponse: (
+          req: RESTlerRequest,
+          resp: RESTlerResponse,
+          error?: RESTlerBaseError,
+        ) => {
+          if (error !== undefined) {
             console.log(`Error: ${error.name} ${error.message}`);
-          else
-            console.log(`Response: ${req.endpoint.method} ${req.endpoint.path} ${resp.status} in ${resp.timeTaken}`);
+          } else {
+            console.log(
+              `Response: ${req.endpoint.method} ${req.endpoint.path} ${resp.status} in ${resp.timeTaken}`,
+            );
+          }
         },
       });
     }

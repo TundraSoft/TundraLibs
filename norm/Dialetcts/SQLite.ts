@@ -7,14 +7,17 @@ import {
   NormConnectionError,
   NormNotConnectedError,
   NormQueryError,
+  NormQueryMissingParamsError,
   NormSQLiteWritePermissionError,
-  NormQueryMissingParamsError
 } from '../errors/mod.ts';
 
 import type { SQLiteDBClientConfig } from '../../dependencies.ts';
 import { path, SQLiteDBClient } from '../../dependencies.ts';
 
-type SQLiteParamType = Record<string, boolean | number | bigint | string | null | undefined | Date | Uint8Array>
+type SQLiteParamType = Record<
+  string,
+  boolean | number | bigint | string | null | undefined | Date | Uint8Array
+>;
 
 export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
   private _client: SQLiteDBClient | undefined = undefined;
@@ -152,8 +155,11 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
     }
   }
 
-  protected _normaliseQuery(sql: string,params?: Record<string,unknown>|undefined): string {
-    if(params === undefined) {
+  protected _normaliseQuery(
+    sql: string,
+    params?: Record<string, unknown> | undefined,
+  ): string {
+    if (params === undefined) {
       return sql;
     }
     const keys = Object.keys(params);
@@ -162,16 +168,21 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
     // Verify that any :key defined exists in params
     const missing: string[] = [];
     const matches = sql.match(/:(\w+)/g);
-    if(matches !== null) {
-      for(const match of matches) {
+    if (matches !== null) {
+      for (const match of matches) {
         const key = match.substr(1);
-        if(!keys.includes(key)) {
+        if (!keys.includes(key)) {
           missing.push(key);
         }
       }
     }
-    if(missing.length > 0) {
-      throw new NormQueryMissingParamsError({ name: this._name, dialect: this.dialect, sql: sql, missing: missing.join(',') });
+    if (missing.length > 0) {
+      throw new NormQueryMissingParamsError({
+        name: this._name,
+        dialect: this.dialect,
+        sql: sql,
+        missing: missing.join(','),
+      });
     }
     return sql;
     // for(const key of keys) {

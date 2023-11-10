@@ -32,7 +32,7 @@ export abstract class RESTler<
   protected _name: string;
   protected _defaultHeaders: Record<string, string>;
   protected _authStatus = [401, 403, 407];
-
+  protected _authInitiated = false;
   /**
    * Creates an instance of RESTler.
    *
@@ -113,6 +113,8 @@ export abstract class RESTler<
     });
     request.headers = { ...this._defaultHeaders, ...request.headers };
 
+    // Inject auth here
+    await this._authInjector(request);
     const endpoint = this._makeURL(request.endpoint as RESTlerEndpoint),
       controller = new AbortController(),
       fetchOptions: RequestInit = {
@@ -131,7 +133,7 @@ export abstract class RESTler<
       status: 200,
       authFailure: false,
       body: {} as RespBody,
-      timeTaken: 0, 
+      timeTaken: 0,
     };
     let authCounter = 0;
     let finalError: RESTlerBaseError | undefined;
@@ -139,8 +141,6 @@ export abstract class RESTler<
     while (authCounter <= maxAuthTries) {
       const start = performance.now();
       try {
-        // Inject auth here
-        this._authInjector(request);
         const timeout = setTimeout(
             () => controller.abort(),
             this._getOption('timeout'),
@@ -177,9 +177,12 @@ export abstract class RESTler<
         }
         const end = performance.now();
         resp.timeTaken = end - start;
-        if (resp.authFailure) {
+        if (resp.authFailure && !this._authInitiated) {
           ++authCounter;
+
+          this._authInitiated = true;
           await this._authenticate();
+          this._authInitiated = false;
           continue;
         }
         // Emit response event

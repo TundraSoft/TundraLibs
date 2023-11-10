@@ -39,5 +39,9 @@ export type { SqliteOptions as SQLiteDBClientConfig } from 'https://deno.land/x/
 
 // export { MongoClient } from 'npm:mongo';
 export { MongoClient as MongoDBClient, MongoServerError } from 'npm:mongodb';
-export type { MongoClientOptions, Db as MongoDB, Collection as MongoCollection } from 'npm:mongodb';
+export type {
+  Collection as MongoCollection,
+  Db as MongoDB,
+  MongoClientOptions,
+} from 'npm:mongodb';
 //#endregion Databases

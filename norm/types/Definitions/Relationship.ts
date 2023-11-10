@@ -1,4 +1,3 @@
-
 export type RelationshipDefinition = {
   model: string;
   hasMany: boolean;

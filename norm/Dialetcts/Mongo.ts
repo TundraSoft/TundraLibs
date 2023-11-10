@@ -8,7 +8,11 @@ import {
   NormQueryError,
 } from '../errors/mod.ts';
 
-import type { MongoClientOptions, MongoDB, MongoCollection } from '../../dependencies.ts';
+import type {
+  MongoClientOptions,
+  MongoCollection,
+  MongoDB,
+} from '../../dependencies.ts';
 import { MongoDBClient, MongoServerError } from '../../dependencies.ts';
 
 export class MongoClient extends AbstractClient<MongoConnectionOptions> {
@@ -35,15 +39,15 @@ export class MongoClient extends AbstractClient<MongoConnectionOptions> {
         value: options.host,
       });
     }
-    if(options.password?.trim().length === 0) {
+    if (options.password?.trim().length === 0) {
       options.password = undefined;
     }
-    if(options.username?.trim().length === 0) {
+    if (options.username?.trim().length === 0) {
       options.username = undefined;
     }
     const defaults: Partial<MongoConnectionOptions> = {
       port: 27017,
-      ssl: false, 
+      ssl: false,
       connectionTimeout: 10,
     };
     super(name, options, defaults);
@@ -71,17 +75,23 @@ export class MongoClient extends AbstractClient<MongoConnectionOptions> {
     throw new Error('Method not implemented.');
   }
 
-  protected _normaliseQuery(sql: string,params?: Record<string,unknown>|undefined): string {
+  protected _normaliseQuery(
+    sql: string,
+    params?: Record<string, unknown> | undefined,
+  ): string {
     throw new Error('Method not implemented.');
   }
 }
-
 
 const client = new MongoDBClient('mongodb://mongo:mongopw@localhost:27071');
 await client.connect();
 const db = client.db('test');
 // await db.collection<{_id: string, name: string }>('test').insertOne({_id: crypto.randomUUID(), name: 'test'});
-console.log(await db.collection('test').find({name: {
-  $regex: 'test',
-}}).toArray());
+console.log(
+  await db.collection('test').find({
+    name: {
+      $regex: 'test',
+    },
+  }).toArray(),
+);
 await client.close();
