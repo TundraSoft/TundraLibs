@@ -14,3 +14,4 @@ export {
   RESTlerUnhandledError,
   RESTlerUnsupportedContentType,
 } from './errors/mod.ts';
+export type { RESTlerErrorMeta } from './errors/mod.ts';

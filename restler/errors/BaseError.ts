@@ -4,10 +4,12 @@ import type { TundraLibErrorMetaTags } from '../../utils/mod.ts';
 
 import type { RESTlerEndpoint } from '../types/mod.ts';
 
+export type RESTlerErrorMeta = Partial<RESTlerEndpoint> & { [key: string]: unknown };
+
 export class RESTlerBaseError extends TundraLibError {
   protected _vendor: string;
   public name = 'RESTlerBaseError';
-  constructor(vendor: string, message: string, metaTags: RESTlerEndpoint) {
+  constructor(vendor: string, message: string, metaTags: RESTlerErrorMeta) {
     const mt: TundraLibErrorMetaTags = {
       ...{ library: 'RESTler' },
       ...metaTags,

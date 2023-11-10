@@ -169,7 +169,7 @@ export abstract class RESTler<
             throw new RESTlerUnhandledError(
               this._name,
               e.message,
-              request.endpoint as RESTlerEndpoint,
+              request.endpoint,
             );
           } else {
             throw e;
