@@ -137,11 +137,11 @@ export abstract class RESTler<
     let finalError: RESTlerBaseError | undefined;
     this.emit('request', request as RESTlerRequest);
     while (authCounter <= maxAuthTries) {
+      const start = performance.now();
       try {
         // Inject auth here
         this._authInjector(request);
-        const start = performance.now(),
-          timeout = setTimeout(
+        const timeout = setTimeout(
             () => controller.abort(),
             this._getOption('timeout'),
           ),
@@ -191,6 +191,7 @@ export abstract class RESTler<
         return resp;
       } catch (e) {
         // Handle error
+        resp.timeTaken = performance.now() - start;
         if (e.name === 'AbortError') {
           // Emit timeout event
           this.emit('timeout', request);
