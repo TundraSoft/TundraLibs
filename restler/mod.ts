@@ -1,11 +1,11 @@
 export { RESTler } from './RESTler.ts';
 export type {
   RESTlerEndpoint,
+  RESTlerEvents,
   RESTlerOptions,
   RESTlerRequest,
   RESTlerResponse,
   RESTlerResponseBody,
-  RESTlerEvents, 
 } from './types/mod.ts';
 export {
   RESTlerAuthFailure,

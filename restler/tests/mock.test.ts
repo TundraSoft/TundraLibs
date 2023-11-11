@@ -5,6 +5,7 @@ import {
   RESTlerRequest,
   RESTlerResponse,
 } from '../mod.ts';
+import { cryptoKey } from '../../id/mod.ts';
 import {
   afterEach,
   assertEquals,
@@ -20,6 +21,7 @@ describe(`[library='RESTler' mode='mock example']`, () => {
       id: 1,
       email: 'test@email.com',
     }];
+    const auth = cryptoKey(32);
     const handler = async (req: Request) => {
       const path = new URL(req.url, 'http://localhost:8000').pathname,
         method = req.method,
@@ -29,12 +31,18 @@ describe(`[library='RESTler' mode='mock example']`, () => {
       // console.log(path, method)
 
       if (path === '/auth' && method === 'POST') {
-        return new Response(JSON.stringify({ token: '123' }), { status: 200 });
+        // Delay response by 1s
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return new Response(JSON.stringify({ token: auth }), {
+          status: 200,
+          headers: respHeaders,
+        });
       } else if (path === '/users' && method === 'POST') {
         if (
           req.headers.has('X-Authorization') === false ||
-          req.headers.get('X-Authorization') !== '123'
+          req.headers.get('X-Authorization') !== auth
         ) {
+          // console.log(auth, req.headers.get('X-Authorization'));
           return new Response(JSON.stringify({ message: 'Unauthorized' }), {
             status: 401,
             headers: respHeaders,
@@ -77,38 +85,37 @@ describe(`[library='RESTler' mode='mock example']`, () => {
           'content-type': 'application/json',
           'accept': 'application/json',
         },
-        _onauth: (v: number) => {
-          console.log(`Auth: ${v}`);
-        },
-        _onauthFailure: (req: RESTlerRequest) => {
-          console.log(
-            `Auth failed: ${req.endpoint.method} ${req.endpoint.path}`,
-          );
-        },
-        _onrequest: (req: RESTlerRequest) => {
-          console.log(`Request: ${req.endpoint.method} ${req.endpoint.path}`);
-        },
-        _ontimeout: (req: RESTlerRequest) => {
-          console.log(`Timeout: ${req.endpoint.method} ${req.endpoint.path}`);
-        },
-        _onresponse: (
-          req: RESTlerRequest,
-          resp: RESTlerResponse,
-          error?: RESTlerBaseError,
-        ) => {
-          if (error !== undefined) {
-            console.log(`Error: ${error.name} ${error.message}`);
-          } else {
-            console.log(
-              `Response: ${req.endpoint.method} ${req.endpoint.path} ${resp.status} in ${resp.timeTaken}`,
-            );
-          }
-        },
+        // _onauth: (v: Record<string, unknown>) => {
+        //   console.log(`Auth: ${JSON.stringify(v)}`);
+        // },
+        // _onauthFailure: (req: RESTlerRequest) => {
+        //   console.log(
+        //     `Auth failed: ${req.endpoint.method} ${req.endpoint.path}`,
+        //   );
+        // },
+        // _onrequest: (req: RESTlerRequest) => {
+        //   console.log(`Request: ${req.endpoint.method} ${req.endpoint.path}`);
+        // },
+        // _ontimeout: (req: RESTlerRequest) => {
+        //   console.log(`Timeout: ${req.endpoint.method} ${req.endpoint.path}`);
+        // },
+        // _onresponse: (
+        //   req: RESTlerRequest,
+        //   resp: RESTlerResponse,
+        //   error?: RESTlerBaseError,
+        // ) => {
+        //   if (error !== undefined) {
+        //     console.log(`Error: ${error.name} ${error.message}`);
+        //   } else {
+        //     console.log(
+        //       `Response: ${req.endpoint.method} ${req.endpoint.path} ${resp.status} in ${resp.timeTaken}`,
+        //     );
+        //   }
+        // },
       });
     }
 
     protected _authInjector(request: RESTlerRequest): void {
-      // console.log('In Auth inject');
       if (request.endpoint.method === 'POST' && this._authKey) {
         if (!request.headers) {
           request.headers = {};
@@ -120,12 +127,17 @@ describe(`[library='RESTler' mode='mock example']`, () => {
       }
     }
 
-    protected _authenticate(): void {
-      // console.log('In Authenticate');
+    protected async _authenticate(): Promise<void> {
       if (this.doAuth === true) {
-        this._authKey = '123';
+        const res = await this._makeRequest<{ token: string }>({
+          endpoint: this._buildEndpoint('POST', '/auth'),
+        });
+        this._authKey = res.body?.token;
       }
-      this.emit('auth', this._authKey);
+      // if (this.doAuth === true) {
+      //   this._authKey = '123';
+      // }
+      this.emit('auth', { token: this._authKey });
     }
 
     async createUser(email: string): Promise<{ id: number; email: string }> {
