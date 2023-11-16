@@ -1,7 +1,4 @@
-import {
-  RESTler,
-  RESTlerRequest,
-} from '../mod.ts';
+import { RESTler, RESTlerRequest } from '../mod.ts';
 import { cryptoKey } from '../../id/mod.ts';
 import {
   afterEach,

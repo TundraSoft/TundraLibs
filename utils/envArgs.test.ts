@@ -1,7 +1,8 @@
 import {
   assertEquals,
   assertStrictEquals,
-  describe, it
+  describe,
+  it,
 } from '../dev.dependencies.ts';
 
 import { envArgs } from './envArgs.ts';

@@ -1,9 +1,5 @@
 import { HOTP } from '../mod.ts';
-import {
-  assertEquals,
-  describe,
-  it,
-} from '../../dev.dependencies.ts';
+import { assertEquals, describe, it } from '../../dev.dependencies.ts';
 
 describe(`[library='otp' mode='HOTP' algorithm='SHA-1']`, () => {
   it('Length of generated OTP must match specified length', async () => {

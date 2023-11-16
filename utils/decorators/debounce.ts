@@ -1,41 +1,29 @@
-function debounce(milliseconds: number) {
+/**
+ * debounces a method call
+ *
+ * @param milliseconds Time in milliseconds to delay consequent calls
+ * @returns original method wrapped with debounce logic
+ */
+export function debounce(milliseconds: number) {
   return function (
-    target: unknown,
-    key: string,
+    _target: unknown,
+    _key: string,
     descriptor: PropertyDescriptor,
   ): PropertyDescriptor {
-    const originalMethod = descriptor.value;
-    let timeoutId: number;
-    let lastCallTime: number;
+    let timerId: number | undefined = undefined; // The timer ID for the current debounce
+    const originalMethod = descriptor.value; // The original method that will be debounced
 
-    descriptor.value = function (...args: unknown[]) {
-      const currentTime = Date.now();
-
-      if (lastCallTime && currentTime - lastCallTime < milliseconds) {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          lastCallTime = currentTime;
-          originalMethod.apply(this, args);
-        }, milliseconds);
-      } else {
-        lastCallTime = currentTime;
-        originalMethod.apply(this, args);
+    descriptor.value = function (this: unknown, ...args: unknown[]) {
+      if (timerId) {
+        clearTimeout(timerId);
       }
+      timerId = setTimeout(() => {
+        originalMethod.apply(this, args); // Invoke the original method with the provided arguments
+      }, milliseconds);
     };
-
+    addEventListener('unload', () => {
+      clearTimeout(timerId);
+    });
     return descriptor;
   };
 }
-
-// class A {
-//   @debounce(5000)
-//   public doThis() {
-//     console.log('doThis');
-//   }
-// }
-
-// const ad = new A();
-
-// ad.doThis();
-// ad.doThis();
-// ad.doThis();
