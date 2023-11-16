@@ -1,6 +1,5 @@
 import {
   RESTler,
-  RESTlerAuthFailure,
   RESTlerBaseError,
   RESTlerRequest,
   RESTlerResponse,
@@ -33,7 +32,7 @@ const mock = (port = 8000) => {
         req.headers.has('X-Authorization') === false ||
         req.headers.get('X-Authorization') !== auth
       ) {
-        console.log(auth, req.headers.get('X-Authorization'));
+        // console.log(auth, req.headers.get('X-Authorization'));
         return new Response(JSON.stringify({ message: 'Unauthorized' }), {
           status: 401,
           headers: respHeaders,
@@ -42,7 +41,7 @@ const mock = (port = 8000) => {
         // Add the user
         const payload = await req.json(),
           id = users.length + 1;
-        users.push({ id: id, email: payload.email });
+        users.push({ id: id, email: payload.email + auth });
         return new Response(JSON.stringify(users[id - 1]), {
           status: 201,
           headers: respHeaders,
@@ -61,7 +60,7 @@ const mock = (port = 8000) => {
     }
   };
   const sig = new AbortController();
-  const serv = Deno.serve({ port: port, signal: sig.signal }, handler);
+  const _serv = Deno.serve({ port: port, signal: sig.signal }, handler);
   return sig;
 };
 
@@ -152,11 +151,21 @@ class MockTest extends RESTler {
 // const test2 = new MockTest();
 // test.doAuth = true;
 // test2.doAuth = true;
-const server =  mock()
+const server = mock();
 
 // window.setInterval(() => auth = cryptoKey(32), 1000)
 // Loop 1000 times
-for (let i = 0; i < 10; i ++) {
-  new MockTest().createUser(`user${i}`);
+const a: Promise<unknown>[] = [];
+for (let i = 0; i < 10; i++) {
+  if (i === 3) {
+    auth = cryptoKey(32);
+    console.log(auth);
+  }
+  a.push(new MockTest().createUser(`user${i}`));
 }
+Promise.allSettled(a).then((v) => {
+  // v.filter((v) => v.status === 'rejected').forEach((v) => console.log(`Failed: ${JSON.stringify(v)}`));
+  console.log(v);
+  server.abort();
+});
 // server.abort();

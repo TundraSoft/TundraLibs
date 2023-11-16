@@ -1,8 +1,6 @@
 import { TOTP } from '../mod.ts';
 import {
-  afterEach,
   assertEquals,
-  beforeEach,
   describe,
   it,
 } from '../../dev.dependencies.ts';

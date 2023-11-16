@@ -38,10 +38,23 @@ export { DB as SQLiteDBClient } from 'https://deno.land/x/sqlite@v3.8/mod.ts';
 export type { SqliteOptions as SQLiteDBClientConfig } from 'https://deno.land/x/sqlite@v3.8/mod.ts';
 
 // export { MongoClient } from 'npm:mongo';
-export { MongoClient as MongoDBClient, MongoServerError } from 'npm:mongodb';
-export type {
+// export { MongoClient as MongoDBClient, MongoServerError } from 'npm:mongodb';
+// export type {
+//   Collection as MongoCollection,
+//   Db as MongoDB,
+//   MongoClientOptions,
+// } from 'npm:mongodb';
+
+export {
   Collection as MongoCollection,
-  Db as MongoDB,
-  MongoClientOptions,
-} from 'npm:mongodb';
+  Database as MongoDB,
+  MongoClient as MongoDBClient,
+} from 'https://deno.land/x/mongo@v0.32.0/mod.ts';
+export {
+  MongoDriverError,
+  MongoInvalidArgumentError,
+  MongoRuntimeError,
+  MongoServerError,
+} from 'https://deno.land/x/mongo@v0.32.0/src/error.ts';
+export type { ConnectOptions as MongoClientOptions } from 'https://deno.land/x/mongo@v0.32.0/mod.ts';
 //#endregion Databases

@@ -1,8 +1,6 @@
 import { HOTP } from '../mod.ts';
 import {
-  afterEach,
   assertEquals,
-  beforeEach,
   describe,
   it,
 } from '../../dev.dependencies.ts';
@@ -85,7 +83,7 @@ describe(`[library='otp' mode='HOTP' algorithm='SHA-256']`, () => {
 
   it('OTP must be the same when generated within same time + interval', async () => {
     const iter = 30,
-      epoc = Date.now(),
+      _epoc = Date.now(),
       otps = new Set<string>();
     for (let i = 0; i < iter; i++) {
       otps.add(await HOTP('12345678901234567890', 'SHA-256', 6, 1)); // Set window as 0
@@ -119,7 +117,7 @@ describe(`[library='otp' mode='HOTP' algorithm='SHA-384']`, () => {
 
   it('OTP must be the same when generated within same time + interval', async () => {
     const iter = 30,
-      epoc = Date.now(),
+      _epoc = Date.now(),
       otps = new Set<string>();
     for (let i = 0; i < iter; i++) {
       otps.add(await HOTP('12345678901234567890', 'SHA-384', 6, 1)); // Set window as 0
@@ -153,7 +151,7 @@ describe(`[library='otp' mode='HOTP' algorithm='SHA-512']`, () => {
 
   it('OTP must be the same when generated within same time + interval', async () => {
     const iter = 30,
-      epoc = Date.now(),
+      _epoc = Date.now(),
       otps = new Set<string>();
     for (let i = 0; i < iter; i++) {
       otps.add(await HOTP('12345678901234567890', 'SHA-512', 6, 1)); // Set window as 0

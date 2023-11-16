@@ -224,7 +224,7 @@ export class Config {
             ext: fileDetails.ext,
           });
       }
-    } catch (e) {
+    } catch (_e) {
       throw new ConfigMalformed(name, { path: basePath, file: fileName });
     }
     this._config.set(name, data);

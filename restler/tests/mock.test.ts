@@ -1,15 +1,11 @@
 import {
   RESTler,
-  RESTlerAuthFailure,
-  RESTlerBaseError,
   RESTlerRequest,
-  RESTlerResponse,
 } from '../mod.ts';
 import { cryptoKey } from '../../id/mod.ts';
 import {
   afterEach,
   assertEquals,
-  assertThrows,
   beforeEach,
   describe,
   it,
@@ -70,7 +66,7 @@ describe(`[library='RESTler' mode='mock example']`, () => {
       }
     };
     const sig = new AbortController();
-    const serv = Deno.serve({ port: port, signal: sig.signal }, handler);
+    const _serv = Deno.serve({ port: port, signal: sig.signal }, handler);
     return sig;
   };
 

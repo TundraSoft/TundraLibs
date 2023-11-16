@@ -1,6 +1,5 @@
-import { RESTler, RESTlerOptions } from '../mod.ts';
+import { RESTler } from '../mod.ts';
 import {
-  afterEach,
   assertEquals,
   beforeEach,
   describe,

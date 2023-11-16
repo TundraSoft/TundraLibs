@@ -21,7 +21,6 @@
         "ban-untagged-todo"
       ],
       "exclude": [
-        "no-unused-vars"
       ]
     }
   },

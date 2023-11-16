@@ -40,7 +40,11 @@ export abstract class RESTler<
    * @param name string - The name of the RESTler instance
    * @param config OptionKeys<O, RESTlerEvents> - The options object
    */
-  constructor(name: string, config: OptionKeys<O, RESTlerEvents>, defaults?: Partial<O>) {
+  constructor(
+    name: string,
+    config: OptionKeys<O, RESTlerEvents>,
+    defaults?: Partial<O>,
+  ) {
     const def: Partial<O> = {
       timeout: 30000,
     } as Partial<O>;
@@ -133,7 +137,7 @@ export abstract class RESTler<
     // We now attempt to make the request, if it fails, we retry once
     const start = performance.now();
     try {
-      this._authInjector(request);
+      await this._authInjector(request);
       const controller = new AbortController(),
         fetchOptions: RequestInit = {
           method: request.endpoint.method,
@@ -204,7 +208,7 @@ export abstract class RESTler<
       this.emit('response', request, resp as RESTlerResponse, finalError);
     }
   }
-  
+
   /**
    * Handles the response object and returns the body
    *
@@ -266,7 +270,7 @@ export abstract class RESTler<
   }
 
   //#region Override these methods
-  
+
   /**
    * The method that injects authentication into the request. This method is meant
    * to be overridden by the child classes.
@@ -277,6 +281,7 @@ export abstract class RESTler<
    * @param request RESTlerRequest - The RESTlerRequest object
    */
   protected _authInjector(
+    // deno-lint-ignore no-unused-vars
     request: RESTlerRequest,
   ): void | Promise<void> {
     // Do nothing

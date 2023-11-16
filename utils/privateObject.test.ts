@@ -1,9 +1,7 @@
 import {
   assertEquals,
-  assertStrictEquals,
-  assertThrows,
+  beforeEach, describe, it
 } from '../dev.dependencies.ts';
-import { afterEach, beforeEach, describe, it } from '../dev.dependencies.ts';
 
 import { privateObject } from './privateObject.ts';
 import type { PrivateObject } from './privateObject.ts';

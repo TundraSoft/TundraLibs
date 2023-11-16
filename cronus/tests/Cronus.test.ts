@@ -4,7 +4,6 @@ import {
   CronusDuplicateJob,
   CronusInvalidCallback,
   CronusInvalidSchedule,
-  CronusJobNotFound,
 } from '../mod.ts';
 
 Deno.test('Cronus.addJob should add a job to Cronus', () => {

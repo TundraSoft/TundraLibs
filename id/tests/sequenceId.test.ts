@@ -1,7 +1,6 @@
 import { sequenceId } from '../mod.ts';
 import {
   assertEquals,
-  assertMatch,
   assertNotEquals,
   describe,
   it,

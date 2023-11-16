@@ -1,9 +1,8 @@
 import {
   assertEquals,
   assertStrictEquals,
-  assertThrows,
+  describe, it
 } from '../dev.dependencies.ts';
-import { afterEach, beforeEach, describe, it } from '../dev.dependencies.ts';
 
 import { envArgs } from './envArgs.ts';
 
