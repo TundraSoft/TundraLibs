@@ -188,7 +188,7 @@ export abstract class RESTler<
         // We do not re-attempt for any error other than auth failure
         if (this._authInitiated === false) {
           this._authInitiated = true;
-          await this._authenticate();
+          await this._authenticate(request);
           // Retry the request
           return await this._makeRequest<RespBody>(request);
         }
@@ -293,8 +293,9 @@ export abstract class RESTler<
    *
    * @remarks
    * This method is meant to be overridden by the child classes. **NOTE** You need to emit 'auth' event here!!!
+   * @param request RESTlerRequest - The RESTlerRequest object
    */
-  protected _authenticate(): void | Promise<void> {
+  protected _authenticate(_request: RESTlerRequest): void | Promise<void> {
     // Do nothing
     this.emit('auth', {});
   }
