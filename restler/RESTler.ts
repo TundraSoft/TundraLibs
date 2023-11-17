@@ -117,12 +117,13 @@ export abstract class RESTler<
   >(
     request: RESTlerRequest,
   ): Promise<RESTlerResponse<RespBody>> {
-    // Object.assign(request.endpoint, {
-    //   baseURL: this._getOption('endpointURL'),
-    //   version: this._getOption('version'),
-    // });
+    Object.assign(request.endpoint, {
+      baseURL: request.endpoint.baseURL ?? this._getOption('endpointURL'),
+      version: this._getOption('version'),
+    });
     // Assign headers
     request.headers = { ...this._defaultHeaders, ...request.headers };
+    
     // Create the URL
     const endpoint = this._makeURL(request.endpoint as RESTlerEndpoint),
       resp: RESTlerResponse<RespBody> = {
