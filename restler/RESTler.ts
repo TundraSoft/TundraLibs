@@ -200,6 +200,9 @@ export abstract class RESTler<
           e.message,
           request.endpoint as RESTlerEndpoint,
         );
+      } else {
+        // We are not getting the instance type as RESTlerBaseError, instead of that, we are getting the VendorNameBaseError, due to which the finalError's type is undefined
+        finalError = e;
       }
       // Emit error event
       throw finalError;
