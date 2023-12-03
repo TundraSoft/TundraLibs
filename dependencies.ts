@@ -95,7 +95,7 @@ export {
   helpers as oakHelpers,
   Request,
   Response,
-} from 'https://deno.land/x/oak@v11.1.0/mod.ts';
+} from 'https://deno.land/x/oak@v12.6.1/mod.ts';
 
 //#endregion Endpoint
 
