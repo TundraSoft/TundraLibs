@@ -124,7 +124,7 @@ export abstract class RESTler<
     });
     // Assign headers
     request.headers = { ...this._defaultHeaders, ...request.headers };
-    
+
     // Create the URL
     const endpoint = this._makeURL(request.endpoint as RESTlerEndpoint),
       resp: RESTlerResponse<RespBody> = {
@@ -144,7 +144,7 @@ export abstract class RESTler<
         fetchOptions: RequestInit = {
           method: request.endpoint.method,
           headers: request.headers,
-          signal: controller.signal, 
+          signal: controller.signal,
           body: (request.body instanceof FormData)
             ? request.body
             : JSON.stringify(request.body),
@@ -153,10 +153,10 @@ export abstract class RESTler<
           () => controller.abort(),
           this._getOption('timeout'),
         );
-      if(this._customClient !== undefined) {
+      if (this._customClient !== undefined) {
         fetchOptions.client = this._customClient;
       }
-      const = interimResp = await fetch(endpoint, fetchOptions);
+      const interimResp = await fetch(endpoint, fetchOptions);
       clearTimeout(timeout);
       resp.timeTaken = performance.now() - start;
       resp.status = interimResp.status;

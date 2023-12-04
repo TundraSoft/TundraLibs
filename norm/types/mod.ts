@@ -10,10 +10,10 @@ export type {
 export type {
   ColumnDefinition,
   ColumnLengthDefinition,
-  ColumnType, 
-  ModelDefinition, 
-  RelationshipDefinition, 
-  TableDefinition
+  ColumnType,
+  ModelDefinition,
+  RelationshipDefinition,
+  TableDefinition,
 } from './Definitions/mod.ts';
 
 export type {

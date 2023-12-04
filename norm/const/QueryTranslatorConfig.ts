@@ -1,7 +1,7 @@
 import type { QueryFilters } from '../types/mod.ts';
 
 export const QueryTranslatorConfig = {
-  escapeIdentifier: '"', 
+  escapeIdentifier: '"',
   quoteIdentifier: '"',
   cascade: {
     database: true,
@@ -69,8 +69,8 @@ export const QueryTranslatorConfig = {
   // deno-lint-ignore no-explicit-any
   quoteValue(value: any): string {
     if (
-      typeof value === null || typeof (value) === 'function' ||
-      typeof (value) === 'symbol' || typeof (value) === 'undefined' ||
+      typeof value === null || typeof value === 'function' ||
+      typeof value === 'symbol' || typeof value === 'undefined' ||
       String(value).toUpperCase() === 'NULL'
     ) {
       return 'NULL';
@@ -101,27 +101,36 @@ export const QueryTranslatorConfig = {
     }
     // Escape quotes already present
     const findRegEx = new RegExp(QueryTranslatorConfig.quoteIdentifier, 'g'),
-      replace = QueryTranslatorConfig.quoteIdentifier + QueryTranslatorConfig.quoteIdentifier;
+      replace = QueryTranslatorConfig.quoteIdentifier +
+        QueryTranslatorConfig.quoteIdentifier;
     // return `'${value.replace(/'/g, "''")}'`;
     return `${QueryTranslatorConfig.quoteIdentifier}${
       value.replace(findRegEx, replace)
     }${QueryTranslatorConfig.quoteIdentifier}`;
-  }, 
-  
+  },
+
   //#region Query Generators
   insert: (
     table: Array<string | undefined>,
     columns: string[],
     values: Record<string, unknown>[],
-    project: Record<string, string>, 
+    project: Record<string, string>,
   ): string => {
     // Move this to config
-    const returning = ` RETURNING ${Object.entries(project).map(([key, value]) => `${QueryTranslatorConfig.escape([key])} AS ${QueryTranslatorConfig.escape([value])}`).join(', ')}`
+    const returning = ` RETURNING ${
+      Object.entries(project).map(([key, value]) =>
+        `${QueryTranslatorConfig.escape([key])} AS ${
+          QueryTranslatorConfig.escape([value])
+        }`
+      ).join(', ')
+    }`;
     return `INSERT INTO ${QueryTranslatorConfig.escape(table)} (${
       columns.map((c) => QueryTranslatorConfig.escape([c])).join(', ')
     }) VALUES (${
       values.map((v) =>
-        Object.values(v).map((c) => QueryTranslatorConfig.quoteValue(c)).join(', ')
+        Object.values(v).map((c) => QueryTranslatorConfig.quoteValue(c)).join(
+          ', ',
+        )
       ).join('), (')
     })${returning};`;
   },
@@ -129,13 +138,23 @@ export const QueryTranslatorConfig = {
   update: (
     table: Array<string | undefined>,
     values: Record<string, unknown>,
-    project: Record<string, string>, 
+    project: Record<string, string>,
     filter?: QueryFilters,
   ): string => {
-    const returning = ` RETURNING ${Object.entries(project).map(([key, value]) => `${QueryTranslatorConfig.escape([key])} AS ${QueryTranslatorConfig.escape([value])}`).join(', ')}`;
+    const returning = ` RETURNING ${
+      Object.entries(project).map(([key, value]) =>
+        `${QueryTranslatorConfig.escape([key])} AS ${
+          QueryTranslatorConfig.escape([value])
+        }`
+      ).join(', ')
+    }`;
     const where = filter ? ` WHERE ${QueryTranslatorConfig.where(filter)}` : '';
     return `UPDATE ${QueryTranslatorConfig.escape(table)} SET ${
-      Object.entries(values).map(([key, value]) => `${QueryTranslatorConfig.escape([key])} = ${QueryTranslatorConfig.quoteValue(value)}`).join(', ')
+      Object.entries(values).map(([key, value]) =>
+        `${QueryTranslatorConfig.escape([key])} = ${
+          QueryTranslatorConfig.quoteValue(value)
+        }`
+      ).join(', ')
     }${where}${returning};`;
   },
 
@@ -152,27 +171,45 @@ export const QueryTranslatorConfig = {
     return `CREATE SCHEMA IF NOT EXISTS ${
       QueryTranslatorConfig.escape([schema])
     };`;
-  }, 
+  },
 
   dropSchema: (schema: string): string => {
     return `DROP SCHEMA IF EXISTS ${QueryTranslatorConfig.escape([schema])};`;
-  }, 
+  },
 
   dropTable: (table: string, schema?: string): string => {
-    return `DROP TABLE IF EXISTS ${QueryTranslatorConfig.escape([table, schema])};`;
-  }, 
+    return `DROP TABLE IF EXISTS ${
+      QueryTranslatorConfig.escape([table, schema])
+    };`;
+  },
 
-  renameTable: (newName: Array<string | undefined>, oldName: Array<string | undefined>): string => {
-    return `ALTER TABLE ${QueryTranslatorConfig.escape(oldName)} RENAME TO ${QueryTranslatorConfig.escape(newName)};`;
-  }, 
+  renameTable: (
+    newName: Array<string | undefined>,
+    oldName: Array<string | undefined>,
+  ): string => {
+    return `ALTER TABLE ${QueryTranslatorConfig.escape(oldName)} RENAME TO ${
+      QueryTranslatorConfig.escape(newName)
+    };`;
+  },
 
   dropColumn: (name: string, table: string, schema?: string): string => {
-    return `ALTER TABLE ${QueryTranslatorConfig.escape([table, schema])} DROP COLUMN ${QueryTranslatorConfig.escape([name])};`;
+    return `ALTER TABLE ${
+      QueryTranslatorConfig.escape([table, schema])
+    } DROP COLUMN ${QueryTranslatorConfig.escape([name])};`;
   },
-  
-  renameColumn: (newName: string, oldName: string, table: string, schema?: string): string => {
-    return `ALTER TABLE ${QueryTranslatorConfig.escape([table, schema])} RENAME COLUMN ${QueryTranslatorConfig.escape([oldName])} TO ${QueryTranslatorConfig.escape([newName])};`;
-  }, 
+
+  renameColumn: (
+    newName: string,
+    oldName: string,
+    table: string,
+    schema?: string,
+  ): string => {
+    return `ALTER TABLE ${
+      QueryTranslatorConfig.escape([table, schema])
+    } RENAME COLUMN ${QueryTranslatorConfig.escape([oldName])} TO ${
+      QueryTranslatorConfig.escape([newName])
+    };`;
+  },
 
   where: (filter: QueryFilters, joiner = 'AND'): string => {
     const ret: string[] = [];
@@ -196,7 +233,10 @@ export const QueryTranslatorConfig = {
         } else {
           // Ok, now we need to check if the value is an object or not
           const value = filter[key];
-          if (value instanceof Object && (!(value instanceof Date) || !(value instanceof Array))) {
+          if (
+            value instanceof Object &&
+            (!(value instanceof Date) || !(value instanceof Array))
+          ) {
             for (
               const [operator, operatorValue] of Object.entries(
                 value,
@@ -249,7 +289,7 @@ export const QueryTranslatorConfig = {
                 case '$in':
                   ret.push(
                     `${QueryTranslatorConfig.escape([key])} IN (${
-                      (operatorValue).map((v: unknown) =>
+                      operatorValue.map((v: unknown) =>
                         QueryTranslatorConfig.quoteValue(v)
                       ).join(', ')
                     })`,
@@ -258,7 +298,7 @@ export const QueryTranslatorConfig = {
                 case '$nin':
                   ret.push(
                     `${QueryTranslatorConfig.escape([key])} NOT IN (${
-                      (operatorValue).map((v: unknown) =>
+                      operatorValue.map((v: unknown) =>
                         QueryTranslatorConfig.quoteValue(v)
                       ).join(', ')
                     })`,
@@ -270,7 +310,9 @@ export const QueryTranslatorConfig = {
             }
           } else {
             ret.push(
-              `${QueryTranslatorConfig.escape([key])} = ${QueryTranslatorConfig.quoteValue(value)}`,
+              `${QueryTranslatorConfig.escape([key])} = ${
+                QueryTranslatorConfig.quoteValue(value)
+              }`,
             );
           }
           // if(typeof filter[key] === 'object') {
@@ -284,7 +326,6 @@ export const QueryTranslatorConfig = {
       }
     }
     return `( ${ret.join(` ${joiner} `)} )`;
-  }
-
+  },
   //#endregion Query Generators
 };

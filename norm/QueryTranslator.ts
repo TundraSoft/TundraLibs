@@ -4,8 +4,8 @@ import type {
   Dialects,
   InsertQuery,
   QueryFilters,
-  UpdateQuery, 
   TableDefinition,
+  UpdateQuery,
 } from './types/mod.ts';
 import {
   MariaQueryTranslatorConfig,
@@ -38,7 +38,7 @@ export class QueryTranslator {
   }
 
   public insert(query: InsertQuery) {
-    const tableName = [query.name, query.schema]; 
+    const tableName = [query.name, query.schema];
     // Get all unique keys from d
     const insertColumns = query.data.reduce((acc, val) => {
       Object.keys(val).forEach((key) => {
@@ -50,7 +50,7 @@ export class QueryTranslator {
     const values = query.data.map((d) => {
       const ret: Record<string, unknown> = {};
       for (const col of insertColumns) {
-        if(query.columns[col]) {
+        if (query.columns[col]) {
           ret[query.columns[col]] = d[col] || null;
         }
       }
@@ -61,7 +61,7 @@ export class QueryTranslator {
     if (query.project) {
       // Loop through project and change the key to actual column name
       query.project.forEach((p) => {
-        if(query.columns[p]) {
+        if (query.columns[p]) {
           project[query.columns[p]] = String(p);
         }
       });
@@ -78,7 +78,7 @@ export class QueryTranslator {
     const tableName = [query.name, query.schema];
     const set: Record<string, unknown> = {};
     Object.entries(query.data).forEach(([key, value]) => {
-      if(query.columns[key]) {
+      if (query.columns[key]) {
         set[query.columns[key]] = value;
       }
     });
@@ -87,7 +87,7 @@ export class QueryTranslator {
     if (query.project) {
       // Loop through project and change the key to actual column name
       query.project.forEach((p) => {
-        if(query.columns[p]) {
+        if (query.columns[p]) {
           project[query.columns[p]] = String(p);
         }
       });
@@ -97,14 +97,18 @@ export class QueryTranslator {
         project[value] = key;
       });
     }
-    const filter = query.filter ? this._normaliseFilter(query.columns, query.filter) : undefined;
+    const filter = query.filter
+      ? this._normaliseFilter(query.columns, query.filter)
+      : undefined;
     return this._config.update(tableName, query.data, project, filter);
   }
 
   public delete(query: DeleteQuery) {
     // const { model, where } = query;
     const tableName = [query.name, query.schema];
-    const filter = query.filter ? this._normaliseFilter(query.columns, query.filter) : undefined;
+    const filter = query.filter
+      ? this._normaliseFilter(query.columns, query.filter)
+      : undefined;
     return this._config.delete(tableName, filter);
   }
 
@@ -123,7 +127,6 @@ export class QueryTranslator {
   }
 
   public createTable(query: TableDefinition) {
-
   }
 
   public dropTable(table: string, schema?: string) {
@@ -131,7 +134,10 @@ export class QueryTranslator {
     // return `DROP TABLE IF EXISTS ${this._escape(schema, table)};`;
   }
 
-  public renameTable(newName: Array<string | undefined>, oldName: Array<string | undefined>) {
+  public renameTable(
+    newName: Array<string | undefined>,
+    oldName: Array<string | undefined>,
+  ) {
     return this._config.renameTable(newName, oldName);
   }
 
@@ -141,19 +147,29 @@ export class QueryTranslator {
     return this._config.dropColumn(name, table, schema);
   }
 
-  public renameColumn(newName: string, oldName: string, table: string, schema?: string) {
+  public renameColumn(
+    newName: string,
+    oldName: string,
+    table: string,
+    schema?: string,
+  ) {
     return this._config.renameColumn(newName, oldName, table, schema);
   }
 
   public alterColumn(query: BaseQuery) {}
 
-  protected _normaliseFilter(columns: Record<string, string>, filter: QueryFilters): QueryFilters {
+  protected _normaliseFilter(
+    columns: Record<string, string>,
+    filter: QueryFilters,
+  ): QueryFilters {
     // Cycle through the filter object and replace the keys with the actual column name
     const newFilter: QueryFilters = {};
     Object.keys(filter).forEach((key) => {
       if (key === '$and' || key === '$or') {
         // newFilter[key] = this._normaliseFilter(columns, filter[key] as unknown as QueryFilters);
-        newFilter[key] = filter[key]?.map((f) => this._normaliseFilter(columns, f));
+        newFilter[key] = filter[key]?.map((f) =>
+          this._normaliseFilter(columns, f)
+        );
       } else {
         if (columns[key] === undefined) {
           throw new Error(`Column name not found ${key}`);
@@ -163,8 +179,12 @@ export class QueryTranslator {
     });
     return newFilter;
   }
-  
-  public whereCondition(columns: Record<string, string>, filter: QueryFilters, joiner = 'AND') {
+
+  public whereCondition(
+    columns: Record<string, string>,
+    filter: QueryFilters,
+    joiner = 'AND',
+  ) {
     return this._config.where(this._normaliseFilter(columns, filter), joiner);
   }
 
@@ -191,15 +211,20 @@ console.log(a.insert({
     id: 1,
     name: 'John',
     age: 30,
-    email: 'adf@gmail.com', 
-  }, 
-  {
+    email: 'adf@gmail.com',
+  }, {
     id: 1,
-    email: 'adf@gmail.com', 
-  }], 
+    email: 'adf@gmail.com',
+  }],
   // project: ['name', 'age', 'email'],
 }));
-const where = a.whereCondition({asd: 'aa1', ds: 'aa2', sdf: 'aa3', sdfsdf: 'aa4', sdf2: 'aa5'}, {
+const where = a.whereCondition({
+  asd: 'aa1',
+  ds: 'aa2',
+  sdf: 'aa3',
+  sdfsdf: 'aa4',
+  sdf2: 'aa5',
+}, {
   'asd': '123',
   'ds': {
     $ne: '321',
