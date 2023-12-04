@@ -1,6 +1,6 @@
-import { OptionKeys } from '../../options/mod.ts';
-import { AbstractClient } from '../AbstractConnection.ts';
-import type { MariaConnectionOptions, NormEvents } from '../types/mod.ts';
+import { OptionKeys } from '../../../options/mod.ts';
+import { AbstractClient } from '../../AbstractConnection.ts';
+import type { MariaConnectionOptions, NormEvents } from '../../types/mod.ts';
 
 export class MariaClient extends AbstractClient<MariaConnectionOptions> {
   constructor(

@@ -1,11 +1,10 @@
 import { User } from './Users.ts';
 import { Post } from './Posts.ts';
+import type { DeepWritable } from '../../../types/mod.ts';
 
 export const DefaultModel = {
   User,
   Post,
 } as const;
 
-type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
-
-export type DefaultModel = DeepWriteable<typeof DefaultModel>;
+export type DefaultModel = DeepWritable<typeof DefaultModel>;

@@ -1,6 +1,6 @@
-import { OptionKeys } from '../../options/mod.ts';
-import { AbstractClient } from '../AbstractConnection.ts';
-import type { NormEvents, SQLiteConnectionOptions } from '../types/mod.ts';
+import { OptionKeys } from '../../../options/mod.ts';
+import { AbstractClient } from '../../AbstractConnection.ts';
+import type { NormEvents, SQLiteConnectionOptions } from '../../types/mod.ts';
 import {
   NormBaseError,
   NormConfigError,
@@ -9,10 +9,10 @@ import {
   NormQueryError,
   NormQueryMissingParamsError,
   NormSQLiteWritePermissionError,
-} from '../errors/mod.ts';
+} from '../../errors/mod.ts';
 
-import type { SQLiteDBClientConfig } from '../../dependencies.ts';
-import { path, SQLiteDBClient } from '../../dependencies.ts';
+import type { SQLiteDBClientConfig } from '../../../dependencies.ts';
+import { path, SQLiteDBClient } from '../../../dependencies.ts';
 
 type SQLiteParamType = Record<
   string,
