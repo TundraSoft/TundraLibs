@@ -252,9 +252,9 @@ export abstract class RESTler<
           endpoint as RESTlerEndpoint,
         );
       }
-      if (contentType.includes('application/json')) {
+      if (contentType.includes('json')) {
         return await response.json() as RespBody;
-      } else if (contentType.includes('text/plain')) {
+      } else if (contentType.includes('text')) {
         return await response.text() as unknown as RespBody;
         // } else if (contentType.includes('text/html')) {
         //   return await response.text() as unknown as RespBody;
