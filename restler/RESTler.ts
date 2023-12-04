@@ -147,7 +147,7 @@ export abstract class RESTler<
           signal: controller.signal,
           body: (request.body instanceof FormData)
             ? request.body
-            : JSON.stringify(request.body),
+            : (typeof(request.body) === 'string') ? request.body : JSON.stringify(request.body),
         },
         timeout = setTimeout(
           () => controller.abort(),
