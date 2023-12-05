@@ -157,7 +157,7 @@ export abstract class RESTler<
       if(this._hasOption('certChain') || this._hasOption('certKey')) {
         fetchOptions.client = Deno.createHttpClient( {
           certChain: this._getOption('certChain'),
-          certKey: this._getOption('certKey'),
+          privateKey: this._getOption('certKey'),
         });
       }
       // if (this._customClient !== undefined) {
