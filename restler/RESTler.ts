@@ -145,17 +145,18 @@ export abstract class RESTler<
           method: request.endpoint.method,
           headers: request.headers,
           signal: controller.signal,
-          body: this._handleBody(request.body),
-          // body: (request.body instanceof FormData)
-          //   ? request.body
-          //   : (typeof(request.body) === 'string') ? request.body : JSON.stringify(request.body),
+          body: (request.body === undefined)
+            ? undefined
+            : (request.body instanceof FormData)
+            ? request.body
+            : this._stringifyBody(request.body),
         },
         timeout = setTimeout(
           () => controller.abort(),
           this._getOption('timeout'),
         );
-      if(this._hasOption('certChain') || this._hasOption('certKey')) {
-        fetchOptions.client = Deno.createHttpClient( {
+      if (this._hasOption('certChain') || this._hasOption('certKey')) {
+        fetchOptions.client = Deno.createHttpClient({
           certChain: this._getOption('certChain'),
           privateKey: this._getOption('certKey'),
         });
@@ -315,13 +316,18 @@ export abstract class RESTler<
     this.emit('auth', {});
   }
 
-  protected _handleBody(body: Record<string, unknown> | Record<string, unknown>[] | FormData | undefined): string | FormData | undefined {
-    if(body === undefined) {
-      return undefined;
-    }
-    if(body instanceof FormData) {
-      return body;
-    }
+  /**
+   * _stringifyBody
+   *
+   * A helper method that converts the body object into a string. Override this in implementation to either
+   * handle other content types or to handle other body types
+   *
+   * @param body The body object
+   * @returns string The strigified body
+   */
+  protected _stringifyBody(
+    body: Record<string, unknown> | Record<string, unknown>[],
+  ): string {
     return JSON.stringify(body);
   }
   //#endregion
