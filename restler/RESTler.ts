@@ -219,22 +219,9 @@ export abstract class RESTler<
       // Emit error event
       throw finalError;
     } finally {
-      const stop = performance.now();
       // We set the authInitiated flag to false here to prevent perpetual loop
       this._authInitiated = false;
       this.emit('response', request, resp as RESTlerResponse, finalError);
-
-      this.emit(
-        'log',
-        {
-          endpoint: request.endpoint,
-          headers: request.headers,
-          body: request.body,
-        },
-        resp,
-        stop - start,
-        false,
-      );
     }
   }
 
