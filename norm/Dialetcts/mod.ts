@@ -1,4 +1,7 @@
-export { MariaClient } from './Maria.ts';
+export { MariaClient, MariaQueryTranslatorConfig } from './Maria/mod.ts';
 // export { MongoClient } from './Mongo.ts';
-export { PostgresClient } from './Postgres.ts';
-export { SQLiteClient } from './SQLite.ts';
+export {
+  PostgresClient,
+  PostgresQueryTranslatorConfig,
+} from './Postgres/mod.ts';
+export { SQLiteClient, SQLiteQueryTranslatorConfig } from './SQLite/mod.ts';

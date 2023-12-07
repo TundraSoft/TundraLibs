@@ -1,19 +1,19 @@
-import { OptionKeys } from '../../options/mod.ts';
-import { AbstractClient } from '../AbstractConnection.ts';
-import type { MongoConnectionOptions, NormEvents } from '../types/mod.ts';
+import { OptionKeys } from '../../../options/mod.ts';
+import { AbstractClient } from '../../AbstractConnection.ts';
+import type { MongoConnectionOptions, NormEvents } from '../../types/mod.ts';
 import {
   NormBaseError,
   NormConfigError,
   NormNotConnectedError,
   NormQueryError,
-} from '../errors/mod.ts';
+} from '../../errors/mod.ts';
 
 import type {
   MongoClientOptions,
   MongoCollection,
   MongoDB,
-} from '../../dependencies.ts';
-import { MongoDBClient, MongoServerError } from '../../dependencies.ts';
+} from '../../../dependencies.ts';
+import { MongoDBClient, MongoServerError } from '../../../dependencies.ts';
 
 export class MongoClient extends AbstractClient<MongoConnectionOptions> {
   protected _client: MongoDBClient | undefined = undefined;
@@ -54,10 +54,9 @@ export class MongoClient extends AbstractClient<MongoConnectionOptions> {
   }
 
   protected async _connect(): Promise<void> {
-    this._client = new MongoDBClient('');
-    await this._client.connect();
-    const db = this._client.db('test');
-    db.admin().command({ ping: 1 });
+    this._client = new MongoDBClient();
+    await this._client.connect('');
+    const db = this._client.database(this._getOption('database'));
     throw new Error('Method not implemented.');
   }
 
@@ -83,15 +82,15 @@ export class MongoClient extends AbstractClient<MongoConnectionOptions> {
   }
 }
 
-const client = new MongoDBClient('mongodb://mongo:mongopw@localhost:27071');
-await client.connect();
-const db = client.db('test');
-// await db.collection<{_id: string, name: string }>('test').insertOne({_id: crypto.randomUUID(), name: 'test'});
-console.log(
-  await db.collection('test').find({
-    name: {
-      $regex: 'test',
-    },
-  }).toArray(),
-);
-await client.close();
+// const client = new MongoDBClient('mongodb://mongo:mongopw@localhost:27071');
+// await client.connect();
+// const db = client.db('test');
+// // await db.collection<{_id: string, name: string }>('test').insertOne({_id: crypto.randomUUID(), name: 'test'});
+// console.log(
+//   await db.collection('test').find({
+//     name: {
+//       $regex: 'test',
+//     },
+//   }).toArray(),
+// );
+// await client.close();

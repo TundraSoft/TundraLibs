@@ -10,6 +10,9 @@ export type RESTlerRequest = {
     & Omit<RESTlerEndpoint, 'baseURL'>
     & Partial<Pick<RESTlerEndpoint, 'baseURL'>>;
   headers?: Record<string, string>;
-  body?: Record<string, unknown> | Record<string, unknown>[] | FormData;
+  body?:
+    | Record<string, unknown>
+    | Record<string, unknown>[]
+    | FormData;
   timeout?: number;
 };

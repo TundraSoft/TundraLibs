@@ -8,9 +8,10 @@ export type QueryPagination = {
 };
 
 export type QuerySorting<TD extends TableDefinition = TableDefinition> = {
-  orderBy?: {
-    [C in keyof TD['columns']]?: 'ASC' | 'DESC';
-  };
+  // orderBy?: {
+  //   [C in keyof TD['columns']]?: 'ASC' | 'DESC';
+  // }
+  orderBy: [keyof TD['columns'], 'ASC' | 'DESC'][];
 };
 
 export type SelectQuery<TD extends TableDefinition = TableDefinition> =
@@ -19,4 +20,7 @@ export type SelectQuery<TD extends TableDefinition = TableDefinition> =
   & QuerySorting<TD>
   & {
     where?: QueryFilters<TD>;
+    project?: {
+      [CN in keyof TD['columns']]?: boolean;
+    };
   };

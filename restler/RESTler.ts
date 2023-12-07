@@ -31,6 +31,7 @@ export abstract class RESTler<
 > extends Options<O, RESTlerEvents> {
   protected _name: string;
   protected _defaultHeaders: Record<string, string>;
+  // protected _customClient: HTTPClient | undefined;
   protected _authStatus = [401, 403, 407];
   protected _authInitiated = false;
 
@@ -144,15 +145,26 @@ export abstract class RESTler<
           method: request.endpoint.method,
           headers: request.headers,
           signal: controller.signal,
-          body: (request.body instanceof FormData)
+          body: (request.body === undefined)
+            ? undefined
+            : (request.body instanceof FormData)
             ? request.body
-            : JSON.stringify(request.body),
+            : this._stringifyBody(request.body),
         },
         timeout = setTimeout(
           () => controller.abort(),
           this._getOption('timeout'),
-        ),
-        interimResp = await fetch(endpoint, fetchOptions);
+        );
+      if (this._hasOption('certChain') || this._hasOption('certKey')) {
+        fetchOptions.client = Deno.createHttpClient({
+          certChain: this._getOption('certChain'),
+          privateKey: this._getOption('certKey'),
+        });
+      }
+      // if (this._customClient !== undefined) {
+      //   fetchOptions.client = this._customClient;
+      // }
+      const interimResp = await fetch(endpoint, fetchOptions);
       clearTimeout(timeout);
       resp.timeTaken = performance.now() - start;
       resp.status = interimResp.status;
@@ -261,9 +273,9 @@ export abstract class RESTler<
           endpoint as RESTlerEndpoint,
         );
       }
-      if (contentType.includes('application/json')) {
+      if (contentType.includes('json')) {
         return await response.json() as RespBody;
-      } else if (contentType.includes('text/plain')) {
+      } else if (contentType.includes('text')) {
         return await response.text() as unknown as RespBody;
         // } else if (contentType.includes('text/html')) {
         //   return await response.text() as unknown as RespBody;
@@ -315,6 +327,21 @@ export abstract class RESTler<
   protected _authenticate(_request: RESTlerRequest): void | Promise<void> {
     // Do nothing
     this.emit('auth', {});
+  }
+
+  /**
+   * _stringifyBody
+   *
+   * A helper method that converts the body object into a string. Override this in implementation to either
+   * handle other content types or to handle other body types
+   *
+   * @param body The body object
+   * @returns string The strigified body
+   */
+  protected _stringifyBody(
+    body: Record<string, unknown> | Record<string, unknown>[],
+  ): string {
+    return JSON.stringify(body);
   }
   //#endregion
 }

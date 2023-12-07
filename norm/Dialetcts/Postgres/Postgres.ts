@@ -1,15 +1,19 @@
-import { OptionKeys } from '../../options/mod.ts';
-import { AbstractClient } from '../AbstractConnection.ts';
-import type { NormEvents, PostgresConnectionOptions } from '../types/mod.ts';
+import { OptionKeys } from '../../../options/mod.ts';
+import { AbstractClient } from '../../AbstractConnection.ts';
+import type { NormEvents, PostgresConnectionOptions } from '../../types/mod.ts';
 import {
   NormConfigError,
   NormNotConnectedError,
   NormQueryError,
   NormQueryMissingParamsError,
-} from '../errors/mod.ts';
+} from '../../errors/mod.ts';
 
-import { PGClient, PGPoolClient, PostgresError } from '../../dependencies.ts';
-import type { PGClientOptions } from '../../dependencies.ts';
+import {
+  PGClient,
+  PGPoolClient,
+  PostgresError,
+} from '../../../dependencies.ts';
+import type { PGClientOptions } from '../../../dependencies.ts';
 
 export class PostgresClient extends AbstractClient<PostgresConnectionOptions> {
   private _client: PGClient | undefined = undefined;
