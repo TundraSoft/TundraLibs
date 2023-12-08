@@ -2,7 +2,7 @@ import { OptionKeys } from '../../../options/mod.ts';
 import { AbstractClient } from '../../AbstractConnection.ts';
 import type { NormEvents, SQLiteConnectionOptions } from '../../types/mod.ts';
 import {
-  NormBaseError,
+  // NormBaseError,
   NormConfigError,
   NormConnectionError,
   NormNotConnectedError,
@@ -145,7 +145,7 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
     }
     try {
       sql = this._normaliseQuery(sql, params);
-      const res = this._client.queryEntries(sql, params as SQLiteParamType);
+      const _res = this._client.queryEntries(sql, params as SQLiteParamType);
     } catch (err) {
       throw new NormQueryError(err.message, {
         name: this._name,
