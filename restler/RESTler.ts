@@ -1,3 +1,5 @@
+/// <reference lib="deno.unstable" />
+
 import { HTTPMethods, path } from '../dependencies.ts';
 
 import { Options } from '../options/mod.ts';
@@ -141,7 +143,7 @@ export abstract class RESTler<
     try {
       await this._authInjector(request);
       const controller = new AbortController(),
-        fetchOptions: RequestInit = {
+        fetchOptions: RequestInit & { client?: Deno.HttpClient; } = {
           method: request.endpoint.method,
           headers: request.headers,
           signal: controller.signal,
@@ -155,17 +157,20 @@ export abstract class RESTler<
           () => controller.abort(),
           this._getOption('timeout'),
         );
-      if (this._hasOption('certChain') || this._hasOption('certKey')) {
-        fetchOptions.client = Deno.createHttpClient({
-          certChain: this._getOption('certChain'),
-          privateKey: this._getOption('certKey'),
-        });
-      }
+      // if (this._hasOption('certChain') || this._hasOption('certKey')) {
+      //   fetchOptions.client = Deno.createHttpClient({
+      //     certChain: this._getOption('certChain'),
+      //     privateKey: this._getOption('certKey'),
+      //   });
+      // }
       // if (this._customClient !== undefined) {
       //   fetchOptions.client = this._customClient;
       // }
       const interimResp = await fetch(endpoint, fetchOptions);
       clearTimeout(timeout);
+      // if (this._hasOption('certChain') || this._hasOption('certKey')) {
+      //   fetchOptions.client?.close();
+      // }
       resp.timeTaken = performance.now() - start;
       resp.status = interimResp.status;
       resp.headers = Object.fromEntries(interimResp.headers.entries());

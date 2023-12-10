@@ -1,4 +1,4 @@
-import type { TableDefinition, ModelDefinition } from '../Definitions/mod.ts';
+import type { ModelDefinition, TableDefinition } from '../Definitions/mod.ts';
 import type { BaseQuery } from './Base.ts';
 import type { QueryFilters } from './Filters.ts';
 
@@ -15,15 +15,8 @@ export type QuerySorting<TD extends TableDefinition = TableDefinition> = {
 };
 
 export type SelectQuery<
-  MD extends ModelDefinition = ModelDefinition,
-  TN extends keyof MD = keyof MD
-> =
-  & BaseQuery<MD>
-  & QueryPagination
-  & QuerySorting<MD[TN]>
-  & {
-    where?: QueryFilters<MD[TN]>;
-    project?: {
-      [CN in keyof MD[TN]['columns']]?: boolean;
-    };
-  };
+  DM extends ModelDefinition = ModelDefinition,
+  TN extends keyof DM = keyof DM,
+> = BaseQuery<DM, TN> & QueryPagination & QuerySorting<DM[TN]> & {
+  filter?: QueryFilters<DM[TN]>;
+};
