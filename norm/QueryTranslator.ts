@@ -11,7 +11,7 @@ import {
   MariaQueryTranslatorConfig,
   PostgresQueryTranslatorConfig,
   SQLiteQueryTranslatorConfig,
-} from './Dialetcts/mod.ts';
+} from './Dialects/mod.ts';
 import { QueryTranslatorConfig } from './const/mod.ts';
 
 export class QueryTranslator {

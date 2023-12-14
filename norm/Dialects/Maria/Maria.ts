@@ -5,9 +5,9 @@ import type { MariaConnectionOptions, NormEvents } from '../../types/mod.ts';
 export class MariaClient extends AbstractClient<MariaConnectionOptions> {
   constructor(
     name: string,
-    options: OptionKeys<MariaConnectionOptions, NormEvents>,
-    defaults: Partial<MariaConnectionOptions>,
+    options: OptionKeys<MariaConnectionOptions, NormEvents>
   ) {
+    const defaults: Partial<MariaConnectionOptions> = {};
     super(name, options, defaults);
   }
 
