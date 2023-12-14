@@ -189,6 +189,7 @@ export abstract class RESTler<
           resp.endpoint as RESTlerEndpoint,
         );
       }
+      await this._processResponse(resp);
       return resp;
     } catch (e) {
       resp.timeTaken = performance.now() - start;
@@ -230,6 +231,7 @@ export abstract class RESTler<
     }
   }
 
+  //#region Override these methods
   /**
    * Handles the response object and returns the body
    *
@@ -290,8 +292,21 @@ export abstract class RESTler<
     }
   }
 
-  //#region Override these methods
-
+  /**
+   * Handles the response object and handles all sorts of errors
+   *
+   * @remarks
+   * This method takes care of processing of the response after the content type of the response is handled.
+   * It can be used to handle all sorts of errors
+   * @param response RESTlerResponse<RespBody> - The RESTlerResponse<RespBody> object
+   * @param response Response - The response object
+   * @returns void
+   */
+  protected async _processResponse<
+    RespBody extends RESTlerResponseBody = RESTlerResponseBody,
+  >(_response: RESTlerResponse<RespBody>) {
+    //
+  }
   /**
    * The method that injects authentication into the request. This method is meant
    * to be overridden by the child classes.
