@@ -1,6 +1,3 @@
-import { ConnectionOptions } from '../Options.ts';
+import { FlatFileConnectionOptions } from '../Options.ts';
 
-export type SQLiteConnectionOptions = ConnectionOptions & {
-  mode: 'MEMORY' | 'FILE';
-  filePath?: string;
-};
+export type SQLiteConnectionOptions = FlatFileConnectionOptions

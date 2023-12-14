@@ -1,11 +1,6 @@
-import { ConnectionOptions } from '../Options.ts';
+import { RemoteServerConnectionOptions } from '../Options.ts';
 
-export type PostgresConnectionOptions = ConnectionOptions & {
-  host: string;
-  username: string;
-  password: string;
-  database: string;
-  port?: number;
+export type PostgresConnectionOptions = RemoteServerConnectionOptions & {
   poolSize?: number;
   tlsOptions?: {
     enabled: boolean;

@@ -1,11 +1,8 @@
-import { ConnectionOptions } from '../Options.ts';
+import { RemoteServerConnectionOptions } from '../Options.ts';
 
-export type MongoConnectionOptions = ConnectionOptions & {
-  host: string;
+export type MongoConnectionOptions = RemoteServerConnectionOptions & {
   username?: string;
   password?: string;
-  database: string;
-  port?: number;
   ssl?: boolean;
   connectionTimeout: number;
 };

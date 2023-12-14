@@ -1,5 +1,7 @@
 export type {
   ConnectionOptions,
+  RemoteServerConnectionOptions,
+  FlatFileConnectionOptions,
   ConnectionStatus,
   MariaConnectionOptions,
   MongoConnectionOptions,
