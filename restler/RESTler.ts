@@ -143,7 +143,7 @@ export abstract class RESTler<
     try {
       await this._authInjector(request);
       const controller = new AbortController(),
-        fetchOptions: RequestInit & { client?: Deno.HttpClient; } = {
+        fetchOptions: RequestInit & { client?: Deno.HttpClient } = {
           method: request.endpoint.method,
           headers: request.headers,
           signal: controller.signal,
