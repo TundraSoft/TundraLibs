@@ -113,7 +113,6 @@ function clientFactory<
   CO extends RemoteServerConnectionOptions,
   C extends AbstractClient<CO>,
 >(type: { new (name: string, opts: CO): C }, name: string, opts: CO): C {
-  // do stuff to return new instance of T.
   return new type(name, opts);
 }
 
