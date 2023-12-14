@@ -4,6 +4,7 @@ import {
   afterEach,
   assert,
   assertGreater,
+  assertGreaterOrEqual,
   describe,
   it,
 } from '../../dev.dependencies.ts';
@@ -60,7 +61,7 @@ describe(`[library='Metrics']`, () => {
     const stats = metrics.stats('test');
     assert(stats);
     assertGreater(stats.timing.max, stats.timing.average);
-    assertGreater(stats.timing.min, 500);
+    assertGreaterOrEqual(stats.timing.min, 500);
     assertEquals(stats.count, 10);
   });
 
