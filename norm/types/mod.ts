@@ -1,11 +1,11 @@
 export type {
   ConnectionOptions,
-  RemoteServerConnectionOptions,
-  FlatFileConnectionOptions,
   ConnectionStatus,
+  FlatFileConnectionOptions,
   MariaConnectionOptions,
   MongoConnectionOptions,
   PostgresConnectionOptions,
+  RemoteServerConnectionOptions,
   SQLiteConnectionOptions,
 } from './Connection/mod.ts';
 

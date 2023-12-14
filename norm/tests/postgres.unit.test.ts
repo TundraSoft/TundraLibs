@@ -1,26 +1,22 @@
-import {
-  assertThrows,
-  describe,
-  it,
-} from '../../dev.dependencies.ts';
+import { assertThrows, describe, it } from '../../dev.dependencies.ts';
 import { PostgresClient } from '../Dialects/mod.ts';
 import type { PostgresConnectionOptions } from '../types/mod.ts';
 import { NormConfigError } from '../errors/mod.ts';
-import { 
+import {
   makePostgresOptions,
   runStandardConnectionTests,
-  runStandardQueryTests
+  runStandardQueryTests,
 } from './testdata/utils/ClientTestHelper.ts';
 
 describe(`[library='norm' dialect='POSTGRES' type='unit']`, () => {
   const clientOpt: PostgresConnectionOptions = makePostgresOptions();
   runStandardConnectionTests(
     PostgresClient,
-    clientOpt
+    clientOpt,
   );
-  runStandardQueryTests(    
+  runStandardQueryTests(
     PostgresClient,
-    clientOpt
+    clientOpt,
   );
 
   it('should throw error if poolSize < 0 or greater than 100', () => {
@@ -53,5 +49,4 @@ describe(`[library='norm' dialect='POSTGRES' type='unit']`, () => {
       new PostgresClient('FailTest', opt2);
     }, NormConfigError);
   });
-  
 });

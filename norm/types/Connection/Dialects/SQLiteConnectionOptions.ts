@@ -1,3 +1,3 @@
 import { FlatFileConnectionOptions } from '../Options.ts';
 
-export type SQLiteConnectionOptions = FlatFileConnectionOptions
+export type SQLiteConnectionOptions = FlatFileConnectionOptions;

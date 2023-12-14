@@ -1,7 +1,7 @@
-export type { 
-  ConnectionOptions, 
-  RemoteServerConnectionOptions, 
-  FlatFileConnectionOptions 
+export type {
+  ConnectionOptions,
+  FlatFileConnectionOptions,
+  RemoteServerConnectionOptions,
 } from './Options.ts';
 export type { ConnectionStatus } from './Status.ts';
 

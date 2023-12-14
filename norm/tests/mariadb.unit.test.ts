@@ -1,20 +1,20 @@
 import { describe } from '../../dev.dependencies.ts';
 import { MariaClient } from '../Dialects/mod.ts';
 import type { MariaConnectionOptions } from '../types/mod.ts';
-import { 
+import {
   makeMariaOptions,
   runStandardConnectionTests,
-  runStandardQueryTests
+  runStandardQueryTests,
 } from './testdata/utils/ClientTestHelper.ts';
 
 describe(`[library='norm' dialect='MARIADB' type='unit']`, () => {
   const clientOpt: MariaConnectionOptions = makeMariaOptions();
   runStandardConnectionTests(
     MariaClient,
-    clientOpt
+    clientOpt,
   );
-  runStandardQueryTests(    
+  runStandardQueryTests(
     MariaClient,
-    clientOpt
+    clientOpt,
   );
 });
