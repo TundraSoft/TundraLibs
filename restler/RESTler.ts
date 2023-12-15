@@ -302,7 +302,7 @@ export abstract class RESTler<
    * @param response Response - The response object
    * @returns void
    */
-  protected async _processResponse<
+  protected _processResponse<
     RespBody extends RESTlerResponseBody = RESTlerResponseBody,
   >(_response: RESTlerResponse<RespBody>) {
     //
