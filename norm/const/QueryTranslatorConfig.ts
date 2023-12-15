@@ -1,4 +1,8 @@
-import type { ColumnDefinition, ForeignKeyDefinition, QueryFilters } from '../types/mod.ts';
+import type {
+  ColumnDefinition,
+  ForeignKeyDefinition,
+  QueryFilters,
+} from '../types/mod.ts';
 export const QueryTranslatorConfig = {
   escapeIdentifier: '"',
   quoteIdentifier: '"',
@@ -176,7 +180,7 @@ export const QueryTranslatorConfig = {
     name: string,
     columns: Array<ColumnDefinition>,
     primaryKeys?: Array<string>,
-    uniqueKeys?: Record<string,Array<string>>,
+    uniqueKeys?: Record<string, Array<string>>,
     foreignKeys?: Record<string, ForeignKeyDefinition>,
     schema?: string,
   ): Array<string> => {
@@ -201,7 +205,7 @@ export const QueryTranslatorConfig = {
           const comments = c.comments ? `COMMENT '${c.comments}'` : '';
           return `${colName} ${dataType}${length} ${nullable} ${defval} ${comments}`;
         }).join(', ')
-      });`
+      });`,
     );
     // Primary Key
     if (primaryKeys && primaryKeys.length > 0) {
@@ -215,7 +219,9 @@ export const QueryTranslatorConfig = {
     if (uniqueKeys) {
       for (const [key, value] of Object.entries(uniqueKeys)) {
         result.push(
-          `ALTER TABLE ${tableName.join('.')} ADD CONSTRAINT ${QueryTranslatorConfig.escape([key])} UNIQUE (${
+          `ALTER TABLE ${tableName.join('.')} ADD CONSTRAINT ${
+            QueryTranslatorConfig.escape([key])
+          } UNIQUE (${
             value.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
           });`,
         );
@@ -230,12 +236,16 @@ export const QueryTranslatorConfig = {
         refTable.push(QueryTranslatorConfig.escape([value.table]));
         const refColumns = Object.values(value.columnMap);
         result.push(
-          `ALTER TABLE ${tableName.join('.')} ADD CONSTRAINT ${QueryTranslatorConfig.escape([key])} FOREIGN KEY (${
+          `ALTER TABLE ${tableName.join('.')} ADD CONSTRAINT ${
+            QueryTranslatorConfig.escape([key])
+          } FOREIGN KEY (${
             Object.keys(value.columnMap).map((pk) =>
               QueryTranslatorConfig.escape([pk])
             ).join(', ')
           }) REFERENCES ${refTable.join('.')} (${
-            refColumns.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
+            refColumns.map((pk) => QueryTranslatorConfig.escape([pk])).join(
+              ', ',
+            )
           }) ON DELETE ${value.onDelete || 'RESTRICT'} ON UPDATE ${
             value.onUpdate || 'RESTRICT'
           };`,
