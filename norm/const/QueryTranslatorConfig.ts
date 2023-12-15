@@ -1,5 +1,4 @@
-import type { QueryFilters } from '../types/mod.ts';
-
+import type { ColumnDefinition, ForeignKeyDefinition, QueryFilters } from '../types/mod.ts';
 export const QueryTranslatorConfig = {
   escapeIdentifier: '"',
   quoteIdentifier: '"',
@@ -171,6 +170,79 @@ export const QueryTranslatorConfig = {
     return `CREATE SCHEMA IF NOT EXISTS ${
       QueryTranslatorConfig.escape([schema])
     };`;
+  },
+
+  createTable: (
+    name: string,
+    columns: Array<ColumnDefinition>,
+    primaryKeys?: Array<string>,
+    uniqueKeys?: Record<string,Array<string>>,
+    foreignKeys?: Record<string, ForeignKeyDefinition>,
+    schema?: string,
+  ): Array<string> => {
+    const result: Array<string> = [];
+    const tableName = schema ? [QueryTranslatorConfig.escape([schema])] : [];
+    tableName.push(QueryTranslatorConfig.escape([name]));
+    result.push(
+      // Column Definitions
+      `CREATE TABLE IF NOT EXISTS ${tableName.join('.')} (${
+        columns.map((c) => {
+          const colName = QueryTranslatorConfig.escape([c.name]);
+          const dataType = QueryTranslatorConfig.dataTypes[c.type];
+          const length = c.length
+            ? (typeof c.length === 'number'
+              ? `(${c.length})`
+              : `(${c.length.precision},${c.length.scale})`)
+            : '';
+          const nullable = c.nullable ? 'NULL' : 'NOT NULL';
+          const defval = c.defaults && c.defaults.create
+            ? `DEFAULT ${c.defaults.create}`
+            : '';
+          const comments = c.comments ? `COMMENT '${c.comments}'` : '';
+          return `${colName} ${dataType}${length} ${nullable} ${defval} ${comments}`;
+        }).join(', ')
+      });`
+    );
+    // Primary Key
+    if (primaryKeys && primaryKeys.length > 0) {
+      result.push(
+        `ALTER TABLE ${tableName.join('.')} ADD PRIMARY KEY (${
+          primaryKeys.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
+        });`,
+      );
+    }
+    // Unique Keys
+    if (uniqueKeys) {
+      for (const [key, value] of Object.entries(uniqueKeys)) {
+        result.push(
+          `ALTER TABLE ${tableName.join('.')} ADD CONSTRAINT ${QueryTranslatorConfig.escape([key])} UNIQUE (${
+            value.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
+          });`,
+        );
+      }
+    }
+    // Foreign Keys
+    if (foreignKeys) {
+      for (const [key, value] of Object.entries(foreignKeys)) {
+        const refTable = value.schema
+          ? [QueryTranslatorConfig.escape([value.schema])]
+          : [];
+        refTable.push(QueryTranslatorConfig.escape([value.table]));
+        const refColumns = Object.values(value.columnMap);
+        result.push(
+          `ALTER TABLE ${tableName.join('.')} ADD CONSTRAINT ${QueryTranslatorConfig.escape([key])} FOREIGN KEY (${
+            Object.keys(value.columnMap).map((pk) =>
+              QueryTranslatorConfig.escape([pk])
+            ).join(', ')
+          }) REFERENCES ${refTable.join('.')} (${
+            refColumns.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
+          }) ON DELETE ${value.onDelete || 'RESTRICT'} ON UPDATE ${
+            value.onUpdate || 'RESTRICT'
+          };`,
+        );
+      }
+    }
+    return result;
   },
 
   dropSchema: (schema: string): string => {

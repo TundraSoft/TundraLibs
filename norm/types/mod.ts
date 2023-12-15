@@ -13,6 +13,7 @@ export type {
   ColumnDefinition,
   ColumnLengthDefinition,
   ColumnType,
+  ForeignKeyDefinition,
   ModelDefinition,
   RelationshipDefinition,
   TableDefinition,

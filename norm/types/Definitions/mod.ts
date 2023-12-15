@@ -4,5 +4,5 @@ export type {
   ColumnType,
 } from './Column.ts';
 export type { ModelDefinition } from './Model.ts';
-export type { RelationshipDefinition } from './Relationship.ts';
+export type { ForeignKeyDefinition, RelationshipDefinition } from './Relationship.ts';
 export type { TableDefinition } from './Table.ts';
