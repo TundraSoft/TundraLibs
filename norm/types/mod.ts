@@ -15,7 +15,7 @@ export type {
   ColumnType,
   ForeignKeyDefinition,
   ModelDefinition,
-  RelationshipDefinition,
+  PartitionDefinition,
   TableDefinition,
 } from './Definitions/mod.ts';
 
