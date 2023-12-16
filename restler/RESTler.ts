@@ -304,7 +304,7 @@ export abstract class RESTler<
    */
   protected _processResponse<
     RespBody extends RESTlerResponseBody = RESTlerResponseBody,
-  >(_response: RESTlerResponse<RespBody>) {
+  >(_response: RESTlerResponse<RespBody>): void {
     //
   }
   /**
