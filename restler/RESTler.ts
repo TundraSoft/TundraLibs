@@ -157,20 +157,20 @@ export abstract class RESTler<
           () => controller.abort(),
           this._getOption('timeout'),
         );
-      // if (this._hasOption('certChain') || this._hasOption('certKey')) {
-      //   fetchOptions.client = Deno.createHttpClient({
-      //     certChain: this._getOption('certChain'),
-      //     privateKey: this._getOption('certKey'),
-      //   });
-      // }
+      if (this._hasOption('certChain') || this._hasOption('certKey')) {
+        fetchOptions.client = Deno.createHttpClient({
+          certChain: this._getOption('certChain'),
+          privateKey: this._getOption('certKey'),
+        });
+      }
       // if (this._customClient !== undefined) {
       //   fetchOptions.client = this._customClient;
       // }
       const interimResp = await fetch(endpoint, fetchOptions);
       clearTimeout(timeout);
-      // if (this._hasOption('certChain') || this._hasOption('certKey')) {
-      //   fetchOptions.client?.close();
-      // }
+      if (this._hasOption('certChain') || this._hasOption('certKey')) {
+        fetchOptions.client?.close();
+      }
       resp.timeTaken = performance.now() - start;
       resp.status = interimResp.status;
       resp.headers = Object.fromEntries(interimResp.headers.entries());

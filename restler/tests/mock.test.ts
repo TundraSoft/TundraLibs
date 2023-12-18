@@ -8,7 +8,7 @@ import {
   it,
 } from '../../dev.dependencies.ts';
 
-describe(`[library='RESTler' mode='mock example']`, () => {
+describe({ name: `[library='RESTler' mode='mock example']`, sanitizeResources: false,}, () => {
   const mock = (port = 8000) => {
     const users: { id: number; email: string }[] = [{
       id: 1,
@@ -157,8 +157,9 @@ describe(`[library='RESTler' mode='mock example']`, () => {
     test = new MockTest();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     server.abort();
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
   it('should list all users', async () => {
