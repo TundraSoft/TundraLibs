@@ -268,10 +268,10 @@ export abstract class RESTler<
       }
       if (contentType.includes('json')) {
         return await response.json() as RespBody;
-      } else if (contentType.includes('text')) {
-        return await response.text() as unknown as RespBody;
       } else if (contentType.includes('text/xml') || contentType.includes('application/xml')) {
         return XMLParse((await response.text())) as unknown as RespBody;
+      } else if (contentType.includes('text')) {
+        return await response.text() as unknown as RespBody;
         // } else if (contentType.includes('text/html')) {
         //   return await response.text() as unknown as RespBody;
         // } else if (contentType.includes('application/octet-stream')) {
