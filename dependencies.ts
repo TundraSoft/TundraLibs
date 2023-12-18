@@ -22,6 +22,11 @@ export type HTTPMethods =
   | 'PATCH'
   | 'DELETE';
 
+//#region RESTler
+export { parse as XMLParse, stringify as XMLStringify } from 'https://deno.land/x/xml@2.1.3/mod.ts'
+
+//#endregion RESTler
+
 //#region Databases
 export { connect as RedisConnect } from 'https://deno.land/x/redis@v0.30.0/mod.ts';
 export type { Redis } from 'https://deno.land/x/redis@v0.30.0/mod.ts';
