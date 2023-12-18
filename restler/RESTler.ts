@@ -189,8 +189,8 @@ export abstract class RESTler<
           resp.endpoint as RESTlerEndpoint,
         );
       }
-      await this._processResponse(resp);
-      return resp;
+      return await this._processResponse(resp);
+      // return resp;
     } catch (e) {
       resp.timeTaken = performance.now() - start;
       if (e.name === 'AbortError') {
@@ -305,8 +305,8 @@ export abstract class RESTler<
    */
   protected _processResponse<
     RespBody extends RESTlerResponseBody = RESTlerResponseBody,
-  >(_response: RESTlerResponse<RespBody>): void {
-    //
+  >(response: RESTlerResponse<RespBody>): RESTlerResponse<RespBody> | Promise<RESTlerResponse<RespBody>> {
+    return response;
   }
   /**
    * The method that injects authentication into the request. This method is meant
