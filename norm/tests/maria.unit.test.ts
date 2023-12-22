@@ -6,23 +6,24 @@ import {
   describe,
   it,
 } from '../../dev.dependencies.ts';
-import { PostgresClient } from '../dialects/mod.ts';
-import type { PostgresConnectionOptions } from '../types/mod.ts';
+import { MariaClient } from '../dialects/mod.ts';
+import type { MariaConnectionOptions } from '../types/mod.ts';
 import {
   // NormBaseError,
   NormConfigError,
   // NormQueryError,
 } from '../errors/mod.ts';
 
-describe(`[library='norm' dialect='POSTGRES' type='unit']`, () => {
-  let client: PostgresClient;
-  const clientOpt: PostgresConnectionOptions = {
-    dialect: 'POSTGRES',
+describe(`[library='norm' dialect='MARIA' type='unit']`, () => {
+  let client: MariaClient;
+  const clientOpt: MariaConnectionOptions = {
+    dialect: 'MARIA',
     host: 'localhost',
-    port: 5432,
-    username: 'postgres',
-    password: 'postgrespw',
-    database: 'postgres',
+    port: 3306,
+    username: 'root',
+    password: 'mariapw',
+    database: 'mysql',
+    poolSize: 10,
   };
   const tableName = 'test_' + Math.floor(Math.random() * 1000000);
   const createTableQuery =
@@ -30,13 +31,13 @@ describe(`[library='norm' dialect='POSTGRES' type='unit']`, () => {
   const insertQuery =
     `INSERT INTO ${tableName} (name, email) VALUES ('John Doe', 'john.dow@gmail.com') RETURNING id, name, email;`;
   const selectQuery = `SELECT * FROM ${tableName};`;
-  const selectQuery1 = `SELECT * FROM ${tableName} WHERE id = 1;`;
+  const selectQuery1 = `SELECT * FROM ${tableName} WHERE id = :id:;`;
   const selectQuery2 = `SELECT * FROM ${tableName} WHERE id = 10;`;
   // const selectQuery3 = `SELECT * FROM ${tableName} WHERE abc = 10;`;
   const dropTableQuery = `DROP TABLE IF EXISTS ${tableName};`;
 
   beforeEach(() => {
-    client = new PostgresClient('test', clientOpt);
+    client = new MariaClient('test', clientOpt);
   });
 
   afterEach(async () => {
@@ -46,116 +47,116 @@ describe(`[library='norm' dialect='POSTGRES' type='unit']`, () => {
   it('should throw error if invalid dialect passed', () => {
     const opt = JSON.parse(
       JSON.stringify({
-        dialect: 'MARIA',
-        host: 'postgres',
-        password: 'postgres',
-        database: 'postgres',
+        dialect: 'POSTGRES',
+        host: 'localhost',
+        password: 'mariapw',
+        database: 'mysql',
       }),
     );
     assertThrows(() => {
-      new PostgresClient('FailTest', opt);
+      new MariaClient('FailTest', opt);
     }, NormConfigError);
   });
 
   it('should throw error if invalid port passed', () => {
     const opt = JSON.parse(
       JSON.stringify({
-        dialect: 'POSTGRES',
-        host: 'postgres',
-        password: 'postgres',
-        database: 'postgres',
+        dialect: 'MARIA',
+        host: 'localhost',
+        password: 'mariapw',
+        database: 'mysql',
         port: -1,
       }),
     );
     assertThrows(() => {
-      new PostgresClient('FailTest', opt);
+      new MariaClient('FailTest', opt);
     }, NormConfigError);
     const opt2 = JSON.parse(
       JSON.stringify({
-        dialect: 'POSTGRES',
-        host: 'postgres',
-        password: 'postgres',
-        database: 'postgres',
+        dialect: 'MARIA',
+        host: 'localhost',
+        password: 'mariapw',
+        database: 'mysql',
         port: 888888,
       }),
     );
     assertThrows(() => {
-      new PostgresClient('FailTest', opt2);
+      new MariaClient('FailTest', opt2);
     }, NormConfigError);
   });
 
   it('should throw error if poolSize < 0 or greater than 100', () => {
     const opt = JSON.parse(
       JSON.stringify({
-        dialect: 'POSTGRES',
-        host: 'postgres',
-        password: 'postgres',
-        database: 'postgres',
+        dialect: 'MARIA',
+        host: 'localhost',
+        password: 'mariapw',
+        database: 'mysql',
         poolSize: -1,
       }),
     );
     assertThrows(() => {
-      new PostgresClient('FailTest', opt);
+      new MariaClient('FailTest', opt);
     }, NormConfigError);
     const opt2 = JSON.parse(
       JSON.stringify({
-        dialect: 'POSTGRES',
-        host: 'postgres',
-        password: 'postgres',
-        database: 'postgres',
+        dialect: 'MARIA',
+        host: 'localhost',
+        password: 'mariapw',
+        database: 'mysql',
         poolSize: 888888,
       }),
     );
     assertThrows(() => {
-      new PostgresClient('FailTest', opt2);
+      new MariaClient('FailTest', opt2);
     }, NormConfigError);
   });
 
   it('should throw error if invalid database value', () => {
     const opt = JSON.parse(
       JSON.stringify({
-        dialect: 'POSTGRES',
-        host: 'postgres',
-        password: 'postgres',
+        dialect: 'MARIA',
+        host: 'localhost',
+        password: 'mariapw',
       }),
     );
     assertThrows(() => {
-      new PostgresClient('FailTest', opt);
+      new MariaClient('FailTest', opt);
     }, NormConfigError);
     const opt2 = JSON.parse(
       JSON.stringify({
-        dialect: 'POSTGRES',
-        host: 'postgres',
-        password: 'postgres',
+        dialect: 'MARIA',
+        host: 'localhost',
+        password: 'mariapw',
         database: '',
       }),
     );
     assertThrows(() => {
-      new PostgresClient('FailTest', opt2);
+      new MariaClient('FailTest', opt2);
     }, NormConfigError);
   });
 
   it('should throw error if invalid host', () => {
     const opt = JSON.parse(
       JSON.stringify({
-        dialect: 'POSTGRES',
-        password: 'postgres',
-        database: 'postgres',
+        dialect: 'MARIA',
+        password: 'mariapw',
+        database: 'mysql',
       }),
     );
     assertThrows(() => {
-      new PostgresClient('FailTest', opt);
+      new MariaClient('FailTest', opt);
     }, NormConfigError);
     const opt2 = JSON.parse(
       JSON.stringify({
-        dialect: 'POSTGRES',
+        dialect: 'MARIA',
         host: ' ',
-        password: 'postgres',
-        database: 'postgres',
+        password: 'mariapw',
+        database: 'mysql',
       }),
     );
     assertThrows(() => {
-      new PostgresClient('FailTest', opt2);
+      new MariaClient('FailTest', opt2);
     }, NormConfigError);
   });
 
@@ -184,7 +185,7 @@ describe(`[library='norm' dialect='POSTGRES' type='unit']`, () => {
     assertEquals(res.count, res.data.length);
     assertEquals(res.data[0].id, 1);
     assertEquals(res.data[0].name, 'John Doe');
-    const res1 = await client.query(selectQuery1);
+    const res1 = await client.query(selectQuery1, { id: 1 });
     assertEquals(res1.count, 1);
     const res2 = await client.query(selectQuery2);
     assertEquals(res2.count, 0);

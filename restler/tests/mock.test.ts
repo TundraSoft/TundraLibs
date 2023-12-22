@@ -8,7 +8,10 @@ import {
   it,
 } from '../../dev.dependencies.ts';
 
-describe({ name: `[library='RESTler' mode='mock example']`, sanitizeResources: false,}, () => {
+describe({
+  name: `[library='RESTler' mode='mock example']`,
+  // sanitizeResources: false,
+}, () => {
   const mock = (port = 8000) => {
     const users: { id: number; email: string }[] = [{
       id: 1,

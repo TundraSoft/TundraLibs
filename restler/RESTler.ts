@@ -143,7 +143,7 @@ export abstract class RESTler<
     try {
       await this._authInjector(request);
       const controller = new AbortController(),
-        fetchOptions: RequestInit & { client?: Deno.HttpClient; } = {
+        fetchOptions: RequestInit & { client?: Deno.HttpClient } = {
           method: request.endpoint.method,
           headers: request.headers,
           signal: controller.signal,
@@ -236,7 +236,7 @@ export abstract class RESTler<
    * Handles the response object and returns the body
    *
    * @remarks
-   * This method takes care of parsing the response body and returning it. Do not 
+   * This method takes care of parsing the response body and returning it. Do not
    * override unless you know what you are doing.
    *
    * @param endpoint RESTlerEndpoint - The RESTlerEndpoint object
@@ -268,8 +268,11 @@ export abstract class RESTler<
       }
       if (contentType.includes('json')) {
         return await response.json() as RespBody;
-      } else if (contentType.includes('text/xml') || contentType.includes('application/xml')) {
-        return XMLParse((await response.text())) as unknown as RespBody;
+      } else if (
+        contentType.includes('text/xml') ||
+        contentType.includes('application/xml')
+      ) {
+        return XMLParse(await response.text()) as unknown as RespBody;
       } else if (contentType.includes('text')) {
         return await response.text() as unknown as RespBody;
         // } else if (contentType.includes('text/html')) {
@@ -305,7 +308,9 @@ export abstract class RESTler<
    */
   protected _processResponse<
     RespBody extends RESTlerResponseBody = RESTlerResponseBody,
-  >(response: RESTlerResponse<RespBody>): RESTlerResponse<RespBody> | Promise<RESTlerResponse<RespBody>> {
+  >(
+    response: RESTlerResponse<RespBody>,
+  ): RESTlerResponse<RespBody> | Promise<RESTlerResponse<RespBody>> {
     return response;
   }
   /**

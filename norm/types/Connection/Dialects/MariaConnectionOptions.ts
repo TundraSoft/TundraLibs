@@ -7,7 +7,10 @@ export type MariaConnectionOptions = ConnectionOptions & {
   database: string;
   port?: number;
   poolSize?: number;
-  ssl?: boolean;
   connectionTimeout?: number;
   idleTimeout?: number;
+  tls?: {
+    sslMode: 'disabled' | 'verify_identity';
+    caCerts?: string[];
+  };
 };

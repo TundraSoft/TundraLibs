@@ -21,6 +21,9 @@ export type {
   DeleteQuery,
   InsertQuery,
   QueryFilters,
+  QueryPagination,
+  QuerySorting,
+  SelectQuery,
   UpdateQuery,
 } from './Query/mod.ts';
 

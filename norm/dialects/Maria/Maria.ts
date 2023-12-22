@@ -1,6 +1,6 @@
 import { OptionKeys } from '../../../options/mod.ts';
 import { AbstractClient } from '../../AbstractConnection.ts';
-import type { NormEvents, PostgresConnectionOptions } from '../../types/mod.ts';
+import type { MariaConnectionOptions, NormEvents } from '../../types/mod.ts';
 import {
   NormConfigError,
   NormNotConnectedError,
@@ -8,32 +8,29 @@ import {
   NormQueryMissingParamsError,
 } from '../../errors/mod.ts';
 
-import {
-  PGClient,
-  PGPoolClient,
-  PostgresError,
+import { MariaDBClient } from '../../../dependencies.ts';
+import type {
+  MariaDBClientConfig,
+  MariaDBResultSet,
 } from '../../../dependencies.ts';
-import type { PGClientOptions } from '../../../dependencies.ts';
 
-export class PostgresClient extends AbstractClient<PostgresConnectionOptions> {
-  private _client: PGClient | undefined = undefined;
+export class MariaClient extends AbstractClient<MariaConnectionOptions> {
+  private _client: MariaDBClient | undefined = undefined;
 
   constructor(
     name: string,
-    options: OptionKeys<PostgresConnectionOptions, NormEvents>,
+    options: OptionKeys<MariaConnectionOptions, NormEvents>,
   ) {
-    const defaults: Partial<PostgresConnectionOptions> = {
+    const defaults: Partial<MariaConnectionOptions> = {
       poolSize: 10,
-      port: 5432,
-      tlsOptions: {
-        enabled: true,
-        enforce: false,
-      },
+      port: 3306,
+      connectionTimeout: 5000,
+      idleTimeout: 10 * 60 * 1000,
     };
-    if (options.dialect !== 'POSTGRES') {
+    if (options.dialect !== 'MARIA') {
       throw new NormConfigError('Invalid value for dialect passed', {
         name: name,
-        dialect: 'POSTGRES',
+        dialect: 'MARIA',
         target: 'dialect',
         value: options.dialect,
       });
@@ -78,49 +75,25 @@ export class PostgresClient extends AbstractClient<PostgresConnectionOptions> {
     if (this._status === 'CONNECTED' && this._client !== undefined) {
       return;
     }
-    // Ok lets connect
-    const opt: PGClientOptions = {
-      applicationName: this._name,
-      connection: {
-        attempts: 1,
-        interval: 500,
-      },
+    const conf: MariaDBClientConfig = {
       hostname: this._getOption('host'),
-      port: this._getOption('port'),
-      user: this._getOption('username'),
+      username: this._getOption('username'),
       password: this._getOption('password'),
-      database: this._getOption('database'),
-      host_type: 'tcp',
-      tls: this._getOption('tlsOptions'),
+      db: this._getOption('database'),
+      port: this._getOption('port'),
+      timeout: this._getOption('connectionTimeout'),
+      poolSize: this._getOption('poolSize'),
+      idleTimeout: this._getOption('idleTimeout'),
+      tls: this._getOption('tls') ? {} : undefined,
     };
-    this._client = new PGClient(opt, this._getOption('poolSize') || 10, true);
-    let client: PGPoolClient | undefined = undefined;
-    // Test connection
-    try {
-      client = await this._client.connect();
-    } catch (err) {
-      if (err instanceof PostgresError) {
-        // 28P01: invalid password or user
-        // 3D000: database does not exist
-        //
-        console.log(err.fields.code);
-      } else if (err.name === 'ConnectionRefused') {
-        console.log('Possibly invalid host or port');
-      }
-      console.log(err);
-      throw err;
-    } finally {
-      if (client) {
-        client.release();
-      }
-    }
+    this._client = await new MariaDBClient().connect(conf);
   }
 
   protected async _close(): Promise<void> {
     if (this._status !== 'CONNECTED' || this._client === undefined) {
       return;
     }
-    await this._client.end();
+    await this._client.close();
     this._client = undefined;
   }
 
@@ -133,32 +106,34 @@ export class PostgresClient extends AbstractClient<PostgresConnectionOptions> {
         dialect: this.dialect,
       });
     }
-    let client: PGPoolClient | undefined = undefined;
     try {
-      client = await this._client.connect();
-      const res = await client.queryObject<R>(
-        this._normaliseQuery(sql, params),
-        params,
-      );
-      return res.rows;
-    } catch (err) {
-      if (err instanceof PostgresError) {
-        throw new NormQueryError(err.message, {
-          name: this._name,
-          dialect: this.dialect,
-          sql: sql,
-          code: err.fields.code,
+      const declare: Array<string> = [],
+        qry = this._normaliseQuery(sql, params);
+      if (Object.keys(params ?? {}).length > 0) {
+        Object.keys(params ?? {}).forEach((key) => {
+          declare.push(`@${key}=?`);
         });
       }
+      let res: MariaDBResultSet;
+      if (declare.length > 0) {
+        console.log('In transaction');
+        res = await this._client.transaction(async (conn) => {
+          await conn.execute(
+            `SET ${declare.join(', ')};`,
+            Object.values(params ?? {}),
+          );
+          return await conn.execute(qry);
+        });
+      } else {
+        res = await this._client.execute(qry);
+      }
+      return res.rows as R[];
+    } catch (err) {
       throw new NormQueryError(err.message, {
         name: this._name,
         dialect: this.dialect,
         sql: sql,
       });
-    } finally {
-      if (client) {
-        client.release();
-      }
     }
   }
 
@@ -172,28 +147,18 @@ export class PostgresClient extends AbstractClient<PostgresConnectionOptions> {
         dialect: this.dialect,
       });
     }
-    let client: PGPoolClient | undefined = undefined;
     try {
-      client = await this._client.connect();
-      await client.queryArray(this._normaliseQuery(sql, params), params);
+      const paramsArray: Array<unknown> = Object.values(params ?? {});
+      await this._client.execute(
+        this._normaliseQuery(sql, params),
+        paramsArray,
+      );
     } catch (err) {
-      if (err instanceof PostgresError) {
-        throw new NormQueryError(err.message, {
-          name: this._name,
-          dialect: this.dialect,
-          sql: sql,
-          code: err.fields.code,
-        });
-      }
       throw new NormQueryError(err.message, {
         name: this._name,
         dialect: this.dialect,
         sql: sql,
       });
-    } finally {
-      if (client) {
-        client.release();
-      }
     }
   }
 
@@ -201,12 +166,14 @@ export class PostgresClient extends AbstractClient<PostgresConnectionOptions> {
     sql: string,
     params?: Record<string, unknown> | undefined,
   ): string {
+    // Remove trailing ; and add it
+    sql = sql.trim().replace(/;+$/, '') + ';';
     if (params === undefined) {
       return sql;
     }
     const keys = Object.keys(params);
     // Replace :key: with :key
-    sql = sql.replace(/:(\w+):/g, '\$$1');
+    sql = sql.replace(/:(\w+):/g, '@$1');
     // Verify that any :key defined exists in params
     const missing: string[] = [];
     const matches = sql.match(/:(\w+)/g);
@@ -226,19 +193,6 @@ export class PostgresClient extends AbstractClient<PostgresConnectionOptions> {
         missing: missing.join(','),
       });
     }
-    return sql;
-    // for(const key of keys) {
-    //   const value = params[key];
-    //   if(typeof value === 'string') {
-    //     params[key] = `'${value}'`;
-    //   }
-    // }
-    // return sql.replace(/\?/g, (match) => {
-    //   const key = keys.shift();
-    //   if(key === undefined) {
-    //     return match;
-    //   }
-    //   return params[key] as string;
-    // });
+    return `${sql}`;
   }
 }

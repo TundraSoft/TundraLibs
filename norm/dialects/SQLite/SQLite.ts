@@ -159,6 +159,8 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
     sql: string,
     params?: Record<string, unknown> | undefined,
   ): string {
+    // Remove trailing ; and add it
+    sql = sql.trim().replace(/;+$/, '') + ';';
     if (params === undefined) {
       return sql;
     }
