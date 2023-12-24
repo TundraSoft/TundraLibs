@@ -4,11 +4,7 @@ import type { QueryFilters } from './Filters.ts';
 import type { QuerySorting } from './Sorting.ts';
 import type { QueryPagination } from './Pagination.ts';
 
-export type QuerySorting<TD extends TableDefinition = TableDefinition> = {
-  orderBy?: [keyof TD['columns'], 'ASC' | 'DESC'][];
-};
-
-type Relationship<DM extends ModelDefinition, TN extends keyof DM> = {
+type SelectRelationship<DM extends ModelDefinition, TN extends keyof DM> = {
   [R in keyof DM[TN]['foreignKeys']]?: DM[TN]['foreignKeys'][R] extends
     { model: infer M }
     ? M extends keyof DM
@@ -24,3 +20,4 @@ export type SelectQuery<
   filter?: QueryFilters<DM[TN]>;
   with?: SelectRelationship<DM, TN>;
 };
+
