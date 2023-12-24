@@ -9,7 +9,7 @@ describe(`[library='Cacher' engine='REDIS']`, () => {
   beforeEach(() => {
     cacher = new RedisCacher('testCacher', {
       engine: 'REDIS',
-      host: 'localhost',
+      host: 'nora-redis.anq',
       port: 6379,
     });
   });
