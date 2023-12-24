@@ -38,16 +38,34 @@ export class QueryTranslator {
     return this._dialect;
   }
 
-  // public select(query: SelectQuery) {
-  //   const tableName = [query.name, query.schema],
-  //     filter = query.filter
-  //       ? this._normaliseFilter(query.columns, query.filter)
-  //       : undefined;
-  //   // Parse columns
-  //   const columns = Object.entries(query.columns).map(([key, value]) => {
-  //     return `${value} AS ${key}`;
-  //   });
-  // }
+  public select(query: SelectQuery) {
+    const tableName = [query.name, query.schema],
+      filter: QueryFilters[] = [], 
+      joins: string[] = [];
+    if(query.filter) {
+      filter.push(this._normaliseFilter(query.columns, query.filter));
+    }
+    if(query.with !== undefined) {
+      Object.entries(query.with).forEach(([_key, value]) => {
+        filter.push(this._normaliseFilter((value as SelectQuery).columns, (value as SelectQuery).filter as QueryFilters));
+      });
+    }
+    // Parse columns
+    const columns = Object.entries(query.columns).map(([key, value]) => {
+      return `${value} AS ${key}`;
+    });
+  }
+
+  public count(query: SelectQuery) {
+    const tableName = [query.name, query.schema],
+      filter = query.filter
+        ? this._normaliseFilter(query.columns, query.filter)
+        : undefined;
+    // Parse columns
+    const columns = Object.entries(query.columns).map(([key, value]) => {
+      return `${value} AS ${key}`;
+    });
+  }
 
   public insert(query: InsertQuery) {
     const tableName = [query.name, query.schema];
