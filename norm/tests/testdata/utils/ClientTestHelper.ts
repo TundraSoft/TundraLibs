@@ -32,7 +32,7 @@ export const makeMariaOptions = () => {
   const clientOpt: MariaConnectionOptions = {
     dialect: 'MARIA',
     host: envData.get('MARIADB_HOST') || 'localhost',
-    username: envData.get('MARIADB_USER') || 'maria',
+    username: envData.get('MARIADB_USER') || 'root',
     password: envData.get('MARIADB_PASSWORD') || 'maria',
     database: envData.get('MARIADB_DATABASE') || 'mysql',
     port: parseInt(envData.get('MARIADB_PORT') || '3306'),
