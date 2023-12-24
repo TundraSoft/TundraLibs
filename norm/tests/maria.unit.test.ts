@@ -7,7 +7,7 @@ import {
   runStandardQueryTests,
 } from './testdata/utils/ClientTestHelper.ts';
 
-describe(`[library='norm' dialect='MARIADB' type='unit']`, () => {
+describe(`[library='norm' dialect='MARIA' type='unit']`, () => {
   const clientOpt: MariaConnectionOptions = makeMariaOptions();
   runStandardConnectionTests(
     MariaClient,

@@ -28,7 +28,7 @@ export abstract class AbstractClient<O extends ConnectionOptions>
   ) {
     if (
       options.dialect === undefined ||
-      !['POSTGRES', 'MONGO', 'MARIADB', 'SQLITE'].includes(options.dialect)
+      !['POSTGRES', 'MONGO', 'MARIA', 'SQLITE'].includes(options.dialect)
     ) {
       throw new NormConfigError('Missing or invalid value for dialect', {
         name: name,
