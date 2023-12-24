@@ -19,10 +19,10 @@ const envData = envArgs('norm/tests/testdata');
 export const makePostgresOptions = () => {
   const clientOpt: PostgresConnectionOptions = {
     dialect: 'POSTGRES',
-    host: envData.get('POSTGRES_HOST'),
-    username: envData.get('POSTGRES_USER'),
-    password: envData.get('POSTGRES_PASSWORD'),
-    database: envData.get('POSTGRES_DATABASE'),
+    host: envData.get('POSTGRES_HOST') || 'postgres',
+    username: envData.get('POSTGRES_USER') || 'postgres',
+    password: envData.get('POSTGRES_PASSWORD') || 'postgres',
+    database: envData.get('POSTGRES_DATABASE') || 'postgres',
     port: parseInt(envData.get('POSTGRES_PORT') || '5432'),
   };
   return clientOpt;
@@ -31,10 +31,10 @@ export const makePostgresOptions = () => {
 export const makeMariaOptions = () => {
   const clientOpt: MariaConnectionOptions = {
     dialect: 'MARIA',
-    host: envData.get('MARIADB_HOST'),
-    username: envData.get('MARIADB_USER'),
-    password: envData.get('MARIADB_PASSWORD'),
-    database: envData.get('MARIADB_DATABASE'),
+    host: envData.get('MARIADB_HOST') || 'maria',
+    username: envData.get('MARIADB_USER') || 'maria',
+    password: envData.get('MARIADB_PASSWORD') || 'maria',
+    database: envData.get('MARIADB_DATABASE') || 'mysql',
     port: parseInt(envData.get('MARIADB_PORT') || '3306'),
   };
   return clientOpt;

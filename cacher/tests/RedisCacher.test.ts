@@ -12,7 +12,7 @@ describe(`[library='Cacher' engine='REDIS']`, () => {
   beforeEach(() => {
     cacher = new RedisCacher('testCacher', {
       engine: 'REDIS',
-      host: envData.get('REDIS_HOST'),
+      host: envData.get('REDIS_HOST') || 'redis',
       port: parseInt(envData.get('REDIS_PORT') || '6379'),
     });
   });
