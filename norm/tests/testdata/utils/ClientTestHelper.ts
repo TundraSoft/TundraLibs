@@ -30,7 +30,7 @@ export const makePostgresOptions = () => {
 
 export const makeMariaOptions = () => {
   const clientOpt: MariaConnectionOptions = {
-    dialect: 'MARIADB',
+    dialect: 'MARIA',
     host: envData.get('MARIADB_HOST'),
     username: envData.get('MARIADB_USER'),
     password: envData.get('MARIADB_PASSWORD'),
@@ -104,6 +104,26 @@ function makeRDBMSConnectionTests(
         password: opts.password,
         database: opts.database,
         port: opts.port,
+      }),
+    ],
+    'should throw error if poolSize < 0 or greater than 100': [
+      JSON.stringify({
+        dialect: opts.dialect,
+        host: opts.host,
+        username: opts.username,
+        password: opts.password,
+        database: opts.database,
+        port: opts.port,
+        poolSize: -1,
+      }),
+      JSON.stringify({
+        dialect: opts.dialect,
+        host: opts.host,
+        username: opts.username,
+        password: opts.password,
+        database: opts.database,
+        port: opts.port,
+        poolSize: 88888888,
       }),
     ],
   };

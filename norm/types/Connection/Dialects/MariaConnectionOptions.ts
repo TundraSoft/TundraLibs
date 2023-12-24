@@ -1,7 +1,6 @@
 import { RemoteServerConnectionOptions } from '../Options.ts';
 
 export type MariaConnectionOptions = RemoteServerConnectionOptions & {
-  poolSize?: number;
   connectionTimeout?: number;
   idleTimeout?: number;
   tls?: {

@@ -11,6 +11,7 @@ export type RemoteServerConnectionOptions = ConnectionOptions & {
   username: string;
   password: string;
   database: string;
+  poolSize?: number;
 };
 
 export type FlatFileConnectionOptions = ConnectionOptions & {
