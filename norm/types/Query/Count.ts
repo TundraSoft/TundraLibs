@@ -5,7 +5,7 @@ import type { QuerySorting } from './Sorting.ts';
 import type { QueryPagination } from './Pagination.ts';
 
 type CountRelationship<DM extends ModelDefinition, TN extends keyof DM> = {
-  [R in keyof DM[TN]['relationShips']]?: DM[TN]['relationShips'][R] extends
+  [R in keyof DM[TN]['foreignKeys']]?: DM[TN]['foreignKeys'][R] extends
     { model: infer M }
     ? M extends keyof DM
       ? CountQuery<DM, M> & { relation: Record<string, string> }
