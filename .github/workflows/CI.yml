@@ -25,7 +25,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       maria:
-        image: mariadb
+        image: mariadb:10
         env:
           MARIADB_ROOT_PASSWORD: maria
         ports:
@@ -33,7 +33,7 @@ jobs:
         options: >-
           --health-cmd "mysql --password=$MARIADB_ROOT_PASSWORD -e 'show databases;'"
           --health-interval 10s
-          --health-timeout 5s
+          --health-timeout 10s
           --health-retries 5
     
     steps:
