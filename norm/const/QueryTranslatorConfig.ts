@@ -1,5 +1,9 @@
-import type { QueryFilters } from '../types/mod.ts';
-
+import type {
+  ColumnDefinition,
+  ForeignKeyDefinition,
+  PartitionDefinition,
+  QueryFilters,
+} from '../types/mod.ts';
 export const QueryTranslatorConfig = {
   escapeIdentifier: '"',
   quoteIdentifier: '"',
@@ -59,6 +63,8 @@ export const QueryTranslatorConfig = {
     'SMALLSERIAL': 'SMALLSERIAL',
     'BIGSERIAL': 'BIGSERIAL',
   },
+  supportsDistribution: false,
+  supportsPartitioning: false,
   escape: (value: Array<string | undefined>): string => {
     const escapeIdentifier = QueryTranslatorConfig.escapeIdentifier;
     const val = value.filter((v) => v !== undefined).reverse().join('.');
@@ -171,6 +177,148 @@ export const QueryTranslatorConfig = {
     return `CREATE SCHEMA IF NOT EXISTS ${
       QueryTranslatorConfig.escape([schema])
     };`;
+  },
+
+  createPrimaryKey: (
+    table: Array<string | undefined>,
+    primaryKeys: Array<string> | undefined,
+  ): string | undefined => {
+    if (primaryKeys && primaryKeys.length > 0) {
+      return `ALTER TABLE ${
+        QueryTranslatorConfig.escape(table)
+      } ADD PRIMARY KEY (${
+        primaryKeys.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
+      });`;
+    }
+  },
+
+  createUniqueConstraints: (
+    table: Array<string | undefined>,
+    uniqueKeys?: Record<string, Array<string>>,
+  ): Array<string> => {
+    const result: Array<string> = [];
+    if (uniqueKeys) {
+      for (const [key, value] of Object.entries(uniqueKeys)) {
+        result.push(
+          `ALTER TABLE ${QueryTranslatorConfig.escape(table)} ADD CONSTRAINT ${
+            QueryTranslatorConfig.escape([key])
+          } UNIQUE (${
+            value.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
+          });`,
+        );
+      }
+    }
+    return result;
+  },
+
+  createForeignKeys: (
+    table: Array<string | undefined>,
+    foreignKeys?: Record<string, ForeignKeyDefinition>,
+  ): Array<string> => {
+    const result: Array<string> = [];
+    if (foreignKeys) {
+      for (const [key, value] of Object.entries(foreignKeys)) {
+        const refTable = value.schema
+          ? [QueryTranslatorConfig.escape([value.schema])]
+          : [];
+        refTable.push(QueryTranslatorConfig.escape([value.table]));
+        const refColumns = Object.values(value.columnMap);
+        result.push(
+          `ALTER TABLE ${QueryTranslatorConfig.escape(table)} ADD CONSTRAINT ${
+            QueryTranslatorConfig.escape([key])
+          } FOREIGN KEY (${
+            Object.keys(value.columnMap).map((pk) =>
+              QueryTranslatorConfig.escape([pk])
+            ).join(', ')
+          }) REFERENCES ${refTable.join('.')} (${
+            refColumns.map((pk) => QueryTranslatorConfig.escape([pk])).join(
+              ', ',
+            )
+          }) ON DELETE ${value.onDelete || 'RESTRICT'} ON UPDATE ${
+            value.onUpdate || 'RESTRICT'
+          };`,
+        );
+      }
+    }
+    return result;
+  },
+
+  distributeTable: (
+    table: Array<string | undefined>,
+    spec: boolean | Array<string> | undefined,
+  ): string | undefined => {
+    if (QueryTranslatorConfig.supportsDistribution && spec) {
+      if (typeof spec === 'boolean') {
+        return `create_reference_table(${QueryTranslatorConfig.escape(table)})`;
+      } else {
+        return `create_distributed_table(${
+          QueryTranslatorConfig.escape(table)
+        }, ${spec.map((s) => QueryTranslatorConfig.escape([s])).join(', ')}))`;
+      }
+    }
+  },
+
+  createTable: (
+    table: Array<string | undefined>,
+    columns: Array<ColumnDefinition>,
+    primaryKeys?: Array<string>,
+    uniqueKeys?: Record<string, Array<string>>,
+    foreignKeys?: Record<string, ForeignKeyDefinition>,
+    partitions?: PartitionDefinition,
+    distribution?: boolean | Array<string>,
+  ): Array<string> => {
+    const result: Array<string> = [];
+
+    // Column Definitions
+    let tblDef = `CREATE TABLE IF NOT EXISTS ${
+      QueryTranslatorConfig.escape(table)
+    } (${
+      columns.map((c) => {
+        const colName = QueryTranslatorConfig.escape([c.name]);
+        const dataType = QueryTranslatorConfig
+          .dataTypes[c.type as keyof typeof QueryTranslatorConfig.dataTypes];
+        const length = c.length
+          ? (typeof c.length === 'number'
+            ? `(${c.length})`
+            : `(${c.length.precision},${c.length.scale})`)
+          : '';
+        const nullable = c.nullable ? 'NULL' : 'NOT NULL';
+        const defval = c.defaults && c.defaults.create
+          ? `DEFAULT ${c.defaults.create}`
+          : '';
+        const comments = c.comments ? `COMMENT '${c.comments}'` : '';
+        return `${colName} ${dataType}${length} ${nullable} ${defval} ${comments}`;
+      }).join(', ')
+    });`;
+    // Partitions
+    if (QueryTranslatorConfig.supportsPartitioning && partitions) {
+      tblDef += ` PARTITION BY ${partitions.type} (${
+        partitions.columns.map((c) => QueryTranslatorConfig.escape([c])).join(
+          ', ',
+        )
+      })`;
+    }
+    result.push(tblDef);
+    // Primary Key
+    const pkQuery = QueryTranslatorConfig.createPrimaryKey(table, primaryKeys);
+    if (pkQuery) {
+      result.push(pkQuery);
+    }
+    // Unique Keys
+    result.push(
+      ...QueryTranslatorConfig.createUniqueConstraints(table, uniqueKeys),
+    );
+    // Foreign Keys
+    result.push(...QueryTranslatorConfig.createForeignKeys(table, foreignKeys));
+    // Distribution
+    const distQuery = QueryTranslatorConfig.distributeTable(
+      table,
+      distribution,
+    );
+    if (distQuery) {
+      result.push(distQuery);
+    }
+    return result;
   },
 
   dropSchema: (schema: string): string => {

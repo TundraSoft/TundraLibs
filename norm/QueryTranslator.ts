@@ -4,7 +4,7 @@ import type {
   Dialects,
   InsertQuery,
   QueryFilters,
-  SelectQuery,
+  // SelectQuery,
   TableDefinition,
   UpdateQuery,
 } from './types/mod.ts';
@@ -38,16 +38,16 @@ export class QueryTranslator {
     return this._dialect;
   }
 
-  public select(query: SelectQuery) {
-    const tableName = [query.name, query.schema],
-      filter = query.filter
-        ? this._normaliseFilter(query.columns, query.filter)
-        : undefined;
-    // Parse columns
-    const columns = Object.entries(query.columns).map(([key, value]) => {
-      return `${value} AS ${key}`;
-    });
- }
+  // public select(query: SelectQuery) {
+  //   const tableName = [query.name, query.schema],
+  //     filter = query.filter
+  //       ? this._normaliseFilter(query.columns, query.filter)
+  //       : undefined;
+  //   // Parse columns
+  //   const columns = Object.entries(query.columns).map(([key, value]) => {
+  //     return `${value} AS ${key}`;
+  //   });
+  // }
 
   public insert(query: InsertQuery) {
     const tableName = [query.name, query.schema];
@@ -138,7 +138,16 @@ export class QueryTranslator {
     return this._config.dropSchema(schema);
   }
 
-  public createTable(_query: TableDefinition) {
+  public createTable(
+    table: TableDefinition,
+  ) {
+    this._config.createTable(
+      [table.name, table.schema],
+      Object.values(table.columns),
+      table.primaryKeys,
+      table.uniqueKeys,
+      table.foreignKeys,
+    );
   }
 
   public dropTable(table: string, schema?: string) {

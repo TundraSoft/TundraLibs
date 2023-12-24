@@ -12,6 +12,7 @@ export type ColumnDefinition = {
   length?: ColumnLengthDefinition;
   nullable?: boolean;
   defaults?: {
+    create?: unknown;
     insert: unknown;
     update: unknown;
   };

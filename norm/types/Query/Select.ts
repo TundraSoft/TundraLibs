@@ -12,7 +12,7 @@ export type QuerySorting<TD extends TableDefinition = TableDefinition> = {
 };
 
 type Relationship<DM extends ModelDefinition, TN extends keyof DM> = {
-  [R in keyof DM[TN]['relationShips']]?: DM[TN]['relationShips'][R] extends
+  [R in keyof DM[TN]['foreignKeys']]?: DM[TN]['foreignKeys'][R] extends
     { model: infer M }
     ? M extends keyof DM
       ? SelectQuery<DM, M> & { relation: Record<string, string> }

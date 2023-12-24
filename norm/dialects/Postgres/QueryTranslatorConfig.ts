@@ -52,4 +52,6 @@ export const PostgresQueryTranslatorConfig = {
     'SMALLSERIAL': 'SMALLSERIAL',
     'BIGSERIAL': 'BIGSERIAL',
   },
+  supportsDistribution: true,
+  supportsPartitioning: true,
 };

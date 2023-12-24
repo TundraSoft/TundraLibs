@@ -2,6 +2,9 @@ import { assertEquals } from '../../dev.dependencies.ts';
 import { afterEach, beforeEach, describe, it } from '../../dev.dependencies.ts';
 
 import { RedisCacher } from '../clients/mod.ts';
+import { envArgs } from '../../utils/envArgs.ts';
+
+const envData = envArgs('cacher/tests');
 
 describe(`[library='Cacher' engine='REDIS']`, () => {
   let cacher: RedisCacher;
@@ -9,8 +12,8 @@ describe(`[library='Cacher' engine='REDIS']`, () => {
   beforeEach(() => {
     cacher = new RedisCacher('testCacher', {
       engine: 'REDIS',
-      host: 'localhost',
-      port: 6379,
+      host: envData.get('REDIS_HOST') || 'localhost',
+      port: parseInt(envData.get('REDIS_PORT') || '6379'),
     });
   });
 

@@ -1,5 +1,5 @@
 import type { ColumnDefinition } from './Column.ts';
-import type { RelationshipDefinition } from './Relationship.ts';
+import type { ForeignKeyDefinition } from './Relationship.ts';
 
 export type TableDefinition = {
   name: string;
@@ -13,16 +13,15 @@ export type TableDefinition = {
   uniqueKeys?: {
     [key: string]: string[];
   };
-  relationShips?: {
-    [key: string]: RelationshipDefinition;
+  foreignKeys?: {
+    [key: string]: ForeignKeyDefinition;
   };
   partition?: string[];
   distribute?: string;
-
   limit?: number;
 };
 
-type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
+// type DeepWriteable<T> = { -readonly [P in keyof T]: DeepWriteable<T[P]> };
 
 export type TablePrimaryKey<T extends TableDefinition> = T extends
   { primaryKeys: string[] } ? Extract<
@@ -31,20 +30,20 @@ export type TablePrimaryKey<T extends TableDefinition> = T extends
   >
   : never;
 
-const a = {
-  name: 'a',
-  columns: {
-    id: {
-      name: 'id',
-      type: 'INTEGER',
-    },
-    name: {
-      name: 'name',
-      type: 'VARCHAR',
-    },
-  },
-  primaryKeys: ['id'],
-  relationShips: {},
-} as const;
+// const a = {
+//   name: 'a',
+//   columns: {
+//     id: {
+//       name: 'id',
+//       type: 'INTEGER',
+//     },
+//     name: {
+//       name: 'name',
+//       type: 'VARCHAR',
+//     },
+//   },
+//   primaryKeys: ['id'],
+//   relationShips: {},
+// } as const;
 
-type aa = DeepWriteable<typeof a>;
+// type aa = DeepWriteable<typeof a>;

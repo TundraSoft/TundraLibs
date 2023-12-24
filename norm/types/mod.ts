@@ -1,9 +1,11 @@
 export type {
   ConnectionOptions,
   ConnectionStatus,
+  FlatFileConnectionOptions,
   MariaConnectionOptions,
   MongoConnectionOptions,
   PostgresConnectionOptions,
+  RemoteServerConnectionOptions,
   SQLiteConnectionOptions,
 } from './Connection/mod.ts';
 
@@ -11,8 +13,9 @@ export type {
   ColumnDefinition,
   ColumnLengthDefinition,
   ColumnType,
+  ForeignKeyDefinition,
   ModelDefinition,
-  RelationshipDefinition,
+  PartitionDefinition,
   TableDefinition,
 } from './Definitions/mod.ts';
 
