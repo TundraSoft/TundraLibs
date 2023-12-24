@@ -19,7 +19,7 @@ const envData = envArgs('norm/tests/testdata');
 export const makePostgresOptions = () => {
   const clientOpt: PostgresConnectionOptions = {
     dialect: 'POSTGRES',
-    host: envData.get('POSTGRES_HOST') || 'postgres',
+    host: envData.get('POSTGRES_HOST') || 'localhost',
     username: envData.get('POSTGRES_USER') || 'postgres',
     password: envData.get('POSTGRES_PASSWORD') || 'postgres',
     database: envData.get('POSTGRES_DATABASE') || 'postgres',
@@ -31,7 +31,7 @@ export const makePostgresOptions = () => {
 export const makeMariaOptions = () => {
   const clientOpt: MariaConnectionOptions = {
     dialect: 'MARIA',
-    host: envData.get('MARIADB_HOST') || 'maria',
+    host: envData.get('MARIADB_HOST') || 'localhost',
     username: envData.get('MARIADB_USER') || 'maria',
     password: envData.get('MARIADB_PASSWORD') || 'maria',
     database: envData.get('MARIADB_DATABASE') || 'mysql',
