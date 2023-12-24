@@ -218,10 +218,10 @@ export const QueryTranslatorConfig = {
     const result: Array<string> = [];
     if (foreignKeys) {
       for (const [key, value] of Object.entries(foreignKeys)) {
-        const refTable = value.schema
-          ? [QueryTranslatorConfig.escape([value.schema])]
-          : [];
-        refTable.push(QueryTranslatorConfig.escape([value.table]));
+        const refTable = QueryTranslatorConfig.escape([
+          value.table,
+          value.schema,
+        ]);
         const refColumns = Object.values(value.columnMap);
         result.push(
           `ALTER TABLE ${QueryTranslatorConfig.escape(table)} ADD CONSTRAINT ${
@@ -230,7 +230,7 @@ export const QueryTranslatorConfig = {
             Object.keys(value.columnMap).map((pk) =>
               QueryTranslatorConfig.escape([pk])
             ).join(', ')
-          }) REFERENCES ${refTable.join('.')} (${
+          }) REFERENCES ${refTable} (${
             refColumns.map((pk) => QueryTranslatorConfig.escape([pk])).join(
               ', ',
             )

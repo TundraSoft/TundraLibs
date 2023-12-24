@@ -141,6 +141,41 @@ export class QueryTranslator {
   public createTable(
     table: TableDefinition,
   ) {
+    // If table.primaryKeys is defined, make sure that each key in table.primaryKeys is a key in table.columns
+    if (table.primaryKeys) {
+      table.primaryKeys.forEach((key) => {
+        if (!table.columns[key]) {
+          throw new Error(
+            `Primary key ${key} not found in ${table.name} columns`,
+          );
+        }
+      });
+    }
+    // If table.uniqueKeys is defined, make sure that each item in the values in table.uniqueKeys is a key in table.columns
+    if (table.uniqueKeys) {
+      Object.values(table.uniqueKeys).forEach((keys) => {
+        keys.forEach((key) => {
+          if (!table.columns[key]) {
+            throw new Error(
+              `Unique key ${key} not found in ${table.name} columns`,
+            );
+          }
+        });
+      });
+    }
+    // If table.foreignKeys is defined, make sure that each key in the columnMap in each value of table.foreignKeys is a key in table.columns
+    if (table.foreignKeys) {
+      Object.values(table.foreignKeys).forEach((fk) => {
+        Object.keys(fk.columnMap).forEach((key) => {
+          if (!table.columns[key]) {
+            throw new Error(
+              `Foreign key reference ${key} not found in ${table.name} columns`,
+            );
+          }
+        });
+      });
+    }
+
     this._config.createTable(
       [table.name, table.schema],
       Object.values(table.columns),
