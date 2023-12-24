@@ -1,5 +1,6 @@
 export const User = {
   name: 'users',
+  schema: 'User2',
   columns: {
     Id: {
       name: 'id',

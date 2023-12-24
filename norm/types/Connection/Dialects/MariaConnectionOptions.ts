@@ -2,7 +2,10 @@ import { RemoteServerConnectionOptions } from '../Options.ts';
 
 export type MariaConnectionOptions = RemoteServerConnectionOptions & {
   poolSize?: number;
-  ssl?: boolean;
   connectionTimeout?: number;
   idleTimeout?: number;
+  tls?: {
+    sslMode: 'disabled' | 'verify_identity';
+    caCerts?: string[];
+  };
 };

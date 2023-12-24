@@ -4,6 +4,7 @@ import type {
   Dialects,
   InsertQuery,
   QueryFilters,
+  SelectQuery,
   TableDefinition,
   UpdateQuery,
 } from './types/mod.ts';
@@ -11,7 +12,7 @@ import {
   MariaQueryTranslatorConfig,
   PostgresQueryTranslatorConfig,
   SQLiteQueryTranslatorConfig,
-} from './Dialects/mod.ts';
+} from './dialects/mod.ts';
 import { QueryTranslatorConfig } from './const/mod.ts';
 
 export class QueryTranslator {
@@ -21,7 +22,7 @@ export class QueryTranslator {
   constructor(dialect: Dialects) {
     this._dialect = dialect;
     switch (dialect) {
-      case 'MARIADB':
+      case 'MARIA':
         Object.assign(this._config, MariaQueryTranslatorConfig);
         break;
       case 'POSTGRES':
@@ -36,6 +37,17 @@ export class QueryTranslator {
   get dialect(): Dialects {
     return this._dialect;
   }
+
+  public select(query: SelectQuery) {
+    const tableName = [query.name, query.schema],
+      filter = query.filter
+        ? this._normaliseFilter(query.columns, query.filter)
+        : undefined;
+    // Parse columns
+    const columns = Object.entries(query.columns).map(([key, value]) => {
+      return `${value} AS ${key}`;
+    });
+ }
 
   public insert(query: InsertQuery) {
     const tableName = [query.name, query.schema];
@@ -126,7 +138,7 @@ export class QueryTranslator {
     return this._config.dropSchema(schema);
   }
 
-  public createTable(query: TableDefinition) {
+  public createTable(_query: TableDefinition) {
   }
 
   public dropTable(table: string, schema?: string) {
@@ -141,7 +153,7 @@ export class QueryTranslator {
     return this._config.renameTable(newName, oldName);
   }
 
-  public addColumn(query: BaseQuery) {}
+  public addColumn(_query: BaseQuery) {}
 
   public dropColumn(name: string, table: string, schema?: string) {
     return this._config.dropColumn(name, table, schema);
@@ -156,7 +168,7 @@ export class QueryTranslator {
     return this._config.renameColumn(newName, oldName, table, schema);
   }
 
-  public alterColumn(query: BaseQuery) {}
+  public alterColumn(_query: BaseQuery) {}
 
   protected _normaliseFilter(
     columns: Record<string, string>,

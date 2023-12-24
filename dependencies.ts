@@ -22,9 +22,18 @@ export type HTTPMethods =
   | 'PATCH'
   | 'DELETE';
 
+//#region RESTler
+export {
+  parse as XMLParse,
+  stringify as XMLStringify,
+} from 'https://deno.land/x/xml@2.1.3/mod.ts';
+
+//#endregion RESTler
+
 //#region Databases
 export { connect as RedisConnect } from 'https://deno.land/x/redis@v0.30.0/mod.ts';
 export type { Redis } from 'https://deno.land/x/redis@v0.30.0/mod.ts';
+
 export {
   Pool as PGClient,
   PoolClient as PGPoolClient,
@@ -33,6 +42,11 @@ export {
 export type { ClientOptions as PGClientOptions } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
 
 // export { default as PGClient } from 'https://deno.land/x/postgresjs@v3.4.3/mod.js';
+export { Client as MariaDBClient } from 'https://deno.land/x/mysql@v2.12.1/mod.ts';
+export type {
+  ClientConfig as MariaDBClientConfig,
+  ExecuteResult as MariaDBResultSet,
+} from 'https://deno.land/x/mysql@v2.12.1/mod.ts';
 
 export { DB as SQLiteDBClient } from 'https://deno.land/x/sqlite@v3.8/mod.ts';
 export type { SqliteOptions as SQLiteDBClientConfig } from 'https://deno.land/x/sqlite@v3.8/mod.ts';

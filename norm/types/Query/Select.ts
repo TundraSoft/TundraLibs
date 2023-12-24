@@ -8,10 +8,16 @@ export type QueryPagination = {
 };
 
 export type QuerySorting<TD extends TableDefinition = TableDefinition> = {
-  // orderBy?: {
-  //   [C in keyof TD['columns']]?: 'ASC' | 'DESC';
-  // }
-  orderBy: [keyof TD['columns'], 'ASC' | 'DESC'][];
+  orderBy?: [keyof TD['columns'], 'ASC' | 'DESC'][];
+};
+
+type Relationship<DM extends ModelDefinition, TN extends keyof DM> = {
+  [R in keyof DM[TN]['relationShips']]?: DM[TN]['relationShips'][R] extends
+    { model: infer M }
+    ? M extends keyof DM
+      ? SelectQuery<DM, M> & { relation: Record<string, string> }
+    : never
+    : never;
 };
 
 export type SelectQuery<
@@ -19,4 +25,5 @@ export type SelectQuery<
   TN extends keyof DM = keyof DM,
 > = BaseQuery<DM, TN> & QueryPagination & QuerySorting<DM[TN]> & {
   filter?: QueryFilters<DM[TN]>;
+  with?: Relationship<DM, TN>;
 };

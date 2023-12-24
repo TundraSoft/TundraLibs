@@ -6,12 +6,12 @@ import {
   describe,
   it,
 } from '../../dev.dependencies.ts';
-import { SQLiteClient } from '../Dialetcts/mod.ts';
+import { SQLiteClient } from '../dialects/mod.ts';
 import type { SQLiteConnectionOptions } from '../types/mod.ts';
 import {
-  NormBaseError,
+  // NormBaseError,
   NormConfigError,
-  NormQueryError,
+  // NormQueryError,
 } from '../errors/mod.ts';
 
 describe(`[library='norm' dialect='SQLite' type='unit']`, () => {
@@ -25,8 +25,8 @@ describe(`[library='norm' dialect='SQLite' type='unit']`, () => {
     `CREATE TABLE IF NOT EXISTS ${tableName} (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(255) NOT NULL, email VARCHAR(255));`;
   const insertQuery =
     `INSERT INTO ${tableName} (name, email) VALUES (:name:, :email:) RETURNING id, name, email;`;
-  const insertBulkQuery =
-    `INSERT INTO ${tableName} (name, email) VALUES (:name:, :email:) RETURNING id, name, email;`;
+  // const insertBulkQuery =
+  //   `INSERT INTO ${tableName} (name, email) VALUES (:name:, :email:) RETURNING id, name, email;`;
   const selectQuery = `SELECT * FROM ${tableName};`;
   const selectQuery1 = `SELECT * FROM ${tableName} WHERE id = :id:;`;
   // const selectQuery2 = `SELECT * FROM ${tableName} WHERE id = 10;`;

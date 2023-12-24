@@ -1,5 +1,5 @@
 import { assertThrows, describe, it } from '../../dev.dependencies.ts';
-import { PostgresClient } from '../Dialects/mod.ts';
+import { PostgresClient } from '../dialects/mod.ts';
 import type { PostgresConnectionOptions } from '../types/mod.ts';
 import { NormConfigError } from '../errors/mod.ts';
 import {

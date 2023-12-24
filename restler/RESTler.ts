@@ -1,6 +1,6 @@
 /// <reference lib="deno.unstable" />
 
-import { HTTPMethods, path } from '../dependencies.ts';
+import { HTTPMethods, path, XMLParse } from '../dependencies.ts';
 
 import { Options } from '../options/mod.ts';
 import type { OptionKeys } from '../options/mod.ts';
@@ -157,20 +157,20 @@ export abstract class RESTler<
           () => controller.abort(),
           this._getOption('timeout'),
         );
-      // if (this._hasOption('certChain') || this._hasOption('certKey')) {
-      //   fetchOptions.client = Deno.createHttpClient({
-      //     certChain: this._getOption('certChain'),
-      //     privateKey: this._getOption('certKey'),
-      //   });
-      // }
+      if (this._hasOption('certChain') || this._hasOption('certKey')) {
+        fetchOptions.client = Deno.createHttpClient({
+          certChain: this._getOption('certChain'),
+          privateKey: this._getOption('certKey'),
+        });
+      }
       // if (this._customClient !== undefined) {
       //   fetchOptions.client = this._customClient;
       // }
       const interimResp = await fetch(endpoint, fetchOptions);
       clearTimeout(timeout);
-      // if (this._hasOption('certChain') || this._hasOption('certKey')) {
-      //   fetchOptions.client?.close();
-      // }
+      if (this._hasOption('certChain') || this._hasOption('certKey')) {
+        fetchOptions.client?.close();
+      }
       resp.timeTaken = performance.now() - start;
       resp.status = interimResp.status;
       resp.headers = Object.fromEntries(interimResp.headers.entries());
@@ -189,8 +189,8 @@ export abstract class RESTler<
           resp.endpoint as RESTlerEndpoint,
         );
       }
-      await this._processResponse(resp);
-      return resp;
+      return await this._processResponse(resp);
+      // return resp;
     } catch (e) {
       resp.timeTaken = performance.now() - start;
       if (e.name === 'AbortError') {
@@ -236,9 +236,8 @@ export abstract class RESTler<
    * Handles the response object and returns the body
    *
    * @remarks
-   * This method takes care of parsing the response body and returning it. It
-   * can be overridden in child classes to handle other content types, however,
-   * care must be taken to ensure that the body is discarded.
+   * This method takes care of parsing the response body and returning it. Do not
+   * override unless you know what you are doing.
    *
    * @param endpoint RESTlerEndpoint - The RESTlerEndpoint object
    * @param response Response - The response object
@@ -269,6 +268,11 @@ export abstract class RESTler<
       }
       if (contentType.includes('json')) {
         return await response.json() as RespBody;
+      } else if (
+        contentType.includes('text/xml') ||
+        contentType.includes('application/xml')
+      ) {
+        return XMLParse(await response.text()) as unknown as RespBody;
       } else if (contentType.includes('text')) {
         return await response.text() as unknown as RespBody;
         // } else if (contentType.includes('text/html')) {
@@ -304,8 +308,10 @@ export abstract class RESTler<
    */
   protected _processResponse<
     RespBody extends RESTlerResponseBody = RESTlerResponseBody,
-  >(_response: RESTlerResponse<RespBody>): void {
-    //
+  >(
+    response: RESTlerResponse<RespBody>,
+  ): RESTlerResponse<RespBody> | Promise<RESTlerResponse<RespBody>> {
+    return response;
   }
   /**
    * The method that injects authentication into the request. This method is meant
