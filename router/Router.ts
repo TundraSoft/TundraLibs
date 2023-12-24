@@ -93,7 +93,7 @@ class RouterNode<T extends RouteHandler = RouteHandler> {
   }
 
   find(path: string): RouteHandler {
-    const [cleanPath, _params]: [string, string[]] = this._standardizePath(
+    const [_cleanPath, _params]: [string, string[]] = this._standardizePath(
       path,
     );
     // We need to check if the path exists in this ones children or their children
