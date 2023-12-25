@@ -118,10 +118,10 @@ export const QueryTranslatorConfig = {
 
   //#region Query Generators
   select: (): string => {
-    // SELECT MAIN.X, json_agg(json_build_object(ALIAS, JOIN.COL...)) AS ALIAS FROM MAIN AS MAIN LEFT JOIN JOIN AS JOIN ON MAIN.COL = JOIN.COL GROUP BY MAIN.COL 
+    // SELECT MAIN.X, json_agg(json_build_object(ALIAS, JOIN.COL...)) AS ALIAS FROM MAIN AS MAIN LEFT JOIN JOIN AS JOIN ON MAIN.COL = JOIN.COL GROUP BY MAIN.COL
     // Grouping in PG is the PK in main table
     return '';
-  }, 
+  },
 
   insert: (
     table: Array<string | undefined>,
