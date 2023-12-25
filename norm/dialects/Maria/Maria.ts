@@ -116,7 +116,6 @@ export class MariaClient extends AbstractClient<MariaConnectionOptions> {
       }
       let res: MariaDBResultSet;
       if (declare.length > 0) {
-        console.log('In transaction');
         res = await this._client.transaction(async (conn) => {
           await conn.execute(
             `SET ${declare.join(', ')};`,
@@ -148,11 +147,24 @@ export class MariaClient extends AbstractClient<MariaConnectionOptions> {
       });
     }
     try {
-      const paramsArray: Array<unknown> = Object.values(params ?? {});
-      await this._client.execute(
-        this._normaliseQuery(sql, params),
-        paramsArray,
-      );
+      const declare: Array<string> = [],
+        qry = this._normaliseQuery(sql, params);
+      if (Object.keys(params ?? {}).length > 0) {
+        Object.keys(params ?? {}).forEach((key) => {
+          declare.push(`@${key}=?`);
+        });
+      }
+      if (declare.length > 0) {
+        await this._client.transaction(async (conn) => {
+          await conn.execute(
+            `SET ${declare.join(', ')};`,
+            Object.values(params ?? {}),
+          );
+          return await conn.execute(qry);
+        });
+      } else {
+        await this._client.execute(qry);
+      }
     } catch (err) {
       throw new NormQueryError(err.message, {
         name: this._name,
