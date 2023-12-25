@@ -46,11 +46,10 @@ export class QueryTranslator {
     // Sorting and ordering is cascaded up to the parent
     // Add the name of the relationship as alias to all columns (special for filters)
 
-    
-    const tableName = [query.name, query.schema],
+    const _tableName = [query.name, query.schema],
       filter: QueryFilters[] = [],
       columns: string[] = [],
-      joins: string[] = [];
+      _joins: string[] = [];
     //#region Rename column names
     Object.entries(query.columns).forEach(([key, value]) => {
       columns.push(`${value} AS ${key}`);
@@ -72,12 +71,12 @@ export class QueryTranslator {
   }
 
   public count(query: SelectQuery) {
-    const tableName = [query.name, query.schema],
-      filter = query.filter
+    const _tableName = [query.name, query.schema],
+      _filter = query.filter
         ? this._normaliseFilter(query.columns, query.filter)
         : undefined;
     // Parse columns
-    const columns = Object.entries(query.columns).map(([key, value]) => {
+    const _columns = Object.entries(query.columns).map(([key, value]) => {
       return `${value} AS ${key}`;
     });
   }
@@ -249,7 +248,7 @@ export class QueryTranslator {
 
   protected _normaliseFilter(
     columns: Record<string, string>,
-    filter: QueryFilters, 
+    filter: QueryFilters,
   ): QueryFilters {
     // Cycle through the filter object and replace the keys with the actual column name
     const newFilter: QueryFilters = {};
