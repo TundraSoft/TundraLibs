@@ -4,7 +4,7 @@ import type {
   Dialects,
   InsertQuery,
   QueryFilters,
-  // SelectQuery,
+  SelectQuery,
   TableDefinition,
   UpdateQuery,
 } from './types/mod.ts';
@@ -38,16 +38,49 @@ export class QueryTranslator {
     return this._dialect;
   }
 
-  // public select(query: SelectQuery) {
-  //   const tableName = [query.name, query.schema],
-  //     filter = query.filter
-  //       ? this._normaliseFilter(query.columns, query.filter)
-  //       : undefined;
-  //   // Parse columns
-  //   const columns = Object.entries(query.columns).map(([key, value]) => {
-  //     return `${value} AS ${key}`;
-  //   });
-  // }
+  public select(query: SelectQuery) {
+    // Basic operation is same as everywhere, but we need to handle "with"
+    // With is joins, if filters are present but no project, then do not select but do a join
+    // If project is present, then do a join and select columns (irrespective of filters)
+    // If no filter and project then do not join, just select columns from main table
+    // Sorting and ordering is cascaded up to the parent
+    // Add the name of the relationship as alias to all columns (special for filters)
+
+    
+    const tableName = [query.name, query.schema],
+      filter: QueryFilters[] = [],
+      columns: string[] = [],
+      joins: string[] = [];
+    //#region Rename column names
+    Object.entries(query.columns).forEach(([key, value]) => {
+      columns.push(`${value} AS ${key}`);
+    });
+    //#endregion
+    if (query.filter) {
+      filter.push(this._normaliseFilter(query.columns, query.filter));
+    }
+    if (query.with !== undefined) {
+      Object.entries(query.with).forEach(([_key, value]) => {
+        filter.push(
+          this._normaliseFilter(
+            (value as SelectQuery).columns,
+            (value as SelectQuery).filter as QueryFilters,
+          ),
+        );
+      });
+    }
+  }
+
+  public count(query: SelectQuery) {
+    const tableName = [query.name, query.schema],
+      filter = query.filter
+        ? this._normaliseFilter(query.columns, query.filter)
+        : undefined;
+    // Parse columns
+    const columns = Object.entries(query.columns).map(([key, value]) => {
+      return `${value} AS ${key}`;
+    });
+  }
 
   public insert(query: InsertQuery) {
     const tableName = [query.name, query.schema];
@@ -216,7 +249,7 @@ export class QueryTranslator {
 
   protected _normaliseFilter(
     columns: Record<string, string>,
-    filter: QueryFilters,
+    filter: QueryFilters, 
   ): QueryFilters {
     // Cycle through the filter object and replace the keys with the actual column name
     const newFilter: QueryFilters = {};

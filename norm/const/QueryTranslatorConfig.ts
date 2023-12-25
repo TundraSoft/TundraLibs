@@ -6,7 +6,7 @@ import type {
 } from '../types/mod.ts';
 export const QueryTranslatorConfig = {
   escapeIdentifier: '"',
-  quoteIdentifier: '"',
+  quoteIdentifier: "'",
   cascade: {
     database: true,
     schema: true,
@@ -67,8 +67,9 @@ export const QueryTranslatorConfig = {
   supportsPartitioning: false,
   escape: (value: Array<string | undefined>): string => {
     const escapeIdentifier = QueryTranslatorConfig.escapeIdentifier;
+    const replceRegEx = new RegExp(`${escapeIdentifier}`, 'g');
     const val = value.filter((v) => v !== undefined).reverse().join('.');
-    return val.replace(`/${escapeIdentifier}/g`, '').split('.').map((v) =>
+    return val.replace(replceRegEx, '').split('.').map((v) =>
       `${escapeIdentifier}${v}${escapeIdentifier}`
     ).join('.');
   },
@@ -116,6 +117,12 @@ export const QueryTranslatorConfig = {
   },
 
   //#region Query Generators
+  select: (): string => {
+    // SELECT MAIN.X, json_agg(json_build_object(ALIAS, JOIN.COL...)) AS ALIAS FROM MAIN AS MAIN LEFT JOIN JOIN AS JOIN ON MAIN.COL = JOIN.COL GROUP BY MAIN.COL 
+    // Grouping in PG is the PK in main table
+    return '';
+  }, 
+
   insert: (
     table: Array<string | undefined>,
     columns: string[],
@@ -169,6 +176,123 @@ export const QueryTranslatorConfig = {
     return `DELETE FROM ${QueryTranslatorConfig.escape(table)}${where};`;
   },
 
+  where: (filter: QueryFilters, joiner = 'AND'): string => {
+    const ret: string[] = [];
+    if (Array.isArray(filter)) {
+      filter.forEach((f) => {
+        ret.push(QueryTranslatorConfig.where(f, joiner));
+      });
+    } else {
+      // Ok if the key is $and or $or then its a sub query
+      const keys = Object.keys(filter);
+      for (const key of keys) {
+        if (key === '$and' || key === '$or') {
+          ret.push(
+            `${
+              QueryTranslatorConfig.where(
+                filter[key] as unknown as QueryFilters,
+                key === '$and' ? 'AND' : 'OR',
+              )
+            }`,
+          );
+        } else {
+          // Ok, now we need to check if the value is an object or not
+          const value = filter[key];
+          if (
+            value instanceof Object &&
+            (!(value instanceof Date) || !(value instanceof Array))
+          ) {
+            for (
+              const [operator, operatorValue] of Object.entries(
+                value,
+              )
+            ) {
+              // const actValue = (operatorValue as string).startsWith('$') ? columns[operatorValue as string] : operatorValue;
+              switch (operator) {
+                case '$eq':
+                  ret.push(
+                    `${QueryTranslatorConfig.escape([key])} = ${
+                      QueryTranslatorConfig.quoteValue(operatorValue)
+                    }`,
+                  );
+                  break;
+                case '$ne':
+                  ret.push(
+                    `${QueryTranslatorConfig.escape([key])} != ${
+                      QueryTranslatorConfig.quoteValue(operatorValue)
+                    }`,
+                  );
+                  break;
+                case '$gt':
+                  ret.push(
+                    `${QueryTranslatorConfig.escape([key])} > ${
+                      QueryTranslatorConfig.quoteValue(operatorValue)
+                    }`,
+                  );
+                  break;
+                case '$gte':
+                  ret.push(
+                    `${QueryTranslatorConfig.escape([key])} >= ${
+                      QueryTranslatorConfig.quoteValue(operatorValue)
+                    }`,
+                  );
+                  break;
+                case '$lt':
+                  ret.push(
+                    `${QueryTranslatorConfig.escape([key])} < ${
+                      QueryTranslatorConfig.quoteValue(operatorValue)
+                    }`,
+                  );
+                  break;
+                case '$lte':
+                  ret.push(
+                    `${QueryTranslatorConfig.escape([key])} <= ${
+                      QueryTranslatorConfig.quoteValue(operatorValue)
+                    }`,
+                  );
+                  break;
+                case '$in':
+                  ret.push(
+                    `${QueryTranslatorConfig.escape([key])} IN (${
+                      operatorValue.map((v: unknown) =>
+                        QueryTranslatorConfig.quoteValue(v)
+                      ).join(', ')
+                    })`,
+                  );
+                  break;
+                case '$nin':
+                  ret.push(
+                    `${QueryTranslatorConfig.escape([key])} NOT IN (${
+                      operatorValue.map((v: unknown) =>
+                        QueryTranslatorConfig.quoteValue(v)
+                      ).join(', ')
+                    })`,
+                  );
+                  break;
+                default:
+                  throw new Error(`Unknown Operator ${operator}`);
+              }
+            }
+          } else {
+            ret.push(
+              `${QueryTranslatorConfig.escape([key])} = ${
+                QueryTranslatorConfig.quoteValue(value)
+              }`,
+            );
+          }
+          // if(typeof filter[key] === 'object') {
+          //   // Ok, now we need to check if the value is an object or not
+          //   const subKeys = Object.keys(filter[key]);
+          //   for(const subKey of subKeys) {
+          //     ret.push(`${this._escape(key)} ${subKey} ${this._escape(filter[key][subKey])}`);
+          //   }
+          // }
+        }
+      }
+    }
+    return `( ${ret.join(` ${joiner} `)} )`;
+  },
+
   truncate: (table: Array<string | undefined>): string => {
     return `TRUNCATE TABLE ${QueryTranslatorConfig.escape(table)};`;
   },
@@ -177,6 +301,10 @@ export const QueryTranslatorConfig = {
     return `CREATE SCHEMA IF NOT EXISTS ${
       QueryTranslatorConfig.escape([schema])
     };`;
+  },
+
+  dropSchema: (schema: string): string => {
+    return `DROP SCHEMA IF EXISTS ${QueryTranslatorConfig.escape([schema])};`;
   },
 
   createPrimaryKey: (
@@ -321,10 +449,6 @@ export const QueryTranslatorConfig = {
     return result;
   },
 
-  dropSchema: (schema: string): string => {
-    return `DROP SCHEMA IF EXISTS ${QueryTranslatorConfig.escape([schema])};`;
-  },
-
   dropTable: (table: string, schema?: string): string => {
     return `DROP TABLE IF EXISTS ${
       QueryTranslatorConfig.escape([table, schema])
@@ -357,123 +481,6 @@ export const QueryTranslatorConfig = {
     } RENAME COLUMN ${QueryTranslatorConfig.escape([oldName])} TO ${
       QueryTranslatorConfig.escape([newName])
     };`;
-  },
-
-  where: (filter: QueryFilters, joiner = 'AND'): string => {
-    const ret: string[] = [];
-    if (Array.isArray(filter)) {
-      filter.forEach((f) => {
-        ret.push(QueryTranslatorConfig.where(f, joiner));
-      });
-    } else {
-      // Ok if the key is $and or $or then its a sub query
-      const keys = Object.keys(filter);
-      for (const key of keys) {
-        if (key === '$and' || key === '$or') {
-          ret.push(
-            `${
-              QueryTranslatorConfig.where(
-                filter[key] as unknown as QueryFilters,
-                key === '$and' ? 'AND' : 'OR',
-              )
-            }`,
-          );
-        } else {
-          // Ok, now we need to check if the value is an object or not
-          const value = filter[key];
-          if (
-            value instanceof Object &&
-            (!(value instanceof Date) || !(value instanceof Array))
-          ) {
-            for (
-              const [operator, operatorValue] of Object.entries(
-                value,
-              )
-            ) {
-              // const actValue = (operatorValue as string).startsWith('$') ? columns[operatorValue as string] : operatorValue;
-              switch (operator) {
-                case '$eq':
-                  ret.push(
-                    `${QueryTranslatorConfig.escape([key])} = ${
-                      QueryTranslatorConfig.quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case '$ne':
-                  ret.push(
-                    `${QueryTranslatorConfig.escape([key])} != ${
-                      QueryTranslatorConfig.quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case '$gt':
-                  ret.push(
-                    `${QueryTranslatorConfig.escape([key])} > ${
-                      QueryTranslatorConfig.quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case '$gte':
-                  ret.push(
-                    `${QueryTranslatorConfig.escape([key])} >= ${
-                      QueryTranslatorConfig.quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case '$lt':
-                  ret.push(
-                    `${QueryTranslatorConfig.escape([key])} < ${
-                      QueryTranslatorConfig.quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case '$lte':
-                  ret.push(
-                    `${QueryTranslatorConfig.escape([key])} <= ${
-                      QueryTranslatorConfig.quoteValue(operatorValue)
-                    }`,
-                  );
-                  break;
-                case '$in':
-                  ret.push(
-                    `${QueryTranslatorConfig.escape([key])} IN (${
-                      operatorValue.map((v: unknown) =>
-                        QueryTranslatorConfig.quoteValue(v)
-                      ).join(', ')
-                    })`,
-                  );
-                  break;
-                case '$nin':
-                  ret.push(
-                    `${QueryTranslatorConfig.escape([key])} NOT IN (${
-                      operatorValue.map((v: unknown) =>
-                        QueryTranslatorConfig.quoteValue(v)
-                      ).join(', ')
-                    })`,
-                  );
-                  break;
-                default:
-                  throw new Error(`Unknown Operator ${operator}`);
-              }
-            }
-          } else {
-            ret.push(
-              `${QueryTranslatorConfig.escape([key])} = ${
-                QueryTranslatorConfig.quoteValue(value)
-              }`,
-            );
-          }
-          // if(typeof filter[key] === 'object') {
-          //   // Ok, now we need to check if the value is an object or not
-          //   const subKeys = Object.keys(filter[key]);
-          //   for(const subKey of subKeys) {
-          //     ret.push(`${this._escape(key)} ${subKey} ${this._escape(filter[key][subKey])}`);
-          //   }
-          // }
-        }
-      }
-    }
-    return `( ${ret.join(` ${joiner} `)} )`;
   },
   //#endregion Query Generators
 };

@@ -1,4 +1,4 @@
-import { QueryExecute } from './Execute.ts';
+import { QueryExecute } from '../result/Execute.ts';
 
 export type QueryResults<
   R extends Record<string, unknown> = Record<string, unknown>,

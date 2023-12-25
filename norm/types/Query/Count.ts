@@ -4,20 +4,19 @@ import type { QueryFilters } from './Filters.ts';
 import type { QuerySorting } from './Sorting.ts';
 import type { QueryPagination } from './Pagination.ts';
 
-type SelectRelationship<DM extends ModelDefinition, TN extends keyof DM> = {
+type CountRelationship<DM extends ModelDefinition, TN extends keyof DM> = {
   [R in keyof DM[TN]['foreignKeys']]?: DM[TN]['foreignKeys'][R] extends
     { model: infer M }
     ? M extends keyof DM
-      ? SelectQuery<DM, M> & { relation: Record<string, string> }
+      ? CountQuery<DM, M> & { relation: Record<string, string> }
     : never
     : never;
 };
 
-export type SelectQuery<
+export type CountQuery<
   DM extends ModelDefinition = ModelDefinition,
   TN extends keyof DM = keyof DM,
 > = BaseQuery<DM, TN> & QueryPagination & QuerySorting<DM[TN]> & {
   filter?: QueryFilters<DM[TN]>;
-  with?: SelectRelationship<DM, TN>;
+  with?: CountRelationship<DM, TN>;
 };
-

@@ -1,4 +1,4 @@
-import { QueryTypes } from './Types.ts';
+import { QueryTypes } from '../Types.ts';
 
 export type QueryExecute = {
   time: number;

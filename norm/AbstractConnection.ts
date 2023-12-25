@@ -1,3 +1,5 @@
+import { base64, openpgp } from '../dependencies.ts';
+
 import { Options } from '../options/mod.ts';
 import type { OptionKeys } from '../options/mod.ts';
 
@@ -162,6 +164,80 @@ export abstract class AbstractClient<O extends ConnectionOptions>
     }
   }
   //#endregion Query
+  //#region Helper functions
+  public encrypt(data: unknown): Promise<string> {
+    if (this._getOption('encryptionKey') === undefined) {
+      throw new NormConfigError('Missing encryption key for encryption', {
+        name: this.name, 
+        target: 'encryptionKey',
+        dialect: this.dialect,
+      });
+    }
+    return AbstractClient.encryptValue(
+      data,
+      this._getOption('encryptionKey') as string,
+    );
+  }
+
+  public decrypt(data: string): Promise<string> {
+    if (this._getOption('encryptionKey') === undefined) {
+      throw new NormConfigError('Missing encryption key for decryption', {
+        name: this.name, 
+        target: 'encryptionKey',
+        dialect: this.dialect,
+      });
+    }
+    return AbstractClient.decryptValue(
+      data,
+      this._getOption('encryptionKey') as string,
+    );
+  }
+
+  public hash(data: unknown): Promise<string> {
+    return AbstractClient.hashValue(data);
+  }
+
+  public static async encryptValue(
+    data: unknown,
+    key: string,
+  ): Promise<string> {
+    const message = await openpgp.createMessage({
+        text: JSON.stringify(data),
+      }),
+      encryptedBinary = await openpgp.encrypt({
+        message,
+        passwords: key,
+        format: 'binary',
+        config: {
+          preferredSymmetricAlgorithm: openpgp.enums.symmetric.aes256,
+          preferredCompressionAlgorithm: openpgp.enums.compression.zip,
+        },
+      });
+    return base64.encode(encryptedBinary);
+  }
+
+  public static async decryptValue(data: string, key: string): Promise<string> {
+    const dataBinary = new Uint8Array(base64.decode(data)),
+      decrypted = await openpgp.decrypt({
+        message: await openpgp.readMessage({ binaryMessage: dataBinary }),
+        passwords: key,
+      });
+    return decrypted.data;
+  }
+
+  public static async hashValue(data: unknown): Promise<string> {
+    if (typeof data === 'string' && data.startsWith('HASH:')) {
+      return data;
+    }
+    const encoder = new TextEncoder(),
+      encoded = encoder.encode(JSON.stringify(data)),
+      hashAlgo = 'SHA-256',
+      hash = await crypto.subtle.digest(hashAlgo, encoded);
+    // return new TextDecoder().decode(hexEncode(new Uint8Array(hash)));
+    // return base64.encode(new Uint8Array(hash));
+    return `HASH:${base64.encode(new Uint8Array(hash))}`;
+  }
+  //#endregion Helper functions
 
   //#region Protected Methods
   protected _detectQuery(sql: string): QueryTypes {
