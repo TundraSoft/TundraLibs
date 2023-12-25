@@ -168,7 +168,7 @@ export abstract class AbstractClient<O extends ConnectionOptions>
   public encrypt(data: unknown): Promise<string> {
     if (this._getOption('encryptionKey') === undefined) {
       throw new NormConfigError('Missing encryption key for encryption', {
-        name: this.name, 
+        name: this.name,
         target: 'encryptionKey',
         dialect: this.dialect,
       });
@@ -182,7 +182,7 @@ export abstract class AbstractClient<O extends ConnectionOptions>
   public decrypt(data: string): Promise<string> {
     if (this._getOption('encryptionKey') === undefined) {
       throw new NormConfigError('Missing encryption key for decryption', {
-        name: this.name, 
+        name: this.name,
         target: 'encryptionKey',
         dialect: this.dialect,
       });

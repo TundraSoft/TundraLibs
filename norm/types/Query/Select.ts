@@ -20,4 +20,3 @@ export type SelectQuery<
   filter?: QueryFilters<DM[TN]>;
   with?: SelectRelationship<DM, TN>;
 };
-
