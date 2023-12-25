@@ -1,20 +1,42 @@
 import {
+  afterAll,
   afterEach,
   assertEquals,
   assertThrows,
+  beforeAll,
   beforeEach,
   it,
 } from '../../../../dev.dependencies.ts';
 import { envArgs } from '../../../../utils/envArgs.ts';
 import {
+  ConnectionOptions,
+  FlatFileConnectionOptions,
   MariaConnectionOptions,
   PostgresConnectionOptions,
   RemoteServerConnectionOptions,
+  SQLiteConnectionOptions,
 } from '../../../types/mod.ts';
 import { NormConfigError } from '../../../errors/mod.ts';
 import { AbstractClient } from '../../../AbstractConnection.ts';
 
 const envData = envArgs('norm/tests/testdata');
+
+export const makeSQLiteMemoryOptions = () => {
+  const clientOpt: SQLiteConnectionOptions = {
+    dialect: 'SQLITE',
+    mode: 'MEMORY',
+  };
+  return clientOpt;
+};
+
+export const makeSQLiteFileOptions = () => {
+  const clientOpt: SQLiteConnectionOptions = {
+    dialect: 'SQLITE',
+    mode: 'FILE',
+    filePath: 'norm/tests/testdata/test.db',
+  };
+  return clientOpt;
+};
 
 export const makePostgresOptions = () => {
   const clientOpt: PostgresConnectionOptions = {
@@ -40,7 +62,32 @@ export const makeMariaOptions = () => {
   return clientOpt;
 };
 
-function makeRDBMSConnectionTests(
+function makeRDBMSFlatFileConnectionTests(
+  opts: FlatFileConnectionOptions,
+): Record<string, string[]> {
+  return {
+    'should throw error if invalid dialect passed': [
+      JSON.stringify({
+        dialect: 'POSTGRES',
+        mode: opts.mode,
+      }),
+    ],
+    'should throw error if invalid mode is passed': [
+      JSON.stringify({
+        dialect: opts.dialect,
+        mode: 'something',
+      }),
+    ],
+    'should throw error if mode is FILE and no filePath is passed': [
+      JSON.stringify({
+        dialect: opts.dialect,
+        mode: 'FILE',
+      }),
+    ],
+  };
+}
+
+function makeRDBMSRemoteConnectionTests(
   opts: RemoteServerConnectionOptions,
 ): Record<string, string[]> {
   return {
@@ -130,20 +177,20 @@ function makeRDBMSConnectionTests(
 }
 
 function clientFactory<
-  CO extends RemoteServerConnectionOptions,
+  CO extends ConnectionOptions,
   C extends AbstractClient<CO>,
 >(type: { new (name: string, opts: CO): C }, name: string, opts: CO): C {
   return new type(name, opts);
 }
 
 export function runStandardConnectionTests<
-  CO extends RemoteServerConnectionOptions,
+  CO extends ConnectionOptions,
   C extends AbstractClient<CO>,
 >(
   clientClass: { new (name: string, opts: CO): C },
   clientOpt: CO,
+  stdConnTestConfig: Record<string, string[]>,
 ) {
-  const stdConnTestConfig = makeRDBMSConnectionTests(clientOpt);
   for (const testName in stdConnTestConfig) {
     const record = stdConnTestConfig[testName];
     it(testName, () => {
@@ -170,28 +217,82 @@ export function runStandardConnectionTests<
   });
 }
 
-export function runStandardQueryTests<
+export function runStandardFlatFileConnectionTests<
+  CO extends FlatFileConnectionOptions,
+  C extends AbstractClient<CO>,
+>(
+  clientClass: { new (name: string, opts: CO): C },
+  clientOpt: CO,
+) {
+  runStandardConnectionTests(
+    clientClass,
+    clientOpt,
+    makeRDBMSFlatFileConnectionTests(clientOpt),
+  );
+}
+
+export function runStandardRemoteConnectionTests<
   CO extends RemoteServerConnectionOptions,
   C extends AbstractClient<CO>,
 >(
   clientClass: { new (name: string, opts: CO): C },
   clientOpt: CO,
 ) {
+  runStandardConnectionTests(
+    clientClass,
+    clientOpt,
+    makeRDBMSRemoteConnectionTests(clientOpt),
+  );
+}
+
+export function runStandardQueryTests<
+  CO extends ConnectionOptions,
+  C extends AbstractClient<CO>,
+>(
+  clientClass: { new (name: string, opts: CO): C },
+  clientOpt: CO,
+  hasSerial = true,
+  isMemory = false,
+) {
   let client: C;
+
+  beforeAll(async () => {
+    if (isMemory) {
+      client = clientFactory(
+        clientClass,
+        'QueryTest',
+        clientOpt,
+      );
+      await client.connect();
+    }
+  });
+
   beforeEach(() => {
-    client = clientFactory(
-      clientClass,
-      'ConnectTest',
-      clientOpt,
-    );
+    if (!isMemory) {
+      client = clientFactory(
+        clientClass,
+        'ConnectTest',
+        clientOpt,
+      );
+    }
   });
 
   afterEach(async () => {
-    await client.close();
+    if (!isMemory) {
+      await client.close();
+    }
   });
+
+  afterAll(async () => {
+    if (isMemory) {
+      await client.close();
+    }
+  });
+
   const tableName = 'test_' + Math.floor(Math.random() * 1000000);
-  const createTableQuery =
-    `CREATE TABLE IF NOT EXISTS ${tableName} (id SERIAL PRIMARY KEY, name VARCHAR(255) NOT NULL, email VARCHAR(255));`;
+  const createTableQuery = `CREATE TABLE IF NOT EXISTS ${tableName} (id ${
+    hasSerial ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'
+  }, name VARCHAR(255) NOT NULL, email VARCHAR(255));`;
   const insertQuery =
     `INSERT INTO ${tableName} (name, email) VALUES ('John Doe', 'john.dow@gmail.com') RETURNING id, name, email;`;
   const selectQuery = `SELECT * FROM ${tableName};`;

@@ -3,13 +3,13 @@ import { MariaClient } from '../dialects/mod.ts';
 import type { MariaConnectionOptions } from '../types/mod.ts';
 import {
   makeMariaOptions,
-  runStandardConnectionTests,
   runStandardQueryTests,
+  runStandardRemoteConnectionTests,
 } from './testdata/utils/ClientTestHelper.ts';
 
 describe(`[library='norm' dialect='MARIA' type='unit']`, () => {
   const clientOpt: MariaConnectionOptions = makeMariaOptions();
-  runStandardConnectionTests(
+  runStandardRemoteConnectionTests(
     MariaClient,
     clientOpt,
   );
