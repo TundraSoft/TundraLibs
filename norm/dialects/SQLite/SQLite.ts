@@ -54,13 +54,26 @@ export class SQLiteClient extends AbstractClient<SQLiteConnectionOptions> {
           value: options.filePath,
         });
       }
-      // Append DB name to the path
+      const absPath = path.isAbsolute(options.filePath)
+        ? options.filePath
+        : path.join(Deno.cwd(), options.filePath);
+      // Check if the file does not exist, if so create it
+      try {
+        const _stat = Deno.statSync(absPath);
+      } catch (err) {
+        if (err instanceof Deno.errors.NotFound) {
+          Deno.createSync(absPath);
+        }
+      }
+
       const stat = Deno.statSync(options.filePath);
+
       if (stat.isDirectory) {
-        options.filePath = path.join(options.filePath, name + '.sqlite');
+        // Append DB name to the path
+        options.filePath = path.join(absPath, name + '.sqlite');
       }
       // Check permission
-      const dir = path.parse(options.filePath);
+      const dir = path.parse(absPath);
       if (
         Deno.permissions.querySync({ name: 'write', path: dir.dir }).state !==
           'granted'
