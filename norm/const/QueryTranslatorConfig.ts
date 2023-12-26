@@ -411,11 +411,14 @@ export const QueryTranslatorConfig = {
             : `(${c.length.precision},${c.length.scale})`)
           : '';
         const nullable = c.nullable ? 'NULL' : 'NOT NULL';
+        const primary = (primaryKeys && primaryKeys.includes(c.name))
+          ? 'PRIMARY KEY'
+          : '';
         const defval = c.defaults && c.defaults.create
           ? `DEFAULT ${c.defaults.create}`
           : '';
         const comments = c.comments ? `COMMENT '${c.comments}'` : '';
-        return `${colName} ${dataType}${length} ${nullable} ${defval} ${comments}`;
+        return `${colName} ${dataType}${length} ${primary} ${nullable} ${defval} ${comments}`;
       }).join(', ')
     });`;
     // Partitions
@@ -428,10 +431,10 @@ export const QueryTranslatorConfig = {
     }
     result.push(tblDef);
     // Primary Key
-    const pkQuery = QueryTranslatorConfig.createPrimaryKey(table, primaryKeys);
-    if (pkQuery) {
-      result.push(pkQuery);
-    }
+    // const pkQuery = QueryTranslatorConfig.createPrimaryKey(table, primaryKeys);
+    // if (pkQuery) {
+    //   result.push(pkQuery);
+    // }
     // Unique Keys
     result.push(
       ...QueryTranslatorConfig.createUniqueConstraints(table, uniqueKeys),
