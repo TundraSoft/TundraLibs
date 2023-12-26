@@ -35,7 +35,13 @@ export function runQueryTranslationTests<
           'name': 'name',
           'type': 'VARCHAR',
           'length': 255,
-          'nullable': false,
+          'nullable': true,
+        },
+        'organization_code':{
+          'name': 'organization_code',
+          'type': 'VARCHAR',
+          'length': 255,
+          'nullable': true
         },
         'email': {
           'name': 'email',
@@ -45,6 +51,9 @@ export function runQueryTranslationTests<
         },
       },
       primaryKeys: ['id'],
+      uniqueKeys: {
+        'org_email_unique' :['email','organization_code'],
+      }
     },
   );
   const dropTableQuery = qt.dropTable(tableName);

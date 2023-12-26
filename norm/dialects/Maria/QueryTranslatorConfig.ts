@@ -56,6 +56,9 @@ export const MariaQueryTranslatorConfig = {
     'SMALLSERIAL': 'INTEGER AUTO_INCREMENT',
     'BIGSERIAL': 'BIGINT AUTO_INCREMENT',
   },
-  supportsDistribution: false,
-  supportsPartitioning: true,
+  capabilities:{
+    supportsDistribution: false,
+    supportsPartitioning: true,
+    supportsAddUniqueConstraint: true,
+  }
 };

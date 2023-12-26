@@ -63,8 +63,11 @@ export const QueryTranslatorConfig = {
     'SMALLSERIAL': 'SMALLSERIAL',
     'BIGSERIAL': 'BIGSERIAL',
   },
-  supportsDistribution: false,
-  supportsPartitioning: false,
+  capabilities: {
+    supportsDistribution: false,
+    supportsPartitioning: false,
+    supportsAddUniqueConstraint: false,
+  },
   escape: (value: Array<string | undefined>): string => {
     const escapeIdentifier = QueryTranslatorConfig.escapeIdentifier;
     const replceRegEx = new RegExp(`${escapeIdentifier}`, 'g');
@@ -327,13 +330,19 @@ export const QueryTranslatorConfig = {
     const result: Array<string> = [];
     if (uniqueKeys) {
       for (const [key, value] of Object.entries(uniqueKeys)) {
-        result.push(
-          `ALTER TABLE ${QueryTranslatorConfig.escape(table)} ADD CONSTRAINT ${
-            QueryTranslatorConfig.escape([key])
-          } UNIQUE (${
+        if(QueryTranslatorConfig.capabilities.supportsAddUniqueConstraint){
+          result.push(
+            `ALTER TABLE ${QueryTranslatorConfig.escape(table)} ADD CONSTRAINT ${
+              QueryTranslatorConfig.escape([key])
+            } UNIQUE (${
+              value.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
+            });`,
+          );
+        }else{
+          result.push(`CONSTRAINT ${QueryTranslatorConfig.escape([key])} UNIQUE (${
             value.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
-          });`,
-        );
+          })`);
+        }
       }
     }
     return result;
@@ -375,7 +384,7 @@ export const QueryTranslatorConfig = {
     table: Array<string | undefined>,
     spec: boolean | Array<string> | undefined,
   ): string | undefined => {
-    if (QueryTranslatorConfig.supportsDistribution && spec) {
+    if (QueryTranslatorConfig.capabilities.supportsDistribution && spec) {
       if (typeof spec === 'boolean') {
         return `create_reference_table(${QueryTranslatorConfig.escape(table)})`;
       } else {
@@ -396,7 +405,7 @@ export const QueryTranslatorConfig = {
     distribution?: boolean | Array<string>,
   ): Array<string> => {
     const result: Array<string> = [];
-
+    
     // Column Definitions
     let tblDef = `CREATE TABLE IF NOT EXISTS ${
       QueryTranslatorConfig.escape(table)
@@ -419,10 +428,12 @@ export const QueryTranslatorConfig = {
           : '';
         const comments = c.comments ? `COMMENT '${c.comments}'` : '';
         return `${colName} ${dataType}${length} ${primary} ${nullable} ${defval} ${comments}`;
-      }).join(', ')
+      }).concat(
+        QueryTranslatorConfig.capabilities.supportsAddUniqueConstraint ? [] : QueryTranslatorConfig.createUniqueConstraints(table, uniqueKeys)
+      ).join(', ')
     });`;
     // Partitions
-    if (QueryTranslatorConfig.supportsPartitioning && partitions) {
+    if (QueryTranslatorConfig.capabilities.supportsPartitioning && partitions) {
       tblDef += ` PARTITION BY ${partitions.type} (${
         partitions.columns.map((c) => QueryTranslatorConfig.escape([c])).join(
           ', ',
@@ -436,9 +447,11 @@ export const QueryTranslatorConfig = {
     //   result.push(pkQuery);
     // }
     // Unique Keys
-    result.push(
-      ...QueryTranslatorConfig.createUniqueConstraints(table, uniqueKeys),
-    );
+    if(QueryTranslatorConfig.capabilities.supportsAddUniqueConstraint) {
+      result.push(
+        ...QueryTranslatorConfig.createUniqueConstraints(table, uniqueKeys),
+      );
+    }
     // Foreign Keys
     result.push(...QueryTranslatorConfig.createForeignKeys(table, foreignKeys));
     // Distribution
