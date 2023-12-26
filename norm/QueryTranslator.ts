@@ -208,7 +208,7 @@ export class QueryTranslator {
       });
     }
 
-    this._config.createTable(
+    return this._config.createTable(
       [table.name, table.schema],
       Object.values(table.columns),
       table.primaryKeys,

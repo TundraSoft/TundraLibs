@@ -176,7 +176,7 @@ function makeRDBMSRemoteConnectionTests(
   };
 }
 
-function clientFactory<
+export function clientFactory<
   CO extends ConnectionOptions,
   C extends AbstractClient<CO>,
 >(type: { new (name: string, opts: CO): C }, name: string, opts: CO): C {
@@ -271,7 +271,7 @@ export function runStandardQueryTests<
     if (!isMemory) {
       client = clientFactory(
         clientClass,
-        'ConnectTest',
+        'QueryTest',
         clientOpt,
       );
     }

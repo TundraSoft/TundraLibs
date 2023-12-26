@@ -6,6 +6,7 @@ import {
   runStandardQueryTests,
   runStandardRemoteConnectionTests,
 } from './testdata/utils/ClientTestHelper.ts';
+import { runQueryTranslationTests } from './testdata/utils/TranslatorTestHelper.ts';
 
 describe(`[library='norm' dialect='MARIA' type='unit']`, () => {
   const clientOpt: MariaConnectionOptions = makeMariaOptions();
@@ -14,6 +15,10 @@ describe(`[library='norm' dialect='MARIA' type='unit']`, () => {
     clientOpt,
   );
   runStandardQueryTests(
+    MariaClient,
+    clientOpt,
+  );
+  runQueryTranslationTests(
     MariaClient,
     clientOpt,
   );

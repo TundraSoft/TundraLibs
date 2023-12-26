@@ -7,6 +7,7 @@ import {
   runStandardFlatFileConnectionTests,
   runStandardQueryTests,
 } from './testdata/utils/ClientTestHelper.ts';
+import { runQueryTranslationTests } from './testdata/utils/TranslatorTestHelper.ts';
 
 describe(`[library='norm' dialect='SQLite'  type='unit']`, () => {
   const clientOptMemory: SQLiteConnectionOptions = makeSQLiteMemoryOptions();
@@ -29,6 +30,16 @@ describe(`[library='norm' dialect='SQLite'  type='unit']`, () => {
     SQLiteClient,
     clientOptFile,
     false,
+    false,
+  );
+  runQueryTranslationTests(
+    SQLiteClient,
+    clientOptMemory,
+    true,
+  );
+  runQueryTranslationTests(
+    SQLiteClient,
+    clientOptFile,
     false,
   );
 });

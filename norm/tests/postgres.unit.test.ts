@@ -6,6 +6,7 @@ import {
   runStandardQueryTests,
   runStandardRemoteConnectionTests,
 } from './testdata/utils/ClientTestHelper.ts';
+import { runQueryTranslationTests } from './testdata/utils/TranslatorTestHelper.ts';
 
 describe(`[library='norm' dialect='POSTGRES' type='unit']`, () => {
   const clientOpt: PostgresConnectionOptions = makePostgresOptions();
@@ -14,6 +15,10 @@ describe(`[library='norm' dialect='POSTGRES' type='unit']`, () => {
     clientOpt,
   );
   runStandardQueryTests(
+    PostgresClient,
+    clientOpt,
+  );
+  runQueryTranslationTests(
     PostgresClient,
     clientOpt,
   );
