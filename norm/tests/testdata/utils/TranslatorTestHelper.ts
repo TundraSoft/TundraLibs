@@ -143,6 +143,7 @@ export function runQueryTranslationTests<
   });
 
   it('translator: should create table with fk definition', async () => {
+    console.log(createTableQueries);
     const res = await client.execute(createTableQueries[0]);
     assertEquals(res.type, 'CREATE');
     for (let i = 1; i < createTableQueries.length; i++) {

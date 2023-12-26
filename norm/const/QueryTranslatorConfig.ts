@@ -504,7 +504,11 @@ export const QueryTranslatorConfig = {
       );
     }
     // Foreign Keys
-    result.push(...QueryTranslatorConfig.createForeignKeys(table, foreignKeys));
+    if (QueryTranslatorConfig.capabilities.supportsAddForeignKey) {
+      result.push(
+        ...QueryTranslatorConfig.createForeignKeys(table, foreignKeys),
+      );
+    }
     // Distribution
     const distQuery = QueryTranslatorConfig.distributeTable(
       table,
