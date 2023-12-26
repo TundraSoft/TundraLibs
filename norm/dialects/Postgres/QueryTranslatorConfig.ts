@@ -52,9 +52,11 @@ export const PostgresQueryTranslatorConfig = {
     'SMALLSERIAL': 'SMALLSERIAL',
     'BIGSERIAL': 'BIGSERIAL',
   },
-  capabilities:{
+  capabilities: {
     supportsDistribution: true,
     supportsPartitioning: true,
-    supportsAddUniqueConstraint: true
-  }
+    supportsAddPrimaryKey: true,
+    supportsAddUniqueConstraint: true,
+    supportsAddForeignKey: true,
+  },
 };

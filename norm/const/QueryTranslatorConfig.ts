@@ -66,7 +66,9 @@ export const QueryTranslatorConfig = {
   capabilities: {
     supportsDistribution: false,
     supportsPartitioning: false,
+    supportsAddPrimaryKey: false,
     supportsAddUniqueConstraint: false,
+    supportsAddForeignKey: false,
   },
   escape: (value: Array<string | undefined>): string => {
     const escapeIdentifier = QueryTranslatorConfig.escapeIdentifier;
@@ -315,11 +317,17 @@ export const QueryTranslatorConfig = {
     primaryKeys: Array<string> | undefined,
   ): string | undefined => {
     if (primaryKeys && primaryKeys.length > 0) {
-      return `ALTER TABLE ${
-        QueryTranslatorConfig.escape(table)
-      } ADD PRIMARY KEY (${
-        primaryKeys.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
-      });`;
+      if (QueryTranslatorConfig.capabilities.supportsAddPrimaryKey) {
+        return `ALTER TABLE ${
+          QueryTranslatorConfig.escape(table)
+        } ADD PRIMARY KEY (${
+          primaryKeys.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
+        });`;
+      } else {
+        return `PRIMARY KEY (${
+          primaryKeys.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
+        })`;
+      }
     }
   },
 
@@ -330,18 +338,20 @@ export const QueryTranslatorConfig = {
     const result: Array<string> = [];
     if (uniqueKeys) {
       for (const [key, value] of Object.entries(uniqueKeys)) {
-        if(QueryTranslatorConfig.capabilities.supportsAddUniqueConstraint){
+        if (QueryTranslatorConfig.capabilities.supportsAddUniqueConstraint) {
           result.push(
-            `ALTER TABLE ${QueryTranslatorConfig.escape(table)} ADD CONSTRAINT ${
-              QueryTranslatorConfig.escape([key])
-            } UNIQUE (${
+            `ALTER TABLE ${
+              QueryTranslatorConfig.escape(table)
+            } ADD CONSTRAINT ${QueryTranslatorConfig.escape([key])} UNIQUE (${
               value.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
             });`,
           );
-        }else{
-          result.push(`CONSTRAINT ${QueryTranslatorConfig.escape([key])} UNIQUE (${
-            value.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
-          })`);
+        } else {
+          result.push(
+            `CONSTRAINT ${QueryTranslatorConfig.escape([key])} UNIQUE (${
+              value.map((pk) => QueryTranslatorConfig.escape([pk])).join(', ')
+            })`,
+          );
         }
       }
     }
@@ -360,21 +370,39 @@ export const QueryTranslatorConfig = {
           value.schema,
         ]);
         const refColumns = Object.values(value.columnMap);
-        result.push(
-          `ALTER TABLE ${QueryTranslatorConfig.escape(table)} ADD CONSTRAINT ${
-            QueryTranslatorConfig.escape([key])
-          } FOREIGN KEY (${
-            Object.keys(value.columnMap).map((pk) =>
-              QueryTranslatorConfig.escape([pk])
-            ).join(', ')
-          }) REFERENCES ${refTable} (${
-            refColumns.map((pk) => QueryTranslatorConfig.escape([pk])).join(
-              ', ',
-            )
-          }) ON DELETE ${value.onDelete || 'RESTRICT'} ON UPDATE ${
-            value.onUpdate || 'RESTRICT'
-          };`,
-        );
+        if (QueryTranslatorConfig.capabilities.supportsAddForeignKey) {
+          result.push(
+            `ALTER TABLE ${
+              QueryTranslatorConfig.escape(table)
+            } ADD CONSTRAINT ${
+              QueryTranslatorConfig.escape([key])
+            } FOREIGN KEY (${
+              Object.keys(value.columnMap).map((pk) =>
+                QueryTranslatorConfig.escape([pk])
+              ).join(', ')
+            }) REFERENCES ${refTable} (${
+              refColumns.map((pk) => QueryTranslatorConfig.escape([pk])).join(
+                ', ',
+              )
+            }) ON DELETE ${value.onDelete || 'RESTRICT'} ON UPDATE ${
+              value.onUpdate || 'RESTRICT'
+            };`,
+          );
+        } else {
+          result.push(
+            `FOREIGN KEY (${
+              Object.keys(value.columnMap).map((pk) =>
+                QueryTranslatorConfig.escape([pk])
+              ).join(', ')
+            }) REFERENCES ${refTable}(${
+              refColumns.map((pk) => QueryTranslatorConfig.escape([pk])).join(
+                ', ',
+              )
+            }) ON DELETE ${value.onDelete || 'RESTRICT'} ON UPDATE ${
+              value.onUpdate || 'RESTRICT'
+            }`,
+          );
+        }
       }
     }
     return result;
@@ -405,7 +433,11 @@ export const QueryTranslatorConfig = {
     distribution?: boolean | Array<string>,
   ): Array<string> => {
     const result: Array<string> = [];
-    
+    // Check if there is a serial, bigserial or auto_increment column
+    const containsSerial = columns.some((c) =>
+      ['SERIAL', 'SMALLSERIAL', 'BIGSERIAL', 'AUTO_INCREMENT'].includes(c.type)
+    );
+    const pkQuery = QueryTranslatorConfig.createPrimaryKey(table, primaryKeys);
     // Column Definitions
     let tblDef = `CREATE TABLE IF NOT EXISTS ${
       QueryTranslatorConfig.escape(table)
@@ -420,16 +452,31 @@ export const QueryTranslatorConfig = {
             : `(${c.length.precision},${c.length.scale})`)
           : '';
         const nullable = c.nullable ? 'NULL' : 'NOT NULL';
-        const primary = (primaryKeys && primaryKeys.includes(c.name))
-          ? 'PRIMARY KEY'
-          : '';
+        const isSerial = [
+          'SERIAL',
+          'SMALLSERIAL',
+          'BIGSERIAL',
+          'AUTO_INCREMENT',
+        ].includes(c.type);
+        const primary = isSerial ? 'PRIMARY KEY' : '';
         const defval = c.defaults && c.defaults.create
           ? `DEFAULT ${c.defaults.create}`
           : '';
         const comments = c.comments ? `COMMENT '${c.comments}'` : '';
         return `${colName} ${dataType}${length} ${primary} ${nullable} ${defval} ${comments}`;
       }).concat(
-        QueryTranslatorConfig.capabilities.supportsAddUniqueConstraint ? [] : QueryTranslatorConfig.createUniqueConstraints(table, uniqueKeys)
+        (!containsSerial &&
+            !QueryTranslatorConfig.capabilities.supportsAddPrimaryKey)
+          ? (pkQuery ? [pkQuery] : [])
+          : [],
+      ).concat(
+        QueryTranslatorConfig.capabilities.supportsAddForeignKey
+          ? []
+          : QueryTranslatorConfig.createForeignKeys(table, foreignKeys),
+      ).concat(
+        QueryTranslatorConfig.capabilities.supportsAddUniqueConstraint
+          ? []
+          : QueryTranslatorConfig.createUniqueConstraints(table, uniqueKeys),
       ).join(', ')
     });`;
     // Partitions
@@ -442,12 +489,16 @@ export const QueryTranslatorConfig = {
     }
     result.push(tblDef);
     // Primary Key
-    // const pkQuery = QueryTranslatorConfig.createPrimaryKey(table, primaryKeys);
-    // if (pkQuery) {
-    //   result.push(pkQuery);
-    // }
+    if (
+      QueryTranslatorConfig.capabilities.supportsAddPrimaryKey &&
+      !containsSerial
+    ) {
+      if (pkQuery) {
+        result.push(pkQuery);
+      }
+    }
     // Unique Keys
-    if(QueryTranslatorConfig.capabilities.supportsAddUniqueConstraint) {
+    if (QueryTranslatorConfig.capabilities.supportsAddUniqueConstraint) {
       result.push(
         ...QueryTranslatorConfig.createUniqueConstraints(table, uniqueKeys),
       );

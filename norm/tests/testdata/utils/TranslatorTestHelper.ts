@@ -21,14 +21,47 @@ export function runQueryTranslationTests<
 ) {
   let client: C;
   const qt = new QueryTranslator(clientOpt.dialect);
+  const relatedTableName = 'relation_test_' +
+    Math.floor(Math.random() * 1000000);
   const tableName = 'test_' + Math.floor(Math.random() * 1000000);
+  const createRelatedTableQueries = qt.createTable({
+    name: relatedTableName,
+    columns: {
+      'id': {
+        'name': 'id',
+        'type': 'SERIAL',
+        'nullable': false,
+      },
+      'name': {
+        'name': 'name',
+        'type': 'VARCHAR',
+        'length': 255,
+        'nullable': true,
+      },
+      'code': {
+        'name': 'code',
+        'type': 'VARCHAR',
+        'length': 6,
+        'nullable': false,
+      },
+    },
+    primaryKeys: ['id'],
+    uniqueKeys: {
+      'uk_code': ['code'],
+    },
+  });
   const createTableQueries = qt.createTable(
     {
       name: tableName,
       columns: {
-        'id': {
-          'name': 'id',
-          'type': 'SERIAL',
+        'id_a': {
+          'name': 'id_a',
+          'type': 'UUID',
+          'nullable': false,
+        },
+        'id_b': {
+          'name': 'id_b',
+          'type': 'UUID',
           'nullable': false,
         },
         'name': {
@@ -37,11 +70,11 @@ export function runQueryTranslationTests<
           'length': 255,
           'nullable': true,
         },
-        'organization_code':{
+        'organization_code': {
           'name': 'organization_code',
           'type': 'VARCHAR',
           'length': 255,
-          'nullable': true
+          'nullable': true,
         },
         'email': {
           'name': 'email',
@@ -50,10 +83,20 @@ export function runQueryTranslationTests<
           'nullable': true,
         },
       },
-      primaryKeys: ['id'],
+      primaryKeys: ['id_a', 'id_b'],
       uniqueKeys: {
-        'org_email_unique' :['email','organization_code'],
-      }
+        'uk_email_orgcode': ['email', 'organization_code'],
+      },
+      foreignKeys: {
+        'fk_organization_code': {
+          'table': relatedTableName,
+          'columnMap': {
+            'organization_code': 'code',
+          },
+          'model': 'Organization',
+          'hasMany': false,
+        },
+      },
     },
   );
   const dropTableQuery = qt.dropTable(tableName);
@@ -90,7 +133,16 @@ export function runQueryTranslationTests<
     }
   });
 
-  it('translator: should create table and add keys etc', async () => {
+  it('translator: should create related table and add keys etc', async () => {
+    const res = await client.execute(createRelatedTableQueries[0]);
+    assertEquals(res.type, 'CREATE');
+    for (let i = 1; i < createRelatedTableQueries.length; i++) {
+      const res = await client.execute(createRelatedTableQueries[i]);
+      assertEquals(res.type, 'ALTER');
+    }
+  });
+
+  it('translator: should create table with fk definition', async () => {
     const res = await client.execute(createTableQueries[0]);
     assertEquals(res.type, 'CREATE');
     for (let i = 1; i < createTableQueries.length; i++) {
@@ -99,8 +151,13 @@ export function runQueryTranslationTests<
     }
   });
 
-  it('translator: should drop table', async () => {
+  it('translator: should drop table with fk definition', async () => {
     const res = await client.execute(dropTableQuery);
+    assertEquals(res.type, 'DROP');
+  });
+
+  it('translator: should drop related table', async () => {
+    const res = await client.execute(qt.dropTable(relatedTableName));
     assertEquals(res.type, 'DROP');
   });
 }
