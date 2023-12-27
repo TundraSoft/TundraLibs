@@ -548,17 +548,17 @@ export const QueryTranslatorConfig = {
 
 const sel = QueryTranslatorConfig.select({
   table: ['Customers', 'Customer'], 
-  project: { OrgCode: 'OrganisationCode', CustId: 'CustId', Verified: 'MobileVerified', JoinedOn: 'JoinDate' }, 
-  filter: { JoinedOn: { $gt: '2023-02-01 00:00:00' } }, 
+  project: { OrganisationCode: 'OrganisationCode', CustId: 'CustId', Verified: 'MobileVerified', JoinDate: 'JoinDate' }, 
+  filter: { JoinDate: { $gt: '2023-02-01 00:00:00' } }, 
   relations: {
     'Statuses': {
       table: ['Status', 'Customer'],
       project: {
-        OrgCode: 'OrganisationCode', CustId: 'CustId', PKYC: 'PlatformKYC'
+        OrganisationCode: 'OrganisationCode', CustId: 'CustId', PlatformKYC: 'PlatformKYC'
       },
       relationShip: {
         CustId: 'CustId', 
-        OrgCode: 'OrganisationCode'
+        OrganisationCode: 'OrganisationCode'
       },
     },
    }
