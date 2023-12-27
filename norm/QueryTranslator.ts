@@ -107,6 +107,8 @@ export class QueryTranslator {
       query.project.forEach((p) => {
         if (query.columns[p]) {
           project[query.columns[p]] = String(p);
+        } else {
+          throw new Error('Column not found');
         }
       });
     } else {
@@ -133,6 +135,8 @@ export class QueryTranslator {
       query.project.forEach((p) => {
         if (query.columns[p]) {
           project[query.columns[p]] = String(p);
+        } else {
+          throw new Error('Column not found');
         }
       });
     } else {

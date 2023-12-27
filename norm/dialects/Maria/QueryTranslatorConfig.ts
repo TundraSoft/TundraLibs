@@ -63,4 +63,15 @@ export const MariaQueryTranslatorConfig = {
     supportsAddUniqueConstraint: true,
     supportsAddForeignKey: true,
   },
+
+  select(): string {
+    /*
+    SELECT posts.*, JSON_ARRAYAGG(JSON_OBJECT('name', comments.member_id, 'status', comments.status))
+	FROM posts
+		JOIN comments on (comments.post_id = posts.id)
+	WHERE posts.Id = '6540dc164d08ff000113050f'
+	LIMIT 1000;
+    */
+    return '';
+  },
 };

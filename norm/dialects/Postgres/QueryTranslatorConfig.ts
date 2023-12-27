@@ -59,4 +59,17 @@ export const PostgresQueryTranslatorConfig = {
     supportsAddUniqueConstraint: true,
     supportsAddForeignKey: true,
   },
+
+  select(): string {
+    /*
+    SELECT "Customers".*,
+        json_agg(json_build_object('II', "Session"."Sessions"."Id", 'LIVE', "Session"."Sessions"."Active")) AS "Sessions"
+    FROM "Customer"."Customers"
+        JOIN "Session"."Sessions" ON ("Session"."Sessions"."CustomerId" = "Customer"."Customers"."Id")
+    WHERE "Customer"."Customers"."CustId" = 20230215000071
+    GROUP BY "Customers"."Id", "Customers"."OrganisationCode"
+    LIMIT 10;
+    */
+    return '';
+  },
 };
