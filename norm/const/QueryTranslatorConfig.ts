@@ -3,7 +3,21 @@ import type {
   ForeignKeyDefinition,
   PartitionDefinition,
   QueryFilters,
+  QueryPagination, 
+  QuerySorting
 } from '../types/mod.ts';
+
+type SelectStatement = {
+  table: Array<string | undefined>;
+  project: Record<string, string>;
+  filter?: QueryFilters;
+  relations?: Record<string, SelectRelation>;
+  pagination?: QueryPagination;
+  sort?: Record<string, 'ASC' | 'DESC'>
+}
+type SelectRelation = SelectStatement & {
+  relationShip: QueryFilters;
+}
 export const QueryTranslatorConfig = {
   escapeIdentifier: '"',
   quoteIdentifier: "'",
@@ -117,36 +131,58 @@ export const QueryTranslatorConfig = {
   },
 
   //#region Query Generators
-  select: (
-    table: Array<string | undefined>,
-    project: Record<string, string>,
-    filter?: QueryFilters,
-    relations?: {
-      [key: string]: {
-        table: Array<string | undefined>;
-        columns: Record<string, string>;
-        relationShip: {
-          [key: string]: string;
-        };
-        project?: Record<string, string>;
-        filter?: QueryFilters;
-      };
-    },
-  ): string => {
+  select: (select: SelectStatement): string => {
     // SELECT MAIN.X, json_agg(json_build_object(ALIAS, JOIN.COL...)) AS ALIAS FROM MAIN AS MAIN LEFT JOIN JOIN AS JOIN ON MAIN.COL = JOIN.COL GROUP BY MAIN.COL
     // Grouping in PG is the PK in main table
-    const tableName = QueryTranslatorConfig.escape(table),
-      selectList = Object.entries(project).map(([key, value]) =>
-        `${QueryTranslatorConfig.escape([value])} AS ${
-          QueryTranslatorConfig.escape([key])
-        }`
-      ),
-      joinList: string[] = [];
-    if (relations && Object.keys(relations).length > 0) {
-    }
-    return '';
-  },
+    const tableAlias = select.table[0], 
+      tableName = QueryTranslatorConfig.escape(select.table), 
+      selectCols: string[] = [],
+      joins: string[] = [],
+      groupBy: string[] = [], 
+      sort: string[] = [], 
+      filters: string[] = [];
+    Object.entries(select.project).forEach(([key, value]) => {
+      selectCols.push(`${QueryTranslatorConfig.escape([key, tableAlias])} AS ${
+        QueryTranslatorConfig.escape([value])
+      }`);
+    });
+    // Add the PK to the group by
 
+    // Process sort for main table
+    if(select.sort) {
+      Object.entries(select.sort).forEach(([key, value]) => {
+        sort.push(`${QueryTranslatorConfig.escape([key, tableAlias])} ${
+          value === 'ASC' ? 'ASC' : 'DESC'
+        }`);
+      });
+    }
+    
+    if(select.filter) {
+      filters.push(QueryTranslatorConfig.where(select.filter, 'AND', tableAlias));
+    }
+
+    if(select.relations) {
+      Object.entries(select.relations).forEach(([key, value]) => {
+        // Create the join
+        const relAlias = key, 
+          joinCondition = QueryTranslatorConfig.where(value.relationShip, 'AND', tableAlias), 
+          relTableName = QueryTranslatorConfig.escape(value.table), 
+          relColumns: string[] = [];
+        Object.entries(value.project).forEach(([key, value]) => {
+          relColumns.push(`${QueryTranslatorConfig.escape([value])}`);
+          relColumns.push(`${QueryTranslatorConfig.escape([key, relAlias])}`);
+        });
+        selectCols.push(`json_agg(json_build_object(${relColumns.join(', ')})) AS ${QueryTranslatorConfig.escape([relAlias])}`);
+        joins.push(`LEFT JOIN ${relTableName} AS ${relAlias} ON ${joinCondition}`);
+        if(value.filter) {
+          filters.push(QueryTranslatorConfig.where(value.filter, 'AND', relAlias));
+        }
+      });
+    }
+    
+    return `SELECT ${selectCols.join(', ')} FROM ${tableName} AS ${QueryTranslatorConfig.escape([tableAlias])} ${joins.join(' ')} ${filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : ''} GROUP BY ${groupBy.join(', ')} ORDER BY ${sort.join(', ')};`;
+  },
+  
   insert: (
     table: Array<string | undefined>,
     columns: string[],
@@ -200,11 +236,11 @@ export const QueryTranslatorConfig = {
     return `DELETE FROM ${QueryTranslatorConfig.escape(table)}${where};`;
   },
 
-  where: (filter: QueryFilters, joiner = 'AND'): string => {
+  where: (filter: QueryFilters, joiner = 'AND', tableAlias?: string): string => {
     const ret: string[] = [];
     if (Array.isArray(filter)) {
       filter.forEach((f) => {
-        ret.push(QueryTranslatorConfig.where(f, joiner));
+        ret.push(QueryTranslatorConfig.where(f, joiner, tableAlias));
       });
     } else {
       // Ok if the key is $and or $or then its a sub query
@@ -216,6 +252,7 @@ export const QueryTranslatorConfig = {
               QueryTranslatorConfig.where(
                 filter[key] as unknown as QueryFilters,
                 key === '$and' ? 'AND' : 'OR',
+                tableAlias
               )
             }`,
           );
@@ -235,49 +272,49 @@ export const QueryTranslatorConfig = {
               switch (operator) {
                 case '$eq':
                   ret.push(
-                    `${QueryTranslatorConfig.escape([key])} = ${
+                    `${QueryTranslatorConfig.escape([key, tableAlias])} = ${
                       QueryTranslatorConfig.quoteValue(operatorValue)
                     }`,
                   );
                   break;
                 case '$ne':
                   ret.push(
-                    `${QueryTranslatorConfig.escape([key])} != ${
+                    `${QueryTranslatorConfig.escape([key, tableAlias])} != ${
                       QueryTranslatorConfig.quoteValue(operatorValue)
                     }`,
                   );
                   break;
                 case '$gt':
                   ret.push(
-                    `${QueryTranslatorConfig.escape([key])} > ${
+                    `${QueryTranslatorConfig.escape([key, tableAlias])} > ${
                       QueryTranslatorConfig.quoteValue(operatorValue)
                     }`,
                   );
                   break;
                 case '$gte':
                   ret.push(
-                    `${QueryTranslatorConfig.escape([key])} >= ${
+                    `${QueryTranslatorConfig.escape([key, tableAlias])} >= ${
                       QueryTranslatorConfig.quoteValue(operatorValue)
                     }`,
                   );
                   break;
                 case '$lt':
                   ret.push(
-                    `${QueryTranslatorConfig.escape([key])} < ${
+                    `${QueryTranslatorConfig.escape([key, tableAlias])} < ${
                       QueryTranslatorConfig.quoteValue(operatorValue)
                     }`,
                   );
                   break;
                 case '$lte':
                   ret.push(
-                    `${QueryTranslatorConfig.escape([key])} <= ${
+                    `${QueryTranslatorConfig.escape([key, tableAlias])} <= ${
                       QueryTranslatorConfig.quoteValue(operatorValue)
                     }`,
                   );
                   break;
                 case '$in':
                   ret.push(
-                    `${QueryTranslatorConfig.escape([key])} IN (${
+                    `${QueryTranslatorConfig.escape([key, tableAlias])} IN (${
                       operatorValue.map((v: unknown) =>
                         QueryTranslatorConfig.quoteValue(v)
                       ).join(', ')
@@ -286,7 +323,7 @@ export const QueryTranslatorConfig = {
                   break;
                 case '$nin':
                   ret.push(
-                    `${QueryTranslatorConfig.escape([key])} NOT IN (${
+                    `${QueryTranslatorConfig.escape([key, tableAlias])} NOT IN (${
                       operatorValue.map((v: unknown) =>
                         QueryTranslatorConfig.quoteValue(v)
                       ).join(', ')
@@ -299,7 +336,7 @@ export const QueryTranslatorConfig = {
             }
           } else {
             ret.push(
-              `${QueryTranslatorConfig.escape([key])} = ${
+              `${QueryTranslatorConfig.escape([key, tableAlias])} = ${
                 QueryTranslatorConfig.quoteValue(value)
               }`,
             );
@@ -508,3 +545,23 @@ export const QueryTranslatorConfig = {
   },
   //#endregion Query Generators
 };
+
+const sel = QueryTranslatorConfig.select({
+  table: ['Customers', 'Customer'], 
+  project: { OrgCode: 'OrganisationCode', CustId: 'CustId', Verified: 'MobileVerified', JoinedOn: 'JoinDate' }, 
+  filter: { JoinedOn: { $gt: '2023-02-01 00:00:00' } }, 
+  relations: {
+    'Statuses': {
+      table: ['Status', 'Customer'],
+      project: {
+        OrgCode: 'OrganisationCode', CustId: 'CustId', PKYC: 'PlatformKYC'
+      },
+      relationShip: {
+        CustId: 'CustId', 
+        OrgCode: 'OrganisationCode'
+      },
+    },
+   }
+});
+
+console.log(sel);
