@@ -125,30 +125,30 @@ export const QueryTranslatorConfig = {
   select: (
     table: Array<string | undefined>,
     project: Record<string, string>,
-    filter?: QueryFilters,
-    relations?: {
-      [key: string]: {
-        table: Array<string | undefined>;
-        columns: Record<string, string>;
-        relationShip: {
-          [key: string]: string;
-        };
-        project?: Record<string, string>;
-        filter?: QueryFilters;
-      };
-    },
+    _filter?: QueryFilters,
+    // relations?: {
+    //   [key: string]: {
+    //     table: Array<string | undefined>;
+    //     columns: Record<string, string>;
+    //     relationShip: {
+    //       [key: string]: string;
+    //     };
+    //     project?: Record<string, string>;
+    //     filter?: QueryFilters;
+    //   };
+    // },
   ): string => {
     // SELECT MAIN.X, json_agg(json_build_object(ALIAS, JOIN.COL...)) AS ALIAS FROM MAIN AS MAIN LEFT JOIN JOIN AS JOIN ON MAIN.COL = JOIN.COL GROUP BY MAIN.COL
     // Grouping in PG is the PK in main table
-    const tableName = QueryTranslatorConfig.escape(table),
-      selectList = Object.entries(project).map(([key, value]) =>
+    const _tableName = QueryTranslatorConfig.escape(table),
+      _selectList = Object.entries(project).map(([key, value]) =>
         `${QueryTranslatorConfig.escape([value])} AS ${
           QueryTranslatorConfig.escape([key])
         }`
       ),
-      joinList: string[] = [];
-    if (relations && Object.keys(relations).length > 0) {
-    }
+      _joinList: string[] = [];
+    // if (relations && Object.keys(relations).length > 0) {
+    // }
     return '';
   },
 
