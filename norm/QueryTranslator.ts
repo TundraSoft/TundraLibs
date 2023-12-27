@@ -46,7 +46,6 @@ export class QueryTranslator {
     // Sorting and ordering is cascaded up to the parent
     // Add the name of the relationship as alias to all columns (special for filters)
 
-    
     const tableName = [query.name, query.schema],
       filter: QueryFilters[] = [],
       columns: string[] = [],
@@ -108,6 +107,8 @@ export class QueryTranslator {
       query.project.forEach((p) => {
         if (query.columns[p]) {
           project[query.columns[p]] = String(p);
+        } else {
+          throw new Error('Column not found');
         }
       });
     } else {
@@ -134,6 +135,8 @@ export class QueryTranslator {
       query.project.forEach((p) => {
         if (query.columns[p]) {
           project[query.columns[p]] = String(p);
+        } else {
+          throw new Error('Column not found');
         }
       });
     } else {
@@ -214,7 +217,7 @@ export class QueryTranslator {
 
   protected _normaliseFilter(
     columns: Record<string, string>,
-    filter: QueryFilters, 
+    filter: QueryFilters,
   ): QueryFilters {
     // Cycle through the filter object and replace the keys with the actual column name
     const newFilter: QueryFilters = {};
