@@ -276,8 +276,13 @@ export class QueryTranslator {
     columns: Record<string, string>,
     filter: QueryFilters,
     joiner = 'AND',
+    tableAlias?: string,
   ) {
-    return this._config.where(this._normaliseFilter(columns, filter), joiner);
+    return this._config.where(
+      this._normaliseFilter(columns, filter),
+      joiner,
+      tableAlias,
+    );
   }
 
   protected _quoteValue(value: unknown): string {
