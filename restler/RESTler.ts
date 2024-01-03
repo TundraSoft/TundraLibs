@@ -207,9 +207,15 @@ export abstract class RESTler<
         // We do not re-attempt for any error other than auth failure
         if (this._authInitiated === false) {
           this._authInitiated = true;
-          await this._authenticate(request);
-          // Retry the request
-          return await this._makeRequest<RespBody>(request);
+          try {
+            await this._authenticate(request);
+            // Retry the request
+            return await this._makeRequest<RespBody>(request);
+          } catch (_e2) {
+            // Dont do anything
+          } finally {
+            this._authInitiated = false;
+          }
         }
         finalError = e;
       } else if (!(e instanceof RESTlerBaseError)) {
@@ -250,13 +256,13 @@ export abstract class RESTler<
     response: Response,
   ): Promise<RespBody> {
     try {
-      if (this._authStatus.includes(response.status)) {
-        response.body?.cancel();
-        throw new RESTlerAuthFailure(
-          this._name,
-          endpoint as RESTlerEndpoint,
-        );
-      }
+      // if (this._authStatus.includes(response.status)) {
+      //   response.body?.cancel();
+      //   throw new RESTlerAuthFailure(
+      //     this._name,
+      //     endpoint as RESTlerEndpoint,
+      //   );
+      // }
       const contentType = response.headers.get('content-type');
       // @TODO: Handle other content types, Add support for auto detection of content type
       if (!contentType) {
