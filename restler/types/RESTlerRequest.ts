@@ -13,6 +13,7 @@ export type RESTlerRequest = {
   body?:
     | Record<string, unknown>
     | Record<string, unknown>[]
-    | FormData;
+    | FormData
+    | string;
   timeout?: number;
 };

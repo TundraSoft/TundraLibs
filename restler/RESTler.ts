@@ -149,7 +149,7 @@ export abstract class RESTler<
           signal: controller.signal,
           body: (request.body === undefined)
             ? undefined
-            : (request.body instanceof FormData)
+            : (request.body instanceof FormData || typeof request.body === 'string')
             ? request.body
             : this._stringifyBody(request.body),
         },
