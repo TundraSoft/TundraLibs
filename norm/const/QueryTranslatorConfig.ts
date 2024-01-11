@@ -564,4 +564,3 @@ const sel = QueryTranslatorConfig.select({
    }
 });
 
-console.log(sel);

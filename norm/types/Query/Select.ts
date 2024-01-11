@@ -20,3 +20,15 @@ export type SelectQuery<
   filter?: QueryFilters<DM[TN]>;
   with?: SelectRelationship<DM, TN>;
 };
+
+
+
+type DateDiff = {
+  from: string; 
+  num?: number;
+  to?: string;
+}
+
+type Age = {
+  source: string;
+}

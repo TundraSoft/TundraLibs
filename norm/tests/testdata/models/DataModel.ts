@@ -13,7 +13,7 @@ import type { SelectQuery } from '../../../types/Query/mod.ts';
 
 const _a: SelectQuery<DefaultModel, 'Post'> = {
   name: 'Post',
-  schema: 'public',
+  schema: 'publicf',
   columns: {
     Id: 'id',
     Title: 'title',
@@ -81,7 +81,9 @@ export type FlattenEntity<
   }[keyof T] extends infer O ? { [P in keyof O]: O[P] } : never
 >;
 
+
 type a = FlattenEntity<DefaultModel['Post']['columns']>;
+
 
 /*
 
@@ -98,11 +100,11 @@ type a = FlattenEntity<DefaultModel['Post']['columns']>;
   },
   relations: {
     'Author': {}
-  },
+  }, 
   // Can be from both columns and relations
   filters: {
 
-  },
+  }, 
   project: {
   },
 }
