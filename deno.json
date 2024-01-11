@@ -33,8 +33,9 @@
     "proseWrap": "preserve"
   },
   "tasks": {
-    "build": "deno fmt && deno lint && deno cache --reload ./dependencies.ts",
-    "test": "deno task build && deno cache --reload ./dev.dependencies.ts && deno test -A"
+    "build": "deno fmt && deno lint && deno check **/*.ts",
+    "cache": "deno cache --reload ./dependencies.ts",
+    "test": "deno task build && deno cache --reload ./dev.dependencies.ts && deno test -A --unstable"
   },
   "test": {
     "include": [

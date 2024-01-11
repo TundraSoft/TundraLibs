@@ -6,8 +6,41 @@ on:
     branches: [ main ]
 
 jobs:
-  build: 
+  get-versions:
     runs-on: ubuntu-latest
+    outputs:
+      deno-versions: ${{ steps.fetch-versions.outputs.deno-versions }}
+    steps:
+      - 
+        name: Get Deno Versions
+        id: fetch-versions
+        run: |
+          DENO_VERSIONS=$(curl -s https://api.github.com/repos/denoland/deno/releases | jq -r '.[].tag_name' | sed 's/v//' | sort -V | tail -n 8 | tac | jq -Rcn '[inputs]')
+          echo "deno-versions=${DENO_VERSIONS}" >> "$GITHUB_OUTPUT"
+
+  check-code:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Setup
+        uses: actions/checkout@v3
+      -
+        name: Setup Deno
+        uses: denoland/setup-deno@v1.1.2
+      -
+        name: Check formatting & linting
+        run: |
+          deno fmt --check
+          deno lint
+          deno check **/*.ts
+  
+  # We run tests on multiple versions of deno, just to be safe
+  run-tests: 
+    needs: [get-versions]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        deno-version: ${{ fromJson(needs.get-versions.outputs.deno-versions) }}
     services:
       redis:
         image: redis
@@ -44,18 +77,11 @@ jobs:
         name: Setup Deno
         uses: denoland/setup-deno@v1.1.2
         with:
-          deno-version: v1.x
-      -
-        name: Check formatting
-        run: deno fmt --check
-      -
-        name: Code Analysis
-        run: deno lint
+          deno-version: v$${{ matrix.deno-version }}
       -
         name: Run tests
         run: |
-          deno test -A --coverage=cov #--doc
-          
+          deno test -A --unstable --coverage=cov #--doc
         # env:
         #   POSTGRES_HOST: localhost
         #   POSTGRES_PORT: 5432
