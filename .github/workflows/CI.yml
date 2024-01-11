@@ -77,7 +77,7 @@ jobs:
         name: Setup Deno
         uses: denoland/setup-deno@v1.1.2
         with:
-          deno-version: v$${{ matrix.deno-version }}
+          deno-version: v${{ matrix.deno-version }}
       -
         name: Run tests
         run: |
