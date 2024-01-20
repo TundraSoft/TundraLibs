@@ -49,7 +49,10 @@ export type {
   ExecuteResult as MariaDBResultSet,
 } from 'https://deno.land/x/mysql@v2.12.1/mod.ts';
 
-export { DB as SQLiteDBClient } from 'https://deno.land/x/sqlite@v3.8/mod.ts';
+export {
+  DB as SQLiteDBClient,
+  SqliteError as SQLiteDBError,
+} from 'https://deno.land/x/sqlite@v3.8/mod.ts';
 export type { SqliteOptions as SQLiteDBClientConfig } from 'https://deno.land/x/sqlite@v3.8/mod.ts';
 
 // export { MongoClient } from 'npm:mongo';
