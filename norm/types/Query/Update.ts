@@ -1,13 +1,9 @@
-import type { ColumnType, ModelDefinition } from '../Definitions/mod.ts';
-import type { BaseQuery } from './Base.ts';
-import type { QueryFilters } from './Filters.ts';
+import { BaseQuery } from './Base.ts';
+import { QueryFilters } from './filters/mod.ts';
 
 export type UpdateQuery<
-  DM extends ModelDefinition = ModelDefinition,
-  TN extends keyof DM = keyof DM,
-> = BaseQuery<DM, TN> & {
-  data: {
-    [K in keyof DM[TN]['columns']]?: ColumnType<DM[TN]['columns'][K]['type']>;
-  };
-  filter?: QueryFilters<DM[TN]>;
+  M extends Record<string, unknown> = Record<string, unknown>,
+> = BaseQuery<M> & {
+  values: Record<string, unknown>;
+  filters?: QueryFilters<M>;
 };

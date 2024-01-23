@@ -67,7 +67,8 @@ describe({
     };
     const sig = new AbortController();
     const _serv = Deno.serve({ port: port, signal: sig.signal }, handler);
-    return sig;
+    // return sig;
+    return _serv;
   };
 
   class MockTest extends RESTler {
@@ -161,8 +162,9 @@ describe({
   });
 
   afterEach(async () => {
-    server.abort();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // server.abort();
+    // await new Promise((resolve) => setTimeout(resolve, 0));
+    await server.shutdown();
   });
 
   it('should list all users', async () => {

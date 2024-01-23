@@ -1,11 +1,13 @@
-export type { BaseQuery } from './Base.ts';
-export type { DeleteQuery } from './Delete.ts';
-export type { QueryFilters } from './Filters.ts';
-export type { InsertQuery } from './Insert.ts';
-export type { QueryPagination } from './Pagination.ts';
-export type { SelectQuery } from './Select.ts';
-export type { QuerySorting } from './Sorting.ts';
+export type { QueryExecute } from './Execute.ts';
+export type { QueryResults } from './Results.ts';
 export type { QueryTypes } from './Types.ts';
-export type { UpdateQuery } from './Update.ts';
 
-export type { QueryExecute, QueryResults } from './result/mod.ts';
+export type { QueryFilters } from './filters/mod.ts';
+
+export type { BaseQuery } from './Base.ts';
+import type { DeleteQuery } from './Delete.ts';
+import type { InsertQuery } from './Insert.ts';
+import type { SelectQuery } from './Select.ts';
+import type { UpdateQuery } from './Update.ts';
+export type Queries = DeleteQuery | InsertQuery | SelectQuery | UpdateQuery;
+export type { DeleteQuery, InsertQuery, SelectQuery, UpdateQuery };

@@ -1,10 +1,8 @@
-import type { ModelDefinition } from '../Definitions/mod.ts';
-import type { BaseQuery } from './Base.ts';
-import type { QueryFilters } from './Filters.ts';
+import { BaseQuery } from './Base.ts';
+import { QueryFilters } from './filters/mod.ts';
 
 export type DeleteQuery<
-  DM extends ModelDefinition = ModelDefinition,
-  TN extends keyof DM = keyof DM,
-> = BaseQuery<DM, TN> & {
-  filter?: QueryFilters<DM[TN]>;
+  M extends Record<string, unknown> = Record<string, unknown>,
+> = BaseQuery<M> & {
+  filters?: QueryFilters<M>;
 };

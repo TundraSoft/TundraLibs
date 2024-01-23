@@ -1,2 +1,1 @@
-export { SQLiteQueryTranslatorConfig } from './QueryTranslatorConfig.ts';
-export { SQLiteClient } from './SQLite.ts';
+export { SQLiteClient } from './SQLiteClient.ts';

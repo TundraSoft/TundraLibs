@@ -1,2 +1,1 @@
-export { PostgresClient } from './Postgres.ts';
-export { PostgresQueryTranslatorConfig } from './QueryTranslatorConfig.ts';
+export { PostgresClient } from './PostgresClient.ts';

@@ -1,11 +1,7 @@
-import type { ColumnType, ModelDefinition } from '../Definitions/mod.ts';
 import type { BaseQuery } from './Base.ts';
 
 export type InsertQuery<
-  DM extends ModelDefinition = ModelDefinition,
-  TN extends keyof DM = keyof DM,
-> = BaseQuery<DM, TN> & {
-  data: {
-    [K in keyof DM[TN]['columns']]?: ColumnType<DM[TN]['columns'][K]['type']>;
-  }[];
+  M extends Record<string, unknown> = Record<string, unknown>,
+> = BaseQuery<M> & {
+  values: Record<string, unknown> | Record<string, unknown>[];
 };

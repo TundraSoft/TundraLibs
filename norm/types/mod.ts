@@ -1,37 +1,22 @@
+export type { Dialects } from './Dialects.ts';
 export type {
-  ConnectionOptions,
-  ConnectionStatus,
-  FlatFileConnectionOptions,
-  MariaConnectionOptions,
-  MongoConnectionOptions,
-  PostgresConnectionOptions,
-  RemoteServerConnectionOptions,
-  SQLiteConnectionOptions,
-} from './Connection/mod.ts';
+  ClientEvents,
+  ClientOptions,
+  ClientStatus,
+  MariaOptions,
+  MongoOptions,
+  PostgresOptions,
+  SQLiteOptions,
+} from './client/mod.ts';
 
 export type {
-  ColumnDefinition,
-  ColumnLengthDefinition,
-  ColumnType,
-  ForeignKeyDefinition,
-  ModelDefinition,
-  PartitionDefinition,
-  TableDefinition,
-} from './Definitions/mod.ts';
-
-export type {
-  BaseQuery,
   DeleteQuery,
   InsertQuery,
+  QueryExecute,
   QueryFilters,
-  QueryPagination,
-  QuerySorting,
+  QueryResults,
+  QueryTypes,
   SelectQuery,
   UpdateQuery,
-} from './Query/mod.ts';
-
-export type { QueryExecute, QueryResults, QueryTypes } from './Query/mod.ts';
-
-export type { DeepWritable } from './DeepWritable.ts';
-export type { Dialects } from './Dialects.ts';
-export type { NormEvents } from './NormEvents.ts';
+  Queries,
+} from './query/mod.ts';

@@ -1,1 +1,1 @@
-export type Dialects = 'POSTGRES' | 'MARIA' | 'SQLITE' | 'MONGO';
+export type Dialects = 'POSTGRES' | 'MARIA' | 'MYSQL' | 'SQLITE' | 'MONGO';
