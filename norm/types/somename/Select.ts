@@ -10,6 +10,7 @@ type RelatedSelectQuery<
 export type SelectQuery<
   M extends Record<string, unknown> = Record<string, unknown>,
 > = BaseQuery<M> & {
+  type: 'SELECT';
   filters?: QueryFilters<M>;
   with?: Record<string, RelatedSelectQuery>;
 };
