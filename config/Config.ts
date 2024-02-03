@@ -230,8 +230,3 @@ export class Config {
     this._config.set(name, data);
   }
 }
-
-const config = new Config();
-config.loadEnv();
-config.load('./tests/testdata/Sample.yaml');
-console.log(config.get('Sample'));

@@ -32,28 +32,30 @@ export {
 //#endregion RESTler
 
 //#region NORM
-export { connect as RedisConnect } from 'https://deno.land/x/redis@v0.30.0/mod.ts';
-export type { Redis } from 'https://deno.land/x/redis@v0.30.0/mod.ts';
+export {
+  connect as RedisConnect,
+  type Redis,
+} from 'https://deno.land/x/redis@v0.30.0/mod.ts';
 
 export {
+  type ClientOptions as PGClientOptions,
   Pool as PGClient,
   PoolClient as PGPoolClient,
   PostgresError,
 } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
-export type { ClientOptions as PGClientOptions } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
 
 // export { default as PGClient } from 'https://deno.land/x/postgresjs@v3.4.3/mod.js';
-export { Client as MariaDBClient } from 'https://deno.land/x/mysql@v2.12.1/mod.ts';
-export type {
-  ClientConfig as MariaDBClientConfig,
-  ExecuteResult as MariaDBResultSet,
+export {
+  Client as MariaDBClient,
+  type ClientConfig as MariaDBClientConfig,
+  type ExecuteResult as MariaDBResultSet,
 } from 'https://deno.land/x/mysql@v2.12.1/mod.ts';
 
 export {
   DB as SQLiteDBClient,
   SqliteError as SQLiteDBError,
+  type SqliteOptions as SQLiteDBClientConfig,
 } from 'https://deno.land/x/sqlite@v3.8/mod.ts';
-export type { SqliteOptions as SQLiteDBClientConfig } from 'https://deno.land/x/sqlite@v3.8/mod.ts';
 
 // export { MongoClient } from 'npm:mongo';
 // export { MongoClient as MongoDBClient, MongoServerError } from 'npm:mongodb';
@@ -65,7 +67,9 @@ export type { SqliteOptions as SQLiteDBClientConfig } from 'https://deno.land/x/
 
 export {
   Collection as MongoCollection,
+  type ConnectOptions as MongoClientOptions,
   Database as MongoDB,
+  type Document as MongoDBDocument,
   MongoClient as MongoDBClient,
 } from 'https://deno.land/x/mongo@v0.32.0/mod.ts';
 export {
@@ -74,7 +78,6 @@ export {
   MongoRuntimeError,
   MongoServerError,
 } from 'https://deno.land/x/mongo@v0.32.0/src/error.ts';
-export type { ConnectOptions as MongoClientOptions } from 'https://deno.land/x/mongo@v0.32.0/mod.ts';
 
 // For encryption
 export * as openpgp from 'https://cdn.skypack.dev/openpgp'; //'https://deno.land/x/openpgp@v5.9.0/src/index.js';

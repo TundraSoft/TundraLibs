@@ -1,6 +1,6 @@
 {
   "name": "TundraLibs",
-  "dockerFile": "Dockerfile",
+  // "dockerFile": "Dockerfile",
   // Configure tool-specific properties.
   "customizations": {
     // Configure properties specific to VS Code.
@@ -24,5 +24,10 @@
       ]
     }
   },
-  "remoteUser": "vscode"
+  "remoteUser": "vscode",
+  "features": {
+    "ghcr.io/cirolosapio/devcontainers-features/alpine-deno:0": {
+      "initZsh": true
+    }
+  }
 }
