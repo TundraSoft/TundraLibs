@@ -7,5 +7,6 @@
     "https://deno.land": true,
     "https://x.nest.land": true,
     "https://crux.land": true
-  }
+  },
+  "CodeGPT.apiKey": "CodeGPT Plus Beta"
 }

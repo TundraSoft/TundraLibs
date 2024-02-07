@@ -1,8 +1,8 @@
-import { assertEquals } from 'https://deno.land/std@0.205.0/assert/mod.ts';
 import { Metrics, tick } from '../mod.ts';
 import {
   afterEach,
   assert,
+  assertEquals,
   assertGreater,
   assertGreaterOrEqual,
   describe,

@@ -59,9 +59,9 @@ const mock = (port = 8000) => {
       });
     }
   };
-  const sig = new AbortController();
-  const _serv = Deno.serve({ port: port, signal: sig.signal }, handler);
-  return sig;
+  const _sig = new AbortController();
+  const _serv = Deno.serve({ port: port, signal: _sig.signal }, handler);
+  return _serv;
 };
 
 class MockTest extends RESTler {
@@ -166,6 +166,6 @@ for (let i = 0; i < 10; i++) {
 Promise.allSettled(a).then((v) => {
   // v.filter((v) => v.status === 'rejected').forEach((v) => console.log(`Failed: ${JSON.stringify(v)}`));
   console.log(v);
-  server.abort();
+  server.shutdown();
 });
 // server.abort();

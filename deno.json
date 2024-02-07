@@ -4,7 +4,8 @@
     "lib": [
       "deno.window"
     ],
-    "strict": true
+    "strict": true,
+    "experimentalDecorators": true
   },
   "lint": {
     "include": [

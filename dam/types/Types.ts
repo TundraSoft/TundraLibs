@@ -1,0 +1,18 @@
+export type QueryTypes =
+  | 'SELECT'
+  | 'INSERT'
+  | 'UPDATE'
+  | 'DELETE'
+  | 'TRUNCATE'
+  | 'COUNT'
+  | 'CREATE_TABLE'
+  | 'CREATE_VIEW'
+  | 'CREATE_SCHEMA'
+  | 'DROP_TABLE'
+  | 'DROP_VIEW'
+  | 'DROP_SCHEMA'
+  | 'ALTER_TABLE'
+  | 'ALTER_VIEW'
+  | 'ALTER_SCHEMA'
+  | 'TRANSACTION'
+  | 'UNKNOWN';
