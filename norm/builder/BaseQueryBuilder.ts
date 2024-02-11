@@ -9,7 +9,7 @@ export class BaseQueryBuilder {
   setSource(source: [string, string]) {
     if (source.length === 2) {
       this.setSchema(source[0]);
-      this.setTable(source[1])
+      this.setTable(source[1]);
     } else {
       this.setTable(source[0]);
     }
@@ -25,7 +25,9 @@ export class BaseQueryBuilder {
     this._table = table;
   }
 
-  public toSQLQuery(dialect: Omit<Dialects, 'MONGO'>): [string, Record<string, unknown> | undefined] {
+  public toSQLQuery(
+    dialect: Omit<Dialects, 'MONGO'>,
+  ): [string, Record<string, unknown> | undefined] {
     throw new Error('Not implemented');
   }
 
@@ -33,4 +35,3 @@ export class BaseQueryBuilder {
     throw new Error('Not implemented');
   }
 }
-

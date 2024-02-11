@@ -1,24 +1,24 @@
 import { BaseError } from './BaseError.ts';
-import type { ErrorMetaTags } from './BaseError.ts';
 
-export type TundraLibErrorMetaTags = ErrorMetaTags & { library: string };
+export type TundraLibErrorMetaTags =
+  & { library: string }
+  & Record<string, unknown>;
+
 /**
  * BaseError class for creating custom errors with additional metadata.
  */
 export class TundraLibError extends BaseError {
-  name = 'TundraLibError';
-  declare protected _metaTags: TundraLibErrorMetaTags;
   /**
    * Creates a new instance of BaseError.
    *
    * @param message - The error message.
-   * @param _metaTags - Optional metadata tags associated with the error.
+   * @param meta - Optional metadata tags associated with the error.
    */
   constructor(
     message: string,
-    metaTags?: TundraLibErrorMetaTags,
+    meta: TundraLibErrorMetaTags,
   ) {
-    super(message, metaTags);
+    super(message, meta);
     Object.setPrototypeOf(this, new.target.prototype);
   }
 
@@ -28,7 +28,7 @@ export class TundraLibError extends BaseError {
    * @returns The library name.
    */
   get library(): string {
-    return this._metaTags?.library ?? 'N/A';
+    return this.getMeta('library') as string || 'N/A';
   }
 }
 

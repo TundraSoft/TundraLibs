@@ -1,13 +1,13 @@
 import { ConfigBaseError } from './BaseError.ts';
-import type { ErrorMetaTags } from '../../utils/mod.ts';
+// import type { ErrorMetaTags } from '../../utils/mod.ts';
 
 export class ConfigMalformed extends ConfigBaseError {
   name = 'ConfigMalformed';
-  constructor(name: string, metaTags?: ErrorMetaTags) {
+  constructor(name: string, meta?: Record<string, unknown>) {
     super(
       name,
       `Could not find configuration file in the path specified.`,
-      metaTags,
+      meta,
     );
     Object.setPrototypeOf(this, new.target.prototype);
   }

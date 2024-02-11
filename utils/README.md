@@ -6,6 +6,16 @@ Collection of helpers primarily used inside tundralibs but can also be used exte
 
 - [Decorators](#decorators)
   - [singleton](#singleton)
+- [Types](#types)
+  - [DeepReadOnly](#deepreadonly)
+  - [DeepWriteable](#deepwriteable)
+  - [ExcludeNever](#excludenever)
+  - [FlattenEntity](#flattenentity)
+  - [MakeOptional](#makeoptional)
+  - [MakeReadOnly](#makereadOnly)
+  - [MakeRequired](#makerequired)
+  - [UnArray](#unarray)
+  - [UnionToIntersection](#uniontointersection)
 - [Base Error](#base-error)
 - [envArgs](#envargs)
 - [privateObject](#privateobject)
@@ -42,6 +52,72 @@ t2.incrimentCounter();
 console.log(t2.counter); //2
 console.log(t.counter); //2
 ```
+
+## Types
+
+Few helpful decorators which are used either in tundralibs
+
+### DeepReadOnly
+
+This ensures that all properties are Readonly.
+
+```ts
+type a = { a: string; b: number; c: { d: bigint } };
+type b = DeepReadOnly<a>; // { readonly a: string, readonly b: number, readonly c: { readonly d: bigint }}
+```
+
+### DeepWritable
+
+This does the opposite of DeepReadOnly, makes an object "non readonly".
+
+example:
+
+```ts
+type a = {
+  readonly a: string;
+  readonly b: number;
+  readonly c: { readonly d: bigint };
+};
+type b = DeepWritable<a>; // { a: string, b: number, c: { d: bigint }}
+```
+
+### ExcludeNever
+
+Removes any items which have type as never. Useful when building dynamic generic types.
+
+### FlattenEntity
+
+Flattents a Record and sub records so that it is available as a single record with no children.
+It prefixes `$` to the name of the child/
+
+```ts
+type a = FlattentEntity<
+  {
+    parent1: string;
+    parent2: { child1: number; child2: { subChild1: boolean } };
+  }
+>;
+
+// Result: { parent1: string, $parent2.child1: number, $parent2.child2.subChild1: boolean }
+```
+
+### MakeOptional
+
+Ensures keys passed are optional in an object.
+
+### MakeReadOnly
+
+Ensures keys passed are readonly in an object.
+
+### MakeRequired
+
+Ensures keys passed as required in an object
+
+### UnArray
+
+Retruns the infered type from an array object.
+
+### UnionToIntersect
 
 ## Base Error
 

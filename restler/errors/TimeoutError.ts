@@ -1,9 +1,13 @@
 import { RESTlerBaseError } from './BaseError.ts';
-import type { RESTlerErrorMeta } from './BaseError.ts';
+// import type { RESTlerErrorMeta } from './BaseError.ts';
 
 export class RESTlerTimeoutError extends RESTlerBaseError {
   name = 'RESTlerTimeoutError';
-  constructor(name: string, timeout: number, metaTags: RESTlerErrorMeta) {
+  constructor(
+    name: string,
+    timeout: number,
+    metaTags: Record<string, unknown>,
+  ) {
     super(
       name,
       `Request aborted after ${timeout}s as response was not received.`,

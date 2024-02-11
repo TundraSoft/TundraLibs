@@ -1,19 +1,19 @@
 import { BaseError } from './BaseError.ts';
-import type { ErrorMetaTags } from './BaseError.ts';
 import { assertEquals, describe, it } from '../dev.dependencies.ts';
 
 describe(`[library='utils' name='BaseError']`, () => {
-  const mockMetaTags: ErrorMetaTags = {
+  const mockMetaTags = {
     tag1: 'value1',
     tag2: 'value2',
   };
 
   it('should create a new instance of BaseError with the correct message and meta tags', () => {
-    const errorMessage = 'This is an error';
+    const errorMessage =
+      '[tag1="${meta.tag1}" tag2="${meta.tag2}"] This is an error';
     const error = new BaseError(errorMessage, mockMetaTags);
     assertEquals(
       error.message,
-      `[tag1='value1' tag2='value2'] ${errorMessage}`,
+      `[tag1="value1" tag2="value2"] This is an error`,
     );
     assertEquals(error.metaTags, mockMetaTags);
   });

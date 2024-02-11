@@ -1,13 +1,13 @@
 import { ConfigBaseError } from './BaseError.ts';
-import type { ErrorMetaTags } from '../../utils/mod.ts';
+// import type { ErrorMetaTags } from '../../utils/mod.ts';
 
 export class ConfigPermissionError extends ConfigBaseError {
   name = 'ConfigPermissionError';
-  constructor(name: string, metaTags: ErrorMetaTags) {
+  constructor(name: string, meta: Record<string, unknown>) {
     super(
       name || 'N/A',
       `Read permission is required to read configuration file.`,
-      metaTags,
+      meta,
     );
     Object.setPrototypeOf(this, new.target.prototype);
   }

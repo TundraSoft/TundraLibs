@@ -51,7 +51,6 @@ export type QueryFilters<
     $or: QueryFilters<R> | QueryFilters<R>[];
   };
 
-
 export type BaseQuery<
   M extends Record<string, unknown> = Record<string, unknown>,
 > = {
@@ -84,7 +83,6 @@ export type SelectQuery<
   with?: Record<string, RelatedSelectQuery>;
 };
 
-
 export type UpdateQuery<
   M extends Record<string, unknown> = Record<string, unknown>,
 > = BaseQuery<M> & {
@@ -93,6 +91,5 @@ export type UpdateQuery<
 };
 
 class QueryTranslator {
-
   insert(insert: InsertQuery): [string, Record<string, unknown>] {}
 }

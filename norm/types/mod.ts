@@ -12,11 +12,11 @@ export type {
 export type {
   DeleteQuery,
   InsertQuery,
+  Queries,
   QueryExecute,
   QueryFilters,
   QueryResults,
   QueryTypes,
   SelectQuery,
   UpdateQuery,
-  Queries,
 } from './query/mod.ts';
