@@ -1,24 +1,20 @@
-import {
-  TundraLibError,
-  type TundraLibErrorMetaTags,
-} from '../../utils/mod.ts';
+import { TundraLibError } from '../../utils/TundraLibError.ts';
 
 export class ConfigBaseError extends TundraLibError {
-  public name = 'ConfigBaseError';
-  protected _config: string;
+  public readonly library = 'Config';
+  public readonly config: string;
 
-  constructor(config: string, message: string, meta?: Record<string, unknown>) {
-    if (meta === undefined) {
-      meta = {};
-    }
-    meta.library = 'Config';
-    meta.config = config;
-    super(message, meta as TundraLibErrorMetaTags);
-    this._config = config;
-    Object.setPrototypeOf(this, new.target.prototype);
+  constructor(
+    config: string,
+    message: string,
+    meta?: Record<string, unknown>,
+    cause?: Error,
+  ) {
+    super(message, meta, cause);
+    this.config = config;
   }
 
-  get config(): string {
-    return this._config;
+  toString(): string {
+    return `${this.timeStamp.toISOString()} [${this.library} ${this.name} ${this.config}] ${this.message}`;
   }
 }

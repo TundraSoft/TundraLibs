@@ -88,6 +88,13 @@ export class Options<
     return this._options.get(name);
   }
 
+  protected _getAllOptions(): O {
+    const options: O = {} as O;
+    this._options.forEach((key, value) => {
+      options[key] = value;
+    });
+    return options;
+  }
   /**
    * Sets an option with a specific name and value.
    *

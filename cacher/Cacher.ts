@@ -6,6 +6,7 @@ import type {
   RedisCacherOptions,
 } from './types/mod.ts';
 
+import { CacherConfigError, DuplicateCacher } from './errors/mod.ts';
 /**
  * The Cacher class is used to manage multiple cache instances.
  */
@@ -56,7 +57,7 @@ export class Cacher {
   static create(name: string, options: AbstractCacherOptions): AbstractCache {
     name = name.trim().toLowerCase();
     if (Cacher.has(name)) {
-      throw new Error(`Cache with name '${name}' already exists.`);
+      throw new DuplicateCacher(name);
     }
 
     let instance: AbstractCache;
@@ -74,7 +75,9 @@ export class Cacher {
         ) as unknown as AbstractCache;
         break;
       default:
-        throw new Error(`Unsupported cache engine '${options.engine}'.`);
+        throw new CacherConfigError(
+          `Unsupported cache engine '${options.engine}'.`,
+        );
     }
     return instance;
   }

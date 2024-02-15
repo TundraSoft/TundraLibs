@@ -186,7 +186,6 @@ export abstract class RESTler<
         : false;
       if (resp.authFailure) {
         throw new RESTlerAuthFailure(
-          this._name,
           resp.endpoint as RESTlerEndpoint,
         );
       }
@@ -198,7 +197,6 @@ export abstract class RESTler<
         // Emit timeout event
         this.emit('timeout', request);
         finalError = new RESTlerTimeoutError(
-          this._name,
           this._getOption('timeout') as number,
           request.endpoint as RESTlerEndpoint,
         );
@@ -221,7 +219,6 @@ export abstract class RESTler<
         finalError = e;
       } else if (!(e instanceof RESTlerBaseError)) {
         finalError = new RESTlerUnhandledError(
-          this._name,
           e.message,
           request.endpoint as RESTlerEndpoint,
         );
@@ -268,7 +265,6 @@ export abstract class RESTler<
       // @TODO: Handle other content types, Add support for auto detection of content type
       if (!contentType) {
         throw new RESTlerUnsupportedContentType(
-          this._name,
           'N/A',
           endpoint as RESTlerEndpoint,
         );
@@ -291,7 +287,6 @@ export abstract class RESTler<
       } else {
         // Ensure we discard the body
         throw new RESTlerUnsupportedContentType(
-          this._name,
           contentType,
           endpoint as RESTlerEndpoint,
         );

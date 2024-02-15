@@ -6,8 +6,11 @@ import type { CacheValue, RedisCacherOptions } from '../types/mod.ts';
 import { AbstractCache } from '../AbstractCache.ts';
 import { Cacher } from '../Cacher.ts';
 
+import { CacherConfigError, CacherConnectionError } from '../errors/mod.ts';
+
 export class RedisCacher extends AbstractCache<RedisCacherOptions> {
   private _client: Redis | undefined = undefined;
+  protected _connectionError: CacherConnectionError | undefined = undefined;
   /**
    * Constructs a new instance of the MemoryCacher class.
    *
@@ -16,8 +19,8 @@ export class RedisCacher extends AbstractCache<RedisCacherOptions> {
    */
   constructor(name: string, options: OptionKeys<RedisCacherOptions>) {
     if (options.engine !== 'REDIS') {
-      throw new Error(
-        `Invalid engine type '${options.engine}' for MemoryCacher.`,
+      throw new CacherConfigError(
+        `Invalid engine: '${options.engine}' passed for Redis Cache.`,
       );
     }
     super(name, options);
@@ -46,10 +49,7 @@ export class RedisCacher extends AbstractCache<RedisCacherOptions> {
   protected async _set(key: string, value: CacheValue): Promise<void> {
     await this._init();
     const expiry = value.expiry;
-    // console.log(`~~~~~: value`, value);
-
     if (expiry > 0) {
-      // console.log(`~~~~~ expiry:`, expiry);
       await this._client?.set(key, JSON.stringify(value), { ex: expiry });
     } else {
       await this._client?.set(key, JSON.stringify(value));
@@ -68,7 +68,6 @@ export class RedisCacher extends AbstractCache<RedisCacherOptions> {
   ): Promise<CacheValue<T> | undefined> {
     await this._init();
     const value = await this._client?.get(key);
-    // console.log(`~~~~~~~ get value: `, value);
     if (!value) {
       return undefined;
     }
@@ -106,14 +105,28 @@ export class RedisCacher extends AbstractCache<RedisCacherOptions> {
    * @returns A Promise that resolves when the Redis client is initialized.
    */
   protected async _init(): Promise<void> {
-    if (this._client === undefined) {
+    if (this._connectionError) {
+      throw this._connectionError;
+    }
+    if (this._client) {
+      return;
+    }
+    try {
       this._client = await RedisConnect({
         hostname: this._getOption('host'),
         port: this._getOption('port'),
         password: this._getOption('password'),
         db: this._getOption('db'),
         tls: this._getOption('tls'),
+        maxRetryCount: 3,
       });
+    } catch (error) {
+      this._connectionError = new CacherConnectionError(
+        error.message,
+        this._getAllOptions(),
+        error,
+      );
+      throw error;
     }
   }
 

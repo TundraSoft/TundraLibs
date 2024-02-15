@@ -7,117 +7,119 @@ import {
   it,
 } from '../../dev.dependencies.ts';
 
-describe(`[library='Options' mode='typed']`, () => {
-  type TestOptions = { foo: string; bar?: number };
-  type TestEvents = { baz: (value: string) => void };
-  class TestClass extends Options<TestOptions, TestEvents> {
-    constructor(opt: OptionKeys<TestOptions, TestEvents>) {
-      super(opt);
-    }
+describe(`Options`, () => {
+  describe('typed', () => {
+    type TestOptions = { foo: string; bar?: number };
+    type TestEvents = { baz: (value: string) => void };
+    class TestClass extends Options<TestOptions, TestEvents> {
+      constructor(opt: OptionKeys<TestOptions, TestEvents>) {
+        super(opt);
+      }
 
-    checkExistence(name: string): boolean {
-      return this._hasOption(name as keyof TestOptions);
-    }
+      checkExistence(name: string): boolean {
+        return this._hasOption(name as keyof TestOptions);
+      }
 
-    getValue<K extends keyof TestOptions>(name: K): TestOptions[K] {
-      return this._getOption(name);
-    }
+      getValue<K extends keyof TestOptions>(name: K): TestOptions[K] {
+        return this._getOption(name);
+      }
 
-    updateValue<K extends keyof TestOptions>(
-      name: K,
-      value: TestOptions[K],
-    ): void {
-      this._setOption(name, value);
-    }
+      updateValue<K extends keyof TestOptions>(
+        name: K,
+        value: TestOptions[K],
+      ): void {
+        this._setOption(name, value);
+      }
 
-    hasEvent(name: string): boolean {
-      return this._events.has(name as keyof TestEvents);
+      hasEvent(name: string): boolean {
+        return this._events.has(name as keyof TestEvents);
+      }
     }
-  }
-  let test: TestClass;
+    let test: TestClass;
 
-  beforeEach(() => {
-    test = new TestClass({
-      foo: 'bar',
-      _onbaz: () => {
-        console.log('df');
-      },
+    beforeEach(() => {
+      test = new TestClass({
+        foo: 'bar',
+        _onbaz: () => {
+          console.log('df');
+        },
+      });
+    });
+
+    it('Check if option value exists', () => {
+      assertEquals(test.checkExistence('foo'), true);
+      assertEquals(test.checkExistence('bar'), false);
+    });
+
+    it('Get option value', () => {
+      assertEquals(test.getValue('foo'), 'bar');
+      // Return undefined if no value
+      assertEquals(test.getValue('bar'), undefined);
+    });
+
+    it('Update option value', () => {
+      test.updateValue('bar', 123);
+      assertEquals(test.getValue('bar'), 123);
+    });
+
+    it('Check if event exists', () => {
+      assertEquals(test.hasEvent('baz'), true);
     });
   });
 
-  it('Check if option value exists', () => {
-    assertEquals(test.checkExistence('foo'), true);
-    assertEquals(test.checkExistence('bar'), false);
-  });
+  describe(`untyped`, () => {
+    // type TestOptions = { foo: string, bar?: number };
+    // type TestEvents = { baz: (value: string) => void }
+    class TestClass extends Options {
+      constructor(opt: OptionKeys) {
+        super(opt);
+      }
 
-  it('Get option value', () => {
-    assertEquals(test.getValue('foo'), 'bar');
-    // Return undefined if no value
-    assertEquals(test.getValue('bar'), undefined);
-  });
+      checkExistence(name: string): boolean {
+        return this._hasOption(name);
+      }
 
-  it('Update option value', () => {
-    test.updateValue('bar', 123);
-    assertEquals(test.getValue('bar'), 123);
-  });
+      getValue(name: string): unknown {
+        return this._getOption(name);
+      }
 
-  it('Check if event exists', () => {
-    assertEquals(test.hasEvent('baz'), true);
-  });
-});
+      updateValue(name: string, value: unknown): void {
+        this._setOption(name, value);
+      }
 
-describe(`[library='Options' mode='untyped']`, () => {
-  // type TestOptions = { foo: string, bar?: number };
-  // type TestEvents = { baz: (value: string) => void }
-  class TestClass extends Options {
-    constructor(opt: OptionKeys) {
-      super(opt);
+      hasEvent(name: string): boolean {
+        return this._events.has(name);
+      }
     }
+    let test: TestClass;
 
-    checkExistence(name: string): boolean {
-      return this._hasOption(name);
-    }
-
-    getValue(name: string): unknown {
-      return this._getOption(name);
-    }
-
-    updateValue(name: string, value: unknown): void {
-      this._setOption(name, value);
-    }
-
-    hasEvent(name: string): boolean {
-      return this._events.has(name);
-    }
-  }
-  let test: TestClass;
-
-  beforeEach(() => {
-    test = new TestClass({
-      foo: 'bar',
-      _onbaz: () => {
-        console.log('df');
-      },
+    beforeEach(() => {
+      test = new TestClass({
+        foo: 'bar',
+        _onbaz: () => {
+          console.log('df');
+        },
+      });
     });
-  });
 
-  it('Check if option value exists', () => {
-    assertEquals(test.checkExistence('foo'), true);
-    assertEquals(test.checkExistence('bar'), false);
-  });
+    it('Check if option value exists', () => {
+      assertEquals(test.checkExistence('foo'), true);
+      assertEquals(test.checkExistence('bar'), false);
+    });
 
-  it('Get option value', () => {
-    assertEquals(test.getValue('foo'), 'bar');
-    // Return undefined if no value
-    assertEquals(test.getValue('bar'), undefined);
-  });
+    it('Get option value', () => {
+      assertEquals(test.getValue('foo'), 'bar');
+      // Return undefined if no value
+      assertEquals(test.getValue('bar'), undefined);
+    });
 
-  it('Update option value', () => {
-    test.updateValue('bar', 123);
-    assertEquals(test.getValue('bar'), 123);
-  });
+    it('Update option value', () => {
+      test.updateValue('bar', 123);
+      assertEquals(test.getValue('bar'), 123);
+    });
 
-  it('Check if event exists', () => {
-    assertEquals(test.hasEvent('baz'), true);
+    it('Check if event exists', () => {
+      assertEquals(test.hasEvent('baz'), true);
+    });
   });
 });

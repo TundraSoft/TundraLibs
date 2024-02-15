@@ -1,0 +1,16 @@
+export type QueryTypes =
+  | 'CREATE_SCHEMA'
+  | 'DROP_SCHEMA'
+  | 'CREATE_TABLE'
+  | 'ALTER_TABLE'
+  | 'DROP_TABLE'
+  | 'CREATE_VIEW'
+  | 'ALTER_VIEW'
+  | 'DROP_VIEW'
+  | 'SELECT'
+  | 'COUNT'
+  | 'INSERT'
+  | 'UPDATE'
+  | 'DELETE'
+  | 'TRUNCATE'
+  | 'RAW';

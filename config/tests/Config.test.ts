@@ -8,5 +8,6 @@
 
 // import { Config } from '../Config.ts';
 
-// describe(`[library='Config'] Config`, () => {
+// describe(`Config`, () => {
+
 // });

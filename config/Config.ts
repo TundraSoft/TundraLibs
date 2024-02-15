@@ -105,7 +105,6 @@ export class Config {
           final = final[item] as Record<string, unknown>;
         } else {
           throw new ConfigNotFound(name, {
-            config: name,
             item: path.join('.'),
           });
         }
@@ -225,7 +224,7 @@ export class Config {
           });
       }
     } catch (_e) {
-      throw new ConfigMalformed(name, { path: basePath, file: fileName });
+      throw new ConfigMalformed(name, { path: basePath, file: fileName }, _e);
     }
     this._config.set(name, data);
   }

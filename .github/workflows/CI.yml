@@ -68,6 +68,10 @@ jobs:
           --health-interval 10s
           --health-timeout 10s
           --health-retries 5
+      mongo:
+        image: mongo:latest
+        ports:
+          - 27017:27017
     
     steps:
       -
@@ -83,11 +87,19 @@ jobs:
         run: |
           deno task test
           # deno test -A --unstable --coverage=cov #--doc
-        # env:
-        #   POSTGRES_HOST: localhost
-        #   POSTGRES_PORT: 5432
-        #   POSTGRES_USER: postgres
-        #   POSTGRES_PASS: postgres
+        env:
+          PG_HOST: localhost
+          PG_PORT: 5432
+          PG_USER: postgres
+          PG_PASS: postgres
+          MARIA_HOST: localhost
+          MARIA_PORT: 3306
+          MARIA_USER: root
+          MARIA_PASS: mariapw
+          MONGO_HOST: localhost
+          MONGO_PORT: 27017
+          MONGO_DB: test
+          
       -
         name: Generate coverage report
         run: deno coverage --lcov cov > cov.lcov

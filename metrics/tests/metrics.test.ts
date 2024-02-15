@@ -9,7 +9,7 @@ import {
   it,
 } from '../../dev.dependencies.ts';
 
-describe(`[library='Metrics']`, () => {
+describe('Metrics', () => {
   const metrics = new Metrics();
 
   afterEach(() => {

@@ -1,10 +1,16 @@
-import { RESTlerBaseError } from './BaseError.ts';
+import { RESTlerBaseError } from './Base.ts';
 // import type { RESTlerErrorMeta } from './BaseError.ts';
+import type { RESTlerEndpoint } from '../types/mod.ts';
 
 export class RESTlerAuthFailure extends RESTlerBaseError {
-  name = 'RESTlerAuthFailure';
-  constructor(name: string, meta: Record<string, unknown>) {
-    super(name, `Received authentication error.`, meta);
-    Object.setPrototypeOf(this, new.target.prototype);
+  constructor(
+    metaTags: RESTlerEndpoint & Record<string, unknown>,
+    cause?: Error,
+  ) {
+    super(
+      `Received authentication error.`,
+      metaTags,
+      cause,
+    );
   }
 }

@@ -1,14 +1,17 @@
-import { RESTlerBaseError } from './BaseError.ts';
+import { RESTlerBaseError } from './Base.ts';
 // import type { RESTlerErrorMeta } from './BaseError.ts';
+import type { RESTlerEndpoint } from '../types/mod.ts';
 
 export class RESTlerUnhandledError extends RESTlerBaseError {
-  name = 'RESTlerUnhandledError';
   constructor(
-    name: string,
     message: string,
-    metaTags: Record<string, unknown>,
+    metaTags: RESTlerEndpoint & Record<string, unknown>,
+    cause?: Error,
   ) {
-    super(name, `Unhandled error - ${message}.`, metaTags);
-    Object.setPrototypeOf(this, new.target.prototype);
+    super(
+      message,
+      metaTags,
+      cause,
+    );
   }
 }

@@ -14,28 +14,30 @@ import {
   it,
 } from '../../dev.dependencies.ts';
 
-describe('[library="id" mode="nanoId"]', () => {
-  const sampleSize = 10000,
-    minLength = 6,
-    maxLength = 40,
-    dictionary = [
-      { data: numbers, reg: /^[0-9{0,}]+$/ },
-      { data: alphabets, reg: /^[a-z{0,}]+$/i },
-      { data: alphaNumeric, reg: /^[A-Z0-9{0,}]+$/i },
-      { data: alphaNumericCase, reg: /^[a-z0-9{0,}]+$/ },
-      { data: webSafe, reg: /^[a-z0-9\_\-{0,}]+$/i },
-      { data: password, reg: /^[a-z0-9\_\-\!\@\$\%\^\&\*{0,}]+$/i },
-    ];
+describe('id', () => {
+  describe('nanoId', () => {
+    const sampleSize = 10000,
+      minLength = 6,
+      maxLength = 40,
+      dictionary = [
+        { data: numbers, reg: /^[0-9{0,}]+$/ },
+        { data: alphabets, reg: /^[a-z{0,}]+$/i },
+        { data: alphaNumeric, reg: /^[A-Z0-9{0,}]+$/i },
+        { data: alphaNumericCase, reg: /^[a-z0-9{0,}]+$/ },
+        { data: webSafe, reg: /^[a-z0-9\_\-{0,}]+$/i },
+        { data: password, reg: /^[a-z0-9\_\-\!\@\$\%\^\&\*{0,}]+$/i },
+      ];
 
-  it('Check for length consistency on sample set of 10000', () => {
-    for (let i = minLength; i <= maxLength; i++) {
-      dictionary.forEach((dict) => {
-        for (let j = 0; j < sampleSize; j++) {
-          assertEquals(i, nanoId(i, dict.data).length);
-        }
-      });
-    }
-  }),
+    it('Check for length consistency on sample set of 10000', () => {
+      for (let i = minLength; i <= maxLength; i++) {
+        dictionary.forEach((dict) => {
+          for (let j = 0; j < sampleSize; j++) {
+            assertEquals(i, nanoId(i, dict.data).length);
+          }
+        });
+      }
+    });
+
     it('Ensure only allowed characters are present on sample set of 10000', () => {
       for (let i = minLength; i <= maxLength; i++) {
         dictionary.forEach((dict) => {
@@ -44,7 +46,8 @@ describe('[library="id" mode="nanoId"]', () => {
           }
         });
       }
-    }),
+    });
+
     it('Check if the collision is < 1% on sample set of 10000', () => {
       let id: string;
       for (let i = minLength; i <= maxLength; i++) {
@@ -63,6 +66,7 @@ describe('[library="id" mode="nanoId"]', () => {
         }
       }
     });
+  });
 });
 
 // Path: id/tests/nanoId.test.ts

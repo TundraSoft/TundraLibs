@@ -3,6 +3,8 @@ import type { OptionKeys } from '../../options/mod.ts';
 import type { CacheValue, MemoryCacherOptions } from '../types/mod.ts';
 import { AbstractCache } from '../AbstractCache.ts';
 
+import { CacherConfigError } from '../errors/mod.ts';
+
 export class MemoryCacher extends AbstractCache<MemoryCacherOptions> {
   private _cache: Map<string, CacheValue> = new Map();
   protected _expiryTimers: Map<string, number> = new Map();
@@ -15,8 +17,8 @@ export class MemoryCacher extends AbstractCache<MemoryCacherOptions> {
    */
   constructor(name: string, options: OptionKeys<MemoryCacherOptions>) {
     if (options.engine !== 'MEMORY') {
-      throw new Error(
-        `Invalid engine type '${options.engine}' for MemoryCacher.`,
+      throw new CacherConfigError(
+        `Invalid engine: '${options.engine}' passed for Redis Cache.`,
       );
     }
     super(name, options);

@@ -9,8 +9,7 @@ import { envArgs } from '../../utils/envArgs.ts';
 const envData = envArgs('cacher/tests');
 
 // Mock instances
-
-describe(`[library='Cacher']`, () => {
+describe('Cacher', () => {
   it('Initialize a cache instance outside Cacher. Cacher should still be aware of it', () => {
     const _newCache = new MemoryCacher('newCache', { engine: 'MEMORY' });
     const _redisInstance = new RedisCacher('redisInstance', {
