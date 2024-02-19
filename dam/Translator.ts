@@ -52,6 +52,67 @@ export abstract class AbstractTranslator {
     return this._processDML(query);
   }
 
+  public beautify(sql: string): string {
+    const keywords = [
+      'SELECT',
+      'FROM',
+      'WHERE',
+      'LIMIT',
+      'INNER JOIN',
+      'LEFT JOIN',
+      'RIGHT JOIN',
+      'GROUP BY',
+      'ORDER BY',
+      'AND',
+      'OR',
+      'HAVING',
+      'UNION',
+      'INSERT INTO',
+      'VALUES',
+      'UPDATE',
+      'SET',
+      'DELETE FROM',
+    ];
+    const formattedSql = sql.split(/\s+/) // Split the SQL by whitespace
+      .map((word, index, words) => {
+        // Prefix line breaks and indentation for specific keywords
+        if (keywords.includes(word.toUpperCase())) {
+          let breakLine = '\n';
+
+          // For certain keywords, add an extra line break
+          if (
+            ['UNION', 'INSERT INTO', 'UPDATE', 'DELETE FROM'].includes(
+              word.toUpperCase(),
+            )
+          ) {
+            breakLine += '\n';
+          }
+
+          // Indentation for logical operators within WHERE, HAVING, etc.
+          if (['AND', 'OR'].includes(word.toUpperCase()) && index > 0) {
+            return `${breakLine}    ${word}`;
+          }
+
+          return `${breakLine}${word}`;
+        }
+
+        // Add spacing after commas, except when the next character is another comma or closing parenthesis
+        if (
+          word.endsWith(',') &&
+          !(words[index + 1] &&
+            (words[index + 1].startsWith(',') ||
+              words[index + 1].startsWith(')')))
+        ) {
+          return `${word}\n  `;
+        }
+
+        return word;
+      })
+      .join(' '); // Rejoin the tokens into a single string
+
+    return formattedSql.trim(); // Trim leading/trailing whitespace
+  }
+
   protected _makeSource(source: string, schema?: string) {
     if (this._schemaSupported === false) {
       schema = undefined;
