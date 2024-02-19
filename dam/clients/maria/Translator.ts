@@ -1,5 +1,5 @@
 import { AbstractTranslator } from '../../Translator.ts';
-import type { Expressions, ColumnIdentifier } from '../../types/mod.ts';
+import type { ColumnIdentifier, Expressions } from '../../types/mod.ts';
 
 export class MariaTranslator extends AbstractTranslator {
   protected _schemaSupported = true;

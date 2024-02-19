@@ -1,5 +1,5 @@
 import { AbstractTranslator } from '../../Translator.ts';
-import type { Expressions, ColumnIdentifier } from '../../types/mod.ts';
+import type { ColumnIdentifier, Expressions } from '../../types/mod.ts';
 
 export class SQLiteTranslator extends AbstractTranslator {
   protected _schemaSupported = false;
@@ -37,17 +37,17 @@ export class SQLiteTranslator extends AbstractTranslator {
       case 'UUID':
         return crypto.randomUUID();
       case 'current_date':
-        return 'DATE(\'now\')';
+        return "DATE('now')";
       case 'current_time':
-        return 'TIME(\'now\')';
+        return "TIME('now')";
       case 'current_timestamp':
         return 'CURRENT_TIMESTAMP';
       case 'now':
-        return 'datetime(\'now\')';
+        return "datetime('now')";
       case 'substr':
-        return `substr(${processExpression(expr.$args[0])}, ${
-          expr.$args[1]
-        }, ${expr.$args[2]})`;
+        return `substr(${processExpression(expr.$args[0])}, ${expr.$args[1]}, ${
+          expr.$args[2]
+        })`;
       case 'concat':
         return `CONCAT(${
           expr.$args.map((arg) => processExpression(arg)).join(', ')

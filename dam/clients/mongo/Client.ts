@@ -450,25 +450,25 @@ export class MongoClient extends AbstractClient<MongoOptions> {
   }
 
   //https://www.mongodb.com/docs/upcoming/reference/operator/aggregation/lookup/#perform-a-concise-correlated-subquery-with--lookup
-  protected _process<
-    R extends Record<string, unknown> = Record<string, unknown>,
-  >(query: SelectQuery<R> | CountQuery<R> | InsertQuery<R>): void {
-    const { joins, project, filters } = {
-      ...{ joins: {}, project: {}, filters: {} },
-      ...query,
-    };
-    const finalJoins: Record<
-      string,
-      { from: string; localField: string; foreignField: string; as: string }
-    > = {};
-    // if(Object.keys(joins).length > 0) {
-    //   // Extract the condition for ON clause and add the columns for projection
-    //   Object.entries(joins).forEach(([key, value]) => {
-    //     const alias = key.trim();
-    //     const { source, relation, project } = value;
-    //   });
-    // }
-  }
+  // protected _process<
+  //   R extends Record<string, unknown> = Record<string, unknown>,
+  // >(query: SelectQuery<R> | CountQuery<R> | InsertQuery<R>): void {
+  //   const { joins, project, filters } = {
+  //     ...{ joins: {}, project: {}, filters: {} },
+  //     ...query,
+  //   };
+  //   const finalJoins: Record<
+  //     string,
+  //     { from: string; localField: string; foreignField: string; as: string }
+  //   > = {};
+  //   // if(Object.keys(joins).length > 0) {
+  //   //   // Extract the condition for ON clause and add the columns for projection
+  //   //   Object.entries(joins).forEach(([key, value]) => {
+  //   //     const alias = key.trim();
+  //   //     const { source, relation, project } = value;
+  //   //   });
+  //   // }
+  // }
 
   // Implement https://stackoverflow.com/questions/51533234/mongodb-find-with-calculated-field
   protected _processFilters(
