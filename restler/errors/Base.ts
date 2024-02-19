@@ -4,6 +4,7 @@ import { TundraLibError } from '../../utils/TundraLibError.ts';
 
 import type { RESTlerEndpoint } from '../types/mod.ts';
 
+export type RESTlerErrorMeta = RESTlerEndpoint & Record<string, unknown>;
 export class RESTlerBaseError extends TundraLibError {
   public readonly library = 'RESTler';
   declare public readonly vendor: string;
