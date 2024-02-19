@@ -1,17 +1,14 @@
 import { type OptionKeys } from '../../../options/mod.ts';
 
 import { AbstractClient } from '../../Client.ts';
-// import { SQLiteHelper } from './Helper.ts';
+import { PostgresTranslator } from './Translator.ts';
+
 import {
   DAMClientError,
   DAMConfigError,
   DAMQueryError,
 } from '../../errors/mod.ts';
-import type {
-  ClientEvents,
-  PostgresOptions,
-  RawQuery,
-} from '../../types/mod.ts';
+import type { ClientEvents, PostgresOptions, Query } from '../../types/mod.ts';
 
 import {
   PGClient,
@@ -21,7 +18,7 @@ import {
 } from '../../../dependencies.ts';
 
 export class PostgresClient extends AbstractClient<PostgresOptions> {
-  // protected _helper = new SQLiteHelper();
+  protected _translator = new PostgresTranslator();
   private _client: PGClient | undefined = undefined;
 
   /**
@@ -91,6 +88,18 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
     super(name, { ...options, ...def });
   }
 
+  protected _standardizeQuery(query: Query): Query {
+    query = super._standardizeQuery(query);
+    return {
+      sql: query.sql.replace(
+        /:([a-zA-Z0-9\_]+):/g,
+        (_, word) => `$${word}`,
+      ),
+      params: query.params,
+    };
+  }
+
+  //#region Abstract methods
   /**
    * Connects to the SQLite database.
    * If the client is already connected, this method does nothing.
@@ -168,7 +177,7 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
 
   protected async _execute<
     R extends Record<string, unknown> = Record<string, unknown>,
-  >(query: RawQuery): Promise<{ count: number; rows: R[] }> {
+  >(query: Query): Promise<{ count: bigint; rows: R[] }> {
     if (this._status !== 'CONNECTED' || this._client === undefined) {
       throw new DAMQueryError('Client not connected', {
         dialect: this.dialect,
@@ -178,7 +187,7 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
       });
     }
     // Ok lets first build the queries if they are not raw query
-    const rawQuery: RawQuery = this._standardizeQuery(
+    const rawQuery: Query = this._standardizeQuery(
       query,
     );
     const client = await this._client.connect();
@@ -188,7 +197,7 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
         rawQuery.params,
       );
       return {
-        count: res.rowCount || res.rows.length || 0,
+        count: BigInt(res.rowCount || res.rows.length || 0),
         rows: res.rows,
       };
     } catch (err) {
@@ -216,15 +225,11 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
     return (this.status === 'CONNECTED' && this._client !== undefined);
   }
 
-  protected _standardizeQuery(query: RawQuery): RawQuery {
-    query = super._standardizeQuery(query);
-    return {
-      type: 'RAW',
-      sql: query.sql.replace(
-        /:([a-zA-Z0-9\_]+):/g,
-        (_, word) => `$${word}`,
-      ),
-      params: query.params,
-    };
+  protected async _getVersion(): Promise<string> {
+    const res = await this.execute<{ Version: string }>({
+      sql: 'SELECT sqlite_version() as "Version";',
+    });
+    return res.data[0].Version;
   }
+  //#endregion Abstract methods
 }

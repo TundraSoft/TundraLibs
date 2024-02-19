@@ -1,6 +1,7 @@
 import { type OptionKeys } from '../../../options/mod.ts';
 import { AbstractClient } from '../../Client.ts';
-import type { ClientEvents, MariaOptions, RawQuery } from '../../types/mod.ts';
+import { MariaTranslator } from './Translator.ts';
+import type { ClientEvents, MariaOptions, Query } from '../../types/mod.ts';
 import {
   DAMClientError,
   DAMConfigError,
@@ -17,6 +18,8 @@ import {
 
 export class MariaClient extends AbstractClient<MariaOptions> {
   // protected _helper = new MariaHelper();
+  protected _translator = new MariaTranslator();
+
   private _client: MariaDBPool | undefined = undefined;
 
   constructor(name: string, options: OptionKeys<MariaOptions, ClientEvents>) {
@@ -65,6 +68,18 @@ export class MariaClient extends AbstractClient<MariaOptions> {
     super(name, { ...defaults, ...options });
   }
 
+  protected _standardizeQuery(query: Query): Query {
+    query = super._standardizeQuery(query);
+    return {
+      sql: query.sql.replace(
+        /:([a-zA-Z0-9\_]+):/g,
+        (_, word) => `:${word}`,
+      ),
+      params: query.params,
+    };
+  }
+
+  //#region Abstract methods
   protected async _connect(): Promise<void> {
     if (this._status === 'CONNECTED' && this._client !== undefined) {
       return;
@@ -119,7 +134,7 @@ export class MariaClient extends AbstractClient<MariaOptions> {
 
   protected async _execute<
     R extends Record<string, unknown> = Record<string, unknown>,
-  >(query: RawQuery): Promise<{ count: number; rows: R[] }> {
+  >(query: Query): Promise<{ count: bigint; rows: R[] }> {
     if (this._status !== 'CONNECTED' || this._client === undefined) {
       throw new DAMQueryError('Client not connected', {
         dialect: this.dialect,
@@ -129,7 +144,7 @@ export class MariaClient extends AbstractClient<MariaOptions> {
       });
     }
     // Ok lets first build the queries if they are not raw query
-    const rawQuery: RawQuery = this._standardizeQuery(
+    const rawQuery: Query = this._standardizeQuery(
       query,
     );
     // console.log(rawQuery.sql, rawQuery.params);
@@ -148,7 +163,7 @@ export class MariaClient extends AbstractClient<MariaOptions> {
       }
       // console.log(await client.execute(rawQuery.sql, rawQuery.params))
       return {
-        count: rowCount,
+        count: BigInt(rowCount),
         rows: res,
       };
     } catch (err) {
@@ -176,15 +191,11 @@ export class MariaClient extends AbstractClient<MariaOptions> {
     return (this.status === 'CONNECTED' && !this._client?.closed);
   }
 
-  protected _standardizeQuery(query: RawQuery): RawQuery {
-    query = super._standardizeQuery(query);
-    return {
-      type: 'RAW',
-      sql: query.sql.replace(
-        /:([a-zA-Z0-9\_]+):/g,
-        (_, word) => `:${word}`,
-      ),
-      params: query.params,
-    };
+  protected async _getVersion(): Promise<string> {
+    const res = await this.execute<{ Version: string }>({
+      sql: 'SELECT VERSION() as `Version`;',
+    });
+    return res.data[0].Version;
   }
+  //#endregion Abstract methods
 }

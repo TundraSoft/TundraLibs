@@ -3,6 +3,6 @@ export type QueryResult<
 > = {
   type: string;
   time: number;
-  count: number;
+  count: bigint;
   data: R[];
 };

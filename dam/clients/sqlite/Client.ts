@@ -1,13 +1,13 @@
 import { type OptionKeys } from '../../../options/mod.ts';
 
 import { AbstractClient } from '../../Client.ts';
-// import { SQLiteHelper } from './Helper.ts';
+import { SQLiteTranslator } from './Translator.ts';
 import {
   DAMBaseError,
   DAMClientError,
   DAMConfigError,
 } from '../../errors/mod.ts';
-import type { ClientEvents, RawQuery, SQLiteOptions } from '../../types/mod.ts';
+import type { ClientEvents, Query, SQLiteOptions } from '../../types/mod.ts';
 
 import {
   path,
@@ -25,7 +25,7 @@ type SQLiteParamType = Record<
 >;
 
 export class SQLiteClient extends AbstractClient<SQLiteOptions> {
-  // protected _helper = new SQLiteHelper();
+  protected _translator = new SQLiteTranslator();
   private _client: SQLiteDBClient | undefined = undefined;
 
   /**
@@ -84,6 +84,18 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
     super(name, options);
   }
 
+  protected _standardizeQuery(query: Query): Query {
+    query = super._standardizeQuery(query);
+    return {
+      sql: query.sql.replace(
+        /:([a-zA-Z0-9\_]+):/g,
+        (_, word) => `:${word}`,
+      ),
+      params: query.params,
+    };
+  }
+
+  //#region Abstract methods
   /**
    * Connects to the SQLite database.
    * If the client is already connected, this method does nothing.
@@ -142,12 +154,12 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
 
   protected _execute<
     R extends Record<string, unknown> = Record<string, unknown>,
-  >(query: RawQuery): { count: number; rows: R[] } {
+  >(query: Query): { count: bigint; rows: R[] } {
     if (this._status !== 'CONNECTED' || this._client === undefined) {
       throw new Error('Client not connected');
     }
     // Ok lets first build the queries if they are not raw query
-    const rawQuery: RawQuery = this._standardizeQuery(
+    const rawQuery: Query = this._standardizeQuery(
       query,
     );
     try {
@@ -156,7 +168,7 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
         rawQuery.params as SQLiteParamType,
       );
       return {
-        count: res.length,
+        count: BigInt(res.length),
         rows: res,
       };
     } catch (err) {
@@ -179,15 +191,11 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
     return (this.status === 'CONNECTED' && this._client?.isClosed === false);
   }
 
-  protected _standardizeQuery(query: RawQuery): RawQuery {
-    query = super._standardizeQuery(query);
-    return {
-      type: 'RAW',
-      sql: query.sql.replace(
-        /:([a-zA-Z0-9\_]+):/g,
-        (_, word) => `:${word}`,
-      ),
-      params: query.params,
-    };
+  protected async _getVersion(): Promise<string> {
+    const res = await this.execute<{ Version: string }>({
+      sql: 'SELECT sqlite_version() as "Version";',
+    });
+    return res.data[0].Version;
   }
+  //#endregion Abstract methods
 }

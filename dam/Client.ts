@@ -1,12 +1,20 @@
 import { type OptionKeys, Options } from '../options/mod.ts';
+import { AbstractTranslator } from './Translator.ts';
+
 import type {
   ClientEvents,
   ClientOptions,
   ClientStatus,
+  CountQuery,
+  DeleteQuery,
   Dialects,
+  InsertQuery,
+  Query,
   QueryResult,
   QueryTypes,
-  RawQuery,
+  SelectQuery,
+  // TruncateQuery,
+  UpdateQuery,
 } from './types/mod.ts';
 
 import { DAMBaseError, DAMClientError } from './errors/mod.ts';
@@ -16,7 +24,9 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
   extends Options<O, ClientEvents> {
   public readonly dialect: Dialects;
   public readonly name: string;
+  declare protected _translator: AbstractTranslator;
   protected _status: ClientStatus = 'READY';
+  protected _version: string | undefined = undefined;
 
   constructor(name: string, options: OptionKeys<O, ClientEvents>) {
     const def: Partial<O> = {
@@ -35,7 +45,11 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
   }
 
   async getVersion(): Promise<string> {
-    return await '';
+    if (this._version === undefined) {
+      await this.connect();
+      this._version = await this._getVersion();
+    }
+    return this._version;
   }
 
   public async connect() {
@@ -84,7 +98,7 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
 
   public async execute<
     R extends Record<string, unknown> = Record<string, unknown>,
-  >(query: RawQuery): Promise<QueryResult<R>> {
+  >(query: Query): Promise<QueryResult<R>> {
     await this.connect();
     try {
       const st = performance.now(),
@@ -93,7 +107,7 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
         result: QueryResult<R> = {
           type: this._detectQuery(query.sql),
           time: 0,
-          count: 0,
+          count: 0n,
           data: [],
         };
       const res = await this._execute<R>(query);
@@ -121,6 +135,44 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
     }
   }
 
+  public async insert<
+    R extends Record<string, unknown> = Record<string, unknown>,
+  >(query: InsertQuery): Promise<QueryResult<R>> {
+    return await this.execute(this._translator.insert(query));
+  }
+
+  public async update<
+    R extends Record<string, unknown> = Record<string, unknown>,
+  >(query: UpdateQuery): Promise<QueryResult<R>> {
+    return await this.execute(this._translator.update(query));
+  }
+
+  public async delete<
+    R extends Record<string, unknown> = Record<string, unknown>,
+  >(query: DeleteQuery): Promise<QueryResult<R>> {
+    return await this.execute(this._translator.delete(query));
+  }
+
+  public async count<
+    R extends Record<string, unknown> = Record<string, unknown>,
+  >(query: CountQuery): Promise<QueryResult<R>> {
+    const res = await this.execute<{ count: bigint }>(
+      this._translator.count(query),
+    );
+    return {
+      type: 'COUNT',
+      time: res.time,
+      count: (res.data && res.data.length > 0) ? res.data[0].count : 0n,
+      data: [],
+    };
+  }
+
+  public async select<
+    R extends Record<string, unknown> = Record<string, unknown>,
+  >(query: SelectQuery): Promise<QueryResult<R>> {
+    return await this.execute(this._translator.select(query));
+  }
+
   protected _detectQuery(sql: string): QueryTypes | 'UNKNOWN' {
     const regex =
       /^(SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|CREATE\s+SCHEMA|DROP\s+SCHEMA|CREATE\s+(MATERIALISED)?\s+VIEW|ALTER\s+(MATERIALISED)?\s+VIEW|DROP\s+(MATERIALISED)?\s+VIEW||TRUNCATE|BEGIN|COMMIT|ROLLBACK|SAVEPOINT)\s+/i;
@@ -132,7 +184,7 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
       'UNKNOWN';
   }
 
-  protected _standardizeQuery(query: RawQuery): RawQuery {
+  protected _standardizeQuery(query: Query): Query {
     // Remove trailing ; and add it
     const sql = query.sql.trim().replace(/;+$/, '') + ';';
     const keys = Object.keys(query.params || {});
@@ -156,7 +208,6 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
       });
     }
     return {
-      type: 'RAW',
       sql: sql,
       params: query.params,
     };
@@ -167,7 +218,8 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
   protected abstract _execute<
     R extends Record<string, unknown> = Record<string, unknown>,
   >(
-    query: RawQuery,
-  ): Promise<{ count: number; rows: R[] }> | { count: number; rows: R[] };
+    query: Query,
+  ): Promise<{ count: bigint; rows: R[] }> | { count: bigint; rows: R[] };
+  protected abstract _getVersion(): Promise<string> | string;
   protected abstract _isReallyConnected(): boolean;
 }
