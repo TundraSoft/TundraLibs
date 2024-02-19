@@ -1,3 +1,5 @@
+import { TruncateQuery } from './mod.ts';
+import { ColumnIdentifier } from './types/ColumnIdentifier.ts';
 import { DMLQueries } from './types/mod.ts';
 import {
   CountQuery,
@@ -21,35 +23,32 @@ export abstract class AbstractTranslator {
   }
 
   count(query: CountQuery): Query {
-    // const sql = this._processDML(query);
-    // console.log(sql.sql);
-    // return sql;
     return this._processDML(query);
   }
 
   select(query: SelectQuery): Query {
-    // const sql = this._processDML(query);
-    // console.log(sql.sql);
-    // return sql;
     return this._processDML(query);
   }
 
   insert(query: InsertQuery): Query {
-    // const sql = this._processDML(query);
-    // console.log(sql.sql);
-    // return sql;
     return this._processDML(query);
   }
 
   update(query: UpdateQuery): Query {
-    // const sql = this._processDML(query);
-    // console.log(sql.sql);
-    // return sql;
     return this._processDML(query);
   }
 
   delete(query: DeleteQuery): Query {
     return this._processDML(query);
+  }
+
+  truncate(query: TruncateQuery): Query {
+    return {
+      sql: `TRUNCATE TABLE ${
+        this._quote(this._makeSource(query.source, query.schema))
+      };`,
+      params: {},
+    };
   }
 
   public beautify(sql: string): string {
@@ -275,25 +274,33 @@ export abstract class AbstractTranslator {
     ): [string, Record<string, unknown>] => {
       let paramCounter = 0;
       const params: Record<string, unknown> = {};
-      const processExpr = (expr: string | Expressions): string => {
-        if (typeof expr === 'string') {
+
+      const processExpr = (
+        expr: ColumnIdentifier | string | number | bigint | Expressions,
+      ): string => {
+        if (['string', 'bigint', 'number'].includes(typeof expr)) {
           // console.log(`!!!!!!!!!!!`, expr);
-          if (!expr.startsWith('$')) {
-            ++paramCounter;
-            const placeholder = getNextParamPlaceholder('e', paramCounter);
+          if (typeof expr === 'string') {
+            if (!expr.startsWith('$')) {
+              const placeholder = getNextParamPlaceholder('e', ++paramCounter);
+              params[placeholder] = expr;
+              return this._makeParam(placeholder);
+            }
+            const col = processColumn(expr, alias, joins);
+            if (col.type === 'TABLE') {
+              throw new Error(`Cannot set table as value in expression`);
+            } else if (col.type === 'JSON') {
+              return col.value;
+            } else {
+              return this._quote(col.value); // Remove the $ for direct column usage
+            }
+          } else {
+            const placeholder = getNextParamPlaceholder('e', ++paramCounter);
             params[placeholder] = expr;
             return this._makeParam(placeholder);
           }
-          const col = processColumn(expr, alias, joins);
-          if (col.type === 'TABLE') {
-            throw new Error(`Cannot set table as value in expression`);
-          } else if (col.type === 'JSON') {
-            return col.value;
-          } else {
-            return this._quote(col.value); // Remove the $ for direct column usage
-          }
         } else {
-          return this._processExpressionType(expr, processExpr);
+          return this._processExpressionType(expr as Expressions, processExpr);
         }
       };
       const stmt = processExpr(expr);
@@ -642,6 +649,8 @@ export abstract class AbstractTranslator {
   protected abstract _JSONRow(data: Record<string, string>): string;
   protected abstract _processExpressionType(
     expr: Expressions,
-    processExpression: (expr: string | Expressions) => string,
+    processExpression: (
+      expr: ColumnIdentifier | string | number | bigint | Expressions,
+    ) => string,
   ): string;
 }

@@ -1,5 +1,5 @@
 import { AbstractTranslator } from '../../Translator.ts';
-import type { Expressions } from '../../types/mod.ts';
+import type { Expressions, ColumnIdentifier } from '../../types/mod.ts';
 
 export class MariaTranslator extends AbstractTranslator {
   protected _schemaSupported = true;
@@ -25,15 +25,17 @@ export class MariaTranslator extends AbstractTranslator {
 
   protected _processExpressionType(
     expr: Expressions,
-    processExpression: (expr: string | Expressions) => string,
+    processExpression: (
+      expr: ColumnIdentifier | string | number | bigint | Expressions,
+    ) => string,
   ): string {
     switch (expr.$expr) {
       case 'UUID':
-        return 'UUID()';
+        return 'uuid()';
       case 'current_date':
-        return 'CURRENT_DATE';
+        return 'CURDATE()';
       case 'current_time':
-        return 'CURRENT_TIME';
+        return 'CURRENT_TIME()';
       case 'current_timestamp':
         return 'CURRENT_TIMESTAMP';
       case 'now':
@@ -56,8 +58,36 @@ export class MariaTranslator extends AbstractTranslator {
         return `UPPER(${processExpression(expr.$args)})`;
       case 'trim':
         return `TRIM(${processExpression(expr.$args)})`;
+      case 'length':
+        return `LENGTH(${processExpression(expr.$args)})`;
+      case 'add':
+        return `(${
+          expr.$args.map((arg) => processExpression(arg)).join(' + ')
+        })`;
+      case 'subtract':
+        return `(${
+          expr.$args.map((arg) => processExpression(arg)).join(' - ')
+        })`;
+      case 'divide':
+        return `(${
+          expr.$args.map((arg) => processExpression(arg)).join(' / ')
+        })`;
+      case 'multiply':
+        return `(${
+          expr.$args.map((arg) => processExpression(arg)).join(' * ')
+        })`;
+      case 'modulo':
+        return `MOD(${processExpression(expr.$args[0])}, ${
+          processExpression(expr.$args[1])
+        })`;
+      case 'abs':
+        return `ABS(${processExpression(expr.$args)})`;
+      case 'ceil':
+        return `CEIL(${processExpression(expr.$args)})`;
+      case 'floor':
+        return `FLOOR(${processExpression(expr.$args)})`;
       default:
-        return '';
+        throw new Error(`Unsupported expression type: ${expr.$expr}`);
     }
   }
 }

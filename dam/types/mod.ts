@@ -55,4 +55,6 @@ export type {
   UpdateQuery,
 } from './query/mod.ts';
 
+export type { ColumnIdentifier } from './ColumnIdentifier.ts';
+
 export type { Dialects, SQLDialects } from './Dialects.ts';
