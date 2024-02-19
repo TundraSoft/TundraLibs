@@ -22,16 +22,3 @@ export type FlattenEntity<
       };
   }[keyof T] extends infer O ? { [P in keyof O]: O[P] } : never
 > extends infer O ? { [P in keyof O]: O[P] } : never;
-
-type d = FlattenEntity<{
-  a: string;
-  b: {
-    c: number;
-    d: {
-      e: boolean;
-    };
-  };
-  f: {
-    g: string;
-  };
-}>;

@@ -15,13 +15,13 @@ export function throttle(milliseconds: number) {
     const originalMethod = descriptor.value; // The original method that will be throttled
 
     descriptor.value = function (this: unknown, ...args: unknown[]) {
-      if (runnable) {
-        originalMethod.apply(this, args); // Invoke the original method with the provided arguments
+      if (runnable === true) {
+        runnable = false;
+        timerId = setTimeout(() => {
+          runnable = true;
+        }, milliseconds);
+        return originalMethod.apply(this, args); // Invoke the original method with the provided arguments
       }
-      runnable = false;
-      timerId = setTimeout(() => {
-        runnable = true;
-      }, milliseconds);
     };
 
     addEventListener('unload', () => {

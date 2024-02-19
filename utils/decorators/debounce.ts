@@ -10,20 +10,17 @@ export function debounce(milliseconds: number) {
     _key: string,
     descriptor: PropertyDescriptor,
   ): PropertyDescriptor {
-    let timerId: number | undefined = undefined; // The timer ID for the current debounce
-    const originalMethod = descriptor.value; // The original method that will be debounced
+    let timeout: number | undefined = undefined;
+    const originalMethod = descriptor.value;
 
-    descriptor.value = function (this: unknown, ...args: unknown[]) {
-      if (timerId) {
-        clearTimeout(timerId);
-      }
-      timerId = setTimeout(() => {
-        originalMethod.apply(this, args); // Invoke the original method with the provided arguments
-      }, milliseconds);
+    descriptor.value = function (this: typeof _target, ...args: unknown[]) {
+      clearTimeout(timeout);
+      timeout = setTimeout(
+        () => originalMethod.apply(this, args),
+        milliseconds,
+      );
     };
-    addEventListener('unload', () => {
-      clearTimeout(timerId);
-    });
+
     return descriptor;
   };
 }
