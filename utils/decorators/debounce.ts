@@ -16,7 +16,9 @@ export function debounce(milliseconds: number) {
     descriptor.value = function (this: typeof _target, ...args: unknown[]) {
       clearTimeout(timeout);
       timeout = setTimeout(
-          () => {originalMethod.apply(this, args)},
+        () => {
+          originalMethod.apply(this, args);
+        },
         milliseconds,
       );
     };

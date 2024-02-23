@@ -1,0 +1,37 @@
+{
+  "Deno Test Case": {
+    "prefix": "test",
+    "body": [
+      "describe('$1', () => {", 
+      "  it('$2', () => {",
+      "    $3",
+      "  });",
+      "});"
+    ],
+    "description": "Create a new test case in Deno"
+  }, 
+  {
+    "Deno Test Case Async": {
+      "prefix": "testAsync",
+      "body": [
+        "describe('$1', () => {", 
+        "  it('$2', async () => {",
+        "    $3",
+        "  });",
+        "});"
+      ],
+      "description": "Create a new async test case in Deno"
+    }
+  }, 
+  {
+    "Deno Benchmark": {
+      "prefix": "bench",
+      "body": [
+        "bench('$1', () => {",
+        "  $2",
+        "});"
+      ],
+      "description": "Create a new benchmark in Deno"
+    }
+  }
+}

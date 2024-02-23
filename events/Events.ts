@@ -213,7 +213,7 @@ export class Events<E extends EventType = Record<string, EventCallback>> {
    * @param args - The arguments to pass to the listeners.
    * @returns A promise that resolves with an array of return values from the listeners.
    */
-  public async emitSync<K extends keyof E>(
+  protected async emitSync<K extends keyof E>(
     event: K,
     ...args: Parameters<E[K]>
   ): Promise<Array<ReturnType<E[K]>>>;
@@ -225,7 +225,7 @@ export class Events<E extends EventType = Record<string, EventCallback>> {
    * @param args - The unknown arguments to pass to the listeners.
    * @returns A promise that resolves with an array of unknown values from the listeners.
    */
-  public async emitSync(
+  protected async emitSync(
     event: string,
     ...args: unknown[]
   ): Promise<Array<unknown>> {

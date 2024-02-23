@@ -11,7 +11,7 @@ describe({
     describe('throttle', () => {
       class Test {
         public cnt = 0;
-      
+
         @debounce(1000)
         public methodName() {
           this.cnt += 1;
@@ -20,7 +20,7 @@ describe({
 
       const a = new Test();
 
-      it('should throttle the method execution', async() => {
+      it('should throttle the method execution', async () => {
         assertEquals(a.cnt, 0);
         a.methodName();
         a.methodName();

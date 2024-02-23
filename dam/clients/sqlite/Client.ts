@@ -13,7 +13,8 @@ import {
   path,
   SQLiteDBClient,
   type SQLiteDBClientConfig,
-  SQLiteDBError,
+  SQLiteDBError, 
+  fs,
 } from '../../../dependencies.ts';
 
 /**
@@ -77,6 +78,7 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
           { name: name, dialect: options.dialect, item: 'path' },
         );
       }
+      fs.ensureDirSync(path.join(options.path, name.trim().toLowerCase()));
     }
     if (options.mode === 'MEMORY') {
       delete options.path;
@@ -108,12 +110,21 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
         mode: 'create',
         memory: (this._getOption('mode') === 'MEMORY'),
       },
-      name = this.name,
+      name = this.name.trim().toLowerCase(),
       file = this._getOption('mode') === 'MEMORY'
         ? ':memory:'
-        : path.join(this._getOption('path') as string, `${name}.db`);
+        : path.join(this._getOption('path') as string, name, `main.db`);
     try {
       this._client = new SQLiteDBClient(file, opt);
+      if(this._getOption('mode') === 'FILE') {
+        for(const file of Deno.readDirSync(path.join(this._getOption('path') as string, name))) {
+          if(file.isFile && file.name.endsWith('.db') && file.name !== 'main.db') {
+            this._client.execute(`ATTACH DATABASE '${path.join(this._getOption('path') as string, name, file.name)}' AS ${file.name.replace('.db', '')};`);
+          }
+        }
+        // Attach memory as TMP
+        // this._client.execute(`ATTACH DATABASE ':memory:' AS TEMP;`);
+      }
     } catch (e) {
       if (e instanceof DAMBaseError) {
         throw e;
@@ -163,6 +174,30 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
       query,
     );
     try {
+      if(rawQuery.sql.startsWith('CREATE SCHEMA')) {
+        if(this._getOption('mode') === 'MEMORY') {
+          throw new DAMClientError('Cannot create schema in memory mode', {
+            dialect: this.dialect,
+            name: this.name,
+          });
+        }
+
+        const schemaName = rawQuery.sql.match(/CREATE SCHEMA "([a-zA-Z0-9\_]+)";/i);
+        if (schemaName !== null && schemaName[1] !== 'main' && schemaName[1] !== 'temp') {
+          if(['temp', 'main'].includes(schemaName[1].toLowerCase())) {
+            throw new DAMClientError(`Cannot create schema with name: ${schemaName[1]}`, {
+              dialect: this.dialect,
+              name: this.name,
+            });
+          }
+          fs.ensureFileSync(path.join(this._getOption('path') as string, this.name, `${schemaName[1]}.db`));
+        }
+        return {
+          count: BigInt(0),
+          rows: [],
+        };
+      }
+
       const res = this._client.queryEntries<R>(
         rawQuery.sql,
         rawQuery.params as SQLiteParamType,
