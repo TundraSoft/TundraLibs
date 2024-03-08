@@ -14,6 +14,7 @@ export type SyslogObject = {
   hostName?: string;
   appName?: string;
   procId?: number;
-  structuredData?: Map<string, StructuredData>;
+  structuredData?: Record<string, StructuredData>;
   message: string;
+  toString: (format?: string) => string;
 };
