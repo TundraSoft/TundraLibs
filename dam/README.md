@@ -184,12 +184,11 @@ export type SQLiteOptions = ClientOptions & {
 
 ##### Mongo
 
-
 ### Translator
 
-AbstractTranslator is a helper class which helps building SQL queries. This is available only for Maria, Postgres and SQLite. 
+AbstractTranslator is a helper class which helps building SQL queries. This is available only for Maria, Postgres and SQLite.
 
-Below types are used to generate the queries - 
+Below types are used to generate the queries -
 
 #### Create Schema
 

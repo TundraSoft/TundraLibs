@@ -281,18 +281,18 @@ export abstract class AbstractTranslator {
       }),
       project: Record<string, string> = {},
       aggregate: Record<string, string> = {},
-      groupBy: string[] = [], 
-      limit = obj.limit ? ` LIMIT ${obj.limit}` : '', 
-      offset = obj.offset ? ` OFFSET ${obj.offset}` : '', 
+      groupBy: string[] = [],
+      limit = obj.limit ? ` LIMIT ${obj.limit}` : '',
+      offset = obj.offset ? ` OFFSET ${obj.offset}` : '',
       orderBy = Object.entries(obj.orderBy || {}).map(([key, value]) => {
         const sort = value.trim().toUpperCase();
-        if(sort !== 'ASC' && sort !== 'DESC') {
+        if (sort !== 'ASC' && sort !== 'DESC') {
           throw new DAMTranslatorBaseError(
             `Invalid sort order: ${value} for ${key}.`,
             { dialect: this.dialect },
           );
         }
-        if(columns[`${key}`]) {
+        if (columns[`${key}`]) {
           return `${columns[`${key}`]} ${sort}`;
         } else if (columns[`$MAIN.${key}`]) {
           return `${columns[`$MAIN.${key}`]} ${sort}`;
