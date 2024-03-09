@@ -1,6 +1,6 @@
 type PropVal = string | number | bigint | boolean | Date | unknown;
 
-export type BaseFilter<P extends PropVal> = P | {
+export type BaseFilter<P extends PropVal> = P | [P] | null | undefined | {
   $eq?: P;
   $ne?: P;
   $null?: boolean;
@@ -13,12 +13,12 @@ export type StringFilter<P extends string = string> = BaseFilter<P> & {
   $ilike?: P;
   $nlike?: P;
   $nilike?: P;
-  $contains?: string;
-  $ncontains?: string;
-  $startsWith?: string;
-  $nstartsWith?: string;
-  $endsWith?: string;
-  $nendsWith?: string;
+  $contains?: P;
+  $ncontains?: P;
+  $startsWith?: P;
+  $nstartsWith?: P;
+  $endsWith?: P;
+  $nendsWith?: P;
 };
 
 type ComparisonFilters<P extends number | bigint | Date = number> =
@@ -28,6 +28,7 @@ type ComparisonFilters<P extends number | bigint | Date = number> =
     $gte?: P;
     $lt?: P;
     $lte?: P;
+    $between: [P, P];
   };
 
 export type NumberFilter<P extends number = number> = ComparisonFilters<P>;
@@ -45,3 +46,25 @@ export type Filters<P extends PropVal = PropVal> = P extends string
   : P extends boolean ? BooleanFilter
   : P extends Date ? DateFilter
   : BaseFilter<P>;
+
+export type Operators =
+  | '$eq'
+  | '$ne'
+  | '$null'
+  | '$in'
+  | '$nin'
+  | '$like'
+  | '$ilike'
+  | '$nlike'
+  | '$nilike'
+  | '$contains'
+  | '$ncontains'
+  | '$startsWith'
+  | '$nstartsWith'
+  | '$endsWith'
+  | '$nendsWith'
+  | '$gt'
+  | '$gte'
+  | '$lt'
+  | '$lte'
+  | '$between';

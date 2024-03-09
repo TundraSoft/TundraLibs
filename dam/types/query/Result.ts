@@ -1,8 +1,10 @@
+import { QueryTypes } from './Types.ts';
+
 export type QueryResult<
   R extends Record<string, unknown> = Record<string, unknown>,
 > = {
-  type: string;
+  type: QueryTypes;
   time: number;
-  count: bigint;
+  count: number;
   data: R[];
 };

@@ -27,6 +27,7 @@ export type {
   DefineExpression,
   Expressions,
   ExpressionsType,
+  JSONExpressions,
   NumberExpressions,
   QueryExpressions,
   StringExpressions,
@@ -34,17 +35,23 @@ export type {
 } from './expressions/mod.ts';
 
 export type {
+  BaseFilter,
   BigIntFilter,
   BooleanFilter,
   CountQuery,
+  CreateSchemaQuery,
+  CreateTableColumnDefinition,
+  CreateTableQuery,
+  CreateViewQuery,
   DateFilter,
-  DDLQueries,
   DeleteQuery,
-  DMLQueries,
+  DropSchemaQuery,
+  DropTableQuery,
+  DropViewQuery,
   Filters,
   InsertQuery,
   NumberFilter,
-  ProjectColumns,
+  Operators,
   Query,
   QueryFilters,
   QueryResult,
@@ -54,6 +61,8 @@ export type {
   TruncateQuery,
   UpdateQuery,
 } from './query/mod.ts';
+
+export type { Aggregate } from './Aggregate.ts';
 
 export type { ColumnIdentifier } from './ColumnIdentifier.ts';
 

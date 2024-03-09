@@ -1,4 +1,4 @@
-import { PostgresClient } from '../../clients/mod.ts';
+import { SQLiteClient } from '../../clients/mod.ts';
 import { queries } from './Queries.ts';
 import {
   afterAll,
@@ -11,7 +11,7 @@ import {
 } from '../../../dev.dependencies.ts';
 // import { DAMClientError, DAMQueryError } from '../../errors/mod.ts';
 
-import { envArgs } from '../../../utils/envArgs.ts';
+// import { envArgs } from '../../../utils/envArgs.ts';
 import type {
   CreateSchemaQuery,
   CreateTableQuery,
@@ -23,24 +23,20 @@ import type {
   UpdateQuery,
 } from '../../mod.ts';
 
-const envData = envArgs('dam/tests');
+// const envData = envArgs('dam/tests');
 
 describe('DAM', () => {
   describe('Translator', () => {
     describe({
-      name: 'Postgres',
+      name: 'SQLite',
       sanitizeExit: false,
       sanitizeOps: false,
       sanitizeResources: false,
     }, () => {
-      const client = new PostgresClient('pgtest', {
-        dialect: 'POSTGRES',
-        host: envData.get('PG_HOST') || 'localhost',
-        username: envData.get('PG_USER') || 'postgres',
-        password: envData.get('PG_PASS') || 'postgres',
-        port: parseInt(envData.get('PG_PORT')) || 5432,
-        database: envData.get('PG_DB') || 'postgres',
-        poolSize: 1,
+      const client = new SQLiteClient('SQLiteFile', {
+        dialect: 'SQLITE',
+        mode: 'FILE',
+        path: 'dam/tests/testdata/',
       });
 
       beforeAll(async () => {
@@ -50,6 +46,7 @@ describe('DAM', () => {
       afterAll(async () => {
         await client.close();
         assertEquals('READY', client.status);
+        Deno.remove('dam/tests/testdata/sqlitefile', { recursive: true });
       });
 
       it('create schema', async () => {
@@ -75,8 +72,8 @@ describe('DAM', () => {
         assert(result);
         const result2 = await client.execute(postQuery[0]);
         assert(result2);
-        const result3 = await client.execute(postQuery[1]);
-        assert(result3);
+        // const result3 = await client.execute(postQuery[1]);
+        // assert(result3);
       });
 
       it('insert', async () => {

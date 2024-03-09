@@ -1,23 +1,23 @@
 import type { ColumnIdentifier } from '../ColumnIdentifier.ts';
 
 type Now = {
-  $expr: 'now';
+  $expr: 'NOW';
 };
 
 type CurrentDate = {
-  $expr: 'current_date';
+  $expr: 'CURRENT_DATE';
 };
 
 type CurrentTime = {
-  $expr: 'current_time';
+  $expr: 'CURRENT_TIME';
 };
 
 type CurrentTimestamp = {
-  $expr: 'current_timestamp';
+  $expr: 'CURRENT_TIMESTAMP';
 };
 
 type DateAdd = {
-  $expr: 'date_add';
+  $expr: 'DATE_ADD';
   $args: [
     'YEAR' | 'MONTH' | 'DAY' | 'HOUR' | 'MINUTE' | 'SECOND',
     DateExpressions | ColumnIdentifier | Date,

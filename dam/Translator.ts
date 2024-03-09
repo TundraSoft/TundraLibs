@@ -1,57 +1,565 @@
-import { TruncateQuery } from './mod.ts';
-import { ColumnIdentifier } from './types/ColumnIdentifier.ts';
-import { DMLQueries } from './types/mod.ts';
-import {
+import type {
+  Aggregate,
   CountQuery,
+  CreateSchemaQuery,
+  CreateTableColumnDefinition,
+  CreateTableQuery,
+  CreateViewQuery,
   DeleteQuery,
+  DropSchemaQuery,
+  DropTableQuery,
+  DropViewQuery,
   Expressions,
   InsertQuery,
-  ProjectColumns,
+  Operators,
   Query,
-  QueryFilters,
   SelectQuery,
   SQLDialects,
+  TruncateQuery,
   UpdateQuery,
 } from './types/mod.ts';
+import { DAMTranslatorBaseError } from './errors/mod.ts';
+import { Parameters } from './Parameters.ts';
+import { DataTypes, QueryFilters } from './mod.ts';
+
+const ExpressionNames = [
+  'NOW',
+  'CURRENT_DATE',
+  'CURRENT_TIME',
+  'CURRENT_TIMESTAMP',
+  'DATE_ADD',
+  'ADD',
+  'SUBTRACT',
+  'MULTIPLY',
+  'DIVIDE',
+  'MODULO',
+  'ABS',
+  'CEIL',
+  'FLOOR',
+  'DATE_DIFF',
+  'LENGTH',
+  'SUBSTR',
+  'CONCAT',
+  'REPLACE',
+  'LOWER',
+  'UPPER',
+  'TRIM',
+  'DATE_FORMAT',
+  'UUID',
+  'JSON_VALUE',
+];
+const AggregateNames = [
+  'SUM',
+  'MIN',
+  'MAX',
+  'AVG',
+  'COUNT',
+  'DISTINCT',
+  'JSON_ROW',
+];
+const OperatorsNames = [
+  '$eq',
+  '$ne',
+  '$null',
+  '$in',
+  '$nin',
+  '$lt',
+  '$lte',
+  '$gt',
+  '$gte',
+  '$like',
+  '$ilike',
+  '$nlike',
+  '$nilike',
+  '$contains',
+  '$ncontains',
+  '$startsWith',
+  '$nstartsWith',
+  '$endsWith',
+  '$nendsWith',
+];
+
+type ProcessQueryColumns = {
+  columns: string[];
+  expressions?: Record<string, Expressions>;
+};
 
 export abstract class AbstractTranslator {
-  dialect: SQLDialects;
-  declare protected _schemaSupported: boolean;
+  public readonly dialect: SQLDialects;
+  declare public readonly capability: {
+    cascade: boolean;
+    matview: boolean;
+    distributed: boolean;
+  };
+  declare protected abstract _dataTypes: Record<DataTypes, string>;
 
   constructor(dialect: SQLDialects) {
     this.dialect = dialect;
   }
 
-  count(query: CountQuery): Query {
-    return this._processDML(query);
-  }
+  public insert(obj: InsertQuery): Query {
+    if (obj.type !== 'INSERT') {
+      throw new DAMTranslatorBaseError(`Invalid query type: ${obj.type}`, {
+        dialect: this.dialect,
+      });
+    }
+    const [columns, params] = this._processColumns(obj),
+      source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source,
+      // columns = obj.columns,
+      insertColumns = Array.from(
+        new Set(obj.values.flatMap(Object.keys)),
+      ),
+      data: string[] = [],
+      project: Record<string, string> = {};
 
-  select(query: SelectQuery): Query {
-    return this._processDML(query);
-  }
+    insertColumns.forEach((column) => {
+      if (!columns[`$${column}`]) {
+        throw new DAMTranslatorBaseError(
+          `Column name: ${column} is not defined.`,
+          { dialect: this.dialect },
+        );
+      }
+    });
 
-  insert(query: InsertQuery): Query {
-    return this._processDML(query);
-  }
+    obj.values.forEach((row) => {
+      const ins = insertColumns.map((column) => {
+        if (row[column] === undefined) {
+          return 'NULL';
+        } else {
+          if (this._isExpression(row[column])) {
+            const [sql, _] = this.buildExpression(
+              row[column] as Expressions,
+              columns,
+              params,
+            );
+            return sql;
+          } else {
+            const paramName = params.create(row[column]);
+            return this._makeParam(paramName);
+          }
+        }
+      });
+      data.push(`(${ins.join(', ')})`);
+    });
 
-  update(query: UpdateQuery): Query {
-    return this._processDML(query);
-  }
-
-  delete(query: DeleteQuery): Query {
-    return this._processDML(query);
-  }
-
-  truncate(query: TruncateQuery): Query {
+    // Now project
+    Object.entries(obj.project).forEach(([key, value]) => {
+      key = this.escape(key);
+      if (this._isColumnIdentifier(value)) {
+        if (columns[value as `$${string}`]) {
+          project[key] = columns[value as `$${string}`];
+        }
+      } else if (this._isExpression(value)) {
+        const [sql, _] = this.buildExpression(
+          value as Expressions,
+          columns,
+          params,
+        );
+        project[key] = sql;
+      } else {
+        const paramName = params.create(value);
+        project[key] = this._makeParam(paramName);
+      }
+    });
     return {
-      sql: `TRUNCATE TABLE ${
-        this._quote(this._makeSource(query.source, query.schema))
+      sql: `INSERT INTO ${this.escape(source)} (${
+        insertColumns.map(this.escape).join(', ')
+      }) VALUES ${data.join(', ')} RETURNING ${
+        Object.entries(project).map(([key, value]) => `${value} AS ${key}`)
+          .join(', ')
+      };`,
+      params: params.asRecord(),
+    };
+  }
+
+  public update(obj: UpdateQuery): Query {
+    if (obj.type !== 'UPDATE') {
+      throw new DAMTranslatorBaseError(`Invalid query type: ${obj.type}`, {
+        dialect: this.dialect,
+      });
+    }
+    const [columns, params] = this._processColumns(obj),
+      source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source,
+      filter = this.buildFilter(obj.filters || {}, columns, params)[0],
+      data: Record<string, unknown> = {};
+
+    Object.entries(obj.data).forEach(([key, value]) => {
+      if (!columns[`$${key}`]) {
+        throw new DAMTranslatorBaseError(
+          `Column name: ${key} is not defined.`,
+          { dialect: this.dialect },
+        );
+      }
+      const colName = columns[`$${key}`];
+      if (value === null) {
+        data[colName] = 'NULL';
+      } else if (this._isExpression(value)) {
+        const [sql, _] = this.buildExpression(
+          value as Expressions,
+          columns,
+          params,
+        );
+        data[colName] = sql;
+      } else {
+        const paramName = params.create(value);
+        data[colName] = this._makeParam(paramName);
+      }
+    });
+
+    return {
+      sql: `UPDATE ${this.escape(source)} SET ${
+        Object.entries(data).map(([key, val]) => `${key} = ${val}`).join(', ')
+      }${filter.length > 0 ? ` WHERE ${filter}` : ``};`,
+      params: params.asRecord(),
+    };
+  }
+
+  public delete(obj: DeleteQuery): Query {
+    if (obj.type !== 'DELETE') {
+      throw new DAMTranslatorBaseError(`Invalid query type: ${obj.type}`, {
+        dialect: this.dialect,
+      });
+    }
+    const [columns, params] = this._processColumns(obj),
+      source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source,
+      filter = this.buildFilter(obj.filters || {}, columns, params)[0];
+
+    return {
+      sql: `DELETE FROM ${this.escape(source)}${
+        filter.length > 0 ? ` WHERE ${filter}` : ``
+      };`,
+      params: params.asRecord(),
+    };
+  }
+
+  public select(obj: SelectQuery): Query {
+    if (obj.type !== 'SELECT') {
+      throw new DAMTranslatorBaseError(`Invalid query type: ${obj.type}`, {
+        dialect: this.dialect,
+      });
+    }
+    const [columns, params] = this._processColumns(obj),
+      source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source,
+      filter = this.buildFilter(obj.filters || {}, columns, params)[0],
+      joins = Object.entries(obj.joins || {}).map(([key, value]) => {
+        const source = value.schema
+            ? `${value.schema}.${value.source}`
+            : value.source,
+          alias = key,
+          relation = Object.entries(value.relation).map(([k, v]) => {
+            // Check if both column exists
+            // @TODO Maybe support JSON column here???
+            // @TODO Add Support for QueryFilters
+            let sourceColumn: string, targetColumn: string;
+            if (columns[`$${k}`]) {
+              sourceColumn = columns[`$${k}`];
+            } else if (columns[`$${alias}.${k}`]) {
+              sourceColumn = columns[`$${alias}.${k}`];
+            } else {
+              console.log(columns);
+              throw new DAMTranslatorBaseError(
+                `Column ${k} in relation for ${alias} does not exist.`,
+                { dialect: this.dialect },
+              );
+            }
+            const dv = v.substring(1);
+            if (columns[`$${dv}`]) {
+              targetColumn = columns[`$${dv}`];
+            } else if (columns[`$MAIN.${dv}`]) {
+              targetColumn = columns[`$MAIN.${dv}`];
+            } else {
+              throw new DAMTranslatorBaseError(
+                `Column ${dv} in relation for ${alias} does not exist.`,
+                { dialect: this.dialect },
+              );
+            }
+            return `${sourceColumn} = ${targetColumn}`;
+          }).join(' AND ');
+        return ` LEFT JOIN ${this.escape(source)} AS ${
+          this.escape(alias)
+        } ON (${relation})`;
+      }),
+      project: Record<string, string> = {},
+      aggregate: Record<string, string> = {},
+      groupBy: string[] = [], 
+      limit = obj.limit ? ` LIMIT ${obj.limit}` : '', 
+      offset = obj.offset ? ` OFFSET ${obj.offset}` : '', 
+      orderBy = Object.entries(obj.orderBy || {}).map(([key, value]) => {
+        const sort = value.trim().toUpperCase();
+        if(sort !== 'ASC' && sort !== 'DESC') {
+          throw new DAMTranslatorBaseError(
+            `Invalid sort order: ${value} for ${key}.`,
+            { dialect: this.dialect },
+          );
+        }
+        if(columns[`${key}`]) {
+          return `${columns[`${key}`]} ${sort}`;
+        } else if (columns[`$MAIN.${key}`]) {
+          return `${columns[`$MAIN.${key}`]} ${sort}`;
+        } else {
+          throw new DAMTranslatorBaseError(
+            `Column name: ${key} is not defined.`,
+            { dialect: this.dialect },
+          );
+        }
+      }).join(', ');
+
+    if (obj.groupBy) {
+      obj.groupBy.forEach((column) => {
+        if (!columns[`${column}`]) {
+          throw new DAMTranslatorBaseError(
+            `Column name: ${column} is not defined.`,
+            { dialect: this.dialect },
+          );
+        }
+        groupBy.push(columns[`${column}`]);
+      });
+    }
+
+    Object.entries(obj.project).forEach(([key, value]) => {
+      key = this.escape(key);
+      if (this._isColumnIdentifier(value)) {
+        value = value.toString().substring(1);
+        if (columns[`$${value}`]) {
+          project[key] = columns[value as `$${string}`];
+        } else if (columns[`$MAIN.${value}`]) {
+          project[key] = columns[`$MAIN.${value}`];
+        } else {
+          throw new DAMTranslatorBaseError(
+            `Column name: ${value} is not defined.`,
+            { dialect: this.dialect },
+          );
+        }
+      } else if (this._isExpression(value)) {
+        const [sql, _] = this.buildExpression(
+          value as Expressions,
+          columns,
+          params,
+        );
+        project[key] = sql;
+      } else if (this._isAggregate(value)) {
+        const [sql, _] = this.buildAggregate(
+          value as Aggregate,
+          columns,
+          params,
+        );
+        aggregate[key] = sql;
+      } else {
+        const paramName = params.create(value);
+        project[key] = this._makeParam(paramName);
+      }
+    });
+
+    // Ok add GroupBy if aggregate is present
+    if (Object.keys(aggregate).length > 0) {
+      Object.entries(project).forEach(([_key, value]) => {
+        // console.log(`Checking ${value}`);
+        if (!groupBy.includes(value)) {
+          groupBy.push(value);
+        }
+      });
+      // Move aggregate to project
+      Object.assign(project, aggregate);
+    }
+
+    return {
+      sql: `SELECT ${
+        Object.entries(project).map(([key, value]) => `${value} AS ${key}`)
+          .join(', ')
+      } FROM ${this.escape(source)} AS ${this.escape('MAIN')}${
+        joins.join(' ')
+      }${filter.length > 0 ? ` WHERE ${filter}` : ``}${
+        groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : ``
+      }${orderBy}${limit}${offset};`,
+      params: params.asRecord(),
+    };
+  }
+
+  public count(obj: CountQuery): Query {
+    if (obj.type !== 'COUNT') {
+      throw new DAMTranslatorBaseError(`Invalid query type: ${obj.type}`, {
+        dialect: this.dialect,
+      });
+    }
+    return this.select({
+      ...obj,
+      ...{
+        type: 'SELECT',
+        project: { TotalRows: { $aggr: 'COUNT', $args: '*' } },
+      },
+    });
+  }
+
+  public truncate(obj: TruncateQuery): Query {
+    if (obj.type !== 'TRUNCATE') {
+      throw new DAMTranslatorBaseError(`Invalid query type: ${obj.type}`, {
+        dialect: this.dialect,
+      });
+    }
+    const source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source;
+    return {
+      sql: `TRUNCATE TABLE ${this.escape(source)}${
+        this.capability.cascade ? ` CASCADE` : ``
       };`,
       params: {},
     };
   }
 
-  public beautify(sql: string): string {
+  public createSchema(obj: CreateSchemaQuery): Query {
+    if (obj.type !== 'CREATE_SCHEMA') {
+      throw new DAMTranslatorBaseError(`Invalid query type: ${obj.type}`, {
+        dialect: this.dialect,
+      });
+    }
+    return {
+      sql: `CREATE SCHEMA IF NOT EXISTS ${this.escape(obj.schema)};`,
+      params: {},
+    };
+  }
+
+  public dropSchema(obj: DropSchemaQuery): Query {
+    if (obj.type !== 'DROP_SCHEMA') {
+      throw new DAMTranslatorBaseError(`Invalid query type: ${obj.type}`, {
+        dialect: this.dialect,
+      });
+    }
+    return {
+      sql: `DROP SCHEMA IF EXISTS ${this.escape(obj.schema)}${
+        this.capability.cascade ? ` CASCADE` : ``
+      };`,
+      params: {},
+    };
+  }
+
+  public createView(obj: CreateViewQuery): Query {
+    if (obj.type !== 'CREATE_VIEW') {
+      throw new DAMTranslatorBaseError(`Invalid query type: ${obj.type}`, {
+        dialect: this.dialect,
+      });
+    }
+    const q = this.select(obj.query);
+    return {
+      sql: `CREATE ${
+        obj.materialized && this.capability.matview ? `MATERIALIZED ` : ``
+      }VIEW ${this.escape(obj.source)} AS ${q.sql};`,
+      params: q.params,
+    };
+  }
+
+  public dropView(obj: DropViewQuery): Query {
+    if (obj.type !== 'DROP_VIEW') {
+      throw new DAMTranslatorBaseError(`Invalid query type: ${obj.type}`, {
+        dialect: this.dialect,
+      });
+    }
+    return {
+      sql: `DROP ${
+        obj.materialized && this.capability.matview ? `MATERIALIZED ` : ``
+      }VIEW IF EXISTS ${this.escape(obj.source)};`,
+      params: {},
+    };
+  }
+
+  public createTable(obj: CreateTableQuery): Array<Query> {
+    if (obj.type !== 'CREATE_TABLE') {
+      throw new DAMTranslatorBaseError(`Invalid query type: ${obj.type}`, {
+        dialect: this.dialect,
+      });
+    }
+    const source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source,
+      columns = Object.entries(obj.columns).map(([name, defn]) => {
+        return this._generateColumnDefinition(name, defn);
+      }),
+      primaryKeys = obj.primaryKeys
+        ? `PRIMARY KEY (${obj.primaryKeys.map(this.escape).join(', ')})`
+        : '',
+      uniqueKeys = Object.entries(obj.uniqueKeys || {}).map(([key, value]) => {
+        return `CONSTRAINT ${
+          this.escape(`UK_${source.replace('.', '_')}_${key}`)
+        } UNIQUE (${value.map(this.escape).join(', ')})`;
+      }),
+      foreignKeys = Object.entries(obj.foreignKeys || {}).map(
+        ([key, value]) => {
+          const relatedTable = value.schema
+            ? `${value.schema}.${value.source}`
+            : value.source;
+          const sourceColumns = Object.keys(value.relation).map(this.escape)
+            .join(', ');
+          const relatedColumns = Object.values(value.relation).map(this.escape)
+            .join(', ');
+          return `ADD CONSTRAINT ${
+            this.escape(`FK_${source.replace('.', '_')}_${key}`)
+          } FOREIGN KEY (${sourceColumns}) REFERENCES ${
+            this.escape(relatedTable)
+          }(${relatedColumns})`;
+        },
+      );
+
+    const sql: Query[] = [];
+    sql.push({
+      sql: `CREATE TABLE IF NOT EXISTS ${this.escape(source)} (${
+        columns.join(', ')
+      }${primaryKeys.length > 0 ? `, ${primaryKeys}` : ''}${
+        uniqueKeys.length > 0 ? `, ${uniqueKeys.join(', ')}` : ''
+      });`,
+    });
+    if (foreignKeys.length > 0) {
+      sql.push({
+        sql: `ALTER TABLE ${this.escape(source)} ${foreignKeys.join(', ')};`,
+      });
+    }
+    return sql;
+  }
+
+  /**
+   * Generates a Drop table statement.
+   *
+   * @param obj - The DropTableQuery object containing the details of the table to be dropped.
+   * @returns A Query object representing the SQL query to drop the table.
+   * @throws Error if the query object type is invalid.
+   */
+  public dropTable(obj: DropTableQuery): Query {
+    if (obj.type !== 'DROP_TABLE') {
+      throw new DAMTranslatorBaseError(`Invalid query type: ${obj.type}`, {
+        dialect: this.dialect,
+      });
+    }
+    const source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source;
+    return {
+      sql: `DROP TABLE IF EXISTS ${this.escape(source)}${
+        this.capability.cascade ? ` CASCADE` : ``
+      };`,
+      params: {},
+    };
+  }
+
+  /**
+   * Replaces any parameters with actual values. Useful for script generation.
+   *
+   * @param obj The Query object to be processed.
+   * @returns SQL String with all parameters replaced
+   */
+  public substituteParams(obj: Query): string {
+    if (!obj.params || Object.keys(obj.params).length === 0) {
+      return obj.sql;
+    }
+    Object.entries(obj.params).forEach(([key, value]) => {
+      const qval = this.quote(value);
+      obj.sql = obj.sql.replace(new RegExp(`:${key}:`, 'g'), qval);
+    });
+    return obj.sql;
+  }
+
+  /**
+   * Tries to "beautify" the SQL string by adding line breaks and indentation.
+   *
+   * @param value - The string to be escaped.
+   * @returns The escaped string.
+   */
+  public beautify(query: string | Query): string {
+    const sql = typeof query === 'string'
+      ? query
+      : this.substituteParams(query);
     const keywords = [
       'SELECT',
       'FROM',
@@ -71,6 +579,9 @@ export abstract class AbstractTranslator {
       'UPDATE',
       'SET',
       'DELETE FROM',
+      'TRUNCATE TABLE',
+      'CREATE SCHEMA',
+      'DROP SCHEMA',
     ];
     const formattedSql = sql.split(/\s+/) // Split the SQL by whitespace
       .map((word, index, words) => {
@@ -112,545 +623,740 @@ export abstract class AbstractTranslator {
     return formattedSql.trim(); // Trim leading/trailing whitespace
   }
 
-  protected _makeSource(source: string, schema?: string) {
-    if (this._schemaSupported === false) {
-      schema = undefined;
+  /**
+   * Builds an SQL expression based on the provided expression object, columns, and parameters.
+   *
+   * @param obj - The expression object.
+   * @param columns - The columns mapping.
+   * @param parameters - Optional parameters object.
+   * @returns A tuple containing the generated SQL expression and the updated parameters object.
+   * @throws Error if the expression object is invalid.
+   */
+  public buildExpression(
+    obj: Expressions,
+    columns: Record<string, string>,
+    parameters?: Parameters,
+  ): [string, Parameters] {
+    if (this._isExpression(obj) === false) {
+      throw new DAMTranslatorBaseError(
+        `Invalid expression object: ${JSON.stringify(obj)}`,
+        { dialect: this.dialect },
+      );
     }
-    return [schema, source].filter((v) => v !== undefined && v.length > 0).join(
-      '.',
-    );
+    const params: Parameters = parameters || new Parameters();
+    // Ok lets process it
+    const expr = obj.$expr,
+      exprArgs: string[] = [],
+      rawArgs = (obj as { $expr: string; $args: unknown | unknown[] }).$args,
+      processArgs = (args: unknown | unknown[]) => {
+        if (args === undefined) {
+          return;
+        } else if (expr === 'JSON_VALUE') {
+          // JSON_VALUE is a special case
+          const [column, path] = args as [string, string[]];
+          // exprArgs.push(this.escape(column.substring(1)));
+          // exprArgs.push(...path.map((part) => `${part}`));
+          exprArgs.push(column.substring(1));
+          exprArgs.push(...path.map((part) => `${part}`));
+        } else if (Array.isArray(args)) {
+          args.forEach((arg) => {
+            processArgs(arg);
+          });
+          return;
+        } else {
+          if (this._isExpression(args)) {
+            const [sql, _] = this.buildExpression(
+              args as Expressions,
+              columns,
+              params,
+            );
+            exprArgs.push(sql);
+          } else if (this._isColumnIdentifier(args)) {
+            // @TODO JSON Value
+            const parts = (args as string).substring(1).split('.');
+            if (columns[`$${parts[0]}`]) {
+              if (parts.length > 1) {
+                const [v, _] = this.buildExpression(
+                  {
+                    $expr: 'JSON_VALUE',
+                    $args: [columns[`$${parts[0]}`], parts.slice(1)],
+                  } as Expressions,
+                  columns,
+                  params,
+                );
+                exprArgs.push(v);
+              } else {
+                exprArgs.push(columns[`$${parts[0]}`]);
+              }
+            } else if (columns[`$MAIN.${parts[0]}`]) {
+              if (parts.length > 1) {
+                const [v, _] = this.buildExpression(
+                  {
+                    $expr: 'JSON_VALUE',
+                    $args: [columns[`$MAIN.${parts[0]}`], parts.slice(1)],
+                  } as Expressions,
+                  columns,
+                  params,
+                );
+                exprArgs.push(v);
+              } else {
+                exprArgs.push(columns[`$MAIN.${parts[0]}`]);
+              }
+            } else if (
+              parts.length > 1 && columns[`$${parts[0]}.${parts[1]}`]
+            ) {
+              if (parts.length > 2) {
+                const [v, _] = this.buildExpression(
+                  {
+                    $expr: 'JSON_VALUE',
+                    $args: [
+                      columns[`$${parts[0]}.${parts[1]}`],
+                      parts.slice(2),
+                    ],
+                  } as Expressions,
+                  columns,
+                  params,
+                );
+                exprArgs.push(v);
+              } else {
+                exprArgs.push(columns[`$${parts[0]}.${parts[1]}`]);
+              }
+            } else {
+              // console.log(columns);
+              throw new DAMTranslatorBaseError(
+                `Invalid column identifier: ${args} in expression ${expr}.`,
+                { dialect: this.dialect },
+              );
+            }
+            // exprArgs.push(this.escape((args as string).substring(1) as string));
+          } else {
+            const paramName = params?.create(args);
+            exprArgs.push(this._makeParam(paramName));
+          }
+        }
+      };
+    processArgs(rawArgs);
+    return [this._generateExpressionSQL(expr, exprArgs), params];
   }
 
+  /**
+   * Builds an aggregate SQL expression based on the provided aggregate object, columns, and optional parameters.
+   *
+   * @param obj - The aggregate object.
+   * @param columns - The columns mapping.
+   * @param parameters - Optional parameters.
+   * @returns A tuple containing the generated SQL expression and the updated parameters.
+   * @throws Error if the aggregate object is invalid or if there is an invalid column identifier in the expression.
+   */
+  public buildAggregate(
+    obj: Aggregate,
+    columns: Record<string, string>,
+    parameters?: Parameters,
+  ): [string, Parameters] {
+    if (this._isAggregate(obj) === false) {
+      throw new DAMTranslatorBaseError(
+        `Invalid aggregate object: ${JSON.stringify(obj)}`,
+        { dialect: this.dialect },
+      );
+    }
+    const expr = obj.$aggr,
+      exprArgs: string[] = [],
+      rawArgs = (obj as { $aggr: string; $args: unknown | unknown[] }).$args,
+      params: Parameters = parameters || new Parameters(),
+      processArgs = (args: unknown | unknown[]) => {
+        if (Array.isArray(args)) {
+          args.forEach((arg) => {
+            processArgs(arg);
+          });
+          return;
+        } else {
+          if (this._isExpression(args)) {
+            const [sql, _] = this.buildExpression(
+              args as Expressions,
+              columns,
+              params,
+            );
+            // Object.assign(params, p);
+            exprArgs.push(sql);
+          } else if (this._isColumnIdentifier(args)) {
+            const parts = (args as string).substring(1).split('.');
+            if (columns[`$${parts[0]}`]) {
+              if (parts.length > 1) {
+                const [v, _] = this.buildExpression(
+                  {
+                    $expr: 'JSON_VALUE',
+                    $args: [columns[`$${parts[0]}`], parts.slice(1)],
+                  } as Expressions,
+                  columns,
+                  params,
+                );
+                exprArgs.push(v);
+              } else {
+                exprArgs.push(columns[`$${parts[0]}`]);
+              }
+            } else if (columns[`$MAIN.${parts[0]}`]) {
+              if (parts.length > 1) {
+                const [v, _] = this.buildExpression(
+                  {
+                    $expr: 'JSON_VALUE',
+                    $args: [columns[`$MAIN.${parts[0]}`], parts.slice(1)],
+                  } as Expressions,
+                  columns,
+                  params,
+                );
+                exprArgs.push(v);
+              } else {
+                exprArgs.push(columns[`$MAIN.${parts[0]}`]);
+              }
+            } else if (
+              parts.length > 1 && columns[`$${parts[0]}.${parts[1]}`]
+            ) {
+              if (parts.length > 2) {
+                const [v, _] = this.buildExpression(
+                  {
+                    $expr: 'JSON_VALUE',
+                    $args: [
+                      columns[`$${parts[0]}.${parts[1]}`],
+                      parts.slice(2),
+                    ],
+                  } as Expressions,
+                  columns,
+                  params,
+                );
+                exprArgs.push(v);
+              } else {
+                exprArgs.push(columns[`$${parts[0]}.${parts[1]}`]);
+              }
+            } else {
+              throw new DAMTranslatorBaseError(
+                `Invalid column identifier: ${args} in expression ${expr}.`,
+                { dialect: this.dialect },
+              );
+            }
+            // exprArgs.push(this.escape((args as string).substring(1) as string));
+          } else if (args instanceof Object && expr === 'JSON_ROW') {
+            // Parse each item and if there is an expression or aggregate, process it
+            const jsonRow: string[] = [];
+            Object.entries(args).forEach(([key, value]) => {
+              if (this._isExpression(value)) {
+                const [sql, _] = this.buildExpression(
+                  value as Expressions,
+                  columns,
+                  params,
+                );
+                // Object.assign(params, p);
+                jsonRow.push(`'${key}', ${sql}`);
+              } else if (this._isAggregate(value)) {
+                const [sql, _] = this.buildAggregate(
+                  value as Aggregate,
+                  columns,
+                  params,
+                );
+                // Object.assign(params, p);
+                jsonRow.push(`'${key}', ${sql}`);
+              } else if (this._isColumnIdentifier(value)) {
+                // @TODO JSON Value
+
+                jsonRow.push(
+                  `'${key}', ${
+                    this.escape((value as string).substring(1) as string)
+                  }`,
+                );
+              } else {
+                // const paramName = `expr_${nanoId(5, alphaNumeric)}`;
+                // params[paramName] = value;
+                const paramName = params.create(value);
+                jsonRow.push(`'${key}', ${this._makeParam(paramName)}`);
+              }
+            });
+            exprArgs.push(jsonRow.join(', '));
+          } else {
+            if (args === '*') {
+              exprArgs.push('*');
+            } else {
+              // const paramName = `expr_${nanoId(5, alphaNumeric)}`;
+              // params[paramName] = args;
+              const paramName = params.create(args);
+              exprArgs.push(this._makeParam(paramName));
+            }
+          }
+        }
+      };
+    processArgs(rawArgs);
+    return [this._generateAggregateSQL(expr, exprArgs), params];
+  }
+
+  /**
+   * Builds a filter string and parameters based on the provided query filters, columns mapping, and optional parameters.
+   *
+   * @param obj - The query filters object.
+   * @param columns - The mapping of column identifiers to their corresponding SQL column names.
+   * @param parameters - Optional parameters object to store parameter values.
+   * @returns A tuple containing the filter string and parameters.
+   */
+  public buildFilter(
+    obj: QueryFilters,
+    columns: Record<string, string>,
+    parameters?: Parameters,
+  ): [string, Parameters] {
+    const params: Parameters = parameters || new Parameters(),
+      filters: string[] = [],
+      processValue = (value: unknown | unknown[]): string | Array<string> => {
+        if (Array.isArray(value)) {
+          return value.map(processValue) as string[];
+        } else {
+          if (this._isColumnIdentifier(value)) {
+            // Check for JSON Value
+            const parts = (value as string).substring(1).split('.');
+            let col: string;
+            if (columns[`$${parts[0]}`]) {
+              col = `$${parts.shift()}`;
+            } else if (columns[`$${parts[0]}.${parts[1]}`]) {
+              col = `$${parts.shift()}.${parts.shift()}`;
+            } else if (parts[0] === 'MAIN' && columns[`$${parts[1]}`]) {
+              parts.shift();
+              col = `$${parts.shift()}`;
+            } else {
+              throw new DAMTranslatorBaseError(
+                `Could not find column: ${value} in expression/aggregate.`,
+                { dialect: this.dialect },
+              );
+            }
+            if (parts.length > 0) {
+              const [v, _] = this.buildExpression(
+                {
+                  $expr: 'JSON_VALUE',
+                  $args: [col as string, parts],
+                } as Expressions,
+                columns,
+                params,
+              );
+              return v;
+            } else {
+              return columns[`${col}`];
+            }
+          } else if (this._isExpression(value)) {
+            const [sql, _] = this.buildExpression(
+              value as Expressions,
+              columns,
+              params,
+            );
+            return sql;
+          } else {
+            const paramName = params.create(value);
+            return this._makeParam(paramName);
+          }
+        }
+      },
+      build = (obj: QueryFilters, joiner: 'AND' | 'OR'): string => {
+        Object.entries(obj).forEach(([key, value]) => {
+          if (key === '$and') {
+            filters.push(
+              `(${(value as QueryFilters[]).map((f) => build(f, 'AND'))})`,
+            );
+          } else if (key === '$or') {
+            filters.push(
+              `(${(value as QueryFilters[]).map((f) => build(f, 'OR'))})`,
+            );
+          } else {
+            // Process key column
+            if (this._isColumnIdentifier(key)) {
+              const parts = (key as string).substring(1).split('.');
+              if (parts[0] === 'MAIN' && Object.keys(columns).length === 0) {
+                // console.log('Stupid if condition');
+                parts.shift();
+              }
+              // First check against table.column
+              if (parts.length > 1 && columns[`$${parts[0]}.${parts[1]}`]) {
+                // Yes it exists
+                key = `$${parts.join('.')}`;
+              } else if (columns[`$${parts[0]}`]) {
+                key = `$${parts.join('.')}`;
+              } else {
+                // console.log(columns);
+                throw new DAMTranslatorBaseError(
+                  `Could not find column: ${key} in filter.`,
+                  { dialect: this.dialect },
+                );
+              }
+            } else {
+              if (columns[`$${key}`]) {
+                key = columns[`$${key}`];
+              } else if (columns[`$MAIN.${key}`]) {
+                key = columns[`$MAIN.${key}`];
+              } else {
+                throw new DAMTranslatorBaseError(
+                  `Could not find column: ${key} in filter.`,
+                  { dialect: this.dialect },
+                );
+              }
+            }
+            // Process operator
+            let operator: Operators = '$eq'; // Defaults to $eq
+            // Lets handle some simple cases
+            if (value === null || value === undefined) {
+              operator = '$null';
+              filters.push(this._generateFilterSQL(key, operator, ['true']));
+            } else if (
+              ['string', 'number', 'bigint', 'boolean'].includes(
+                typeof value,
+              ) || value instanceof Date
+            ) {
+              operator = '$eq';
+              // Create parameter
+              let val = processValue(value);
+              if (!Array.isArray(val)) {
+                val = [val];
+              }
+              filters.push(this._generateFilterSQL(key, operator, val));
+            } else if (Array.isArray(value)) {
+              operator = '$in';
+              let val = processValue(value);
+              if (!Array.isArray(val)) {
+                val = [val];
+              }
+              filters.push(this._generateFilterSQL(key, operator, val));
+            } else if (value instanceof Object && !(value instanceof Date)) {
+              Object.entries(value).forEach(([op, val]) => {
+                if (!OperatorsNames.includes(op)) {
+                  throw new DAMTranslatorBaseError(
+                    `Invalid operator: ${op} for ${key}`,
+                    { dialect: this.dialect },
+                  );
+                }
+                operator = op as Operators;
+                if (operator === '$null') {
+                  val = val as boolean;
+                } else {
+                  val = processValue(val);
+                }
+                if (!Array.isArray(val)) {
+                  val = [val];
+                }
+                filters.push(this._generateFilterSQL(key, operator, val));
+              });
+            } else {
+              // console.log(typeof value);
+              throw new DAMTranslatorBaseError(
+                `Invalid value for filter: ${value}`,
+                { dialect: this.dialect },
+              );
+            }
+          }
+        });
+
+        return filters.join(` ${joiner} `);
+      };
+    if (Object.keys(obj).length === 0) {
+      return ['', params];
+    }
+    return [build(obj, 'AND'), params];
+  }
+
+  /**
+   * Processes columns and expressions from the query object and returns a single mapping of all columns.
+   * This will also generate the SQL for expressions.
+   *
+   * @param obj - The query object containing the columns and joins.
+   * @returns An array containing the extracted columns and parameters.
+   */
+  protected _processColumns(
+    obj: ProcessQueryColumns & { joins?: Record<string, ProcessQueryColumns> },
+  ): [Record<string, string>, Parameters] {
+    const params: Parameters = new Parameters(),
+      joinList = Object.keys(obj.joins || {}),
+      hasJoins = joinList.length > 0,
+      columns: Record<string, string> = {},
+      normalizeArgs = (
+        exp: { $expr: string; $args?: unknown | unknown[] },
+        alias?: string,
+      ): Expressions => {
+        if (exp.$args === undefined) {
+          return exp as Expressions;
+        }
+        const validate = (earg: unknown, alias?: string) => {
+          if (this._isExpression(earg) || this._isAggregate(earg)) {
+            earg = normalizeArgs(
+              earg as { $expr: string; $args?: unknown | unknown[] },
+              alias,
+            );
+          } else if (this._isColumnIdentifier(earg)) {
+            const parts = (earg as string).substring(1).split('.');
+            if (parts[0] === 'MAIN' && hasJoins === false) {
+              parts.shift();
+            }
+            // First check against table.column
+            if (parts.length > 1 && columns[`$${parts[0]}.${parts[1]}`]) {
+              // Yes it exists
+              earg = `$${parts.join('.')}`;
+            } else if (columns[`$${alias}.${parts[0]}`]) {
+              earg = `$${alias}.${parts.join('.')}`;
+            } else if (columns[`$${parts[0]}`]) {
+              earg = `$${parts.join('.')}`;
+            } else if (columns[`$MAIN.${parts[0]}`]) {
+              earg = `$MAIN.${parts.join('.')}`;
+            } else {
+              throw new DAMTranslatorBaseError(
+                `Could not find column: ${earg} in expression/aggregate.`,
+                { dialect: this.dialect },
+              );
+            }
+          }
+          return earg;
+        };
+        if (Array.isArray(exp.$args)) {
+          exp.$args = exp.$args.map((e) => validate(e, alias));
+        } else {
+          exp.$args = validate(exp.$args, alias);
+        }
+        return exp as Expressions;
+      },
+      extractColumns = (obj: ProcessQueryColumns, alias?: string) => {
+        obj.columns.forEach((column) => {
+          if (alias) {
+            columns[`$${alias}.${column}`] = `${this.escape(alias)}.${
+              this.escape(column)
+            }`;
+          } else {
+            columns[`$${column}`] = this.escape(column);
+          }
+        });
+      },
+      extractExpressions = (obj: ProcessQueryColumns, alias?: string) => {
+        if (obj.expressions) {
+          Object.entries(obj.expressions).forEach(([key, value]) => {
+            if (obj.columns.includes(key)) {
+              throw new DAMTranslatorBaseError(
+                `Expression name: ${key} is already defined as a column.`,
+                { dialect: this.dialect },
+              );
+            }
+            // Normalize args if it exists
+            value = normalizeArgs(value, alias);
+            const [sql, _] = this.buildExpression(value, columns, params);
+            if (alias) {
+              columns[`$${alias}.${key}`] = sql;
+            } else {
+              columns[`$${key}`] = sql;
+            }
+          });
+        }
+      };
+    const mainAlias: string | undefined = hasJoins ? 'MAIN' : undefined;
+    extractColumns(obj, mainAlias);
+    // loop through joins and extract columns
+    Object.entries(obj.joins || {}).forEach(([key, value]) => {
+      const alias = key;
+      extractColumns(value, alias);
+    });
+    extractExpressions(obj, mainAlias);
+    // loop through joins and extract expressions
+    Object.entries(obj.joins || {}).forEach(([key, value]) => {
+      const alias = key;
+      extractExpressions(value, alias);
+    });
+    return [columns, params];
+  }
+
+  /**
+   * Checks if the given value is an expression.
+   * An expression is an object that has a '$expr' property and its value is included in the ExpressionNames array.
+   *
+   * @param value - The value to check.
+   * @returns A boolean indicating whether the value is an expression.
+   */
+  protected _isExpression(value: unknown): boolean {
+    return value instanceof Object && Object.keys(value).includes('$expr') &&
+      ExpressionNames.includes((value as Expressions).$expr);
+  }
+
+  /**
+   * Checks if the given value is an aggregate.
+   * @param value - The value to check.
+   * @returns `true` if the value is an aggregate, `false` otherwise.
+   */
+  protected _isAggregate(value: unknown): boolean {
+    return value instanceof Object && Object.keys(value).includes('$aggr') &&
+      AggregateNames.includes((value as Aggregate).$aggr);
+  }
+
+  /**
+   * Checks if the given value is a column identifier.
+   * A column identifier is a string that starts with a '$' symbol.
+   *
+   * @param value - The value to check.
+   * @returns `true` if the value is a column identifier, `false` otherwise.
+   */
+  protected _isColumnIdentifier(value: unknown): boolean {
+    return typeof value === 'string' && value.startsWith('$');
+  }
+
+  /**
+   * Makes a parameter string for the given name.
+   * @param name - The name of the parameter.
+   * @returns The parameter string.
+   */
   protected _makeParam(name: string): string {
     return `:${name}:`;
   }
 
-  protected _processDML(query: DMLQueries): Query {
-    if (
-      !['INSERT', 'UPDATE', 'DELETE', 'SELECT', 'COUNT'].includes(query.type)
-    ) {
-      throw new Error(
-        `Process can only be invoked for INSERT, UPDATE, DELETE, SELECT, and COUNT queries`,
-      );
-    }
-
-    const { project, filters, join } = {
-      ...{ project: {}, filters: {}, join: {} },
-      ...query,
-    };
-
-    const params: Record<string, unknown> = {};
-    const expressions: Record<string, string> = {};
-    const joins: Record<string, { source: string; on: string }> = {};
-    const joinKeys = Object.keys(join);
-
-    const getNextParamPlaceholder = (
-      prefix: string,
-      counter: number,
-    ): string => {
-      return `${prefix}_${counter}_param`;
-    };
-
-    /**
-     * Processes a project and returns a record of translated values.
-     *
-     * @param project - The project to process.
-     * @param alias - The alias for the project. Default is 'MAIN'.
-     * @param joins - The joins to apply. Default is an empty array.
-     * @returns A record of translated values.
-     */
-    const processProject = (
-      project: ProjectColumns,
-      alias = 'MAIN',
-      joins: string[] = [],
-    ): Record<string, string> => {
-      const projectReturn: Record<string, string> = {};
-
-      for (const [key, value] of Object.entries(project)) {
-        if (value === false) {
-          continue;
-        }
-
-        if (typeof value === 'object' && !(value instanceof Date)) {
-          const [expr, exprparams] = processExpression(value, alias, joins);
-          expressions[key] = expr;
-          Object.entries(exprparams).forEach(([k, v]) => {
-            params[k] = v;
-          });
-        } else {
-          const col = processColumn(key, alias, joins);
-          // console.log(col.value, col.type);
-
-          if (col.type === 'TABLE') {
-            if (typeof value !== 'boolean') {
-              throw new Error(
-                `Alias value must be boolean for ${key} as it represents a row in Table`,
-              );
-            }
-            projectReturn[col.value] = 'TABLE';
-          }
-
-          if (col.type === 'JSON') {
-            if (typeof value !== 'string') {
-              throw new Error(`Alias value for ${key} must be string`);
-            }
-            projectReturn[value] = col.value;
-          }
-
-          if (col.type === 'COLUMN') {
-            if (typeof value === 'boolean' && value === true) {
-              projectReturn[key.replace('$', '')] = this._quote(col.value);
-            } else if (typeof value === 'string') {
-              projectReturn[value] = this._quote(col.value);
-            }
-          }
-        }
-      }
-
-      return projectReturn;
-    };
-
-    /**
-     * Processes a column and returns its type and value.
-     *
-     * @param column - The column to process.
-     * @param alias - The alias of the column.
-     * @param joins - The list of joins.
-     * @returns An object containing the type and value of the processed column.
-     */
-    const processColumn = (
-      column: string,
-      alias: string,
-      joins: string[],
-    ): { type: 'COLUMN' | 'JSON' | 'TABLE'; value: string } => {
-      const col: string[] = [];
-      if (joins.length > 0) {
-        col.push(alias);
-      }
-      if (column.startsWith('$')) {
-        const parts = column.substring(1).split('.');
-        let index = 0;
-        if (
-          joins.includes(parts[index]) || parts[index] === alias ||
-          parts[index] === 'MAIN'
-        ) {
-          col[0] = parts[index];
-          index++;
-        }
-        if (index === parts.length) {
-          return { type: 'TABLE', value: col[0] };
-        } else {
-          col.push(parts[index]);
-          index++;
-          if (index < parts.length) {
-            return {
-              type: 'JSON',
-              value: this._JSONValue(col.join('.'), parts.slice(index)),
-            };
-          } else {
-            const colJoined = col.join('.');
-            return { type: 'COLUMN', value: colJoined };
-          }
-        }
-      } else {
-        col.push(column);
-        const colJoined = col.join('.');
-        return { type: 'COLUMN', value: colJoined };
-      }
-    };
-
-    /**
-     * Processes an expression and returns the statement and parameters.
-     *
-     * @param expr - The expression to process.
-     * @param alias - The alias for the expression.
-     * @param joins - The joins for the expression.
-     * @returns A tuple containing the statement and parameters.
-     */
-    const processExpression = (
-      expr: string | Expressions,
-      alias: string,
-      joins: string[],
-    ): [string, Record<string, unknown>] => {
-      let paramCounter = 0;
-      const params: Record<string, unknown> = {};
-
-      const processExpr = (
-        expr: ColumnIdentifier | string | number | bigint | Expressions,
-      ): string => {
-        if (['string', 'bigint', 'number'].includes(typeof expr)) {
-          // console.log(`!!!!!!!!!!!`, expr);
-          if (typeof expr === 'string') {
-            if (!expr.startsWith('$')) {
-              const placeholder = getNextParamPlaceholder('e', ++paramCounter);
-              params[placeholder] = expr;
-              return this._makeParam(placeholder);
-            }
-            const col = processColumn(expr, alias, joins);
-            if (col.type === 'TABLE') {
-              throw new Error(`Cannot set table as value in expression`);
-            } else if (col.type === 'JSON') {
-              return col.value;
-            } else {
-              return this._quote(col.value); // Remove the $ for direct column usage
-            }
-          } else {
-            const placeholder = getNextParamPlaceholder('e', ++paramCounter);
-            params[placeholder] = expr;
-            return this._makeParam(placeholder);
-          }
-        } else {
-          return this._processExpressionType(expr as Expressions, processExpr);
-        }
-      };
-      const stmt = processExpr(expr);
-      return [stmt, params];
-    };
-
-    /**
-     * Processes the query filters and generates the corresponding SQL statement.
-     *
-     * @param filters - The query filters.
-     * @param joins - The array of join statements.
-     * @returns The SQL statement representing the filters.
-     */
-    const processFilters = (
-      filters: QueryFilters,
-      joins: string[] = [],
-    ): string => {
-      // const params: Record<string, unknown> = {};
-      let paramCounter = 0;
-
-      const filter = (
-        filters: QueryFilters,
-        join: 'AND' | 'OR' = 'AND',
-      ): string => {
-        const stmts: string[] = [];
-        for (const [key, val] of Object.entries(filters)) {
-          if (key === '$and' || key === '$or') {
-            if (Array.isArray(val)) {
-              const inner = val.map((filter) =>
-                filter(filter, key === '$and' ? 'AND' : 'OR')
-              );
-              stmts.push(
-                `(${inner.join(` ${key === '$and' ? 'AND' : 'OR'} `)})`,
-              );
-            } else {
-              stmts.push(
-                `(${
-                  filter(
-                    val as QueryFilters,
-                    key.toUpperCase().substring(1) as 'AND' | 'OR',
-                  )
-                })`,
-              );
-            }
-            continue;
-          } else {
-            let colName: string;
-            if (Object.keys(expressions).includes(key)) {
-              // Inject expressions
-              colName = `(${expressions[key]})`;
-            } else {
-              const column = processColumn(key, 'MAIN', joins);
-              colName = column.type === 'JSON'
-                ? column.value
-                : this._quote(column.value);
-            }
-            if (val === null || val === undefined) {
-              stmts.push(`${colName} IS NULL`);
-            } else if (
-              ['string', 'number', 'boolean', 'bigint'].includes(typeof val) ||
-              val instanceof Date
-            ) {
-              const p = getNextParamPlaceholder('f_eq', ++paramCounter);
-              stmts.push(`${colName} = ${this._makeParam(p)}`);
-              params[p] = val;
-            } else if (typeof val === 'object' && !(val instanceof Date)) {
-              Object.entries(val).forEach(([op, v]) => {
-                // const paramName = newParam(op.substring(1));
-                // stmts.push(`${colName} ${op === '$eq' ? '=' : op === '$ne' ? '<>' : op === '$gt' ? '>' : op === '$gte' ? '>=' : op === '$lt' ? '<' : op === '$lte' ? '<=' : op === '$startsWith' ? 'LIKE' : op === '$endsWith' ? 'LIKE' : op === '$contains' ? 'LIKE' : op === '$in' ? 'IN' : 'NOT IN'} ${this._makeParam(param)}`);
-                // if(op === '$in' || op === '$nin') {
-                //   params[param] = val;
-                // } else {
-                //   params[param] = val;
-                // }
-                const paramName = getNextParamPlaceholder(
-                  `f_${op.substring(1)}`,
-                  ++paramCounter,
-                );
-                switch (op) {
-                  case '$eq':
-                    stmts.push(`${colName} = ${this._makeParam(paramName)}`);
-                    params[paramName] = v;
-                    break;
-                  case '$ne':
-                    stmts.push(`${colName} != ${this._makeParam(paramName)}`);
-                    params[paramName] = v;
-                    break;
-                  case '$null':
-                    stmts.push(
-                      `${colName} IS ${v === true ? 'NULL' : 'NOT NULL'}`,
-                    );
-                    break;
-                  case '$nin':
-                  case '$in':
-                    {
-                      // Make param for each value
-                      const inP: string[] = [];
-                      (v as Array<unknown>).forEach((vi, i) => {
-                        const inpN = `${paramName}_${i}`;
-                        inP.push(this._makeParam(inpN));
-                        params[inpN] = vi;
-                      });
-                      stmts.push(
-                        `${colName} ${op == '$in' ? 'IN' : 'NOT IN'} (${
-                          inP.join(', ')
-                        })`,
-                      );
-                      // params[paramName] = v;
-                    }
-                    break;
-                  case '$gt':
-                    stmts.push(`${colName} > ${this._makeParam(paramName)}`);
-                    params[paramName] = v;
-                    break;
-                  case '$gte':
-                    stmts.push(`${colName} >= ${this._makeParam(paramName)}`);
-                    params[paramName] = v;
-                    break;
-                  case '$lt':
-                    stmts.push(`${colName} < ${this._makeParam(paramName)}`);
-                    params[paramName] = v;
-                    break;
-                  case '$lte':
-                    stmts.push(`${colName} <= ${this._makeParam(paramName)}`);
-                    params[paramName] = v;
-                    break;
-                  // case '$between':
-                  case '$like':
-                    stmts.push(`${colName} LIKE ${this._makeParam(paramName)}`);
-                    params[paramName] = v;
-                    break;
-                  case '$nlike':
-                    stmts.push(
-                      `${colName} NOT LIKE ${this._makeParam(paramName)}`,
-                    );
-                    params[paramName] = v;
-                    break;
-                  case '$ilike':
-                    stmts.push(
-                      `${colName} ILIKE ${this._makeParam(paramName)}`,
-                    );
-                    params[paramName] = v;
-                    break;
-                  case '$nilike':
-                    stmts.push(
-                      `${colName} NOT ILIKE ${this._makeParam(paramName)}`,
-                    );
-                    params[paramName] = v;
-                    break;
-                  case '$contains':
-                    stmts.push(`${colName} LIKE ${this._makeParam(paramName)}`);
-                    params[paramName] = `%${v}%`;
-                    break;
-                  case '$ncontains':
-                    stmts.push(
-                      `${colName} NOT LIKE ${this._makeParam(paramName)}`,
-                    );
-                    params[paramName] = `%${v}%`;
-                    break;
-                  case '$startsWith':
-                    stmts.push(`${colName} LIKE ${this._makeParam(paramName)}`);
-                    params[paramName] = `${v}%`;
-                    break;
-                  case '$nstartsWith':
-                    stmts.push(
-                      `${colName} NOT LIKE ${this._makeParam(paramName)}`,
-                    );
-                    params[paramName] = `${v}%`;
-                    break;
-                  case '$endsWith':
-                    stmts.push(`${colName} LIKE ${this._makeParam(paramName)}`);
-                    params[paramName] = `%${v}`;
-                    break;
-                  case '$nendsWith':
-                    stmts.push(
-                      `${colName} NOT LIKE ${this._makeParam(paramName)}`,
-                    );
-                    params[paramName] = `%${v}`;
-                    break;
-                  default:
-                    throw new Error(`Unknown operator ${op}`);
-                }
-              });
-            }
-          }
-        }
-        return stmts.join(` ${join} `);
-      };
-
-      return filter(filters);
-    };
-
-    // Generate project (the main project, all project inside join will be ignored for now)
-    const finalProject = processProject(project, 'MAIN', joinKeys);
-    // Process join statements
-    if (Object.keys(join).length > 0) {
-      // Ok we have join, extract them
-      Object.entries(join).forEach(([key, value]) => {
-        const alias = key.trim();
-        const { source, project, relation } = value;
-        if (Object.keys(relation).length === 0) {
-          throw new Error(`Join condition for ${alias} is missing`);
-        }
-        // Replace the table project if it exists
-        const joinRow = this._JSONRow(
-          processProject(project, alias, Object.keys(join)),
-        );
-        if (finalProject[alias]) {
-          finalProject[alias] = joinRow;
-        }
-        joins[alias] = {
-          source: this._quote(this._makeSource(source, value.schema)),
-          on: Object.entries(relation).map(([k, v]) =>
-            `${this._quote(alias)}.${this._quote(v as string)} = ${
-              this._quote(`MAIN.${k}`)
-            }`
-          ).join(' AND '),
-        };
-      });
-    }
-    // Process filters
-    const finalFilters = processFilters(filters, joinKeys);
-
-    const source = this._quote(this._makeSource(query.source, query.schema));
-    let stmt: string;
-
-    if (query.type === 'SELECT') {
-      // Final select columns
-      const selectColumns = Object.entries(
-        Object.assign({}, finalProject, expressions),
-      ).map(([k, v]) => `${v} AS ${this._quote(k)}`).join(', ');
-      // Since we still dont support aggregation, add columns which are not table (if table exists)
-      // Basically get all columns from finalProjet where key is not in joins
-      const groupBy = Object.entries(finalProject).filter(([k]) =>
-        !Object.keys(joins).includes(k)
-      ).map(([_k, v]) => `${v}`).join(', ');
-      stmt = `SELECT ${selectColumns} FROM ${source} AS ${this._quote('MAIN')}${
-        Object.entries(joins).map(([k, v]) =>
-          ` LEFT JOIN ${v.source} AS ${this._quote(k)} ON (${v.on})`
-        ).join(' ')
-      }${finalFilters.length > 0 ? ` WHERE ${finalFilters}` : ''}${
-        groupBy.length > 0 ? ` GROUP BY ${groupBy}` : ''
-      };`;
-    } else if (query.type === 'COUNT') {
-      // Only aggregate group by columns
-      stmt = `SELECT COUNT(1) AS ${this._quote('count')} FROM ${source} AS ${
-        this._quote('MAIN')
-      }${
-        Object.entries(joins).map(([k, v]) =>
-          ` LEFT JOIN ${v.source} AS ${this._quote(k)} ON (${v.on})`
-        ).join(' ')
-      }${finalFilters.length > 0 ? ` WHERE ${finalFilters}` : ''};`;
-    } else if (query.type === 'INSERT') {
-      const insertColumns = Array.from(
-          new Set(query.data.flatMap(Object.keys)),
-        ),
-        insertValues = query.data.map((row, i) => {
-          const newRow: Record<string, unknown> = {};
-          for (const key of insertColumns) {
-            if (row[key] !== undefined && row[key] !== null) {
-              const paramName = `i_${key}_${i}`;
-              // If value is object, then it could be expression
-              const val = row[key];
-              if (
-                val !== null &&
-                (typeof val === 'object' && !(val instanceof Date) &&
-                  Object.keys(val).includes('$expr'))
-              ) {
-                // console.log('-----', val, '-------');
-                const [expr, exprparams] = processExpression(
-                  val as Expressions,
-                  'MAIN',
-                  [],
-                );
-                // console.log('-----', expr, exprparams, '-------');
-                newRow[key] = expr;
-                Object.entries(exprparams).forEach(([k, v]) => {
-                  params[k] = v;
-                });
-              } else {
-                params[paramName] = val;
-                newRow[key] = this._makeParam(paramName);
-              }
-            } else {
-              newRow[key] = 'NULL';
-            }
-          }
-          return newRow;
-        });
-      const returnCols = Object.entries(
-        Object.assign({}, finalProject, expressions),
-      ).map(([k, v]) => `${v} AS ${this._quote(k)}`).join(', ');
-      stmt = `INSERT INTO ${source} (${
-        insertColumns.map(this._quote).join(', ')
-      }) VALUES ${
-        insertValues.map((row) => `(${Object.values(row).join(', ')})`).join(
-          ', ',
-        )
-      }${returnCols.length > 0 ? ` RETURNING ${returnCols}` : ``};`;
-    } else if (query.type === 'UPDATE') {
-      const updateData: Record<string, unknown> = {};
-      Object.entries(query.data).forEach(([key, value]) => {
-        if (value === undefined || value === null) {
-          updateData[key] = 'NULL';
-        } else {
-          const paramName = `u_${key}`;
-          if (
-            typeof value === 'object' && !(value instanceof Date) &&
-            Object.keys(value).includes('$expr')
-          ) {
-            const [expr, exprparams] = processExpression(
-              value as Expressions,
-              'MAIN',
-              [],
-            );
-            updateData[key] = expr;
-            Object.entries(exprparams).forEach(([k, v]) => {
-              params[k] = v;
-            });
-          } else {
-            params[paramName] = value;
-            updateData[key] = this._makeParam(paramName);
-          }
-        }
-      });
-      stmt = `UPDATE ${source} SET ${
-        Object.entries(updateData).map(([k, v]) => `${this._quote(k)} = ${v}`)
-          .join(', ')
-      }${finalFilters.length > 0 ? ` WHERE ${finalFilters}` : ''};`;
-    } else if (query.type === 'DELETE') {
-      stmt = `DELETE FROM ${source} AS ${this._quote('MAIN')}${
-        finalFilters.length > 0 ? ` WHERE ${finalFilters}` : ''
-      };`;
-    } else {
-      throw new Error('Unknown query type');
-    }
-
-    return {
-      sql: stmt,
-      params: params,
-    };
-  }
-
-  protected abstract _quote(name: string): string;
-  protected abstract _JSONValue(column: string, path: string[]): string;
-  protected abstract _JSONRow(data: Record<string, string>): string;
-  protected abstract _processExpressionType(
-    expr: Expressions,
-    processExpression: (
-      expr: ColumnIdentifier | string | number | bigint | Expressions,
-    ) => string,
+  abstract escape(name: string): string;
+  abstract quote(value: unknown): string;
+  protected abstract _generateAggregateSQL(
+    name: string,
+    args: string[],
+  ): string;
+  protected abstract _generateExpressionSQL(
+    name: string,
+    args: string[],
+  ): string;
+  protected abstract _generateFilterSQL(
+    column: string,
+    operator: Operators,
+    value: string[],
+  ): string;
+  protected abstract _generateColumnDefinition(
+    name: string,
+    defn: CreateTableColumnDefinition,
   ): string;
 }
+
+// const a = new PostgresTranslator();
+// console.log(a.buildExpression({$expr: 'JSON_VALUE', $args: ['$a', ['b', '[0]', 'c']]}));
+// console.log(a.buildExpression({$expr: 'CONCAT', $args: ['$a', { $expr: 'UPPER', $args: 'b' }]}));
+// console.log(a.buildAggregate({$aggr: 'SUM', $args: '$a'}));
+// console.log(a.buildAggregate({$aggr: 'SUM', $args: { $expr: 'ADD', $args: [10000, 2] }}));
+// console.log(a.buildAggregate({ $aggr: 'JSON_ROW', $args: { a: '$a', b: { $expr: 'ADD', $args: [1, 2] }, c: { $aggr: 'COUNT', $args: '*' } } }));
+// console.log(a.buildExpression({ $expr: 'NOW' }));
+// console.log(
+//   a.insert({
+//     type: 'INSERT',
+//     source: 'users',
+//     // schema: 'sdfdf',
+//     columns: ['id', 'name', 'email', 'created_date'],
+//     expressions: {
+//       maskedEmail: { $expr: 'LOWER', $args: '$email.abc' },
+//     },
+//     values: [{ id: 1, name: 'test', created_date: { $expr: 'NOW' } }, {
+//       id: 2,
+//       name: 'test',
+//       created_date: { $expr: 'NOW' },
+//     }],
+//     project: {
+//       ID: '$id',
+//       Name: '$name',
+//       Email: '$email',
+//       MaskedEmail: '$maskedEmail',
+//       CreatedDate: '$created_date',
+//     },
+//   }).sql,
+// );
+
+// console.log(a.update({
+//   type: 'UPDATE',
+//   source: 'users',
+//   columns: ['id', 'name', 'email', 'created_date'],
+//   expressions: {
+//     maskedEmail: {$expr: 'LOWER', $args: '$email' }
+//   },
+//   data: {name: 'test2'},
+//   filters: {id: 1, maskedEmail: { $ne: 'sdf'} }
+// }).sql)
+
+// console.log(a.delete({
+//   type: 'DELETE',
+//   source: 'users',
+//   columns: ['id', 'name', 'email', 'created_date'],
+//   filters: {id: 1, maskedEmail: { $ne: 'sdf'} }
+// }).sql)
+
+// console.log(
+//   a.select({
+//     type: 'SELECT',
+//     source: 'users',
+//     columns: ['id', 'name', 'email', 'created_date'],
+//     expressions: {
+//       maskedEmail: { $expr: 'LOWER', $args: '$email' },
+//       abc: { $expr: 'JSON_VALUE', $args: ['$MAIN.name', ['b', '[0]', 'c']] },
+//     },
+//     filters: {
+//       id: 1,
+//       maskedEmail: { $ne: 'sdf' },
+//       name: [1, 2, 3, '3'],
+//       created_date: new Date(),
+//       '$addresses.zip': { $in: [1, 2, 3] },
+//     },
+//     joins: {
+//       addresses: {
+//         source: 'addresses',
+//         relation: {
+//           user_id: 'id',
+//         },
+//         columns: ['id', 'user_id', 'address', 'city', 'state', 'zip'],
+//         expressions: {
+//           fullAddress: {
+//             $expr: 'CONCAT',
+//             $args: [
+//               '$MAIN.name',
+//               '$address',
+//               ', ',
+//               '$city',
+//               ', ',
+//               '$state',
+//               ' ',
+//               '$zip',
+//             ],
+//           },
+//         },
+//       },
+//     },
+//     project: {
+//       ID: '$id',
+//       Name: '$name',
+//       cnt: { $aggr: 'COUNT', $args: '*' },
+//     },
+//   }).sql,
+// );
+
+// console.log(
+//   a.count({
+//     type: 'COUNT',
+//     source: 'users',
+//     columns: ['id', 'name', 'email', 'created_date'],
+//     expressions: {
+//       maskedEmail: { $expr: 'LOWER', $args: '$email' },
+//       abc: { $expr: 'JSON_VALUE', $args: ['$MAIN.name', ['b', '[0]', 'c']] },
+//     },
+//     filters: {
+//       id: 1,
+//       maskedEmail: { $ne: 'sdf' },
+//       name: [1, 2, 3, '3'],
+//       created_date: new Date(),
+//       '$addresses.zip': { $in: [1, 2, 3] },
+//     },
+//     joins: {
+//       addresses: {
+//         source: 'addresses',
+//         relation: {
+//           user_id: 'id',
+//         },
+//         columns: ['id', 'user_id', 'address', 'city', 'state', 'zip'],
+//         expressions: {
+//           fullAddress: {
+//             $expr: 'CONCAT',
+//             $args: [
+//               '$MAIN.name',
+//               '$address',
+//               ', ',
+//               '$city',
+//               ', ',
+//               '$state',
+//               ' ',
+//               '$zip',
+//             ],
+//           },
+//         },
+//       },
+//     },
+//   }).sql,
+// );

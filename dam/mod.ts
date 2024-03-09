@@ -13,6 +13,7 @@ export {
   DAMClientError,
   DAMConfigError,
   DAMQueryError,
+  DAMTranslatorBaseError,
 } from './errors/mod.ts';
 
 export type {
@@ -23,18 +24,23 @@ export type {
   ClientStatus,
   ColumnIdentifier,
   CountQuery,
+  CreateSchemaQuery,
+  CreateTableQuery,
+  CreateViewQuery,
   DataTypes,
   DateExpressions,
   DateTypes,
-  DDLQueries,
   DecimalTypes,
   DeleteQuery,
   Dialects,
-  DMLQueries,
+  DropSchemaQuery,
+  DropTableQuery,
+  DropViewQuery,
   Expressions,
   ExpressionsType,
   InsertQuery,
   IntegerTypes,
+  JSONExpressions,
   JSONTypes,
   MariaOptions,
   MongoOptions,
@@ -59,3 +65,4 @@ export type {
 
 export { AbstractClient } from './Client.ts';
 export { AbstractTranslator } from './Translator.ts';
+export { Parameters } from './Parameters.ts';

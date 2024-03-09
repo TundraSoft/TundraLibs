@@ -13,4 +13,4 @@ export type QueryTypes =
   | 'UPDATE'
   | 'DELETE'
   | 'TRUNCATE'
-  | 'RAW';
+  | 'UNKNOWN';

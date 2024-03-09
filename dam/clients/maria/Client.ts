@@ -17,8 +17,7 @@ import {
 } from '../../../dependencies.ts';
 
 export class MariaClient extends AbstractClient<MariaOptions> {
-  // protected _helper = new MariaHelper();
-  protected _translator = new MariaTranslator();
+  public translator = new MariaTranslator();
 
   private _client: MariaDBPool | undefined = undefined;
 
@@ -96,7 +95,21 @@ export class MariaClient extends AbstractClient<MariaOptions> {
       idleTimeout: this._getOption('idleTimeout'),
       // tls: this._getOption('tls') ? {} : undefined,
       namedPlaceholders: true,
+      ssl: false,
     };
+    const tls = this._getOption('tls');
+    if (tls) {
+      if (tls.enabled === true) {
+        if (!tls.certificates && tls.verify) {
+          conf.ssl = true;
+        } else if (tls.certificates) {
+          conf.ssl.cert = tls.certificates;
+        }
+        if (tls.verify !== undefined && tls.verify === false) {
+          conf.ssl.rejectUnauthorized = false;
+        }
+      }
+    }
     this._client = await MariaDBPoolConnector(conf);
     let c: MariaDBPoolConnection | undefined = undefined;
     try {
@@ -134,7 +147,7 @@ export class MariaClient extends AbstractClient<MariaOptions> {
 
   protected async _execute<
     R extends Record<string, unknown> = Record<string, unknown>,
-  >(query: Query): Promise<{ count: bigint; rows: R[] }> {
+  >(query: Query): Promise<{ count: number; rows: R[] }> {
     if (this._status !== 'CONNECTED' || this._client === undefined) {
       throw new DAMQueryError('Client not connected', {
         dialect: this.dialect,
@@ -163,7 +176,7 @@ export class MariaClient extends AbstractClient<MariaOptions> {
       }
       // console.log(await client.execute(rawQuery.sql, rawQuery.params))
       return {
-        count: BigInt(rowCount),
+        count: rowCount,
         rows: res,
       };
     } catch (err) {

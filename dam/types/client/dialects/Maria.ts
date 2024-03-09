@@ -11,7 +11,8 @@ export type MariaOptions = ClientOptions & {
   idleTimeout?: number;
   poolSize?: number;
   tls?: {
-    sslMode: 'disabled' | 'verify_identity';
-    caCerts?: string[];
+    enabled: boolean;
+    certificates?: string[];
+    verify?: boolean;
   };
 };

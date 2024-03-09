@@ -10,11 +10,11 @@ import {
 import type { ClientEvents, Query, SQLiteOptions } from '../../types/mod.ts';
 
 import {
+  fs,
   path,
   SQLiteDBClient,
   type SQLiteDBClientConfig,
-  SQLiteDBError, 
-  fs,
+  SQLiteDBError,
 } from '../../../dependencies.ts';
 
 /**
@@ -26,7 +26,7 @@ type SQLiteParamType = Record<
 >;
 
 export class SQLiteClient extends AbstractClient<SQLiteOptions> {
-  protected _translator = new SQLiteTranslator();
+  public translator = new SQLiteTranslator();
   private _client: SQLiteDBClient | undefined = undefined;
 
   /**
@@ -116,10 +116,20 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
         : path.join(this._getOption('path') as string, name, `main.db`);
     try {
       this._client = new SQLiteDBClient(file, opt);
-      if(this._getOption('mode') === 'FILE') {
-        for(const file of Deno.readDirSync(path.join(this._getOption('path') as string, name))) {
-          if(file.isFile && file.name.endsWith('.db') && file.name !== 'main.db') {
-            this._client.execute(`ATTACH DATABASE '${path.join(this._getOption('path') as string, name, file.name)}' AS ${file.name.replace('.db', '')};`);
+      if (this._getOption('mode') === 'FILE') {
+        for (
+          const file of Deno.readDirSync(
+            path.join(this._getOption('path') as string, name),
+          )
+        ) {
+          if (
+            file.isFile && file.name.endsWith('.db') && file.name !== 'main.db'
+          ) {
+            this._client.execute(
+              `ATTACH DATABASE '${
+                path.join(this._getOption('path') as string, name, file.name)
+              }' AS ${file.name.replace('.db', '')};`,
+            );
           }
         }
         // Attach memory as TMP
@@ -165,7 +175,7 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
 
   protected _execute<
     R extends Record<string, unknown> = Record<string, unknown>,
-  >(query: Query): { count: bigint; rows: R[] } {
+  >(query: Query): { count: number; rows: R[] } {
     if (this._status !== 'CONNECTED' || this._client === undefined) {
       throw new Error('Client not connected');
     }
@@ -174,26 +184,99 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
       query,
     );
     try {
-      if(rawQuery.sql.startsWith('CREATE SCHEMA')) {
-        if(this._getOption('mode') === 'MEMORY') {
+      if (rawQuery.sql.startsWith('CREATE SCHEMA')) {
+        if (this._getOption('mode') === 'MEMORY') {
           throw new DAMClientError('Cannot create schema in memory mode', {
             dialect: this.dialect,
             name: this.name,
           });
         }
 
-        const schemaName = rawQuery.sql.match(/CREATE SCHEMA "([a-zA-Z0-9\_]+)";/i);
-        if (schemaName !== null && schemaName[1] !== 'main' && schemaName[1] !== 'temp') {
-          if(['temp', 'main'].includes(schemaName[1].toLowerCase())) {
-            throw new DAMClientError(`Cannot create schema with name: ${schemaName[1]}`, {
-              dialect: this.dialect,
-              name: this.name,
-            });
+        const schemaMatch = rawQuery.sql.match(
+          /CREATE SCHEMA ([^"]+)?"([a-zA-Z0-9\_]+)";/i,
+        );
+        if (!schemaMatch) {
+          throw new DAMClientError('Invalid schema creation query', {
+            dialect: this.dialect,
+            name: this.name,
+          });
+        }
+        const schemaName = schemaMatch[2].trim();
+        if (
+          schemaName !== null && schemaName !== 'main' &&
+          schemaName !== 'temp'
+        ) {
+          if (['temp', 'main'].includes(schemaName.toLowerCase())) {
+            throw new DAMClientError(
+              `Cannot create schema with name: ${schemaName}`,
+              {
+                dialect: this.dialect,
+                name: this.name,
+              },
+            );
           }
-          fs.ensureFileSync(path.join(this._getOption('path') as string, this.name, `${schemaName[1]}.db`));
+          fs.ensureFileSync(
+            path.join(
+              this._getOption('path') as string,
+              this.name.trim().toLowerCase(),
+              `${schemaName}.db`,
+            ),
+          );
+          // Attach it
+          this._client.execute(
+            `ATTACH DATABASE '${
+              path.join(
+                this._getOption('path') as string,
+                this.name.trim().toLowerCase(),
+                `${schemaName}.db`,
+              )
+            }' AS ${schemaName};`,
+          );
         }
         return {
-          count: BigInt(0),
+          count: 0,
+          rows: [],
+        };
+      } else if (rawQuery.sql.startsWith('DROP SCHEMA')) {
+        if (this._getOption('mode') === 'MEMORY') {
+          throw new DAMClientError('Cannot create schema in memory mode', {
+            dialect: this.dialect,
+            name: this.name,
+          });
+        }
+
+        const schemaMatch = rawQuery.sql.match(
+          /DROP SCHEMA ([^"]+)?"([a-zA-Z0-9\_]+)"/i,
+        );
+        if (!schemaMatch) {
+          throw new DAMClientError('Invalid schema drop query', {
+            dialect: this.dialect,
+            name: this.name,
+          });
+        }
+        const schemaName = schemaMatch[2].trim();
+        if (
+          schemaName !== null && schemaName !== 'main' &&
+          schemaName !== 'temp'
+        ) {
+          if (['temp', 'main'].includes(schemaName.toLowerCase())) {
+            throw new DAMClientError(
+              `Cannot drop schema with name: ${schemaName}`,
+              {
+                dialect: this.dialect,
+                name: this.name,
+              },
+            );
+          }
+          this._client.execute(`DETACH DATABASE ${schemaName};`);
+          Deno.removeSync(path.join(
+            this._getOption('path') as string,
+            this.name.trim().toLowerCase(),
+            `${schemaName}.db`,
+          ));
+        }
+        return {
+          count: 0,
           rows: [],
         };
       }
@@ -203,7 +286,7 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
         rawQuery.params as SQLiteParamType,
       );
       return {
-        count: BigInt(res.length),
+        count: res.length,
         rows: res,
       };
     } catch (err) {

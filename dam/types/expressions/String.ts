@@ -2,17 +2,17 @@ import type { ColumnIdentifier } from '../ColumnIdentifier.ts';
 import type { DateExpressions } from './Date.ts';
 
 type Substr = {
-  $expr: 'substr';
+  $expr: 'SUBSTR';
   $args: [string | ColumnIdentifier, number, number];
 };
 
 type Concat = {
-  $expr: 'concat';
+  $expr: 'CONCAT';
   $args: (string | ColumnIdentifier | StringExpressions)[];
 };
 
 type Replace = {
-  $expr: 'replace';
+  $expr: 'REPLACE';
   $args: [
     StringExpressions | string | ColumnIdentifier,
     StringExpressions | string | ColumnIdentifier,
@@ -21,23 +21,23 @@ type Replace = {
 };
 
 type Lower = {
-  $expr: 'lower';
+  $expr: 'LOWER';
   $args: StringExpressions | string | ColumnIdentifier;
 };
 
 type Upper = {
-  $expr: 'upper';
+  $expr: 'UPPER';
   $args: StringExpressions | string | ColumnIdentifier;
 };
 
 type Trim = {
-  $expr: 'trim';
+  $expr: 'TRIM';
   $args: StringExpressions | string | ColumnIdentifier;
 };
 
 type DateFormat = {
-  $expr: 'date_format';
-  $args: [DateExpressions, string];
+  $expr: 'DATE_FORMAT';
+  $args: [DateExpressions | ColumnIdentifier, string];
 };
 
 export type StringExpressions =

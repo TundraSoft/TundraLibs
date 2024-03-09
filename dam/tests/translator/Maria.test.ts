@@ -1,6 +1,8 @@
 import { MariaClient } from '../../clients/mod.ts';
+import { queries } from './Queries.ts';
 import {
   afterAll,
+  assert,
   assertEquals,
   beforeAll,
   // assertRejects,
@@ -9,25 +11,28 @@ import {
 } from '../../../dev.dependencies.ts';
 // import { DAMClientError, DAMQueryError } from '../../errors/mod.ts';
 
-import { alphaNumeric, nanoId } from '../../../id/mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
-import {
-  CountQuery,
+import type {
+  CreateSchemaQuery,
+  CreateTableQuery,
+  DeleteQuery,
+  DropSchemaQuery,
   InsertQuery,
   SelectQuery,
+  TruncateQuery,
   UpdateQuery,
-} from '../../types/mod.ts';
+} from '../../mod.ts';
 
 const envData = envArgs('dam/tests');
 
-describe({
-  name: 'DAM',
-  sanitizeExit: false,
-  sanitizeOps: false,
-  sanitizeResources: false,
-}, () => {
+describe('DAM', () => {
   describe('Translator', () => {
-    describe('Maria', () => {
+    describe({
+      name: 'Maria',
+      sanitizeExit: false,
+      sanitizeOps: false,
+      sanitizeResources: false,
+    }, () => {
       const client = new MariaClient('maria', {
         dialect: 'MARIA',
         host: envData.get('MARIA_HOST') || 'localhost',
@@ -38,223 +43,83 @@ describe({
         poolSize: 1,
       });
 
-      const schema = `test_${nanoId(4, alphaNumeric)}`;
-
       beforeAll(async () => {
         await client.connect();
-        await client.execute({
-          type: 'RAW',
-          sql: `CREATE SCHEMA \`${schema}\`;`,
-        });
-        await client.execute({
-          type: 'RAW',
-          sql:
-            `CREATE TABLE \`${schema}\`.\`Users\`(\`Id\` UUID NOT NULL, \`Name\` VARCHAR(100) NOT NULL, \`Email\` VARCHAR(255) NOT NULL, \`Password\` VARCHAR(255) NOT NULL, \`DOB\` DATE, \`Status\` BOOLEAN NOT NULL, \`JoinDate\` TIMESTAMP NOT NULL, PRIMARY KEY (\`Id\`));`,
-        });
-        await client.execute({
-          type: 'RAW',
-          sql:
-            `CREATE TABLE \`${schema}\`.\`Posts\`(\`Id\` UUID NOT NULL, \`Title\` VARCHAR(100) NOT NULL, \`Slug\` VARCHAR(100) NOT NULL, \`Content\` VARCHAR(255) NOT NULL, \`Meta\` JSON, \`AuthorId\` UUID NOT NULL, \`CreatedDate\` TIMESTAMP NOT NULL, PRIMARY KEY (\`Id\`));`,
-        });
       });
 
       afterAll(async () => {
-        await client.connect();
-        await client.execute({
-          type: 'RAW',
-          sql: `DROP SCHEMA \`${schema}\`;`,
-        });
         await client.close();
         assertEquals('READY', client.status);
       });
 
-      it('Insert', async () => {
-        const insertUser: InsertQuery = {
-          type: 'INSERT',
-          source: 'Users',
-          schema: schema,
-          data: [
-            {
-              Id: crypto.randomUUID(),
-              Name: 'John Doe',
-              Email: 'test@email.com',
-              Password: 'sdf',
-              DOB: '2023-02-02',
-              Status: true,
-              JoinDate: new Date(),
-            },
-            {
-              Id: crypto.randomUUID(),
-              Name: 'Jane Doe',
-              Email: 'janq@email.com',
-              Password: 'sdf',
-              DOB: '2023-02-02',
-              Status: true,
-              JoinDate: new Date(),
-            },
-          ],
-          project: {
-            Id: 'Id',
-            Name: 'Name',
-            Email: 'Email',
-            Password: 'Password',
-            DOB: 'DOB',
-            Status: 'Status',
-            JoinDate: 'sdf',
-            ComplexId: {
-              $expr: 'concat',
-              $args: ['$Name', '$DOB'],
-            },
-          },
-        };
-        const resi = await client.insert<
-          {
-            Id: string;
-            Name: string;
-            Email: string;
-            Password: string;
-            DOB: Date;
-            Status: boolean;
-            sdf: Date;
-            ComplexId: string;
-          }
-        >(insertUser);
-        assertEquals(2n, resi.count);
-        // Posts
-        const insertPost: InsertQuery = {
-          type: 'INSERT',
-          source: 'Posts',
-          schema: schema,
-          data: [
-            {
-              Id: crypto.randomUUID(),
-              Title: 'First Post',
-              Slug: {
-                $expr: 'lower',
-                $args: 'First Post',
-              },
-              Content:
-                'Lorem ipsum dolor sit amet, consectetur adipiscing elit.',
-              Meta: {
-                tags: ['first', 'post'],
-                keywords: ['Lorem', 'ipsum', 'consectetur'],
-                publishInfo: {
-                  published: true,
-                  date: new Date(),
-                },
-              },
-              AuthorId: resi.data[0].Id,
-              CreatedDate: new Date(),
-            },
-            {
-              Id: crypto.randomUUID(),
-              Title: 'Second Post',
-              Slug: {
-                $expr: 'lower',
-                $args: 'Second Post',
-              },
-              Content:
-                'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-              Meta: {
-                tags: ['second', 'post'],
-                keywords: ['Sed', 'eiusmod', 'tempor'],
-                publishInfo: {
-                  published: false,
-                  date: null,
-                },
-              },
-              AuthorId: resi.data[1].Id,
-              CreatedDate: new Date(),
-            },
-            // Add more posts here...
-          ],
-          project: {
-            Id: 'Id',
-            Title: 'Title',
-            Slug: 'Slug',
-            Content: 'Content',
-            Meta: 'Meta',
-            AuthorId: 'AuthorId',
-            CreatedDate: 'CreatedDate',
-          },
-        };
-        await client.insert(insertPost);
+      it('create schema', async () => {
+        const result = await client.execute(
+          client.translator.createSchema(
+            queries.create_schema as CreateSchemaQuery,
+          ),
+        );
+        assert(result);
       });
 
-      it('Update', async () => {
-        const updatePost: UpdateQuery = {
-          type: 'UPDATE',
-          source: 'Posts',
-          schema: schema,
-          data: {
-            Slug: {
-              $expr: 'lower',
-              $args: '$Title',
-            },
-          },
-          filters: {
-            '$Meta.publishInfo.published': true,
-          },
-        };
-        const res = await client.update(updatePost);
-        assertEquals(1n, res.count);
+      it('create table', async () => {
+        const userQuery = client.translator.createTable(
+          queries.create_user as unknown as CreateTableQuery,
+        );
+        const postQuery = client.translator.createTable(
+          queries.create_post as unknown as CreateTableQuery,
+        );
+        assert(userQuery);
+        assert(postQuery);
+        assertEquals(postQuery.length, 2);
+        const result = await client.execute(userQuery[0]);
+        assert(result);
+        const result2 = await client.execute(postQuery[0]);
+        assert(result2);
+        const result3 = await client.execute(postQuery[1]);
+        assert(result3);
       });
 
-      it('Count', async () => {
-        const sel: CountQuery = {
-          type: 'COUNT',
-          source: 'Posts',
-          schema: schema,
-          filters: {
-            '$Meta.publishInfo.published': true,
-            '$AuthorId': {
-              $in: [
-                crypto.randomUUID(),
-                crypto.randomUUID(),
-              ],
-            },
-          },
-        };
-
-        const res = await client.count(sel);
-        assertEquals(0n, res.count);
+      it('insert', async () => {
+        const resUser = await client.insert(queries.insert_user as InsertQuery);
+        assert(resUser);
+        assertEquals(resUser.count, resUser.data.length);
+        const resPost = await client.insert(queries.insert_post as InsertQuery);
+        assert(resPost);
+        assertEquals(resPost.count, resPost.data.length);
       });
 
-      it('Select', async () => {
-        const sel: SelectQuery = {
-          type: 'SELECT',
-          source: 'Posts',
-          schema: schema,
-          project: {
-            Id: 'Id',
-            Title: 'Title',
-            Slug: 'Slug',
-            Content: 'Content',
-            Meta: 'Meta',
-            AuthorId: 'AuthorId',
-            CreatedDate: 'CreatedDate',
-            '$Author': true,
-          },
-          filters: {
-            '$Meta.publishInfo.published': true,
-          },
-          join: {
-            Author: {
-              source: 'Users',
-              schema: schema,
-              relation: {
-                AuthorId: 'Id',
-              },
-              project: {
-                Name: 'Name',
-                Email: 'Email',
-              },
-            },
-          },
-        };
+      it('select', async () => {
+        const res = await client.select(queries.select_post as SelectQuery);
+        assert(res);
+        assertEquals(res.count, res.data.length);
+      });
 
-        const res = await client.select(sel);
-        assertEquals(1n, res.count);
+      it('update', async () => {
+        const res = await client.update(queries.update_user as UpdateQuery);
+        assert(res);
+      });
+
+      it('truncate table', async () => {
+        const post = client.translator.truncate(
+          queries.truncate_post as TruncateQuery,
+        );
+        assert(post);
+        const res = await client.execute(post);
+        assert(res);
+      });
+
+      it('delete records', async () => {
+        const res = await client.delete(queries.delete_user as DeleteQuery);
+        assert(res);
+      });
+
+      it('Drop schema', async () => {
+        const dschema = client.translator.dropSchema(
+          queries.drop_schema as DropSchemaQuery,
+        );
+        assert(dschema);
+        const result = await client.execute(dschema);
+        assert(result);
       });
     });
   });

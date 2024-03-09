@@ -5,6 +5,7 @@ export type {
   DateFilter,
   Filters,
   NumberFilter,
+  Operators,
   QueryFilters,
   StringFilter,
 } from './filter/mod.ts';
@@ -13,11 +14,15 @@ export type { QueryResult } from './Result.ts';
 
 export type {
   CountQuery,
-  DDLQueries,
+  CreateSchemaQuery,
+  CreateTableColumnDefinition,
+  CreateTableQuery,
+  CreateViewQuery,
   DeleteQuery,
-  DMLQueries,
+  DropSchemaQuery,
+  DropTableQuery,
+  DropViewQuery,
   InsertQuery,
-  ProjectColumns,
   Query,
   SelectQuery,
   TruncateQuery,

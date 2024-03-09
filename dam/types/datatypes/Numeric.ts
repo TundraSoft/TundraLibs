@@ -4,4 +4,4 @@ export type BigintTypes = 'BIGINT' | 'BIGSERIAL';
 
 export type IntegerTypes = 'INTEGER' | 'SMALLINT' | 'MEDIUMINT' | 'BIGINT';
 
-export type DecimalTypes = 'DECIMAL' | 'FLOAT' | 'DOUBLE' | 'REAL';
+export type DecimalTypes = 'NUMERIC' | 'DECIMAL' | 'FLOAT' | 'DOUBLE' | 'REAL';

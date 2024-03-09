@@ -18,14 +18,14 @@ import {
 } from '../../../dependencies.ts';
 
 export class PostgresClient extends AbstractClient<PostgresOptions> {
-  protected _translator = new PostgresTranslator();
+  public translator = new PostgresTranslator();
   private _client: PGClient | undefined = undefined;
 
   /**
    * Creates an instance of the SQLiteClient class.
    * @param name - The name of the client.
    * @param options - The options for the SQLite client.
-   * @throws {NormConfigError} If the options are invalid.
+   * @throws {DAMConfigError} If the options are invalid.
    */
   constructor(
     name: string,
@@ -121,8 +121,20 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
       password: this._getOption('password'),
       database: this._getOption('database'),
       host_type: 'tcp',
-      tls: this._getOption('tls'),
     };
+    const tls = this._getOption('tls');
+    if (tls) {
+      opt.tls = {};
+      if (tls.enabled) {
+        opt.tls.enabled = tls.enabled;
+      }
+      if (tls.certificates) {
+        opt.tls.caCertificates = tls.certificates;
+      }
+      if (tls.verify) {
+        opt.tls.enforce = tls.verify;
+      }
+    }
     this._client = new PGClient(opt, this._getOption('poolSize') || 10, true);
     let client: PGPoolClient | undefined = undefined;
     // Test connection
@@ -177,7 +189,7 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
 
   protected async _execute<
     R extends Record<string, unknown> = Record<string, unknown>,
-  >(query: Query): Promise<{ count: bigint; rows: R[] }> {
+  >(query: Query): Promise<{ count: number; rows: R[] }> {
     if (this._status !== 'CONNECTED' || this._client === undefined) {
       throw new DAMQueryError('Client not connected', {
         dialect: this.dialect,
@@ -197,7 +209,7 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
         rawQuery.params,
       );
       return {
-        count: BigInt(res.rowCount || res.rows.length || 0),
+        count: res.rowCount || res.rows.length || 0,
         rows: res.rows,
       };
     } catch (err) {

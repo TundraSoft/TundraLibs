@@ -9,8 +9,8 @@ export type PostgresOptions = ClientOptions & {
   database: string;
   poolSize?: number;
   tls?: {
-    enabled?: boolean;
-    certificate?: string;
-    enforce?: boolean;
+    enabled: boolean;
+    certificates?: string[];
+    verify?: boolean;
   };
 };

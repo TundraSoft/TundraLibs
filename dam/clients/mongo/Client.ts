@@ -114,7 +114,7 @@ export class MongoClient extends AbstractClient<MongoOptions> {
         st = performance.now(),
         // collection = (query.source.length > 1 && query.source[1] !== undefined) ? client.db(query.source[0]).collection(query.source[1]) : client.db().collection(query.source[0]),
         collection = client.db().collection(query.source),
-        insertRes = await collection.insertMany(query.data),
+        insertRes = await collection.insertMany(query.values),
         insertIds = Array.from(Object.entries(insertRes.insertedIds)).map((
           [_k, v],
         ) => v),
@@ -127,7 +127,7 @@ export class MongoClient extends AbstractClient<MongoOptions> {
       return {
         type: 'INSERT',
         time: time,
-        count: BigInt(ret.length),
+        count: ret.length,
         data: ret as unknown as Array<R>,
       } as QueryResult<R>;
     } catch (e) {
@@ -187,7 +187,7 @@ export class MongoClient extends AbstractClient<MongoOptions> {
       return {
         type: 'UPDATE',
         time: time,
-        count: BigInt(res.modifiedCount),
+        count: res.modifiedCount,
       } as QueryResult<R>;
     } catch (e) {
       if (e instanceof MongoDBServerError) {
@@ -244,7 +244,7 @@ export class MongoClient extends AbstractClient<MongoOptions> {
       return {
         type: 'DELETE',
         time: time,
-        count: BigInt(res.deletedCount),
+        count: res.deletedCount,
       } as QueryResult<R>;
     } catch (e) {
       if (e instanceof MongoDBServerError) {
@@ -303,7 +303,7 @@ export class MongoClient extends AbstractClient<MongoOptions> {
       return {
         type: 'SELECT',
         time: time,
-        count: BigInt(res.length),
+        count: res.length,
         data: res as unknown as Array<R>,
       } as QueryResult<R>;
     } catch (e) {
@@ -357,7 +357,7 @@ export class MongoClient extends AbstractClient<MongoOptions> {
       return {
         type: 'COUNT',
         time: time,
-        count: BigInt(res),
+        count: res,
       } as QueryResult<R>;
     } catch (e) {
       if (e instanceof MongoDBServerError) {
@@ -414,7 +414,7 @@ export class MongoClient extends AbstractClient<MongoOptions> {
       return {
         type: 'TRUNCATE',
         time: time,
-        count: BigInt(res.deletedCount),
+        count: res.deletedCount,
       } as QueryResult<R>;
     } catch (e) {
       if (e instanceof MongoDBServerError) {
@@ -567,7 +567,7 @@ export class MongoClient extends AbstractClient<MongoOptions> {
     try {
       inst = await this._client.connect();
     } catch (e) {
-      console.log(JSON.stringify(e));
+      // console.log(JSON.stringify(e));
       if (e instanceof MongoDBServerError) {
         throw new DAMClientError(
           'Unable to connect to database. Please check config',
@@ -600,7 +600,7 @@ export class MongoClient extends AbstractClient<MongoOptions> {
 
   protected _execute<
     R extends Record<string, unknown> = Record<string, unknown>,
-  >(query: Query): { count: bigint; rows: R[] } {
+  >(query: Query): { count: number; rows: R[] } {
     throw new DAMQueryError('MongoDB does not support execute method', {
       dialect: this.dialect,
       name: this.name,
@@ -622,60 +622,3 @@ export class MongoClient extends AbstractClient<MongoOptions> {
   }
   //#endregion Abstract methods
 }
-
-// const ins: InsertQuery = {
-//   type: 'INSERT',
-//   source: 'test',
-//   data: [{ a: 1, b: 2 }, { a: 3, b: 4 }],
-//   project: { a: true, b: true },
-// };
-
-// const upd: UpdateQuery = {
-//   type: 'UPDATE',
-//   source: 'test',
-//   data: { a: 4, b: 5 },
-//   filters: { a: 1 },
-// };
-
-// const del: DeleteQuery = {
-//   type: 'DELETE',
-//   source: 'test',
-//   filters: { a: 3 },
-// };
-
-// const cnt: CountQuery = {
-//   type: 'COUNT',
-//   source: 'test',
-//   filters: { a: 4 },
-// };
-
-// const sel: SelectQuery = {
-//   type: 'SELECT',
-//   source: 'test',
-//   filters: { a: 4 },
-//   project: { a: true, b: true, _id: false },
-// };
-
-// const m = new MongoClient('test', {
-//   dialect: 'MONGO',
-//   host: '10.1.10.3',
-//   database: 'test',
-//   username: 'mongo',
-//   password: 'mongopw',
-// });
-
-// await m.connect();
-// const res = await m.insert(ins);
-// console.log(res);
-
-// const upres = await m.update(upd);
-// console.log(upres);
-
-// const cntres = await m.count(cnt);
-// console.log(cntres);
-
-// const selres = await m.select(sel);
-// console.log(selres);
-
-// const delres = await m.delete(del);
-// console.log(delres);
