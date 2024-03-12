@@ -1,14 +1,16 @@
 import { HTTPMethods, path } from '../../dependencies.ts';
-import { TundraLibError } from '../../utils/TundraLibError.ts';
-// import type { TundraLibErrorMetaTags } from '../../utils/mod.ts';
+import { RESTlerBaseError } from './Base.ts';
+import type { RESTlerEndpoint } from '../types/mod.ts';
 
-export class RESTlerBaseError extends TundraLibError {
+export type RESTlerErrorMeta = RESTlerEndpoint & Record<string, unknown>;
+
+export class RESTlerEndpointError extends RESTlerBaseError {
   public readonly library = 'RESTler';
   declare public readonly vendor: string;
 
   constructor(
     message: string,
-    meta: Record<string, unknown>,
+    meta: RESTlerErrorMeta,
     cause?: Error,
   ) {
     super(message, meta, cause);

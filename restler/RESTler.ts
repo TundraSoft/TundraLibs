@@ -140,28 +140,28 @@ export abstract class RESTler<
     this.emit('request', request as RESTlerRequest);
     // We now attempt to make the request, if it fails, we retry once
     const start = performance.now();
+    const controller = new AbortController(),
+      timeout = setTimeout(
+        () => controller.abort(),
+        this._getOption('timeout'),
+      );
     try {
       await this._authInjector(request);
-      const controller = new AbortController(),
-        fetchOptions: RequestInit & { client?: Deno.HttpClient } = {
-          method: request.endpoint.method,
-          headers: request.headers,
-          signal: controller.signal,
-          body: (request.body === undefined)
-            ? undefined
-            : (request.body instanceof FormData ||
-                typeof request.body === 'string')
-            ? request.body
-            : this._stringifyBody(request.body),
-        },
-        timeout = setTimeout(
-          () => controller.abort(),
-          this._getOption('timeout'),
-        );
+      const fetchOptions: RequestInit & { client?: Deno.HttpClient } = {
+        method: request.endpoint.method,
+        headers: request.headers,
+        signal: controller.signal,
+        body: (request.body === undefined)
+          ? undefined
+          : (request.body instanceof FormData ||
+              typeof request.body === 'string')
+          ? request.body
+          : this._stringifyBody(request.body),
+      };
       if (this._hasOption('certChain') || this._hasOption('certKey')) {
         fetchOptions.client = Deno.createHttpClient({
-          certChain: this._getOption('certChain'),
-          privateKey: this._getOption('certKey'),
+          cert: this._getOption('certChain'),
+          key: this._getOption('certKey'),
         });
       }
       // if (this._customClient !== undefined) {
@@ -192,6 +192,9 @@ export abstract class RESTler<
       return await this._processResponse(resp);
       // return resp;
     } catch (e) {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
       resp.timeTaken = performance.now() - start;
       if (e.name === 'AbortError') {
         // Emit timeout event

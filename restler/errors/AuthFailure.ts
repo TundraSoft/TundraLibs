@@ -1,10 +1,8 @@
-import { RESTlerBaseError } from './Base.ts';
-// import type { RESTlerErrorMeta } from './BaseError.ts';
-import type { RESTlerEndpoint } from '../types/mod.ts';
+import { RESTlerEndpointError, type RESTlerErrorMeta } from './Endpoint.ts';
 
-export class RESTlerAuthFailure extends RESTlerBaseError {
+export class RESTlerAuthFailure extends RESTlerEndpointError {
   constructor(
-    metaTags: RESTlerEndpoint & Record<string, unknown>,
+    metaTags: RESTlerErrorMeta,
     cause?: Error,
   ) {
     super(

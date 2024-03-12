@@ -1,11 +1,10 @@
-import { RESTlerBaseError } from './Base.ts';
+import { RESTlerEndpointError, type RESTlerErrorMeta } from './Endpoint.ts';
 // import type { RESTlerErrorMeta } from './BaseError.ts';
-import type { RESTlerEndpoint } from '../types/mod.ts';
 
-export class RESTlerUnsupportedContentType extends RESTlerBaseError {
+export class RESTlerUnsupportedContentType extends RESTlerEndpointError {
   constructor(
     type: string,
-    metaTags: RESTlerEndpoint & Record<string, unknown>,
+    metaTags: RESTlerErrorMeta,
   ) {
     super(
       `Unsupported content type ${type}. Only JSON, TEXT is supported.`,

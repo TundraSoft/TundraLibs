@@ -1,11 +1,10 @@
-import { RESTlerBaseError } from './Base.ts';
+import { RESTlerEndpointError, type RESTlerErrorMeta } from './Endpoint.ts';
 // import type { RESTlerErrorMeta } from './BaseError.ts';
-import type { RESTlerEndpoint } from '../types/mod.ts';
 
-export class RESTlerTimeoutError extends RESTlerBaseError {
+export class RESTlerTimeoutError extends RESTlerEndpointError {
   constructor(
     timeout: number,
-    metaTags: RESTlerEndpoint & Record<string, unknown>,
+    metaTags: RESTlerErrorMeta,
   ) {
     super(
       `Request aborted after ${timeout}s as response was not received.`,
