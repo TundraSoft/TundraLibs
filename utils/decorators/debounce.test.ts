@@ -12,7 +12,7 @@ describe({
       class Test {
         public cnt = 0;
 
-        @debounce(1000)
+        @debounce(1)
         public methodName() {
           this.cnt += 1;
         }
@@ -27,7 +27,8 @@ describe({
         a.methodName();
         a.methodName();
         await new Promise((resolve) => setTimeout(resolve, 1200));
-        assertEquals(a.cnt, 1);
+        a.methodName();
+        assertEquals(a.cnt, 2);
       });
     });
   });
