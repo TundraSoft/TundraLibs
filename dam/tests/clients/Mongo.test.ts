@@ -35,15 +35,6 @@ describe({
         database: envData.get('MONGO_DB') || 'test',
         poolSize: 1,
       });
-      console.log({
-        dialect: 'MONGO',
-        host: envData.get('MONGO_HOST') || 'localhost',
-        username: envData.get('MONGO_USER') || undefined,
-        password: envData.get('MONGO_PASS') || undefined,
-        port: parseInt(envData.get('MONGO_PORT')) || 27017,
-        database: envData.get('MONGO_DB') || 'test',
-        poolSize: 1,
-      });
 
       const schema = `test_${nanoId(4, alphaNumeric)}`;
 
