@@ -82,6 +82,15 @@ jobs:
         uses: denoland/setup-deno@v1.1.2
         with:
           deno-version: v${{ matrix.deno-version }}
+      
+      -
+        name: Load dependencies
+        run: deno task cache
+      
+      -
+        name: Run benchmarks
+        run: deno task bench
+      
       -
         name: Run tests
         run: |

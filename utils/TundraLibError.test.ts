@@ -32,5 +32,13 @@ describe('utils', () => {
       assertEquals(error.message, errorMessage);
       assertEquals(error.cause, cause);
     });
+
+    it('Should convert class to string', () => {
+      const errorMessage = 'This is an error';
+      const error = new TundraLibError(errorMessage);
+      const errorString = error.toString();
+      assertEquals(errorString.includes('This is an error'), true);
+      assertEquals(errorString.includes('TundraLibError'), true);
+    });
   });
 });

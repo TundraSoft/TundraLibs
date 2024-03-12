@@ -17,8 +17,8 @@ describe('RESTler', () => {
     let mockServer: Deno.HttpServer,
       mock: MockTest;
 
-    beforeAll(async () => {
-      port = await getFreePort();
+    beforeAll(() => {
+      port = getFreePort();
       mockServer = server(port);
       mock = new MockTest(port);
     });

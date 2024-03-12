@@ -41,6 +41,17 @@ describe('utils', () => {
         assertEquals(secretObject.has('key1'), true);
         secretObject.delete('key3'); // Deleting non-existing key should not throw error
       });
+
+      it('test foreach', () => {
+        const keys: string[] = [];
+        const values: unknown[] = [];
+        secretObject.forEach((key, value) => {
+          keys.push(key);
+          values.push(value);
+        });
+        assertEquals(keys, ['key1', 'key2']);
+        assertEquals(values, ['value1', 'value2']);
+      });
     });
 
     describe(`unsealed`, () => {
@@ -78,6 +89,17 @@ describe('utils', () => {
         assertEquals(secretObject.get('key1'), undefined);
         assertEquals(secretObject.has('key1'), false);
         secretObject.delete('key3'); // Deleting non-existing key should not throw error
+      });
+
+      it('test foreach', () => {
+        const keys: string[] = [];
+        const values: unknown[] = [];
+        secretObject.forEach((key, value) => {
+          keys.push(key);
+          values.push(value);
+        });
+        assertEquals(keys, ['key1', 'key2']);
+        assertEquals(values, ['value1', 'value2']);
       });
     });
   });
