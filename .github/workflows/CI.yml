@@ -85,8 +85,7 @@ jobs:
       -
         name: Run tests
         run: |
-          deno task test
-          # deno test -A --unstable --coverage=cov #--doc
+          deno task test --coverage=tundralib
         env:
           PG_HOST: localhost
           PG_PORT: 5432
@@ -104,7 +103,13 @@ jobs:
           
       -
         name: Generate coverage report
-        run: deno coverage --lcov cov > cov.lcov
+        run: deno coverage tundralib --lcov cov --output=tundralib.lcov
+      
+      - 
+        name: Collect coverage
+        uses: codecov/codecov-action@v1.0.10 # upload the report on Codecov
+        with:
+          file: ./tundralib.lcov
       
       # - name: upload coverage
       #   uses: codecov/codecov-action@v2
