@@ -331,7 +331,7 @@ export type SelectQuery = {
   >;
   joins?: Record<string, JoinSegment>;
   groupBy?: ColumnIdentifier[];
-  orderBy?: string[];
+  orderBy?: Record<ColumnIdentifier, 'ASC' | 'DESC'>;
   limit?: number;
   offset?: number;
 };
@@ -370,11 +370,11 @@ export type TruncateQuery = {
 - [ ] Expressions with column reference in insert will throw error (expected behaviour)
 - [ ] MongoDB driver support is incomplete (joins and expressions)
 
-#### Postgres
+### Postgres
 
 - JSONB is used by default as there are some issues when using base JSON column type (using JSON column in group by causes issues)
 
-#### SQLite
+### SQLite
 
 - CREATE SCHEMA - Create SCHEMA is only supported in FILE mode and not in memory mode. This is because SQLite
   does not support schema. What happens is we create a new database and attaches the same to the connection.
@@ -383,11 +383,11 @@ export type TruncateQuery = {
 - CONSTRAINS - Currently create table generates 2 sql statements. One with table definition and another with foreign keys. SQLite does not support this.
 - Expression UUID is very hacky. Will need to move it to crypto.randomUUID()
 
-#### Maria
+### Maria
 
 - Only supports MARIA and not MySQL
 
-#### Mongo
+### Mongo
 
 - Joins are supported only on tables within the same "database"/"schema".
 - Expressions, Aggregations and Expressions in filter not implemented.
