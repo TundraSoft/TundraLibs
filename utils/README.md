@@ -27,16 +27,15 @@ Collection of helpers primarily used inside tundralibs but can also be used exte
 
 Decorators FTW!
 
-### Debounce 
+### Debounce
 
-Debounce a class method so that it can only be called after x seconds. Each time the method is called during the delay, 
+Debounce a class method so that it can only be called after x seconds. Each time the method is called during the delay,
 the timer is further reset.
 
 ```ts
 import { debounce } from 'utils/mod.ts';
 
 class Test {
-
   @debounce(5) // Debounce by 5seconds
   debounceMethod(arg1, arg2) {
     // Action here
@@ -44,7 +43,6 @@ class Test {
   }
 }
 ```
-
 
 ### singleton
 
@@ -76,14 +74,13 @@ console.log(t.counter); //2
 
 ### Throttle
 
-Throttles a method call so that it can be called only once every x seconds. If multiple calls are made during the delay time, the 
+Throttles a method call so that it can be called only once every x seconds. If multiple calls are made during the delay time, the
 previous result will be shared.
 
 ```ts
 import { throttle } from 'utils/mod.ts';
 
 class Test {
-
   @throttle(5) // Throttle by 5seconds
   throttleMethod(arg1, arg2) {
     // Action here

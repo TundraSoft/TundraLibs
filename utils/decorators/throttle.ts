@@ -17,17 +17,18 @@ export function throttle(delay: number) {
     const milliseconds = delay * 1000; // Convert seconds to milliseconds
     let lastReturn: ReturnType<typeof descriptor.value> = undefined; // The last return value of the method
 
-    descriptor.value = function(...args: unknown[]) {
+    descriptor.value = function (...args: unknown[]) {
       // deno-lint-ignore no-this-alias
       const self = this;
-      if (lastRunTime === 0 || (performance.now() - lastRunTime > milliseconds)) {
+      if (
+        lastRunTime === 0 || (performance.now() - lastRunTime > milliseconds)
+      ) {
         lastRunTime = performance.now();
         lastReturn = originalMethod.apply(self, args); // Invoke the original method with the provided arguments
       }
       return lastReturn;
-    }
+    };
 
     return descriptor;
-
   };
 }

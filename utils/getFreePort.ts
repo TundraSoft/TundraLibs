@@ -1,4 +1,4 @@
-export const getFreePort = async (min = 1024, max = 65535): Promise<number> => {
+export const getFreePort = (min = 1024, max = 65535): number => {
   while (true) {
     const port = Math.floor(Math.random() * (max - min + 1)) + min;
     try {
@@ -9,4 +9,4 @@ export const getFreePort = async (min = 1024, max = 65535): Promise<number> => {
       continue;
     }
   }
-}
+};

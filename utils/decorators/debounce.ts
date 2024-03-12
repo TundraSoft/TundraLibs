@@ -1,6 +1,6 @@
 /**
- * debounces a method call. The first time it is called, it executes, however 
- * further calls will be delayed by the provided amount of time. Each time 
+ * debounces a method call. The first time it is called, it executes, however
+ * further calls will be delayed by the provided amount of time. Each time
  * the call is made during the delay will reset and extend the delay.
  * The cached response will be returned for each call during the delay.
  *
@@ -19,7 +19,9 @@ export function debounce(delay: number) {
     let lastReturn: ReturnType<typeof descriptor.value> = undefined;
 
     descriptor.value = function (...args: unknown[]) {
-      if (lastCallTime === 0 || performance.now() > (lastCallTime + milliseconds)) {
+      if (
+        lastCallTime === 0 || performance.now() > (lastCallTime + milliseconds)
+      ) {
         lastReturn = originalMethod.apply(this, args);
       }
       lastCallTime = performance.now();

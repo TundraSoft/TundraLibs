@@ -28,7 +28,6 @@ describe({
         a.methodName();
         a.methodName();
         assertEquals(a.called, 1);
-
       });
     });
   });
