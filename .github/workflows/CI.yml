@@ -58,9 +58,9 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       maria:
-        image: mariadb:10
+        image: mariadb
         env:
-          MARIADB_ROOT_PASSWORD: maria
+          MARIADB_ROOT_PASSWORD: mariapw
         ports:
           - 3306:3306
         options: >-
