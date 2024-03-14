@@ -161,31 +161,26 @@ export abstract class RESTler<
       if (this._hasOption('certChain') || this._hasOption('certKey')) {
         // @Version check - Remove later on
         const ver = semver.parse(Deno.version.deno);
+        const cert: { certChain?: string, privateKey?: string, cert?: string, key?: string } = {};
         if (semver.lt(ver, semver.parse('1.41.0'))) {
-          // Stupid hack to pass linting
-          fetchOptions.client = Deno.createHttpClient(
-            JSON.parse(JSON.stringify({
-              certChain: this._getOption('certChain'),
-              privateKey: this._getOption('certKey'),
-            })),
-          );
+          cert.certChain = this._getOption('certChain');
+          cert.privateKey = this._getOption('certKey');
         } else {
-          // Stupid hack to pass linting
-          fetchOptions.client = Deno.createHttpClient(
-            JSON.parse(JSON.stringify({
-              cert: this._getOption('certChain'),
-              key: this._getOption('certKey'),
-            })),
-          );
+          cert.cert = this._getOption('certChain');
+          cert.key = this._getOption('certKey');
         }
+        fetchOptions.client = Deno.createHttpClient(cert);
       }
-      // if (this._customClient !== undefined) {
-      //   fetchOptions.client = this._customClient;
-      // }
-      const interimResp = await fetch(endpoint, fetchOptions);
-      clearTimeout(timeout);
-      if (this._hasOption('certChain') || this._hasOption('certKey')) {
-        fetchOptions.client?.close();
+      let interimResp: Response;
+      try {
+        interimResp = await fetch(endpoint, fetchOptions);
+      } catch (e) {
+        throw e;
+      } finally {
+        clearTimeout(timeout);
+        if (this._hasOption('certChain') || this._hasOption('certKey')) {
+          fetchOptions.client?.close();
+        }
       }
       resp.timeTaken = performance.now() - start;
       resp.status = interimResp.status;

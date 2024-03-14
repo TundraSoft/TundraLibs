@@ -122,13 +122,14 @@ export class RedisCacher extends AbstractCache<RedisCacherOptions> {
       });
       this._status = 'READY';
     } catch (error) {
-      this._connectionError = new CacherConnectionError(
+      const e = new CacherConnectionError(
         error.message,
         this._getAllOptions(),
         error,
       );
+      this._connectionError = e;
       this._client = undefined;
-      throw error;
+      throw e;
     }
   }
 
