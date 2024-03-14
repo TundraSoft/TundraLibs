@@ -1,6 +1,6 @@
 /// <reference lib="deno.unstable" />
 
-import { HTTPMethods, path, XMLParse } from '../dependencies.ts';
+import { HTTPMethods, path, semver, XMLParse } from '../dependencies.ts';
 
 import { Options } from '../options/mod.ts';
 import type { OptionKeys } from '../options/mod.ts';
@@ -159,10 +159,22 @@ export abstract class RESTler<
           : this._stringifyBody(request.body),
       };
       if (this._hasOption('certChain') || this._hasOption('certKey')) {
-        fetchOptions.client = Deno.createHttpClient({
-          cert: this._getOption('certChain'),
-          key: this._getOption('certKey'),
-        });
+        // @Version check - Remove later on
+        const ver = semver.parse(Deno.version.deno);
+        if (semver.lt(ver, semver.parse('1.41.0'))) {
+          // Stupi hack to pass linting
+          fetchOptions.client = Deno.createHttpClient(
+            JSON.parse(JSON.stringify({
+              certChain: this._getOption('certChain'),
+              privateKey: this._getOption('certKey'),
+            })),
+          );
+        } else {
+          fetchOptions.client = Deno.createHttpClient({
+            cert: this._getOption('certChain'),
+            key: this._getOption('certKey'),
+          });
+        }
       }
       // if (this._customClient !== undefined) {
       //   fetchOptions.client = this._customClient;

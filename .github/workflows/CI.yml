@@ -15,7 +15,7 @@ jobs:
         name: Get Deno Versions
         id: fetch-versions
         run: |
-          DENO_VERSIONS=$(curl -s https://api.github.com/repos/denoland/deno/releases | jq -r '.[].tag_name' | sed 's/v//' | sort -V | tail -n 3 | tac | jq -Rcn '[inputs]')
+          DENO_VERSIONS=$(curl -s https://api.github.com/repos/denoland/deno/releases | jq -r '.[].tag_name' | sed 's/v//' | sort -V | tail -n 8 | tac | jq -Rcn '[inputs]')
           echo "deno-versions=${DENO_VERSIONS}" >> "$GITHUB_OUTPUT"
 
   check-code:

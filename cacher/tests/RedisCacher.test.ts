@@ -3,7 +3,7 @@ import {
   assertEquals,
   assertRejects,
   assertThrows,
-  beforeAll,
+  beforeEach,
   describe,
   it,
 } from '../../dev.dependencies.ts';
@@ -18,7 +18,7 @@ describe({ name: 'Cacher', sanitizeOps: false }, () => {
   describe('RedisCacher', () => {
     let cacher: RedisCacher;
 
-    beforeAll(() => {
+    beforeEach(() => {
       cacher = new RedisCacher('testCacher', {
         engine: 'REDIS',
         host: envData.get('REDIS_HOST') || 'localhost',

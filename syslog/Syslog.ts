@@ -57,10 +57,8 @@ export const Syslog = (): SyslogObject => {
         case 'dateTime': {
           let dt: Date;
           if (!(value instanceof Date)) {
-            try {
-              dt = new Date(value);
-            } catch {
-              console.log('Invalid dateTime provided', value);
+            dt = new Date(value);
+            if (isNaN(dt.getTime())) {
               throw new Error('Invalid dateTime provided');
             }
           } else {
