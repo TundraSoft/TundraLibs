@@ -40,7 +40,7 @@ export class PostgresTranslator extends AbstractTranslator {
     'DATETIME': 'TIMESTAMP',
     'TIME': 'TIME',
     'TIMESTAMP': 'TIMESTAMP',
-    'TIMESTAMPZ': 'TIMESTAMPTZ',
+    'TIMESTAMPTZ': 'TIMESTAMPTZ',
     'JSON': 'JSONB',
     'JSONB': 'JSONB',
   };

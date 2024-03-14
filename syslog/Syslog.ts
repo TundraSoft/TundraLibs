@@ -24,13 +24,13 @@ export const Syslog = (): SyslogObject => {
   const proxyHandler: ProxyHandler<SyslogObject> = {
     get(target, prop) {
       switch (prop) {
-        case 'prival':
+        // case 'prival':
         case 'pri':
           return target.facility * 8 + target.severity;
-        case 'isoDateTime':
-          return target.dateTime.toISOString();
-        case 'bsdDateTime':
-          return `${target.dateTime.toDateString()} ${target.dateTime.toTimeString()}`;
+        // case 'isoDateTime':
+        //   return target.dateTime.toISOString();
+        // case 'bsdDateTime':
+        //   return `${target.dateTime.toDateString()} ${target.dateTime.toTimeString()}`;
         case 'toString':
           return (format: string = Formats.RFC5424) =>
             stringify(target, format);
@@ -46,7 +46,7 @@ export const Syslog = (): SyslogObject => {
           }
           target.version = value;
           return true;
-        case 'prival':
+        // case 'prival':
         case 'pri':
           if (value < 0 || value > 191) {
             throw new Error('Invalid pri');
@@ -60,6 +60,7 @@ export const Syslog = (): SyslogObject => {
             try {
               dt = new Date(value);
             } catch {
+              console.log('Invalid dateTime provided', value);
               throw new Error('Invalid dateTime provided');
             }
           } else {
@@ -116,6 +117,8 @@ export const Syslog = (): SyslogObject => {
       version: '1',
       dateTime: new Date(),
       facility: Facilities.LOCAL0,
+      severity: Severities.EMERGENCY,
+
     } as SyslogObject,
     proxyHandler,
   );

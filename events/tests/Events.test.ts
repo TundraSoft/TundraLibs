@@ -12,8 +12,10 @@ const delay = (ms: number) =>
 /**
  * Typed events
  */
-describe(`[library='Events' mode='typed']`, () => {
-  let op: unknown[] = [],
+describe('Events', () => {
+  describe('Typed Events', () => {
+
+    let op: unknown[] = [],
     test: EventTester;
   //#region Typed Events
   type TestEvents = {
@@ -161,7 +163,7 @@ describe(`[library='Events' mode='typed']`, () => {
         test.on('event1', first);
         test.on('event1', second);
         test.on('event1', third);
-        test.on('event1', fourth);
+        test.once('event1', fourth);
         test.runSync();
         await delay(2000);
         assertEquals(op.join(','), '1,2,3,4');
@@ -175,19 +177,32 @@ describe(`[library='Events' mode='typed']`, () => {
         test.on('event1', first);
         test.on('event1', second);
         test.on('event1', third);
-        test.on('event1', fourth);
+        test.once('event1', fourth);
         test.run();
         await delay(2000);
         assertEquals(op.join(','), '1,2,4,3');
       },
     });
+
+    it('Test array of events', () => {
+      const test = new EventTester();
+      test.on('event1', [first, second]);
+      test.once('event1', [third, fourth]);
+      assertEquals(test.getEventCount(), 4);
+      test.off('event1', [first, second]);
+      assertEquals(test.getEventCount(), 2);
+    });
+    
+  });
 });
 
 /**
  * UnTyped events
  */
-describe(`[library='Events' mode='untyped']`, () => {
-  let op: unknown[] = [],
+describe('Events', () => {
+
+  describe('UnTyped Events', () => {
+    let op: unknown[] = [],
     test: EventTester;
   //#region Typed Events
 
@@ -332,7 +347,7 @@ describe(`[library='Events' mode='untyped']`, () => {
         test.on('event1', first);
         test.on('event1', second);
         test.on('event1', third);
-        test.on('event1', fourth);
+        test.once('event1', fourth);
         test.runSync();
         await delay(2000);
         assertEquals(op.join(','), '1,2,3,4');
@@ -352,6 +367,18 @@ describe(`[library='Events' mode='untyped']`, () => {
         assertEquals(op.join(','), '1,2,4,3');
       },
     });
+
+    it('Test array of events', () => {
+      const test = new EventTester();
+      test.on('event1', [first, second]);
+      test.once('event1', [third, fourth]);
+      assertEquals(test.getEventCount(), 4);
+      test.off('event1', [first, second]);
+      assertEquals(test.getEventCount(), 2);
+    });
+
+  });
+
 });
 
 // Path: events/tests/Events.test.ts

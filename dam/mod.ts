@@ -8,6 +8,10 @@ export {
   SQLiteTranslator,
 } from './clients/mod.ts';
 
+export { 
+  AggregateNames, DataTypeNames, ExpressionNames, 
+} from './const/mod.ts';
+
 export {
   DAMBaseError,
   DAMClientError,

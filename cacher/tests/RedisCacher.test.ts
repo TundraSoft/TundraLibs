@@ -1,16 +1,16 @@
-import { assertEquals } from '../../dev.dependencies.ts';
-import { afterEach, beforeEach, describe, it } from '../../dev.dependencies.ts';
+import { afterEach, beforeAll, describe, it, assertThrows, assertEquals, assertRejects } from '../../dev.dependencies.ts';
 
 import { RedisCacher } from '../clients/mod.ts';
+import { CacherConfigError, CacherConnectionError } from '../errors/mod.ts';
 import { envArgs } from '../../utils/envArgs.ts';
 
 const envData = envArgs('cacher/tests');
 
-describe('Cacher', () => {
+describe({name: 'Cacher', sanitizeOps: false }, () => {
   describe('RedisCacher', () => {
     let cacher: RedisCacher;
 
-    beforeEach(() => {
+    beforeAll(() => {
       cacher = new RedisCacher('testCacher', {
         engine: 'REDIS',
         host: envData.get('REDIS_HOST') || 'localhost',
@@ -19,8 +19,30 @@ describe('Cacher', () => {
     });
 
     afterEach(async () => {
-      await cacher.clear();
+      if(cacher.status === 'READY') {
+        await cacher.clear();
+      }
       await cacher.close();
+    });
+
+    it('throw error on invalid engine', () => {
+      assertThrows(() => { 
+        new RedisCacher('testCacher', JSON.parse(JSON.stringify({
+          engine: 'INVALID',
+        })));
+      }, CacherConfigError);
+    });
+
+    it('throw error on invalid host', () => {
+      assertRejects(async () => {
+        const a = new RedisCacher('testCacher', {
+          engine: 'REDIS',
+          host: 'invalid',
+          port: 6379,
+        });
+        await a.set('test', 'test');
+        await a.close();
+      }, CacherConnectionError);
     });
 
     it('should set and get values correctly', async () => {

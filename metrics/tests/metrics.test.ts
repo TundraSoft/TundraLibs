@@ -47,6 +47,7 @@ describe('Metrics', () => {
     assertEquals(metrics.count('test'), 3);
     metrics.mark('test');
     assertEquals(metrics.count('test'), 4);
+    // console.log(metrics.all());
   });
 
   it('Test min, max and average', async () => {
@@ -77,6 +78,7 @@ describe('Metrics', () => {
     assertEquals(metrics.count('test'), 10);
     metrics.purge();
     assertEquals(metrics.count('test'), 0);
+    assertEquals(metrics.all(), {});
   });
 
   it('Test decorator', async () => {

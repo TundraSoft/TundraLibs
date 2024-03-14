@@ -7,6 +7,7 @@ import {
   numbers,
   password,
   sequenceId,
+  passwordGenerator,
 } from '../mod.ts';
 
 Deno.bench({
@@ -132,6 +133,13 @@ Deno.bench({
   name: `[library='id' mode='sequenceId'] Generate sequenceId - Overriding`,
 }, () => {
   sequenceId(134);
+});
+
+Deno.bench({
+  name:
+    `[library='id' mode='passwordGenerator'] Generate 21 characters password`,
+}, () => {
+  passwordGenerator(21);
 });
 
 Deno.bench({

@@ -3,4 +3,4 @@ export type DateTypes =
   | 'TIME'
   | 'DATETIME'
   | 'TIMESTAMP'
-  | 'TIMESTAMPZ';
+  | 'TIMESTAMPTZ';

@@ -42,7 +42,7 @@ export class SQLiteTranslator extends AbstractTranslator {
     'DATETIME': 'TIMESTAMP',
     'TIME': 'TIME',
     'TIMESTAMP': 'TIMESTAMP',
-    'TIMESTAMPZ': 'TIMESTAMP',
+    'TIMESTAMPTZ': 'TIMESTAMP',
     'JSON': 'TEXT',
     'JSONB': 'TEXT',
   };

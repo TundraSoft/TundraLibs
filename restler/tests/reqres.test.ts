@@ -43,7 +43,7 @@ describe('RESTler', () => {
 
       async getUsers(): Promise<UserType[]> {
         const users = await this._makeRequest<ReqResResponse<UserType[]>>({
-          endpoint: this._buildEndpoint('GET', `/users`),
+          endpoint: this._buildEndpoint('GET', `/users`, { limit: '1' }),
         });
         // Do some check
         return users.body?.data as UserType[];

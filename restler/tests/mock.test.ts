@@ -12,6 +12,7 @@ import {
 
 export class S extends Error {}
 describe('RESTler', () => {
+
   describe('Mock Sample', () => {
     let port: number;
     let mockServer: Deno.HttpServer,
@@ -25,6 +26,10 @@ describe('RESTler', () => {
 
     afterAll(async () => {
       await mockServer.shutdown();
+    });
+
+    it('Should list name of class', () => {
+      assertEquals(mock.name, 'mock');
     });
 
     it('Should list users', async () => {

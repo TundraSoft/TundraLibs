@@ -11,7 +11,7 @@ export abstract class AbstractCache<
   O extends AbstractCacherOptions = AbstractCacherOptions,
 > extends Options<O> {
   protected _name: string;
-
+  protected _status: 'INIT' | 'READY' = 'INIT';
   /**
    * Creates a new AbstractCache instance.
    *
@@ -38,6 +38,9 @@ export abstract class AbstractCache<
     return this._getOption('engine');
   }
 
+  get status(): 'INIT' | 'READY' {
+    return this._status;
+  }
   /**
    * Checks if a key exists in the cache.
    *

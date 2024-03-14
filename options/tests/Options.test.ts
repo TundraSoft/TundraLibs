@@ -8,6 +8,7 @@ import {
 } from '../../dev.dependencies.ts';
 
 describe(`Options`, () => {
+
   describe('typed', () => {
     type TestOptions = { foo: string; bar?: number };
     type TestEvents = { baz: (value: string) => void };
@@ -34,6 +35,10 @@ describe(`Options`, () => {
       hasEvent(name: string): boolean {
         return this._events.has(name as keyof TestEvents);
       }
+
+      getAll(): TestOptions {
+        return this._getAllOptions();
+      }
     }
     let test: TestClass;
 
@@ -64,6 +69,10 @@ describe(`Options`, () => {
 
     it('Check if event exists', () => {
       assertEquals(test.hasEvent('baz'), true);
+    });
+
+    it('Get all options', () => {
+      assertEquals(test.getAll(), { foo: 'bar' });
     });
   });
 
@@ -90,6 +99,10 @@ describe(`Options`, () => {
       hasEvent(name: string): boolean {
         return this._events.has(name);
       }
+
+      getAll(): Record<string, unknown> {
+        return this._getAllOptions();
+      }
     }
     let test: TestClass;
 
@@ -120,6 +133,10 @@ describe(`Options`, () => {
 
     it('Check if event exists', () => {
       assertEquals(test.hasEvent('baz'), true);
+    });
+
+    it('Get all options', () => {
+      assertEquals(test.getAll(), { foo: 'bar' });
     });
   });
 });

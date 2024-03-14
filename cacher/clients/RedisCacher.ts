@@ -120,12 +120,14 @@ export class RedisCacher extends AbstractCache<RedisCacherOptions> {
         tls: this._getOption('tls'),
         maxRetryCount: 3,
       });
+      this._status = 'READY';
     } catch (error) {
       this._connectionError = new CacherConnectionError(
         error.message,
         this._getAllOptions(),
         error,
       );
+      this._client = undefined;
       throw error;
     }
   }
@@ -136,6 +138,7 @@ export class RedisCacher extends AbstractCache<RedisCacherOptions> {
   public async close(): Promise<void> {
     if (this._client) {
       await this._client?.close();
+      this._status = 'INIT';
     }
   }
 }

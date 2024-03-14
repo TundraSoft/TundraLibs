@@ -22,6 +22,7 @@ export class MemoryCacher extends AbstractCache<MemoryCacherOptions> {
       );
     }
     super(name, options);
+    this._status = 'READY';
   }
 
   /**
