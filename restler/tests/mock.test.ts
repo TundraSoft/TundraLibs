@@ -14,8 +14,8 @@ import {
   it,
 } from '../../dev.dependencies.ts';
 
-export class S extends Error {}
-describe('RESTler', () => {
+// Added for compat with 1.40 and before
+describe({name: 'RESTler', sanitizeExit: false, sanitizeOps: false, sanitizeResources: false }, () => {
   describe('Mock Sample', () => {
     let port: number;
     let mockServer: Deno.HttpServer,
