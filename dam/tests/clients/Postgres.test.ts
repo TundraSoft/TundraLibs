@@ -2,6 +2,7 @@ import {
   afterAll,
   assertEquals,
   assertRejects,
+  assertThrows,
   beforeAll,
   describe,
   it,
@@ -56,7 +57,7 @@ describe('DAM', () => {
         sanitizeExit: false,
         sanitizeOps: false,
         sanitizeResources: false,
-      }, async () => {
+      }, () => {
         const c = {
           dialect: 'POSSSSSS',
           host: 'no-host',
@@ -64,9 +65,10 @@ describe('DAM', () => {
           password: 'pg',
           database: 'd',
         };
-        const a = new PostgresClient('maria', c as PostgresOptions);
-        assertRejects(async () => await a.connect(), DAMConfigError);
-        await a.close();
+        assertThrows(
+          () => new PostgresClient('maria', c as PostgresOptions),
+          DAMConfigError,
+        );
       });
 
       it('Invalid connection', async () => {

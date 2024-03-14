@@ -2,6 +2,7 @@ import {
   afterAll,
   assertEquals,
   assertRejects,
+  assertThrows,
   describe,
   it,
 } from '../../../dev.dependencies.ts';
@@ -55,7 +56,7 @@ describe({
         sanitizeExit: false,
         sanitizeOps: false,
         sanitizeResources: false,
-      }, async () => {
+      }, () => {
         const c = {
           dialect: 'MARIAAA',
           host: 'no-host',
@@ -63,9 +64,10 @@ describe({
           password: 'pg',
           database: 'd',
         };
-        const a = new MariaClient('maria', c as MariaOptions);
-        assertRejects(async () => await a.connect(), DAMConfigError);
-        await a.close();
+        assertThrows(
+          () => new MariaClient('maria', c as MariaOptions),
+          DAMConfigError,
+        );
       });
 
       it({

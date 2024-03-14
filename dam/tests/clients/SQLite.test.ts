@@ -2,12 +2,14 @@ import {
   afterAll,
   assertEquals,
   assertRejects,
+  assertThrows,
   beforeAll,
   describe,
   it,
 } from '../../../dev.dependencies.ts';
 import {
-  DAMClientError,
+  // DAMClientError,
+  DAMConfigError,
   DAMQueryError,
   SQLiteClient,
   type SQLiteOptions,
@@ -29,13 +31,14 @@ describe('DAM', () => {
           sanitizeExit: false,
           sanitizeOps: false,
           sanitizeResources: false,
-        }, async () => {
+        }, () => {
           const c = {
             dialect: 'SQLLLLL',
           };
-          const a = new SQLiteClient('maria', c as SQLiteOptions);
-          assertRejects(async () => await a.connect(), DAMClientError);
-          await a.close();
+          assertThrows(
+            () => new SQLiteClient('maria', c as SQLiteOptions),
+            DAMConfigError,
+          );
         });
 
         it('Must connect to db', async () => {
