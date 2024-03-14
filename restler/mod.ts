@@ -10,6 +10,7 @@ export type {
 export {
   RESTlerAuthFailure,
   RESTlerBaseError,
+  RESTlerEndpointError,
   RESTlerTimeoutError,
   RESTlerUnhandledError,
   RESTlerUnsupportedContentType,
