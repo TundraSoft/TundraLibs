@@ -6,11 +6,16 @@ import {
   describe,
   it,
 } from '../../../dev.dependencies.ts';
-import { DAMClientError, DAMQueryError } from '../../errors/mod.ts';
 
 import { alphaNumeric, nanoId } from '../../../id/mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
-import { PostgresOptions, PostgresClient } from '../../mod.ts';
+import {
+  DAMClientError,
+  DAMConfigError,
+  DAMQueryError,
+  PostgresClient,
+  type PostgresOptions,
+} from '../../mod.ts';
 const envData = envArgs('dam/tests');
 
 describe('DAM', () => {
@@ -53,14 +58,14 @@ describe('DAM', () => {
         sanitizeResources: false,
       }, async () => {
         const c = {
-          dialect: 'POSSSSSS', 
+          dialect: 'POSSSSSS',
           host: 'no-host',
           username: 'pg',
           password: 'pg',
           database: 'd',
-        }
+        };
         const a = new PostgresClient('maria', c as PostgresOptions);
-        assertRejects(async () => await a.connect(), DAMClientError);
+        assertRejects(async () => await a.connect(), DAMConfigError);
         await a.close();
       });
 

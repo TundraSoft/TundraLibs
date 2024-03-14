@@ -6,7 +6,12 @@ import {
   describe,
   it,
 } from '../../../dev.dependencies.ts';
-import { DAMQueryError, DAMClientError, SQLiteClient, type SQLiteOptions } from '../../mod.ts';
+import {
+  DAMClientError,
+  DAMQueryError,
+  SQLiteClient,
+  type SQLiteOptions,
+} from '../../mod.ts';
 // import { nanoId, alphaNumeric } from '../../../id/mod.ts';
 
 describe('DAM', () => {
@@ -26,8 +31,8 @@ describe('DAM', () => {
           sanitizeResources: false,
         }, async () => {
           const c = {
-            dialect: 'SQLLLLL', 
-          }
+            dialect: 'SQLLLLL',
+          };
           const a = new SQLiteClient('maria', c as SQLiteOptions);
           assertRejects(async () => await a.connect(), DAMClientError);
           await a.close();

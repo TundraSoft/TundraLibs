@@ -1,4 +1,3 @@
-import { MongoClient } from '../../clients/mod.ts';
 import {
   afterAll,
   assertEquals,
@@ -7,10 +6,10 @@ import {
   describe,
   it,
 } from '../../../dev.dependencies.ts';
-import { DAMClientError, DAMQueryError } from '../../errors/mod.ts';
-
 import { alphaNumeric, nanoId } from '../../../id/mod.ts';
+import { DAMClientError, DAMQueryError, MongoClient } from '../../mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
+
 const envData = envArgs('dam/tests');
 
 describe({

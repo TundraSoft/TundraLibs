@@ -5,11 +5,17 @@ import {
   describe,
   it,
 } from '../../../dev.dependencies.ts';
-import { DAMClientError, DAMQueryError } from '../../errors/mod.ts';
+import {} from '../../errors/mod.ts';
 
 import { alphaNumeric, nanoId } from '../../../id/mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
-import { MariaClient, type MariaOptions } from '../../mod.ts';
+import {
+  DAMClientError,
+  DAMConfigError,
+  DAMQueryError,
+  MariaClient,
+  type MariaOptions,
+} from '../../mod.ts';
 
 const envData = envArgs('dam/tests');
 
@@ -51,14 +57,14 @@ describe({
         sanitizeResources: false,
       }, async () => {
         const c = {
-          dialect: 'MARIAAA', 
+          dialect: 'MARIAAA',
           host: 'no-host',
           username: 'pg',
           password: 'pg',
           database: 'd',
-        }
+        };
         const a = new MariaClient('maria', c as MariaOptions);
-        assertRejects(async () => await a.connect(), DAMClientError);
+        assertRejects(async () => await a.connect(), DAMConfigError);
         await a.close();
       });
 
