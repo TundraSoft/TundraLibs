@@ -1,6 +1,10 @@
 import { MockTest, server } from './mockServer.ts';
 import { getFreePort } from '../../utils/mod.ts';
-import { RESTlerAuthFailure } from '../mod.ts';
+import {
+  RESTlerAuthFailure,
+  RESTlerTimeoutError,
+  RESTlerUnsupportedContentType,
+} from '../mod.ts';
 import {
   afterAll,
   assertEquals,
@@ -46,6 +50,14 @@ describe('RESTler', () => {
       mock.doAuth = false;
       mock.authKey = undefined;
       await assertRejects(() => mock.createUser('sdfsdf'), RESTlerAuthFailure);
+    });
+
+    it('should timeout', async () => {
+      await assertRejects(() => mock.timeout(), RESTlerTimeoutError);
+    });
+
+    it('should throw error on unknown content type', async () => {
+      await assertRejects(() => mock.unknown(), RESTlerUnsupportedContentType);
     });
   });
 });

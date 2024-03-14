@@ -17,7 +17,12 @@ import {
 // import { nanoId, alphaNumeric } from '../../../id/mod.ts';
 
 // Sanitize is present here for 1.40.x compatibility
-describe({ name: 'DAM', sanitizeExit: false, sanitizeOps: false, sanitizeResources: false }, () => {
+describe({
+  name: 'DAM',
+  sanitizeExit: false,
+  sanitizeOps: false,
+  sanitizeResources: false,
+}, () => {
   describe('Client', () => {
     describe('SQLite', () => {
       describe('Memory', () => {
