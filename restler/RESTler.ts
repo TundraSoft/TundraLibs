@@ -161,7 +161,12 @@ export abstract class RESTler<
       if (this._hasOption('certChain') || this._hasOption('certKey')) {
         // @Version check - Remove later on
         const ver = semver.parse(Deno.version.deno);
-        const cert: { certChain?: string, privateKey?: string, cert?: string, key?: string } = {};
+        const cert: {
+          certChain?: string;
+          privateKey?: string;
+          cert?: string;
+          key?: string;
+        } = {};
         if (semver.lt(ver, semver.parse('1.41.0'))) {
           cert.certChain = this._getOption('certChain');
           cert.privateKey = this._getOption('certKey');
