@@ -143,7 +143,7 @@ export abstract class RESTler<
     const controller = new AbortController(),
       timeout = setTimeout(
         () => controller.abort(),
-        this._getOption('timeout'),
+        request.timeout || this._getOption('timeout'),
       );
     try {
       await this._authInjector(request);

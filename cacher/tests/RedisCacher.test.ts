@@ -14,7 +14,13 @@ import { envArgs } from '../../utils/envArgs.ts';
 
 const envData = envArgs('cacher/tests');
 
-describe({ name: 'Cacher', sanitizeOps: false }, () => {
+// Sanitize exist and resource is present due to bug in 1.40.1
+describe({
+  name: 'Cacher',
+  sanitizeOps: false,
+  sanitizeExit: false,
+  sanitizeResources: false,
+}, () => {
   describe('RedisCacher', () => {
     let cacher: RedisCacher;
 

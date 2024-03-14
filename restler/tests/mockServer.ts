@@ -50,6 +50,19 @@ export const server = (port = 8000) => {
         status: 200,
         headers: respHeaders,
       });
+    } else if (path === '/timeout') {
+      // Delay response by 1s
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      return new Response(JSON.stringify({ message: 'Timeout' }), {
+        status: 408,
+        headers: respHeaders,
+      });
+    } else if (path === '/unknown') {
+      respHeaders.set('content-type', 'application/octet-stream');
+      return new Response('{"message": "Unknown"}', {
+        status: 200,
+        headers: respHeaders,
+      });
     } else {
       return new Response(JSON.stringify({ message: 'Not found' }), {
         status: 404,
@@ -146,5 +159,18 @@ export class MockTest extends RESTler {
       endpoint: this._buildEndpoint('GET', '/users'),
     });
     return res.body as { id: number; email: string }[];
+  }
+
+  async timeout(): Promise<void> {
+    await this._makeRequest({
+      endpoint: this._buildEndpoint('GET', '/timeout'),
+      timeout: 1000,
+    });
+  }
+
+  async unknown(): Promise<void> {
+    await this._makeRequest({
+      endpoint: this._buildEndpoint('GET', '/unknown'),
+    });
   }
 }
