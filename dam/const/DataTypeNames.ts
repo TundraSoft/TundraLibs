@@ -1,7 +1,7 @@
 import type { DataTypes } from '../mod.ts';
 
 export const DataTypeNames: Array<DataTypes> = [
-  'AUTO_INCREMENT', 
+  'AUTO_INCREMENT',
   'SERIAL',
   'BIGSERIAL',
   'BIGINT',
@@ -30,4 +30,4 @@ export const DataTypeNames: Array<DataTypes> = [
   'TIMESTAMPTZ',
   'JSON',
   'JSONB',
-]
+];

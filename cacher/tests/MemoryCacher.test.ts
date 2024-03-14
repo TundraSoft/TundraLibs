@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, it, assertEquals, assertThrows } from '../../dev.dependencies.ts';
+import {
+  afterEach,
+  assertEquals,
+  assertThrows,
+  beforeEach,
+  describe,
+  it,
+} from '../../dev.dependencies.ts';
 
 import { MemoryCacher } from '../clients/mod.ts';
 
@@ -17,10 +24,13 @@ describe('Cacher', () => {
     });
 
     it('throw error on invalid engine', () => {
-      assertThrows(() => { 
-        new MemoryCacher('testCacher', JSON.parse(JSON.stringify({
-          engine: 'INVALID',
-        })));
+      assertThrows(() => {
+        new MemoryCacher(
+          'testCacher',
+          JSON.parse(JSON.stringify({
+            engine: 'INVALID',
+          })),
+        );
       });
     });
 

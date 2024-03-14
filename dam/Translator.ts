@@ -23,7 +23,6 @@ import { Parameters } from './Parameters.ts';
 import { DataTypes, QueryFilters } from './mod.ts';
 import { AggregateNames, ExpressionNames } from './const/mod.ts';
 
-
 const OperatorsNames = [
   '$eq',
   '$ne',

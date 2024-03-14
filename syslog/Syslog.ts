@@ -118,7 +118,6 @@ export const Syslog = (): SyslogObject => {
       dateTime: new Date(),
       facility: Facilities.LOCAL0,
       severity: Severities.EMERGENCY,
-
     } as SyslogObject,
     proxyHandler,
   );

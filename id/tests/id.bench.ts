@@ -6,8 +6,8 @@ import {
   nanoId,
   numbers,
   password,
-  sequenceId,
   passwordGenerator,
+  sequenceId,
 } from '../mod.ts';
 
 Deno.bench({

@@ -12,7 +12,6 @@ import {
 
 export class S extends Error {}
 describe('RESTler', () => {
-
   describe('Mock Sample', () => {
     let port: number;
     let mockServer: Deno.HttpServer,

@@ -1,4 +1,12 @@
-import { afterEach, beforeAll, describe, it, assertThrows, assertEquals, assertRejects } from '../../dev.dependencies.ts';
+import {
+  afterEach,
+  assertEquals,
+  assertRejects,
+  assertThrows,
+  beforeAll,
+  describe,
+  it,
+} from '../../dev.dependencies.ts';
 
 import { RedisCacher } from '../clients/mod.ts';
 import { CacherConfigError, CacherConnectionError } from '../errors/mod.ts';
@@ -6,7 +14,7 @@ import { envArgs } from '../../utils/envArgs.ts';
 
 const envData = envArgs('cacher/tests');
 
-describe({name: 'Cacher', sanitizeOps: false }, () => {
+describe({ name: 'Cacher', sanitizeOps: false }, () => {
   describe('RedisCacher', () => {
     let cacher: RedisCacher;
 
@@ -19,17 +27,20 @@ describe({name: 'Cacher', sanitizeOps: false }, () => {
     });
 
     afterEach(async () => {
-      if(cacher.status === 'READY') {
+      if (cacher.status === 'READY') {
         await cacher.clear();
       }
       await cacher.close();
     });
 
     it('throw error on invalid engine', () => {
-      assertThrows(() => { 
-        new RedisCacher('testCacher', JSON.parse(JSON.stringify({
-          engine: 'INVALID',
-        })));
+      assertThrows(() => {
+        new RedisCacher(
+          'testCacher',
+          JSON.parse(JSON.stringify({
+            engine: 'INVALID',
+          })),
+        );
       }, CacherConfigError);
     });
 

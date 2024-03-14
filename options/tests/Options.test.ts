@@ -8,7 +8,6 @@ import {
 } from '../../dev.dependencies.ts';
 
 describe(`Options`, () => {
-
   describe('typed', () => {
     type TestOptions = { foo: string; bar?: number };
     type TestEvents = { baz: (value: string) => void };
