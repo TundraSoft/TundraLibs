@@ -162,7 +162,7 @@ export abstract class RESTler<
         // @Version check - Remove later on
         const ver = semver.parse(Deno.version.deno);
         if (semver.lt(ver, semver.parse('1.41.0'))) {
-          // Stupi hack to pass linting
+          // Stupid hack to pass linting
           fetchOptions.client = Deno.createHttpClient(
             JSON.parse(JSON.stringify({
               certChain: this._getOption('certChain'),
@@ -170,10 +170,13 @@ export abstract class RESTler<
             })),
           );
         } else {
-          fetchOptions.client = Deno.createHttpClient({
-            cert: this._getOption('certChain'),
-            key: this._getOption('certKey'),
-          });
+          // Stupid hack to pass linting
+          fetchOptions.client = Deno.createHttpClient(
+            JSON.parse(JSON.stringify({
+              cert: this._getOption('certChain'),
+              key: this._getOption('certKey'),
+            })),
+          );
         }
       }
       // if (this._customClient !== undefined) {
