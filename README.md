@@ -11,10 +11,18 @@ A collection of libraries written in Deno which I use in different projects.
 
 ## Libraries
 
+- [x] [Cacher](./cacher/README.md)
+- [x] [Config](./config//README.md)
+- [x] [Cronus](./cronus/README.md)
+- [x] [DAM](./dam/README.md)
 - [x] [Events](./events/README.md)
 - [x] [Guardian](./guardian/README.md)
 - [x] [ID](./id/README.md)
+- [x] [Metrics](./metrics/README.md)
 - [x] [Options](./options/README.md)
+- [x] [OTP](./otp/README.md)
+- [x] [RESTler](./restler/README.md)
+- [x] [Syslog](./syslog/README.md)
 - [x] [Utils](./utils/README.md)
 
 ## TODO
