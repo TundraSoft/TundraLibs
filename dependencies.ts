@@ -1,4 +1,5 @@
 //#region Deno STD
+export * as semver from 'https://deno.land/std@0.205.0/semver/mod.ts';
 export * as path from 'https://deno.land/std@0.205.0/path/posix/mod.ts';
 export * as fs from 'https://deno.land/std@0.205.0/fs/mod.ts';
 export {
@@ -6,6 +7,7 @@ export {
   parse as parseDate,
 } from 'https://deno.land/std@0.205.0/datetime/mod.ts';
 export { printf, sprintf } from 'https://deno.land/std@0.205.0/fmt/printf.ts';
+export { Buffer } from 'https://deno.land/std@0.205.0/streams/mod.ts';
 
 export * as yaml from 'https://deno.land/std@0.205.0/yaml/mod.ts';
 export * as toml from 'https://deno.land/std@0.205.0/toml/mod.ts';
