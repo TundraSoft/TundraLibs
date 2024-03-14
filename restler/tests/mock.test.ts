@@ -15,7 +15,12 @@ import {
 } from '../../dev.dependencies.ts';
 
 // Added for compat with 1.40 and before
-describe({name: 'RESTler', sanitizeExit: false, sanitizeOps: false, sanitizeResources: false }, () => {
+describe({
+  name: 'RESTler',
+  sanitizeExit: false,
+  sanitizeOps: false,
+  sanitizeResources: false,
+}, () => {
   describe('Mock Sample', () => {
     let port: number;
     let mockServer: Deno.HttpServer,
