@@ -1,4 +1,3 @@
-import { MariaClient } from '../../clients/mod.ts';
 import {
   afterAll,
   assertEquals,
@@ -10,6 +9,7 @@ import { DAMClientError, DAMQueryError } from '../../errors/mod.ts';
 
 import { alphaNumeric, nanoId } from '../../../id/mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
+import { MariaClient, type MariaOptions } from '../../mod.ts';
 
 const envData = envArgs('dam/tests');
 
@@ -42,6 +42,24 @@ describe({
         await client.execute({ type: 'RAW', sql: `DROP SCHEMA ${schema};` });
         await client.close();
         assertEquals('READY', client.status);
+      });
+
+      it({
+        name: 'Invalid Dialect',
+        sanitizeExit: false,
+        sanitizeOps: false,
+        sanitizeResources: false,
+      }, async () => {
+        const c = {
+          dialect: 'MARIAAA', 
+          host: 'no-host',
+          username: 'pg',
+          password: 'pg',
+          database: 'd',
+        }
+        const a = new MariaClient('maria', c as MariaOptions);
+        assertRejects(async () => await a.connect(), DAMClientError);
+        await a.close();
       });
 
       it({

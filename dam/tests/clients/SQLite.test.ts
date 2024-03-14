@@ -1,4 +1,3 @@
-import { SQLiteClient } from '../../clients/mod.ts';
 import {
   afterAll,
   assertEquals,
@@ -7,8 +6,7 @@ import {
   describe,
   it,
 } from '../../../dev.dependencies.ts';
-import { DAMQueryError } from '../../errors/mod.ts';
-
+import { DAMQueryError, DAMClientError, SQLiteClient, type SQLiteOptions } from '../../mod.ts';
 // import { nanoId, alphaNumeric } from '../../../id/mod.ts';
 
 describe('DAM', () => {
@@ -20,6 +18,20 @@ describe('DAM', () => {
           mode: 'MEMORY',
         });
         // const schema = `test_${nanoId(4, alphaNumeric)}`;
+
+        it({
+          name: 'Invalid Dialect',
+          sanitizeExit: false,
+          sanitizeOps: false,
+          sanitizeResources: false,
+        }, async () => {
+          const c = {
+            dialect: 'SQLLLLL', 
+          }
+          const a = new SQLiteClient('maria', c as SQLiteOptions);
+          assertRejects(async () => await a.connect(), DAMClientError);
+          await a.close();
+        });
 
         it('Must connect to db', async () => {
           await client.connect();

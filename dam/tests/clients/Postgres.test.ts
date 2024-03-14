@@ -1,4 +1,3 @@
-import { PostgresClient } from '../../clients/mod.ts';
 import {
   afterAll,
   assertEquals,
@@ -11,6 +10,7 @@ import { DAMClientError, DAMQueryError } from '../../errors/mod.ts';
 
 import { alphaNumeric, nanoId } from '../../../id/mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
+import { PostgresOptions, PostgresClient } from '../../mod.ts';
 const envData = envArgs('dam/tests');
 
 describe('DAM', () => {
@@ -44,6 +44,24 @@ describe('DAM', () => {
         });
         await client.close();
         assertEquals('READY', client.status);
+      });
+
+      it({
+        name: 'Invalid Dialect',
+        sanitizeExit: false,
+        sanitizeOps: false,
+        sanitizeResources: false,
+      }, async () => {
+        const c = {
+          dialect: 'POSSSSSS', 
+          host: 'no-host',
+          username: 'pg',
+          password: 'pg',
+          database: 'd',
+        }
+        const a = new PostgresClient('maria', c as PostgresOptions);
+        assertRejects(async () => await a.connect(), DAMClientError);
+        await a.close();
       });
 
       it('Invalid connection', async () => {

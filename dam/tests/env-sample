@@ -1,4 +1,4 @@
-PG_HOST=10.1.10.3
+PG_HOST=localhost
 PG_USER=postgres
 PG_PASS=postgrespw
 PG_DB=postgres
@@ -8,7 +8,7 @@ MARIA_USER=root
 MARIA_PASS=mariapw
 MARIA_DB=mysql
 
-MONGO_HOST=10.1.10.3
+MONGO_HOST=localhost
 MONGO_USER=mongo
 MONGO_PASS=mongopw
 MONGO_DB=test
