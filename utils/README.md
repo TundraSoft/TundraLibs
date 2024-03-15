@@ -6,6 +6,7 @@ Collection of helpers primarily used inside tundralibs but can also be used exte
 
 - [Decorators](#decorators)
   - [debounce](#debounce)
+  - [memoize](#memoize)
   - [singleton](#singleton)
   - [throttle](#throttle)
 - [Types](#types)
@@ -20,6 +21,8 @@ Collection of helpers primarily used inside tundralibs but can also be used exte
   - [UnionToIntersection](#uniontointersection)
 - [Base Error](#base-error)
 - [envArgs](#envargs)
+- [getFreePort](#getfreeport)
+- [hash](#hash)
 - [privateObject](#privateobject)
 - [TundraLibError](#tundraliberror)
 
@@ -40,6 +43,22 @@ class Test {
   debounceMethod(arg1, arg2) {
     // Action here
     return 'Hi';
+  }
+}
+```
+
+### memoize
+
+Caches a method output and returns the cached output. Careful when using this, it caches based on the arguments passed only.
+_NOTE_ This will convert the method to a Promise.
+
+```ts
+import { memoize } from 'utils/mod.ts';
+
+class Test {
+  @memoize
+  memoMethod(arg1) {
+    // action here
   }
 }
 ```
@@ -174,6 +193,32 @@ It internally leverages privateObject.
 import { envArgs } from '';
 const a = envArgs();
 ```
+
+## getFreePort
+
+Gets a port which is not in use. By default searches from 1024 - 65535.
+
+```ts
+getFreePort(min = 1024, max = 65535): number;
+```
+
+`min` - The minimum port number from which to search
+
+`max` - The maximum port number to which search
+
+## hash
+
+Generates a hash of the provided data. Supports SHA-1, SHA-256, SHA-384 and SHA-512 and can return value in either HEX or Base64 format.
+
+```ts
+hash(data: unknown, opt: { algorithm: 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512', encoding: 'HEX' | 'BASE64' })
+```
+
+`data: unknown` - Data for which hash is to be generated
+
+`opt?: { algorithm: 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512', encoding: 'HEX' | 'BASE64' }` - Options for generating the hash. Defaults to 'SHA-256' and 'HEX'
+
+_NOTE_ - Requires `--allow-read` permission
 
 ## privateObject
 

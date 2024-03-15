@@ -12,6 +12,7 @@ export { printf, sprintf } from 'https://deno.land/std@0.205.0/fmt/printf.ts';
 export * as yaml from 'https://deno.land/std@0.205.0/yaml/mod.ts';
 export * as toml from 'https://deno.land/std@0.205.0/toml/mod.ts';
 export * as base64 from 'https://deno.land/std@0.205.0/encoding/base64.ts';
+export * as hex from 'https://deno.land/std@0.205.0/encoding/hex.ts';
 
 export { Status, STATUS_TEXT } from 'https://deno.land/std@0.205.0/http/mod.ts';
 
@@ -91,6 +92,6 @@ export {
 // } from 'https://deno.land/x/mongo@v0.32.0/src/error.ts';
 
 // For encryption
-export * as openpgp from 'https://cdn.skypack.dev/openpgp'; //'https://deno.land/x/openpgp@v5.9.0/src/index.js';
+export * as openpgp from 'https://deno.land/x/openpgp@v5.11.1/src/index.js';//'https://cdn.skypack.dev/openpgp'; //'https://deno.land/x/openpgp@v5.9.0/src/index.js';
 
 //#endregion NORM
