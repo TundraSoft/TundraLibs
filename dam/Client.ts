@@ -27,7 +27,6 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
   public readonly name: string;
   declare public translator: AbstractTranslator;
   protected _status: ClientStatus = 'READY';
-  protected _version: string | undefined = undefined;
 
   constructor(name: string, options: OptionKeys<O, ClientEvents>) {
     const def: Partial<O> = {
@@ -47,14 +46,6 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
 
   get status(): ClientStatus {
     return this._status;
-  }
-
-  async getVersion(): Promise<string> {
-    if (this._version === undefined) {
-      await this.connect();
-      this._version = await this._getVersion();
-    }
-    return this._version;
   }
 
   /**

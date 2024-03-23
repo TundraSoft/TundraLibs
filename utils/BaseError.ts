@@ -1,7 +1,7 @@
 export class BaseError extends Error {
   public readonly name: string;
   public readonly timeStamp: Date = new Date();
-  public readonly meta: Record<string, unknown>;
+  declare public readonly meta: Record<string, unknown>;
   public readonly cause?: Error;
 
   constructor(

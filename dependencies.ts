@@ -2,6 +2,7 @@
 export * as semver from 'https://deno.land/std@0.205.0/semver/mod.ts';
 export * as path from 'https://deno.land/std@0.205.0/path/posix/mod.ts';
 export * as fs from 'https://deno.land/std@0.205.0/fs/mod.ts';
+
 export {
   format as dateFormat,
   parse as parseDate,
@@ -14,7 +15,10 @@ export * as toml from 'https://deno.land/std@0.205.0/toml/mod.ts';
 export * as base64 from 'https://deno.land/std@0.205.0/encoding/base64.ts';
 export * as hex from 'https://deno.land/std@0.205.0/encoding/hex.ts';
 
-export { Status, STATUS_TEXT } from 'https://deno.land/std@0.205.0/http/mod.ts';
+export {
+  Status,
+  STATUS_TEXT,
+} from 'https://deno.land/std@0.205.0/http/status.ts';
 
 //#endregion Deno STD
 export type HTTPMethods =
