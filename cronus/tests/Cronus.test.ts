@@ -87,6 +87,22 @@ describe('Cronus', () => {
     );
   });
 
+  it('Cronus.getScheduleJobs should return all jobs scheduled at a particular time', () => {
+    const cronus = new Cronus();
+    const name = 'test-job';
+    const jobDetails = {
+      schedule: '* * * * *',
+      action: () => console.log('Test Job'),
+    };
+
+    cronus.addJob(name, jobDetails);
+
+    assertEquals(
+      cronus.getScheduledJobs(jobDetails.schedule).includes(name),
+      true,
+    );
+  });
+
   it('Test all features', () => {
     const cronus = new Cronus();
 
