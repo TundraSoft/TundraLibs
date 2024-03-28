@@ -552,7 +552,7 @@ export class StringGuardian<
    */
   upiId(message?: string): GuardianProxy<this> {
     return this.pattern(
-      /^[a-zA-Z0-9]{12}$/,
+      /^[a-zA-Z0-9.-]{2,256}@[a-zA-Z][a-zA-Z]{2,64}$/,
       message || `Expect string to be a valid UPI ID`,
     );
   }

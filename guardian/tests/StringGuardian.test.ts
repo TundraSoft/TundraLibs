@@ -1,4 +1,4 @@
-import { GuardianError, stringGuard } from '../mod.ts';
+import { Guardian, GuardianError } from '../mod.ts';
 
 import {
   assertEquals,
@@ -13,14 +13,41 @@ describe('Guardian', () => {
     it({
       name: 'String - Test basic string validation',
       fn(): void {
-        assertEquals(stringGuard.trim().between(3, 40)('Abhinav '), 'Abhinav');
+        assertEquals(Guardian.string().trim().between(3, 40)('John '), 'John');
         assertEquals(
-          stringGuard.trim().between(3, 40).email()('testmail@gmail.com'),
+          Guardian.string().trim().between(3, 40).email().equals(
+            'test@email.com',
+          )('test@email.com'),
+          'test@email.com',
+        );
+        const a = Guardian.string().trim().between(3, 40).email(
+          'Invalid email',
+        );
+        const [e, _d] = a.validate('some');
+        assertInstanceOf(e, GuardianError);
+        // Check message
+        assertEquals(e.message, 'Invalid email');
+        assertEquals(e.children, []);
+      },
+    });
+
+    it({
+      name: 'String - Test basic string validation',
+      fn(): void {
+        assertEquals(
+          Guardian.string().trim().between(3, 40)('Abhinav '),
+          'Abhinav',
+        );
+        assertEquals(
+          Guardian.string().trim().between(3, 40).email()('testmail@gmail.com'),
           'testmail@gmail.com',
         );
-        assertEquals(stringGuard(' asd sd asd asd '), ' asd sd asd asd ');
-        assertEquals(stringGuard.optional()(), undefined);
-        assertThrows(() => stringGuard.aadhaar()('123456789'), GuardianError);
+        assertEquals(Guardian.string()(' asd sd asd asd '), ' asd sd asd asd ');
+        assertEquals(Guardian.string().optional()(), undefined);
+        assertThrows(
+          () => Guardian.string().aadhaar()('123456789'),
+          GuardianError,
+        );
       },
     });
 
@@ -29,7 +56,9 @@ describe('Guardian', () => {
       fn(): void {
         assertThrows(
           () =>
-            stringGuard.aadhaar('Value is not a valid AADHAAR')('123456789'),
+            Guardian.string().aadhaar('Value is not a valid AADHAAR')(
+              '123456789',
+            ),
           GuardianError,
           'Value is not a valid AADHAAR',
         );
@@ -39,54 +68,60 @@ describe('Guardian', () => {
     it({
       name: 'StringGuardian - Test capitalize',
       fn(): void {
-        assertEquals(stringGuard.capitalize()('hello'), 'Hello');
-        assertEquals(stringGuard.capitalize()('world'), 'World');
-        assertEquals(stringGuard.capitalize()(''), '');
+        assertEquals(Guardian.string().capitalize()('hello'), 'Hello');
+        assertEquals(Guardian.string().capitalize()('world'), 'World');
+        assertEquals(Guardian.string().capitalize()(''), '');
       },
     });
 
     it({
       name: 'StringGuardian - Test lowerCase',
       fn(): void {
-        assertEquals(stringGuard.lowerCase()('Hello'), 'hello');
-        assertEquals(stringGuard.lowerCase()('WORLD'), 'world');
-        assertEquals(stringGuard.lowerCase()(''), '');
+        assertEquals(Guardian.string().lowerCase()('Hello'), 'hello');
+        assertEquals(Guardian.string().lowerCase()('WORLD'), 'world');
+        assertEquals(Guardian.string().lowerCase()(''), '');
       },
     });
 
     it({
       name: 'StringGuardian - Test upperCase',
       fn(): void {
-        assertEquals(stringGuard.upperCase()('hello'), 'HELLO');
-        assertEquals(stringGuard.upperCase()('world'), 'WORLD');
-        assertEquals(stringGuard.upperCase()(''), '');
+        assertEquals(Guardian.string().upperCase()('hello'), 'HELLO');
+        assertEquals(Guardian.string().upperCase()('world'), 'WORLD');
+        assertEquals(Guardian.string().upperCase()(''), '');
       },
     });
 
     it({
       name: 'StringGuardian - Test camelCase',
       fn(): void {
-        assertEquals(stringGuard.camelCase()('hello world'), 'HelloWorld');
-        assertEquals(stringGuard.camelCase()('foo bar'), 'FooBar');
-        assertEquals(stringGuard.camelCase()(''), '');
+        assertEquals(
+          Guardian.string().camelCase()('hello world'),
+          'HelloWorld',
+        );
+        assertEquals(Guardian.string().camelCase()('foo bar'), 'FooBar');
+        assertEquals(Guardian.string().camelCase()(''), '');
       },
     });
 
     it({
       name: 'StringGuardian - Test snakeCase',
       fn(): void {
-        assertEquals(stringGuard.snakeCase()('hello world'), 'hello_world');
-        assertEquals(stringGuard.snakeCase()('foo bar'), 'foo_bar');
-        assertEquals(stringGuard.snakeCase()(''), '');
+        assertEquals(
+          Guardian.string().snakeCase()('hello world'),
+          'hello_world',
+        );
+        assertEquals(Guardian.string().snakeCase()('foo bar'), 'foo_bar');
+        assertEquals(Guardian.string().snakeCase()(''), '');
       },
     });
 
     it({
       name: 'StringGuardian - Test trim',
       fn(): void {
-        assertEquals(stringGuard.trim()('  hello  '), 'hello');
-        assertEquals(stringGuard.trim()('  world  '), 'world');
-        assertEquals(stringGuard.trim()(''), '');
+        assertEquals(Guardian.string().trim()('  hello  '), 'hello');
+        assertEquals(Guardian.string().trim()('  world  '), 'world');
+        assertEquals(Guardian.string().trim()(''), '');
       },
     });
 
@@ -94,11 +129,14 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test replace',
       fn(): void {
         assertEquals(
-          stringGuard.replace('hello', 'hi')('hello world'),
+          Guardian.string().replace('hello', 'hi')('hello world'),
           'hi world',
         );
-        assertEquals(stringGuard.replace('foo', 'bar')('foo bar'), 'bar bar');
-        assertEquals(stringGuard.replace('abc', 'def')(''), '');
+        assertEquals(
+          Guardian.string().replace('foo', 'bar')('foo bar'),
+          'bar bar',
+        );
+        assertEquals(Guardian.string().replace('abc', 'def')(''), '');
       },
     });
 
@@ -106,7 +144,10 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test toDate',
       fn(): void {
         // Add your test cases here
-        assertInstanceOf(stringGuard.toDate('yyyy-MM-dd')('2020-01-01'), Date);
+        assertInstanceOf(
+          Guardian.string().toDate('yyyy-MM-dd')('2020-01-01'),
+          Date,
+        );
       },
     });
 
@@ -114,9 +155,9 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test notEmpty',
       fn(): void {
         // Add your test cases here
-        assertEquals(stringGuard.notEmpty()('hello'), 'hello');
-        assertEquals(stringGuard.notEmpty()(' '), ' ');
-        assertThrows(() => stringGuard.notEmpty()(''), GuardianError);
+        assertEquals(Guardian.string().notEmpty()('hello'), 'hello');
+        assertEquals(Guardian.string().notEmpty()(' '), ' ');
+        assertThrows(() => Guardian.string().notEmpty()(''), GuardianError);
       },
     });
 
@@ -124,7 +165,7 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test min',
       fn(): void {
         // Add your test cases here
-        assertThrows(() => stringGuard.min(5)('hi'), GuardianError);
+        assertThrows(() => Guardian.string().min(5)('hi'), GuardianError);
       },
     });
 
@@ -132,7 +173,10 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test max',
       fn(): void {
         // Add your test cases here
-        assertThrows(() => stringGuard.max(5)('hello world'), GuardianError);
+        assertThrows(
+          () => Guardian.string().max(5)('hello world'),
+          GuardianError,
+        );
       },
     });
 
@@ -141,7 +185,7 @@ describe('Guardian', () => {
       fn(): void {
         // Add your test cases here
         assertThrows(
-          () => stringGuard.between(2, 5)('hello world'),
+          () => Guardian.string().between(2, 5)('hello world'),
           GuardianError,
         );
       },
@@ -151,7 +195,7 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test pattern',
       fn(): void {
         // Add your test cases here
-        assertEquals(stringGuard.pattern(/^[0-9]+$/)('12345'), '12345');
+        assertEquals(Guardian.string().pattern(/^[0-9]+$/)('12345'), '12345');
       },
     });
 
@@ -159,8 +203,8 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test pan',
       fn(): void {
         // Add your test cases here
-        assertEquals(stringGuard.pan()('ABCDE1234F'), 'ABCDE1234F');
-        assertThrows(() => stringGuard.pan()('ABCDE1234'), GuardianError);
+        assertEquals(Guardian.string().pan()('ABCDE1234F'), 'ABCDE1234F');
+        assertThrows(() => Guardian.string().pan()('ABCDE1234'), GuardianError);
       },
     });
 
@@ -168,8 +212,14 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test aadhaar',
       fn(): void {
         // Add your test cases here
-        assertEquals(stringGuard.aadhaar()('2234 5678 9012'), '2234 5678 9012');
-        assertThrows(() => stringGuard.aadhaar()('123456789'), GuardianError);
+        assertEquals(
+          Guardian.string().aadhaar()('2234 5678 9012'),
+          '2234 5678 9012',
+        );
+        assertThrows(
+          () => Guardian.string().aadhaar()('123456789'),
+          GuardianError,
+        );
       },
     });
 
@@ -177,9 +227,18 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test email',
       fn(): void {
         // Add your test cases here
-        assertEquals(stringGuard.email()('test@email.com'), 'test@email.com');
-        assertThrows(() => stringGuard.email()('testemail.com'), GuardianError);
-        assertThrows(() => stringGuard.email()('test@email'), GuardianError);
+        assertEquals(
+          Guardian.string().email()('test@email.com'),
+          'test@email.com',
+        );
+        assertThrows(
+          () => Guardian.string().email()('testemail.com'),
+          GuardianError,
+        );
+        assertThrows(
+          () => Guardian.string().email()('test@email'),
+          GuardianError,
+        );
       },
     });
 
@@ -187,8 +246,11 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test mobile',
       fn(): void {
         // Add your test cases here
-        assertEquals(stringGuard.mobile()('6937483910'), '6937483910');
-        assertThrows(() => stringGuard.mobile()('123456789'), GuardianError);
+        assertEquals(Guardian.string().mobile()('6937483910'), '6937483910');
+        assertThrows(
+          () => Guardian.string().mobile()('123456789'),
+          GuardianError,
+        );
       },
     });
 
@@ -196,8 +258,11 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test phone',
       fn(): void {
         // Add your test cases here
-        assertEquals(stringGuard.phone()('1234567890'), '1234567890');
-        assertThrows(() => stringGuard.phone()('0123456789'), GuardianError);
+        assertEquals(Guardian.string().phone()('1234567890'), '1234567890');
+        assertThrows(
+          () => Guardian.string().phone()('0123456789'),
+          GuardianError,
+        );
       },
     });
 
@@ -205,9 +270,9 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test ifsc',
       fn(): void {
         // Add your test cases here
-        assertEquals(stringGuard.ifsc()('SBIN0000003'), 'SBIN0000003');
-        assertEquals(stringGuard.ifsc()('SBIN00000A3'), 'SBIN00000A3');
-        assertThrows(() => stringGuard.ifsc()('SBIN_01'), GuardianError);
+        assertEquals(Guardian.string().ifsc()('SBIN0000003'), 'SBIN0000003');
+        assertEquals(Guardian.string().ifsc()('SBIN00000A3'), 'SBIN00000A3');
+        assertThrows(() => Guardian.string().ifsc()('SBIN_01'), GuardianError);
       },
     });
 
@@ -215,8 +280,11 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test gst',
       fn(): void {
         // Add your test cases here
-        assertEquals(stringGuard.gst()('29AABCU9602H1Z0'), '29AABCU9602H1Z0');
-        // assertThrows(() => stringGuard.gst()('29AABCU9602H1Z'), GuardianError);
+        assertEquals(
+          Guardian.string().gst()('29AABCU9602H1Z0'),
+          '29AABCU9602H1Z0',
+        );
+        // assertThrows(() => Guardian.string().gst()('29AABCU9602H1Z'), GuardianError);
       },
     });
 
@@ -224,9 +292,10 @@ describe('Guardian', () => {
       name: 'StringGuardian - Test ipv4',
       fn(): void {
         // Add your test cases here
-        assertEquals(stringGuard.ipv4()('192.168.1.1'), '192.168.1.1');
+        assertEquals(Guardian.string().ipv4()('192.168.1.1'), '192.168.1.1');
         assertThrows(
-          () => stringGuard.ipv4()('2001:0db8:85a3:0000:0000:8a2e:0370:7334'),
+          () =>
+            Guardian.string().ipv4()('2001:0db8:85a3:0000:0000:8a2e:0370:7334'),
           GuardianError,
         );
       },
@@ -237,14 +306,47 @@ describe('Guardian', () => {
       fn(): void {
         // Add your test cases here
         assertEquals(
-          stringGuard.ipv6()('2001:0db8:85a3:0000:0000:8a2e:0370:7334'),
+          Guardian.string().ipv6()('2001:0db8:85a3:0000:0000:8a2e:0370:7334'),
           '2001:0db8:85a3:0000:0000:8a2e:0370:7334',
         );
         assertThrows(
-          () => stringGuard.ipv6()('2001:0db8:85a3:0000:0000:8a2e:0370'),
+          () => Guardian.string().ipv6()('2001:0db8:85a3:0000:0000:8a2e:0370'),
           GuardianError,
         );
-        assertThrows(() => stringGuard.ipv6()('192.168.1.1'), GuardianError);
+        assertThrows(
+          () => Guardian.string().ipv6()('192.168.1.1'),
+          GuardianError,
+        );
+      },
+    });
+
+    it({
+      name: 'StringGuardian - Test domain',
+      fn(): void {
+        // Add your test cases here
+        assertEquals(
+          Guardian.string().domain()('www.google.com'),
+          'www.google.com',
+        );
+        assertThrows(
+          () => Guardian.string().domain()('d:/a/dsf'),
+          GuardianError,
+        );
+      },
+    });
+
+    it({
+      name: 'StringGuardian - Test hostname',
+      fn(): void {
+        // Add your test cases here
+        assertEquals(
+          Guardian.string().hostName()('www.google.com'),
+          'www.google.com',
+        );
+        assertThrows(
+          () => Guardian.string().hostName()('d:/a/dsf'),
+          GuardianError,
+        );
       },
     });
 
@@ -253,10 +355,111 @@ describe('Guardian', () => {
       fn(): void {
         // Add your test cases here
         assertEquals(
-          stringGuard.url()('https://www.google.com'),
+          Guardian.string().url()('https://www.google.com'),
           'https://www.google.com',
         );
-        assertThrows(() => stringGuard.url()('d:/a/dsf'), GuardianError);
+        assertThrows(() => Guardian.string().url()('d:/a/dsf'), GuardianError);
+      },
+    });
+
+    it({
+      name: 'StringGuardian - Test uuid',
+      fn(): void {
+        // Add your test cases here
+        assertEquals(
+          Guardian.string().uuid()('550e8400-e29b-41d4-a716-446655440000'),
+          '550e8400-e29b-41d4-a716-446655440000',
+        );
+        assertThrows(
+          () => Guardian.string().uuid()('550e8400-e29b-41d4-a716-44665544000'),
+          GuardianError,
+        );
+      },
+    });
+
+    it({
+      name: 'StringGuardian - Test creditCard',
+      fn(): void {
+        // Add your test cases here
+        assertEquals(
+          Guardian.string().card()('4111111111111111'),
+          '4111111111111111',
+        );
+        assertThrows(
+          () => Guardian.string().card()('411111111111111'),
+          GuardianError,
+        );
+        // Visa
+        assertEquals(
+          Guardian.string().visa()('4111111111111111'),
+          '4111111111111111',
+        );
+
+        // Mastercard
+        assertEquals(
+          Guardian.string().mastercard()('5555555555554444'),
+          '5555555555554444',
+        );
+
+        // amex
+        assertEquals(
+          Guardian.string().amex()('378282246310005'),
+          '378282246310005',
+        );
+
+        // discover
+        assertEquals(
+          Guardian.string().discover()('6011111111111117'),
+          '6011111111111117',
+        );
+
+        // diners
+        assertEquals(
+          Guardian.string().diners()('30569309025904'),
+          '30569309025904',
+        );
+
+        // jcb
+        assertEquals(
+          Guardian.string().jcb()('3530111333300000'),
+          '3530111333300000',
+        );
+
+        // rupay
+        assertEquals(
+          Guardian.string().rupay()('6521030000000000'),
+          '6521030000000000',
+        );
+      },
+    });
+
+    it({
+      name: 'StringGuardian - Test CVV',
+      fn(): void {
+        // Add your test cases here
+        assertEquals(Guardian.string().cvv()('123'), '123');
+        assertThrows(() => Guardian.string().cvv()('12'), GuardianError);
+      },
+    });
+
+    it({
+      name: 'StringGuardian - Test UPIId',
+      fn(): void {
+        // Add your test cases here
+        assertEquals(Guardian.string().upiId()('test@upi'), 'test@upi');
+        assertThrows(
+          () => Guardian.string().upiId()('test@upi@'),
+          GuardianError,
+        );
+      },
+    });
+
+    it({
+      name: 'StringGuardian - Test pinCode',
+      fn(): void {
+        // Add your test cases here
+        assertEquals(Guardian.string().pinCode()('560004'), '560004');
+        assertThrows(() => Guardian.string().pinCode()('56004'), GuardianError);
       },
     });
   });

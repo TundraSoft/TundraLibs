@@ -48,7 +48,7 @@ describe('Guardian', () => {
     it({
       name: 'ArrayGuardian - Test between',
       fn(): void {
-        const numGuard = Guardian.array().of(Guardian.number()).min(3).max(5);
+        const numGuard = Guardian.array().of(Guardian.number()).between(3, 5);
         assertEquals(numGuard([1, 2, 3]), [1, 2, 3]);
         assertThrows(
           () => numGuard([1, 2, 3, 4, 5, 6, 7]),

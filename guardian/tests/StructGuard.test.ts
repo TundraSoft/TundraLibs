@@ -2,6 +2,7 @@ import { Guardian, GuardianError, Struct } from '../mod.ts';
 import type { Type } from '../mod.ts';
 
 import {
+  assert,
   assertEquals,
   assertThrows,
   describe,
@@ -111,6 +112,8 @@ describe('Guardian', () => {
         );
         // Passimg junk should throw error
         assertThrows(() => userSchema(JSON.parse(data[2])), GuardianError);
+        const [e, _d] = userSchema.validate(JSON.parse(data[2]));
+        assert(e?.toJSON());
       },
     });
 
@@ -135,7 +138,7 @@ describe('Guardian', () => {
           JSON.parse(JSON.stringify(userSchemaPartial(JSON.parse(data[2])))),
           op,
         );
-        // assertThrows(() => userSchemaPartial(JSON.parse(data[2])), ValidationError);
+        // assertThrows(() => userSchemaPartial(JSON.parse(data[2])), GuardianError);
       },
     });
 
