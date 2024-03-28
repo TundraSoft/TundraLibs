@@ -108,7 +108,7 @@ export class StringGuardian<
     return this.transform((str: string) => str.replace(search, replace));
   }
 
-  toDate(format = 'YYYY-MM-dd'): GuardianProxy<DateGuardian<P>> {
+  toDate(format = 'yyyy-MM-dd'): GuardianProxy<DateGuardian<P>> {
     return this.transform((str: string) => parseDate(str, format));
   }
   //#endregion Manipulators
@@ -290,7 +290,7 @@ export class StringGuardian<
    */
   ifsc(message?: string): GuardianProxy<this> {
     return this.pattern(
-      /^[A-Z]{4}0[A-Z0-9]{6}$/,
+      /^[A-Z]{4}0[A-Z0-9]{6}$/i,
       message || `Expect string to be a valid IFSC code`,
     );
   }

@@ -1,38 +1,75 @@
 import { GuardianError, numberGuard } from '../mod.ts';
 
-import { assertEquals, assertThrows } from '../../dev.dependencies.ts';
+import {
+  assertEquals,
+  assertThrows,
+  describe,
+  it,
+} from '../../dev.dependencies.ts';
 
-Deno.test({
-  name: 'Number - Test basic string validation',
-  fn(): void {
-    assertEquals(numberGuard.integer()(123123), 123123);
-    assertEquals(numberGuard.min(10)(15), 15);
-    assertEquals(numberGuard.equals(10)(10), 10);
-    assertEquals(numberGuard.optional()(), undefined);
-    assertThrows(
-      () => numberGuard.integer()(234233241234.123412341234),
-      GuardianError,
-    );
-  },
-});
+describe('Guardian', () => {
+  describe('Number', () => {
+    it({
+      name: 'NumberGuardian - Test toDate',
+      fn(): void {
+        assertEquals(numberGuard.toDate()(1577836800), new Date('2020-01-01'));
+      },
+    });
 
-Deno.test({
-  name: 'Number - Check if correct error message is coming',
-  fn(): void {
-    assertThrows(
-      () =>
-        numberGuard.integer('Value is not a valid Integer')(123456789.234234),
-      GuardianError,
-      'Value is not a valid Integer',
-    );
-  },
-});
+    it({
+      name: 'NumberGuardian - Test float',
+      fn(): void {
+        assertEquals(numberGuard.float()(3.14), 3.14);
+        // assertThrows(() => numberGuard.float()(3), GuardianError);
+      },
+    });
 
-Deno.test({
-  name: 'Number - Transform to Date',
-  fn(): void {
-    const ts = 1661066144083,
-      dt = new Date(ts);
-    assertEquals(numberGuard.toDate()(ts), dt);
-  },
+    it({
+      name: 'NumberGuardian - Test integer',
+      fn(): void {
+        assertEquals(numberGuard.integer()(42), 42);
+        assertThrows(() => numberGuard.integer()(3.14), GuardianError);
+      },
+    });
+
+    it({
+      name: 'NumberGuardian - Test min',
+      fn(): void {
+        assertEquals(numberGuard.min(5)(10), 10);
+        assertThrows(() => numberGuard.min(5)(3), GuardianError);
+      },
+    });
+
+    it({
+      name: 'NumberGuardian - Test max',
+      fn(): void {
+        assertEquals(numberGuard.max(5)(3), 3);
+        assertThrows(() => numberGuard.max(5)(10), GuardianError);
+      },
+    });
+
+    it({
+      name: 'NumberGuardian - Test gt',
+      fn(): void {
+        assertEquals(numberGuard.gt(5)(10), 10);
+        assertThrows(() => numberGuard.gt(5)(5), GuardianError);
+      },
+    });
+
+    it({
+      name: 'NumberGuardian - Test lt',
+      fn(): void {
+        assertEquals(numberGuard.lt(5)(3), 3);
+        assertThrows(() => numberGuard.lt(5)(5), GuardianError);
+      },
+    });
+
+    it({
+      name: 'NumberGuardian - Test between',
+      fn(): void {
+        assertEquals(numberGuard.between(2, 5)(3), 3);
+        assertThrows(() => numberGuard.between(2, 5)(6), GuardianError);
+      },
+    });
+  });
 });

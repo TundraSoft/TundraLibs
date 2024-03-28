@@ -129,7 +129,7 @@ export class BigintGuardian<
    */
   aadhaar(message?: string): GuardianProxy<this> {
     return this.pattern(
-      /^[2-9]{1}[0-9]{3}\\s*[0-9]{4}\\s*[0-9]{4}$/,
+      /^[2-9]{1}[0-9]{3}[0-9]{4}[0-9]{4}$/,
       message || `Expect value to be a valid Aadhaar`,
     );
   }
