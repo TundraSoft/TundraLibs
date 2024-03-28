@@ -7,7 +7,7 @@ import {
 import { hash } from './hash.ts';
 
 describe('utils', () => {
-  describe('hash', () => {
+  describe({ name: 'hash' }, () => {
     const data = { a: 1, b: 2, c: 3 };
     const str = 'Loreum ipsum dolar sit amet';
     const num = 1234567890;

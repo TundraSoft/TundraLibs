@@ -68,3 +68,4 @@ export type {
 export { AbstractClient } from './Client.ts';
 export { AbstractTranslator } from './Translator.ts';
 export { Parameters } from './Parameters.ts';
+export { DAM } from './DAM.ts';

@@ -1,9 +1,9 @@
-import { MariaClient } from '../../clients/mod.ts';
 import { queries } from './Queries.ts';
 import {
   afterAll,
   assert,
   assertEquals,
+  assertThrows,
   beforeAll,
   // assertRejects,
   describe,
@@ -12,15 +12,17 @@ import {
 // import { DAMClientError, DAMQueryError } from '../../errors/mod.ts';
 
 import { envArgs } from '../../../utils/envArgs.ts';
-import type {
-  CreateSchemaQuery,
-  CreateTableQuery,
-  DeleteQuery,
-  DropSchemaQuery,
-  InsertQuery,
-  SelectQuery,
-  TruncateQuery,
-  UpdateQuery,
+import {
+  type CreateSchemaQuery,
+  type CreateTableQuery,
+  DAMTranslatorBaseError,
+  type DeleteQuery,
+  type DropSchemaQuery,
+  type InsertQuery,
+  MariaClient,
+  type SelectQuery,
+  type TruncateQuery,
+  type UpdateQuery,
 } from '../../mod.ts';
 
 const envData = envArgs('dam/tests');
@@ -50,6 +52,79 @@ describe('DAM', () => {
       afterAll(async () => {
         await client.close();
         assertEquals('READY', client.status);
+      });
+
+      it('Should throw error on invalid type', () => {
+        assertThrows(
+          () =>
+            client.translator.createSchema(
+              JSON.parse(JSON.stringify({ type: 'INVALID' })),
+            ),
+          DAMTranslatorBaseError,
+        );
+        assertThrows(
+          () =>
+            client.translator.dropSchema(
+              JSON.parse(JSON.stringify({ type: 'INVALID' })),
+            ),
+          DAMTranslatorBaseError,
+        );
+        assertThrows(
+          () =>
+            client.translator.createTable(
+              JSON.parse(JSON.stringify({ type: 'INVALID' })),
+            ),
+          DAMTranslatorBaseError,
+        );
+        assertThrows(
+          () =>
+            client.translator.dropTable(
+              JSON.parse(JSON.stringify({ type: 'INVALID' })),
+            ),
+          DAMTranslatorBaseError,
+        );
+        assertThrows(
+          () =>
+            client.translator.select(
+              JSON.parse(JSON.stringify({ type: 'INVALID' })),
+            ),
+          DAMTranslatorBaseError,
+        );
+        assertThrows(
+          () =>
+            client.translator.insert(
+              JSON.parse(JSON.stringify({ type: 'INVALID' })),
+            ),
+          DAMTranslatorBaseError,
+        );
+        assertThrows(
+          () =>
+            client.translator.update(
+              JSON.parse(JSON.stringify({ type: 'INVALID' })),
+            ),
+          DAMTranslatorBaseError,
+        );
+        assertThrows(
+          () =>
+            client.translator.delete(
+              JSON.parse(JSON.stringify({ type: 'INVALID' })),
+            ),
+          DAMTranslatorBaseError,
+        );
+        assertThrows(
+          () =>
+            client.translator.truncate(
+              JSON.parse(JSON.stringify({ type: 'INVALID' })),
+            ),
+          DAMTranslatorBaseError,
+        );
+        assertThrows(
+          () =>
+            client.translator.count(
+              JSON.parse(JSON.stringify({ type: 'INVALID' })),
+            ),
+          DAMTranslatorBaseError,
+        );
       });
 
       it('create schema', async () => {

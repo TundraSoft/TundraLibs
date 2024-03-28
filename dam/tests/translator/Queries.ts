@@ -465,4 +465,38 @@ export const queries = {
     source: 'Posts',
     schema: schemaName,
   },
+  count_post: {
+    type: 'COUNT',
+    source: 'Posts',
+    schema: schemaName,
+    columns: [
+      'Id',
+      'Title',
+      'Meta',
+      'Content',
+      'CreatedDate',
+      'PublishDate',
+      'Published',
+      'AuthorId',
+    ],
+    joins: {
+      Author: {
+        source: 'Users',
+        schema: schemaName,
+        columns: [
+          'Id',
+          'Name',
+          'Email',
+          'Password',
+          'DOB',
+          'Status',
+          'Profile',
+          'JoinDate',
+        ],
+        relation: {
+          Id: '$AuthorId',
+        },
+      },
+    },
+  },
 };

@@ -202,13 +202,13 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
   public async count<
     R extends Record<string, unknown> = Record<string, unknown>,
   >(query: CountQuery): Promise<QueryResult<R>> {
-    const res = await this.execute<{ count: number }>(
+    const res = await this.execute<{ TotalRows: number }>(
       this.translator.count(query),
     );
     return {
       type: 'COUNT',
       time: res.time,
-      count: (res.data && res.data.length > 0) ? res.data[0].count : 0,
+      count: (res.data && res.data.length > 0) ? res.data[0].TotalRows : 0,
       data: [],
     };
   }
