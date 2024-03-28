@@ -279,6 +279,8 @@ export const queries = {
     ],
     data: {
       Password: nanoId(36),
+      DOB: null,
+      JoinDate: { $expr: 'CURRENT_DATE' },
     },
     filters: {
       Name: {

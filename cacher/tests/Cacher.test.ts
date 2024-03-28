@@ -9,7 +9,7 @@ import {
 } from '../../dev.dependencies.ts';
 
 import { envArgs } from '../../utils/envArgs.ts';
-import { DuplicateCacher } from '../mod.ts';
+import { CacherConfigError, DuplicateCacher } from '../mod.ts';
 
 const envData = envArgs('cacher/tests');
 
@@ -61,8 +61,22 @@ describe('Cacher', () => {
 
   it('Throw error on duplicate name', () => {
     Cacher.create('dupCheck', { engine: 'MEMORY' });
+    Cacher.create('dupCheck2', { engine: 'REDIS' });
+
+    assertThrows(
+      () =>
+        Cacher.create(
+          'invalid',
+          JSON.parse(JSON.stringify({ engine: 'REDISSD' })),
+        ),
+      CacherConfigError,
+    );
     assertThrows(
       () => Cacher.create('dupCheck', { engine: 'MEMORY' }),
+      DuplicateCacher,
+    );
+    assertThrows(
+      () => Cacher.create('dupCheck2', { engine: 'MEMORY' }),
       DuplicateCacher,
     );
   });

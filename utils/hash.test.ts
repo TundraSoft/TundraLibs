@@ -16,7 +16,7 @@ describe('utils', () => {
     const arr = [1, 2, 3, 4, 5];
 
     describe('invalid options', () => {
-      it('should throw an error', async () => {
+      it('invalid algorithm', async () => {
         await assertRejects(
           () =>
             hash(
@@ -30,7 +30,7 @@ describe('utils', () => {
         );
       });
 
-      it('should throw an error', async () => {
+      it('invalid encoding', async () => {
         await assertRejects(
           () =>
             hash(

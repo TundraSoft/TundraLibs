@@ -90,6 +90,7 @@ describe('DAM', () => {
             ),
           DAMTranslatorBaseError,
         );
+
         assertThrows(
           () =>
             client.translator.insert(
@@ -101,6 +102,34 @@ describe('DAM', () => {
           () =>
             client.translator.update(
               JSON.parse(JSON.stringify({ type: 'INVALID' })),
+            ),
+          DAMTranslatorBaseError,
+        );
+        assertThrows(
+          () =>
+            client.translator.update(
+              JSON.parse(
+                JSON.stringify({
+                  type: 'UPDATE',
+                  source: 'sdf',
+                  columns: ['sdf'],
+                  data: { asdff: 'sdf' },
+                }),
+              ),
+            ),
+          DAMTranslatorBaseError,
+        );
+        assertThrows(
+          () =>
+            client.translator.update(
+              JSON.parse(
+                JSON.stringify({
+                  type: 'UPDATE',
+                  source: 'sdf',
+                  columns: ['sdf'],
+                  data: { asdff: 'sdf' },
+                }),
+              ),
             ),
           DAMTranslatorBaseError,
         );
