@@ -35,33 +35,46 @@ export class MariaClient extends AbstractClient<MariaOptions> {
         item: 'dialect',
       });
     }
-    if (options.port && (options.port < 0 || options.port > 65535)) {
-      throw new DAMConfigError('Port value must be between 0 to 65535', {
+    if (options.host === undefined) {
+      throw new DAMConfigError(`Hostname is required`, {
+        name: name,
+        dialect: options.dialect,
+        item: 'host',
+      });
+    }
+    if (options.port && (options.port < 1024 || options.port > 65535)) {
+      throw new DAMConfigError(`Port value must be between 1024 and 65535`, {
         name: name,
         dialect: options.dialect,
         item: 'port',
       });
     }
-    if (options.poolSize && (options.poolSize < 0 || options.poolSize > 100)) {
-      throw new DAMConfigError('PoolSize must be between 0 to 100', {
+    if (options.username === undefined || options.username === '') {
+      throw new DAMConfigError(`Username is required`, {
         name: name,
         dialect: options.dialect,
-        item: 'poolSize',
+        item: 'user',
       });
     }
-    if (options.database === undefined || options.database.trim() === '') {
-      throw new DAMConfigError('Invalid value for database', {
+    if (options.password === undefined || options.password === '') {
+      throw new DAMConfigError(`Password is required`, {
+        name: name,
+        dialect: options.dialect,
+        item: 'password',
+      });
+    }
+    if (options.database === undefined || options.database === '') {
+      throw new DAMConfigError(`Database name is required`, {
         name: name,
         dialect: options.dialect,
         item: 'database',
       });
     }
-    // Must be valid host?
-    if (options.host === undefined || options.host.trim() === '') {
-      throw new DAMConfigError('Invalid value for host', {
+    if (options.poolSize && options.poolSize < 1) {
+      throw new DAMConfigError(`Postgres pool size must be greater than 0`, {
         name: name,
         dialect: options.dialect,
-        item: 'host',
+        item: 'poolSize',
       });
     }
     super(name, { ...defaults, ...options });

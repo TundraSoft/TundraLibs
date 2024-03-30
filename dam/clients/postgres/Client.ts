@@ -50,29 +50,29 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
         item: 'host',
       });
     }
-    if (options.port && (options.port < 1 || options.port > 65535)) {
-      throw new DAMConfigError(`Port value must be between 1 and 65535`, {
+    if (options.port && (options.port < 1024 || options.port > 65535)) {
+      throw new DAMConfigError(`Port value must be between 1024 and 65535`, {
         name: name,
         dialect: options.dialect,
         item: 'port',
       });
     }
-    if (options.username === undefined) {
-      throw new DAMConfigError(`Postgres user is required`, {
+    if (options.username === undefined || options.username === '') {
+      throw new DAMConfigError(`Username is required`, {
         name: name,
         dialect: options.dialect,
         item: 'user',
       });
     }
-    if (options.password === undefined) {
-      throw new DAMConfigError(`Postgres password is required`, {
+    if (options.password === undefined || options.password === '') {
+      throw new DAMConfigError(`Password is required`, {
         name: name,
         dialect: options.dialect,
         item: 'password',
       });
     }
-    if (options.database === undefined) {
-      throw new DAMConfigError(`Postgres database is required`, {
+    if (options.database === undefined || options.database === '') {
+      throw new DAMConfigError(`Database name is required`, {
         name: name,
         dialect: options.dialect,
         item: 'database',

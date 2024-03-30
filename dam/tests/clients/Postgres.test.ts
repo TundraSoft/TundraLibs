@@ -66,33 +66,33 @@ describe('DAM', () => {
           database: 'd',
         };
         assertThrows(
-          () => new PostgresClient('maria', c as PostgresOptions),
+          () => new PostgresClient('pgtest', c as PostgresOptions),
+          DAMConfigError,
+        );
+
+        // Host Validation
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'pgtest',
+              { dialect: 'POSTGRES' } as PostgresOptions,
+            ),
           DAMConfigError,
         );
         assertThrows(
           () =>
             new PostgresClient(
-              'post',
+              'pgtest',
               { dialect: 'POSTGRES', host: '' } as PostgresOptions,
             ),
           DAMConfigError,
         );
+
+        // Port Validation
         assertThrows(
           () =>
             new PostgresClient(
-              'post',
-              {
-                dialect: 'POSTGRES',
-                host: 'localhost',
-                port: 999999,
-              } as PostgresOptions,
-            ),
-          DAMConfigError,
-        );
-        assertThrows(
-          () =>
-            new PostgresClient(
-              'post',
+              'pgtest',
               {
                 dialect: 'POSTGRES',
                 host: 'localhost',
@@ -104,11 +104,11 @@ describe('DAM', () => {
         assertThrows(
           () =>
             new PostgresClient(
-              'post',
+              'pgtest',
               {
                 dialect: 'POSTGRES',
                 host: 'localhost',
-                poolSize: -1,
+                port: 1000,
               } as PostgresOptions,
             ),
           DAMConfigError,
@@ -116,11 +116,24 @@ describe('DAM', () => {
         assertThrows(
           () =>
             new PostgresClient(
-              'post',
+              'pgtest',
               {
                 dialect: 'POSTGRES',
                 host: 'localhost',
-                poolSize: 101,
+                port: 999999,
+              } as PostgresOptions,
+            ),
+          DAMConfigError,
+        );
+
+        // Username Validation
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'pgtest',
+              {
+                dialect: 'POSTGRES',
+                host: 'localhost',
               } as PostgresOptions,
             ),
           DAMConfigError,
@@ -128,20 +141,82 @@ describe('DAM', () => {
         assertThrows(
           () =>
             new PostgresClient(
-              'post',
+              'pgtest',
               {
                 dialect: 'POSTGRES',
                 host: 'localhost',
+                username: '',
+              } as PostgresOptions,
+            ),
+          DAMConfigError,
+        );
+
+        // Password Validation
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'pgtest',
+              {
+                dialect: 'POSTGRES',
+                host: 'localhost',
+                username: 'test',
+              } as PostgresOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'pgtest',
+              {
+                dialect: 'POSTGRES',
+                host: 'localhost',
+                username: 'test',
+                password: '',
+              } as PostgresOptions,
+            ),
+          DAMConfigError,
+        );
+
+        // Database Validation
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'pgtest',
+              {
+                dialect: 'POSTGRES',
+                host: 'localhost',
+                username: 'test',
+                password: 'test',
+              } as PostgresOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'pgtest',
+              {
+                dialect: 'POSTGRES',
+                host: 'localhost',
+                username: 'test',
+                password: 'test',
                 database: '',
               } as PostgresOptions,
             ),
           DAMConfigError,
         );
+
+        // Pool Size Validation
         assertThrows(
           () =>
             new PostgresClient(
-              'post',
-              { dialect: 'POSTGRES', host: 'localhost' } as PostgresOptions,
+              'pgtest',
+              {
+                dialect: 'POSTGRES',
+                host: 'localhost',
+                poolSize: -1,
+              } as PostgresOptions,
             ),
           DAMConfigError,
         );

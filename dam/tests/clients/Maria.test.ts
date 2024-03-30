@@ -64,8 +64,19 @@ describe({
           password: 'pg',
           database: 'd',
         };
+        // Dialect Validation
         assertThrows(
           () => new MariaClient('maria', c as MariaOptions),
+          DAMConfigError,
+        );
+
+        // Host Validation
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              { dialect: 'MARIA' } as MariaOptions,
+            ),
           DAMConfigError,
         );
         assertThrows(
@@ -76,18 +87,8 @@ describe({
             ),
           DAMConfigError,
         );
-        assertThrows(
-          () =>
-            new MariaClient(
-              'maria',
-              {
-                dialect: 'MARIA',
-                host: 'localhost',
-                port: 999999,
-              } as MariaOptions,
-            ),
-          DAMConfigError,
-        );
+
+        // Port Validation
         assertThrows(
           () =>
             new MariaClient(
@@ -103,7 +104,7 @@ describe({
               {
                 dialect: 'MARIA',
                 host: 'localhost',
-                poolSize: -1,
+                port: 1000,
               } as MariaOptions,
             ),
           DAMConfigError,
@@ -115,7 +116,20 @@ describe({
               {
                 dialect: 'MARIA',
                 host: 'localhost',
-                poolSize: 101,
+                port: 999999,
+              } as MariaOptions,
+            ),
+          DAMConfigError,
+        );
+
+        // Username Validation
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              {
+                dialect: 'MARIA',
+                host: 'localhost',
               } as MariaOptions,
             ),
           DAMConfigError,
@@ -127,16 +141,78 @@ describe({
               {
                 dialect: 'MARIA',
                 host: 'localhost',
+                username: '',
+              } as MariaOptions,
+            ),
+          DAMConfigError,
+        );
+
+        // Password Validation
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              {
+                dialect: 'MARIA',
+                host: 'localhost',
+                username: 'test',
+              } as MariaOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              {
+                dialect: 'MARIA',
+                host: 'localhost',
+                username: 'test',
+                password: '',
+              } as MariaOptions,
+            ),
+          DAMConfigError,
+        );
+
+        // Database Validation
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              {
+                dialect: 'MARIA',
+                host: 'localhost',
+                username: 'test',
+                password: 'test',
+              } as MariaOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              {
+                dialect: 'MARIA',
+                host: 'localhost',
+                username: 'test',
+                password: 'test',
                 database: '',
               } as MariaOptions,
             ),
           DAMConfigError,
         );
+
+        // Pool Size Validation
         assertThrows(
           () =>
             new MariaClient(
               'maria',
-              { dialect: 'MARIA', host: 'localhost' } as MariaOptions,
+              {
+                dialect: 'MARIA',
+                host: 'localhost',
+                poolSize: -1,
+              } as MariaOptions,
             ),
           DAMConfigError,
         );
