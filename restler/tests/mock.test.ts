@@ -7,6 +7,7 @@ import {
 } from '../mod.ts';
 import {
   afterAll,
+  assert,
   assertEquals,
   assertRejects,
   beforeAll,
@@ -55,6 +56,16 @@ describe({
       mock.doAuth = false;
       mock.authKey = undefined;
       await assertRejects(() => mock.createUser('sdfsdf'), RESTlerAuthFailure);
+      try {
+        await mock.createUser('sdfsdf');
+      } catch (e) {
+        assertEquals(e.message, 'Authentication failed');
+        assert((e as RESTlerAuthFailure).url);
+        assert((e as RESTlerAuthFailure).vendor);
+        assert((e as RESTlerAuthFailure).version);
+        assert((e as RESTlerAuthFailure).method);
+        assert((e as RESTlerAuthFailure).toString());
+      }
     });
 
     it('should timeout', async () => {

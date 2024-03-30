@@ -53,7 +53,7 @@ describe('DAM', () => {
       });
 
       it({
-        name: 'Invalid Dialect',
+        name: 'Invalid Config',
         sanitizeExit: false,
         sanitizeOps: false,
         sanitizeResources: false,
@@ -67,6 +67,82 @@ describe('DAM', () => {
         };
         assertThrows(
           () => new PostgresClient('maria', c as PostgresOptions),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'post',
+              { dialect: 'POSTGRES', host: '' } as PostgresOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'post',
+              {
+                dialect: 'POSTGRES',
+                host: 'localhost',
+                port: 999999,
+              } as PostgresOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'post',
+              {
+                dialect: 'POSTGRES',
+                host: 'localhost',
+                port: -1,
+              } as PostgresOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'post',
+              {
+                dialect: 'POSTGRES',
+                host: 'localhost',
+                poolSize: -1,
+              } as PostgresOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'post',
+              {
+                dialect: 'POSTGRES',
+                host: 'localhost',
+                poolSize: 101,
+              } as PostgresOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'post',
+              {
+                dialect: 'POSTGRES',
+                host: 'localhost',
+                database: '',
+              } as PostgresOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new PostgresClient(
+              'post',
+              { dialect: 'POSTGRES', host: 'localhost' } as PostgresOptions,
+            ),
           DAMConfigError,
         );
       });

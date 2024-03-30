@@ -52,7 +52,7 @@ describe({
       });
 
       it({
-        name: 'Invalid Dialect',
+        name: 'Invalid Config',
         sanitizeExit: false,
         sanitizeOps: false,
         sanitizeResources: false,
@@ -66,6 +66,78 @@ describe({
         };
         assertThrows(
           () => new MariaClient('maria', c as MariaOptions),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              { dialect: 'MARIA', host: '' } as MariaOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              {
+                dialect: 'MARIA',
+                host: 'localhost',
+                port: 999999,
+              } as MariaOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              { dialect: 'MARIA', host: 'localhost', port: -1 } as MariaOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              {
+                dialect: 'MARIA',
+                host: 'localhost',
+                poolSize: -1,
+              } as MariaOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              {
+                dialect: 'MARIA',
+                host: 'localhost',
+                poolSize: 101,
+              } as MariaOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              {
+                dialect: 'MARIA',
+                host: 'localhost',
+                database: '',
+              } as MariaOptions,
+            ),
+          DAMConfigError,
+        );
+        assertThrows(
+          () =>
+            new MariaClient(
+              'maria',
+              { dialect: 'MARIA', host: 'localhost' } as MariaOptions,
+            ),
           DAMConfigError,
         );
       });

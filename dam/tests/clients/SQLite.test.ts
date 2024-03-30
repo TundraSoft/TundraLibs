@@ -33,7 +33,7 @@ describe({
         // const schema = `test_${nanoId(4, alphaNumeric)}`;
 
         it({
-          name: 'Invalid Dialect',
+          name: 'Invalid Config',
           sanitizeExit: false,
           sanitizeOps: false,
           sanitizeResources: false,
@@ -43,6 +43,37 @@ describe({
           };
           assertThrows(
             () => new SQLiteClient('maria', c as SQLiteOptions),
+            DAMConfigError,
+          );
+          assertThrows(
+            () =>
+              new SQLiteClient(
+                'post',
+                {
+                  dialect: 'SQLITE',
+                  mode: 'FSDFE',
+                } as unknown as SQLiteOptions,
+              ),
+            DAMConfigError,
+          );
+          assertThrows(
+            () =>
+              new SQLiteClient(
+                'post',
+                { dialect: 'SQLITE', mode: 'FILE' } as unknown as SQLiteOptions,
+              ),
+            DAMConfigError,
+          );
+          assertThrows(
+            () =>
+              new SQLiteClient(
+                'post',
+                {
+                  dialect: 'SQLITE',
+                  mode: 'FILE',
+                  path: '/adf',
+                } as unknown as SQLiteOptions,
+              ),
             DAMConfigError,
           );
         });

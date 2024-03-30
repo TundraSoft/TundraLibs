@@ -190,17 +190,32 @@ describe('DAM', () => {
         const resPost = await client.insert(queries.insert_post as InsertQuery);
         assert(resPost);
         assertEquals(resPost.count, resPost.data.length);
+        assert(
+          client.translator.beautify(
+            client.translator.insert(queries.insert_post as InsertQuery),
+          ),
+        );
       });
 
       it('select', async () => {
         const res = await client.select(queries.select_post as SelectQuery);
         assert(res);
         assertEquals(res.count, res.data.length);
+        assert(
+          client.translator.beautify(
+            client.translator.select(queries.select_post as SelectQuery),
+          ),
+        );
       });
 
       it('update', async () => {
         const res = await client.update(queries.update_user as UpdateQuery);
         assert(res);
+        assert(
+          client.translator.beautify(
+            client.translator.update(queries.update_user as UpdateQuery),
+          ),
+        );
       });
 
       it('truncate table', async () => {
@@ -215,6 +230,11 @@ describe('DAM', () => {
       it('delete records', async () => {
         const res = await client.delete(queries.delete_user as DeleteQuery);
         assert(res);
+        assert(
+          client.translator.beautify(
+            client.translator.delete(queries.delete_user as DeleteQuery),
+          ),
+        );
       });
 
       it('Drop schema', async () => {

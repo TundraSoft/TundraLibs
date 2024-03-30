@@ -59,13 +59,25 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
         });
       }
       // Ok check if the path is writable
-      const stat = Deno.statSync(options.path);
-      if (!stat.isDirectory) {
-        throw new DAMConfigError(
-          `SQLite path: ${options.path} is not a directory`,
-          { name: name, dialect: options.dialect, item: 'path' },
-        );
-        // options.path = path.join(options.path, name + '.sqlite');
+      try {
+        const stat = Deno.statSync(options.path);
+        if (!stat.isDirectory) {
+          throw new DAMConfigError(
+            `SQLite path: ${options.path} is not a directory`,
+            { name: name, dialect: options.dialect, item: 'path' },
+          );
+          // options.path = path.join(options.path, name + '.sqlite');
+        }
+      } catch (e) {
+        if (e instanceof DAMConfigError) {
+          throw e;
+        }
+        if (e instanceof Deno.errors.NotFound) {
+          throw new DAMConfigError(
+            `SQLite path: ${options.path} does not exist`,
+            { name: name, dialect: options.dialect, item: 'path' },
+          );
+        }
       }
       // Check permission
       const perm = Deno.permissions.querySync({
