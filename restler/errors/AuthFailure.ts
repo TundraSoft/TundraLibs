@@ -6,7 +6,7 @@ export class RESTlerAuthFailure extends RESTlerEndpointError {
     cause?: Error,
   ) {
     super(
-      `Received authentication error.`,
+      `Authentication failed`,
       metaTags,
       cause,
     );

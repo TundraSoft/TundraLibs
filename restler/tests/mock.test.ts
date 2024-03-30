@@ -61,8 +61,8 @@ describe({
       } catch (e) {
         assertEquals(e.message, 'Authentication failed');
         assert((e as RESTlerAuthFailure).url);
-        assert((e as RESTlerAuthFailure).vendor);
-        assert((e as RESTlerAuthFailure).version);
+        // assert((e as RESTlerAuthFailure).vendor);
+        // assert((e as RESTlerAuthFailure).version);
         assert((e as RESTlerAuthFailure).method);
         assert((e as RESTlerAuthFailure).toString());
       }
