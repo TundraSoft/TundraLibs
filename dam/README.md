@@ -11,7 +11,7 @@ Currently DAM supports:
 - Postgres
 - MariaDB
 - SQLite
-- MongoDB
+- MongoDB (partial)
 
 There are few restrictions in SQLite and MongoDB as listed below:
 
@@ -376,8 +376,11 @@ export type TruncateQuery = {
 
 ### SQLite
 
-- CREATE SCHEMA - Create SCHEMA is only supported in FILE mode and not in memory mode. This is because SQLite
-  does not support schema. What happens is we create a new database and attaches the same to the connection.
+- SCHEMA - Both Create and
+
+CREATE SCHEMA - Create SCHEMA is only supported in FILE mode and not in memory mode. This is because SQLite
+does not support schema. What happens is we create a new database and attaches the same to the connection.
+
 - DROP SCHEMA - Same as CREATE SCHEMA. On drop the file is deleted and hence non recoverable
 - TRUNCATE - Truncate table is NOT supported, hence delete statement without filter is generated
 - CONSTRAINS - Currently create table generates 2 sql statements. One with table definition and another with foreign keys. SQLite does not support this.
