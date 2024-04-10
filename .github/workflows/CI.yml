@@ -129,9 +129,10 @@ jobs:
       
       - 
         name: Collect coverage
-        uses: codecov/codecov-action@v1.0.10 # upload the report on Codecov
+        uses: codecov/codecov-action@v4 # upload the report on Codecov
         with:
           file: ./tundralib.lcov
+          token: ${{ secrets.CODECOV_TOKEN }} # required
       
       # - name: upload coverage
       #   uses: codecov/codecov-action@v2
