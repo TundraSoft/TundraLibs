@@ -7,6 +7,7 @@ Collection of helpers primarily used inside tundralibs but can also be used exte
 - [Decorators](#decorators)
   - [debounce](#debounce)
   - [memoize](#memoize)
+  - [once](#once)
   - [singleton](#singleton)
   - [throttle](#throttle)
 - [Types](#types)
@@ -20,6 +21,7 @@ Collection of helpers primarily used inside tundralibs but can also be used exte
   - [UnArray](#unarray)
   - [UnionToIntersection](#uniontointersection)
 - [Base Error](#base-error)
+- [encrypt](#encrypt)
 - [envArgs](#envargs)
 - [getFreePort](#getfreeport)
 - [hash](#hash)
@@ -47,10 +49,9 @@ class Test {
 }
 ```
 
-### memoize
+### Memoize
 
 Caches a method output and returns the cached output. Careful when using this, it caches based on the arguments passed only.
-_NOTE_ This will convert the method to a Promise.
 
 ```ts
 import { memoize } from 'utils/mod.ts';
@@ -63,7 +64,22 @@ class Test {
 }
 ```
 
-### singleton
+### Once
+
+Ensures a method can be called only once. All consecutive calls will result in the first execution's result being passed.
+
+```ts
+import { memoize } from 'utils/mod.ts';
+
+class Test {
+  @once
+  memoMethod(arg1) {
+    // action here
+  }
+}
+```
+
+### Singleton
 
 Convert a class to a singleton ensuring same instance of the class is retrieved everytime the class is initialized.
 

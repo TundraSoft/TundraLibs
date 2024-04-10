@@ -19,7 +19,7 @@ export const singleton = <T extends new (...args: any[]) => any>(
     // deno-lint-ignore no-explicit-any
     constructor(...args: any[]) {
       if (instance) {
-        return instance;
+        return instance; // NOSONAR
       }
       super(...args);
       instance = this as unknown as T;

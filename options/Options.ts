@@ -1,7 +1,6 @@
 import { privateObject } from '../utils/privateObject.ts';
 import type { PrivateObject } from '../utils/mod.ts';
-import { Events } from '../events/mod.ts';
-import { EventCallback, EventType } from '../events/mod.ts';
+import { type EventCallback, Events, type EventType } from '../events/mod.ts';
 import { OptionKeys } from './types/mod.ts';
 
 /**
@@ -26,7 +25,7 @@ export class Options<
    * @param defaults - An optional object containing default values for the options.
    */
   constructor(options: OptionKeys<O, E>, defaults?: Partial<O>) {
-    const { options: op, events: ev } = Object.entries(options || {}).reduce(
+    const { options: op, events: ev } = Object.entries(options).reduce(
       (acc: { options: O; events: E }, [key, value]) => {
         if (key.startsWith('_on') && value instanceof Function) {
           // deno-lint-ignore no-explicit-any

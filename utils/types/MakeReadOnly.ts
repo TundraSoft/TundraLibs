@@ -5,6 +5,6 @@
  * @param {T} obj - The original object.
  * @returns {MakeReadOnly<T, K>} - The new type with specified properties made read-only.
  */
-export type MakeReadOnly<T, K extends keyof T | unknown> = K extends keyof T
+export type MakeReadOnly<T, K extends keyof T | unknown> = K extends keyof T // NOSONAR
   ? Readonly<Pick<T, K>> & Omit<T, K>
   : T;

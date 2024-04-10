@@ -1,4 +1,8 @@
-import { hash } from '../hash.ts';
+function simpleHash(args: unknown[]): string {
+  return JSON.stringify(args);
+}
+
+const AsyncFunction = (async function () {}).constructor;
 
 /**
  * memoize decorator
@@ -18,17 +22,29 @@ export const memoize = (
 ) => {
   const originalMethod = descriptor.value;
   const cache = new Map();
-
-  descriptor.value = async function (...args: unknown[]) {
-    const key = await hash(args, { algorithm: 'SHA-256', encoding: 'HEX' });
-    if (cache.has(key)) {
-      return cache.get(key);
-    } else {
-      const result = originalMethod.apply(this, args);
-      cache.set(key, result);
-      return result;
-    }
-  };
-
+  if (originalMethod instanceof AsyncFunction) {
+    descriptor.value = async function (...args: unknown[]) {
+      const key = simpleHash(args);
+      if (cache.has(key)) {
+        return cache.get(key);
+      } else {
+        // deno-lint-ignore ban-types
+        const result = await (originalMethod as Function).apply(this, args);
+        cache.set(key, result);
+        return result;
+      }
+    };
+  } else {
+    descriptor.value = function (...args: unknown[]) {
+      const key = simpleHash(args);
+      if (cache.has(key)) {
+        return cache.get(key);
+      } else {
+        const result = originalMethod.apply(this, args);
+        cache.set(key, result);
+        return result;
+      }
+    };
+  }
   return descriptor;
 };

@@ -1,0 +1,60 @@
+name: Bug Report
+description: File a bug report
+title: "[BUG]: "
+labels: ["bug", "triage"]
+# projects: ["org/repo"]
+# assignees:
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+  
+  - type: checkboxes
+    attributes:
+      label: Is this a new issue?
+      description: Please search to see if this issue is already reported.
+      options:
+        - label: I have searched the existing issues
+          required: true
+  
+  - type: textarea
+    id: reproduce-steps
+    attributes:
+      label: Steps to reproduce
+      description: How did we reproduce this?
+      placeholder: Explain how we can reproduce this issue?
+    validations:
+      required: true
+  
+  - type: textarea
+    id: current-behaviour
+    attributes:
+      label: Current Behaviour
+      description: Explain what the current behaviour is
+      placeholder: Tell us what you see!
+    validations:
+      required: true
+  
+  - type: textarea
+    id: expected-behaviour
+    attributes:
+      label: Expected Behaviour
+      description: What is actually expected to happen?
+      placeholder: What do you expect to see?
+    validations:
+      required: false
+  
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Logs
+      placeholder: Paste the output of logs (if any)
+  
+  - type: textarea
+    id: environment-config
+    attributes:
+      label: Environment Config
+      description: What is the environment configuration?
+      placeholder: Include relevant information such as OS, OS Version, Browser etc

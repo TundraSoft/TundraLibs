@@ -18,7 +18,7 @@ export class BaseError extends Error {
     this.cause = cause;
   }
 
-  getMeta(key: string): unknown | undefined {
+  getMeta(key: string): unknown {
     return this.meta[key];
   }
 

@@ -1,0 +1,42 @@
+name: Documentation
+description: Documentation
+title: "[DOC]: "
+labels: ["documentation", "maintenance", "chore"]
+# projects: ["org/repo"]
+# assignees:
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Improve the documentation of the code base.
+  
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      description: What type of documentation?
+      options:
+        - Wiki
+        - Code Docs
+        - Process Flow Diagrams
+    validations:
+      required: true
+  
+  - type: dropdown
+    id: action
+    attributes:
+      label: Action
+      description: What action is needed?
+      options:
+        - Create
+        - Update
+    validations:
+      required: true
+  
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: Mention the source file/module/section for which documentation is needed
+    validations:
+      required: true

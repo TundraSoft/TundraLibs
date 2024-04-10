@@ -4,6 +4,16 @@
   "deno.lint": true,
   "deno.unstable": true,
   "deno.config": "./deno.json",
+  "deno.cacheOnSave": true,
+  "deno.suggest.imports.autoDiscover": true,
+  "deno.codeLens.implementations": true,
+  "deno.codeLens.references": true,
+  "deno.codeLens.referencesAllFunctions": true,
+  "deno.codeLens.test": true,
+  "deno.codeLens.testArgs": [
+    "--allow-all",
+    "--no-check"
+  ],
   "deno.suggest.imports.hosts": {
     "https://deno.land": true,
     "https://x.nest.land": true,

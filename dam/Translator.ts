@@ -620,8 +620,6 @@ export abstract class AbstractTranslator {
         } else if (expr === 'JSON_VALUE') {
           // JSON_VALUE is a special case
           const [column, path] = args as [string, string[]];
-          // exprArgs.push(this.escape(column.substring(1)));
-          // exprArgs.push(...path.map((part) => `${part}`));
           exprArgs.push(column.substring(1));
           exprArgs.push(...path.map((part) => `${part}`));
         } else if (Array.isArray(args)) {
@@ -688,13 +686,11 @@ export abstract class AbstractTranslator {
                 exprArgs.push(columns[`$${parts[0]}.${parts[1]}`]);
               }
             } else {
-              // console.log(columns);
               throw new DAMTranslatorBaseError(
                 `Invalid column identifier: ${args} in expression ${expr}.`,
                 { dialect: this.dialect },
               );
             }
-            // exprArgs.push(this.escape((args as string).substring(1) as string));
           } else {
             const paramName = params?.create(args);
             exprArgs.push(this._makeParam(paramName));

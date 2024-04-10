@@ -18,8 +18,7 @@ import type {
   UpdateQuery,
 } from './types/mod.ts';
 
-import { DAMBaseError, DAMClientError } from './errors/mod.ts';
-import { DAMQueryError } from '../dam/errors/mod.ts';
+import { DAMBaseError, DAMClientError, DAMQueryError } from './errors/mod.ts';
 
 export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
   extends Options<O, ClientEvents> {
@@ -32,9 +31,6 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
     const def: Partial<O> = {
       slowQueryThreshold: 5,
     } as Partial<O>;
-    // if (!['POSTGRES', 'MARIA', 'SQLITE', 'MONGO'].includes(options.dialect)) {
-    //   throw new Error('Invalid dialect');
-    // }
     super(options, def);
     this.name = name.trim().toLowerCase();
     this.dialect = options.dialect;

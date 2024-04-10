@@ -2,19 +2,18 @@ import {
   assertEquals,
   assertNotEquals,
   assertThrows,
-  describe,
-  it,
 } from '../dev.dependencies.ts';
 import { getFreePort } from './getFreePort.ts';
 
-describe({ name: 'utils', permissions: { net: true } }, () => {
-  describe({ name: 'getFreePort' }, () => {
-    it('should return a number', () => {
+Deno.test(
+  { name: 'utils/getFreePort', permissions: { net: true } },
+  async (t) => {
+    await t.step('should return a number', () => {
       const port = getFreePort();
       assertEquals(typeof port, 'number');
     });
 
-    it('should return a number within the specified range', () => {
+    await t.step('should return a number within the specified range', () => {
       const min = 3000;
       const max = 4000;
       const port = getFreePort(min, max);
@@ -22,14 +21,14 @@ describe({ name: 'utils', permissions: { net: true } }, () => {
       assertEquals(port >= min && port <= max, true);
     });
 
-    it('should return a different port on subsequent calls', () => {
+    await t.step('should return a different port on subsequent calls', () => {
       const port1 = getFreePort();
       const port2 = getFreePort();
 
       assertEquals(port1 !== port2, true);
     });
 
-    it('should throw an error if the range is invalid', () => {
+    await t.step('should throw an error if the range is invalid', () => {
       const min = 4000;
       const max = 3000;
 
@@ -38,7 +37,7 @@ describe({ name: 'utils', permissions: { net: true } }, () => {
       }, RangeError);
     });
 
-    it('should not return a port in use', () => {
+    await t.step('should not return a port in use', () => {
       const port = getFreePort(3000, 3010);
       const listener = Deno.listen({ port });
       for (let i = 0; i < 10; i++) {
@@ -46,5 +45,5 @@ describe({ name: 'utils', permissions: { net: true } }, () => {
       }
       listener.close();
     });
-  });
-});
+  },
+);

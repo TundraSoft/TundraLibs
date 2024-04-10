@@ -1,0 +1,48 @@
+name: Code Refactor
+description: Code Refactoring
+title: "[REFACTOR]: "
+labels: ["refactor", "enhancement", "maintenance"]
+# projects: ["org/repo"]
+# assignees:
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Refactor code to improve readability, maintainability, and performance.
+  
+  - type: input
+    id: refactor
+    attributes:
+      label: Refactor
+      description: What part of the code base needs to be refactored?
+    validations:
+      required: true
+  
+  - type: dropdown
+    id: refactor-type
+    attributes:
+      label: Refactor Type
+      description: What type of refactor is needed?
+      multiple: true
+      options:
+        - Performance
+        - Reliability
+        - Maintainability
+        - Readability
+        - Testability
+  
+  - type: textarea
+    id: goals
+    attributes:
+      label: Goals
+      description: Explain the benefits of refactoring this code. What are you hoping to achieve? Justify the refactor.
+    validations:
+      required: true
+  
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks
+      description: What are the risks associated with this refactor? What could go wrong?
+    validations:
+      required: false

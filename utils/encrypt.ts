@@ -65,7 +65,7 @@ export const encrypt = async (
   }
 };
 
-export const decrypt = async <T extends unknown = unknown>(
+export const decrypt = async <T>(
   message: string,
   key: string,
   opt?: Partial<EncryptOptions>,

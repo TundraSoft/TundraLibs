@@ -1,6 +1,5 @@
 import { base64, hex } from '../dependencies.ts';
 
-// type Hashable = string | number | bigint | Record<string, unknown> | unknown[];
 type HashOptions = {
   algorithm: 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512';
   encoding: 'HEX' | 'BASE64';
