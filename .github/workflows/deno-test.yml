@@ -106,6 +106,17 @@ jobs:
           REDIS_PORT: 6379
       
       # Here on out we run only on latest version
+      - name: Setup Node (required for SonarCloud)
+        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
+        uses: actions/setup-node@v3
+        with:
+         node-version: '17.x'
+         registry-url: 'https://registry.npmjs.org'
+
+      - name: Setup LCOV
+        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
+        run: sudo apt install -y lcov
+
       -
         name: Generate coverage report
         if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
