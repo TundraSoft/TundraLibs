@@ -20,6 +20,7 @@ import {
   RESTlerUnhandledError,
   RESTlerUnsupportedContentType,
 } from './errors/mod.ts';
+import { int } from 'https://deno.land/std@0.205.0/yaml/_type/int.ts';
 
 /**
  * The base class for all RESTler classes. This class is not meant to be
@@ -176,13 +177,18 @@ export abstract class RESTler<
       let interimResp: Response;
       try {
         interimResp = await fetch(endpoint, fetchOptions);
-        if (
-          request.endpoint.baseURL?.startsWith('https://uatskyway.yesbank.in/')
-        ) {
-          console.log(`Request: ${JSON.stringify(endpoint)}`);
-          console.log(
-            `Request: Got ${interimResp.statusText} with headers - ${interimResp.headers}`,
-          );
+        // @TODO DELETE ME
+        console.log(`Request: ${JSON.stringify(endpoint)}`);
+        console.log(
+          `Response: Got ${interimResp.statusText} with headers - ${
+            JSON.stringify(Object.fromEntries(interimResp.headers.entries()))
+          }`,
+        );
+        try {
+          const f = interimResp.clone();
+          console.log(`Response Body: ${f.text()}`);
+        } catch {
+          // Nothing to do
         }
       } catch (e) {
         throw e;
