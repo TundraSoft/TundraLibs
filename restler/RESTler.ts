@@ -185,7 +185,7 @@ export abstract class RESTler<
         );
         try {
           const f = interimResp.clone();
-          console.log(`Response Body: ${f.text()}`);
+          console.log(`Response Body: ${await f.text()}`);
         } catch {
           // Nothing to do
         }
