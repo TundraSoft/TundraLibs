@@ -20,7 +20,6 @@ import {
   RESTlerUnhandledError,
   RESTlerUnsupportedContentType,
 } from './errors/mod.ts';
-import { int } from 'https://deno.land/std@0.205.0/yaml/_type/int.ts';
 
 /**
  * The base class for all RESTler classes. This class is not meant to be
