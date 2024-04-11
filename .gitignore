@@ -3,7 +3,7 @@ deno.lock
 *.pyc
 *.swp
 .env
-!utils/testdata/.env
+!*/fixtures/.env
 
 /.cargo_home/
 /.idea/

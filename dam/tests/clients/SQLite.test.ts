@@ -158,7 +158,7 @@ describe({
         const client = new SQLiteClient('sqlite2', {
           dialect: 'SQLITE',
           mode: 'FILE',
-          path: 'dam/tests/testdata/',
+          path: 'dam/tests/fixtures/',
         });
         // const schema = `test_${nanoId(4, alphaNumeric)}`;
         beforeAll(async () => {
@@ -168,7 +168,7 @@ describe({
         afterAll(async () => {
           await client.close();
           assertEquals('READY', client.status);
-          Deno.remove('dam/tests/testdata/sqlite2', { recursive: true });
+          Deno.remove('dam/tests/fixtures/sqlite2', { recursive: true });
         });
 
         it('Must connect to db', () => {
