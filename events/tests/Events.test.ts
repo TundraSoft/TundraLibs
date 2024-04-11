@@ -1,385 +1,374 @@
-// import { Events, type EventType } from '../mod.ts';
-// import {
-//   assertEquals,
-//   beforeEach,
-//   describe,
-//   it,
-// } from '../../dev.dependencies.ts';
+import { Events } from '../mod.ts';
+import { assertEquals } from '../../dev.dependencies.ts';
 
-// const delay = (ms: number) =>
-//   new Promise<true>((resolve) => setTimeout(() => resolve(true), ms));
+const delay = (ms: number) =>
+  new Promise<true>((resolve) => setTimeout(() => resolve(true), ms));
 
-// Deno.test('Events.Types', async (t) => {
-// });
+Deno.test('Events.Types', async (t) => {
+  let op: unknown[] = [],
+    test: EventTester;
+  //#region Typed Events
+  type TestEvents = {
+    event1(a: string, v: number): unknown;
+  };
 
-// Deno.test('Events.UnTyped', async (t) => {
-// });
+  class EventTester extends Events<TestEvents> {
+    getEventCount(): number {
+      return this._events.get('event1')?.size || 0;
+    }
+    run() {
+      this.emit('event1', 'Run', 1);
+    }
+    runSync() {
+      this.emitSync('event1', 'RunAsync', 0);
+    }
+  }
 
-// /**
-//  * Typed events
-//  */
-// describe('Events', () => {
-//   describe('Typed Events', () => {
-//     let op: unknown[] = [],
-//       test: EventTester;
-//     //#region Typed Events
-//     type TestEvents = {
-//       event1(a: string, v: number): unknown;
-//     };
+  function first(a: string) {
+    op.push('1');
+    return a + '1';
+  }
 
-//     class EventTester<T extends EventType = EventType> extends Events<T> {
-//       getEventCount(): number {
-//         return this._events.get('event1')?.size || 0;
-//       }
-//       run() {
-//         this.emit('event1', 'Run', 1);
-//       }
-//       runSync() {
-//         this.emitSync('event1', 'RunAsync', 0);
-//       }
-//     }
+  function second(a: string) {
+    op.push('2');
+    return a + '2';
+  }
 
-//     function first(a: string) {
-//       op.push('1');
-//       return a + '1';
-//     }
+  async function third(a: string) {
+    await delay(1000);
+    op.push('3');
+    return a + '3';
+  }
 
-//     function second(a: string) {
-//       op.push('2');
-//       return a + '2';
-//     }
+  function fourth(a: string) {
+    op.push('4');
+    return a + '4';
+  }
 
-//     async function third(a: string) {
-//       await delay(1000);
-//       op.push('3');
-//       return a + '3';
-//     }
+  function once(a: string) {
+    op.push('once');
+    return a + 'once';
+  }
 
-//     function fourth(a: string) {
-//       op.push('4');
-//       return a + '4';
-//     }
+  await t.step({
+    name: 'Add new Events',
+    fn() {
+      test = new EventTester();
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      assertEquals(test.getEventCount(), 1);
+    },
+  });
+  await t.step({
+    name: 'Test if to ensure deletion/removal of specific events name',
+    fn() {
+      test = new EventTester();
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      test.on('event1', second);
+      assertEquals(test.getEventCount(), 2);
+      test.off('event1');
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      test.on('event1', second);
+      assertEquals(test.getEventCount(), 2);
+      test.off();
+      assertEquals(test.getEventCount(), 0);
+    },
+  });
+  await t.step({
+    name: 'Test to ensure deletion of all callbacks in an event name',
+    fn() {
+      test = new EventTester();
+      // Reset for test
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      test.on('event1', second);
+      assertEquals(test.getEventCount(), 2);
+      test.off('event1');
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      test.on('event1', second);
+      assertEquals(test.getEventCount(), 2);
+      test.off();
+      assertEquals(test.getEventCount(), 0);
+    },
+  });
+  await t.step({
+    name:
+      'Test to ensure removal (deletion) of all callbacks in all event name',
+    fn() {
+      test = new EventTester();
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      test.on('event1', second);
+      assertEquals(test.getEventCount(), 2);
+      test.off();
+      assertEquals(test.getEventCount(), 0);
+    },
+  });
+  await t.step({
+    name: 'Test to ensure prevention of Duplicate callbacks in an event',
+    fn() {
+      const test = new EventTester();
+      // Reset for test
+      test.off();
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      assertEquals(test.getEventCount(), 1);
+      test.on('event1', first);
+      assertEquals(test.getEventCount(), 1);
+    },
+  });
+  await t.step({
+    name:
+      'Test to ensure all callback with tagged as once is executed only one time',
+    async fn() {
+      const test = new EventTester();
+      // Reset for test
+      test.off();
+      op = [];
+      test.on('event1', first);
+      test.once('event1', once);
+      test.run();
+      await delay(1000);
+      test.run();
+      assertEquals(op.join(','), '1,once,1');
+    },
+  });
+  await t.step({
+    name: 'Test to ensure removal of callbacks marked as once',
+    fn() {
+      const test = new EventTester();
+      // Reset for test
+      test.off();
+      op = [];
+      test.once('event1', once);
+      assertEquals(test.getEventCount(), 1);
+      test.off('event1', once);
+      assertEquals(test.getEventCount(), 0);
+    },
+  });
+  await t.step({
+    name:
+      'Run All callbacks in an event waiting for each callback to finish executing/return value',
+    async fn() {
+      const test = new EventTester();
+      op = [];
+      test.on('event1', first);
+      test.on('event1', second);
+      test.on('event1', third);
+      test.once('event1', fourth);
+      test.runSync();
+      await delay(2000);
+      assertEquals(op.join(','), '1,2,3,4');
+    },
+  });
+  await t.step({
+    name:
+      'Run all callbacks in an event without waiting for each callback to finish executing/return value',
+    async fn() {
+      const test = new EventTester();
+      op = [];
+      test.on('event1', first);
+      test.on('event1', second);
+      test.on('event1', third);
+      test.once('event1', fourth);
+      test.run();
+      await delay(2000);
+      assertEquals(op.join(','), '1,2,4,3');
+    },
+  });
 
-//     function once(a: string) {
-//       op.push('once');
-//       return a + 'once';
-//     }
+  await t.step('Test array of events', () => {
+    const test = new EventTester();
+    test.on('event1', [first, second]);
+    test.once('event1', [third, fourth]);
+    assertEquals(test.getEventCount(), 4);
+    test.off('event1', [first, second]);
+    assertEquals(test.getEventCount(), 2);
+  });
+});
 
-//     beforeEach(() => {
-//       test = new EventTester();
-//     }),
-//       it({
-//         name: 'Add new Events',
-//         fn() {
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           assertEquals(test.getEventCount(), 1);
-//         },
-//       }),
-//       it({
-//         name: 'Test if to ensure deletion/removal of specific events name',
-//         fn() {
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           assertEquals(test.getEventCount(), 2);
-//           test.off('event1');
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           assertEquals(test.getEventCount(), 2);
-//           test.off();
-//           assertEquals(test.getEventCount(), 0);
-//         },
-//       }),
-//       it({
-//         name: 'Test to ensure deletion of all callbacks in an event name',
-//         fn() {
-//           // Reset for test
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           assertEquals(test.getEventCount(), 2);
-//           test.off('event1');
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           assertEquals(test.getEventCount(), 2);
-//           test.off();
-//           assertEquals(test.getEventCount(), 0);
-//         },
-//       }),
-//       it({
-//         name:
-//           'Test to ensure removal (deletion) of all callbacks in all event name',
-//         fn() {
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           assertEquals(test.getEventCount(), 2);
-//           test.off();
-//           assertEquals(test.getEventCount(), 0);
-//         },
-//       }),
-//       it({
-//         name: 'Test to ensure prevention of Duplicate callbacks in an event',
-//         fn() {
-//           // Reset for test
-//           test.off();
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           assertEquals(test.getEventCount(), 1);
-//           test.on('event1', first);
-//           assertEquals(test.getEventCount(), 1);
-//         },
-//       }),
-//       it({
-//         name:
-//           'Test to ensure all callback with tagged as once is executed only one time',
-//         async fn() {
-//           // Reset for test
-//           test.off();
-//           op = [];
-//           test.on('event1', first);
-//           test.once('event1', once);
-//           test.run();
-//           await delay(1000);
-//           test.run();
-//           assertEquals(op.join(','), '1,once,1');
-//         },
-//       }),
-//       it({
-//         name: 'Test to ensure removal of callbacks marked as once',
-//         fn() {
-//           // Reset for test
-//           test.off();
-//           op = [];
-//           test.once('event1', once);
-//           assertEquals(test.getEventCount(), 1);
-//           test.off('event1', once);
-//           assertEquals(test.getEventCount(), 0);
-//         },
-//       }),
-//       it({
-//         name:
-//           'Run All callbacks in an event waiting for each callback to finish executing/return value',
-//         async fn() {
-//           op = [];
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           test.on('event1', third);
-//           test.once('event1', fourth);
-//           test.runSync();
-//           await delay(2000);
-//           assertEquals(op.join(','), '1,2,3,4');
-//         },
-//       }),
-//       it({
-//         name:
-//           'Run all callbacks in an event without waiting for each callback to finish executing/return value',
-//         async fn() {
-//           op = [];
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           test.on('event1', third);
-//           test.once('event1', fourth);
-//           test.run();
-//           await delay(2000);
-//           assertEquals(op.join(','), '1,2,4,3');
-//         },
-//       });
+Deno.test('Events.UnTyped', async (t) => {
+  let op: unknown[] = [],
+    test: EventTester;
+  //#region Typed Events
 
-//     it('Test array of events', () => {
-//       const test = new EventTester();
-//       test.on('event1', [first, second]);
-//       test.once('event1', [third, fourth]);
-//       assertEquals(test.getEventCount(), 4);
-//       test.off('event1', [first, second]);
-//       assertEquals(test.getEventCount(), 2);
-//     });
-//   });
-// });
+  class EventTester extends Events {
+    getEventCount(): number {
+      return this._events.get('event1')?.size || 0;
+    }
+    run() {
+      this.emit('event1', 'Run', 1);
+    }
+    runSync() {
+      this.emitSync('event1', 'RunAsync', 0);
+    }
+  }
 
-// /**
-//  * UnTyped events
-//  */
-// describe('Events', () => {
-//   describe('UnTyped Events', () => {
-//     let op: unknown[] = [],
-//       test: EventTester;
-//     //#region Typed Events
+  function first(a: string) {
+    op.push('1');
+    return a + '1';
+  }
 
-//     class EventTester extends Events {
-//       getEventCount(): number {
-//         return this._events.get('event1')?.size || 0;
-//       }
-//       run() {
-//         this.emit('event1', 'Run', 1);
-//       }
-//       runSync() {
-//         this.emitSync('event1', 'RunAsync', 0);
-//       }
-//     }
+  function second(a: string) {
+    op.push('2');
+    return a + '2';
+  }
 
-//     function first(a: string) {
-//       op.push('1');
-//       return a + '1';
-//     }
+  async function third(a: string) {
+    await delay(1000);
+    op.push('3');
+    return a + '3';
+  }
 
-//     function second(a: string) {
-//       op.push('2');
-//       return a + '2';
-//     }
+  function fourth(a: string) {
+    op.push('4');
+    return a + '4';
+  }
 
-//     async function third(a: string) {
-//       await delay(1000);
-//       op.push('3');
-//       return a + '3';
-//     }
+  function once(a: string) {
+    op.push('once');
+    return a + 'once';
+  }
 
-//     function fourth(a: string) {
-//       op.push('4');
-//       return a + '4';
-//     }
+  await t.step({
+    name: 'Add new Events',
+    fn() {
+      test = new EventTester();
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      assertEquals(test.getEventCount(), 1);
+    },
+  });
+  await t.step({
+    name: 'Test if to ensure deletion/removal of specific events name',
+    fn() {
+      test = new EventTester();
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      test.on('event1', second);
+      assertEquals(test.getEventCount(), 2);
+      test.off('event1');
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      test.on('event1', second);
+      assertEquals(test.getEventCount(), 2);
+      test.off();
+      assertEquals(test.getEventCount(), 0);
+    },
+  });
+  await t.step({
+    name: 'Test to ensure deletion of all callbacks in an event name',
+    fn() {
+      test = new EventTester();
+      // Reset for test
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      test.on('event1', second);
+      assertEquals(test.getEventCount(), 2);
+      test.off('event1');
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      test.on('event1', second);
+      assertEquals(test.getEventCount(), 2);
+      test.off();
+      assertEquals(test.getEventCount(), 0);
+    },
+  });
+  await t.step({
+    name:
+      'Test to ensure removal (deletion) of all callbacks in all event name',
+    fn() {
+      test = new EventTester();
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      test.on('event1', second);
+      assertEquals(test.getEventCount(), 2);
+      test.off();
+      assertEquals(test.getEventCount(), 0);
+    },
+  });
+  await t.step({
+    name: 'Test to ensure prevention of Duplicate callbacks in an event',
+    fn() {
+      test = new EventTester();
+      // Reset for test
+      test.off();
+      assertEquals(test.getEventCount(), 0);
+      test.on('event1', first);
+      assertEquals(test.getEventCount(), 1);
+      test.on('event1', first);
+      assertEquals(test.getEventCount(), 1);
+    },
+  });
+  await t.step({
+    name:
+      'Test to ensure all callback with tagged as once is executed only one time',
+    async fn() {
+      test = new EventTester();
+      // Reset for test
+      test.off();
+      op = [];
+      test.on('event1', first);
+      test.once('event1', once);
+      test.run();
+      await delay(1000);
+      test.run();
+      assertEquals(op.join(','), '1,once,1');
+    },
+  });
+  await t.step({
+    name: 'Test to ensure removal of callbacks marked as once',
+    fn() {
+      test = new EventTester();
+      // Reset for test
+      test.off();
+      op = [];
+      test.once('event1', once);
+      assertEquals(test.getEventCount(), 1);
+      test.off('event1', once);
+      assertEquals(test.getEventCount(), 0);
+    },
+  });
+  await t.step({
+    name:
+      'Run All callbacks in an event waiting for each callback to finish executing/return value',
+    async fn() {
+      test = new EventTester();
+      op = [];
+      test.on('event1', first);
+      test.on('event1', second);
+      test.on('event1', third);
+      test.once('event1', fourth);
+      test.runSync();
+      await delay(2000);
+      assertEquals(op.join(','), '1,2,3,4');
+    },
+  });
+  await t.step({
+    name:
+      'Run all callbacks in an event without waiting for each callback to finish executing/return value',
+    async fn() {
+      test = new EventTester();
+      op = [];
+      test.on('event1', first);
+      test.on('event1', second);
+      test.on('event1', third);
+      test.on('event1', fourth);
+      test.run();
+      await delay(2000);
+      assertEquals(op.join(','), '1,2,4,3');
+    },
+  });
 
-//     function once(a: string) {
-//       op.push('once');
-//       return a + 'once';
-//     }
-
-//     beforeEach(() => {
-//       test = new EventTester();
-//     }),
-//       it({
-//         name: 'Add new Events',
-//         fn() {
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           assertEquals(test.getEventCount(), 1);
-//         },
-//       }),
-//       it({
-//         name: 'Test if to ensure deletion/removal of specific events name',
-//         fn() {
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           assertEquals(test.getEventCount(), 2);
-//           test.off('event1');
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           assertEquals(test.getEventCount(), 2);
-//           test.off();
-//           assertEquals(test.getEventCount(), 0);
-//         },
-//       }),
-//       it({
-//         name: 'Test to ensure deletion of all callbacks in an event name',
-//         fn() {
-//           // Reset for test
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           assertEquals(test.getEventCount(), 2);
-//           test.off('event1');
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           assertEquals(test.getEventCount(), 2);
-//           test.off();
-//           assertEquals(test.getEventCount(), 0);
-//         },
-//       }),
-//       it({
-//         name:
-//           'Test to ensure removal (deletion) of all callbacks in all event name',
-//         fn() {
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           assertEquals(test.getEventCount(), 2);
-//           test.off();
-//           assertEquals(test.getEventCount(), 0);
-//         },
-//       }),
-//       it({
-//         name: 'Test to ensure prevention of Duplicate callbacks in an event',
-//         fn() {
-//           // Reset for test
-//           test.off();
-//           assertEquals(test.getEventCount(), 0);
-//           test.on('event1', first);
-//           assertEquals(test.getEventCount(), 1);
-//           test.on('event1', first);
-//           assertEquals(test.getEventCount(), 1);
-//         },
-//       }),
-//       it({
-//         name:
-//           'Test to ensure all callback with tagged as once is executed only one time',
-//         async fn() {
-//           // Reset for test
-//           test.off();
-//           op = [];
-//           test.on('event1', first);
-//           test.once('event1', once);
-//           test.run();
-//           await delay(1000);
-//           test.run();
-//           assertEquals(op.join(','), '1,once,1');
-//         },
-//       }),
-//       it({
-//         name: 'Test to ensure removal of callbacks marked as once',
-//         fn() {
-//           // Reset for test
-//           test.off();
-//           op = [];
-//           test.once('event1', once);
-//           assertEquals(test.getEventCount(), 1);
-//           test.off('event1', once);
-//           assertEquals(test.getEventCount(), 0);
-//         },
-//       }),
-//       it({
-//         name:
-//           'Run All callbacks in an event waiting for each callback to finish executing/return value',
-//         async fn() {
-//           op = [];
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           test.on('event1', third);
-//           test.once('event1', fourth);
-//           test.runSync();
-//           await delay(2000);
-//           assertEquals(op.join(','), '1,2,3,4');
-//         },
-//       }),
-//       it({
-//         name:
-//           'Run all callbacks in an event without waiting for each callback to finish executing/return value',
-//         async fn() {
-//           op = [];
-//           test.on('event1', first);
-//           test.on('event1', second);
-//           test.on('event1', third);
-//           test.on('event1', fourth);
-//           test.run();
-//           await delay(2000);
-//           assertEquals(op.join(','), '1,2,4,3');
-//         },
-//       });
-
-//     it('Test array of events', () => {
-//       const test = new EventTester();
-//       test.on('event1', [first, second]);
-//       test.once('event1', [third, fourth]);
-//       assertEquals(test.getEventCount(), 4);
-//       test.off('event1', [first, second]);
-//       assertEquals(test.getEventCount(), 2);
-//     });
-//   });
-// });
-
-// // Path: events/tests/Events.test.ts
+  await t.step('Test array of events', () => {
+    const test = new EventTester();
+    test.on('event1', [first, second]);
+    test.once('event1', [third, fourth]);
+    assertEquals(test.getEventCount(), 4);
+    test.off('event1', [first, second]);
+    assertEquals(test.getEventCount(), 2);
+  });
+});

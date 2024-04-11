@@ -1,4 +1,4 @@
-name: CI
+name: Deno - Testing
 
 on: 
   push:
@@ -6,19 +6,7 @@ on:
     branches: [ main ]
 
 jobs:
-  sonarcloud:
-    name: SonarCloud
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-  
+
   get-versions:
     runs-on: ubuntu-latest
     outputs:
@@ -30,30 +18,16 @@ jobs:
         run: |
           DENO_VERSIONS=$(curl -s https://api.github.com/repos/denoland/deno/releases | jq -r '.[].tag_name' | sed 's/v//' | sort -V | tail -n 8 | tac | jq -Rcn '[inputs]')
           echo "deno-versions=${DENO_VERSIONS}" >> "$GITHUB_OUTPUT"
-
-  check-code:
-    runs-on: ubuntu-latest
-    steps:
-      -
-        name: Setup
-        uses: actions/checkout@v4
-      -
-        name: Setup Deno
-        uses: denoland/setup-deno@v1.1.4
-      -
-        name: Check formatting & linting
-        run: |
-          deno fmt --check
-          deno lint
-          deno check **/*.ts
   
-  # We run tests on multiple versions of deno, just to be safe
-  run-tests: 
-    needs: [get-versions]
+  run-tests:
     runs-on: ubuntu-latest
+    
+    needs: [get-versions]
+    
     strategy:
       matrix:
         deno-version: ${{ fromJson(needs.get-versions.outputs.deno-versions) }}
+
     services:
       redis:
         image: redis
@@ -87,6 +61,87 @@ jobs:
           - 27017:27017
     
     steps:
+      -
+        name: Setup
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      -
+        name: Setup Deno
+        uses: denoland/setup-deno@v1.1.4
+      
+      -
+        name: Check formatting & linting
+        run: |
+          deno fmt --check
+          deno lint
+          deno check **/*.ts
+      
+      -
+        name: Load dependencies
+        run: deno task cache
+      
+      -
+        name: Run benchmarks
+        run: deno task bench
+      
+      -
+        name: Run tests
+        run: |
+          deno task test --coverage=tundralib
+        env:
+          PG_HOST: localhost
+          PG_PORT: 5432
+          PG_USER: postgres
+          PG_PASS: postgres
+          MARIA_HOST: localhost
+          MARIA_PORT: 3306
+          MARIA_USER: root
+          MARIA_PASS: mariapw
+          MONGO_HOST: localhost
+          MONGO_PORT: 27017
+          MONGO_DB: test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+      
+      # Here on out we run only on latest version
+      -
+        name: Generate coverage report
+        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
+        run: |
+          deno coverage tundralib --lcov cov --output=coverage/tundralib.lcov
+          genhtml -o coverage/html coverage/tundralib.lcov
+      
+      - 
+        name: Collect coverage
+        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
+        uses: codecov/codecov-action@v4 # upload the report on Codecov
+        with:
+          file: coverage/tundralib.lcov
+          token: ${{ secrets.CODECOV_TOKEN }} # required
+     
+      -
+        name: Check formatting & linting
+        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
+        run: |
+          deno fmt --check
+          deno lint
+          deno check **/*.ts
+      
+      - 
+        name: Fix LCOV output for SonarCloud
+        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
+        run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' coverage/tundralib.lcov
+      
+      - 
+        name: SonarCloud Scan
+        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
       -
         name: Setup
         uses: actions/checkout@v4
