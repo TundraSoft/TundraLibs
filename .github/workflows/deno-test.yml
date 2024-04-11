@@ -74,9 +74,9 @@ jobs:
       -
         name: Check formatting & linting
         run: |
-          deno fmt --check
+          deno fmt --unstable --check
           deno lint
-          deno check **/*.ts
+          deno check --unstable **/*.ts
       
       -
         name: Load dependencies

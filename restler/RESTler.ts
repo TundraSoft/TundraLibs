@@ -167,19 +167,10 @@ export abstract class RESTler<
           cert.privateKey = this._getOption('certKey');
           fetchOptions.client = Deno.createHttpClient(cert);
         } else {
-          // const cert: {
-          //   certChain?: string;
-          //   privateKey?: string;
-          //   cert?: string;
-          //   key?: string;
-          // } = {};
-          // cert.cert = this._getOption('certChain');
-          // cert.key = this._getOption('certKey');
-          // fetchOptions.client = Deno.createHttpClient(cert);
-          fetchOptions.client = Deno.createHttpClient({
-            cert: this._getOption('certChain'),
-            key: this._getOption('certKey'),
-          });
+          const cert: Record<string, string | undefined> = {};
+          cert.cert = this._getOption('certChain');
+          cert.key = this._getOption('certKey');
+          fetchOptions.client = Deno.createHttpClient(cert);
         }
       }
       let interimResp: Response;
