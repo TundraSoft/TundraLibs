@@ -112,6 +112,7 @@ export class Config {
       // Replace any variables
       let replace = JSON.stringify(final);
       this._env.forEach((key: string, value: string) => {
+        console.log(key, value);
         replace = replace.replace(new RegExp(`\\$${key}`, 'g'), value.trim());
       });
       final = JSON.parse(replace) as Record<string, unknown>;

@@ -12,12 +12,13 @@
       "cwd": "${workspaceFolder}",
       "runtimeExecutable": "deno",
       "runtimeArgs": [
-        "test",
-        "--inspect-brk",
+        "run",
+        "--inspect-brk=127.0.0.1:9227",
         "--allow-all",
-        "--unstable"
+        "--unstable", 
+        "./config/Config.ts"
       ],
-      "attachSimplePort": 9229
+      "attachSimplePort": 9227
     }
   ]
 }
