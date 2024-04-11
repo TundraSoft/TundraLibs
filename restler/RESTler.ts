@@ -176,6 +176,12 @@ export abstract class RESTler<
       let interimResp: Response;
       try {
         interimResp = await fetch(endpoint, fetchOptions);
+        if (
+          request.endpoint.baseURL?.startsWith('https://uatskyway.yesbank.in/')
+        ) {
+          console.log(`Request: ${JSON.stringify(endpoint)}`);
+          console.log(`Request: Got ${interimResp.statusText} with headers - ${interimResp.headers}`);
+        }
       } catch (e) {
         throw e;
       } finally {
