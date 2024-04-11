@@ -106,14 +106,16 @@ jobs:
           REDIS_PORT: 6379
       
       # Here on out we run only on latest version
-      - name: Setup Node (required for SonarCloud)
+      - 
+        name: Setup Node (required for SonarCloud)
         if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
         uses: actions/setup-node@v3
         with:
          node-version: '17.x'
          registry-url: 'https://registry.npmjs.org'
 
-      - name: Setup LCOV
+      - 
+        name: Setup LCOV
         if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
         run: sudo apt install -y lcov
 
@@ -122,7 +124,7 @@ jobs:
         if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
         run: |
           deno coverage coverage --lcov cov --output=coverage/report.lcov
-          genhtml -o coverage/html coverage/tundralib.lcov
+          genhtml -o coverage/html coverage/report.lcov
       
       - 
         name: Collect coverage
@@ -144,55 +146,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      -
-        name: Setup
-        uses: actions/checkout@v4
-      -
-        name: Setup Deno
-        uses: denoland/setup-deno@v1.1.4
-        with:
-          deno-version: v${{ matrix.deno-version }}
-      
-      -
-        name: Load dependencies
-        run: deno task cache
-      
-      -
-        name: Run benchmarks
-        run: deno task bench
-      
-      -
-        name: Run tests
-        run: |
-          deno task test --coverage=tundralib
-        env:
-          PG_HOST: localhost
-          PG_PORT: 5432
-          PG_USER: postgres
-          PG_PASS: postgres
-          MARIA_HOST: localhost
-          MARIA_PORT: 3306
-          MARIA_USER: root
-          MARIA_PASS: mariapw
-          MONGO_HOST: localhost
-          MONGO_PORT: 27017
-          MONGO_DB: test
-          REDIS_HOST: localhost
-          REDIS_PORT: 6379
-          
-      -
-        name: Generate coverage report
-        run: deno coverage tundralib --lcov cov --output=tundralib.lcov
-      
-      - 
-        name: Collect coverage
-        uses: codecov/codecov-action@v4 # upload the report on Codecov
-        with:
-          file: ./tundralib.lcov
-          token: ${{ secrets.CODECOV_TOKEN }} # required
-      
-      # - name: upload coverage
-      #   uses: codecov/codecov-action@v2
-      #   with:
-      #     files: cov.lcov
