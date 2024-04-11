@@ -161,20 +161,26 @@ export abstract class RESTler<
       if (this._hasOption('certChain') || this._hasOption('certKey')) {
         // @Version check - Remove later on
         const ver = semver.parse(Deno.version.deno);
-        const cert: {
-          certChain?: string;
-          privateKey?: string;
-          cert?: string;
-          key?: string;
-        } = {};
         if (semver.lt(ver, semver.parse('1.41.0'))) {
+          const cert: Record<string, string | undefined> = {};
           cert.certChain = this._getOption('certChain');
           cert.privateKey = this._getOption('certKey');
+          fetchOptions.client = Deno.createHttpClient(cert);
         } else {
-          cert.cert = this._getOption('certChain');
-          cert.key = this._getOption('certKey');
+          // const cert: {
+          //   certChain?: string;
+          //   privateKey?: string;
+          //   cert?: string;
+          //   key?: string;
+          // } = {};
+          // cert.cert = this._getOption('certChain');
+          // cert.key = this._getOption('certKey');
+          // fetchOptions.client = Deno.createHttpClient(cert);
+          fetchOptions.client = Deno.createHttpClient({
+            cert: this._getOption('certChain'),
+            key: this._getOption('certKey'),
+          });
         }
-        fetchOptions.client = Deno.createHttpClient(cert);
       }
       let interimResp: Response;
       try {
