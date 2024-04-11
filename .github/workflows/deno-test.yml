@@ -89,7 +89,7 @@ jobs:
       -
         name: Run tests
         run: |
-          deno task test --coverage=coverage/tundralib.lcov
+          deno task test --coverage=coverage
         env:
           PG_HOST: localhost
           PG_PORT: 5432
@@ -110,7 +110,7 @@ jobs:
         name: Generate coverage report
         if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
         run: |
-          deno coverage tundralib --lcov cov --output=coverage/tundralib.lcov
+          deno coverage coverage --lcov cov --output=coverage/report.lcov
           genhtml -o coverage/html coverage/tundralib.lcov
       
       - 
@@ -118,13 +118,13 @@ jobs:
         if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
         uses: codecov/codecov-action@v4 # upload the report on Codecov
         with:
-          file: coverage/tundralib.lcov
+          file: coverage/report.lcov
           token: ${{ secrets.CODECOV_TOKEN }} # required
       
       - 
         name: Fix LCOV output for SonarCloud
         if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
-        run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' coverage/tundralib.lcov
+        run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' coverage/report.lcov
       
       - 
         name: SonarCloud Scan

@@ -176,19 +176,6 @@ export abstract class RESTler<
       let interimResp: Response;
       try {
         interimResp = await fetch(endpoint, fetchOptions);
-        // @TODO DELETE ME
-        console.log(`Request: ${JSON.stringify(endpoint)}`);
-        console.log(
-          `Response: Got ${interimResp.statusText} with headers - ${
-            JSON.stringify(Object.fromEntries(interimResp.headers.entries()))
-          }`,
-        );
-        try {
-          const f = interimResp.clone();
-          console.log(`Response Body: ${await f.text()}`);
-        } catch {
-          // Nothing to do
-        }
       } catch (e) {
         throw e;
       } finally {
