@@ -180,7 +180,9 @@ export abstract class RESTler<
           request.endpoint.baseURL?.startsWith('https://uatskyway.yesbank.in/')
         ) {
           console.log(`Request: ${JSON.stringify(endpoint)}`);
-          console.log(`Request: Got ${interimResp.statusText} with headers - ${interimResp.headers}`);
+          console.log(
+            `Request: Got ${interimResp.statusText} with headers - ${interimResp.headers}`,
+          );
         }
       } catch (e) {
         throw e;
