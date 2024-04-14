@@ -125,7 +125,7 @@ class Configurations {
 
   /**
    * Checks if the dir exists and it is readable.
-   * 
+   *
    * @param dir string The directory to scan
    * @throws ConfigNotFound if the directory is not found
    * @throws ConfigPermissionError if read only permission is not given to the path
