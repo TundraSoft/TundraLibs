@@ -136,5 +136,21 @@ Deno.test('utils/privateObject', async (t) => {
       assertEquals(keys, ['key1', 'key2']);
       assertEquals(values, ['value1', 'value2']);
     });
+
+    await t.step('test clear', () => {
+      secretObject = privateObject<Record<string, unknown>>({
+        key1: 'value1',
+        key2: 'value2',
+      });
+      secretObject.clear();
+      assertEquals(secretObject.keys(), []);
+      // Should not clear the object if mutations are disabled
+      secretObject = privateObject<Record<string, unknown>>({
+        key1: 'value1',
+        key2: 'value2',
+      }, false);
+      secretObject.clear();
+      assertEquals(secretObject.keys(), ['key1', 'key2']);
+    });
   });
 });

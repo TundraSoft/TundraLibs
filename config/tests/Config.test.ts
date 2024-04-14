@@ -15,6 +15,17 @@ import {
   ConfigPermissionError, 
 } from '../mod.ts';
 
+Deno.test({
+  name: 'Config - No Permission', 
+  permissions: { read: false },
+  fn: async () => {
+    await assertRejects(
+      () => Config.load('config/tests/fixtures/valid/', 'sample'),
+      ConfigPermissionError,
+    );
+  },
+});
+
 Deno.test('Config', async (t) => {
   await t.step('Load config', async () => {
     await Config.load('config/tests/fixtures/valid/', 'sample');
@@ -108,14 +119,3 @@ Deno.test('Config', async (t) => {
     );
   });
 });
-
-Deno.test({
-  name: 'Config - No Permission', 
-  permissions: { read: false },
-  fn: async () => {
-    await assertRejects(
-      () => Config.load('config/tests/fixtures/valid/', 'sample'),
-      ConfigPermissionError,
-    );
-  },
-})

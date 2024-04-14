@@ -356,6 +356,22 @@ console.log(pv.keys());
 // [ "a", "b", "c" ]
 ```
 
+#### privateObject.clear
+
+Clears all keys and values
+
+_NOTE_ This only works if enable mutations is set to true
+
+```ts
+const pv = privateObject<{ a: number; b: string; c?: string; d?: number }>({
+  a: 1,
+  b: 'Hello',
+  d: undefined,
+});
+pv.clear();
+console.log(pv); //{}
+```
+
 ## TundraLibError
 
 A mutation of BaseError which is used as the base for all errors thrown by TundraLib modules. Only change done is to demand library as a meta tag to identify the error.

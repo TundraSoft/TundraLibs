@@ -123,6 +123,10 @@ class Configurations {
     return JSON.parse(this._replaceVariables(JSON.stringify(final))) as T;
   }
 
+  clear(): void {
+    this._config.clear();
+  }
+
   /**
    * Checks if the dir exists and it is readable.
    *
