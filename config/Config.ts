@@ -69,15 +69,13 @@ class Configurations {
    * @returns boolean True if the config exists, false otherwise
    */
   has(...items: string[]): boolean {
-    const name = (items.shift() as string).trim().toLowerCase();
-    const path: string[] = [];
+    const name = (items.shift() as string).trim().toLowerCase(); // NOSONAR
     if (!this._config.has(name)) {
       return false;
     }
     let final = this._config.get(name) as Record<string, unknown>;
     if (items.length > 0) {
       for (const item of items) {
-        path.push(item);
         if (final[item]) {
           final = final[item] as Record<string, unknown>;
         } else {
@@ -107,15 +105,13 @@ class Configurations {
    * @returns T
    */
   get<T>(...items: string[]): T | undefined {
-    const name = (items.shift() as string).trim().toLowerCase();
-    const path: string[] = [];
+    const name = (items.shift() as string).trim().toLowerCase(); // NOSONAR
     if (!this._config.has(name)) {
       throw new ConfigNotDefined({ config: name });
     }
     let final = this._config.get(name) as Record<string, unknown>;
     if (items.length > 0) {
       for (const item of items) {
-        path.push(item);
         if (final[item]) {
           final = final[item] as Record<string, unknown>;
         } else {
@@ -128,16 +124,15 @@ class Configurations {
   }
 
   /**
+   * Checks if the dir exists and it is readable.
+   * 
    * @param dir string The directory to scan
-   * @param file string The specific file (only name) to load. Optional
-   * @returns Record<string, string> List of config files found
    * @throws ConfigNotFound if the directory is not found
    * @throws ConfigPermissionError if read only permission is not given to the path
    * @throws DuplicateConfig if the same config file is found twice
    */
   @memoize
-  protected async _scanPath(dir: string, file?: string) {
-    // First check if the path is valid
+  protected async _checkPath(dir: string) {
     try {
       const stat = await Deno.stat(dir);
       if (stat.isDirectory === false) {
@@ -152,6 +147,20 @@ class Configurations {
         throw e;
       }
     }
+  }
+
+  /**
+   * @param dir string The directory to scan
+   * @param file string The specific file (only name) to load. Optional
+   * @returns Record<string, string> List of config files found
+   * @throws ConfigNotFound if the directory is not found
+   * @throws ConfigPermissionError if read only permission is not given to the path
+   * @throws DuplicateConfig if the same config file is found twice
+   */
+  @memoize
+  protected async _scanPath(dir: string, file?: string) {
+    // First check if the path is valid
+    await this._checkPath(dir);
     const configFiles: Record<string, string> = {};
     if (file) {
       file = file.trim().toLowerCase();
@@ -262,6 +271,3 @@ class Configurations {
 }
 
 export const Config = new Configurations();
-// await Config.loadEnv();
-// await Config.load('config/tests/fixtures/valid');
-// console.log(Config.get('sample'))

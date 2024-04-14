@@ -12,6 +12,7 @@ import {
   ConfigNotFound,
   DuplicateConfig,
   MalformedConfig,
+  ConfigPermissionError, 
 } from '../mod.ts';
 
 Deno.test('Config', async (t) => {
@@ -22,6 +23,7 @@ Deno.test('Config', async (t) => {
     // Load the rest
     await Config.load('config/tests/fixtures/valid/', 'sample2');
     await Config.load('config/tests/fixtures/valid/', 'sample3');
+    assertEquals(Config.list(), ['sample', 'sample2', 'sample3']);
   });
 
   await t.step('Check loaded config', () => {
@@ -33,7 +35,12 @@ Deno.test('Config', async (t) => {
     // Fetching non-existent config should throw error
     assertThrows(() => Config.get('invalid'), ConfigNotDefined);
     assertEquals(Config.has('sample'), true);
+    // Return false for config which is not present
+    assertEquals(Config.has('sdf'), false);
     assertEquals(Config.has('sample', 'database', 'ports'), true);
+    // Must return false on nested item not present
+    assertEquals(Config.has('sample', 'database', 'portsdf'), false);
+
     assertEquals(Config.get('sample', 'userName'), '');
     // Load env
     Config.loadEnv('config/tests/fixtures/');
@@ -55,44 +62,60 @@ Deno.test('Config', async (t) => {
     }
   });
 
-  await t.step('Duplicate config', () => {
-    assertRejects(
+  await t.step('Duplicate config', async () => {
+    await assertRejects(
       () => Config.load('config/tests/fixtures/valid/', 'sample'),
       DuplicateConfig,
     );
-    assertRejects(
+    await assertRejects(
       () => Config.load('config/tests/fixtures/duplicate2/'),
       DuplicateConfig,
     );
-    assertRejects(
+    await assertRejects(
       () => Config.load('config/tests/fixtures/duplicate/'),
       DuplicateConfig,
     );
-    assertRejects(
+    await assertRejects(
       () => Config.load('config/tests/fixtures/duplicate/', 'SaMpLe'),
       DuplicateConfig,
     );
   });
 
-  await t.step('Config not found', () => {
-    assertRejects(
+  await t.step('Config not found', async () => {
+    // Passing the file path directly
+    await assertRejects(
+      () => Config.load('config/tests/fixtures/valud/Sample.toml'),
+      ConfigNotFound,
+    );
+    await assertRejects(
       () => Config.load('config/tests/fixtures/valid/', 'sdfkjghb'),
       ConfigNotFound,
     );
   });
 
-  await t.step('Malformed', () => {
-    assertRejects(
+  await t.step('Malformed', async () => {
+    await assertRejects(
       () => Config.load('config/tests/fixtures/malformed/', 'malformedYml'),
       MalformedConfig,
     );
-    assertRejects(
+    await assertRejects(
       () => Config.load('config/tests/fixtures/malformed/', 'malformedToml'),
       MalformedConfig,
     );
-    assertRejects(
+    await assertRejects(
       () => Config.load('config/tests/fixtures/malformed/', 'malformedJSON'),
       MalformedConfig,
     );
   });
 });
+
+Deno.test({
+  name: 'Config - No Permission', 
+  permissions: { read: false },
+  fn: async () => {
+    await assertRejects(
+      () => Config.load('config/tests/fixtures/valid/', 'sample'),
+      ConfigPermissionError,
+    );
+  },
+})
