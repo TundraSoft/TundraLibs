@@ -13,7 +13,8 @@
       "./"
     ],
     "exclude": [
-      "*/testdata/"
+      "*/tests/",
+      "*/fixtures/"
     ],
     "rules": {
       "tags": [
@@ -27,7 +28,7 @@
   },
   "fmt": {
     "include": ["./"],
-    "exclude": ["*/testdata/"],
+    "exclude": ["*/tests/", "*/fixtures/"],
     "semiColons": true,
     "lineWidth": 80,
     "indentWidth": 2,
@@ -45,7 +46,7 @@
       "./"
     ],
     "exclude": [
-      "*/testdata/"
+      "*/fixtures/"
     ]
   },
   "lock": false

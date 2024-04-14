@@ -1,10 +1,5 @@
 import type { RESTlerEndpoint } from './RESTlerEndpoint.ts';
 
-// export type RESTlerRequestBody = Record<string, unknown> | Record<
-//   string,
-//   unknown
-// >[] | FormData;
-
 export type RESTlerRequest = {
   endpoint:
     & Omit<RESTlerEndpoint, 'baseURL'>

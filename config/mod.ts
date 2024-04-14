@@ -1,8 +1,10 @@
+export { Config } from './Config.ts';
 export {
-  ConfigMalformed,
-  ConfigMultiple,
+  ConfigError,
+  ConfigNotDefined,
   ConfigNotFound,
   ConfigPermissionError,
-  ConfigUnsupported,
+  DuplicateConfig,
+  MalformedConfig,
+  UnsupportedConfig,
 } from './errors/mod.ts';
-export { Config } from './Config.ts';

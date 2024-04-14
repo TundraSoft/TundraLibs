@@ -1,4 +1,3 @@
-import { HTTPMethods, path } from '../../dependencies.ts';
 import { RESTlerBaseError } from './Base.ts';
 import type { RESTlerEndpoint } from '../types/mod.ts';
 
@@ -14,25 +13,5 @@ export class RESTlerEndpointError extends RESTlerBaseError {
     cause?: Error,
   ) {
     super(message, meta, cause);
-  }
-
-  get method(): HTTPMethods {
-    return this.meta.method as HTTPMethods;
-  }
-
-  get url(): string {
-    return path.join(
-      this.meta.baseURL as string,
-      this.meta.version as string || '',
-      this.meta.path as string,
-    );
-  }
-
-  get version(): string {
-    return this.meta.version as string;
-  }
-
-  toString(): string {
-    return `${this.timeStamp.toISOString()} [${this.library} ${this.vendor} ${this.name}] ${this.message}`;
   }
 }

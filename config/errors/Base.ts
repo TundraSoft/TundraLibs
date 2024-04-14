@@ -1,17 +1,18 @@
 import { TundraLibError } from '../../utils/TundraLibError.ts';
 
-export class ConfigBaseError extends TundraLibError {
+export class ConfigError extends TundraLibError {
   public readonly library = 'Config';
-  public readonly config: string;
 
   constructor(
-    config: string,
     message: string,
-    meta?: Record<string, unknown>,
+    meta: { config: string } & Record<string, unknown>,
     cause?: Error,
   ) {
     super(message, meta, cause);
-    this.config = config;
+  }
+
+  get config(): string {
+    return this.meta.config as string;
   }
 
   toString(): string {

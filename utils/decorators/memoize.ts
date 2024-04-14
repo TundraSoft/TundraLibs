@@ -2,7 +2,7 @@ function simpleHash(args: unknown[]): string {
   return JSON.stringify(args);
 }
 
-const AsyncFunction = (async function () {}).constructor;
+const AsyncFunction = (async function () {}).constructor; // NOSONAR
 
 /**
  * memoize decorator

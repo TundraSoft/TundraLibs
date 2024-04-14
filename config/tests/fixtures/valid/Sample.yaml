@@ -12,7 +12,7 @@ database:
   enabled: true
 servers:
   alpha:
-    ip: 10.0.0.1
+    ip: $ALPHA_IP
     dc: eqdc10
   beta:
     ip: 10.0.0.2
@@ -26,4 +26,5 @@ clients:
   hosts:
     - alpha
     - omega
-userName: $USER
+userName: $USERD
+password: $$PASSWORD
