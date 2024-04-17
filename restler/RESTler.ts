@@ -137,7 +137,7 @@ export abstract class RESTler<
         timeTaken: 0,
       };
     let finalError: RESTlerBaseError | undefined;
-    this.emit('request', request as RESTlerRequest);
+    this.emit('request', request);
     // We now attempt to make the request, if it fails, we retry once
     const start = performance.now();
     const controller = new AbortController(),
@@ -193,12 +193,10 @@ export abstract class RESTler<
         interimResp,
       );
       // Check if it is an auth failure
-      resp.authFailure = (this._authStatus.includes(interimResp.status))
-        ? true
-        : false;
+      resp.authFailure = this._authStatus.includes(interimResp.status);
       if (resp.authFailure) {
         throw new RESTlerAuthFailure(
-          resp.endpoint as RESTlerEndpoint,
+          resp.endpoint,
         );
       }
       return await this._processResponse(resp);
@@ -281,7 +279,7 @@ export abstract class RESTler<
       if (!contentType) {
         throw new RESTlerUnsupportedContentType(
           'N/A',
-          endpoint as RESTlerEndpoint,
+          endpoint,
         );
       }
       if (contentType.includes('json')) {
@@ -303,7 +301,7 @@ export abstract class RESTler<
         // Ensure we discard the body
         throw new RESTlerUnsupportedContentType(
           contentType,
-          endpoint as RESTlerEndpoint,
+          endpoint,
         );
       }
     } finally {

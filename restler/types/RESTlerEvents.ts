@@ -2,9 +2,7 @@ import { RESTlerBaseError } from '../mod.ts';
 import type { RESTlerRequest, RESTlerResponse } from './mod.ts';
 
 export type RESTlerEvents = {
-  auth: <T extends Record<string, unknown> = Record<string, unknown>>(
-    authInfo: T,
-  ) => void;
+  auth: (authInfo: unknown) => void;
   authFailure: (request: RESTlerRequest) => void;
   response: (
     request: RESTlerRequest,

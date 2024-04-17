@@ -14,7 +14,6 @@ import type {
   QueryResult,
   QueryTypes,
   SelectQuery,
-  // TruncateQuery,
   UpdateQuery,
 } from './types/mod.ts';
 
@@ -40,6 +39,9 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
     DAM.register(this as unknown as AbstractClient);
   }
 
+  /**
+   * Gets the status of the client
+   */
   get status(): ClientStatus {
     return this._status;
   }
@@ -221,9 +223,10 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
     return await this.execute(this.translator.select(query));
   }
 
+  //#region Protected methods
   protected _detectQuery(sql: string): QueryTypes | 'UNKNOWN' {
     const regex =
-      /^(SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|CREATE\s+SCHEMA|DROP\s+SCHEMA|CREATE\s+(MATERIALISED)?\s+VIEW|ALTER\s+(MATERIALISED)?\s+VIEW|DROP\s+(MATERIALISED)?\s+VIEW||TRUNCATE|BEGIN|COMMIT|ROLLBACK|SAVEPOINT)\s+/i;
+      /^(SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|CREATE\s+SCHEMA|DROP\s+SCHEMA|CREATE\s+(MATERIALISED)?\s+VIEW|ALTER\s+(MATERIALISED)?\s+VIEW|DROP\s+(MATERIALISED)?\s+VIEW|TRUNCATE|BEGIN|COMMIT|ROLLBACK|SAVEPOINT)\s+/i; // NOSONAR
     const matchedValue = sql.match(regex)?.[0].trim().replace(
       /MATERIALISED/i,
       '',
@@ -237,7 +240,7 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
     const sql = query.sql.trim().replace(/;+$/, '') + ';';
     const keys = Object.keys(query.params || {});
     const missing: string[] = [];
-    const matches = sql.match(/:([a-zA-Z0-9_]+):/g);
+    const matches = sql.match(/:(\w+):/g);
     if (matches !== null) {
       for (const match of matches) {
         const key = match.substring(1, match.length - 1);
@@ -247,7 +250,6 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
       }
     }
     if (missing.length > 0) {
-      // throw new Error(`Missing parameters: ${missing.join(', ')}`);
       throw new DAMQueryError(`Missing parameter(s) ${missing.join(', ')}`, {
         dialect: this.dialect,
         name: this.name,
@@ -261,6 +263,7 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
     };
   }
 
+  //#region Abstract methods
   protected abstract _connect(): Promise<void> | void;
   protected abstract _close(): Promise<void> | void;
   protected abstract _execute<
@@ -270,4 +273,7 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
   ): Promise<{ count: number; rows: R[] }> | { count: number; rows: R[] };
   protected abstract _getVersion(): Promise<string> | string;
   protected abstract _isReallyConnected(): boolean;
+  //#endregion Abstract methods
+
+  //#endregion Protected methods
 }
