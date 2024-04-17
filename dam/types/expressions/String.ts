@@ -1,43 +1,42 @@
-import type { ColumnIdentifier } from '../ColumnIdentifier.ts';
 import type { DateExpressions } from './Date.ts';
 
 type Substr = {
   $expr: 'SUBSTR';
-  $args: [string | ColumnIdentifier, number, number];
+  $args: [string, number, number];
 };
 
 type Concat = {
   $expr: 'CONCAT';
-  $args: (string | ColumnIdentifier | StringExpressions)[];
+  $args: (string | StringExpressions)[];
 };
 
 type Replace = {
   $expr: 'REPLACE';
   $args: [
-    StringExpressions | string | ColumnIdentifier,
-    StringExpressions | string | ColumnIdentifier,
-    StringExpressions | string | ColumnIdentifier,
+    StringExpressions | string,
+    StringExpressions | string,
+    StringExpressions | string,
   ];
 };
 
 type Lower = {
   $expr: 'LOWER';
-  $args: StringExpressions | string | ColumnIdentifier;
+  $args: StringExpressions | string;
 };
 
 type Upper = {
   $expr: 'UPPER';
-  $args: StringExpressions | string | ColumnIdentifier;
+  $args: StringExpressions | string;
 };
 
 type Trim = {
   $expr: 'TRIM';
-  $args: StringExpressions | string | ColumnIdentifier;
+  $args: StringExpressions | string;
 };
 
 type DateFormat = {
   $expr: 'DATE_FORMAT';
-  $args: [DateExpressions | ColumnIdentifier, string];
+  $args: [DateExpressions, string];
 };
 
 export type StringExpressions =

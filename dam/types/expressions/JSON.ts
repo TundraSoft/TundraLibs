@@ -4,4 +4,3 @@ export type JSONExpressions = {
   $expr: 'JSON_VALUE';
   $args: [ColumnIdentifier, string[]];
 };
-
