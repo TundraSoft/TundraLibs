@@ -7,7 +7,7 @@ export const Syslog = (): SyslogObject => {
   ) => {
     Object.entries(structuredData).forEach(([id, data]) => {
       // SDID must be alphanumeric@numeric
-      if (!id.match(/^[a-z0-9_.-]{1,32}@[0-9]{1,}$/i)) {
+      if (!id.match(/^[a-z0-9_.-]{1,32}@\d+$/i)) {
         throw new Error(`Invalid structuredData id ${id}`);
       }
       Object.entries(data).forEach(([key, value]) => {
@@ -19,6 +19,7 @@ export const Syslog = (): SyslogObject => {
         }
       });
     });
+    return structuredData;
   };
 
   const proxyHandler: ProxyHandler<SyslogObject> = {
@@ -27,10 +28,6 @@ export const Syslog = (): SyslogObject => {
         // case 'prival':
         case 'pri':
           return target.facility * 8 + target.severity;
-        // case 'isoDateTime':
-        //   return target.dateTime.toISOString();
-        // case 'bsdDateTime':
-        //   return `${target.dateTime.toDateString()} ${target.dateTime.toTimeString()}`;
         case 'toString':
           return (format: string = Formats.RFC5424) =>
             stringify(target, format);
@@ -46,7 +43,6 @@ export const Syslog = (): SyslogObject => {
           }
           target.version = value;
           return true;
-        // case 'prival':
         case 'pri':
           if (value < 0 || value > 191) {
             throw new Error('Invalid pri');
@@ -67,12 +63,6 @@ export const Syslog = (): SyslogObject => {
           target.dateTime = dt;
           return true;
         }
-        // case 'bsdDateTime':
-        //   target.dateTime = new Date(value);
-        //   return true;
-        // case 'isoDateTime':
-        //   target.dateTime = new Date(value);
-        //   return true;
         case 'severity':
           if (value < 0 || value > 7) {
             throw new Error('Invalid severity');
@@ -98,9 +88,7 @@ export const Syslog = (): SyslogObject => {
           target.procId = value;
           return true;
         case 'structuredData':
-          // Validate structuredData
-          validateStructureData(value);
-          target.structuredData = value;
+          target.structuredData = validateStructureData(value);
           return true;
         case 'message':
           target.message = value.trim();
@@ -123,8 +111,8 @@ export const Syslog = (): SyslogObject => {
 
 export const parse = (log: string): SyslogObject => {
   const logObj = Syslog(),
-    BSDMatch = log.match(Patterns.RFC3164),
-    RFCMatch = log.match(Patterns.RFC5424);
+    BSDMatch = Patterns.RFC3164.exec(log),
+    RFCMatch = Patterns.RFC5424.exec(log);
   //<165>Aug 24 1987 05:34:00 mymachine myproc[10]: %% It\'s time to make the do-nuts.  %%  Ingredients: Mix=OK, Jelly=OK #Devices: Mixer=OK, Jelly_Injector=OK, Frier=OK # Transport: Conveyer1=OK, Conveyer2=OK # %%
   if (RFCMatch) {
     logObj.pri = parseInt(RFCMatch[1]);
@@ -135,8 +123,8 @@ export const parse = (log: string): SyslogObject => {
     logObj.msgId = RFCMatch[6];
     // process structuredData & message
     let structAndMessage = log.substring(RFCMatch[0].length);
-    if (structAndMessage.match(Patterns.STRUCT)) {
-      // console.log(structAndMessage.match(regExp.STRUCT));
+    // Remove global flag for checking
+    if (new RegExp(Patterns.STRUCT, '').test(structAndMessage)) {
       const structData = structAndMessage.matchAll(Patterns.STRUCT);
       const sd: Record<string, StructuredData> = {};
       for (const struct of structData) {
@@ -159,9 +147,7 @@ export const parse = (log: string): SyslogObject => {
               .trim();
             keyValueMatch = keyValuePairs.match(Patterns.STRUCTKEYS);
           }
-          // logObj.setStructuredData(structIdLookup[1].trim(), s);
           sd[structIdLookup[1].trim()] = s;
-          // console.log(s);
         } else {
           throw new Error(`Malformed structured data received: ${struct}`);
         }

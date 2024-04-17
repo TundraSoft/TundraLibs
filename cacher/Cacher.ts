@@ -65,7 +65,7 @@ export class Cacher {
       case 'MEMORY':
         instance = new MemoryCacher(
           name,
-          options as MemoryCacherOptions,
+          options,
         ) as AbstractCache;
         break;
       case 'REDIS':

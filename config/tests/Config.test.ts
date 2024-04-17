@@ -77,10 +77,12 @@ Deno.test('Config', async (t) => {
     await assertRejects(
       () => Config.load('config/tests/fixtures/valid/', 'sample'),
       DuplicateConfig,
+      'Config with the name sample already loaded'
     );
     await assertRejects(
       () => Config.load('config/tests/fixtures/duplicate2/'),
       DuplicateConfig,
+      'Multiple config files found for test in config/tests/fixtures/duplicate2/'
     );
     await assertRejects(
       () => Config.load('config/tests/fixtures/duplicate/'),

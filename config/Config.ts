@@ -56,7 +56,7 @@ class Configurations {
     for (const [configName, file] of Object.entries(files)) {
       // Check if it exists
       if (this._config.has(configName)) {
-        throw new DuplicateConfig({ path: dir, config: configName });
+        throw new DuplicateConfig({ config: configName });
       }
       await this._loadConfig(configName, file);
     }
@@ -263,14 +263,14 @@ class Configurations {
    */
   protected _replaceVariables(data: string): string {
     // Search for pattern $<key> and replace with the value from env
-    const regex = /(?<!\$)\$([a-zA-Z0-9_]+)/g;
+    const regex = /(?<!\$)\$(\w+)/g;
     let match;
     while ((match = regex.exec(data)) !== null) {
       const key = match[1];
       const value = this._env.get(key) || '';
       data = data.replace(new RegExp(`\\$${key}`, 'g'), value.trim());
     }
-    return data.replaceAll(/\$\$([a-zA-Z0-9_]+)/g, (val) => val.slice(1));
+    return data.replaceAll(/\$\$(\w+)/g, (val) => val.slice(1));
   }
 }
 

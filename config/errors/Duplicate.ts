@@ -5,7 +5,7 @@ export class DuplicateConfig extends ConfigError {
     super(
       `${
         meta.path === undefined
-          ? 'Config under the name ${config} already loaded'
+          ? 'Config with the name ${config} already loaded'
           : 'Multiple config files found for ${config} in ${path}'
       }`,
       meta,
