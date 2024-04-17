@@ -1,8 +1,7 @@
 import type { ColumnIdentifier } from '../ColumnIdentifier.ts';
 
-type JSONValue = {
+export type JSONExpressions = {
   $expr: 'JSON_VALUE';
   $args: [ColumnIdentifier, string[]];
 };
 
-export type JSONExpressions = JSONValue;

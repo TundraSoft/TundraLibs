@@ -1,5 +1,3 @@
-export type GenerateUUID = {
+export type UUIDExpressions = {
   $expr: 'UUID';
 };
-
-export type UUIDExpressions = GenerateUUID;

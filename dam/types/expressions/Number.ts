@@ -61,7 +61,7 @@ type Length = {
     | StringExpressions
     | UUIDExpressions
     | NumberExpressions
-    | ColumnIdentifier
+    // | ColumnIdentifier // Removed as string will override this
     | string
     | number
     | bigint;
