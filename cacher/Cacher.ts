@@ -1,10 +1,6 @@
 import { AbstractCache } from './AbstractCache.ts';
 import { MemoryCacher, RedisCacher } from './clients/mod.ts';
-import type {
-  AbstractCacherOptions,
-  MemoryCacherOptions,
-  RedisCacherOptions,
-} from './types/mod.ts';
+import type { AbstractCacherOptions, RedisCacherOptions } from './types/mod.ts';
 
 import { CacherConfigError, DuplicateCacher } from './errors/mod.ts';
 /**
