@@ -1,23 +1,18 @@
-import { Cacher } from '../Cacher.ts';
-import { MemoryCacher, RedisCacher } from '../clients/mod.ts';
-
 import {
   assertEquals,
+  assertInstanceOf,
   assertThrows,
-  describe,
-  it,
 } from '../../dev.dependencies.ts';
-
 import { envArgs } from '../../utils/envArgs.ts';
-import { CacherConfigError, DuplicateCacher } from '../mod.ts';
 
-const envData = envArgs('cacher/tests');
+import { Cacher, MemoryCache, RedisCache, UnsupportedCacherError, CacherDuplicateError, CacherNotFound, type CacherOptions } from '../mod.ts';
 
-// Mock instances
-describe('Cacher', () => {
-  it('Initialize a cache instance outside Cacher. Cacher should still be aware of it', () => {
-    const _newCache = new MemoryCacher('newCache', { engine: 'MEMORY' });
-    const _redisInstance = new RedisCacher('redisInstance', {
+const envData = envArgs('cacher/tests/');
+
+Deno.test('Cacher.Manager', async (t) => {
+  await t.step('Create a new cache instance', () => {
+    const _newCache = new MemoryCache('newCache', { engine: 'MEMORY' });
+    const _redisInstance = new RedisCache('redisInstance', {
       engine: 'REDIS',
       host: envData.get('REDIS_HOST') || 'localhost',
       port: 6379,
@@ -26,58 +21,52 @@ describe('Cacher', () => {
     assertEquals(Cacher.has('redisInstance'), true);
   });
 
-  it('Case Insensitive check', () => {
-    const _newCache = new MemoryCacher('newCache', { engine: 'MEMORY' });
-    const _redisInstance = new RedisCacher('redisInstance', {
-      engine: 'REDIS',
-      host: envData.get('REDIS_HOST') || 'localhost',
-      port: 6379,
-    });
+  await t.step('Case insensitive check', () => {
     assertEquals(Cacher.has('newcache'), true);
-    assertEquals(Cacher.has('redisinstance'), true);
+    assertEquals(Cacher.has('REDISINSTANCE'), true);
   });
 
-  it('Fetch the correct class', () => {
-    const _newCache = new MemoryCacher('newCache', { engine: 'MEMORY' });
-    const _redisInstance = new RedisCacher('redisInstance', {
+  await t.step('Fetch the correct class', () => {
+    assertEquals(Cacher.get('newcache')?.name, 'newcache');
+    assertInstanceOf(Cacher.get('newcache'), MemoryCache);
+    assertEquals(Cacher.get('redisinstance')?.name, 'redisinstance');
+    assertInstanceOf(Cacher.get('redisinstance'), RedisCache);
+  });
+
+  await t.step('Throw error on duplicate name', () => {
+    assertThrows(
+      () => Cacher.create('newcache', { engine: 'REDIS',
+      host: envData.get('REDIS_HOST') || 'localhost',
+      port: 6379, } as CacherOptions),
+      CacherDuplicateError,
+    );
+    assertThrows(
+      () => Cacher.create('redisinstance', { engine: 'MEMORY' }),
+      CacherDuplicateError,
+    );
+  });
+
+  await t.step('Should NOT throw error if same config is passed', () => {
+    Cacher.create('newcache', { engine: 'MEMORY' });
+    Cacher.create('redisinstance', {
       engine: 'REDIS',
       host: envData.get('REDIS_HOST') || 'localhost',
       port: 6379,
-    });
-    assertEquals(Cacher.get('newcache')?.name, 'newCache');
-    assertEquals(Cacher.get('redisinstance')?.name, 'redisInstance');
+    } as CacherOptions);
   });
 
-  it('Fetch the correct class', () => {
-    const _newCache = new MemoryCacher('newCache', { engine: 'MEMORY' });
-    const _redisInstance = new RedisCacher('redisInstance', {
-      engine: 'REDIS',
-      host: envData.get('REDIS_HOST') || 'localhost',
-      port: 6379,
-    });
-    assertEquals(Cacher.get('newcache')?.name, 'newCache');
-    assertEquals(Cacher.get('redisinstance')?.name, 'redisInstance');
-  });
-
-  it('Throw error on duplicate name', () => {
-    Cacher.create('dupCheck', { engine: 'MEMORY' });
-    Cacher.create('dupCheck2', { engine: 'REDIS' });
-
+  await t.step('Throw error on unsupported engine', () => {
     assertThrows(
-      () =>
-        Cacher.create(
-          'invalid',
-          JSON.parse(JSON.stringify({ engine: 'REDISSD' })),
-        ),
-      CacherConfigError,
-    );
-    assertThrows(
-      () => Cacher.create('dupCheck', { engine: 'MEMORY' }),
-      DuplicateCacher,
-    );
-    assertThrows(
-      () => Cacher.create('dupCheck2', { engine: 'MEMORY' }),
-      DuplicateCacher,
+      () => Cacher.create('unsupported', { engine: 'UNKNOWN' } as unknown as CacherOptions),
+      UnsupportedCacherError,
     );
   });
+
+  await t.step('Throw error on unknown engine', () => {
+    assertThrows(
+      () => Cacher.get('sdljfhb'),
+      CacherNotFound,
+    );
+  });
+
 });

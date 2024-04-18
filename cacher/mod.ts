@@ -1,14 +1,16 @@
-export { MemoryCacher, RedisCacher } from './clients/mod.ts';
+export { MemoryCache, RedisCache } from './engines/mod.ts';
 export {
   CacherBaseError,
   CacherConfigError,
-  CacherConnectionError,
-  DuplicateCacher,
+  CacherDuplicateError,
+  CacherInitError,
+  CacherNotFound,
+  UnsupportedCacherError,
 } from './errors/mod.ts';
 export type {
-  CacheSettings,
-  CacheValue,
-  MemoryCacherOptions,
-  RedisCacherOptions,
+  CacherEvents,
+  CacherOptions,
+  MemoryOptions,
+  RedisOptions,
 } from './types/mod.ts';
-export { Cacher } from './Cacher.ts';
+export { Cacher } from './CacheManager.ts';

@@ -1,4 +1,6 @@
-export type { MemoryCacherOptions, RedisCacherOptions } from './clients/mod.ts';
-export type { AbstractCacherOptions } from './AbstractCacherOptions.ts';
-export type { CacheSettings } from './CacheSettings.ts';
-export type { CacheValue } from './CacheValue.ts';
+export type { MemoryOptions, RedisOptions } from './engine/mod.ts';
+
+export type { CacherEvents } from './Events.ts';
+export type { CacherOptions } from './Options.ts';
+export type { CacheSettings } from './Settings.ts';
+export type { CacheValue } from './Value.ts';

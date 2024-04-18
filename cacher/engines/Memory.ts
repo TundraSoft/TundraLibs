@@ -1,12 +1,17 @@
-import type { OptionKeys } from '../../options/mod.ts';
-
-import type { CacheValue, MemoryCacherOptions } from '../types/mod.ts';
+import {
+  type PrivateObject,
+  privateObject,
+} from '../../utils/privateObject.ts';
+import type { OptionKeys } from '../../options/types/mod.ts';
 import { AbstractCache } from '../AbstractCache.ts';
-
+import type { CacheValue, MemoryOptions } from '../types/mod.ts';
 import { CacherConfigError } from '../errors/mod.ts';
 
-export class MemoryCacher extends AbstractCache<MemoryCacherOptions> {
-  private _cache: Map<string, CacheValue> = new Map();
+export class MemoryCache extends AbstractCache {
+  protected _cache: PrivateObject<Record<string, CacheValue>> = privateObject(
+    {},
+    true,
+  );
   protected _expiryTimers: Map<string, number> = new Map();
 
   /**
@@ -15,14 +20,22 @@ export class MemoryCacher extends AbstractCache<MemoryCacherOptions> {
    * @param name - The name of the cache. This is used to namespace the cache.
    * @param options - The options to initialize the cache with.
    */
-  constructor(name: string, options: OptionKeys<MemoryCacherOptions>) {
+  constructor(name: string, options: OptionKeys<MemoryOptions>) {
     if (options.engine !== 'MEMORY') {
-      throw new CacherConfigError(
-        `Invalid engine: '${options.engine}' passed for Redis Cache.`,
-      );
+      throw new CacherConfigError({
+        engine: 'MEMORY',
+        key: 'engine',
+        config: name,
+        value: options.engine,
+      });
     }
     super(name, options);
+  }
+
+  protected _init(): void {
+    if (this.status === 'READY') return;
     this._status = 'READY';
+    this.emit('ready', this.name);
   }
 
   /**

@@ -1,30 +1,30 @@
-import { RedisConnect } from '../../dependencies.ts';
-import type { Redis } from '../../dependencies.ts';
+import { type Redis, RedisConnect } from '../../dependencies.ts';
 
 import type { OptionKeys } from '../../options/mod.ts';
-import type { CacheValue, RedisCacherOptions } from '../types/mod.ts';
+import type { CacheValue, RedisOptions } from '../types/mod.ts';
 import { AbstractCache } from '../AbstractCache.ts';
-import { Cacher } from '../Cacher.ts';
 
-import { CacherConfigError, CacherConnectionError } from '../errors/mod.ts';
+import { CacherConfigError, CacherInitError } from '../errors/mod.ts';
 
-export class RedisCacher extends AbstractCache<RedisCacherOptions> {
+export class RedisCache extends AbstractCache<RedisOptions> {
   private _client: Redis | undefined = undefined;
-  protected _connectionError: CacherConnectionError | undefined = undefined;
+
   /**
    * Constructs a new instance of the MemoryCacher class.
    *
    * @param name - The name of the cache. This is used to namespace the cache.
    * @param options - The options to initialize the cache with.
    */
-  constructor(name: string, options: OptionKeys<RedisCacherOptions>) {
+  constructor(name: string, options: OptionKeys<RedisOptions>) {
     if (options.engine !== 'REDIS') {
-      throw new CacherConfigError(
-        `Invalid engine: '${options.engine}' passed for Redis Cache.`,
-      );
+      throw new CacherConfigError({
+        engine: 'REDIS',
+        key: 'engine',
+        config: name,
+        value: options.engine,
+      });
     }
     super(name, options);
-    Cacher.register(name, this as unknown as AbstractCache);
   }
 
   /**
@@ -71,7 +71,11 @@ export class RedisCacher extends AbstractCache<RedisCacherOptions> {
     if (!value) {
       return undefined;
     }
-    return JSON.parse(value) as CacheValue<T>;
+    const fv = JSON.parse(value) as CacheValue<T>;
+    if (fv.window) {
+      this._client?.expire(key, fv.expiry);
+    }
+    return fv;
   }
 
   /**
@@ -93,7 +97,7 @@ export class RedisCacher extends AbstractCache<RedisCacherOptions> {
   protected async _clear(): Promise<void> {
     await this._init();
     // Get all keys belonging to this cache
-    const keys = await this._client?.keys(`${this._name}:*`);
+    const keys = await this._client?.keys(`${this.name}:*`);
     if (keys && keys.length > 0) {
       await this._client?.del(...keys);
     }
@@ -105,9 +109,6 @@ export class RedisCacher extends AbstractCache<RedisCacherOptions> {
    * @returns A Promise that resolves when the Redis client is initialized.
    */
   protected async _init(): Promise<void> {
-    if (this._connectionError) {
-      throw this._connectionError;
-    }
     if (this._client) {
       return;
     }
@@ -118,18 +119,11 @@ export class RedisCacher extends AbstractCache<RedisCacherOptions> {
         password: this._getOption('password'),
         db: this._getOption('db'),
         tls: this._getOption('tls'),
-        maxRetryCount: 3,
+        maxRetryCount: 1,
       });
       this._status = 'READY';
     } catch (error) {
-      const e = new CacherConnectionError(
-        error.message,
-        this._getAllOptions(),
-        error,
-      );
-      this._connectionError = e;
-      this._client = undefined;
-      throw e;
+      throw new CacherInitError({ engine: 'REDIS', config: this.name }, error);
     }
   }
 
@@ -139,6 +133,7 @@ export class RedisCacher extends AbstractCache<RedisCacherOptions> {
   public async close(): Promise<void> {
     if (this._client) {
       await this._client?.close();
+      this._client = undefined;
       this._status = 'INIT';
     }
   }

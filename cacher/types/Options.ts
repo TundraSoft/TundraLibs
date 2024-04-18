@@ -1,4 +1,4 @@
-export type AbstractCacherOptions = {
+export type CacherOptions = {
   engine: 'MEMORY' | 'REDIS';
   defaultExpiry?: number;
 };
