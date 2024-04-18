@@ -3,8 +3,8 @@ import {
   RESTlerBaseError,
   RESTlerRequest,
   RESTlerResponse,
-} from '../mod.ts';
-import { cryptoKey } from '../../id/mod.ts';
+} from '../../mod.ts';
+import { cryptoKey } from '../../../id/mod.ts';
 
 let auth = cryptoKey(32);
 const mock = (port = 8000) => {

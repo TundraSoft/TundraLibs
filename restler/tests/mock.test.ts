@@ -1,4 +1,4 @@
-import { MockTest, server } from './mockServer.ts';
+import { MockTest, server } from './fixtures/mockServer.ts';
 import { getFreePort } from '../../utils/mod.ts';
 import {
   RESTlerAuthFailure,

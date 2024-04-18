@@ -1,4 +1,4 @@
-import { cryptoKey } from '../../id/mod.ts';
+import { cryptoKey } from '../../../id/mod.ts';
 
 export const server = (port = 8000) => {
   const users: { id: number; email: string }[] = [{
@@ -82,7 +82,7 @@ export const server = (port = 8000) => {
   return serv;
 };
 
-import { RESTler, RESTlerRequest } from '../mod.ts';
+import { RESTler, RESTlerRequest } from '../../mod.ts';
 
 export class MockTest extends RESTler {
   public authKey: string | undefined = undefined;

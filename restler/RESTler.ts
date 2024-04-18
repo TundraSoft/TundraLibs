@@ -127,41 +127,19 @@ export abstract class RESTler<
     // Assign headers
     request.headers = { ...this._defaultHeaders, ...request.headers };
     // Create the URL
-    const endpoint = this._makeURL(request.endpoint as RESTlerEndpoint),
-      resp: RESTlerResponse<RespBody> = {
-        endpoint: request.endpoint as RESTlerEndpoint,
-        headers: {},
-        status: 200,
-        authFailure: false,
-        timeTaken: 0,
-      };
+    const resp: RESTlerResponse<RespBody> = {
+      endpoint: request.endpoint as RESTlerEndpoint,
+      headers: {},
+      status: 200,
+      authFailure: false,
+      timeTaken: 0,
+    };
     let finalError: RESTlerBaseError | undefined;
     this.emit('request', request);
     // We now attempt to make the request, if it fails, we retry once
     const start = performance.now();
-    const controller = new AbortController(),
-      timeout = setTimeout(
-        () => controller.abort(),
-        request.timeout || this._getOption('timeout'),
-      );
     try {
-      await this._authInjector(request);
-      const fetchOptions: RequestInit & { client?: Deno.HttpClient } = {
-        method: request.endpoint.method,
-        headers: request.headers,
-        signal: controller.signal,
-        body: request.body ? this._makeRequestBody(request.body) : undefined,
-        client: this._httpClientOptions(),
-      };
-      let interimResp: Response;
-      try {
-        interimResp = await fetch(endpoint, fetchOptions);
-      } finally {
-        clearTimeout(timeout);
-        if (this._hasOption('certChain') || this._hasOption('certKey')) {
-          fetchOptions.client?.close();
-        }
-      }
+      const interimResp = await this.__doRequest(request);
       resp.timeTaken = performance.now() - start;
       resp.status = interimResp.status;
       resp.headers = Object.fromEntries(interimResp.headers.entries());
@@ -178,11 +156,7 @@ export abstract class RESTler<
         );
       }
       return await this._processResponse(resp);
-      // return resp;
     } catch (e) {
-      if (timeout) {
-        clearTimeout(timeout);
-      }
       resp.timeTaken = performance.now() - start;
       if (e.name === 'AbortError') {
         // Emit timeout event
@@ -201,8 +175,6 @@ export abstract class RESTler<
             await this._authenticate(request);
             // Retry the request
             return await this._makeRequest<RespBody>(request);
-          } catch (_e2) {
-            // Dont do anything
           } finally {
             this._authInitiated = false;
           }
@@ -354,7 +326,7 @@ export abstract class RESTler<
   }
   //#endregion Override these methods
   //#region Private methods
-  private _httpClientOptions(): Deno.HttpClient | undefined {
+  private __httpClientOptions(): Deno.HttpClient | undefined {
     if (this._hasOption('certChain') || this._hasOption('certKey')) {
       // @Version check - Remove later on
       const ver = semver.parse(Deno.version.deno);
@@ -371,5 +343,30 @@ export abstract class RESTler<
       }
     }
     return undefined;
+  }
+
+  private async __doRequest(request: RESTlerRequest): Promise<Response> {
+    const endpoint = this._makeURL(request.endpoint as RESTlerEndpoint);
+    const controller = new AbortController(),
+      timeout = setTimeout(
+        () => controller.abort(),
+        request.timeout || this._getOption('timeout'),
+      );
+    await this._authInjector(request);
+    const fetchOptions: RequestInit & { client?: Deno.HttpClient } = {
+      method: request.endpoint.method,
+      headers: request.headers,
+      signal: controller.signal,
+      body: request.body ? this._makeRequestBody(request.body) : undefined,
+      client: this.__httpClientOptions(),
+    };
+    try {
+      return await fetch(endpoint, fetchOptions);
+    } finally {
+      clearTimeout(timeout);
+      if (fetchOptions.client) {
+        fetchOptions.client.close();
+      }
+    }
   }
 }
