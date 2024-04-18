@@ -115,5 +115,5 @@ Deno.test('Cacher.Redis', async (t) => {
     assertRejects(async () => { const a = new RedisCache('tester', test as RedisOptions); await a.set('df', 'sd') }, CacherInitError);
   });
 
-  // cacher.close();
+  cacher.close();
 });
