@@ -346,13 +346,13 @@ export abstract class RESTler<
   }
 
   private async __doRequest(request: RESTlerRequest): Promise<Response> {
-    const endpoint = this._makeURL(request.endpoint as RESTlerEndpoint);
-    const controller = new AbortController(),
+    await this._authInjector(request);
+    const endpoint = this._makeURL(request.endpoint as RESTlerEndpoint),
+      controller = new AbortController(),
       timeout = setTimeout(
         () => controller.abort(),
         request.timeout || this._getOption('timeout'),
       );
-    await this._authInjector(request);
     const fetchOptions: RequestInit & { client?: Deno.HttpClient } = {
       method: request.endpoint.method,
       headers: request.headers,

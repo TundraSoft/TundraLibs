@@ -2,6 +2,7 @@ import {
   assertEquals,
   assertInstanceOf,
   assertThrows,
+  assert
 } from '../../dev.dependencies.ts';
 import { envArgs } from '../../utils/envArgs.ts';
 
@@ -60,6 +61,16 @@ Deno.test('Cacher.Manager', async (t) => {
       () => Cacher.create('unsupported', { engine: 'UNKNOWN' } as unknown as CacherOptions),
       UnsupportedCacherError,
     );
+    try {
+      Cacher.create('unsupported', { engine: 'UNKNOWN' } as unknown as CacherOptions);
+    } catch (e) {
+      if (e instanceof UnsupportedCacherError) {
+        assertEquals(e.name, 'UnsupportedCacherError');
+        assertEquals(e.library, 'Cacher');
+        assertEquals(e.config, 'unsupported');
+        assert(e.toString());
+      }
+    }
   });
 
   await t.step('Throw error on unknown engine', () => {
@@ -67,6 +78,16 @@ Deno.test('Cacher.Manager', async (t) => {
       () => Cacher.get('sdljfhb'),
       CacherNotFound,
     );
+    try {
+      Cacher.get('sdljfhb');
+    } catch (e) {
+      if (e instanceof CacherNotFound) {
+        assertEquals(e.name, 'CacherNotFound');
+        assertEquals(e.library, 'Cacher');
+        assertEquals(e.config, 'sdljfhb');
+        assert(e.toString());
+      }
+    }
   });
 
 });

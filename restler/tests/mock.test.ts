@@ -7,78 +7,57 @@ import {
   RESTlerUnsupportedContentType,
 } from '../mod.ts';
 import {
-  afterAll,
   assert,
   assertEquals,
   assertRejects,
-  beforeAll,
-  describe,
-  it,
 } from '../../dev.dependencies.ts';
 
-// Added for compat with 1.40 and before
-describe({
-  name: 'RESTler',
-  sanitizeExit: false,
-  sanitizeOps: false,
-  sanitizeResources: false,
-}, () => {
-  describe('Mock Sample', () => {
-    let port: number;
-    let mockServer: Deno.HttpServer,
-      mock: MockTest;
-
-    beforeAll(() => {
-      port = getFreePort();
-      mockServer = server(port);
-      mock = new MockTest(port);
-    });
-
-    afterAll(async () => {
-      await mockServer.shutdown();
-    });
-
-    it('Should list name of class', () => {
-      assertEquals(mock.name, 'mock');
-    });
-
-    it('Should list users', async () => {
-      const users = await mock.listUsers();
-      assertEquals(users.length, 1);
-    });
-
-    it('authentication must work', async () => {
-      mock.doAuth = true;
-      const user = await mock.createUser('test@example.com');
-      assertEquals(user.email, 'test@example.com');
-    });
-
-    it('should throw auth error', async () => {
-      mock.doAuth = false;
-      mock.authKey = undefined;
-      await assertRejects(() => mock.createUser('sdfsdf'), RESTlerAuthFailure);
-      try {
-        await mock.createUser('sdfsdf');
-      } catch (e) {
-        assertEquals(e.message, 'Authentication failed');
-        assert((e as RESTlerAuthFailure).url);
-        // assert((e as RESTlerAuthFailure).vendor);
-        // assert((e as RESTlerAuthFailure).version);
-        assert((e as RESTlerAuthFailure).method);
-        assert((e as RESTlerAuthFailure).toString());
-      }
-    });
-
-    it('should timeout', async () => {
-      await assertRejects(() => mock.timeout(), RESTlerTimeoutError);
-    });
-
-    it('should throw error on unknown content type', async () => {
-      await assertRejects(() => mock.unknown(), RESTlerUnsupportedContentType);
-    });
-
-    it('Unhandled error', async () => {
-      await assertRejects(() => mock.unhandled(), RESTlerUnhandledError);
-    });
+Deno.test('RESTler.Mock', async (t) => {
+  const port = getFreePort();
+  const mockServer = server(port);
+  const mock = new MockTest(port);
+  await t.step('Should list name of class', () => {
+    assertEquals(mock.name, 'mock');
   });
+
+  await t.step('Should list users', async () => {
+    const users = await mock.listUsers();
+    assertEquals(users.length, 1);
+  });
+
+  await t.step('authentication must work', async () => {
+    mock.doAuth = true;
+    const user = await mock.createUser('test@example.com');
+    assertEquals(user.email, 'test@example.com');
+  });
+
+  await t.step('should throw auth error', async () => {
+    mock.doAuth = false;
+    mock.authKey = undefined;
+    await assertRejects(() => mock.createUser('sdfsdf'), RESTlerAuthFailure);
+    try {
+      await mock.createUser('sdfsdf');
+    } catch (e) {
+      assertEquals(e.message, 'Authentication failed');
+      assert((e as RESTlerAuthFailure).url);
+      // assert((e as RESTlerAuthFailure).vendor);
+      // assert((e as RESTlerAuthFailure).version);
+      assert((e as RESTlerAuthFailure).method);
+      assert((e as RESTlerAuthFailure).toString());
+    }
+  });
+
+  await t.step('should timeout', async () => {
+    await assertRejects(() => mock.timeout(), RESTlerTimeoutError);
+  });
+
+  await t.step('should throw error on unknown content type', async () => {
+    await assertRejects(() => mock.unknown(), RESTlerUnsupportedContentType);
+  });
+
+  await t.step('Unhandled error', async () => {
+    await assertRejects(() => mock.unhandled(), RESTlerUnhandledError);
+  });
+
+  await mockServer.shutdown();
 });

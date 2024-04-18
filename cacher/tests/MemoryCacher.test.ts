@@ -19,6 +19,7 @@ Deno.test('Cacher.Memory', async (t) => {
     const result = await cacher.get(key);
 
     assertEquals(result, value);
+    assertEquals(cacher.engine, 'MEMORY');
   });
 
   await t.step('should return undefined for non-existent keys', async () => {

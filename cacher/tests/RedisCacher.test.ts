@@ -24,6 +24,7 @@ Deno.test('Cacher.Redis', async (t) => {
     const result = await cacher.get(key);
 
     assertEquals(result, value);
+    assertEquals(cacher.engine, 'REDIS');
   });
 
   await t.step('should return undefined for non-existent keys', async () => {
@@ -112,7 +113,12 @@ Deno.test('Cacher.Redis', async (t) => {
       host: 'localhost',
       port: 1234,
     }
-    assertRejects(async () => { const a = new RedisCache('tester', test as RedisOptions); await a.set('df', 'sd') }, CacherInitError);
+    const t = new RedisCache('tester2', test as RedisOptions);
+    assertRejects(async () => { await t.set('df', 'sd') }, CacherInitError);
+    assertRejects(async () => { await t.has('df') }, CacherInitError);
+    assertRejects(async () => { await t.get('df') }, CacherInitError);
+    assertRejects(async () => { await t.delete('df') }, CacherInitError);
+    assertRejects(async () => { await t.clear() }, CacherInitError);
   });
 
   cacher.close();
