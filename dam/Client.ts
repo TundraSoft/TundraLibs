@@ -237,7 +237,7 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
 
   protected _standardizeQuery(query: Query): Query {
     // Remove trailing ; and add it
-    const sql = query.sql.trim().replace(/;+$/, '') + ';';
+    const sql = query.sql.trim().replace(/;$/, '') + ';';
     const keys = Object.keys(query.params || {});
     const missing: string[] = [];
     const matches = sql.match(/:(\w+):/g);

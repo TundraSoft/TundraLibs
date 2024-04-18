@@ -1,6 +1,5 @@
 import { HTTPMethods, path } from '../../dependencies.ts';
 import { TundraLibError } from '../../utils/TundraLibError.ts';
-// import type { TundraLibErrorMetaTags } from '../../utils/mod.ts';
 
 export class RESTlerBaseError extends TundraLibError {
   public readonly library = 'RESTler';

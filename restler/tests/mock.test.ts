@@ -3,6 +3,7 @@ import { getFreePort } from '../../utils/mod.ts';
 import {
   RESTlerAuthFailure,
   RESTlerTimeoutError,
+  RESTlerUnhandledError,
   RESTlerUnsupportedContentType,
 } from '../mod.ts';
 import {
@@ -74,6 +75,10 @@ describe({
 
     it('should throw error on unknown content type', async () => {
       await assertRejects(() => mock.unknown(), RESTlerUnsupportedContentType);
+    });
+
+    it('Unhandled error', async () => {
+      await assertRejects(() => mock.unhandled(), RESTlerUnhandledError);
     });
   });
 });

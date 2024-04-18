@@ -126,7 +126,6 @@ export abstract class RESTler<
     });
     // Assign headers
     request.headers = { ...this._defaultHeaders, ...request.headers };
-
     // Create the URL
     const endpoint = this._makeURL(request.endpoint as RESTlerEndpoint),
       resp: RESTlerResponse<RespBody> = {
@@ -151,33 +150,12 @@ export abstract class RESTler<
         method: request.endpoint.method,
         headers: request.headers,
         signal: controller.signal,
-        body: (request.body === undefined)
-          ? undefined
-          : (request.body instanceof FormData ||
-              typeof request.body === 'string')
-          ? request.body
-          : this._stringifyBody(request.body),
+        body: request.body ? this._makeRequestBody(request.body) : undefined,
+        client: this._httpClientOptions(),
       };
-      if (this._hasOption('certChain') || this._hasOption('certKey')) {
-        // @Version check - Remove later on
-        const ver = semver.parse(Deno.version.deno);
-        if (semver.lt(ver, semver.parse('1.41.0'))) {
-          const cert: Record<string, string | undefined> = {};
-          cert.certChain = this._getOption('certChain');
-          cert.privateKey = this._getOption('certKey');
-          fetchOptions.client = Deno.createHttpClient(cert);
-        } else {
-          const cert: Record<string, string | undefined> = {};
-          cert.cert = this._getOption('certChain');
-          cert.key = this._getOption('certKey');
-          fetchOptions.client = Deno.createHttpClient(cert);
-        }
-      }
       let interimResp: Response;
       try {
         interimResp = await fetch(endpoint, fetchOptions);
-      } catch (e) {
-        throw e;
       } finally {
         clearTimeout(timeout);
         if (this._hasOption('certChain') || this._hasOption('certKey')) {
@@ -234,9 +212,9 @@ export abstract class RESTler<
         finalError = new RESTlerUnhandledError(
           e.message,
           request.endpoint as RESTlerEndpoint,
+          e,
         );
       } else {
-        // We are not getting the instance type as RESTlerBaseError, instead of that, we are getting the VendorNameBaseError, due to which the finalError's type is undefined
         finalError = e;
       }
       // Emit error event
@@ -267,22 +245,15 @@ export abstract class RESTler<
     response: Response,
   ): Promise<RespBody> {
     try {
-      // if (this._authStatus.includes(response.status)) {
-      //   response.body?.cancel();
-      //   throw new RESTlerAuthFailure(
-      //     this._name,
-      //     endpoint as RESTlerEndpoint,
-      //   );
-      // }
       const contentType = response.headers.get('content-type');
-      // @TODO: Handle other content types, Add support for auto detection of content type
       if (!contentType) {
-        throw new RESTlerUnsupportedContentType(
-          'N/A',
-          endpoint,
-        );
-      }
-      if (contentType.includes('json')) {
+        const resp = await response.text();
+        try {
+          return JSON.parse(resp) as RespBody;
+        } catch {
+          return resp as unknown as RespBody;
+        }
+      } else if (contentType.includes('application/json')) {
         return await response.json() as RespBody;
       } else if (
         contentType.includes('text/xml') ||
@@ -291,12 +262,6 @@ export abstract class RESTler<
         return XMLParse(await response.text()) as unknown as RespBody;
       } else if (contentType.includes('text')) {
         return await response.text() as unknown as RespBody;
-        // } else if (contentType.includes('text/html')) {
-        //   return await response.text() as unknown as RespBody;
-        // } else if (contentType.includes('application/octet-stream')) {
-        //   return await response.blob() as unknown as RespBody;
-        // } else if (contentType.includes('multipart/form-data')) {
-        //   return await response.formData() as unknown as RespBody;
       } else {
         // Ensure we discard the body
         throw new RESTlerUnsupportedContentType(
@@ -328,6 +293,7 @@ export abstract class RESTler<
   ): RESTlerResponse<RespBody> | Promise<RESTlerResponse<RespBody>> {
     return response;
   }
+
   /**
    * The method that injects authentication into the request. This method is meant
    * to be overridden by the child classes.
@@ -371,5 +337,39 @@ export abstract class RESTler<
   ): string {
     return JSON.stringify(body);
   }
-  //#endregion
+
+  protected _makeRequestBody(
+    body: FormData | string | Record<string, unknown> | Record<
+      string,
+      unknown
+    >[],
+  ): string | FormData {
+    if (body instanceof FormData) {
+      return body;
+    } else if (typeof body === 'string') {
+      return body;
+    } else {
+      return this._stringifyBody(body);
+    }
+  }
+  //#endregion Override these methods
+  //#region Private methods
+  private _httpClientOptions(): Deno.HttpClient | undefined {
+    if (this._hasOption('certChain') || this._hasOption('certKey')) {
+      // @Version check - Remove later on
+      const ver = semver.parse(Deno.version.deno);
+      if (semver.lt(ver, semver.parse('1.41.0'))) {
+        const cert: Record<string, string | undefined> = {};
+        cert.certChain = this._getOption('certChain');
+        cert.privateKey = this._getOption('certKey');
+        return Deno.createHttpClient(cert);
+      } else {
+        const cert: Record<string, string | undefined> = {};
+        cert.cert = this._getOption('certChain');
+        cert.key = this._getOption('certKey');
+        return Deno.createHttpClient(cert);
+      }
+    }
+    return undefined;
+  }
 }

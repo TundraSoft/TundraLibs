@@ -63,6 +63,12 @@ export const server = (port = 8000) => {
         status: 200,
         headers: respHeaders,
       });
+    } else if (path === '/unhandled') {
+      respHeaders.set('content-type', 'application/octet-stream');
+      return new Response('{"message": "Unknown"}', {
+        status: 200,
+        headers: respHeaders,
+      });
     } else {
       return new Response(JSON.stringify({ message: 'Not found' }), {
         status: 404,
@@ -120,6 +126,9 @@ export class MockTest extends RESTler {
   }
 
   protected _authInjector(request: RESTlerRequest): void {
+    if(request.endpoint.path === '/unhandled') {
+      throw new RangeError('Unhandled');
+    }
     if (request.endpoint.method === 'POST' && this.authKey) {
       if (!request.headers) {
         request.headers = {};
@@ -171,6 +180,12 @@ export class MockTest extends RESTler {
   async unknown(): Promise<void> {
     await this._makeRequest({
       endpoint: this._buildEndpoint('GET', '/unknown'),
+    });
+  }
+
+  async unhandled(): Promise<void> {
+    await this._makeRequest({
+      endpoint: this._buildEndpoint('GET', '/unhandled'),
     });
   }
 }
