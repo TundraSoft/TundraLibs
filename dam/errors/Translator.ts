@@ -1,4 +1,3 @@
-import type { QueryTypes } from '../types/mod.ts';
 import { DAMError } from './Base.ts';
 
 export class TranslatorError extends DAMError {
