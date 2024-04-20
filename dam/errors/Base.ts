@@ -1,8 +1,8 @@
 import { TundraLibError } from '../../utils/TundraLibError.ts';
 
-export class DAMBaseError extends TundraLibError {
+export class DAMError extends TundraLibError {
   public readonly library = 'DAM';
-  public readonly dialect: string;
+  declare meta: { dialect: string } & Record<string, unknown>;
 
   constructor(
     message: string,
@@ -10,7 +10,10 @@ export class DAMBaseError extends TundraLibError {
     cause?: Error,
   ) {
     super(message, meta, cause);
-    this.dialect = meta.dialect as string || 'N/A';
+  }
+
+  get dialect(): string {
+    return this.meta.dialect;
   }
 
   toString(): string {

@@ -6,6 +6,7 @@ import { PostgresTranslator } from './Translator.ts';
 import {
   DAMClientError,
   DAMConfigError,
+  DAMConnectionError,
   DAMQueryError,
 } from '../../errors/mod.ts';
 import type { ClientEvents, PostgresOptions, Query } from '../../types/mod.ts';
@@ -18,6 +19,7 @@ import {
 } from '../../../dependencies.ts';
 
 export class PostgresClient extends AbstractClient<PostgresOptions> {
+  declare readonly dialect = 'POSTGRES';
   public translator = new PostgresTranslator();
   private _client: PGClient | undefined = undefined;
 
@@ -36,55 +38,6 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
       port: 5432,
       poolSize: 50,
     };
-    // Check the config
-    if (options.dialect !== 'POSTGRES') {
-      throw new DAMConfigError(
-        `Invalid/incorrect dialect '${options.dialect}'.`,
-        { name: name, dialect: options.dialect, item: 'dialect' },
-      );
-    }
-    if (options.host === undefined) {
-      throw new DAMConfigError(`Hostname is required`, {
-        name: name,
-        dialect: options.dialect,
-        item: 'host',
-      });
-    }
-    if (options.port && (options.port < 1024 || options.port > 65535)) {
-      throw new DAMConfigError(`Port value must be between 1024 and 65535`, {
-        name: name,
-        dialect: options.dialect,
-        item: 'port',
-      });
-    }
-    if (options.username === undefined || options.username === '') {
-      throw new DAMConfigError(`Username is required`, {
-        name: name,
-        dialect: options.dialect,
-        item: 'user',
-      });
-    }
-    if (options.password === undefined || options.password === '') {
-      throw new DAMConfigError(`Password is required`, {
-        name: name,
-        dialect: options.dialect,
-        item: 'password',
-      });
-    }
-    if (options.database === undefined || options.database === '') {
-      throw new DAMConfigError(`Database name is required`, {
-        name: name,
-        dialect: options.dialect,
-        item: 'database',
-      });
-    }
-    if (options.poolSize && options.poolSize < 1) {
-      throw new DAMConfigError(`Postgres pool size must be greater than 0`, {
-        name: name,
-        dialect: options.dialect,
-        item: 'poolSize',
-      });
-    }
     super(name, { ...options, ...def });
   }
 
@@ -92,24 +45,68 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
     query = super._standardizeQuery(query);
     return {
       sql: query.sql.replace(
-        /:([a-zA-Z0-9\_]+):/g,
+        /:([a-zA-Z0-9_]+):/g,
         (_, word) => `$${word}`,
       ),
       params: query.params,
     };
   }
 
-  //#region Abstract methods
-  /**
-   * Connects to the SQLite database.
-   * If the client is already connected, this method does nothing.
-   */
-  protected async _connect() {
-    if (this._status === 'CONNECTED' && this._client !== undefined) {
-      return;
+  protected _validateConfig(options: PostgresOptions): void {
+    if (options.dialect !== 'POSTGRES') {
+      throw new DAMConfigError('Invalid dialect provided for Postgres Client', {
+        dialect: this.dialect,
+        config: this.name,
+        item: 'dialect',
+        value: options.dialect,
+      });
     }
-    // Ok lets connect
-    const opt: PGClientOptions = {
+    if (options.host === undefined || options.host.trim() === '') {
+      throw new DAMConfigError(`Hostname is required`, {
+        config: this.name,
+        dialect: this.dialect,
+        item: 'host',
+      });
+    }
+    if (options.port && (options.port < 1024 || options.port > 65535)) {
+      throw new DAMConfigError(`Port value must be between 1024 and 65535`, {
+        config: this.name,
+        dialect: this.dialect,
+        item: 'port',
+      });
+    }
+    if (options.username === undefined || options.username.trim() === '') {
+      throw new DAMConfigError(`Username is required`, {
+        config: this.name,
+        dialect: this.dialect,
+        item: 'username',
+      });
+    }
+    if (options.password === undefined || options.password.trim() === '') {
+      throw new DAMConfigError(`Password is required`, {
+        config: this.name,
+        dialect: this.dialect,
+        item: 'password',
+      });
+    }
+    if (options.database === undefined || options.database.trim() === '') {
+      throw new DAMConfigError(`Database name is required`, {
+        config: this.name,
+        dialect: this.dialect,
+        item: 'database',
+      });
+    }
+    if (options.poolSize && options.poolSize < 1) {
+      throw new DAMConfigError(`Pool size must be greater than 0`, {
+        config: this.name,
+        dialect: this.dialect,
+        item: 'poolSize',
+      });
+    }
+  }
+
+  protected _makeConfig(): PGClientOptions {
+    const conf: PGClientOptions = {
       applicationName: this.name,
       connection: {
         attempts: 1,
@@ -122,20 +119,38 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
       database: this._getOption('database'),
       host_type: 'tcp',
     };
+
     const tls = this._getOption('tls');
     if (tls) {
-      opt.tls = {};
+      conf.tls = {};
       if (tls.enabled) {
-        opt.tls.enabled = tls.enabled;
+        conf.tls.enabled = tls.enabled;
       }
       if (tls.certificates) {
-        opt.tls.caCertificates = tls.certificates;
+        conf.tls.caCertificates = tls.certificates;
       }
       if (tls.verify) {
-        opt.tls.enforce = tls.verify;
+        conf.tls.enforce = tls.verify;
       }
     }
-    this._client = new PGClient(opt, this._getOption('poolSize') || 10, true);
+
+    return conf;
+  }
+  //#region Abstract methods
+  /**
+   * Connects to the SQLite database.
+   * If the client is already connected, this method does nothing.
+   */
+  protected async _connect() {
+    if (this._status === 'CONNECTED' && this._client !== undefined) {
+      return;
+    }
+    // Ok lets connect
+    this._client = new PGClient(
+      this._makeConfig(),
+      this._getOption('poolSize') || 10,
+      true,
+    );
     let client: PGPoolClient | undefined = undefined;
     // Test connection
     try {
@@ -145,26 +160,20 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
         // 28P01: invalid password or user
         // 3D000: database does not exist
         //
-        // console.log(err.fields.code);
-        throw new DAMClientError(
-          'Unable to connect to database. Please check config',
+        throw new DAMConnectionError(
           {
             dialect: this.dialect,
-            name: this.name,
-            code: err.fields.code,
-            message: err.fields.message,
+            config: this.name,
+            errorCode: err.fields.code,
+            errorMessage: err.fields.message,
           },
           err,
         );
       }
-      // console.log(err.name);
-      throw new DAMClientError(
-        'Unable to connect to database. Please check config',
+      throw new DAMConnectionError(
         {
           dialect: this.dialect,
-          name: this.name,
-          message: err.message,
-          src: err.name,
+          config: this.name,
         },
         err,
       );
@@ -191,18 +200,16 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
     R extends Record<string, unknown> = Record<string, unknown>,
   >(query: Query): Promise<{ count: number; rows: R[] }> {
     if (this._status !== 'CONNECTED' || this._client === undefined) {
-      throw new DAMQueryError('Client not connected', {
+      throw new DAMClientError('Client not connected', {
         dialect: this.dialect,
-        name: this.name,
-        query: query.sql,
-        params: query.params,
+        config: this.name,
       });
     }
     // Ok lets first build the queries if they are not raw query
     const rawQuery: Query = this._standardizeQuery(
       query,
     );
-    const client = await this._client.connect();
+    const client: PGPoolClient = await this._client.connect();
     try {
       const res = await client.queryObject<R>(
         rawQuery.sql,
@@ -213,19 +220,10 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
         rows: res.rows,
       };
     } catch (err) {
-      if (err instanceof PostgresError) {
-        throw new DAMQueryError(err.message, {
-          dialect: this.dialect,
-          name: this.name,
-          query: rawQuery.sql,
-          params: rawQuery.params,
-          fields: err.fields,
-        }, err);
-      }
-      throw new DAMQueryError(err.message, {
+      throw new DAMQueryError({
         dialect: this.dialect,
-        name: this.name,
-        query: rawQuery.sql,
+        config: this.name,
+        sql: rawQuery.sql,
         params: rawQuery.params,
       }, err);
     } finally {

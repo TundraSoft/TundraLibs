@@ -1,17 +1,16 @@
-import { DAMBaseError } from './Base.ts';
+import { DAMError } from './Base.ts';
 
-export class DAMClientError extends DAMBaseError {
-  public readonly config: string;
+export class DAMClientError extends DAMError {
+  declare meta: { dialect: string; config: string };
   constructor(
     message: string,
-    meta: { name: string; dialect: string } & Record<string, unknown>,
+    meta: { dialect: string; config: string } & Record<string, unknown>,
     cause?: Error,
   ) {
     super(message, meta, cause);
-    this.config = meta.name as string || 'N/A';
   }
 
-  toString(): string {
-    return `${this.timeStamp.toISOString()} [${this.library} ${this.dialect} ${this.config} ${this.name}] ${this.message}`;
+  get config(): string {
+    return this.meta.config;
   }
 }

@@ -17,11 +17,18 @@ import type {
   UpdateQuery,
 } from './types/mod.ts';
 
-import { DAMBaseError, DAMClientError, DAMQueryError } from './errors/mod.ts';
+import {
+  DAMClientError,
+  DAMConfigError,
+  DAMConnectionError,
+  DAMError,
+  DAMMissingParams,
+  DAMQueryError,
+} from './errors/mod.ts';
 
 export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
   extends Options<O, ClientEvents> {
-  public readonly dialect: Dialects;
+  declare readonly dialect: Dialects;
   public readonly name: string;
   declare public translator: AbstractTranslator;
   protected _status: ClientStatus = 'READY';
@@ -32,7 +39,7 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
     } as Partial<O>;
     super(options, def);
     this.name = name.trim().toLowerCase();
-    this.dialect = options.dialect;
+    this._validateConfig(options);
     if (!DAM.hasConfig(this.name)) {
       DAM.addConfig(this.name, options);
     }
@@ -63,12 +70,12 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
       this.emit('connect', this.name);
     } catch (err) {
       this._status = 'ERROR';
-      let nErr: DAMBaseError;
-      if (err instanceof DAMBaseError) {
+      let nErr: DAMError;
+      if (err instanceof DAMError) {
         nErr = err;
       } else {
-        nErr = new DAMClientError(err.message, {
-          name: this.name,
+        nErr = new DAMConnectionError({
+          config: this.name,
           dialect: this.dialect,
         }, err);
       }
@@ -93,12 +100,12 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
       this.emit('close', this.name);
     } catch (err) {
       this._status = 'ERROR';
-      let nErr: DAMBaseError;
-      if (err instanceof DAMBaseError) {
+      let nErr: DAMError;
+      if (err instanceof DAMError) {
         nErr = err;
       } else {
         nErr = new DAMClientError(err.message, {
-          name: this.name,
+          config: this.name,
           dialect: this.dialect,
         });
       }
@@ -138,14 +145,14 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
       }
       return result;
     } catch (err) {
-      let fErr: DAMBaseError;
-      if (err instanceof DAMBaseError) {
+      let fErr: DAMError;
+      if (err instanceof DAMError) {
         fErr = err;
       } else {
-        fErr = new DAMQueryError(err.message, {
+        fErr = new DAMQueryError({
           dialect: this.dialect,
-          name: this.name,
-          query: query.sql,
+          config: this.name,
+          sql: query.sql,
           params: query.params,
         }, err);
       }
@@ -224,9 +231,20 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
   }
 
   //#region Protected methods
+  protected _validateConfig(options: ClientOptions) {
+    if (['POSTGRES', 'MARIA', 'MONGO', 'SQLITE'].includes(options.dialect)) {
+      throw new DAMConfigError('Unsupported dialect ${value}', {
+        dialect: this.dialect,
+        config: this.name,
+        item: 'dialect',
+        value: this.dialect,
+      });
+    }
+  }
+
   protected _detectQuery(sql: string): QueryTypes | 'UNKNOWN' {
     const regex =
-      /^(SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|CREATE\s+SCHEMA|DROP\s+SCHEMA|CREATE\s+(MATERIALISED)?\s+VIEW|ALTER\s+(MATERIALISED)?\s+VIEW|DROP\s+(MATERIALISED)?\s+VIEW|TRUNCATE|BEGIN|COMMIT|ROLLBACK|SAVEPOINT)\s+/i; // NOSONAR
+      /^(SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|CREATE\s+SCHEMA|DROP\s+SCHEMA|CREATE\s+(MATERIALISED)?\s+VIEW|ALTER\s+(MATERIALISED)?\s+VIEW|DROP\s+(MATERIALISED)?\s+VIEW|TRUNCATE|BEGIN|COMMIT|ROLLBACK|SAVEPOINT)\s+/i;
     const matchedValue = sql.match(regex)?.[0].trim().replace(
       /MATERIALISED/i,
       '',
@@ -250,11 +268,12 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
       }
     }
     if (missing.length > 0) {
-      throw new DAMQueryError(`Missing parameter(s) ${missing.join(', ')}`, {
+      throw new DAMMissingParams({
         dialect: this.dialect,
-        name: this.name,
-        query: query.sql,
+        config: this.name,
+        sql: query.sql,
         params: query.params,
+        missing: missing,
       });
     }
     return {

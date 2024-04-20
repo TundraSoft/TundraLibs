@@ -1,5 +1,13 @@
-export { DAMBaseError } from './Base.ts';
+export {
+  DAMConfigError,
+  DAMConnectionError,
+  DAMMissingParams,
+  DAMQueryError,
+} from './client/mod.ts';
+export {
+  IncorrectType,
+  InvalidDefinition,
+  MissingDefinition,
+} from './translator/mod.ts';
+export { DAMError } from './Base.ts';
 export { DAMClientError } from './Client.ts';
-export { DAMConfigError } from './Config.ts';
-export { DAMQueryError } from './Query.ts';
-export { DAMTranslatorBaseError } from './Translator.ts';

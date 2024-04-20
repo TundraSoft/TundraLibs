@@ -3,9 +3,10 @@ import { type OptionKeys } from '../../../options/mod.ts';
 import { AbstractClient } from '../../Client.ts';
 import { SQLiteTranslator } from './Translator.ts';
 import {
-  DAMBaseError,
-  DAMClientError,
   DAMConfigError,
+  DAMConnectionError,
+  DAMError,
+  DAMQueryError,
 } from '../../errors/mod.ts';
 import type { ClientEvents, Query, SQLiteOptions } from '../../types/mod.ts';
 
@@ -17,6 +18,10 @@ import {
   SQLiteDBError,
 } from '../../../dependencies.ts';
 
+// Schema REGEXP
+const SchemaRegex =
+  /(CREATE|DROP) SCHEMA (IF EXISTS |IF NOT EXISTS )?([^"]+)?"([a-zA-Z0-9_]+)";/i;
+
 /**
  * Represents the type of parameters that can be used in SQLite queries.
  */
@@ -26,6 +31,7 @@ type SQLiteParamType = Record<
 >;
 
 export class SQLiteClient extends AbstractClient<SQLiteOptions> {
+  declare readonly dialect = 'SQLITE';
   public translator = new SQLiteTranslator();
   private _client: SQLiteDBClient | undefined = undefined;
 
@@ -37,61 +43,6 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
    */
   constructor(name: string, options: OptionKeys<SQLiteOptions, ClientEvents>) {
     // Validate options
-    if (options.mode === undefined) {
-      throw new DAMConfigError(`SQLite mode is required`, {
-        name: name,
-        dialect: options.dialect,
-        item: 'mode',
-      });
-    }
-    if (!['MEMORY', 'FILE'].includes(options.mode)) {
-      throw new DAMConfigError(
-        `SQLite mode: ${options.mode} is not supported`,
-        { name: name, dialect: options.dialect, item: 'mode' },
-      );
-    }
-    if (['FILE'].includes(options.mode)) {
-      if (options.path === undefined) {
-        throw new DAMConfigError(`SQLite path is required`, {
-          name: name,
-          dialect: options.dialect,
-          item: 'path',
-        });
-      }
-      // Ok check if the path is writable
-      try {
-        const stat = Deno.statSync(options.path);
-        if (!stat.isDirectory) {
-          throw new DAMConfigError(
-            `SQLite path: ${options.path} is not a directory`,
-            { name: name, dialect: options.dialect, item: 'path' },
-          );
-          // options.path = path.join(options.path, name + '.sqlite');
-        }
-      } catch (e) {
-        if (e instanceof DAMConfigError) {
-          throw e;
-        }
-        if (e instanceof Deno.errors.NotFound) {
-          throw new DAMConfigError(
-            `SQLite path: ${options.path} does not exist`,
-            { name: name, dialect: options.dialect, item: 'path' },
-          );
-        }
-      }
-      // Check permission
-      const perm = Deno.permissions.querySync({
-        name: 'write',
-        path: options.path,
-      });
-      if (perm.state !== 'granted') {
-        throw new DAMConfigError(
-          `SQLite path: ${options.path} is not writable`,
-          { name: name, dialect: options.dialect, item: 'path' },
-        );
-      }
-      fs.ensureDirSync(path.join(options.path, name.trim().toLowerCase()));
-    }
     if (options.mode === 'MEMORY') {
       delete options.path;
     }
@@ -102,11 +53,91 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
     query = super._standardizeQuery(query);
     return {
       sql: query.sql.replace(
-        /:([a-zA-Z0-9\_]+):/g,
+        /:([a-zA-Z0-9_]+):/g,
         (_, word) => `:${word}`,
       ),
       params: query.params,
     };
+  }
+
+  protected _validateConfig(options: SQLiteOptions): void {
+    // Call super
+    super._validateConfig(options);
+    // Validate per this dialect
+    if (options.dialect !== 'SQLITE') {
+      throw new DAMConfigError('Invalid dialect provided for SQLite Client', {
+        dialect: this.dialect,
+        config: this.name,
+        item: 'dialect',
+        value: options.dialect,
+      });
+    }
+    if (!['FILE', 'MEMORY'].includes(options.mode)) {
+      throw new DAMConfigError(
+        'Incorrect value provided for "Mode" option: ${value}',
+        {
+          dialect: this.dialect,
+          config: this.name,
+          item: 'mode',
+          value: options.mode,
+        },
+      );
+    }
+    if (
+      options.mode === 'FILE' &&
+      (options.path === undefined || options.path?.trim().length === 0)
+    ) {
+      throw new DAMConfigError('Path must be provided for SQLite DB storage', {
+        dialect: this.dialect,
+        config: this.name,
+        item: 'path',
+        value: options.path,
+      });
+    }
+    // Verify path
+    try {
+      const st = Deno.statSync(options.path as string);
+      if (!st.isDirectory) {
+        throw new DAMConfigError('Path must be a directory', {
+          dialect: this.dialect,
+          config: this.name,
+          item: 'path',
+          value: options.path,
+        });
+      }
+      // Write dummy file
+      fs.ensureFileSync(
+        path.join(
+          options.path as string,
+          this.name.trim().toLowerCase(),
+          'main.db',
+        ),
+      );
+    } catch (e) {
+      if (e instanceof DAMConfigError) {
+        throw e;
+      }
+      if (e instanceof Deno.errors.PermissionDenied) {
+        throw new DAMConfigError(
+          'Read/Write permission required for path ${value}',
+          {
+            dialect: this.dialect,
+            config: this.name,
+            item: 'path',
+            value: options.path,
+          },
+          e,
+        );
+      }
+      if (e instanceof Deno.errors.NotFound) {
+        throw new DAMConfigError('Path does not exist', {
+          dialect: this.dialect,
+          config: this.name,
+          item: 'path',
+          value: options.path,
+        }, e);
+      }
+    }
   }
 
   //#region Abstract methods
@@ -129,43 +160,27 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
     try {
       this._client = new SQLiteDBClient(file, opt);
       if (this._getOption('mode') === 'FILE') {
-        for (
-          const file of Deno.readDirSync(
-            path.join(this._getOption('path') as string, name),
-          )
-        ) {
-          if (
-            file.isFile && file.name.endsWith('.db') && file.name !== 'main.db'
-          ) {
-            this._client.execute(
-              `ATTACH DATABASE '${
-                path.join(this._getOption('path') as string, name, file.name)
-              }' AS ${file.name.replace('.db', '')};`,
-            );
-          }
-        }
-        // Attach memory as TMP
-        // this._client.execute(`ATTACH DATABASE ':memory:' AS TEMP;`);
+        this._attachDatabases(
+          path.join(this._getOption('path') as string, name),
+        );
       }
     } catch (e) {
-      if (e instanceof DAMBaseError) {
+      if (e instanceof DAMError) {
         throw e;
       }
       if (e instanceof SQLiteDBError) {
-        throw new DAMClientError(
-          'Unable to connect to database. Please check config',
+        throw new DAMConnectionError(
           {
             dialect: this.dialect,
-            name: this.name,
-            code: e.code,
-            message: e.message,
+            config: this.name,
+            errorCode: e.code?.toString() ?? '',
+            errorMessage: e.message,
           },
           e,
         );
       }
-      throw new DAMClientError(
-        'Unable to connect to database. Please check config',
-        { dialect: this.dialect, name: this.name, message: e.message },
+      throw new DAMConnectionError(
+        { dialect: this.dialect, config: this.name, errorMessage: e.message },
         e,
       );
     }
@@ -196,103 +211,22 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
       query,
     );
     try {
-      if (rawQuery.sql.startsWith('CREATE SCHEMA')) {
+      if (SchemaRegex.test(rawQuery.sql)) {
         if (this._getOption('mode') === 'MEMORY') {
-          throw new DAMClientError('Cannot create schema in memory mode', {
+          throw new DAMQueryError({
             dialect: this.dialect,
-            name: this.name,
-          });
+            config: this.name,
+            sql: rawQuery.sql,
+          }, new Error('Cannot create schema in memory mode'));
+        } else {
+          this._handleSchema(rawQuery.sql);
+          return {
+            count: 0,
+            rows: [],
+          };
         }
-
-        const schemaMatch = rawQuery.sql.match(
-          /CREATE SCHEMA ([^"]+)?"([a-zA-Z0-9\_]+)";/i,
-        );
-        if (!schemaMatch) {
-          throw new DAMClientError('Invalid schema creation query', {
-            dialect: this.dialect,
-            name: this.name,
-          });
-        }
-        const schemaName = schemaMatch[2].trim();
-        if (
-          schemaName !== null && schemaName !== 'main' &&
-          schemaName !== 'temp'
-        ) {
-          if (['temp', 'main'].includes(schemaName.toLowerCase())) {
-            throw new DAMClientError(
-              `Cannot create schema with name: ${schemaName}`,
-              {
-                dialect: this.dialect,
-                name: this.name,
-              },
-            );
-          }
-          fs.ensureFileSync(
-            path.join(
-              this._getOption('path') as string,
-              this.name.trim().toLowerCase(),
-              `${schemaName}.db`,
-            ),
-          );
-          // Attach it
-          this._client.execute(
-            `ATTACH DATABASE '${
-              path.join(
-                this._getOption('path') as string,
-                this.name.trim().toLowerCase(),
-                `${schemaName}.db`,
-              )
-            }' AS ${schemaName};`,
-          );
-        }
-        return {
-          count: 0,
-          rows: [],
-        };
-      } else if (rawQuery.sql.startsWith('DROP SCHEMA')) {
-        if (this._getOption('mode') === 'MEMORY') {
-          throw new DAMClientError('Cannot create schema in memory mode', {
-            dialect: this.dialect,
-            name: this.name,
-          });
-        }
-
-        const schemaMatch = rawQuery.sql.match(
-          /DROP SCHEMA ([^"]+)?"([a-zA-Z0-9\_]+)"/i,
-        );
-        if (!schemaMatch) {
-          throw new DAMClientError('Invalid schema drop query', {
-            dialect: this.dialect,
-            name: this.name,
-          });
-        }
-        const schemaName = schemaMatch[2].trim();
-        if (
-          schemaName !== null && schemaName !== 'main' &&
-          schemaName !== 'temp'
-        ) {
-          if (['temp', 'main'].includes(schemaName.toLowerCase())) {
-            throw new DAMClientError(
-              `Cannot drop schema with name: ${schemaName}`,
-              {
-                dialect: this.dialect,
-                name: this.name,
-              },
-            );
-          }
-          this._client.execute(`DETACH DATABASE ${schemaName};`);
-          Deno.removeSync(path.join(
-            this._getOption('path') as string,
-            this.name.trim().toLowerCase(),
-            `${schemaName}.db`,
-          ));
-        }
-        return {
-          count: 0,
-          rows: [],
-        };
       }
-
+      // Ok its normal query
       const res = this._client.queryEntries<R>(
         rawQuery.sql,
         rawQuery.params as SQLiteParamType,
@@ -302,17 +236,11 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
         rows: res,
       };
     } catch (err) {
-      if (err instanceof SQLiteDBError) {
-        throw new DAMClientError(err.message, {
-          dialect: this.dialect,
-          name: this.name,
-          code: err.code,
-          codeName: err.codeName,
-        }, err);
-      }
-      throw new DAMClientError(err.message, {
+      throw new DAMQueryError({
         dialect: this.dialect,
-        name: this.name,
+        config: this.name,
+        sql: rawQuery.sql,
+        params: rawQuery.params,
       }, err);
     }
   }
@@ -328,4 +256,74 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
     return res.data[0].Version;
   }
   //#endregion Abstract methods
+  protected _attachDatabases(loc: string) {
+    if (this._client === undefined) {
+      return;
+    }
+    for (const file of Deno.readDirSync(loc)) {
+      if (
+        file.isFile && file.name.endsWith('.db') && file.name !== 'main.db'
+      ) {
+        this._client.execute(
+          `ATTACH DATABASE '${
+            path.join(this._getOption('path') as string, name, file.name)
+          }' AS ${file.name.replace('.db', '')};`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Special function to handle creation and deletion of schemas in SQLite
+   * file mode.
+   * *NOTE*: This function is only called when the client is in FILE mode.
+   *
+   * @param sql The SQL Statement
+   * @throws {DAMQueryError} If an error occurs during schema handling.
+   */
+  protected _handleSchema(sql: string) {
+    const match = SchemaRegex.exec(sql);
+    if (match) {
+      const schemaName = match[4].trim();
+      const filename = path.join(
+        this._getOption('path') as string,
+        this.name.trim().toLowerCase(),
+        `${schemaName.toLowerCase()}.db`,
+      );
+      if (match[1].toUpperCase() === 'CREATE') {
+        if (
+          schemaName === null && schemaName === 'main' && schemaName === 'temp'
+        ) {
+          throw new DAMQueryError({
+            dialect: this.dialect,
+            config: this.name,
+            sql: sql,
+          }, new Error('Invalid schema name'));
+        }
+        fs.ensureFileSync(
+          path.join(
+            this._getOption('path') as string,
+            this.name.trim().toLowerCase(),
+            `${schemaName}.db`,
+          ),
+        );
+        // Attach it
+        this.execute({
+          sql: `ATTACH DATABASE '${filename}' AS ${schemaName};`,
+        });
+      } else if (match[1].toUpperCase() === 'DROP') {
+        if (
+          schemaName === null && schemaName === 'main' && schemaName === 'temp'
+        ) {
+          throw new DAMQueryError({
+            dialect: this.dialect,
+            config: this.name,
+            sql: sql,
+          }, new Error('Invalid schema name'));
+        }
+        this.execute({ sql: `DETACH DATABASE ${schemaName};` });
+        Deno.removeSync(filename);
+      }
+    }
+  }
 }

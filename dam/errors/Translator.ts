@@ -1,15 +1,14 @@
-import { DAMBaseError } from './Base.ts';
+import type { QueryTypes } from '../types/mod.ts';
+import { DAMError } from './Base.ts';
 
-export class DAMTranslatorBaseError extends DAMBaseError {
+export class TranslatorError extends DAMError {
   constructor(
     message: string,
-    meta: { dialect: string } & Record<string, unknown>,
+    meta: {
+      dialect: string;
+    } & Record<string, unknown>,
     cause?: Error,
   ) {
     super(message, meta, cause);
-  }
-
-  toString(): string {
-    return `${this.timeStamp.toISOString()} [${this.library} ${this.dialect} ${this.name}] ${this.message}`;
   }
 }

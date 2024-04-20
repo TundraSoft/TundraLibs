@@ -3,7 +3,6 @@ import { DAMTranslatorBaseError } from '../../errors/mod.ts';
 import type {
   CreateTableColumnDefinition,
   DataTypes,
-  Operators,
 } from '../../types/mod.ts';
 
 export class MariaTranslator extends AbstractTranslator {
@@ -45,99 +44,31 @@ export class MariaTranslator extends AbstractTranslator {
     'JSONB': 'JSON',
   };
 
+  protected _escapeChar: string = '`';
+
   constructor() {
     super('POSTGRES');
   }
 
-  public escape(name: string) {
-    return name.replaceAll('`', '').split('.').map((part) => `\`${part}\``)
-      .join(
-        '.',
-      );
-  }
-
-  public quote(value: unknown): string {
-    if (value === undefined || value === null) {
-      return 'NULL';
-    } else if (
-      ['string', 'number', 'bigint', 'boolean'].includes(typeof value)
-    ) {
-      return `'${value}'`;
-    } else if (value instanceof Date) {
-      return `'${value.toISOString()}'`;
-    } else if (Array.isArray(value)) {
-      return `ARRAY[${value.map((v) => this.quote(v)).join(', ')}]`;
-    } else {
-      return `'${JSON.stringify(value)}'`;
-    }
-  }
-
   protected _generateAggregateSQL(name: string, args: string[]): string {
     switch (name) {
-      case 'SUM':
-        return `SUM(${args.join(', ')})`;
-      case 'MIN':
-        return `MIN(${args.join(', ')})`;
-      case 'MAX':
-        return `MAX(${args.join(', ')})`;
-      case 'AVG':
-        return `AVG(${args.join(', ')})`;
-      case 'COUNT':
-        return `COUNT(${args.join(', ')})`;
-      case 'DISTINCT':
-        return `DISTINCT(${args.join(', ')})`;
       case 'JSON_ROW':
         return `JSON_ARRAYAGG(JSON_OBJECT(${args.join(', ')}))`;
       default:
-        throw new DAMTranslatorBaseError(
-          `Invalid aggregate function: ${name}`,
-          { dialect: this.dialect },
-        );
+        return super._generateAggregateSQL(name, args);
     }
   }
 
   protected _generateExpressionSQL(name: string, args: string[]): string {
+    /**
+     * We handle only specific cases here, what is default will be handled by
+     * the parent class
+     */
     switch (name) {
       case 'JSON_VALUE': {
         const column = args.shift() as string;
         return `JSON_VALUE(${this.escape(column)}, '$.${args.join('.')}')`;
       }
-      case 'NOW':
-        return 'NOW()';
-      case 'CURRENT_DATE':
-        return 'CURRENT_DATE';
-      case 'CURRENT_TIME':
-        return 'CURRENT_TIME';
-      case 'CURRENT_TIMESTAMP':
-        return 'CURRENT_TIMESTAMP';
-      case 'UUID':
-        return `UUID()`;
-      case 'ADD':
-        return `(${args.join(' + ')})`;
-      case 'SUBTRACT':
-        return `(${args.join(' - ')})`;
-      case 'MULTIPLY':
-        return `(${args.join(' * ')})`;
-      case 'DIVIDE':
-        return `(${args.join(' / ')})`;
-      case 'MODULO':
-        return `(${args.join(' % ')})`;
-      case 'ABS':
-        return `ABS(${args[0]})`;
-      case 'CEIL':
-        return `CEIL(${args[0]})`;
-      case 'FLOOR':
-        return `FLOOR(${args[0]})`;
-      case 'CONCAT':
-        return `(${args.join(' || ')})`;
-      case 'LOWER':
-        return `LOWER(${args[0]})`;
-      case 'UPPER':
-        return `UPPER(${args[0]})`;
-      case 'TRIM':
-        return `TRIM(${args[0]})`;
-      case 'LENGTH':
-        return `LENGTH(${args[0]})`;
       case 'SUBSTR':
         return `SUBSTRING(${args[0]} FROM ${args[1]} FOR ${args[2]})`;
       case 'REPLACE':
@@ -149,65 +80,7 @@ export class MariaTranslator extends AbstractTranslator {
       case 'DATE_FORMAT':
         return `DATE_FORMAT(${args.join(', ')})`;
       default:
-        throw new DAMTranslatorBaseError(
-          `Invalid expression function: ${name}`,
-          { dialect: this.dialect },
-        );
-    }
-  }
-
-  protected _generateFilterSQL(
-    column: string,
-    operator: Operators,
-    value: string[],
-  ): string {
-    switch (operator) {
-      case '$eq':
-        return `${column} = ${value[0]}`;
-      case '$ne':
-        return `${column} != ${value[0]}`;
-      case '$null':
-        return value[0] === 'true'
-          ? `${column} IS NULL`
-          : `${column} IS NOT NULL`;
-      case '$gt':
-        return `${column} > ${value[0]}`;
-      case '$gte':
-        return `${column} >= ${value[0]}`;
-      case '$lt':
-        return `${column} < ${value[0]}`;
-      case '$lte':
-        return `${column} <= ${value[0]}`;
-      case '$between':
-        return `${column} BETWEEN ${value[0]} AND ${value[1]}`;
-      case '$in':
-        return `${column} IN (${value.join(', ')})`;
-      case '$nin':
-        return `${column} NOT IN (${value.join(', ')})`;
-      case '$like':
-        return `${column} LIKE ${value[0]}`;
-      case '$ilike':
-        return `${column} LIKE ${value[0]}`;
-      case '$nlike':
-        return `${column} NOT LIKE ${value[0]}`;
-      case '$nilike':
-        return `${column} NOT LIKE ${value[0]}`;
-      case '$contains':
-        return `${column} LIKE %${value[0]}%`;
-      case '$ncontains':
-        return `${column} NOT LIKE %${value[0]}%`;
-      case '$startsWith':
-        return `${column} LIKE ${value[0]}%`;
-      case '$nstartsWith':
-        return `${column} NOT LIKE ${value[0]}%`;
-      case '$endsWith':
-        return `${column} LIKE %${value[0]}`;
-      case '$nendsWith':
-        return `${column} NOT LIKE %${value[0]}`;
-      default:
-        throw new DAMTranslatorBaseError(`Invalid operator: ${operator}`, {
-          dialect: this.dialect,
-        });
+        return super._generateExpressionSQL(name, args);
     }
   }
 

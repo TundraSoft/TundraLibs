@@ -111,6 +111,7 @@ export class Options<
    * @returns The instance of the class for method chaining.
    */
   protected _setOption(name: string, value: unknown): this {
+    this._validateOption(name, value as O[keyof O]);
     this._options.set(name, value as O[keyof O]);
     return this;
   }
@@ -126,5 +127,17 @@ export class Options<
       this._setOption(key as keyof O, value as O[keyof O]);
     }
     return this;
+  }
+
+  protected _validateOption<K extends keyof O>(key: K, value: O[K]): void;
+  /**
+   * Helper function to validation option value when being set.
+   *
+   * @param options The options which is to be validated
+   */
+  // deno-lint-ignore no-unused-vars
+  protected _validateOption(key: string, value: unknown): void {
+    // This is a stub method, it should be overridden by the child class
+    return;
   }
 }
