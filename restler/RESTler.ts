@@ -292,7 +292,13 @@ export abstract class RESTler<
       ) {
         return XMLParse(await response.text()) as unknown as RespBody;
       } else if (contentType.includes('text')) {
-        return await response.text() as unknown as RespBody;
+        const res = response.text() as unknown as RespBody;
+        try {
+          return JSON.parse(res);
+        }
+        catch {
+          return res;
+        }
         // } else if (contentType.includes('text/html')) {
         //   return await response.text() as unknown as RespBody;
         // } else if (contentType.includes('application/octet-stream')) {
