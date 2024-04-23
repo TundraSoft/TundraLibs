@@ -294,7 +294,7 @@ export abstract class RESTler<
       } else if (contentType.includes('text')) {
         const res = await response.text() as unknown as RespBody;
         try {
-          return JSON.parse(res) as unknown as RespBody;;
+          return JSON.parse(res) as unknown as RespBody;
         } catch {
           return res;
         }
