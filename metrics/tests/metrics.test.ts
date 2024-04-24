@@ -1,22 +1,15 @@
 import { assertEquals } from 'https://deno.land/std@0.205.0/assert/mod.ts';
 import { Metrics, tick } from '../mod.ts';
 import {
-  afterEach,
   assert,
   assertGreater,
   assertGreaterOrEqual,
-  describe,
-  it,
 } from '../../dev.dependencies.ts';
 
-describe('Metrics', () => {
+Deno.test('Metrics', async (t) => {
   const metrics = new Metrics();
 
-  afterEach(() => {
-    metrics.purge();
-  });
-
-  it('basic mark', () => {
+  await t.step('basic mark', () => {
     metrics.mark('test');
     // No stats must be available
     assertEquals(metrics.stats('test'), {
@@ -29,7 +22,8 @@ describe('Metrics', () => {
     assertEquals(metrics.count('test'), 1);
   });
 
-  it('multiple marks on same mark', () => {
+  await t.step('multiple marks on same mark', () => {
+    metrics.purge();
     metrics.mark('test');
     // No stats must be available
     assertEquals(metrics.stats('test'), {
@@ -50,7 +44,8 @@ describe('Metrics', () => {
     // console.log(metrics.all());
   });
 
-  it('Test min, max and average', async () => {
+  await t.step('Test min, max and average', async () => {
+    metrics.purge();
     const fn = async () => {
       metrics.mark('test');
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -66,7 +61,8 @@ describe('Metrics', () => {
     assertEquals(stats.count, 10);
   });
 
-  it('Test purge', async () => {
+  await t.step('Test purge', async () => {
+    metrics.purge();
     const fn = async () => {
       metrics.mark('test');
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -81,7 +77,8 @@ describe('Metrics', () => {
     assertEquals(metrics.all(), {});
   });
 
-  it('Test decorator', async () => {
+  await t.step('Test decorator', async () => {
+    metrics.purge();
     class Test {
       @tick
       async test() {

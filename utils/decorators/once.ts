@@ -1,4 +1,4 @@
-const AsyncFunction = (async function () {}).constructor;
+const AsyncFunction = (async function () {}).constructor; // NOSONAR
 
 /**
  * once

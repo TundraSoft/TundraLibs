@@ -1,20 +1,48 @@
 # Config
 
-Every application will have configuration files present. This library helps
-in loading those configurations. It supports json, YAML and TOML formats and
-also has the ability to replace environment variables when the config value
-is requested.
+Helper class which helps maintain configurations in your application. It can
+load json, yaml and toml configuration files and even substitutes any ENV
+variable when the config value is requested.
+
+This is a singleton class.
 
 ## Usage
 
-The config class is a singleton, this means all loaded configuration data
-no matter how many times you initialize the class. This also means, that if
-you load config from 2 different directories and they contain files with
-same name, the old one will be replaced.
+### Invocation
 
 ```ts
-import { Config } from '';
+import { Config } from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/${TAG}/config/mod.ts';
 
-const config = new Config();
-config.load(basePath = './configs'); // Load all YAML, TOML and JSON files from this path
+await Config.load('./path/to/config/files');
+// To load specific config files
+await Config.load('./path/to/config/files', 'configname'); // This will search for the config file with the provided name
+
+// Set env source (.env file if need be). This is optional.
+Config.loadEnv('./');
+
+Config.list(); // List all loaded config files
+
+Config.has('configname'); // Pass the config file name
+
+Config.has('configname', 'someKey', 'subKeyInSomeKey');
+
+Config.get('configname'); // Returns all config items from config file configname
+
+Config.get('configname', 'someKey'); // Returns specific config key from configname
 ```
+
+### Methods
+
+#### loadEnv
+
+#### load
+
+#### list
+
+#### has
+
+#### get
+
+### Errors
+
+## Notes

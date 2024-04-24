@@ -38,7 +38,7 @@ describe('DAM', () => {
       const client = new SQLiteClient('SQLiteFile', {
         dialect: 'SQLITE',
         mode: 'FILE',
-        path: 'dam/tests/testdata/',
+        path: 'dam/tests/fixtures/',
       });
 
       beforeAll(async () => {
@@ -48,7 +48,7 @@ describe('DAM', () => {
       afterAll(async () => {
         await client.close();
         assertEquals('READY', client.status);
-        Deno.remove('dam/tests/testdata/sqlitefile', { recursive: true });
+        Deno.remove('dam/tests/fixtures/sqlitefile', { recursive: true });
       });
 
       it('Should throw error on invalid type', () => {

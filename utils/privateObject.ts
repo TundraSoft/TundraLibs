@@ -45,6 +45,10 @@ export type PrivateObject<
    * @returns An array of strings representing the keys.
    */
   keys: () => string[];
+  /**
+   * Clears all key-value pairs from the internal data object.
+   */
+  clear: () => void;
 };
 
 /**
@@ -78,6 +82,8 @@ export const privateObject = <
       }
     },
     keys: () => Object.keys(_data),
+    clear: () => (enableMutations &&
+      Object.keys(_data).forEach((key) => delete _data[key])),
   };
 };
 

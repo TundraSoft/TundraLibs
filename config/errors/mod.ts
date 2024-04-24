@@ -1,6 +1,7 @@
-export { ConfigBaseError } from './BaseError.ts';
-export { ConfigMalformed } from './ConfigMalformed.ts';
-export { ConfigMultiple } from './ConfigMultiple.ts';
-export { ConfigNotFound } from './ConfigNotFound.ts';
-export { ConfigPermissionError } from './ConfigPermissionError.ts';
-export { ConfigUnsupported } from './ConfigUnsupported.ts';
+export { ConfigError } from './Base.ts';
+export { DuplicateConfig } from './Duplicate.ts';
+export { MalformedConfig } from './Malformed.ts';
+export { ConfigNotDefined } from './NotDefined.ts';
+export { ConfigNotFound } from './NotFound.ts';
+export { ConfigPermissionError } from './PermissionError.ts';
+export { UnsupportedConfig } from './Unsupported.ts';

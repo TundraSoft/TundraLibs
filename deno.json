@@ -7,13 +7,14 @@
     "strict": true,
     "experimentalDecorators": true
   },
-  "unstable": ["fs"],
+  "unstable": ["fs", "net"],
   "lint": {
     "include": [
       "./"
     ],
     "exclude": [
-      "*/testdata/"
+      "*/tests/",
+      "*/fixtures/"
     ],
     "rules": {
       "tags": [
@@ -27,7 +28,7 @@
   },
   "fmt": {
     "include": ["./"],
-    "exclude": ["*/testdata/"],
+    "exclude": ["*/tests/", "*/fixtures/"],
     "semiColons": true,
     "lineWidth": 80,
     "indentWidth": 2,
@@ -37,7 +38,7 @@
   "tasks": {
     "clean": "deno fmt && deno lint && deno check **/*.ts",
     "cache": "deno cache --reload ./dependencies.ts ./dev.dependencies.ts",
-    "test": "deno test -A --parallel --unstable-fs",
+    "test": "deno test -A --parallel --unstable-fs --unstable-net",
     "bench": "deno bench -A --unstable-fs"
   },
   "test": {
@@ -45,7 +46,7 @@
       "./"
     ],
     "exclude": [
-      "*/testdata/"
+      "*/fixtures/"
     ]
   },
   "lock": false
