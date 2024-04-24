@@ -15,7 +15,7 @@
         "run",
         "--inspect-brk=127.0.0.1:9227",
         "--allow-all",
-        "--unstable", 
+        "--unstable",
         "./config/Config.ts"
       ],
       "attachSimplePort": 9227
