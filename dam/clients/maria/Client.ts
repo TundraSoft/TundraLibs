@@ -24,20 +24,20 @@ export class MariaClient extends AbstractClient<MariaOptions> {
   private _client: MariaDBPool | undefined = undefined;
 
   constructor(name: string, options: OptionKeys<MariaOptions, ClientEvents>) {
-    const defaults: Partial<MariaOptions> = {
+    const def: Partial<MariaOptions> = {
       poolSize: 50,
       port: 3306,
       connectionTimeout: 30 * 1000,
       idleTimeout: 30 * 60 * 1000,
     };
-    super(name, { ...defaults, ...options });
+    super(name, { ...def, ...options });
   }
 
   protected _standardizeQuery(query: Query): Query {
     query = super._standardizeQuery(query);
     return {
       sql: query.sql.replace(
-        /:([a-zA-Z0-9_]+):/g,
+        /:(\w+):/g,
         (_, word) => `:${word}`,
       ),
       params: query.params,
@@ -45,51 +45,69 @@ export class MariaClient extends AbstractClient<MariaOptions> {
   }
 
   protected _validateConfig(options: MariaOptions): void {
+    // Call super
+    super._validateConfig(options);
+    // Validate per this dialect
     if (options.dialect !== 'MARIA') {
-      throw new DAMConfigError('Invalid dialect provided for Postgres Client', {
-        dialect: this.dialect,
-        config: this.name,
-        item: 'dialect',
-        value: options.dialect,
-      });
+      throw new DAMConfigError(
+        'Invalid dialect provided for ${dialect} Client',
+        {
+          dialect: this.dialect,
+          config: this.name,
+          item: 'dialect',
+          value: options.dialect,
+        },
+      );
     }
     if (options.host === undefined || options.host.trim() === '') {
-      throw new DAMConfigError(`Hostname is required`, {
+      throw new DAMConfigError('Hostname of ${dialect} server is required', {
         config: this.name,
         dialect: this.dialect,
         item: 'host',
       });
     }
     if (options.port && (options.port < 1024 || options.port > 65535)) {
-      throw new DAMConfigError(`Port value must be between 1024 and 65535`, {
-        config: this.name,
-        dialect: this.dialect,
-        item: 'port',
-      });
+      throw new DAMConfigError(
+        'Port of ${dialect} server is required and must be between 1024 and 65535',
+        {
+          config: this.name,
+          dialect: this.dialect,
+          item: 'port',
+        },
+      );
     }
     if (options.username === undefined || options.username.trim() === '') {
-      throw new DAMConfigError(`Username is required`, {
-        config: this.name,
-        dialect: this.dialect,
-        item: 'username',
-      });
+      throw new DAMConfigError(
+        'Username for authenticating with ${dialect} server is required',
+        {
+          config: this.name,
+          dialect: this.dialect,
+          item: 'username',
+        },
+      );
     }
     if (options.password === undefined || options.password.trim() === '') {
-      throw new DAMConfigError(`Password is required`, {
-        config: this.name,
-        dialect: this.dialect,
-        item: 'password',
-      });
+      throw new DAMConfigError(
+        'Password for authenticating with ${dialect} server is required',
+        {
+          config: this.name,
+          dialect: this.dialect,
+          item: 'password',
+        },
+      );
     }
     if (options.database === undefined || options.database.trim() === '') {
-      throw new DAMConfigError(`Database name is required`, {
-        config: this.name,
-        dialect: this.dialect,
-        item: 'database',
-      });
+      throw new DAMConfigError(
+        'Database name in ${dialect} server is required',
+        {
+          config: this.name,
+          dialect: this.dialect,
+          item: 'database',
+        },
+      );
     }
     if (options.poolSize && options.poolSize < 1) {
-      throw new DAMConfigError(`Pool size must be greater than 0`, {
+      throw new DAMConfigError('Pool size must be greater than 0', {
         config: this.name,
         dialect: this.dialect,
         item: 'poolSize',
@@ -128,6 +146,7 @@ export class MariaClient extends AbstractClient<MariaOptions> {
 
     return conf;
   }
+
   //#region Abstract methods
   protected async _connect(): Promise<void> {
     if (this._status === 'CONNECTED' && this._client !== undefined) {
@@ -185,16 +204,13 @@ export class MariaClient extends AbstractClient<MariaOptions> {
     );
     const client = await this._client.getConnection();
     try {
-      await client.query;
       let res = await client.query<Array<R>>(rawQuery.sql, rawQuery.params);
       let rowCount = 0;
       if (Array.isArray(res)) {
         rowCount = res.length;
-      } else {
-        if (Object.keys(res).includes('affectedRows')) {
-          rowCount = res['affectedRows'] as number;
-          res = [];
-        }
+      } else if (Object.keys(res).includes('affectedRows')) {
+        rowCount = res['affectedRows'] as number;
+        res = [];
       }
       // console.log(await client.execute(rawQuery.sql, rawQuery.params))
       return {
@@ -208,7 +224,6 @@ export class MariaClient extends AbstractClient<MariaOptions> {
           config: this.name,
           sql: rawQuery.sql,
           params: rawQuery.params,
-          code: err.code,
         }, err);
       }
       throw new DAMQueryError({
@@ -216,7 +231,6 @@ export class MariaClient extends AbstractClient<MariaOptions> {
         config: this.name,
         sql: rawQuery.sql,
         params: rawQuery.params,
-        code: err.code,
       }, err);
     } finally {
       await client.release();

@@ -76,6 +76,7 @@ jobs:
         run: |
           deno fmt --check
           deno lint
+          deno check --unstable **/*.ts
       
       -
         name: Load dependencies

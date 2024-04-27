@@ -62,6 +62,11 @@ export type {
   UpdateQuery,
 } from './query/mod.ts';
 
+export type {
+  TranslatorCapability,
+  TranslatorProcessColumns,
+} from './translator/mod.ts';
+
 export type { Aggregate } from './Aggregate.ts';
 
 export type { ColumnIdentifier } from './ColumnIdentifier.ts';

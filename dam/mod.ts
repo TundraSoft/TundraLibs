@@ -11,11 +11,12 @@ export {
 export { AggregateNames, DataTypeNames, ExpressionNames } from './const/mod.ts';
 
 export {
-  DAMBaseError,
   DAMClientError,
   DAMConfigError,
+  DAMError,
+  DAMMissingParams,
   DAMQueryError,
-  DAMTranslatorBaseError,
+  DAMTranslatorError,
 } from './errors/mod.ts';
 
 export type {

@@ -12,7 +12,7 @@ import type {
   PostgresOptions,
   SQLiteOptions,
 } from './types/mod.ts';
-import { DAMConfigError } from './errors/mod.ts';
+import { DAMError } from './errors/mod.ts';
 import { singleton } from '../utils/mod.ts';
 
 /**
@@ -36,14 +36,17 @@ class ConnectionManager {
       !config.dialect ||
       !['POSTGRES', 'MONGO', 'SQLITE', 'MARIA'].includes(config.dialect)
     ) {
-      throw new DAMConfigError('Invalid dialect', {
-        dialect: config.dialect,
-        name: name,
-        item: 'dialect',
-      });
+      throw new DAMError(
+        `Unsupported dialect ${config.dialect} passed for ${name}`,
+        {
+          dialect: config.dialect,
+          name: name,
+          item: 'name',
+        },
+      );
     }
     if (this._configs.has(name) && this._configs.get(name) !== config) {
-      throw new DAMConfigError('Config already exists', {
+      throw new DAMError(`Config by the name ${name} already exists`, {
         dialect: config.dialect,
         name: name,
         item: 'name',
@@ -74,43 +77,54 @@ class ConnectionManager {
   public getClient<T extends AbstractClient>(name: string): T {
     name = name.trim().toLowerCase();
     if (!this._configs.has(name)) {
-      throw new DAMConfigError('Config not found', {
+      throw new DAMError(`Config by the name ${name} is not defined.`, {
         dialect: '',
         name: name,
-        item: 'name',
       });
     }
     // Return instance if already exists!
-    if (this._configs.has(name) && this._clients.has(name) === false) {
+    if (this._clients.has(name) === false) {
       const config = this._configs.get(name) as ClientOptions;
       switch (config.dialect) {
         case 'POSTGRES':
-          new PostgresClient(name, config as PostgresOptions);
+          this._clients.set(
+            name,
+            new PostgresClient(
+              name,
+              config as PostgresOptions,
+            ) as unknown as AbstractClient,
+          );
           break;
         case 'MONGO':
-          new MongoClient(name, config as MongoOptions);
-          // this._clients.set(name, new MongoClient(config));
+          this._clients.set(
+            name,
+            new MongoClient(
+              name,
+              config as MongoOptions,
+            ) as unknown as AbstractClient,
+          );
           break;
         case 'SQLITE':
-          new SQLiteClient(name, config as SQLiteOptions);
-          // this._clients.set(name, new SQLiteClient(config));
+          this._clients.set(
+            name,
+            new SQLiteClient(
+              name,
+              config as SQLiteOptions,
+            ) as unknown as AbstractClient,
+          );
           break;
         case 'MARIA':
-          new MariaClient(name, config as MariaOptions);
-          // this._clients.set(name, new MariaClient(config));
+          this._clients.set(
+            name,
+            new MariaClient(
+              name,
+              config as MariaOptions,
+            ) as unknown as AbstractClient,
+          );
           break;
       }
     }
     return this._clients.get(name) as T;
-  }
-
-  /**
-   * Registers a client in the DAM.
-   *
-   * @param client - The client to register.
-   */
-  public register<T extends AbstractClient>(client: T) {
-    this._clients.set(client.name.trim().toLowerCase(), client);
   }
 }
 

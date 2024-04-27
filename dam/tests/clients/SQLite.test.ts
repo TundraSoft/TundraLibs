@@ -10,8 +10,8 @@ import {
 import {
   // DAMClientError,
   DAMConfigError,
-  DAMQueryError,
   SQLiteClient,
+  DAMMissingParams, 
   type SQLiteOptions,
 } from '../../mod.ts';
 // import { nanoId, alphaNumeric } from '../../../id/mod.ts';
@@ -150,7 +150,7 @@ describe({
                 `INSERT INTO test1 ("Name", "Email", "Password", "DOB", "AccountNumber", "Balance", "Status") VALUES (:name:, :email:, :password:, :dob:, :accountNumber:, :balance:, :status:) RETURNING *;`,
             });
           };
-          assertRejects(a, DAMQueryError);
+          assertRejects(a, DAMMissingParams);
         });
       });
 
@@ -242,7 +242,7 @@ describe({
                 `INSERT INTO test1 ("Name", "Email", "Password", "DOB", "AccountNumber", "Balance", "Status") VALUES (:name:, :email:, :password:, :dob:, :accountNumber:, :balance:, :status:) RETURNING *;`,
             });
           };
-          assertRejects(a, DAMQueryError);
+          assertRejects(a, DAMMissingParams);
         });
       });
     });

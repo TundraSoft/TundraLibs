@@ -1,18 +1,13 @@
 import { AbstractTranslator } from '../../Translator.ts';
-import { DAMTranslatorBaseError } from '../../errors/mod.ts';
+import { DAMTranslatorError } from '../../errors/mod.ts';
 import type {
   CreateTableColumnDefinition,
   DataTypes,
   Operators,
+  TranslatorCapability,
 } from '../../types/mod.ts';
 
 export class PostgresTranslator extends AbstractTranslator {
-  public readonly capability = {
-    cascade: true,
-    matview: true,
-    distributed: false,
-  };
-
   protected _dataTypes: Record<DataTypes, string> = {
     'AUTO_INCREMENT': 'SERIAL',
     'SERIAL': 'SERIAL',
@@ -47,8 +42,17 @@ export class PostgresTranslator extends AbstractTranslator {
 
   protected _escapeChar: string = '"';
 
-  constructor() {
-    super('POSTGRES');
+  constructor(capabilities: Partial<TranslatorCapability> = {}) {
+    const cap = {
+      ...{
+        cascade: false,
+        matview: false,
+        distributed: false,
+        partition: false,
+      },
+      ...capabilities,
+    };
+    super('POSTGRES', cap);
   }
 
   protected _generateAggregateSQL(name: string, args: string[]): string {
@@ -117,7 +121,7 @@ export class PostgresTranslator extends AbstractTranslator {
   ): string {
     const type = this._dataTypes[defn.type];
     if (type === undefined) {
-      throw new DAMTranslatorBaseError(`Invalid data type: ${defn.type}`, {
+      throw new DAMTranslatorError(`Data Type definition missing for ${name}`, {
         dialect: this.dialect,
       });
     }

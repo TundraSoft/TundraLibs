@@ -2,14 +2,12 @@ import { DAMClientError } from '../Client.ts';
 
 export class DAMQueryError extends DAMClientError {
   constructor(
-    meta:
-      & {
-        dialect: string;
-        config: string;
-        sql: string;
-        params?: Record<string, unknown>;
-      }
-      & Record<string, unknown>,
+    meta: {
+      dialect: string;
+      config: string;
+      sql: string;
+      params?: Record<string, unknown>;
+    },
     cause?: Error,
   ) {
     super(

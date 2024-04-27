@@ -1,10 +1,11 @@
+import { Dialects } from '../mod.ts';
 import { DAMError } from './Base.ts';
 
-export class TranslatorError extends DAMError {
+export class DAMTranslatorError extends DAMError {
   constructor(
     message: string,
     meta: {
-      dialect: string;
+      dialect: Dialects;
     } & Record<string, unknown>,
     cause?: Error,
   ) {

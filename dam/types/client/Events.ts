@@ -1,4 +1,4 @@
-import { DAMBaseError } from '../../errors/mod.ts';
+import { DAMError } from '../../errors/mod.ts';
 
 export type ClientEvents = {
   connect: (name: string) => void;
@@ -10,7 +10,7 @@ export type ClientEvents = {
     params?: Record<string, unknown>,
     resultCount?: number,
   ) => void;
-  error: (name: string, error: DAMBaseError) => void;
+  error: (name: string, error: DAMError) => void;
   slowQuery: (
     name: string,
     duration: number,

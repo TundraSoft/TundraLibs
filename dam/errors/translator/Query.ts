@@ -1,7 +1,7 @@
 import type { QueryTypes } from '../../mod.ts';
-import { TranslatorError } from '../Translator.ts';
+import { DAMTranslatorError } from '../Translator.ts';
 
-export class BaseQueryError extends TranslatorError {
+export class BaseQueryError extends DAMTranslatorError {
   declare meta: { dialect: string; queryType: QueryTypes };
   constructor(
     message: string,

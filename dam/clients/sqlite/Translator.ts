@@ -1,19 +1,14 @@
 import { AbstractTranslator } from '../../Translator.ts';
-import { DAMTranslatorBaseError } from '../../errors/mod.ts';
+import { DAMTranslatorError } from '../../errors/mod.ts';
 import type {
   CreateTableColumnDefinition,
   DataTypes,
   Query,
+  TranslatorCapability,
   TruncateQuery,
 } from '../../types/mod.ts';
 
 export class SQLiteTranslator extends AbstractTranslator {
-  public readonly capability = {
-    cascade: true,
-    matview: false,
-    distributed: false,
-  };
-
   protected _dataTypes: Record<DataTypes, string> = {
     'AUTO_INCREMENT': 'AUTOINCREMENT',
     'SERIAL': 'AUTOINCREMENT',
@@ -48,16 +43,24 @@ export class SQLiteTranslator extends AbstractTranslator {
 
   protected _escapeChar: string = '"';
 
-  constructor() {
-    super('SQLITE');
+  constructor(capabilities: Partial<TranslatorCapability> = {}) {
+    const cap = {
+      ...{
+        cascade: false,
+        matview: false,
+        distributed: false,
+        partition: false,
+      },
+      ...capabilities,
+    };
+    super('SQLITE', cap);
   }
 
   public truncate(obj: TruncateQuery): Query {
     if (obj.type !== 'TRUNCATE') {
-      throw new DAMTranslatorBaseError(
-        `Invalid query type: ${obj.type}`,
-        { dialect: this.dialect },
-      );
+      throw new DAMTranslatorError(`Expected query type to be INSERT`, {
+        dialect: this.dialect,
+      });
     }
     return this.delete({
       type: 'DELETE',
@@ -129,7 +132,7 @@ export class SQLiteTranslator extends AbstractTranslator {
   ): string {
     const type = this._dataTypes[defn.type];
     if (type === undefined) {
-      throw new DAMTranslatorBaseError(`Invalid data type: ${defn.type}`, {
+      throw new DAMTranslatorError(`Data Type definition missing for ${name}`, {
         dialect: this.dialect,
       });
     }

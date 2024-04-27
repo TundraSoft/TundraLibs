@@ -1,6 +1,5 @@
 import { type OptionKeys, Options } from '../options/mod.ts';
 import { AbstractTranslator } from './Translator.ts';
-import { DAM } from './DAM.ts';
 
 import type {
   ClientEvents,
@@ -12,7 +11,6 @@ import type {
   InsertQuery,
   Query,
   QueryResult,
-  QueryTypes,
   SelectQuery,
   UpdateQuery,
 } from './types/mod.ts';
@@ -33,6 +31,8 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
   declare public translator: AbstractTranslator;
   protected _status: ClientStatus = 'READY';
 
+  protected _version!: string;
+
   constructor(name: string, options: OptionKeys<O, ClientEvents>) {
     const def: Partial<O> = {
       slowQueryThreshold: 5,
@@ -40,10 +40,6 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
     super(options, def);
     this.name = name.trim().toLowerCase();
     this._validateConfig(options);
-    if (!DAM.hasConfig(this.name)) {
-      DAM.addConfig(this.name, options);
-    }
-    DAM.register(this as unknown as AbstractClient);
   }
 
   /**
@@ -115,6 +111,17 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
   }
 
   /**
+   * Gets the server version.
+   *
+   * @returns string The version of the database server.
+   */
+  public async getVersion(): Promise<string> {
+    if (this._version === undefined) {
+      this._version = await this._getVersion();
+    }
+    return this._version;
+  }
+  /**
    * Executes a query and returns the result.
    *
    * @template R - The type of the result data.
@@ -131,7 +138,6 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
         slowQueryThreshold = (this._getOption('slowQueryThreshold') || 5) *
           1000,
         result: QueryResult<R> = {
-          type: this._detectQuery(query.sql),
           time: 0,
           count: 0,
           data: [],
@@ -211,7 +217,6 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
       this.translator.count(query),
     );
     return {
-      type: 'COUNT',
       time: res.time,
       count: (res.data && res.data.length > 0) ? res.data[0].TotalRows : 0,
       data: [],
@@ -232,8 +237,8 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
 
   //#region Protected methods
   protected _validateConfig(options: ClientOptions) {
-    if (['POSTGRES', 'MARIA', 'MONGO', 'SQLITE'].includes(options.dialect)) {
-      throw new DAMConfigError('Unsupported dialect ${value}', {
+    if (!['POSTGRES', 'MARIA', 'MONGO', 'SQLITE'].includes(options.dialect)) {
+      throw new DAMConfigError(`Unsupported dialect ${options.dialect}`, {
         dialect: this.dialect,
         config: this.name,
         item: 'dialect',
@@ -242,17 +247,13 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
     }
   }
 
-  protected _detectQuery(sql: string): QueryTypes | 'UNKNOWN' {
-    const regex =
-      /^(SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE|CREATE\s+SCHEMA|DROP\s+SCHEMA|CREATE\s+(MATERIALISED)?\s+VIEW|ALTER\s+(MATERIALISED)?\s+VIEW|DROP\s+(MATERIALISED)?\s+VIEW|TRUNCATE|BEGIN|COMMIT|ROLLBACK|SAVEPOINT)\s+/i;
-    const matchedValue = sql.match(regex)?.[0].trim().replace(
-      /MATERIALISED/i,
-      '',
-    );
-    return matchedValue?.toUpperCase().replace(/\s+/, '_') as QueryTypes ||
-      'UNKNOWN';
-  }
-
+  /**
+   * Performes few checks and standardizes the query like removing trailing ;,
+   * ensuring variables are created correctly.
+   *
+   * @param query Query The query to standardize
+   * @returns Query The standardized query
+   */
   protected _standardizeQuery(query: Query): Query {
     // Remove trailing ; and add it
     const sql = query.sql.trim().replace(/;$/, '') + ';';

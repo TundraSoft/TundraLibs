@@ -13,7 +13,7 @@ import { envArgs } from '../../../utils/envArgs.ts';
 import {
   DAMClientError,
   DAMConfigError,
-  DAMQueryError,
+  DAMMissingParams,
   MariaClient,
   type MariaOptions,
 } from '../../mod.ts';
@@ -307,7 +307,7 @@ describe({
               `INSERT INTO test1 (\`Name\`, \`Email\`, \`Password\`, \`DOB\`, \`AccountNumber\`, \`Balance\`, \`Status\`) VALUES (:name:, :email:, :password:, :dob:, :accountNumber:, :balance:, :status:) RETURNING *;`,
           });
         };
-        assertRejects(a, DAMQueryError);
+        assertRejects(a, DAMMissingParams);
         await client.close();
       });
     });

@@ -18,5 +18,9 @@
     "https://deno.land": true,
     "https://x.nest.land": true,
     "https://crux.land": true
+  },
+  "sonarlint.connectedMode.project": {
+    "connectionId": "Sonar",
+    "projectKey": "TundraSoft_TundraLibs"
   }
 }

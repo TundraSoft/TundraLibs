@@ -13,7 +13,7 @@ import { envArgs } from '../../../utils/envArgs.ts';
 import {
   DAMClientError,
   DAMConfigError,
-  DAMQueryError,
+  DAMMissingParams,
   PostgresClient,
   type PostgresOptions,
 } from '../../mod.ts';
@@ -304,7 +304,7 @@ describe('DAM', () => {
               `INSERT INTO test1 ("Name", "Email", "Password", "DOB", "AccountNumber", "Balance", "Status") VALUES (:name:, :email:, :password:, :dob:, :accountNumber:, :balance:, :status:) RETURNING *;`,
           });
         };
-        assertRejects(a, DAMQueryError);
+        assertRejects(a, DAMMissingParams);
       });
     });
   });

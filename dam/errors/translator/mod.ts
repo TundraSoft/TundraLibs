@@ -1,3 +1,4 @@
-export { IncorrectType } from './IncorrectType.ts';
-export { InvalidDefinition } from './InvalidDefinition.ts';
-export { MissingDefinition } from './MissingDefinition.ts';
+export { DAMInvalidExpression } from './InvalidExpression.ts';
+export { DAMInvalidAggregate } from './InvalidAggregate.ts';
+export { DAMNotDefined } from './NotDefined.ts';
+export { DAMQueryTypeMismatch } from './QueryTypeMismatch.ts';
