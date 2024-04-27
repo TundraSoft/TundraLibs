@@ -1,250 +1,244 @@
 import {
-  afterAll,
+  assert, 
   assertEquals,
   assertRejects,
   assertThrows,
-  beforeAll,
-  describe,
-  it,
 } from '../../../dev.dependencies.ts';
+
 import {
-  // DAMClientError,
   DAMConfigError,
-  SQLiteClient,
+  DAMQueryError,
   DAMMissingParams, 
+  SQLiteClient, 
   type SQLiteOptions,
 } from '../../mod.ts';
-// import { nanoId, alphaNumeric } from '../../../id/mod.ts';
 
-// Sanitize is present here for 1.40.x compatibility
-describe({
-  name: 'DAM',
-  sanitizeExit: false,
-  sanitizeOps: false,
-  sanitizeResources: false,
-}, () => {
-  describe('Client', () => {
-    describe('SQLite', () => {
-      describe('Memory', () => {
-        const client = new SQLiteClient('sqlite', {
-          dialect: 'SQLITE',
+Deno.test('DAM:Client:SQLite', async (t) => {
+
+  await t.step('Invalid Config', async (t) => {
+    await t.step('Incorrect/Missing Dialect', () => {
+      assertThrows(() => {
+        const conf = {
+          dialect: 'SQLITES',
           mode: 'MEMORY',
-        });
-        // const schema = `test_${nanoId(4, alphaNumeric)}`;
+        }
+        const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
+      }, DAMConfigError);
 
-        it({
-          name: 'Invalid Config',
-          sanitizeExit: false,
-          sanitizeOps: false,
-          sanitizeResources: false,
-        }, () => {
-          const c = {
-            dialect: 'SQLLLLL',
-          };
-          assertThrows(
-            () => new SQLiteClient('maria', c as SQLiteOptions),
-            DAMConfigError,
-          );
-          assertThrows(
-            () =>
-              new SQLiteClient(
-                'post',
-                {
-                  dialect: 'SQLITE',
-                  mode: 'FSDFE',
-                } as unknown as SQLiteOptions,
-              ),
-            DAMConfigError,
-          );
-          assertThrows(
-            () =>
-              new SQLiteClient(
-                'post',
-                { dialect: 'SQLITE', mode: 'FILE' } as unknown as SQLiteOptions,
-              ),
-            DAMConfigError,
-          );
-          assertThrows(
-            () =>
-              new SQLiteClient(
-                'post',
-                {
-                  dialect: 'SQLITE',
-                  mode: 'FILE',
-                  path: '/adf',
-                } as unknown as SQLiteOptions,
-              ),
-            DAMConfigError,
-          );
-        });
+      assertThrows(() => {
+        const conf = {
+          dialect: '',
+          mode: 'MEMORY',
+        }
+        const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
+      }, DAMConfigError);
 
-        it('Must connect to db', async () => {
-          await client.connect();
-          assertEquals('CONNECTED', client.status);
-        });
+      assertThrows(() => {
+        const conf = {
+          mode: 'MEMORY',
+        }
+        const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
+      }, DAMConfigError);
+    });
 
-        it('Must close connection', async () => {
-          await client.connect();
-          assertEquals('CONNECTED', client.status);
-          await client.close();
-          assertEquals('READY', client.status);
-        });
+    await t.step('Missing Mode', () => {
+      assertThrows(() => {
+        const conf = {
+          dialect: 'SQLITE',
+          mode: 'JLHV'
+        }
+        const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
+      }, DAMConfigError);
 
-        it('Basic querying', async () => {
-          // await client.execute({
-          //   type: 'RAW',
-          //   sql: `CREATE SCHEMA ${schema};`,
-          // });
-          const resC = await client.execute({
-            type: 'RAW',
-            sql:
-              'CREATE TABLE test1("Id" INTEGER NOT NULL, "Name" VARCHAR(100) NOT NULL, "Email" VARCHAR(255) NOT NULL, "Password" VARCHAR(255) NOT NULL, "DOB" DATE, "AccountNumber" INTEGER NOT NULL, "Balance" DECIMAL NOT NULL, "Status" BOOLEAN NOT NULL, PRIMARY KEY ("Id"));',
-          });
-          assertEquals(0, resC.count);
+      assertThrows(() => {
+        const conf = {
+          dialect: 'SQLITE',
+          mode: '', 
+        }
+        const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
+      }, DAMConfigError);
 
-          const resi = await client.execute({
-            type: 'RAW',
-            sql:
-              `INSERT INTO test1 ("Name", "Email", "Password", "DOB", "AccountNumber", "Balance", "Status") VALUES ('John Doe', 'john@doe.com', 'password', '2023-01-01', 123456, 34.32, true) RETURNING *;`,
-          });
+      assertThrows(() => {
+        const conf = {
+          dialect: 'SQLITE',
+        }
+        const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
+      }, DAMConfigError);
+    });
 
-          assertEquals(1, resi.count);
-
-          const resu = await client.execute({
-            type: 'RAW',
-            sql: `UPDATE test1 SET "Status" = false RETURNING *;`,
-          });
-
-          assertEquals(1, resu.count);
-
-          const resd = await client.execute({
-            type: 'RAW',
-            sql: 'DELETE FROM test1 RETURNING *;',
-          });
-          assertEquals(1, resd.count);
-        });
-
-        it('Querying with parameters', async () => {
-          const resi = await client.execute({
-            type: 'RAW',
-            sql:
-              `INSERT INTO test1 ("Name", "Email", "Password", "DOB", "AccountNumber", "Balance", "Status") VALUES (:name:, :email:, :password:, :dob:, :accountNumber:, :balance:, :status:) RETURNING *;`,
-            params: {
-              name: 'Jane Doe',
-              email: 'jane@doe.com',
-              password: 'sdf',
-              dob: '2023-02-02',
-              accountNumber: 12345,
-              balance: 0.99,
-              status: true,
-            },
-          });
-          assertEquals(1, resi.count);
-        });
-
-        it('Missing params test', () => {
-          const a = async () => {
-            await client.execute({
-              type: 'RAW',
-              sql:
-                `INSERT INTO test1 ("Name", "Email", "Password", "DOB", "AccountNumber", "Balance", "Status") VALUES (:name:, :email:, :password:, :dob:, :accountNumber:, :balance:, :status:) RETURNING *;`,
-            });
-          };
-          assertRejects(a, DAMMissingParams);
-        });
-      });
-
-      describe('File', () => {
-        const client = new SQLiteClient('sqlite2', {
+    await t.step('Path for File mode', () => {
+      assertThrows(() => {
+        const conf = {
           dialect: 'SQLITE',
           mode: 'FILE',
-          path: 'dam/tests/fixtures/',
-        });
-        // const schema = `test_${nanoId(4, alphaNumeric)}`;
-        beforeAll(async () => {
-          await client.connect();
-        });
+        }
+        const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
+      }, DAMConfigError);
 
-        afterAll(async () => {
-          await client.close();
-          assertEquals('READY', client.status);
-          Deno.remove('dam/tests/fixtures/sqlite2', { recursive: true });
-        });
-
-        it('Must connect to db', () => {
-          assertEquals('CONNECTED', client.status);
-        });
-
-        // it('Must close connection', async () => {
-        //   await client.connect();
-        //   assertEquals('CONNECTED', client.status);
-        //   await client.close();
-        //   assertEquals('READY', client.status)
-        // });
-
-        it('Basic querying', async () => {
-          // await client.execute({
-          //   type: 'RAW',
-          //   sql: `CREATE SCHEMA ${schema};`,
-          // });
-          const resC = await client.execute({
-            type: 'RAW',
-            sql:
-              'CREATE TABLE test1("Id" INTEGER NOT NULL, "Name" VARCHAR(100) NOT NULL, "Email" VARCHAR(255) NOT NULL, "Password" VARCHAR(255) NOT NULL, "DOB" DATE, "AccountNumber" INTEGER NOT NULL, "Balance" DECIMAL NOT NULL, "Status" BOOLEAN NOT NULL, PRIMARY KEY ("Id"));',
-          });
-          assertEquals(0, resC.count);
-
-          const resi = await client.execute({
-            type: 'RAW',
-            sql:
-              `INSERT INTO test1 ("Name", "Email", "Password", "DOB", "AccountNumber", "Balance", "Status") VALUES ('John Doe', 'john@doe.com', 'password', '2023-01-01', 123456, 34.32, true) RETURNING *;`,
-          });
-
-          assertEquals(1, resi.count);
-
-          const resu = await client.execute({
-            type: 'RAW',
-            sql: `UPDATE test1 SET "Status" = false RETURNING *;`,
-          });
-
-          assertEquals(1, resu.count);
-
-          const resd = await client.execute({
-            type: 'RAW',
-            sql: 'DELETE FROM test1 RETURNING *;',
-          });
-          assertEquals(1, resd.count);
-        });
-
-        it('Querying with parameters', async () => {
-          const resi = await client.execute({
-            type: 'RAW',
-            sql:
-              `INSERT INTO test1 ("Name", "Email", "Password", "DOB", "AccountNumber", "Balance", "Status") VALUES (:name:, :email:, :password:, :dob:, :accountNumber:, :balance:, :status:) RETURNING *;`,
-            params: {
-              name: 'Jane Doe',
-              email: 'jane@doe.com',
-              password: 'sdf',
-              dob: '2023-02-02',
-              accountNumber: 12345,
-              balance: 0.99,
-              status: true,
-            },
-          });
-          assertEquals(1, resi.count);
-        });
-
-        it('Missing params test', () => {
-          const a = async () => {
-            await client.execute({
-              type: 'RAW',
-              sql:
-                `INSERT INTO test1 ("Name", "Email", "Password", "DOB", "AccountNumber", "Balance", "Status") VALUES (:name:, :email:, :password:, :dob:, :accountNumber:, :balance:, :status:) RETURNING *;`,
-            });
-          };
-          assertRejects(a, DAMMissingParams);
-        });
-      });
+      assertThrows(() => {
+        const conf = {
+          dialect: 'SQLITE',
+          mode: 'FILE', 
+          path: '/woo/hoo'
+        }
+        const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
+      }, DAMConfigError);
     });
+
+  });
+
+
+  await t.step('Perform DB Operations', async (t) => {
+    const conf = {
+      dialect: 'SQLITE',
+      mode: 'MEMORY',
+    }
+    const client = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
+
+    const confFile = {
+      dialect: 'SQLITE',
+      mode: 'FILE',
+      path: 'dam/tests/fixtures/', 
+    };
+    const clientFile = new SQLiteClient('sqlitetest2', confFile as SQLiteOptions);
+
+    await t.step('Connect', async () => {
+      await client.connect();
+      assertEquals('CONNECTED', client.status);
+      await client.close();
+
+      await clientFile.connect();
+      assertEquals('CONNECTED', clientFile.status);
+      await clientFile.close();
+    });
+
+    await t.step('Close', async () => {
+      await client.connect();
+      await client.close();
+      assertEquals('READY', client.status);
+
+      await clientFile.connect();
+      await clientFile.close();
+      assertEquals('READY', clientFile.status);
+    });
+
+    await t.step('Query', async () => {
+      await client.connect();
+      assert(await client.execute({
+        type: 'RAW',
+        sql: `SELECT sql FROM sqlite_master WHERE tbl_name = 'table_name' AND type = 'table';`,
+      }));
+      await client.close();
+
+      await clientFile.connect();
+      assert(await clientFile.execute({
+        type: 'RAW',
+        sql: `SELECT sql FROM sqlite_master WHERE tbl_name = 'table_name' AND type = 'table';`,
+      }));
+      await clientFile.close();
+    });
+
+    await t.step('Query Error', async () => {
+      await client.connect();
+      await assertRejects(async () => {
+        await client.execute({
+          type: 'RAW',
+          sql: `SELECT sql FROM sdf WHERE tbl_name = 'table_name' AND type = 'table'`,
+        });
+      }, DAMQueryError);
+      await client.close();
+
+      await clientFile.connect();
+      await assertRejects(async () => {
+        await clientFile.execute({
+          type: 'RAW',
+          sql: `SELECT sql FROM sdf WHERE tbl_name = 'table_name' AND type = 'table'`,
+        });
+      }, DAMQueryError);
+      await clientFile.close();
+    });
+
+    await t.step('Query with Parameter', async () => {
+      await client.connect();
+      assert(await client.execute({
+        type: 'RAW',
+        sql: `SELECT sql FROM sqlite_master WHERE tbl_name = 'table_name' AND type = :type:`,
+          params: {
+            type: 'table',
+          }
+      }));
+      await client.close();
+
+      await clientFile.connect();
+      assert(await clientFile.execute({
+        type: 'RAW',
+        sql: `SELECT sql FROM sqlite_master WHERE tbl_name = 'table_name' AND type = :type:`,
+          params: {
+            type: 'table',
+          }
+      }));
+      await clientFile.close();
+    });
+
+    await t.step('Missing Parameter', async () => {
+      await client.connect();
+      await assertRejects(async () => {
+        await client.execute({
+          type: 'RAW',
+          sql: `SELECT sql FROM sdf WHERE tbl_name = 'table_name' AND type = :type:`,
+        });
+      }, DAMMissingParams);
+      await client.close();
+
+      await clientFile.connect();
+      await assertRejects(async () => {
+        await clientFile.execute({
+          type: 'RAW',
+          sql: `SELECT sql FROM sdf WHERE tbl_name = 'table_name' AND type = :type:`,
+        });
+      }, DAMMissingParams);
+      await clientFile.close();
+    });
+
+    await t.step('Create Schema', async () => {
+      await client.connect();
+      await assertRejects(async () => {
+        await client.execute({
+          type: 'RAW',
+          sql: `CREATE SCHEMA test;`,
+        });
+      }, DAMQueryError);
+      await client.close();
+
+      await clientFile.connect();
+      
+      assert(await clientFile.execute({ type: 'RAW', sql: `CREATE SCHEMA IF NOT EXISTS test;` }));
+      await clientFile.close();
+    });
+
+    await t.step('Must load the schema on re-connect', async () => {
+      await clientFile.connect();
+      await assertRejects(async () => {
+        await clientFile.execute({ type: 'RAW', sql: `CREATE SCHEMA IF NOT EXISTS test;` });
+      }, DAMQueryError);
+      await clientFile.close();
+    });
+
+    await t.step('Must drop the schema', async () => {
+      await client.connect();
+      await assertRejects(async () => {
+        await client.execute({
+          type: 'RAW',
+          sql: `DROP SCHEMA test;`,
+        });
+      }, DAMQueryError);
+      await client.close();
+
+      await clientFile.connect();
+      
+      assert(await clientFile.execute({ type: 'RAW', sql: `DROP SCHEMA test;` }));
+      await clientFile.close();
+    });
+
   });
 });

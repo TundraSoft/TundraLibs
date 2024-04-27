@@ -21,7 +21,7 @@ import {
 
 // Schema REGEXP
 const SchemaRegex =
-  /(CREATE|DROP) (SCHEMA|DATABASE) (IF EXISTS |IF NOT EXISTS )?([^"]+)?"(\w+)";/i;
+  /(CREATE|DROP) (SCHEMA|DATABASE) (IF EXISTS |IF NOT EXISTS )?(\w+);$/i;
 
 /**
  * Represents the type of parameters that can be used in SQLite queries.
@@ -117,17 +117,24 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
     };
     let file = ':memory:';
     let basePath = '';
+    let databases: string[] | undefined = undefined;
     if (this._getOption('mode') === 'FILE') {
       basePath = path.join(
-        this._getOption('path')!,
+        this._getOption('path') as string,
         this.name.trim().toLowerCase(),
       );
       file = path.join(basePath, 'main.db');
+      // Get all files from the path
+      databases = this.__getDatabases(basePath);
     }
     try {
       this._client = new SQLiteDBClient(file, opt);
-      if (this._getOption('mode') === 'FILE') {
-        this.__loadDatabases(basePath);
+      if (this._getOption('mode') === 'FILE' && databases !== undefined) {
+        databases.map((db) => {
+          this._client?.execute(
+            `ATTACH DATABASE '${path.join(basePath, `${db}.db`)}' AS ${db};`,
+          );
+        });
       }
     } catch (e) {
       if (e instanceof DAMError) {
@@ -232,21 +239,21 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
    * @param basePath string Loads all files in the given path as databases.
    * @returns void
    */
-  private __loadDatabases(basePath: string) {
-    if (this._client === undefined) {
-      return;
-    }
+  private __getDatabases(basePath: string) {
     // Do not load databases in memory mode
     if (this._getOption('mode') === 'MEMORY') {
       return;
     }
+    const databases: string[] = [];
     for (const file of Deno.readDirSync(basePath)) {
       if (
         file.isFile && file.name.endsWith('.db') && file.name !== 'main.db'
       ) {
-        this.__createDatabase(file.name.replace('.db', ''));
+        console.log(`Found database: ${file.name}`);
+        databases.push(file.name.replace('.db', ''));
       }
     }
+    return databases;
   }
 
   /**
@@ -256,6 +263,9 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
    */
   private __createDatabase(name: string) {
     name = name.trim();
+    if (this._client === undefined || this._client.isClosed) {
+      return;
+    }
     if (this._getOption('mode') === 'MEMORY') {
       throw new DAMNotSupported({
         dialect: this.dialect,
@@ -280,9 +290,9 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
         `${name}.db`,
       ),
     );
-    this.execute({
-      sql: `ATTACH DATABASE '${path.join(basePath, `${name}.db`)}' AS ${name};`,
-    });
+    this._client.execute(
+      `ATTACH DATABASE '${path.join(basePath, `${name}.db`)}' AS ${name};`,
+    );
   }
 
   /**
@@ -291,6 +301,9 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
    * @param name string The name of the database to drop
    */
   private __dropDatabase(name: string) {
+    if (this._client === undefined || this._client.isClosed) {
+      return;
+    }
     name = name.trim();
     if (this._getOption('mode') === 'MEMORY') {
       throw new DAMNotSupported({
@@ -310,6 +323,7 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
       this._getOption('path')!,
       this.name.trim().toLowerCase(),
     );
+    this._client.execute(`DETACH DATABASE ${name};`);
     this.execute({
       sql: `DETACH DATABASE ${name};`,
     });

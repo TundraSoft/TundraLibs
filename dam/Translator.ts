@@ -242,8 +242,8 @@ export abstract class AbstractTranslator {
     const [columns, params] = this._processColumns(obj);
     const source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source;
     const filter = this.buildFilter(obj.filters || {}, columns, params)[0];
-    const project = new Map<string, unknown>();
-    const aggregate = new Map<string, unknown>();
+    const project: Record<string, string> = {};
+    const aggregate: Record<string, string> = {};
 
     const groupBy: string[] = (obj.groupBy || []).map((key) => {
       if (!columns[`${key}`]) {
@@ -305,9 +305,9 @@ export abstract class AbstractTranslator {
       if (this._isColumnIdentifier(value)) {
         const column = value.toString().substring(1);
         if (columns[`$${column}`]) {
-          project.set(escapedKey, columns[column as `$${string}`]);
+          project[escapedKey] = columns[`$${column}`];
         } else if (columns[`$MAIN.${column}`]) {
-          project.set(escapedKey, columns[`$MAIN.${column}`]);
+          project[escapedKey] = columns[`$MAIN.${column}`];
         } else {
           throw new DAMTranslatorError(`Unknown column ${column} in project`, {
             dialect: this.dialect,
@@ -319,17 +319,17 @@ export abstract class AbstractTranslator {
           columns,
           params,
         );
-        project.set(escapedKey, sql);
+        project[escapedKey] = sql;
       } else if (this._isAggregate(value)) {
         const [sql, _] = this.buildAggregate(
           value as Aggregate,
           columns,
           params,
         );
-        aggregate.set(escapedKey, sql);
+        aggregate[escapedKey] = sql;
       } else {
         const paramName = params.create(value);
-        project.set(escapedKey, this._makeParam(paramName));
+        project[escapedKey] = this._makeParam(paramName);
       }
     }
 
@@ -753,6 +753,7 @@ export abstract class AbstractTranslator {
           );
           exprArgs.push(sql);
         } else if (this._isColumnIdentifier(arg)) {
+          console.log('Column Identifier', arg);
           const parts = (arg as string).substring(1).split('.');
           if (columns[`$${parts[0]}`]) {
             if (parts.length > 1) {
@@ -806,10 +807,10 @@ export abstract class AbstractTranslator {
               dialect: this.dialect,
             });
           }
-        } else if (args instanceof Object && expr === 'JSON_ROW') {
+        } else if (arg instanceof Object && expr === 'JSON_ROW') {
           // Parse each item and if there is an expression or aggregate, process it
           const jsonRow: string[] = [];
-          Object.entries(args).forEach(([key, value]) => {
+          Object.entries(arg).forEach(([key, value]) => {
             if (this._isExpression(value)) {
               const [sql, _] = this.buildExpression(
                 value as Expressions,
@@ -1394,7 +1395,7 @@ export abstract class AbstractTranslator {
     sort: Record<string, 'ASC' | 'DESC'>,
     columns: Record<string, string>,
   ): string {
-    return Object.entries(sort).map(([key, value]) => {
+    const orderBy = Object.entries(sort).map(([key, value]) => {
       const sort = value.trim().toUpperCase();
       if (sort !== 'ASC' && sort !== 'DESC') {
         throw new DAMTranslatorError(
@@ -1404,8 +1405,9 @@ export abstract class AbstractTranslator {
           },
         );
       }
-      if (columns[`${key}`]) {
-        return `${columns[`${key}`]} ${sort}`;
+      key = key.substring(1);
+      if (columns[`$${key}`]) {
+        return `${columns[`$${key}`]} ${sort}`;
       } else if (columns[`$MAIN.${key}`]) {
         return `${columns[`$MAIN.${key}`]} ${sort}`;
       } else {
@@ -1414,5 +1416,10 @@ export abstract class AbstractTranslator {
         });
       }
     }).join(', ');
+    if (orderBy.length === 0) {
+      return '';
+    } else {
+      return ` ORDER BY ${orderBy}`;
+    }
   }
 }

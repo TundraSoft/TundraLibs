@@ -73,6 +73,8 @@ export class MariaTranslator extends AbstractTranslator {
         const column = args.shift() as string;
         return `JSON_VALUE(${this.escape(column)}, '$.${args.join('.')}')`;
       }
+      case 'UUID':
+        return 'UUID()';
       case 'SUBSTR':
         return `SUBSTRING(${args[0]} FROM ${args[1]} FOR ${args[2]})`;
       case 'REPLACE':
