@@ -15,7 +15,7 @@ import {
 import {
   type CreateSchemaQuery,
   type CreateTableQuery,
-  DAMTranslatorBaseError,
+  DAMTranslatorError,
   type DeleteQuery,
   type DropSchemaQuery,
   type InsertQuery,
@@ -57,70 +57,70 @@ describe('DAM', () => {
             client.translator.createSchema(
               JSON.parse(JSON.stringify({ type: 'INVALID' })),
             ),
-          DAMTranslatorBaseError,
+            DAMTranslatorError,
         );
         assertThrows(
           () =>
             client.translator.dropSchema(
               JSON.parse(JSON.stringify({ type: 'INVALID' })),
             ),
-          DAMTranslatorBaseError,
+            DAMTranslatorError,
         );
         assertThrows(
           () =>
             client.translator.createTable(
               JSON.parse(JSON.stringify({ type: 'INVALID' })),
             ),
-          DAMTranslatorBaseError,
+            DAMTranslatorError,
         );
         assertThrows(
           () =>
             client.translator.dropTable(
               JSON.parse(JSON.stringify({ type: 'INVALID' })),
             ),
-          DAMTranslatorBaseError,
+            DAMTranslatorError,
         );
         assertThrows(
           () =>
             client.translator.select(
               JSON.parse(JSON.stringify({ type: 'INVALID' })),
             ),
-          DAMTranslatorBaseError,
+            DAMTranslatorError,
         );
         assertThrows(
           () =>
             client.translator.insert(
               JSON.parse(JSON.stringify({ type: 'INVALID' })),
             ),
-          DAMTranslatorBaseError,
+            DAMTranslatorError,
         );
         assertThrows(
           () =>
             client.translator.update(
               JSON.parse(JSON.stringify({ type: 'INVALID' })),
             ),
-          DAMTranslatorBaseError,
+            DAMTranslatorError,
         );
         assertThrows(
           () =>
             client.translator.delete(
               JSON.parse(JSON.stringify({ type: 'INVALID' })),
             ),
-          DAMTranslatorBaseError,
+            DAMTranslatorError,
         );
         assertThrows(
           () =>
             client.translator.truncate(
               JSON.parse(JSON.stringify({ type: 'INVALID' })),
             ),
-          DAMTranslatorBaseError,
+            DAMTranslatorError,
         );
         assertThrows(
           () =>
             client.translator.count(
               JSON.parse(JSON.stringify({ type: 'INVALID' })),
             ),
-          DAMTranslatorBaseError,
+            DAMTranslatorError,
         );
       });
 
