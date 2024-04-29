@@ -17,7 +17,7 @@ import {
 
 const envData = envArgs('dam/tests');
 
-Deno.test('DAM:Client:Maria', async (t) => {
+Deno.test({ name: 'DAM:Client:Maria', sanitizeOps: false, sanitizeResources: false }, async (t) => {
 
   await t.step('Invalid Config', async (t) => {
     await t.step('Incorrect/Missing Dialect', () => {
@@ -238,8 +238,8 @@ Deno.test('DAM:Client:Maria', async (t) => {
         database: envData.get('MARIA_DB') || 'mysql',
         poolSize: 1,
       }
+      const client = new MariaClient('mariaTest', conf as MariaOptions);
       assertRejects(async () => {
-        const client = new MariaClient('mariaTest', conf as MariaOptions);
         await client.connect();
       }, DAMConnectionError);
     });
@@ -254,8 +254,8 @@ Deno.test('DAM:Client:Maria', async (t) => {
         database: envData.get('MARIA_DB') || 'mysql',
         poolSize: 1,
       }
+      const client = new MariaClient('mariaTest', conf as MariaOptions);
       assertRejects(async () => {
-        const client = new MariaClient('mariaTest', conf as MariaOptions);
         try {
           await client.connect();
         } catch {
@@ -314,7 +314,6 @@ Deno.test('DAM:Client:Maria', async (t) => {
     });
 
     await t.step('Query Error', async () => {
-      await client.connect();
       await assertRejects(async () => {
         await client.execute({
           type: 'RAW',
@@ -325,7 +324,6 @@ Deno.test('DAM:Client:Maria', async (t) => {
     });
 
     await t.step('Query with Parameter', async () => {
-      await client.connect();
       assert(await client.execute({
         type: 'RAW',
         sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ':schema:'`,
@@ -337,7 +335,6 @@ Deno.test('DAM:Client:Maria', async (t) => {
     });
 
     await t.step('Missing Parameter', async () => {
-      await client.connect();
       await assertRejects(async () => {
         await client.execute({
           type: 'RAW',

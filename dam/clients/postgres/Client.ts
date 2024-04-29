@@ -257,7 +257,7 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
 
   protected async _getVersion(): Promise<string> {
     const res = await this.execute<{ Version: string }>({
-      sql: 'SELECT sqlite_version() as "Version";',
+      sql: 'SELECT version() as "Version";',
     });
     return res.data[0].Version;
   }
