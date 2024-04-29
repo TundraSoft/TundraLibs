@@ -1,7 +1,7 @@
 import { TOTP } from '../mod.ts';
 import { assertEquals } from '../../dev.dependencies.ts';
 
-Deno.test('OTP.TOTP', async (t) => {
+Deno.test('OTP:TOTP', async (t) => {
   await t.step('SHA-1', async (t) => {
     await t.step(
       'Length of generated OTP must match specified length',

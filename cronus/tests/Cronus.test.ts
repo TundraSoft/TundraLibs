@@ -13,8 +13,8 @@ import {
   CronusJobNotFound,
 } from '../mod.ts';
 
-describe('Cronus', () => {
-  it('Cronus.addJob should add a job to Cronus', () => {
+describe('Cronus:Main', () => {
+  it('addJob should add a job to Cronus', () => {
     const cronus = new Cronus();
     const name = 'test-job';
     const jobDetails = {
@@ -27,7 +27,7 @@ describe('Cronus', () => {
     assertEquals(cronus.hasJob(name), true);
   });
 
-  it('Cronus.addJob should throw an error if job with same name already exists', () => {
+  it('addJob should throw an error if job with same name already exists', () => {
     const cronus = new Cronus();
     const name = 'test-job';
     const jobDetails = {
@@ -43,7 +43,7 @@ describe('Cronus', () => {
     );
   });
 
-  it('Cronus.addJob should throw an error if invalid cron schedule is provided', () => {
+  it('addJob should throw an error if invalid cron schedule is provided', () => {
     const cronus = new Cronus();
     const name = 'test-job';
     const jobDetails = {
@@ -57,7 +57,7 @@ describe('Cronus', () => {
     );
   });
 
-  it('Cronus.addJob should throw an error if action is not a callback function', () => {
+  it('addJob should throw an error if action is not a callback function', () => {
     const cronus = new Cronus();
     const name = 'test-job';
     const jobDetails = {
@@ -71,7 +71,7 @@ describe('Cronus', () => {
     );
   });
 
-  it('Cronus.addJob should add job to schedule if enable is not false', () => {
+  it('addJob should add job to schedule if enable is not false', () => {
     const cronus = new Cronus();
     const name = 'test-job';
     const jobDetails = {
@@ -87,7 +87,7 @@ describe('Cronus', () => {
     );
   });
 
-  it('Cronus.getScheduleJobs should return all jobs scheduled at a particular time', () => {
+  it('getScheduleJobs should return all jobs scheduled at a particular time', () => {
     const cronus = new Cronus();
     const name = 'test-job';
     const jobDetails = {

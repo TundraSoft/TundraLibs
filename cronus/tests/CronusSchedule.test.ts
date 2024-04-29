@@ -12,7 +12,7 @@ function getRandomArbitrary(min: number, max: number) {
   return Math.floor(Math.random() * (max - min) + min);
 }
 
-describe('Cronus', () => {
+describe('Cronus:Schedule', () => {
   describe('schedule validation', () => {
     it('should return true for a valid cron schedule', () => {
       const schedule = '0 0 * * *'; // Every day at midnight

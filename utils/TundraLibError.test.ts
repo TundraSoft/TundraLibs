@@ -1,7 +1,7 @@
 import { TundraLibError } from './TundraLibError.ts';
 import { assertEquals } from '../dev.dependencies.ts';
 
-Deno.test('utils/TundraLibError', async (t) => {
+Deno.test('utils:TundraLibError', async (t) => {
   await t.step(
     'should create a new instance of TundraLibError with the correct message and meta tags',
     () => {

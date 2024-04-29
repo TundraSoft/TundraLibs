@@ -12,7 +12,7 @@ import {
   assertRejects,
 } from '../../dev.dependencies.ts';
 
-Deno.test('RESTler.Mock', async (t) => {
+Deno.test('RESTler:Mock', async (t) => {
   const port = getFreePort();
   const mockServer = server(port);
   const mock = new MockTest(port);

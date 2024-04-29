@@ -1,7 +1,7 @@
 import { assertEquals } from '../../dev.dependencies.ts';
 import { once } from './once.ts';
 
-Deno.test('utils/decorators/once', async (t) => {
+Deno.test('utils:decorators:once', async (t) => {
   class MyClass {
     counter = 0;
 

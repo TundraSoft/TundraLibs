@@ -3,7 +3,7 @@ import { assertEquals } from '../dev.dependencies.ts';
 import { privateObject } from './privateObject.ts';
 import type { PrivateObject } from './privateObject.ts';
 
-Deno.test('utils/privateObject', async (t) => {
+Deno.test('utils:privateObject', async (t) => {
   let secretObject: PrivateObject;
 
   await t.step('sealed object', async (t) => {

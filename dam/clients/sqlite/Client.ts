@@ -324,9 +324,6 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
       this.name.trim().toLowerCase(),
     );
     this._client.execute(`DETACH DATABASE ${name};`);
-    this.execute({
-      sql: `DETACH DATABASE ${name};`,
-    });
     Deno.removeSync(path.join(basePath, `${name}.db`));
   }
 

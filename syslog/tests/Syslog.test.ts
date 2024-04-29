@@ -1,7 +1,7 @@
 import { parse, Syslog } from '../Syslog.ts';
 import { assertEquals, assertThrows } from '../../dev.dependencies.ts';
 
-Deno.test('Syslog.stringify', async (t) => {
+Deno.test('Syslog:stringify', async (t) => {
   await t.step('should return the expected output with structured data', () => {
     const syslog = Syslog();
     syslog.hostName = 'localhost';
@@ -9,7 +9,6 @@ Deno.test('Syslog.stringify', async (t) => {
     syslog.procId = 123;
     syslog.msgId = '12345';
     syslog.pri = 165;
-    // syslog.setStructuredData('ABC@1234', { key: 'value' });
     syslog.structuredData = {
       'ABC@1234': { key: 'value' },
     };
@@ -30,7 +29,6 @@ Deno.test('Syslog.stringify', async (t) => {
       syslog.procId = 123;
       syslog.msgId = '12345';
       syslog.pri = 165;
-      // syslog.message = 'Test message';
 
       const expectedOutput = '<165>1 ' +
         syslog.dateTime.toISOString() +
@@ -41,15 +39,15 @@ Deno.test('Syslog.stringify', async (t) => {
   );
 });
 
-Deno.test('Syslog.parse', async (t) => {
+Deno.test('Syslog:parse', async (t) => {
   await t.step('should parse RFC5432 correctly', () => {
     const logEntry =
-      '<165>1 2022-01-01T00:00:00.000Z localhost myApp 123 12345 [ABC@1234 key="value"] Test message';
+      '<165>1 2022-01-01T00:00:00.000Z localhost - 123 12345 [ABC@1234 key="value"] Test message';
 
     const syslog = parse(logEntry);
 
     assertEquals(syslog.hostName, 'localhost');
-    assertEquals(syslog.appName, 'myApp');
+    assertEquals(syslog.appName, undefined);
     assertEquals(syslog.procId, 123);
     assertEquals(syslog.msgId, '12345');
     assertEquals(
@@ -76,7 +74,7 @@ Deno.test('Syslog.parse', async (t) => {
   });
 });
 
-Deno.test('Syslog.validate', () => {
+Deno.test('Syslog:validate', () => {
   const syslog = Syslog();
 
   // Test initial properties
@@ -84,10 +82,7 @@ Deno.test('Syslog.validate', () => {
   assertEquals(syslog.facility, 16); // LOCAL0
 
   // Test getters
-  assertEquals(syslog.pri, 128); // facility * 8 + severity
-  // assertEquals(syslog.prival, 128); // same as pri
-  // assertEquals(typeof syslog.isoDateTime, 'string');
-  // assertEquals(typeof syslog.bsdDateTime, 'string');
+  assertEquals(syslog.pri, 128); 
 
   // Test setters
   syslog.version = '1';

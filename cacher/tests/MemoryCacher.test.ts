@@ -6,7 +6,7 @@ import {
 
 import { MemoryCache, type MemoryOptions, CacherConfigError } from '../mod.ts';
 
-Deno.test('Cacher.Memory', async (t) => {
+Deno.test('Cacher:Memory', async (t) => {
   const cacher = new MemoryCache('testCacher', {
     engine: 'MEMORY',
   });

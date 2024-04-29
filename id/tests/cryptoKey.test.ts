@@ -1,7 +1,7 @@
 import { cryptoKey } from '../mod.ts';
 import { assertEquals, assertMatch } from '../../dev.dependencies.ts';
 
-Deno.test('id.cryptoKey', async (t) => {
+Deno.test('id:cryptoKey', async (t) => {
   await t.step('Check if the length is as specified', () => {
     for (let i = 6; i <= 40; i++) {
       assertEquals(cryptoKey(i).length, i);

@@ -1,7 +1,7 @@
 import { throttle } from './throttle.ts';
 import { assertEquals } from '../../dev.dependencies.ts';
 
-Deno.test('utils/decorators/throttle', async (t) => {
+Deno.test('utils:decorators:throttle', async (t) => {
   class Test {
     called = 0;
 

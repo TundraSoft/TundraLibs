@@ -1,7 +1,7 @@
 import { singleton } from './singleton.ts';
 import { assertStrictEquals } from '../../dev.dependencies.ts';
 
-Deno.test('utils/decorators/singleton', async (t) => {
+Deno.test('utils:decorators:singleton', async (t) => {
   @singleton
   class TestClass {
     counter: number;

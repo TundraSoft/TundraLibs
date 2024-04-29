@@ -1,7 +1,7 @@
 import { BaseError } from './BaseError.ts';
 import { assertEquals } from '../dev.dependencies.ts';
 
-Deno.test('utils/BaseError', async (t) => {
+Deno.test('utils:BaseError', async (t) => {
   await t.step(
     'should create a new instance of BaseError with the correct message and meta tags',
     () => {

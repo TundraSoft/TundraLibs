@@ -1,7 +1,7 @@
 import { assertEquals } from '../../dev.dependencies.ts';
 import { memoize } from './memoize.ts';
 
-Deno.test('utils/decorators/memoize', async (t) => {
+Deno.test('utils:decorators:memoize', async (t) => {
   let counter = 0;
 
   class MyClass {

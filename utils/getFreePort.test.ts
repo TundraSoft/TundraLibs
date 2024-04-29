@@ -6,7 +6,7 @@ import {
 import { getFreePort } from './getFreePort.ts';
 
 Deno.test(
-  { name: 'utils/getFreePort', permissions: { net: true } },
+  { name: 'utils:getFreePort', permissions: { net: true } },
   async (t) => {
     await t.step('should return a number', () => {
       const port = getFreePort();

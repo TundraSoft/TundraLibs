@@ -2,7 +2,7 @@ import { assertEquals, assertStrictEquals } from '../dev.dependencies.ts';
 
 import { envArgs } from './envArgs.ts';
 
-Deno.test({ name: 'utils/envArgs' }, async (t) => {
+Deno.test({ name: 'utils:envArgs' }, async (t) => {
   await t.step(
     'should retrieve environment variables and return them as an object',
     () => {

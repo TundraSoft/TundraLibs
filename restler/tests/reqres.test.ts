@@ -3,7 +3,7 @@ import {
   assertEquals,
 } from '../../dev.dependencies.ts';
 
-Deno.test('RESTler.reqres', async (t) => {
+Deno.test('RESTler:ReqqRes', async (t) => {
   type UserType = {
     id: number;
     email: string;

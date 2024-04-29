@@ -1,7 +1,7 @@
 import { debounce } from './debounce.ts';
 import { assertEquals } from '../../dev.dependencies.ts';
 
-Deno.test('utils/decorators/debounce', async (t) => {
+Deno.test('utils:decorators:debounce', async (t) => {
   class Test {
     public cnt = 0;
 

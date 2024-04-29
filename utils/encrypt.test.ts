@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from '../dev.dependencies.ts';
 import { decrypt, encrypt } from './encrypt.ts';
 
-Deno.test('utils/encrypt', async (t) => {
+Deno.test('utils:encrypt', async (t) => {
   const key = '1111111111111111';
   const data = { a: 1, b: 2, c: 3 };
   const str = 'Loreum ipsum dolar sit amet';

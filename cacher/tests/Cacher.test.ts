@@ -10,7 +10,7 @@ import { Cacher, MemoryCache, RedisCache, UnsupportedCacherError, CacherDuplicat
 
 const envData = envArgs('cacher/tests/');
 
-Deno.test('Cacher.Manager', async (t) => {
+Deno.test('Cacher:Manager', async (t) => {
   await t.step('Create a new cache instance', () => {
     const _newCache = new MemoryCache('newCache', { engine: 'MEMORY' });
     const _redisInstance = new RedisCache('redisInstance', {

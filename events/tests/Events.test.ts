@@ -4,7 +4,7 @@ import { assertEquals } from '../../dev.dependencies.ts';
 const delay = (ms: number) =>
   new Promise<true>((resolve) => setTimeout(() => resolve(true), ms));
 
-Deno.test('Events.Types', async (t) => {
+Deno.test('Events:Typed', async (t) => {
   let op: unknown[] = [],
     test: EventTester;
   //#region Typed Events
@@ -190,7 +190,7 @@ Deno.test('Events.Types', async (t) => {
   });
 });
 
-Deno.test('Events.UnTyped', async (t) => {
+Deno.test('Events:UnTyped', async (t) => {
   let op: unknown[] = [],
     test: EventTester;
   //#region Typed Events

@@ -1,7 +1,7 @@
 import { type OptionKeys, Options } from '../mod.ts';
 import { assertEquals } from '../../dev.dependencies.ts';
 
-Deno.test('Options.Typed', async (t) => {
+Deno.test('Options:Typed', async (t) => {
   type TestOptions = { foo: string; bar?: number };
   type TestEvents = { baz: (value: string) => void };
   class TestClass extends Options<TestOptions, TestEvents> {
@@ -82,7 +82,7 @@ Deno.test('Options.Typed', async (t) => {
   });
 });
 
-Deno.test('Options.Untyped', async (t) => {
+Deno.test('Options:Untyped', async (t) => {
   class TestClass extends Options {
     constructor(opt: OptionKeys) {
       super(opt);

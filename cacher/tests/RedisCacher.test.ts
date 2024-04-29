@@ -9,7 +9,7 @@ import { RedisCache, type RedisOptions, CacherConfigError, CacherInitError } fro
 
 const envData = envArgs('cacher/tests');
 
-Deno.test('Cacher.Redis', async (t) => {
+Deno.test('Cacher:Redis', async (t) => {
   const cacher = new RedisCache('testCacher', {
     engine: 'REDIS',
     host: envData.get('REDIS_HOST') || 'localhost',
