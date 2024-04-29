@@ -11,6 +11,7 @@ import type {
   RESTlerRequest,
   RESTlerResponse,
   RESTlerResponseBody,
+  RESTlerResponseHandler,
 } from './types/mod.ts';
 
 import {
@@ -119,7 +120,11 @@ export abstract class RESTler<
     RespBody extends RESTlerResponseBody = RESTlerResponseBody,
   >(
     request: RESTlerRequest,
+    responseHandler?: RESTlerResponseHandler,
   ): Promise<RESTlerResponse<RespBody>> {
+    if (responseHandler === undefined) {
+      responseHandler = this._processResponse;
+    }
     Object.assign(request.endpoint, {
       baseURL: request.endpoint.baseURL ?? this._getOption('endpointURL'),
       version: this._getOption('version'),
@@ -155,7 +160,7 @@ export abstract class RESTler<
           resp.endpoint,
         );
       }
-      return await this._processResponse(resp);
+      return await responseHandler(resp);
     } catch (e) {
       resp.timeTaken = performance.now() - start;
       if (e.name === 'AbortError') {

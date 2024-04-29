@@ -1,4 +1,4 @@
-import type { RESTlerEndpoint } from './RESTlerEndpoint.ts';
+import type { RESTlerEndpoint } from './Endpoint.ts';
 
 export type RESTlerRequest = {
   endpoint:
