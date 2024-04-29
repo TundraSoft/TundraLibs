@@ -71,7 +71,7 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
     });
     // Return a function that will validate the value
     return ((
-      ...objs: StructParameters<S>
+      ...objs: Partial<StructParameters<S>>
     ): StructResolveType<S> | Promise<StructResolveType<S>> => {
       const retObj: Record<string, unknown> = {},
         obj = objs[0];
