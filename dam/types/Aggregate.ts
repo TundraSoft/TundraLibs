@@ -1,5 +1,4 @@
-import { Expressions } from './mod.ts';
-import { ColumnIdentifier } from './mod.ts';
+import { ColumnIdentifier, Expressions } from './mod.ts';
 
 type Sum = {
   $aggr: 'SUM';

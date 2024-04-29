@@ -36,7 +36,7 @@ export type InsertQuery = {
   values: Record<string, unknown>[];
   project: Record<
     string,
-    ColumnIdentifier | Expressions | string | number | boolean | Date
+    Expressions | string | number | boolean | Date
   >;
 };
 
@@ -68,7 +68,6 @@ export type SelectQuery = {
   filters?: QueryFilters;
   project: Record<
     string,
-    | ColumnIdentifier
     | Expressions
     | Aggregate
     | string

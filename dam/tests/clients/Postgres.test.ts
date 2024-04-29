@@ -289,29 +289,29 @@ Deno.test('DAM:Client:Postgres', async (t) => {
       await client.connect();
       assert(await client.select({
         type: 'SELECT',
-        source: 'TABLES',
-        schema: 'INFORMATION_SCHEMA',
-        columns: ['TABLE_SCHEMA', 'TABLE_NAME'],
+        source: 'tables',
+        schema: 'information_schema',
+        columns: ['table_schema', 'table_name'],
         joins: {
           Cols: {
-            source: 'COLUMNS',
-            schema: 'INFORMATION_SCHEMA',
-            columns: ['COLUMN_NAME', 'DATA_TYPE', 'TABLE_SCHEMA', 'TABLE_NAME'], 
+            source: 'columns',
+            schema: 'information_schema',
+            columns: ['column_name', 'data_type', 'table_schema', 'table_name'], 
             relation: {
-              'TABLE_SCHEMA': '$TABLE_SCHEMA',
-              'TABLE_NAME': '$TABLE_NAME',
+              'table_schema': '$table_schema',
+              'table_name': '$table_name',
             },
           }
         },
         project: {
-          'TableSchema': '$TABLE_SCHEMA',
-          'TableName': '$TABLE_NAME',
-          'Columns': { $aggr: 'JSON_ROW', $args: { 'ColumnName': '$Cols.COLUMN_NAME', 'DataType': '$Cols.DATA_TYPE' } }
+          'TableSchema': '$table_schema',
+          'TableName': '$table_name',
+          'Columns': { $aggr: 'JSON_ROW', $args: { 'ColumnName': '$Cols.column_name', 'DataType': '$Cols.data_type' } }
         }, 
         limit: 10, 
         offset: 10,
         orderBy: {
-          '$TABLE_SCHEMA': 'ASC',
+          '$table_schema': 'ASC',
         }
       }));
       await client.close();

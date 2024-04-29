@@ -15,6 +15,7 @@ export {
   DAMConfigError,
   DAMError,
   DAMMissingParams,
+  DAMNotSupported,
   DAMQueryError,
   DAMTranslatorError,
 } from './errors/mod.ts';

@@ -7,7 +7,7 @@ import {
   it,
 } from '../../../dev.dependencies.ts';
 import { alphaNumeric, nanoId } from '../../../id/mod.ts';
-import { DAMClientError, DAMQueryError, MongoClient } from '../../mod.ts';
+import { DAMClientError, DAMNotSupported, MongoClient } from '../../mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
 
 const envData = envArgs('dam/tests');
@@ -59,7 +59,6 @@ describe({
           password: 'pg',
           database: 'd',
         });
-        // const d = await a.connect();
         assertRejects(async () => await a.connect(), DAMClientError);
         await a.close();
       });
@@ -68,17 +67,13 @@ describe({
         assertEquals('CONNECTED', client.status);
       });
 
-      // it('Must close connection', async () => {
-      //   await client.close();
-      //   assertEquals('READY', client.status)
-      // });
 
       it('Basic querying', () => {
         const a = client.execute({
           type: 'RAW',
           sql: `CREATE SCHEMA ${schema};`,
         });
-        assertRejects(async () => await a, DAMQueryError);
+        assertRejects(async () => await a, DAMNotSupported);
       });
     });
   });
