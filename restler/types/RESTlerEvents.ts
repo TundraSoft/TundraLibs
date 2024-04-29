@@ -10,5 +10,6 @@ export type RESTlerEvents = {
     error?: RESTlerBaseError,
   ) => void;
   request: (request: RESTlerRequest) => void;
+  track: (name: string, args?: unknown) => void; // Helper event to "track" certain events in implemented class
   timeout: (request: RESTlerRequest) => void;
 };
