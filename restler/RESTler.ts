@@ -120,10 +120,10 @@ export abstract class RESTler<
     RespBody extends RESTlerResponseBody = RESTlerResponseBody,
   >(
     request: RESTlerRequest,
-    responseHandler?: RESTlerResponseHandler,
+    processResponse?: RESTlerResponseHandler,
   ): Promise<RESTlerResponse<RespBody>> {
-    if (responseHandler === undefined) {
-      responseHandler = this._processResponse;
+    if (processResponse === undefined) {
+      processResponse = this._processResponse.bind(this);
     }
     Object.assign(request.endpoint, {
       baseURL: request.endpoint.baseURL ?? this._getOption('endpointURL'),
@@ -160,7 +160,7 @@ export abstract class RESTler<
           resp.endpoint,
         );
       }
-      return await responseHandler(resp);
+      return await processResponse(resp);
     } catch (e) {
       resp.timeTaken = performance.now() - start;
       if (e.name === 'AbortError') {
