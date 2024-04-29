@@ -76,13 +76,13 @@ export const Syslog = (): SyslogObject => {
           target.facility = value;
           return true;
         case 'msgId':
-          target.msgId = value;
+          target.msgId = (value.trim() === '-') ? undefined : value.trim();
           return true;
         case 'hostName':
-          target.hostName = value.trim();
+          target.hostName = (value.trim() === '-') ? undefined : value.trim();
           return true;
         case 'appName':
-          target.appName = value.trim();
+          target.appName = (value.trim() === '-') ? undefined : value.trim();
           return true;
         case 'procId':
           target.procId = value;
