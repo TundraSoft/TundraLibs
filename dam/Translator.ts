@@ -740,108 +740,106 @@ export abstract class AbstractTranslator {
         return;
       }
 
-      if (!Array.isArray(args)) {
-        args = [args];
+      if (Array.isArray(args)) {
+        processArgs(args[0]);
       }
 
-      for (const arg of args as unknown[]) {
-        if (this._isExpression(arg)) {
-          const [sql, _] = this.buildExpression(
-            arg as Expressions,
-            columns,
-            params,
-          );
-          exprArgs.push(sql);
-        } else if (this._isColumnIdentifier(arg)) {
-          console.log('Column Identifier', arg);
-          const parts = (arg as string).substring(1).split('.');
-          if (columns[`$${parts[0]}`]) {
-            if (parts.length > 1) {
-              const [v, _] = this.buildExpression(
-                {
-                  $expr: 'JSON_VALUE',
-                  $args: [columns[`$${parts[0]}`], parts.slice(1)],
-                } as Expressions,
-                columns,
-                params,
-              );
-              exprArgs.push(v);
-            } else {
-              exprArgs.push(columns[`$${parts[0]}`]);
-            }
-          } else if (columns[`$MAIN.${parts[0]}`]) {
-            if (parts.length > 1) {
-              const [v, _] = this.buildExpression(
-                {
-                  $expr: 'JSON_VALUE',
-                  $args: [columns[`$MAIN.${parts[0]}`], parts.slice(1)],
-                } as Expressions,
-                columns,
-                params,
-              );
-              exprArgs.push(v);
-            } else {
-              exprArgs.push(columns[`$MAIN.${parts[0]}`]);
-            }
-          } else if (
-            parts.length > 1 && columns[`$${parts[0]}.${parts[1]}`]
-          ) {
-            if (parts.length > 2) {
-              const [v, _] = this.buildExpression(
-                {
-                  $expr: 'JSON_VALUE',
-                  $args: [
-                    columns[`$${parts[0]}.${parts[1]}`],
-                    parts.slice(2),
-                  ],
-                } as Expressions,
-                columns,
-                params,
-              );
-              exprArgs.push(v);
-            } else {
-              exprArgs.push(columns[`$${parts[0]}.${parts[1]}`]);
-            }
+      if (this._isExpression(args)) {
+        const [sql, _] = this.buildExpression(
+          args as Expressions,
+          columns,
+          params,
+        );
+        exprArgs.push(sql);
+      } else if (this._isColumnIdentifier(args)) {
+        console.log('Column Identifier', args);
+        const parts = (args as string).substring(1).split('.');
+        if (columns[`$${parts[0]}`]) {
+          if (parts.length > 1) {
+            const [v, _] = this.buildExpression(
+              {
+                $expr: 'JSON_VALUE',
+                $args: [columns[`$${parts[0]}`], parts.slice(1)],
+              } as Expressions,
+              columns,
+              params,
+            );
+            exprArgs.push(v);
           } else {
-            throw new DAMTranslatorError(`Invalud Aggregate argument ${args}`, {
-              dialect: this.dialect,
-            });
+            exprArgs.push(columns[`$${parts[0]}`]);
           }
-        } else if (arg instanceof Object && expr === 'JSON_ROW') {
-          // Parse each item and if there is an expression or aggregate, process it
-          const jsonRow: string[] = [];
-          Object.entries(arg).forEach(([key, value]) => {
-            if (this._isExpression(value)) {
-              const [sql, _] = this.buildExpression(
-                value as Expressions,
-                columns,
-                params,
-              );
-              jsonRow.push(`'${key}', ${sql}`);
-            } else if (this._isAggregate(value)) {
-              const [sql, _] = this.buildAggregate(
-                value as Aggregate,
-                columns,
-                params,
-              );
-              jsonRow.push(`'${key}', ${sql}`);
-            } else if (this._isColumnIdentifier(value)) {
-              jsonRow.push(
-                `'${key}', ${this.escape(value.substring(1))}`,
-              );
-            } else {
-              const paramName = params.create(value);
-              jsonRow.push(`'${key}', ${this._makeParam(paramName)}`);
-            }
-          });
-          exprArgs.push(jsonRow.join(', '));
+        } else if (columns[`$MAIN.${parts[0]}`]) {
+          if (parts.length > 1) {
+            const [v, _] = this.buildExpression(
+              {
+                $expr: 'JSON_VALUE',
+                $args: [columns[`$MAIN.${parts[0]}`], parts.slice(1)],
+              } as Expressions,
+              columns,
+              params,
+            );
+            exprArgs.push(v);
+          } else {
+            exprArgs.push(columns[`$MAIN.${parts[0]}`]);
+          }
+        } else if (
+          parts.length > 1 && columns[`$${parts[0]}.${parts[1]}`]
+        ) {
+          if (parts.length > 2) {
+            const [v, _] = this.buildExpression(
+              {
+                $expr: 'JSON_VALUE',
+                $args: [
+                  columns[`$${parts[0]}.${parts[1]}`],
+                  parts.slice(2),
+                ],
+              } as Expressions,
+              columns,
+              params,
+            );
+            exprArgs.push(v);
+          } else {
+            exprArgs.push(columns[`$${parts[0]}.${parts[1]}`]);
+          }
         } else {
-          if (args === '*') {
-            exprArgs.push('*');
+          throw new DAMTranslatorError(`Invalud Aggregate argument ${args}`, {
+            dialect: this.dialect,
+          });
+        }
+      } else if (args instanceof Object && expr === 'JSON_ROW') {
+        // Parse each item and if there is an expression or aggregate, process it
+        const jsonRow: string[] = [];
+        Object.entries(args).forEach(([key, value]) => {
+          if (this._isExpression(value)) {
+            const [sql, _] = this.buildExpression(
+              value as Expressions,
+              columns,
+              params,
+            );
+            jsonRow.push(`'${key}', ${sql}`);
+          } else if (this._isAggregate(value)) {
+            const [sql, _] = this.buildAggregate(
+              value as Aggregate,
+              columns,
+              params,
+            );
+            jsonRow.push(`'${key}', ${sql}`);
+          } else if (this._isColumnIdentifier(value)) {
+            jsonRow.push(
+              `'${key}', ${this.escape(value.substring(1))}`,
+            );
           } else {
-            const paramName = params.create(args);
-            exprArgs.push(this._makeParam(paramName));
+            const paramName = params.create(value);
+            jsonRow.push(`'${key}', ${this._makeParam(paramName)}`);
           }
+        });
+        exprArgs.push(jsonRow.join(', '));
+      } else {
+        if (args === '*') {
+          exprArgs.push('*');
+        } else {
+          const paramName = params.create(args);
+          exprArgs.push(this._makeParam(paramName));
         }
       }
     };
