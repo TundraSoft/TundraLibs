@@ -4,9 +4,7 @@ import {
   assertRejects,
   assertThrows,
 } from '../../../dev.dependencies.ts';
-import {} from '../../errors/mod.ts';
 
-// import { alphaNumeric, nanoId } from '../../../id/mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
 import {
   DAMConfigError,
@@ -14,6 +12,7 @@ import {
   MariaClient,
   DAMQueryError, 
   type MariaOptions,
+  DAMConnectionError
 } from '../../mod.ts';
 
 const envData = envArgs('dam/tests');
@@ -32,9 +31,9 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
-
+      
       assertThrows(() => {
         const conf = {
           dialect: '',
@@ -45,7 +44,7 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
 
       assertThrows(() => {
@@ -57,7 +56,20 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
+      }, DAMConfigError);
+
+      assertThrows(() => {
+        const conf = {
+          dialect: 'POSTGRES',
+          host: envData.get('MARIA_HOST') || 'localhost',
+          username: envData.get('MARIA_USER') || 'root',
+          password: envData.get('MARIA_PASS') || 'mariapw',
+          port: parseInt(envData.get('MARIA_PORT')) || 3306,
+          database: envData.get('MARIA_DB') || 'mysql',
+          poolSize: 1,
+        }
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
     });
 
@@ -71,7 +83,7 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
 
       assertThrows(() => {
@@ -84,7 +96,7 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
     });
 
@@ -99,7 +111,7 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
 
       assertThrows(() => {
@@ -112,7 +124,7 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
     });
 
@@ -127,7 +139,7 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
 
       assertThrows(() => {
@@ -140,7 +152,7 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
     });
 
@@ -155,7 +167,7 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtestPW', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
         console.log('sdfgsdfsdfsdf')
       }, DAMConfigError);
 
@@ -169,7 +181,7 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
     });
 
@@ -184,7 +196,7 @@ Deno.test('DAM:Client:Maria', async (t) => {
           // database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
 
       assertThrows(() => {
@@ -197,7 +209,7 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: '',
           poolSize: 1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
     });
 
@@ -212,10 +224,49 @@ Deno.test('DAM:Client:Maria', async (t) => {
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: -1,
         }
-        const _a = new MariaClient('pgtest', conf as MariaOptions);
+        const _a = new MariaClient('mariaTest', conf as MariaOptions);
       }, DAMConfigError);
     });
 
+    await t.step('Failed connection', () => {
+      const conf = {
+        dialect: 'MARIA',
+        host: envData.get('MARIA_HOST') || 'localhost',
+        username: envData.get('MARIA_USER') || 'root',
+        password: 'InvalidPassword',
+        port: parseInt(envData.get('MARIA_PORT')) || 3306,
+        database: envData.get('MARIA_DB') || 'mysql',
+        poolSize: 1,
+      }
+      assertRejects(async () => {
+        const client = new MariaClient('mariaTest', conf as MariaOptions);
+        await client.connect();
+      }, DAMConnectionError);
+    });
+
+    await t.step('Querying in Failed connection', () => {
+      const conf = {
+        dialect: 'MARIA',
+        host: envData.get('MARIA_HOST') || 'localhost',
+        username: envData.get('MARIA_USER') || 'root',
+        password: 'InvalidPassword',
+        port: parseInt(envData.get('MARIA_PORT')) || 3306,
+        database: envData.get('MARIA_DB') || 'mysql',
+        poolSize: 1,
+      }
+      assertRejects(async () => {
+        const client = new MariaClient('mariaTest', conf as MariaOptions);
+        try {
+          await client.connect();
+        } catch {
+          // Suppress
+        }
+        await client.execute({
+          type: 'RAW',
+          sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'mysql';`,
+        });
+      }, DAMConnectionError);
+    });
   });
 
   await t.step('Perform DB Operations', async (t) => {
@@ -228,9 +279,12 @@ Deno.test('DAM:Client:Maria', async (t) => {
       database: envData.get('MARIA_DB') || 'mysql',
       poolSize: 1,
     }
-    const client = new MariaClient('pgtest', conf as MariaOptions);
+    const client = new MariaClient('mariaTest', conf as MariaOptions);
 
     await t.step('Connect', async () => {
+      await client.connect();
+      assertEquals('CONNECTED', client.status);
+      // Attempt calling connect again should not change anything
       await client.connect();
       assertEquals('CONNECTED', client.status);
       await client.close();
@@ -240,10 +294,18 @@ Deno.test('DAM:Client:Maria', async (t) => {
       await client.connect();
       await client.close();
       assertEquals('READY', client.status);
+      // Attempt calling close again should not change anything
+      await client.close();
+      assertEquals('READY', client.status);
     });
 
-    await t.step('Query', async () => {
+    await t.step('Get Version', async () => {
       await client.connect();
+      assert(await client.getVersion());
+      await client.close();
+    });
+    
+    await t.step('Query', async () => {
       assert(await client.execute({
         type: 'RAW',
         sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'mysql';`,
@@ -286,7 +348,6 @@ Deno.test('DAM:Client:Maria', async (t) => {
     });
 
     await t.step('Generate select query', async () => {
-      await client.connect();
       assert(await client.select({
         type: 'SELECT',
         source: 'TABLES',
@@ -313,6 +374,27 @@ Deno.test('DAM:Client:Maria', async (t) => {
         orderBy: {
           '$TABLE_SCHEMA': 'ASC',
         }
+      }));
+      await client.close();
+    });
+
+    await t.step('Generate count query', async () => {
+      assert(await client.count({
+        type: 'COUNT',
+        source: 'TABLES',
+        schema: 'INFORMATION_SCHEMA',
+        columns: ['TABLE_SCHEMA', 'TABLE_NAME', 'DATA_LENGTH'],
+        joins: {
+          Cols: {
+            source: 'COLUMNS',
+            schema: 'INFORMATION_SCHEMA',
+            columns: ['COLUMN_NAME', 'DATA_TYPE', 'TABLE_SCHEMA', 'TABLE_NAME'], 
+            relation: {
+              'TABLE_SCHEMA': '$TABLE_SCHEMA',
+              'TABLE_NAME': '$TABLE_NAME',
+            },
+          }
+        },
       }));
       await client.close();
     });

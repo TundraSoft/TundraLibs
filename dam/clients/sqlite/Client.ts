@@ -175,6 +175,7 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
   protected _execute<
     R extends Record<string, unknown> = Record<string, unknown>,
   >(query: Query): { count: number; rows: R[] } {
+    // Below is not needed, but kept for safety
     if (this._status !== 'CONNECTED' || this._client === undefined) {
       throw new Error('Client not connected');
     }
@@ -249,7 +250,6 @@ export class SQLiteClient extends AbstractClient<SQLiteOptions> {
       if (
         file.isFile && file.name.endsWith('.db') && file.name !== 'main.db'
       ) {
-        console.log(`Found database: ${file.name}`);
         databases.push(file.name.replace('.db', ''));
       }
     }

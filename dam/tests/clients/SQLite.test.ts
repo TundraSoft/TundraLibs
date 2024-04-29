@@ -39,6 +39,14 @@ Deno.test('DAM:Client:SQLite', async (t) => {
         }
         const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
       }, DAMConfigError);
+
+      assertThrows(() => {
+        const conf = {
+          dialect: 'MARIA',
+          mode: 'MEMORY',
+        }
+        const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
+      }, DAMConfigError);
     });
 
     await t.step('Missing Mode', () => {
@@ -100,13 +108,19 @@ Deno.test('DAM:Client:SQLite', async (t) => {
       mode: 'FILE',
       path: 'dam/tests/fixtures/', 
     };
-    const clientFile = new SQLiteClient('sqlitetest2', confFile as SQLiteOptions);
+    const clientFile = new SQLiteClient('clientTest', confFile as SQLiteOptions);
 
     await t.step('Connect', async () => {
       await client.connect();
       assertEquals('CONNECTED', client.status);
+      // Calling connect again should do nothing
+      await client.connect();
+      assertEquals('CONNECTED', client.status);
       await client.close();
 
+      await clientFile.connect();
+      assertEquals('CONNECTED', clientFile.status);
+      // Calling client again should do nothing
       await clientFile.connect();
       assertEquals('CONNECTED', clientFile.status);
       await clientFile.close();
@@ -116,21 +130,31 @@ Deno.test('DAM:Client:SQLite', async (t) => {
       await client.connect();
       await client.close();
       assertEquals('READY', client.status);
+      // Calling close again should do nothing
+      await client.close();
+      assertEquals('READY', client.status);
 
       await clientFile.connect();
       await clientFile.close();
       assertEquals('READY', clientFile.status);
+      // Calling close again should do nothing
+      await clientFile.close();
+      assertEquals('READY', clientFile.status);
     });
 
-    await t.step('Query', async () => {
+    await t.step('Get Version', async () => {
       await client.connect();
+      assert(await client.getVersion());
+      await client.close();
+    });
+    
+    await t.step('Query', async () => {
       assert(await client.execute({
         type: 'RAW',
         sql: `SELECT sql FROM sqlite_master WHERE tbl_name = 'table_name' AND type = 'table';`,
       }));
       await client.close();
 
-      await clientFile.connect();
       assert(await clientFile.execute({
         type: 'RAW',
         sql: `SELECT sql FROM sqlite_master WHERE tbl_name = 'table_name' AND type = 'table';`,

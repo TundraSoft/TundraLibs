@@ -9,6 +9,7 @@ import { envArgs } from '../../../utils/envArgs.ts';
 import {
   DAMConfigError,
   DAMQueryError,
+  DAMConnectionError, 
   PostgresClient,
   DAMMissingParams,  
   type PostgresOptions,
@@ -48,6 +49,19 @@ Deno.test('DAM:Client:Postgres', async (t) => {
 
       assertThrows(() => {
         const conf = {
+          host: envData.get('PG_HOST') || 'localhost',
+          username: envData.get('PG_USER') || 'postgres',
+          password: envData.get('PG_PASS') || 'postgres',
+          port: parseInt(envData.get('PG_PORT')) || 5432,
+          database: envData.get('PG_DB') || 'postgres',
+          poolSize: 1,
+        }
+        const _a = new PostgresClient('pgtest', conf as PostgresOptions);
+      }, DAMConfigError);
+
+      assertThrows(() => {
+        const conf = {
+          dialect: 'MARIA',
           host: envData.get('PG_HOST') || 'localhost',
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
@@ -214,6 +228,45 @@ Deno.test('DAM:Client:Postgres', async (t) => {
       }, DAMConfigError);
     });
 
+    await t.step('Failed connection', () => {
+      const conf = {
+        dialect: 'POSTGRES',
+        host: envData.get('PG_HOST') || 'localhost', 
+        username: envData.get('PG_USER') || 'postgres',
+        password: 'InvalidPassword',
+        port: parseInt(envData.get('PG_PORT')) || 5432,
+        database: envData.get('PG_DB') || 'postgres',
+        poolSize: 1,
+      }
+      assertRejects(async () => {
+        const client = new PostgresClient('pgtest', conf as PostgresOptions);
+        await client.connect();
+      }, DAMConnectionError);
+    });
+
+    await t.step('Querying in Failed connection', () => {
+      const conf = {
+        dialect: 'POSTGRES',
+        host: envData.get('PG_HOST') || 'localhost', 
+        username: envData.get('PG_USER') || 'postgres',
+        password: 'InvalidPassword',
+        port: parseInt(envData.get('PG_PORT')) || 5432,
+        database: envData.get('PG_DB') || 'postgres',
+        poolSize: 1,
+      }
+      assertRejects(async () => {
+        const client = new PostgresClient('pgtest', conf as PostgresOptions);
+        try {
+          await client.connect();
+        } catch {
+          // Suppress
+        }
+        await client.execute({
+          type: 'RAW',
+          sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'mysql';`,
+        });
+      }, DAMConnectionError);
+    });
   });
 
   await t.step('Perform DB Operations', async (t) => {
@@ -231,6 +284,9 @@ Deno.test('DAM:Client:Postgres', async (t) => {
     await t.step('Connect', async () => {
       await client.connect();
       assertEquals('CONNECTED', client.status);
+      // Attempt calling connect again should not change anything
+      await client.connect();
+      assertEquals('CONNECTED', client.status);
       await client.close();
     });
 
@@ -238,8 +294,16 @@ Deno.test('DAM:Client:Postgres', async (t) => {
       await client.connect();
       await client.close();
       assertEquals('READY', client.status);
+      // Attempt calling close again should not change anything
+      await client.close();
+      assertEquals('READY', client.status);
     });
 
+    await t.step('Get Version', async () => {
+      await client.connect();
+      assert(await client.getVersion());
+      await client.close();
+    });
     await t.step('Query', async () => {
       await client.connect();
       await client.execute({
@@ -313,6 +377,28 @@ Deno.test('DAM:Client:Postgres', async (t) => {
         orderBy: {
           '$table_schema': 'ASC',
         }
+      }));
+      await client.close();
+    });
+
+    await t.step('Generate count query', async () => {
+      await client.connect();
+      assert(await client.count({
+        type: 'COUNT',
+        source: 'tables',
+        schema: 'information_schema',
+        columns: ['table_schema', 'table_name'],
+        joins: {
+          Cols: {
+            source: 'columns',
+            schema: 'information_schema',
+            columns: ['column_name', 'data_type', 'table_schema', 'table_name'], 
+            relation: {
+              'table_schema': '$table_schema',
+              'table_name': '$table_name',
+            },
+          }
+        },
       }));
       await client.close();
     });

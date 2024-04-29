@@ -218,6 +218,7 @@ export class PostgresClient extends AbstractClient<PostgresOptions> {
   protected async _execute<
     R extends Record<string, unknown> = Record<string, unknown>,
   >(query: Query): Promise<{ count: number; rows: R[] }> {
+    // Below is not needed, but kept for safety
     if (this._status !== 'CONNECTED' || this._client === undefined) {
       throw new DAMClientError('Client not connected', {
         dialect: this.dialect,

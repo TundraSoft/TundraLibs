@@ -13,6 +13,7 @@ export { AggregateNames, DataTypeNames, ExpressionNames } from './const/mod.ts';
 export {
   DAMClientError,
   DAMConfigError,
+  DAMConnectionError,
   DAMError,
   DAMMissingParams,
   DAMNotSupported,
