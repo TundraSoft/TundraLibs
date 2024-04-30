@@ -23,4 +23,7 @@ export const ExpressionNames = [
   'DATE_FORMAT',
   'UUID',
   'JSON_VALUE',
+  'ENCRYPT',
+  'DECRYPT',
+  'HASH',
 ];

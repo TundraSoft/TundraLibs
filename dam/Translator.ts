@@ -561,41 +561,34 @@ export abstract class AbstractTranslator {
       });
     }
     const source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source,
-      addColumns = Object.entries(obj.addColumns || {}).map(([name, defn]) => {
-        return `ADD COLUMN ${this._generateColumnDefinition(name, defn)}`;
-      }),
-      dropColumns = (obj.dropColumns || []).map((name) => {
-        return `DROP COLUMN ${this.escape(name)}`;
-      }),
-      renameColumns = Object.entries(obj.renameColumns || {}).map(
-        ([oldName, newName]) => {
-          return `RENAME COLUMN ${this.escape(oldName)} TO ${
-            this.escape(
-              newName,
-            )
-          }`;
-        },
-      ),
-      alterColumns = Object.entries(obj.alterColumns || {}).map(
-        ([name, defn]) => {
-          return `ALTER COLUMN ${this.escape(name)} TYPE ${
-            this._dataTypes[defn.type]
-          }`;
-        },
-      ),
-      nullableColumns = Object.entries(obj.alterColumns || {}).map(
-        ([name, defn]) => {
-          return `ALTER COLUMN ${this.escape(name)} ${
-            defn.nullable ? 'DROP' : 'SET'
-          } NOT NULL`;
-        },
+      alterItems: string[] = [];
+    Object.entries(obj.addColumns || {}).forEach(([name, defn]) => {
+      alterItems.push(
+        `ADD COLUMN ${this._generateColumnDefinition(name, defn)}`,
       );
+    });
+    obj.dropColumns?.forEach((name) => {
+      alterItems.push(`DROP COLUMN ${this.escape(name)}`);
+    });
+    Object.entries(obj.renameColumns || {}).forEach(([oldName, newName]) => {
+      alterItems.push(
+        `RENAME COLUMN ${this.escape(oldName)} TO ${this.escape(newName)}`,
+      );
+    });
+    Object.entries(obj.alterColumns || {}).forEach(([name, defn]) => {
+      alterItems.push(
+        `ALTER COLUMN ${this.escape(name)} TYPE ${this._dataTypes[defn.type]}`,
+      );
+    });
+    Object.entries(obj.alterColumns || {}).forEach(([name, defn]) => {
+      alterItems.push(
+        `ALTER COLUMN ${this.escape(name)} ${
+          defn.nullable ? 'DROP' : 'SET'
+        } NOT NULL`,
+      );
+    });
     return {
-      sql: `ALTER TABLE ${this.escape(source)} ${addColumns.join(', ')}${
-        dropColumns.length > 0 ? `, ${dropColumns.join(', ')}` : ''
-      }${renameColumns.length > 0 ? `, ${renameColumns.join(', ')}` : ''}${
-        alterColumns.length > 0 ? `, ${alterColumns.join(', ')}` : ''
-      }${nullableColumns.length > 0 ? `, ${nullableColumns.join(', ')}` : ''};`,
+      sql: `ALTER TABLE ${this.escape(source)} ${alterItems.join(', ')}`,
     };
   }
 
@@ -948,13 +941,11 @@ export abstract class AbstractTranslator {
           }
         });
         exprArgs.push(jsonRow.join(', '));
+      } else if (args === '*') {
+        exprArgs.push('*');
       } else {
-        if (args === '*') {
-          exprArgs.push('*');
-        } else {
-          const paramName = params.create(args);
-          exprArgs.push(this._makeParam(paramName));
-        }
+        const paramName = params.create(args);
+        exprArgs.push(this._makeParam(paramName));
       }
     };
 
@@ -1398,6 +1389,10 @@ export abstract class AbstractTranslator {
         return `DATE_ADD(${args.join(', ')})`;
       case 'DATE_FORMAT':
         return `DATE_FORMAT(${args.join(', ')})`;
+      case 'ENCRYPT':
+        return `(${args[0]})`;
+      case 'DECRYPT':
+        return `(${args[0]})`;
       default:
         throw new DAMTranslatorError(`Unsupported Expression ${name}`, {
           dialect: this.dialect,

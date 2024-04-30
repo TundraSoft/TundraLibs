@@ -56,11 +56,10 @@ export class PostgresTranslator extends AbstractTranslator {
   }
 
   protected _generateAggregateSQL(name: string, args: string[]): string {
-    switch (name) {
-      case 'JSON_ROW':
-        return `JSON_AGG(JSONB_BUILD_OBJECT(${args.join(', ')}))`;
-      default:
-        return super._generateAggregateSQL(name, args);
+    if (name === 'JSON_ROW') {
+      return `JSON_AGG(JSONB_BUILD_OBJECT(${args.join(', ')}))`;
+    } else {
+      return super._generateAggregateSQL(name, args);
     }
   }
 
@@ -85,8 +84,14 @@ export class PostgresTranslator extends AbstractTranslator {
       }
       case 'UUID':
         return `GEN_RANDOM_UUID()`;
+      case 'LOWER':
+        return `LOWER(${args[0]}::TEXT)`;
+      case 'UPPER':
+        return `UPPER(${args[0]}::TEXT)`;
+      case 'TRIM':
+        return `TRIM(${args[0]}::TEXT)`;
       case 'SUBSTR':
-        return `SUBSTRING(${args[0]} FROM ${args[1]} FOR ${args[2]})`;
+        return `SUBSTRING(${args[0]}::TEXT FROM ${args[1]} FOR ${args[2]})`;
       case 'REPLACE':
         return `REPLACE(${args[0]}, ${args[1]}, ${args[2]})`;
       case 'DATE_DIFF':
@@ -95,6 +100,12 @@ export class PostgresTranslator extends AbstractTranslator {
         return `DATE_ADD(${args.join(', ')})`;
       case 'DATE_FORMAT':
         return `DATE_FORMAT(${args.join(', ')})`;
+      case 'ENCRYPT':
+        return `ENCODE(PGP_SYM_ENCRYPT(${args[0]}::TEXT, ${
+          args[1]
+        }, 'compress-algo=1, cipher-algo=aes256'), 'base64')`;
+      case 'DECRYPT':
+        return `PGP_SYM_DECRYPT(DECODE(${args[0]}, 'base64'), ${args[1]})`;
       default:
         return super._generateExpressionSQL(name, args);
     }

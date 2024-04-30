@@ -280,7 +280,11 @@ Deno.test('DAM:Client:Postgres', async (t) => {
       poolSize: 1,
     }
     const client = new PostgresClient('pgtest', conf as PostgresOptions);
-
+    try {
+      await client.execute({ sql: 'CREATE EXTENSION pgcrypto;' });
+    } catch {
+      // Suppress
+    }
     await t.step('Connect', async () => {
       await client.connect();
       assertEquals('CONNECTED', client.status);
@@ -350,27 +354,26 @@ Deno.test('DAM:Client:Postgres', async (t) => {
     });
 
     await t.step('Generate select query', async () => {
-      await client.connect();
       assert(await client.select({
         type: 'SELECT',
-        source: 'TABLES',
-        schema: 'INFORMATION_SCHEMA',
-        columns: ['TABLE_SCHEMA', 'TABLE_NAME', 'DATA_LENGTH'],
+        source: 'tables',
+        schema: 'information_schema',
+        columns: ['table_schema', 'table_name'],
         joins: {
           Cols: {
-            source: 'COLUMNS',
-            schema: 'INFORMATION_SCHEMA',
-            columns: ['COLUMN_NAME', 'DATA_TYPE', 'TABLE_SCHEMA', 'TABLE_NAME'], 
+            source: 'columns',
+            schema: 'information_schema',
+            columns: ['column_name', 'data_type', 'table_schema', 'table_name'], 
             relation: {
-              'TABLE_SCHEMA': '$TABLE_SCHEMA',
-              'TABLE_NAME': '$TABLE_NAME',
+              'table_schema': '$table_schema',
+              'table_name': '$table_name',
             },
           }
         },
         project: {
-          'TableSchema': '$TABLE_SCHEMA',
-          'TableName': '$TABLE_NAME',
-          'Columns': { $aggr: 'JSON_ROW', $args: { 'ColumnName': '$Cols.COLUMN_NAME', 'DataType': '$Cols.DATA_TYPE' } }, 
+          'TableSchema': '$table_schema',
+          'TableName': '$table_name',
+          'Columns': { $aggr: 'JSON_ROW', $args: { 'ColumnName': '$Cols.column_name', 'DataType': '$Cols.data_type' } }, 
           'UUID': {
             $expr: 'UUID'
           }, 
@@ -417,13 +420,21 @@ Deno.test('DAM:Client:Postgres', async (t) => {
             $expr: 'TRIM',
             $args: {
               $expr: 'UUID',
-            },
+            }, 
           }, 
+          'encrypted': {
+            $expr: 'ENCRYPT',
+            $args: [ 'TundraLib', 'F2388451B0954326'],
+          }, 
+          'decrypted': {
+            $expr: 'DECRYPT',
+            $args: ['ww0ECQMCw+ltwWTrbtVp0j8BEfQxlXL5eIrce7l09SOs0f/hSsrTIIXDlea2mkHHeUC/t4cbIg5o/geyqKzmROk7lcLPsSXiiC24NJ2rDBQ=', 'F2388451B0954326'],
+          }
         }, 
         limit: 10, 
         offset: 10,
         orderBy: {
-          '$TABLE_SCHEMA': 'ASC',
+          '$table_schema': 'ASC',
         }
       }));
       await client.close();

@@ -72,11 +72,10 @@ export class MariaTranslator extends AbstractTranslator {
   }
 
   protected _generateAggregateSQL(name: string, args: string[]): string {
-    switch (name) {
-      case 'JSON_ROW':
-        return `JSON_ARRAYAGG(JSON_OBJECT(${args.join(', ')}))`;
-      default:
-        return super._generateAggregateSQL(name, args);
+    if (name === 'JSON_ROW') {
+      return `JSON_ARRAYAGG(JSON_OBJECT(${args.join(', ')}))`;
+    } else {
+      return super._generateAggregateSQL(name, args);
     }
   }
 
@@ -102,6 +101,10 @@ export class MariaTranslator extends AbstractTranslator {
         return `DATE_ADD(${args.join(', ')})`;
       case 'DATE_FORMAT':
         return `DATE_FORMAT(${args.join(', ')})`;
+      case 'ENCRYPT':
+        return `TO_BASE64(AES_ENCRYPT(${args[0]}, ${args[1]}))`;
+      case 'DECRYPT':
+        return `CAST(AES_DECRYPT(FROM_BASE64(${args[0]}), ${args[1]}) AS CHAR)`;
       default:
         return super._generateExpressionSQL(name, args);
     }

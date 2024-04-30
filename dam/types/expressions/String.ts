@@ -44,6 +44,24 @@ type DateFormat = {
   $args: [DateExpressions, string];
 };
 
+type Encrypt = {
+  $expr: 'ENCRYPT';
+  $args: [
+    string | StringExpressions | NumberExpressions | DateExpressions,
+    string,
+  ];
+};
+
+type Decrypt = {
+  $expr: 'DECRYPT';
+  $args: [string, string];
+};
+
+type Hash = {
+  $expr: 'HASH';
+  $args: [string | StringExpressions];
+};
+
 export type StringExpressions =
   | Substr
   | Concat
@@ -51,4 +69,7 @@ export type StringExpressions =
   | Lower
   | Upper
   | Trim
-  | DateFormat;
+  | DateFormat
+  | Encrypt
+  | Decrypt
+  | Hash;

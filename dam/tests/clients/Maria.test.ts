@@ -415,6 +415,14 @@ Deno.test({ name: 'DAM:Client:Maria', sanitizeOps: false, sanitizeResources: fal
               $expr: 'UUID',
             },
           }, 
+          'encrypted': {
+            $expr: 'ENCRYPT',
+            $args: [ 'TundraLib', 'F2388451B0954326'],
+          }, 
+          'decrypted': {
+            $expr: 'DECRYPT',
+            $args: ['+sHWh9FnLoRKoKwW62G/7w==', 'F2388451B0954326'],
+          }
         }, 
         limit: 10, 
         offset: 10,
