@@ -56,7 +56,7 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
    * Emits a 'connect' event upon successful connection.
    * Emits an 'error' event if an error occurs during the connection process.
    *
-   * @throws {DAMBaseError} If an error occurs during the connection process.
+   * @throws {DAMConnectionError} If an error occurs during the connection process.
    */
   public async connect() {
     if (this._isReallyConnected()) return;
@@ -67,7 +67,7 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
     } catch (err) {
       this._status = 'ERROR';
       let nErr: DAMError;
-      if (err instanceof DAMError) {
+      if (err instanceof DAMConnectionError) {
         nErr = err;
       } else {
         nErr = new DAMConnectionError({
@@ -86,7 +86,7 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
    * If an error occurs during the close operation, the client's status is set to 'ERROR'
    * and an 'error' event is emitted with the client's name and the error object.
    *
-   * @throws {DAMBaseError} If an error occurs during the close operation.
+   * @throws {DAMConnectionError} If an error occurs during the close operation.
    */
   public async close() {
     if (this.status !== 'CONNECTED') return;
@@ -97,7 +97,7 @@ export abstract class AbstractClient<O extends ClientOptions = ClientOptions>
     } catch (err) {
       this._status = 'ERROR';
       let nErr: DAMError;
-      if (err instanceof DAMError) {
+      if (err instanceof DAMConnectionError) {
         nErr = err;
       } else {
         nErr = new DAMClientError(err.message, {

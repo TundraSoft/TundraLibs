@@ -2,6 +2,8 @@ import { AbstractTranslator } from '../../Translator.ts';
 import type {
   CreateTableColumnDefinition,
   DataTypes,
+  Query,
+  RenameViewQuery,
   TranslatorCapability,
 } from '../../types/mod.ts';
 import { DAMTranslatorError } from '../../errors/mod.ts';
@@ -52,6 +54,21 @@ export class MariaTranslator extends AbstractTranslator {
       ...capabilities,
     };
     super('MARIA', cap);
+  }
+
+  public renameView(obj: RenameViewQuery): Query {
+    if (obj.type !== 'RENAME_VIEW') {
+      throw new DAMTranslatorError('Expected query type to be RENAME_VIEW', {
+        dialect: this.dialect,
+      });
+    }
+    return super.renameTable({
+      type: 'RENAME_TABLE',
+      source: obj.source,
+      schema: obj.schema,
+      newSource: obj.newSource,
+      newSchema: obj.newSchema,
+    });
   }
 
   protected _generateAggregateSQL(name: string, args: string[]): string {

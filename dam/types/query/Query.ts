@@ -128,6 +128,24 @@ export type CreateTableQuery = {
   >;
 };
 
+export type AlterTableQuery = {
+  type: 'ALTER_TABLE';
+  source: string;
+  schema?: string;
+  addColumns?: Record<string, CreateTableColumnDefinition>;
+  dropColumns?: string[];
+  renameColumns?: Record<string, string>;
+  alterColumns?: Record<string, CreateTableColumnDefinition>;
+};
+
+export type RenameTableQuery = {
+  type: 'RENAME_TABLE';
+  source: string;
+  schema?: string;
+  newSource: string;
+  newSchema?: string;
+};
+
 export type DropTableQuery = {
   type: 'DROP_TABLE';
   source: string;
@@ -140,6 +158,22 @@ export type CreateViewQuery = {
   schema?: string;
   materialized?: boolean;
   query: SelectQuery;
+};
+
+export type AlterViewQuery = {
+  type: 'ALTER_VIEW';
+  source: string;
+  schema?: string;
+  materialized?: boolean;
+  query: SelectQuery;
+};
+
+export type RenameViewQuery = {
+  type: 'RENAME_VIEW';
+  source: string;
+  schema?: string;
+  newSource: string;
+  newSchema?: string;
 };
 
 export type DropViewQuery = {

@@ -22,6 +22,8 @@ export {
 } from './errors/mod.ts';
 
 export type {
+  AlterTableQuery,
+  AlterViewQuery,
   BigintTypes,
   BooleanTypes,
   ClientEvents,
@@ -55,6 +57,8 @@ export type {
   QueryFilters,
   QueryResult,
   QueryTypes,
+  RenameTableQuery,
+  RenameViewQuery,
   SelectQuery,
   SerialTypes,
   SQLDialects,

@@ -353,29 +353,77 @@ Deno.test('DAM:Client:Postgres', async (t) => {
       await client.connect();
       assert(await client.select({
         type: 'SELECT',
-        source: 'tables',
-        schema: 'information_schema',
-        columns: ['table_schema', 'table_name'],
+        source: 'TABLES',
+        schema: 'INFORMATION_SCHEMA',
+        columns: ['TABLE_SCHEMA', 'TABLE_NAME', 'DATA_LENGTH'],
         joins: {
           Cols: {
-            source: 'columns',
-            schema: 'information_schema',
-            columns: ['column_name', 'data_type', 'table_schema', 'table_name'], 
+            source: 'COLUMNS',
+            schema: 'INFORMATION_SCHEMA',
+            columns: ['COLUMN_NAME', 'DATA_TYPE', 'TABLE_SCHEMA', 'TABLE_NAME'], 
             relation: {
-              'table_schema': '$table_schema',
-              'table_name': '$table_name',
+              'TABLE_SCHEMA': '$TABLE_SCHEMA',
+              'TABLE_NAME': '$TABLE_NAME',
             },
           }
         },
         project: {
-          'TableSchema': '$table_schema',
-          'TableName': '$table_name',
-          'Columns': { $aggr: 'JSON_ROW', $args: { 'ColumnName': '$Cols.column_name', 'DataType': '$Cols.data_type' } }
+          'TableSchema': '$TABLE_SCHEMA',
+          'TableName': '$TABLE_NAME',
+          'Columns': { $aggr: 'JSON_ROW', $args: { 'ColumnName': '$Cols.COLUMN_NAME', 'DataType': '$Cols.DATA_TYPE' } }, 
+          'UUID': {
+            $expr: 'UUID'
+          }, 
+          'Length': {
+            $expr: 'LENGTH',
+            $args: 'Hello World'
+          }, 
+          'SubString': {
+            $expr: 'SUBSTR',
+            $args: ['Hello World', 6, { $expr: 'LENGTH', $args: 'Hello World' }]
+          }, 
+          'Nested': {
+            $expr: 'TRIM', 
+            $args: {
+              $expr: 'SUBSTR',
+              $args: ['Hello World', 6, { $expr: 'LENGTH', $args: 'Hello World' }]
+            }
+          }, 
+          'Concat': {
+            $expr: 'CONCAT', 
+            $args: ['Hello', ' ', 'World'],
+          }, 
+          'Replace': {
+            $expr: 'REPLACE',
+            $args: [
+              'Hello World',
+              'World',
+              'Universe',
+            ]
+          }, 
+          'Lower': {
+            $expr: 'LOWER', 
+            $args: {
+              $expr: 'UUID', 
+            }
+          }, 
+          'Upper': {
+            $expr: 'UPPER', 
+            $args: {
+              $expr: 'UUID', 
+            }
+          }, 
+          'Trim': {
+            $expr: 'TRIM',
+            $args: {
+              $expr: 'UUID',
+            },
+          }, 
         }, 
         limit: 10, 
         offset: 10,
         orderBy: {
-          '$table_schema': 'ASC',
+          '$TABLE_SCHEMA': 'ASC',
         }
       }));
       await client.close();

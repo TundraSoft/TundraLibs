@@ -13,6 +13,8 @@ export type {
 export type { QueryResult } from './Result.ts';
 
 export type {
+  AlterTableQuery,
+  AlterViewQuery,
   CountQuery,
   CreateSchemaQuery,
   CreateTableColumnDefinition,
@@ -24,6 +26,8 @@ export type {
   DropViewQuery,
   InsertQuery,
   Query,
+  RenameTableQuery,
+  RenameViewQuery,
   SelectQuery,
   TruncateQuery,
   UpdateQuery,

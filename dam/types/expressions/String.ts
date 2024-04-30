@@ -1,8 +1,13 @@
 import type { DateExpressions } from './Date.ts';
-
+import { NumberExpressions } from './Number.ts';
+import { UUIDExpressions } from './UUID.ts';
 type Substr = {
   $expr: 'SUBSTR';
-  $args: [string, number, number];
+  $args: [
+    string | StringExpressions,
+    number | NumberExpressions,
+    number | NumberExpressions,
+  ];
 };
 
 type Concat = {
@@ -21,17 +26,17 @@ type Replace = {
 
 type Lower = {
   $expr: 'LOWER';
-  $args: StringExpressions | string;
+  $args: UUIDExpressions | StringExpressions | string;
 };
 
 type Upper = {
   $expr: 'UPPER';
-  $args: StringExpressions | string;
+  $args: UUIDExpressions | StringExpressions | string;
 };
 
 type Trim = {
   $expr: 'TRIM';
-  $args: StringExpressions | string;
+  $args: UUIDExpressions | StringExpressions | string;
 };
 
 type DateFormat = {

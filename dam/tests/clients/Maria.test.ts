@@ -228,7 +228,7 @@ Deno.test({ name: 'DAM:Client:Maria', sanitizeOps: false, sanitizeResources: fal
       }, DAMConfigError);
     });
 
-    await t.step('Failed connection', () => {
+    await t.step('Failed connection', async () => {
       const conf = {
         dialect: 'MARIA',
         host: envData.get('MARIA_HOST') || 'localhost',
@@ -242,9 +242,10 @@ Deno.test({ name: 'DAM:Client:Maria', sanitizeOps: false, sanitizeResources: fal
       assertRejects(async () => {
         await client.connect();
       }, DAMConnectionError);
+      await client.close();
     });
 
-    await t.step('Querying in Failed connection', () => {
+    await t.step('Querying in Failed connection', async () => {
       const conf = {
         dialect: 'MARIA',
         host: envData.get('MARIA_HOST') || 'localhost',
@@ -266,6 +267,7 @@ Deno.test({ name: 'DAM:Client:Maria', sanitizeOps: false, sanitizeResources: fal
           sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'mysql';`,
         });
       }, DAMConnectionError);
+      await client.close();
     });
   });
 
@@ -364,7 +366,55 @@ Deno.test({ name: 'DAM:Client:Maria', sanitizeOps: false, sanitizeResources: fal
         project: {
           'TableSchema': '$TABLE_SCHEMA',
           'TableName': '$TABLE_NAME',
-          'Columns': { $aggr: 'JSON_ROW', $args: { 'ColumnName': '$Cols.COLUMN_NAME', 'DataType': '$Cols.DATA_TYPE' } }
+          'Columns': { $aggr: 'JSON_ROW', $args: { 'ColumnName': '$Cols.COLUMN_NAME', 'DataType': '$Cols.DATA_TYPE' } }, 
+          'UUID': {
+            $expr: 'UUID'
+          }, 
+          'Length': {
+            $expr: 'LENGTH',
+            $args: 'Hello World'
+          }, 
+          'SubString': {
+            $expr: 'SUBSTR',
+            $args: ['Hello World', 6, { $expr: 'LENGTH', $args: 'Hello World' }]
+          }, 
+          'Nested': {
+            $expr: 'TRIM', 
+            $args: {
+              $expr: 'SUBSTR',
+              $args: ['Hello World', 6, { $expr: 'LENGTH', $args: 'Hello World' }]
+            }
+          }, 
+          'Concat': {
+            $expr: 'CONCAT', 
+            $args: ['Hello', ' ', 'World'],
+          }, 
+          'Replace': {
+            $expr: 'REPLACE',
+            $args: [
+              'Hello World',
+              'World',
+              'Universe',
+            ]
+          }, 
+          'Lower': {
+            $expr: 'LOWER', 
+            $args: {
+              $expr: 'UUID', 
+            }
+          }, 
+          'Upper': {
+            $expr: 'UPPER', 
+            $args: {
+              $expr: 'UUID', 
+            }
+          }, 
+          'Trim': {
+            $expr: 'TRIM',
+            $args: {
+              $expr: 'UUID',
+            },
+          }, 
         }, 
         limit: 10, 
         offset: 10,

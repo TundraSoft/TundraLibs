@@ -1,5 +1,7 @@
 import type {
   Aggregate,
+  AlterTableQuery,
+  AlterViewQuery,
   CountQuery,
   CreateSchemaQuery,
   CreateTableColumnDefinition,
@@ -13,6 +15,8 @@ import type {
   InsertQuery,
   Operators,
   Query,
+  RenameTableQuery,
+  RenameViewQuery,
   SelectQuery,
   SQLDialects,
   TranslatorCapability,
@@ -443,6 +447,42 @@ export abstract class AbstractTranslator {
     };
   }
 
+  public alterView(obj: AlterViewQuery): Query {
+    if (obj.type !== 'ALTER_VIEW') {
+      throw new DAMTranslatorError('Expected query type to be ALTER_VIEW', {
+        dialect: this.dialect,
+      });
+    }
+    const source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source,
+      q = this.select(obj.query);
+    return {
+      sql: `ALTER ${
+        obj.materialized && this.capability.matview ? `MATERIALIZED ` : ``
+      }VIEW ${this.escape(source)} AS ${q.sql};`,
+      params: q.params,
+    };
+  }
+
+  public renameView(obj: RenameViewQuery): Query {
+    if (obj.type !== 'RENAME_VIEW') {
+      throw new DAMTranslatorError('Expected query type to be RENAME_VIEW', {
+        dialect: this.dialect,
+      });
+    }
+    const source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source,
+      newSource = obj.newSchema
+        ? `${obj.newSchema}.${obj.newSource}`
+        : obj.newSource;
+    return {
+      sql: `ALTER VIEW ${this.escape(source)} RENAME TO ${
+        this.escape(
+          newSource,
+        )
+      };`,
+      params: {},
+    };
+  }
+
   public dropView(obj: DropViewQuery): Query {
     if (obj.type !== 'DROP_VIEW') {
       throw new DAMTranslatorError('Expected query type to be DROP_VIEW', {
@@ -468,21 +508,27 @@ export abstract class AbstractTranslator {
         return this._generateColumnDefinition(name, defn);
       }),
       primaryKeys = obj.primaryKeys
-        ? `PRIMARY KEY (${obj.primaryKeys.map(this.escape).join(', ')})`
+        ? `PRIMARY KEY (${
+          obj.primaryKeys.map(this.escape.bind(this)).join(', ')
+        })`
         : '',
       uniqueKeys = Object.entries(obj.uniqueKeys || {}).map(([key, value]) => {
         return `CONSTRAINT ${
           this.escape(`UK_${source.replace('.', '_')}_${key}`)
-        } UNIQUE (${value.map(this.escape).join(', ')})`;
+        } UNIQUE (${value.map(this.escape.bind(this)).join(', ')})`;
       }),
       foreignKeys = Object.entries(obj.foreignKeys || {}).map(
         ([key, value]) => {
           const relatedTable = value.schema
             ? `${value.schema}.${value.source}`
             : value.source;
-          const sourceColumns = Object.keys(value.relation).map(this.escape)
+          const sourceColumns = Object.keys(value.relation).map(
+            this.escape.bind(this),
+          )
             .join(', ');
-          const relatedColumns = Object.values(value.relation).map(this.escape)
+          const relatedColumns = Object.values(value.relation).map(
+            this.escape.bind(this),
+          )
             .join(', ');
           return `ADD CONSTRAINT ${
             this.escape(`FK_${source.replace('.', '_')}_${key}`)
@@ -508,6 +554,74 @@ export abstract class AbstractTranslator {
     return sql;
   }
 
+  public alterTable(obj: AlterTableQuery): Query {
+    if (obj.type !== 'ALTER_TABLE') {
+      throw new DAMTranslatorError('Expected query type to be ALTER_TABLE', {
+        dialect: this.dialect,
+      });
+    }
+    const source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source,
+      addColumns = Object.entries(obj.addColumns || {}).map(([name, defn]) => {
+        return `ADD COLUMN ${this._generateColumnDefinition(name, defn)}`;
+      }),
+      dropColumns = (obj.dropColumns || []).map((name) => {
+        return `DROP COLUMN ${this.escape(name)}`;
+      }),
+      renameColumns = Object.entries(obj.renameColumns || {}).map(
+        ([oldName, newName]) => {
+          return `RENAME COLUMN ${this.escape(oldName)} TO ${
+            this.escape(
+              newName,
+            )
+          }`;
+        },
+      ),
+      alterColumns = Object.entries(obj.alterColumns || {}).map(
+        ([name, defn]) => {
+          return `ALTER COLUMN ${this.escape(name)} TYPE ${
+            this._dataTypes[defn.type]
+          }`;
+        },
+      ),
+      nullableColumns = Object.entries(obj.alterColumns || {}).map(
+        ([name, defn]) => {
+          return `ALTER COLUMN ${this.escape(name)} ${
+            defn.nullable ? 'DROP' : 'SET'
+          } NOT NULL`;
+        },
+      );
+    return {
+      sql: `ALTER TABLE ${this.escape(source)} ${addColumns.join(', ')}${
+        dropColumns.length > 0 ? `, ${dropColumns.join(', ')}` : ''
+      }${renameColumns.length > 0 ? `, ${renameColumns.join(', ')}` : ''}${
+        alterColumns.length > 0 ? `, ${alterColumns.join(', ')}` : ''
+      }${nullableColumns.length > 0 ? `, ${nullableColumns.join(', ')}` : ''};`,
+    };
+  }
+
+  public renameTable(obj: RenameTableQuery): Query {
+    if (obj.type !== 'RENAME_TABLE') {
+      throw new DAMTranslatorError('Expected query type to be RENAME_TABLE', {
+        dialect: this.dialect,
+      });
+    }
+    const source = obj.schema ? `${obj.schema}.${obj.source}` : obj.source,
+      newSource = obj.newSchema
+        ? `${obj.newSchema}.${obj.newSource}`
+        : obj.newSource;
+    return {
+      sql: `ALTER TABLE ${
+        this.escape(
+          source,
+        )
+      } RENAME TO ${
+        this.escape(
+          newSource,
+        )
+      };`,
+      params: {},
+    };
+  }
   /**
    * Generates a Drop table statement.
    *
@@ -627,81 +741,80 @@ export abstract class AbstractTranslator {
         return;
       }
 
-      if (!Array.isArray(args)) {
-        args = [args];
+      if (Array.isArray(args)) {
+        args.map(processArgs);
+        return;
       }
 
-      for (const arg of args as unknown[]) {
-        if (this._isExpression(arg)) {
-          const [sql, _] = this.buildExpression(
-            arg as Expressions,
-            columns,
-            params,
-          );
-          exprArgs.push(sql);
-        } else if (this._isColumnIdentifier(arg)) {
-          const parts = (arg as string).substring(1).split('.');
+      if (this._isExpression(args)) {
+        const [sql, _] = this.buildExpression(
+          args as Expressions,
+          columns,
+          params,
+        );
+        exprArgs.push(sql);
+      } else if (this._isColumnIdentifier(args)) {
+        const parts = (args as string).substring(1).split('.');
+        if (columns[`$${parts[0]}`]) {
           if (columns[`$${parts[0]}`]) {
-            if (columns[`$${parts[0]}`]) {
-              if (parts.length > 1) {
-                const [v, _] = this.buildExpression(
-                  {
-                    $expr: 'JSON_VALUE',
-                    $args: [columns[`$${parts[0]}`], parts.slice(1)],
-                  } as Expressions,
-                  columns,
-                  params,
-                );
-                exprArgs.push(v);
-              } else {
-                exprArgs.push(columns[`$${parts[0]}`]);
-              }
-            } else if (columns[`$MAIN.${parts[0]}`]) {
-              if (parts.length > 1) {
-                const [v, _] = this.buildExpression(
-                  {
-                    $expr: 'JSON_VALUE',
-                    $args: [columns[`$MAIN.${parts[0]}`], parts.slice(1)],
-                  } as Expressions,
-                  columns,
-                  params,
-                );
-                exprArgs.push(v);
-              } else {
-                exprArgs.push(columns[`$MAIN.${parts[0]}`]);
-              }
-            } else if (
-              parts.length > 1 && columns[`$${parts[0]}.${parts[1]}`]
-            ) {
-              if (parts.length > 2) {
-                const [v, _] = this.buildExpression(
-                  {
-                    $expr: 'JSON_VALUE',
-                    $args: [
-                      columns[`$${parts[0]}.${parts[1]}`],
-                      parts.slice(2),
-                    ],
-                  } as Expressions,
-                  columns,
-                  params,
-                );
-                exprArgs.push(v);
-              } else {
-                exprArgs.push(columns[`$${parts[0]}.${parts[1]}`]);
-              }
-            } else {
-              throw new DAMTranslatorError(
-                `Unknown Expression argument ${args}`,
+            if (parts.length > 1) {
+              const [v, _] = this.buildExpression(
                 {
-                  dialect: this.dialect,
-                },
+                  $expr: 'JSON_VALUE',
+                  $args: [columns[`$${parts[0]}`], parts.slice(1)],
+                } as Expressions,
+                columns,
+                params,
               );
+              exprArgs.push(v);
+            } else {
+              exprArgs.push(columns[`$${parts[0]}`]);
             }
+          } else if (columns[`$MAIN.${parts[0]}`]) {
+            if (parts.length > 1) {
+              const [v, _] = this.buildExpression(
+                {
+                  $expr: 'JSON_VALUE',
+                  $args: [columns[`$MAIN.${parts[0]}`], parts.slice(1)],
+                } as Expressions,
+                columns,
+                params,
+              );
+              exprArgs.push(v);
+            } else {
+              exprArgs.push(columns[`$MAIN.${parts[0]}`]);
+            }
+          } else if (
+            parts.length > 1 && columns[`$${parts[0]}.${parts[1]}`]
+          ) {
+            if (parts.length > 2) {
+              const [v, _] = this.buildExpression(
+                {
+                  $expr: 'JSON_VALUE',
+                  $args: [
+                    columns[`$${parts[0]}.${parts[1]}`],
+                    parts.slice(2),
+                  ],
+                } as Expressions,
+                columns,
+                params,
+              );
+              exprArgs.push(v);
+            } else {
+              exprArgs.push(columns[`$${parts[0]}.${parts[1]}`]);
+            }
+          } else {
+            throw new DAMTranslatorError(
+              `Unknown Expression argument ${args}`,
+              {
+                dialect: this.dialect,
+              },
+            );
           }
-        } else {
-          const paramName = params?.create(args);
-          exprArgs.push(this._makeParam(paramName));
         }
+      } else {
+        const paramName = params?.create(args);
+        exprArgs.push(this._makeParam(paramName));
       }
     };
 
@@ -741,7 +854,8 @@ export abstract class AbstractTranslator {
       }
 
       if (Array.isArray(args)) {
-        processArgs(args[0]);
+        args.map(processArgs);
+        return;
       }
 
       if (this._isExpression(args)) {

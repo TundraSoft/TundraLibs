@@ -35,6 +35,8 @@ export type {
 } from './expressions/mod.ts';
 
 export type {
+  AlterTableQuery,
+  AlterViewQuery,
   BaseFilter,
   BigIntFilter,
   BooleanFilter,
@@ -56,6 +58,8 @@ export type {
   QueryFilters,
   QueryResult,
   QueryTypes,
+  RenameTableQuery,
+  RenameViewQuery,
   SelectQuery,
   StringFilter,
   TruncateQuery,
