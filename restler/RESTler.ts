@@ -240,6 +240,7 @@ export abstract class RESTler<
         try {
           return JSON.parse(await response.text()) as RespBody;
         } catch {
+          Deno.exit(1);
           return await response.text() as unknown as RespBody;
         }
       } else {
