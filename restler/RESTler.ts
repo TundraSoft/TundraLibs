@@ -34,7 +34,6 @@ export abstract class RESTler<
 > extends Options<O, RESTlerEvents> {
   protected _name: string;
   protected _defaultHeaders: Record<string, string>;
-  // protected _customClient: HTTPClient | undefined;
   protected _authStatus = [401, 403, 407];
   protected _authInitiated = false;
 
@@ -238,7 +237,11 @@ export abstract class RESTler<
       ) {
         return XMLParse(await response.text()) as unknown as RespBody;
       } else if (contentType.includes('text')) {
-        return await response.text() as unknown as RespBody;
+        try {
+          return JSON.parse(await response.text()) as RespBody;
+        } catch {
+          return await response.text() as unknown as RespBody;
+        }
       } else {
         // Ensure we discard the body
         throw new RESTlerUnsupportedContentType(
