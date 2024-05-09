@@ -361,6 +361,9 @@ export abstract class RESTler<
         () => controller.abort(),
         request.timeout || this._getOption('timeout'),
       );
+    console.log(`RESTLER - Log: Making a ${request.endpoint.method} request to ${request.endpoint.path}`);
+    console.log(`HEADERS passed: ${JSON.stringify(request.headers)}`);
+    console.log(`BODY passed: ${JSON.stringify(request.body)}`);
     const fetchOptions: RequestInit & { client?: Deno.HttpClient } = {
       method: request.endpoint.method,
       headers: request.headers,
