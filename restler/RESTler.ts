@@ -327,8 +327,10 @@ export abstract class RESTler<
     if (body instanceof FormData) {
       return body;
     } else if (typeof body === 'string') {
+      console.log('IT IS A STRING')
       return body;
     } else {
+      console.log('IT IS A JSON')
       return this._stringifyBody(body);
     }
   }
