@@ -327,10 +327,8 @@ export abstract class RESTler<
     if (body instanceof FormData) {
       return body;
     } else if (typeof body === 'string') {
-      console.log('IT IS A STRING')
       return body;
     } else {
-      console.log('IT IS A JSON')
       return this._stringifyBody(body);
     }
   }
@@ -363,9 +361,6 @@ export abstract class RESTler<
         () => controller.abort(),
         request.timeout || this._getOption('timeout'),
       );
-    console.log(`RESTLER - Log: Making a ${request.endpoint.method} request to ${request.endpoint.path}`);
-    console.log(`HEADERS passed: ${JSON.stringify(request.headers)}`);
-    console.log(`BODY passed: ${JSON.stringify(request.body)}`);
     const fetchOptions: RequestInit & { client?: Deno.HttpClient } = {
       method: request.endpoint.method,
       headers: request.headers,
