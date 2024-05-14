@@ -96,8 +96,6 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
         try {
           // If it is Strict or Partial, only defined properties are allowed
           if (mode === 'STRICT' && !structKeys.has(key)) {
-            // pathErrors(`${key} is not a valid property`, [...opts.path, key]);
-            // console.log(path, key)
             throw makeError(`Unknown property passed "${key}"`, [...path, key]);
           }
           if (structKeys.has(key) || mode === 'ALL') {
@@ -107,12 +105,6 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
             if (isPromiseLike(retVal)) {
               promises.push(retVal as Promise<unknown>);
               retVal.then((v) => retObj[key] = v, (e) => {
-                // const err = makeError(e)
-                // errors.push({
-                //   error: e,
-                //   path: [...path, key],
-                // });
-                // console.log([...path, ...key])
                 errors.push(makeError(e, [...path, key]));
               });
             } else {
@@ -120,11 +112,6 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
             }
           }
         } catch (e) {
-          // errors.push({
-          //   error: e,
-          //   path: [...path, key],
-          // });
-          // console.log([...path, key])
           errors.push(makeError(e, [...path, key]));
         }
       });
@@ -132,10 +119,6 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
       if (promises.length === 0) {
         // No promises found, so return
         if (errors.length > 0) {
-          // throw createValidationError(errors, message, ...objs);
-          // console.log(message, errors)
-          // const a = new GuardianError(message || defOptions.message, undefined, errors);
-          // console.log(a.children)
           throw new GuardianError(
             message || defOptions.message,
             undefined,
@@ -155,8 +138,6 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
 
       return Promise.all(promises).then(() => {
         if (errors.length > 0) {
-          // throw createValidationError(errors, message, ...objs);
-          // console.log(message)
           throw new GuardianError(
             message || defOptions.message,
             undefined,

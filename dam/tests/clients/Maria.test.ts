@@ -432,7 +432,7 @@ Deno.test({ name: 'DAM:Client:Maria', sanitizeOps: false, sanitizeResources: fal
       }));
       await client.close();
     });
-
+    
     await t.step('Generate count query', async () => {
       assert(await client.count({
         type: 'COUNT',

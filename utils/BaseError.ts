@@ -22,11 +22,6 @@ export class BaseError extends Error {
     return this.meta[key];
   }
 
-  // protected makeMessage(message: string) {
-  //   const metaString = this.meta ? Object.entries(this.meta).map(([key, value]) => `${key}=${value}`).join(' ') : '';
-  //   return metaString ? `[${metaString}] ${message}` : message;
-  // }
-
   toString() {
     return `${this.timeStamp.toISOString()} [${this.name}] ${this.message}`;
   }

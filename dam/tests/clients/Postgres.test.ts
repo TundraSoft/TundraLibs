@@ -308,6 +308,7 @@ Deno.test('DAM:Client:Postgres', async (t) => {
       assert(await client.getVersion());
       await client.close();
     });
+
     await t.step('Query', async () => {
       await client.connect();
       await client.execute({
