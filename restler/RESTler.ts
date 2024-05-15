@@ -21,6 +21,7 @@ import {
   RESTlerUnhandledError,
   RESTlerUnsupportedContentType,
 } from './errors/mod.ts';
+import { re } from 'https://deno.land/std@0.205.0/semver/_shared.ts';
 
 /**
  * The base class for all RESTler classes. This class is not meant to be
@@ -368,6 +369,12 @@ export abstract class RESTler<
       body: request.body ? this._makeRequestBody(request.body) : undefined,
       client: this.__httpClientOptions(),
     };
+    if (request.body instanceof FormData) {
+      // Remove content-type header for FormData
+      const h = new Headers(request.headers || {});
+      h.delete('content-type');
+      request.headers = Object.fromEntries(h.entries());
+    }
     try {
       return await fetch(endpoint, fetchOptions);
     } finally {
