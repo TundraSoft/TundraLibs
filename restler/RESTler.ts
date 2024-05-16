@@ -335,7 +335,7 @@ export abstract class RESTler<
   }
   //#endregion Override these methods
   //#region Private methods
-  private __httpClientOptions(): Deno.HttpClient | undefined {
+  protected __httpClientOptions(): Deno.HttpClient | undefined {
     if (this._hasOption('certChain') || this._hasOption('certKey')) {
       // @Version check - Remove later on
       const ver = semver.parse(Deno.version.deno);
