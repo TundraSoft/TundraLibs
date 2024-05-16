@@ -319,12 +319,12 @@ export abstract class RESTler<
   }
 
   protected _makeRequestBody(
-    body: Uint8Array | FormData | string | Record<string, unknown> | Record<
+    body: FormData | string | Record<string, unknown> | Record<
       string,
       unknown
     >[],
-  ): string | FormData | Uint8Array {
-    if (body instanceof FormData || body instanceof Uint8Array) {
+  ): string | FormData {
+    if (body instanceof FormData) {
       return body;
     } else if (typeof body === 'string') {
       return body;
@@ -334,6 +334,7 @@ export abstract class RESTler<
   }
   //#endregion Override these methods
   //#region Private methods
+  // Templorarily make this protected.
   protected _httpClientOptions(): Deno.HttpClient | undefined {
     if (this._hasOption('certChain') || this._hasOption('certKey')) {
       // @Version check - Remove later on
@@ -361,6 +362,12 @@ export abstract class RESTler<
         () => controller.abort(),
         request.timeout || this._getOption('timeout'),
       );
+    if (request.body instanceof FormData) {
+      // Remove content-type header for FormData
+      const h = new Headers(request.headers || {});
+      h.delete('content-type');
+      request.headers = Object.fromEntries(h.entries());
+    }
     const fetchOptions: RequestInit & { client?: Deno.HttpClient } = {
       method: request.endpoint.method,
       headers: request.headers,
@@ -368,12 +375,6 @@ export abstract class RESTler<
       body: request.body ? this._makeRequestBody(request.body) : undefined,
       client: this._httpClientOptions(),
     };
-    if (request.body instanceof FormData) {
-      // Remove content-type header for FormData
-      const h = new Headers(request.headers || {});
-      h.delete('content-type');
-      request.headers = Object.fromEntries(h.entries());
-    }
     try {
       return await fetch(endpoint, fetchOptions);
     } finally {

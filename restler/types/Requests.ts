@@ -9,7 +9,6 @@ export type RESTlerRequest = {
     | Record<string, unknown>
     | Record<string, unknown>[]
     | FormData
-    | string
-    | Uint8Array;
+    | string;
   timeout?: number;
 };
