@@ -320,12 +320,12 @@ export abstract class RESTler<
   }
 
   protected _makeRequestBody(
-    body: FormData | string | Record<string, unknown> | Record<
+    body: Uint8Array | FormData | string | Record<string, unknown> | Record<
       string,
       unknown
     >[],
-  ): string | FormData {
-    if (body instanceof FormData) {
+  ): string | FormData | Uint8Array {
+    if (body instanceof FormData || body instanceof Uint8Array) {
       return body;
     } else if (typeof body === 'string') {
       return body;
