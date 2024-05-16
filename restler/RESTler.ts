@@ -21,7 +21,6 @@ import {
   RESTlerUnhandledError,
   RESTlerUnsupportedContentType,
 } from './errors/mod.ts';
-import { re } from 'https://deno.land/std@0.205.0/semver/_shared.ts';
 
 /**
  * The base class for all RESTler classes. This class is not meant to be
@@ -335,7 +334,7 @@ export abstract class RESTler<
   }
   //#endregion Override these methods
   //#region Private methods
-  protected __httpClientOptions(): Deno.HttpClient | undefined {
+  protected _httpClientOptions(): Deno.HttpClient | undefined {
     if (this._hasOption('certChain') || this._hasOption('certKey')) {
       // @Version check - Remove later on
       const ver = semver.parse(Deno.version.deno);
@@ -367,7 +366,7 @@ export abstract class RESTler<
       headers: request.headers,
       signal: controller.signal,
       body: request.body ? this._makeRequestBody(request.body) : undefined,
-      client: this.__httpClientOptions(),
+      client: this._httpClientOptions(),
     };
     if (request.body instanceof FormData) {
       // Remove content-type header for FormData
