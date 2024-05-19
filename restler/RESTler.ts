@@ -229,12 +229,15 @@ export abstract class RESTler<
         } catch {
           return resp as unknown as RespBody;
         }
-      } else if (contentType.includes('application/json') || contentType.includes('json')) {
+      } else if (
+        contentType.includes('application/json') || contentType.includes('json')
+      ) {
         return await response.json() as RespBody;
       } else if (
         contentType.includes('text/xml') ||
         contentType.includes('application/xml') ||
-        contentType.includes('xml')
+        contentType.includes('xml') ||
+        contentType.includes('application/soap+xml')
       ) {
         return XMLParse(await response.text()) as unknown as RespBody;
       } else if (contentType.includes('text')) {
