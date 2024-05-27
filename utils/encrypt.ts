@@ -61,7 +61,7 @@ export const encrypt = async (
       cryptKey,
       enc.encode(JSON.stringify(message)),
     );
-  if (opt?.encoding === 'HEX') {
+  if (encOpt.encoding === 'HEX') {
     return `${hex.encodeHex(encrypted)}:${
       hex.encodeHex(encopt.iv || encopt.counter || '')
     }`;

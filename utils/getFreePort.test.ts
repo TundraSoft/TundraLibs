@@ -38,10 +38,10 @@ Deno.test(
     });
 
     await t.step('should not return a port in use', () => {
-      const port = getFreePort(3000, 3010);
+      const port = getFreePort(3000, 3002);
       const listener = Deno.listen({ port });
       for (let i = 0; i < 10; i++) {
-        assertNotEquals(getFreePort(3000, 3010), port);
+        assertNotEquals(getFreePort(3000, 3002), port);
       }
       listener.close();
     });

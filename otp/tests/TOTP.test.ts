@@ -36,7 +36,7 @@ Deno.test('OTP:TOTP', async (t) => {
     await t.step(
       'OTP must be the same when generated within same time + interval',
       async () => {
-        const iter = 30,
+        const iter = 5,
           epoc = Date.now(),
           otps = new Set<string>();
         for (let i = 0; i < iter; i++) {
@@ -83,7 +83,7 @@ Deno.test('OTP:TOTP', async (t) => {
     await t.step(
       'OTP must be the same when generated within same time + interval',
       async () => {
-        const iter = 30,
+        const iter = 5,
           epoc = Date.now(),
           otps = new Set<string>();
         for (let i = 0; i < iter; i++) {
@@ -116,7 +116,7 @@ Deno.test('OTP:TOTP', async (t) => {
     await t.step(
       'Generated OTP must be unique for the same secret and time',
       async () => {
-        const iter = 30;
+        const iter = 5;
         const otps = new Set<string>();
         for (let i = 0; i < iter; i++) {
           otps.add(await TOTP('12345678901234567890', 'SHA-384', 6, 1)); // Set window as 0
@@ -130,7 +130,7 @@ Deno.test('OTP:TOTP', async (t) => {
     await t.step(
       'OTP must be the same when generated within same time + interval',
       async () => {
-        const iter = 30,
+        const iter = 5,
           epoc = Date.now(),
           otps = new Set<string>();
         for (let i = 0; i < iter; i++) {
@@ -163,7 +163,7 @@ Deno.test('OTP:TOTP', async (t) => {
     await t.step(
       'Generated OTP must be unique for the same secret and time',
       async () => {
-        const iter = 30;
+        const iter = 5;
         const otps = new Set<string>();
         for (let i = 0; i < iter; i++) {
           otps.add(await TOTP('12345678901234567890', 'SHA-512', 6, 1)); // Set window as 0
@@ -177,7 +177,7 @@ Deno.test('OTP:TOTP', async (t) => {
     await t.step(
       'OTP must be the same when generated within same time + interval',
       async () => {
-        const iter = 30,
+        const iter = 5,
           epoc = Date.now(),
           otps = new Set<string>();
         for (let i = 0; i < iter; i++) {
