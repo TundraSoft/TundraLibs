@@ -20,7 +20,7 @@ Deno.test('utils:encrypt', async (t) => {
             ),
           ),
         Error,
-        'Invalid algorithm',
+        'Invalid options passed',
       );
 
       await assertRejects(
@@ -33,7 +33,7 @@ Deno.test('utils:encrypt', async (t) => {
             ),
           ),
         Error,
-        'Invalid algorithm',
+        'Invalid options passed',
       );
     });
 
@@ -48,7 +48,7 @@ Deno.test('utils:encrypt', async (t) => {
             ),
           ),
         Error,
-        'Invalid encoding',
+        'Invalid options passed',
       );
 
       await assertRejects(
@@ -61,7 +61,7 @@ Deno.test('utils:encrypt', async (t) => {
             ),
           ),
         Error,
-        'Invalid encoding',
+        'Invalid options passed',
       );
     });
   });

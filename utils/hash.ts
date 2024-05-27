@@ -10,19 +10,26 @@ const defOptions: HashOptions = {
   encoding: 'HEX',
 };
 
+const isValidHashOptions = (x: unknown): x is HashOptions => {
+  return (
+    typeof x === 'object' &&
+    x !== null &&
+    'algorithm' in x &&
+    ['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'].includes(
+      (x as HashOptions).algorithm,
+    ) &&
+    'encoding' in x &&
+    ['HEX', 'BASE64'].includes((x as HashOptions).encoding)
+  );
+};
+
 export const hash = async (
   data: unknown,
   opt: HashOptions = defOptions,
 ): Promise<string> => {
   opt = { ...defOptions, ...opt };
-  if (
-    !opt.algorithm ||
-    !['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'].includes(opt.algorithm)
-  ) {
-    throw new Error(`Invalid algorithm ${opt.algorithm}`);
-  }
-  if (!opt.encoding || !['HEX', 'BASE64'].includes(opt.encoding)) {
-    throw new Error('Invalid encoding');
+  if (!isValidHashOptions(opt)) {
+    throw new Error('Invalid options passed');
   }
   const dataString = JSON.stringify(data);
   const hash = await crypto.subtle.digest(

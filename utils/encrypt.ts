@@ -13,20 +13,27 @@ const defaultOptions: EncryptOptions = {
 const enc = new TextEncoder(),
   dec = new TextDecoder();
 
+const isValidEncryptOptions = (x: unknown): x is EncryptOptions => {
+  return (
+    typeof x === 'object' &&
+    x !== null &&
+    'algorithm' in x &&
+    ['AES-CTR', 'AES-CBC', 'AES-GCM'].includes(
+      (x as EncryptOptions).algorithm,
+    ) &&
+    'encoding' in x &&
+    ['HEX', 'BASE64'].includes((x as EncryptOptions).encoding)
+  );
+};
+
 export const encrypt = async (
   message: unknown,
   key: string,
   opt?: Partial<EncryptOptions>,
 ): Promise<string> => {
   const encOpt = { ...defaultOptions, ...opt };
-  if (
-    !encOpt.algorithm ||
-    !['AES-CTR', 'AES-CBC', 'AES-GCM'].includes(encOpt.algorithm)
-  ) {
-    throw new Error(`Invalid algorithm ${encOpt.algorithm}`);
-  }
-  if (!encOpt.encoding || !['HEX', 'BASE64'].includes(encOpt.encoding)) {
-    throw new Error('Invalid encoding');
+  if (!isValidEncryptOptions(encOpt)) {
+    throw new Error('Invalid options passed');
   }
   const encopt: {
     name: 'AES-CTR' | 'AES-CBC' | 'AES-GCM';
@@ -71,14 +78,8 @@ export const decrypt = async <T>(
   opt?: Partial<EncryptOptions>,
 ): Promise<T> => {
   const encOpt = { ...defaultOptions, ...opt };
-  if (
-    !encOpt.algorithm ||
-    !['AES-CTR', 'AES-CBC', 'AES-GCM'].includes(encOpt.algorithm)
-  ) {
-    throw new Error(`Invalid algorithm ${encOpt.algorithm}`);
-  }
-  if (!encOpt.encoding || !['HEX', 'BASE64'].includes(encOpt.encoding)) {
-    throw new Error('Invalid encoding');
+  if (!isValidEncryptOptions(encOpt)) {
+    throw new Error('Invalid options passed');
   }
   const spl = message.split(':'),
     iv = encOpt.encoding === 'HEX'

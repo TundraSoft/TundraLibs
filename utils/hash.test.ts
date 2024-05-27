@@ -18,7 +18,7 @@ Deno.test('utils:hash', async (t) => {
             ),
           ),
         Error,
-        'Invalid algorithm',
+        'Invalid options passed',
       );
     });
 
@@ -32,7 +32,19 @@ Deno.test('utils:hash', async (t) => {
             ),
           ),
         Error,
-        'Invalid algorithm',
+        'Invalid options passed',
+      );
+
+      await assertRejects(
+        () =>
+          hash(
+            'data',
+            JSON.parse(
+              JSON.stringify({ algorithm: 'sha-1' }),
+            ),
+          ),
+        Error,
+        'Invalid options passed',
       );
     });
   });
