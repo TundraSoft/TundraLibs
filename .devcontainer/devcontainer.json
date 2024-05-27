@@ -1,11 +1,13 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/alpine
 {
-	"name": "Alpine",
+	"name": "Tundrasoft",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/base:alpine-3.19",
+	"image": "mcr.microsoft.com/devcontainers/base:bullseye",
 	"features": {
-		"ghcr.io/cirolosapio/devcontainers-features/alpine-deno:0": {}
+		"ghcr.io/devcontainers-community/features/deno:1": {
+			"version": "latest"
+		}
 	},  
 	"customizations": {
     "vscode": {
@@ -29,7 +31,7 @@
           "https://crux.land": true
         },
         "editor.defaultFormatter": "denoland.vscode-deno",
-        "deno.config": "./deno.jsonc",
+        "deno.config": "./deno.json",
         "editor.tabSize": 2
       },
       "extensions": [

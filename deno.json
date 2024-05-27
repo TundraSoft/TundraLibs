@@ -36,11 +36,11 @@
     "proseWrap": "preserve"
   },
   "tasks": {
-    "fmt": "deno fmt",
     "cache": "deno cache --reload ./dependencies.ts ./dev.dependencies.ts",
-    "test": "deno test -A --parallel --unstable-fs --unstable-net",
+    "clean": "deno fmt && deno task cache",
     "bench": "deno bench -A --unstable-fs",
-    "check": "deno fmt --check && deno lint && deno check **/*.ts && deno task test"
+    "test": "deno test -A --parallel --unstable-fs --unstable-net",
+    "check": "deno fmt --check && deno lint && deno check **/*.ts"
   },
   "test": {
     "include": [

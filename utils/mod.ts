@@ -17,5 +17,6 @@ export { BaseError } from './BaseError.ts';
 export { envArgs } from './envArgs.ts';
 export { hash } from './hash.ts';
 export { getFreePort } from './getFreePort.ts';
+export { loadHooks } from './gitHooks.ts';
 export { privateObject } from './privateObject.ts';
 export type { PrivateObject } from './privateObject.ts';

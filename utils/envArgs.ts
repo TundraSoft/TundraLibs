@@ -12,7 +12,7 @@ export const envArgs = function (
   envFilePath = './',
   loadDockerSecrets = true,
 ) {
-  const env: Record<string, string> = {};  
+  const env: Record<string, string> = {};
   try {
     const envPermission = Deno.permissions.querySync({ name: 'env' });
     if (envPermission.state === 'granted') {
