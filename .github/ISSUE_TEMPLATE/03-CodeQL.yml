@@ -1,0 +1,54 @@
+name: CodeQL/Security Issue
+description: CodeQL Security Issue
+title: "[SEC]: "
+labels: ["codeql", "security", "maintenance"]
+# projects: ["org/repo"]
+# assignees:
+body:
+  - type: markdown
+    attributes:
+      value: |
+        CodeQL/Security issues.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: What is the severity of the issue?
+      options:
+        - Critical
+        - High
+        - Medium
+        - Low
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: Mention the source file/module/section where the issue is found
+  
+  - type: textarea
+    id: issue
+    attributes:
+      label: Issue
+      description: Describe the issue
+    validations:
+      required: true
+  
+  - type: textarea
+    id: report
+    attributes:
+      label: Report
+      description: Provide the report from CodeQL/Security tool
+    validations:
+      required: false
+  
+  - type: textarea
+    id: fix
+    attributes:
+      label: Fix
+      description: How to fix the issue?
+    validations:
+      required: false

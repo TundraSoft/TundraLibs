@@ -1,0 +1,75 @@
+name: Feature Request
+description: Request a new Feature
+title: "[FEAT]: "
+labels: ["feat", "enhancement"]
+# assignees:
+# projects: ["octo-org/1", "octo-org/44"]
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type of Enhancement
+      description: What is the typeof enhancement?
+      options:
+        - New Module/Functionality
+        - Enhance existing module/Functionality
+    validations:
+      required: true
+
+  - type: input
+    id: feature-name
+    attributes:
+      label: Feature Name
+      description: What is the name of the feature?
+      placeholder: Name of the feature
+    validations:
+      required: true
+  
+  - type: textarea
+    id: goal
+    attributes:
+      label: Feature Goal
+      description: What is the goal of the feature?
+      placeholder: Lets do some cool stuff
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Workflow
+      description: How would this work? Describe with as much detail as possible. Include wireframes, data flow etc
+    validations:
+      required: true
+
+  - type: textarea
+    id: external
+    attributes:
+      label: External Dependencies
+      description: Are there any external dependencies? If yes, what are they?
+    validations:
+      required: false
+  
+  - type: textarea
+    id: test-cases
+    attributes:
+      label: Test Cases
+      description: What are the test cases for this feature?
+    validations:
+      required: true
+  
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: What is the impact of this feature?
+    validations:
+      required: false
+  
+  - type: textarea
+    id: additional-info
+    attributes:
+      label: Additional Information
+      description: Any additional information?
+    validations:
+      required: false

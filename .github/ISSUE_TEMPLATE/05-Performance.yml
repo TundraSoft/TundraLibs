@@ -1,0 +1,56 @@
+name: Performance Tuning
+description: Performance Tuning
+title: "[PERF]: "
+labels: ["performance", "maintenance"]
+# projects: ["org/repo"]
+# assignees:
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Improve the performance of the code base.
+  
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: Mention the source file/module/section where the performance tuning is needed
+    validations:
+      required: true
+  
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      description: What type of performance tuning is needed?
+      options:
+        - Single Action
+        - Bulk Processing
+        - Flow Control
+    validations:
+      required: true
+    
+  - type: textarea
+    id: brief
+    attributes:
+      label: Brief
+      description: What is the current performance?
+    validations:
+      required: true
+  
+  - type: textarea
+    id: current-state
+    attributes:
+      label: Current State
+      description: What is the current performance?
+    validations:
+      required: true
+  
+  - type: textarea
+    id: current-state-notes
+    attributes:
+      label: Current State Notes
+      description: Provide any additional information such as device, browser, or network conditions.
+    validations:
+      required: false
+  

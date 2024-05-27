@@ -1,0 +1,25 @@
+name: Bump a version
+description: Bump a dependency to a specific version
+title: "[BUMP]: "
+labels: ["bump", "maintenance", "dependencies"]
+# projects: ["org/repo"]
+# assignees:
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bump a dependency to a soecific version.
+  
+  - type: textarea
+    id: version
+    attributes:
+      label: Version Information
+      description: Mention the libraries and the version to be updated to
+    validations:
+      required: true
+  
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Any special notes/warning/reasoning for the version update

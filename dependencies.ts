@@ -1,71 +1,25 @@
-// Begin Core
-export * as path from 'https://deno.land/std@0.163.0/path/mod.ts';
-export * as fs from 'https://deno.land/std@0.163.0/fs/mod.ts';
+//#region Deno STD
+export * as semver from 'https://deno.land/std@0.224.0/semver/mod.ts';
+export * as path from 'https://deno.land/std@0.224.0/path/posix/mod.ts';
+export * as fs from 'https://deno.land/std@0.224.0/fs/mod.ts';
+
 export {
   format as dateFormat,
   parse as parseDate,
-} from 'https://deno.land/std@0.163.0/datetime/mod.ts';
-export {
-  BufWriter,
-  BufWriterSync,
-} from 'https://deno.land/std@0.163.0/io/mod.ts';
+} from 'https://deno.land/std@0.224.0/datetime/mod.ts';
+export { printf, sprintf } from 'https://deno.land/std@0.224.0/fmt/printf.ts';
 
-export { printf, sprintf } from 'https://deno.land/std@0.163.0/fmt/printf.ts';
-export * as yaml from 'https://deno.land/std@0.163.0/encoding/yaml.ts';
-export * as toml from 'https://deno.land/std@0.163.0/encoding/toml.ts';
-export * as base64url from 'https://deno.land/std@0.163.0/encoding/base64url.ts';
-export {
-  blue,
-  bold,
-  brightGreen,
-  brightRed,
-  cyan,
-  green,
-  italic,
-  magenta,
-  red,
-  underline,
-  yellow,
-} from 'https://deno.land/std@0.163.0/fmt/colors.ts';
-
-export * as base64 from 'https://deno.land/std@0.163.0/encoding/base64.ts';
-
-// End Core
+export * as yaml from 'https://deno.land/std@0.224.0/yaml/mod.ts';
+export * as toml from 'https://deno.land/std@0.224.0/toml/mod.ts';
+export * as base64 from 'https://deno.land/std@0.224.0/encoding/base64.ts';
+export * as hex from 'https://deno.land/std@0.224.0/encoding/hex.ts';
 
 export {
-  Client as PGClient,
-  Pool as PGPool,
-} from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
-export type { ClientOptions as PGClientOptions } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
-
-export { DB as SQLiteClient } from 'https://deno.land/x/sqlite@v3.4.0/mod.ts';
-
-export {
-  Bson,
-  MongoClient as MongoDBClient,
-} from 'https://deno.land/x/mongo@v0.31.1/mod.ts';
-export { Client as MySQL } from 'https://deno.land/x/mysql@v2.10.3/mod.ts';
-export type { ClientConfig as MySQLClientConfig } from 'https://deno.land/x/mysql@v2.10.3/mod.ts';
-
-// export { default as postgresjs } from "https://deno.land/x/postgresjs@v3.3.1/mod.js"
-// export * as MySQLClient from "https://deno.land/x/mysql2@v1.0.5/mod.ts";
-//#endregion norm
-
-//#region Endpoint
-export {
-  createHttpError,
-  // HttpError,
-  isClientErrorStatus,
-  isErrorStatus,
-  isHttpError,
-  isInformationalStatus,
-  isRedirectStatus,
-  isServerErrorStatus,
-  isSuccessfulStatus,
-  Status,
+  STATUS_CODE,
   STATUS_TEXT,
-} from 'https://deno.land/std@0.163.0/http/mod.ts';
+} from 'https://deno.land/std@0.224.0/http/status.ts';
 
+//#endregion Deno STD
 export type HTTPMethods =
   | 'HEAD'
   | 'OPTIONS'
@@ -75,34 +29,50 @@ export type HTTPMethods =
   | 'PATCH'
   | 'DELETE';
 
-export type {
-  ClientErrorStatus,
-  ErrorStatus,
-  InformationalStatus,
-  RedirectStatus,
-  ServerErrorStatus,
-  SuccessfulStatus,
-} from 'https://deno.land/std@0.163.0/http/mod.ts';
+//#region RESTler
+export {
+  parse as XMLParse,
+  stringify as XMLStringify,
+} from 'https://deno.land/x/xml@4.0.0/mod.ts';
 
-export type {
-  Middleware,
-  RouterContext,
-  RouterMiddleware,
-} from 'https://deno.land/x/oak@v12.6.1/mod.ts';
+//#endregion RESTler
+
+//#region NORM
+export {
+  connect as RedisConnect,
+  type Redis,
+} from 'https://deno.land/x/redis@v0.32.3/mod.ts';
 
 export {
-  Context,
-  helpers as oakHelpers,
-  Request,
-  Response,
-} from 'https://deno.land/x/oak@v12.6.1/mod.ts';
+  type ClientOptions as PGClientOptions,
+  Pool as PGClient,
+  PoolClient as PGPoolClient,
+  PostgresError,
+} from 'https://deno.land/x/postgres@v0.19.3/mod.ts';
 
-//#endregion Endpoint
+export {
+  createPool as MariaDBPoolConnector,
+  type Pool as MariaDBPool,
+  type PoolConfig as MariaDBClientConfig,
+  type PoolConnection as MariaDBPoolConnection,
+  SqlError as MariaDBError,
+} from 'npm:mariadb';
 
-//#region BigDecimal
-export { BigDenary } from 'https://deno.land/x/bigdenary/mod.ts';
-export type {
-  BDNumberInput,
-  BigDenaryRaw,
-} from 'https://deno.land/x/bigdenary/mod.ts';
-//#endregion BigDecimal
+export {
+  DB as SQLiteDBClient,
+  SqliteError as SQLiteDBError,
+  type SqliteOptions as SQLiteDBClientConfig,
+} from 'https://deno.land/x/sqlite@v3.8/mod.ts';
+
+export {
+  type Collection,
+  type Db,
+  MongoClient as MongoDBClient,
+  type MongoClientOptions as MongoDBClientOptions,
+  MongoServerError as MongoDBServerError,
+} from 'npm:mongodb';
+
+// For encryption
+export * as openpgp from 'https://cdn.skypack.dev/openpgp'; //'https://deno.land/x/openpgp@v5.11.1/src/index.js'; //'https://cdn.skypack.dev/openpgp';
+
+//#endregion NORM

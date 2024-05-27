@@ -1,0 +1,58 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/alpine
+{
+	"name": "Alpine",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/base:alpine-3.19",
+	"features": {
+		"ghcr.io/cirolosapio/devcontainers-features/alpine-deno:0": {}
+	},  
+	"customizations": {
+    "vscode": {
+      "settings": {
+        "deno.enable": true,
+        "deno.lint": true,
+        "deno.unstable": true,
+        "deno.cacheOnSave": true,
+        "deno.suggest.imports.autoDiscover": true,
+        "deno.codeLens.implementations": true,
+        "deno.codeLens.references": true,
+        "deno.codeLens.referencesAllFunctions": true,
+        "deno.codeLens.test": true,
+        "deno.codeLens.testArgs": [
+          "--allow-all",
+          "--no-check"
+        ],
+        "deno.suggest.imports.hosts": {
+          "https://deno.land": true,
+          "https://x.nest.land": true,
+          "https://crux.land": true
+        },
+        "editor.defaultFormatter": "denoland.vscode-deno",
+        "deno.config": "./deno.jsonc",
+        "editor.tabSize": 2
+      },
+      "extensions": [
+        "denoland.vscode-deno",
+        "benjaminbenais.copilot-theme",
+        "GitHub.copilot", 
+        "github.vscode-github-actions"
+      ]
+    }
+  }
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	// "postCreateCommand": "uname -a",
+
+	// Configure tool-specific properties.
+	// "customizations": {},
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
+
+  //"mounts": [
+    // "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  // ],
+}

@@ -4,17 +4,18 @@
     "lib": [
       "deno.window"
     ],
-    "strict": true
+    "strict": true,
+    "experimentalDecorators": true
   },
+  "unstable": ["fs", "net"],
   "lint": {
-    "files": {
-      "include": [
-        "./"
-      ],
-      "exclude": [
-        "*/testdata/*"
-      ]
-    },
+    "include": [
+      "./"
+    ],
+    "exclude": [
+      "*/tests/",
+      "*/fixtures/"
+    ],
     "rules": {
       "tags": [
         "recommended"
@@ -22,14 +23,12 @@
       "include": [
         "ban-untagged-todo"
       ],
-      "exclude": [
-        "no-unused-vars"
-      ]
+      "exclude": []
     }
   },
   "fmt": {
     "include": ["./"],
-    "exclude": ["*/testdata/"],
+    "exclude": ["*/tests/", "*/fixtures/", ".devcontainer", ".github"],
     "semiColons": true,
     "lineWidth": 80,
     "indentWidth": 2,
@@ -37,18 +36,19 @@
     "proseWrap": "preserve"
   },
   "tasks": {
-    "build": "deno fmt && deno lint && deno cache --reload ./dependencies.ts",
-    "test": "deno task build && deno cache --reload ./dev.dependencies.ts && deno test -A"
+    "fmt": "deno fmt",
+    "cache": "deno cache --reload ./dependencies.ts ./dev.dependencies.ts",
+    "test": "deno test -A --parallel --unstable-fs --unstable-net",
+    "bench": "deno bench -A --unstable-fs",
+    "check": "deno fmt --check && deno lint && deno check **/*.ts && deno task test"
   },
   "test": {
-    "files": {
-      "include": [
-        "./"
-      ],
-      "exclude": [
-        "*/testdata/"
-      ]
-    }
+    "include": [
+      "./"
+    ],
+    "exclude": [
+      "*/fixtures/"
+    ]
   },
   "lock": false
 }
