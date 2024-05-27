@@ -51,6 +51,15 @@ Deno.test('Events:Typed', async (t) => {
   }
 
   await t.step({
+    name: 'Call emit with no listeners',
+    fn() {
+      test = new EventTester();
+      assertEquals(test.getEventCount(), 0);
+      test.run();
+    },
+  });
+
+  await t.step({
     name: 'Add new Events',
     fn() {
       test = new EventTester();
@@ -59,6 +68,7 @@ Deno.test('Events:Typed', async (t) => {
       assertEquals(test.getEventCount(), 1);
     },
   });
+
   await t.step({
     name: 'Test if to ensure deletion/removal of specific events name',
     fn() {
@@ -94,6 +104,7 @@ Deno.test('Events:Typed', async (t) => {
       assertEquals(test.getEventCount(), 0);
     },
   });
+
   await t.step({
     name:
       'Test to ensure removal (deletion) of all callbacks in all event name',
@@ -107,6 +118,7 @@ Deno.test('Events:Typed', async (t) => {
       assertEquals(test.getEventCount(), 0);
     },
   });
+
   await t.step({
     name: 'Test to ensure prevention of Duplicate callbacks in an event',
     fn() {
@@ -120,6 +132,7 @@ Deno.test('Events:Typed', async (t) => {
       assertEquals(test.getEventCount(), 1);
     },
   });
+
   await t.step({
     name:
       'Test to ensure all callback with tagged as once is executed only one time',
@@ -136,6 +149,7 @@ Deno.test('Events:Typed', async (t) => {
       assertEquals(op.join(','), '1,once,1');
     },
   });
+
   await t.step({
     name: 'Test to ensure removal of callbacks marked as once',
     fn() {
@@ -149,6 +163,7 @@ Deno.test('Events:Typed', async (t) => {
       assertEquals(test.getEventCount(), 0);
     },
   });
+
   await t.step({
     name:
       'Run All callbacks in an event waiting for each callback to finish executing/return value',
@@ -164,6 +179,7 @@ Deno.test('Events:Typed', async (t) => {
       assertEquals(op.join(','), '1,2,3,4');
     },
   });
+
   await t.step({
     name:
       'Run all callbacks in an event without waiting for each callback to finish executing/return value',
@@ -187,6 +203,14 @@ Deno.test('Events:Typed', async (t) => {
     assertEquals(test.getEventCount(), 4);
     test.off('event1', [first, second]);
     assertEquals(test.getEventCount(), 2);
+  });
+
+  await t.step('Test emitSync with an event throwing an error', () => {
+    const test = new EventTester();
+    test.on('event1', () => {
+      throw new Error('Error');
+    });
+    test.runSync();
   });
 });
 
@@ -234,6 +258,15 @@ Deno.test('Events:UnTyped', async (t) => {
   }
 
   await t.step({
+    name: 'Call emit with no listeners',
+    fn() {
+      test = new EventTester();
+      assertEquals(test.getEventCount(), 0);
+      test.run();
+    },
+  });
+  
+  await t.step({
     name: 'Add new Events',
     fn() {
       test = new EventTester();
@@ -242,6 +275,7 @@ Deno.test('Events:UnTyped', async (t) => {
       assertEquals(test.getEventCount(), 1);
     },
   });
+
   await t.step({
     name: 'Test if to ensure deletion/removal of specific events name',
     fn() {
@@ -259,6 +293,7 @@ Deno.test('Events:UnTyped', async (t) => {
       assertEquals(test.getEventCount(), 0);
     },
   });
+
   await t.step({
     name: 'Test to ensure deletion of all callbacks in an event name',
     fn() {
@@ -277,6 +312,7 @@ Deno.test('Events:UnTyped', async (t) => {
       assertEquals(test.getEventCount(), 0);
     },
   });
+
   await t.step({
     name:
       'Test to ensure removal (deletion) of all callbacks in all event name',
@@ -290,6 +326,7 @@ Deno.test('Events:UnTyped', async (t) => {
       assertEquals(test.getEventCount(), 0);
     },
   });
+
   await t.step({
     name: 'Test to ensure prevention of Duplicate callbacks in an event',
     fn() {
@@ -303,6 +340,7 @@ Deno.test('Events:UnTyped', async (t) => {
       assertEquals(test.getEventCount(), 1);
     },
   });
+
   await t.step({
     name:
       'Test to ensure all callback with tagged as once is executed only one time',
@@ -319,6 +357,7 @@ Deno.test('Events:UnTyped', async (t) => {
       assertEquals(op.join(','), '1,once,1');
     },
   });
+
   await t.step({
     name: 'Test to ensure removal of callbacks marked as once',
     fn() {
@@ -332,6 +371,7 @@ Deno.test('Events:UnTyped', async (t) => {
       assertEquals(test.getEventCount(), 0);
     },
   });
+
   await t.step({
     name:
       'Run All callbacks in an event waiting for each callback to finish executing/return value',
@@ -347,6 +387,7 @@ Deno.test('Events:UnTyped', async (t) => {
       assertEquals(op.join(','), '1,2,3,4');
     },
   });
+
   await t.step({
     name:
       'Run all callbacks in an event without waiting for each callback to finish executing/return value',
@@ -371,4 +412,13 @@ Deno.test('Events:UnTyped', async (t) => {
     test.off('event1', [first, second]);
     assertEquals(test.getEventCount(), 2);
   });
+
+  await t.step('Test emitSync with an event throwing an error', () => {
+    const test = new EventTester();
+    test.on('event1', () => {
+      throw new Error('Error');
+    });
+    test.runSync();
+  });
+
 });

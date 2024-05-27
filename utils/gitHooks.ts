@@ -40,7 +40,7 @@ export const loadHooks = async (hookPath: string) => {
           // Suppress error
         }
         await Deno.writeTextFile(gitHookPath, hookFile);
-        await Deno.chmod(gitHookPath, 0o755);
+        await Deno.chmod(gitHookPath, 0o755); // NOSONAR
       }
     }
   }

@@ -32,7 +32,7 @@ export const envArgs = function (
       });
     if (filePermission.state === 'granted') {
       const data = Deno.readTextFileSync(envFile);
-      const pattern = new RegExp(/^\s*([\w.-]+)\s*=\s*(.+)\s*$/);
+      const pattern = new RegExp(/^\s*([\w.-]+)\s*=\s*(.+?)\s*$/);
       const isQuoted = new RegExp(/^('|")[^\1].*(\1)$/);
 
       data.split('\n').forEach((line) => {
