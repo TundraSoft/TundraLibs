@@ -15,8 +15,8 @@ export * as base64 from 'https://deno.land/std@0.224.0/encoding/base64.ts';
 export * as hex from 'https://deno.land/std@0.224.0/encoding/hex.ts';
 
 export {
-  STATUS_CODE,
   STATUS_TEXT,
+  type StatusCode,
 } from 'https://deno.land/std@0.224.0/http/status.ts';
 
 //#endregion Deno STD

@@ -6,7 +6,7 @@ Deno.test('Options:Typed', async (t) => {
   type TestEvents = { baz: (value: string) => void };
   class TestClass extends Options<TestOptions, TestEvents> {
     constructor(opt: OptionKeys<TestOptions, TestEvents>) {
-      super(opt);
+      super(opt, { foo: 'aaa' });
     }
 
     checkExistence(name: string): boolean {
