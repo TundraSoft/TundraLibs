@@ -6,5 +6,4 @@ export {
   ConfigPermissionError,
   DuplicateConfig,
   MalformedConfig,
-  UnsupportedConfig,
 } from './errors/mod.ts';

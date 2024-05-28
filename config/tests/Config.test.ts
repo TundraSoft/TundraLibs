@@ -27,6 +27,11 @@ Deno.test({
 });
 
 Deno.test('Config', async (t) => {
+
+  await t.step('Invalid path', () => {
+    assertRejects(async () => await Config.load('config/tests/fixtures/valid/Sample.yaml'), ConfigNotFound)
+  });
+
   await t.step('Load config', async () => {
     await Config.load('config/tests/fixtures/valid/', 'sample');
     // Should load only Sample config
@@ -35,9 +40,11 @@ Deno.test('Config', async (t) => {
     await Config.load('config/tests/fixtures/valid/', 'sample2');
     await Config.load('config/tests/fixtures/valid/', 'sample3');
     assertEquals(Config.list(), ['sample', 'sample2', 'sample3']);
+    Config.clear();
   });
 
-  await t.step('Check loaded config', () => {
+  await t.step('Check loaded config', async () => {
+    await Config.load('config/tests/fixtures/valid/', 'sample');
     assert(Config.get('sample'));
     // Config name is not case sensitive
     assertEquals(Config.get('SamPle', 'title'), 'TOML Example');

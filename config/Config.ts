@@ -12,7 +12,6 @@ import {
   ConfigPermissionError,
   DuplicateConfig,
   MalformedConfig,
-  UnsupportedConfig,
 } from './errors/mod.ts';
 /**
  * Config
@@ -201,11 +200,13 @@ class Configurations {
    */
   protected async _loadConfig(name: string, file: string) {
     const fileDetails = path.parse(file);
-    let data: Record<string, unknown>;
     switch (fileDetails.ext.toLowerCase()) {
       case '.json':
         try {
-          data = JSON.parse(await Deno.readTextFile(file));
+          this._config.set(
+            name.trim().toLowerCase(),
+            JSON.parse(await Deno.readTextFile(file)),
+          );
         } catch {
           throw new MalformedConfig({
             config: name,
@@ -218,10 +219,13 @@ class Configurations {
       case '.yaml':
       case '.yml':
         try {
-          data = yaml.parse(await Deno.readTextFile(file)) as Record<
-            string,
-            unknown
-          >;
+          this._config.set(
+            name.trim().toLowerCase(),
+            yaml.parse(await Deno.readTextFile(file)) as Record<
+              string,
+              unknown
+            >,
+          );
         } catch {
           throw new MalformedConfig({
             config: name,
@@ -233,7 +237,10 @@ class Configurations {
         break;
       case '.toml':
         try {
-          data = toml.parse(await Deno.readTextFile(file));
+          this._config.set(
+            name.trim().toLowerCase(),
+            toml.parse(await Deno.readTextFile(file)),
+          );
         } catch {
           throw new MalformedConfig({
             config: name,
@@ -243,14 +250,7 @@ class Configurations {
           });
         }
         break;
-      default:
-        throw new UnsupportedConfig({
-          config: name,
-          path: file,
-          ext: fileDetails.ext,
-        });
     }
-    this._config.set(name.trim().toLowerCase(), data);
   }
 
   /**
