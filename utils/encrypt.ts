@@ -60,16 +60,9 @@ export const encrypt = async (
       encopt,
       cryptKey,
       enc.encode(JSON.stringify(message)),
-    );
-  if (encOpt.encoding === 'HEX') {
-    return `${hex.encodeHex(encrypted)}:${
-      hex.encodeHex(encopt.iv || encopt.counter || '')
-    }`;
-  } else {
-    return `${base64.encodeBase64(encrypted)}:${
-      base64.encodeBase64(encopt.iv || encopt.counter || '')
-    }`;
-  }
+    ),
+    encode = encOpt.encoding === 'HEX' ? hex.encodeHex : base64.encodeBase64;
+  return `${encode(encrypted)}:${encode(encopt.iv || encopt.counter || '')}`;
 };
 
 export const decrypt = async <T>(
