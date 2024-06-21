@@ -4,7 +4,7 @@ import { alphaNumeric, nanoid } from '../nanoid/mod.ts';
 import { assertEquals } from '../dev.dependencies.ts';
 
 Deno.test({
-  name: '[module=\'JWT\'] Test signature & Validation - HS256',
+  name: "[module='JWT'] Test signature & Validation - HS256",
   async fn(): Promise<void> {
     const opt: JWTOptions = {
       algo: 'HS256',
@@ -30,7 +30,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: '[module=\'JWT\'] Test signature & Validation - HS384',
+  name: "[module='JWT'] Test signature & Validation - HS384",
   async fn(): Promise<void> {
     const opt: JWTOptions = {
       algo: 'HS384',
@@ -56,7 +56,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: '[module=\'JWT\'] Test signature & Validation - HS512',
+  name: "[module='JWT'] Test signature & Validation - HS512",
   async fn(): Promise<void> {
     const opt: JWTOptions = {
       algo: 'HS512',
