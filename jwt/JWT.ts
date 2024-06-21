@@ -21,7 +21,7 @@ export class JWT extends Options<JWTOptions> {
     };
     super(options, defaults);
     if (!this._hasOption('key')) {
-      throw new Error('[module=\'JWT\'] Encryption key must be provided');
+      throw new Error("[module='JWT'] Encryption key must be provided");
     }
   }
 
@@ -85,7 +85,7 @@ export class JWT extends Options<JWTOptions> {
 
     if (!verify) {
       throw new Error(
-        '[module=\'JWT\'] Signature verification of token failed',
+        "[module='JWT'] Signature verification of token failed",
       );
     }
     this._validateClaims(claim);
@@ -105,7 +105,7 @@ export class JWT extends Options<JWTOptions> {
   ): { headers: JWTHeaders; claim: JWTClaims; signature: string } {
     const tokenParts = token.split('.');
     if (tokenParts.length != 3) {
-      throw new Error('[module=\'JWT\'] Invalid token provided');
+      throw new Error("[module='JWT'] Invalid token provided");
     }
     const headers = JSON.parse(
         new TextDecoder().decode(base64url.decode(tokenParts[0])),
@@ -133,12 +133,12 @@ export class JWT extends Options<JWTOptions> {
         // Check if issued at is in the future
       } catch {
         throw new Error(
-          '[module=\'JWT\'] Claim issue at is not a valid timestamp epoch',
+          "[module='JWT'] Claim issue at is not a valid timestamp epoch",
         );
       }
       if (new Date(claim.iat) > new Date()) {
         throw new Error(
-          '[module=\'JWT\'] Cannot have claim issue at in the future',
+          "[module='JWT'] Cannot have claim issue at in the future",
         );
       }
     }
@@ -147,12 +147,12 @@ export class JWT extends Options<JWTOptions> {
         new Date(claim.nbf);
       } catch {
         throw new Error(
-          '[module=\'JWT\'] Claim not before at is not a valid timestamp epoch',
+          "[module='JWT'] Claim not before at is not a valid timestamp epoch",
         );
       }
       if (new Date(claim.nbf) > new Date()) {
         throw new Error(
-          '[module=\'JWT\'] Claim Not Before is found to be in the future',
+          "[module='JWT'] Claim Not Before is found to be in the future",
         );
       }
     }
@@ -161,11 +161,11 @@ export class JWT extends Options<JWTOptions> {
         new Date(claim.exp);
       } catch {
         throw new Error(
-          '[module=\'JWT\'] Claim expiry is not a valid timestamp epoch',
+          "[module='JWT'] Claim expiry is not a valid timestamp epoch",
         );
       }
       if (new Date(claim.exp) > new Date()) {
-        throw new Error('[module=\'JWT\'] Claim has expired!');
+        throw new Error("[module='JWT'] Claim has expired!");
       }
     }
   }
@@ -206,7 +206,7 @@ export class JWT extends Options<JWTOptions> {
           );
           break;
         default:
-          throw new Error('[module=\'JWT\'] Unknown algo specified');
+          throw new Error("[module='JWT'] Unknown algo specified");
       }
     }
   }

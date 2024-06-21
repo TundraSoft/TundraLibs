@@ -72,7 +72,7 @@ export class Escape {
     }
 
     const res = str.replace(/&quot;/g, '"')
-      .replace(/&#39;/g, '\'')
+      .replace(/&#39;/g, "'")
       .replace(/&#x3A;/g, ':')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
@@ -110,8 +110,8 @@ export class Escape {
         case '"':
           escapedSqlStr += '\\"';
           break;
-        case '\'':
-          escapedSqlStr += '\\\'';
+        case "'":
+          escapedSqlStr += "\\'";
           break;
         case '\\':
           escapedSqlStr += '\\\\';
@@ -128,9 +128,9 @@ export class Escape {
     }
 
     if (chunkIndex < sqlStr.length) {
-      return '\'' + escapedSqlStr + sqlStr.slice(chunkIndex) + '\'';
+      return "'" + escapedSqlStr + sqlStr.slice(chunkIndex) + "'";
     }
 
-    return '\'' + escapedSqlStr + '\'';
+    return "'" + escapedSqlStr + "'";
   }
 }

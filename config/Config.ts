@@ -68,11 +68,10 @@ export class Config {
       let data = JSON.stringify(config);
       if (Config.#env && Config.#env.size > 0) {
         Config.#env.forEach((value, key) => {
-          if(key.startsWith('_') || key.startsWith('?')) return;
+          if (key.startsWith('_') || key.startsWith('?')) return;
           const regex = new RegExp('\\$' + key + '', 'g');
           data = data.replaceAll(regex, value);
         });
-        
       }
       // Replace the env variables
       //#endregion Replace env variables

@@ -8,8 +8,8 @@ import { Generator } from './Generators.ts';
 
 export type TranslatorConfig = {
   quote: {
-    column: '"' | '\'' | '`';
-    value: '"' | '\'' | '`';
+    column: '"' | "'" | '`';
+    value: '"' | "'" | '`';
   };
   dataTypes: {
     [Property in keyof typeof DataTypes]: string;
@@ -23,7 +23,7 @@ export type TranslatorConfig = {
 export const PostgresTranslatorConfig: TranslatorConfig = {
   quote: {
     column: '"',
-    value: '\'',
+    value: "'",
   },
   dataTypes: {
     'INT': 'INTEGER',
@@ -75,14 +75,14 @@ export const PostgresTranslatorConfig: TranslatorConfig = {
     [Generator.CURRENT_TIMESTAMP]: '${CURRENT_TIMESTAMP}',
     [Generator.UUID]: '${GEN_RANDOM_UUID()}',
     [Generator.NOW]: '${NOW()}',
-    [Generator.SYS_GUID]: '${REPLACE(GEN_RANDOM_UUID()::varchar, \'-\', \'\')}',
+    [Generator.SYS_GUID]: "${REPLACE(GEN_RANDOM_UUID()::varchar, '-', '')}",
   },
 };
 
 export const MariaTranslatorConfig: TranslatorConfig = {
   quote: {
     column: '`',
-    value: '\'',
+    value: "'",
   },
   dataTypes: {
     'INT': 'INTEGER',
@@ -141,7 +141,7 @@ export const MariaTranslatorConfig: TranslatorConfig = {
 export const SQLiteTranslatorConfig: TranslatorConfig = {
   quote: {
     column: '`',
-    value: '\'',
+    value: "'",
   },
   dataTypes: {
     'INT': 'INTEGER',
@@ -187,12 +187,12 @@ export const SQLiteTranslatorConfig: TranslatorConfig = {
     'AUTO_INCREMENT': 'INTEGER',
   },
   generators: {
-    [Generator.CURRENT_DATE]: '${DATE(\'now\')}',
-    [Generator.CURRENT_TIME]: '${TIME(\'now\')}',
-    [Generator.CURRENT_DATETIME]: '${datetime(\'now\')}',
+    [Generator.CURRENT_DATE]: "${DATE('now')}",
+    [Generator.CURRENT_TIME]: "${TIME('now')}",
+    [Generator.CURRENT_DATETIME]: "${datetime('now')}",
     [Generator.CURRENT_TIMESTAMP]: '${CURRENT_TIMESTAMP}',
     [Generator.UUID]: crypto.randomUUID,
-    [Generator.NOW]: '${datetime(\'now\')}',
+    [Generator.NOW]: "${datetime('now')}",
     [Generator.SYS_GUID]: crypto.randomUUID,
   },
 };
