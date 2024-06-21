@@ -837,7 +837,7 @@ export class Model<
       // If unique key is part of update and rowCount > 1, throw error
       if (rowCnt > 1) {
         this._uniqueKeys[key].forEach((column) => {
-          if (data[column] !== undefined || data[column] !== null) {
+          if (data[column] !== undefined && data[column] !== null) {
             // throw new ModelValidationError({
             //   [column]: [`Column ${column as string} is not unique`],
             // }, this.name, this._connection.name);
