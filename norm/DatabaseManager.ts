@@ -17,6 +17,7 @@ import {
 export class DatabaseManager {
   private static _configs: Map<string, ClientConfig> = new Map();
   private static _instance: Map<string, AbstractClient> = new Map();
+  public static onPoolWait: (name: string, size: number) => void = () => {};
 
   static register<T extends ClientConfig>(name: string, config: T) {
     const nameClean = name.trim().toLowerCase();

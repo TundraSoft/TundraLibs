@@ -64,6 +64,9 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
   ): Promise<{ type: QueryType; data?: Entity[]; count?: number }> {
     try {
       // first get the client
+      if (this._client.available < 1) {
+        this.emit('poolWait', this.name, this._client.size);
+      }
       const client = await this._client.connect(),
         sql = this._queryTranslator.translate(query),
         queryType = this._queryType(sql),
