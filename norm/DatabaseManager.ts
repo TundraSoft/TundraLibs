@@ -104,6 +104,7 @@ export class DatabaseManager {
     // if (await dbConn.ping() === false) {
     //   throw new CommunicationError(name, dialect);
     // }
+    dbConn.on('poolWait', DatabaseManager.onPoolWait);
     DatabaseManager._instance.set(name, dbConn);
   }
 }
