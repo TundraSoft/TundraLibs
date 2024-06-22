@@ -40,7 +40,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
         },
       },
       poolSize = this._getOption('poolSize') as number || 1;
-    this._client = await new PGPool(pgConfig, poolSize, true);
+    this._client = await new PGPool(pgConfig, poolSize, false);
     // Hack to test the connection, if there is something wrong it will throw immediately
     // await (await this._client.connect()).release();
   }
