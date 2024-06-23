@@ -31,8 +31,7 @@ import { ConnectionError, NormError, QueryError } from './errors/mod.ts';
 
 export abstract class AbstractClient<
   O extends ClientConfig = ClientConfig,
-  E extends ClientEvents = ClientEvents,
-> extends Options<O, E> {
+> extends Options<O, ClientEvents> {
   protected _dialect: Dialects;
   protected _name: string;
   protected _state: 'CONNECTED' | 'CLOSED' = 'CLOSED';
@@ -40,6 +39,7 @@ export abstract class AbstractClient<
 
   declare protected _client: unknown;
   protected _queryTranslator: QueryTranslator;
+  protected _longQueryTime: number = 500;
 
   constructor(name: string, config: NonNullable<O> | O) {
     super(config);
@@ -47,6 +47,12 @@ export abstract class AbstractClient<
     this._dialect = config.dialect;
     if (this._hasOption('encryptionKey')) {
       this._encryptionKey = this._getOption('encryptionKey') as string;
+    }
+    if (
+      this._hasOption('longQueryWarningTime') &&
+      this._getOption('longQueryWarningTime') as number > 0
+    ) {
+      this._longQueryTime = this._getOption('longQueryWarningTime') as number;
     }
     this._queryTranslator = new QueryTranslator(this._dialect);
   }
@@ -142,6 +148,14 @@ export abstract class AbstractClient<
         retVal.count = result.count || 0;
       }
       retVal.time = performance.now() - start;
+      if (retVal.time > this._longQueryTime) {
+        this.emit(
+          'longQuery',
+          this.name,
+          sql,
+          retVal.time,
+        );
+      }
       // console.log('Done')
       return retVal;
     } catch (e) {

@@ -17,6 +17,12 @@ import {
 export class DatabaseManager {
   private static _configs: Map<string, ClientConfig> = new Map();
   private static _instance: Map<string, AbstractClient> = new Map();
+  public static onPoolWait: (name: string, size: number) => void = () => {};
+  public static onLongQuery: (
+    name: string,
+    query: unknown,
+    time: number,
+  ) => void = () => {};
 
   static register<T extends ClientConfig>(name: string, config: T) {
     const nameClean = name.trim().toLowerCase();
@@ -103,6 +109,8 @@ export class DatabaseManager {
     // if (await dbConn.ping() === false) {
     //   throw new CommunicationError(name, dialect);
     // }
+    dbConn.on('poolWait', DatabaseManager.onPoolWait);
+    dbConn.on('longQuery', DatabaseManager.onLongQuery);
     DatabaseManager._instance.set(name, dbConn);
   }
 }
