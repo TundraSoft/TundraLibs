@@ -417,7 +417,7 @@ Deno.test({ name: 'DAM > Client > Postgres', permissions: { net: true } }, async
       dialect: 'POSTGRES',
       host: envData.get('PG_HOST') || 'localhost',
       username: envData.get('PG_USER') || 'postgres',
-      password: envData.get('PG_PASS') || 'postgres',
+      password: envData.get('PG_PASS') || 'postgrespw',
       port: parseInt(envData.get('PG_PORT')) || 5432,
       database: envData.get('PG_DB') || 'postgres',
       poolSize: 1,

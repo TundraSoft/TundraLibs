@@ -417,8 +417,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       username: envData.get('MARIA_USER') || 'root',
       password: envData.get('MARIA_PASS') || 'mariapw',
       port: parseInt(envData.get('MARIA_PORT')) || 3306,
-      database: envData.get('MARIA_DB') || 'postgres',
-      poolSize: 1,
+      database: envData.get('MARIA_DB') || 'mysql',
     }
     const client = new MariaClient('mariatest', conf as MariaOptions);
     await t.step('Must connect to database', async () => {
