@@ -4,7 +4,8 @@ deno.lock
 *.swp
 .env
 !*/fixtures/.env
-!*/tests/fixtures/.env
+!*/tests/.env
+!*/tests/fixtures/*
 
 /.cargo_home/
 /.idea/

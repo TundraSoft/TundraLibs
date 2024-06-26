@@ -65,12 +65,22 @@ export {
 } from 'https://deno.land/x/sqlite@v3.8/mod.ts';
 
 export {
-  type Collection,
-  type Db,
+  Collection as MongoDBCollection,
+  type ConnectOptions as MongoDBClientOptions,
+  Database as MongoDBDatabase,
+  type Document as MongoDBDocument,
+  GridFSBucket as MongoDBGridBucket,
   MongoClient as MongoDBClient,
-  type MongoClientOptions as MongoDBClientOptions,
-  MongoServerError as MongoDBServerError,
-} from 'npm:mongodb';
+  ObjectId as MongoDBObjectId,
+} from 'https://deno.land/x/mongo@v0.33.0/mod.ts';
+
+// export {
+//   type Collection,
+//   type Db,
+//   MongoClient as MongoDBClient,
+//   type MongoClientOptions as MongoDBClientOptions,
+//   MongoServerError as MongoDBServerError,
+// } from 'npm:mongodb';
 
 // For encryption
 export * as openpgp from 'https://cdn.skypack.dev/openpgp'; //'https://deno.land/x/openpgp@v5.11.1/src/index.js'; //'https://cdn.skypack.dev/openpgp';

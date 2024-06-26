@@ -21,10 +21,8 @@
       "tags": [
         "recommended"
       ],
-      "include": [
-        "ban-untagged-todo"
-      ],
-      "exclude": []
+      "include": [],
+      "exclude": ["ban-untagged-todo"]
     }
   },
   "fmt": {
