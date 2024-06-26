@@ -36,7 +36,7 @@ jobs:
       postgres:
         image: postgres
         env:
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_PASSWORD: postgrespw
         ports:
           - 5432:5432
         options: >-
@@ -74,9 +74,7 @@ jobs:
       -
         name: Check formatting & linting
         run: |
-          deno fmt --check
-          deno lint
-          deno check --unstable **/*.ts
+          deno task check
       
       -
         name: Load dependencies
@@ -94,7 +92,7 @@ jobs:
           PG_HOST: localhost
           PG_PORT: 5432
           PG_USER: postgres
-          PG_PASS: postgres
+          PG_PASS: postgrespw
           MARIA_HOST: localhost
           MARIA_PORT: 3306
           MARIA_USER: root

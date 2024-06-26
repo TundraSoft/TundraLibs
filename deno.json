@@ -38,7 +38,7 @@
     "cache": "deno cache --reload ./dependencies.ts ./dev.dependencies.ts",
     "clean": "deno fmt && deno task cache",
     "bench": "deno bench -A --unstable-fs",
-    "test": "deno test -A --parallel --unstable-fs --unstable-net",
+    "test": "deno test --allow-net --allow-read --allow-write --allow-env --parallel --unstable-fs --unstable-net",
     "check": "deno fmt --check && deno lint && deno check **/*.ts"
   },
   "test": {
