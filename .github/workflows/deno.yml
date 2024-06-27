@@ -45,7 +45,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       maria:
-        image: mariadb:11.2
+        image: mariadb:11.1
         env:
           MARIADB_ROOT_PASSWORD: rootpw
           MARIADB_USER: maria
