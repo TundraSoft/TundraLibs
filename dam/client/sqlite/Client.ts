@@ -66,6 +66,7 @@ export class SQLiteClient extends Client<SQLiteOptions> {
     try {
       this._client = new SQLiteDBClient(this._initializeDB(), opt);
     } catch (err) {
+      this._client = undefined;
       if (err instanceof SQLiteDBError) {
         throw new DAMClientConnectionError(
           {

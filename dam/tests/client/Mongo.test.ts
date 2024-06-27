@@ -265,6 +265,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
       conf.username = envData.get('MONGO_USER');
       conf.password = envData.get('MONGO_PASS');
     }
+    console.log(conf);
     const client = new MongoClient('mongotest', conf as MongoOptions);
     await s.step('Must connect to database', async () => {
       await client.connect();

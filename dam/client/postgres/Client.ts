@@ -100,6 +100,7 @@ export class PostgresClient extends Client<PostgresOptions> {
     try {
       client = await this._client.connect();
     } catch (err) {
+      this._client = undefined;
       if (err instanceof PostgresError) {
         // 28P01: invalid password or user
         // 3D000: database does not exist
