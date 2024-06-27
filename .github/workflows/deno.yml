@@ -47,6 +47,7 @@ jobs:
       maria:
         image: mariadb:latest
         env:
+          MARIADB_ROOT_PASSWORD: rootpw
           MARIADB_USER: maria
           MARIADB_PASSWORD: mariapw
           MYSQL_DATABASE: mysql
