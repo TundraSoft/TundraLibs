@@ -6,9 +6,9 @@ const envData = envArgs('dam/tests');
 
 Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources: false }, async (t) => {
 
-  await t.step('Invalid Config', async (t) => {
+  await t.step('Invalid Config', async (s) => {
 
-    await t.step('Incorrect/Missing Dialect', () => {
+    await s.step('Incorrect/Missing Dialect', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
@@ -74,7 +74,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       }, DAMClientConfigError);
     });
 
-    await t.step('Missing Host', () => {
+    await s.step('Missing Host', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
@@ -127,7 +127,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       }, DAMClientConfigError);
     });
 
-    await t.step('Missing/Incorrect port', () => {
+    await s.step('Incorrect port', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
@@ -181,7 +181,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       }, DAMClientConfigError);
     });
 
-    await t.step('Username Missing', () => {
+    await s.step('Username Missing', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
@@ -235,7 +235,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       }, DAMClientConfigError);
     });
 
-    await t.step('Invalid Password', () => {
+    await s.step('Invalid Password', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
@@ -290,7 +290,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       }, DAMClientConfigError);
     });
 
-    await t.step('Database Missing', () => {
+    await s.step('Database Missing', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
@@ -344,7 +344,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       }, DAMClientConfigError);
     });
 
-    await t.step('Invalid/Incorrect PoolSize', () => {
+    await s.step('Invalid/Incorrect PoolSize', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
@@ -372,7 +372,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       }, DAMClientConfigError);
     });
 
-    await t.step('Failed connection', () => {
+    await s.step('Failed connection', async () => {
       const conf = {
         dialect: 'MARIA',
         host: envData.get('MARIA_HOST') || 'localhost', 
@@ -383,10 +383,10 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
         poolSize: 1,
       }
       const client = new MariaClient('mariatest', conf as MariaOptions);
-      assertRejects(async () => await client.connect(), DAMClientConnectionError);
+      await assertRejects(async () => await client.connect(), DAMClientConnectionError);
     });
     
-    await t.step('Querying in Failed connection', () => {
+    await s.step('Querying in Failed connection', async () => {
       const conf = {
         dialect: 'MARIA',
         host: envData.get('MARIA_HOST') || 'localhost', 
@@ -396,7 +396,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
         database: envData.get('MARIA_DB') || 'mysql',
         poolSize: 1,
       }
-      assertRejects(async () => {
+      await assertRejects(async () => {
         const client = new MariaClient('mariatest', conf as MariaOptions);
         try {
           await client.connect();
@@ -406,11 +406,11 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
         await client.query({
           sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'mysql';`,
         });
-      }, DAMClientQueryError);
+      }, DAMClientConnectionError);
     });
   });
 
-  await t.step('Basic Operations', async (t) => {
+  await t.step('Basic Operations', async (s) => {
     const conf = {
       dialect: 'MARIA',
       host: envData.get('MARIA_HOST') || 'localhost',
@@ -419,9 +419,8 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       port: parseInt(envData.get('MARIA_PORT')) || 3307,
       database: envData.get('MARIA_DB') || 'mysql',
     }
-    console.log(conf);
     const client = new MariaClient('mariatest', conf as MariaOptions);
-    await t.step('Must connect to database', async () => {
+    await s.step('Must connect to database', async () => {
       await client.connect();
       assertEquals('CONNECTED', client.status);
       // Attempt calling connect again should not change anything
@@ -430,13 +429,13 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       await client.close();
     });
 
-    await t.step('Get Version', async () => {
+    await s.step('Get Version', async () => {
       await client.connect();
       assert(await client.version());
       await client.close();
     });
 
-    await t.step('Query', async () => {
+    await s.step('Query', async () => {
       await client.connect();
       await client.query({
         sql: `SELECT 1 + 1;`,
@@ -444,7 +443,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       await client.close();
     });
 
-    await t.step('Query Error', async () => {
+    await s.step('Query Error', async () => {
       await client.connect();
       await assertRejects(async () => {
         await client.query({
@@ -454,7 +453,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       await client.close();
     });
 
-    await t.step('Query with Parameter', async () => {
+    await s.step('Query with Parameter', async () => {
       await client.connect();
       assert(await client.query({
           sql: `SELECT 1 + :num:;`,
@@ -465,7 +464,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       await client.close();
     });
 
-    await t.step('Missing Parameter', async () => {
+    await s.step('Missing Parameter', async () => {
       await client.connect();
       await assertRejects(async () => {
         await client.query({

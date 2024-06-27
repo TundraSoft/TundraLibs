@@ -141,15 +141,6 @@ export abstract class Client<O extends ClientOptions = ClientOptions>
     }
   }
 
-  public async ping(): Promise<boolean> {
-    try {
-      await this.query({ sql: 'SELECT 1;' });
-      return true;
-    } catch (_e) {
-      return false;
-    }
-  }
-
   public async version(): Promise<string> {
     if (this._version === undefined) {
       await this.connect();
@@ -188,6 +179,7 @@ export abstract class Client<O extends ClientOptions = ClientOptions>
   }
 
   //#region Abstract Methods
+  public abstract ping(): Promise<boolean>;
   protected abstract _connect(): Promise<void> | void;
   protected abstract _close(): Promise<void> | void;
   protected abstract _execute<R extends Record<string, unknown>>(

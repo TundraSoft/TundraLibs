@@ -3,6 +3,7 @@ deno.lock
 *.pyc
 *.swp
 .env
+
 !*/fixtures/.env
 !*/tests/.env
 !*/tests/fixtures/*

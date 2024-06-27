@@ -14,7 +14,7 @@ export type MongoOptions = ClientOptions & {
   // poolSize?: number; // Pool size is the number of connections to keep in the pool
   tls?: {
     enabled: boolean;
-    certificate?: string;
+    certificate: string;
     key: string;
   };
 };

@@ -6,9 +6,9 @@ const envData = envArgs('dam/tests');
 
 Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
 
-  await t.step('Invalid Config', async (t) => {
+  await t.step('Invalid Config', async (s) => {
 
-    await t.step('Incorrect/Missing Dialect', () => {
+    await s.step('Incorrect/Missing Dialect', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
@@ -74,7 +74,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       }, DAMClientConfigError);
     });
 
-    await t.step('Missing Host', () => {
+    await s.step('Missing Host', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
@@ -127,7 +127,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       }, DAMClientConfigError);
     });
 
-    await t.step('Missing/Incorrect port', () => {
+    await s.step('Incorrect port', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
@@ -181,7 +181,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       }, DAMClientConfigError);
     });
 
-    await t.step('Username Missing', () => {
+    await s.step('Username Missing', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
@@ -235,7 +235,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       }, DAMClientConfigError);
     });
 
-    await t.step('Invalid Password', () => {
+    await s.step('Invalid Password', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
@@ -290,7 +290,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       }, DAMClientConfigError);
     });
 
-    await t.step('Database Missing', () => {
+    await s.step('Database Missing', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
@@ -344,7 +344,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       }, DAMClientConfigError);
     });
 
-    await t.step('Invalid/Incorrect PoolSize', () => {
+    await s.step('Invalid/Incorrect PoolSize', () => {
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
@@ -372,7 +372,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       }, DAMClientConfigError);
     });
 
-    await t.step('Failed connection', () => {
+    await s.step('Failed connection', async () => {
       const conf = {
         dialect: 'POSTGRES',
         host: envData.get('PG_HOST') || 'localhost', 
@@ -382,14 +382,14 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         database: envData.get('PG_DB') || 'postgres',
         poolSize: 1,
       }
-      assertRejects(async () => {
+      await assertRejects(async () => {
         const client = new PostgresClient('pgtest', conf as PostgresOptions);
         await client.connect();
         await client.close();
       }, DAMClientConnectionError);
     });
 
-    await t.step('Querying in Failed connection', () => {
+    await s.step('Querying in Failed connection', async () => {
       const conf = {
         dialect: 'POSTGRES',
         host: envData.get('PG_HOST') || 'localhost', 
@@ -399,7 +399,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         database: envData.get('PG_DB') || 'postgres',
         poolSize: 1,
       }
-      assertRejects(async () => {
+      await assertRejects(async () => {
         const client = new PostgresClient('pgtest', conf as PostgresOptions);
         try {
           await client.connect();
@@ -409,11 +409,11 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         await client.query({
           sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'mysql';`,
         });
-      }, DAMClientQueryError);
+      }, DAMClientConnectionError);
     });
   });
 
-  await t.step('Basic Operations', async (t) => {
+  await t.step('Basic Operations', async (s) => {
     const conf = {
       dialect: 'POSTGRES',
       host: envData.get('PG_HOST') || 'localhost',
@@ -424,7 +424,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       poolSize: 1,
     }
     const client = new PostgresClient('pgtest', conf as PostgresOptions);
-    await t.step('Must connect to database', async () => {
+    await s.step('Must connect to database', async () => {
       await client.connect();
       assertEquals('CONNECTED', client.status);
       // Attempt calling connect again should not change anything
@@ -433,7 +433,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       await client.close();
     });
 
-    await t.step('Correct value for status', async () => {
+    await s.step('Correct value for status', async () => {
       await client.connect();
       await client.close();
       assertEquals('READY', client.status);
@@ -442,13 +442,13 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       assertEquals('READY', client.status);
     });
 
-    await t.step('Get Version', async () => {
+    await s.step('Get Version', async () => {
       await client.connect();
       assert(await client.version());
       await client.close();
     });
 
-    await t.step('Query', async () => {
+    await s.step('Query', async () => {
       await client.connect();
       await client.query({
         sql: `SELECT 1 + 1;`,
@@ -456,7 +456,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       await client.close();
     });
 
-    await t.step('Query Error', async () => {
+    await s.step('Query Error', async () => {
       await client.connect();
       await assertRejects(async () => {
         await client.query({
@@ -466,7 +466,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       await client.close();
     });
 
-    await t.step('Query with Parameter', async () => {
+    await s.step('Query with Parameter', async () => {
       await client.connect();
       assert(await client.query({
           sql: `SELECT 1 + :num:;`,
@@ -477,7 +477,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       await client.close();
     });
 
-    await t.step('Missing Parameter', async () => {
+    await s.step('Missing Parameter', async () => {
       await client.connect();
       await assertRejects(async () => {
         await client.query({

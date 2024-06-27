@@ -13,7 +13,6 @@ import { assertSQLiteOptions } from '../../asserts/Options.ts';
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
-  DAMClientNotConnectedError,
 } from '../../errors/mod.ts';
 
 /**
@@ -33,6 +32,15 @@ export class SQLiteClient extends Client<SQLiteOptions> {
       throw new DAMClientConfigError({ dialect: 'SQLITE', configName: name });
     }
     super(name, options);
+  }
+
+  public async ping(): Promise<boolean> {
+    try {
+      await this.query({ sql: 'SELECT 1;' });
+      return true;
+    } catch (_e) {
+      return false;
+    }
   }
 
   protected _standardizeQuery(query: Query): Query {
@@ -88,14 +96,8 @@ export class SQLiteClient extends Client<SQLiteOptions> {
   protected _execute<R extends Record<string, unknown>>(
     query: Query,
   ): { count: number; rows: R[] } {
-    if (this._client === undefined) {
-      throw new DAMClientNotConnectedError({
-        dialect: this.dialect,
-        configName: this.name,
-      });
-    }
     const sQuery = this._standardizeQuery(query);
-    const res = this._client.queryEntries<R>(
+    const res = this._client!.queryEntries<R>(
       sQuery.sql,
       sQuery.params as SQLiteParamType,
     );

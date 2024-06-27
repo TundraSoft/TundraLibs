@@ -17,7 +17,8 @@ export class DAMClientQueryError extends DAMClientError {
     },
     cause?: Error,
   ) {
-    super('Error running sql query', meta, cause);
+    const msg = `Error running sql query`;
+    super(msg, meta, cause);
   }
 
   get sql(): string {

@@ -14,7 +14,6 @@ import type { ClientEvents, MariaOptions, Query } from '../../types/mod.ts';
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
-  DAMClientNotConnectedError,
   DAMClientQueryError,
 } from '../../errors/mod.ts';
 
@@ -34,6 +33,15 @@ export class MariaClient extends Client<MariaOptions> {
       throw new DAMClientConfigError({ dialect: 'MARIA', configName: name });
     }
     super(name, options);
+  }
+
+  public async ping(): Promise<boolean> {
+    try {
+      await this.query({ sql: 'SELECT 1;' });
+      return true;
+    } catch (_e) {
+      return false;
+    }
   }
 
   protected _makeConfig(): MariaDBClientConfig {
@@ -88,6 +96,7 @@ export class MariaClient extends Client<MariaOptions> {
     try {
       c = await this._client.getConnection();
     } catch (e) {
+      this._client = undefined;
       if (e instanceof MariaDBError) {
         throw new DAMClientConnectionError({
           dialect: this.dialect,
@@ -114,12 +123,6 @@ export class MariaClient extends Client<MariaOptions> {
   protected async _execute<R extends Record<string, unknown>>(
     sql: Query,
   ): Promise<{ count: number; rows: R[] }> {
-    if (this._client === undefined) {
-      throw new DAMClientNotConnectedError({
-        dialect: this.dialect,
-        configName: this.name,
-      });
-    }
     const query = this._standardizeQuery(sql);
     const client = await this._client!.getConnection();
     try {

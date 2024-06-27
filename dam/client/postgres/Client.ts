@@ -13,7 +13,6 @@ import type { ClientEvents, PostgresOptions, Query } from '../../types/mod.ts';
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
-  DAMClientNotConnectedError,
   DAMClientQueryError,
 } from '../../errors/mod.ts';
 export class PostgresClient extends Client<PostgresOptions> {
@@ -33,6 +32,15 @@ export class PostgresClient extends Client<PostgresOptions> {
       throw new DAMClientConfigError({ dialect: 'POSTGRES', configName: name });
     }
     super(name, options);
+  }
+
+  public async ping(): Promise<boolean> {
+    try {
+      await this.query({ sql: 'SELECT 1;' });
+      return true;
+    } catch (_e) {
+      return false;
+    }
   }
 
   protected _makeConfig(): PGClientOptions {
@@ -128,14 +136,8 @@ export class PostgresClient extends Client<PostgresOptions> {
   protected async _execute<R extends Record<string, unknown>>(
     query: Query,
   ): Promise<{ count: number; rows: R[] }> {
-    if (this._client === undefined) {
-      throw new DAMClientNotConnectedError({
-        dialect: this.dialect,
-        configName: this.name,
-      });
-    }
     const sQuery = this._standardizeQuery(query);
-    const client: PGPoolClient = await this._client.connect();
+    const client: PGPoolClient = await this._client!.connect();
     try {
       const res = await client.queryObject<R>(
         sQuery.sql,

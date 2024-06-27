@@ -16,14 +16,18 @@ export {
   assertStringExpression,
 } from './asserts/mod.ts';
 
-export { MariaClient, PostgresClient, SQLiteClient } from './client/mod.ts';
+export {
+  MariaClient,
+  MongoClient,
+  PostgresClient,
+  SQLiteClient,
+} from './client/mod.ts';
 
 export {
   DAMClientConfigError,
   DAMClientConnectionError,
   DAMClientError,
   DAMClientMissingParamsError,
-  DAMClientNotConnectedError,
   DAMClientQueryError,
   DAMError,
 } from './errors/mod.ts';
