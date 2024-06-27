@@ -51,6 +51,10 @@ jobs:
           MYSQL_ROOT_PASSWORD: mariapw
           MARIADB_DATABASE: mysql
           MYSQL_DATABASE: mysql
+          MARIADB_USER: maria
+          MYSQL_USER: maria
+          MARIADB_PASSWORD: mariapw
+          MYSQL_PASSWORD: mariapw
         ports:
           - 3306:3306
         options: >-
@@ -99,7 +103,7 @@ jobs:
           PG_DB: postgres
           MARIA_HOST: localhost
           MARIA_PORT: 3306
-          MARIA_USER: root
+          MARIA_USER: maria
           MARIA_PASS: mariapw
           MARIA_DB: mysql
           MONGO_HOST: localhost
