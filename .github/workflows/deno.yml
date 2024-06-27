@@ -47,14 +47,9 @@ jobs:
       maria:
         image: mariadb:latest
         env:
-          MARIADB_DATABASE: mysql
-          MYSQL_DATABASE: mysql
           MARIADB_USER: maria
-          MYSQL_USER: maria
           MARIADB_PASSWORD: mariapw
-          MYSQL_PASSWORD: mariapw
-          MARIADB_ROOT_PASSWORD: mariapw
-          MYSQL_ROOT_PASSWORD: mariapw
+          MYSQL_DATABASE: mysql
         ports:
           - 3306:3306
         options: >-
