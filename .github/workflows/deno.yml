@@ -47,6 +47,7 @@ jobs:
       maria:
         image: mariadb
         env:
+          MARIADB_ROOT_PASSWORD: mariapw
           MYSQL_ROOT_PASSWORD: mariapw
         ports:
           - 3306:3306
@@ -93,10 +94,12 @@ jobs:
           PG_PORT: 5432
           PG_USER: postgres
           PG_PASS: postgrespw
+          PG_DB: postgres
           MARIA_HOST: localhost
           MARIA_PORT: 3306
           MARIA_USER: root
           MARIA_PASS: mariapw
+          MARIA_DB: mysql
           MONGO_HOST: localhost
           MONGO_PORT: 27017
           MONGO_DB: test
