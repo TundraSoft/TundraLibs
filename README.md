@@ -8,7 +8,7 @@
 [![codecov](https://codecov.io/gh/TundraSoft/TundraLibs/graph/badge.svg?token=LTDXV9HWQI)](https://codecov.io/gh/TundraSoft/TundraLibs)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=TundraSoft_TundraLibs&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=TundraSoft_TundraLibs)
 
-A collection of libraries written in Deno which I use in different projects.
+Collection of libraries built for Deno.
 
 ## Libraries
 
