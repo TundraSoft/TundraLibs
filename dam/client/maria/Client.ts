@@ -47,7 +47,7 @@ export class MariaClient extends Client<MariaOptions> {
       connectionLimit: this._getOption('poolSize'),
       idleTimeout: this._getOption('idleTimeout'),
       namedPlaceholders: true,
-      ssl: false,
+      // ssl: false,
     };
     const tls = this._getOption('tls');
     if (tls) {
@@ -62,7 +62,6 @@ export class MariaClient extends Client<MariaOptions> {
         }
       }
     }
-
     return conf;
   }
 
@@ -84,7 +83,7 @@ export class MariaClient extends Client<MariaOptions> {
     if (this._client !== undefined) {
       return;
     }
-    this._client = await MariaDBPoolConnector(this._makeConfig());
+    this._client = MariaDBPoolConnector(this._makeConfig());
     let c: MariaDBPoolConnection | undefined = undefined;
     try {
       c = await this._client.getConnection();
@@ -121,8 +120,8 @@ export class MariaClient extends Client<MariaOptions> {
         configName: this.name,
       });
     }
-    const client = await this._client!.getConnection();
     const query = this._standardizeQuery(sql);
+    const client = await this._client!.getConnection();
     try {
       let res = await client.query<Array<R>>(query.sql, query.params);
       let rowCount = 0;

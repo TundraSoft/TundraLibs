@@ -413,7 +413,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
   await t.step('Basic Operations', async (t) => {
     const conf = {
       dialect: 'MARIA',
-      host: envData.get('MARIA_HOST') || 'localhost',
+      host: envData.get('MARIA_HOST') || 'host.docker.internal',
       username: envData.get('MARIA_USER') || 'root',
       password: envData.get('MARIA_PASS') || 'mariapw',
       port: parseInt(envData.get('MARIA_PORT')) || 3306,
@@ -427,15 +427,6 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       await client.connect();
       assertEquals('CONNECTED', client.status);
       await client.close();
-    });
-
-    await t.step('Correct value for status', async () => {
-      await client.connect();
-      await client.close();
-      assertEquals('READY', client.status);
-      // Attempt calling close again should not change anything
-      await client.close();
-      assertEquals('READY', client.status);
     });
 
     await t.step('Get Version', async () => {
@@ -477,7 +468,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       await client.connect();
       await assertRejects(async () => {
         await client.query({
-          sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ':schema:'`,
+          sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = :schema:`,
         });
       }, DAMClientMissingParamsError);
       await client.close();

@@ -8,7 +8,7 @@ export type PostgresOptions = ClientOptions & {
   password: string;
   database: string;
   poolSize?: number;
-  connectionTimeout?: number; // Connection timeout is in seconds. Must be between 1 and 30
+  connectionTimeout?: number; // Connection timeout is in seconds. Must be between 1 and 30 - NOTE DOES NOT WORK
   tls?: {
     enabled: boolean;
     certificates?: string[];

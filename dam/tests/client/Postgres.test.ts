@@ -385,6 +385,7 @@ Deno.test({ name: 'DAM > Client > Postgres', permissions: { net: true } }, async
       assertRejects(async () => {
         const client = new PostgresClient('pgtest', conf as PostgresOptions);
         await client.connect();
+        await client.close();
       }, DAMClientConnectionError);
     });
 
@@ -459,7 +460,7 @@ Deno.test({ name: 'DAM > Client > Postgres', permissions: { net: true } }, async
       await client.connect();
       await assertRejects(async () => {
         await client.query({
-          sql: `SELECT * FROM sdfsdfsdf WHERE TABLE_SCHEMA = 'public';`,
+          sql: `SELECT dfssdf FROM sdfsdf;`, 
         });
       }, DAMClientQueryError);
       await client.close();

@@ -48,9 +48,6 @@ export class PostgresClient extends Client<PostgresOptions> {
       password: this._getOption('password'),
       database: this._getOption('database'),
       host_type: 'tcp',
-      options: {
-        connect_timeout: String(this._getOption('connectionTimeout') || 10),
-      },
     };
 
     const tls = this._getOption('tls');
@@ -137,8 +134,8 @@ export class PostgresClient extends Client<PostgresOptions> {
         configName: this.name,
       });
     }
-    const client: PGPoolClient = await this._client.connect();
     const sQuery = this._standardizeQuery(query);
+    const client: PGPoolClient = await this._client.connect();
     try {
       const res = await client.queryObject<R>(
         sQuery.sql,
