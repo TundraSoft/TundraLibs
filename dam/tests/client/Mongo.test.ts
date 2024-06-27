@@ -255,13 +255,15 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
   });
 
   await t.step('Basic Operations', async (s) => {
-    const conf = {
+    const conf: Record<string, unknown> = {
       dialect: 'MONGO',
       host: envData.get('MONGO_HOST') || 'localhost',
-      username: envData.get('MONGO_USER'),
-      password: envData.get('MONGO_PASS'),
       port: parseInt(envData.get('MONGO_PORT')) || 27017,
       database: envData.get('MONGO_DB') || 'test',
+    }
+    if(envData.has('MONGO_USER') && envData.has('MONGO_PASS')) {
+      conf.username = envData.get('MONGO_USER');
+      conf.password = envData.get('MONGO_PASS');
     }
     const client = new MongoClient('mongotest', conf as MongoOptions);
     await s.step('Must connect to database', async () => {
