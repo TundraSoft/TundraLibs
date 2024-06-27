@@ -56,7 +56,7 @@ export {
   type PoolConfig as MariaDBClientConfig,
   type PoolConnection as MariaDBPoolConnection,
   SqlError as MariaDBError,
-} from 'npm:mariadb';
+} from 'npm:mariadb@3.2.3';
 
 export {
   DB as SQLiteDBClient,
