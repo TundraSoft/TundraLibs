@@ -34,7 +34,7 @@ jobs:
         ports:
           - 6379:6379
       postgres:
-        image: postgres
+        image: postgres:latest
         env:
           POSTGRES_PASSWORD: postgrespw
         ports:
@@ -45,16 +45,16 @@ jobs:
           --health-timeout 5s
           --health-retries 5
       maria:
-        image: mariadb
+        image: mariadb:latest
         env:
-          MARIADB_ROOT_PASSWORD: mariapw
-          MYSQL_ROOT_PASSWORD: mariapw
           MARIADB_DATABASE: mysql
           MYSQL_DATABASE: mysql
           MARIADB_USER: maria
           MYSQL_USER: maria
           MARIADB_PASSWORD: mariapw
           MYSQL_PASSWORD: mariapw
+          MARIADB_ROOT_PASSWORD: mariapw
+          MYSQL_ROOT_PASSWORD: mariapw
         ports:
           - 3306:3306
         options: >-
