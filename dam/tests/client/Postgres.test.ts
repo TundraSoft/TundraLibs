@@ -4,7 +4,7 @@ import { envArgs } from '../../../utils/envArgs.ts';
 
 const envData = envArgs('dam/tests');
 
-Deno.test({ name: 'DAM > Client > Postgres', permissions: { net: true } }, async (t) => {
+Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
 
   await t.step('Invalid Config', async (t) => {
 

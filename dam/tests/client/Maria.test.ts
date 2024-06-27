@@ -4,7 +4,7 @@ import { envArgs } from '../../../utils/envArgs.ts';
 
 const envData = envArgs('dam/tests');
 
-Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources: false, permissions: { net: true } }, async (t) => {
+Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources: false }, async (t) => {
 
   await t.step('Invalid Config', async (t) => {
 
@@ -413,7 +413,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
   await t.step('Basic Operations', async (t) => {
     const conf = {
       dialect: 'MARIA',
-      host: envData.get('MARIA_HOST') || 'host.docker.internal',
+      host: envData.get('MARIA_HOST') || 'localhost',
       username: envData.get('MARIA_USER') || 'root',
       password: envData.get('MARIA_PASS') || 'mariapw',
       port: parseInt(envData.get('MARIA_PORT')) || 3306,
