@@ -414,14 +414,10 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
     const conf = {
       dialect: 'MARIA',
       port: parseInt(envData.get('MARIA_PORT')) || 3306,
-      // host: envData.get('MARIA_HOST') || 'localhost',
-      // username: envData.get('MARIA_USER') || 'maria',
-      // password: envData.get('MARIA_PASS') || 'mariapw',
-      // database: envData.get('MARIA_DB') || 'mysql',
-      host: 'localhost',
-      username: 'maria',
-      password: 'mariapw',
-      database: 'mysql',
+      host: envData.get('MARIA_HOST') || 'localhost',
+      username: envData.get('MARIA_USER') || 'root',
+      password: envData.get('MARIA_PASS') || 'mariapw',
+      database: envData.get('MARIA_DB') || 'mysql',
     }
     const client = new MariaClient('mariatest', conf as MariaOptions);
     await s.step('Must connect to database', async () => {

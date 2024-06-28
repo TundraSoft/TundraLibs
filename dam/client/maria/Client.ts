@@ -24,7 +24,7 @@ export class MariaClient extends Client<MariaOptions> {
   constructor(name: string, options: OptionKeys<MariaOptions, ClientEvents>) {
     const def: Partial<MariaOptions> = {
       port: 3306,
-      connectionTimeout: 1,
+      connectionTimeout: 30,
       idleTimeout: 600,
       poolSize: 5,
     };
