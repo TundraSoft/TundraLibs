@@ -91,7 +91,7 @@ export class MariaClient extends Client<MariaOptions> {
     if (this._client !== undefined) {
       return;
     }
-    this._client = MariaDBPoolConnector(this._makeConfig());
+    this._client = await MariaDBPoolConnector(this._makeConfig());
     let c: MariaDBPoolConnection | undefined = undefined;
     try {
       c = await this._client.getConnection();

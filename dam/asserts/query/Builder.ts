@@ -35,7 +35,7 @@ export const assertInsertQueryBuilder = (
     Array.isArray(x.values) && // Array
     x.values.every((row) =>
       typeof row === 'object' && row !== null &&
-      Object.entries(row).every(([_val, col]) =>
+      Object.entries(row).every(([col, _val]) =>
         typeof col === 'string' && x.columns.includes(col)
       )
     ); // Validate row;
