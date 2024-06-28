@@ -11,7 +11,6 @@ Currently DAM supports:
 - Postgres
 - MariaDB
 - SQLite
-- MongoDB (partial)
 
 There are few restrictions in SQLite and MongoDB as listed below:
 
