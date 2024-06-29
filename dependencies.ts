@@ -50,13 +50,22 @@ export {
   PostgresError,
 } from 'https://deno.land/x/postgres@v0.19.3/mod.ts';
 
+// export {
+//   createPool as MariaDBPoolConnector,
+//   type Pool as MariaDBPool,
+//   type PoolConfig as MariaDBClientConfig,
+//   type PoolConnection as MariaDBPoolConnection,
+//   SqlError as MariaDBError,
+// } from 'npm:mariadb';
+
 export {
-  createPool as MariaDBPoolConnector,
-  type Pool as MariaDBPool,
-  type PoolConfig as MariaDBClientConfig,
-  type PoolConnection as MariaDBPoolConnection,
-  SqlError as MariaDBError,
-} from 'npm:mariadb';
+  Client as MySQLClient,
+  type ClientConfig as MySQLClientConfig,
+  Connection as MySQLConnection,
+  type ExecuteResult as MySQLExecuteResult,
+  type TLSConfig as MySQLTLSConfig,
+  TLSMode as MySQLTLSMode,
+} from 'https://deno.land/x/mysql@v2.12.1/mod.ts';
 
 export {
   DB as SQLiteDBClient,

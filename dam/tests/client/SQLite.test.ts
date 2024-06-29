@@ -187,21 +187,29 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
 
     await t.step('Query with params', async () => {
       await memClient.connect();
-      await assert(async () => {
-        await memClient.query({
-          sql: `SELECT sql FROM sqlite_master WHERE tbl_name = 'table_name' AND type = :tbl:;`, 
-          params: { tbl: 'table' }
-        });
+      const res1 = await memClient.query({
+        sql: `SELECT :var1: as \`A\`, :var2: as \`B\`, :var1: as \`C\`;`,
+        params: {
+          var1: 1,
+          var2: 'sdf', 
+        }
       });
+      assertEquals(res1.data[0].A, 1);
+      assertEquals(res1.data[0].C, 1);
+      assertEquals(res1.data[0].B, 'sdf');
       await memClient.close();
 
       await fileClient.connect();
-      await assert(async () => {
-        await fileClient.query({
-          sql: `SELECT sql FROM sqlite_master WHERE tbl_name = 'table_name' AND type = :tbl:;`, 
-          params: { tbl: 'table' }
-        });
+      const res = await fileClient.query({
+        sql: `SELECT :var1: as \`A\`, :var2: as \`B\`, :var1: as \`C\`;`,
+        params: {
+          var1: 1,
+          var2: 'sdf', 
+        }
       });
+      assertEquals(res.data[0].A, 1);
+      assertEquals(res.data[0].C, 1);
+      assertEquals(res.data[0].B, 'sdf');
       await fileClient.close();
     });
 

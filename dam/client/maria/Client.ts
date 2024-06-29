@@ -1,9 +1,7 @@
 import {
-  type MariaDBClientConfig,
-  MariaDBError,
-  type MariaDBPool,
-  type MariaDBPoolConnection,
-  MariaDBPoolConnector,
+  MySQLClient,
+  type MySQLClientConfig,
+  MySQLTLSMode,
 } from '../../../dependencies.ts';
 
 import { OptionKeys } from '../../../options/mod.ts';
@@ -19,7 +17,7 @@ import {
 
 export class MariaClient extends Client<MariaOptions> {
   declare readonly dialect = 'MARIA';
-  private _client: MariaDBPool | undefined = undefined;
+  private _client: MySQLClient | undefined = undefined;
 
   constructor(name: string, options: OptionKeys<MariaOptions, ClientEvents>) {
     const def: Partial<MariaOptions> = {
@@ -44,45 +42,57 @@ export class MariaClient extends Client<MariaOptions> {
     }
   }
 
-  protected _makeConfig(): MariaDBClientConfig {
-    const conf: MariaDBClientConfig = {
-      host: this._getOption('host'),
-      user: this._getOption('username'),
+  protected _makeConfig(): MySQLClientConfig {
+    const conf: MySQLClientConfig = {
+      hostname: this._getOption('host'),
+      username: this._getOption('username'),
       password: this._getOption('password'),
-      database: this._getOption('database'),
+      db: this._getOption('database'),
       port: this._getOption('port'),
-      connectTimeout: (this._getOption('connectionTimeout') || 1) * 1000,
-      connectionLimit: this._getOption('poolSize'),
+      timeout: (this._getOption('connectionTimeout') || 1) * 1000,
       idleTimeout: this._getOption('idleTimeout'),
-      namedPlaceholders: true,
-      // ssl: false,
+      poolSize: this._getOption('poolSize') || 10,
     };
     const tls = this._getOption('tls');
     if (tls) {
       if (tls.enabled === true) {
-        if (!tls.certificates && tls.verify) {
-          conf.ssl = true;
-        } else if (tls.certificates) {
-          conf.ssl = {
-            cert: tls.certificates,
-            rejectUnauthorized: tls.verify,
-          };
+        conf.tls = {
+          mode:
+            (tls.verify ? MySQLTLSMode.VERIFY_IDENTITY : MySQLTLSMode.DISABLED),
+        };
+        if (tls.certificates) {
+          conf.tls.caCerts = tls.certificates;
         }
       }
     }
     return conf;
   }
 
-  protected _standardizeQuery(
-    query: Query,
-  ): Query {
-    const sQuery = super._standardizeQuery(query);
+  protected _processParams(query: Query): { sql: string; params: unknown[] } {
+    // Regular expression to match named parameters in the SQL string
+    if (!query.params) {
+      return { sql: query.sql, params: [] };
+    }
+    const paramRegex = /:(\w+):/g;
+    let match;
+    const paramsArray: unknown[] = [];
+    let processedSql = query.sql;
+
+    // Find all matches and replace them with '?', while building the params array
+    while ((match = paramRegex.exec(query.sql)) !== null) {
+      // Extract the parameter name from the match
+      const paramName = match[1];
+      // Replace the first occurrence of the named parameter in the SQL string with '?'
+      processedSql = processedSql.replace(`:${paramName}:`, '?');
+      // Add the parameter value to the paramsArray, handling multiple occurrences
+      if (query.params[paramName]) {
+        paramsArray.push(query.params[paramName]);
+      }
+    }
+
     return {
-      sql: sQuery.sql.replace(
-        /:(\w+):/g,
-        (_, word) => `:${word}`,
-      ),
-      params: sQuery.params,
+      sql: processedSql,
+      params: paramsArray,
     };
   }
 
@@ -91,31 +101,22 @@ export class MariaClient extends Client<MariaOptions> {
     if (this._client !== undefined) {
       return;
     }
-    this._client = await MariaDBPoolConnector(this._makeConfig());
-    let c: MariaDBPoolConnection | undefined = undefined;
+    this._client = new MySQLClient();
     try {
-      c = await this._client.getConnection();
+      await this._client.connect(this._makeConfig());
+      await this._client.execute('SELECT 1;');
     } catch (e) {
       this._client = undefined;
-      if (e instanceof MariaDBError) {
-        throw new DAMClientConnectionError({
-          dialect: this.dialect,
-          configName: this.name,
-          errorCode: e.code?.toString(),
-        }, e);
-      }
       throw new DAMClientConnectionError({
         dialect: this.dialect,
         configName: this.name,
       }, e);
-    } finally {
-      c?.release();
     }
   }
 
   protected async _close(): Promise<void> {
     if (this._client !== undefined) {
-      await this._client?.end();
+      await this._client.close();
       this._client = undefined;
     }
   }
@@ -124,36 +125,21 @@ export class MariaClient extends Client<MariaOptions> {
     sql: Query,
   ): Promise<{ count: number; rows: R[] }> {
     const query = this._standardizeQuery(sql);
-    const client = await this._client!.getConnection();
+    const std = this._processParams(query);
+    // Convert named params to positional params
     try {
-      let res = await client.query<Array<R>>(query.sql, query.params);
-      let rowCount = 0;
-      if (Array.isArray(res)) {
-        rowCount = res.length;
-      } else if (Object.keys(res).includes('affectedRows')) {
-        rowCount = res['affectedRows'] as number;
-        res = [];
-      }
+      // let res = await client.query<Array<R>>(query.sql, query.params);
+      const res = await this._client!.execute(std.sql, std.params);
       return {
-        count: rowCount,
-        rows: res,
+        count: res.affectedRows || res.rows?.length || 0,
+        rows: res.rows as R[],
       };
     } catch (e) {
-      if (e instanceof MariaDBError) {
-        throw new DAMClientQueryError({
-          dialect: this.dialect,
-          configName: this.name,
-          errorCode: e.code?.toString(),
-          query,
-        }, e);
-      }
       throw new DAMClientQueryError({
         dialect: this.dialect,
         configName: this.name,
         query,
       }, e);
-    } finally {
-      await client.release();
     }
   }
 
