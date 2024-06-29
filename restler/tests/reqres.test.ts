@@ -1,7 +1,5 @@
 import { RESTler } from '../mod.ts';
-import {
-  assertEquals,
-} from '../../dev.dependencies.ts';
+import { assertEquals } from '../../dev.dependencies.ts';
 
 Deno.test('RESTler:ReqqRes', async (t) => {
   type UserType = {

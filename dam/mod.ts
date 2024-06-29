@@ -4,8 +4,10 @@ export {
   assertClientOptions,
   assertColumnIdentifier,
   assertDateExpression,
+  assertDeleteQueryBuilder,
   assertDialect,
   assertExpression,
+  assertInsertQueryBuilder,
   assertJSONExpression,
   assertMariaOptions,
   assertMongoOptions,
@@ -14,6 +16,7 @@ export {
   assertSQLDialect,
   assertSQLiteOptions,
   assertStringExpression,
+  assertUpdateQueryBuilder,
 } from './asserts/mod.ts';
 
 export {

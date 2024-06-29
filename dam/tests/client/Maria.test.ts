@@ -1,13 +1,27 @@
-import { assertEquals, assertThrows, assertRejects, assert } from '../../../dev.dependencies.ts';
-import { MariaClient, type MariaOptions, DAMClientConfigError, DAMClientConnectionError, DAMClientQueryError, DAMClientMissingParamsError } from '../../mod.ts';
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertThrows,
+} from '../../../dev.dependencies.ts';
+import {
+  DAMClientConfigError,
+  DAMClientConnectionError,
+  DAMClientMissingParamsError,
+  DAMClientQueryError,
+  MariaClient,
+  type MariaOptions,
+} from '../../mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
 
 const envData = envArgs('dam/tests');
 
-Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources: false }, async (t) => {
-
+Deno.test({
+  name: 'DAM > Client > Maria',
+  sanitizeOps: false,
+  sanitizeResources: false,
+}, async (t) => {
   await t.step('Invalid Config', async (s) => {
-
     await s.step('Incorrect/Missing Dialect', () => {
       assertThrows(() => {
         const conf = {
@@ -18,7 +32,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
@@ -31,7 +45,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
@@ -43,7 +57,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
@@ -56,8 +70,11 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
-        const _a = new MariaClient('mariatest', conf as unknown as MariaOptions);
+        };
+        const _a = new MariaClient(
+          'mariatest',
+          conf as unknown as MariaOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
@@ -69,8 +86,11 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
-        const _a = new MariaClient('mariatest', conf as unknown as MariaOptions);
+        };
+        const _a = new MariaClient(
+          'mariatest',
+          conf as unknown as MariaOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -83,47 +103,53 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: '', 
+          host: '',
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'mariapw',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: null, 
+          host: null,
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'mariapw',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
-        const _a = new MariaClient('mariatest', conf as unknown as MariaOptions);
+        };
+        const _a = new MariaClient(
+          'mariatest',
+          conf as unknown as MariaOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: undefined, 
+          host: undefined,
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'mariapw',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
-        const _a = new MariaClient('mariatest', conf as unknown as MariaOptions);
+        };
+        const _a = new MariaClient(
+          'mariatest',
+          conf as unknown as MariaOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -133,11 +159,11 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
           dialect: 'MARIA',
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'mariapw',
-          host: 'localhost', 
+          host: 'localhost',
           port: 65534323,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
@@ -146,11 +172,11 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
           dialect: 'MARIA',
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'mariapw',
-          host: 'localhost', 
+          host: 'localhost',
           port: -1,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
@@ -159,11 +185,11 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
           dialect: 'MARIA',
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'mariapw',
-          host: 'localhost', 
+          host: 'localhost',
           port: 0,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
@@ -172,12 +198,15 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
           dialect: 'MARIA',
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'mariapw',
-          host: 'localhost', 
+          host: 'localhost',
           port: null,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
-        const _a = new MariaClient('mariatest', conf as unknown as MariaOptions);
+        };
+        const _a = new MariaClient(
+          'mariatest',
+          conf as unknown as MariaOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -185,53 +214,59 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           // username: envData.get('MARIA_USER') || 'postgres',
           password: envData.get('MARIA_PASS') || 'mariapw',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: '',
           password: envData.get('MARIA_PASS') || 'mariapw',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: undefined,
           password: envData.get('MARIA_PASS') || 'mariapw',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
-        const _a = new MariaClient('mariatest', conf as unknown as MariaOptions);
+        };
+        const _a = new MariaClient(
+          'mariatest',
+          conf as unknown as MariaOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: null,
           password: envData.get('MARIA_PASS') || 'mariapw',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
-        const _a = new MariaClient('mariatest', conf as unknown as MariaOptions);
+        };
+        const _a = new MariaClient(
+          'mariatest',
+          conf as unknown as MariaOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -239,54 +274,60 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: envData.get('MARIA_USER') || 'root',
           // password: envData.get('MARIA_PASS') || 'postgres',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatestPW', conf as MariaOptions);
-        console.log('sdfgsdfsdfsdf')
+        console.log('sdfgsdfsdfsdf');
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: envData.get('MARIA_USER') || 'root',
           password: '',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: envData.get('MARIA_USER') || 'root',
           password: undefined,
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
-        const _a = new MariaClient('mariatest', conf as unknown as MariaOptions);
+        };
+        const _a = new MariaClient(
+          'mariatest',
+          conf as unknown as MariaOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: envData.get('MARIA_USER') || 'root',
           password: null,
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
-        const _a = new MariaClient('mariatest', conf as unknown as MariaOptions);
+        };
+        const _a = new MariaClient(
+          'mariatest',
+          conf as unknown as MariaOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -294,53 +335,59 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'mariapw',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           // database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'mariapw',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: '',
           poolSize: 1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'mariapw',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: undefined,
           poolSize: 1,
-        }
-        const _a = new MariaClient('mariatest', conf as unknown as MariaOptions);
+        };
+        const _a = new MariaClient(
+          'mariatest',
+          conf as unknown as MariaOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'mariapw',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: null,
           poolSize: 1,
-        }
-        const _a = new MariaClient('mariatest', conf as unknown as MariaOptions);
+        };
+        const _a = new MariaClient(
+          'mariatest',
+          conf as unknown as MariaOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -348,26 +395,26 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'postgres',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: -1,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
-          host: envData.get('MARIA_HOST') || 'localhost', 
+          host: envData.get('MARIA_HOST') || 'localhost',
           username: envData.get('MARIA_USER') || 'root',
           password: envData.get('MARIA_PASS') || 'mariapw',
           port: parseInt(envData.get('MARIA_PORT')) || 3306,
           database: envData.get('MARIA_DB') || 'mysql',
           poolSize: 0,
-        }
+        };
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
     });
@@ -375,27 +422,30 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
     await s.step('Failed connection', async () => {
       const conf = {
         dialect: 'MARIA',
-        host: envData.get('MARIA_HOST') || 'localhost', 
+        host: envData.get('MARIA_HOST') || 'localhost',
         username: envData.get('MARIA_USER') || 'root',
         password: 'InvalidPassword',
         port: parseInt(envData.get('MARIA_PORT')) || 3306,
         database: envData.get('MARIA_DB') || 'mysql',
         poolSize: 1,
-      }
+      };
       const client = new MariaClient('mariatest', conf as MariaOptions);
-      await assertRejects(async () => await client.connect(), DAMClientConnectionError);
+      await assertRejects(
+        async () => await client.connect(),
+        DAMClientConnectionError,
+      );
     });
-    
+
     await s.step('Querying in Failed connection', async () => {
       const conf = {
         dialect: 'MARIA',
-        host: envData.get('MARIA_HOST') || 'localhost', 
+        host: envData.get('MARIA_HOST') || 'localhost',
         username: envData.get('MARIA_USER') || 'root',
         password: 'InvalidPassword',
         port: parseInt(envData.get('MARIA_PORT')) || 3306,
         database: envData.get('MARIA_DB') || 'mysql',
         poolSize: 1,
-      }
+      };
       await assertRejects(async () => {
         const client = new MariaClient('mariatest', conf as MariaOptions);
         try {
@@ -404,7 +454,8 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
           // Suppress
         }
         await client.query({
-          sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'mysql';`,
+          sql:
+            `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'mysql';`,
         });
       }, DAMClientConnectionError);
     });
@@ -418,7 +469,7 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       username: envData.get('MARIA_USER') || 'root',
       password: envData.get('MARIA_PASS') || 'mariapw',
       database: envData.get('MARIA_DB') || 'mysql',
-    }
+    };
     const client = new MariaClient('mariatest', conf as MariaOptions);
     await s.step('Must connect to database', async () => {
       await client.connect();
@@ -459,8 +510,8 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
         sql: `SELECT :var1: as \`A\`, :var2: as \`B\`, :var1: as \`C\`;`,
         params: {
           var1: 1,
-          var2: 'sdf', 
-        }
+          var2: 'sdf',
+        },
       });
       assertEquals(res.data[0].A, 1);
       assertEquals(res.data[0].C, 1);
@@ -472,11 +523,11 @@ Deno.test({ name: 'DAM > Client > Maria', sanitizeOps: false, sanitizeResources:
       await client.connect();
       await assertRejects(async () => {
         await client.query({
-          sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = :schema:`,
+          sql:
+            `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = :schema:`,
         });
       }, DAMClientMissingParamsError);
       await client.close();
     });
-
   });
 });

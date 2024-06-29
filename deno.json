@@ -27,7 +27,7 @@
   },
   "fmt": {
     "include": ["./"],
-    "exclude": ["*/tests/", "*/fixtures/", ".devcontainer", ".github"],
+    "exclude": ["**/fixtures/", ".devcontainer", ".github"],
     "semiColons": true,
     "lineWidth": 80,
     "indentWidth": 2,

@@ -126,7 +126,7 @@ export class MockTest extends RESTler {
   }
 
   protected _authInjector(request: RESTlerRequest): void {
-    if(request.endpoint.path === '/unhandled') {
+    if (request.endpoint.path === '/unhandled') {
       throw new RangeError('Unhandled');
     }
     if (request.endpoint.method === 'POST' && this.authKey) {

@@ -9,6 +9,7 @@ import type {
   UpdateQueryBuilder,
 } from '../../types/mod.ts';
 import { assertQueryFilters } from './Filter.ts';
+import { assertExpression } from './Expressions.ts';
 
 export const assertBaseQueryBuilder = (x: unknown): x is BaseQueryBuilder => {
   return (typeof x === 'object' && x !== null && 'type' in x && 'source' in x &&
@@ -24,7 +25,12 @@ export const assertBaseDMLQueryBuilder = (
     (['INSERT', 'UPDATE', 'DELETE', 'SELECT', 'COUNT'].includes(x.type) && // Check type
       'columns' in x && Array.isArray(x.columns) && x.columns.length > 0 && // Column definition
       (!('expressions' in x) ||
-        (typeof x.expressions === 'object' && x.expressions !== null))); // Expression definition
+        (typeof x.expressions === 'object' && x.expressions !== null && (
+          Object.entries(x.expressions).every(([col, expr]) =>
+            !(x.columns as Array<string>).includes(col) &&
+            assertExpression(expr)
+          )
+        )))); // Expression definition
 };
 
 export const assertInsertQueryBuilder = (
@@ -45,10 +51,15 @@ export const assertUpdateQueryBuilder = (
   x: unknown,
 ): x is UpdateQueryBuilder => {
   return assertBaseDMLQueryBuilder(x) && x.type === 'UPDATE' && // Basic type check
-    'values' in x && typeof x.values === 'object' && x.values !== null && // Values
+    'values' in x && // Value must be object
+    typeof x.values === 'object' && x.values !== null &&
+    Object.entries(x.values).every(([col, _val]) => x.columns.includes(col)) && // Values
     (!('where' in x) ||
       (typeof x.where === 'object' && x.where !== null &&
-        assertQueryFilters(x.where))); // Where
+        assertQueryFilters(x.where, [
+          ...x.columns,
+          ...Object.keys(x.expressions || {}),
+        ]))); // Where
 };
 
 export const assertDeleteQueryBuilder = (
@@ -57,7 +68,10 @@ export const assertDeleteQueryBuilder = (
   return assertBaseDMLQueryBuilder(x) && x.type === 'DELETE' && // Basic type check
     (!('where' in x) ||
       (typeof x.where === 'object' && x.where !== null &&
-        assertQueryFilters(x.where))); // Where
+        assertQueryFilters(x.where, [
+          ...x.columns,
+          ...Object.keys(x.expressions || {}),
+        ]))); // Where
 };
 
 export const assertCountQueryBuilder = (x: unknown): x is CountQueryBuilder => {

@@ -1,13 +1,23 @@
-import { assertEquals, assertThrows, assertRejects, assert } from '../../../dev.dependencies.ts';
-import { PostgresClient, type PostgresOptions, DAMClientConfigError, DAMClientConnectionError, DAMClientQueryError, DAMClientMissingParamsError } from '../../mod.ts';
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertThrows,
+} from '../../../dev.dependencies.ts';
+import {
+  DAMClientConfigError,
+  DAMClientConnectionError,
+  DAMClientMissingParamsError,
+  DAMClientQueryError,
+  PostgresClient,
+  type PostgresOptions,
+} from '../../mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
 
 const envData = envArgs('dam/tests');
 
 Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
-
   await t.step('Invalid Config', async (s) => {
-
     await s.step('Incorrect/Missing Dialect', () => {
       assertThrows(() => {
         const conf = {
@@ -18,7 +28,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
@@ -31,7 +41,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
@@ -43,7 +53,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
@@ -56,8 +66,11 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
-        const _a = new PostgresClient('pgtest', conf as unknown as PostgresOptions);
+        };
+        const _a = new PostgresClient(
+          'pgtest',
+          conf as unknown as PostgresOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
@@ -69,8 +82,11 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
-        const _a = new PostgresClient('pgtest', conf as unknown as PostgresOptions);
+        };
+        const _a = new PostgresClient(
+          'pgtest',
+          conf as unknown as PostgresOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -83,47 +99,53 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: '', 
+          host: '',
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: null, 
+          host: null,
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
-        const _a = new PostgresClient('pgtest', conf as unknown as PostgresOptions);
+        };
+        const _a = new PostgresClient(
+          'pgtest',
+          conf as unknown as PostgresOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: undefined, 
+          host: undefined,
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
-        const _a = new PostgresClient('pgtest', conf as unknown as PostgresOptions);
+        };
+        const _a = new PostgresClient(
+          'pgtest',
+          conf as unknown as PostgresOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -133,11 +155,11 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
           dialect: 'POSTGRES',
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
-          host: 'localhost', 
+          host: 'localhost',
           port: 65534323,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
@@ -146,11 +168,11 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
           dialect: 'POSTGRES',
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
-          host: 'localhost', 
+          host: 'localhost',
           port: -1,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
@@ -159,11 +181,11 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
           dialect: 'POSTGRES',
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
-          host: 'localhost', 
+          host: 'localhost',
           port: 0,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
@@ -172,12 +194,15 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
           dialect: 'POSTGRES',
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
-          host: 'localhost', 
+          host: 'localhost',
           port: null,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
-        const _a = new PostgresClient('pgtest', conf as unknown as PostgresOptions);
+        };
+        const _a = new PostgresClient(
+          'pgtest',
+          conf as unknown as PostgresOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -185,53 +210,59 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           // username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: '',
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: undefined,
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
-        const _a = new PostgresClient('pgtest', conf as unknown as PostgresOptions);
+        };
+        const _a = new PostgresClient(
+          'pgtest',
+          conf as unknown as PostgresOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: null,
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
-        const _a = new PostgresClient('pgtest', conf as unknown as PostgresOptions);
+        };
+        const _a = new PostgresClient(
+          'pgtest',
+          conf as unknown as PostgresOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -239,54 +270,60 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: envData.get('PG_USER') || 'postgres',
           // password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtestPW', conf as PostgresOptions);
-        console.log('sdfgsdfsdfsdf')
+        console.log('sdfgsdfsdfsdf');
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: envData.get('PG_USER') || 'postgres',
           password: '',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: envData.get('PG_USER') || 'postgres',
           password: undefined,
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
-        const _a = new PostgresClient('pgtest', conf as unknown as PostgresOptions);
+        };
+        const _a = new PostgresClient(
+          'pgtest',
+          conf as unknown as PostgresOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: envData.get('PG_USER') || 'postgres',
           password: null,
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
-        const _a = new PostgresClient('pgtest', conf as unknown as PostgresOptions);
+        };
+        const _a = new PostgresClient(
+          'pgtest',
+          conf as unknown as PostgresOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -294,53 +331,59 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           // database: envData.get('PG_DB') || 'postgres',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: '',
           poolSize: 1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: undefined,
           poolSize: 1,
-        }
-        const _a = new PostgresClient('pgtest', conf as unknown as PostgresOptions);
+        };
+        const _a = new PostgresClient(
+          'pgtest',
+          conf as unknown as PostgresOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: null,
           poolSize: 1,
-        }
-        const _a = new PostgresClient('pgtest', conf as unknown as PostgresOptions);
+        };
+        const _a = new PostgresClient(
+          'pgtest',
+          conf as unknown as PostgresOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -348,26 +391,26 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: -1,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
-          host: envData.get('PG_HOST') || 'localhost', 
+          host: envData.get('PG_HOST') || 'localhost',
           username: envData.get('PG_USER') || 'postgres',
           password: envData.get('PG_PASS') || 'postgres',
           port: parseInt(envData.get('PG_PORT')) || 5432,
           database: envData.get('PG_DB') || 'postgres',
           poolSize: 0,
-        }
+        };
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
     });
@@ -375,13 +418,13 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
     await s.step('Failed connection', async () => {
       const conf = {
         dialect: 'POSTGRES',
-        host: envData.get('PG_HOST') || 'localhost', 
+        host: envData.get('PG_HOST') || 'localhost',
         username: envData.get('PG_USER') || 'postgres',
         password: 'InvalidPassword',
         port: parseInt(envData.get('PG_PORT')) || 5432,
         database: envData.get('PG_DB') || 'postgres',
         poolSize: 1,
-      }
+      };
       await assertRejects(async () => {
         const client = new PostgresClient('pgtest', conf as PostgresOptions);
         await client.connect();
@@ -392,13 +435,13 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
     await s.step('Querying in Failed connection', async () => {
       const conf = {
         dialect: 'POSTGRES',
-        host: envData.get('PG_HOST') || 'localhost', 
+        host: envData.get('PG_HOST') || 'localhost',
         username: envData.get('PG_USER') || 'postgres',
         password: 'InvalidPassword',
         port: parseInt(envData.get('PG_PORT')) || 5432,
         database: envData.get('PG_DB') || 'postgres',
         poolSize: 1,
-      }
+      };
       await assertRejects(async () => {
         const client = new PostgresClient('pgtest', conf as PostgresOptions);
         try {
@@ -407,7 +450,8 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
           // Suppress
         }
         await client.query({
-          sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'mysql';`,
+          sql:
+            `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'mysql';`,
         });
       }, DAMClientConnectionError);
     });
@@ -422,7 +466,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       port: parseInt(envData.get('PG_PORT')) || 5432,
       database: envData.get('PG_DB') || 'postgres',
       poolSize: 1,
-    }
+    };
     const client = new PostgresClient('pgtest', conf as PostgresOptions);
     await s.step('Must connect to database', async () => {
       await client.connect();
@@ -460,7 +504,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       await client.connect();
       await assertRejects(async () => {
         await client.query({
-          sql: `SELECT dfssdf FROM sdfsdf;`, 
+          sql: `SELECT dfssdf FROM sdfsdf;`,
         });
       }, DAMClientQueryError);
       await client.close();
@@ -472,11 +516,11 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         sql: `SELECT :var1: as "A", :var2: as "B", :var1: as "C";`,
         params: {
           var1: 1,
-          var2: 'sdf', 
-        }
+          var2: 'sdf',
+        },
       });
-      assertEquals(res.data[0].A, 1);
-      assertEquals(res.data[0].C, 1);
+      assertEquals(res.data[0].A, '1');
+      assertEquals(res.data[0].C, '1');
       assertEquals(res.data[0].B, 'sdf');
       await client.close();
     });
@@ -485,11 +529,11 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       await client.connect();
       await assertRejects(async () => {
         await client.query({
-          sql: `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ':schema:'`,
+          sql:
+            `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ':schema:'`,
         });
       }, DAMClientMissingParamsError);
       await client.close();
     });
-
   });
 });

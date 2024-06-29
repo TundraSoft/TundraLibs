@@ -265,7 +265,7 @@ Deno.test('Events:UnTyped', async (t) => {
       test.run();
     },
   });
-  
+
   await t.step({
     name: 'Add new Events',
     fn() {
@@ -420,5 +420,4 @@ Deno.test('Events:UnTyped', async (t) => {
     });
     test.runSync();
   });
-
 });

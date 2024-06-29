@@ -6,11 +6,7 @@ import {
   RESTlerUnhandledError,
   RESTlerUnsupportedContentType,
 } from '../mod.ts';
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-} from '../../dev.dependencies.ts';
+import { assert, assertEquals, assertRejects } from '../../dev.dependencies.ts';
 
 Deno.test('RESTler:Mock', async (t) => {
   const port = getFreePort();

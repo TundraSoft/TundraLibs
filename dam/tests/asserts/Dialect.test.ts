@@ -1,5 +1,5 @@
 import { assertEquals } from '../../../dev.dependencies.ts';
-import { assertSQLDialect, assertDialect } from '../../mod.ts';
+import { assertDialect, assertSQLDialect } from '../../mod.ts';
 
 Deno.test('DAM > asserts > Dialect', async (t) => {
   await t.step('Dialects', () => {

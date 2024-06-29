@@ -10,13 +10,13 @@ import {
   ConfigError,
   ConfigNotDefined,
   ConfigNotFound,
+  ConfigPermissionError,
   DuplicateConfig,
   MalformedConfig,
-  ConfigPermissionError, 
 } from '../mod.ts';
 
 Deno.test({
-  name: 'Config - No Permission', 
+  name: 'Config - No Permission',
   permissions: { read: false },
   fn: async () => {
     await assertRejects(
@@ -27,9 +27,11 @@ Deno.test({
 });
 
 Deno.test('Config', async (t) => {
-
   await t.step('Invalid path', () => {
-    assertRejects(async () => await Config.load('config/tests/fixtures/valid/Sample.yaml'), ConfigNotFound)
+    assertRejects(
+      async () => await Config.load('config/tests/fixtures/valid/Sample.yaml'),
+      ConfigNotFound,
+    );
   });
 
   await t.step('Load config', async () => {
@@ -84,12 +86,12 @@ Deno.test('Config', async (t) => {
     await assertRejects(
       () => Config.load('config/tests/fixtures/valid/', 'sample'),
       DuplicateConfig,
-      'Config with the name sample already loaded'
+      'Config with the name sample already loaded',
     );
     await assertRejects(
       () => Config.load('config/tests/fixtures/duplicate2/'),
       DuplicateConfig,
-      'Multiple config files found for test in config/tests/fixtures/duplicate2/'
+      'Multiple config files found for test in config/tests/fixtures/duplicate2/',
     );
     await assertRejects(
       () => Config.load('config/tests/fixtures/duplicate/'),

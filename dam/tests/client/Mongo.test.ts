@@ -1,13 +1,22 @@
-import { assertEquals, assertThrows, assertRejects, assert } from '../../../dev.dependencies.ts';
-import { MongoClient, type MongoOptions, DAMClientConfigError, DAMClientConnectionError, DAMClientQueryError } from '../../mod.ts';
+import {
+  assert,
+  assertEquals,
+  assertRejects,
+  assertThrows,
+} from '../../../dev.dependencies.ts';
+import {
+  DAMClientConfigError,
+  DAMClientConnectionError,
+  DAMClientQueryError,
+  MongoClient,
+  type MongoOptions,
+} from '../../mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
 
 const envData = envArgs('dam/tests');
 
 Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
-
   await t.step('Invalid Config', async (s) => {
-
     await s.step('Incorrect/Missing Dialect', () => {
       assertThrows(() => {
         const conf = {
@@ -17,7 +26,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           database: envData.get('MONGO_DB') || 'test',
-        }
+        };
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
@@ -29,7 +38,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           database: envData.get('MONGO_DB') || 'test',
-        }
+        };
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
@@ -40,7 +49,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           database: envData.get('MONGO_DB') || 'test',
-        }
+        };
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
@@ -52,8 +61,11 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           database: envData.get('MONGO_DB') || 'test',
-        }
-        const _a = new MongoClient('mongotest', conf as unknown as MongoOptions);
+        };
+        const _a = new MongoClient(
+          'mongotest',
+          conf as unknown as MongoOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
@@ -64,8 +76,11 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           database: envData.get('MONGO_DB') || 'test',
-        }
-        const _a = new MongoClient('mongotest', conf as unknown as MongoOptions);
+        };
+        const _a = new MongoClient(
+          'mongotest',
+          conf as unknown as MongoOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -77,44 +92,50 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           database: envData.get('MONGO_DB') || 'test',
-        }
+        };
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
-          host: '', 
+          host: '',
           username: envData.get('MONGO_USER') || 'mongo',
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           database: envData.get('MONGO_DB') || 'test',
-        }
+        };
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
-          host: null, 
+          host: null,
           username: envData.get('MONGO_USER') || 'mongo',
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           database: envData.get('MONGO_DB') || 'test',
-        }
-        const _a = new MongoClient('mongotest', conf as unknown as MongoOptions);
+        };
+        const _a = new MongoClient(
+          'mongotest',
+          conf as unknown as MongoOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
-          host: undefined, 
+          host: undefined,
           username: envData.get('MONGO_USER') || 'mongo',
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           database: envData.get('MONGO_DB') || 'test',
-        }
-        const _a = new MongoClient('mongotest', conf as unknown as MongoOptions);
+        };
+        const _a = new MongoClient(
+          'mongotest',
+          conf as unknown as MongoOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -124,10 +145,10 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
           dialect: 'MONGO',
           username: envData.get('MONGO_USER') || 'mongo',
           password: envData.get('MONGO_PASS') || 'mongopw',
-          host: 'localhost', 
+          host: 'localhost',
           port: 65534323,
           database: envData.get('MONGO_DB') || 'test',
-        }
+        };
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
@@ -136,10 +157,10 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
           dialect: 'MONGO',
           username: envData.get('MONGO_USER') || 'mongo',
           password: envData.get('MONGO_PASS') || 'mongopw',
-          host: 'localhost', 
+          host: 'localhost',
           port: -1,
           database: envData.get('MONGO_DB') || 'test',
-        }
+        };
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
@@ -148,10 +169,10 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
           dialect: 'MONGO',
           username: envData.get('MONGO_USER') || 'mongo',
           password: envData.get('MONGO_PASS') || 'mongopw',
-          host: 'localhost', 
+          host: 'localhost',
           port: 0,
           database: envData.get('MONGO_DB') || 'test',
-        }
+        };
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
@@ -160,11 +181,14 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
           dialect: 'MONGO',
           username: envData.get('MONGO_USER') || 'mongo',
           password: envData.get('MONGO_PASS') || 'mongopw',
-          host: 'localhost', 
+          host: 'localhost',
           port: null,
           database: envData.get('MONGO_DB') || 'test',
-        }
-        const _a = new MongoClient('mongotest', conf as unknown as MongoOptions);
+        };
+        const _a = new MongoClient(
+          'mongotest',
+          conf as unknown as MongoOptions,
+        );
       }, DAMClientConfigError);
     });
 
@@ -172,74 +196,83 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
       assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
-          host: envData.get('MONGO_HOST') || 'localhost', 
+          host: envData.get('MONGO_HOST') || 'localhost',
           username: envData.get('MONGO_USER') || 'mongo',
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           // database: envData.get('MONGO_DB') || 'test',
-        }
+        };
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
-          host: envData.get('MONGO_HOST') || 'localhost', 
+          host: envData.get('MONGO_HOST') || 'localhost',
           username: envData.get('MONGO_USER') || 'mongo',
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           database: '',
-        }
+        };
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
-          host: envData.get('MONGO_HOST') || 'localhost', 
+          host: envData.get('MONGO_HOST') || 'localhost',
           username: envData.get('MONGO_USER') || 'mongo',
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           database: undefined,
-        }
-        const _a = new MongoClient('mongotest', conf as unknown as MongoOptions);
+        };
+        const _a = new MongoClient(
+          'mongotest',
+          conf as unknown as MongoOptions,
+        );
       }, DAMClientConfigError);
 
       assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
-          host: envData.get('MONGO_HOST') || 'localhost', 
+          host: envData.get('MONGO_HOST') || 'localhost',
           username: envData.get('MONGO_USER') || 'mongo',
           password: envData.get('MONGO_PASS') || 'mongopw',
           port: parseInt(envData.get('MONGO_PORT')) || 27017,
           database: null,
-        }
-        const _a = new MongoClient('mongotest', conf as unknown as MongoOptions);
+        };
+        const _a = new MongoClient(
+          'mongotest',
+          conf as unknown as MongoOptions,
+        );
       }, DAMClientConfigError);
     });
 
     await s.step('Failed connection', () => {
       const conf = {
         dialect: 'MONGO',
-        host: envData.get('MONGO_HOST') || 'localhost', 
+        host: envData.get('MONGO_HOST') || 'localhost',
         username: envData.get('MONGO_USER') || 'mongo',
         password: 'InvalidPassword',
         port: 34323,
         database: envData.get('MONGO_DB') || 'test',
-      }
+      };
       const client = new MongoClient('mongotest', conf as MongoOptions);
-      assertRejects(async () => await client.connect(), DAMClientConnectionError);
+      assertRejects(
+        async () => await client.connect(),
+        DAMClientConnectionError,
+      );
     });
-    
+
     await s.step('Querying in Failed connection', async () => {
       const conf = {
         dialect: 'MONGO',
-        host: envData.get('MONGO_HOST') || 'localhost', 
+        host: envData.get('MONGO_HOST') || 'localhost',
         username: envData.get('MONGO_USER') || 'mongo',
         password: 'InvalidPassword',
         port: 34323,
         database: envData.get('MONGO_DB') || 'test',
-      }
+      };
       await assertRejects(async () => {
         const client = new MongoClient('mongotest', conf as MongoOptions);
         try {
@@ -260,8 +293,8 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
       host: envData.get('MONGO_HOST') || 'localhost',
       port: parseInt(envData.get('MONGO_PORT')) || 27017,
       database: envData.get('MONGO_DB') || 'test',
-    }
-    if(envData.has('MONGO_USER') && envData.has('MONGO_PASS')) {
+    };
+    if (envData.has('MONGO_USER') && envData.has('MONGO_PASS')) {
       conf.username = envData.get('MONGO_USER');
       conf.password = envData.get('MONGO_PASS');
     }
@@ -316,7 +349,12 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
     // This has no effect in mongodb
     await s.step('Query with Parameter', async () => {
       await client.connect();
-      assert(await client.query({sql: JSON.stringify({ ping: 1 }), params: { some: 'thing' } }));
+      assert(
+        await client.query({
+          sql: JSON.stringify({ ping: 1 }),
+          params: { some: 'thing' },
+        }),
+      );
       await client.close();
     });
 
