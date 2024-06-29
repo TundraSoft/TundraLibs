@@ -469,7 +469,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
     await s.step('Query with Parameter', async () => {
       await client.connect();
       const res = await client.query({
-        sql: `SELECT :var1: as \`A\`, :var2: as \`B\`, :var1: as \`C\`;`,
+        sql: `SELECT :var1: as "A", :var2: as "B", :var1: as "C";`,
         params: {
           var1: 1,
           var2: 'sdf', 

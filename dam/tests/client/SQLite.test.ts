@@ -188,7 +188,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
     await t.step('Query with params', async () => {
       await memClient.connect();
       const res1 = await memClient.query({
-        sql: `SELECT :var1: as \`A\`, :var2: as \`B\`, :var1: as \`C\`;`,
+        sql: `SELECT :var1: as "A", :var2: as "B", :var1: as "C";`,
         params: {
           var1: 1,
           var2: 'sdf', 
@@ -201,7 +201,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
 
       await fileClient.connect();
       const res = await fileClient.query({
-        sql: `SELECT :var1: as \`A\`, :var2: as \`B\`, :var1: as \`C\`;`,
+        sql: `SELECT :var1: as "A", :var2: as "B", :var1: as "C";`,
         params: {
           var1: 1,
           var2: 'sdf', 
