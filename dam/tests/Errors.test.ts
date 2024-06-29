@@ -1,4 +1,8 @@
-import { assertEquals, assertInstanceOf } from '../../dev.dependencies.ts';
+import {
+  assert,
+  assertEquals,
+  assertInstanceOf,
+} from '../../dev.dependencies.ts';
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
@@ -17,6 +21,7 @@ Deno.test('DAM > Errors', async (t) => {
     assertInstanceOf(a, DAMError);
     assertEquals(a.configName, 'test');
     assertEquals(a.dialect, 'MARIA');
+    assert(a.toString().includes('MARIA'));
   });
 
   await t.step('DAMClientConnectionError', () => {

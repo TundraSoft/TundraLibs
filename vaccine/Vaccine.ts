@@ -40,7 +40,7 @@ class Injector {
       dependency = this.serviceInstances.get(type.name);
     } else if (config === 'SCOPED') {
       if (!scope) {
-        throw new Error('Scope is required for SCOPED services');
+        scope = crypto.randomUUID();
       }
       if (!this.scopes.has(scope)) {
         this.scopes.set(scope, new Map());
