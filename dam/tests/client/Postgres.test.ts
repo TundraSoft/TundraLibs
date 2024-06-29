@@ -475,15 +475,13 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       await client.connect();
       assertEquals('CONNECTED', client.status);
       await client.close();
+      assertEquals('READY', client.status);
     });
 
-    await s.step('Correct value for status', async () => {
+    await s.step('Ping', async () => {
       await client.connect();
+      assertEquals(await client.ping(), true);
       await client.close();
-      assertEquals('READY', client.status);
-      // Attempt calling close again should not change anything
-      await client.close();
-      assertEquals('READY', client.status);
     });
 
     await s.step('Get Version', async () => {

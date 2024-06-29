@@ -180,6 +180,26 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
       assertEquals(fileClient.status, 'READY');
     });
 
+    await t.step('Ping', async () => {
+      await memClient.connect();
+      assertEquals(await memClient.ping(), true);
+      await memClient.close();
+
+      await fileClient.connect();
+      assertEquals(await fileClient.ping(), true);
+      await fileClient.close();
+    });
+
+    await t.step('Get Version', async () => {
+      await memClient.connect();
+      assert(await memClient.version());
+      await memClient.close();
+
+      await fileClient.connect();
+      assert(await fileClient.version());
+      await fileClient.close();
+    });
+
     await t.step('Query', async () => {
       await memClient.connect();
       await assert(async () => {

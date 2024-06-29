@@ -1,5 +1,5 @@
 import { Parameters } from '../mod.ts';
-import { assertEquals } from '../../dev.dependencies.ts';
+import { assert, assertEquals } from '../../dev.dependencies.ts';
 
 Deno.test('DAM > Parameters', async (t) => {
   await t.step('should create a parameter and return its name', () => {
@@ -9,6 +9,9 @@ Deno.test('DAM > Parameters', async (t) => {
 
     assertEquals(param1, 'p_XXXXX_0');
     assertEquals(param2, 'p_XXXXX_1');
+    const p = new Parameters();
+    const p1 = p.create('value1');
+    assert(p1);
   });
 
   await t.step('should return the same name for the same value', () => {

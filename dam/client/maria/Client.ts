@@ -128,7 +128,6 @@ export class MariaClient extends Client<MariaOptions> {
     const std = this._processParams(query);
     // Convert named params to positional params
     try {
-      // let res = await client.query<Array<R>>(query.sql, query.params);
       const res = await this._client!.execute(std.sql, std.params);
       return {
         count: res.affectedRows || res.rows?.length || 0,

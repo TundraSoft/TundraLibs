@@ -115,8 +115,10 @@ export const assertStringExpression = (
         (typeof x.$args[0] === 'string' ||
           assertColumnIdentifier(x.$args[0], columns)) &&
         (typeof x.$args[1] === 'number' ||
+          assertColumnIdentifier(x.$args[1], columns) ||
           assertNumberExpression(x.$args[1], columns)) &&
         (typeof x.$args[2] === 'number' ||
+          assertColumnIdentifier(x.$args[2], columns) ||
           assertNumberExpression(x.$args[2], columns))) // SUBSTRING
     ); // End
 };

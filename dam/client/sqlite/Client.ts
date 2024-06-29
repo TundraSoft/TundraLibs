@@ -115,10 +115,6 @@ export class SQLiteClient extends Client<SQLiteOptions> {
     return res.data[0].Version;
   }
 
-  protected _isReallyConnected(): boolean {
-    return this._client !== undefined && this._client.isClosed === false;
-  }
-
   protected _initializeDB(): string {
     if (this._getOption('mode') === 'MEMORY') {
       return ':memory:';

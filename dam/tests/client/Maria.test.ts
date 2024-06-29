@@ -480,6 +480,12 @@ Deno.test({
       await client.close();
     });
 
+    await s.step('Ping', async () => {
+      await client.connect();
+      assertEquals(await client.ping(), true);
+      await client.close();
+    });
+
     await s.step('Get Version', async () => {
       await client.connect();
       assert(await client.version());
