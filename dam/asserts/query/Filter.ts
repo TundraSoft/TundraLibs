@@ -5,103 +5,135 @@ import type {
   QueryFilters,
   StringOperators,
 } from '../../types/mod.ts';
-import { assertExpression } from './Expressions.ts';
+import { assertColumnIdentifier } from './ColumnIdentifier.ts';
+import {
+  assertDateExpression,
+  assertExpression,
+  assertNumberExpression,
+} from './Expressions.ts';
 
-// Assert operators
-export const assertBaseOperators = <P>(x: unknown): x is BaseOperators<P> => {
-  if (x === null || typeof x === 'undefined') return true;
+export const assertBaseOperators = <P>(
+  x: unknown,
+  collumns?: string[],
+): x is BaseOperators<P> => {
+  // Straight up value
   if (
-    typeof x === 'string' || typeof x === 'bigint' ||
-    typeof x === 'boolean' || typeof x === 'number' || x instanceof Date ||
-    assertExpression(x)
-  ) return true; // Value (eq operator)
-  if (Array.isArray(x) && x.every((item) => typeof item === typeof x[0])) {
-    return true; // Array ($in operator)
+    typeof x === 'bigint' || typeof x === 'number' || typeof x === 'string' ||
+    typeof x === 'boolean' || x instanceof Date || x === null ||
+    assertExpression(x, collumns)
+  ) {
+    return true;
   }
-  // Could be object
-  if (typeof x === 'object') {
-    // Ok this gets tricky, we need to only validate for $eq, $ne, $null, $in, $nin. Ignore others for now
-    return Object.entries(x).filter(([key]) =>
-      ['$eq', '$ne', '$null', '$in', '$nin'].includes(key)
-    ).every(([key, val]) => {
-      if (key === '$null') return typeof val === 'boolean';
-      if (key === '$eq' || key === '$ne') {
-        return typeof val === 'string' || typeof val === 'bigint' ||
-          typeof val === 'boolean' || typeof val === 'number' ||
-          val instanceof Date || assertExpression(x);
+  // In operator shorthand
+  if (Array.isArray(x)) {
+    return x.every((v) =>
+      typeof v === 'string' || typeof v === 'bigint' ||
+      typeof v === 'boolean' || typeof v === 'number' ||
+      v instanceof Date || assertExpression(v, collumns)
+    );
+  }
+  // Its an object and has $eq, $ne, $null, $in, $nin
+  if (typeof x === 'object' && x !== null) {
+    // Loop through each key
+    return Object.entries(x).every(([key, value]) => {
+      if (['$eq', '$ne'].includes(key)) {
+        return typeof value === 'string' || typeof value === 'bigint' ||
+          typeof value === 'boolean' || typeof value === 'number' ||
+          value instanceof Date || assertExpression(value, collumns);
       }
-      if (key === '$in' || key === '$nin') {
-        return Array.isArray(val) &&
-          val.every((v) =>
+      if (['$null'].includes(key)) {
+        return typeof value === 'boolean';
+      }
+      if (['$in', '$nin'].includes(key)) {
+        return Array.isArray(value) &&
+          value.every((v) =>
             typeof v === 'string' || typeof v === 'bigint' ||
             typeof v === 'boolean' || typeof v === 'number' ||
-            v instanceof Date || assertExpression(x)
+            v instanceof Date || assertExpression(v, collumns)
           );
       }
+      // It can also contain $or and $and, if that is the case we have to check each item
     });
   }
+  // No match till here, so return false
   return false;
 };
 
 export const assertMathOperators = <P extends number | bigint | Date>(
   x: unknown,
+  collumns?: string[],
 ): x is MathOperators<P> => {
-  return assertBaseOperators<P>(x) &&
-    (typeof x === 'object' && x !== null &&
-      Object.entries(x).filter(([key]) =>
-        ['$lt', '$lte', '$gt', '$gte', '$between'].includes(key)
-      ).every(([key, val]) => {
-        if (key === '$between') {
-          return Array.isArray(val) && val.length === 2 &&
-            val.every((v) =>
-              typeof v === 'number' || typeof v === 'bigint' ||
-              v instanceof Date || assertExpression(x)
+  return assertBaseOperators<P>(x, collumns) ||
+    (typeof x === 'object' && x !== null) &&
+      Object.entries(x).every(([key, value]) => {
+        if (['$gt', '$gte', '$lt', '$lte'].includes(key)) {
+          return typeof value === 'bigint' || typeof value === 'number' ||
+            value instanceof Date || assertDateExpression(value, collumns) ||
+            assertNumberExpression(value, collumns) ||
+            assertColumnIdentifier(value, collumns);
+        }
+        if (['$between'].includes(key)) {
+          return Array.isArray(value) && value.length === 2 &&
+            value.every((v) =>
+              typeof v === 'bigint' || typeof v === 'number' ||
+              v instanceof Date || assertDateExpression(v, collumns) ||
+              assertNumberExpression(v, collumns) ||
+              assertColumnIdentifier(v, collumns)
             );
         }
-        return typeof val === 'number' || typeof val === 'bigint' ||
-          val instanceof Date || assertExpression(x);
-      }));
+      });
 };
 
-export const assertStringOperators = (x: unknown): x is StringOperators => {
-  return assertBaseOperators<string>(x) &&
-    (typeof x === 'object' && x !== null &&
-      Object.entries(x).filter(([key]) =>
-        [
-          '$like',
-          '$ilike',
-          '$nlike',
-          '$nilike',
-          '$contains',
-          '$ncontains',
-          '$startsWith',
-          '$nstartsWith',
-          '$endsWith',
-          '$nendsWith',
-        ].includes(key)
-      ).every(([_key, val]) => {
-        return typeof val === 'string';
-      }));
+export const assertStringOperators = (
+  x: unknown,
+  collumns?: string[],
+): x is StringOperators => {
+  return assertBaseOperators<string>(x, collumns) ||
+    (typeof x === 'object' && x !== null) &&
+      Object.entries(x).every(([key, value]) => {
+        if (
+          [
+            '$like',
+            '$ilike',
+            '$nlike',
+            '$nilike',
+            '$contains',
+            '$ncontains',
+            '$startsWith',
+            '$nstartsWith',
+            '$endsWith',
+            '$nendsWith',
+          ].includes(key)
+        ) {
+          return typeof value === 'string' ||
+            assertStringOperators(value, collumns) ||
+            assertColumnIdentifier(value, collumns);
+        }
+      });
 };
 
-export const assertOperators = <P>(x: unknown): x is Operators<P> => {
-  return (assertStringOperators(x) || assertMathOperators(x));
+export const assertOperators = <P>(
+  x: unknown,
+  collumns?: string[],
+): x is Operators<P> => {
+  return assertBaseOperators<P>(x, collumns) ||
+    assertMathOperators(x, collumns) || assertStringOperators(x, collumns);
 };
 
-// Assert Filters
 export const assertQueryFilters = <R extends Record<string, unknown>>(
   x: unknown,
   columns?: string[],
 ): x is QueryFilters<R> => {
-  if (typeof x !== 'object' || x === null) return false;
-  return Object.entries(x).every(([key, val]) => {
-    if (['$and', '$or'].includes(key)) {
-      if (!Array.isArray(val)) return assertQueryFilters(val);
-      return val.every((v) => assertQueryFilters(v));
-    } else {
-      // Check if col is valid
-      return (columns !== undefined && columns.includes(key)) &&
-        assertOperators(val);
-    }
-  });
+  return typeof x === 'object' && x !== null &&
+    Object.entries(x).every(([key, value]) => {
+      if (['$and', '$or'].includes(key)) {
+        return (Array.isArray(value) &&
+          value.every((v) => assertQueryFilters(v, columns))) ||
+          assertQueryFilters(value, columns);
+      }
+      // This will be column: Operator
+      return (typeof key === 'string' &&
+        (columns === undefined ? true : columns?.includes(key)) &&
+        assertOperators(value, columns)); // || assertQueryFilters(value, columns);
+    });
 };

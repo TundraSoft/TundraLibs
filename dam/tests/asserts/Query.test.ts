@@ -1,14 +1,14 @@
 import { assertEquals } from '../../../dev.dependencies.ts';
 import {
   assertAggregates,
+  assertBaseOperators,
   assertColumnIdentifier,
-  assertDateExpression,
   assertDeleteQueryBuilder,
+  assertExpression,
   assertInsertQueryBuilder,
-  // assertExpression,
-  assertJSONExpression,
-  assertNumberExpression,
-  assertStringExpression,
+  assertMathOperators,
+  assertQueryFilters,
+  assertStringOperators,
   assertUpdateQueryBuilder,
 } from '../../mod.ts';
 
@@ -100,47 +100,48 @@ Deno.test('DAM > asserts > Query', async (t) => {
 
   await t.step('Expressions', async (t) => {
     await t.step('Date', () => {
-      assertEquals(assertDateExpression({ $expr: 'NOW' }), true);
-      assertEquals(assertDateExpression({ $expr: 'CURRENT_DATE' }), true);
-      assertEquals(assertDateExpression({ $expr: 'CURRENT_TIME' }), true);
-      assertEquals(assertDateExpression({ $expr: 'CURRENT_TIMESTAMP' }), true);
+      assertEquals(assertExpression({ $expr: 'NOW' }), true);
+      assertEquals(assertExpression({ $expr: 'CURRENT_DATE' }), true);
+      assertEquals(assertExpression({ $expr: 'CURRENT_TIME' }), true);
+      assertEquals(assertExpression({ $expr: 'CURRENT_TIMESTAMP' }), true);
+      //#region DATE_ADD
       assertEquals(
-        assertDateExpression({
+        assertExpression({
           $expr: 'DATE_ADD',
           $args: ['YEAR', { $expr: 'NOW' }, 1],
         }),
         true,
       );
       assertEquals(
-        assertDateExpression({
+        assertExpression({
           $expr: 'DATE_ADD',
           $args: ['MONTH', { $expr: 'NOW' }, 1],
         }),
         true,
       );
       assertEquals(
-        assertDateExpression({
+        assertExpression({
           $expr: 'DATE_ADD',
           $args: ['DAY', { $expr: 'NOW' }, 1],
         }),
         true,
       );
       assertEquals(
-        assertDateExpression({
+        assertExpression({
           $expr: 'DATE_ADD',
           $args: ['HOUR', { $expr: 'NOW' }, 1],
         }),
         true,
       );
       assertEquals(
-        assertDateExpression({
+        assertExpression({
           $expr: 'DATE_ADD',
           $args: ['MINUTE', { $expr: 'NOW' }, 1],
         }),
         true,
       );
       assertEquals(
-        assertDateExpression({
+        assertExpression({
           $expr: 'DATE_ADD',
           $args: ['SECOND', { $expr: 'NOW' }, 1],
         }),
@@ -148,53 +149,54 @@ Deno.test('DAM > asserts > Query', async (t) => {
       );
 
       assertEquals(
-        assertDateExpression({
+        assertExpression({
           $expr: 'DATE_ADD',
           $args: ['YEAR', { $expr: 'NOW' }, '1'],
         }),
         false,
       );
       assertEquals(
-        assertDateExpression({
+        assertExpression({
           $expr: 'DATE_ADD',
           $args: ['YEARD', { $expr: 'NOW' }, 1],
         }, ['a']),
         false,
       );
       assertEquals(
-        assertDateExpression({
+        assertExpression({
           $expr: 'DATE_ADD',
           $args: ['YEAR', { $expr: 'NOW' }, 1],
         }, ['a']),
         true,
       );
       assertEquals(
-        assertDateExpression({
+        assertExpression({
           $expr: 'DATE_ADD',
           $args: ['YEAR', { $expr: 'NOW' }, '$a'],
         }, ['a']),
         true,
       );
       assertEquals(
-        assertDateExpression({
+        assertExpression({
           $expr: 'DATE_ADD',
           $args: ['YEAR', new Date(), '$a'],
         }, ['a']),
         true,
       );
+      //#endregion DATE_ADD
     });
 
     await t.step('Number', () => {
       assertEquals(
-        assertNumberExpression({ $expr: 'ADD', $args: [1, 2] }),
+        assertExpression({ $expr: 'ADD', $args: [1, 2] }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'ADD', $args: ['$a', '$b'] }),
+        assertExpression({ $expr: 'ADD', $args: ['$a', '$b'] }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'ADD', $args: ['$a', '$b'] }, [
+        assertExpression({ $expr: 'ADD', $args: ['$a', '$b'] }, [
           'a',
           'b',
           'c',
@@ -202,7 +204,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'ADD', $args: ['$a', '$MAIN.$b'] }, [
+        assertExpression({ $expr: 'ADD', $args: ['$a', '$MAIN.$b'] }, [
           'a',
           'b',
           'c',
@@ -210,7 +212,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'ADD', $args: ['$a', '$C.$a'] }, [
+        assertExpression({ $expr: 'ADD', $args: ['$a', '$C.$a'] }, [
           'a',
           'b',
           '$C.$a',
@@ -218,7 +220,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'ADD', $args: ['$d', '$c'] }, [
+        assertExpression({ $expr: 'ADD', $args: ['$d', '$c'] }, [
           'a',
           'b',
           'c',
@@ -226,7 +228,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         false,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'ADD', $args: ['d', 'c'] }, [
+        assertExpression({ $expr: 'ADD', $args: ['d', 'c'] }, [
           'a',
           'b',
           'c',
@@ -235,15 +237,15 @@ Deno.test('DAM > asserts > Query', async (t) => {
       );
 
       assertEquals(
-        assertNumberExpression({ $expr: 'SUB', $args: [1, 2] }),
+        assertExpression({ $expr: 'SUB', $args: [1, 2] }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'SUB', $args: ['$a', '$b'] }),
+        assertExpression({ $expr: 'SUB', $args: ['$a', '$b'] }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'SUB', $args: ['$a', '$b'] }, [
+        assertExpression({ $expr: 'SUB', $args: ['$a', '$b'] }, [
           'a',
           'b',
           'c',
@@ -251,7 +253,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'SUB', $args: ['$a', '$MAIN.$b'] }, [
+        assertExpression({ $expr: 'SUB', $args: ['$a', '$MAIN.$b'] }, [
           'a',
           'b',
           'c',
@@ -259,7 +261,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'SUB', $args: ['$a', '$C.$a'] }, [
+        assertExpression({ $expr: 'SUB', $args: ['$a', '$C.$a'] }, [
           'a',
           'b',
           '$C.$a',
@@ -267,7 +269,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'SUB', $args: ['$d', '$c'] }, [
+        assertExpression({ $expr: 'SUB', $args: ['$d', '$c'] }, [
           'a',
           'b',
           'c',
@@ -275,7 +277,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         false,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'SUB', $args: ['d', 'c'] }, [
+        assertExpression({ $expr: 'SUB', $args: ['d', 'c'] }, [
           'a',
           'b',
           'c',
@@ -284,15 +286,15 @@ Deno.test('DAM > asserts > Query', async (t) => {
       );
 
       assertEquals(
-        assertNumberExpression({ $expr: 'MUL', $args: [1, 2] }),
+        assertExpression({ $expr: 'MUL', $args: [1, 2] }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'MUL', $args: ['$a', '$b'] }),
+        assertExpression({ $expr: 'MUL', $args: ['$a', '$b'] }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'MUL', $args: ['$a', '$b'] }, [
+        assertExpression({ $expr: 'MUL', $args: ['$a', '$b'] }, [
           'a',
           'b',
           'c',
@@ -300,7 +302,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'MUL', $args: ['$a', '$MAIN.$b'] }, [
+        assertExpression({ $expr: 'MUL', $args: ['$a', '$MAIN.$b'] }, [
           'a',
           'b',
           'c',
@@ -308,7 +310,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'MUL', $args: ['$a', '$C.$a'] }, [
+        assertExpression({ $expr: 'MUL', $args: ['$a', '$C.$a'] }, [
           'a',
           'b',
           '$C.$a',
@@ -316,7 +318,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'MUL', $args: ['$d', '$c'] }, [
+        assertExpression({ $expr: 'MUL', $args: ['$d', '$c'] }, [
           'a',
           'b',
           'c',
@@ -324,7 +326,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         false,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'MUL', $args: ['d', 'c'] }, [
+        assertExpression({ $expr: 'MUL', $args: ['d', 'c'] }, [
           'a',
           'b',
           'c',
@@ -333,15 +335,15 @@ Deno.test('DAM > asserts > Query', async (t) => {
       );
 
       assertEquals(
-        assertNumberExpression({ $expr: 'DIV', $args: [1, 2] }),
+        assertExpression({ $expr: 'DIV', $args: [1, 2] }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'DIV', $args: ['$a', '$b'] }),
+        assertExpression({ $expr: 'DIV', $args: ['$a', '$b'] }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'DIV', $args: ['$a', '$b'] }, [
+        assertExpression({ $expr: 'DIV', $args: ['$a', '$b'] }, [
           'a',
           'b',
           'c',
@@ -349,7 +351,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'DIV', $args: ['$a', '$MAIN.$b'] }, [
+        assertExpression({ $expr: 'DIV', $args: ['$a', '$MAIN.$b'] }, [
           'a',
           'b',
           'c',
@@ -357,7 +359,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'DIV', $args: ['$a', '$C.$a'] }, [
+        assertExpression({ $expr: 'DIV', $args: ['$a', '$C.$a'] }, [
           'a',
           'b',
           '$C.$a',
@@ -365,7 +367,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'DIV', $args: ['$d', '$c'] }, [
+        assertExpression({ $expr: 'DIV', $args: ['$d', '$c'] }, [
           'a',
           'b',
           'c',
@@ -373,7 +375,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         false,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'DIV', $args: ['d', 'c'] }, [
+        assertExpression({ $expr: 'DIV', $args: ['d', 'c'] }, [
           'a',
           'b',
           'c',
@@ -382,15 +384,15 @@ Deno.test('DAM > asserts > Query', async (t) => {
       );
 
       assertEquals(
-        assertNumberExpression({ $expr: 'MOD', $args: [1, 2] }),
+        assertExpression({ $expr: 'MOD', $args: [1, 2] }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'MOD', $args: ['$a', '$b'] }),
+        assertExpression({ $expr: 'MOD', $args: ['$a', '$b'] }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'MOD', $args: ['$a', '$b'] }, [
+        assertExpression({ $expr: 'MOD', $args: ['$a', '$b'] }, [
           'a',
           'b',
           'c',
@@ -398,7 +400,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'MOD', $args: ['$a', '$MAIN.$b'] }, [
+        assertExpression({ $expr: 'MOD', $args: ['$a', '$MAIN.$b'] }, [
           'a',
           'b',
           'c',
@@ -406,7 +408,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'MOD', $args: ['$a', '$C.$a'] }, [
+        assertExpression({ $expr: 'MOD', $args: ['$a', '$C.$a'] }, [
           'a',
           'b',
           '$C.$a',
@@ -414,7 +416,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'MOD', $args: ['$d', '$c'] }, [
+        assertExpression({ $expr: 'MOD', $args: ['$d', '$c'] }, [
           'a',
           'b',
           'c',
@@ -422,7 +424,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         false,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'MOD', $args: ['d', 'c'] }, [
+        assertExpression({ $expr: 'MOD', $args: ['d', 'c'] }, [
           'a',
           'b',
           'c',
@@ -430,18 +432,18 @@ Deno.test('DAM > asserts > Query', async (t) => {
         false,
       );
 
-      assertEquals(assertNumberExpression({ $expr: 'ABS', $args: 1 }), true);
-      assertEquals(assertNumberExpression({ $expr: 'ABS', $args: '$a' }), true);
+      assertEquals(assertExpression({ $expr: 'ABS', $args: 1 }), true);
+      assertEquals(assertExpression({ $expr: 'ABS', $args: '$a' }), true);
       assertEquals(
-        assertNumberExpression({ $expr: 'ABS', $args: '$a' }, ['a']),
+        assertExpression({ $expr: 'ABS', $args: '$a' }, ['a']),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'ABS', $args: '$MAIN.$a' }, ['a', 'b']),
+        assertExpression({ $expr: 'ABS', $args: '$MAIN.$a' }, ['a', 'b']),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'ABS', $args: '$C.$a' }, [
+        assertExpression({ $expr: 'ABS', $args: '$C.$a' }, [
           'a',
           'b',
           '$C.$a',
@@ -449,7 +451,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'ABS', $args: '$g' }, [
+        assertExpression({ $expr: 'ABS', $args: '$g' }, [
           'a',
           'b',
           'c',
@@ -458,28 +460,28 @@ Deno.test('DAM > asserts > Query', async (t) => {
         false,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'ABS', $args: 'a' }, ['a']),
+        assertExpression({ $expr: 'ABS', $args: 'a' }, ['a']),
         false,
       );
 
-      assertEquals(assertNumberExpression({ $expr: 'CEIL', $args: 1 }), true);
+      assertEquals(assertExpression({ $expr: 'CEIL', $args: 1 }), true);
       assertEquals(
-        assertNumberExpression({ $expr: 'CEIL', $args: '$a' }),
+        assertExpression({ $expr: 'CEIL', $args: '$a' }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'CEIL', $args: '$a' }, ['a']),
+        assertExpression({ $expr: 'CEIL', $args: '$a' }, ['a']),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'CEIL', $args: '$MAIN.$a' }, [
+        assertExpression({ $expr: 'CEIL', $args: '$MAIN.$a' }, [
           'a',
           'b',
         ]),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'CEIL', $args: '$C.$a' }, [
+        assertExpression({ $expr: 'CEIL', $args: '$C.$a' }, [
           'a',
           'b',
           '$C.$a',
@@ -487,7 +489,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'CEIL', $args: '$g' }, [
+        assertExpression({ $expr: 'CEIL', $args: '$g' }, [
           'a',
           'b',
           'c',
@@ -496,28 +498,28 @@ Deno.test('DAM > asserts > Query', async (t) => {
         false,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'CEIL', $args: 'a' }, ['a']),
+        assertExpression({ $expr: 'CEIL', $args: 'a' }, ['a']),
         false,
       );
 
-      assertEquals(assertNumberExpression({ $expr: 'FLOOR', $args: 1 }), true);
+      assertEquals(assertExpression({ $expr: 'FLOOR', $args: 1 }), true);
       assertEquals(
-        assertNumberExpression({ $expr: 'FLOOR', $args: '$a' }),
+        assertExpression({ $expr: 'FLOOR', $args: '$a' }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'FLOOR', $args: '$a' }, ['a']),
+        assertExpression({ $expr: 'FLOOR', $args: '$a' }, ['a']),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'FLOOR', $args: '$MAIN.$a' }, [
+        assertExpression({ $expr: 'FLOOR', $args: '$MAIN.$a' }, [
           'a',
           'b',
         ]),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'FLOOR', $args: '$C.$a' }, [
+        assertExpression({ $expr: 'FLOOR', $args: '$C.$a' }, [
           'a',
           'b',
           '$C.$a',
@@ -525,7 +527,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'FLOOR', $args: '$g' }, [
+        assertExpression({ $expr: 'FLOOR', $args: '$g' }, [
           'a',
           'b',
           'c',
@@ -534,40 +536,40 @@ Deno.test('DAM > asserts > Query', async (t) => {
         false,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'FLOOR', $args: 'a' }, ['a']),
+        assertExpression({ $expr: 'FLOOR', $args: 'a' }, ['a']),
         false,
       );
 
       assertEquals(
-        assertNumberExpression({ $expr: 'LENGTH', $args: 'a' }),
+        assertExpression({ $expr: 'LENGTH', $args: 'a' }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'LENGTH', $args: '$a' }),
+        assertExpression({ $expr: 'LENGTH', $args: '$a' }),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'LENGTH', $args: '$a' }, ['a']),
+        assertExpression({ $expr: 'LENGTH', $args: '$a' }, ['a']),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'LENGTH', $args: '$MAIN.$a' }, [
+        assertExpression({ $expr: 'LENGTH', $args: '$MAIN.$a' }, [
           'a',
           'b',
         ]),
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'LENGTH', $args: '$C.$a' }, [
+        assertExpression({ $expr: 'LENGTH', $args: '$C.$a' }, [
           'a',
           'b',
           '$C.$a',
         ]),
         true,
       );
-      // THIS IS A BUG
+      // This is actually a bug, where the column is missing but since input can be string we accept it.
       assertEquals(
-        assertNumberExpression({ $expr: 'LENGTH', $args: '$g' }, [
+        assertExpression({ $expr: 'LENGTH', $args: '$g' }, [
           'a',
           'b',
           'c',
@@ -576,110 +578,110 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertNumberExpression({ $expr: 'LENGTH', $args: 1 }, ['a']),
+        assertExpression({ $expr: 'LENGTH', $args: 1 }, ['a']),
         false,
       );
 
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['YEAR', { $expr: 'NOW' }, { $expr: 'NOW' }],
         }),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['MONTH', { $expr: 'NOW' }, { $expr: 'NOW' }],
         }),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['DAY', { $expr: 'NOW' }, { $expr: 'NOW' }],
         }),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['HOUR', { $expr: 'NOW' }, { $expr: 'NOW' }],
         }),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['MINUTE', { $expr: 'NOW' }, { $expr: 'NOW' }],
         }),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['SECOND', { $expr: 'NOW' }, { $expr: 'NOW' }],
         }),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['YEAR', { $expr: 'NOW' }, { $expr: 'NOW' }],
         }, ['a']),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['YEAR', { $expr: 'NOW' }, '$a'],
         }, ['a', 'b']),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['YEAR', { $expr: 'NOW' }, '$MAIN.$a'],
         }, ['a']),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['YEAR', { $expr: 'NOW' }, '$C.$a'],
         }, ['a', 'b', '$C.$a']),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['YEAR', new Date(), '$C.$a'],
         }, ['a', 'b', '$C.$a']),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['YEAR', '$C.$a', new Date()],
         }, ['a', 'b', '$C.$a']),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['YEAR', new Date(), new Date()],
         }, ['a', 'b', '$C.$a']),
         true,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['YEAR', { $expr: 'NOW' }, '$g'],
         }, ['a', 'b', 'c', 'd']),
         false,
       );
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['YEAR', { $expr: 'NOW' }, 'a'],
         }, ['a']),
@@ -687,7 +689,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
       );
 
       assertEquals(
-        assertNumberExpression({
+        assertExpression({
           $expr: 'DATE_DIFF',
           $args: ['SECONDF', { $expr: 'NOW' }, { $expr: 'NOW' }],
         }),
@@ -696,18 +698,18 @@ Deno.test('DAM > asserts > Query', async (t) => {
     });
 
     await t.step('String', () => {
-      assertEquals(assertStringExpression({ $expr: 'UUID' }), true);
+      assertEquals(assertExpression({ $expr: 'UUID' }), true);
 
       assertEquals(
-        assertStringExpression({ $expr: 'CONCAT', $args: ['a', 'b'] }),
+        assertExpression({ $expr: 'CONCAT', $args: ['a', 'b'] }),
         true,
       );
       assertEquals(
-        assertStringExpression({ $expr: 'CONCAT', $args: ['$a', '$b'] }),
+        assertExpression({ $expr: 'CONCAT', $args: ['$a', '$b'] }),
         true,
       );
       assertEquals(
-        assertStringExpression({ $expr: 'CONCAT', $args: ['$a', '$b'] }, [
+        assertExpression({ $expr: 'CONCAT', $args: ['$a', '$b'] }, [
           'a',
           'b',
           'c',
@@ -715,7 +717,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertStringExpression({ $expr: 'CONCAT', $args: ['$a', '$MAIN.$b'] }, [
+        assertExpression({ $expr: 'CONCAT', $args: ['$a', '$MAIN.$b'] }, [
           'a',
           'b',
           'c',
@@ -723,7 +725,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertStringExpression({ $expr: 'CONCAT', $args: ['$a', '$C.$a'] }, [
+        assertExpression({ $expr: 'CONCAT', $args: ['$a', '$C.$a'] }, [
           'a',
           'b',
           '$C.$a',
@@ -731,26 +733,27 @@ Deno.test('DAM > asserts > Query', async (t) => {
         true,
       );
       assertEquals(
-        assertStringExpression({ $expr: 'CONCAT', $args: 'sdf' }),
+        assertExpression({ $expr: 'CONCAT', $args: 'sdf' }),
         false,
       );
       assertEquals(
-        assertStringExpression({
+        assertExpression({
           $expr: 'CONCAT',
           $args: ['d', { $expr: 'CONCAT', $args: ['sdf', 'df'] }],
         }),
         false,
       ); // Non string expression
+      // This is actually a bug, where the column is missing but since input can be string we accept it.
       assertEquals(
-        assertStringExpression({ $expr: 'CONCAT', $args: ['$d', '$c'] }, [
+        assertExpression({ $expr: 'CONCAT', $args: ['$d', '$c'] }, [
           'a',
           'b',
           'c',
         ]),
         true,
-      ); // THIS MAY BE A BUG.
+      );
       assertEquals(
-        assertStringExpression({ $expr: 'CONCAT', $args: ['d', 1] }, [
+        assertExpression({ $expr: 'CONCAT', $args: ['d', 1] }, [
           'a',
           'b',
           'c',
@@ -758,7 +761,7 @@ Deno.test('DAM > asserts > Query', async (t) => {
         false,
       ); // Adding number
       assertEquals(
-        assertStringExpression({
+        assertExpression({
           $expr: 'CONCAT',
           $args: ['d', { $expr: 'LENGTH', $args: 'sdf' }],
         }),
@@ -766,77 +769,80 @@ Deno.test('DAM > asserts > Query', async (t) => {
       ); // Non string expression
 
       assertEquals(
-        assertStringExpression({ $expr: 'LOWER', $args: 'a' }),
+        assertExpression({ $expr: 'LOWER', $args: 'a' }),
         true,
       );
       assertEquals(
-        assertStringExpression({ $expr: 'UPPER', $args: 'a' }),
+        assertExpression({ $expr: 'UPPER', $args: 'a' }),
         true,
       );
-      assertEquals(assertStringExpression({ $expr: 'TRIM', $args: 'a' }), true);
+      assertEquals(assertExpression({ $expr: 'TRIM', $args: 'a' }), true);
 
       assertEquals(
-        assertStringExpression({ $expr: 'LOWER', $args: '$a' }),
+        assertExpression({ $expr: 'LOWER', $args: '$a' }),
         true,
       );
       assertEquals(
-        assertStringExpression({ $expr: 'UPPER', $args: '$a' }),
+        assertExpression({ $expr: 'UPPER', $args: '$a' }),
         true,
       );
       assertEquals(
-        assertStringExpression({ $expr: 'TRIM', $args: '$a' }),
-        true,
-      );
-
-      assertEquals(
-        assertStringExpression({ $expr: 'LOWER', $args: '$a' }, ['a']),
-        true,
-      );
-      assertEquals(
-        assertStringExpression({ $expr: 'UPPER', $args: '$a' }, ['a']),
-        true,
-      );
-      assertEquals(
-        assertStringExpression({ $expr: 'TRIM', $args: '$a' }, ['a']),
+        assertExpression({ $expr: 'TRIM', $args: '$a' }),
         true,
       );
 
       assertEquals(
-        assertStringExpression({ $expr: 'LOWER', $args: '$a' }, ['v']),
+        assertExpression({ $expr: 'LOWER', $args: '$a' }, ['a']),
         true,
-      ); // Can be considered as bug
+      );
       assertEquals(
-        assertStringExpression({ $expr: 'UPPER', $args: '$a' }, ['v']),
+        assertExpression({ $expr: 'UPPER', $args: '$a' }, ['a']),
         true,
-      ); // Can be considered as bug
+      );
       assertEquals(
-        assertStringExpression({ $expr: 'TRIM', $args: '$a' }, ['v']),
+        assertExpression({ $expr: 'TRIM', $args: '$a' }, ['a']),
         true,
-      ); // Can be considered as bug
+      );
+
+      // This is actually a bug, where the column is missing but since input can be string we accept it.
+      assertEquals(
+        assertExpression({ $expr: 'LOWER', $args: '$a' }, ['v']),
+        true,
+      );
+      // This is actually a bug, where the column is missing but since input can be string we accept it.
+      assertEquals(
+        assertExpression({ $expr: 'UPPER', $args: '$a' }, ['v']),
+        true,
+      );
+      // This is actually a bug, where the column is missing but since input can be string we accept it.
+      assertEquals(
+        assertExpression({ $expr: 'TRIM', $args: '$a' }, ['v']),
+        true,
+      );
 
       assertEquals(
-        assertStringExpression({
+        assertExpression({
           $expr: 'REPLACE',
           $args: ['Hello World', 'Hello', 'Ola'],
         }),
         true,
       );
       assertEquals(
-        assertStringExpression({
+        assertExpression({
           $expr: 'REPLACE',
           $args: ['Hello World', '$a', 'Ola'],
         }),
         true,
       );
       assertEquals(
-        assertStringExpression({
+        assertExpression({
           $expr: 'REPLACE',
           $args: ['Hello World', '$a', 'Ola'],
         }, ['a', 'b']),
         true,
       );
       assertEquals(
-        assertStringExpression({
+        assertExpression({
           $expr: 'REPLACE',
           $args: ['Hello World', '$a', '$a'],
         }, ['a', 'b']),
@@ -844,28 +850,29 @@ Deno.test('DAM > asserts > Query', async (t) => {
       );
 
       assertEquals(
-        assertStringExpression({
+        assertExpression({
           $expr: 'SUBSTRING',
           $args: ['Hello World', 1, 2],
         }, ['a']),
         true,
       );
       assertEquals(
-        assertStringExpression({
+        assertExpression({
           $expr: 'SUBSTRING',
           $args: ['Hello World', '$a', 2],
         }, ['a']),
         true,
       );
       assertEquals(
-        assertStringExpression({
+        assertExpression({
           $expr: 'SUBSTRING',
           $args: ['Hello World', 1, '$a'],
         }, ['a']),
         true,
       );
+      // This is actually a bug, where the column is missing but since input can be string we accept it.
       assertEquals(
-        assertStringExpression({
+        assertExpression({
           $expr: 'SUBSTRING',
           $args: ['Hello World', '$a', '$b'],
         }, ['a']),
@@ -875,41 +882,308 @@ Deno.test('DAM > asserts > Query', async (t) => {
 
     await t.step('JSON', () => {
       assertEquals(
-        assertJSONExpression({
+        assertExpression({
           $expr: 'JSON_VALUE',
           $args: ['$a', ['a', 'b', 'c']],
         }),
         true,
       );
       assertEquals(
-        assertJSONExpression({
+        assertExpression({
           $expr: 'JSON_VALUE',
           $args: ['$a', ['a', 'b', 'c']],
         }, ['a', 'b', 'c']),
         true,
       );
       assertEquals(
-        assertJSONExpression({
+        assertExpression({
           $expr: 'JSON_VALUE',
           $args: ['$MAIN.$a', ['a', 'b', 'c']],
         }, ['a', 'b', 'c']),
         true,
       );
       assertEquals(
-        assertJSONExpression({
+        assertExpression({
           $expr: 'JSON_VALUE',
           $args: ['$B.$c', ['a', 'b', 'c']],
         }, ['a', '$B.$c', 'c']),
         true,
       );
       assertEquals(
-        assertJSONExpression({
+        assertExpression({
           $expr: 'JSON_VALUE',
           $args: ['a', ['a', 'b', 'c']],
         }, ['a', 'b', 'c']),
         false,
       );
     });
+  });
+
+  await t.step('Filter', () => {
+    assertEquals(assertBaseOperators('sdf'), true);
+    assertEquals(assertBaseOperators(1), true);
+    assertEquals(assertBaseOperators(1n), true);
+    assertEquals(assertBaseOperators(true), true);
+    assertEquals(assertBaseOperators(null), true);
+    assertEquals(assertBaseOperators(new Date()), true);
+    assertEquals(assertBaseOperators([1, 2, 3]), true);
+    assertEquals(assertBaseOperators({ $eq: 1 }), true);
+    assertEquals(assertBaseOperators({ $ne: 1 }), true);
+    assertEquals(assertBaseOperators({ $null: true }), true);
+    assertEquals(assertBaseOperators({ $in: [1, 2, 3] }), true);
+    assertEquals(assertBaseOperators({ $nin: [1, 2, 3] }), true);
+
+    assertEquals(assertMathOperators({ $gt: 1 }), true);
+    assertEquals(assertMathOperators({ $gte: 1 }), true);
+    assertEquals(assertMathOperators({ $lt: 1 }), true);
+    assertEquals(assertMathOperators({ $lte: 1 }), true);
+    assertEquals(assertMathOperators({ $between: [1, 2] }), true);
+
+    assertEquals(assertMathOperators({ $gt: '$a' }), true);
+    assertEquals(assertMathOperators({ $gte: '$a' }), true);
+    assertEquals(assertMathOperators({ $lt: '$a' }), true);
+    assertEquals(assertMathOperators({ $lte: '$a' }), true);
+    assertEquals(assertMathOperators({ $between: ['$a', '$a'] }), true);
+    assertEquals(
+      assertMathOperators({ $gt: { $expr: 'ADD', $args: [1, 2] } }),
+      true,
+    );
+    assertEquals(
+      assertMathOperators({ $gte: { $expr: 'ADD', $args: [1, 2] } }),
+      true,
+    );
+    assertEquals(
+      assertMathOperators({ $lt: { $expr: 'ADD', $args: [1, 2] } }),
+      true,
+    );
+    assertEquals(
+      assertMathOperators({ $lte: { $expr: 'ADD', $args: [1, 2] } }),
+      true,
+    );
+    assertEquals(
+      assertMathOperators({
+        $between: [{ $expr: 'ADD', $args: [1, 2] }, {
+          $expr: 'ADD',
+          $args: [1, 2],
+        }],
+      }),
+      true,
+    );
+
+    assertEquals(assertMathOperators({ $gt: 1n }), true);
+    assertEquals(assertMathOperators({ $gte: 1n }), true);
+    assertEquals(assertMathOperators({ $lt: 1n }), true);
+    assertEquals(assertMathOperators({ $lte: 1n }), true);
+    assertEquals(assertMathOperators({ $between: [1n, 2n] }), true);
+
+    assertEquals(assertMathOperators({ $gt: new Date() }), true);
+    assertEquals(assertMathOperators({ $gte: new Date() }), true);
+    assertEquals(assertMathOperators({ $lt: new Date() }), true);
+    assertEquals(assertMathOperators({ $lte: new Date() }), true);
+    assertEquals(
+      assertMathOperators({ $between: [new Date(), new Date()] }),
+      true,
+    );
+    assertEquals(
+      assertMathOperators({ $between: [{ $expr: 'NOW' }, { $expr: 'NOW' }] }),
+      true,
+    );
+
+    assertEquals(assertMathOperators({ $gt: 'sdf' }), false);
+    assertEquals(assertMathOperators({ $gte: 'sdf' }), false);
+    assertEquals(assertMathOperators({ $lt: 'sdf' }), false);
+    assertEquals(assertMathOperators({ $lte: 'sdf' }), false);
+    assertEquals(assertMathOperators({ $between: ['sdf', 'sdf'] }), false);
+
+    assertEquals(assertStringOperators({ $like: 'sdf' }), true);
+    assertEquals(assertStringOperators({ $nlike: 'sdf' }), true);
+    assertEquals(assertStringOperators({ $ilike: 'sdf' }), true);
+    assertEquals(assertStringOperators({ $nilike: 'sdf' }), true);
+    assertEquals(assertStringOperators({ $contains: 'sdf' }), true);
+    assertEquals(assertStringOperators({ $ncontains: 'sdf' }), true);
+    assertEquals(assertStringOperators({ $startsWith: 'sdf' }), true);
+    assertEquals(assertStringOperators({ $nstartsWith: 'sdf' }), true);
+    assertEquals(assertStringOperators({ $endsWith: 'sdf' }), true);
+    assertEquals(assertStringOperators({ $nendsWith: 'sdf' }), true);
+
+    assertEquals(
+      assertStringOperators({ $like: '$sdf' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $nlike: '$sdf' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $ilike: '$sdf' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $nilike: '$sdf' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $contains: '$sdf' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $ncontains: '$sdf' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $startsWith: '$sdf' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $nstartsWith: '$sdf' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $endsWith: '$sdf' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $nendsWith: '$sdf' }, ['dsf', 'sdf']),
+      true,
+    );
+
+    assertEquals(
+      assertStringOperators({
+        $like: { $expr: 'CONCAT', $args: ['$sdf', 'd'] },
+      }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({
+        $nlike: { $expr: 'CONCAT', $args: ['$sdf', 'd'] },
+      }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({
+        $ilike: { $expr: 'CONCAT', $args: ['$sdf', 'd'] },
+      }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({
+        $nilike: { $expr: 'CONCAT', $args: ['$sdf', 'd'] },
+      }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({
+        $contains: { $expr: 'CONCAT', $args: ['$sdf', 'd'] },
+      }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({
+        $ncontains: { $expr: 'CONCAT', $args: ['$sdf', 'd'] },
+      }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({
+        $startsWith: { $expr: 'CONCAT', $args: ['$sdf', 'd'] },
+      }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({
+        $nstartsWith: { $expr: 'CONCAT', $args: ['$sdf', 'd'] },
+      }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({
+        $endsWith: { $expr: 'CONCAT', $args: ['$sdf', 'd'] },
+      }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({
+        $nendsWith: { $expr: 'CONCAT', $args: ['$sdf', 'd'] },
+      }, ['dsf', 'sdf']),
+      true,
+    );
+
+    // These are actually a bug, where the column is missing but since input can be string we accept it.
+    assertEquals(
+      assertStringOperators({ $like: '$sdfd' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $nlike: '$sdfd' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $ilike: '$sdfd' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $nilike: '$sdfd' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $contains: '$sdfd' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $ncontains: '$sdfd' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $startsWith: '$sdfd' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $nstartsWith: '$sdfd' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $endsWith: '$sdfd' }, ['dsf', 'sdf']),
+      true,
+    );
+    assertEquals(
+      assertStringOperators({ $nendsWith: '$sdfd' }, ['dsf', 'sdf']),
+      true,
+    );
+
+    assertEquals(
+      assertQueryFilters({ $and: [{ _id: { $eq: 1 } }, { _id: { $ne: 2 } }] }),
+      true,
+    );
+    assertEquals(
+      assertQueryFilters({ $or: [{ _id: { $eq: 1 } }, { _id: { $ne: 2 } }] }),
+      true,
+    );
+    assertEquals(
+      assertQueryFilters({
+        $and: [{ _id: { $eq: 1 } }, { _id: { $ne: 2 } }],
+        $or: [{ _id: { $eq: 1 } }, { _id: { $ne: 2 } }],
+      }),
+      true,
+    );
+    assertEquals(
+      assertQueryFilters({
+        name: 'asdf',
+        email: { $in: ['test@email.com', 'sdf@gmail.com'] },
+        $and: [{ _id: { $eq: 1 } }, { _id: { $ne: 2 } }],
+        $or: [{ _id: { $eq: 1 } }, { _id: { $ne: 2 } }],
+      }),
+      true,
+    );
+    assertEquals(
+      assertQueryFilters({ $or: { name: { $eq: 'some' }, lastName: 'thing' } }),
+      true,
+    );
+    assertEquals(
+      assertQueryFilters({
+        $and: { name: { $eq: 'some' }, lastName: 'thing' },
+      }),
+      true,
+    );
   });
 
   await t.step('Builder', async (s) => {

@@ -72,7 +72,7 @@ export const assertNumberExpression = (
           assertColumnIdentifier(x.$args, columns) ||
           assertNumberExpression(x.$args, columns))) || // ABS, CEIL, FLOOR
       (x.$expr === 'LENGTH' &&
-        (typeof x.$args === 'string' ||
+        ((typeof x.$args === 'string' /*&& !x.$args.startsWith('$')*/) ||
           assertColumnIdentifier(x.$args, columns) ||
           assertStringExpression(x.$args, columns))) || // LENGTH
       (x.$expr === 'DATE_DIFF' && Array.isArray(x.$args) &&
@@ -99,20 +99,22 @@ export const assertStringExpression = (
     (
       (x.$expr === 'UUID' && !('$args' in x)) || // UUID
       (['LOWER', 'UPPER', 'TRIM'].includes(x.$expr) &&
-        (typeof x.$args === 'string' ||
+        ((typeof x.$args === 'string' /*&& !x.$args.startsWith('$')*/) ||
           assertColumnIdentifier(x.$args, columns))) || // LOWER, UPPER, TRIM, LENGTH
       (x.$expr === 'CONCAT' && Array.isArray(x.$args) &&
         x.$args.every((arg) =>
-          typeof arg === 'string' || assertColumnIdentifier(arg, columns)
+          (typeof arg === 'string' /*&& !arg.startsWith('$')*/) ||
+          assertColumnIdentifier(arg, columns)
         )) || // CONCAT
       (x.$expr === 'REPLACE' && Array.isArray(x.$args) &&
         x.$args.length === 3 &&
         x.$args.every((arg) =>
-          typeof arg === 'string' || assertColumnIdentifier(arg, columns)
+          (typeof arg === 'string' /*&& !arg.startsWith('$')*/) ||
+          assertColumnIdentifier(arg, columns)
         )) || // REPLACE
       (x.$expr === 'SUBSTRING' && Array.isArray(x.$args) &&
         x.$args.length === 3 &&
-        (typeof x.$args[0] === 'string' ||
+        ((typeof x.$args[0] === 'string' /*&& !x.$args[0].startsWith('$')*/) ||
           assertColumnIdentifier(x.$args[0], columns)) &&
         (typeof x.$args[1] === 'number' ||
           assertColumnIdentifier(x.$args[1], columns) ||

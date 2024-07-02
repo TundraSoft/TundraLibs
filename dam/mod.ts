@@ -1,6 +1,7 @@
 export {
   assertAggregates,
   assertBaseAggregate,
+  assertBaseOperators,
   assertClientOptions,
   assertColumnIdentifier,
   assertDateExpression,
@@ -10,12 +11,16 @@ export {
   assertInsertQueryBuilder,
   assertJSONExpression,
   assertMariaOptions,
+  assertMathOperators,
   assertMongoOptions,
   assertNumberExpression,
+  assertOperators,
   assertPostgresOptions,
+  assertQueryFilters,
   assertSQLDialect,
   assertSQLiteOptions,
   assertStringExpression,
+  assertStringOperators,
   assertUpdateQueryBuilder,
 } from './asserts/mod.ts';
 

@@ -14,8 +14,7 @@
       "./"
     ],
     "exclude": [
-      "*/tests/",
-      "*/fixtures/"
+      "**/fixtures/"
     ],
     "rules": {
       "tags": [

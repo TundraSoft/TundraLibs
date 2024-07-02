@@ -25,21 +25,21 @@ type DateAdd = {
   ];
 };
 
-type CastDate = {
-  $expr: 'DATE';
-  $args: [DateExpressions | ColumnIdentifier, 'DATE'];
-};
+// type CastDate = {
+//   $expr: 'DATE';
+//   $args: [DateExpressions | ColumnIdentifier, 'DATE'];
+// };
 
-type CastDateTime = {
-  $expr: 'DATETIME';
-  $args: [DateExpressions | ColumnIdentifier, 'DATE'];
-};
+// type CastDateTime = {
+//   $expr: 'DATETIME';
+//   $args: [DateExpressions | ColumnIdentifier, 'DATE'];
+// };
 
 export type DateExpressions =
   | Now
   | CurrentDate
   | CurrentTime
   | CurrentTimestamp
-  | DateAdd
-  | CastDate
-  | CastDateTime;
+  | DateAdd;
+// | CastDate
+// | CastDateTime;
