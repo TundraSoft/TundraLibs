@@ -23,6 +23,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
       poolSize: 1, // Lets default to 1
       idleTimeout: 5, // 5 seconds
       connectionTimeout: 30, // 30 seconds
+      lazyConnect: true,
     };
     super(name, { ...defaults, ...options });
   }
@@ -40,7 +41,11 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
         },
       },
       poolSize = this._getOption('poolSize') as number || 1;
-    this._client = await new PGPool(pgConfig, poolSize, false);
+    this._client = await new PGPool(
+      pgConfig,
+      poolSize,
+      this._options.lazyConnect === true,
+    );
     // Hack to test the connection, if there is something wrong it will throw immediately
     // await (await this._client.connect()).release();
   }

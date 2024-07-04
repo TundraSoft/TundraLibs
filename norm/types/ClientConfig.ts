@@ -30,6 +30,7 @@ export type PostgresConfig = BasicConnection & {
   poolSize?: number;
   idleTimeout?: number;
   connectionTimeout?: number;
+  lazyConnect?: boolean;
   tls?: Partial<TLSConfig>;
 };
 
