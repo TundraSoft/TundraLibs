@@ -241,10 +241,11 @@ export abstract class RESTler<
       ) {
         return XMLParse(await response.text()) as unknown as RespBody;
       } else if (contentType.includes('text')) {
+        const t = await response.text();
         try {
-          return JSON.parse(await response.text()) as RespBody;
+          return JSON.parse(t) as RespBody;
         } catch {
-          return await response.text() as unknown as RespBody;
+          return t as unknown as RespBody;
         }
       } else {
         // Ensure we discard the body
