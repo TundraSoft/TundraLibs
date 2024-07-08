@@ -35,13 +35,14 @@ export type DeleteQueryBuilder = BaseDMLQueryBuilder & {
 
 export type SelectQueryBuilder = BaseDMLQueryBuilder & {
   type: 'SELECT';
+  project: Record<ColumnIdentifier, boolean>;
   where?: QueryFilters;
   limit?: number;
   offset?: number;
   order?: Record<ColumnIdentifier, 'ASC' | 'DESC'>;
-  aggregates?: Record<string, Aggregates>;
+  aggregates?: Aggregates;
+  // having?: Record<string, unknown>; // Should be MathOperators only
   groupBy?: ColumnIdentifier[];
-  project?: Record<ColumnIdentifier, boolean>;
 } extends infer O ? { [P in keyof O]: O[P] } : never;
 
 export type CountQueryBuilder = BaseDMLQueryBuilder & {

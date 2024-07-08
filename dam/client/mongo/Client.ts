@@ -27,7 +27,7 @@ import { DAMClientConnectionError } from '../../mod.ts';
 export class MongoClient extends Client<MongoOptions> {
   declare readonly dialect = 'MONGO';
   private _client: MongoDBClient | undefined = undefined;
-  private _db: MongoDBDatabase | undefined = undefined;
+  public _db: MongoDBDatabase | undefined = undefined;
 
   constructor(name: string, options: OptionKeys<MongoOptions, ClientEvents>) {
     const def: Partial<MongoOptions> = {
@@ -130,10 +130,11 @@ export class MongoClient extends Client<MongoOptions> {
     try {
       // If it is insert, generate the id
       if (sql.insert) {
-        sql.documents.map((d: Record<string, unknown>) => {
-          if (d._id) {
+        sql.documents = sql.documents.map((d: Record<string, unknown>) => {
+          if (!d._id) {
             d._id = new MongoDBObjectId();
           }
+          return d;
         });
       }
       const db = (sql._admin) ? this._client!.database('admin') : this._db;
@@ -157,7 +158,7 @@ export class MongoClient extends Client<MongoOptions> {
       } else if (sql.insert) {
         return {
           count: res.n,
-          rows: sql.documents.map((d: Record<string, unknown>) => d._id),
+          rows: [], //sql.documents.map((d: Record<string, unknown>) => d._id),
         };
       } else {
         return {

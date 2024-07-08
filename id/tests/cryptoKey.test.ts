@@ -1,28 +1,28 @@
 import { cryptoKey } from '../mod.ts';
-import { assertEquals, assertMatch } from '../../dev.dependencies.ts';
+import { asserts } from '../../dev.dependencies.ts';
 
 Deno.test('id:cryptoKey', async (t) => {
   await t.step('Check if the length is as specified', () => {
     for (let i = 6; i <= 40; i++) {
-      assertEquals(cryptoKey(i).length, i);
+      asserts.assertEquals(cryptoKey(i).length, i);
     }
   });
 
   await t.step('Check if Prefix is added', () => {
-    assertEquals(cryptoKey(6, 'abc').startsWith('abc'), true);
+    asserts.assertEquals(cryptoKey(6, 'abc').startsWith('abc'), true);
   });
 
   await t.step('Check if hyphens are added', () => {
-    assertEquals(cryptoKey(6, '', 2).length, 8);
-    assertMatch(
+    asserts.assertEquals(cryptoKey(6, '', 2).length, 8);
+    asserts.assertMatch(
       cryptoKey(6, '', 2),
       /^[a-z0-9]{2}\-[a-z0-9]{2}\-[a-z0-9]{2}$/, // NOSONAR
     );
   });
 
   await t.step('Check if hyphens are added with prefix', () => {
-    assertEquals(cryptoKey(6, 'abc', 2).length, 11);
-    assertMatch(
+    asserts.assertEquals(cryptoKey(6, 'abc', 2).length, 11);
+    asserts.assertMatch(
       cryptoKey(6, 'abc', 2),
       /^abc[a-z0-9]{2}\-[a-z0-9]{2}\-[a-z0-9]{2}$/, // NOSONAR
     );
@@ -40,7 +40,7 @@ Deno.test('id:cryptoKey', async (t) => {
     // Wait for all parallel executions to complete
     return Promise.all(promises)
       .then(() => {
-        assertEquals(generatedIds.size, iterations);
+        asserts.assertEquals(generatedIds.size, iterations);
       });
   });
 });

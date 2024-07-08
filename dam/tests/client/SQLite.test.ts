@@ -1,9 +1,4 @@
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertThrows,
-} from '../../../dev.dependencies.ts';
+import { asserts } from '../../../dev.dependencies.ts';
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
@@ -16,14 +11,14 @@ import {
 Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
   await t.step('Invalid Config', async (t) => {
     await t.step('Incorrect/Missing Dialect', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
         };
         const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: '',
           mode: 'MEMORY',
@@ -31,14 +26,14 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
         const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           mode: 'MEMORY',
         };
         const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: undefined,
           mode: 'MEMORY',
@@ -49,7 +44,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: null,
           mode: 'MEMORY',
@@ -62,14 +57,14 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
     });
 
     await t.step('Incorrect/Missing Mode', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'SQLITE',
         };
         const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'SQLITE',
           mode: 'MEMORYDF',
@@ -77,7 +72,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
         const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'SQLITE',
           mode: undefined,
@@ -88,7 +83,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'SQLITE',
           mode: null,
@@ -101,7 +96,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
     });
 
     await t.step('Invalid File mode config', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'SQLITE',
           mode: 'FILE',
@@ -109,7 +104,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
         const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'SQLITE',
           mode: 'FILE',
@@ -118,7 +113,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
         const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'SQLITE',
           mode: 'FILE',
@@ -138,7 +133,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
         path: '/sdfsdf/sdFASDF',
       };
       const _a = new SQLiteClient('sqlitetest', conf as SQLiteOptions);
-      assertRejects(async () => {
+      asserts.assertRejects(async () => {
         try {
           await _a.connect();
         } catch (_e) {
@@ -170,39 +165,39 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
 
     await t.step('Connect', async () => {
       await memClient.connect();
-      assertEquals(memClient.status, 'CONNECTED');
+      asserts.assertEquals(memClient.status, 'CONNECTED');
       await memClient.close();
-      assertEquals(memClient.status, 'READY');
+      asserts.assertEquals(memClient.status, 'READY');
 
       await fileClient.connect();
-      assertEquals(fileClient.status, 'CONNECTED');
+      asserts.assertEquals(fileClient.status, 'CONNECTED');
       await fileClient.close();
-      assertEquals(fileClient.status, 'READY');
+      asserts.assertEquals(fileClient.status, 'READY');
     });
 
     await t.step('Ping', async () => {
       await memClient.connect();
-      assertEquals(await memClient.ping(), true);
+      asserts.assertEquals(await memClient.ping(), true);
       await memClient.close();
 
       await fileClient.connect();
-      assertEquals(await fileClient.ping(), true);
+      asserts.assertEquals(await fileClient.ping(), true);
       await fileClient.close();
     });
 
     await t.step('Get Version', async () => {
       await memClient.connect();
-      assert(await memClient.version());
+      asserts.assert(await memClient.version());
       await memClient.close();
 
       await fileClient.connect();
-      assert(await fileClient.version());
+      asserts.assert(await fileClient.version());
       await fileClient.close();
     });
 
     await t.step('Query', async () => {
       await memClient.connect();
-      await assert(async () => {
+      await asserts.assert(async () => {
         await memClient.query({
           sql:
             `SELECT sql FROM sqlite_master WHERE tbl_name = 'table_name' AND type = 'table';`,
@@ -211,7 +206,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
       await memClient.close();
 
       await fileClient.connect();
-      await assert(async () => {
+      await asserts.assert(async () => {
         await fileClient.query({
           sql:
             `SELECT sql FROM sqlite_master WHERE tbl_name = 'table_name' AND type = 'table';`,
@@ -222,7 +217,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
 
     await t.step('Query Error', async () => {
       await memClient.connect();
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         await memClient.query({
           sql: `SELECT dfssdf FROM sdfsdf;`,
         });
@@ -230,7 +225,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
       await memClient.close();
 
       await fileClient.connect();
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         await fileClient.query({
           sql: `SELECT dfssdf FROM sdfsdf;`,
         });
@@ -247,9 +242,9 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
           var2: 'sdf',
         },
       });
-      assertEquals(res1.data[0].A, 1);
-      assertEquals(res1.data[0].C, 1);
-      assertEquals(res1.data[0].B, 'sdf');
+      asserts.assertEquals(res1.data[0].A, 1);
+      asserts.assertEquals(res1.data[0].C, 1);
+      asserts.assertEquals(res1.data[0].B, 'sdf');
       await memClient.close();
 
       await fileClient.connect();
@@ -260,15 +255,15 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
           var2: 'sdf',
         },
       });
-      assertEquals(res.data[0].A, 1);
-      assertEquals(res.data[0].C, 1);
-      assertEquals(res.data[0].B, 'sdf');
+      asserts.assertEquals(res.data[0].A, 1);
+      asserts.assertEquals(res.data[0].C, 1);
+      asserts.assertEquals(res.data[0].B, 'sdf');
       await fileClient.close();
     });
 
     await t.step('Query with missing params', async () => {
       await memClient.connect();
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         await memClient.query({
           sql: `SELECT sql FROM sdf WHERE tbl_name = :tbl: AND type = 'table'`,
         });
@@ -276,7 +271,7 @@ Deno.test({ name: 'DAM > Client > SQLite' }, async (t) => {
       await memClient.close();
 
       await fileClient.connect();
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         await fileClient.query({
           sql: `SELECT sql FROM sdf WHERE tbl_name = :tbl: AND type = 'table'`,
         });

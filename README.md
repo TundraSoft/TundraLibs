@@ -6,7 +6,11 @@
 [![License](https://img.shields.io/github/license/tundrasoft/TundraLibs.svg)](https://github.com/tundrasoft/TundraLibs/blob/master/LICENSE)
 [![Repo size](https://img.shields.io/github/repo-size/tundrasoft/deno?logo=github)](#)
 [![codecov](https://codecov.io/gh/TundraSoft/TundraLibs/graph/badge.svg?token=LTDXV9HWQI)](https://codecov.io/gh/TundraSoft/TundraLibs)
+
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=TundraSoft_TundraLibs&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=TundraSoft_TundraLibs)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=TundraSoft_TundraLibs&metric=bugs)](https://sonarcloud.io/summary/new_code?id=TundraSoft_TundraLibs)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=TundraSoft_TundraLibs&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=TundraSoft_TundraLibs)
+[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=TundraSoft_TundraLibs&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=TundraSoft_TundraLibs)
 
 Collection of libraries built for Deno.
 

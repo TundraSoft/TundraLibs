@@ -1,6 +1,7 @@
 export type { DeepReadOnly } from './DeepReadOnly.ts';
 export type { DeepWritable } from './DeepWritable.ts';
 export type { ExcludeNever } from './ExcludeNever.ts';
+export type { HTTPMethods } from './HTTPMethods.ts';
 export type { Flatten } from './Flatten.ts';
 export type { MakeOptional } from './MakeOptional.ts';
 export type { MakeReadOnly } from './MakeReadOnly.ts';

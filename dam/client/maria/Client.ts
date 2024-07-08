@@ -12,7 +12,6 @@ import type { ClientEvents, MariaOptions, Query } from '../../types/mod.ts';
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
-  DAMClientQueryError,
 } from '../../errors/mod.ts';
 
 export class MariaClient extends Client<MariaOptions> {
@@ -127,19 +126,20 @@ export class MariaClient extends Client<MariaOptions> {
     const query = this._standardizeQuery(sql);
     const std = this._processParams(query);
     // Convert named params to positional params
-    try {
-      const res = await this._client!.execute(std.sql, std.params);
-      return {
-        count: res.affectedRows || res.rows?.length || 0,
-        rows: res.rows as R[],
-      };
-    } catch (e) {
-      throw new DAMClientQueryError({
-        dialect: this.dialect,
-        configName: this.name,
-        query,
-      }, e);
+    if (this._client!.pool?.available === 0) {
+      // Emit out of pool connection
+      this.emit(
+        'poolLimit',
+        this.name,
+        this._getOption('poolSize') as number,
+        sql,
+      );
     }
+    const res = await this._client!.execute(std.sql, std.params);
+    return {
+      count: res.affectedRows || res.rows?.length || 0,
+      rows: res.rows as R[],
+    };
   }
 
   protected async _getVersion(): Promise<string> {

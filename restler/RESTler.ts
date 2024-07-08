@@ -1,13 +1,7 @@
 /// <reference lib="deno.unstable" />
 
-import {
-  HTTPMethods,
-  path,
-  semver,
-  type StatusCode,
-  XMLParse,
-} from '../dependencies.ts';
-
+import { path, semver, type StatusCode, XMLParse } from '../dependencies.ts';
+import { HTTPMethods } from '../utils/mod.ts';
 import { Options } from '../options/mod.ts';
 import type { OptionKeys } from '../options/mod.ts';
 import type {

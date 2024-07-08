@@ -1,9 +1,4 @@
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertThrows,
-} from '../../../dev.dependencies.ts';
+import { asserts } from '../../../dev.dependencies.ts';
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
@@ -23,7 +18,7 @@ Deno.test({
 }, async (t) => {
   await t.step('Invalid Config', async (s) => {
     await s.step('Incorrect/Missing Dialect', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -36,7 +31,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: '',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -49,7 +44,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           host: envData.get('MARIA_HOST') || 'localhost',
           username: envData.get('MARIA_USER') || 'root',
@@ -61,7 +56,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: undefined,
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -77,7 +72,7 @@ Deno.test({
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: null,
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -95,7 +90,7 @@ Deno.test({
     });
 
     await s.step('Missing Host', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           username: envData.get('MARIA_USER') || 'root',
@@ -107,7 +102,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: '',
@@ -120,7 +115,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: null,
@@ -136,7 +131,7 @@ Deno.test({
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: undefined,
@@ -154,7 +149,7 @@ Deno.test({
     });
 
     await s.step('Incorrect port', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           username: envData.get('MARIA_USER') || 'root',
@@ -167,7 +162,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           username: envData.get('MARIA_USER') || 'root',
@@ -180,7 +175,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           username: envData.get('MARIA_USER') || 'root',
@@ -193,7 +188,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           username: envData.get('MARIA_USER') || 'root',
@@ -211,7 +206,7 @@ Deno.test({
     });
 
     await s.step('Username Missing', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -224,7 +219,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -237,7 +232,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -253,7 +248,7 @@ Deno.test({
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -271,7 +266,7 @@ Deno.test({
     });
 
     await s.step('Invalid Password', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -285,7 +280,7 @@ Deno.test({
         console.log('sdfgsdfsdfsdf');
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -298,7 +293,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -314,7 +309,7 @@ Deno.test({
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -332,7 +327,7 @@ Deno.test({
     });
 
     await s.step('Database Missing', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -345,7 +340,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -358,7 +353,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -374,7 +369,7 @@ Deno.test({
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -392,7 +387,7 @@ Deno.test({
     });
 
     await s.step('Invalid/Incorrect PoolSize', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -405,7 +400,7 @@ Deno.test({
         const _a = new MariaClient('mariatest', conf as MariaOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('MARIA_HOST') || 'localhost',
@@ -430,7 +425,7 @@ Deno.test({
         poolSize: 1,
       };
       const client = new MariaClient('mariatest', conf as MariaOptions);
-      await assertRejects(
+      await asserts.assertRejects(
         async () => await client.connect(),
         DAMClientConnectionError,
       );
@@ -446,7 +441,7 @@ Deno.test({
         database: envData.get('MARIA_DB') || 'mysql',
         poolSize: 1,
       };
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         const client = new MariaClient('mariatest', conf as MariaOptions);
         try {
           await client.connect();
@@ -473,22 +468,22 @@ Deno.test({
     const client = new MariaClient('mariatest', conf as MariaOptions);
     await s.step('Must connect to database', async () => {
       await client.connect();
-      assertEquals('CONNECTED', client.status);
+      asserts.assertEquals('CONNECTED', client.status);
       // Attempt calling connect again should not change anything
       await client.connect();
-      assertEquals('CONNECTED', client.status);
+      asserts.assertEquals('CONNECTED', client.status);
       await client.close();
     });
 
     await s.step('Ping', async () => {
       await client.connect();
-      assertEquals(await client.ping(), true);
+      asserts.assertEquals(await client.ping(), true);
       await client.close();
     });
 
     await s.step('Get Version', async () => {
       await client.connect();
-      assert(await client.version());
+      asserts.assert(await client.version());
       await client.close();
     });
 
@@ -502,7 +497,7 @@ Deno.test({
 
     await s.step('Query Error', async () => {
       await client.connect();
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         await client.query({
           sql: `SELECT * FROM sdfsdfsdf WHERE TABLE_SCHEMA = 'public';`,
         });
@@ -519,15 +514,15 @@ Deno.test({
           var2: 'sdf',
         },
       });
-      assertEquals(res.data[0].A, 1);
-      assertEquals(res.data[0].C, 1);
-      assertEquals(res.data[0].B, 'sdf');
+      asserts.assertEquals(res.data[0].A, 1);
+      asserts.assertEquals(res.data[0].C, 1);
+      asserts.assertEquals(res.data[0].B, 'sdf');
       await client.close();
     });
 
     await s.step('Missing Parameter', async () => {
       await client.connect();
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         await client.query({
           sql:
             `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = :schema:`,

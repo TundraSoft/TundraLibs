@@ -20,15 +20,6 @@ export {
 } from 'https://deno.land/std@0.224.0/http/status.ts';
 
 //#endregion Deno STD
-export type HTTPMethods =
-  | 'HEAD'
-  | 'OPTIONS'
-  | 'GET'
-  | 'POST'
-  | 'PUT'
-  | 'PATCH'
-  | 'DELETE';
-
 //#region RESTler
 export {
   parse as XMLParse,

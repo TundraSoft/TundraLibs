@@ -13,10 +13,9 @@ import type { ClientEvents, PostgresOptions, Query } from '../../types/mod.ts';
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
-  DAMClientQueryError,
 } from '../../errors/mod.ts';
 export class PostgresClient extends Client<PostgresOptions> {
-  declare readonly dialect = 'MARIA';
+  declare readonly dialect = 'POSTGRES';
   private _client: PGClient | undefined = undefined;
 
   constructor(
@@ -25,7 +24,8 @@ export class PostgresClient extends Client<PostgresOptions> {
   ) {
     const def: Partial<PostgresOptions> = {
       port: 5432,
-      poolSize: 5,
+      poolSize: 10,
+      lazy: true,
     };
     options = { ...def, ...options };
     if (!assertPostgresOptions(options)) {
@@ -94,7 +94,7 @@ export class PostgresClient extends Client<PostgresOptions> {
     this._client = new PGClient(
       this._makeConfig(),
       this._getOption('poolSize') || 10,
-      false,
+      this._getOption('lazy') === true,
     );
     let client: PGPoolClient | undefined = undefined;
     try {
@@ -138,25 +138,23 @@ export class PostgresClient extends Client<PostgresOptions> {
     query: Query,
   ): Promise<{ count: number; rows: R[] }> {
     const sQuery = this._standardizeQuery(query);
-    const client: PGPoolClient = await this._client!.connect();
-    try {
-      const res = await client.queryObject<R>(
-        sQuery.sql,
-        sQuery.params,
+    if (this._client?.size === this._getOption('poolSize')) {
+      this.emit(
+        'poolLimit',
+        this.name,
+        this._getOption('poolSize') as number,
+        query,
       );
-      return {
-        count: res.rowCount || res.rows.length || 0,
-        rows: res.rows,
-      };
-    } catch (err) {
-      throw new DAMClientQueryError({
-        dialect: this.dialect,
-        configName: this.name,
-        query: query,
-      }, err);
-    } finally {
-      client.release();
     }
+    using client = await this._client!.connect();
+    const res = await client.queryObject<R>(
+      sQuery.sql,
+      sQuery.params,
+    );
+    return {
+      count: res.rowCount || res.rows.length || 0,
+      rows: res.rows,
+    };
   }
 
   protected async _getVersion(): Promise<string> {

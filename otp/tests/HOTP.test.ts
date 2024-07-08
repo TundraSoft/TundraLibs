@@ -1,5 +1,5 @@
 import { HOTP } from '../mod.ts';
-import { assertEquals } from '../../dev.dependencies.ts';
+import { asserts } from '../../dev.dependencies.ts';
 
 Deno.test('OTP:HOTP', async (t) => {
   await t.step('SHA-1', async (t) => {
@@ -13,7 +13,7 @@ Deno.test('OTP:HOTP', async (t) => {
             return await HOTP('12345678901234567890', 'SHA-1', length, 1);
           }));
           otps.forEach((otp, index) => {
-            assertEquals(otp.length, lengths[index]);
+            asserts.assertEquals(otp.length, lengths[index]);
           });
         }
       },
@@ -27,7 +27,7 @@ Deno.test('OTP:HOTP', async (t) => {
         for (let i = 0; i < iter; i++) {
           otps.add(await HOTP('12345678901234567890', 'SHA-1', 6, i)); // Set window as 0
         }
-        assertEquals(otps.size, iter);
+        asserts.assertEquals(otps.size, iter);
       },
     );
 
@@ -39,7 +39,7 @@ Deno.test('OTP:HOTP', async (t) => {
         for (let i = 0; i < iter; i++) {
           otps.add(await HOTP('12345678901234567890', 'SHA-1', 6, 1)); // Set window as 0
         }
-        assertEquals(otps.size, 1);
+        asserts.assertEquals(otps.size, 1);
       },
     );
 
@@ -59,7 +59,7 @@ Deno.test('OTP:HOTP', async (t) => {
         key = '12345678901234567890';
       for (const counter in Object.keys(testCase)) {
         const otp = await HOTP(key, 'SHA-1', 6, parseInt(counter));
-        assertEquals(
+        asserts.assertEquals(
           otp,
           testCase[counter as unknown as keyof typeof testCase],
         );
@@ -78,7 +78,7 @@ Deno.test('OTP:HOTP', async (t) => {
             return await HOTP('12345678901234567890', 'SHA-256', length, 1);
           }));
           otps.forEach((otp, index) => {
-            assertEquals(otp.length, lengths[index]);
+            asserts.assertEquals(otp.length, lengths[index]);
           });
         }
       },
@@ -92,7 +92,7 @@ Deno.test('OTP:HOTP', async (t) => {
         for (let i = 0; i < iter; i++) {
           otps.add(await HOTP('12345678901234567890', 'SHA-256', 6, i)); // Set window as 0
         }
-        assertEquals(otps.size, iter);
+        asserts.assertEquals(otps.size, iter);
       },
     );
 
@@ -105,7 +105,7 @@ Deno.test('OTP:HOTP', async (t) => {
         for (let i = 0; i < iter; i++) {
           otps.add(await HOTP('12345678901234567890', 'SHA-256', 6, 1)); // Set window as 0
         }
-        assertEquals(otps.size, 1);
+        asserts.assertEquals(otps.size, 1);
       },
     );
   });
@@ -121,7 +121,7 @@ Deno.test('OTP:HOTP', async (t) => {
             return await HOTP('12345678901234567890', 'SHA-384', length, 1);
           }));
           otps.forEach((otp, index) => {
-            assertEquals(otp.length, lengths[index]);
+            asserts.assertEquals(otp.length, lengths[index]);
           });
         }
       },
@@ -135,7 +135,7 @@ Deno.test('OTP:HOTP', async (t) => {
         for (let i = 0; i < iter; i++) {
           otps.add(await HOTP('12345678901234567890', 'SHA-384', 6, i)); // Set window as 0
         }
-        assertEquals(otps.size, iter);
+        asserts.assertEquals(otps.size, iter);
       },
     );
 
@@ -148,7 +148,7 @@ Deno.test('OTP:HOTP', async (t) => {
         for (let i = 0; i < iter; i++) {
           otps.add(await HOTP('12345678901234567890', 'SHA-384', 6, 1)); // Set window as 0
         }
-        assertEquals(otps.size, 1);
+        asserts.assertEquals(otps.size, 1);
       },
     );
   });
@@ -164,7 +164,7 @@ Deno.test('OTP:HOTP', async (t) => {
             return await HOTP('12345678901234567890', 'SHA-512', length, 1);
           }));
           otps.forEach((otp, index) => {
-            assertEquals(otp.length, lengths[index]);
+            asserts.assertEquals(otp.length, lengths[index]);
           });
         }
       },
@@ -178,7 +178,7 @@ Deno.test('OTP:HOTP', async (t) => {
         for (let i = 0; i < iter; i++) {
           otps.add(await HOTP('12345678901234567890', 'SHA-512', 6, i)); // Set window as 0
         }
-        assertEquals(otps.size, iter);
+        asserts.assertEquals(otps.size, iter);
       },
     );
 
@@ -191,7 +191,7 @@ Deno.test('OTP:HOTP', async (t) => {
         for (let i = 0; i < iter; i++) {
           otps.add(await HOTP('12345678901234567890', 'SHA-512', 6, 1)); // Set window as 0
         }
-        assertEquals(otps.size, 1);
+        asserts.assertEquals(otps.size, 1);
       },
     );
 
@@ -209,7 +209,7 @@ Deno.test('OTP:HOTP', async (t) => {
         9: '520489',
       };
       await Object.entries(data).forEach(async ([key, value]) => {
-        assertEquals(
+        asserts.assertEquals(
           await HOTP('12345678901234567890', 'SHA-1', 6, Number(key)),
           value,
         );

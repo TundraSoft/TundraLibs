@@ -45,6 +45,11 @@ type Floor = {
   $args: NumberExpressions | ColumnIdentifier | number | bigint;
 };
 
+type Round = {
+  $expr: 'ROUND';
+  $args: NumberExpressions | ColumnIdentifier | number | bigint;
+};
+
 type DateDiff = {
   $expr: 'DATE_DIFF';
   $args: [
@@ -58,11 +63,11 @@ type Length = {
   $expr: 'LENGTH';
   $args:
     | StringExpressions
-    | NumberExpressions
+    // | NumberExpressions
     // | ColumnIdentifier // Removed as string will override this
-    | string
-    | number
-    | bigint;
+    | string;
+  // | number
+  // | bigint;
 };
 
 export type NumberExpressions =
@@ -74,5 +79,6 @@ export type NumberExpressions =
   | Abs
   | Ceil
   | Floor
+  | Round
   | DateDiff
   | Length;

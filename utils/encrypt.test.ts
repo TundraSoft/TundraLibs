@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from '../dev.dependencies.ts';
+import { asserts } from '../dev.dependencies.ts';
 import { decrypt, encrypt } from './encrypt.ts';
 
 Deno.test('utils:encrypt', async (t) => {
@@ -10,7 +10,7 @@ Deno.test('utils:encrypt', async (t) => {
 
   await t.step('invalid configuration', async (t) => {
     await t.step('invalid algorithm', async () => {
-      await assertRejects(
+      await asserts.assertRejects(
         () =>
           encrypt(
             'data',
@@ -23,7 +23,7 @@ Deno.test('utils:encrypt', async (t) => {
         'Invalid options passed',
       );
 
-      await assertRejects(
+      await asserts.assertRejects(
         () =>
           decrypt(
             'data',
@@ -38,7 +38,7 @@ Deno.test('utils:encrypt', async (t) => {
     });
 
     await t.step('invalid encoding', async () => {
-      await assertRejects(
+      await asserts.assertRejects(
         () =>
           encrypt(
             'data',
@@ -51,7 +51,7 @@ Deno.test('utils:encrypt', async (t) => {
         'Invalid options passed',
       );
 
-      await assertRejects(
+      await asserts.assertRejects(
         () =>
           decrypt(
             'data',
@@ -76,7 +76,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CBC',
         encoding: 'HEX',
       });
-      assertEquals(decrypted, data);
+      asserts.assertEquals(decrypted, data);
 
       const encrypted2 = await encrypt(data, key, {
         algorithm: 'AES-CBC',
@@ -86,7 +86,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CBC',
         encoding: 'BASE64',
       });
-      assertEquals(decrypted2, data);
+      asserts.assertEquals(decrypted2, data);
     });
 
     await t.step('should encrypt and decrypt string', async () => {
@@ -98,7 +98,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CBC',
         encoding: 'HEX',
       });
-      assertEquals(decrypted, str);
+      asserts.assertEquals(decrypted, str);
 
       const encrypted2 = await encrypt(str, key, {
         algorithm: 'AES-CBC',
@@ -108,7 +108,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CBC',
         encoding: 'BASE64',
       });
-      assertEquals(decrypted2, str);
+      asserts.assertEquals(decrypted2, str);
     });
 
     await t.step('should encrypt and decrypt number', async () => {
@@ -120,7 +120,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CBC',
         encoding: 'HEX',
       });
-      assertEquals(decrypted, num);
+      asserts.assertEquals(decrypted, num);
 
       const encrypted2 = await encrypt(num, key, {
         algorithm: 'AES-CBC',
@@ -130,7 +130,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CBC',
         encoding: 'BASE64',
       });
-      assertEquals(decrypted2, num);
+      asserts.assertEquals(decrypted2, num);
     });
 
     await t.step('should encrypt and decrypt array', async () => {
@@ -142,7 +142,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CBC',
         encoding: 'HEX',
       });
-      assertEquals(decrypted, arr);
+      asserts.assertEquals(decrypted, arr);
 
       const encrypted2 = await encrypt(arr, key, {
         algorithm: 'AES-CBC',
@@ -152,7 +152,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CBC',
         encoding: 'BASE64',
       });
-      assertEquals(decrypted2, arr);
+      asserts.assertEquals(decrypted2, arr);
     });
   });
 
@@ -166,7 +166,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CTR',
         encoding: 'HEX',
       });
-      assertEquals(decrypted, data);
+      asserts.assertEquals(decrypted, data);
 
       const encrypted2 = await encrypt(data, key, {
         algorithm: 'AES-CTR',
@@ -176,7 +176,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CTR',
         encoding: 'BASE64',
       });
-      assertEquals(decrypted2, data);
+      asserts.assertEquals(decrypted2, data);
     });
 
     await t.step('should encrypt and decrypt string', async () => {
@@ -188,7 +188,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CTR',
         encoding: 'HEX',
       });
-      assertEquals(decrypted, str);
+      asserts.assertEquals(decrypted, str);
 
       const encrypted2 = await encrypt(str, key, {
         algorithm: 'AES-CTR',
@@ -198,7 +198,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CTR',
         encoding: 'BASE64',
       });
-      assertEquals(decrypted2, str);
+      asserts.assertEquals(decrypted2, str);
     });
 
     await t.step('should encrypt and decrypt number', async () => {
@@ -210,7 +210,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CTR',
         encoding: 'HEX',
       });
-      assertEquals(decrypted, num);
+      asserts.assertEquals(decrypted, num);
 
       const encrypted2 = await encrypt(num, key, {
         algorithm: 'AES-CTR',
@@ -220,7 +220,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CTR',
         encoding: 'BASE64',
       });
-      assertEquals(decrypted2, num);
+      asserts.assertEquals(decrypted2, num);
     });
 
     await t.step('should encrypt and decrypt array', async () => {
@@ -232,7 +232,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CTR',
         encoding: 'HEX',
       });
-      assertEquals(decrypted, arr);
+      asserts.assertEquals(decrypted, arr);
 
       const encrypted2 = await encrypt(arr, key, {
         algorithm: 'AES-CTR',
@@ -242,7 +242,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-CTR',
         encoding: 'BASE64',
       });
-      assertEquals(decrypted2, arr);
+      asserts.assertEquals(decrypted2, arr);
     });
   });
 
@@ -256,7 +256,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-GCM',
         encoding: 'HEX',
       });
-      assertEquals(decrypted, data);
+      asserts.assertEquals(decrypted, data);
 
       const encrypted2 = await encrypt(data, key, {
         algorithm: 'AES-GCM',
@@ -266,7 +266,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-GCM',
         encoding: 'BASE64',
       });
-      assertEquals(decrypted2, data);
+      asserts.assertEquals(decrypted2, data);
     });
 
     await t.step('should encrypt and decrypt string', async () => {
@@ -278,7 +278,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-GCM',
         encoding: 'HEX',
       });
-      assertEquals(decrypted, str);
+      asserts.assertEquals(decrypted, str);
 
       const encrypted2 = await encrypt(str, key, {
         algorithm: 'AES-GCM',
@@ -288,7 +288,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-GCM',
         encoding: 'BASE64',
       });
-      assertEquals(decrypted2, str);
+      asserts.assertEquals(decrypted2, str);
     });
 
     await t.step('should encrypt and decrypt number', async () => {
@@ -300,7 +300,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-GCM',
         encoding: 'HEX',
       });
-      assertEquals(decrypted, num);
+      asserts.assertEquals(decrypted, num);
 
       const encrypted2 = await encrypt(num, key, {
         algorithm: 'AES-GCM',
@@ -310,7 +310,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-GCM',
         encoding: 'BASE64',
       });
-      assertEquals(decrypted2, num);
+      asserts.assertEquals(decrypted2, num);
     });
 
     await t.step('should encrypt and decrypt array', async () => {
@@ -322,7 +322,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-GCM',
         encoding: 'HEX',
       });
-      assertEquals(decrypted, arr);
+      asserts.assertEquals(decrypted, arr);
 
       const encrypted2 = await encrypt(arr, key, {
         algorithm: 'AES-GCM',
@@ -332,7 +332,7 @@ Deno.test('utils:encrypt', async (t) => {
         algorithm: 'AES-GCM',
         encoding: 'BASE64',
       });
-      assertEquals(decrypted2, arr);
+      asserts.assertEquals(decrypted2, arr);
     });
   });
 });

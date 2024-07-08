@@ -1,5 +1,5 @@
 import { TOTP } from '../mod.ts';
-import { assertEquals } from '../../dev.dependencies.ts';
+import { asserts } from '../../dev.dependencies.ts';
 
 Deno.test('OTP:TOTP', async (t) => {
   await t.step('SHA-1', async (t) => {
@@ -13,7 +13,7 @@ Deno.test('OTP:TOTP', async (t) => {
             return await TOTP('12345678901234567890', 'SHA-1', length, 30);
           }));
           otps.forEach((otp, index) => {
-            assertEquals(otp.length, lengths[index]);
+            asserts.assertEquals(otp.length, lengths[index]);
           });
         }
       },
@@ -29,7 +29,7 @@ Deno.test('OTP:TOTP', async (t) => {
           // Wait for next tick
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-        assertEquals(otps.size, iter);
+        asserts.assertEquals(otps.size, iter);
       },
     );
 
@@ -44,7 +44,7 @@ Deno.test('OTP:TOTP', async (t) => {
           // Wait for next tick
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-        assertEquals(otps.size, 1);
+        asserts.assertEquals(otps.size, 1);
       },
     );
   });
@@ -60,7 +60,7 @@ Deno.test('OTP:TOTP', async (t) => {
             return await TOTP('12345678901234567890', 'SHA-256', length, 30);
           }));
           otps.forEach((otp, index) => {
-            assertEquals(otp.length, lengths[index]);
+            asserts.assertEquals(otp.length, lengths[index]);
           });
         }
       },
@@ -76,7 +76,7 @@ Deno.test('OTP:TOTP', async (t) => {
           // Wait for next tick
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-        assertEquals(otps.size, iter);
+        asserts.assertEquals(otps.size, iter);
       },
     );
 
@@ -91,7 +91,7 @@ Deno.test('OTP:TOTP', async (t) => {
           // Wait for next tick
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-        assertEquals(otps.size, 1);
+        asserts.assertEquals(otps.size, 1);
       },
     );
   });
@@ -107,7 +107,7 @@ Deno.test('OTP:TOTP', async (t) => {
             return await TOTP('12345678901234567890', 'SHA-384', length, 30);
           }));
           otps.forEach((otp, index) => {
-            assertEquals(otp.length, lengths[index]);
+            asserts.assertEquals(otp.length, lengths[index]);
           });
         }
       },
@@ -123,7 +123,7 @@ Deno.test('OTP:TOTP', async (t) => {
           // Wait for next tick
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-        assertEquals(otps.size, iter);
+        asserts.assertEquals(otps.size, iter);
       },
     );
 
@@ -138,7 +138,7 @@ Deno.test('OTP:TOTP', async (t) => {
           // Wait for next tick
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-        assertEquals(otps.size, 1);
+        asserts.assertEquals(otps.size, 1);
       },
     );
   });
@@ -154,7 +154,7 @@ Deno.test('OTP:TOTP', async (t) => {
             return await TOTP('12345678901234567890', 'SHA-512', length, 30);
           }));
           otps.forEach((otp, index) => {
-            assertEquals(otp.length, lengths[index]);
+            asserts.assertEquals(otp.length, lengths[index]);
           });
         }
       },
@@ -170,7 +170,7 @@ Deno.test('OTP:TOTP', async (t) => {
           // Wait for next tick
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-        assertEquals(otps.size, iter);
+        asserts.assertEquals(otps.size, iter);
       },
     );
 
@@ -185,7 +185,7 @@ Deno.test('OTP:TOTP', async (t) => {
           // Wait for next tick
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-        assertEquals(otps.size, 1);
+        asserts.assertEquals(otps.size, 1);
       },
     );
 
@@ -199,7 +199,7 @@ Deno.test('OTP:TOTP', async (t) => {
         20000000000000: '353130',
       };
       await Object.entries(data).forEach(async ([key, value]) => {
-        assertEquals(
+        asserts.assertEquals(
           await TOTP('12345678901234567890', 'SHA-1', 6, 30, Number(key)),
           value,
         );
@@ -216,7 +216,7 @@ Deno.test('OTP:TOTP', async (t) => {
         20000000000000: '77737706',
       };
       await Object.entries(data).forEach(async ([key, value]) => {
-        assertEquals(
+        asserts.assertEquals(
           await TOTP(
             '12345678901234567890123456789012',
             'SHA-256',
@@ -239,7 +239,7 @@ Deno.test('OTP:TOTP', async (t) => {
         20000000000000: '47863826',
       };
       await Object.entries(data).forEach(async ([key, value]) => {
-        assertEquals(
+        asserts.assertEquals(
           await TOTP(
             '1234567890123456789012345678901234567890123456789012345678901234',
             'SHA-512',

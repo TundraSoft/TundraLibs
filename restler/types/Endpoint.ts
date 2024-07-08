@@ -1,4 +1,4 @@
-import { HTTPMethods } from '../../dependencies.ts';
+import { HTTPMethods } from '../../utils/mod.ts';
 
 export type RESTlerEndpoint = {
   method: HTTPMethods;

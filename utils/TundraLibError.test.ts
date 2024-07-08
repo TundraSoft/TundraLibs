@@ -1,5 +1,5 @@
 import { TundraLibError } from './TundraLibError.ts';
-import { assertEquals } from '../dev.dependencies.ts';
+import { asserts } from '../dev.dependencies.ts';
 
 Deno.test('utils:TundraLibError', async (t) => {
   await t.step(
@@ -11,11 +11,11 @@ Deno.test('utils:TundraLibError', async (t) => {
       };
       const errorMessage = '[tag1="${tag1}" tag2="${tag2}"] This is an error';
       const error = new TundraLibError(errorMessage, mockMetaTags);
-      assertEquals(
+      asserts.assertEquals(
         error.message,
         `[tag1="value1" tag2="value2"] This is an error`,
       );
-      assertEquals(error.meta, mockMetaTags);
+      asserts.assertEquals(error.meta, mockMetaTags);
     },
   );
 
@@ -24,8 +24,8 @@ Deno.test('utils:TundraLibError', async (t) => {
     () => {
       const errorMessage = 'This is an error';
       const error = new TundraLibError(errorMessage);
-      assertEquals(error.message, errorMessage);
-      assertEquals(error.meta, {});
+      asserts.assertEquals(error.message, errorMessage);
+      asserts.assertEquals(error.meta, {});
     },
   );
 
@@ -35,8 +35,8 @@ Deno.test('utils:TundraLibError', async (t) => {
       const errorMessage = 'This is an error';
       const cause = new Error('This is the cause');
       const error = new TundraLibError(errorMessage, {}, cause);
-      assertEquals(error.message, errorMessage);
-      assertEquals(error.cause, cause);
+      asserts.assertEquals(error.message, errorMessage);
+      asserts.assertEquals(error.cause, cause);
     },
   );
 
@@ -44,7 +44,7 @@ Deno.test('utils:TundraLibError', async (t) => {
     const errorMessage = 'This is an error';
     const error = new TundraLibError(errorMessage);
     const errorString = error.toString();
-    assertEquals(errorString.includes('This is an error'), true);
-    assertEquals(errorString.includes('TundraLibError'), true);
+    asserts.assertEquals(errorString.includes('This is an error'), true);
+    asserts.assertEquals(errorString.includes('TundraLibError'), true);
   });
 });

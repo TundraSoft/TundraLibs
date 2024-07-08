@@ -1,9 +1,4 @@
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertThrows,
-} from '../../../dev.dependencies.ts';
+import { asserts } from '../../../dev.dependencies.ts';
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
@@ -18,7 +13,7 @@ const envData = envArgs('dam/tests');
 Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
   await t.step('Invalid Config', async (s) => {
     await s.step('Incorrect/Missing Dialect', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGOD',
           host: envData.get('MONGO_HOST') || 'localhost',
@@ -30,7 +25,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: '',
           host: envData.get('MONGO_HOST') || 'localhost',
@@ -42,7 +37,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           host: envData.get('MONGO_HOST') || 'localhost',
           username: envData.get('MONGO_USER') || 'mongo',
@@ -53,7 +48,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: undefined,
           host: envData.get('MONGO_HOST') || 'localhost',
@@ -68,7 +63,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: null,
           host: envData.get('MONGO_HOST') || 'localhost',
@@ -85,7 +80,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
     });
 
     await s.step('Missing Host', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
           username: envData.get('MONGO_USER') || 'mongo',
@@ -96,7 +91,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
           host: '',
@@ -108,7 +103,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
           host: null,
@@ -123,7 +118,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
           host: undefined,
@@ -140,7 +135,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
     });
 
     await s.step('Incorrect port', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
           username: envData.get('MONGO_USER') || 'mongo',
@@ -152,7 +147,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
           username: envData.get('MONGO_USER') || 'mongo',
@@ -164,7 +159,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
           username: envData.get('MONGO_USER') || 'mongo',
@@ -176,7 +171,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
           username: envData.get('MONGO_USER') || 'mongo',
@@ -193,7 +188,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
     });
 
     await s.step('Database Missing', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
           host: envData.get('MONGO_HOST') || 'localhost',
@@ -205,7 +200,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
           host: envData.get('MONGO_HOST') || 'localhost',
@@ -217,7 +212,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         const _a = new MongoClient('mongotest', conf as MongoOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
           host: envData.get('MONGO_HOST') || 'localhost',
@@ -232,7 +227,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MONGO',
           host: envData.get('MONGO_HOST') || 'localhost',
@@ -258,7 +253,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         database: envData.get('MONGO_DB') || 'test',
       };
       const client = new MongoClient('mongotest', conf as MongoOptions);
-      assertRejects(
+      asserts.assertRejects(
         async () => await client.connect(),
         DAMClientConnectionError,
       );
@@ -273,7 +268,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
         port: 34323,
         database: envData.get('MONGO_DB') || 'test',
       };
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         const client = new MongoClient('mongotest', conf as MongoOptions);
         try {
           await client.connect();
@@ -302,22 +297,22 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
     const client = new MongoClient('mongotest', conf as MongoOptions);
     await s.step('Must connect to database', async () => {
       await client.connect();
-      assertEquals('CONNECTED', client.status);
+      asserts.assertEquals('CONNECTED', client.status);
       // Attempt calling connect again should not change anything
       await client.connect();
-      assertEquals('CONNECTED', client.status);
+      asserts.assertEquals('CONNECTED', client.status);
       await client.close();
     });
 
     await s.step('Get Version', async () => {
       await client.connect();
-      assert(await client.version());
+      asserts.assert(await client.version());
       await client.close();
     });
 
     await s.step('Ping', async () => {
       await client.connect();
-      assert(await client.ping());
+      asserts.assert(await client.ping());
       await client.close();
     });
 
@@ -331,13 +326,13 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
 
     await s.step('Query Error', async () => {
       await client.connect();
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         await client.query({
           sql: JSON.stringify({ some: 'thing' }),
         });
       }, DAMClientQueryError);
 
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         await client.query({
           sql: 'SELECT 1;',
         });
@@ -349,7 +344,7 @@ Deno.test({ name: 'DAM > Client > Mongo' }, async (t) => {
     // This has no effect in mongodb
     await s.step('Query with Parameter', async () => {
       await client.connect();
-      assert(
+      asserts.assert(
         await client.query({
           sql: JSON.stringify({ ping: 1 }),
           params: { some: 'thing' },

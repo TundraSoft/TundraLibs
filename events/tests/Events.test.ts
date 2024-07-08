@@ -1,5 +1,5 @@
 import { Events } from '../mod.ts';
-import { assertEquals } from '../../dev.dependencies.ts';
+import { asserts } from '../../dev.dependencies.ts';
 
 const delay = (ms: number) =>
   new Promise<true>((resolve) => setTimeout(() => resolve(true), ms));
@@ -54,7 +54,7 @@ Deno.test('Events:Typed', async (t) => {
     name: 'Call emit with no listeners',
     fn() {
       test = new EventTester();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.run();
     },
   });
@@ -63,9 +63,9 @@ Deno.test('Events:Typed', async (t) => {
     name: 'Add new Events',
     fn() {
       test = new EventTester();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
-      assertEquals(test.getEventCount(), 1);
+      asserts.assertEquals(test.getEventCount(), 1);
     },
   });
 
@@ -73,17 +73,17 @@ Deno.test('Events:Typed', async (t) => {
     name: 'Test if to ensure deletion/removal of specific events name',
     fn() {
       test = new EventTester();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
       test.on('event1', second);
-      assertEquals(test.getEventCount(), 2);
+      asserts.assertEquals(test.getEventCount(), 2);
       test.off('event1');
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
       test.on('event1', second);
-      assertEquals(test.getEventCount(), 2);
+      asserts.assertEquals(test.getEventCount(), 2);
       test.off();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
     },
   });
   await t.step({
@@ -91,17 +91,17 @@ Deno.test('Events:Typed', async (t) => {
     fn() {
       test = new EventTester();
       // Reset for test
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
       test.on('event1', second);
-      assertEquals(test.getEventCount(), 2);
+      asserts.assertEquals(test.getEventCount(), 2);
       test.off('event1');
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
       test.on('event1', second);
-      assertEquals(test.getEventCount(), 2);
+      asserts.assertEquals(test.getEventCount(), 2);
       test.off();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
     },
   });
 
@@ -110,12 +110,12 @@ Deno.test('Events:Typed', async (t) => {
       'Test to ensure removal (deletion) of all callbacks in all event name',
     fn() {
       test = new EventTester();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
       test.on('event1', second);
-      assertEquals(test.getEventCount(), 2);
+      asserts.assertEquals(test.getEventCount(), 2);
       test.off();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
     },
   });
 
@@ -125,11 +125,11 @@ Deno.test('Events:Typed', async (t) => {
       const test = new EventTester();
       // Reset for test
       test.off();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
-      assertEquals(test.getEventCount(), 1);
+      asserts.assertEquals(test.getEventCount(), 1);
       test.on('event1', first);
-      assertEquals(test.getEventCount(), 1);
+      asserts.assertEquals(test.getEventCount(), 1);
     },
   });
 
@@ -146,7 +146,7 @@ Deno.test('Events:Typed', async (t) => {
       test.run();
       await delay(1000);
       test.run();
-      assertEquals(op.join(','), '1,once,1');
+      asserts.assertEquals(op.join(','), '1,once,1');
     },
   });
 
@@ -158,9 +158,9 @@ Deno.test('Events:Typed', async (t) => {
       test.off();
       op = [];
       test.once('event1', once);
-      assertEquals(test.getEventCount(), 1);
+      asserts.assertEquals(test.getEventCount(), 1);
       test.off('event1', once);
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
     },
   });
 
@@ -176,7 +176,7 @@ Deno.test('Events:Typed', async (t) => {
       test.once('event1', fourth);
       test.runSync();
       await delay(2000);
-      assertEquals(op.join(','), '1,2,3,4');
+      asserts.assertEquals(op.join(','), '1,2,3,4');
     },
   });
 
@@ -192,7 +192,7 @@ Deno.test('Events:Typed', async (t) => {
       test.once('event1', fourth);
       test.run();
       await delay(2000);
-      assertEquals(op.join(','), '1,2,4,3');
+      asserts.assertEquals(op.join(','), '1,2,4,3');
     },
   });
 
@@ -200,9 +200,9 @@ Deno.test('Events:Typed', async (t) => {
     const test = new EventTester();
     test.on('event1', [first, second]);
     test.once('event1', [third, fourth]);
-    assertEquals(test.getEventCount(), 4);
+    asserts.assertEquals(test.getEventCount(), 4);
     test.off('event1', [first, second]);
-    assertEquals(test.getEventCount(), 2);
+    asserts.assertEquals(test.getEventCount(), 2);
   });
 
   await t.step('Test emitSync with an event throwing an error', () => {
@@ -261,7 +261,7 @@ Deno.test('Events:UnTyped', async (t) => {
     name: 'Call emit with no listeners',
     fn() {
       test = new EventTester();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.run();
     },
   });
@@ -270,9 +270,9 @@ Deno.test('Events:UnTyped', async (t) => {
     name: 'Add new Events',
     fn() {
       test = new EventTester();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
-      assertEquals(test.getEventCount(), 1);
+      asserts.assertEquals(test.getEventCount(), 1);
     },
   });
 
@@ -280,17 +280,17 @@ Deno.test('Events:UnTyped', async (t) => {
     name: 'Test if to ensure deletion/removal of specific events name',
     fn() {
       test = new EventTester();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
       test.on('event1', second);
-      assertEquals(test.getEventCount(), 2);
+      asserts.assertEquals(test.getEventCount(), 2);
       test.off('event1');
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
       test.on('event1', second);
-      assertEquals(test.getEventCount(), 2);
+      asserts.assertEquals(test.getEventCount(), 2);
       test.off();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
     },
   });
 
@@ -299,17 +299,17 @@ Deno.test('Events:UnTyped', async (t) => {
     fn() {
       test = new EventTester();
       // Reset for test
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
       test.on('event1', second);
-      assertEquals(test.getEventCount(), 2);
+      asserts.assertEquals(test.getEventCount(), 2);
       test.off('event1');
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
       test.on('event1', second);
-      assertEquals(test.getEventCount(), 2);
+      asserts.assertEquals(test.getEventCount(), 2);
       test.off();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
     },
   });
 
@@ -318,12 +318,12 @@ Deno.test('Events:UnTyped', async (t) => {
       'Test to ensure removal (deletion) of all callbacks in all event name',
     fn() {
       test = new EventTester();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
       test.on('event1', second);
-      assertEquals(test.getEventCount(), 2);
+      asserts.assertEquals(test.getEventCount(), 2);
       test.off();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
     },
   });
 
@@ -333,11 +333,11 @@ Deno.test('Events:UnTyped', async (t) => {
       test = new EventTester();
       // Reset for test
       test.off();
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
       test.on('event1', first);
-      assertEquals(test.getEventCount(), 1);
+      asserts.assertEquals(test.getEventCount(), 1);
       test.on('event1', first);
-      assertEquals(test.getEventCount(), 1);
+      asserts.assertEquals(test.getEventCount(), 1);
     },
   });
 
@@ -354,7 +354,7 @@ Deno.test('Events:UnTyped', async (t) => {
       test.run();
       await delay(1000);
       test.run();
-      assertEquals(op.join(','), '1,once,1');
+      asserts.assertEquals(op.join(','), '1,once,1');
     },
   });
 
@@ -366,9 +366,9 @@ Deno.test('Events:UnTyped', async (t) => {
       test.off();
       op = [];
       test.once('event1', once);
-      assertEquals(test.getEventCount(), 1);
+      asserts.assertEquals(test.getEventCount(), 1);
       test.off('event1', once);
-      assertEquals(test.getEventCount(), 0);
+      asserts.assertEquals(test.getEventCount(), 0);
     },
   });
 
@@ -384,7 +384,7 @@ Deno.test('Events:UnTyped', async (t) => {
       test.once('event1', fourth);
       test.runSync();
       await delay(2000);
-      assertEquals(op.join(','), '1,2,3,4');
+      asserts.assertEquals(op.join(','), '1,2,3,4');
     },
   });
 
@@ -400,7 +400,7 @@ Deno.test('Events:UnTyped', async (t) => {
       test.on('event1', fourth);
       test.run();
       await delay(2000);
-      assertEquals(op.join(','), '1,2,4,3');
+      asserts.assertEquals(op.join(','), '1,2,4,3');
     },
   });
 
@@ -408,9 +408,9 @@ Deno.test('Events:UnTyped', async (t) => {
     const test = new EventTester();
     test.on('event1', [first, second]);
     test.once('event1', [third, fourth]);
-    assertEquals(test.getEventCount(), 4);
+    asserts.assertEquals(test.getEventCount(), 4);
     test.off('event1', [first, second]);
-    assertEquals(test.getEventCount(), 2);
+    asserts.assertEquals(test.getEventCount(), 2);
   });
 
   await t.step('Test emitSync with an event throwing an error', () => {

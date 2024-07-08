@@ -1,4 +1,5 @@
-import { HTTPMethods, path } from '../../dependencies.ts';
+import { path } from '../../dependencies.ts';
+import type { HTTPMethods } from '../../utils/mod.ts';
 import { TundraLibError } from '../../utils/TundraLibError.ts';
 
 export class RESTlerBaseError extends TundraLibError {

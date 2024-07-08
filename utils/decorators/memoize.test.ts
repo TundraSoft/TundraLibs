@@ -1,4 +1,4 @@
-import { assertEquals } from '../../dev.dependencies.ts';
+import { asserts } from '../../dev.dependencies.ts';
 import { memoize } from './memoize.ts';
 
 Deno.test('utils:decorators:memoize', async (t) => {
@@ -23,17 +23,17 @@ Deno.test('utils:decorators:memoize', async (t) => {
 
   await t.step('memoize function sync', () => {
     counter = 0;
-    assertEquals(myClass.myMethod(1), 1);
-    assertEquals(myClass.myMethod(1), 1);
-    assertEquals(myClass.myMethod(2), 3);
-    assertEquals(myClass.myMethod(2), 3);
+    asserts.assertEquals(myClass.myMethod(1), 1);
+    asserts.assertEquals(myClass.myMethod(1), 1);
+    asserts.assertEquals(myClass.myMethod(2), 3);
+    asserts.assertEquals(myClass.myMethod(2), 3);
   });
 
   await t.step('memoize function async', async () => {
     counter = 0;
-    assertEquals(await myClass.myMethodAsync(1), 1);
-    assertEquals(await myClass.myMethodAsync(1), 1);
-    assertEquals(await myClass.myMethodAsync(2), 3);
-    assertEquals(await myClass.myMethodAsync(2), 3);
+    asserts.assertEquals(await myClass.myMethodAsync(1), 1);
+    asserts.assertEquals(await myClass.myMethodAsync(1), 1);
+    asserts.assertEquals(await myClass.myMethodAsync(2), 3);
+    asserts.assertEquals(await myClass.myMethodAsync(2), 3);
   });
 });

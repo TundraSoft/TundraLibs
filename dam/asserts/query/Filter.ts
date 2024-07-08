@@ -10,6 +10,7 @@ import {
   assertDateExpression,
   assertExpression,
   assertNumberExpression,
+  assertStringExpression,
 } from './Expressions.ts';
 
 export const assertBaseOperators = <P>(
@@ -106,7 +107,7 @@ export const assertStringOperators = (
           ].includes(key)
         ) {
           return typeof value === 'string' ||
-            assertStringOperators(value, collumns) ||
+            assertStringExpression(value, collumns) ||
             assertColumnIdentifier(value, collumns);
         }
       });

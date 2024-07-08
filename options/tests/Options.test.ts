@@ -1,5 +1,5 @@
 import { type OptionKeys, Options } from '../mod.ts';
-import { assertEquals } from '../../dev.dependencies.ts';
+import { asserts } from '../../dev.dependencies.ts';
 
 Deno.test('Options:Typed', async (t) => {
   type TestOptions = { foo: string; bar?: number };
@@ -40,8 +40,8 @@ Deno.test('Options:Typed', async (t) => {
         console.log('df');
       },
     });
-    assertEquals(test.checkExistence('foo'), true);
-    assertEquals(test.checkExistence('bar'), false);
+    asserts.assertEquals(test.checkExistence('foo'), true);
+    asserts.assertEquals(test.checkExistence('bar'), false);
   });
 
   await t.step('Get option value', () => {
@@ -51,9 +51,9 @@ Deno.test('Options:Typed', async (t) => {
         console.log('df');
       },
     });
-    assertEquals(test.getValue('foo'), 'bar');
+    asserts.assertEquals(test.getValue('foo'), 'bar');
     // Return undefined if no value
-    assertEquals(test.getValue('bar'), undefined);
+    asserts.assertEquals(test.getValue('bar'), undefined);
   });
 
   await t.step('Update option value', () => {
@@ -64,7 +64,7 @@ Deno.test('Options:Typed', async (t) => {
       },
     });
     test.updateValue('bar', 123);
-    assertEquals(test.getValue('bar'), 123);
+    asserts.assertEquals(test.getValue('bar'), 123);
   });
 
   await t.step('Check if event exists', () => {
@@ -74,11 +74,11 @@ Deno.test('Options:Typed', async (t) => {
         console.log('df');
       },
     });
-    assertEquals(test.hasEvent('baz'), true);
+    asserts.assertEquals(test.hasEvent('baz'), true);
   });
 
   await t.step('Get all options', () => {
-    assertEquals(test.getAll(), { foo: 'bar' });
+    asserts.assertEquals(test.getAll(), { foo: 'bar' });
   });
 });
 
@@ -117,8 +117,8 @@ Deno.test('Options:Untyped', async (t) => {
         console.log('df');
       },
     });
-    assertEquals(test.checkExistence('foo'), true);
-    assertEquals(test.checkExistence('bar'), false);
+    asserts.assertEquals(test.checkExistence('foo'), true);
+    asserts.assertEquals(test.checkExistence('bar'), false);
   });
 
   await t.step('Get option value', () => {
@@ -128,9 +128,9 @@ Deno.test('Options:Untyped', async (t) => {
         console.log('df');
       },
     });
-    assertEquals(test.getValue('foo'), 'bar');
+    asserts.assertEquals(test.getValue('foo'), 'bar');
     // Return undefined if no value
-    assertEquals(test.getValue('bar'), undefined);
+    asserts.assertEquals(test.getValue('bar'), undefined);
   });
 
   await t.step('Update option value', () => {
@@ -141,7 +141,7 @@ Deno.test('Options:Untyped', async (t) => {
       },
     });
     test.updateValue('bar', 123);
-    assertEquals(test.getValue('bar'), 123);
+    asserts.assertEquals(test.getValue('bar'), 123);
   });
 
   await t.step('Check if event exists', () => {
@@ -151,7 +151,7 @@ Deno.test('Options:Untyped', async (t) => {
         console.log('df');
       },
     });
-    assertEquals(test.hasEvent('baz'), true);
+    asserts.assertEquals(test.hasEvent('baz'), true);
   });
 
   await t.step('Get all options', () => {
@@ -161,6 +161,6 @@ Deno.test('Options:Untyped', async (t) => {
         console.log('df');
       },
     });
-    assertEquals(test.getAll(), { foo: 'bar' });
+    asserts.assertEquals(test.getAll(), { foo: 'bar' });
   });
 });

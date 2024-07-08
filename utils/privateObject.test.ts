@@ -1,4 +1,4 @@
-import { assertEquals } from '../dev.dependencies.ts';
+import { asserts } from '../dev.dependencies.ts';
 
 import { privateObject } from './privateObject.ts';
 import type { PrivateObject } from './privateObject.ts';
@@ -12,9 +12,9 @@ Deno.test('utils:privateObject', async (t) => {
         key1: 'value1',
         key2: 'value2',
       }, false);
-      assertEquals(secretObject.get('key1'), 'value1');
-      assertEquals(secretObject.get('key2'), 'value2');
-      assertEquals(secretObject.get('key3'), undefined);
+      asserts.assertEquals(secretObject.get('key1'), 'value1');
+      asserts.assertEquals(secretObject.get('key2'), 'value2');
+      asserts.assertEquals(secretObject.get('key3'), undefined);
     });
 
     await t.step(
@@ -24,9 +24,9 @@ Deno.test('utils:privateObject', async (t) => {
           key1: 'value1',
           key2: 'value2',
         }, false);
-        assertEquals(secretObject.has('key1'), true);
-        assertEquals(secretObject.has('key2'), true);
-        assertEquals(secretObject.has('key3'), false);
+        asserts.assertEquals(secretObject.has('key1'), true);
+        asserts.assertEquals(secretObject.has('key2'), true);
+        asserts.assertEquals(secretObject.has('key3'), false);
       },
     );
 
@@ -36,10 +36,10 @@ Deno.test('utils:privateObject', async (t) => {
         key2: 'value2',
       }, false);
       secretObject.set('key1', 'new value');
-      assertEquals(secretObject.get('key1'), 'value1'); // Should not change
+      asserts.assertEquals(secretObject.get('key1'), 'value1'); // Should not change
       secretObject.set('key3', 'value3');
-      assertEquals(secretObject.get('key3'), undefined);
-      assertEquals(secretObject.has('key3'), false);
+      asserts.assertEquals(secretObject.get('key3'), undefined);
+      asserts.assertEquals(secretObject.has('key3'), false);
     });
 
     await t.step(
@@ -50,8 +50,8 @@ Deno.test('utils:privateObject', async (t) => {
           key2: 'value2',
         }, false);
         secretObject.delete('key1');
-        assertEquals(secretObject.get('key1'), 'value1');
-        assertEquals(secretObject.has('key1'), true);
+        asserts.assertEquals(secretObject.get('key1'), 'value1');
+        asserts.assertEquals(secretObject.has('key1'), true);
         secretObject.delete('key3'); // Deleting non-existing key should not throw error
       },
     );
@@ -67,8 +67,8 @@ Deno.test('utils:privateObject', async (t) => {
         keys.push(key);
         values.push(value);
       });
-      assertEquals(keys, ['key1', 'key2']);
-      assertEquals(values, ['value1', 'value2']);
+      asserts.assertEquals(keys, ['key1', 'key2']);
+      asserts.assertEquals(values, ['value1', 'value2']);
     });
   });
 
@@ -78,9 +78,9 @@ Deno.test('utils:privateObject', async (t) => {
         key1: 'value1',
         key2: 'value2',
       });
-      assertEquals(secretObject.get('key1'), 'value1');
-      assertEquals(secretObject.get('key2'), 'value2');
-      assertEquals(secretObject.get('key3'), undefined);
+      asserts.assertEquals(secretObject.get('key1'), 'value1');
+      asserts.assertEquals(secretObject.get('key2'), 'value2');
+      asserts.assertEquals(secretObject.get('key3'), undefined);
     });
 
     await t.step(
@@ -90,9 +90,9 @@ Deno.test('utils:privateObject', async (t) => {
           key1: 'value1',
           key2: 'value2',
         });
-        assertEquals(secretObject.has('key1'), true);
-        assertEquals(secretObject.has('key2'), true);
-        assertEquals(secretObject.has('key3'), false);
+        asserts.assertEquals(secretObject.has('key1'), true);
+        asserts.assertEquals(secretObject.has('key2'), true);
+        asserts.assertEquals(secretObject.has('key3'), false);
       },
     );
 
@@ -102,10 +102,10 @@ Deno.test('utils:privateObject', async (t) => {
         key2: 'value2',
       });
       secretObject.set('key1', 'new value');
-      assertEquals(secretObject.get('key1'), 'new value');
+      asserts.assertEquals(secretObject.get('key1'), 'new value');
       secretObject.set('key3', 'value3');
-      assertEquals(secretObject.get('key3'), 'value3');
-      assertEquals(secretObject.has('key3'), true);
+      asserts.assertEquals(secretObject.get('key3'), 'value3');
+      asserts.assertEquals(secretObject.has('key3'), true);
     });
 
     await t.step(
@@ -116,8 +116,8 @@ Deno.test('utils:privateObject', async (t) => {
           key2: 'value2',
         });
         secretObject.delete('key1');
-        assertEquals(secretObject.get('key1'), undefined);
-        assertEquals(secretObject.has('key1'), false);
+        asserts.assertEquals(secretObject.get('key1'), undefined);
+        asserts.assertEquals(secretObject.has('key1'), false);
         secretObject.delete('key3'); // Deleting non-existing key should not throw error
       },
     );
@@ -133,8 +133,8 @@ Deno.test('utils:privateObject', async (t) => {
         keys.push(key);
         values.push(value);
       });
-      assertEquals(keys, ['key1', 'key2']);
-      assertEquals(values, ['value1', 'value2']);
+      asserts.assertEquals(keys, ['key1', 'key2']);
+      asserts.assertEquals(values, ['value1', 'value2']);
     });
 
     await t.step('test clear', () => {
@@ -143,14 +143,14 @@ Deno.test('utils:privateObject', async (t) => {
         key2: 'value2',
       });
       secretObject.clear();
-      assertEquals(secretObject.keys(), []);
+      asserts.assertEquals(secretObject.keys(), []);
       // Should not clear the object if mutations are disabled
       secretObject = privateObject<Record<string, unknown>>({
         key1: 'value1',
         key2: 'value2',
       }, false);
       secretObject.clear();
-      assertEquals(secretObject.keys(), ['key1', 'key2']);
+      asserts.assertEquals(secretObject.keys(), ['key1', 'key2']);
     });
   });
 });

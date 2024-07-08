@@ -57,6 +57,7 @@ export type {
   DeleteQueryBuilder,
   Dialects,
   Expressions,
+  HavingFilter,
   InsertQueryBuilder,
   JSONExpressions,
   MariaOptions,

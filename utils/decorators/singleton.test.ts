@@ -1,5 +1,5 @@
 import { singleton } from './singleton.ts';
-import { assertStrictEquals } from '../../dev.dependencies.ts';
+import { asserts } from '../../dev.dependencies.ts';
 
 Deno.test('utils:decorators:singleton', async (t) => {
   @singleton
@@ -19,7 +19,7 @@ Deno.test('utils:decorators:singleton', async (t) => {
     const instance1 = new TestClass();
     const instance2 = new TestClass();
 
-    assertStrictEquals(instance1, instance2);
+    asserts.assertStrictEquals(instance1, instance2);
   });
 
   await t.step('should preserve the state of the instance', () => {
@@ -27,8 +27,8 @@ Deno.test('utils:decorators:singleton', async (t) => {
     const instance2 = new TestClass();
     instance.incrementCounter();
 
-    assertStrictEquals(instance.counter, 1);
+    asserts.assertStrictEquals(instance.counter, 1);
     instance2.incrementCounter();
-    assertStrictEquals(instance.counter, instance2.counter);
+    asserts.assertStrictEquals(instance.counter, instance2.counter);
   });
 });

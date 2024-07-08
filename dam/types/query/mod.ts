@@ -1,6 +1,7 @@
 export type {
   BaseExpression,
   DateExpressions,
+  ExpressionFunction,
   Expressions,
   JSONExpressions,
   NumberExpressions,
@@ -24,6 +25,7 @@ export type { ColumnIdentifier } from './ColumnIdentifier.ts';
 
 export type {
   BaseOperators,
+  HavingFilter,
   MathOperators,
   Operators,
   QueryFilters,
@@ -36,7 +38,8 @@ export type Query = {
   identifier?: string; // Identifier for the query. If not provided, will be generated
   sql: string; // The query
   params?: Record<string, unknown>; // Parameters
-  child?: (result: QueryResult) => Query[]; // After this query, run this query
+  returns?: boolean; // If this query returns data. Used if there are child queries.
+  after?: (result: QueryResult) => Query; // After this query, run these queries
 };
 
 export type QueryResult<
@@ -46,5 +49,5 @@ export type QueryResult<
   time: number; // Total time taken (includes all child queryies)
   count: number; // Affected/Selected rows of this query. If limit is set then this will be <= that limit. 0 if not applicable
   data?: R[];
-  child?: QueryResult[];
+  // child?: QueryResult[];
 };

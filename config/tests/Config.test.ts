@@ -1,9 +1,4 @@
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertThrows,
-} from '../../dev.dependencies.ts';
+import { asserts } from '../../dev.dependencies.ts';
 
 import {
   Config,
@@ -19,7 +14,7 @@ Deno.test({
   name: 'Config - No Permission',
   permissions: { read: false },
   fn: async () => {
-    await assertRejects(
+    await asserts.assertRejects(
       () => Config.load('config/tests/fixtures/valid/', 'sample'),
       ConfigPermissionError,
     );
@@ -28,7 +23,7 @@ Deno.test({
 
 Deno.test('Config', async (t) => {
   await t.step('Invalid path', () => {
-    assertRejects(
+    asserts.assertRejects(
       async () => await Config.load('config/tests/fixtures/valid/Sample.yaml'),
       ConfigNotFound,
     );
@@ -37,38 +32,38 @@ Deno.test('Config', async (t) => {
   await t.step('Load config', async () => {
     await Config.load('config/tests/fixtures/valid/', 'sample');
     // Should load only Sample config
-    assertEquals(Config.list(), ['sample']);
+    asserts.assertEquals(Config.list(), ['sample']);
     // Load the rest
     await Config.load('config/tests/fixtures/valid/', 'sample2');
     await Config.load('config/tests/fixtures/valid/', 'sample3');
-    assertEquals(Config.list(), ['sample', 'sample2', 'sample3']);
+    asserts.assertEquals(Config.list(), ['sample', 'sample2', 'sample3']);
     Config.clear();
   });
 
   await t.step('Check loaded config', async () => {
     await Config.load('config/tests/fixtures/valid/', 'sample');
-    assert(Config.get('sample'));
+    asserts.assert(Config.get('sample'));
     // Config name is not case sensitive
-    assertEquals(Config.get('SamPle', 'title'), 'TOML Example');
+    asserts.assertEquals(Config.get('SamPle', 'title'), 'TOML Example');
     // But other keys are case sensitive
-    assertEquals(Config.get('sample', 'Title'), undefined);
+    asserts.assertEquals(Config.get('sample', 'Title'), undefined);
     // Fetching non-existent config should throw error
-    assertThrows(() => Config.get('invalid'), ConfigNotDefined);
-    assertEquals(Config.has('sample'), true);
+    asserts.assertThrows(() => Config.get('invalid'), ConfigNotDefined);
+    asserts.assertEquals(Config.has('sample'), true);
     // Return false for config which is not present
-    assertEquals(Config.has('sdf'), false);
-    assertEquals(Config.has('sample', 'database', 'ports'), true);
+    asserts.assertEquals(Config.has('sdf'), false);
+    asserts.assertEquals(Config.has('sample', 'database', 'ports'), true);
     // Must return false on nested item not present
-    assertEquals(Config.has('sample', 'database', 'portsdf'), false);
+    asserts.assertEquals(Config.has('sample', 'database', 'portsdf'), false);
 
-    assertEquals(Config.get('sample', 'userName'), '');
+    asserts.assertEquals(Config.get('sample', 'userName'), '');
     // Load env
     Config.loadEnv('config/tests/fixtures/');
-    assertEquals(Config.get('sample', 'userName'), 'TundraLib');
+    asserts.assertEquals(Config.get('sample', 'userName'), 'TundraLib');
     // Undefined env variables will be set as empty string
-    assertEquals(Config.get('sample', 'servers', 'alpha', 'ip'), '');
+    asserts.assertEquals(Config.get('sample', 'servers', 'alpha', 'ip'), '');
     // Escaped variables (double $$) will come with single $
-    assertEquals(Config.get('sample', 'password'), '$PASSWORD');
+    asserts.assertEquals(Config.get('sample', 'password'), '$PASSWORD');
   });
 
   await t.step('Test errors', () => {
@@ -76,28 +71,28 @@ Deno.test('Config', async (t) => {
       Config.get('sdfsdf');
     } catch (e) {
       if (e instanceof ConfigError) {
-        assertEquals(e.config, 'sdfsdf');
-        assert(e.toString().includes('Config sdfsdf'));
+        asserts.assertEquals(e.config, 'sdfsdf');
+        asserts.assert(e.toString().includes('Config sdfsdf'));
       }
     }
   });
 
   await t.step('Duplicate config', async () => {
-    await assertRejects(
+    await asserts.assertRejects(
       () => Config.load('config/tests/fixtures/valid/', 'sample'),
       DuplicateConfig,
       'Config with the name sample already loaded',
     );
-    await assertRejects(
+    await asserts.assertRejects(
       () => Config.load('config/tests/fixtures/duplicate2/'),
       DuplicateConfig,
       'Multiple config files found for test in config/tests/fixtures/duplicate2/',
     );
-    await assertRejects(
+    await asserts.assertRejects(
       () => Config.load('config/tests/fixtures/duplicate/'),
       DuplicateConfig,
     );
-    await assertRejects(
+    await asserts.assertRejects(
       () => Config.load('config/tests/fixtures/duplicate/', 'SaMpLe'),
       DuplicateConfig,
     );
@@ -105,26 +100,26 @@ Deno.test('Config', async (t) => {
 
   await t.step('Config not found', async () => {
     // Passing the file path directly
-    await assertRejects(
+    await asserts.assertRejects(
       () => Config.load('config/tests/fixtures/valud/Sample.toml'),
       ConfigNotFound,
     );
-    await assertRejects(
+    await asserts.assertRejects(
       () => Config.load('config/tests/fixtures/valid/', 'sdfkjghb'),
       ConfigNotFound,
     );
   });
 
   await t.step('Malformed', async () => {
-    await assertRejects(
+    await asserts.assertRejects(
       () => Config.load('config/tests/fixtures/malformed/', 'malformedYml'),
       MalformedConfig,
     );
-    await assertRejects(
+    await asserts.assertRejects(
       () => Config.load('config/tests/fixtures/malformed/', 'malformedToml'),
       MalformedConfig,
     );
-    await assertRejects(
+    await asserts.assertRejects(
       () => Config.load('config/tests/fixtures/malformed/', 'malformedJSON'),
       MalformedConfig,
     );

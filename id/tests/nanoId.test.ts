@@ -7,7 +7,7 @@ import {
   password,
   webSafe,
 } from '../mod.ts';
-import { assertEquals, assertMatch } from '../../dev.dependencies.ts';
+import { asserts } from '../../dev.dependencies.ts';
 
 Deno.test('id:nanoId', async (t) => {
   const sampleSize = 10000,
@@ -25,7 +25,7 @@ Deno.test('id:nanoId', async (t) => {
     for (let i = minLength; i <= maxLength; i++) {
       dictionary.forEach((dict) => {
         for (let j = 0; j < sampleSize; j++) {
-          assertEquals(i, nanoId(i, dict.data).length);
+          asserts.assertEquals(i, nanoId(i, dict.data).length);
         }
       });
     }
@@ -37,7 +37,7 @@ Deno.test('id:nanoId', async (t) => {
       for (let i = minLength; i <= maxLength; i++) {
         dictionary.forEach((dict) => {
           for (let j = 0; j < sampleSize; j++) {
-            assertMatch(nanoId(6, dict.data), dict.reg);
+            asserts.assertMatch(nanoId(6, dict.data), dict.reg);
           }
         });
       }
@@ -58,7 +58,7 @@ Deno.test('id:nanoId', async (t) => {
         const diff: number = Math.round(
           ((sampleSize - op.size) / sampleSize) * 100,
         );
-        assertEquals(diff <= 1, true);
+        asserts.assertEquals(diff <= 1, true);
       }
     }
   });

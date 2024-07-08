@@ -1,4 +1,4 @@
-import { assertEquals } from '../../../dev.dependencies.ts';
+import { asserts } from '../../../dev.dependencies.ts';
 import {
   assertClientOptions,
   assertMariaOptions,
@@ -12,42 +12,42 @@ import {
  */
 Deno.test('DAM > asserts > Options', async (t) => {
   await t.step('Client', () => {
-    assertEquals(
+    asserts.assertEquals(
       true,
       assertClientOptions({ dialect: 'MARIA', slowQueryThreshold: 10 }),
     );
-    assertEquals(
+    asserts.assertEquals(
       true,
       assertClientOptions({ dialect: 'MONGO', slowQueryThreshold: 10 }),
     );
-    assertEquals(
+    asserts.assertEquals(
       true,
       assertClientOptions({ dialect: 'POSTGRES', slowQueryThreshold: 10 }),
     );
-    assertEquals(
+    asserts.assertEquals(
       true,
       assertClientOptions({ dialect: 'SQLITE', slowQueryThreshold: 10 }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertClientOptions({ dialect: 'SQLITE', slowQueryThreshold: 0 }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertClientOptions({ dialect: 'SQLITE', slowQueryThreshold: 'sdf' }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertClientOptions({ dialect: 'SQLITE', slowQueryThreshold: -1 }),
     );
-    assertEquals(false, assertClientOptions({ dialect: 'MARIAS' }));
-    assertEquals(false, assertClientOptions({ dialect: 'MONGOD' }));
-    assertEquals(false, assertClientOptions({ some: 'MONGOD' }));
+    asserts.assertEquals(false, assertClientOptions({ dialect: 'MARIAS' }));
+    asserts.assertEquals(false, assertClientOptions({ dialect: 'MONGOD' }));
+    asserts.assertEquals(false, assertClientOptions({ some: 'MONGOD' }));
   });
 
   await t.step('Maria', () => {
     // Valid
-    assertEquals(
+    asserts.assertEquals(
       true,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -62,7 +62,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       true,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -74,7 +74,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Invalid Dialect
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIADB',
@@ -90,7 +90,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
       }),
     );
     // Host
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -104,7 +104,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -119,7 +119,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -136,7 +136,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Port
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -151,7 +151,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -166,7 +166,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -183,7 +183,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Username
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -197,7 +197,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -212,7 +212,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -229,7 +229,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Password
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -243,7 +243,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -258,7 +258,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -275,7 +275,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Database
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -289,7 +289,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -304,7 +304,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -321,7 +321,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Connection timeout
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -336,7 +336,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -351,7 +351,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -368,7 +368,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Idle timeout
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -383,7 +383,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -400,7 +400,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Pool size
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -415,7 +415,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMariaOptions({
         dialect: 'MARIA',
@@ -435,7 +435,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
   });
 
   await t.step('Postgres', () => {
-    assertEquals(
+    asserts.assertEquals(
       true,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -451,7 +451,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Invalid Dialect
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRESQL',
@@ -467,7 +467,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
       }),
     );
     // Host
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -481,7 +481,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -496,7 +496,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -513,7 +513,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Port
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -528,7 +528,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -543,7 +543,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -560,7 +560,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Username
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -574,7 +574,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -589,7 +589,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -606,7 +606,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Password
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -620,7 +620,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -635,7 +635,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -652,7 +652,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Database
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -666,7 +666,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -681,7 +681,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -698,7 +698,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Connection timeout
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -713,7 +713,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -728,7 +728,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -745,11 +745,11 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Idle timeout
-    // assertEquals(false, assertPostgresOptions({ dialect: 'POSTGRES', host: 'some-host', port: 1234, username: 'user', password: 'pass', database: 'db', connectionTimeout: 10, idleTimeout: -1, poolSize: 10, tls: { enabled: true } }));
-    // assertEquals(false, assertPostgresOptions({ dialect: 'POSTGRES', host: 'some-host', port: 1234, username: 'user', password: 'pass', database: 'db', connectionTimeout: 10, idleTimeout: 'adf', poolSize: 10, tls: { enabled: true } }));
+    // asserts.assertEquals(false, assertPostgresOptions({ dialect: 'POSTGRES', host: 'some-host', port: 1234, username: 'user', password: 'pass', database: 'db', connectionTimeout: 10, idleTimeout: -1, poolSize: 10, tls: { enabled: true } }));
+    // asserts.assertEquals(false, assertPostgresOptions({ dialect: 'POSTGRES', host: 'some-host', port: 1234, username: 'user', password: 'pass', database: 'db', connectionTimeout: 10, idleTimeout: 'adf', poolSize: 10, tls: { enabled: true } }));
 
     // Pool size
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -764,7 +764,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertPostgresOptions({
         dialect: 'POSTGRES',
@@ -783,7 +783,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
 
   await t.step('Mongo', () => {
     // Valid
-    assertEquals(
+    asserts.assertEquals(
       true,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -798,7 +798,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       true,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -810,7 +810,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Invalid Dialect
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGODB',
@@ -826,7 +826,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
       }),
     );
     // Host
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -840,7 +840,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -855,7 +855,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -872,7 +872,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Port
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -887,7 +887,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -902,7 +902,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -919,9 +919,9 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Username
-    // assertEquals(false, assertMongoOptions({ dialect: 'MONGO', host: 'some-host', port: 1234, password: 'pass', database: 'db', connectionTimeout: 10, idleTimeout: 10, poolSize: 10, tls: { enabled: true } }));
-    // assertEquals(false, assertMongoOptions({ dialect: 'MONGO', host: 'some-host', port: 1234, username: null, password: 'pass', database: 'db', connectionTimeout: 10, idleTimeout: 10, poolSize: 10, tls: { enabled: true } }));
-    assertEquals(
+    // asserts.assertEquals(false, assertMongoOptions({ dialect: 'MONGO', host: 'some-host', port: 1234, password: 'pass', database: 'db', connectionTimeout: 10, idleTimeout: 10, poolSize: 10, tls: { enabled: true } }));
+    // asserts.assertEquals(false, assertMongoOptions({ dialect: 'MONGO', host: 'some-host', port: 1234, username: null, password: 'pass', database: 'db', connectionTimeout: 10, idleTimeout: 10, poolSize: 10, tls: { enabled: true } }));
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -938,9 +938,9 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Password
-    // assertEquals(false, assertMongoOptions({ dialect: 'MONGO', host: 'some-host', port: 1234, username: 'user', database: 'db', connectionTimeout: 10, idleTimeout: 10, poolSize: 10, tls: { enabled: true } }));
-    // assertEquals(false, assertMongoOptions({ dialect: 'MONGO', host: 'some-host', port: 1234, username: 'user', password: null, database: 'db', connectionTimeout: 10, idleTimeout: 10, poolSize: 10, tls: { enabled: true } }));
-    assertEquals(
+    // asserts.assertEquals(false, assertMongoOptions({ dialect: 'MONGO', host: 'some-host', port: 1234, username: 'user', database: 'db', connectionTimeout: 10, idleTimeout: 10, poolSize: 10, tls: { enabled: true } }));
+    // asserts.assertEquals(false, assertMongoOptions({ dialect: 'MONGO', host: 'some-host', port: 1234, username: 'user', password: null, database: 'db', connectionTimeout: 10, idleTimeout: 10, poolSize: 10, tls: { enabled: true } }));
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -957,7 +957,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Database
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -971,7 +971,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -986,7 +986,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -1003,7 +1003,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Connection timeout
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -1018,7 +1018,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -1033,7 +1033,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -1050,7 +1050,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Idle timeout
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -1065,7 +1065,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -1082,7 +1082,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
     );
 
     // Pool size
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -1097,7 +1097,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         tls: { enabled: true },
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       false,
       assertMongoOptions({
         dialect: 'MONGO',
@@ -1115,7 +1115,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
   });
 
   await t.step('SQLite', () => {
-    assertEquals(
+    asserts.assertEquals(
       true,
       assertSQLiteOptions({
         dialect: 'SQLITE',
@@ -1123,7 +1123,7 @@ Deno.test('DAM > asserts > Options', async (t) => {
         path: 'some-path',
       }),
     );
-    assertEquals(
+    asserts.assertEquals(
       true,
       assertSQLiteOptions({ dialect: 'SQLITE', mode: 'MEMORY' }),
     );

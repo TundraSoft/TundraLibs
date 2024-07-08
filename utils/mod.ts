@@ -5,6 +5,7 @@ export type {
   DeepWritable,
   ExcludeNever,
   Flatten,
+  HTTPMethods,
   MakeOptional,
   MakeReadOnly,
   MakeRequired,

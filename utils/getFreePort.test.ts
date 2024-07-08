@@ -1,8 +1,4 @@
-import {
-  assertEquals,
-  assertNotEquals,
-  assertThrows,
-} from '../dev.dependencies.ts';
+import { asserts } from '../dev.dependencies.ts';
 import { getFreePort } from './getFreePort.ts';
 
 Deno.test(
@@ -10,7 +6,7 @@ Deno.test(
   async (t) => {
     await t.step('should return a number', () => {
       const port = getFreePort();
-      assertEquals(typeof port, 'number');
+      asserts.assertEquals(typeof port, 'number');
     });
 
     await t.step('should return a number within the specified range', () => {
@@ -18,21 +14,21 @@ Deno.test(
       const max = 4000;
       const port = getFreePort(min, max);
 
-      assertEquals(port >= min && port <= max, true);
+      asserts.assertEquals(port >= min && port <= max, true);
     });
 
     await t.step('should return a different port on subsequent calls', () => {
       const port1 = getFreePort();
       const port2 = getFreePort();
 
-      assertEquals(port1 !== port2, true);
+      asserts.assertEquals(port1 !== port2, true);
     });
 
     await t.step('should throw an error if the range is invalid', () => {
       const min = 4000;
       const max = 3000;
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         getFreePort(min, max);
       }, RangeError);
     });
@@ -41,7 +37,7 @@ Deno.test(
       const port = getFreePort(3000, 3002);
       const listener = Deno.listen({ port });
       for (let i = 0; i < 10; i++) {
-        assertNotEquals(getFreePort(3000, 3002), port);
+        asserts.assertNotEquals(getFreePort(3000, 3002), port);
       }
       listener.close();
     });

@@ -1,25 +1,23 @@
+import { asserts } from '../../../dev.dependencies.ts';
 import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertThrows,
-} from '../../../dev.dependencies.ts';
-import {
+  type ClientEvents,
   DAMClientConfigError,
   DAMClientConnectionError,
   DAMClientMissingParamsError,
   DAMClientQueryError,
   PostgresClient,
   type PostgresOptions,
+  type Query,
 } from '../../mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
+import { OptionKeys } from '../../../options/mod.ts';
 
 const envData = envArgs('dam/tests');
 
 Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
   await t.step('Invalid Config', async (s) => {
     await s.step('Incorrect/Missing Dialect', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'MARIA',
           host: envData.get('PG_HOST') || 'localhost',
@@ -32,7 +30,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: '',
           host: envData.get('PG_HOST') || 'localhost',
@@ -45,7 +43,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           host: envData.get('PG_HOST') || 'localhost',
           username: envData.get('PG_USER') || 'postgres',
@@ -57,7 +55,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: undefined,
           host: envData.get('PG_HOST') || 'localhost',
@@ -73,7 +71,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: null,
           host: envData.get('PG_HOST') || 'localhost',
@@ -91,7 +89,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
     });
 
     await s.step('Missing Host', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           username: envData.get('PG_USER') || 'postgres',
@@ -103,7 +101,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: '',
@@ -116,7 +114,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: null,
@@ -132,7 +130,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: undefined,
@@ -150,7 +148,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
     });
 
     await s.step('Incorrect port', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           username: envData.get('PG_USER') || 'postgres',
@@ -163,7 +161,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           username: envData.get('PG_USER') || 'postgres',
@@ -176,7 +174,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           username: envData.get('PG_USER') || 'postgres',
@@ -189,7 +187,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           username: envData.get('PG_USER') || 'postgres',
@@ -207,7 +205,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
     });
 
     await s.step('Username Missing', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -220,7 +218,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -233,7 +231,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -249,7 +247,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -267,7 +265,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
     });
 
     await s.step('Invalid Password', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -281,7 +279,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         console.log('sdfgsdfsdfsdf');
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -294,7 +292,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -310,7 +308,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -328,7 +326,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
     });
 
     await s.step('Database Missing', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -341,7 +339,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -354,7 +352,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -370,7 +368,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         );
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -388,7 +386,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
     });
 
     await s.step('Invalid/Incorrect PoolSize', () => {
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -401,7 +399,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         const _a = new PostgresClient('pgtest', conf as PostgresOptions);
       }, DAMClientConfigError);
 
-      assertThrows(() => {
+      asserts.assertThrows(() => {
         const conf = {
           dialect: 'POSTGRES',
           host: envData.get('PG_HOST') || 'localhost',
@@ -425,7 +423,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         database: envData.get('PG_DB') || 'postgres',
         poolSize: 1,
       };
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         const client = new PostgresClient('pgtest', conf as PostgresOptions);
         await client.connect();
         await client.close();
@@ -442,7 +440,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
         database: envData.get('PG_DB') || 'postgres',
         poolSize: 1,
       };
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         const client = new PostgresClient('pgtest', conf as PostgresOptions);
         try {
           await client.connect();
@@ -470,23 +468,23 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
     const client = new PostgresClient('pgtest', conf as PostgresOptions);
     await s.step('Must connect to database', async () => {
       await client.connect();
-      assertEquals('CONNECTED', client.status);
+      asserts.assertEquals('CONNECTED', client.status);
       // Attempt calling connect again should not change anything
       await client.connect();
-      assertEquals('CONNECTED', client.status);
+      asserts.assertEquals('CONNECTED', client.status);
       await client.close();
-      assertEquals('READY', client.status);
+      asserts.assertEquals('READY', client.status);
     });
 
     await s.step('Ping', async () => {
       await client.connect();
-      assertEquals(await client.ping(), true);
+      asserts.assertEquals(await client.ping(), true);
       await client.close();
     });
 
     await s.step('Get Version', async () => {
       await client.connect();
-      assert(await client.version());
+      asserts.assert(await client.version());
       await client.close();
     });
 
@@ -500,7 +498,7 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
 
     await s.step('Query Error', async () => {
       await client.connect();
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         await client.query({
           sql: `SELECT dfssdf FROM sdfsdf;`,
         });
@@ -517,15 +515,15 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
           var2: 'sdf',
         },
       });
-      assertEquals(res.data[0].A, '1');
-      assertEquals(res.data[0].C, '1');
-      assertEquals(res.data[0].B, 'sdf');
+      asserts.assertEquals(res.data[0].A, '1');
+      asserts.assertEquals(res.data[0].C, '1');
+      asserts.assertEquals(res.data[0].B, 'sdf');
       await client.close();
     });
 
     await s.step('Missing Parameter', async () => {
       await client.connect();
-      await assertRejects(async () => {
+      await asserts.assertRejects(async () => {
         await client.query({
           sql:
             `SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ':schema:'`,
@@ -533,5 +531,40 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       }, DAMClientMissingParamsError);
       await client.close();
     });
+  });
+
+  await t.step('Pool connection operations', async (s) => {
+    const limited: { query: Query; limit: number }[] = [];
+    const conf = {
+      dialect: 'POSTGRES',
+      host: envData.get('PG_HOST') || 'localhost',
+      username: envData.get('PG_USER') || 'postgres',
+      password: envData.get('PG_PASS') || 'postgrespw',
+      port: parseInt(envData.get('PG_PORT')) || 5432,
+      database: envData.get('PG_DB') || 'postgres',
+      poolSize: 1,
+      _onpoolLimit: (_name: string, limit: number, query: Query) => {
+        limited.push({ query, limit });
+      },
+    };
+
+    const client = new PostgresClient(
+      'pgtest',
+      conf as OptionKeys<PostgresOptions, ClientEvents>,
+    );
+
+    await s.step(
+      'Query execution halted due to connection pool size',
+      async () => {
+        const res: Promise<unknown>[] = [];
+        for (let i = 0; i < 10; i++) {
+          res.push(
+            client.query({ sql: 'SELECT :count:;', params: { count: i } }),
+          );
+        }
+        await Promise.all(res);
+        asserts.assertEquals(limited.length, 9);
+      },
+    );
   });
 });

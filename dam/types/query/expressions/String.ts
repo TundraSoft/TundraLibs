@@ -42,6 +42,21 @@ type Trim = {
   $args: StringExpressions | string;
 };
 
+type Encrypt = {
+  $expr: 'ENCRYPT';
+  $args: [string, string];
+};
+
+type Decrypt = {
+  $expr: 'DECRYPT';
+  $args: [string, string];
+};
+
+type Hash = {
+  $expr: 'HASH';
+  $args: [string];
+};
+
 export type StringExpressions =
   | UUIDExpression
   | Substr

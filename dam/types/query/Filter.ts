@@ -48,3 +48,7 @@ export type QueryFilters<
     $or?: QueryFilters<FE>[];
     $and?: QueryFilters<FE>[];
   } extends infer O ? { [P in keyof O]: O[P] } : never;
+
+export type HavingFilter<F extends Array<string> = Array<string>> = {
+  [Property in F[number]]?: MathOperators<number>;
+} extends infer O ? { [P in keyof O]: O[P] } : never;

@@ -1,5 +1,5 @@
 import { BaseError } from './BaseError.ts';
-import { assertEquals } from '../dev.dependencies.ts';
+import { asserts } from '../dev.dependencies.ts';
 
 Deno.test('utils:BaseError', async (t) => {
   await t.step(
@@ -11,11 +11,11 @@ Deno.test('utils:BaseError', async (t) => {
       };
       const errorMessage = '[tag1="${tag1}" tag2="${tag2}"] This is an error';
       const error = new BaseError(errorMessage, mockMetaTags);
-      assertEquals(
+      asserts.assertEquals(
         error.message,
         `[tag1="value1" tag2="value2"] This is an error`,
       );
-      assertEquals(error.meta, mockMetaTags);
+      asserts.assertEquals(error.meta, mockMetaTags);
     },
   );
 
@@ -24,8 +24,8 @@ Deno.test('utils:BaseError', async (t) => {
     () => {
       const errorMessage = 'This is an error';
       const error = new BaseError(errorMessage);
-      assertEquals(error.message, errorMessage);
-      assertEquals(error.meta, {});
+      asserts.assertEquals(error.message, errorMessage);
+      asserts.assertEquals(error.meta, {});
     },
   );
 
@@ -35,8 +35,8 @@ Deno.test('utils:BaseError', async (t) => {
       const errorMessage = 'This is an error';
       const cause = new Error('This is the cause');
       const error = new BaseError(errorMessage, {}, cause);
-      assertEquals(error.message, errorMessage);
-      assertEquals(error.cause, cause);
+      asserts.assertEquals(error.message, errorMessage);
+      asserts.assertEquals(error.cause, cause);
     },
   );
 
@@ -50,13 +50,13 @@ Deno.test('utils:BaseError', async (t) => {
       const errorMessage = '[tag1="${tag1}" tag2="${tag2}"] This is an error';
       const cause = new Error('This is the cause');
       const error = new BaseError(errorMessage, mockMetaTags, cause);
-      assertEquals(
+      asserts.assertEquals(
         error.message,
         `[tag1="value1" tag2="value2"] This is an error`,
       );
-      assertEquals(error.meta, mockMetaTags);
-      assertEquals(error.meta['tag1'], error.getMeta('tag1'));
-      assertEquals(error.cause, cause);
+      asserts.assertEquals(error.meta, mockMetaTags);
+      asserts.assertEquals(error.meta['tag1'], error.getMeta('tag1'));
+      asserts.assertEquals(error.cause, cause);
     },
   );
 
@@ -64,7 +64,7 @@ Deno.test('utils:BaseError', async (t) => {
     const errorMessage = 'This is an error';
     const error = new BaseError(errorMessage);
     const errorString = error.toString();
-    assertEquals(errorString.includes('This is an error'), true);
-    assertEquals(errorString.includes('BaseError'), true);
+    asserts.assertEquals(errorString.includes('This is an error'), true);
+    asserts.assertEquals(errorString.includes('BaseError'), true);
   });
 });

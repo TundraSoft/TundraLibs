@@ -56,6 +56,7 @@ export const assertNumberExpression = (
       'ABS',
       'CEIL',
       'FLOOR',
+      'ROUND',
       'DATE_DIFF',
       'LENGTH',
     ].includes(x.$expr) &&
@@ -67,12 +68,12 @@ export const assertNumberExpression = (
           assertColumnIdentifier(a, columns) ||
           assertNumberExpression(a, columns)
         ))) || // ADD, SUB, MUL, DIV, MOD
-      (['ABS', 'CEIL', 'FLOOR'].includes(x.$expr) &&
+      (['ABS', 'CEIL', 'FLOOR', 'ROUND'].includes(x.$expr) &&
         (typeof x.$args === 'number' || typeof x.$args === 'bigint' ||
           assertColumnIdentifier(x.$args, columns) ||
           assertNumberExpression(x.$args, columns))) || // ABS, CEIL, FLOOR
       (x.$expr === 'LENGTH' &&
-        ((typeof x.$args === 'string' /*&& !x.$args.startsWith('$')*/) ||
+        ((typeof x.$args === 'string') || // add and !x.$argsstartsWith('$') to be added to force check string as column
           assertColumnIdentifier(x.$args, columns) ||
           assertStringExpression(x.$args, columns))) || // LENGTH
       (x.$expr === 'DATE_DIFF' && Array.isArray(x.$args) &&
@@ -99,22 +100,22 @@ export const assertStringExpression = (
     (
       (x.$expr === 'UUID' && !('$args' in x)) || // UUID
       (['LOWER', 'UPPER', 'TRIM'].includes(x.$expr) &&
-        ((typeof x.$args === 'string' /*&& !x.$args.startsWith('$')*/) ||
+        ((typeof x.$args === 'string') || // add and !x.$args.startsWith('$') to be added to force check string as column
           assertColumnIdentifier(x.$args, columns))) || // LOWER, UPPER, TRIM, LENGTH
       (x.$expr === 'CONCAT' && Array.isArray(x.$args) &&
         x.$args.every((arg) =>
-          (typeof arg === 'string' /*&& !arg.startsWith('$')*/) ||
+          (typeof arg === 'string') || // add and !arg.startsWith('$') to be added to force check string as column
           assertColumnIdentifier(arg, columns)
         )) || // CONCAT
       (x.$expr === 'REPLACE' && Array.isArray(x.$args) &&
         x.$args.length === 3 &&
         x.$args.every((arg) =>
-          (typeof arg === 'string' /*&& !arg.startsWith('$')*/) ||
+          (typeof arg === 'string') || // add and !arg.startsWith('$') to be added to force check string as column
           assertColumnIdentifier(arg, columns)
         )) || // REPLACE
       (x.$expr === 'SUBSTRING' && Array.isArray(x.$args) &&
         x.$args.length === 3 &&
-        ((typeof x.$args[0] === 'string' /*&& !x.$args[0].startsWith('$')*/) ||
+        ((typeof x.$args[0] === 'string') || // add and !x.$args[0].startsWith('$') to be added to force check string as column
           assertColumnIdentifier(x.$args[0], columns)) &&
         (typeof x.$args[1] === 'number' ||
           assertColumnIdentifier(x.$args[1], columns) ||
