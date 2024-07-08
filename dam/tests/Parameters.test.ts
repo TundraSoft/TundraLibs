@@ -1,5 +1,5 @@
 import { Parameters } from '../mod.ts';
-import { assert, assertEquals } from '../../dev.dependencies.ts';
+import { asserts } from '../../dev.dependencies.ts';
 
 Deno.test('DAM > Parameters', async (t) => {
   await t.step('should create a parameter and return its name', () => {
@@ -7,11 +7,11 @@ Deno.test('DAM > Parameters', async (t) => {
     const param1 = params.create('value1');
     const param2 = params.create('value2');
 
-    assertEquals(param1, 'p_XXXXX_0');
-    assertEquals(param2, 'p_XXXXX_1');
+    asserts.assertEquals(param1, 'p_XXXXX_0');
+    asserts.assertEquals(param2, 'p_XXXXX_1');
     const p = new Parameters();
     const p1 = p.create('value1');
-    assert(p1);
+    asserts.assert(p1);
   });
 
   await t.step('should return the same name for the same value', () => {
@@ -19,7 +19,7 @@ Deno.test('DAM > Parameters', async (t) => {
     const param1 = params.create('value1');
     const param2 = params.create('value1');
 
-    assertEquals(param1, param2);
+    asserts.assertEquals(param1, param2);
   });
 
   await t.step('should return the correct size of parameters', () => {
@@ -28,7 +28,7 @@ Deno.test('DAM > Parameters', async (t) => {
     params.create('value2');
     params.create('value3');
 
-    assertEquals(params.size, 3);
+    asserts.assertEquals(params.size, 3);
   });
 
   await t.step('should return parameters as a record', () => {
@@ -39,7 +39,7 @@ Deno.test('DAM > Parameters', async (t) => {
 
     const record = params.asRecord();
 
-    assertEquals(record, {
+    asserts.assertEquals(record, {
       p_XXXXX_0: 'value1',
       p_XXXXX_1: 'value2',
       p_XXXXX_2: 'value3',
@@ -68,7 +68,7 @@ Deno.test('DAM > Parameters', async (t) => {
 
     const record = params.asRecord();
 
-    assertEquals(record, {
+    asserts.assertEquals(record, {
       p_XXXXX_0: 'value1',
       p_XXXXX_1: 123,
       p_XXXXX_2: JSON.stringify({ a: 1, b: 2 }),

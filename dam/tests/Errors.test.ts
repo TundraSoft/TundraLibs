@@ -1,8 +1,4 @@
-import {
-  assert,
-  assertEquals,
-  assertInstanceOf,
-} from '../../dev.dependencies.ts';
+import { asserts } from '../../dev.dependencies.ts';
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
@@ -17,11 +13,11 @@ Deno.test('DAM > Errors', async (t) => {
       dialect: 'MARIA',
       configName: 'test',
     });
-    assertInstanceOf(a, DAMClientConfigError);
-    assertInstanceOf(a, DAMError);
-    assertEquals(a.configName, 'test');
-    assertEquals(a.dialect, 'MARIA');
-    assert(a.toString().includes('MARIA'));
+    asserts.assertInstanceOf(a, DAMClientConfigError);
+    asserts.assertInstanceOf(a, DAMError);
+    asserts.assertEquals(a.configName, 'test');
+    asserts.assertEquals(a.dialect, 'MARIA');
+    asserts.assert(a.toString().includes('MARIA'));
   });
 
   await t.step('DAMClientConnectionError', () => {
@@ -30,11 +26,11 @@ Deno.test('DAM > Errors', async (t) => {
       configName: 'test',
       errorCode: '12',
     });
-    assertInstanceOf(a, DAMClientConnectionError);
-    assertInstanceOf(a, DAMError);
-    assertEquals(a.configName, 'test');
-    assertEquals(a.dialect, 'MARIA');
-    assertEquals(a.errorCode, '12');
+    asserts.assertInstanceOf(a, DAMClientConnectionError);
+    asserts.assertInstanceOf(a, DAMError);
+    asserts.assertEquals(a.configName, 'test');
+    asserts.assertEquals(a.dialect, 'MARIA');
+    asserts.assertEquals(a.errorCode, '12');
   });
 
   await t.step('DAMClientMissingParamsError', () => {
@@ -43,13 +39,13 @@ Deno.test('DAM > Errors', async (t) => {
       configName: 'test',
       query: { sql: 'SELECT :a:, :f:' },
     });
-    assertInstanceOf(a, DAMClientMissingParamsError);
-    assertInstanceOf(a, DAMError);
-    assertEquals(a.configName, 'test');
-    assertEquals(a.dialect, 'MARIA');
-    assertEquals(a.missingParams, ['a', 'f']);
-    assertEquals(a.sql, 'SELECT :a:, :f:');
-    assertEquals(a.params, undefined);
+    asserts.assertInstanceOf(a, DAMClientMissingParamsError);
+    asserts.assertInstanceOf(a, DAMError);
+    asserts.assertEquals(a.configName, 'test');
+    asserts.assertEquals(a.dialect, 'MARIA');
+    asserts.assertEquals(a.missingParams, ['a', 'f']);
+    asserts.assertEquals(a.sql, 'SELECT :a:, :f:');
+    asserts.assertEquals(a.params, undefined);
   });
 
   await t.step('DAMClientQueryError', () => {
@@ -58,13 +54,13 @@ Deno.test('DAM > Errors', async (t) => {
       configName: 'test',
       query: { sql: 'SELECT :a:, :f:', params: { a: 1, f: 'sdf' } },
     });
-    assertInstanceOf(a, DAMClientQueryError);
-    assertInstanceOf(a, DAMError);
-    assertEquals(a.configName, 'test');
-    assertEquals(a.dialect, 'MARIA');
-    assertEquals(a.sql, 'SELECT :a:, :f:');
-    assertEquals(a.params, { a: 1, f: 'sdf' });
-    assertEquals(a.errorCode, undefined);
+    asserts.assertInstanceOf(a, DAMClientQueryError);
+    asserts.assertInstanceOf(a, DAMError);
+    asserts.assertEquals(a.configName, 'test');
+    asserts.assertEquals(a.dialect, 'MARIA');
+    asserts.assertEquals(a.sql, 'SELECT :a:, :f:');
+    asserts.assertEquals(a.params, { a: 1, f: 'sdf' });
+    asserts.assertEquals(a.errorCode, undefined);
 
     const b = new DAMClientQueryError({
       dialect: 'MARIA',
@@ -72,8 +68,8 @@ Deno.test('DAM > Errors', async (t) => {
       query: { sql: 'SELECT :a:, :f:', params: { a: 1, f: 'sdf' } },
       errorCode: '12',
     });
-    assertInstanceOf(a, DAMClientQueryError);
-    assertInstanceOf(a, DAMError);
-    assertEquals(b.errorCode, '12');
+    asserts.assertInstanceOf(a, DAMClientQueryError);
+    asserts.assertInstanceOf(a, DAMError);
+    asserts.assertEquals(b.errorCode, '12');
   });
 });
