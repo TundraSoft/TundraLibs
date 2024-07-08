@@ -68,6 +68,16 @@ Deno.test('RESTler > Mock', async (t) => {
     asserts.assertEquals(text, 'Hello World');
     const xml = await mock.xml();
     asserts.assertEquals(JSON.stringify(xml), JSON.stringify({ xml: null }));
+    const nocontent = await mock.nocontent();
+    asserts.assertEquals(
+      JSON.stringify(nocontent),
+      JSON.stringify({ message: 'hello' }),
+    );
+    const fd = await mock.formData();
+    asserts.assertEquals(
+      JSON.stringify(fd),
+      JSON.stringify({ message: 'John Doe' }),
+    );
   });
 
   await mockServer.shutdown();

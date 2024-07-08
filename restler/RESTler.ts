@@ -158,7 +158,7 @@ export abstract class RESTler<
       } else {
         const interimResp = await this.__makeSocketRequest<RespBody>(request);
         resp.timeTaken = performance.now() - start;
-        resp.status = interimResp.status as StatusCode;
+        resp.status = interimResp.status;
         resp.headers = interimResp.headers;
         // Call the response handler
         resp.body = interimResp.body;

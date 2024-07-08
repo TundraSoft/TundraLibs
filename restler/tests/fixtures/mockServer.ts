@@ -10,13 +10,14 @@ export const server = (port = 8000) => {
     const path = new URL(req.url, 'http://localhost:8000').pathname,
       method = req.method,
       respHeaders = new Headers();
-    respHeaders.set('content-type', 'application/json');
+    // respHeaders.set('content-type', 'application/json');
     respHeaders.set('accept', 'application/json');
     // console.log(path, method)
 
     if (path === '/auth' && method === 'POST') {
       // Delay response by 1s
       // console.log('Here');
+      respHeaders.set('content-type', 'application/json');
       await new Promise((resolve) => setTimeout(resolve, 1000));
       return new Response(JSON.stringify({ token: auth }), {
         status: 200,
@@ -30,6 +31,7 @@ export const server = (port = 8000) => {
       ) {
         // console.log('Here3');
         // console.log(auth, req.headers.get('X-Authorization'));
+        respHeaders.set('content-type', 'application/json');
         return new Response(JSON.stringify({ message: 'Unauthorized' }), {
           status: 401,
           headers: respHeaders,
@@ -37,6 +39,7 @@ export const server = (port = 8000) => {
       } else {
         // console.log('Here4');
         // Add the user
+        respHeaders.set('content-type', 'application/json');
         const payload = await req.json(),
           id = users.length + 1;
         users.push({ id: id, email: payload.email });
@@ -46,12 +49,14 @@ export const server = (port = 8000) => {
         });
       }
     } else if (path === '/users' && method === 'GET') {
+      respHeaders.set('content-type', 'application/json');
       return new Response(JSON.stringify(users), {
         status: 200,
         headers: respHeaders,
       });
     } else if (path === '/timeout') {
       // Delay response by 1s
+      respHeaders.set('content-type', 'application/json');
       await new Promise((resolve) => setTimeout(resolve, 5000));
       return new Response(JSON.stringify({ message: 'Timeout' }), {
         status: 408,
@@ -84,6 +89,20 @@ export const server = (port = 8000) => {
     } else if (path === '/xml') {
       respHeaders.set('content-type', 'application/xml');
       return new Response('<xml></xml>', {
+        status: 200,
+        headers: respHeaders,
+      });
+    } else if (path === '/nocontent') {
+      respHeaders.set('content-type', 'application/json');
+      return new Response(JSON.stringify({ message: 'hello' }), {
+        status: 200,
+        headers: respHeaders,
+      });
+    } else if (path === '/form') {
+      // respHeaders.set('content-type', 'application/x-www-form-urlencoded');
+      const d = await req.formData();
+      respHeaders.set('content-type', 'application/json');
+      return new Response(JSON.stringify({ message: d.get('name') }), {
         status: 200,
         headers: respHeaders,
       });
@@ -223,5 +242,22 @@ export class MockTest extends RESTler {
     return (await this._makeRequest<string>({
       endpoint: this._buildEndpoint('GET', '/xml'),
     })).body as string;
+  }
+
+  async nocontent(): Promise<{ message: string}> {
+    const resp = (await this._makeRequest<{message: string }>({
+      endpoint: this._buildEndpoint('GET', '/nocontent'),
+    }));
+    return resp.body as { message: string};
+  }
+
+  async formData() {
+    const body = new FormData();
+    body.append('name', 'John Doe');
+    const resp = await this._makeRequest({
+      endpoint: this._buildEndpoint('POST', '/form'),
+      body,
+    });
+    return resp.body;
   }
 }
