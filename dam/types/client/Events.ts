@@ -13,5 +13,4 @@ export type ClientEvents = {
     error?: DAMError,
   ) => void;
   error: (name: string, type: 'CONNECTION' | 'QUERY', error: DAMError) => void;
-  poolLimit: (name: string, limit: number, query: Query) => void;
 };

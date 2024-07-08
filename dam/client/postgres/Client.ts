@@ -94,7 +94,7 @@ export class PostgresClient extends Client<PostgresOptions> {
     this._client = new PGClient(
       this._makeConfig(),
       this._getOption('poolSize') || 10,
-      this._getOption('lazy') === true,
+      this._getOption('lazy'),
     );
     let client: PGPoolClient | undefined = undefined;
     try {
@@ -138,15 +138,12 @@ export class PostgresClient extends Client<PostgresOptions> {
     query: Query,
   ): Promise<{ count: number; rows: R[] }> {
     const sQuery = this._standardizeQuery(query);
-    if (this._client?.size === this._getOption('poolSize')) {
-      this.emit(
-        'poolLimit',
-        this.name,
-        this._getOption('poolSize') as number,
-        query,
-      );
-    }
     using client = await this._client!.connect();
+    console.log(
+      this._client?.available,
+      this._client?.size,
+      await this._client?.initialized(),
+    );
     const res = await client.queryObject<R>(
       sQuery.sql,
       sQuery.params,

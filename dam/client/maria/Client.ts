@@ -124,17 +124,8 @@ export class MariaClient extends Client<MariaOptions> {
     sql: Query,
   ): Promise<{ count: number; rows: R[] }> {
     const query = this._standardizeQuery(sql);
-    const std = this._processParams(query);
     // Convert named params to positional params
-    if (this._client!.pool?.available === 0) {
-      // Emit out of pool connection
-      this.emit(
-        'poolLimit',
-        this.name,
-        this._getOption('poolSize') as number,
-        sql,
-      );
-    }
+    const std = this._processParams(query);
     const res = await this._client!.execute(std.sql, std.params);
     return {
       count: res.affectedRows || res.rows?.length || 0,

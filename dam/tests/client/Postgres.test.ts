@@ -1,16 +1,13 @@
 import { asserts } from '../../../dev.dependencies.ts';
 import {
-  type ClientEvents,
   DAMClientConfigError,
   DAMClientConnectionError,
   DAMClientMissingParamsError,
   DAMClientQueryError,
   PostgresClient,
   type PostgresOptions,
-  type Query,
 } from '../../mod.ts';
 import { envArgs } from '../../../utils/envArgs.ts';
-import { OptionKeys } from '../../../options/mod.ts';
 
 const envData = envArgs('dam/tests');
 
@@ -531,40 +528,5 @@ Deno.test({ name: 'DAM > Client > Postgres' }, async (t) => {
       }, DAMClientMissingParamsError);
       await client.close();
     });
-  });
-
-  await t.step('Pool connection operations', async (s) => {
-    const limited: { query: Query; limit: number }[] = [];
-    const conf = {
-      dialect: 'POSTGRES',
-      host: envData.get('PG_HOST') || 'localhost',
-      username: envData.get('PG_USER') || 'postgres',
-      password: envData.get('PG_PASS') || 'postgrespw',
-      port: parseInt(envData.get('PG_PORT')) || 5432,
-      database: envData.get('PG_DB') || 'postgres',
-      poolSize: 1,
-      _onpoolLimit: (_name: string, limit: number, query: Query) => {
-        limited.push({ query, limit });
-      },
-    };
-
-    const client = new PostgresClient(
-      'pgtest',
-      conf as OptionKeys<PostgresOptions, ClientEvents>,
-    );
-
-    await s.step(
-      'Query execution halted due to connection pool size',
-      async () => {
-        const res: Promise<unknown>[] = [];
-        for (let i = 0; i < 10; i++) {
-          res.push(
-            client.query({ sql: 'SELECT :count:;', params: { count: i } }),
-          );
-        }
-        await Promise.all(res);
-        asserts.assertEquals(limited.length, 9);
-      },
-    );
   });
 });
