@@ -65,6 +65,15 @@ Deno.test('Vaccine', () => {
     }
   }
 
+  @Innoculate('SCOPEn')
+  class NoDeps {
+    @Dose()
+    public mi!: ManualInjection;
+
+    constructor() {
+    }
+  }
+
   const t1 = new TestService();
   const t2 = new TestService2();
   const t3 = new TestService3();
@@ -95,4 +104,7 @@ Deno.test('Vaccine', () => {
   asserts.assertEquals(t4.transientService.value, 'am changed too');
   asserts.assertNotEquals(t2.transientService.value, t3.transientService.value);
   asserts.assertNotEquals(t2.transientService.value, t4.transientService.value);
+
+  // NoDeps
+  asserts.assertThrows(() => new NoDeps(), Error);
 });

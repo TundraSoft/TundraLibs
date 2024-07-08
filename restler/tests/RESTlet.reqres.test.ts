@@ -54,6 +54,20 @@ Deno.test('RESTler > ReqRes', async (t) => {
         throw new Error('Failed to create user');
       }
     }
+
+    async htmlTest(): Promise<string> {
+      return (await this._makeRequest<string>({
+        endpoint: {
+          method: 'GET',
+          baseURL: 'https://google.com',
+          path: '',
+          version: undefined,
+        },
+        headers: {
+          'accept': 'text/html',
+        },
+      })).body as string;
+    }
   }
 
   await t.step('Test GET method (multiple data)', async () => {
@@ -72,5 +86,11 @@ Deno.test('RESTler > ReqRes', async (t) => {
     const test = new TestClass();
     const user = await test.createUser({ email: 'morpheus@matrix.com' });
     asserts.assertEquals(user.email, 'morpheus@matrix.com');
+  });
+
+  await t.step('Test HTML response', async () => {
+    const test = new TestClass();
+    const html = await test.htmlTest();
+    asserts.assert(html.includes('<!doctype html>'));
   });
 });

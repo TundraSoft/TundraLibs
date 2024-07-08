@@ -69,6 +69,24 @@ export const server = (port = 8000) => {
         status: 200,
         headers: respHeaders,
       });
+    } else if (path === '/html') {
+      respHeaders.set('content-type', 'text/html');
+      return new Response('<html></html>', {
+        status: 200,
+        headers: respHeaders,
+      });
+    } else if (path === '/text') {
+      respHeaders.set('content-type', 'text/plain');
+      return new Response('Hello World', {
+        status: 200,
+        headers: respHeaders,
+      });
+    } else if (path === '/xml') {
+      respHeaders.set('content-type', 'application/xml');
+      return new Response('<xml></xml>', {
+        status: 200,
+        headers: respHeaders,
+      });
     } else {
       return new Response(JSON.stringify({ message: 'Not found' }), {
         status: 404,
@@ -187,5 +205,23 @@ export class MockTest extends RESTler {
     await this._makeRequest({
       endpoint: this._buildEndpoint('GET', '/unhandled'),
     });
+  }
+
+  async html(): Promise<string> {
+    return (await this._makeRequest<string>({
+      endpoint: this._buildEndpoint('GET', '/html'),
+    })).body as string;
+  }
+
+  async text(): Promise<string> {
+    return (await this._makeRequest<string>({
+      endpoint: this._buildEndpoint('GET', '/text'),
+    })).body as string;
+  }
+
+  async xml(): Promise<string> {
+    return (await this._makeRequest<string>({
+      endpoint: this._buildEndpoint('GET', '/xml'),
+    })).body as string;
   }
 }

@@ -61,5 +61,14 @@ Deno.test('RESTler > Mock', async (t) => {
     await asserts.assertRejects(() => mock.unhandled(), RESTlerUnhandledError);
   });
 
+  await t.step('different content type', async () => {
+    const html = await mock.html();
+    asserts.assertEquals(html, '<html></html>');
+    const text = await mock.text();
+    asserts.assertEquals(text, 'Hello World');
+    const xml = await mock.xml();
+    asserts.assertEquals(JSON.stringify(xml), JSON.stringify({ xml: null }));
+  });
+
   await mockServer.shutdown();
 });

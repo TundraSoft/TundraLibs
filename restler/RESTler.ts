@@ -252,10 +252,11 @@ export abstract class RESTler<
       ) {
         return XMLParse(await response.text()) as unknown as RespBody;
       } else if (contentType.includes('text')) {
+        const t = await response.text();
         try {
-          return JSON.parse(await response.text()) as RespBody;
+          return JSON.parse(t) as RespBody;
         } catch {
-          return await response.text() as unknown as RespBody;
+          return t as unknown as RespBody;
         }
       } else {
         // Ensure we discard the body
@@ -411,7 +412,9 @@ export abstract class RESTler<
     }
     request.headers['Host'] = 'localhost';
     request.headers['Connection'] = 'close';
-    // request.headers['Content-Type'] = 'application/json';
+    if (request.headers['Content-Type'] === undefined) {
+      request.headers['Content-Type'] = 'application/json';
+    }
     const endpoint = this._makeURL(request.endpoint as RESTlerEndpoint);
     const body = request.body ? JSON.stringify(request.body) : '';
     request.headers['Content-Length'] = body.length.toString();
@@ -421,9 +424,6 @@ export abstract class RESTler<
           '\r\n',
         )
     }\r\n\r\n${body}`;
-    console.log('--------------------------------------------------');
-    console.log(finalRequest);
-    console.log('--------------------------------------------------');
     const enc = new TextEncoder();
     const dec = new TextDecoder();
     using socket = await Deno.connect({
