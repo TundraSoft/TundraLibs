@@ -62,6 +62,11 @@ jobs:
         image: mongo:latest
         ports:
           - 27017:27017
+      docker:
+        image: docker:dind
+        options: --privileged --shm-size=2g
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock:ro
     
     steps:
       -

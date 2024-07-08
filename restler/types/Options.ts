@@ -5,4 +5,5 @@ export type RESTlerOptions = {
   defaultHeaders?: Record<string, string>;
   certChain?: string;
   certKey?: string;
+  isUnixSocket?: boolean;
 };

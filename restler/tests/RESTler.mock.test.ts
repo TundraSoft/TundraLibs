@@ -8,7 +8,7 @@ import {
 } from '../mod.ts';
 import { asserts } from '../../dev.dependencies.ts';
 
-Deno.test('RESTler:Mock', async (t) => {
+Deno.test('RESTler > Mock', async (t) => {
   const port = getFreePort();
   const mockServer = server(port);
   const mock = new MockTest(port);

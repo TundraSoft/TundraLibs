@@ -36,6 +36,7 @@ export abstract class RESTler<
   protected _defaultHeaders: Record<string, string>;
   protected _authStatus = [401, 403, 407];
   protected _authInitiated = false;
+  protected _socketConnection: Deno.UnixConn | undefined;
 
   /**
    * Creates an instance of RESTler.
@@ -50,6 +51,7 @@ export abstract class RESTler<
   ) {
     const def: Partial<O> = {
       timeout: 30000,
+      isUnixSocket: false,
     } as Partial<O>;
     super(config, { ...def, ...defaults });
     this._name = name.trim();
@@ -143,17 +145,26 @@ export abstract class RESTler<
     // We now attempt to make the request, if it fails, we retry once
     const start = performance.now();
     try {
-      const interimResp = await this.__doRequest(request);
-      resp.timeTaken = performance.now() - start;
-      resp.status = interimResp.status as StatusCode;
-      resp.headers = Object.fromEntries(interimResp.headers.entries());
-      // Call the response handler
-      resp.body = await this._handleResponse<RespBody>(
-        request.endpoint as RESTlerEndpoint,
-        interimResp,
-      );
+      if (this._getOption('isUnixSocket') === false) {
+        const interimResp = await this.__doRequest(request);
+        resp.timeTaken = performance.now() - start;
+        resp.status = interimResp.status as StatusCode;
+        resp.headers = Object.fromEntries(interimResp.headers.entries());
+        // Call the response handler
+        resp.body = await this._handleResponse<RespBody>(
+          request.endpoint as RESTlerEndpoint,
+          interimResp,
+        );
+      } else {
+        const interimResp = await this.__makeSocketRequest<RespBody>(request);
+        resp.timeTaken = performance.now() - start;
+        resp.status = interimResp.status as StatusCode;
+        resp.headers = interimResp.headers;
+        // Call the response handler
+        resp.body = interimResp.body;
+      }
       // Check if it is an auth failure
-      resp.authFailure = this._authStatus.includes(interimResp.status);
+      resp.authFailure = this._authStatus.includes(resp.status);
       if (resp.authFailure) {
         throw new RESTlerAuthFailure(
           resp.endpoint,
@@ -336,6 +347,7 @@ export abstract class RESTler<
       return this._stringifyBody(body);
     }
   }
+
   //#endregion Override these methods
   //#region Private methods
   // Templorarily make this protected.
@@ -386,6 +398,83 @@ export abstract class RESTler<
       if (fetchOptions.client) {
         fetchOptions.client.close();
       }
+    }
+  }
+
+  private async __makeSocketRequest<
+    RespBody extends RESTlerResponseBody = RESTlerResponseBody,
+  >(request: RESTlerRequest): Promise<RESTlerResponse<RespBody>> {
+    await this._authInjector(request);
+    request.endpoint.baseURL = 'http://localhost/';
+    if (!request.headers) {
+      request.headers = {};
+    }
+    request.headers['Host'] = 'localhost';
+    request.headers['Connection'] = 'close';
+    // request.headers['Content-Type'] = 'application/json';
+    const endpoint = this._makeURL(request.endpoint as RESTlerEndpoint);
+    const body = request.body ? JSON.stringify(request.body) : '';
+    request.headers['Content-Length'] = body.length.toString();
+    const finalRequest = `${request.endpoint.method} ${endpoint} HTTP/1.1\r\n${
+      Object.entries(request.headers).map(([key, val]) => `${key}: ${val}`)
+        .join(
+          '\r\n',
+        )
+    }\r\n\r\n${body}`;
+    console.log('--------------------------------------------------');
+    console.log(finalRequest);
+    console.log('--------------------------------------------------');
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+    using socket = await Deno.connect({
+      transport: 'unix',
+      path: this._getOption('endpointURL'),
+    });
+    await socket.write(enc.encode(finalRequest));
+    let response = '';
+    const buffer = new Uint8Array(1024);
+    let bytesRead;
+    while ((bytesRead = await socket.read(buffer)) !== null) {
+      response += dec.decode(buffer.subarray(0, bytesRead));
+    }
+    // Convert to RESTler Response object
+    const [headerText, ...bodyParts] = response.split('\r\n\r\n');
+    const headerLines = headerText.split('\r\n');
+    const statusLine = headerLines[0];
+    return {
+      endpoint: request.endpoint as RESTlerEndpoint,
+      headers: (headerLines.slice(1).reduce(
+        (acc: Record<string, string>, currentLine) => {
+          const [key, value] = currentLine.split(': ');
+          acc[key.trim()] = value.trim();
+          return acc;
+        },
+        {},
+      )),
+      status: parseInt(statusLine.split(' ')[1]) as StatusCode,
+      authFailure: false,
+      timeTaken: 0,
+      body: this.__decodeChunkedResponse(bodyParts.join('\r\n')) as RespBody,
+    };
+  }
+
+  private __decodeChunkedResponse(response: string): Record<string, unknown> {
+    const lines = response.split('\r\n');
+    let body = '';
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const chunkSize = parseInt(line, 16);
+      if (isNaN(chunkSize)) {
+        body += line + '\r\n';
+      } else {
+        i++;
+        body += lines[i].substring(0, chunkSize);
+      }
+    }
+    try {
+      return JSON.parse(body);
+    } catch (_e) {
+      return body as unknown as Record<string, unknown>;
     }
   }
 }
