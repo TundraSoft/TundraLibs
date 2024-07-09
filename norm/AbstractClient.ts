@@ -154,6 +154,7 @@ export abstract class AbstractClient<
           this.name,
           sql,
           retVal.time,
+          retVal.count || 0,
         );
       }
       // console.log('Done')

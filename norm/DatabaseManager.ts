@@ -22,6 +22,7 @@ export class DatabaseManager {
     name: string,
     query: unknown,
     time: number,
+    count: number,
   ) => void = () => {};
 
   static register<T extends ClientConfig>(name: string, config: T) {
@@ -30,7 +31,6 @@ export class DatabaseManager {
       return;
     }
     DatabaseManager._configs.set(nameClean, config);
-    // await DatabaseManager._initialize(nameClean);
   }
 
   static async loadConfig(name = 'database', basePath = './configs/') {
