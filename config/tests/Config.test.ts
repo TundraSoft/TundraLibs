@@ -11,7 +11,7 @@ import {
 } from '../mod.ts';
 
 Deno.test({
-  name: 'Config - No Permission',
+  name: 'Config > No Permission',
   permissions: { read: false },
   fn: async () => {
     await asserts.assertRejects(

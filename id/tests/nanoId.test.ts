@@ -9,7 +9,7 @@ import {
 } from '../mod.ts';
 import { asserts } from '../../dev.dependencies.ts';
 
-Deno.test('id:nanoId', async (t) => {
+Deno.test('id > nanoId', async (t) => {
   const sampleSize = 10000,
     minLength = 6,
     maxLength = 40,

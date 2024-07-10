@@ -3,7 +3,7 @@ import { asserts } from '../dev.dependencies.ts';
 import { envArgs } from './envArgs.ts';
 
 Deno.test(
-  { name: 'utils:envArgs', permissions: { env: true, read: true } },
+  { name: 'utils > envArgs', permissions: { env: true, read: true } },
   async (t) => {
     await t.step(
       'should retrieve environment variables and return them as an object',

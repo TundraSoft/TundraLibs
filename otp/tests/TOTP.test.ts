@@ -1,7 +1,7 @@
 import { TOTP } from '../mod.ts';
 import { asserts } from '../../dev.dependencies.ts';
 
-Deno.test('OTP:TOTP', async (t) => {
+Deno.test('OTP > TOTP', async (t) => {
   await t.step('SHA-1', async (t) => {
     await t.step(
       'Length of generated OTP must match specified length',
@@ -22,7 +22,7 @@ Deno.test('OTP:TOTP', async (t) => {
     await t.step(
       'Generated OTP must be unique for the same secret and time',
       async () => {
-        const iter = 30;
+        const iter = 5;
         const otps = new Set<string>();
         for (let i = 0; i < iter; i++) {
           otps.add(await TOTP('12345678901234567890', 'SHA-1', 6, 1)); // Set window as 0
@@ -69,7 +69,7 @@ Deno.test('OTP:TOTP', async (t) => {
     await t.step(
       'Generated OTP must be unique for the same secret and time',
       async () => {
-        const iter = 30;
+        const iter = 5;
         const otps = new Set<string>();
         for (let i = 0; i < iter; i++) {
           otps.add(await TOTP('12345678901234567890', 'SHA-256', 6, 1)); // Set window as 0

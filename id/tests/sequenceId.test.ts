@@ -1,7 +1,7 @@
 import { sequenceId } from '../mod.ts';
 import { asserts } from '../../dev.dependencies.ts';
 
-Deno.test('id:sequenceId', async (t) => {
+Deno.test('id > sequenceId', async (t) => {
   await t.step('Ensure the values are in sequence', () => {
     for (let i = 0; i < 100; i++) {
       const res1 = sequenceId(),

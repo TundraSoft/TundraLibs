@@ -35,7 +35,7 @@ Deno.remove = removeMock;
 Deno.writeTextFile = writeFileMock;
 Deno.chmod = chmodMock;
 
-Deno.test('loadHooks processes valid hooks correctly', async () => {
+Deno.test('utils > getHooks', async () => {
   await loadHooks('test/hooks');
 
   // Verify that readDir was called with the correct path

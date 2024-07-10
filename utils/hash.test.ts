@@ -1,7 +1,7 @@
 import { asserts } from '../dev.dependencies.ts';
 import { hash } from './hash.ts';
 
-Deno.test('utils:hash', async (t) => {
+Deno.test('utils > hash', async (t) => {
   const data = { a: 1, b: 2, c: 3 };
   const str = 'Loreum ipsum dolar sit amet';
   const num = 1234567890;
