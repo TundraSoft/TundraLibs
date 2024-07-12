@@ -1,6 +1,6 @@
-# ID
+# Metrics
 
-Collection of ID or key generator functions.
+Library to easily collect and process metrics.
 
 ## cryptoKey
 
@@ -73,16 +73,3 @@ sequenceId(counter?: number): Bigint
 ```
 
 `counter?: number` - Override the counter. By default everytime the "application" starts, the counter is set to 0. Use this to override that. Once it is overridden, all subsequent ID's will be generated from that value
-
-## simpleId
-
-Generates sequential ID's basis current date. The generated ID's are of form YYYYMMDDNNNN where YYYY is full year, MM is 01-12, DD is 01-31 and NNNN is the sequential part. You can override this length and the start value.
-
-
-### Usage
-
-`const id = simpleId(seed = 0, minLen = 4);`
-
-`seed` - This is the start value. By default it is 0.
-
-`minLen` - The min length of the sequenced value. NOTE - This is not including the date prefix.

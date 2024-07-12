@@ -9,3 +9,4 @@ export {
 export { nanoId, passwordGenerator } from './nanoId.ts';
 export { sequenceId } from './sequenceId.ts';
 export { cryptoKey } from './cryptoKey.ts';
+export { simpleId } from './simpleId.ts';

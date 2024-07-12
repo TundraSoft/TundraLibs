@@ -8,6 +8,7 @@ import {
   password,
   passwordGenerator,
   sequenceId,
+  simpleId, 
 } from '../mod.ts';
 
 Deno.bench({
@@ -183,3 +184,11 @@ Deno.bench({
 }, () => {
   cryptoKey(32, 'TLIB-');
 });
+
+const sid = simpleId(0, 4);
+Deno.bench({
+  name:
+    `[library='id' mode='simpleId'] Generate ID basis date`,
+}, () => {
+  sid();
+})
