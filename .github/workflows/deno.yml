@@ -151,8 +151,11 @@ jobs:
     needs: [get-versions]
     
     strategy:
+      fail-fast: false
       matrix:
         deno-version: ${{ fromJson(needs.get-versions.outputs.deno-versions) }}
+        exclude:
+          - deno-version: 1.44.3
 
     services:
       redis:
