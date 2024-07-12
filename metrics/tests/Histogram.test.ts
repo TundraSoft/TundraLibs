@@ -92,6 +92,8 @@ Deno.test('Metrics > Histogram', async (t) => {
     counter.observe(1, { label1: 'value1', label2: 'value2' });
     counter.observe(5, { label1: 'value1', label2: 'value3' });
     counter.observe(10, { label1: 'value1', label2: 'value3' });
+    counter.observe(10);
+    console.log(counter.toPrometheus());
     asserts.assertEquals(counter.toJSON(), {
       name: 'test_counter',
       help: '',
@@ -106,15 +108,19 @@ Deno.test('Metrics > Histogram', async (t) => {
           buckets: { '1': 0, '2': 0, '5': 1, '10': 2, '1.5': 0 },
           sum: 15,
         },
+        no_label: {
+          buckets: { '1': 0, '2': 0, '5': 0, '10': 1, '1.5': 0 },
+          sum: 10,
+        },
       },
     });
     asserts.assertEquals(
       counter.toString(),
-      '[type="HISTOGRAM", name="test_counter", label1="value1",label2="value2"] {"buckets":{"1":2,"2":2,"5":2,"10":2,"1.5":2},"sum":2}\n[type="HISTOGRAM", name="test_counter", label1="value1",label2="value3"] {"buckets":{"1":0,"2":0,"5":1,"10":2,"1.5":0},"sum":15}',
+      '[type="HISTOGRAM", name="test_counter", label1="value1",label2="value2"] {"buckets":{"1":2,"2":2,"5":2,"10":2,"1.5":2},"sum":2}\n[type="HISTOGRAM", name="test_counter", label1="value1",label2="value3"] {"buckets":{"1":0,"2":0,"5":1,"10":2,"1.5":0},"sum":15}\n[type="HISTOGRAM", name="test_counter"] {"buckets":{"1":0,"2":0,"5":0,"10":1,"1.5":0},"sum":10}',
     );
     asserts.assertEquals(
       counter.toPrometheus(),
-      '# HELP test_counter \n# TYPE test_counter HISTOGRAM\ntest_counter_bucket{label1="value1",label2="value2",le="1"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="1.5"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="2"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="5"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="10"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="+Inf"} 2\ntest_counter_sum{label1="value1",label2="value2"} 2\ntest_counter_count{label1="value1",label2="value2"} 2\ntest_counter_bucket{label1="value1",label2="value3",le="1"} 0\ntest_counter_bucket{label1="value1",label2="value3",le="1.5"} 0\ntest_counter_bucket{label1="value1",label2="value3",le="2"} 0\ntest_counter_bucket{label1="value1",label2="value3",le="5"} 1\ntest_counter_bucket{label1="value1",label2="value3",le="10"} 2\ntest_counter_bucket{label1="value1",label2="value3",le="+Inf"} 2\ntest_counter_sum{label1="value1",label2="value3"} 15\ntest_counter_count{label1="value1",label2="value3"} 2',
+      '# HELP test_counter \n# TYPE test_counter HISTOGRAM\ntest_counter_bucket{label1="value1",label2="value2",le="1"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="1.5"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="2"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="5"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="10"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="+Inf"} 2\ntest_counter_sum{label1="value1",label2="value2"} 2\ntest_counter_count{label1="value1",label2="value2"} 2\ntest_counter_bucket{label1="value1",label2="value3",le="1"} 0\ntest_counter_bucket{label1="value1",label2="value3",le="1.5"} 0\ntest_counter_bucket{label1="value1",label2="value3",le="2"} 0\ntest_counter_bucket{label1="value1",label2="value3",le="5"} 1\ntest_counter_bucket{label1="value1",label2="value3",le="10"} 2\ntest_counter_bucket{label1="value1",label2="value3",le="+Inf"} 2\ntest_counter_sum{label1="value1",label2="value3"} 15\ntest_counter_count{label1="value1",label2="value3"} 2\ntest_counter_bucket{le="1"} 0\ntest_counter_bucket{le="1.5"} 0\ntest_counter_bucket{le="2"} 0\ntest_counter_bucket{le="5"} 0\ntest_counter_bucket{le="10"} 1\ntest_counter_bucket{le="+Inf"} 1\ntest_counter_sum{} 10\ntest_counter_count{} 1',
     );
     asserts.assertEquals(
       counter.dump('JSON'),

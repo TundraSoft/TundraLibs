@@ -163,6 +163,8 @@ Deno.test('Metrics > Summary', async (t) => {
     counter.observe(1, { label1: 'value1', label2: 'value2' });
     counter.observe(5, { label1: 'value1', label2: 'value3' });
     counter.observe(10, { label1: 'value1', label2: 'value3' });
+    counter.observe(10);
+    console.log(counter.toPrometheus());
     asserts.assertEquals(counter.toJSON(), {
       name: 'test_counter',
       help: '',
@@ -179,15 +181,20 @@ Deno.test('Metrics > Summary', async (t) => {
           count: 2,
           sum: 15,
         },
+        no_label: {
+          quantile: { '0.5': 10, '0.9': 10, '0.99': 10 },
+          count: 1,
+          sum: 10,
+        },
       },
     });
     asserts.assertEquals(
       counter.toString(),
-      '[type="SUMMARY", name="test_counter", label1="value1",label2="value2"] {"quantile":{"0.5":1.5,"0.9":1.9,"0.99":1.99},"count":2,"sum":2}\n[type="SUMMARY", name="test_counter", label1="value1",label2="value3"] {"quantile":{"0.5":10,"0.9":14,"0.99":14.9},"count":2,"sum":15}',
+      '[type="SUMMARY", name="test_counter", label1="value1",label2="value2"] {"quantile":{"0.5":1.5,"0.9":1.9,"0.99":1.99},"count":2,"sum":2}\n[type="SUMMARY", name="test_counter", label1="value1",label2="value3"] {"quantile":{"0.5":10,"0.9":14,"0.99":14.9},"count":2,"sum":15}\n[type="SUMMARY", name="test_counter"] {"quantile":{"0.5":10,"0.9":10,"0.99":10},"count":1,"sum":10}',
     );
     asserts.assertEquals(
       counter.toPrometheus(),
-      '# HELP test_counter \n# TYPE test_counter SUMMARY\ntest_counter{label1="value1",label2="value2",quantile="0.5"} 1.5\ntest_counter{label1="value1",label2="value2",quantile="0.9"} 1.9\ntest_counter{label1="value1",label2="value2",quantile="0.99"} 1.99\ntest_counter_sum{label1="value1",label2="value2"} 2\ntest_counter_count{label1="value1",label2="value2"} 2\ntest_counter{label1="value1",label2="value3",quantile="0.5"} 10\ntest_counter{label1="value1",label2="value3",quantile="0.9"} 14\ntest_counter{label1="value1",label2="value3",quantile="0.99"} 14.9\ntest_counter_sum{label1="value1",label2="value3"} 15\ntest_counter_count{label1="value1",label2="value3"} 2',
+      '# HELP test_counter \n# TYPE test_counter SUMMARY\ntest_counter{label1="value1",label2="value2",quantile="0.5"} 1.5\ntest_counter{label1="value1",label2="value2",quantile="0.9"} 1.9\ntest_counter{label1="value1",label2="value2",quantile="0.99"} 1.99\ntest_counter_sum{label1="value1",label2="value2"} 2\ntest_counter_count{label1="value1",label2="value2"} 2\ntest_counter{label1="value1",label2="value3",quantile="0.5"} 10\ntest_counter{label1="value1",label2="value3",quantile="0.9"} 14\ntest_counter{label1="value1",label2="value3",quantile="0.99"} 14.9\ntest_counter_sum{label1="value1",label2="value3"} 15\ntest_counter_count{label1="value1",label2="value3"} 2\ntest_counter{quantile="0.5"} 10\ntest_counter{quantile="0.9"} 10\ntest_counter{quantile="0.99"} 10\ntest_counter_sum{} 10\ntest_counter_count{} 1',
     );
     asserts.assertEquals(
       counter.dump('JSON'),

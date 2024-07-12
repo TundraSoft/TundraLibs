@@ -91,6 +91,8 @@ Deno.test('Metrics > Gauge', async (t) => {
     counter.inc({ label1: 'value1', label2: 'value2' });
     counter.inc({ label1: 'value1', label2: 'value3' });
     counter.inc();
+    counter.inc({ label1: 'value1', label2: 'value3' });
+    counter.dec({ label1: 'value1', label2: 'value3' });
     asserts.assertEquals(counter.toJSON(), {
       name: 'test_counter',
       help: '',

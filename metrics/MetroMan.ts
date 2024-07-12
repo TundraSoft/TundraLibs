@@ -16,9 +16,6 @@ export class MetroMan {
     // Register the metric instance with the metrics registry.
     inst.forEach((i) => {
       const name = i.name.trim().toLowerCase();
-      if (this._instances.has(name) && this._instances.get(name) !== i) {
-        throw new Error(`Metric '${i.name}' already exists`);
-      }
       this._instances.set(name, i);
     });
   }
