@@ -8,7 +8,7 @@ import {
   password,
   passwordGenerator,
   sequenceId,
-  simpleId, 
+  simpleId,
 } from '../mod.ts';
 
 Deno.bench({
@@ -187,8 +187,7 @@ Deno.bench({
 
 const sid = simpleId(0, 4);
 Deno.bench({
-  name:
-    `[library='id' mode='simpleId'] Generate ID basis date`,
+  name: `[library='id' mode='simpleId'] Generate ID basis date`,
 }, () => {
   sid();
-})
+});

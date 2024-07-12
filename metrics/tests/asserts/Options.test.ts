@@ -1,8 +1,13 @@
 import { asserts } from '../../../dev.dependencies.ts';
-import { assertGaugeOptions, assertMetricOptions, assertCounterOptions, assertHistogramOptions, assertSummaryOptions } from '../../asserts/mod.ts';
+import {
+  assertCounterOptions,
+  assertGaugeOptions,
+  assertHistogramOptions,
+  assertMetricOptions,
+  assertSummaryOptions,
+} from '../../asserts/mod.ts';
 
 Deno.test('Metric > assert', async (t) => {
-
   await t.step('assertMetricOptions', () => {
     const good = { name: 'test', type: 'COUNTER' };
     const bad = { name: 'test', type: 'COUNTER', help: 1 };
@@ -37,12 +42,21 @@ Deno.test('Metric > assert', async (t) => {
     const good = { name: 'test', type: 'SUMMARY', quantiles: [0.5, 0.9, 0.99] };
     const bad = { name: 'test', type: 'SUMMARY' };
     const bad2 = { name: 'test', type: 'SUMMARY', window: 0 };
-    const bad3 = { name: 'test', type: 'SUMMARY', quantiles: [0.5, 0.9, 0.99], window: 100000 };
-    const bad4 = { name: 'test', type: 'GAUGE', quantiles: { 0.5: 1, 0.9: 2, 0.99: 3 } };
+    const bad3 = {
+      name: 'test',
+      type: 'SUMMARY',
+      quantiles: [0.5, 0.9, 0.99],
+      window: 100000,
+    };
+    const bad4 = {
+      name: 'test',
+      type: 'GAUGE',
+      quantiles: { 0.5: 1, 0.9: 2, 0.99: 3 },
+    };
     asserts.assertEquals(assertSummaryOptions(good), true);
     asserts.assertEquals(assertSummaryOptions(bad), false);
     asserts.assertEquals(assertSummaryOptions(bad2), false);
     asserts.assertEquals(assertSummaryOptions(bad3), false);
     asserts.assertEquals(assertSummaryOptions(bad4), false);
   });
-})
+});

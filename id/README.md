@@ -78,7 +78,6 @@ sequenceId(counter?: number): Bigint
 
 Generates sequential ID's basis current date. The generated ID's are of form YYYYMMDDNNNN where YYYY is full year, MM is 01-12, DD is 01-31 and NNNN is the sequential part. You can override this length and the start value.
 
-
 ### Usage
 
 `const id = simpleId(seed = 0, minLen = 4);`

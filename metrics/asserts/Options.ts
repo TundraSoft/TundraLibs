@@ -28,7 +28,8 @@ export const assertHistogramOptions = (x: unknown): x is HistogramOptions => {
 
 export const assertSummaryOptions = (x: unknown): x is SummaryOptions => {
   return assertMetricOptions(x) && x.type === 'SUMMARY' && 'quantiles' in x &&
-    Array.isArray(x.quantiles) && x.quantiles.every((v) => typeof v === 'number') &&
+    Array.isArray(x.quantiles) &&
+    x.quantiles.every((v) => typeof v === 'number') &&
     ('window' in x
       ? (typeof x.window === 'number' && x.window > 0 && x.window <= 600)
       : true); // 10 minutes
