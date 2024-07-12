@@ -1,5 +1,4 @@
-import { assertMetricOptions } from './asserts/mod.ts';
-import type { MetricOptions, MetricOutput, MetricType } from './types/mod.ts';
+import type { MetricOptions, MetricOutput } from './types/mod.ts';
 /**
  * Represents a base metric class.
  * @template T - The type of metric data.
@@ -8,15 +7,18 @@ export abstract class BaseMetric<T> {
   declare protected _data: Map<string, T>;
   public readonly name: string;
   public readonly help: string;
-  public readonly type: MetricType;
+  public readonly type: string;
 
   /**
    * Constructs a new instance of the BaseMetric class.
    * @param opt - The metric options.
    */
   constructor(opt: MetricOptions) {
-    if (assertMetricOptions(opt) === false) {
-      throw new Error('Invalid metric options');
+    if (opt.name === undefined || opt.name.trim() === '') {
+      throw new Error('Metric must have a name');
+    }
+    if (opt.type === undefined || opt.type.trim() === '') {
+      throw new Error('Metric must have a type');
     }
     this.name = opt.name;
     this.help = opt.help || '';

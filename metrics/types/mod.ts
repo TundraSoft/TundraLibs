@@ -6,4 +6,3 @@ export type {
   SummaryOptions,
 } from './Options.ts';
 export type { MetricOutput } from './Output.ts';
-export type { MetricType } from './Type.ts';

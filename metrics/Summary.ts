@@ -1,4 +1,3 @@
-import { assertSummaryOptions } from './asserts/mod.ts';
 import { BaseMetric } from './Base.ts';
 import type { MetricOutput, SummaryOptions } from './types/mod.ts';
 
@@ -25,15 +24,29 @@ export class Summary extends BaseMetric<
   constructor(
     opt: SummaryOptions,
   ) {
-    if (opt.quantiles === undefined) {
-      opt.quantiles = [0.5, 0.9, 0.99];
+    const opts = {
+      ...{ type: 'SUMMARY', quantiles: [0.5, 0.9, 0.99] },
+      ...opt,
+    };
+    if (
+      !opts.quantiles || !Array.isArray(opts.quantiles) ||
+      opts.quantiles.length === 0 ||
+      opts.quantiles.some((b) => typeof b !== 'number')
+    ) {
+      throw new Error('Summary metric requires quantiles to be defined');
     }
-    if (!assertSummaryOptions(opt)) {
-      throw new Error('Invalid Summary options');
+
+    if (opts.window !== undefined) {
+      if (opts.window < 1 || opts.window > 600) {
+        throw new Error(
+          'Summary metric window must be between 1 and 600 seconds',
+        );
+      }
     }
-    super(opt);
-    this._window = opt.window; // In seconds
-    this._quantiles = opt.quantiles.toSorted((a, b) => a - b);
+
+    super(opts);
+    this._window = opts.window; // In seconds
+    this._quantiles = opts.quantiles.toSorted((a, b) => a - b);
   }
 
   /**

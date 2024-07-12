@@ -4,7 +4,6 @@ export type {
   HistogramOptions,
   MetricOptions,
   MetricOutput,
-  MetricType,
   SummaryOptions,
 } from './types/mod.ts';
 export { BaseMetric } from './Base.ts';

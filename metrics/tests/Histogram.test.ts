@@ -1,9 +1,25 @@
-import { Histogram } from '../mod.ts';
+import { Histogram, type HistogramOptions } from '../mod.ts';
 import { asserts } from '../../dev.dependencies.ts';
 
 Deno.test('Metrics > Histogram', async (t) => {
+  await t.step('Test invalid configuration', () => {
+    asserts.assertThrows(
+      () => {
+        new Histogram(
+          {
+            name: 'test_counter',
+            type: 'HISTOGRAM',
+            buckets: ['sdf', 'sdf', 'sdf'],
+          } as unknown as HistogramOptions,
+        );
+      },
+      Error,
+      'Histogram metric requires buckets to be defined',
+    );
+  });
+
   await t.step('Test incrementing a counter', () => {
-    const counter = new Histogram({ name: 'test_counter', type: 'HISTOGRAM' });
+    const counter = new Histogram({ name: 'test_counter' });
     counter.observe(1);
     counter.observe(1);
     counter.observe(5);
@@ -23,7 +39,7 @@ Deno.test('Metrics > Histogram', async (t) => {
   });
 
   await t.step('Test incrementing a counter with labels', () => {
-    const counter = new Histogram({ name: 'test_counter', type: 'HISTOGRAM' });
+    const counter = new Histogram({ name: 'test_counter' });
     counter.observe(1, { label1: 'value1' });
     counter.observe(1, { label1: 'value1' });
     counter.observe(5, { label1: 'value2' });
@@ -47,7 +63,7 @@ Deno.test('Metrics > Histogram', async (t) => {
   });
 
   await t.step('Test incrementing a counter with multiple labels', () => {
-    const counter = new Histogram({ name: 'test_counter', type: 'HISTOGRAM' });
+    const counter = new Histogram({ name: 'test_counter' });
     counter.observe(1, { label1: 'value1', label2: 'value2' });
     counter.observe(1, { label1: 'value1', label2: 'value2' });
     counter.observe(5, { label1: 'value1', label2: 'value3' });
@@ -71,7 +87,7 @@ Deno.test('Metrics > Histogram', async (t) => {
   });
 
   await t.step('Test generation of different output', () => {
-    const counter = new Histogram({ name: 'test_counter', type: 'HISTOGRAM' });
+    const counter = new Histogram({ name: 'test_counter' });
     counter.observe(1, { label1: 'value1', label2: 'value2' });
     counter.observe(1, { label1: 'value1', label2: 'value2' });
     counter.observe(5, { label1: 'value1', label2: 'value3' });
@@ -99,6 +115,18 @@ Deno.test('Metrics > Histogram', async (t) => {
     asserts.assertEquals(
       counter.toPrometheus(),
       '# HELP test_counter \n# TYPE test_counter HISTOGRAM\ntest_counter_bucket{label1="value1",label2="value2",le="1"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="1.5"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="2"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="5"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="10"} 2\ntest_counter_bucket{label1="value1",label2="value2",le="+Inf"} 2\ntest_counter_sum{label1="value1",label2="value2"} 2\ntest_counter_count{label1="value1",label2="value2"} 2\ntest_counter_bucket{label1="value1",label2="value3",le="1"} 0\ntest_counter_bucket{label1="value1",label2="value3",le="1.5"} 0\ntest_counter_bucket{label1="value1",label2="value3",le="2"} 0\ntest_counter_bucket{label1="value1",label2="value3",le="5"} 1\ntest_counter_bucket{label1="value1",label2="value3",le="10"} 2\ntest_counter_bucket{label1="value1",label2="value3",le="+Inf"} 2\ntest_counter_sum{label1="value1",label2="value3"} 15\ntest_counter_count{label1="value1",label2="value3"} 2',
+    );
+    asserts.assertEquals(
+      counter.dump('JSON'),
+      counter.toJSON(),
+    );
+    asserts.assertEquals(
+      counter.dump('PROMETHEUS'),
+      counter.toPrometheus(),
+    );
+    asserts.assertEquals(
+      counter.dump('STRING'),
+      counter.toString(),
     );
   });
 });

@@ -1,5 +1,4 @@
 import { BaseMetric } from './Base.ts';
-import { assertHistogramOptions } from './asserts/mod.ts';
 import type { HistogramOptions } from './types/mod.ts';
 
 /**
@@ -17,14 +16,19 @@ export class Histogram
   constructor(
     opt: HistogramOptions,
   ) {
-    if (opt.buckets === undefined) {
-      opt.buckets = [1, 1.5, 2, 5, 10];
+    const opts = {
+      ...{ type: 'HISTOGRAM', buckets: [1, 1.5, 2, 5, 10] },
+      ...opt,
+    };
+    if (
+      !opts.buckets || !Array.isArray(opts.buckets) ||
+      opts.buckets.length === 0 ||
+      opts.buckets.some((b) => typeof b !== 'number')
+    ) {
+      throw new Error('Histogram metric requires buckets to be defined');
     }
-    if (!assertHistogramOptions(opt)) {
-      throw new Error('Invalid Metric options for Histogram');
-    }
-    super(opt);
-    this._buckets = opt.buckets.toSorted((a, b) => a - b);
+    super(opts);
+    this._buckets = opts.buckets.toSorted((a, b) => a - b);
   }
 
   /**

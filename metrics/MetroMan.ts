@@ -12,13 +12,15 @@ export class MetroMan {
    *
    * @param inst Metric instance to register.
    */
-  register<T = unknown>(inst: BaseMetric<T>): void {
+  register<T = unknown>(...inst: BaseMetric<T>[]): void {
     // Register the metric instance with the metrics registry.
-    const name = inst.name.trim().toLowerCase();
-    if (this._instances.has(name) && this._instances.get(name) !== inst) {
-      throw new Error(`Metric '${inst.name}' already exists`);
-    }
-    this._instances.set(name, inst);
+    inst.forEach((i) => {
+      const name = i.name.trim().toLowerCase();
+      if (this._instances.has(name) && this._instances.get(name) !== i) {
+        throw new Error(`Metric '${i.name}' already exists`);
+      }
+      this._instances.set(name, i);
+    });
   }
 
   /**

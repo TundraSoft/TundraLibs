@@ -1,5 +1,4 @@
 import { BaseMetric } from './Base.ts';
-import { assertCounterOptions } from './asserts/mod.ts';
 import type { CounterOptions } from './types/mod.ts';
 
 /**
@@ -7,10 +6,8 @@ import type { CounterOptions } from './types/mod.ts';
  */
 export class Counter extends BaseMetric<number> {
   constructor(opt: CounterOptions) {
-    if (!assertCounterOptions(opt)) {
-      throw new Error('Invalid Metric options for counter');
-    }
-    super(opt);
+    const opts = { type: 'COUNTER', ...opt };
+    super(opts);
   }
 
   /**

@@ -1,5 +1,4 @@
 import { BaseMetric } from './Base.ts';
-import { assertGaugeOptions } from './asserts/mod.ts';
 import type { GaugeOptions } from './types/mod.ts';
 
 /**
@@ -7,10 +6,8 @@ import type { GaugeOptions } from './types/mod.ts';
  */
 export class Gauge extends BaseMetric<number> {
   constructor(opt: GaugeOptions) {
-    if (!assertGaugeOptions(opt)) {
-      throw new Error('Invalid Metric options for Gauge');
-    }
-    super(opt);
+    const opts = { type: 'GAUGE', ...opt };
+    super(opts);
   }
   /**
    * Sets the value of the gauge metric.

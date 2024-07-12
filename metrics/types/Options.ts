@@ -1,29 +1,24 @@
-import type { MetricType } from './Type.ts';
+type BaseMetricOptions = {
+  name: string;
+  help?: string;
+};
 
 /**
  * Represents the options of a metric.
  */
-export type MetricOptions = {
-  name: string; // The name of the metric
-  help?: string; // The help text
-  type: MetricType; // The metric type
+export type MetricOptions = BaseMetricOptions & {
+  type: string; // The metric type
 };
 
-export type CounterOptions = MetricOptions & {
-  type: 'COUNTER'; // The metric type
-};
+export type CounterOptions = BaseMetricOptions;
 
-export type GaugeOptions = MetricOptions & {
-  type: 'GAUGE'; // The metric type
-};
+export type GaugeOptions = BaseMetricOptions;
 
-export type HistogramOptions = MetricOptions & {
-  type: 'HISTOGRAM'; // The metric type
+export type HistogramOptions = BaseMetricOptions & {
   buckets?: number[]; // The bucket values
 };
 
-export type SummaryOptions = MetricOptions & {
-  type: 'SUMMARY'; // The metric type
+export type SummaryOptions = BaseMetricOptions & {
   quantiles?: number[]; // The quantile values
   window?: number; // The time window
 };
