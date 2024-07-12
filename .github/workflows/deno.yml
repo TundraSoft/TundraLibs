@@ -16,10 +16,136 @@ jobs:
         name: Get Deno Versions
         id: fetch-versions
         run: |
-          DENO_VERSIONS=$(curl -s https://api.github.com/repos/denoland/deno/releases | jq -r '.[].tag_name' | sed 's/v//' | sort -V | tail -n 8 | tac | jq -Rcn '[inputs]')
+          DENO_VERSIONS=$(curl -s https://api.github.com/repos/denoland/deno/releases | jq -r '.[].tag_name' | sed 's/v//' | sort -V | tail -n 8 | head -n 7 | tac | jq -Rcn '[inputs]')
           echo "deno-versions=${DENO_VERSIONS}" >> "$GITHUB_OUTPUT"
   
-  run-tests:
+  run-latest:
+    runs-on: ubuntu-latest
+    
+    needs: [get-versions]
+    
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+      postgres:
+        image: postgres:latest
+        env:
+          POSTGRES_PASSWORD: postgrespw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      maria:
+        image: mariadb
+        env:
+          MARIADB_ROOT_PASSWORD: mariapw
+          MARIADB_USER: maria
+          MARIADB_PASSWORD: mariapw
+          MARIADB_DATABASE: mysql
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh  --connect --innodb_initialized"
+          --health-interval 10s
+          --health-timeout 10s
+          --health-retries 5
+      mongo:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+      docker:
+        image: docker:dind
+        options: --privileged --shm-size=2g
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock:ro
+    
+    steps:
+      -
+        name: Setup
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      -
+        name: Setup Deno
+        uses: denoland/setup-deno@v1.1.4
+      
+      -
+        name: Check formatting & linting
+        run: |
+          deno task check
+      
+      -
+        name: Run benchmarks
+        run: deno task bench
+
+      -
+        name: Load dependencies
+        run: deno task cache
+      
+      -
+        name: Run tests
+        run: |
+          deno task test --coverage=coverage
+        env:
+          PG_HOST: localhost
+          PG_PORT: 5432
+          PG_USER: postgres
+          PG_PASS: postgrespw
+          PG_DB: postgres
+          MARIA_HOST: localhost
+          MARIA_PORT: 3306
+          MARIA_USER: maria
+          MARIA_PASS: mariapw
+          MARIA_DB: mysql
+          MONGO_HOST: localhost
+          MONGO_PORT: 27017
+          MONGO_DB: test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+      
+      # Here on out we run only on latest version
+      - 
+        name: Setup Node (required for SonarCloud)
+        uses: actions/setup-node@v3
+        with:
+         node-version: '17.x'
+         registry-url: 'https://registry.npmjs.org'
+
+      - 
+        name: Setup LCOV
+        run: sudo apt install -y lcov
+
+      -
+        name: Generate coverage report
+        run: |
+          deno coverage coverage --lcov cov --output=coverage/report.lcov
+          genhtml -o coverage/html coverage/report.lcov
+      
+      - 
+        name: Collect coverage
+        uses: codecov/codecov-action@v4 # upload the report on Codecov
+        with:
+          file: coverage/report.lcov
+          token: ${{ secrets.CODECOV_TOKEN }} # required
+      
+      - 
+        name: Fix LCOV output for SonarCloud
+        run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' coverage/report.lcov
+      
+      - 
+        name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  
+  run-previous:
     runs-on: ubuntu-latest
     
     needs: [get-versions]
@@ -78,21 +204,8 @@ jobs:
       -
         name: Setup Deno
         uses: denoland/setup-deno@v1.1.4
-        # with:
-        #   deno-version: ${{ matrix.deno-version }}
-      
-      -
-        name: Check formatting & linting
-        run: |
-          deno task check
-      
-      -
-        name: Load dependencies
-        run: deno task cache
-      
-      -
-        name: Run benchmarks
-        run: deno task bench
+        with:
+          deno-version: ${{ matrix.deno-version }}
       
       -
         name: Run tests
@@ -114,45 +227,4 @@ jobs:
           MONGO_DB: test
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-      
-      # Here on out we run only on latest version
-      - 
-        name: Setup Node (required for SonarCloud)
-        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
-        uses: actions/setup-node@v3
-        with:
-         node-version: '17.x'
-         registry-url: 'https://registry.npmjs.org'
-
-      - 
-        name: Setup LCOV
-        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
-        run: sudo apt install -y lcov
-
-      -
-        name: Generate coverage report
-        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
-        run: |
-          deno coverage coverage --lcov cov --output=coverage/report.lcov
-          genhtml -o coverage/html coverage/report.lcov
-      
-      - 
-        name: Collect coverage
-        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
-        uses: codecov/codecov-action@v4 # upload the report on Codecov
-        with:
-          file: coverage/report.lcov
-          token: ${{ secrets.CODECOV_TOKEN }} # required
-      
-      - 
-        name: Fix LCOV output for SonarCloud
-        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
-        run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' coverage/report.lcov
-      
-      - 
-        name: SonarCloud Scan
-        if: ${{ matrix.deno-version == fromJson(needs.get-versions.outputs.deno-versions)[0] }}
-        uses: SonarSource/sonarcloud-github-action@master
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  
