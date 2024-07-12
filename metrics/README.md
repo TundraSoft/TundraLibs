@@ -1,75 +1,52 @@
 # Metrics
 
-Library to easily collect and process metrics.
+Collection of classes to help calculate and track performance metrics. It is follows prometheus standards of metric collection.
 
-## cryptoKey
+Currently supported metrics:
 
-Generates a key or ID basis provided length. This uses crypto.getRandomValues. Typical usage can be for passwords, encryption key or secrets.
+- [x] Counter
+- [x] Gauge
+- [x] Histogram
+- [x] Summary
 
-It has the ability to "Prefix" the key with a standard text (length will increase) and also hyphenate the key in fixed intervals.
+Custom metrics can be defined by extending the base class BaseMetric.
 
-### Usage
+## MetroMan
 
-```ts
-cryptoKey = (length = 32, prefix = '', hyphenInterval = 0): string
-```
-
-`length: number` - Length of the key to be generated. defaults to 32
-
-`prefix: string` - Prefix the key with said string. _NOTE_ this will increase the length of the key. Defaults to empty string
-
-`hyphenInterval: number` - Add hyphens after x characters. Defaults to 0 (no hyphen)
-
-This will return a string as specified
-
-Example:
-
-```ts
-console.log(cryptoKey(32)); // 3bd8753444559aa1f67c3664b7722ad4
-console.log(cryptoKey(32, 'TLIB-')); // TLIB-3bd8753444559aa1f67c3664b7722ad4
-console.log(cryptoKey(32, 'TLIB-', 4)); // TLIB-9374-2723-001b-4013-6ee3-0ea8-cad0-5434
-```
-
-## nanoId
-
-Generates a random id of predefined x length using input data set. This utility is meant to be a fast and easy way to generate ID keeping performance in mind and not collision resistance.
-
-### Predefined Data sets:
-
-- alphabets -- English alphabets (lower case)
-- numbers -- 0-9
-- alphaNumeric -- English alphabets (lower case) and numbers
-- alphaNumericCase -- English alphabets (lower AND upper case) and numbers
-- webSafe -- alphaNumeric and -_ characters
-- password -- websafe and !@$%^&* characters
+This is a "registry" - A simply utility class which stores the instances of different metrics making it easier to get the instance.
 
 ### Usage
 
 ```ts
-nanoId(size = 21, base: string = webSafe): string
+import { Counter, MetroMan } from './mod.ts';
+const registry = new MetroMan();
+const c = new Counter({ name: 'test_counter' });
+registry.register(c);
+
+// Later on
+const fromRegistry = registry.get<Counter>('test_counter');
+fromRegistry.inc();
 ```
 
-`size: number` - The length of the generated ID
+#### register
 
-`base: string` - Base dataset to use. Defaults to webSafe. See [Data Sets](#predefined-data-sets)
+Registers an instance of metric. It automatically fetches the type and name from the metric and uses them to store the
+instance.
 
-#### Password generator alias
+`register(inst: BasicMetric<unknown>): void`
 
-```ts
-passwordGenerator(size = 21): string
-```
+`inst:BasicMetric<unknown>` - The instance of the metric class. The name is fetched from this instance and lowercased and used for reference making it case-insensitive
 
-`size: number` - Length of the password. Calls nanoId internally using password as the data set
+#### get
 
-## sequenceId
+Gets a specific instance of metric.
 
-Generates a unique ID based on server information and a counter. This is based out of https://mariadb.com/kb/en/uuid_short/
-Uses PID of deno and current epoch (not the smartest, but for now this is all we have)
+`get<T extends BaseMetric<unknown> = BaseMetric<unknown>>(name: string): T`
 
-### Usage
+`T extends BasicMetric<unknown>` - The type of metric. This would be required to seamlessly use the returned instance as the methods will vary from implementation to implementation. If this is not provided, then you can always force type conversion by using `as ClassName`
 
-```ts
-sequenceId(counter?: number): Bigint
-```
+`name: string` - The name of the metric. This is provided when creating the metric instance. Case insensitive.
 
-`counter?: number` - Override the counter. By default everytime the "application" starts, the counter is set to 0. Use this to override that. Once it is overridden, all subsequent ID's will be generated from that value
+## BaseMetric
+
+This is an abstract class basis which all metrics have been implemented. This allows easy extendability of metrics.
