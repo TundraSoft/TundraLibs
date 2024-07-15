@@ -18,7 +18,7 @@ export class Gauge extends BaseMetric<number> {
     const key = (!labels)
       ? 'no_label'
       : Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',');
-    this._data.set(key, (this._data.get(key) || 0) + value);
+    this._data.set(key, value);
   }
 
   /**

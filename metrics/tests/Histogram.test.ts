@@ -93,7 +93,6 @@ Deno.test('Metrics > Histogram', async (t) => {
     counter.observe(5, { label1: 'value1', label2: 'value3' });
     counter.observe(10, { label1: 'value1', label2: 'value3' });
     counter.observe(10);
-    console.log(counter.toPrometheus());
     asserts.assertEquals(counter.toJSON(), {
       name: 'test_counter',
       help: '',

@@ -68,7 +68,6 @@ Deno.test('Metrics > Counter', async (t) => {
     counter.inc({ label1: 'value1', label2: 'value2' });
     counter.inc({ label1: 'value1', label2: 'value3' });
     counter.inc();
-    console.log(counter.toPrometheus());
     asserts.assertEquals(counter.toJSON(), {
       name: 'test_counter',
       help: '',

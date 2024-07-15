@@ -10,6 +10,7 @@ import {
   sequenceId,
   simpleId,
 } from '../mod.ts';
+import { ObjectId } from '../objectId.ts';
 
 Deno.bench({
   name:
@@ -187,7 +188,22 @@ Deno.bench({
 
 const sid = simpleId(0, 4);
 Deno.bench({
-  name: `[library='id' mode='simpleId'] Generate ID basis date`,
+  name: `[library='id' mode='simpleId'] Generate simpleId`,
 }, () => {
   sid();
+});
+
+const oid = ObjectId(0);
+Deno.bench({
+  name: `[library='id' mode='ObjectId'] Generate ObjectId`,
+}, () => {
+  oid();
+});
+
+const oid2 = ObjectId(0, 'adw');
+Deno.bench({
+  name:
+    `[library='id' mode='ObjectId'] Generate ObjectId with manual machine id`,
+}, () => {
+  oid2();
 });

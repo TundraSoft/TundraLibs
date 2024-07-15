@@ -1,0 +1,6 @@
+{
+  "sonarlint.connectedMode.project": {
+    "connectionId": "Sonar",
+    "projectKey": "TundraSoft_TundraLibs"
+  }
+}

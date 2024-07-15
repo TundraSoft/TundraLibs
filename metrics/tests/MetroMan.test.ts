@@ -33,5 +33,6 @@ Deno.test('Metrics > MetroMan', async (t) => {
     // deno-lint-ignore no-prototype-builtins
     asserts.assert(metrics.collect('JSON').hasOwnProperty('counter1'));
     asserts.assert(metrics.collect('PROMETHEUS').includes('counter1'));
+    asserts.assertThrows(() => metrics.collect('BOO' as 'STRING'));
   });
 });

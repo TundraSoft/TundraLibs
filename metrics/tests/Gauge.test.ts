@@ -14,7 +14,26 @@ Deno.test('Metrics > Gauge', async (t) => {
 
   await t.step('Test incrementing a counter', () => {
     const counter = new Gauge({ name: 'test_counter' });
+    counter.dec();
+    asserts.assertEquals(counter.toJSON(), {
+      name: 'test_counter',
+      help: '',
+      type: 'GAUGE',
+      labels: [],
+      data: {
+        no_label: -1,
+      },
+    });
     counter.set(5);
+    asserts.assertEquals(counter.toJSON(), {
+      name: 'test_counter',
+      help: '',
+      type: 'GAUGE',
+      labels: [],
+      data: {
+        no_label: 5,
+      },
+    });
     counter.inc();
     counter.inc();
     counter.inc();
