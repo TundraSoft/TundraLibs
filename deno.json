@@ -34,6 +34,7 @@
     "proseWrap": "preserve"
   },
   "tasks": {
+    "init": "deno run -A ./utils/gitHooks.ts .",
     "cache": "deno cache --reload ./dependencies.ts ./dev.dependencies.ts",
     "clean": "deno fmt && deno task cache",
     "bench": "deno bench -A --unstable-fs",

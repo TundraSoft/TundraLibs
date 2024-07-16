@@ -38,7 +38,10 @@
         "denoland.vscode-deno",
         "benjaminbenais.copilot-theme",
         "GitHub.copilot", 
-        "github.vscode-github-actions"
+        "github.vscode-github-actions",  
+        "ms-azuretools.vscode-docker", 
+        "hashrock.fresh-mini-codegen", 
+        "googlecloudtools.cloudcode"
       ]
     }
   }

@@ -1,3 +1,5 @@
+import { fs } from '../dependencies.ts';
+
 const hookTypes = [
   'applypatch-msg',
   'pre-applypatch',
@@ -27,6 +29,7 @@ const hookTypes = [
 export const loadHooks = async (hookPath: string) => {
   // Go through the folder, find all files and copy to .git/hooks folder if they are not already there
   const hooks = await Deno.readDir(hookPath);
+  await fs.ensureDir('.git/hooks');
   for await (const hook of hooks) {
     if (hook.isFile) {
       const hookName = hook.name;
