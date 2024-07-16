@@ -2,17 +2,17 @@ import {
   MySQLClient,
   type MySQLClientConfig,
   MySQLTLSMode,
-} from '../../../dependencies.ts';
+} from '../../dependencies.ts';
 
-import { OptionKeys } from '../../../options/mod.ts';
-import { Client } from '../../Client.ts';
-import { assertMariaOptions } from '../../asserts/Options.ts';
-import type { ClientEvents, MariaOptions, Query } from '../../types/mod.ts';
+import { OptionKeys } from '../../options/mod.ts';
+import { Client } from '../Client.ts';
+import { assertMariaOptions } from '../asserts/Options.ts';
+import type { ClientEvents, MariaOptions, Query } from '../types/mod.ts';
 
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
-} from '../../errors/mod.ts';
+} from '../errors/mod.ts';
 
 export class MariaClient extends Client<MariaOptions> {
   declare readonly dialect = 'MARIA';

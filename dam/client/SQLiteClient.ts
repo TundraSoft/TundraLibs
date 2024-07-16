@@ -4,16 +4,16 @@ import {
   SQLiteDBClient,
   type SQLiteDBClientConfig,
   SQLiteDBError,
-} from '../../../dependencies.ts';
+} from '../../dependencies.ts';
 
-import { OptionKeys } from '../../../options/mod.ts';
-import type { ClientEvents, Query, SQLiteOptions } from '../../types/mod.ts';
-import { Client } from '../../Client.ts';
-import { assertSQLiteOptions } from '../../asserts/Options.ts';
+import { OptionKeys } from '../../options/mod.ts';
+import type { ClientEvents, Query, SQLiteOptions } from '../types/mod.ts';
+import { Client } from '../Client.ts';
+import { assertSQLiteOptions } from '../asserts/Options.ts';
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
-} from '../../errors/mod.ts';
+} from '../errors/mod.ts';
 
 /**
  * Represents the type of parameters that can be used in SQLite queries.

@@ -3,17 +3,17 @@ import {
   type PGClientOptions,
   PGPoolClient,
   PostgresError,
-} from '../../../dependencies.ts';
+} from '../../dependencies.ts';
 
-import { OptionKeys } from '../../../options/mod.ts';
-import { Client } from '../../Client.ts';
-import { assertPostgresOptions } from '../../asserts/Options.ts';
-import type { ClientEvents, PostgresOptions, Query } from '../../types/mod.ts';
+import { OptionKeys } from '../../options/mod.ts';
+import { Client } from '../Client.ts';
+import { assertPostgresOptions } from '../asserts/Options.ts';
+import type { ClientEvents, PostgresOptions, Query } from '../types/mod.ts';
 
 import {
   DAMClientConfigError,
   DAMClientConnectionError,
-} from '../../errors/mod.ts';
+} from '../errors/mod.ts';
 export class PostgresClient extends Client<PostgresOptions> {
   declare readonly dialect = 'POSTGRES';
   private _client: PGClient | undefined = undefined;

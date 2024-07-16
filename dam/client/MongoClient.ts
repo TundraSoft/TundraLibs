@@ -4,25 +4,25 @@ import {
   MongoDBDatabase,
   type MongoDBDocument,
   MongoDBObjectId,
-} from '../../../dependencies.ts';
+} from '../../dependencies.ts';
 
-import { OptionKeys } from '../../../options/mod.ts';
-import { Client } from '../../Client.ts';
-import { assertMongoOptions } from '../../asserts/Options.ts';
+import { OptionKeys } from '../../options/mod.ts';
+import { Client } from '../Client.ts';
+import { assertMongoOptions } from '../asserts/Options.ts';
 import type {
   ClientEvents,
   // InsertQuery,
   MongoOptions,
   Query,
-} from '../../types/mod.ts';
+} from '../types/mod.ts';
 
 import {
   DAMClientConfigError,
   // DAMClientConnectionError,
   // DAMClientError,
   DAMClientQueryError,
-} from '../../errors/mod.ts';
-import { DAMClientConnectionError } from '../../mod.ts';
+} from '../errors/mod.ts';
+import { DAMClientConnectionError } from '../mod.ts';
 
 export class MongoClient extends Client<MongoOptions> {
   declare readonly dialect = 'MONGO';
