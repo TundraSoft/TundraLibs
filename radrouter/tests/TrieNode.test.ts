@@ -98,4 +98,13 @@ Deno.test('RadRouter > TrieNode', async (t) => {
       'users/{id}/posts/{pid}/comments': ['GET'],
     });
   });
+
+  await t.step('Find', () => {
+    const tmp = router.find('/users/123/posts/456');
+    asserts.assert(tmp);
+    asserts.assertEquals(tmp.params, { id: '123', pid: '456' });
+
+    const tmp2 = router.find('/users/123/post/456');
+    asserts.assertEquals(tmp2, undefined);
+  });
 });
