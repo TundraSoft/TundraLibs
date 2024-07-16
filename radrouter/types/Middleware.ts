@@ -1,1 +1,2 @@
-export type Middleware = (...args: unknown[]) => unknown | Promise<unknown>;
+// deno-lint-ignore no-explicit-any
+export type Middleware = (...args: any) => any | Promise<any>;

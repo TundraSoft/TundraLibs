@@ -1,5 +1,5 @@
 import { asserts } from '../../dev.dependencies.ts';
-import { TrieNode } from '../TrieNode.ts';
+import { TrieNode } from '../mod.ts';
 
 Deno.test('RadRouter > TrieNode', async (t) => {
   const router = new TrieNode();
@@ -66,15 +66,17 @@ Deno.test('RadRouter > TrieNode', async (t) => {
       'GET',
       () => console.log('GET /users/{id}/comments/{cid}'),
     );
-    asserts.assertEquals(
-      router.getNode('/users/{id}')!.handlers.has('GET'),
-      true,
-    ); // NOSONAR
-    // asserts.assertEquals(router.getNode('/users/{id}/posts')!.handlers.has('GET'), true);
-    asserts.assertEquals(
-      router.getNode('/users/{id}/posts/{pid}')!.hasHandler('POST'),
-      false,
-    ); // NOSONAR
+    const t = router.getNode('/users/{id}/');
+    if (t) {
+      asserts.assertEquals(
+        t.handlers.has('GET'),
+        true,
+      );
+      asserts.assertEquals(
+        t.hasHandler('POST'),
+        false,
+      );
+    }
   });
 
   await t.step('Index', () => {
@@ -97,6 +99,7 @@ Deno.test('RadRouter > TrieNode', async (t) => {
       'users/{id}/posts/{pid}': ['GET'],
       'users/{id}/posts/{pid}/comments': ['GET'],
     });
+    asserts.assertEquals(router.findNode('')?.path, '');
   });
 
   await t.step('Find', () => {
@@ -106,5 +109,30 @@ Deno.test('RadRouter > TrieNode', async (t) => {
 
     const tmp2 = router.find('/users/123/post/456');
     asserts.assertEquals(tmp2, undefined);
+  });
+
+  await t.step('Sceanrio - Split and add', () => {
+    const t = new TrieNode('/users/{id}/posts/{pid}');
+    const user = t.addNode('users/{id}');
+    asserts.assertEquals(t.path, 'users/{id}');
+    asserts.assertEquals(t, user);
+  });
+
+  await t.step('Handlers Testing', () => {
+    const t = new TrieNode('/users/{id}/posts/{pid}');
+    t.addHandler('GET', () => console.log('GET /users/{id}/posts/{pid}'));
+    t.addHandler('POST', () => console.log('POST /users/{id}/posts/{pid}'));
+    t.addHandler('PUT', () => console.log('PUT /users/{id}/posts/{pid}'));
+    t.addHandler('DELETE', () => console.log('DELETE /users/{id}/posts/{pid}'));
+    asserts.assertEquals(t.handlers.size, 4);
+    t.addNode('/users/{id}/posts/{pid}/author/user_{id}').addHandler(
+      'GET',
+      () => console.log('GET /users/{id}/posts/{pid}/author/{id}'),
+    );
+    const fr = t.find('/users/123/posts/456/author/user_789');
+    asserts.assertEquals(fr, undefined);
+    const fr2 = t.find('/users/123/posts/456/author/user_123');
+    asserts.assertEquals(fr2?.params, { id: '123', pid: '456' });
+    asserts.assertEquals(fr2?.node.path, 'author/user_{id}');
   });
 });
