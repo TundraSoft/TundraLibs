@@ -139,11 +139,7 @@ export class PostgresClient extends Client<PostgresOptions> {
   ): Promise<{ count: number; rows: R[] }> {
     const sQuery = this._standardizeQuery(query);
     using client = await this._client!.connect();
-    console.log(
-      this._client?.available,
-      this._client?.size,
-      await this._client?.initialized(),
-    );
+    
     const res = await client.queryObject<R>(
       sQuery.sql,
       sQuery.params,
