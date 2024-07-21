@@ -155,7 +155,7 @@ export abstract class AbstractClient<
           this.name,
           sql,
           retVal.time,
-          retVal.data?.length || retVal.count || 0,
+          retVal.data?.length || 0,
         );
       }
       // console.log('Done')
@@ -172,7 +172,7 @@ export abstract class AbstractClient<
         'query',
         this.name,
         sql,
-        retVal.data?.length || retVal.count || 0,
+        retVal.data?.length || 0,
         retVal.time,
         err,
       );
