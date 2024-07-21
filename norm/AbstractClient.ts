@@ -111,14 +111,15 @@ export abstract class AbstractClient<
   public async query<
     Entity extends Record<string, unknown> = Record<string, unknown>,
   >(sql: QueryOption<Entity>): Promise<QueryResult<Entity>> {
+    const retVal: QueryResult<Entity> = {
+      type: sql.type,
+      time: 0,
+      count: 0,
+    };
+    let err: NormError | undefined;
     try {
       await this.connect();
-      const start = performance.now(),
-        retVal: QueryResult<Entity> = {
-          type: sql.type,
-          time: 0,
-          count: 0,
-        };
+      const start = performance.now();
       // Ensure projection has same column names as columns
       if (sql.type === QueryTypes.INSERT) {
         if ((sql as InsertQuery<Entity>).data.length === 0) {
@@ -154,17 +155,27 @@ export abstract class AbstractClient<
           this.name,
           sql,
           retVal.time,
-          retVal.count || 0,
+          retVal.data?.length || retVal.count || 0,
         );
       }
       // console.log('Done')
       return retVal;
     } catch (e) {
       if (e instanceof NormError) {
-        throw e;
+        err = e;
       } else {
-        throw new QueryError(e.message, sql, this.name, this.dialect);
+        err = new QueryError(e.message, sql, this.name, this.dialect);
       }
+      throw err;
+    } finally {
+      this.emit(
+        'query',
+        this.name,
+        sql,
+        retVal.data?.length || retVal.count || 0,
+        retVal.time,
+        err,
+      );
     }
   }
 

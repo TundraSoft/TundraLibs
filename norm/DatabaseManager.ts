@@ -18,6 +18,13 @@ export class DatabaseManager {
   private static _configs: Map<string, ClientConfig> = new Map();
   private static _instance: Map<string, AbstractClient> = new Map();
   public static onPoolWait: (name: string, size: number) => void = () => {};
+  public static onQuery: (
+    name: string,
+    query: unknown,
+    count: number,
+    time: number,
+    error?: Error,
+  ) => void = () => {};
   public static onLongQuery: (
     name: string,
     query: unknown,
@@ -111,6 +118,7 @@ export class DatabaseManager {
     // }
     dbConn.on('poolWait', DatabaseManager.onPoolWait);
     dbConn.on('longQuery', DatabaseManager.onLongQuery);
+    dbConn.on('query', DatabaseManager.onQuery);
     DatabaseManager._instance.set(name, dbConn);
   }
 }
