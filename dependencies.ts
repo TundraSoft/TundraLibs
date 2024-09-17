@@ -35,8 +35,8 @@ export * as base64 from 'https://deno.land/std@0.163.0/encoding/base64.ts';
 export {
   Client as PGClient,
   Pool as PGPool,
-} from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
-export type { ClientOptions as PGClientOptions } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
+} from 'https://deno.land/x/postgres@v0.19.3/mod.ts';
+export type { ClientOptions as PGClientOptions } from 'https://deno.land/x/postgres@v0.19.3/mod.ts';
 
 export { DB as SQLiteClient } from 'https://deno.land/x/sqlite@v3.4.0/mod.ts';
 

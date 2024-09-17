@@ -7,14 +7,15 @@ import type {
   QueryType,
   SelectQuery,
 } from '../types/mod.ts';
-import { PGPool } from '../../dependencies.ts';
+import { PGPool, PGClient } from '../../dependencies.ts';
 import type { PGClientOptions } from '../../dependencies.ts';
 
 import { NormError, QueryError } from '../errors/mod.ts';
 
 export class PostgresClient<O extends PostgresConfig = PostgresConfig>
   extends AbstractClient<O> {
-  declare protected _client: PGPool;
+  // declare protected _client: PGPool;
+  declare protected _client: PGClient;
 
   constructor(name: string, options: NonNullable<O> | O) {
     const defaults: Partial<PostgresConfig> = {
@@ -41,11 +42,13 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
         },
       },
       poolSize = this._getOption('poolSize') as number || 1;
-    this._client = await new PGPool(
-      pgConfig,
-      poolSize,
-      this._options.lazyConnect === true,
-    );
+    // this._client = await new PGPool(
+    //   pgConfig,
+    //   poolSize,
+    //   this._options.lazyConnect === true,
+    // );
+    this._client = new PGClient(pgConfig);
+    await this._client.connect();
     // Hack to test the connection, if there is something wrong it will throw immediately
     // await (await this._client.connect()).release();
   }
@@ -56,9 +59,8 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
 
   protected async _ping(): Promise<boolean> {
     const sql = `SELECT 1+1 AS result`,
-      client = await this._client.connect(),
-      { result } = (await client.queryObject<{ result: number }>(sql)).rows[0];
-    await client.release();
+      // client = await this._client.connect(),
+      { result } = (await this._client.queryObject<{ result: number }>(sql)).rows[0];
     return result === 2;
   }
 
@@ -69,11 +71,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
   ): Promise<{ type: QueryType; data?: Entity[]; count?: number }> {
     try {
       // first get the client
-      if (this._client.available < 1) {
-        this.emit('poolWait', this.name, this._client.size);
-      }
-      const client = await this._client.connect(),
-        sql = this._queryTranslator.translate(query),
+      const sql = this._queryTranslator.translate(query),
         queryType = this._queryType(sql),
         countQuery = this._queryTranslator.translate({
           ...query as CountQuery<Entity>,
@@ -90,12 +88,12 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
           (query as SelectQuery).pagination) || query.type === QueryTypes.DELETE
       ) {
         const result =
-          (await client.queryObject<{ TotalRows: number }>(countQuery)).rows[0];
+          (await this._client.queryObject<{ TotalRows: number }>(countQuery)).rows[0];
         actualRows = result.TotalRows;
       }
 
       // Run the actual query
-      const result = await client.queryObject<Entity>(sql);
+      const result = await this._client.queryObject<Entity>(sql);
       if (query.type === QueryTypes.COUNT) {
         const dt: { totalrows: number } = result.rows[0] as unknown as {
           totalrows: number;
@@ -108,8 +106,6 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
       if (actualRows > -1) {
         retVal.count = actualRows;
       }
-
-      client.release();
       return retVal;
     } catch (error) {
       if (error instanceof NormError) {
