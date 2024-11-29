@@ -15,6 +15,16 @@ import { NormError, QueryError } from '../errors/mod.ts';
 export class MariaClient<O extends MariaConfig = MariaConfig>
   extends AbstractClient<O> {
   declare protected _client: MySQL;
+
+  override get poolInfo(): { size: number; available: number; inUse: number } {
+    return {
+      size: this._client.pool?.size || 10,
+      available: this._client.pool?.available || 0,
+      inUse: (this._client.pool?.size || 10) -
+        (this._client.pool?.available || 0),
+    };
+  }
+
   constructor(name: string, options: NonNullable<O> | O) {
     const defaults: Partial<MariaConfig> = {
       dialect: 'MARIADB',
@@ -94,7 +104,12 @@ export class MariaClient<O extends MariaConfig = MariaConfig>
       if (error instanceof NormError) {
         throw error;
       } else {
-        throw new QueryError(error.message, query, this.name, this.dialect);
+        throw new QueryError(
+          (error as Error).message,
+          query,
+          this.name,
+          this.dialect,
+        );
       }
     }
   }

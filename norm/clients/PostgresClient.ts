@@ -17,6 +17,14 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
   declare protected _client: PGPool;
   // declare protected _client: PGClient;
 
+  override get poolInfo(): { size: number; available: number; inUse: number } {
+    return {
+      size: this._client.size,
+      available: this._client.available,
+      inUse: this._client.size - this._client.available,
+    };
+  }
+
   constructor(name: string, options: NonNullable<O> | O) {
     const defaults: Partial<PostgresConfig> = {
       dialect: 'POSTGRES',

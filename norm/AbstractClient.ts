@@ -73,6 +73,8 @@ export abstract class AbstractClient<
     return this._encryptionKey;
   }
 
+  abstract get poolInfo(): { size: number; available: number; inUse: number };
+
   public async connect(): Promise<void> {
     try {
       if (this._state === 'CLOSED') {
@@ -84,7 +86,7 @@ export abstract class AbstractClient<
       this._state = 'CLOSED';
       // console.log(e);
       // Handle all errors
-      throw new ConnectionError(e.message, this.name, this.dialect);
+      throw new ConnectionError((e as Error).message, this.name, this.dialect);
     }
   }
 
@@ -164,7 +166,12 @@ export abstract class AbstractClient<
       if (e instanceof NormError) {
         err = e;
       } else {
-        err = new QueryError(e.message, sql, this.name, this.dialect);
+        err = new QueryError(
+          (e as Error).message,
+          sql,
+          this.name,
+          this.dialect,
+        );
       }
       throw err;
     } finally {
