@@ -75,6 +75,9 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
       const { result } =
         (await client.queryObject<{ result: number }>(sql)).rows[0]; // Execute the query and get the result
       return result === 2; // Check if the result is 2
+    } catch (e) {
+      console.log(`----------------------PING RES: ${e}`);
+      return false;
     } finally {
       await client.release(); // Release the connection back to the pool
     }

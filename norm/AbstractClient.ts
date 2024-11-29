@@ -125,6 +125,7 @@ export abstract class AbstractClient<
       await this.connect();
       return this._ping();
     } catch (_e) {
+      console.log(`-----------------PING ERROR: ${_e}`);
       return false;
     }
   }
