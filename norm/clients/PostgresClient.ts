@@ -53,7 +53,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
           },
         },
         poolSize = this._getOption('poolSize') as number || 10;
-      console.log(`Connecting to Postgres with pool size: ${poolSize} and Lazy: ${this._options.lazyConnect === true}`);
+      console.log(`Connecting to Postgres with pool size: ${poolSize} and Lazy: ${this._options.lazyConnect}, ${this._options.lazyConnect === true}`);
       this._client = await new PGPool(
         pgConfig,
         poolSize,
