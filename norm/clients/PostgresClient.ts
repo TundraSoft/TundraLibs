@@ -57,7 +57,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
       this._client = await new PGPool(
         pgConfig,
         poolSize,
-        this._options.lazyConnect == true,
+        this._options.lazyConnect,
       );
       // Hack to test the connection, if there is something wrong it will throw immediately
       await (await this._client.connect()).release();
