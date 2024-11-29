@@ -51,9 +51,6 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
           connection: {
             attempts: 1,
           },
-          options: {
-            connect_timeout: '30', 
-          }, 
         },
         poolSize = this._getOption('poolSize') as number || 10;
       console.log(`Connecting to Postgres with pool size: ${poolSize} and Lazy: ${this._options.lazyConnect === true}`);
