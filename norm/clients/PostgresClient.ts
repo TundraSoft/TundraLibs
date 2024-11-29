@@ -70,13 +70,13 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
 
   protected async _ping(): Promise<boolean> {
     const sql = `SELECT 1+1 AS result`,
-      client = await this._client.connect();
+      client = await this._client.connect(); // Acquire a connection from the pool
     try {
       const { result } =
-        (await client.queryObject<{ result: number }>(sql)).rows[0];
-      return result === 2;
+        (await client.queryObject<{ result: number }>(sql)).rows[0]; // Execute the query and get the result
+      return result === 2; // Check if the result is 2
     } finally {
-      await client.release();
+      await client.release(); // Release the connection back to the pool
     }
   }
 
