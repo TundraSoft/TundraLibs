@@ -38,30 +38,35 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
   }
 
   protected async _connect(): Promise<void> {
-    // Suffix the hostname
-    const name = `${this._name}-${Deno.hostname()}`;
-    const pgConfig: PGClientOptions = {
-        applicationName: name,
-        hostname: this._options.host,
-        port: this._options.port,
-        user: this._options.userName,
-        password: this._options.password,
-        database: this._options.database,
-        connection: {
-          attempts: 1,
+    try {
+      // Suffix the hostname
+      const name = `${this._name}-${Deno.hostname()}`;
+      const pgConfig: PGClientOptions = {
+          applicationName: name,
+          hostname: this._options.host,
+          port: this._options.port,
+          user: this._options.userName,
+          password: this._options.password,
+          database: this._options.database,
+          connection: {
+            attempts: 1,
+          },
         },
-      },
-      poolSize = this._getOption('poolSize') as number || 10;
-    this._client = await new PGPool(
-      pgConfig,
-      poolSize,
-      this._options.lazyConnect === true,
-    );
-    // Hack to test the connection, if there is something wrong it will throw immediately
-    await (await this._client.connect()).release();
+        poolSize = this._getOption('poolSize') as number || 10;
+      this._client = await new PGPool(
+        pgConfig,
+        poolSize,
+        this._options.lazyConnect === true,
+      );
+      // Hack to test the connection, if there is something wrong it will throw immediately
+      await (await this._client.connect()).release();
 
-    // this._client = new PGClient(pgConfig);
-    // await this._client.connect();
+      // this._client = new PGClient(pgConfig);
+      // await this._client.connect();
+    } catch (error) {
+      console.log(`----------------------CONNECT RES: ${error}`);
+      throw error;
+    }
   }
 
   protected async _disconnect(): Promise<void> {
