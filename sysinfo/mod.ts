@@ -49,7 +49,8 @@ export const Sysinfo = {
     | 'netbsd'
     | 'aix'
     | 'solaris'
-    | 'illumos' {
+    | 'illumos'
+    | 'android' {
     return Deno.build.os;
   },
 
@@ -210,7 +211,7 @@ export const Sysinfo = {
           const data = new TextDecoder().decode(await Deno.readFile(file)),
             lines = data.split('\n'),
             pattern = new RegExp(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/),
-            isQuoted = new RegExp(/^('|")[^\1].*(\1)$/);
+            isQuoted = new RegExp(/^(['"])[^'"].*\1$/);
           lines.forEach((line) => {
             if (pattern.test(line)) {
               const record = line.match(pattern),

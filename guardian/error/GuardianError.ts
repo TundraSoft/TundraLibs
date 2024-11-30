@@ -17,7 +17,7 @@ export class GuardianError extends Error {
     return this.#path?.join('.');
   }
 
-  public get message(): string {
+  public override get message(): string {
     return this.#message;
   }
 

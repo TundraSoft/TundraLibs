@@ -507,7 +507,7 @@ array if schedule does not exist
             output = await job.action.apply(null, job.arguments || []);
           } catch (e) {
             // Call error
-            error = e;
+            error = e as Error;
           } finally {
             const timeTaken = (performance.now() - stTime) / 1000;
             if (error !== undefined) {
