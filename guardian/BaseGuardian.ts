@@ -182,7 +182,7 @@ export class BaseGuardian<F extends FunctionType> {
         );
       }
     } catch (e) {
-      err = e;
+      err = e as GuardianError;
     }
     return [err, res];
   }

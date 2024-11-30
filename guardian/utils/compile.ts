@@ -125,6 +125,7 @@ export function compile<S>(struct: S, options?: Partial<StructOptions>) {
           //   path: [...path, key],
           // });
           // console.log([...path, key])
+          // @ts-ignore - This is a valid error
           errors.push(makeError(e, [...path, key]));
         }
       });

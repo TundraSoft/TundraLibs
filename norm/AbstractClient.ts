@@ -40,6 +40,11 @@ export abstract class AbstractClient<
   declare protected _client: unknown;
   protected _queryTranslator: QueryTranslator;
   protected _longQueryTime: number = 500;
+  protected _stats: { total: number; slow: number; time: number } = {
+    total: 0,
+    slow: 0,
+    time: 0,
+  };
 
   constructor(name: string, config: NonNullable<O> | O) {
     super(config);
@@ -73,6 +78,22 @@ export abstract class AbstractClient<
     return this._encryptionKey;
   }
 
+  get dbStats(): {
+    pool: { size: number; available: number; inUse: number };
+    total: number;
+    slow: number;
+    time: number;
+  } {
+    return {
+      pool: this.poolInfo,
+      total: this._stats.total,
+      slow: this._stats.slow,
+      time: this._stats.time,
+    };
+  }
+
+  abstract get poolInfo(): { size: number; available: number; inUse: number };
+
   public async connect(): Promise<void> {
     try {
       if (this._state === 'CLOSED') {
@@ -84,7 +105,7 @@ export abstract class AbstractClient<
       this._state = 'CLOSED';
       // console.log(e);
       // Handle all errors
-      throw new ConnectionError(e.message, this.name, this.dialect);
+      throw new ConnectionError((e as Error).message, this.name, this.dialect);
     }
   }
 
@@ -104,6 +125,7 @@ export abstract class AbstractClient<
       await this.connect();
       return this._ping();
     } catch (_e) {
+      // console.log(`-----------------PING ERROR: ${_e}`);
       return false;
     }
   }
@@ -164,10 +186,23 @@ export abstract class AbstractClient<
       if (e instanceof NormError) {
         err = e;
       } else {
-        err = new QueryError(e.message, sql, this.name, this.dialect);
+        err = new QueryError(
+          (e as Error).message,
+          sql,
+          this.name,
+          this.dialect,
+        );
       }
       throw err;
     } finally {
+      this._stats.total++;
+      if (retVal.time > this._longQueryTime) {
+        this._stats.slow++;
+      }
+      // Calculate average time
+      this._stats.time =
+        (this._stats.time * (this._stats.total - 1) + retVal.time) /
+        this._stats.total;
       this.emit(
         'query',
         this.name,
