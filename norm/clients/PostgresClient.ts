@@ -53,7 +53,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
           },
         },
         poolSize = this._getOption('poolSize') as number || 10;
-      console.log(`Connecting to Postgres with pool size: ${poolSize} and Lazy: ${this._options.lazyConnect} ${typeof this._options.lazyConnect}, ${this._options.lazyConnect == true}`);
+      // console.log(`Connecting to Postgres with pool size: ${poolSize} and Lazy: ${this._options.lazyConnect} ${typeof this._options.lazyConnect}, ${this._options.lazyConnect == true}`);
       this._client = await new PGPool(
         pgConfig,
         poolSize,
@@ -65,7 +65,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
       // this._client = new PGClient(pgConfig);
       // await this._client.connect();
     } catch (error) {
-      console.log(`----------------------CONNECT RES: ${error}`);
+      // console.log(`----------------------CONNECT RES: ${error}`);
       throw error;
     }
   }
@@ -82,7 +82,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
         (await client.queryObject<{ result: number }>(sql)).rows[0]; // Execute the query and get the result
       return result === 2; // Check if the result is 2
     } catch (e) {
-      console.log(`----------------------PING RES: ${e}`);
+      // console.log(`----------------------PING RES: ${e}`);
       return false;
     } finally {
       await client.release(); // Release the connection back to the pool
