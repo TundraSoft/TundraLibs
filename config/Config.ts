@@ -134,7 +134,6 @@ class Configurations {
    * @throws ConfigPermissionError if read only permission is not given to the path
    * @throws DuplicateConfig if the same config file is found twice
    */
-  @memoize
   protected async _checkPath(dir: string) {
     try {
       const stat = await Deno.stat(dir);
@@ -160,7 +159,6 @@ class Configurations {
    * @throws ConfigPermissionError if read only permission is not given to the path
    * @throws DuplicateConfig if the same config file is found twice
    */
-  @memoize
   protected async _scanPath(dir: string, file?: string) {
     // First check if the path is valid
     await this._checkPath(dir);
