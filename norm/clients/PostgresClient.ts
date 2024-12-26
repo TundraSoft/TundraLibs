@@ -98,24 +98,23 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
     try {
       const sql = this._queryTranslator.translate(query),
         queryType = this._queryType(sql),
-        countQuery = this._queryTranslator.translate({
-          ...query as CountQuery<Entity>,
-          type: QueryTypes.COUNT,
-        }),
+        // countQuery = this._queryTranslator.translate({
+        //   ...query as CountQuery<Entity>,
+        //   type: QueryTypes.COUNT,
+        // }),
         retVal: { type: QueryType; data?: Entity[]; count?: number } = {
           type: queryType,
         };
-      let actualRows = -1;
-
-      // Get count output if and only if it is select with pagination or if it is a delete query
-      if (
-        (query.type === QueryTypes.SELECT &&
-          (query as SelectQuery).pagination) || query.type === QueryTypes.DELETE
-      ) {
-        const result =
-          (await client.queryObject<{ TotalRows: number }>(countQuery)).rows[0];
-        actualRows = result.TotalRows;
-      }
+      // let actualRows = -1;
+      // // Get count output if and only if it is select with pagination or if it is a delete query
+      // if (
+      //   (query.type === QueryTypes.SELECT &&
+      //     (query as SelectQuery).pagination) || query.type === QueryTypes.DELETE
+      // ) {
+      //   const result =
+      //     (await client.queryObject<{ TotalRows: number }>(countQuery)).rows[0];
+      //   actualRows = result.TotalRows;
+      // }
 
       // Run the actual query
       const result = await client.queryObject<Entity>(sql);
@@ -128,9 +127,9 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
         retVal.data = result.rows;
         retVal.count = result.rowCount;
       }
-      if (actualRows > -1) {
-        retVal.count = actualRows;
-      }
+      // if (actualRows > -1) {
+      //   retVal.count = actualRows;
+      // }
       return retVal;
     } catch (error) {
       if (error instanceof NormError) {
