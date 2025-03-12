@@ -14,13 +14,21 @@ export { BaseGuardian } from './BaseGuardian.ts';
 
 export {
   arrayGuard,
+  ArrayGuardian,
   bigintGuard,
+  BigintGuardian,
   booleanGuard,
+  BooleanGuardian,
   dateGuard,
+  DateGuardian,
   Guardian,
+  UnknownGuardian,
   numberGuard,
+  NumberGuardian,
   objectGuard,
+  ObjectGuardian,
   stringGuard,
+  StringGuardian,
   Struct,
 } from './Guardians/mod.ts';
 
