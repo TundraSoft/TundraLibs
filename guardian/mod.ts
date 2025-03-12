@@ -22,7 +22,6 @@ export {
   dateGuard,
   DateGuardian,
   Guardian,
-  UnknownGuardian,
   numberGuard,
   NumberGuardian,
   objectGuard,
@@ -30,6 +29,7 @@ export {
   stringGuard,
   StringGuardian,
   Struct,
+  UnknownGuardian,
 } from './Guardians/mod.ts';
 
 export { GuardianError } from './error/mod.ts';
