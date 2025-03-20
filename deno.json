@@ -29,6 +29,7 @@
       "./.vscode",
       "./.git",
       "./.github",
+      "./.sonarlint",
       "./.devcontainer",
       "**/fixtures/**"
     ]
@@ -44,6 +45,7 @@
       "./.vscode",
       "./.git",
       "./.github",
+      "./.sonarlint",
       "./.devcontainer",
       "**/fixtures/**"
     ]
