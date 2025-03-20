@@ -1,5 +1,5 @@
 {
-    "sonarCloudOrganization": "tundrasoft",
-    "projectKey": "TundraSoft_TundraLibs",
-    "region": "IN"
+  "sonarCloudOrganization": "tundrasoft",
+  "projectKey": "TundraSoft_TundraLibs",
+  "region": "IN"
 }
