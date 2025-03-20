@@ -51,9 +51,7 @@ body:
       options:
         - Workflow
         - crypt
-        - events
         - id
-        - options
         - utils
   - type: input
     id: package-version

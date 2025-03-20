@@ -1,6 +1,6 @@
 import * as asserts from '$asserts';
-import { type EventOptionsKeys, Options } from './mod.ts';
-import type { EventCallback } from '@tundralibs/events';
+import { type EventOptionsKeys, Options } from './Options.ts';
+import type { EventCallback } from './Events.ts';
 
 Deno.test('Options', async (t) => {
   type Opt = { a?: string; b?: number; c: boolean };

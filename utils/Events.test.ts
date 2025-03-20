@@ -1,5 +1,5 @@
 import * as asserts from '$asserts';
-import { Events } from './mod.ts';
+import { Events } from './Events.ts';
 
 // Helper function to create a delayed function
 const createDelayedFunction = (delay: number, callback: () => void) => {

@@ -1,4 +1,4 @@
-import { type EventCallback, Events } from '@tundralibs/events';
+import { type EventCallback, Events } from './Events.ts';
 import { type PrivateObject, privateObject } from '../utils/mod.ts';
 
 /**

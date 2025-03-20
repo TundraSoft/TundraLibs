@@ -30,9 +30,7 @@ jobs:
           scopes: |-
             workflows
             crypt
-            events
             id
-            options
             utils
           requireScope: true
           subjectPattern: '^[A-Z].+$'
