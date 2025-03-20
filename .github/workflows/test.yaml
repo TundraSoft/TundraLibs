@@ -149,9 +149,9 @@ jobs:
       - name: Run tests
         run: deno task test:run && deno task test:bench && deno coverage coverage --lcov cov --output=coverage/report.lcov
       
-      - name: 'Generate coverage report'
-        if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
-        run: genhtml -o coverage/html coverage/report.lcov
+      # - name: 'Generate coverage report'
+      #   if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
+      #   run: genhtml -o coverage/html coverage/report.lcov
       
       - name: Collect coverage
         if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
@@ -160,11 +160,11 @@ jobs:
           file: coverage/report.lcov
           token: ${{ secrets.CODECOV_TOKEN }} # required
       
-      - name: Fix LCOV output for SonarCloud
-        if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
-        run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' coverage/report.lcov
+      # - name: Fix LCOV output for SonarCloud
+      #   if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
+      #   run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' coverage/report.lcov
       
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v5.0.0 # Ex: v4.1.0, See the latest version at https://github.com/marketplace/actions/official-sonarqube-scan
+        uses: SonarSource/sonarqube-scan-action@v5.0.0 
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
