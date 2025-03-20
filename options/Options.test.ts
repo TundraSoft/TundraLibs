@@ -1,223 +1,137 @@
-import { Options } from './mod.ts';
-import type { OptionsKey, OptionsType } from './mod.ts';
-import { assertEquals, assertNotEquals } from '../dev.dependencies.ts';
+import * as asserts from '$asserts';
+import { type EventOptionsKeys, Options } from './mod.ts';
+import type { EventCallback } from '@tundralibs/events';
 
-//#region Typed Options
-type iTypedOptions = {
-  value1: string;
-  value2: number;
-  value3: {
-    value31: boolean;
-  };
-  value44?: Array<string>;
-};
-class TypedOption extends Options<iTypedOptions> {
-  constructor(
-    options: NonNullable<iTypedOptions> | Partial<iTypedOptions>,
-    defaults?: Partial<iTypedOptions>,
-  ) {
-    super(options, defaults);
+Deno.test('Options', async (t) => {
+  type Opt = { a?: string; b?: number; c: boolean };
+  type Evnt = { change: () => void };
+  class TypedOptions extends Options<Opt, Evnt> {
+    constructor(opt: EventOptionsKeys<Opt, Evnt>) {
+      super(opt, { b: 10 });
+    }
+
+    update() {
+      this._setOption('a', 'hello');
+      this._setOption('b', 20);
+      this._setOption('c', true);
+    }
+
+    updateInvalid() {
+      this._setOption('a', undefined);
+    }
+
+    override _validateOption<K extends keyof Opt>(
+      key: K,
+      value: Opt[K],
+    ): boolean {
+      if (key === 'a' && typeof value !== 'string') {
+        throw new Error('Invalid value');
+      }
+      return true;
+    }
   }
 
-  // deno-lint-ignore no-explicit-any
-  public setOptions(name: keyof iTypedOptions, value: any) {
-    this._setOption(name, value);
+  class UnTypedOptions extends Options {
+    constructor(
+      opt: EventOptionsKeys<
+        Record<string, unknown>,
+        Record<string, EventCallback>
+      >,
+    ) {
+      super(opt, { b: 10 });
+    }
+
+    update() {
+      this._setOption('a', 'hello');
+      this._setOption('b', 20);
+      this._setOption('c', true);
+    }
+
+    updateInvalid() {
+      this._setOption('a', 234);
+    }
+
+    override _validateOption(
+      key: string,
+      value: unknown,
+    ): boolean {
+      if (key === 'a' && typeof value !== 'string') {
+        throw new Error('Invalid value');
+      }
+      return true;
+    }
   }
 
-  public getOption(name: keyof iTypedOptions): unknown {
-    return this._getOption(name);
-  }
+  await t.step('should set and fetch options', () => {
+    let cnt = 0;
+    const options = new TypedOptions({ c: true, _onchange: () => cnt++ });
+    asserts.assertEquals(options.getOption('a'), undefined);
+    asserts.assertEquals(options.getOption('b'), 10);
+    asserts.assertEquals(options.getOption('c'), true);
+    options.update();
+    asserts.assertEquals(options.getOption('a'), 'hello');
+    asserts.assertEquals(options.getOption('b'), 20);
+    asserts.assertEquals(options.getOption('c'), true);
 
-  public getOptions() {
-    return this._options;
-  }
+    cnt = 0;
+    const options2 = new UnTypedOptions({ c: true, _onchange: () => cnt++ });
+    asserts.assertEquals(options2.getOption('a'), undefined);
+    asserts.assertEquals(options2.getOption('b'), 10);
+    asserts.assertEquals(options2.getOption('c'), true);
+    options2.update();
+    asserts.assertEquals(options2.getOption('a'), 'hello');
+    asserts.assertEquals(options2.getOption('b'), 20);
+    asserts.assertEquals(options2.getOption('c'), true);
+  });
 
-  public hasOption(name: string): boolean {
-    return this._hasOption(name as keyof iTypedOptions);
-  }
-}
+  await t.step('should register events', () => {
+    let cnt = 0;
+    const options = new TypedOptions({ c: true, _onchange: () => cnt++ });
+    asserts.assertEquals(cnt, 0);
+    options.emit('change');
+    asserts.assertEquals(cnt, 1);
 
-/**
- * Check if option is initialized correctly (Typed)
- */
-Deno.test({
-  name: 'Check if option is initialized correctly (Typed)',
-  fn(): void {
-    const opt: iTypedOptions = {
-      value1: 'Test Value',
-      value2: 1,
-      value3: {
-        value31: true,
-      },
-      value44: ['1', '2'],
-    };
-    const a: TypedOption = new TypedOption(opt);
-    assertEquals(a.getOptions(), opt);
-  },
+    cnt = 0;
+    const options2 = new UnTypedOptions({ c: true, _onchange: () => cnt++ });
+    asserts.assertEquals(cnt, 0);
+    options2.emit('change');
+    asserts.assertEquals(cnt, 1);
+  });
+
+  await t.step('should check if options exist', () => {
+    const options = new TypedOptions({ c: true });
+    asserts.assertEquals(options.hasOption('a'), false);
+    asserts.assertEquals(options.hasOption('b'), true);
+    asserts.assertEquals(options.hasOption('c'), true);
+    options.update();
+    asserts.assertEquals(options.hasOption('a'), true);
+    asserts.assertEquals(options.hasOption('b'), true);
+    asserts.assertEquals(options.hasOption('c'), true);
+
+    const options2 = new UnTypedOptions({ c: true });
+    asserts.assertEquals(options2.hasOption('a'), false);
+    asserts.assertEquals(options2.hasOption('b'), true);
+    asserts.assertEquals(options2.hasOption('c'), true);
+    options2.update();
+    asserts.assertEquals(options2.hasOption('a'), true);
+    asserts.assertEquals(options2.hasOption('b'), true);
+    asserts.assertEquals(options2.hasOption('c'), true);
+  });
+
+  await t.step('should not throw error if option key is missing', () => {
+    // Ideally this should never be run, maybe we throw error for typed???
+    // const options = new TypedOptions({ c: true });
+    // asserts.assertEquals(options.getOption('some_key'), undefined);
+
+    const options2 = new UnTypedOptions({ c: true });
+    asserts.assertEquals(options2.getOption('some_key'), undefined);
+  });
+
+  await t.step('should throw error if option value is invalid', () => {
+    const options = new TypedOptions({ c: true });
+    asserts.assertThrows(() => options.updateInvalid(), Error);
+
+    const options2 = new UnTypedOptions({ c: true });
+    asserts.assertThrows(() => options2.updateInvalid(), Error);
+  });
 });
-
-/**
- * Ensure set option is cloned and not referenced (Typed)
- */
-Deno.test({
-  name: 'Ensure set option is cloned and not referenced (Typed)',
-  fn(): void {
-    const opt: iTypedOptions = {
-      value1: 'Test Value',
-      value2: 1,
-      value3: {
-        value31: true,
-      },
-      value44: ['1', '2'],
-    };
-    const a: TypedOption = new TypedOption(opt);
-    opt.value1 = 'Changed';
-    assertNotEquals(a.getOptions(), opt);
-  },
-});
-
-/**
- * Initialize with default value (Typed)
- */
-Deno.test({
-  name: 'Initialize with default value (Typed)',
-  fn(): void {
-    const opt: Partial<iTypedOptions> = {
-      value1: 'Test Value',
-      value2: 1,
-    };
-    const def: Partial<iTypedOptions> = {
-      value3: {
-        value31: true,
-      },
-      value44: ['1', '2'],
-    };
-    const a: TypedOption = new TypedOption(opt, def);
-    assertEquals(a.getOptions(), { ...opt, ...def });
-  },
-});
-
-/**
- * Check if config value exists (Typed)
- */
-Deno.test({
-  name: 'Check if config value exists (Typed)',
-  fn(): void {
-    const opt: iTypedOptions = {
-      value1: 'Test Value',
-      value2: 1,
-      value3: {
-        value31: true,
-      },
-      value44: ['1', '2'],
-    };
-    const a: TypedOption = new TypedOption(opt);
-    assertEquals(a.hasOption('value1'), true);
-    assertEquals(a.hasOption('value32'), false);
-  },
-});
-//#endregion Typed Options
-
-//#region UnTyped Options
-class UnTypedOption extends Options {
-  constructor(options: OptionsType, defaults?: OptionsType) {
-    super(options, defaults);
-  }
-
-  public setOptions(name: OptionsKey, value: unknown) {
-    this._setOption(name, value);
-  }
-
-  public getOption(name: OptionsKey): unknown {
-    return this._getOption(name);
-  }
-
-  public getOptions() {
-    return this._options;
-  }
-
-  public hasOption(name: OptionsKey): boolean {
-    return this._hasOption(name);
-  }
-}
-
-/**
- * Check if option is initialized correctly (UnTyped)
- */
-Deno.test({
-  name: 'Check if option is initialized correctly (UnTyped)',
-  fn(): void {
-    const opt = {
-      value1: 'Test Value',
-      value2: 1,
-      value3: {
-        value31: true,
-      },
-      value44: ['1', '2'],
-    };
-    const a: UnTypedOption = new UnTypedOption(opt);
-    assertEquals(a.getOptions(), opt);
-  },
-});
-
-/**
- * Ensure set option is cloned and not referenced (UnTyped)
- */
-Deno.test({
-  name: 'Ensure set option is cloned and not referenced (UnTyped)',
-  fn(): void {
-    const opt = {
-      value1: 'Test Value',
-      value2: 1,
-      value3: {
-        value31: true,
-      },
-      value44: ['1', '2'],
-    };
-    const a: UnTypedOption = new UnTypedOption(opt);
-    opt.value1 = 'Changed';
-    assertNotEquals(a.getOptions(), opt);
-  },
-});
-
-/**
- * Initialize with default value (UnTyped)
- */
-Deno.test({
-  name: 'Initialize with default value (UnTyped)',
-  fn(): void {
-    const opt = {
-      value1: 'Test Value',
-      value2: 1,
-    };
-    const def = {
-      value3: {
-        value31: true,
-      },
-      value44: ['1', '2'],
-    };
-    const a: UnTypedOption = new UnTypedOption(opt, def);
-    assertEquals(a.getOptions(), { ...opt, ...def });
-  },
-});
-
-/**
- * Check if config value exists (UnTyped)
- */
-Deno.test({
-  name: 'Check if config value exists (UnTyped)',
-  fn(): void {
-    const opt = {
-      value1: 'Test Value',
-      value2: 1,
-      value3: {
-        value31: true,
-      },
-      value44: ['1', '2'],
-    };
-    const a: UnTypedOption = new UnTypedOption(opt);
-    assertEquals(a.hasOption('value1'), true);
-    assertEquals(a.hasOption('value32'), false);
-  },
-});
-//#endregion UnTyped Options

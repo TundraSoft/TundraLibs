@@ -1,0 +1,19 @@
+workflows:
+  - changed-files:
+      - any-glob-to-any-file: .github/*
+      - any-glob-to-any-file: .vscode/*
+crypt:
+  - changed-files:
+      - any-glob-to-any-file: crypt/*
+events:
+  - changed-files:
+      - any-glob-to-any-file: events/*
+id:
+  - changed-files:
+      - any-glob-to-any-file: id/*
+options:
+  - changed-files:
+      - any-glob-to-any-file: options/*
+utils:
+  - changed-files:
+      - any-glob-to-any-file: utils/*

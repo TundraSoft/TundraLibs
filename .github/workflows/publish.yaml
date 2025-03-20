@@ -1,0 +1,38 @@
+name: 'Publish Packages'
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:
+
+  push:
+    paths-ignore:
+      - .dockerignore
+      - .gitignore
+      - .github/ISSUE_TEMPLATE/*
+      - .github/PULL_REQUEST_TEMPLATE*
+      - '**.md'
+      - ./LICENSE
+  pull_request:
+    branches: [main]
+
+jobs:
+  publish-dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: canary
+
+      - name: Publish (dry run)
+        run: deno publish --dry-run

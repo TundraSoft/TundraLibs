@@ -1,28 +1,22 @@
-# Description
+# Pull Request
 
-Please include a summary of the change and which issue is fixed. Please also
-include relevant motivation and context. List any dependencies that are required
-for this change.
+## Description
+<!-- Brief description of what this PR does -->
 
-Fixes # (issue)
+## Related Issues
+<!-- List issues with "Fixes #123" or "Closes #123" -->
 
-### Known downstream dependencies
+## Type of Change
+<!-- Mark with an [x] -->
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Breaking change
+- [ ] Documentation
+- [ ] Other: _____
 
-### Type of change
+## Quick Checklist
+- [ ] I've tested these changes
+- [ ] Code follows project standards
+- [ ] Added/updated necessary docs
 
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to
-      not work as expected)
-- [ ] This change requires a documentation update
-
-### Checklist:
-
-- [ ] Code follows the style guidelines of this project
-- [ ] Executed deno --fmt and deno --test locally before pushing
-- [ ] Code is well commented
-- [ ] Documentation has been updated
-- [ ] No new warnings are generated
-- [ ] Test cases have been updated to reflect the changes/fixes
-- [ ] New and existing unit tests pass locally with changes
-- [ ] Any dependent changes have been merged and published in downstream modules
+<!-- Note: GitHub automatically shows all commits in this PR - no need to list them manually -->

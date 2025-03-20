@@ -1,36 +1,69 @@
-deno.lock
-*.orig
-*.pyc
-*.swp
-.env
-
-/.cargo_home/
-/.idea/
-gclient_config.py_entries
-/gh-pages/
-/target/
-/std/hash/_wasm/target
-/tools/wpt/manifest.json
-
-# Files that help ensure VSCode can work but we don't want checked into the
-# repo
-/node_modules
-/tsconfig.json
-
-# compiled wasm files
-std/wasi/testdata/snapshot_preview1/
-
-# generated v8 coverage files
-cli/tests/.test_coverage/
-
-# MacOS generated files
+# OS generated files
 .DS_Store
 .DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Icon?
+Desktop.ini
 
-# Flamegraphs
-/flamebench*.svg
-/flamegraph*.svg
+# Editor and IDE files
+.idea/
+.vim/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+*.swp
+*.swo
+*~
+.history/
+*.sublime-*
 
-# WPT generated cert files
-/tools/wpt/certs/index.txt*
-/tools/wpt/certs/serial*
+# Deno specific
+deno.lock
+.deno/
+.cache/
+
+# Coverage and testing
+**/coverage/
+html_cov/
+coverage.lcov
+coverage/
+.nyc_output/
+
+# Build and output directories
+dist/
+build/
+out/
+docs/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependency directories (if any)
+node_modules/
+jspm_packages/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock

@@ -1,0 +1,12 @@
+{
+  "name": "@tundralibs/id",
+  "version": "0.1.0",
+  "description": "Collection of ID generators",
+  "exports": {
+    ".": "./mod.ts",
+    "./nanoID": "./nanoID.ts",
+    "./ObjectId": "./ObjectID.ts",
+    "./sequenceID": "./sequenceID.ts",
+    "./simpleID": "./simpleID.ts"
+  }
+}

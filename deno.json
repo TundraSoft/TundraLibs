@@ -1,54 +1,94 @@
 {
   "compilerOptions": {
-    "allowJs": false,
-    "lib": [
-      "deno.window"
-    ],
-    "strict": true
+    "strict": true,
+    "useUnknownInCatchVariables": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "allowUnreachableCode": false,
+    "noErrorTruncation": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true
+  },
+  "unstable": [
+    "ffi"
+  ],
+  "imports": {
+    "$asserts": "jsr:@std/assert@^1.0.0",
+    "$testing": "jsr:@std/testing@^1.0.0",
+    "$fs": "jsr:@std/fs@^1.0.0",
+    "$path": "jsr:@std/path@^1.0.0"
   },
   "lint": {
-    "files": {
-      "include": [
-        "./"
-      ],
-      "exclude": [
-        "*/testdata/*"
-      ]
-    },
+    "report": "pretty",
     "rules": {
       "tags": [
         "recommended"
-      ],
-      "include": [
-        "ban-untagged-todo"
-      ],
-      "exclude": [
-        "no-unused-vars"
       ]
-    }
+    },
+    "exclude": [
+      "./.vscode",
+      "./.git",
+      "./.github",
+      "./.devcontainer",
+      "**/fixtures/**"
+    ]
   },
   "fmt": {
-    "include": ["./"],
-    "exclude": ["*/testdata/"],
-    "semiColons": true,
-    "lineWidth": 80,
     "indentWidth": 2,
+    "lineWidth": 80,
+    "useTabs": false,
+    "proseWrap": "preserve",
+    "semiColons": true,
     "singleQuote": true,
-    "proseWrap": "preserve"
-  },
-  "tasks": {
-    "build": "deno fmt && deno lint && deno cache --reload ./dependencies.ts",
-    "test": "deno task build && deno cache --reload ./dev.dependencies.ts && deno test -A"
+    "exclude": [
+      "./.vscode",
+      "./.git",
+      "./.github",
+      "./.devcontainer",
+      "**/fixtures/**"
+    ]
   },
   "test": {
-    "files": {
-      "include": [
-        "./"
-      ],
-      "exclude": [
-        "*/testdata/"
-      ]
-    }
+    "exclude": [
+      "./.vscode",
+      "./.git",
+      "./.github",
+      "./.devcontainer",
+      "coverage",
+      "docs",
+      "**/fixtures/**"
+    ]
   },
-  "lock": false
+  "bench": {
+    "exclude": [
+      "./.vscode",
+      "./.git",
+      "./.github",
+      "./.devcontainer",
+      "coverage",
+      "docs",
+      "**/fixtures/**"
+    ]
+  },
+  "tasks": {
+    "check": "deno task check:fmt && deno task check:lint && deno task check:types",
+    "check:fmt": "deno fmt --check",
+    "check:lint": "deno lint",
+    "check:types": "deno check **/*.ts",
+    "test": "deno task test:run && deno task test:report && deno task test:bench",
+    "test:run": "deno test --allow-read --allow-write --allow-env --allow-net --allow-ffi --allow-sys --parallel --coverage=coverage",
+    "test:report": "deno coverage coverage",
+    "test:bench": "deno bench --allow-read --allow-write --allow-env --allow-net --allow-ffi --allow-sys || true",
+    "workspace:add": "deno run --allow-read --allow-sys --allow-write .github/workspace.ts add",
+    "workspace:remove": "deno run --allow-read --allow-sys --allow-write .github/workspace.ts remove",
+    "workspace:sync": "deno run --allow-read --allow-sys --allow-write .github/workspace.ts sync"
+  },
+  "lock": true,
+  "workspace": [
+    "./crypt",
+    "./events",
+    "./id",
+    "./options",
+    "./utils"
+  ]
 }

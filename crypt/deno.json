@@ -1,0 +1,17 @@
+{
+  "name": "@tundralibs/crypt",
+  "version": "0.1.0",
+  "description": "Collection of cryptographic functions",
+  "exports": {
+    ".": "./mod.ts",
+    "./digest": "./digest.ts",
+    "./encrypt": "./encrypt.ts",
+    "./keygenerator": "./keyGenerator.ts",
+    "./OTP": "./OTP.ts",
+    "./sign": "./sign.ts"
+  },
+  "imports": {
+    "$encoding": "jsr:@std/encoding@^1.0.0",
+    "$fmt": "jsr:@std/fmt@^1.0.0"
+  }
+}

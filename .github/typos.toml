@@ -1,0 +1,9 @@
+[default]
+check-filename = true
+
+[files]
+extend-exclude = [
+  "*.json",
+  "*test.ts",
+  "*bench.ts",
+]

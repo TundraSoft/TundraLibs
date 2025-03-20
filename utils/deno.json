@@ -1,0 +1,21 @@
+{
+  "name": "@tundralibs/utils",
+  "version": "0.1.0",
+  "description": "Collection of helper or utility functions which are too small to be a project on their own.",
+  "exports": {
+    ".": "./mod.ts",
+    "./envArgs": "./envArgs.ts",
+    "./getFreePort": "./getFreePort.ts",
+    "./isInSubnet": "./isInSubnet.ts",
+    "./isPublicIP": "./isPublicIP.ts",
+    "./isSubnet": "./isSubnet.ts",
+    "./memoize": "./memoize.ts",
+    "./once": "./once.ts",
+    "./privateObject": "./privateObject.ts",
+    "./singleton": "./singleton.ts",
+    "./syslog": "./syslog.ts",
+    "./templatize": "./templatize.ts",
+    "./throttle": "./throttle.ts",
+    "./variableReplacer": "./variableReplacer.ts"
+  }
+}

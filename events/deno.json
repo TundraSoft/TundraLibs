@@ -1,0 +1,9 @@
+{
+  "name": "@tundralibs/events",
+  "version": "0.1.0",
+  "description": "Provides an abstract class to manage events",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "imports": {}
+}

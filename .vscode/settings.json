@@ -1,17 +1,21 @@
 {
   "deno.enable": true,
-  //"deno.lint": true,
-  "deno.unstable": true,
-  "deno.import_intellisense_origins": {
-    "https://deno.land": true
-  },
+  "deno.unstable": [],
+  "deno.cacheOnSave": true,
+  "deno.suggest.imports.autoDiscover": true,
+  "deno.codeLens.implementations": true,
+  "deno.codeLens.references": true,
+  "deno.codeLens.referencesAllFunctions": true,
+  "deno.codeLens.test": true,
+  "deno.codeLens.testArgs": [
+    "--allow-all",
+    "--no-check",
+  ],
+
   "editor.tabSize": 2,
-  "deno.suggest.imports.hosts": {
-    "https://deno.land": true,
-    "https://x.nest.land": true,
-    "https://crux.land": true
-  }
-  // "workbench.editorAssociations": {
-  //   "*.md": "default"
-  // }
+  "editor.formatOnSave": true,
+  "sonarlint.connectedMode.project": {
+    "connectionId": "Sonar",
+    "projectKey": "TundraSoft_TundraLibs"
+  },
 }

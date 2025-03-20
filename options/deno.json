@@ -1,0 +1,9 @@
+{
+  "name": "@tundralibs/options",
+  "version": "0.1.0",
+  "description": "A simple library which allows for easy management of options and events in a library. Primarily used throughout Tundralibs.",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "imports": {}
+}

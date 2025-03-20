@@ -1,0 +1,39 @@
+{
+  "name": "TundraLibs",
+  "dockerFile": "Dockerfile",
+  // Configure tool-specific properties.
+  "customizations": {
+    // Configure properties specific to VS Code.
+    "vscode": {
+      // Set *default* container specific settings.json values on container create.
+      "settings": {
+        "deno.enable": true,
+        "deno.unstable": [],
+        "deno.cacheOnSave": true,
+        "deno.suggest.imports.autoDiscover": true,
+        "deno.codeLens.implementations": true,
+        "deno.codeLens.references": true,
+        "deno.codeLens.referencesAllFunctions": true,
+        "deno.codeLens.test": true,
+        "deno.codeLens.testArgs": [
+          "--allow-all",
+          "--no-check"
+        ],
+        "editor.tabSize": 2,
+        "editor.formatOnSave": true
+      },
+
+      // Add the IDs of extensions you want installed when the container is created.
+      "extensions": [
+        "denoland.vscode-deno",
+        "benjaminbenais.copilot-theme",
+        "GitHub.copilot",
+        "hashrock.fresh-framework-helper",
+        "hashrock.fresh-mini-codegen",
+        "laurencebahiirwa.deno-std-lib-snippets",
+        "SonarSource.sonarlint-vscode"
+      ]
+    }
+  },
+  "remoteUser": "vscode"
+}

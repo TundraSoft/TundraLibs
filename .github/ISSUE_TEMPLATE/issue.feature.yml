@@ -1,0 +1,49 @@
+name: Feature Request
+description: Request a new Feature
+title: '[FEAT]: '
+labels: ['feat', 'enhancement']
+# assignees:
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this feature request.
+  - type: checkboxes
+    attributes:
+      label: Is this a new issue?
+      description: Please search to see if this issue is already reported.
+      options:
+        - label: I have searched the existing issues
+          required: true
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: Feature Description
+      description: What would you like this feature to do?
+      placeholder: A clear and concise description of the functionality you're requesting
+    validations:
+      required: true
+  - type: textarea
+    id: feature-justification
+    attributes:
+      label: Justification
+      description: Why is this feature valuable?
+      placeholder: Explain how this feature would benefit users or improve the project
+    validations:
+      required: true
+  - type: input
+    id: contact
+    attributes:
+      label: Contact Details (Optional)
+      description: How can we reach you if we need more information?
+      placeholder: email@example.com
+    validations:
+      required: false
+  - type: textarea
+    id: feature-additional
+    attributes:
+      label: Additional Information
+      description: Any references, documentation, or examples that might help us implement this feature?
+      placeholder: Links, screenshots, sketches, or other helpful resources
+    validations:
+      required: false

@@ -1,217 +1,156 @@
-// Events.ts
-import { Callback, EventName, EventsType, Listeners } from './types.ts';
+// deno-lint-ignore-file
+export type EventCallback = (...args: any[]) => unknown | Promise<unknown>;
 
 /**
- * Events
- * Adds the capability of event handling for any class which derives this class.
- * This is not meant to be used as a standalone class.
- * Based out of eventemitter class for nodejs.
+ * A class that provides event handling capabilities.
+ *
+ * @template E - An object that maps event names to their corresponding callback types.
  */
-// deno-lint-ignore no-explicit-any
-export class Events<E extends EventsType = Record<EventName, any>> {
-  protected _events: Map<keyof E, Set<Listeners>> = new Map();
+export class Events<
+  E extends Record<string, EventCallback> = Record<string, EventCallback>,
+> {
+  private __events: Map<keyof E, Set<EventCallback>> = new Map();
 
   /**
-   * on
-   * Method override to add event monitor for typed events.
+   * Registers an event listener for the specified event.
    *
-   * @param event Key of Typed event definition
-   * @param callback Callback to call
-   * @returns self refernce for chaining
+   * @param event - The name of the event.
+   * @param callback - The callback function or an array of callback functions to register.
+   * @returns The current instance for chaining.
+   *
+   * @example
+   * ```ts
+   * const events = new Events();
+   * events.on('hello', () => console.log('Hello, world!'));
+   * events.on('hello', [() => console.log('Hello again!'), () => console.log('Hello once more!')]);
+   * ```
    */
   public on<K extends keyof E>(event: K, callback: E[K]): this;
-
-  /**
-   * on
-   * Initialize or create an event monitor. If the class is initialised as
-   * strictly typed, then the event name must be part of the list shared.
-   *
-   * @param event string The event name to which monitor
-   * @param callback function The callback functions
-   * @returns self refernce for chaining
-   */
-  public on(event: EventName, callback: Callback): this {
-    if (!this._events.get(event)) {
-      this._events.set(event, new Set());
+  public on<K extends keyof E>(event: K, callback: E[K][]): this;
+  public on(event: string, callback: EventCallback | EventCallback[]) {
+    if (!this.__events.has(event)) {
+      this.__events.set(event, new Set());
     }
-    this._events.get(event)?.add(callback);
+    if (Array.isArray(callback)) {
+      for (const cb of callback) {
+        this.on(event, cb as E[keyof E]);
+      }
+    } else if (!this.__events.get(event)!.has(callback)) {
+      this.__events.get(event)!.add(callback);
+    }
     return this;
   }
 
   /**
-   * once
-   * Method override to monitor event once for typed events.
+   * Unregisters an event listener for the specified event.
    *
-   * @param event Key of Typed event definition
-   * @param callback Callback to call
-   * @returns self refernce for chaining
+   * @param event - The name of the event.
+   * @param callback - The callback function or an array of callback functions to unregister. If not provided, all listeners for the event are removed.
+   * @returns The current instance for chaining.
+   *
+   * @example
+   * ```ts
+   * const events = new Events();
+   * const callback = () => console.log('Hello, world!');
+   * events.on('hello', callback);
+   * events.off('hello', callback);
+   * ```
+   */
+  public off<K extends keyof E>(event: K, callback?: E[K]): this;
+  public off<K extends keyof E>(event: K, callback?: E[K][]): this;
+  public off(event: string, callback?: EventCallback | EventCallback[]) {
+    if (!this.__events.has(event)) {
+      return this;
+    }
+    if (callback === undefined) {
+      this.__events.delete(event);
+      return this;
+    }
+    if (Array.isArray(callback)) {
+      for (const cb of callback) {
+        this.__events.get(event)!.delete(cb as EventCallback);
+      }
+    } else {
+      this.__events.get(event)!.delete(callback);
+    }
+    return this;
+  }
+
+  /**
+   * Registers an event listener that is called at most once for the specified event.
+   *
+   * @param event - The name of the event.
+   * @param callback - The callback function or an array of callback functions to register.
+   * @returns The current instance for chaining.
+   *
+   * @example
+   * ```ts
+   * const events = new Events();
+   * events.once('hello', () => console.log('Hello, world!'));
+   * events.emit('hello'); // Logs: Hello, world!
+   * events.emit('hello'); // Does nothing
+   * ```
    */
   public once<K extends keyof E>(event: K, callback: E[K]): this;
-
-  /**
-   * once
-   * Create an event which only fires once post which the event is
-   * discarded.
-   *
-   * @param event string The event name
-   * @param callback function The function to call
-   * @returns self Self reference for chaining
-   */
-  public once(event: EventName, callback: Callback): this {
-    const listen: Listeners = callback;
-    listen.__once = true;
-    // deno-lint-ignore no-explicit-any
-    return this.on(event, listen as any);
+  public once<K extends keyof E>(event: K, callback: E[K][]): this;
+  public once(event: string, callback: EventCallback | EventCallback[]) {
+    if (Array.isArray(callback)) {
+      for (const cb of callback) {
+        this.once(event, cb as E[keyof E]);
+      }
+      return this;
+    } else {
+      const onceCallback = (...args: Parameters<E[keyof E]>) => {
+        this.off(event, onceCallback as E[keyof E]);
+        return callback(...args);
+      };
+      return this.on(event, onceCallback as E[keyof E]);
+    }
   }
 
   /**
-   * off
-   * Method override to remove a specific callback in event chain
+   * Emits the specified event asynchronously, calling all registered listeners with the provided arguments.
    *
-   * @param event Key of Typed event definition
-   * @param callback Callback to remove
+   * @param event - The name of the event.
+   * @param args - The arguments to pass to the event listeners.
+   * @returns A promise that resolves when all listeners have been called.
    */
-  public off<K extends keyof E>(event: K, callback: E[K]): this;
+  emit<K extends keyof E>(
+    event: K,
+    ...args: Parameters<E[K]>
+  ): this {
+    if (!this.__events.has(event)) {
+      return this;
+    }
+    const callbacks = this.__events.get(event)!;
 
-  /**
-   * off
-   * Remove all callbacks for a specific event
-   *
-   * @param event Key of typed event definition
-   */
-  public off<K extends keyof E>(event: K): this;
-
-  /**
-   * off
-   * Override to remove all events
-   */
-  public off(): this;
-
-  /**
-   * off
-   * Removes specific or all event callbacks. If a specific callback
-   * is specified, then only that is removed, if only event name is passed
-   * then all callbacks in the event is removed. If no event name is passed
-   * all callbacks in all events are removed.
-   *
-   * @param event string The event name
-   * @param callback function The function to be removed
-   * @returns self Self reference for chaining
-   */
-  public off(event?: EventName, callback?: Callback): this {
-    if (!event && !callback) {
-      // Clear all events
-      this._events.clear();
-    } else if (event && this._events.has(event)) {
-      // Handle specific event and possibly specific callbacks
-      if (callback) {
-        // If callback exists, delete it
-        const callbacks = this._events.get(event)!;
-        if (callbacks.has(callback)) {
-          callbacks.delete(callback);
-        }
-      } else {
-        // delete all listeners
-        this._events.delete(event);
-      }
+    for (const cb of callbacks) {
+      cb(...args);
     }
     return this;
   }
 
   /**
-   * emit
-   * Method override for typed events
-   * Calls all callback to the specific event provided waiting for each event to return
+   * Emits the specified event synchronously, calling all registered listeners with the provided arguments.
    *
-   * @param event Key of typed event definition
-   * @param args Array<Parameters> Typed Arguments to pass to the callback
+   * @param event - The name of the event.
+   * @param args - The arguments to pass to the event listeners.
+   * @returns A promise that resolves when all listeners have completed.
    */
-  protected async emit<K extends keyof E>(
+  async emitSync<K extends keyof E>(
     event: K,
     ...args: Parameters<E[K]>
-  ): Promise<ReturnType<E[K]>[]>;
-
-  /**
-   * emit
-   * Calls all callback to the specific event provided waiting for each event to return
-   *
-   * @param event string The event name
-   * @param args Array<any> Arguments to pass to the callback
-   * @returns Promise<ReturnType<Callback>[]> Array of return values from each callback
-   */
-  protected async emit(
-    event: EventName,
-    ...args: Parameters<Callback>
-  ): Promise<ReturnType<Callback>[]> {
-    const returnValue: ReturnType<Callback>[] = [];
-    if (this._events.has(event)) {
-      const e = this._events.get(event)!;
-      for (const [, callback] of e.entries()) {
-        try {
-          returnValue.push(await callback.apply(callback, args));
-          if (callback.__once) {
-            delete callback.__once;
-            e.delete(callback);
-          }
-        } catch (_error) {
-          // @TODO - Figure out what to do here
-        }
-      }
-      // Delete event from set - This will happen if all callbacks are once.
-      if (e.size === 0) {
-        this._events.delete(event);
-      }
+  ): Promise<this> {
+    if (!this.__events.has(event)) {
+      return this;
     }
-    return returnValue;
-  }
+    // Remove unused results array
+    const callbacks = this.__events.get(event)!;
 
-  /**
-   * emitSync
-   * Method override to emit events synchronously
-   * Calls all callback to the specific event provided without waiting for each event to return
-   *
-   * @param event Key of typed event definition
-   * @param args Array<Parameters> Typed Arguments to pass to the callback
-   */
-  protected emitSync<K extends keyof E>(
-    event: K,
-    ...args: Parameters<E[K]>
-  ): ReturnType<E[K]>[];
-
-  /**
-   * emitSync
-   * Calls all callback to the specific event provided without waiting for each event to return
-   *
-   * @param event string The event name
-   * @param args Array<any> Arguments to pass to the callback
-   * @returns ReturnType<Callback>[] Array of return values from each callback
-   */
-  protected emitSync(
-    event: EventName,
-    ...args: Parameters<Callback>
-  ): ReturnType<Callback>[] {
-    const returnValue: ReturnType<Callback>[] = [];
-    if (this._events.has(event)) {
-      const e = this._events.get(event)!;
-      for (const [, callback] of e.entries()) {
-        try {
-          const r: ReturnType<Callback> = callback(...args); //callback.apply(callback, args);
-          if (r instanceof Promise) {
-            r.then((val) => returnValue.push(val)).catch(() => {});
-          }
-          if (callback.__once) {
-            delete callback.__once;
-            e.delete(callback);
-          }
-        } catch (_error) {
-          // @TODO - Figure out what to do here
-        }
-      }
-      // Delete event from set - This will happen if all callbacks are once.
-      if (e.size === 0) {
-        this._events.delete(event);
-      }
+    for (const cb of callbacks) {
+      await cb(...args);
     }
-    return returnValue;
+
+    return this;
   }
 }

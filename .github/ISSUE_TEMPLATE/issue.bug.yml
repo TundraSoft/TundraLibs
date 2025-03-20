@@ -1,0 +1,99 @@
+name: Bug Report
+description: File a bug report
+title: '[BUG]: '
+labels:
+  - bug
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+  - type: checkboxes
+    attributes:
+      label: Is this a new issue?
+      description: Please search to see if this issue is already reported.
+      options:
+        - label: I have searched the existing issues
+          required: true
+  - type: input
+    id: contact
+    attributes:
+      label: Contact Details
+      description: How can we get in touch with you if we need more info?
+      placeholder: ex. email@example.com
+    validations:
+      required: false
+  - type: input
+    id: deno-version
+    attributes:
+      label: Deno Version
+      description: What is the deno version?
+      placeholder: Mention the deno version (Major.Minor.Patch)
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: What is the operating system?
+      multiple: false
+      options:
+        - Windows
+        - Linux
+        - MacOS
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      description: Select the package where you found the bug
+      multiple: false
+      options:
+        - Workflow
+        - crypt
+        - events
+        - id
+        - options
+        - utils
+  - type: input
+    id: package-version
+    attributes:
+      label: Package Version
+      description: What is the package version?
+      placeholder: Mention the package version (Major.Minor.Patch)
+    validations:
+      required: true
+  - type: textarea
+    id: current-behaviour
+    attributes:
+      label: Current Behaviour
+      description: Explain what the current behaviour is
+      placeholder: Tell us what you see!
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behaviour
+    attributes:
+      label: Expected Behaviour
+      description: What is actually expected to happen?
+      placeholder: What do you expect to see?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce-steps
+    attributes:
+      label: Steps to reproduce
+      description: How did we reproduce this?
+      placeholder: Explain how we can reproduce this issue?
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Logs
+      placeholder: >-
+        Paste the output of logs. You can fetch this by running docker log
+        <container-name>
+    validations:
+      required: false
