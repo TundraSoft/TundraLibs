@@ -1,3 +1,4 @@
+import { format } from '$datetime';
 /**
  * Generates a sequential ID based on the current date and
  * a seed value. The resulting id is a BigInt which is concatenated
@@ -25,9 +26,7 @@
  */
 export const simpleID = (seed = 0, minLen = 4): () => bigint => {
   let dt = new Date();
-  let dtno = `${dt.getFullYear()}${String(dt.getMonth() + 1).padStart(2, '0')}${
-    String(dt.getDate()).padStart(2, '0')
-  }`;
+  let dtno = format(dt, 'yyyyMMdd');
   return () => {
     // Reset the date if it's a new day
     if (dt.getDate() !== new Date().getDate()) {

@@ -9,7 +9,7 @@ const createDelayedFunction = (delay: number, callback: () => void) => {
   };
 };
 
-Deno.test('Events', async (t) => {
+Deno.test('utils.Events', async (t) => {
   await t.step('should register and emit untyped events', () => {
     let cnt = 0;
     const events = new Events();

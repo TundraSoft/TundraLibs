@@ -165,6 +165,6 @@ jobs:
       #   run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' coverage/report.lcov
       
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v5.0.0 
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

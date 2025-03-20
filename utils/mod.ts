@@ -1,3 +1,4 @@
+export { BaseError, type BaseErrorJson } from './BaseError.ts';
 export { envArgs } from './envArgs.ts';
 export { type EventCallback, Events } from './Events.ts';
 export { getFreePort } from './getFreePort.ts';

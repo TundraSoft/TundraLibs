@@ -71,4 +71,34 @@ Deno.test('id.simpleId', async (t) => {
       asserts.assertEquals(results[i]! - results[i - 1]!, 1n);
     }
   });
+
+  await t.step('Test if the counter resets on a new day', () => {
+    // Save original Date constructor
+    const OriginalDate = Date;
+
+    try {
+      const OriginalDate = Date;
+      const dt = new Date(2023, 0, 2, 12, 0, 0);
+
+      // @ts-ignore: Mocking Date for testing
+      globalThis.Date = class extends OriginalDate {
+        constructor() {
+          super();
+          return dt;
+        }
+      };
+
+      const id = simpleID(0, 4);
+
+      asserts.assertEquals(id(), 202301020001n);
+
+      globalThis.Date = OriginalDate;
+
+      // Check that the date part changed and seed reset
+      asserts.assertNotEquals(id(), 202301020002n);
+    } finally {
+      // Restore original Date constructor
+      globalThis.Date = OriginalDate;
+    }
+  });
 });

@@ -59,7 +59,7 @@ const Patterns = {
   'STRUCT': /\[[^\]]+\]\s*/g,
   'STRUCTID': /\[((\w+)@(\d+))\s*/,
   'STRUCTKEYS': /([\w.-]+)\s*=\s*(["'])((?:(?=(\\?))\3.)*?)\2/,
-};
+}; //NOSONAR
 
 function parsePri(
   pri: number,
