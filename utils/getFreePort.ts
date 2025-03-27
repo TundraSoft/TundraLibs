@@ -1,8 +1,6 @@
 interface GetFreePortOptions {
   min?: number;
   max?: number;
-  timeout?: number;
-  maxRetries?: number;
   exclude?: number[];
 }
 
@@ -19,11 +17,9 @@ export class PortError extends Error {
  * @param options - Configuration options
  * @param options.min - The minimum port number (default: 1024)
  * @param options.max - The maximum port number (default: 65535)
- * @param options.timeout - Timeout in milliseconds (default: 5000)
- * @param options.maxRetries - Maximum number of retries (default: 100)
  * @param options.exclude - Array of ports to exclude
- * @returns A promise that resolves to a free port number
- * @throws {PortError} If no free port is found or timeout occurs
+ * @returns A free port number
+ * @throws {PortError} If no free port is found
  */
 export const getFreePort = ({
   min = 1024,

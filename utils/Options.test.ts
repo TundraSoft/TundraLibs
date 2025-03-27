@@ -17,17 +17,24 @@ Deno.test('utils.Options', async (t) => {
     }
 
     updateInvalid() {
-      this._setOption('a', undefined);
+      this._setOption('a', 1233 as unknown as string);
     }
 
-    override _validateOption<K extends keyof Opt>(
+    setOption(key: keyof Opt, value: Opt[keyof Opt]) {
+      this._setOption(key, value);
+    }
+
+    override _processOption<K extends keyof Opt>(
       key: K,
       value: Opt[K],
-    ): boolean {
-      if (key === 'a' && typeof value !== 'string') {
+    ): Opt[K] {
+      if (
+        key === 'a' && typeof value !== 'string' && value !== undefined &&
+        value !== null
+      ) {
         throw new Error('Invalid value');
       }
-      return true;
+      return value;
     }
   }
 
@@ -51,14 +58,14 @@ Deno.test('utils.Options', async (t) => {
       this._setOption('a', 234);
     }
 
-    override _validateOption(
+    override _processOption(
       key: string,
       value: unknown,
-    ): boolean {
+    ): unknown {
       if (key === 'a' && typeof value !== 'string') {
         throw new Error('Invalid value');
       }
-      return true;
+      return value;
     }
   }
 
@@ -118,10 +125,26 @@ Deno.test('utils.Options', async (t) => {
     asserts.assertEquals(options2.hasOption('c'), true);
   });
 
+  await t.step('should set null or undefined values properly', () => {
+    const options = new TypedOptions({ c: true });
+
+    // Setting undefined shouldn't throw but should process the value
+    options.setOption('a', undefined as unknown as string);
+    asserts.assertEquals(options.getOption('a'), undefined);
+
+    // Setting null shouldn't throw but should process the value
+    options.setOption('a', null as unknown as string);
+    asserts.assertEquals(options.getOption('a'), null);
+  });
+
   await t.step('should not throw error if option key is missing', () => {
-    // Ideally this should never be run, maybe we throw error for typed???
-    // const options = new TypedOptions({ c: true });
-    // asserts.assertEquals(options.getOption('some_key'), undefined);
+    // Test for both typed and untyped options
+    const options = new TypedOptions({ c: true });
+    // Using a non-existent key as any to test behavior
+    asserts.assertEquals(
+      options.getOption('some_key' as unknown as keyof Opt),
+      undefined,
+    );
 
     const options2 = new UnTypedOptions({ c: true });
     asserts.assertEquals(options2.getOption('some_key'), undefined);

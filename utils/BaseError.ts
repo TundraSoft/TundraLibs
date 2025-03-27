@@ -19,7 +19,6 @@ export class BaseError<
 > extends Error {
   public readonly timeStamp: Date = new Date();
   declare public readonly context: M;
-  protected _messageTemplate = '[${timeStamp}] ${message}';
   protected _baseMessage: string = '';
 
   constructor(
@@ -27,12 +26,13 @@ export class BaseError<
     context: M = {} as M,
     cause?: Error,
   ) {
-    // Generate the error message
-    super(
-      variableReplacer(message, context),
-    );
-    // Pass the original message to super - we'll format it after child class initialization
-    this._baseMessage = variableReplacer(message, context);
+    message = variableReplacer(message, context);
+    super(message);
+
+    // Fix the prototype chain for Error subclassing
+    Object.setPrototypeOf(this, new.target.prototype);
+
+    this._baseMessage = message;
     this.name = this.constructor.name;
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
@@ -40,18 +40,16 @@ export class BaseError<
     this.context = context;
     this.cause = cause;
 
-    // Now format the message after child properties (like _messageTemplate) are initialized
+    // Now format the message using the template method pattern
     this.message = this._makeMessage();
-
-    // Call onInit hook
-    this.onInit();
   }
 
   /**
-   * Call an onInit hook. This can be used to call any additional
-   * operations, send the error event to an external service, etc.
+   * Get the message template to use for this error.
+   * Override this in derived classes to customize the template.
    */
-  public async onInit(): Promise<void> {
+  protected get _messageTemplate(): string {
+    return '[${timeStamp}] ${message}';
   }
 
   /**
@@ -70,39 +68,55 @@ export class BaseError<
     if (this.cause instanceof BaseError) {
       return this.cause.getCodeSnippet(contextLines);
     }
-    const stackLines = (this.cause ? (this.cause as Error).stack : this.stack)
-      ?.split('\n');
-    let snippet = '';
-    if (stackLines && stackLines.length > 1) {
-      const match = stackLines[1]!.trim().match(
-        // /at\s+(?:[^(\s]+ \()?file:\/\/(.*):(\d+):(\d+)/i,
-        /at\s+(?:[^@]*\@)?(?:file:\/\/)?(.*):(\d+):(\d+)/i,
-      );
-      if (match) {
-        const [, filePath, line] = match;
-        try {
-          const fileContent = Deno.readTextFileSync(path.toFileUrl(filePath!));
-          const lines = fileContent.split('\n');
-          const errorLine = parseInt(line!) - 1;
-          const startLine = Math.max(0, errorLine - contextLines);
-          const endLine = Math.min(lines.length, errorLine + contextLines + 1);
 
-          snippet = lines.slice(startLine, endLine)
-            .map((codeLine, index) => {
-              const currentLine = startLine + index + 1;
-              const lineIndicator = currentLine === errorLine + 1 ? '>' : ' ';
-              return `${lineIndicator} ${
-                currentLine.toString().padStart(4)
-              } | ${codeLine}`;
-            })
-            .join('\n');
-        } catch {
-          // Unable to read file
-          snippet = 'Could not fetch code snippet';
-        }
-      }
+    const stackTrace = this.cause ? (this.cause as Error).stack : this.stack;
+    if (!stackTrace) {
+      return 'No stack trace available';
     }
-    return snippet.trim();
+
+    const stackLines = stackTrace.split('\n');
+    if (stackLines.length <= 1) {
+      return 'Insufficient stack trace information';
+    }
+
+    const stackLine = stackLines[1]?.trim();
+    if (!stackLine) {
+      return 'Invalid stack trace format';
+    }
+
+    const match = stackLine.match(
+      /at\s+(?:[^@]*\@)?(?:file:\/\/)?(.*):(\d+):(\d+)/i,
+    );
+    if (!match || !match[1] || !match[2]) {
+      return 'Could not parse stack trace';
+    }
+
+    const [, filePath, lineStr] = match;
+    try {
+      const fileContent = Deno.readTextFileSync(path.toFileUrl(filePath));
+      const lines = fileContent.split('\n');
+      const errorLine = parseInt(lineStr, 10) - 1;
+      if (isNaN(errorLine) || errorLine < 0) {
+        return 'Invalid line number in stack trace';
+      }
+
+      const startLine = Math.max(0, errorLine - contextLines);
+      const endLine = Math.min(lines.length, errorLine + contextLines + 1);
+
+      const snippet = lines.slice(startLine, endLine)
+        .map((codeLine, index) => {
+          const currentLine = startLine + index + 1;
+          const lineIndicator = currentLine === errorLine + 1 ? '>' : ' ';
+          return `${lineIndicator} ${
+            currentLine.toString().padStart(4)
+          } | ${codeLine}`;
+        })
+        .join('\n');
+
+      return snippet.trim();
+    } catch (error) {
+      return `Could not fetch code snippet: ${(error as Error).message}`;
+    }
   }
 
   /**
@@ -126,17 +140,21 @@ export class BaseError<
    * @returns Record<string, unknown> The JSON representation of the error.
    */
   public toJSON(): BaseErrorJson {
+    let causeValue: BaseErrorJson | string | undefined = undefined;
+
+    if (this.cause) {
+      causeValue = this.cause instanceof BaseError
+        ? this.cause.toJSON()
+        : String(this.cause);
+    }
+
     return {
       name: this.name,
       message: this._baseMessage,
       context: this.context,
       timeStamp: this.timeStamp.toISOString(),
       stack: this.stack,
-      cause: this.cause
-        ? this.cause instanceof BaseError
-          ? this.cause.toJSON()
-          : this.cause.toString()
-        : undefined,
+      cause: causeValue,
     };
   }
 

@@ -45,16 +45,10 @@ export abstract class Options<
   constructor(
     options: EventOptionsKeys<O, E>,
     defaults?: Partial<O>,
-    // assertOptions: (opt: unknown) => asserts opt is O = () => {},
   ) {
     super();
     // First set the defaults and explicitly type it
     const finalOptions = { ...defaults, ...options };
-
-    // If assertion function provided, validate the merged options
-    // if (assertOptions) {
-    //   assertOptions(finalOptions);
-    // }
     this._setOptions(finalOptions);
   }
 
@@ -95,10 +89,7 @@ export abstract class Options<
    * @returns The current instance for chaining.
    */
   protected _setOption<K extends keyof O>(key: K, value: O[K]): this {
-    if (this._validateOption(key, value) === false) {
-      throw new Error(`Invalid option value for key: ${key as string}`);
-    }
-    this.__options.set(key, value);
+    this.__options.set(key, this._processOption(key, value));
     return this;
   }
 
@@ -123,13 +114,14 @@ export abstract class Options<
   }
 
   /**
-   * Validates an option.
+   * Process an option, can be used for .
    *
    * @param key - The key of the option to validate.
    * @param value - The value of the option to validate.
    * @returns A boolean indicating whether the option is valid.
    */
-  protected _validateOption<K extends keyof O>(_key: K, _value: O[K]): boolean {
-    return true; // Override in subclasses to provide custom validation logic
+  // deno-lint-ignore no-unused-vars
+  protected _processOption<K extends keyof O>(key: K, value: O[K]): O[K] {
+    return value;
   }
 }

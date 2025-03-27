@@ -60,4 +60,22 @@ Deno.test('utils.templatize', async (t) => {
       'Beginning-Middle-End',
     );
   });
+
+  await t.step('should correctly handle empty string values', () => {
+    const template = 'Hello, ${name}!';
+    const result = templatize(template);
+    asserts.assertEquals(result({ name: '' }), 'Hello, !');
+  });
+
+  await t.step(
+    'should handle complex nested structures in template names',
+    () => {
+      const template = 'User: ${user.name}, Age: ${user.details.age}';
+      const result = templatize(template);
+      asserts.assertEquals(
+        result({ 'user.name': 'John', 'user.details.age': '30' }),
+        'User: John, Age: 30',
+      );
+    },
+  );
 });

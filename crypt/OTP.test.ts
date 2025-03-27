@@ -1,5 +1,11 @@
 import * as asserts from '$asserts';
-import { type DigestAlgorithms, HOTP, TOTP } from './mod.ts';
+import {
+  type DigestAlgorithms,
+  HOTP,
+  TOTP,
+  verifyHOTP,
+  verifyTOTP,
+} from './mod.ts';
 
 Deno.test('OTP', async (t) => {
   await t.step('TOTP', async (h) => {
@@ -84,21 +90,6 @@ Deno.test('OTP', async (t) => {
       }
     });
 
-    // await h.step(
-    //   'ensure unique OTPs are generated once window has elapsed',
-    //   async () => {
-    //     const iter = 30;
-    //     const otps = new Set<string>();
-    //     for (let i = 0; i < iter; i++) {
-    //       otps.add(
-    //         await TOTP('12345678901234567890', Date.now(), 1, 6, 'SHA-1'),
-    //       );
-    //       await new Promise((resolve) => setTimeout(resolve, 1000));
-    //     }
-    //     asserts.assertEquals(otps.size, iter);
-    //   },
-    // );
-
     await h.step('must throw on invalid params', () => {
       asserts.assertRejects(
         () => TOTP('dfdfsd', Date.now(), 30, 6, 'SHA-1'),
@@ -126,6 +117,81 @@ Deno.test('OTP', async (t) => {
           ),
         Error,
         'The provided algorithm name is not supported',
+      );
+    });
+
+    await h.step('verifyTOTP - validate correct OTPs', async () => {
+      const key = '12345678901234567890';
+      const time = 59000; // Known test time
+      const expectedTOTP = '287082'; // Known correct value
+
+      // Generate TOTP for reference
+      const totp = await TOTP(key, time, 30, 6, 'SHA-1');
+      asserts.assertEquals(totp, expectedTOTP);
+
+      // Verify the generated TOTP
+      const isValid = await verifyTOTP(totp, key, 1, time, 30, 6, 'SHA-1');
+      asserts.assertEquals(isValid, true);
+    });
+
+    await h.step('verifyTOTP - reject incorrect OTPs', async () => {
+      const key = '12345678901234567890';
+      const time = 59000;
+
+      // Test with incorrect OTP
+      const isValid = await verifyTOTP('111111', key, 1, time, 30, 6, 'SHA-1');
+      asserts.assertEquals(isValid, false);
+    });
+
+    await h.step('verifyTOTP - validate within time window', async () => {
+      const key = '12345678901234567890';
+      const currentTime = 1111111109000; // Base time
+      const validOTP = await TOTP(key, currentTime, 30, 6, 'SHA-1');
+
+      // Test time window +/- 1 period
+      const futureTime = currentTime + 30 * 1000; // 30 seconds later
+      const pastTime = currentTime - 30 * 1000; // 30 seconds earlier
+
+      // OTP should be valid within the time window (window=1)
+      asserts.assertEquals(
+        await verifyTOTP(validOTP, key, 1, futureTime, 30, 6, 'SHA-1'),
+        true,
+      );
+      asserts.assertEquals(
+        await verifyTOTP(validOTP, key, 1, pastTime, 30, 6, 'SHA-1'),
+        true,
+      );
+
+      // OTP should be invalid outside the time window
+      const farFutureTime = currentTime + 2 * 30 * 1000; // 60 seconds later
+      const farPastTime = currentTime - 2 * 30 * 1000; // 60 seconds earlier
+
+      asserts.assertEquals(
+        await verifyTOTP(validOTP, key, 1, farFutureTime, 30, 6, 'SHA-1'),
+        false,
+      );
+      asserts.assertEquals(
+        await verifyTOTP(validOTP, key, 1, farPastTime, 30, 6, 'SHA-1'),
+        false,
+      );
+    });
+
+    await h.step('verifyTOTP - support binary key input', async () => {
+      const textKey = '12345678901234567890';
+      const binaryKey = new TextEncoder().encode(textKey);
+      const time = 59000;
+
+      // Generate OTPs with both key formats
+      const textKeyOTP = await TOTP(textKey, time, 30, 6, 'SHA-1');
+      const binaryKeyOTP = await TOTP(binaryKey, time, 30, 6, 'SHA-1');
+
+      // OTPs should match
+      asserts.assertEquals(textKeyOTP, binaryKeyOTP);
+
+      // Verify with binary key
+      asserts.assertEquals(
+        await verifyTOTP(textKeyOTP, binaryKey, 1, time, 30, 6, 'SHA-1'),
+        true,
       );
     });
   });
@@ -204,6 +270,82 @@ Deno.test('OTP', async (t) => {
           ),
         Error,
         'The provided algorithm name is not supported',
+      );
+    });
+
+    await h.step('verifyHOTP - validate correct OTPs', async () => {
+      const key = '12345678901234567890';
+      const counter = 0;
+      const expectedHOTP = '755224'; // Known correct value
+
+      // Generate HOTP for reference
+      const hotp = await HOTP(key, counter, 6, 'SHA-1');
+      asserts.assertEquals(hotp, expectedHOTP);
+
+      // Verify the generated HOTP
+      const isValid = await verifyHOTP(hotp, key, counter, 6, 'SHA-1');
+      asserts.assertEquals(isValid, true);
+    });
+
+    await h.step('verifyHOTP - reject incorrect OTPs', async () => {
+      const key = '12345678901234567890';
+      const counter = 0;
+
+      // Test with incorrect OTP
+      const isValid = await verifyHOTP('111111', key, counter, 6, 'SHA-1');
+      asserts.assertEquals(isValid, false);
+    });
+
+    await h.step('verifyHOTP - support binary key input', async () => {
+      const textKey = '12345678901234567890';
+      const binaryKey = new TextEncoder().encode(textKey);
+      const counter = 0;
+
+      // Generate OTPs with both key formats
+      const textKeyOTP = await HOTP(textKey, counter, 6, 'SHA-1');
+      const binaryKeyOTP = await HOTP(binaryKey, counter, 6, 'SHA-1');
+
+      // OTPs should match
+      asserts.assertEquals(textKeyOTP, binaryKeyOTP);
+
+      // Verify with binary key
+      asserts.assertEquals(
+        await verifyHOTP(textKeyOTP, binaryKey, counter, 6, 'SHA-1'),
+        true,
+      );
+    });
+
+    await h.step('must throw on invalid params for verify functions', () => {
+      const key = '12345678901234567890';
+
+      asserts.assertRejects(
+        () => verifyTOTP('123456', 'short', 1, Date.now(), 30, 6, 'SHA-1'),
+        Error,
+        'Secret key should be at least 16 characters long',
+      );
+
+      asserts.assertRejects(
+        () => verifyTOTP('123456', key, -1, Date.now(), 30, 6, 'SHA-1'),
+        Error,
+        'Window must be a non-negative integer',
+      );
+
+      asserts.assertRejects(
+        () => verifyTOTP('123456', key, 1, Date.now(), 0, 6, 'SHA-1'),
+        Error,
+        'Time period must be at least 1 second',
+      );
+
+      asserts.assertRejects(
+        () => verifyHOTP('123456', 'short', 0, 6, 'SHA-1'),
+        Error,
+        'Secret key should be at least 16 characters long',
+      );
+
+      asserts.assertRejects(
+        () => verifyHOTP('123456', key, -1, 6, 'SHA-1'),
+        Error,
+        'Counter must be a non-negative integer',
       );
     });
   });

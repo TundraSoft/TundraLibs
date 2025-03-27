@@ -129,6 +129,21 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assertEquals(parsed.processId, 324);
       asserts.assertEquals(parsed.message, 'User logged in');
     });
+
+    await t.step('facilityName and severityName properties', () => {
+      const logLine =
+        '<165>1 2022-01-01T00:00:00.000Z localhost - 123 12345 [ABC@1234 key="value"] Test message';
+      const parsed = parse(logLine);
+      asserts.assertEquals(parsed.facilityName, 'LOCAL4');
+      asserts.assertEquals(parsed.severityName, 'NOTICE');
+    });
+
+    await t.step('RFC3164 facilityName and severityName', () => {
+      const logLine = '<34>Oct 11 22:14:15 mymachine su[230]: hello world';
+      const parsed = parse(logLine);
+      asserts.assertEquals(parsed.facilityName, 'AUTH');
+      asserts.assertEquals(parsed.severityName, 'CRITICAL');
+    });
   });
 
   await s.step('Error cases', async (t) => {
@@ -144,14 +159,29 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    // This wont throw error unfortunately :(
-    // await t.step('Malformed structured data', () => {
-    //   asserts.assertThrows(
-    //     () => parse('<165>1 2022-01-01T00:00:00.000Z - - - - [invalid@123'),
-    //     Error,
-    //     'Malformed structured data received: [invalid@123',
-    //   );
-    // });
+    await t.step('Invalid RFC5424 format', () => {
+      asserts.assertThrows(
+        () => parse('<>1 2022-01-01T00:00:00.000Z - - - - -'),
+        Error,
+        'Invalid RFC5424 format: Missing priority value',
+      );
+    });
+
+    await t.step('Invalid RFC3164 format - Missing priority value', () => {
+      // More explicit test case with empty angle brackets
+      asserts.assertThrows(
+        () => parse('<> Oct 11 22:14:15 mymachine su[230]: hello world'),
+        Error,
+        'Invalid/Unsupported syslog format',
+      );
+
+      // Also test without angle brackets at all
+      asserts.assertThrows(
+        () => parse('Oct 11 22:14:15 mymachine su[230]: hello world'),
+        Error,
+        'Invalid/Unsupported syslog format', // Will trigger the first check
+      );
+    });
   });
 
   await s.step('Edge cases', async (t) => {
@@ -179,6 +209,41 @@ Deno.test('utils.Syslog', async (s) => {
         'value with spaces',
       );
     });
+
+    await t.step('Invalid processId in RFC5424', () => {
+      const logLine =
+        '<165>1 2022-01-01T00:00:00.000Z localhost - abc 12345 - Test message';
+      const parsed = parse(logLine);
+      asserts.assertEquals(parsed.processId, undefined);
+    });
+
+    await t.step('Invalid processId in RFC3164', () => {
+      const logLine = '<34>Oct 11 22:14:15 mymachine su[abc]: hello world';
+      asserts.assertThrows(
+        () => parse(logLine),
+        Error,
+        'Invalid/Unsupported syslog format',
+      );
+      // const parsed = parse(logLine);
+      // asserts.assertEquals(parsed.processId, undefined);
+    });
+
+    await t.step('Empty structured data element values', () => {
+      const logLine =
+        '<165>1 2022-01-01T00:00:00.000Z - - - - [test@1 key=""] message';
+      const parsed = parse(logLine);
+      asserts.assertEquals(parsed.structuredData?.['test@1']?.['key'], '');
+    });
+
+    await t.step('Truly malformed structured data', () => {
+      // This should be properly handled instead of throwing an uncaught error
+      const logLine =
+        '<165>1 2022-01-01T00:00:00.000Z - - - - [incomplete message';
+      const parsed = parse(logLine);
+      // Even with malformed structured data, we should get a valid object back
+      asserts.assertEquals(typeof parsed, 'object');
+      asserts.assertEquals(parsed.facility, SyslogFacilities.LOCAL4);
+    });
   });
 
   await s.step('stringify', async (t) => {
@@ -191,7 +256,7 @@ Deno.test('utils.Syslog', async (s) => {
       };
       asserts.assertEquals(
         stringify(obj),
-        '<131>2022-01-01T00:00:00.000Z - - - - Test message',
+        '<131>1 2022-01-01T00:00:00.000Z - - - - Test message',
       );
     });
 
@@ -207,7 +272,7 @@ Deno.test('utils.Syslog', async (s) => {
       };
       asserts.assertEquals(
         stringify(obj),
-        '<131>2022-01-01T00:00:00.000Z - - - - [test@123 key="value"] ',
+        '<131>1 2022-01-01T00:00:00.000Z - - - - [test@123 key="value"] ',
       );
     });
 
@@ -240,6 +305,35 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
+    await t.step('With facilityName and severityName', () => {
+      const obj = {
+        facility: SyslogFacilities.LOCAL0,
+        facilityName: SyslogFacilities[SyslogFacilities.LOCAL0],
+        severity: SyslogSeverities.ERROR,
+        severityName: SyslogSeverities[SyslogSeverities.ERROR],
+        timestamp: new Date('2022-01-01T00:00:00.000Z'),
+        message: 'Test message',
+      };
+      asserts.assertEquals(
+        stringify(obj),
+        '<131>1 2022-01-01T00:00:00.000Z - - - - Test message',
+      );
+    });
+
+    await t.step('RFC5424 version is included', () => {
+      const obj = {
+        facility: SyslogFacilities.LOCAL0,
+        severity: SyslogSeverities.ERROR,
+        timestamp: new Date('2022-01-01T00:00:00.000Z'),
+        message: 'Test message',
+      };
+      const result = stringify(obj);
+      asserts.assert(
+        result.includes('>1 '),
+        'RFC5424 version number should be included',
+      );
+    });
+
     asserts.assertEquals(
       stringify({
         facility: SyslogFacilities.LOCAL4,
@@ -256,7 +350,7 @@ Deno.test('utils.Syslog', async (s) => {
           },
         },
       }),
-      '<165>2022-01-01T00:00:00.000Z localhost - 123 12345 [ABC@1234 key="value"] Test message',
+      '<165>1 2022-01-01T00:00:00.000Z localhost - 123 12345 [ABC@1234 key="value"] Test message',
     );
   });
 });

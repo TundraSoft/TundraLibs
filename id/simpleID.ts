@@ -6,40 +6,52 @@ import { format } from '$datetime';
  *
  * @param seed number The seed to start with
  * @param minLen number The min length of seed value added to the date
+ * @param includeMicroseconds boolean Whether to include microseconds in the timestamp for better collision resistance
  * @returns A function that generates a unique ID.
- *
- * @example
- * // Basic usage
- * const generateID = simpleID();
- * const id1 = generateID();
- * const id2 = generateID();
- * console.log(id1); // Logs a unique ID based on the current date and a seed value
- * console.log(id2); // Logs another unique ID with incremented seed value
- *
- * @example
- * // Custom seed and minimum length
- * const generateID = simpleID(100, 6);
- * const id1 = generateID();
- * const id2 = generateID();
- * console.log(id1); // Logs a unique ID with seed starting at 100 and minimum length of 6
- * console.log(id2); // Logs another unique ID with incremented seed value
  */
-export const simpleID = (seed = 0, minLen = 4): () => bigint => {
+export const simpleID = (
+  seed = 0,
+  minLen = 4,
+  includeMicroseconds = false,
+): () => bigint => {
+  if (minLen < 1) {
+    throw new Error('Minimum length must be at least 1');
+  }
+
+  let currentSeed = seed;
   let dt = new Date();
   let dtno = format(dt, 'yyyyMMdd');
+  // Add microsecond component for enhanced uniqueness
+  let microTime = includeMicroseconds
+    ? performance.now().toString().replace('.', '').padEnd(6, '0').substring(
+      0,
+      6,
+    )
+    : '';
+
   return () => {
+    const now = new Date();
     // Reset the date if it's a new day
-    if (dt.getDate() !== new Date().getDate()) {
-      dt = new Date();
-      dtno = `${dt.getFullYear()}${String(dt.getMonth() + 1).padStart(2, '0')}${
-        String(dt.getDate()).padStart(2, '0')
-      }`;
-      seed = 0;
+    if (
+      dt.getDate() !== now.getDate() ||
+      dt.getMonth() !== now.getMonth() ||
+      dt.getFullYear() !== now.getFullYear()
+    ) {
+      dt = now;
+      dtno = format(dt, 'yyyyMMdd');
+      currentSeed = 0; // Reset seed
     }
-    seed++;
-    const cnt = String(seed).padStart(minLen, '0');
-    return BigInt(
-      `${dtno}${cnt}`,
-    );
+
+    if (includeMicroseconds) {
+      // Update microsecond precision on each call for better uniqueness
+      microTime = performance.now().toString().replace('.', '').padEnd(6, '0')
+        .substring(0, 6);
+    }
+
+    currentSeed++; // Increment after potential reset
+    const cnt = String(currentSeed).padStart(minLen, '0');
+
+    // Include microseconds in the ID if requested
+    return BigInt(`${dtno}${includeMicroseconds ? microTime : ''}${cnt}`);
   };
 };

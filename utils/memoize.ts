@@ -2,6 +2,28 @@
 // memoize.ts
 
 /**
+ * Type for the cached item with expiration
+ */
+type CachedItem<T> = {
+  expire: number;
+  data: T;
+};
+
+/**
+ * Creates a safe cache key from the function arguments
+ * @param args - Function arguments to create key from
+ * @returns A string representation of the arguments
+ */
+const createCacheKey = <T extends Array<unknown>>(args: T): string => {
+  try {
+    return JSON.stringify(args);
+  } catch (error) {
+    // If arguments can't be stringified, use a fallback approach
+    return `${Date.now()}_${Math.random()}`;
+  }
+};
+
+/**
  * Memoizes the provided function by caching its return values for the same set of arguments.
  *
  * @param fn The function to cache.
@@ -32,22 +54,75 @@ export const memoize = <T extends (...args: any[]) => any>(
   fn: T,
   timeout: number = 30 * 60,
 ): T => {
-  const cache = new Map<string, { expire: number; data: ReturnType<T> }>();
+  if (typeof fn !== 'function') {
+    throw new TypeError('Expected a function');
+  }
+
+  // Ensure timeout is a positive number
+  const cacheTimeout = Math.max(0, timeout) * 1000;
+
+  const cache = new Map<string, CachedItem<ReturnType<T>>>();
+  // For tracking in-flight promises
+  const pendingPromises = new Map<string, Promise<any>>();
 
   const memoizedFn = ((...args: Parameters<T>): ReturnType<T> => {
-    const key = JSON.stringify(args);
-    if (cache.has(key)) {
-      if (cache.get(key)!.expire > Date.now()) {
-        return cache.get(key)!.data;
-      }
+    const key = createCacheKey(args);
+    const now = Date.now();
+
+    // Check if we have a valid cached value
+    const cachedValue = cache.get(key);
+    if (cachedValue && cachedValue.expire > now) {
+      return cachedValue.data;
+    }
+
+    // If expired, remove from cache
+    if (cachedValue) {
       cache.delete(key);
     }
-    const result = fn(...args);
-    cache.set(key, {
-      data: result as ReturnType<T>,
-      expire: Date.now() + timeout * 1000,
-    });
-    return result as ReturnType<T>;
+
+    // For async functions, check if there's already a pending promise
+    if (pendingPromises.has(key)) {
+      return pendingPromises.get(key) as ReturnType<T>;
+    }
+
+    try {
+      // Call the original function
+      const result = fn(...args);
+
+      // Handle promises specially
+      if (result instanceof Promise) {
+        // Save the promise in the pendingPromises map
+        pendingPromises.set(key, result);
+
+        // For async functions, return a new promise
+        return Promise.resolve(result)
+          .then((resolvedValue) => {
+            // Only cache successful promises
+            cache.set(key, {
+              data: resolvedValue as ReturnType<T>,
+              expire: now + cacheTimeout,
+            });
+            // Remove from pending promises
+            pendingPromises.delete(key);
+            return resolvedValue;
+          })
+          .catch((error) => {
+            // Don't cache errors and remove from pending
+            pendingPromises.delete(key);
+            throw error;
+          }) as ReturnType<T>;
+      }
+
+      // For synchronous functions, cache immediately
+      cache.set(key, {
+        data: result as ReturnType<T>,
+        expire: now + cacheTimeout,
+      });
+      return result as ReturnType<T>;
+    } catch (error) {
+      // Don't cache errors
+      throw error;
+    }
   }) as T;
 
   return memoizedFn;
@@ -75,13 +150,66 @@ export const memoize = <T extends (...args: any[]) => any>(
  */
 export function Memoize(timeout: number = 30 * 60): MethodDecorator {
   return (
-    _target: object,
-    _propertyKey: string | symbol,
+    target: object,
+    propertyKey: string | symbol,
     descriptor: PropertyDescriptor,
   ) => {
     if (typeof descriptor.value === 'function') {
-      descriptor.value = memoize(descriptor.value, timeout);
+      // For normal methods
+      const originalMethod = descriptor.value;
+
+      // Create a new descriptor value that preserves the 'this' context
+      descriptor.value = function (this: any, ...args: any[]) {
+        // Create a unique key for this instance
+        const instanceKey = this && this.constructor
+          ? `${this.constructor.name}_${propertyKey.toString()}`
+          : propertyKey.toString();
+
+        // Create a unique memoized function for this instance if it doesn't exist
+        if (!this.__memoized) {
+          this.__memoized = new Map();
+        }
+
+        if (!this.__memoized.has(instanceKey)) {
+          this.__memoized.set(
+            instanceKey,
+            memoize(
+              (...args: any[]) => originalMethod.apply(this, args),
+              timeout,
+            ),
+          );
+        }
+
+        // Call the memoized function
+        return this.__memoized.get(instanceKey)(...args);
+      };
+    } else if (typeof descriptor.get === 'function') {
+      // For getters
+      const originalGetter = descriptor.get;
+
+      descriptor.get = function (this: any) {
+        // Create a unique key for this instance and getter
+        const instanceKey = this && this.constructor
+          ? `${this.constructor.name}_get_${propertyKey.toString()}`
+          : `get_${propertyKey.toString()}`;
+
+        // Create a unique memoized function for this instance if it doesn't exist
+        if (!this.__memoized) {
+          this.__memoized = new Map();
+        }
+
+        if (!this.__memoized.has(instanceKey)) {
+          this.__memoized.set(
+            instanceKey,
+            memoize(() => originalGetter.apply(this), timeout),
+          );
+        }
+
+        // Call the memoized getter
+        return this.__memoized.get(instanceKey)();
+      };
     }
+
     return descriptor;
   };
 }

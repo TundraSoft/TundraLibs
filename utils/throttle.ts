@@ -57,13 +57,21 @@ export const throttle = <T extends (...args: any[]) => any>(
 
   const update = (argMap: string, callLog: any) => {
     callMap.set(argMap, callLog);
-    // setTimeout(() => {
-    //   callMap.delete(argMap);
-    // }, delay + 1);
+  };
+
+  const safeStringify = (args: any[]): string => {
+    try {
+      return JSON.stringify(args);
+    } catch {
+      // If JSON.stringify fails (e.g., circular references), use a simpler approach
+      return String(
+        args.map((arg) => typeof arg === 'object' ? 'object' : arg),
+      );
+    }
   };
 
   const throttled = function (...args: Parameters<T>): ReturnType<T> {
-    const argMap = JSON.stringify(ignoreArgs ? [] : args);
+    const argMap = safeStringify(ignoreArgs ? [] : args);
     const callLog = callMap.get(argMap) ||
       { lastCall: 0, returnValue: null, isRunning: false };
     const currentTime = getCurrentTime();

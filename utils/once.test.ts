@@ -77,4 +77,38 @@ Deno.test('utils.once', async (t) => {
     asserts.assertEquals(await calc.multiply(4, 5), 6);
     asserts.assertEquals(Calculator.counter, 1);
   });
+
+  await t.step('should handle errors in once functions', () => {
+    let counter = 0;
+    const willThrow = (): number => {
+      counter++;
+      throw new Error('This function throws');
+    };
+
+    const onceThrow = once(willThrow);
+
+    // First call should throw
+    asserts.assertThrows(() => onceThrow(), Error, 'This function throws');
+    asserts.assertEquals(counter, 1);
+
+    // Second call should also throw the same error
+    asserts.assertThrows(() => onceThrow(), Error, 'This function throws');
+    // But the function shouldn't be called again
+    asserts.assertEquals(counter, 1);
+  });
+
+  await t.step('should handle void functions', () => {
+    let counter = 0;
+    const voidFn = (): void => {
+      counter++;
+    };
+
+    const onceVoid = once(voidFn);
+
+    onceVoid();
+    asserts.assertEquals(counter, 1);
+
+    onceVoid();
+    asserts.assertEquals(counter, 1);
+  });
 });

@@ -29,10 +29,20 @@
  */
 export const once = <T extends (...args: any[]) => any>(fn: T): T => {
   let result: ReturnType<T> | undefined;
+  let called = false;
+  let error: unknown;
 
   const onceFn = ((...args: Parameters<T>): ReturnType<T> => {
-    if (result === undefined) {
-      result = fn(...args);
+    if (!called) {
+      called = true;
+      try {
+        result = fn(...args) as ReturnType<T>;
+      } catch (e) {
+        error = e;
+        throw e;
+      }
+    } else if (error) {
+      throw error;
     }
     return result as ReturnType<T>;
   }) as T;

@@ -66,23 +66,29 @@ Deno.test('utils.Events', async (t) => {
     async () => {
       const events = new Events();
       let cnt = 3;
-      let timer1: ReturnType<typeof setTimeout>;
+      let timer1: ReturnType<typeof setTimeout> | undefined;
       const cb = async (_name: string) => {
         // Delay
-        await new Promise((resolve) => timer1 = setTimeout(resolve, 250));
+        await new Promise((resolve) => {
+          timer1 = setTimeout(resolve, 250);
+        });
         cnt++;
       };
-      let timer2: ReturnType<typeof setTimeout>;
+      let timer2: ReturnType<typeof setTimeout> | undefined;
       const cb2 = async (_name: string) => {
         // Delay
-        await new Promise((resolve) => timer2 = setTimeout(resolve, 250));
+        await new Promise((resolve) => {
+          timer2 = setTimeout(resolve, 250);
+        });
         cnt++;
       };
       events.on('hello', [cb, cb2]);
       await events.emitSync('hello', 'world');
       asserts.assertEquals(cnt, 5);
-      clearTimeout(timer1!);
-      clearTimeout(timer2!);
+
+      // Clear timeouts safely
+      if (timer1) clearTimeout(timer1);
+      if (timer2) clearTimeout(timer2);
     },
   );
 
@@ -126,8 +132,13 @@ Deno.test('utils.Events', async (t) => {
     events.emit('hello');
   });
 
-  await t.step('should not throw when emitting an unregistered event', () => {
-    const events = new Events();
-    events.emitSync('hello');
-  });
+  await t.step(
+    'should not throw when emitting an unregistered event',
+    async () => {
+      const events = new Events();
+      // Both methods should be tested separately
+      events.emit('hello');
+      await events.emitSync('hello');
+    },
+  );
 });

@@ -61,11 +61,42 @@ UNQUOTED=no quotes
       Deno.removeSync(envPath);
     });
 
+    await t.step('should handle mixed quotes and special characters', () => {
+      const envPath = createTempEnvFile(`
+MIXED_QUOTES="contains 'single' within double"
+JSON_VALUE='{"key": "value"}'
+URL="https://example.com/path?query=value"`);
+
+      const result = envArgs(envPath);
+      asserts.assertEquals(
+        result.get('MIXED_QUOTES'),
+        "contains 'single' within double",
+      );
+      asserts.assertEquals(result.get('JSON_VALUE'), '{"key": "value"}');
+      asserts.assertEquals(
+        result.get('URL'),
+        'https://example.com/path?query=value',
+      );
+      // Clean up
+      Deno.removeSync(envPath);
+    });
+
     await t.step('should be immutable', () => {
       const result = envArgs();
+
+      // Attempt to modify the result
       result.set('TEST_USER', 'new_value');
 
+      // Verify immutability
       asserts.assertEquals(result.has('TEST_USER'), false);
+      asserts.assertEquals(result.get('TEST_USER'), undefined);
+
+      // Verify that other operations also don't work
+      result.delete('HOME');
+      asserts.assertEquals(
+        result.keys().length,
+        Object.keys(Deno.env.toObject()).length,
+      );
     });
   },
 });
@@ -107,12 +138,49 @@ Deno.test({
   },
 });
 
-// Test Docker secrets functionality if possible
+// Mock Docker secrets for testing
+const mockDockerSecrets = async (_t: Deno.TestContext) => {
+  // Create a mock Docker secrets directory
+  const secretsDir = path.join(Deno.cwd(), 'mock_secrets');
+  try {
+    await Deno.mkdir(secretsDir);
+  } catch (error) {
+    if (!(error instanceof Deno.errors.AlreadyExists)) {
+      throw error;
+    }
+  }
+
+  // Create test secrets
+  Deno.writeTextFileSync(
+    path.join(secretsDir, 'DB_PASSWORD'),
+    'secret_db_password',
+  );
+  Deno.writeTextFileSync(path.join(secretsDir, 'API_KEY'), 'secret_api_key');
+
+  // Setup and teardown
+  return {
+    secretsDir,
+    cleanup: () => {
+      try {
+        Deno.removeSync(secretsDir, { recursive: true });
+      } catch (error) {
+        console.error(
+          `Failed to clean up mock secrets: ${(error as Error).message}`,
+        );
+      }
+    },
+  };
+};
+
+// Docker secrets test - now implemented but still ignored by default
 Deno.test({
   name: 'utils.envArgs - Docker secrets',
-  permissions: { env: true, read: true },
-  ignore: true, // Enable this test only in environments where Docker secrets can be tested
+  permissions: { env: true, read: true, write: true },
+  ignore: false, // Enable this test only in environments where Docker secrets can be tested
   async fn(t) {
+    const originalReadDirSync = Deno.readDirSync;
+    const originalReadTextFileSync = Deno.readTextFileSync;
+
     await t.step(
       'should not attempt to load Docker secrets when disabled',
       () => {
@@ -124,5 +192,44 @@ Deno.test({
         readDirSpy.restore();
       },
     );
+
+    await t.step('should load Docker secrets when enabled', async () => {
+      const { secretsDir, cleanup } = await mockDockerSecrets(t);
+
+      try {
+        // Mock implementation for Docker secrets path - update type signature to match Deno API
+        Deno.readDirSync = function (
+          path: string | URL,
+        ): IteratorObject<Deno.DirEntry, unknown, unknown> {
+          return (function* () {
+            const pathStr = path instanceof URL ? path.pathname : path;
+            if (pathStr === '/run/secrets') {
+              yield* originalReadDirSync(secretsDir);
+            } else {
+              yield* originalReadDirSync(pathStr);
+            }
+          })() as IteratorObject<Deno.DirEntry, unknown, unknown>;
+        };
+
+        Deno.readTextFileSync = function (path: string | URL): string {
+          const pathStr = path instanceof URL ? path.pathname : path;
+          if (pathStr.startsWith('/run/secrets/')) {
+            const secretName = pathStr.split('/').pop() || '';
+            return originalReadTextFileSync(`${secretsDir}/${secretName}`);
+          }
+          return originalReadTextFileSync(pathStr);
+        };
+
+        const result = envArgs('./', true);
+
+        asserts.assertEquals(result.get('DB_PASSWORD'), 'secret_db_password');
+        asserts.assertEquals(result.get('API_KEY'), 'secret_api_key');
+      } finally {
+        // Restore original functions
+        Deno.readDirSync = originalReadDirSync;
+        Deno.readTextFileSync = originalReadTextFileSync;
+        cleanup();
+      }
+    });
   },
 });

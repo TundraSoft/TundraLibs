@@ -51,4 +51,63 @@ Deno.test('utils.singleton', async (t) => {
     asserts.assertStrictEquals(instance1, instance2);
     asserts.assertEquals(instance2.config, 'initial config');
   });
+
+  await t.step('should work correctly with inheritance', () => {
+    @Singleton
+    class BaseClass {
+      baseValue: string;
+
+      constructor(value: string) {
+        this.baseValue = value;
+      }
+    }
+
+    @Singleton
+    class DerivedClass extends BaseClass {
+      derivedValue: string;
+
+      constructor(baseValue: string, derivedValue: string) {
+        super(baseValue);
+        this.derivedValue = derivedValue;
+      }
+    }
+
+    // Each class should have its own singleton instance
+    const base1 = new BaseClass('base');
+    const base2 = new BaseClass('newbase');
+    asserts.assertStrictEquals(base1, base2);
+    asserts.assertEquals(base1.baseValue, 'base');
+
+    const derived1 = new DerivedClass('derivedbase', 'derived');
+    const derived2 = new DerivedClass('newderivedbase', 'newderived');
+    console.log(base1, derived2);
+    asserts.assertStrictEquals(derived1, derived2);
+    asserts.assertEquals(derived1.baseValue, 'base');
+    asserts.assertEquals(derived1.derivedValue, 'derived');
+
+    // Base and derived instances should be different
+    asserts.assertStrictEquals(base1, derived1);
+  });
+
+  await t.step('should work with async methods', async () => {
+    @Singleton
+    class AsyncClass {
+      counter = 0;
+
+      async incrementAsync(): Promise<number> {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return ++this.counter;
+      }
+    }
+
+    const instance1 = new AsyncClass();
+    const instance2 = new AsyncClass();
+
+    const result1 = await instance1.incrementAsync();
+    asserts.assertEquals(result1, 1);
+
+    const result2 = await instance2.incrementAsync();
+    asserts.assertEquals(result2, 2);
+    asserts.assertEquals(instance1.counter, 2);
+  });
 });

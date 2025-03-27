@@ -70,6 +70,27 @@ Deno.test('utils.privateObject', async (t) => {
       asserts.assertEquals(keys, ['key1', 'key2']);
       asserts.assertEquals(values, ['value1', 'value2']);
     });
+
+    await t.step('should return correct keys', () => {
+      secretObject = privateObject<Record<string, unknown>>({
+        key1: 'value1',
+        key2: 'value2',
+      }, false);
+      const keys = secretObject.keys();
+      asserts.assertEquals(keys.length, 2);
+      asserts.assertEquals(keys.includes('key1'), true);
+      asserts.assertEquals(keys.includes('key2'), true);
+    });
+
+    await t.step('should return the object through asObject', () => {
+      const originalObj = {
+        key1: 'value1',
+        key2: 'value2',
+      };
+      secretObject = privateObject<Record<string, unknown>>(originalObj, false);
+      const returnedObj = secretObject.asObject();
+      asserts.assertStrictEquals(returnedObj, originalObj);
+    });
   });
 
   await t.step('unsealed object', async (t) => {
@@ -158,6 +179,38 @@ Deno.test('utils.privateObject', async (t) => {
       }, false);
       secretObject.clear();
       asserts.assertEquals(secretObject.keys(), ['key1', 'key2']);
+    });
+
+    await t.step('should handle complex object values', () => {
+      const complexObject = {
+        simple: 'string',
+        array: [1, 2, 3],
+        nested: { a: 1, b: 2 },
+        func: () => 'function',
+      };
+
+      secretObject = privateObject<Record<string, unknown>>();
+      secretObject.set('complex', complexObject);
+
+      // Check direct reference preservation
+      asserts.assertStrictEquals(secretObject.get('complex'), complexObject);
+
+      // Check that modifying the original affects the private object
+      complexObject.array.push(4);
+      const retrieved = secretObject.get('complex') as typeof complexObject;
+      asserts.assertEquals(retrieved.array, [1, 2, 3, 4]);
+    });
+
+    await t.step('should handle null and undefined values', () => {
+      secretObject = privateObject<Record<string, unknown>>({
+        nullValue: null,
+        undefinedValue: undefined,
+      });
+
+      asserts.assertEquals(secretObject.get('nullValue'), null);
+      asserts.assertEquals(secretObject.get('undefinedValue'), undefined);
+      asserts.assertEquals(secretObject.has('nullValue'), true);
+      asserts.assertEquals(secretObject.has('undefinedValue'), true);
     });
   });
 });

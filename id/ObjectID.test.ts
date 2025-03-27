@@ -32,7 +32,7 @@ Deno.test('id.objectId', async (t) => {
   await t.step('Custom machine ID', () => {
     const id = ObjectID(0, 'aaa'),
       res1 = id();
-    asserts.assertEquals(res1.substring(8, 11), 'aaa');
+    asserts.assertEquals(res1.substring(11, 14), 'aaa');
   });
 
   // Additional test cases
@@ -72,8 +72,8 @@ Deno.test('id.objectId', async (t) => {
     const result2 = id2();
 
     // Machine IDs should be different when not explicitly set
-    const machineId1 = result1.substring(8, 11);
-    const machineId2 = result2.substring(8, 11);
+    const machineId1 = result1.substring(11, 14);
+    const machineId2 = result2.substring(11, 14);
 
     // This test could occasionally fail if random machine IDs happen to be the same
     // But it's very unlikely with a 3-character alphanumeric ID

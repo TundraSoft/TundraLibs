@@ -31,12 +31,15 @@ export class Events<
     if (!this.__events.has(event)) {
       this.__events.set(event, new Set());
     }
+    const eventCallbacks = this.__events.get(event);
+    if (!eventCallbacks) return this;
+
     if (Array.isArray(callback)) {
       for (const cb of callback) {
         this.on(event, cb as E[keyof E]);
       }
-    } else if (!this.__events.get(event)!.has(callback)) {
-      this.__events.get(event)!.add(callback);
+    } else if (!eventCallbacks.has(callback)) {
+      eventCallbacks.add(callback);
     }
     return this;
   }
@@ -66,12 +69,15 @@ export class Events<
       this.__events.delete(event);
       return this;
     }
+    const eventCallbacks = this.__events.get(event);
+    if (!eventCallbacks) return this;
+
     if (Array.isArray(callback)) {
       for (const cb of callback) {
-        this.__events.get(event)!.delete(cb as EventCallback);
+        eventCallbacks.delete(cb as EventCallback);
       }
     } else {
-      this.__events.get(event)!.delete(callback);
+      eventCallbacks.delete(callback);
     }
     return this;
   }
@@ -113,16 +119,16 @@ export class Events<
    *
    * @param event - The name of the event.
    * @param args - The arguments to pass to the event listeners.
-   * @returns A promise that resolves when all listeners have been called.
+   * @returns The current instance for chaining.
    */
   emit<K extends keyof E>(
     event: K,
     ...args: Parameters<E[K]>
   ): this {
-    if (!this.__events.has(event)) {
+    const callbacks = this.__events.get(event);
+    if (!callbacks) {
       return this;
     }
-    const callbacks = this.__events.get(event)!;
 
     for (const cb of callbacks) {
       cb(...args);
@@ -132,6 +138,7 @@ export class Events<
 
   /**
    * Emits the specified event synchronously, calling all registered listeners with the provided arguments.
+   * Waits for each callback to complete before calling the next one.
    *
    * @param event - The name of the event.
    * @param args - The arguments to pass to the event listeners.
@@ -141,11 +148,10 @@ export class Events<
     event: K,
     ...args: Parameters<E[K]>
   ): Promise<this> {
-    if (!this.__events.has(event)) {
+    const callbacks = this.__events.get(event);
+    if (!callbacks) {
       return this;
     }
-    // Remove unused results array
-    const callbacks = this.__events.get(event)!;
 
     for (const cb of callbacks) {
       await cb(...args);

@@ -53,8 +53,10 @@ export const envArgs = function (
     });
     if (filePermission.state === 'granted') {
       const data = Deno.readTextFileSync(envFile);
-      const pattern = new RegExp(/^\s*([\w.-]+)\s*=\s*(.+?)?\s*$/); // NOSONAR
-      const isQuoted = new RegExp(/^('|")[^'"].*\1$/);
+      // Improved regex pattern to avoid Sonar warnings
+      const pattern = /^\s*([\w.-]+)\s*=\s*(.+?)?\s*$/;
+      const isQuoted = /^(['"])(.*)\1$/;
+
       data.split('\n').forEach((line) => {
         const match = line.match(pattern);
         if (match) {
@@ -64,16 +66,20 @@ export const envArgs = function (
             if (!value) {
               env[key] = '';
             } else {
-              env[key] = isQuoted.test(value)
-                ? value.slice(1, -1).trim()
-                : value.trim();
+              let finalValue = value.trim();
+              const quoteMatch = finalValue.match(isQuoted);
+              if (quoteMatch) {
+                finalValue = quoteMatch[2] ?? '';
+              }
+              env[key] = finalValue;
             }
           }
         }
       });
     }
   } catch {
-    // Nothing to do, we die gracefully
+    // Log error in development environments if needed
+    // console.debug(`Error loading .env file: ${error.message}`);
   }
 
   if (loadDockerSecrets) {
@@ -85,13 +91,18 @@ export const envArgs = function (
       });
       if (dockerSecretPermission.state === 'granted') {
         for (const file of Deno.readDirSync(dockerSecretPath)) {
-          const key = file.name;
-          const value = Deno.readTextFileSync(path.join(dockerSecretPath, key));
-          env[key] = value;
+          if (file.isFile) {
+            const key = file.name;
+            const value = Deno.readTextFileSync(
+              path.join(dockerSecretPath, key),
+            );
+            env[key] = value.trim();
+          }
         }
       }
     } catch {
-      // Nothing to do, we die gracefully
+      // Log error in development environments if needed
+      // console.debug(`Error loading Docker secrets: ${error.message}`);
     }
   }
 

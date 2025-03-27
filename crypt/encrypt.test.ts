@@ -21,6 +21,76 @@ Deno.test('encryption', async (t) => {
     asserts.assertEquals(typeof encrypted, 'string');
     asserts.assertEquals(encrypted.length > 0, true);
     asserts.assertEquals(decrypted, data);
+
+    // Check the format of the encrypted data
+    const encryptedParts = encrypted.split(':');
+    asserts.assertEquals(encryptedParts.length, 2);
+    asserts.assert(
+      /^[0-9a-f]+$/.test(encryptedParts[0]!),
+      'First part should be hex',
+    );
+    asserts.assert(
+      /^[0-9a-f]+$/.test(encryptedParts[1]!),
+      'Second part should be hex',
+    );
+  });
+
+  await t.step('encryptAES - Empty Input', async () => {
+    const data = '';
+    const secret = 'abcdefghijklmnopqrstuvwx';
+    const mode: EncryptionModes = 'AES-GCM:256';
+
+    const encrypted = await encryptAES(mode, secret, data);
+    const decrypted = await decryptAES(mode, secret, encrypted);
+
+    asserts.assertEquals(decrypted, data);
+  });
+
+  await t.step('encryptAES - Binary Input', async () => {
+    const data = new Uint8Array([1, 2, 3, 4, 5]);
+    const secret = 'abcdefghijklmnopqrstuvwx';
+    const mode: EncryptionModes = 'AES-GCM:256';
+
+    const encrypted = await encryptAES(mode, secret, data);
+    const decrypted = await decryptAES(
+      mode,
+      secret,
+      encrypted,
+      true,
+    ) as Uint8Array;
+
+    asserts.assert(decrypted instanceof Uint8Array);
+    asserts.assertEquals(Array.from(decrypted), [1, 2, 3, 4, 5]);
+  });
+
+  await t.step('decryptAES - returnBinary parameter', async () => {
+    const data = 'test data';
+    const secret = 'abcdefghijklmnopqrstuvwx';
+    const mode: EncryptionModes = 'AES-GCM:256';
+
+    const encrypted = await encryptAES(mode, secret, data);
+    const decryptedBinary = await decryptAES(mode, secret, encrypted, true);
+
+    asserts.assert(decryptedBinary instanceof Uint8Array);
+    const textDecoder = new TextDecoder();
+    asserts.assertEquals(
+      textDecoder.decode(decryptedBinary as Uint8Array),
+      data,
+    );
+  });
+
+  await t.step('decryptAES - Invalid Data Format', async () => {
+    const secret = 'abcdefghijklmnopqrstuvwx';
+    const mode: EncryptionModes = 'AES-GCM:256';
+    const invalidData = 'not-valid-format';
+
+    await asserts.assertRejects(
+      async () => {
+        await decryptAES(mode, secret, invalidData);
+      },
+      Error,
+      'Invalid encrypted data format. Expected "data:iv"',
+    );
   });
 
   await t.step('encryptAES - Invalid Encryption Mode', async () => {

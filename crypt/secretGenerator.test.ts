@@ -81,7 +81,7 @@ Deno.test('secretGenerator', async (t) => {
       // deno-lint-ignore no-explicit-any
       () => secretGenerator(32, 'invalid' as any),
       Error,
-      'Invalid encoding. Must be "hex", "base64", or "raw"',
+      'Invalid encoding. Must be "hex", "base64", "alphanumeric", or "raw"',
     );
   });
 
@@ -95,5 +95,43 @@ Deno.test('secretGenerator', async (t) => {
 
     // All secrets should be unique
     assertEquals(generatedSecrets.size, iterations);
+  });
+
+  await t.step('Generate secret with hyphen interval', () => {
+    const secret = secretGenerator(16, 'hex', '', 4) as string;
+    assertEquals(typeof secret, 'string');
+    assertEquals(secret.split('-').length, 8); // 32 hex chars / 4 = 8 groups
+    assertMatch(secret, /^([0-9a-f]{4}-){7}[0-9a-f]{4}$/);
+  });
+
+  await t.step('Generate secret with alphanumeric encoding', () => {
+    const secret = secretGenerator(16, 'alphanumeric') as string;
+    assertEquals(typeof secret, 'string');
+    assertMatch(secret, /^[0-9a-zA-Z]+$/);
+  });
+
+  await t.step('Generate secret with options object', () => {
+    const secret = secretGenerator({
+      byteLength: 16,
+      encoding: 'hex',
+      prefix: 'key-',
+      hyphenInterval: 4,
+      lowercase: true,
+    }) as string;
+
+    assertEquals(typeof secret, 'string');
+    assertEquals(secret.startsWith('key-'), true);
+    assertMatch(secret, /^key-([0-9a-f]{4}-){7}[0-9a-f]{4}$/);
+  });
+
+  await t.step('Generate alphanumeric secret with lowercase option', () => {
+    const secret = secretGenerator({
+      byteLength: 16,
+      encoding: 'alphanumeric',
+      lowercase: true,
+    }) as string;
+
+    assertEquals(typeof secret, 'string');
+    assertMatch(secret, /^[0-9a-z]+$/);
   });
 });

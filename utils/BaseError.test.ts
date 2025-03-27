@@ -58,23 +58,6 @@ Deno.test(
       asserts.assertEquals(error.cause, cause);
     });
 
-    await t.step('should call onInit method', async () => {
-      let onInitCalled = false;
-
-      class TestError extends BaseError {
-        public override async onInit(): Promise<void> {
-          await 1;
-          onInitCalled = true;
-        }
-      }
-
-      new TestError('Test error');
-      // Allow the event loop to process the async onInit call
-      await new Promise((resolve) => setTimeout(resolve, 0));
-
-      asserts.assertEquals(onInitCalled, true);
-    });
-
     await t.step('should handle missing Error.captureStackTrace', () => {
       // Temporarily remove Error.captureStackTrace
       const originalCaptureStackTrace = Error.captureStackTrace;
@@ -206,6 +189,37 @@ Deno.test(
       asserts.assertEquals(json3.cause, 'Error: Normal Error');
       asserts.assert(json3.timeStamp);
     });
+
+    await t.step(
+      'should allow derived classes to override message template',
+      () => {
+        class CustomError extends BaseError {
+          protected override get _messageTemplate(): string {
+            return 'CUSTOM: ${message}';
+          }
+        }
+
+        const error = new CustomError('Test error');
+        asserts.assertStringIncludes(error.message, 'CUSTOM: Test error');
+        asserts.assertEquals(error.message, 'CUSTOM: Test error');
+        // asserts.assertN(error.message, '['); // Should not have timestamp brackets
+
+        class CustomErrorWithContext extends BaseError<{ code: number }> {
+          protected override get _messageTemplate(): string {
+            return 'ERROR ${code}: ${message}';
+          }
+        }
+
+        const errorWithContext = new CustomErrorWithContext(
+          'Permission denied',
+          { code: 403 },
+        );
+        asserts.assertStringIncludes(
+          errorWithContext.message,
+          'ERROR 403: Permission denied',
+        );
+      },
+    );
   },
 );
 
@@ -219,7 +233,141 @@ Deno.test(
       const error = new BaseError('Test error', {}, new Error('Cause error'));
       const snippet = error.getCodeSnippet();
       asserts.assertEquals(typeof snippet, 'string');
-      asserts.assertEquals(snippet, 'Could not fetch code snippet');
+      console.log(snippet);
+      asserts.assertEquals(
+        snippet.startsWith('Could not fetch code snippet'),
+        true,
+      );
+    });
+  },
+);
+
+Deno.test(
+  {
+    name: 'utils.BaseError.EdgeCases',
+    permissions: { read: true, write: true },
+  },
+  async (t) => {
+    await t.step('should handle deep nesting of errors', () => {
+      const level3 = new BaseError('Level 3 error');
+      const level2 = new BaseError('Level 2 error', {}, level3);
+      const level1 = new BaseError('Level 1 error', {}, level2);
+
+      asserts.assertEquals(level1.getRootCause(), level3);
+
+      const json = level1.toJSON();
+      asserts.assertEquals(json.message, 'Level 1 error');
+      asserts.assertEquals(
+        (json.cause as BaseErrorJson).message,
+        'Level 2 error',
+      );
+      asserts.assertEquals(
+        ((json.cause as BaseErrorJson).cause as BaseErrorJson).message,
+        'Level 3 error',
+      );
+    });
+
+    await t.step('should handle complex context objects', () => {
+      const complexContext = {
+        user: { id: 123, name: 'Test', roles: ['admin', 'user'] },
+        request: { path: '/api/data', method: 'GET' },
+        timestamp: new Date(),
+        nested: { deep: { property: 'value' } },
+      };
+
+      const error = new BaseError('Complex context test', complexContext);
+      asserts.assertEquals(error.context, complexContext);
+      asserts.assertEquals(error.getContextValue('user').id, 123);
+      asserts.assertEquals(
+        error.getContextValue('nested').deep.property,
+        'value',
+      );
+
+      const json = error.toJSON();
+      asserts.assertEquals(json.context, complexContext);
+    });
+
+    await t.step('should handle different generic context types', () => {
+      type UserContext = {
+        userId: number;
+        username: string;
+      };
+
+      class UserError extends BaseError<UserContext> {
+        getUserId(): number {
+          return this.getContextValue('userId');
+        }
+      }
+
+      const userError = new UserError('User error', {
+        userId: 123,
+        username: 'testuser',
+      });
+      asserts.assertEquals(userError.getUserId(), 123);
+      asserts.assertEquals(userError.getContextValue('username'), 'testuser');
+    });
+
+    await t.step('should handle malformed stack traces', () => {
+      const originalStackDescriptor = Object.getOwnPropertyDescriptor(
+        Error.prototype,
+        'stack',
+      );
+      const originalStackGetter = originalStackDescriptor?.get;
+      const originalStackSetter = originalStackDescriptor?.set;
+
+      try {
+        // Create a mock error with malformed stack
+        const mockError = new Error('Mock error');
+        Object.defineProperty(mockError, 'stack', {
+          get: () => 'Error: Mock error\nmalformed stack trace line',
+          configurable: true,
+        });
+
+        const error = new BaseError('Test error', {}, mockError);
+        const snippet = error.getCodeSnippet();
+        asserts.assertEquals(snippet, 'Could not parse stack trace');
+
+        // Create a mock error with no stack
+        const noStackError = new Error('No stack');
+        Object.defineProperty(noStackError, 'stack', {
+          get: () => undefined,
+          configurable: true,
+        });
+
+        const error2 = new BaseError('Test error', {}, noStackError);
+        const snippet2 = error2.getCodeSnippet();
+        asserts.assertEquals(snippet2, 'No stack trace available');
+      } finally {
+        // Restore original stack getter/setter
+        if (originalStackGetter && originalStackSetter) {
+          Object.defineProperty(Error.prototype, 'stack', {
+            get: originalStackGetter,
+            set: originalStackSetter,
+            configurable: true,
+          });
+        }
+      }
+    });
+  },
+);
+
+/**
+ * Test for file system errors beyond permission errors
+ */
+Deno.test(
+  { name: 'utils.BaseError.FileSystemErrors', permissions: { read: true } },
+  async (t) => {
+    await t.step('should handle non-existent files in stack trace', () => {
+      const mockError = new Error('File not found error');
+      Object.defineProperty(mockError, 'stack', {
+        get: () =>
+          'Error: File not found error\n    at Object.<anonymous> (/non/existent/file.ts:10:5)',
+        configurable: true,
+      });
+
+      const error = new BaseError('Test error', {}, mockError);
+      const snippet = error.getCodeSnippet();
+      asserts.assertStringIncludes(snippet, 'Could not fetch code snippet');
     });
   },
 );

@@ -20,7 +20,18 @@ export const variableReplacer = (
   const flatten = (
     obj: Record<string, unknown>,
     parentKey = '',
+    visited = new Set<object>(),
   ): Record<string, unknown> => {
+    // Detect circular references
+    if (typeof obj === 'object' && obj !== null) {
+      if (visited.has(obj)) {
+        throw new Error(
+          'Circular reference detected during variable replacement',
+        );
+      }
+      visited.add(obj);
+    }
+
     const result: Record<string, unknown> = {};
     for (const key in obj) {
       if (Object.prototype.hasOwnProperty.call(obj, key)) {
@@ -32,7 +43,11 @@ export const variableReplacer = (
           result[newKey] = `(${value.join(', ')})`;
         } // If value is a non-null object, recurse deeper
         else if (typeof value === 'object' && value !== null) {
-          const nested = flatten(value as Record<string, unknown>, newKey);
+          const nested = flatten(
+            value as Record<string, unknown>,
+            newKey,
+            visited,
+          );
           Object.assign(result, nested);
         } // Otherwise, directly store the primitive value
         else {

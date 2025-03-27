@@ -24,49 +24,52 @@ const random = function (length: number): Uint32Array {
 };
 
 /**
- * Generates a unique id from the base characterset provided. The characters used
- * are as uniform as possible ensuring even spread and low repeatability.
- * During testing, when generating 10,000,000 < 1% collision was found. However, this
- * is subject to multiple scenarios in production
+ * Generates a unique id from the base characterset provided.
  *
  * @param {number} size length of ID required
- * @param {string} base the base characters to use for ID generation. Defaults to WEB_SAFE [[WEB_SAFE]]
+ * @param {string} base the base characters to use for ID generation. Defaults to WEB_SAFE
  * @returns {string} The generated unique id
- *
- * @example
- * // Basic usage
- * const id = nanoID();
- * console.log(id); // Logs a 21-character unique id using WEB_SAFE characters
- *
- * @example
- * // Generate an ID with a specific length
- * const id = nanoID(10);
- * console.log(id); // Logs a 10-character unique id using WEB_SAFE characters
- *
- * @example
- * // Generate an ID with a custom character set
- * const id = nanoID(10, NUMBERS);
- * console.log(id); // Logs a 10-character unique id using only numeric characters
- *
- * @example
- * // Generate an ID with a custom character set including special characters
- * const id = nanoID(15, PASSWORD);
- * console.log(id); // Logs a 15-character unique id using PASSWORD characters
  */
 export function nanoID(size = 21, base: string = WEB_SAFE): string {
+  // Input validation
   if (size < 1) {
     throw new Error('Size should be greater than 0');
   }
-  let id = '',
-    i = 0;
-  const mask = (2 << (31 - Math.clz32((base.length - 1) | 1))) - 1,
-    step = Math.ceil((1.6 * mask * size) / base.length),
-    bytes: Uint32Array = random(step);
 
-  while (id.length < size) {
-    id += base[bytes[i]! & mask] || '';
-    i++;
+  if (!base || base.length === 0) {
+    throw new Error('Base string cannot be empty');
   }
+
+  // Performance optimizations
+  let id = '';
+  let i = 0;
+
+  // Calculate mask based on base length
+  const mask = (2 << (31 - Math.clz32((base.length - 1) | 1))) - 1;
+
+  // Calculate step for sufficient randomness
+  const step = Math.ceil((1.6 * mask * size) / base.length);
+
+  // Get random bytes all at once (more efficient)
+  const bytes: Uint32Array = random(step);
+
+  // Generate ID
+  while (id.length < size) {
+    const index = bytes[i]! & mask;
+    // Only add valid characters (when index is within base length)
+    if (index < base.length) {
+      id += base[index];
+    }
+    i++;
+
+    // If we run out of random bytes, generate more
+    if (i >= bytes.length) {
+      const newBytes = random(step);
+      bytes.set(newBytes);
+      i = 0;
+    }
+  }
+
   return id;
 }
 
