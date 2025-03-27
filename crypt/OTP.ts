@@ -66,7 +66,7 @@ function validateInputs(
  * @param {string | Uint8Array} key - The secret key for HMAC.
  * @param {number} counter - The counter value.
  * @param {number} [length=6] - The length of the OTP.
- * @param {DigestAlgorithms} [algo='SHA-1'] - The hash algorithm to use. ({@link DigestAlgorithms})
+ * @param {DigestAlgorithms} [algo='SHA-256'] - The hash algorithm to use. ({@link DigestAlgorithms})
  * @returns {Promise<string>} A promise that resolves to the generated OTP.
  *
  * @see {@link https://tools.ietf.org/html/rfc4226|RFC 4226 - HOTP}
@@ -76,7 +76,7 @@ const generate = async (
   key: string | Uint8Array,
   counter: number,
   length: number = 6,
-  algo: DigestAlgorithms = 'SHA-1',
+  algo: DigestAlgorithms = 'SHA-256',
 ): Promise<string> => {
   try {
     // Validate inputs
@@ -127,7 +127,7 @@ const generate = async (
  * @param {number} [epoch=Date.now()] - The epoch time
  * @param {number} [period=30] - The time period in seconds
  * @param {number} [length=6] - The length of the OTP
- * @param {DigestAlgorithms} [algo='SHA-1'] - The hash algorithm to use
+ * @param {DigestAlgorithms} [algo='SHA-256'] - The hash algorithm to use
  * @returns {Promise<boolean>} True if the OTP is valid, false otherwise
  */
 export const verifyTOTP = async (
@@ -137,7 +137,7 @@ export const verifyTOTP = async (
   epoch: number = Date.now(),
   period: number = 30,
   length: number = 6,
-  algo: DigestAlgorithms = 'SHA-1',
+  algo: DigestAlgorithms = 'SHA-256',
 ): Promise<boolean> => {
   try {
     if (period < 1) {
@@ -154,7 +154,6 @@ export const verifyTOTP = async (
 
     const currentCounter = Math.floor(epoch / (period * 1000));
 
-    // Check OTPs in the time window
     for (let i = -window; i <= window; i++) {
       const counter = currentCounter + i;
       if (counter < 0) continue;
@@ -181,7 +180,7 @@ export const verifyTOTP = async (
  * @param {string | Uint8Array} key - The secret key for HMAC
  * @param {number} counter - The counter value
  * @param {number} [length=6] - The length of the OTP
- * @param {DigestAlgorithms} [algo='SHA-1'] - The hash algorithm to use
+ * @param {DigestAlgorithms} [algo='SHA-256'] - The hash algorithm to use
  * @returns {Promise<boolean>} True if the OTP is valid, false otherwise
  */
 export const verifyHOTP = async (
@@ -189,7 +188,7 @@ export const verifyHOTP = async (
   key: string | Uint8Array,
   counter: number,
   length: number = 6,
-  algo: DigestAlgorithms = 'SHA-1',
+  algo: DigestAlgorithms = 'SHA-256',
 ): Promise<boolean> => {
   try {
     if (!otp || otp.length !== length || !/^\d+$/.test(otp)) {
@@ -213,7 +212,7 @@ export const verifyHOTP = async (
  * @param {number} [epoch=Date.now()] - The epoch time.
  * @param {number} [period=30] - The time period in seconds.
  * @param {number} [length=6] - The length of the OTP.
- * @param {DigestAlgorithms} [algo='SHA-1'] - The hash algorithm to use. ({@link DigestAlgorithms})
+ * @param {DigestAlgorithms} [algo='SHA-256'] - The hash algorithm to use. ({@link DigestAlgorithms})
  * @returns {Promise<string>} A promise that resolves to the generated TOTP.
  *
  * @see {@link https://tools.ietf.org/html/rfc6238|RFC 6238 - TOTP}
@@ -223,7 +222,7 @@ export const TOTP = (
   epoch: number = Date.now(),
   period: number = 30,
   length: number = 6,
-  algo: DigestAlgorithms = 'SHA-1',
+  algo: DigestAlgorithms = 'SHA-256',
 ): Promise<string> => {
   if (period < 1) {
     throw new Error('Time period must be at least 1 second');
@@ -238,7 +237,7 @@ export const TOTP = (
  * @param {string | Uint8Array} key - The secret key for HMAC.
  * @param {number} counter - The counter value.
  * @param {number} [length=6] - The length of the OTP.
- * @param {DigestAlgorithms} [algo='SHA-1'] - The hash algorithm to use. ({@link DigestAlgorithms})
+ * @param {DigestAlgorithms} [algo='SHA-256'] - The hash algorithm to use. ({@link DigestAlgorithms})
  * @returns {Promise<string>} A promise that resolves to the generated HOTP.
  *
  * @see {@link https://tools.ietf.org/html/rfc4226|RFC 4226 - HOTP}
@@ -247,5 +246,5 @@ export const HOTP = (
   key: string | Uint8Array,
   counter: number,
   length: number = 6,
-  algo: DigestAlgorithms = 'SHA-1',
+  algo: DigestAlgorithms = 'SHA-256',
 ): Promise<string> => generate(key, counter, length, algo);
