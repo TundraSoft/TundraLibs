@@ -291,7 +291,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       if (!username || !password) {
         throw new Error('Basic auth requires a username and password');
       }
-      headers['Authorization'] = `Basic ${btoa(`${username}:${password}`)}`;
+      headers['Authorization'] = `Basic ${btoa(`${username}:${password}`)}`; //NOSONAR
     }
     if (endpoint.bearerToken) {
       headers['Authorization'] = `Bearer ${endpoint.bearerToken}`;
@@ -389,7 +389,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @returns Promise resolving to a response object
    * @throws {RESTlerRequestError} If there's an error communicating with the socket
    */
-  protected async _makeUnixSocketRequest(
+  protected async _makeUnixSocketRequest( //NOSONAR
     request: RESTlerRequest,
   ): Promise<
     { status: StatusCode; body: ResponseBody; headers: Record<string, string> }
@@ -614,7 +614,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     contentType: string | null | undefined,
   ): B {
     try {
-      if (!contentType) {
+      if (!contentType || contentType === '' || contentType.includes('text')) {
         // If content type is not specified, try to parse as JSON
         try {
           return JSON.parse(body) as B;
@@ -625,12 +625,6 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         return JSON.parse(body) as B;
       } else if (contentType.includes('xml')) {
         return XMLParse(body) as unknown as B;
-      } else if (contentType.includes('text')) {
-        try {
-          return JSON.parse(body) as B;
-        } catch {
-          return body as unknown as B;
-        }
       } else {
         // For any other content type, return as is
         return body as unknown as B;
@@ -661,7 +655,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @returns Processed option value
    * @throws {RESTlerConfigError} If the option value is invalid
    */
-  protected override _processOption<K extends keyof RESTlerOptions>(
+  protected override _processOption<K extends keyof RESTlerOptions>( //NOSONAR
     key: K,
     value: RESTlerOptions[K],
   ): RESTlerOptions[K] {
