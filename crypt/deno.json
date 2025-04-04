@@ -6,8 +6,8 @@
     ".": "./mod.ts",
     "./digest": "./digest.ts",
     "./encrypt": "./encrypt.ts",
-    "./keygenerator": "./keyGenerator.ts",
     "./OTP": "./OTP.ts",
+    "./secretGenerator": "./secretGenerator.ts",
     "./sign": "./sign.ts"
   },
   "imports": {
