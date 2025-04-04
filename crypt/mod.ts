@@ -6,7 +6,6 @@ export {
   encryptAES,
   type EncryptionModes,
 } from './encrypt.ts';
-export { keyGenerator } from './keyGenerator.ts';
 export { HOTP, TOTP, verifyHOTP, verifyTOTP } from './OTP.ts';
 export {
   sign,

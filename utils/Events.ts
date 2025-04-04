@@ -9,7 +9,7 @@ export type EventCallback = (...args: any[]) => unknown | Promise<unknown>;
 export class Events<
   E extends Record<string, EventCallback> = Record<string, EventCallback>,
 > {
-  private __events: Map<keyof E, Set<EventCallback>> = new Map();
+  private readonly __events: Map<keyof E, Set<EventCallback>> = new Map();
 
   /**
    * Registers an event listener for the specified event.

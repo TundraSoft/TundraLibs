@@ -31,7 +31,8 @@
       "./.github",
       "./.sonarlint",
       "./.devcontainer",
-      "**/fixtures/**"
+      "**/fixtures/**",
+      "**/tests/**"
     ]
   },
   "fmt": {
@@ -89,6 +90,7 @@
   "workspace": [
     "./crypt",
     "./id",
+    "./restler",
     "./utils"
   ]
 }

@@ -8,6 +8,9 @@ crypt:
 id:
   - changed-files:
       - any-glob-to-any-file: id/*
+restler:
+  - changed-files:
+      - any-glob-to-any-file: restler/*
 utils:
   - changed-files:
       - any-glob-to-any-file: utils/*

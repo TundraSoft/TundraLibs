@@ -40,7 +40,7 @@ export abstract class Options<
   O extends Record<string, unknown> = Record<string, unknown>,
   E extends Record<string, EventCallback> = Record<string, EventCallback>,
 > extends Events<E> {
-  private __options: PrivateObject<O> = privateObject<O>();
+  private readonly __options: PrivateObject<O> = privateObject<O>();
 
   constructor(
     options: EventOptionsKeys<O, E>,
@@ -48,7 +48,16 @@ export abstract class Options<
   ) {
     super();
     // First set the defaults and explicitly type it
-    const finalOptions = { ...defaults, ...options };
+    // Start with defaults
+    const finalOptions = { ...defaults } as EventOptionsKeys<O, E>;
+
+    // Apply non-undefined values from options (excluding event handlers)
+    for (const key in options) {
+      // Skip undefined values
+      if (options[key] !== undefined) {
+        (finalOptions as Record<string, unknown>)[key] = options[key];
+      }
+    }
     this._setOptions(finalOptions);
   }
 

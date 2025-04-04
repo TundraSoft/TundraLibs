@@ -52,6 +52,7 @@ body:
         - Workflow
         - crypt
         - id
+        - restler
         - utils
   - type: input
     id: package-version
