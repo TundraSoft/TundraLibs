@@ -80,7 +80,6 @@ Deno.test('utils.singleton', async (t) => {
 
     const derived1 = new DerivedClass('derivedbase', 'derived');
     const derived2 = new DerivedClass('newderivedbase', 'newderived');
-    console.log(base1, derived2);
     asserts.assertStrictEquals(derived1, derived2);
     asserts.assertEquals(derived1.baseValue, 'base');
     asserts.assertEquals(derived1.derivedValue, 'derived');

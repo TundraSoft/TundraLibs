@@ -1,4 +1,5 @@
 import * as asserts from '$asserts';
+import { RESTlerOptions } from '../types/Options.ts';
 import { DockerAPI } from './fixtures/docker/DockerAPI.ts';
 import type {
   DockerContainer,
@@ -140,6 +141,13 @@ const mockInfo: DockerInfo = {
   SecurityOptions: ['name=seccomp,profile=default'],
 };
 
+class DockerAPIMock extends DockerAPI {
+  protected override _validateSocketPath(
+    value: unknown,
+  ): value is RESTlerOptions['socketPath'] {
+    return true;
+  }
+}
 // Mock Deno.connect for Unix socket tests
 const mockConnect = () => {
   // Mock socket implementation that returns different responses for different requests
@@ -215,7 +223,7 @@ Deno.test('RESTler.Example', async (h) => {
     await t.step('should accept custom socket path', () => {
       try {
         setupMock();
-        const customApi = new DockerAPI('/var/run/filesystemui.socket');
+        const customApi = new DockerAPIMock('/var/run/notthere.socket');
         // No direct way to verify the socket path, but we can verify it was constructed
         asserts.assertNotEquals(customApi, null);
       } finally {

@@ -170,7 +170,3 @@ const dockerApi = new DockerAPI();
 const containers = await dockerApi.listContainers(true);
 const images = await dockerApi.listImages();
 const info = await dockerApi.getSystemInfo();
-
-console.log(containers);
-console.log(images);
-console.log(info);

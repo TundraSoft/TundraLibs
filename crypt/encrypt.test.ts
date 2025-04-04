@@ -15,7 +15,6 @@ Deno.test('encryption', async (t) => {
 
     const encrypted = await encryptAES(mode, secret, data);
     const decrypted = await decryptAES(mode, secret, encrypted);
-    //console.log(encrypted); // Logs the encrypted data and IV
 
     // Check that the encrypted data is a non-empty string
     asserts.assertEquals(typeof encrypted, 'string');

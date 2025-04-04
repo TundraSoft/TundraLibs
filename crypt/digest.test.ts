@@ -7,13 +7,11 @@ Deno.test('digest', async (t) => {
     const data = 'my data';
 
     const hash = await digest(algorithm, data);
-    // console.log(hash); // Logs the SHA-1 hash of 'my data'
 
     // Check that the hash is a non-empty string
     assertEquals(typeof hash, 'string');
     assertEquals(hash.length > 0, true);
     assertEquals(hash.length, 40); // SHA-1 produces a 40-character hex string
-    console.log(hash);
     assertEquals(hash, 'fee95d29ae5926af3375e2eb3a688471de0a2c3e'); // Expected SHA-1 hash for 'my data'
   });
 
@@ -22,7 +20,6 @@ Deno.test('digest', async (t) => {
     const data = 'my data';
 
     const hash = await digest(algorithm, data);
-    // console.log(hash); // Logs the SHA-256 hash of 'my data'
 
     // Check that the hash is a non-empty string
     assertEquals(typeof hash, 'string');
@@ -39,7 +36,6 @@ Deno.test('digest', async (t) => {
     const data = 'my data';
 
     const hash = await digest(algorithm, data);
-    // console.log(hash); // Logs the SHA-384 hash of 'my data'
 
     // Check that the hash is a non-empty string
     assertEquals(typeof hash, 'string');
@@ -56,7 +52,6 @@ Deno.test('digest', async (t) => {
     const data = 'my data';
 
     const hash = await digest(algorithm, data);
-    // console.log(hash); // Logs the SHA-512 hash of 'my data'
 
     // Check that the hash is a non-empty string
     assertEquals(typeof hash, 'string');
