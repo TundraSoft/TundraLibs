@@ -51,6 +51,7 @@ body:
       options:
         - Workflow
         - crypt
+        - guardian
         - id
         - restler
         - utils

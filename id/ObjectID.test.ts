@@ -98,4 +98,17 @@ Deno.test('id.objectId', async (t) => {
       asserts.assertEquals(counter2 - counter1, 1);
     }
   });
+
+  await t.step(
+    'must throw if machineIdLength is less than 1 characters',
+    () => {
+      asserts.assertThrows(
+        () => {
+          ObjectID(0, 'a', 0);
+        },
+        Error,
+        'Machine ID length must be at least 1',
+      );
+    },
+  );
 });

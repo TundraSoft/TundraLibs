@@ -1,0 +1,9 @@
+{
+  "name": "@tundralibs/guardian",
+  "version": "0.1.0",
+  "description": "Validate all things! Guardian is a validation library",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "imports": {}
+}

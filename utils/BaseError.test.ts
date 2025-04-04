@@ -233,7 +233,6 @@ Deno.test(
       const error = new BaseError('Test error', {}, new Error('Cause error'));
       const snippet = error.getCodeSnippet();
       asserts.assertEquals(typeof snippet, 'string');
-      console.log(snippet);
       asserts.assertEquals(
         snippet.startsWith('Could not fetch code snippet'),
         true,

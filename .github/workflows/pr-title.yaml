@@ -30,6 +30,7 @@ jobs:
           scopes: |-
             workflows
             crypt
+            guardian
             id
             restler
             utils

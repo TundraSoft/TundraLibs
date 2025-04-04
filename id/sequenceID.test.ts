@@ -79,4 +79,14 @@ Deno.test('id.sequenceId', async (t) => {
     const uniqueSequences = new Set(sequences.map((id) => id.toString()));
     asserts.assertEquals(uniqueSequences.size, count);
   });
+
+  await t.step('test negative counter value', () => {
+    asserts.assertThrows(
+      () => sequenceID(-1),
+      Error,
+      'Counter cannot be negative',
+    );
+    const d = sequenceID(10);
+    asserts.assertThrows(() => d(-1), Error, 'Counter cannot be negative');
+  });
 });

@@ -101,4 +101,9 @@ Deno.test('id.simpleId', async (t) => {
       globalThis.Date = OriginalDate;
     }
   });
+
+  await t.step('Test with microseconds', () => {
+    const id = simpleID(0, 4, true);
+    asserts.assert(id().toString().length > 14); // Check if the ID length is greater than 14
+  });
 });

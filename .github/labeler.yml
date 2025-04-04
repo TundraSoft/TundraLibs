@@ -5,6 +5,9 @@ workflows:
 crypt:
   - changed-files:
       - any-glob-to-any-file: crypt/*
+guardian:
+  - changed-files:
+      - any-glob-to-any-file: guardian/*
 id:
   - changed-files:
       - any-glob-to-any-file: id/*

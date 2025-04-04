@@ -89,6 +89,7 @@
   "lock": true,
   "workspace": [
     "./crypt",
+    "./guardian",
     "./id",
     "./restler",
     "./utils"
