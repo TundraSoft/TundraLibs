@@ -330,6 +330,29 @@ Deno.test('RESTler', async (t) => {
         request.headers!['Authorization'],
         'Basic dXNlcjpwYXNz',
       );
+      asserts.assertThrows(
+        () =>
+          client.processEndpoint({
+            path: '/users',
+            basicAuth: {
+              username: 'user',
+            },
+          } as RESTlerEndpoint, { method: 'GET' }),
+        Error,
+        'Basic auth requires a username and password',
+      );
+
+      asserts.assertThrows(
+        () =>
+          client.processEndpoint({
+            path: '/users',
+            basicAuth: {
+              password: 'pass',
+            },
+          } as RESTlerEndpoint, { method: 'GET' }),
+        Error,
+        'Basic auth requires a username and password',
+      );
     });
 
     await t.step('should handle request-specific headers', () => {
@@ -359,6 +382,50 @@ Deno.test('RESTler', async (t) => {
       );
 
       asserts.assert(request.url.includes(':8080/'));
+      asserts.assertThrows(
+        () =>
+          client.processEndpoint(
+            {
+              path: '/users',
+              port: 70000,
+            },
+            { method: 'GET' },
+          ),
+        Error,
+        'Invalid port',
+      );
+      asserts.assertThrows(
+        () =>
+          client.processEndpoint(
+            {
+              path: '/users',
+              port: 341n,
+            } as unknown as RESTlerEndpoint,
+            { method: 'GET' },
+          ),
+        Error,
+        'Invalid port',
+      );
+      asserts.assertThrows(
+        () =>
+          client.processEndpoint(
+            {
+              path: '/users',
+              port: 'df',
+            } as unknown as RESTlerEndpoint,
+            { method: 'GET' },
+          ),
+        Error,
+        'Invalid port',
+      );
+    });
+
+    await t.step('should override baseURL', () => {
+      const req = client.processEndpoint({
+        baseURL: 'https://api.example.com',
+        path: '/users',
+      }, { method: 'GET' });
+      asserts.assertEquals(req.url, 'https://api.example.com/users');
     });
   });
 
@@ -1098,14 +1165,10 @@ Deno.test('RESTler', async (t) => {
   await t.step('request with different content types', async (d) => {
     await d.step('should make request with XML payload', async () => {
       try {
-        let capturedContentType = '';
         let capturedBody = '';
 
         globalThis.fetch = async (_input, init) => {
           await 1;
-          if (init?.headers instanceof Headers) {
-            capturedContentType = init.headers.get('Content-Type') || '';
-          }
           capturedBody = init?.body as string || '';
 
           return new Response(
@@ -1226,14 +1289,10 @@ Deno.test('RESTler', async (t) => {
 
     await d.step('should make request with text payload', async () => {
       try {
-        let capturedContentType = '';
         let capturedBody = '';
 
         globalThis.fetch = async (_input, init) => {
           await 1;
-          if (init?.headers instanceof Headers) {
-            capturedContentType = init.headers.get('Content-Type') || '';
-          }
           capturedBody = init?.body as string || '';
 
           return new Response(
@@ -1309,4 +1368,452 @@ Deno.test('RESTler', async (t) => {
       },
     );
   });
+
+  // Add these new test sections after the existing tests
+  await t.step('TLS configuration', async (d) => {
+    await d.step(
+      'should create an HTTP client with TLS configuration',
+      async () => {
+        try {
+          // Store the original createHttpClient function
+          const originalCreateHttpClient = Deno.createHttpClient;
+
+          // Track if createHttpClient was called and with what parameters
+          let createHttpClientCalled = false;
+          let createHttpClientParams: any = null;
+
+          // Mock Deno.createHttpClient
+          Deno.createHttpClient = (options: any) => {
+            createHttpClientCalled = true;
+            createHttpClientParams = options;
+
+            // Return a mock client
+            return {
+              close: () => {},
+            } as Deno.HttpClient;
+          };
+
+          // Mock Deno.readTextFileSync
+          const originalReadTextFileSync = Deno.readTextFileSync;
+          Deno.readTextFileSync = (path: string | URL) => {
+            return `Mock content for cert-key`;
+          };
+
+          // Mock fetch
+          globalThis.fetch = async () => {
+            await 1;
+            return new Response(
+              JSON.stringify({ success: true }),
+              { status: 200 },
+            );
+          };
+
+          try {
+            // Create client with TLS cert path
+            const certClient = new TestRESTler({
+              baseURL: 'https://api.example.com',
+              tls: './restler/tests/fixtures/cert.pem',
+            });
+
+            // Make request to trigger TLS client creation
+            await certClient.makeRequest(
+              { path: '/secure' },
+              { method: 'GET' },
+            );
+
+            // Verify client was created with the right params
+            asserts.assertEquals(createHttpClientCalled, true);
+            asserts.assert(createHttpClientParams.caCerts.length === 1);
+            asserts.assertEquals(
+              createHttpClientParams.caCerts[0],
+              'Mock content for cert-key',
+            );
+
+            // Reset tracking
+            createHttpClientCalled = false;
+            createHttpClientParams = null;
+            // Create client with certificate and key
+            const keyPairClient = new TestRESTler({
+              baseURL: 'https://api.example.com',
+              tls: {
+                certificate: './restler/tests/fixtures/cert.pem',
+                key: './restler/tests/fixtures/key.pem',
+              },
+            });
+
+            // Make request to trigger TLS client creation
+            await keyPairClient.makeRequest(
+              { path: '/secure' },
+              { method: 'GET' },
+            );
+
+            // Verify client was created with the right params
+            asserts.assertEquals(createHttpClientCalled, true);
+            asserts.assertEquals(
+              createHttpClientParams.cert,
+              'Mock content for cert-key',
+            );
+            asserts.assertEquals(
+              createHttpClientParams.key,
+              'Mock content for cert-key',
+            );
+          } finally {
+            // Restore original functions
+            Deno.createHttpClient = originalCreateHttpClient;
+            Deno.readTextFileSync = originalReadTextFileSync;
+          }
+        } finally {
+          cleanupMocks();
+        }
+      },
+    );
+  });
+
+  await t.step('Request timeout', async (d) => {
+    await d.step('should timeout when response takes too long', async () => {
+      // Create a flag to ensure the fake timeout is triggered
+      let timeoutTriggered = false;
+
+      const originalSetTimeout = globalThis.setTimeout;
+      globalThis.setTimeout = (
+        callback: (...args: any[]) => void,
+        _timeout?: number,
+        ...args: any[]
+      ) => {
+        // Immediately execute the abort callback
+        timeoutTriggered = true;
+        callback(...args);
+        return 0 as unknown as number;
+      };
+
+      // Mock fetch to throw AbortError when signal.aborted is true
+      globalThis.fetch = async (_input, init) => {
+        // If the signal is aborted, throw an AbortError
+        if (init?.signal?.aborted) {
+          const error = new Error('The operation was aborted');
+          error.name = 'AbortError';
+          throw error;
+        }
+
+        // This should never be reached in this test
+        return new Response(
+          JSON.stringify({ success: true }),
+          { status: 200 },
+        );
+      };
+
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      try {
+        // Request with timeout should now fail
+        await client.makeRequest(
+          { path: '/delayed' },
+          {
+            method: 'GET',
+            timeout: 1, // 1 second timeout (will be immediate due to mocked setTimeout)
+          },
+        );
+        asserts.fail('Request should have timed out but did not');
+      } catch (error) {
+        // Verify the error is the expected timeout error
+        asserts.assert(error instanceof RESTlerTimeoutError);
+        // Verify timeout was triggered
+        asserts.assert(timeoutTriggered);
+      } finally {
+        // Restore original setTimeout
+        if (globalThis.setTimeout !== originalSetTimeout) {
+          globalThis.setTimeout = originalSetTimeout;
+        }
+        cleanupMocks();
+      }
+    });
+
+    await d.step(
+      'should not timeout when response is fast enough',
+      async () => {
+        try {
+          // Mock fetch to return quickly
+          globalThis.fetch = async () => {
+            // Return immediately
+            return new Response(
+              JSON.stringify({ success: true }),
+              { status: 200 },
+            );
+          };
+
+          const client = new TestRESTler({
+            baseURL: 'https://api.example.com',
+          });
+
+          // Request with 1 second timeout should succeed
+          const response = await client.makeRequest(
+            { path: '/fast' },
+            {
+              method: 'GET',
+              timeout: 1,
+            },
+          );
+
+          asserts.assertEquals(response.status, 200);
+        } finally {
+          cleanupMocks();
+        }
+      },
+    );
+  });
+
+  await t.step(
+    'Unix socket request with different content types',
+    async (d) => {
+      // Create mock class that exposes _makeUnixSocketRequest and _communicateWithUnixSocket
+      class UnixSocketTestRESTler extends TestRESTler {
+        // Track the last socket request
+        public lastSocketRequest: string = '';
+
+        // Override socket communication to capture the request and return a mock response
+        protected override async _communicateWithUnixSocket(
+          requestData: string,
+        ): Promise<string> {
+          // Store the request for assertions
+          this.lastSocketRequest = requestData;
+
+          // Return a mock HTTP response
+          return [
+            'HTTP/1.1 200 OK',
+            'Content-Type: application/json',
+            'Connection: close',
+            'Content-Length: 16',
+            '',
+            '{"success":true}',
+          ].join('\r\n');
+        }
+
+        // Make the protected method public for testing
+        public makeUnixSocketRequest(request: any) {
+          return this._makeUnixSocketRequest(request);
+        }
+
+        protected override _validateSocketPath(
+          value: unknown,
+        ): value is RESTlerOptions['socketPath'] {
+          return true;
+        }
+      }
+
+      await d.step('should send JSON payload via Unix socket', async () => {
+        // Create a client with socketPath option
+        const client = new UnixSocketTestRESTler({
+          baseURL: 'http://localhost',
+          socketPath: '/tmp/mock.sock', // Will be mocked, doesn't need to exist
+        });
+
+        // Make a request with JSON payload
+        await client.makeUnixSocketRequest({
+          url: 'http://localhost/api',
+          method: 'POST',
+          headers: {},
+          timeout: 10,
+          contentType: 'JSON',
+          payload: { name: 'Test', value: 123 },
+        });
+
+        // Verify the request format
+        asserts.assert(
+          client.lastSocketRequest.includes(
+            'POST http://localhost/api HTTP/1.1',
+          ),
+        );
+        asserts.assert(
+          client.lastSocketRequest.includes('Content-Type: application/json'),
+        );
+        asserts.assert(
+          client.lastSocketRequest.includes('{"name":"Test","value":123}'),
+        );
+      });
+
+      await d.step('should send XML payload via Unix socket', async () => {
+        // Create a client with socketPath option
+        const client = new UnixSocketTestRESTler({
+          baseURL: 'http://localhost',
+          socketPath: '/tmp/mock.sock',
+        });
+
+        // Make a request with XML payload
+        await client.makeUnixSocketRequest({
+          url: 'http://localhost/api',
+          method: 'POST',
+          headers: {},
+          timeout: 10,
+          contentType: 'XML',
+          payload: { root: { item: { id: 1, name: 'Test' } } },
+        });
+
+        // Verify the request format
+        asserts.assert(
+          client.lastSocketRequest.includes(
+            'POST http://localhost/api HTTP/1.1',
+          ),
+        );
+        asserts.assert(
+          client.lastSocketRequest.includes('Content-Type: application/xml'),
+        );
+        asserts.assert(client.lastSocketRequest.includes('<root>'));
+        asserts.assert(client.lastSocketRequest.includes('<item>'));
+        asserts.assert(client.lastSocketRequest.includes('<id>1</id>'));
+        asserts.assert(client.lastSocketRequest.includes('<name>Test</name>'));
+      });
+
+      await d.step('should send form data via Unix socket', async () => {
+        // Create a client with socketPath option
+        const client = new UnixSocketTestRESTler({
+          baseURL: 'http://localhost',
+          socketPath: '/tmp/mock.sock',
+        });
+
+        // Make a request with form data
+        await client.makeUnixSocketRequest({
+          url: 'http://localhost/api',
+          method: 'POST',
+          headers: {},
+          timeout: 10,
+          contentType: 'FORM',
+          payload: {
+            username: 'testuser',
+            password: 'pass123',
+          },
+        });
+
+        // Verify the request format
+        asserts.assert(
+          client.lastSocketRequest.includes(
+            'POST http://localhost/api HTTP/1.1',
+          ),
+        );
+        asserts.assert(
+          client.lastSocketRequest.includes(
+            'Content-Type: application/x-www-form-urlencoded',
+          ),
+        );
+        asserts.assert(
+          client.lastSocketRequest.includes(
+            'username=testuser&password=pass123',
+          ),
+        );
+      });
+
+      await d.step('should send text payload via Unix socket', async () => {
+        // Create a client with socketPath option
+        const client = new UnixSocketTestRESTler({
+          baseURL: 'http://localhost',
+          socketPath: '/tmp/mock.sock',
+        });
+
+        // Make a request with text payload
+        await client.makeUnixSocketRequest({
+          url: 'http://localhost/api',
+          method: 'POST',
+          headers: {},
+          timeout: 10,
+          contentType: 'TEXT',
+          payload: 'Hello, world!',
+        });
+
+        // Verify the request format
+        asserts.assert(
+          client.lastSocketRequest.includes(
+            'POST http://localhost/api HTTP/1.1',
+          ),
+        );
+        asserts.assert(
+          client.lastSocketRequest.includes('Content-Type: text/plain'),
+        );
+        asserts.assert(client.lastSocketRequest.includes('Hello, world!'));
+      });
+
+      await d.step(
+        'should handle chunked response from Unix socket',
+        async () => {
+          class ChunkedResponseTestRESTler extends UnixSocketTestRESTler {
+            protected override async _communicateWithUnixSocket(): Promise<
+              string
+            > {
+              // Return a mock chunked HTTP response
+              return [
+                'HTTP/1.1 200 OK',
+                'Content-Type: application/json',
+                'Transfer-Encoding: chunked',
+                'Connection: close',
+                '',
+                '7', // Chunk size in hex (7 bytes)
+                '{"name"', // First chunk
+                '8', // Chunk size (8 bytes)
+                ':"Test"}', // Second chunk
+                '0', // End of chunks
+                '',
+                '',
+              ].join('\r\n');
+            }
+          }
+
+          // Create a client with socketPath option
+          const client = new ChunkedResponseTestRESTler({
+            baseURL: 'http://localhost',
+            socketPath: '/tmp/mock.sock',
+          });
+
+          // Make a request
+          const response = await client.makeUnixSocketRequest(
+            {
+              url: 'http://localhost/api',
+              method: 'GET',
+              headers: {},
+              timeout: 10,
+            },
+          );
+
+          // Verify chunked response was decoded properly
+          asserts.assertEquals(response.status, 200);
+          asserts.assertEquals(
+            (response.body! as { name: string }).name,
+            'Test',
+          );
+        },
+      );
+
+      await d.step(
+        'should handle errors in Unix socket communication',
+        async () => {
+          class ErroringSocketTestRESTler extends UnixSocketTestRESTler {
+            protected override async _communicateWithUnixSocket(): Promise<
+              string
+            > {
+              throw new Error('Socket connection failed');
+            }
+          }
+
+          // Create a client with socketPath option
+          const client = new ErroringSocketTestRESTler({
+            baseURL: 'http://localhost',
+            socketPath: '/tmp/mock.sock',
+          });
+
+          // Make a request that should fail
+          await asserts.assertRejects(
+            async () => {
+              await client.makeUnixSocketRequest({
+                url: 'http://localhost/api',
+                method: 'GET',
+                headers: {},
+                timeout: 10,
+              });
+            },
+            RESTlerRequestError,
+            'Error communicating with Unix socket',
+          );
+        },
+      );
+    },
+  );
 });

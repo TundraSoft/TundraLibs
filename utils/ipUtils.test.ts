@@ -86,6 +86,8 @@ Deno.test('utils.ipUtils', async (i) => {
         'not an ip',
         '2001:db8::1/64', // CIDR not allowed
         '::ffff:192.168.0.256', // invalid IPv4 part
+        '2001:::db8', // triple colon (invalid sequence)
+        '2001::::1', // quadruple colon (invalid sequence)
       ];
 
       for (const ip of invalidIPs) {
@@ -148,6 +150,10 @@ Deno.test('utils.ipUtils', async (i) => {
         'g001:db8::1', // invalid hex
         '2001:db8::1:2:3:4:5:6:7', // too many segments
         '::ffff:192.168.0.256', // invalid IPv4 part
+        '2001:::db8', // triple colon (invalid sequence)
+        '2001::::1', // quadruple colon (invalid sequence)
+        '1:2:3:4:5:6:7:8:9', // too many segments for full notation
+        '1a2b:3c4d:xyz::1', // invalid hex character
       ];
 
       for (const ip of invalidIPs) {
@@ -155,6 +161,61 @@ Deno.test('utils.ipUtils', async (i) => {
           expandIPv6(ip),
           null,
           `Expected null for invalid IP ${ip}`,
+        );
+      }
+    });
+  });
+
+  await i.step('expandIPv6 IPv4-mapped formats', async (t) => {
+    await t.step('should handle various IPv4-mapped IPv6 formats', () => {
+      const testCases = [
+        {
+          compressed: '::ffff:192.168.0.1',
+          expanded: '0:0:0:0:0:ffff:c0a8:1',
+        },
+        {
+          compressed: ':ffff:192.168.0.1', // single colon prefix
+          expanded: '0:0:0:0:0:ffff:c0a8:1',
+        },
+        {
+          compressed: '::192.168.0.1', // IPv4-compatible format
+          expanded: '0:0:0:0:0:0:c0a8:1',
+        },
+        {
+          compressed: '2001:db8::192.168.0.1', // mixed with prefix
+          expanded: '2001:db8:0:0:0:0:c0a8:1',
+        },
+        {
+          compressed: '2001:db8:1:2::192.168.0.1', // longer prefix
+          expanded: '2001:db8:1:2:0:0:c0a8:1',
+        },
+        {
+          compressed: '2001:0:0:0:0:0:192.168.0.1', // full notation with IPv4
+          expanded: '2001:0:0:0:0:0:c0a8:1',
+        },
+      ];
+
+      for (const { compressed, expanded } of testCases) {
+        asserts.assertEquals(
+          expandIPv6(compressed),
+          expanded,
+          `Failed to expand ${compressed}`,
+        );
+      }
+    });
+
+    await t.step('should return null for invalid mixed formats', () => {
+      const invalidCases = [
+        '2001:db8:1:2:3:4:5:6:192.168.0.1', // way too many segments (9 total)
+        '1:2:3:4:5:6:7:192.168.0.1', // 8 segments including IPv4 mapped (invalid)
+        '2001:db8:1:2:3:4:5:192.168.0.1', // 7 segments + IPv4 part (should be max 6)
+      ];
+
+      for (const ip of invalidCases) {
+        asserts.assertEquals(
+          expandIPv6(ip),
+          null,
+          `Expected null for invalid mixed format ${ip}`,
         );
       }
     });
@@ -232,13 +293,17 @@ Deno.test('utils.ipUtils', async (i) => {
         '',
         '2001:db8', // incomplete
         '2001::db8::1', // multiple ::
+        '2001:::db8', // invalid colon sequence
+        'xyz::1', // invalid hex
+        '1:2:3:4:5:6:7:8:9', // too many segments
+        '::ffff:999.168.0.1', // invalid IPv4 part in IPv4-mapped format
       ];
 
       for (const ip of invalidIPs) {
         asserts.assertThrows(
           () => ipv6ToBinary(ip),
           Error,
-          undefined,
+          `Invalid IPv6 address: ${ip}`,
           `Should throw for invalid IP ${ip}`,
         );
       }

@@ -195,6 +195,55 @@ Deno.test('utils.isInSubnet', async (t) => {
     }
   });
 
+  // Add new test step to specifically test the missing code paths
+  await t.step('should handle specific edge cases in CIDR parsing', () => {
+    // Test for missing subnetIP or cidrStr
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '/24'),
+      false,
+      'Subnet with missing IP part should return false',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '192.168.0.0/'),
+      false,
+      'Subnet with empty CIDR part should return false',
+    );
+
+    // Test for non-numeric CIDR (isNaN case)
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '192.168.0.0/abc'),
+      false,
+      'Subnet with non-numeric CIDR should return false',
+    );
+
+    // Test for IPv4 CIDR range validation
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '192.168.0.0/33'),
+      false,
+      'IPv4 subnet with CIDR > 32 should return false',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '192.168.0.0/-1'),
+      false,
+      'IPv4 subnet with negative CIDR should return false',
+    );
+
+    // Test for IPv6 CIDR range validation
+    asserts.assertEquals(
+      isInSubnet('2001:db8::1', '2001:db8::/129'),
+      false,
+      'IPv6 subnet with CIDR > 128 should return false',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('2001:db8::1', '2001:db8::/-1'),
+      false,
+      'IPv6 subnet with negative CIDR should return false',
+    );
+  });
+
   await t.step('should handle whitespace in inputs', () => {
     asserts.assertEquals(
       isInSubnet(' 192.168.0.1 ', ' 192.168.0.0/24 '),
