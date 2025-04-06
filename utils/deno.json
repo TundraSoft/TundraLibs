@@ -8,6 +8,7 @@
     "./envArgs": "./envArgs.ts",
     "./Events": "./Events.ts",
     "./getFreePort": "./getFreePort.ts",
+    "./ipUtils": "./ipUtils.ts",
     "./isInSubnet": "./isInSubnet.ts",
     "./isPublicIP": "./isPublicIP.ts",
     "./isSubnet": "./isSubnet.ts",

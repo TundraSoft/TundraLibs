@@ -2,6 +2,22 @@ export { BaseError, type BaseErrorJson } from './BaseError.ts';
 export { envArgs } from './envArgs.ts';
 export { type EventCallback, Events } from './Events.ts';
 export { getFreePort } from './getFreePort.ts';
+export {
+  expandIPv6,
+  IPV4_MAX_SUBNET,
+  IPV4_REGEX,
+  IPV4_SEGMENT,
+  ipv4ToBinary,
+  ipv4ToHexSegments,
+  ipv4ToLong,
+  IPV6_MAX_SUBNET,
+  IPV6_REGEX,
+  IPV6_SEGMENT,
+  ipv6ToBinary,
+  isIPv4InRange,
+  isValidIPv4,
+  isValidIPv6Structure,
+} from './ipUtils.ts';
 export { isInSubnet } from './isInSubnet.ts';
 export { isPublicIP } from './isPublicIP.ts';
 export { isSubnet } from './isSubnet.ts';

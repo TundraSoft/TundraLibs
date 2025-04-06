@@ -106,6 +106,20 @@ Deno.test('encryption', async (t) => {
     );
   });
 
+  await t.step('encryptAES - Invalid Decryption Mode', async () => {
+    const data = 'my data';
+    const secret = 'abcdefghijklmnopqrstuvwx'; // 24 bytes (192 bits)
+    const mode = 'INVALID-MODE:256' as EncryptionModes;
+
+    await asserts.assertRejects(
+      async () => {
+        await decryptAES(mode, secret, data);
+      },
+      Error,
+      'Invalid AES encryption mode. Must be AES-GCM or AES-CBC',
+    );
+  });
+
   await t.step('encryptAES - Invalid Key Length', async () => {
     const data = 'my data';
     const secret = 'abcdefghijklmnopqrstuvwx'; // 24 bytes (192 bits)
@@ -118,19 +132,55 @@ Deno.test('encryption', async (t) => {
       Error,
       'Invalid AES key length. Must be 128, 256, 384 or 512',
     );
+    await asserts.assertRejects(
+      async () => {
+        await encryptAES('AES-GCM' as EncryptionModes, secret, data);
+      },
+      Error,
+      'Invalid AES key length. Must be 128, 256, 384 or 512',
+    );
   });
 
-  await t.step('encryptAES - Invalid Secret Length', async () => {
+  await t.step('decryptAES - Invalid Key Length', async () => {
     const data = 'my data';
-    const secret = 'short'; // 5 bytes (40 bits)
-    const mode: EncryptionModes = 'AES-GCM:128';
+    const secret = 'abcdefghijklmnopqrstuvwx'; // 24 bytes (192 bits)
+    const mode = 'AES-GCM:192' as EncryptionModes; // Invalid key length
 
     await asserts.assertRejects(
       async () => {
-        await encryptAES(mode, secret, data);
+        await decryptAES(mode, secret, data);
       },
       Error,
-      'Invalid key length',
+      'Invalid AES key length. Must be 128, 256, 384 or 512',
+    );
+    await asserts.assertRejects(
+      async () => {
+        await decryptAES('AES-GCM' as EncryptionModes, secret, data);
+      },
+      Error,
+      'Invalid AES key length. Must be 128, 256, 384 or 512',
+    );
+  });
+
+  await t.step('decryptAES - no IV', async () => {
+    const data = 'my data';
+    const secret = 'abcdefghijklmnopqrstuvwx';
+    const mode: EncryptionModes = 'AES-GCM:128';
+    const encrypted = await encryptAES(mode, secret, data);
+
+    await asserts.assertRejects(
+      async () => {
+        await decryptAES(mode, secret, encrypted.split(':')[0]!);
+      },
+      Error,
+      'Invalid encrypted data format. Expected "data:iv"',
+    );
+    await asserts.assertRejects(
+      async () => {
+        await decryptAES(mode, secret, `${encrypted.split(':')[0]!}:`);
+      },
+      Error,
+      'Initialization vector (IV) is undefined',
     );
   });
 

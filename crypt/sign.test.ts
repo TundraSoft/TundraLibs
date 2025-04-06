@@ -205,6 +205,15 @@ Deno.test('signing', async (t) => {
         ),
       Error,
     );
+    asserts.assertRejects(
+      async () =>
+        await sign(
+          'HMAC:' as SigningModes,
+          secret,
+          data,
+        ),
+      Error,
+    );
 
     asserts.assertRejects(
       async () =>
@@ -230,6 +239,16 @@ Deno.test('signing', async (t) => {
       async () =>
         await verify(
           'HMAC:SHA-1024' as SigningModes,
+          secret,
+          data,
+          signature,
+        ),
+      Error,
+    );
+    asserts.assertRejects(
+      async () =>
+        await verify(
+          'HMAC:' as SigningModes,
           secret,
           data,
           signature,

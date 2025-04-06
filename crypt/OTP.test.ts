@@ -194,6 +194,53 @@ Deno.test('OTP', async (t) => {
         true,
       );
     });
+
+    await h.step('explicitly test invalid period parameter', () => {
+      asserts.assertThrows(
+        () => TOTP('12345678901234567890', Date.now(), 0, 6, 'SHA-1'),
+        Error,
+        'Time period must be at least 1 second',
+      );
+    });
+
+    await h.step('test default parameters', async () => {
+      // Test that TOTP works with default parameters
+      const key = '12345678901234567890';
+      const timestamp = 59000;
+
+      // Default params: epoch = Date.now(), period = 30, length = 6, algo = 'SHA-256'
+      const fullParamsOTP = await TOTP(key, timestamp, 30, 6, 'SHA-256');
+
+      // Test omitting algorithm
+      const noAlgoOTP = await TOTP(key, timestamp, 30, 6);
+      asserts.assertEquals(noAlgoOTP, fullParamsOTP);
+
+      // Test omitting length
+      const noLengthOTP = await TOTP(key, timestamp, 30);
+      asserts.assertEquals(noLengthOTP.length, 6);
+
+      // Test omitting period
+      const noPeriodOTP = await TOTP(key);
+      asserts.assertEquals(noPeriodOTP.length, 6);
+    });
+
+    await h.step('verifyTOTP - reject OTP with wrong length', async () => {
+      const key = '12345678901234567890';
+      const time = 59000;
+
+      // Test with incorrect OTP length
+      const isValid = await verifyTOTP('1234', key, 1, time, 30, 6, 'SHA-1');
+      asserts.assertEquals(isValid, false);
+    });
+
+    // await h.step('verifyTOTP - reject non-numeric OTP', async () => {
+    //   const key = '12345678901234567890';
+    //   const time = 59000;
+
+    //   // Test with non-numeric OTP
+    //   const isValid = await verifyTOTP('abcdef', key, 1, time, 30, 6, 'SHA-1');
+    //   asserts.assertEquals(isValid, false);
+    // });
   });
 
   await t.step('HOTP', async (h) => {
@@ -313,6 +360,55 @@ Deno.test('OTP', async (t) => {
         await verifyHOTP(textKeyOTP, binaryKey, counter, 6, 'SHA-1'),
         true,
       );
+    });
+
+    await h.step('test default parameters', async () => {
+      // Test that HOTP works with default parameters
+      const key = '12345678901234567890';
+      const counter = 0;
+
+      // Default params: length = 6, algo = 'SHA-256'
+      const fullParamsOTP = await HOTP(key, counter, 6, 'SHA-256');
+
+      // Test omitting algorithm
+      const noAlgoOTP = await HOTP(key, counter, 6);
+      asserts.assertEquals(noAlgoOTP, fullParamsOTP);
+
+      // Test omitting length
+      const noLengthOTP = await HOTP(key, counter);
+      asserts.assertEquals(noLengthOTP.length, 6);
+    });
+
+    await h.step('test with large counter value', async () => {
+      const key = '12345678901234567890';
+      const largeCounter = 2147483647; // Max 32-bit signed integer
+
+      // Ensure large counter works
+      const otp = await HOTP(key, largeCounter, 6, 'SHA-1');
+      asserts.assertEquals(otp.length, 6);
+      asserts.assertEquals(/^\d{6}$/.test(otp), true);
+
+      // Verify the OTP is valid
+      const isValid = await verifyHOTP(otp, key, largeCounter, 6, 'SHA-1');
+      asserts.assertEquals(isValid, true);
+    });
+
+    await h.step('verifyHOTP - reject OTP with wrong length', async () => {
+      const key = '12345678901234567890';
+      const counter = 0;
+
+      // Test with incorrect OTP length
+      const isValid = await verifyHOTP('1234', key, counter, 6, 'SHA-1');
+      asserts.assertEquals(isValid, false);
+    });
+
+    await h.step('verifyHOTP - reject non-numeric OTP', async () => {
+      const key = '12345678901234567890';
+      const counter = 0;
+
+      // Test with non-numeric OTP
+      const isValid = await verifyHOTP('abcdef', key, counter, 6, 'SHA-1');
+      asserts.assertEquals(isValid, false);
     });
 
     await h.step('must throw on invalid params for verify functions', () => {

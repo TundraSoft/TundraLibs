@@ -202,4 +202,132 @@ Deno.test('utils.isInSubnet', async (t) => {
       'Should trim whitespace from inputs',
     );
   });
+
+  await t.step('IPv4 - should handle non-standard CIDR notations', () => {
+    // Test with /31 (2 addresses), /30 (4 addresses) networks
+    asserts.assertEquals(
+      isInSubnet('192.168.0.0', '192.168.0.0/31'),
+      true,
+      'First address in /31 should be in subnet',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '192.168.0.0/31'),
+      true,
+      'Second address in /31 should be in subnet',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.2', '192.168.0.0/31'),
+      false,
+      'Address outside /31 should not be in subnet',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.3', '192.168.0.0/30'),
+      true,
+      'Last address in /30 should be in subnet',
+    );
+  });
+
+  await t.step('IPv6 - should handle IPv4-mapped IPv6 addresses', () => {
+    asserts.assertEquals(
+      isInSubnet('::ffff:192.168.0.1', '::ffff:192.168.0.0/120'),
+      true,
+      'IPv4-mapped IPv6 should match appropriate subnet',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('::ffff:192.168.0.1', '::ffff:192.168.1.0/120'),
+      false,
+      'IPv4-mapped IPv6 should not match different subnet',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('::ffff:192.168.0.1', '192.168.0.0/24'),
+      false,
+      'IPv4-mapped IPv6 should not match IPv4 subnet',
+    );
+  });
+
+  await t.step('IPv6 - should handle special address types', () => {
+    // Link-local addresses (fe80::/10)
+    asserts.assertEquals(
+      isInSubnet('fe80::1:2:3:4', 'fe80::/10'),
+      true,
+      'Link-local address should match fe80::/10',
+    );
+
+    // Unique local addresses (fc00::/7)
+    asserts.assertEquals(
+      isInSubnet('fd00::1', 'fc00::/7'),
+      true,
+      'Unique local address should match fc00::/7',
+    );
+
+    // Multicast addresses (ff00::/8)
+    asserts.assertEquals(
+      isInSubnet('ff02::1', 'ff00::/8'),
+      true,
+      'Multicast address should match ff00::/8',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('2001:db8::1', 'fe80::/10'),
+      false,
+      'Global unicast should not match link-local range',
+    );
+  });
+
+  await t.step('should handle unusual prefix lengths', () => {
+    // IPv4 unusual prefixes
+    asserts.assertEquals(
+      isInSubnet('10.1.1.1', '10.0.0.0/7'),
+      true,
+      'Should handle unusual IPv4 prefix like /7',
+    );
+
+    // IPv6 unusual prefixes
+    asserts.assertEquals(
+      isInSubnet('2001:db8::1', '2001:db8::/127'),
+      true,
+      'Should handle unusual IPv6 prefix like /127',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('2001:db8::3', '2001:db8::/127'),
+      false,
+      'IPv6 with /127 should only match 2 addresses',
+    );
+  });
+
+  await t.step('should handle malformed but similar inputs', () => {
+    // CIDR with space
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '192.168.0.0 /24'),
+      false,
+      'CIDR with space should be invalid',
+    );
+
+    // Missing segments
+    asserts.assertEquals(
+      isInSubnet('192.168.0', '192.168.0.0/24'),
+      false,
+      'IPv4 with missing segments should be invalid',
+    );
+
+    // Extra segments
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1.5', '192.168.0.0/24'),
+      false,
+      'IPv4 with extra segments should be invalid',
+    );
+
+    // Hexadecimal IPv4
+    asserts.assertEquals(
+      isInSubnet('0xC0.0xA8.0x0.0x1', '192.168.0.0/24'),
+      false,
+      'Hexadecimal IPv4 should be invalid',
+    );
+  });
 });

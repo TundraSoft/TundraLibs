@@ -102,6 +102,11 @@ Deno.test('secretGenerator', async (t) => {
     assertEquals(typeof secret, 'string');
     assertEquals(secret.split('-').length, 8); // 32 hex chars / 4 = 8 groups
     assertMatch(secret, /^([0-9a-f]{4}-){7}[0-9a-f]{4}$/);
+    assertThrows(
+      () => secretGenerator(16, 'hex', '', -1),
+      Error,
+      'hyphenInterval must be a non-negative integer',
+    );
   });
 
   await t.step('Generate secret with alphanumeric encoding', () => {

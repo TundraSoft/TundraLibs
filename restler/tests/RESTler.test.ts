@@ -80,12 +80,49 @@ class TestRESTler extends RESTler {
     return this._validateHeaders(value);
   }
 
+  public validateSocketPath(value: unknown) {
+    return this._validateSocketPath(value);
+  }
+
+  public validateTls(value: unknown) {
+    return this._validateTls(value);
+  }
+
   public getAuthStatusCodes() {
     return this._authStatus;
   }
 
   public getRateLimitStatusCodes() {
     return this._rateLimitStatus;
+  }
+
+  public parseResponseBody<B extends ResponseBody>(
+    body: string,
+    contentType: string | null | undefined,
+  ): B {
+    return this._parseResponseBody<B>(body, contentType);
+  }
+
+  public extractHeaderNumber(
+    headers: Record<string, string> | undefined,
+    ...headerNames: string[]
+  ): number | undefined {
+    return this._extractHeaderNumber(headers, ...headerNames);
+  }
+}
+
+// Mock async authentication injector for testing
+class AsyncAuthTestRESTler extends TestRESTler {
+  public authCalled = false;
+
+  protected override async _authInjector(
+    request: RESTlerEndpoint,
+    _options: RESTlerMethodPayload & RESTlerRequestOptions,
+  ): Promise<void> {
+    // Simulate async auth operation
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    this.authCalled = true;
+    request.bearerToken = 'async-auth-token';
   }
 }
 
@@ -788,5 +825,488 @@ Deno.test('RESTler', async (t) => {
         cleanupMocks();
       }
     });
+  });
+
+  await t.step('additional validation methods', async (d) => {
+    const client = new TestRESTler({
+      baseURL: 'https://api.example.com',
+    });
+
+    await d.step('validateSocketPath', async () => {
+      // Create a temp file for testing socket path
+      const tempFilePath = await Deno.makeTempFile();
+      try {
+        asserts.assert(client.validateSocketPath(tempFilePath));
+        asserts.assert(client.validateSocketPath(undefined));
+        asserts.assert(client.validateSocketPath(null));
+        asserts.assert(!client.validateSocketPath('/nonexistent/path'));
+        asserts.assert(!client.validateSocketPath(123));
+        asserts.assert(!client.validateSocketPath({}));
+      } finally {
+        // Clean up
+        try {
+          Deno.removeSync(tempFilePath);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    });
+
+    await d.step('validateTls', async () => {
+      // Create temp files for certificate and key
+      const certPath = await Deno.makeTempFile();
+      const keyPath = await Deno.makeTempFile();
+      try {
+        // Test string path
+        asserts.assert(client.validateTls(certPath));
+
+        // Test object with cert and key
+        asserts.assert(client.validateTls({
+          certificate: certPath,
+          key: keyPath,
+        }));
+
+        // Test invalid values
+        asserts.assert(!client.validateTls('/nonexistent/path'));
+        asserts.assert(
+          !client.validateTls({
+            certificate: '/nonexistent/cert',
+            key: '/nonexistent/key',
+          }),
+        );
+        asserts.assert(!client.validateTls(123));
+        asserts.assert(!client.validateTls({}));
+        asserts.assert(
+          !client.validateTls({
+            certificate: 'missing-key',
+          }),
+        );
+      } finally {
+        // Clean up
+        try {
+          Deno.removeSync(certPath);
+          Deno.removeSync(keyPath);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    });
+  });
+
+  await t.step('response parsing', async (d) => {
+    const client = new TestRESTler({
+      baseURL: 'https://api.example.com',
+    });
+
+    await d.step('should parse JSON responses correctly', () => {
+      const jsonBody = '{"id":1,"name":"Test"}';
+      const result = client.parseResponseBody<{ id: number; name: string }>(
+        jsonBody,
+        'application/json',
+      );
+      asserts.assertEquals(result.id, 1);
+      asserts.assertEquals(result.name, 'Test');
+    });
+
+    await d.step('should parse XML responses correctly', () => {
+      const xmlBody = '<root><item id="1">Test</item></root>';
+      const result = client.parseResponseBody<
+        { root: { item: { '@id': string; '#text': string } } }
+      >(
+        xmlBody,
+        'application/xml',
+      );
+      asserts.assert(result.root);
+      asserts.assertEquals(result.root.item['@id'], '1');
+      asserts.assertEquals(result.root.item['#text'], 'Test');
+    });
+
+    await d.step('should handle text responses', () => {
+      const textBody = 'Plain text response';
+      const result = client.parseResponseBody(textBody, 'text/plain');
+      asserts.assertEquals(result, 'Plain text response');
+    });
+
+    await d.step('should handle missing content type', () => {
+      // Try to parse as JSON first
+      const jsonBody = '{"id":1,"name":"Test"}';
+      const result1 = client.parseResponseBody<{ id: number; name: string }>(
+        jsonBody,
+        null,
+      );
+      asserts.assertEquals(result1.id, 1);
+      asserts.assertEquals(result1.name, 'Test');
+
+      // Fallback to text when JSON parsing fails
+      const textBody = 'Plain text response';
+      const result2 = client.parseResponseBody(textBody, null);
+      asserts.assertEquals(result2, 'Plain text response');
+    });
+
+    await d.step('should handle invalid JSON', () => {
+      const invalidJson = '{id:1,name:"Test"}'; // Missing quotes around property names
+      const result = client.parseResponseBody(invalidJson, 'application/json');
+      asserts.assertEquals(result, invalidJson); // Returns raw text when parsing fails
+    });
+
+    await d.step('should handle invalid XML', () => {
+      const invalidXml = '<root><item>No closing tag</root>';
+      const result = client.parseResponseBody(invalidXml, 'application/xml');
+      asserts.assertEquals(result, invalidXml); // Returns raw text when parsing fails
+    });
+  });
+
+  await t.step('URL construction edge cases', async (d) => {
+    await d.step('should handle empty path', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      const request = client.processEndpoint(
+        { path: '' },
+        { method: 'GET' },
+      );
+
+      asserts.assertEquals(request.url, 'https://api.example.com/');
+    });
+
+    await d.step('should handle baseURL with trailing slash', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com/',
+      });
+
+      const request = client.processEndpoint(
+        { path: '/users' },
+        { method: 'GET' },
+      );
+
+      asserts.assertEquals(request.url, 'https://api.example.com/users');
+    });
+
+    await d.step('should handle custom baseURL in endpoint', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      const request = client.processEndpoint(
+        {
+          baseURL: 'https://different-api.example.com',
+          path: '/users',
+        },
+        { method: 'GET' },
+      );
+
+      asserts.assertEquals(
+        request.url,
+        'https://different-api.example.com/users',
+      );
+    });
+
+    await d.step('should handle complex query parameters', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      const request = client.processEndpoint(
+        {
+          path: '/search',
+          query: {
+            q: 'test query',
+            filter: 'category=test&status=active', // Will be properly encoded
+            special: '#$&+,/:;=?@[]',
+          },
+        },
+        { method: 'GET' },
+      );
+
+      const url = new URL(request.url);
+      asserts.assertEquals(url.searchParams.get('q'), 'test query');
+      asserts.assertEquals(
+        url.searchParams.get('filter'),
+        'category=test&status=active',
+      );
+      asserts.assertEquals(url.searchParams.get('special'), '#$&+,/:;=?@[]');
+    });
+  });
+
+  await t.step('header extraction', async (d) => {
+    const client = new TestRESTler({
+      baseURL: 'https://api.example.com',
+    });
+
+    await d.step('should extract header with exact match', () => {
+      const headers = {
+        'x-rate-limit': '100',
+        'content-type': 'application/json',
+      };
+
+      const result = client.extractHeaderNumber(headers, 'x-rate-limit');
+      asserts.assertEquals(result, 100);
+    });
+
+    await d.step('should extract header with case-insensitive match', () => {
+      const headers = {
+        'X-Rate-Limit': '100',
+        'Content-Type': 'application/json',
+      };
+
+      const result = client.extractHeaderNumber(headers, 'x-rate-limit');
+      asserts.assertEquals(result, 100);
+    });
+
+    await d.step('should try alternative header names', () => {
+      const headers = {
+        'ratelimit-limit': '100',
+        'content-type': 'application/json',
+      };
+
+      const result = client.extractHeaderNumber(
+        headers,
+        'x-ratelimit-limit',
+        'ratelimit-limit',
+      );
+      asserts.assertEquals(result, 100);
+    });
+
+    await d.step('should return undefined for missing headers', () => {
+      const headers = {
+        'content-type': 'application/json',
+      };
+
+      const result = client.extractHeaderNumber(headers, 'x-rate-limit');
+      asserts.assertEquals(result, undefined);
+    });
+
+    await d.step(
+      'should return undefined for non-numeric header values',
+      () => {
+        const headers = {
+          'x-rate-limit': 'unlimited',
+        };
+
+        const result = client.extractHeaderNumber(headers, 'x-rate-limit');
+        asserts.assertEquals(result, undefined);
+      },
+    );
+
+    await d.step('should handle undefined headers', () => {
+      const result = client.extractHeaderNumber(undefined, 'x-rate-limit');
+      asserts.assertEquals(result, undefined);
+    });
+  });
+
+  await t.step('request with different content types', async (d) => {
+    await d.step('should make request with XML payload', async () => {
+      try {
+        let capturedContentType = '';
+        let capturedBody = '';
+
+        globalThis.fetch = async (_input, init) => {
+          await 1;
+          if (init?.headers instanceof Headers) {
+            capturedContentType = init.headers.get('Content-Type') || '';
+          }
+          capturedBody = init?.body as string || '';
+
+          return new Response(
+            JSON.stringify({ success: true }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        };
+
+        const client = new TestRESTler({
+          baseURL: 'https://api.example.com',
+        });
+
+        const xmlData = { root: { item: { id: 1, name: 'Test' } } };
+        await client.makeRequest(
+          { path: '/xml-endpoint' },
+          {
+            method: 'POST',
+            contentType: 'XML',
+            payload: xmlData,
+          },
+        );
+
+        // Check if XML was properly formatted
+        asserts.assert(capturedBody.includes('<root>'));
+        asserts.assert(capturedBody.includes('<item>'));
+        asserts.assert(capturedBody.includes('<id>1</id>'));
+        asserts.assert(capturedBody.includes('<name>Test</name>'));
+      } finally {
+        cleanupMocks();
+      }
+    });
+
+    await d.step('should make request with form data', async () => {
+      try {
+        let capturedContentType = '';
+        let capturedBody: any;
+
+        globalThis.fetch = async (_input, init) => {
+          await 1;
+          if (init?.headers instanceof Headers) {
+            const ct = init.headers.get('Content-Type');
+            capturedContentType = ct || '';
+          }
+          capturedBody = init?.body as FormData || '';
+
+          return new Response(
+            JSON.stringify({ success: true }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        };
+
+        const client = new TestRESTler({
+          baseURL: 'https://api.example.com',
+        });
+
+        const formData = new FormData();
+        formData.append('username', 'testuser');
+        formData.append('password', 'password123');
+
+        await client.makeRequest(
+          { path: '/login' },
+          {
+            method: 'POST',
+            contentType: 'FORM',
+            payload: formData,
+          },
+        );
+
+        // The headers should NOT have a Content-Type because fetch will set it with the boundary
+        asserts.assertEquals(capturedContentType, '');
+
+        // Verify it's a FormData object
+        asserts.assertEquals(capturedBody instanceof FormData, true);
+      } finally {
+        cleanupMocks();
+      }
+    });
+
+    await d.step('should make request with URL-encoded form data', async () => {
+      try {
+        let capturedBody = '';
+
+        globalThis.fetch = async (_input, init) => {
+          await 1;
+          capturedBody = init?.body as string || '';
+
+          return new Response(
+            JSON.stringify({ success: true }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          );
+        };
+
+        const client = new TestRESTler({
+          baseURL: 'https://api.example.com',
+        });
+
+        await client.makeRequest(
+          { path: '/login' },
+          {
+            method: 'POST',
+            contentType: 'FORM',
+            payload: {
+              username: 'testuser',
+              password: 'password123',
+            },
+          },
+        );
+
+        // Check if form data was properly encoded
+        asserts.assertEquals(
+          capturedBody as unknown as Record<string, string>,
+          { username: 'testuser', password: 'password123' },
+        );
+      } finally {
+        cleanupMocks();
+      }
+    });
+
+    await d.step('should make request with text payload', async () => {
+      try {
+        let capturedContentType = '';
+        let capturedBody = '';
+
+        globalThis.fetch = async (_input, init) => {
+          await 1;
+          if (init?.headers instanceof Headers) {
+            capturedContentType = init.headers.get('Content-Type') || '';
+          }
+          capturedBody = init?.body as string || '';
+
+          return new Response(
+            'Response text',
+            { status: 200, headers: { 'Content-Type': 'text/plain' } },
+          );
+        };
+
+        const client = new TestRESTler({
+          baseURL: 'https://api.example.com',
+        });
+
+        await client.makeRequest(
+          { path: '/text-endpoint' },
+          {
+            method: 'POST',
+            contentType: 'TEXT',
+            payload: 'Hello world',
+          },
+        );
+
+        asserts.assertEquals(capturedBody, 'Hello world');
+      } finally {
+        cleanupMocks();
+      }
+    });
+  });
+
+  await t.step('async authentication', async (d) => {
+    await d.step(
+      'should wait for async authentication to complete',
+      async () => {
+        try {
+          const requestData = {
+            headers: {} as Record<string, string>,
+          };
+
+          globalThis.fetch = async (_input, init) => {
+            await 1;
+            // Store headers for assertions
+            if (init?.headers instanceof Headers) {
+              requestData.headers = Object.fromEntries(
+                Array.from(init.headers.entries()),
+              );
+            }
+
+            return new Response(
+              JSON.stringify({ authenticated: true }),
+              { status: 200 },
+            );
+          };
+
+          const client = new AsyncAuthTestRESTler({
+            baseURL: 'https://api.example.com',
+          });
+
+          await client.makeRequest(
+            { path: '/secure' },
+            { method: 'GET' },
+          );
+
+          // Check that auth was called
+          asserts.assertEquals(client.authCalled, true);
+
+          // Check that the token was set
+          asserts.assertEquals(
+            requestData.headers['authorization'],
+            'Bearer async-auth-token',
+          );
+        } finally {
+          cleanupMocks();
+        }
+      },
+    );
   });
 });

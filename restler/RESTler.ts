@@ -1,5 +1,6 @@
 import { STATUS_CODE, STATUS_TEXT, type StatusCode } from '$http/status';
 import { parse as XMLParse, stringify as XMLStringify } from '$xml';
+import * as path from '$path';
 import { type EventOptionsKeys, Options } from '@tundralibs/utils';
 import type {
   RESTlerEndpoint,
@@ -239,7 +240,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @param ...headerNames - Possible header names to check (case-insensitive)
    * @returns The numeric value from the header, or undefined if not found or not a number
    */
-  private _extractHeaderNumber(
+  protected _extractHeaderNumber(
     headers: Record<string, string> | undefined,
     ...headerNames: string[]
   ): number | undefined {
@@ -302,7 +303,14 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       });
     }
     const url = new URL(this._replaceVersion(baseURL, version));
-    url.pathname += this._replaceVersion(endpoint.path, version);
+    if (url.pathname !== '') {
+      url.pathname = path.join(
+        url.pathname,
+        this._replaceVersion(endpoint.path, version),
+      );
+    } else {
+      url.pathname = this._replaceVersion(endpoint.path, version);
+    }
     if (endpoint.query) {
       Object.entries(endpoint.query).forEach(([key, value]) => {
         url.searchParams.set(key, this._replaceVersion(value, version));

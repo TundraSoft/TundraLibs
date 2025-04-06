@@ -134,7 +134,7 @@ export const decryptAES = async (
     );
 
     // Note: AES-CBC uses PKCS#7 padding by default in Web Crypto API
-    if (!iv) {
+    if (!iv || iv.length === 0) {
       throw new Error('Initialization vector (IV) is undefined');
     }
 
