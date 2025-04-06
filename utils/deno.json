@@ -21,5 +21,10 @@
     "./templatize": "./templatize.ts",
     "./throttle": "./throttle.ts",
     "./variableReplacer": "./variableReplacer.ts"
+  },
+  "imports": {
+    "$toml": "jsr:@std/toml@^1.0.1",
+    "$yaml": "jsr:@std/yaml@^1.0.5",
+    "$jsonc": "jsr:@std/jsonc@^1.0.1"
   }
 }

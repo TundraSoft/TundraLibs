@@ -1393,12 +1393,6 @@ Deno.test('RESTler', async (t) => {
             } as Deno.HttpClient;
           };
 
-          // Mock Deno.readTextFileSync
-          const originalReadTextFileSync = Deno.readTextFileSync;
-          Deno.readTextFileSync = (path: string | URL) => {
-            return `Mock content for cert-key`;
-          };
-
           // Mock fetch
           globalThis.fetch = async () => {
             await 1;
@@ -1460,7 +1454,6 @@ Deno.test('RESTler', async (t) => {
           } finally {
             // Restore original functions
             Deno.createHttpClient = originalCreateHttpClient;
-            Deno.readTextFileSync = originalReadTextFileSync;
           }
         } finally {
           cleanupMocks();

@@ -1,0 +1,8 @@
+{
+  "name": "JSON Config",
+  "version": "1.0.0",
+  "settings": {
+    "enabled": true,
+    "timeout": 5000
+  }
+}
