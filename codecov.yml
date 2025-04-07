@@ -1,6 +1,6 @@
 ignore:
-  - "**/tests/**.ts"
-  - "**/**.bench.ts"
-  - "**/**.test.ts"
-  - "**/fixtures/**/**"
-  - ".github/**"
+  - '**/tests/**.ts'
+  - '**/**.bench.ts'
+  - '**/**.test.ts'
+  - '**/fixtures/**/**'
+  - '.github/**'

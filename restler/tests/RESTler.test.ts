@@ -143,6 +143,14 @@ Deno.test('RESTler', async (t) => {
       );
     });
 
+    await t.step('should throw for invalid baseURL', () => {
+      asserts.assertThrows(
+        () => new TestRESTler({ baseURL: 'sftp://api.test.org' }),
+        RESTlerConfigError,
+        'Base URL must be a string and not empty',
+      );
+    });
+
     await t.step('should throw for invalid port', () => {
       asserts.assertThrows(
         () =>
@@ -179,6 +187,73 @@ Deno.test('RESTler', async (t) => {
         'Content type must be one of',
       );
     });
+
+    await t.step('should throw for invalid headers', () => {
+      asserts.assertThrows(
+        () =>
+          new TestRESTler({
+            baseURL: 'https://api.example.com',
+            // deno-lint-ignore no-explicit-any
+            headers: 'df' as any,
+          }),
+        RESTlerConfigError,
+        'Headers must be an object.',
+      );
+    });
+
+    await t.step('should throw for invalid socketpath', () => {
+      asserts.assertThrows(
+        () =>
+          new TestRESTler({
+            baseURL: 'https://api.example.com',
+            // deno-lint-ignore no-explicit-any
+            socketPath: '/no/file/here',
+          }),
+        RESTlerConfigError,
+        'Socket path must be a string and point to a valid file.',
+      );
+    });
+
+    await t.step('should throw for invalid certificate config (TLS)', () => {
+      asserts.assertThrows(
+        () =>
+          new TestRESTler({
+            baseURL: 'https://api.example.com',
+            // deno-lint-ignore no-explicit-any
+            tls: 123 as any,
+          }),
+        RESTlerConfigError,
+        'TLS must be a string or an object with certificate and key.',
+      );
+    });
+
+    await t.step('should throw for invalid certificate config (TLS)', () => {
+      asserts.assertThrows(
+        () =>
+          new TestRESTler({
+            baseURL: 'https://api.example.com',
+            // deno-lint-ignore no-explicit-any
+            tls: {
+              certificate: '',
+            } as any,
+          }),
+        RESTlerConfigError,
+        'TLS must be a string or an object with certificate and key.',
+      );
+    });
+
+    await t.step('should throw for invalid version', () => {
+      asserts.assertThrows(
+        () =>
+          new TestRESTler({
+            baseURL: 'https://api.example.com',
+            // deno-lint-ignore no-explicit-any
+            version: {} as any,
+          }),
+        RESTlerConfigError,
+        'Version must be a string.',
+      );
+    });
   });
 
   await t.step('input validation methods', async (t) => {
@@ -202,6 +277,7 @@ Deno.test('RESTler', async (t) => {
       asserts.assertEquals(client.validatePort(0), false);
       asserts.assertEquals(client.validatePort(65536), false);
       asserts.assertEquals(client.validatePort('80'), false);
+      asserts.assertEquals(client.validatePort(undefined), true);
     });
 
     await t.step('validateTimeout', () => {
@@ -211,6 +287,7 @@ Deno.test('RESTler', async (t) => {
       asserts.assertEquals(client.validateTimeout(0), false);
       asserts.assertEquals(client.validateTimeout(61), false);
       asserts.assertEquals(client.validateTimeout('10'), false);
+      asserts.assertEquals(client.validateTimeout(undefined), true);
     });
 
     await t.step('validateContentType', () => {

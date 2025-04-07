@@ -279,6 +279,9 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     endpoint: RESTlerEndpoint,
     options: RESTlerMethodPayload & RESTlerRequestOptions,
   ): RESTlerRequest {
+    if (endpoint.baseURL && this._validateBaseURL(endpoint.baseURL) === false) {
+      throw new Error('Invalid endpoint baseURL');
+    }
     const version = endpoint.version || this.getOption('version') || '';
     const baseURL = endpoint.baseURL || this.getOption('baseURL');
     const headers: Record<string, string> = this._defaultHeaders;
@@ -745,10 +748,21 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
   protected _validateBaseURL(
     value: unknown,
   ): value is RESTlerOptions['baseURL'] {
-    // Basic url regex
-    const urlRegex = /^(https?:\/\/)?([a-zA-Z0-9.-]+)(:\d+)?(\/.*)?$/;
-    return (typeof value === 'string' && value.length > 0 &&
-      urlRegex.test(value));
+    if (typeof value === 'string') {
+      try {
+        const a = new URL(value);
+        if (a.protocol !== 'http:' && a.protocol !== 'https:') {
+          return false;
+        }
+        if (a.host === '') {
+          return false;
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
   }
 
   /**
@@ -758,8 +772,8 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @returns Whether the value is valid
    */
   protected _validatePort(value: unknown): value is RESTlerOptions['port'] {
-    return (value === undefined && value === null) ||
-      (typeof value === 'number' && (value > 0 && value <= 65535));
+    if (value === undefined || value === null) return true;
+    return typeof value === 'number' && (value > 0 && value <= 65535);
   }
 
   /**
@@ -785,10 +799,8 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
   protected _validateTimeout(
     value: unknown,
   ): value is RESTlerOptions['timeout'] {
-    return (
-      (value === undefined && value === null) ||
-      (typeof value === 'number' && value >= 1 && value <= 60)
-    );
+    if (value === undefined || value === null) return true;
+    return (typeof value === 'number' && value >= 1 && value <= 60);
   }
 
   /**
