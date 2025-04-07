@@ -310,6 +310,32 @@ Deno.test('RESTler', async (t) => {
     });
   });
 
+  await t.step('baseURL override', async (d) => {
+    const client = new TestRESTler({
+      baseURL: 'https://api.example.com',
+      version: '1',
+    });
+    await d.step('should override baseURL in endpoint', () => {
+      const result = client.processEndpoint({
+        baseURL: 'https://api2.example.com',
+        path: '/users',
+      }, { method: 'GET' });
+      asserts.assertEquals(result.url, 'https://api2.example.com/users');
+    });
+
+    await d.step('should throw on invalid url', () => {
+      asserts.assertThrows(
+        () =>
+          client.processEndpoint({
+            baseURL: 'sftp://api2.example.com',
+            path: '/users',
+          }, { method: 'GET' }),
+        Error,
+        'Invalid endpoint baseURL',
+      );
+    });
+  });
+
   await t.step('version replacement', async (t) => {
     const client = new TestRESTler({
       baseURL: 'https://api.example.com/v{version}',
