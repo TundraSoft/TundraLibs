@@ -1,5 +1,6 @@
 export const enum Dialect {
   POSTGRES = 'POSTGRES',
+  POSTGRESPOOL = 'POSTGRESPOOL',
   MYSQL = 'MYSQL',
   SQLITE = 'SQLITE',
   MARIADB = 'MARIADB',

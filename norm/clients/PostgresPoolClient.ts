@@ -1,34 +1,23 @@
 import { AbstractClient } from '../AbstractClient.ts';
 import { QueryTypes } from '../types/mod.ts';
 import type { PostgresConfig, QueryOption, QueryType } from '../types/mod.ts';
-import { PGClient } from '../../dependencies.ts';
+import { PGPool } from '../../dependencies.ts';
 import type { PGClientOptions } from '../../dependencies.ts';
 
 import { NormError, QueryError } from '../errors/mod.ts';
 
-export class PostgresClient<O extends PostgresConfig = PostgresConfig>
+export class PostgresPoolClient<O extends PostgresConfig = PostgresConfig>
   extends AbstractClient<O> {
-  declare protected _client: PGClient;
+  declare protected _client: PGPool;
   private _lastActivityTime: number = 0;
   private _idleCheckInterval: number | null = null;
   private _idleTimeout: number = 60; // Default 60 seconds
 
-  override get status(): 'CONNECTED' | 'CLOSED' {
-    if (
-      this._state === 'CONNECTED' && (this._client && this._client.connected)
-    ) {
-      return 'CONNECTED';
-    } else {
-      this._state = 'CLOSED';
-      return 'CLOSED';
-    }
-  }
-
   override get poolInfo(): { size: number; available: number; inUse: number } {
     return {
-      size: 1,
-      available: 1,
-      inUse: 0,
+      size: this._client.size,
+      available: this._client.available,
+      inUse: this._client.size - this._client.available,
     };
   }
 
@@ -103,18 +92,24 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
     // Suffix the hostname
     const name = `${this._name}-${Deno.hostname()}`;
     const pgConfig: PGClientOptions = {
-      applicationName: name,
-      hostname: this._options.host,
-      port: this._options.port,
-      user: this._options.userName,
-      password: this._options.password,
-      database: this._options.database,
-      connection: {
-        attempts: 1,
+        applicationName: name,
+        hostname: this._options.host,
+        port: this._options.port,
+        user: this._options.userName,
+        password: this._options.password,
+        database: this._options.database,
+        connection: {
+          attempts: 1,
+        },
       },
-    };
-    this._client = new PGClient(pgConfig);
-    await this._client.connect();
+      poolSize = this._getOption('poolSize') as number || 10;
+    this._client = await new PGPool(
+      pgConfig,
+      poolSize,
+      this._options.lazyConnect,
+    );
+    // Hack to test the connection, if there is something wrong it will throw immediately
+    await (await this._client.connect()).release();
 
     // Start idle monitoring
     this._startIdleTimer();
@@ -125,21 +120,24 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
     // Stop the idle timer
     this._stopIdleTimer();
 
-    // Disconnect from database
-    if (this._client && this._client.connected) {
+    // Disconnect pool
+    if (this._client) {
       await this._client.end();
     }
   }
 
   protected async _ping(): Promise<boolean> {
-    const sql = `SELECT 1+1 AS result`;
+    const sql = `SELECT 1+1 AS result`,
+      client = await this._client.connect();
     try {
       this._updateActivity(); // Count ping as activity
       const { result } =
-        (await this._client.queryObject<{ result: number }>(sql)).rows[0];
+        (await client.queryObject<{ result: number }>(sql)).rows[0];
       return result === 2;
     } catch (e) {
       return false;
+    } finally {
+      await client.release();
     }
   }
 
@@ -148,6 +146,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
   >(
     query: QueryOption<Entity>,
   ): Promise<{ type: QueryType; data?: Entity[]; count?: number }> {
+    const client = await this._client.connect();
     try {
       // Update activity timestamp
       this._updateActivity();
@@ -159,7 +158,7 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
         };
 
       // Run the actual query
-      const result = await this._client.queryObject<Entity>(sql);
+      const result = await client.queryObject<Entity>(sql);
 
       // Update activity timestamp again after query completes
       this._updateActivity();
@@ -185,6 +184,8 @@ export class PostgresClient<O extends PostgresConfig = PostgresConfig>
           this.dialect,
         );
       }
+    } finally {
+      await client.release();
     }
   }
 }

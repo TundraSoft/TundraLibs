@@ -1,6 +1,10 @@
 import { Config } from '../config/Config.ts';
 import { AbstractClient } from './AbstractClient.ts';
-import { MariaClient, PostgresClient } from './clients/mod.ts';
+import {
+  MariaClient,
+  PostgresClient,
+  PostgresPoolClient,
+} from './clients/mod.ts';
 import {
   ClientConfig,
   Dialect,
@@ -90,6 +94,12 @@ export class DatabaseManager {
     switch (dialect) {
       case Dialect.POSTGRES:
         dbConn = new PostgresClient(
+          name,
+          config as ClientConfig & PostgresConfig,
+        );
+        break;
+      case Dialect.POSTGRESPOOL:
+        dbConn = new PostgresPoolClient(
           name,
           config as ClientConfig & PostgresConfig,
         );

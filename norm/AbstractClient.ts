@@ -96,7 +96,7 @@ export abstract class AbstractClient<
 
   public async connect(): Promise<void> {
     try {
-      if (this._state === 'CLOSED') {
+      if (this.status === 'CLOSED') {
         await this._connect();
         // Test if it is actually connected
         this._state = 'CONNECTED';
@@ -111,7 +111,7 @@ export abstract class AbstractClient<
 
   public async disconnect(): Promise<void> {
     try {
-      if (this._state === 'CONNECTED') {
+      if (this.status === 'CONNECTED') {
         await this._disconnect();
         this._state = 'CLOSED';
       }
@@ -125,7 +125,6 @@ export abstract class AbstractClient<
       await this.connect();
       return this._ping();
     } catch (_e) {
-      // console.log(`-----------------PING ERROR: ${_e}`);
       return false;
     }
   }
@@ -162,10 +161,8 @@ export abstract class AbstractClient<
           );
         }
       }
-      // console.log(sql);
       const result = await this._query(sql);
       if (result) {
-        // console.log(result);
         retVal.type = result.type;
         retVal.data = result.data;
         retVal.count = result.count || 0;
@@ -360,7 +357,7 @@ export abstract class AbstractClient<
         encoded,
       );
 
-    return base64.encode(new Uint8Array(ecncrypted)) + ':' + base64.encode(iv);
+    return base64.encode(ecncrypted) + ':' + base64.encode(iv.buffer);
   }
 
   public static async decryptValue(data: string, key: string) {
@@ -391,9 +388,7 @@ export abstract class AbstractClient<
       encoded = encoder.encode(JSON.stringify(data)),
       hashAlgo = 'SHA-256',
       hash = await crypto.subtle.digest(hashAlgo, encoded);
-    // return new TextDecoder().decode(hexEncode(new Uint8Array(hash)));
-    // return base64.encode(new Uint8Array(hash));
-    return `HASH:${base64.encode(new Uint8Array(hash))}`;
+    return `HASH:${base64.encode(hash)}`;
   }
 
   //#region Abstract Methods
