@@ -8,7 +8,7 @@ ignore:
 component_management:
   default_rules:
     statuses:
-      - type: project # in this case every component that doens't have a status defined will have a project type one
+      - type: project # default
         target: auto
         branches:
           - '!main'
