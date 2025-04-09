@@ -4,3 +4,33 @@ ignore:
   - '**/**.test.ts'
   - '**/fixtures/**/**'
   - '.github/**'
+
+component_management:
+  default_rules:
+    statuses:
+      - type: project # in this case every component that doens't have a status defined will have a project type one
+        target: auto
+        branches:
+          - '!main'
+
+  individual_components:
+    - component_id: crypt
+      name: @tundralibs/crypt
+      paths:
+        - crypt/**
+    - component_id: guardian
+      name: @tundralibs/guardian
+      paths:
+        - crypt/**
+    - component_id: id
+      name: @tundralibs/id
+      paths:
+        - id/**
+    - component_id: restler
+      name: @tundralibs/RESTler
+      paths:
+        - restler/**
+    - component_id: utils
+      name: @tundralibs/utils
+      paths:
+        - utils/**

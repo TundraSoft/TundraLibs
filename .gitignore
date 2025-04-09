@@ -33,6 +33,7 @@ html_cov/
 coverage.lcov
 coverage/
 .nyc_output/
+test-report.xml
 
 # Build and output directories
 dist/

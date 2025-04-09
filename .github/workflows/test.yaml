@@ -160,6 +160,12 @@ jobs:
           file: coverage/report.lcov
           token: ${{ secrets.CODECOV_TOKEN }} # required
       
+      - name: Upload test results to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+      
       # - name: Fix LCOV output for SonarCloud
       #   if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
       #   run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' coverage/report.lcov
