@@ -15,22 +15,22 @@ component_management:
 
   individual_components:
     - component_id: crypt
-      name: @tundralibs/crypt
+      name: crypt
       paths:
         - crypt/**
     - component_id: guardian
-      name: @tundralibs/guardian
+      name: guardian
       paths:
         - crypt/**
     - component_id: id
-      name: @tundralibs/id
+      name: id
       paths:
         - id/**
     - component_id: restler
-      name: @tundralibs/RESTler
+      name: RESTler
       paths:
         - restler/**
     - component_id: utils
-      name: @tundralibs/utils
+      name: utils
       paths:
         - utils/**
