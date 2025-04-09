@@ -306,14 +306,10 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       });
     }
     const url = new URL(this._replaceVersion(baseURL, version));
-    if (url.pathname !== '') {
-      url.pathname = path.join(
-        url.pathname,
-        this._replaceVersion(endpoint.path, version),
-      );
-    } else {
-      url.pathname = this._replaceVersion(endpoint.path, version);
-    }
+    url.pathname = path.join(
+      url.pathname,
+      this._replaceVersion(endpoint.path, version),
+    );
     if (endpoint.query) {
       Object.entries(endpoint.query).forEach(([key, value]) => {
         url.searchParams.set(key, this._replaceVersion(value, version));

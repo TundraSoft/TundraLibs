@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-explicit-any
 import * as fs from '$fs';
 import * as path from '$path';
 import { parse as jsonParse } from '$jsonc';
@@ -6,156 +7,82 @@ import { parse as yamlParse } from '$yaml';
 import { envArgs } from './envArgs.ts';
 import { variableReplacer } from './variableReplacer.ts';
 
-/**
- * A type representing a valid path tuple for traversing a nested object structure.
- * Used for type-safe property access in configuration objects.
- * @template T The object type whose properties can be accessed
- */
-type ValidPathTuple<T> =
-  | []
-  | {
-    [K in keyof T]:
-      | [K]
-      | (T[K] extends Record<string, unknown> ? [K, ...ValidPathTuple<T[K]>]
-        : [K]);
-  }[keyof T];
+export type ConfigType = {
+  list: () => Array<string>;
+  has: (path: string) => boolean;
+  keys: (set: string) => Array<string>;
+  get: <T = unknown>(path: string) => T;
+  forEach: (
+    set: string,
+    callback: (key: string, value: unknown) => void,
+  ) => void;
+};
 
-/**
- * Represents a configuration manager providing type-safe access to configuration items
- * @template C The type of configuration object (defaults to Record<string, Record<string, unknown>>)
- * @template K Keys of the configuration object
- */
-export type ConfigType<
+export const Config = <
   C extends Record<string, Record<string, unknown>> = Record<
     string,
     Record<string, unknown>
   >,
-> = {
-  /**
-   * Gets a value from the configuration
-   * @param item The configuration section to access
-   * @param path The property path to traverse
-   * @returns The requested configuration value or undefined
-   * @throws Error if Configuration Set or path is not found
-   */
-  get: <T, K extends keyof C = keyof C>(
-    item: K,
-    ...path: Array<string>
-  ) => T;
-
-  /**
-   * Checks if a configuration path exists
-   * @param item The configuration section to check
-   * @param path The property path to test
-   * @returns True if the path exists, false otherwise
-   */
-  has: <K extends keyof C = keyof C>(
-    item: K,
-    ...path: Array<string>
-  ) => boolean;
-
-  /**
-   * Gets all keys for a configuration section
-   * @param item The configuration section
-   * @returns Array of keys for the specified section
-   */
-  keys: <K extends keyof C = keyof C>(item: K) => Array<keyof C[K]>;
-
-  /**
-   * Lists all available configuration sections
-   * @returns Array of configuration section names
-   */
-  list: () => Array<keyof C>;
-
-  /**
-   * Iterates over key-value pairs in a configuration section
-   * @param item The configuration section
-   * @param callback Function to call for each key-value pair
-   */
-  forEach: <K extends keyof C = keyof C, SK extends keyof C[K] = keyof C[K]>(
-    item: K,
-    callback: (key: keyof C[K], value: unknown) => void,
-  ) => void;
-};
-
-/**
- * Creates a configuration manager from a data object
- * @template T The type of configuration data
- * @param data The configuration data object
- * @returns A ConfigType instance for accessing the configuration
- */
-export const Config = <T extends Record<string, Record<string, unknown>>>(
-  data: T,
-): ConfigType<T> => {
-  const _data = data;
+>(config: C): ConfigType => {
+  const _data = config;
+  // Cache few items
+  const _configSets: Array<string> = Object.keys(_data);
   return {
-    list: () => Object.keys(_data) as Array<keyof T>,
-
-    has: <K extends keyof T = keyof T>(item: K, ...path: string[]) => {
-      item = (String(item)).trim().toLowerCase() as K;
-      if (_data[item] === undefined) {
+    list: () => _configSets,
+    has: (path: string): boolean => {
+      const paths = (path as unknown as string).split('.');
+      const set = paths.shift() as string;
+      if (!_configSets.includes(set)) {
         return false;
-      } else {
-        // deno-lint-ignore no-explicit-any
-        let current: any = _data[item];
-        for (const key of path) {
-          if (current === undefined || current[key] === undefined) {
-            return false;
-          }
-          current = current[key];
+      }
+      let obj: any = _data[set]!;
+      while (paths.length > 0) {
+        const key = paths.shift();
+        if (obj[key as string] === undefined) {
+          return false;
+        } else {
+          obj = obj[key as string];
         }
-        return true;
       }
+      return true;
     },
-
-    get: <R = unknown, K extends keyof T = keyof T>(
-      item: K,
-      ...path: string[]
-    ): R => {
-      item = (String(item)).trim().toLowerCase() as K;
-      if (_data[item] === undefined) {
-        throw new Error(`Configuration set ${String(item)} not found`);
-      } else {
-        // deno-lint-ignore no-explicit-any
-        let current: any = _data[item];
-        const traversed: string[] = [];
-
-        for (const key of path) {
-          traversed.push(key);
-          if (current === undefined || current[key] === undefined) {
-            throw new Error(
-              `Configuration item ${traversed.join(' -> ')} not found in ${
-                String(item)
-              }`,
-            );
-          }
-          current = current[key];
+    keys: <K extends keyof C | string>(set: K): Array<string> => {
+      if (!_configSets.includes(set as string)) {
+        throw new Error(`Config set "${set as string}" does not exist`);
+      }
+      return Object.keys(_data[set as string]!);
+    },
+    get: <T = unknown>(path: string): T => {
+      const paths = (path as unknown as string).split('.');
+      const set = paths.shift() as string;
+      if (!_configSets.includes(set)) {
+        throw new Error(`Config set "${set}" does not exist`);
+      }
+      let obj: any = _data[set]!;
+      const traversed: Array<string> = [];
+      while (paths.length > 0) {
+        const key = paths.shift();
+        traversed.push(key as string);
+        if (Object.keys(obj).includes(key as string) === false) {
+          throw new Error(
+            `Config item "${
+              traversed.join('.')
+            }" does not exist in set "${set}`,
+          );
+        } else {
+          obj = obj[key as string];
         }
-
-        return current as R;
       }
+      return obj;
     },
-
-    keys: <K extends keyof T = keyof T>(item: K) => {
-      item = (item as string).trim().toLowerCase() as K;
-      if (_data[item] === undefined) {
-        return [];
-      } else {
-        return Object.keys(_data[item]!);
+    forEach: (set: string, callback: (key: string, value: unknown) => void) => {
+      if (!_configSets.includes(set)) {
+        throw new Error(`Config set "${set}" does not exist`);
       }
-    },
-
-    forEach: <K extends keyof T = keyof T, SK extends keyof T[K] = keyof T[K]>(
-      item: K,
-      callback: (key: SK, value: T[K][SK]) => void,
-    ) => {
-      item = (item as string).trim().toLowerCase() as K;
-      if (_data[item] === undefined) {
-        return;
-      } else {
-        Object.entries(_data[item]!).forEach(([key, value]) =>
-          callback(key as SK, value as T[K][SK])
-        );
+      const obj = _data[set]!;
+      for (const key of Object.keys(obj)) {
+        const value = obj[key];
+        callback(key, value);
       }
     },
   };
@@ -163,8 +90,6 @@ export const Config = <T extends Record<string, Record<string, unknown>>>(
 
 /**
  * Options for loading configuration files
- *
- * Used by {@link loadConfig} function
  */
 export type LoadConfigOptions = {
   /**
@@ -173,56 +98,26 @@ export type LoadConfigOptions = {
   path: string;
 
   /**
-   * RegExp patterns for files to include (optional)
+   * RegExp patterns for files to include
+   * Only files matching these patterns will be loaded
    */
   include?: Array<RegExp>;
 
   /**
-   * RegExp patterns for files to exclude (optional)
+   * RegExp patterns for files to exclude
+   * Files matching these patterns will be ignored
    */
   exclude?: Array<RegExp>;
 
   /**
    * Environment variable handling:
-   * - true: Load environment variables from the config path
-   * - false/undefined: Don't use environment variables
-   * - string: Path to load environment variables from
+   * - `true`: Load environment variables from the config path
+   * - `false` or `undefined`: Don't use environment variables
+   * - `string`: Path to load environment variables from
    */
   env?: boolean | string;
 };
 
-/**
- * Validates the provided configuration options to ensure they conform to the {@link LoadConfigOptions} type.
- *
- * @param options - The configuration options to validate.
- * @returns The validated {@link LoadConfigOptions} object if valid.
- * @throws ConfigError {@link TypeError} - If the validation fails with a descriptive error message.
- *
- * @example
- * ```typescript
- * import { assertLoadConfigOptions } from './Config.ts';
- *
- * const options = {
- *   path: './config',
- *   include: [/\.config\.json$/],
- *   exclude: [/\.backup$/],
- *   env: './.env',
- * };
- *
- * try {
- *   const validOptions = assertLoadConfigOptions(options);
- *   // Proceed with using validOptions
- * } catch (error) {
- *   if (error instanceof Error) {
- *     console.error(`Configuration Error: ${error.message}`);
- *   } else {
- *     throw error;
- *   }
- * }
- * ```
- *
- * @see {@link loadConfig} - The method that utilizes the validated configuration options.
- */
 export const assertLoadConfigOptions = (
   options: unknown,
 ): options is LoadConfigOptions => {
@@ -257,21 +152,6 @@ export const assertLoadConfigOptions = (
   return true;
 };
 
-/**
- * Loads configuration files from the specified path
- * @param options Configuration options {@link LoadConfigOptions} including path and environment settings
- * @returns A Config {@link Config} object with methods to access the loaded configuration
- *
- * @example
- * // Load all config files from ./config with environment variables
- * const config = await loadConfig({
- *   path: './config',
- *   env: true
- * });
- *
- * // Get a specific configuration value
- * const serverPort = config.get<number>('server', 'port');
- */
 export const loadConfig = async (options: LoadConfigOptions) => {
   const defaults: Partial<LoadConfigOptions> = {
     exclude: [],

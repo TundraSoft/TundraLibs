@@ -32,9 +32,9 @@ Deno.test('utils.Config', async (t) => {
     });
 
     // These should have the correct types inferred
-    const appName: string = typedConfig.get('app', 'name');
-    const debug: boolean = typedConfig.get('settings', 'debug');
-    const maxConn: number = typedConfig.get('settings', 'maxConnections');
+    const appName: string = typedConfig.get('app.name');
+    const debug: boolean = typedConfig.get('settings.debug');
+    const maxConn: number = typedConfig.get('settings.maxConnections');
 
     asserts.assertEquals(appName, 'Test App');
     asserts.assertEquals(debug, true);
@@ -93,21 +93,21 @@ Deno.test('utils.Config', async (t) => {
         level: 'info',
       },
     });
-    asserts.assertEquals(config.get('application', 'name'), 'test');
-    asserts.assertEquals(config.get('application', 'port'), 8080);
+    asserts.assertEquals(config.get('application.name'), 'test');
+    asserts.assertEquals(config.get('application.port'), 8080);
     asserts.assertThrows(
-      () => config.get('application', 'ports'),
+      () => config.get('application.ports'),
       Error,
-      'Configuration item ports not found in application',
+      'Config item "ports" does not exist in set "application',
     );
     asserts.assertThrows(
-      () => config.get('applicationd' as 'application', 'ports'),
+      () => config.get('applicationd' as 'application.ports'),
       Error,
-      'Configuration set applicationd not found',
+      'Config set "applicationd" does not exist',
     );
-    asserts.assertEquals(config.has('application', 'port'), true);
-    asserts.assertEquals(config.has('application', 'ports'), false);
-    asserts.assertEquals(config.has('sdf' as 'application'), false);
+    asserts.assertEquals(config.has('application.port'), true);
+    asserts.assertEquals(config.has('application.ports'), false);
+    asserts.assertEquals(config.has('sdf'), false);
 
     asserts.assertEquals(config.list(), ['application', 'logging']);
     asserts.assertEquals(
@@ -164,23 +164,19 @@ Deno.test('utils.Config', async (t) => {
     });
 
     // Deep nesting tests
-    asserts.assertEquals(config.get<number>('server', 'http', 'port'), 8080);
+    asserts.assertEquals(config.get<number>('server.http.port'), 8080);
     asserts.assertEquals(
       config.get<string>(
-        'server',
-        'http',
-        'options',
-        'headers',
-        'content-type',
+        'server.http.options.headers.content-type',
       ),
       'application/json',
     );
     asserts.assertEquals(
-      config.get<boolean>('server', 'https', 'enabled'),
+      config.get<boolean>('server.https.enabled'),
       true,
     );
     asserts.assertEquals(
-      config.get<string>('server', 'https', 'certificates', 'key'),
+      config.get<string>('server.https.certificates.key'),
       '/path/to/key',
     );
 
@@ -190,15 +186,15 @@ Deno.test('utils.Config', async (t) => {
 
     // Deep path existence
     asserts.assertEquals(
-      config.has('server', 'http', 'options', 'timeout'),
+      config.has('server.http.options.timeout'),
       true,
     );
     asserts.assertEquals(
-      config.has('server', 'http', 'options', 'nonexistent'),
+      config.has('server.http.options.nonexistent'),
       false,
     );
     asserts.assertEquals(
-      config.has('server', 'http', 'nonexistent', 'property'),
+      config.has('server.http.nonexistent.property'),
       false,
     );
 
@@ -289,21 +285,21 @@ Deno.test('utils.Config', async (t) => {
       // Test JSON file
       asserts.assertEquals(conf.has('json_config'), true);
       asserts.assertEquals(
-        conf.get<string>('json_config', 'name'),
+        conf.get<string>('json_config.name'),
         'JSON Config',
       );
 
       // Test YAML file
       asserts.assertEquals(conf.has('yaml_config'), true);
       asserts.assertEquals(
-        conf.get<string>('yaml_config', 'name'),
+        conf.get<string>('yaml_config.name'),
         'YAML Config',
       );
 
       // Test TOML file
       asserts.assertEquals(conf.has('toml_config'), true);
       asserts.assertEquals(
-        conf.get<string>('toml_config', 'name'),
+        conf.get<string>('toml_config.name'),
         'TOML Config',
       );
     });
@@ -375,19 +371,19 @@ Deno.test('utils.Config', async (t) => {
         });
 
         asserts.assertEquals(
-          conf.get<number>('config', 'server', 'port'),
+          conf.get<number>('config.server.port'),
           9000,
         );
         asserts.assertEquals(
-          conf.get<string>('config', 'server', 'host'),
+          conf.get<string>('config.server.host'),
           'example.com',
         );
         asserts.assertEquals(
-          conf.get<string>('config', 'database', 'user'),
+          conf.get<string>('config.database.user'),
           'testuser',
         );
         asserts.assertEquals(
-          conf.get<string>('config', 'database', 'password'),
+          conf.get<string>('config.database.password'),
           'testpass',
         );
       } finally {

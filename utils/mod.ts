@@ -1,3 +1,16 @@
+export type {
+  DeepReadOnly,
+  DeepWritable,
+  ExcludeNever,
+  FlattenEntity,
+  MakeReadOnly,
+  MakeRequired,
+  Optional,
+  Paths,
+  PathValue,
+  UnArray,
+  UnionToIntersection,
+} from './types/mod.ts';
 export { BaseError, type BaseErrorJson } from './BaseError.ts';
 export { envArgs } from './envArgs.ts';
 export { type EventCallback, Events } from './Events.ts';
