@@ -164,6 +164,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
         uses: codecov/test-results-action@v1
         with:
+          files: ./test-report.xml
           token: ${{ secrets.CODECOV_TOKEN }}
       
       # - name: Fix LCOV output for SonarCloud
