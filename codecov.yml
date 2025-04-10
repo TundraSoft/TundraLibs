@@ -5,32 +5,104 @@ ignore:
   - '**/fixtures/**/**'
   - '.github/**'
 
+# Set coverage thresholds
+coverage:
+  precision: 2  # Number of decimal places
+  round: down   # Round coverage down
+  range: "70...90"  # Green to red range
+  status:
+    project:
+      default:
+        target: 80%  # Overall project coverage target
+        threshold: 1%  # Allow coverage to drop by 1% in PR
+    patch:
+      default:
+        target: 70%  # Target for new code in PRs
+        threshold: 5%  # Allow coverage to drop by 5% in PR patches
+    changes: yes  # Track only changes in a PR
+
+# Configure PR comments
+comment:
+  layout: "reach, diff, flags, files, footer"
+  behavior: default
+  require_changes: false  # Comment even if coverage doesn't change
+  require_base: no
+  require_head: yes
+  after_n_builds: 1
+
 component_management:
   default_rules:
     statuses:
-      - type: project # default
+      - type: project
         target: auto
         branches:
-          - '!main'
+          - '!main'  # This rule applies to all branches EXCEPT main
 
   individual_components:
     - component_id: crypt
       name: crypt
       paths:
-        - crypt/**
+        - "crypt/**.ts"
+        - "!crypt/**.test.ts"  # Exclude test files
+      statuses:
+        - type: project
+          target: 75%
+
     - component_id: guardian
       name: guardian
       paths:
-        - crypt/**
+        - "guardian/**.ts"
+        - "!guardian/**.test.ts"
+      statuses:
+        - type: project
+          target: 75%
+
     - component_id: id
       name: id
       paths:
-        - id/**
+        - "id/**.ts"
+        - "!id/**.test.ts"
+      statuses:
+        - type: project
+          target: 75%
+
     - component_id: restler
       name: RESTler
       paths:
-        - restler/**
+        - "restler/**.ts"
+        - "!restler/**.test.ts"
+      statuses:
+        - type: project
+          target: 75%
+
     - component_id: utils
       name: utils
       paths:
-        - utils/**
+        - "utils/**.ts"
+        - "!utils/**.test.ts"
+      statuses:
+        - type: project
+          target: 75%
+
+# Add explicit flags to help with component identification
+flags:
+  crypt:
+    paths:
+      - crypt/
+    carryforward: true
+  guardian:
+    paths:
+      - guardian/
+    carryforward: true
+  id:
+    paths:
+      - id/
+    carryforward: true
+  restler:
+    paths:
+      - restler/
+    carryforward: true
+  utils:
+    paths:
+      - utils/
+    carryforward: true
