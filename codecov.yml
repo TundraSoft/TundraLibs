@@ -7,25 +7,25 @@ ignore:
 
 # Set coverage thresholds
 coverage:
-  precision: 2  # Number of decimal places
-  round: down   # Round coverage down
-  range: "70...90"  # Green to red range
+  precision: 2 # Number of decimal places
+  round: down # Round coverage down
+  range: '70...90' # Green to red range
   status:
     project:
       default:
-        target: 80%  # Overall project coverage target
-        threshold: 1%  # Allow coverage to drop by 1% in PR
+        target: 80% # Overall project coverage target
+        threshold: 1% # Allow coverage to drop by 1% in PR
     patch:
       default:
-        target: 70%  # Target for new code in PRs
-        threshold: 5%  # Allow coverage to drop by 5% in PR patches
-    changes: yes  # Track only changes in a PR
+        target: 70% # Target for new code in PRs
+        threshold: 5% # Allow coverage to drop by 5% in PR patches
+    changes: yes # Track only changes in a PR
 
 # Configure PR comments
 comment:
-  layout: "reach, diff, flags, files, footer"
+  layout: 'reach, diff, flags, files, footer'
   behavior: default
-  require_changes: false  # Comment even if coverage doesn't change
+  require_changes: false # Comment even if coverage doesn't change
   require_base: no
   require_head: yes
   after_n_builds: 1
@@ -36,14 +36,14 @@ component_management:
       - type: project
         target: auto
         branches:
-          - '!main'  # This rule applies to all branches EXCEPT main
+          - '!main' # This rule applies to all branches EXCEPT main
 
   individual_components:
     - component_id: crypt
       name: crypt
       paths:
-        - "crypt/**.ts"
-        - "!crypt/**.test.ts"  # Exclude test files
+        - 'crypt/**.ts'
+        - '!crypt/**.test.ts' # Exclude test files
       statuses:
         - type: project
           target: 75%
@@ -51,8 +51,8 @@ component_management:
     - component_id: guardian
       name: guardian
       paths:
-        - "guardian/**.ts"
-        - "!guardian/**.test.ts"
+        - 'guardian/**.ts'
+        - '!guardian/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -60,8 +60,8 @@ component_management:
     - component_id: id
       name: id
       paths:
-        - "id/**.ts"
-        - "!id/**.test.ts"
+        - 'id/**.ts'
+        - '!id/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -69,8 +69,8 @@ component_management:
     - component_id: restler
       name: RESTler
       paths:
-        - "restler/**.ts"
-        - "!restler/**.test.ts"
+        - 'restler/**.ts'
+        - '!restler/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -78,8 +78,8 @@ component_management:
     - component_id: utils
       name: utils
       paths:
-        - "utils/**.ts"
-        - "!utils/**.test.ts"
+        - 'utils/**.ts'
+        - '!utils/**.test.ts'
       statuses:
         - type: project
           target: 75%
