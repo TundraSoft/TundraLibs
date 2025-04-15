@@ -35,6 +35,7 @@ export class QueryTranslator {
     this._dialect = dialect;
     // Load few defaults of the dialects
     switch (dialect) {
+      case 'POSTGRESPOOL':
       case 'POSTGRES':
         this._config = PostgresTranslatorConfig;
         break;
