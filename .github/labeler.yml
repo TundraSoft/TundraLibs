@@ -8,9 +8,6 @@ cacher:
 crypt:
   - changed-files:
       - any-glob-to-any-file: crypt/*
-dam:
-  - changed-files:
-      - any-glob-to-any-file: dam/*
 guardian:
   - changed-files:
       - any-glob-to-any-file: guardian/*

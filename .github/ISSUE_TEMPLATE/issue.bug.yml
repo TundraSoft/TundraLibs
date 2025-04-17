@@ -52,7 +52,6 @@ body:
         - Workflow
         - cacher
         - crypt
-        - dam
         - guardian
         - id
         - restler

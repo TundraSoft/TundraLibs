@@ -72,6 +72,10 @@ jobs:
 
   test:
     services:
+      memcache:
+        image: memcached
+        ports:
+          - 11211:11211
       redis:
         image: redis
         ports:
