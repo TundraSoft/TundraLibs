@@ -2,20 +2,23 @@ import * as asserts from '$asserts';
 import { MemCacher, type MemCacherOptions } from '../../mod.ts';
 import { CacherConfigError } from '../../../errors/mod.ts';
 import { MemCacherConnectError } from '../errors/mod.ts';
+import { envArgs } from '@tundralibs/utils';
+import { MemCacherOperationError } from '../mod.ts';
 
+const env = envArgs('./cacher/engines/memcached/tests/');
 Deno.test('Cacher.MemCacher', async (t) => {
   let memcached: MemCacher;
 
   // Helper function to create a delay
-  const delay = (ms: number) =>
-    new Promise((resolve) => setTimeout(resolve, ms));
+  // const delay = (ms: number) =>
+  //   new Promise((resolve) => setTimeout(resolve, ms));
 
   // Setup and teardown for tests that need an initialized client
   const setupMemcached = () => {
     memcached = new MemCacher('memcached-test', {
-      host: 'localhost',
-      port: 11211,
-      maxBufferSize: 10,
+      host: env.get('MEMCACHED_HOST'),
+      port: parseInt(env.get('MEMCACHED_PORT')),
+      maxBufferSize: parseInt(env.get('MEMCACHED_SIZE')),
     });
     return memcached;
   };
@@ -42,6 +45,17 @@ Deno.test('Cacher.MemCacher', async (t) => {
       asserts.assertEquals(cacher.name, 'memory-test');
       asserts.assertEquals(cacher.Engine, 'MEMCACHED');
       asserts.assertEquals(cacher.getOption('defaultExpiry'), 300);
+    });
+
+    await d.step('set port and maxBufferSize', () => {
+      const cacher = new MemCacher('boo', {
+        host: 'localhost',
+        port: undefined,
+        maxBufferSize: undefined,
+      });
+
+      asserts.assertEquals(cacher.getOption('port'), 11211);
+      asserts.assertEquals(cacher.getOption('maxBufferSize'), 10);
     });
 
     await d.step('Should throw on invalid config', () => {
@@ -137,7 +151,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const value = 'test-value';
 
         await memcached.set(key, value);
-        await delay(100); // Add delay after set
+        // await delay(100); // Add delay after set
         const result = await memcached.get(key);
 
         asserts.assertEquals(result, value);
@@ -148,7 +162,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const value = 12345;
 
         await memcached.set(key, value);
-        await delay(100); // Add delay after set
+        // await delay(100); // Add delay after set
         const result = await memcached.get<number>(key);
 
         asserts.assertEquals(result, value);
@@ -159,7 +173,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const value = { name: 'test', value: 42, nested: { value: 'nested' } };
 
         await memcached.set(key, value);
-        await delay(100); // Add delay after set
+        // await delay(100); // Add delay after set
         const result = await memcached.get(key);
 
         asserts.assertEquals(result, value);
@@ -170,7 +184,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const value = [1, 2, 'three', { four: 4 }];
 
         await memcached.set(key, value);
-        await delay(100); // Add delay after set
+        // await delay(100); // Add delay after set
         const result = await memcached.get(key);
 
         asserts.assertEquals(result, value);
@@ -180,7 +194,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const key = 'test-exists';
 
         await memcached.set(key, 'test-value');
-        await delay(100); // Add delay after set
+        // await delay(100); // Add delay after set
         const exists = await memcached.has(key);
         const notExists = await memcached.has('non-existent-key');
 
@@ -192,9 +206,9 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const key = 'test-delete';
 
         await memcached.set(key, 'test-value');
-        await delay(100); // Add delay after set
+        // await delay(100); // Add delay after set
         await memcached.delete(key);
-        await delay(100); // Add delay after delete
+        // await delay(100); // Add delay after delete
         const exists = await memcached.has(key);
 
         asserts.assertEquals(exists, false);
@@ -203,7 +217,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
       await d.step('should handle null values', async () => {
         const key = 'test-null';
         await memcached.set(key, null);
-        await delay(100);
+        // await delay(100);
         const result = await memcached.get(key);
 
         asserts.assertEquals(result, null);
@@ -212,7 +226,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
       await d.step('should handle empty strings', async () => {
         const key = 'test-empty';
         await memcached.set(key, '');
-        await delay(100);
+        // await delay(100);
         const result = await memcached.get<string>(key);
 
         asserts.assertEquals(result, '');
@@ -237,7 +251,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
         };
 
         await memcached.set(key, largeObj);
-        await delay(100);
+        // await delay(100);
         const result = await memcached.get(key);
 
         asserts.assertEquals(result, largeObj);
@@ -260,7 +274,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
 
         // Set with 2 second expiry
         await memcached.set(key, value, { expiry: 2 });
-        await delay(100); // Add delay after set
+        // await delay(100); // Add delay after set
 
         // Verify it exists immediately
         let result = await memcached.get(key);
@@ -292,7 +306,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
 
           // Set with 3 second expiry and window mode enabled
           await memcached.set(key, value, { expiry: 3, window: true });
-          await delay(100); // Add delay after set
+          // await delay(100); // Add delay after set
 
           // Verify it exists immediately
           let result = await memcached.get(key);
@@ -380,27 +394,27 @@ Deno.test('Cacher.MemCacher', async (t) => {
           // These should all throw connect errors since client isn't initialized
           await asserts.assertRejects(
             () => uninitializedCacher.get('any-key'),
-            MemCacherConnectError,
+            MemCacherOperationError,
           );
 
-          // await asserts.assertRejects(
-          //   () => uninitializedCacher.set('any-key', 'value'),
-          //   MemCacherConnectError,
-          // );
+          await asserts.assertRejects(
+            () => uninitializedCacher.set('any-key', 'value'),
+            MemCacherOperationError,
+          );
 
           await asserts.assertRejects(
             () => uninitializedCacher.delete('any-key'),
-            MemCacherConnectError,
+            MemCacherOperationError,
           );
 
           await asserts.assertRejects(
             () => uninitializedCacher.has('any-key'),
-            MemCacherConnectError,
+            MemCacherOperationError,
           );
 
           await asserts.assertRejects(
             () => uninitializedCacher.clear(),
-            MemCacherConnectError,
+            MemCacherOperationError,
           );
         } finally {
           // Make sure to finalize the instance even though it's not initialized

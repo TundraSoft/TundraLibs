@@ -57,6 +57,7 @@ jspm_packages/
 .env.*
 !.env.example
 !**/fixtures/.env
+!**/tests/.env
 
 # Temporary files
 tmp/

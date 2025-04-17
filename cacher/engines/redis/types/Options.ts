@@ -38,7 +38,7 @@ export type RedisCacherOptions = CacherOptions & {
   /**
    * Optional Redis username for authentication.
    */
-  user?: string;
+  username?: string;
 
   /**
    * Optional Redis password for authentication.

@@ -123,7 +123,7 @@ export abstract class AbstractCacher<O extends CacherOptions = CacherOptions>
         },
       );
     }
-    this._set(this._normalizeKey(key), cacheValue);
+    await this._set(this._normalizeKey(key), cacheValue);
   }
 
   /**

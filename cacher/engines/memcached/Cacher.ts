@@ -127,21 +127,11 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
    *
    * @param key - The normalized key
    * @returns The cached value, or undefined if not found
-   * @throws {@link MemCacherConnectError} if not connected
    * @throws {@link MemCacherOperationError} if the operation fails
    * @protected
    * @override
    */
   protected async _get(key: string): Promise<CacheValue | undefined> {
-    if (!this._client) {
-      throw new MemCacherConnectError(
-        {
-          name: this.name,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
-        },
-      );
-    }
     try {
       const res = await this._client!.get(key);
       // console.log(res);
@@ -150,7 +140,7 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
       } else {
         const data = JSON.parse(res) as CacheValue;
         if (data.window && data.expiry) {
-          await this._client.set(key, JSON.stringify(data), data.expiry);
+          await this._client!.set(key, JSON.stringify(data), data.expiry);
         }
         return data;
       }
@@ -169,26 +159,16 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
    * @param key - The normalized key
    * @param value - The value to store
    * @returns A promise that resolves when the operation is complete
-   * @throws {@link MemCacherConnectError} if not connected
    * @throws {@link MemCacherOperationError} if the operation fails
    * @protected
    * @override
    */
   protected async _set(key: string, value: CacheValue): Promise<void> {
-    if (!this._client) {
-      throw new MemCacherConnectError(
-        {
-          name: this.name,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
-        },
-      );
-    }
     try {
       if (value.expiry > 0) {
-        await this._client.set(key, JSON.stringify(value), value.expiry);
+        await this._client!.set(key, JSON.stringify(value), value.expiry);
       } else {
-        await this._client.set(key, JSON.stringify(value));
+        await this._client!.set(key, JSON.stringify(value));
       }
       // Delay by 100ms to ensure the data is set
       // await new Promise((resolve) => setTimeout(resolve, 1));
@@ -206,23 +186,13 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
    *
    * @param key - The normalized key
    * @returns A promise that resolves when the operation is complete
-   * @throws {@link MemCacherConnectError} if not connected
    * @throws {@link MemCacherOperationError} if the operation fails
    * @protected
    * @override
    */
   protected async _delete(key: string): Promise<void> {
-    if (!this._client) {
-      throw new MemCacherConnectError(
-        {
-          name: this.name,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
-        },
-      );
-    }
     try {
-      await this._client.delete(key);
+      await this._client!.delete(key);
     } catch (e) {
       throw new MemCacherOperationError({
         name: this.name,
@@ -236,23 +206,13 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
    * Clears all values from the Memcached server.
    *
    * @returns A promise that resolves when the operation is complete
-   * @throws {@link MemCacherConnectError} if not connected
    * @throws {@link MemCacherOperationError} if the operation fails
    * @protected
    * @override
    */
   protected async _clear(): Promise<void> {
-    if (!this._client) {
-      throw new MemCacherConnectError(
-        {
-          name: this.name,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
-        },
-      );
-    }
     try {
-      await this._client.flush();
+      await this._client!.flush();
     } catch (e) {
       throw new MemCacherOperationError({
         name: this.name,
@@ -266,23 +226,13 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
    *
    * @param key - The normalized key
    * @returns True if the key exists, false otherwise
-   * @throws {@link MemCacherConnectError} if not connected
    * @throws {@link MemCacherOperationError} if the operation fails
    * @protected
    * @override
    */
   protected async _has(key: string): Promise<boolean> {
-    if (!this._client) {
-      throw new MemCacherConnectError(
-        {
-          name: this.name,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
-        },
-      );
-    }
     try {
-      const res = await this._client.get(key);
+      const res = await this._client!.get(key);
       if (res === null || res === undefined) {
         return false;
       }

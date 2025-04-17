@@ -1,10 +1,11 @@
 import * as asserts from '$asserts';
 import { RedisCacher, type RedisCacherOptions } from '../../mod.ts';
 import { CacherConfigError } from '../../../errors/mod.ts';
-import {
-  RedisCacherConnectError,
-  RedisCacherOperationError,
-} from '../errors/mod.ts';
+import { RedisCacherConnectError } from '../errors/mod.ts';
+import { envArgs } from '@tundralibs/utils';
+import { RedisCacherOperationError } from '../mod.ts';
+
+const env = envArgs('./cacher/engines/redis/tests/');
 
 Deno.test('Cacher.RedisCacher', async (t) => {
   let redis: RedisCacher;
@@ -12,8 +13,11 @@ Deno.test('Cacher.RedisCacher', async (t) => {
   // Setup and teardown for tests that need an initialized client
   const setupRedis = () => {
     redis = new RedisCacher('redis-test', {
-      host: 'localhost',
-      port: 6379,
+      host: env.get('REDIS_HOST'),
+      port: parseInt(env.get('REDIS_PORT')),
+      username: env.get('REDIS_USERNAME'),
+      password: env.get('REDIS_PASSWORD'),
+      db: parseInt(env.get('REDIS_DB')),
     });
     return redis;
   };
@@ -40,6 +44,15 @@ Deno.test('Cacher.RedisCacher', async (t) => {
       asserts.assertEquals(cacher.name, 'redis-test');
       asserts.assertEquals(cacher.Engine, 'REDIS');
       asserts.assertEquals(cacher.getOption('defaultExpiry'), 300);
+    });
+
+    await d.step('set defaults when undefined', () => {
+      const cacher = new RedisCacher('boo', {
+        host: 'localhost',
+        port: undefined,
+      });
+
+      asserts.assertEquals(cacher.getOption('port'), 6379);
     });
 
     await d.step('Should throw on invalid config', () => {
@@ -70,6 +83,46 @@ Deno.test('Cacher.RedisCacher', async (t) => {
           new RedisCacher('redis-test', {
             host: 'localhost',
             port: 'invalid-port',
+          } as unknown as RedisCacherOptions);
+        },
+        CacherConfigError,
+      );
+
+      asserts.assertThrows(
+        () => {
+          new RedisCacher('redis-test', {
+            host: 'localhost',
+            db: 'sdf',
+          } as unknown as RedisCacherOptions);
+        },
+        CacherConfigError,
+      );
+
+      asserts.assertThrows(
+        () => {
+          new RedisCacher('redis-test', {
+            host: 'localhost',
+            username: -1,
+          } as unknown as RedisCacherOptions);
+        },
+        CacherConfigError,
+      );
+
+      asserts.assertThrows(
+        () => {
+          new RedisCacher('redis-test', {
+            host: 'localhost',
+            password: true,
+          } as unknown as RedisCacherOptions);
+        },
+        CacherConfigError,
+      );
+
+      asserts.assertThrows(
+        () => {
+          new RedisCacher('redis-test', {
+            host: 'localhost',
+            certPath: '/no/file/here',
           } as unknown as RedisCacherOptions);
         },
         CacherConfigError,
@@ -335,28 +388,38 @@ Deno.test('Cacher.RedisCacher', async (t) => {
 
         // These should all throw connect errors since client isn't initialized
         await asserts.assertRejects(
-          async () => await uninitializedCacher.get('any-key'),
-          RedisCacherConnectError,
-        );
-
-        // await asserts.assertRejects(
-        //   async () => await uninitializedCacher.set('any-key', 'value'),
-        //   RedisCacherConnectError,
-        // );
-
-        await asserts.assertRejects(
-          async () => await uninitializedCacher.delete('any-key'),
-          RedisCacherConnectError,
+          async () => {
+            await uninitializedCacher.get('any-key');
+          },
+          RedisCacherOperationError,
         );
 
         await asserts.assertRejects(
-          async () => await uninitializedCacher.has('any-key'),
-          RedisCacherConnectError,
+          async () => {
+            await uninitializedCacher.set('any-key', 'value');
+          },
+          RedisCacherOperationError,
         );
 
         await asserts.assertRejects(
-          async () => await uninitializedCacher.clear(),
-          RedisCacherConnectError,
+          async () => {
+            await uninitializedCacher.delete('any-key');
+          },
+          RedisCacherOperationError,
+        );
+
+        await asserts.assertRejects(
+          async () => {
+            await uninitializedCacher.has('any-key');
+          },
+          RedisCacherOperationError,
+        );
+
+        await asserts.assertRejects(
+          async () => {
+            await uninitializedCacher.clear();
+          },
+          RedisCacherOperationError,
         );
       },
     );

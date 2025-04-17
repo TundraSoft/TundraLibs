@@ -98,7 +98,7 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
         const opt: RedisConnectOptions = {
           hostname: this.getOption('host'),
           port: this.getOption('port'),
-          username: this.getOption('user'),
+          username: this.getOption('username'),
           password: this.getOption('password'),
           db: this.getOption('db'),
           name: this.name,
@@ -115,7 +115,7 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
             name: this.name,
             host: this.getOption('host'),
             port: this.getOption('port'),
-            username: this.getOption('user'),
+            username: this.getOption('username'),
             password: this.getOption('password'),
             db: this.getOption('db'),
           },
@@ -145,32 +145,19 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
    *
    * @param key - The normalized key
    * @returns The cached value, or undefined if not found
-   * @throws {@link RedisCacherConnectError} if not connected
    * @throws {@link RedisCacherOperationError} if the operation fails
    * @protected
    * @override
    */
   protected async _get(key: string): Promise<CacheValue | undefined> {
-    if (!this._client) {
-      throw new RedisCacherConnectError(
-        {
-          name: this.name,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
-          username: this.getOption('user'),
-          password: this.getOption('password'),
-          db: this.getOption('db'),
-        },
-      );
-    }
     try {
-      const res = await this._client.get(key);
+      const res = await this._client!.get(key);
       if (res === null || res === undefined) {
         return undefined;
       } else {
         const data = JSON.parse(res) as CacheValue;
         if (data.window && data.expiry) {
-          await this._client.expire(key, data.expiry); // Fixed: removed unnecessary non-null assertion
+          await this._client!.expire(key, data.expiry); // Fixed: removed unnecessary non-null assertion
         }
         return data;
       }
@@ -189,28 +176,15 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
    * @param key - The normalized key
    * @param value - The value to store
    * @returns A promise that resolves when the operation is complete
-   * @throws {@link RedisCacherConnectError} if not connected
    * @throws {@link RedisCacherOperationError} if the operation fails
    * @protected
    * @override
    */
   protected async _set(key: string, value: CacheValue): Promise<void> {
-    if (!this._client) {
-      throw new RedisCacherConnectError(
-        {
-          name: this.name,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
-          username: this.getOption('user'),
-          password: this.getOption('password'),
-          db: this.getOption('db'),
-        },
-      );
-    }
     try {
-      await this._client.set(key, JSON.stringify(value));
+      await this._client!.set(key, JSON.stringify(value));
       if (value.expiry > 0) {
-        await this._client.expire(key, value.expiry);
+        await this._client!.expire(key, value.expiry);
       }
     } catch (e) {
       throw new RedisCacherOperationError({
@@ -226,26 +200,13 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
    *
    * @param key - The normalized key
    * @returns A promise that resolves when the operation is complete
-   * @throws {@link RedisCacherConnectError} if not connected
    * @throws {@link RedisCacherOperationError} if the operation fails
    * @protected
    * @override
    */
   protected async _delete(key: string): Promise<void> {
-    if (!this._client) {
-      throw new RedisCacherConnectError(
-        {
-          name: this.name,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
-          username: this.getOption('user'),
-          password: this.getOption('password'),
-          db: this.getOption('db'),
-        },
-      );
-    }
     try {
-      await this._client.del(key);
+      await this._client!.del(key);
     } catch (e) {
       throw new RedisCacherOperationError({
         name: this.name,
@@ -259,28 +220,15 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
    * Clears all values for this cacher's namespace from the Redis server.
    *
    * @returns A promise that resolves when the operation is complete
-   * @throws {@link RedisCacherConnectError} if not connected
    * @throws {@link RedisCacherOperationError} if the operation fails
    * @protected
    * @override
    */
   protected async _clear(): Promise<void> {
-    if (!this._client) {
-      throw new RedisCacherConnectError(
-        {
-          name: this.name,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
-          username: this.getOption('user'),
-          password: this.getOption('password'),
-          db: this.getOption('db'),
-        },
-      );
-    }
     try {
-      const keys = await this._client.keys(`${this.name}:*`);
+      const keys = await this._client!.keys(`${this.name}:*`);
       for (const key of keys) {
-        await this._client.del(key);
+        await this._client!.del(key);
       }
     } catch (e) {
       throw new RedisCacherOperationError({
@@ -295,26 +243,13 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
    *
    * @param key - The normalized key
    * @returns True if the key exists, false otherwise
-   * @throws {@link RedisCacherConnectError} if not connected
    * @throws {@link RedisCacherOperationError} if the operation fails
    * @protected
    * @override
    */
   protected async _has(key: string): Promise<boolean> {
-    if (!this._client) {
-      throw new RedisCacherConnectError(
-        {
-          name: this.name,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
-          username: this.getOption('user'),
-          password: this.getOption('password'),
-          db: this.getOption('db'),
-        },
-      );
-    }
     try {
-      const res = await this._client.exists(key);
+      const res = await this._client!.exists(key);
       return res === 1;
     } catch (e) {
       throw new RedisCacherOperationError({
@@ -373,13 +308,24 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
         if (value === undefined || value === null) {
           return undefined as RedisCacherOptions[K];
         }
+        if (typeof value !== 'number' || value < 0) {
+          throw new CacherConfigError(
+            'Redis db must be a positive number',
+            {
+              name: this.name || 'N/A', // Fallback to 'N/A' if name is undefined
+              engine: this.Engine || 'REDIS', // Fallback to 'REDIS' if Engine is undefined',
+              configKey: key,
+              configValue: value,
+            },
+          );
+        }
         break;
-      case 'user':
+      case 'username':
         if (value !== undefined && value !== null) {
           if (typeof value === 'string' && value.length === 0) {
             value = undefined as RedisCacherOptions[K];
           } else {
-            throw new CacherConfigError('User must be a string', {
+            throw new CacherConfigError('Username must be a string', {
               name: this.name || 'N/A', // Fallback to 'N/A' if name is undefined
               engine: this.Engine || 'REDIS', // Fallback to 'REDIS' if Engine is undefined',
               configKey: key,
