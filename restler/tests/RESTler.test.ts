@@ -1,5 +1,5 @@
 import * as asserts from '$asserts';
-import { RESTler } from '../RESTler.ts';
+import { RESTler } from '../mod.ts';
 import {
   RESTlerConfigError,
   RESTlerRequestError,

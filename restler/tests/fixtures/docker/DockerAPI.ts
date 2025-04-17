@@ -1,5 +1,5 @@
-import { RESTler } from '../../../RESTler.ts';
-import type { RESTlerOptions } from '../../../types/Options.ts';
+import { RESTler } from '../../../mod.ts';
+import type { RESTlerOptions } from '../../../mod.ts';
 import type { DockerContainer, DockerImage, DockerInfo } from './types.ts';
 
 /**

@@ -11,7 +11,7 @@
     "./sign": "./sign.ts"
   },
   "imports": {
-    "$encoding": "jsr:@std/encoding@^1.0.0",
+    "$encoding": "jsr:@std/encoding@1.0.8",
     "$fmt": "jsr:@std/fmt@^1.0.0"
   }
 }

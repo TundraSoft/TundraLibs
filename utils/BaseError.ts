@@ -85,7 +85,7 @@ export class BaseError<
     }
 
     const match = stackLine.match(
-      /at\s+(?:[^@]*\@)?(?:file:\/\/)?(.*):(\d+):(\d+)/i,
+      /at\s+(?:[^@]*@)?(?:file:\/\/)?(.*):(\d+):(\d+)/i,
     );
     if (!match || !match[1] || !match[2]) {
       return 'Could not parse stack trace';

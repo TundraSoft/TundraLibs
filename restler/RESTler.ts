@@ -45,7 +45,7 @@ import { ResponseBody } from './types/Response.ts';
  * @template O Type extending RESTlerOptions for custom configuration
  */
 export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
-  extends Options<RESTlerOptions, RESTlerEvents> {
+  extends Options<O, RESTlerEvents> {
   /**
    * Vendor identifier for the API client implementation.
    * Used in error messages and logging to identify the API provider.
@@ -81,7 +81,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @param defaults - Default options to apply if not specified in options
    */
   constructor(
-    options: EventOptionsKeys<O & RESTlerOptions>,
+    options: EventOptionsKeys<O>,
     defaults?: Partial<O>,
   ) {
     super(options, {
@@ -90,7 +90,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         contentType: 'JSON',
       },
       ...defaults,
-    });
+    } as Partial<O>);
     if (this.hasOption('tls')) {
       const opt = this.getOption('tls');
       if (typeof opt === 'string') {
@@ -662,10 +662,10 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @returns Processed option value
    * @throws {RESTlerConfigError} If the option value is invalid
    */
-  protected override _processOption<K extends keyof RESTlerOptions>( //NOSONAR
+  protected override _processOption<K extends keyof RESTlerOptions>(
     key: K,
-    value: RESTlerOptions[K],
-  ): RESTlerOptions[K] {
+    value: O[K],
+  ): O[K] {
     switch (key) {
       case 'baseURL':
         if (!this._validateBaseURL(value)) {
@@ -732,7 +732,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         }
         break;
     }
-    return super._processOption(key, value);
+    return super._processOption(key, value) as O[K];
   }
 
   /**

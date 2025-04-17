@@ -1,5 +1,5 @@
 import * as asserts from '$asserts';
-import { RESTlerOptions } from '../types/Options.ts';
+import { RESTlerOptions } from '../mod.ts';
 import { DockerAPI } from './fixtures/docker/DockerAPI.ts';
 import type {
   DockerContainer,

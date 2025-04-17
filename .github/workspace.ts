@@ -46,6 +46,7 @@ type IssueTemplateSchema = {
 const LABELER_YML = '.github/labeler.yml';
 const PR_TITLE_YML = '.github/workflows/pr-title.yaml';
 const ISSUE_YML = '.github/ISSUE_TEMPLATE/issue.bug.yml';
+const CODECOV_YML = './codecov.yml';
 const WORKSPACE_NAME_PATTERN = new RegExp(/^@[a-z0-9-]+\/[a-z0-9-]+$/);
 const WORKSPACE_SCOPE = 'tundralibs';
 
@@ -98,6 +99,87 @@ const checkWorkspaces = async (
   }
 };
 
+/**
+ * Updates the codecov.yml file to include or exclude workspaces
+ * @param workspaces - Array of workspace names to include
+ * @param deleteList - Optional array of workspace names to remove
+ */
+const updateCodecov = async (
+  workspaces: string[],
+  deleteList?: string[],
+): Promise<void> => {
+  if (await fs.exists(CODECOV_YML)) {
+    const codecovContent = yaml.parse(
+      await Deno.readTextFile(CODECOV_YML),
+    ) as Record<string, unknown>;
+    
+    // Get the component management section
+    const componentManagement = codecovContent.component_management as Record<string, unknown>;
+    if (!componentManagement) {
+      console.warn('No component_management section found in codecov.yml');
+      return;
+    }
+    
+    // Get the individual components array
+    let individualComponents = (componentManagement.individual_components || []) as Array<Record<string, unknown>>;
+    
+    // Remove components in the delete list
+    if (deleteList && deleteList.length > 0) {
+      individualComponents = individualComponents.filter(
+        (component) => !deleteList.includes(component.component_id as string)
+      );
+      
+      // Also remove from flags section
+      const flags = codecovContent.flags as Record<string, unknown> || {};
+      for (const name of deleteList) {
+        delete flags[name];
+      }
+      codecovContent.flags = flags;
+    }
+    
+    // Add components from workspaces that don't exist yet
+    for (const name of workspaces) {
+      // Skip if component already exists
+      if (individualComponents.some(component => component.component_id === name)) {
+        continue;
+      }
+      
+      // Add component
+      individualComponents.push({
+        component_id: name,
+        name: name,
+        paths: [
+          `${name}/**.ts`,
+          `!${name}/**.test.ts`
+        ],
+        statuses: [
+          {
+            type: "project",
+            target: "75%"
+          }
+        ]
+      });
+      
+      // Add to flags section
+      const flags = codecovContent.flags as Record<string, unknown> || {};
+      flags[name] = {
+        paths: [`${name}/`],
+        carryforward: true
+      };
+      codecovContent.flags = flags;
+    }
+    
+    // Update the component management section
+    componentManagement.individual_components = individualComponents;
+    codecovContent.component_management = componentManagement;
+    
+    // Write the updated content back to file
+    await Deno.writeTextFile(CODECOV_YML, yaml.stringify(codecovContent));
+  } else {
+    console.warn(`Codecov config not found at ${CODECOV_YML}`);
+  }
+};
+
 const updateWorkflows = async (
   workspaces: string[],
   deleteList?: string[],
@@ -107,6 +189,10 @@ const updateWorkflows = async (
   );
   await checkWorkspaces(workspaces);
   workspaces = workspaces.sort();
+  
+  // Update codecov.yml
+  await updateCodecov(workspaces, deleteList);
+  
   // Ok great, we now sync with git
   if (await fs.exists(LABELER_YML)) {
     const labelerContent = yaml.parse(

@@ -29,7 +29,9 @@ jobs:
             chore
           scopes: |-
             workflows
+            cacher
             crypt
+            dam
             guardian
             id
             restler

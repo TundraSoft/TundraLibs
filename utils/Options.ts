@@ -54,7 +54,7 @@ export abstract class Options<
     // Apply non-undefined values from options (excluding event handlers)
     for (const key in options) {
       // Skip undefined values
-      if (options[key] !== undefined) {
+      if (Object.prototype.hasOwnProperty.call(options, key)) {
         (finalOptions as Record<string, unknown>)[key] = options[key];
       }
     }
@@ -123,14 +123,14 @@ export abstract class Options<
   }
 
   /**
-   * Process an option, can be used for .
+   * Process an option before storing it. Subclasses can override this to implement validation
+   * or transformation of option values.
    *
-   * @param key - The key of the option to validate.
-   * @param value - The value of the option to validate.
-   * @returns A boolean indicating whether the option is valid.
+   * @param key - The key of the option to process.
+   * @param value - The value of the option to process.
+   * @returns The processed option value.
    */
-  // deno-lint-ignore no-unused-vars
-  protected _processOption<K extends keyof O>(key: K, value: O[K]): O[K] {
+  protected _processOption(key: keyof O, value: O[typeof key]): O[typeof key] {
     return value;
   }
 }

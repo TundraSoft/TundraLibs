@@ -50,7 +50,9 @@ body:
       multiple: false
       options:
         - Workflow
+        - cacher
         - crypt
+        - dam
         - guardian
         - id
         - restler

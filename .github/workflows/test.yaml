@@ -5,28 +5,20 @@ permissions:
 
 on:
   workflow_dispatch:
-  # inputs:
-  #   denoVersuio:
-  #     description: 'Log level'
-  #     required: true
-  #     default: 'warning'
-  #     type: choice
-  #     options:
-  #       - info
-  #       - warning
-  #       - debug
-  #   print_tags:
-  #     description: 'True to print to STDOUT'
-  #     required: true
-  #     type: boolean
-  #   tags:
-  #     description: 'Test scenario tags'
-  #     required: true
-  #     type: string
-  #   environment:
-  #     description: 'Environment to run tests against'
-  #     type: environment
-  #     required: true
+    inputs:
+      denoVersion:
+        description: 'Deno version to run tests with'
+        required: true
+        default: 'v2.x'
+        type: choice
+        options:
+          - v2.x
+          - canary
+      submitReports:
+        description: 'Submit reports to CodeCov and SonarQube'
+        required: true
+        default: false
+        type: boolean
   push:
     paths-ignore:
       - .dockerignore
@@ -46,9 +38,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        deno:
-          - v2.x
-          - canary
+        deno: ${{ github.event_name == 'workflow_dispatch' && format('{0}', github.event.inputs.denoVersion) != '' && fromJSON(format('["{}"]', github.event.inputs.denoVersion)) || fromJSON('["v2.x", "canary"]') }}
         os:
           - ubuntu-latest
           - windows-latest
@@ -117,14 +107,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        deno:
-          # - v1.x
-          - v2.x
-          - canary
+        deno: ${{ github.event_name == 'workflow_dispatch' && format('{0}', github.event.inputs.denoVersion) != '' && fromJSON(format('["{}"]', github.event.inputs.denoVersion)) || fromJSON('["v2.x", "canary"]') }}
         os:
           - ubuntu-latest
-          # - windows-latest
-          # - macOS-latest
 
     steps:
       - name: Clone repository
@@ -137,10 +122,6 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
         run: sudo apt install -y lcov
 
-      # - name: Install Docker on macOS
-      #   if: matrix.os == 'macOS-latest'
-      #   run: brew install --cask docker
-
       - name: Set up Deno
         uses: denoland/setup-deno@v2
         with:
@@ -149,29 +130,22 @@ jobs:
       - name: Run tests
         run: deno task test:run && deno task test:bench && deno coverage coverage --lcov cov --output=coverage/report.lcov
       
-      # - name: 'Generate coverage report'
-      #   if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
-      #   run: genhtml -o coverage/html coverage/report.lcov
-      
       - name: Collect coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
-        uses: codecov/codecov-action@v4 # upload the report on Codecov
+        if: (matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x') && (github.event_name != 'workflow_dispatch' || github.event.inputs.submitReports == 'true')
+        uses: codecov/codecov-action@v4
         with:
           file: coverage/report.lcov
-          token: ${{ secrets.CODECOV_TOKEN }} # required
+          token: ${{ secrets.CODECOV_TOKEN }}
       
       - name: Upload test results to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
+        if: (matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x') && (github.event_name != 'workflow_dispatch' || github.event.inputs.submitReports == 'true')
         uses: codecov/test-results-action@v1
         with:
           files: ./test-report.xml
           token: ${{ secrets.CODECOV_TOKEN }}
       
-      # - name: Fix LCOV output for SonarCloud
-      #   if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x'
-      #   run: sed -i 's@'$GITHUB_WORKSPACE'@/github/workspace/@g' coverage/report.lcov
-      
       - name: SonarQube Scan
+        if: (matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x') && (github.event_name != 'workflow_dispatch' || github.event.inputs.submitReports == 'true')
         uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

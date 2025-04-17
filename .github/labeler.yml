@@ -2,9 +2,15 @@ workflows:
   - changed-files:
       - any-glob-to-any-file: .github/*
       - any-glob-to-any-file: .vscode/*
+cacher:
+  - changed-files:
+      - any-glob-to-any-file: cacher/*
 crypt:
   - changed-files:
       - any-glob-to-any-file: crypt/*
+dam:
+  - changed-files:
+      - any-glob-to-any-file: dam/*
 guardian:
   - changed-files:
       - any-glob-to-any-file: guardian/*

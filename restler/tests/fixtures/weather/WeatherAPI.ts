@@ -1,10 +1,10 @@
-import { RESTler } from '../../../RESTler.ts';
+import { RESTler } from '../../../mod.ts';
 import type {
   RESTlerEndpoint,
   RESTlerMethodPayload,
   RESTlerOptions,
   RESTlerRequestOptions,
-} from '../../../types/mod.ts';
+} from '../../../mod.ts';
 import type { ForecastResponse, WeatherResponse } from './types.ts';
 
 /**

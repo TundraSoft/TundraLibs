@@ -202,7 +202,7 @@ Deno.test(
         const error = new CustomError('Test error');
         asserts.assertStringIncludes(error.message, 'CUSTOM: Test error');
         asserts.assertEquals(error.message, 'CUSTOM: Test error');
-        // asserts.assertN(error.message, '['); // Should not have timestamp brackets
+        asserts.assert(error.message, '['); // Should not have timestamp brackets
 
         class CustomErrorWithContext extends BaseError<{ code: number }> {
           protected override get _messageTemplate(): string {
@@ -307,45 +307,29 @@ Deno.test(
     });
 
     await t.step('should handle malformed stack traces', () => {
-      const originalStackDescriptor = Object.getOwnPropertyDescriptor(
-        Error.prototype,
-        'stack',
-      );
-      const originalStackGetter = originalStackDescriptor?.get;
-      const originalStackSetter = originalStackDescriptor?.set;
+      // Create a mock error with malformed stack
+      const mockError = new Error('Mock error');
+      Object.defineProperty(mockError, 'stack', {
+        value: 'Error: Mock error\nmalformed stack trace line',
+        configurable: true,
+        writable: true,
+      });
 
-      try {
-        // Create a mock error with malformed stack
-        const mockError = new Error('Mock error');
-        Object.defineProperty(mockError, 'stack', {
-          get: () => 'Error: Mock error\nmalformed stack trace line',
-          configurable: true,
-        });
+      const error = new BaseError('Test error', {}, mockError);
+      const snippet = error.getCodeSnippet();
+      asserts.assertEquals(snippet, 'Could not parse stack trace');
 
-        const error = new BaseError('Test error', {}, mockError);
-        const snippet = error.getCodeSnippet();
-        asserts.assertEquals(snippet, 'Could not parse stack trace');
+      // Create a mock error with no stack
+      const noStackError = new Error('No stack');
+      Object.defineProperty(noStackError, 'stack', {
+        value: undefined,
+        configurable: true,
+        writable: true,
+      });
 
-        // Create a mock error with no stack
-        const noStackError = new Error('No stack');
-        Object.defineProperty(noStackError, 'stack', {
-          get: () => undefined,
-          configurable: true,
-        });
-
-        const error2 = new BaseError('Test error', {}, noStackError);
-        const snippet2 = error2.getCodeSnippet();
-        asserts.assertEquals(snippet2, 'No stack trace available');
-      } finally {
-        // Restore original stack getter/setter
-        if (originalStackGetter && originalStackSetter) {
-          Object.defineProperty(Error.prototype, 'stack', {
-            get: originalStackGetter,
-            set: originalStackSetter,
-            configurable: true,
-          });
-        }
-      }
+      const error2 = new BaseError('Test error', {}, noStackError);
+      const snippet2 = error2.getCodeSnippet();
+      asserts.assertEquals(snippet2, 'No stack trace available');
     });
   },
 );

@@ -5,6 +5,12 @@ permissions:
 
 on:
   workflow_dispatch:
+    inputs:
+      dryRun:
+        description: 'Perform a dry run (no actual publishing)'
+        required: true
+        default: true
+        type: boolean
 
   push:
     paths-ignore:
@@ -18,12 +24,14 @@ on:
     branches: [main]
 
 jobs:
-  publish-dry-run:
+  publish:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
       id-token: write
+    # Only run on push events or workflow_dispatch on main branch
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
 
     steps:
       - name: Clone repository
@@ -35,4 +43,9 @@ jobs:
           deno-version: canary
 
       - name: Publish (dry run)
+        if: (github.event_name == 'workflow_dispatch' && github.event.inputs.dryRun == 'true') || github.ref != 'refs/heads/main' || github.event_name == 'pull_request'
         run: deno publish --dry-run
+
+      - name: Publish
+        if: (github.event_name == 'workflow_dispatch' && github.event.inputs.dryRun == 'false' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        run: deno publish
