@@ -91,7 +91,6 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
         this._client = new Memcached({
           host: this.getOption('host'),
           port: this.getOption('port'),
-          poolSize: 1,
         });
         await this._client.set('__test__', 'test');
       } catch (e) {
@@ -186,7 +185,7 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
     }
     try {
       if (value.expiry > 0) {
-        await this._client.set(key, JSON.stringify(value), value.expiry, 500);
+        await this._client.set(key, JSON.stringify(value), value.expiry);
       } else {
         await this._client.set(key, JSON.stringify(value));
       }

@@ -9,6 +9,10 @@ import {
 Deno.test('Cacher.MemCacher', async (t) => {
   let memcached: MemCacher;
 
+  // Helper function to create a delay
+  const delay = (ms: number) =>
+    new Promise((resolve) => setTimeout(resolve, ms));
+
   // Setup and teardown for tests that need an initialized client
   const setupMemcached = () => {
     memcached = new MemCacher('memcached-test', {
@@ -89,6 +93,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const value = 'test-value';
 
         await memcached.set(key, value);
+        await delay(100); // Add delay after set
         const result = await memcached.get(key);
 
         asserts.assertEquals(result, value);
@@ -99,6 +104,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const value = 12345;
 
         await memcached.set(key, value);
+        await delay(100); // Add delay after set
         const result = await memcached.get<number>(key);
 
         asserts.assertEquals(result, value);
@@ -109,6 +115,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const value = { name: 'test', value: 42, nested: { value: 'nested' } };
 
         await memcached.set(key, value);
+        await delay(100); // Add delay after set
         const result = await memcached.get(key);
 
         asserts.assertEquals(result, value);
@@ -119,6 +126,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const value = [1, 2, 'three', { four: 4 }];
 
         await memcached.set(key, value);
+        await delay(100); // Add delay after set
         const result = await memcached.get(key);
 
         asserts.assertEquals(result, value);
@@ -128,6 +136,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const key = 'test-exists';
 
         await memcached.set(key, 'test-value');
+        await delay(100); // Add delay after set
         const exists = await memcached.has(key);
         const notExists = await memcached.has('non-existent-key');
 
@@ -139,7 +148,9 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const key = 'test-delete';
 
         await memcached.set(key, 'test-value');
+        await delay(100); // Add delay after set
         await memcached.delete(key);
+        await delay(100); // Add delay after delete
         const exists = await memcached.has(key);
 
         asserts.assertEquals(exists, false);
@@ -162,6 +173,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
 
         // Set with 2 second expiry
         await memcached.set(key, value, { expiry: 2 });
+        await delay(100); // Add delay after set
 
         // Verify it exists immediately
         let result = await memcached.get(key);
@@ -193,6 +205,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
 
           // Set with 3 second expiry and window mode enabled
           await memcached.set(key, value, { expiry: 3, window: true });
+          await delay(100); // Add delay after set
 
           // Verify it exists immediately
           let result = await memcached.get(key);
