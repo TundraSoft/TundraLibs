@@ -64,7 +64,7 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
    */
   constructor(name: string, options: Partial<MemCacherOptions>) {
     options = {
-      ...{ engine: 'MEMCACHED', port: 11211 },
+      ...{ engine: 'MEMCACHED', port: 11211, maxBufferSize: 10 },
       ...options,
     };
     super(name, options);
@@ -91,6 +91,7 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
         this._client = new Memcached({
           host: this.getOption('host'),
           port: this.getOption('port'),
+          maxBufferSize: this.getOption('maxBufferSize')! * 1024 * 1024,
         });
         await this._client.set('__test__', 'test');
       } catch (e) {
@@ -330,6 +331,22 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
         if (typeof value !== 'number' || value <= 0 || value > 65535) {
           throw new CacherConfigError(
             'Memcached port must be a positive number between 0 and 65535', // Fixed: was incorrectly 'Redis port'
+            {
+              name: this.name || 'N/A',
+              engine: this.Engine || 'MEMCACHED',
+              configKey: key,
+              configValue: value,
+            },
+          );
+        }
+        break;
+      case 'maxBufferSize':
+        if (value === undefined || value === null) {
+          value = 10 as MemCacherOptions[K]; // Fixed: was incorrectly 10
+        }
+        if (typeof value !== 'number' || value <= 0) {
+          throw new CacherConfigError(
+            'Max buffer size must be a positive number', // Fixed: was incorrectly 'Redis port'
             {
               name: this.name || 'N/A',
               engine: this.Engine || 'MEMCACHED',

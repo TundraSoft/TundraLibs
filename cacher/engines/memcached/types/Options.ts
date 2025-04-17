@@ -32,4 +32,9 @@ export type MemCacherOptions = CacherOptions & {
    * Defaults to 11211 if not specified.
    */
   port?: number;
+
+  /**
+   * Maximum buffer size for the Memcached client (in mb). Defaults to 10
+   */
+  maxBufferSize?: number;
 };

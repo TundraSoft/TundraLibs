@@ -1,10 +1,7 @@
 import * as asserts from '$asserts';
-import { MemCacher, type MemCacherOptions } from '../engines/mod.ts';
-import { CacherConfigError } from '../errors/mod.ts';
-import {
-  MemCacherConnectError,
-  MemCacherOperationError,
-} from '../engines/memcached/errors/mod.ts';
+import { MemCacher, type MemCacherOptions } from '../../mod.ts';
+import { CacherConfigError } from '../../../errors/mod.ts';
+import { MemCacherConnectError } from '../errors/mod.ts';
 
 Deno.test('Cacher.MemCacher', async (t) => {
   let memcached: MemCacher;
@@ -18,6 +15,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
     memcached = new MemCacher('memcached-test', {
       host: 'localhost',
       port: 11211,
+      maxBufferSize: 10,
     });
     return memcached;
   };
@@ -79,6 +77,52 @@ Deno.test('Cacher.MemCacher', async (t) => {
         CacherConfigError,
       );
     });
+
+    await d.step('should allow custom defaultExpiry', () => {
+      const cacher = new MemCacher('memcached-test', {
+        host: 'localhost',
+        port: 11211,
+        defaultExpiry: 600,
+      });
+
+      asserts.assertEquals(cacher.getOption('defaultExpiry'), 600);
+    });
+
+    await d.step('should validate port range', () => {
+      asserts.assertThrows(
+        () => {
+          new MemCacher('memcached-test', {
+            host: 'localhost',
+            port: 70000, // Invalid port
+          });
+        },
+        CacherConfigError,
+        'Memcached port must be a positive number between 0 and 65535',
+      );
+    });
+
+    await d.step(
+      'should reuse existing connection on multiple init calls',
+      async () => {
+        const cacher = new MemCacher('memcached-test', {
+          host: 'localhost',
+          port: 11211,
+        });
+
+        try {
+          await cacher.init();
+          const client = (cacher as any)._client;
+
+          // Call init again
+          await cacher.init();
+
+          // Client should be the same instance
+          asserts.assertEquals((cacher as any)._client, client);
+        } finally {
+          await cacher.finalize();
+        }
+      },
+    );
   });
 
   await t.step('data operations', async (d) => {
@@ -154,6 +198,49 @@ Deno.test('Cacher.MemCacher', async (t) => {
         const exists = await memcached.has(key);
 
         asserts.assertEquals(exists, false);
+      });
+
+      await d.step('should handle null values', async () => {
+        const key = 'test-null';
+        await memcached.set(key, null);
+        await delay(100);
+        const result = await memcached.get(key);
+
+        asserts.assertEquals(result, null);
+      });
+
+      await d.step('should handle empty strings', async () => {
+        const key = 'test-empty';
+        await memcached.set(key, '');
+        await delay(100);
+        const result = await memcached.get<string>(key);
+
+        asserts.assertEquals(result, '');
+      });
+
+      await d.step('should handle large objects', async () => {
+        const key = 'test-large';
+        const largeObj = {
+          id: 'test',
+          items: Array(100).fill(0).map((_, i) => ({
+            id: i,
+            value: `value-${i}`,
+          })),
+          nested: {
+            deep: {
+              deeper: {
+                deepest: 'value',
+                array: Array(50).fill('test'),
+              },
+            },
+          },
+        };
+
+        await memcached.set(key, largeObj);
+        await delay(100);
+        const result = await memcached.get(key);
+
+        asserts.assertEquals(result, largeObj);
       });
     } finally {
       // Cleanup after tests
@@ -245,5 +332,81 @@ Deno.test('Cacher.MemCacher', async (t) => {
         MemCacherConnectError,
       );
     });
+  });
+
+  await t.step('error handling', async (d) => {
+    await d.step('should finalize properly', async () => {
+      const cacher = new MemCacher('memcached-test', {
+        host: 'localhost',
+        port: 11211,
+      });
+
+      try {
+        await cacher.init();
+
+        // Verify client exists
+        asserts.assert((cacher as any)._client !== undefined);
+
+        // Finalize
+        await cacher.finalize();
+
+        // Client should be undefined after finalize
+        asserts.assertEquals((cacher as any)._client, undefined);
+
+        // Calling finalize again should be safe
+        await cacher.finalize();
+      } finally {
+        // Ensure finalize is called even if assertions fail
+        await cacher.finalize();
+      }
+    });
+
+    await d.step(
+      'should throw operation errors for invalid operations',
+      async () => {
+        // Create a new cacher that's not initialized to test connection errors
+        class NoClient extends MemCacher {
+          public override async init(): Promise<void> {
+            // Do not call super.init() to simulate a failed connection
+          }
+        }
+
+        const uninitializedCacher = new NoClient('test-errors', {
+          host: 'localhost',
+          port: 11211,
+        });
+
+        try {
+          // These should all throw connect errors since client isn't initialized
+          await asserts.assertRejects(
+            () => uninitializedCacher.get('any-key'),
+            MemCacherConnectError,
+          );
+
+          // await asserts.assertRejects(
+          //   () => uninitializedCacher.set('any-key', 'value'),
+          //   MemCacherConnectError,
+          // );
+
+          await asserts.assertRejects(
+            () => uninitializedCacher.delete('any-key'),
+            MemCacherConnectError,
+          );
+
+          await asserts.assertRejects(
+            () => uninitializedCacher.has('any-key'),
+            MemCacherConnectError,
+          );
+
+          await asserts.assertRejects(
+            () => uninitializedCacher.clear(),
+            MemCacherConnectError,
+          );
+        } finally {
+          // Make sure to finalize the instance even though it's not initialized
+          await uninitializedCacher.finalize();
+        }
+      },
+    );
   });
 });

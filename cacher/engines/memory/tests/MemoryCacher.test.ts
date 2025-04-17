@@ -1,5 +1,5 @@
 import * as asserts from '$asserts';
-import { MemoryCacher } from '../engines/memory/Cacher.ts';
+import { MemoryCacher } from '../Cacher.ts';
 
 Deno.test('Cacher.MemoryCacher', async (t) => {
   await t.step('initialization', async (t) => {

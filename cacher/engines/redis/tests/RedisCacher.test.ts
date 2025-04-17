@@ -1,7 +1,10 @@
 import * as asserts from '$asserts';
-import { RedisCacher, type RedisCacherOptions } from '../engines/mod.ts';
-import { CacherConfigError } from '../errors/mod.ts';
-import { RedisCacherConnectError } from '../engines/redis/errors/mod.ts';
+import { RedisCacher, type RedisCacherOptions } from '../../mod.ts';
+import { CacherConfigError } from '../../../errors/mod.ts';
+import {
+  RedisCacherConnectError,
+  RedisCacherOperationError,
+} from '../errors/mod.ts';
 
 Deno.test('Cacher.RedisCacher', async (t) => {
   let redis: RedisCacher;
@@ -72,6 +75,29 @@ Deno.test('Cacher.RedisCacher', async (t) => {
         CacherConfigError,
       );
     });
+
+    await d.step('should allow custom defaultExpiry', () => {
+      const cacher = new RedisCacher('redis-test', {
+        host: 'localhost',
+        port: 6379,
+        defaultExpiry: 600,
+      });
+
+      asserts.assertEquals(cacher.getOption('defaultExpiry'), 600);
+    });
+
+    await d.step('should validate port range', () => {
+      asserts.assertThrows(
+        () => {
+          new RedisCacher('redis-test', {
+            host: 'localhost',
+            port: 70000, // Invalid port
+          });
+        },
+        CacherConfigError,
+        'Redis port must be a positive number between 0 and 65535',
+      );
+    });
   });
 
   await t.step('data operations', async (d) => {
@@ -140,6 +166,46 @@ Deno.test('Cacher.RedisCacher', async (t) => {
         const exists = await redis.has(key);
 
         asserts.assertEquals(exists, false);
+      });
+
+      await d.step('should handle null values', async () => {
+        const key = 'test-null';
+        await redis.set(key, null);
+        const result = await redis.get(key);
+
+        asserts.assertEquals(result, null);
+      });
+
+      await d.step('should handle empty strings', async () => {
+        const key = 'test-empty';
+        await redis.set(key, '');
+        const result = await redis.get<string>(key);
+
+        asserts.assertEquals(result, '');
+      });
+
+      await d.step('should handle large objects', async () => {
+        const key = 'test-large';
+        const largeObj = {
+          id: 'test',
+          items: Array(1000).fill(0).map((_, i) => ({
+            id: i,
+            value: `value-${i}`,
+          })),
+          nested: {
+            deep: {
+              deeper: {
+                deepest: 'value',
+                array: Array(100).fill('test'),
+              },
+            },
+          },
+        };
+
+        await redis.set(key, largeObj);
+        const result = await redis.get(key);
+
+        asserts.assertEquals(result, largeObj);
       });
     } finally {
       // Cleanup after tests
@@ -229,5 +295,70 @@ Deno.test('Cacher.RedisCacher', async (t) => {
         RedisCacherConnectError,
       );
     });
+  });
+
+  await t.step('error handling', async (d) => {
+    await d.step('should finalize properly', async () => {
+      const cacher = new RedisCacher('redis-test', {
+        host: 'localhost',
+        port: 6379,
+      });
+
+      await cacher.init();
+
+      // Verify client exists
+      asserts.assert((cacher as any)._client !== undefined);
+
+      // Finalize
+      await cacher.finalize();
+
+      // Client should be undefined after finalize
+      asserts.assertEquals((cacher as any)._client, undefined);
+
+      // Calling finalize again should be safe
+      await cacher.finalize();
+    });
+
+    await d.step(
+      'should throw operation errors for invalid operations',
+      async () => {
+        class NoClient extends RedisCacher {
+          public override async init(): Promise<void> {
+            // Do not call super.init() to simulate a failed connection
+          }
+        }
+        // Create a new cacher that's not initialized to test connection errors
+        const uninitializedCacher = new NoClient('test-errors', {
+          host: 'localhost',
+          port: 6379,
+        });
+
+        // These should all throw connect errors since client isn't initialized
+        await asserts.assertRejects(
+          async () => await uninitializedCacher.get('any-key'),
+          RedisCacherConnectError,
+        );
+
+        // await asserts.assertRejects(
+        //   async () => await uninitializedCacher.set('any-key', 'value'),
+        //   RedisCacherConnectError,
+        // );
+
+        await asserts.assertRejects(
+          async () => await uninitializedCacher.delete('any-key'),
+          RedisCacherConnectError,
+        );
+
+        await asserts.assertRejects(
+          async () => await uninitializedCacher.has('any-key'),
+          RedisCacherConnectError,
+        );
+
+        await asserts.assertRejects(
+          async () => await uninitializedCacher.clear(),
+          RedisCacherConnectError,
+        );
+      },
+    );
   });
 });

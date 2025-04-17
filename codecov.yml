@@ -1,5 +1,5 @@
 ignore:
-  - '**/tests/**.ts'
+  - '**/tests/**/*.ts'
   - '**/**.bench.ts'
   - '**/**.test.ts'
   - '**/fixtures/**/**'
