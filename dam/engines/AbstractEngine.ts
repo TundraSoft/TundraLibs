@@ -76,7 +76,7 @@ export abstract class AbstractEngine<
       ...defaults,
     });
     this.name = name.trim();
-    this._maxConcurrent = this.getOption('maxConcurrent') || 1;
+    this._maxConcurrent = this.getOption('maxConcurrent') ?? 1;
   }
 
   /**
@@ -169,9 +169,8 @@ export abstract class AbstractEngine<
     try {
       if (this.status === 'UNABLE') {
         return false;
-      } else if (this.status === 'WAITING') {
-        await this.init();
       }
+      await this.init();
       return this._ping();
     } catch {
       return false;
@@ -196,13 +195,11 @@ export abstract class AbstractEngine<
     try {
       if (this.status === 'UNABLE') {
         return 'N/A';
-      } else if (this.status === 'WAITING' || this.status === 'IDLE') {
-        await this.init();
       }
+      await this.init();
       // _version should return just the version string without additional queries
       return await this._version();
-    } catch (error) {
-      console.error('Failed to get version:', error);
+    } catch {
       return 'N/A';
     }
   }
@@ -536,7 +533,7 @@ export abstract class AbstractEngine<
 
       try {
         await Promise.all(batchPromises);
-      } catch (_error) {
+      } catch {
         if (!continueOnError) {
           // Stop execution and return what we have so far
           break;
@@ -651,17 +648,16 @@ export abstract class AbstractEngine<
       ? query.params.asRecord()
       : query.params || {};
 
-    // Check for missing parameters
+    // Check for missing parameters using RegExp.exec
     const keys = Object.keys(params);
     const missing: string[] = [];
-    const matches = sql.match(/:(\w+):/g);
+    const paramRegex = /:(\w+):/g;
+    let match;
 
-    if (matches !== null) {
-      for (const match of matches) {
-        const key = match.substring(1, match.length - 1);
-        if (!keys.includes(key)) {
-          missing.push(key);
-        }
+    while ((match = paramRegex.exec(sql)) !== null) {
+      const paramName = match[1] as string;
+      if (!keys.includes(paramName)) {
+        missing.push(paramName);
       }
     }
 
@@ -701,9 +697,7 @@ export abstract class AbstractEngine<
     switch (key) {
       case 'slowQueryThreshold':
         // If value is null/undefined, set to 5 seconds
-        if (value === null || value === undefined) {
-          value = 5 as O[K];
-        }
+        value ??= 5 as O[K];
         if (typeof value !== 'number' || value < 0 || value > 60) {
           throw new DAMEngineConfigError(
             'Slow query threshold must be a number between 0 (disable) and 60 seconds.',
@@ -718,9 +712,7 @@ export abstract class AbstractEngine<
         break;
       case 'maxConnectAttempts':
         // If value is null/undefined, set to 3 attempts
-        if (value === null || value === undefined) {
-          value = 3 as O[K];
-        }
+        value ??= 3 as O[K];
         if (typeof value !== 'number' || value < 1 || value > 10) {
           throw new DAMEngineConfigError(
             'Max connect attempts must be a number between 1 and 10.',
@@ -747,9 +739,7 @@ export abstract class AbstractEngine<
         }
         break;
       case 'maxConcurrent':
-        if (value === null || value === undefined) {
-          value = 1 as O[K];
-        }
+        value ??= 1 as O[K];
         if (typeof value !== 'number' || value < 1) {
           throw new DAMEngineConfigError(
             'Max concurrent queries must be a positive number.',

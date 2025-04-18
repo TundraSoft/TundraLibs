@@ -102,7 +102,7 @@ const generate = async (
     );
 
     // Extract code using dynamic truncation (RFC 4226 section 5.4)
-    const offset = digest[digest.byteLength - 1]! & 0x0f;
+    const offset = (digest[digest.byteLength - 1] ?? 0) & 0x0f;
     const code =
       new DataView(digest.buffer, digest.byteOffset, digest.byteLength)
         .getUint32(offset) & 0x7fffffff;

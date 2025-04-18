@@ -74,8 +74,8 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
       connectionTimeout: 30, // 30 seconds
     });
     // Dont allow more than poolSize concurrent queries
-    if (this._maxConcurrent > (this.getOption('poolSize')! || 1)) {
-      this._maxConcurrent = this.getOption('poolSize') || 1;
+    if (this._maxConcurrent > (this.getOption('poolSize')! ?? 1)) {
+      this._maxConcurrent = this.getOption('poolSize') ?? 1;
     }
   }
 
@@ -155,12 +155,21 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
   protected override _standardizeQuery(query: Query): Query {
     const standardQuery = super._standardizeQuery(query);
 
+    // Convert :param: syntax to :param for MariaDB named parameters using RegExp.exec
+    let sql = standardQuery.sql;
+    const paramRegex = /:(\w+):/g;
+    let match;
+    while ((match = paramRegex.exec(sql)) !== null) {
+      const fullMatch = match[0];
+      const paramName = match[1];
+      sql = sql.replace(fullMatch, `:${paramName}`);
+      // Reset lastIndex to account for string length changes
+      paramRegex.lastIndex = 0;
+    }
+
     return {
-      ...standardQuery, // Include all properties from the standardized query
-      sql: standardQuery.sql.replace(
-        /:(\w+):/g,
-        (_, word) => `:${word}`,
-      ),
+      ...standardQuery,
+      sql,
     };
   }
 
@@ -204,12 +213,12 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
       const res = await this.query<{ version: string }>({
         sql: 'SELECT VERSION() as version',
       });
-      // Extract just the version number using regex
+      // Extract just the version number using RegExp.exec
       if (res.data[0]) {
         const v = res.data[0].version;
-        return v.match(/\d+\.\d+(\.\d+)?/)
-          ? v.match(/\d+\.\d+(\.\d+)?/)![0].trim()
-          : 'N/A';
+        const versionRegex = /\d+\.\d+(\.\d+)?/;
+        const match = versionRegex.exec(v);
+        return match ? match[0].trim() : 'N/A';
       }
       return 'N/A';
     } catch {
@@ -332,9 +341,7 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
         }
         break;
       case 'poolSize':
-        if (value === null || value === undefined) {
-          value = 1 as MariaEngineOptions[K];
-        }
+        value ??= 1 as MariaEngineOptions[K];
         if (typeof value !== 'number' || value < 1) {
           throw new DAMEngineConfigError(
             'Pool size must be a positive number.',
@@ -348,9 +355,7 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
         }
         break;
       case 'port':
-        if (value === null || value === undefined) {
-          value = 3306 as MariaEngineOptions[K];
-        }
+        value ??= 3306 as MariaEngineOptions[K];
         if (typeof value !== 'number' || value < 1 || value > 65535) {
           throw new DAMEngineConfigError(
             'Port must be a number between 1 and 65535.',
@@ -425,9 +430,7 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
         }
         break;
       case 'enforceTLS':
-        if (value === null || value === undefined) {
-          value = false as MariaEngineOptions[K];
-        }
+        value ??= false as MariaEngineOptions[K];
         if (typeof value !== 'boolean') {
           throw new DAMEngineConfigError(
             'Enforce TLS must be a boolean.',

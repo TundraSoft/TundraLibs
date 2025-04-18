@@ -289,9 +289,7 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
         }
         break;
       case 'port':
-        if (value === undefined || value === null) {
-          value = 6379 as RedisCacherOptions[K];
-        }
+        value ??= 6379 as RedisCacherOptions[K]; // Fixed: was incorrectly 6379
         if (typeof value !== 'number' || value <= 0 || value > 65535) {
           throw new CacherConfigError(
             'Redis port must be a positive number between 0 and 65535',
@@ -305,19 +303,18 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
         }
         break;
       case 'db':
-        if (value === undefined || value === null) {
-          return undefined as RedisCacherOptions[K];
-        }
-        if (typeof value !== 'number' || value < 0) {
-          throw new CacherConfigError(
-            'Redis db must be a positive number',
-            {
-              name: this.name || 'N/A', // Fallback to 'N/A' if name is undefined
-              engine: this.Engine || 'REDIS', // Fallback to 'REDIS' if Engine is undefined',
-              configKey: key,
-              configValue: value,
-            },
-          );
+        if (value !== undefined || value !== null) {
+          if (typeof value !== 'number' || value < 0) {
+            throw new CacherConfigError(
+              'Redis db must be a positive number',
+              {
+                name: this.name || 'N/A', // Fallback to 'N/A' if name is undefined
+                engine: this.Engine || 'REDIS', // Fallback to 'REDIS' if Engine is undefined',
+                configKey: key,
+                configValue: value,
+              },
+            );
+          }
         }
         break;
       case 'username':

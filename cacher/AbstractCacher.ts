@@ -287,9 +287,7 @@ export abstract class AbstractCacher<O extends CacherOptions = CacherOptions>
   ): O[K] {
     switch (key) {
       case 'defaultExpiry':
-        if (value === undefined || value === null) {
-          value = 300 as O[K];
-        }
+        value ??= 300 as O[K];
         if (
           typeof value !== 'number' || isNaN(value) || value < 0 ||
           value > 216000

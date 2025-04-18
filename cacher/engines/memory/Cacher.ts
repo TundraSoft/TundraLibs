@@ -71,8 +71,8 @@ export class MemoryCacher extends AbstractCacher<MemoryCacherOptions> {
    * @returns A promise that resolves when the operation is complete
    * @override
    */
-  public override async finalize(): Promise<void> {
-    await this._clear();
+  public override finalize(): void {
+    this._clear();
   }
 
   //#region Abstract methods

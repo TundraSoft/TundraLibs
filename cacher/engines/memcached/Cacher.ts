@@ -134,7 +134,6 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
   protected async _get(key: string): Promise<CacheValue | undefined> {
     try {
       const res = await this._client!.get(key);
-      // console.log(res);
       if (res === null || res === undefined) {
         return undefined;
       } else {
@@ -275,9 +274,7 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
         }
         break;
       case 'port':
-        if (value === undefined || value === null) {
-          value = 11211 as MemCacherOptions[K]; // Fixed: was incorrectly 6379
-        }
+        value ??= 11211 as MemCacherOptions[K]; // Fixed: was incorrectly 6379
         if (typeof value !== 'number' || value <= 0 || value > 65535) {
           throw new CacherConfigError(
             'Memcached port must be a positive number between 0 and 65535', // Fixed: was incorrectly 'Redis port'
@@ -291,9 +288,7 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
         }
         break;
       case 'maxBufferSize':
-        if (value === undefined || value === null) {
-          value = 10 as MemCacherOptions[K]; // Fixed: was incorrectly 10
-        }
+        value ??= 10 as MemCacherOptions[K]; // Fixed: was incorrectly 10
         if (typeof value !== 'number' || value <= 0) {
           throw new CacherConfigError(
             'Max buffer size must be a positive number', // Fixed: was incorrectly 'Redis port'

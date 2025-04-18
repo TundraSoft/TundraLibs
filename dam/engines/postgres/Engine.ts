@@ -76,8 +76,8 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
       idleTimeout: 180, // 3 minutes
     });
     // Dont allow more than poolSize concurrent queries
-    if (this._maxConcurrent > (this.getOption('poolSize')! || 1)) {
-      this._maxConcurrent = this.getOption('poolSize') || 1;
+    if (this._maxConcurrent > (this.getOption('poolSize')! ?? 1)) {
+      this._maxConcurrent = this.getOption('poolSize') ?? 1;
     }
   }
 
@@ -164,13 +164,21 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
   protected override _standardizeQuery(query: Query): Query {
     const standardQuery = super._standardizeQuery(query);
 
-    // Convert :param: syntax to $param for PostgreSQL
+    // Convert :param: syntax to $param for PostgreSQL using RegExp.exec
+    let sql = standardQuery.sql;
+    const paramRegex = /:(\w+):/g;
+    let match;
+    while ((match = paramRegex.exec(sql)) !== null) {
+      const fullMatch = match[0];
+      const paramName = match[1];
+      sql = sql.replace(fullMatch, `$${paramName}`);
+      // Reset lastIndex to account for string length changes
+      paramRegex.lastIndex = 0;
+    }
+
     return {
       ...standardQuery,
-      sql: standardQuery.sql.replace(
-        /:(\w+):/g,
-        (_, word) => `$${word}`,
-      ),
+      sql,
     };
   }
 
@@ -217,8 +225,9 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
       // Extract just the version number using regex
       if (res.data[0]) {
         const v = res.data[0].version;
-        // Match the version number using regex
-        const match = v.match(/PostgreSQL ([\d.]+)/);
+        // Match the version number using RegExp.exec
+        const versionRegex = /PostgreSQL ([\d.]+)/;
+        const match = versionRegex.exec(v);
         if (match && match[1]) {
           return match[1];
         }
@@ -385,9 +394,7 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
         }
         break;
       case 'port':
-        if (value === null || value === undefined) {
-          value = 5432 as PostgresEngineOptions[K];
-        }
+        value ??= 5432 as PostgresEngineOptions[K];
         if (typeof value !== 'number' || value < 1 || value > 65535) {
           throw new DAMEngineConfigError(
             'Port must be a number between 1 and 65535.',
@@ -462,9 +469,7 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
         }
         break;
       case 'enforceTLS':
-        if (value === null || value === undefined) {
-          value = false as PostgresEngineOptions[K];
-        }
+        value ??= false as PostgresEngineOptions[K];
         if (typeof value !== 'boolean') {
           throw new DAMEngineConfigError(
             'Enforce TLS must be a boolean.',
