@@ -36,7 +36,7 @@ export { isPublicIP } from './isPublicIP.ts';
 export { isSubnet } from './isSubnet.ts';
 export { Memoize, memoize } from './memoize.ts';
 export { Once, once } from './once.ts';
-export { type EventOptionsKeys, Options } from './Options.ts';
+export { type EventOptionKeys, Options } from './Options.ts';
 export { type PrivateObject, privateObject } from './privateObject.ts';
 export { Singleton } from './singleton.ts';
 export {

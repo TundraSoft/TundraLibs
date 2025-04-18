@@ -1,7 +1,7 @@
 import { STATUS_CODE, STATUS_TEXT, type StatusCode } from '$http/status';
 import { parse as XMLParse, stringify as XMLStringify } from '$xml';
 import * as path from '$path';
-import { type EventOptionsKeys, Options } from '@tundralibs/utils';
+import { type EventOptionKeys, Options } from '@tundralibs/utils';
 import type {
   RESTlerEndpoint,
   RESTlerEvents,
@@ -81,7 +81,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @param defaults - Default options to apply if not specified in options
    */
   constructor(
-    options: EventOptionsKeys<O>,
+    options: EventOptionKeys<O>,
     defaults?: Partial<O>,
   ) {
     super(options, {

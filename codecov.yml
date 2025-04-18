@@ -81,6 +81,14 @@ component_management:
       statuses:
         - type: project
           target: 75%
+    - component_id: dam
+      name: dam
+      paths:
+        - dam/**.ts
+        - '!dam/**.test.ts'
+      statuses:
+        - type: project
+          target: 75%
 flags:
   crypt:
     paths:
@@ -105,4 +113,8 @@ flags:
   cacher:
     paths:
       - cacher/
+    carryforward: true
+  dam:
+    paths:
+      - dam/
     carryforward: true

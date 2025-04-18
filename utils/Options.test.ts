@@ -1,12 +1,12 @@
 import * as asserts from '$asserts';
-import { type EventOptionsKeys, Options } from './Options.ts';
+import { type EventOptionKeys, Options } from './Options.ts';
 import type { EventCallback } from './Events.ts';
 
 Deno.test('utils.Options', async (t) => {
   type Opt = { a?: string; b?: number; c: boolean };
   type Evnt = { change: () => void };
   class TypedOptions extends Options<Opt, Evnt> {
-    constructor(opt: EventOptionsKeys<Opt, Evnt>) {
+    constructor(opt: EventOptionKeys<Opt, Evnt>) {
       super(opt, { b: 10 });
     }
 
@@ -40,7 +40,7 @@ Deno.test('utils.Options', async (t) => {
 
   class UnTypedOptions extends Options {
     constructor(
-      opt: EventOptionsKeys<
+      opt: EventOptionKeys<
         Record<string, unknown>,
         Record<string, EventCallback>
       >,

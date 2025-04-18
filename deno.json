@@ -90,6 +90,7 @@
   "workspace": [
     "./cacher",
     "./crypt",
+    "./dam",
     "./guardian",
     "./id",
     "./restler",

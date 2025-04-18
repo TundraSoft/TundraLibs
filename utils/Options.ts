@@ -5,7 +5,7 @@ import { type PrivateObject, privateObject } from '../utils/mod.ts';
  * Helper type which creates an object with both the option keys and the event
  * names with a _ prefix.
  */
-export type EventOptionsKeys<
+export type EventOptionKeys<
   O extends Record<string, unknown> = Record<string, unknown>,
   E extends Record<string, EventCallback> = Record<string, EventCallback>,
 > =
@@ -25,7 +25,7 @@ export type EventOptionsKeys<
  * @example
  * ```ts
  * class MyOptions extends Options<{ foo: string, bar: number }, { baz: () => void }> {
- *  constructor(options: EventOptionsKeys<{ foo: string, bar: number }, { baz: () => void }>,) {
+ *  constructor(options: EventOptionKeys<{ foo: string, bar: number }, { baz: () => void }>,) {
  *   super(options, { foo: 'default', bar: 0 }); // Set default value if desired
  *  }
  *  test() {
@@ -43,13 +43,13 @@ export abstract class Options<
   private readonly __options: PrivateObject<O> = privateObject<O>();
 
   constructor(
-    options: EventOptionsKeys<O, E>,
+    options: EventOptionKeys<O, E>,
     defaults?: Partial<O>,
   ) {
     super();
     // First set the defaults and explicitly type it
     // Start with defaults
-    const finalOptions = { ...defaults } as EventOptionsKeys<O, E>;
+    const finalOptions = { ...defaults } as EventOptionKeys<O, E>;
 
     // Apply non-undefined values from options (excluding event handlers)
     for (const key in options) {
@@ -109,7 +109,7 @@ export abstract class Options<
    * @returns The current instance for chaining.
    */
   protected _setOptions(
-    options: EventOptionsKeys<O, E>,
+    options: EventOptionKeys<O, E>,
   ): this {
     // Loop through and set each option
     for (const key in options) {
