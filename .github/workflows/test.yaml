@@ -97,7 +97,7 @@ jobs:
           MARIADB_ROOT_PASSWORD: mariapw2
           MARIADB_USER: maria
           MARIADB_PASSWORD: mariapw
-          MARIADB_DATABASE: maria
+          MARIADB_DATABASE: mysql
         ports:
           - 3306:3306
         options: >-

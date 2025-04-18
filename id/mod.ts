@@ -10,3 +10,4 @@ export {
 export { ObjectID } from './ObjectID.ts';
 export { sequenceID } from './sequenceID.ts';
 export { simpleID } from './simpleID.ts';
+export { getTimestamp, monotonicUlid, ulid } from './ulid.ts';

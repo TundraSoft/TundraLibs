@@ -1,4 +1,4 @@
-import { PostgresError } from '$postgres2';
+import { PostgresError } from '$postgres';
 import {
   DAMEngineConnectError,
   type DAMEngineErrorMeta,

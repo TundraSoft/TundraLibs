@@ -7,7 +7,8 @@
     "./nanoID": "./nanoID.ts",
     "./ObjectId": "./ObjectID.ts",
     "./sequenceID": "./sequenceID.ts",
-    "./simpleID": "./simpleID.ts"
+    "./simpleID": "./simpleID.ts",
+    "./ulid": "./ulid.ts"
   },
   "imports": {
     "$datetime": "jsr:@std/datetime@^0.225.3"

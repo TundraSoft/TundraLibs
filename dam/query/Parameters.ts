@@ -77,7 +77,7 @@ export class QueryParameters {
   /**
    * Returns the number of unique parameters stored
    */
-  get size() {
+  get size(): number {
     return this._params.size;
   }
 
@@ -89,7 +89,7 @@ export class QueryParameters {
    *
    * @returns Record with parameter names as keys and values as values
    */
-  asRecord() {
+  asRecord(): Record<string, unknown> {
     const record: Record<string, unknown> = {};
     this._params.forEach((name, value) => {
       record[name] = value;

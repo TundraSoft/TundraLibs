@@ -1,4 +1,4 @@
-import { ClientOptions, Pool } from '$postgres2';
+import { ClientOptions, Pool } from '$postgres';
 import { EventOptionKeys } from '@tundralibs/utils';
 import { AbstractEngine } from '../AbstractEngine.ts';
 import { DAMEngineConfigError } from '../errors/mod.ts';

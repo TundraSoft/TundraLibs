@@ -4,9 +4,9 @@ export enum Engines {
   'MEMCACHED' = 'MEMCACHED',
 }
 
-export const EngineList = Object.values(Engines);
-
 export type Engine = keyof typeof Engines;
+
+export const EngineList: Array<Engine> = Object.values(Engines);
 
 export const assertEngine = (x: unknown): x is Engine => {
   return typeof x === 'string' && EngineList.includes(x as Engines);

@@ -63,6 +63,6 @@ export class MariaEngineQueryError extends DAMEngineQueryError<
       }
     }
 
-    super(message, { engine: 'POSTGRES', ...meta }, cause);
+    super(message, { engine: 'MARIA', ...meta }, cause);
   }
 }
