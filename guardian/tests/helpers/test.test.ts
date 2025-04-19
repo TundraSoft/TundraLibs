@@ -141,7 +141,7 @@ Deno.test('Guardian.helpers.test', async (t) => {
   // Add these additional test cases
   await t.step('handles edge cases with empty values properly', () => {
     const emptyStringTest = test((v: string) => v.length > 0);
-    assertThrows(() => emptyStringTest(''), Error, 'Unexpected value: ');
+    assertThrows(() => emptyStringTest(''), Error, 'Validation failed');
 
     const emptyArrayTest = test((v: unknown[]) =>
       v.some((item) => item !== undefined)
