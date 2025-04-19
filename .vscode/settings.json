@@ -1,6 +1,7 @@
 {
   "deno.enable": true,
   "deno.unstable": [],
+  "deno.lint": true,
   "deno.cacheOnSave": true,
   "deno.suggest.imports.autoDiscover": true,
   "deno.codeLens.implementations": true,

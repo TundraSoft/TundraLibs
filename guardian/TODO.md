@@ -1,0 +1,4 @@
+- Optimize the create method
+- Maybe stick to using getType for create method validation. Also if this is the case, we should enhance it to support for the loose typing in JS
+- Rework on the GuardianError
+- NaN is being reported as number in getType.

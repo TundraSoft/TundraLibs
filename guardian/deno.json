@@ -5,5 +5,7 @@
   "exports": {
     ".": "./mod.ts"
   },
-  "imports": {}
+  "imports": {
+    "$datetime": "jsr:@std/datetime@^0.225.3"
+  }
 }
