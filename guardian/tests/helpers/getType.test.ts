@@ -65,4 +65,41 @@ Deno.test('Guardian.helpers.getType', async (t) => {
     assertEquals(getType(new Map()), 'object');
     assertEquals(getType(new Set()), 'object');
   });
+
+  await t.step('handles special JavaScript objects correctly', () => {
+    // Web APIs
+    if (typeof URL !== 'undefined') {
+      assertEquals(getType(new URL('https://example.com')), 'object');
+    }
+
+    // Collection objects
+    assertEquals(getType(new Map()), 'object');
+    assertEquals(getType(new Set()), 'object');
+    assertEquals(getType(new WeakMap()), 'object');
+    assertEquals(getType(new WeakSet()), 'object');
+  });
+
+  await t.step('works with custom class instances', () => {
+    class TestClass {
+      property = 'value';
+    }
+    assertEquals(getType(new TestClass()), 'object');
+  });
+
+  await t.step('handles TypedArrays correctly', () => {
+    assertEquals(getType(new Int8Array()), 'object');
+    assertEquals(getType(new Uint8Array()), 'object');
+    assertEquals(getType(new Float32Array()), 'object');
+    assertEquals(getType(new Uint8ClampedArray()), 'object');
+  });
+
+  await t.step('handles symbol type', () => {
+    assertEquals(getType(Symbol('test')), 'symbol');
+  });
+
+  await t.step('handles errors correctly', () => {
+    assertEquals(getType(new Error()), 'object');
+    assertEquals(getType(new TypeError()), 'object');
+    assertEquals(getType(new SyntaxError()), 'object');
+  });
 });

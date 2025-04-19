@@ -37,24 +37,35 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
    */
   static create(error?: string): GuardianProxy<NumberGuardian> {
     return new NumberGuardian((value: unknown): number => {
-      if (typeof value !== 'number' || Number.isNaN(value)) {
-        throw new GuardianError(
-          {
-            got: Array.isArray(value)
-              ? 'array'
-              : value === undefined
-              ? 'undefined'
-              : value === null
-              ? null
-              : typeof value,
-            expected: 'number',
-            comparison: 'type',
-            type: getType(value),
-          },
-          error || 'Expected value to be a number, got ${type}',
-        );
+      // Already a number
+      if (typeof value === 'number' && !Number.isNaN(value)) {
+        return value;
       }
-      return value;
+
+      // Try to parse string as number
+      if (typeof value === 'string') {
+        const parsedValue = Number(value.trim());
+        if (!Number.isNaN(parsedValue)) {
+          return parsedValue;
+        }
+      }
+
+      // Value is not a valid number
+      throw new GuardianError(
+        {
+          got: Array.isArray(value)
+            ? 'array'
+            : value === undefined
+            ? 'undefined'
+            : value === null
+            ? null
+            : typeof value,
+          expected: 'number',
+          comparison: 'type',
+          type: getType(value),
+        },
+        error || 'Expected value to be a number, got ${type}',
+      );
     }).proxy();
   }
 

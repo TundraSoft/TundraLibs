@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-explicit-any
 import {
   ArrayGuardian,
   BigIntGuardian,
@@ -217,7 +218,7 @@ export class Guardian {
    * type User = Guardian.GuardianType<typeof userGuard>; // { name: string; age: number }
    * ```
    */
-  static type<G>(guardian: G): GuardianType<G> {
+  static type<G>(_guardian: G): GuardianType<G> {
     return undefined as unknown as GuardianType<G>;
   }
 }

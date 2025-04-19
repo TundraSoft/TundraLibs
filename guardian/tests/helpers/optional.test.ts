@@ -1,5 +1,6 @@
 import { assertEquals, assertRejects } from '$asserts';
 import { optional } from '../../helpers/mod.ts';
+import { GuardianError } from '../../GuardianError.ts';
 
 Deno.test('Guardian.helpers.optional', async (t) => {
   await t.step(
@@ -123,4 +124,51 @@ Deno.test('Guardian.helpers.optional', async (t) => {
       );
     },
   );
+
+  await t.step('handles async default value generator', async () => {
+    const guardian = (value: number): number => value * 2;
+    const asyncDefaultGen = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return 42;
+    };
+
+    const optionalGuardian = optional(guardian, asyncDefaultGen);
+    assertEquals(await optionalGuardian(undefined), 84); // default 42 gets transformed by guardian
+    assertEquals(optionalGuardian(10), 20); // normal value works synchronously
+  });
+
+  await t.step('correctly handles null with default value', () => {
+    const guardian = (value: string | null): string => {
+      if (value === null) return 'NULL_RESULT';
+      return value.toUpperCase();
+    };
+
+    const optionalGuardian = optional(guardian, 'default');
+    assertEquals(optionalGuardian(null), 'DEFAULT');
+    assertEquals(optionalGuardian(undefined), 'DEFAULT');
+  });
+
+  await t.step('preserves error context from guardian', async () => {
+    const errorWithContext = (value: number): number => {
+      if (value < 0) {
+        const error = new GuardianError({
+          got: value,
+          expected: 'positive number',
+          comparison: 'min',
+        });
+        throw error;
+      }
+      return value;
+    };
+
+    const optionalGuardian = optional(errorWithContext, 5);
+
+    try {
+      optionalGuardian(-10);
+      throw new Error('Should have thrown');
+    } catch (error) {
+      assertEquals(error instanceof GuardianError, true);
+      assertEquals((error as GuardianError).context.comparison, 'min');
+    }
+  });
 });

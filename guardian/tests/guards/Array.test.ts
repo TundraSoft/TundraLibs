@@ -262,4 +262,123 @@ Deno.test('ArrayGuardian', async (t) => {
       assertThrows(() => guard([1, 2, 3]), GuardianError); // Wrong type
     });
   });
+
+  await t.step('array with specific element count at index', async (t) => {
+    await t.step('passes with correct element at index', () => {
+      const guard = ArrayGuardian.create().of(
+        NumberGuardian.create().in([1, 2, 3]),
+      );
+      assertEquals(guard([1, 2, 3]), [1, 2, 3]);
+    });
+
+    await t.step('properly reports index in error path', () => {
+      const guard = ArrayGuardian.create().of(
+        NumberGuardian.create().max(5),
+      );
+
+      try {
+        guard([1, 2, 10, 4]);
+        throw new Error('Should have thrown');
+      } catch (error) {
+        assertEquals(error instanceof GuardianError, true);
+        assertEquals((error as GuardianError).context.path, '[2]');
+      }
+    });
+
+    await t.step('works with nested array validation', () => {
+      const nestedArrayGuard = ArrayGuardian.create().of(
+        ArrayGuardian.create().of(NumberGuardian.create().positive()),
+      );
+
+      assertEquals(nestedArrayGuard([[1, 2], [3, 4]]), [[1, 2], [3, 4]]);
+
+      try {
+        nestedArrayGuard([[1, 2], [3, -4]]);
+        throw new Error('Should have thrown');
+      } catch (error) {
+        assertEquals(error instanceof GuardianError, true);
+        // Should include both array indices in path
+        assertEquals(
+          (error as GuardianError).context.path?.includes('[1][1]'),
+          true,
+        );
+      }
+    });
+  });
+
+  await t.step('combined validations', async (t) => {
+    await t.step('combines array and element validations correctly', () => {
+      // Array must be length 3 and contain only positive numbers
+      const guard = ArrayGuardian.create()
+        .length(3)
+        .of(NumberGuardian.create().positive());
+
+      assertEquals(guard([1, 2, 3]), [1, 2, 3]);
+      assertThrows(() => guard([1, 2]), GuardianError); // Wrong length
+      assertThrows(() => guard([1, 2, -3]), GuardianError); // Element validation fails
+    });
+
+    await t.step(
+      'validation ordered correctly (array validation first)',
+      () => {
+        // Testing that array validation happens before element validation
+        let elementValidationCalled = false;
+
+        // Create a test guardian for elements that tracks if it was called
+        const testElementGuard = (value: unknown): number => {
+          elementValidationCalled = true;
+          if (typeof value !== 'number') {
+            throw new GuardianError({
+              got: value,
+              expected: 'number',
+            });
+          }
+          return value;
+        };
+
+        // Array validation should fail first
+        const guard = ArrayGuardian.create()
+          .minLength(3)
+          .of(testElementGuard);
+
+        try {
+          guard([1]);
+          throw new Error('Should have thrown');
+        } catch (error) {
+          // Should fail on array length, not element validation
+          assertEquals(elementValidationCalled, false);
+          assertEquals(
+            (error as GuardianError).message,
+            'Expected array to have at least 3 elements',
+          );
+        }
+      },
+    );
+  });
+
+  await t.step('array destructuring', async (t) => {
+    await t.step('validates arrays as tuples correctly', () => {
+      const tupleGuard = ArrayGuardian.create().length(2).transform((arr) => {
+        const [first, second] = arr;
+        return { first, second };
+      });
+
+      assertEquals(tupleGuard([1, 'test']), { first: 1, second: 'test' });
+      assertThrows(() => tupleGuard([1]), GuardianError); // Wrong length
+    });
+  });
+
+  await t.step('handles empty arrays correctly', () => {
+    const emptyArrayGuard = ArrayGuardian.create().empty();
+    assertEquals(emptyArrayGuard([]), []);
+
+    const nonEmptyArrayGuard = ArrayGuardian.create().notEmpty();
+    assertEquals(nonEmptyArrayGuard([1]), [1]);
+
+    // Element validation shouldn't be called on empty arrays with .of()
+    const emptyOfGuard = ArrayGuardian.create().empty().of((v) => {
+      throw new Error('Should not be called');
+    });
+    assertEquals(emptyOfGuard([]), []);
+  });
 });

@@ -137,4 +137,52 @@ Deno.test('Guardian.helpers.test', async (t) => {
     assertEquals(testFn(4), 4);
     assertThrows(() => testFn(3), Error, 'Must be even');
   });
+
+  // Add these additional test cases
+  await t.step('handles edge cases with empty values properly', () => {
+    const emptyStringTest = test((v: string) => v.length > 0);
+    assertThrows(() => emptyStringTest(''), Error, 'Unexpected value: ');
+
+    const emptyArrayTest = test((v: unknown[]) =>
+      v.some((item) => item !== undefined)
+    );
+    assertThrows(() => emptyArrayTest([]), Error);
+    assertEquals(emptyArrayTest([1]), [1]);
+  });
+
+  await t.step('handles complex error contexts correctly', () => {
+    const withContextTest = test(
+      (v: number) => v > 10,
+      'Value ${got} must be greater than ${expected}',
+      10,
+    );
+
+    assertThrows(
+      () => withContextTest(5),
+      Error,
+      'Value 5 must be greater than 10',
+    );
+  });
+
+  await t.step('properly passes through non-primitive values', () => {
+    const dateTest = test((date: Date) => date.getFullYear() > 2020);
+    const validDate = new Date('2022-01-01');
+    const invalidDate = new Date('2019-01-01');
+
+    assertEquals(dateTest(validDate), validDate);
+    assertThrows(() => dateTest(invalidDate), Error);
+  });
+
+  await t.step(
+    'correctly handles async predicate with delayed resolution',
+    async () => {
+      const delayedAsyncTest = test(async (v: number) => {
+        await delay(20); // Longer delay
+        return v % 2 === 0;
+      });
+
+      assertEquals(await delayedAsyncTest(4), 4);
+      await assertRejects(async () => await delayedAsyncTest(3), Error);
+    },
+  );
 });

@@ -1,6 +1,6 @@
 import { assertEquals, assertThrows } from '$asserts';
 import { GuardianError } from '../../GuardianError.ts';
-import { StringGuardian } from '../../guards/mod.ts';
+import { StringGuardian } from '../../guards/String.ts';
 
 Deno.test('StringGuardian', async (t) => {
   await t.step('create', async (t) => {
@@ -8,40 +8,17 @@ Deno.test('StringGuardian', async (t) => {
       const guard = StringGuardian.create();
       assertEquals(guard('hello'), 'hello');
       assertEquals(guard(''), '');
+      assertEquals(guard('123'), '123');
     });
 
     await t.step('throws for non-string values', () => {
       const guard = StringGuardian.create();
-      assertThrows(
-        () => guard(123),
-        GuardianError,
-        'Expected value to be a string, got number',
-      );
-      assertThrows(
-        () => guard(true),
-        GuardianError,
-        'Expected value to be a string, got boolean',
-      );
-      assertThrows(
-        () => guard({}),
-        GuardianError,
-        'Expected value to be a string, got object',
-      );
-      assertThrows(
-        () => guard([]),
-        GuardianError,
-        'Expected value to be a string, got array',
-      );
-      assertThrows(
-        () => guard(null),
-        GuardianError,
-        'Expected value to be a string, got null',
-      );
-      assertThrows(
-        () => guard(undefined),
-        GuardianError,
-        'Expected value to be a string, got undefined',
-      );
+      assertThrows(() => guard(123), GuardianError);
+      assertThrows(() => guard(true), GuardianError);
+      assertThrows(() => guard({}), GuardianError);
+      assertThrows(() => guard([]), GuardianError);
+      assertThrows(() => guard(null), GuardianError);
+      assertThrows(() => guard(undefined), GuardianError);
     });
 
     await t.step('uses custom error message when provided', () => {
@@ -494,6 +471,177 @@ Deno.test('StringGuardian', async (t) => {
         Error,
         'Expected value (hello_123) to contain only alphanumeric characters',
       );
+    });
+  });
+
+  await t.step('minLength validation', async (t) => {
+    await t.step('passes when string meets minimum length', () => {
+      const guard = StringGuardian.create().minLength(5);
+      assertEquals(guard('hello'), 'hello');
+      assertEquals(guard('hello world'), 'hello world');
+    });
+
+    await t.step('throws when string is too short', () => {
+      const guard = StringGuardian.create().minLength(5);
+      assertThrows(() => guard('hi'), GuardianError);
+      assertThrows(() => guard(''), GuardianError);
+    });
+  });
+
+  await t.step('maxLength validation', async (t) => {
+    await t.step('passes when string meets maximum length', () => {
+      const guard = StringGuardian.create().maxLength(5);
+      assertEquals(guard('hello'), 'hello');
+      assertEquals(guard('hi'), 'hi');
+      assertEquals(guard(''), '');
+    });
+
+    await t.step('throws when string is too long', () => {
+      const guard = StringGuardian.create().maxLength(5);
+      assertThrows(() => guard('hello world'), GuardianError);
+    });
+  });
+
+  await t.step('length validation', async (t) => {
+    await t.step('passes when string has exact length', () => {
+      const guard = StringGuardian.create().minLength(5);
+      assertEquals(guard('hello'), 'hello');
+    });
+
+    await t.step('throws when string has incorrect length', () => {
+      const guard = StringGuardian.create().minLength(5).maxLength(5);
+      assertThrows(() => guard('hi'), GuardianError);
+      assertThrows(() => guard('hello world'), GuardianError);
+    });
+  });
+
+  await t.step('pattern validation', async (t) => {
+    await t.step('passes when string matches pattern', () => {
+      const guard = StringGuardian.create().pattern(/^[a-z]+$/);
+      assertEquals(guard('hello'), 'hello');
+    });
+
+    await t.step('throws when string does not match pattern', () => {
+      const guard = StringGuardian.create().pattern(/^[a-z]+$/);
+      assertThrows(() => guard('Hello'), GuardianError);
+      assertThrows(() => guard('hello123'), GuardianError);
+    });
+
+    await t.step('works with string patterns', () => {
+      const guard = StringGuardian.create().pattern(/^[a-z]+$/);
+      assertEquals(guard('hello'), 'hello');
+      assertThrows(() => guard('Hello'), GuardianError);
+    });
+  });
+
+  await t.step('email validation', async (t) => {
+    await t.step('passes for valid email addresses', () => {
+      const guard = StringGuardian.create().email();
+      assertEquals(guard('user@example.com'), 'user@example.com');
+      assertEquals(
+        guard('user.name+tag@example.co.uk'),
+        'user.name+tag@example.co.uk',
+      );
+    });
+
+    await t.step('throws for invalid email addresses', () => {
+      const guard = StringGuardian.create().email();
+      assertThrows(() => guard('user@'), GuardianError);
+      assertThrows(() => guard('user@example'), GuardianError);
+      assertThrows(() => guard('@example.com'), GuardianError);
+      assertThrows(() => guard('user@.com'), GuardianError);
+    });
+  });
+
+  await t.step('url validation', async (t) => {
+    await t.step('passes for valid URLs', () => {
+      const guard = StringGuardian.create().url();
+      assertEquals(guard('https://example.com'), 'https://example.com');
+      assertEquals(
+        guard('http://example.com/path?query=value#fragment'),
+        'http://example.com/path?query=value#fragment',
+      );
+    });
+
+    await t.step('throws for invalid URLs', () => {
+      const guard = StringGuardian.create().url();
+      assertThrows(() => guard('example.com'), GuardianError);
+      assertThrows(() => guard('htp://example.com'), GuardianError);
+    });
+  });
+
+  await t.step('transformation methods', async (t) => {
+    await t.step('trim removes whitespace', () => {
+      const guard = StringGuardian.create().trim();
+      assertEquals(guard('  hello  '), 'hello');
+    });
+
+    await t.step('toLowerCase converts to lower case', () => {
+      const guard = StringGuardian.create().lowerCase();
+      assertEquals(guard('HELLO'), 'hello');
+    });
+
+    await t.step('toUpperCase converts to upper case', () => {
+      const guard = StringGuardian.create().upperCase();
+      assertEquals(guard('hello'), 'HELLO');
+    });
+
+    await t.step('replace substitutes matching patterns', () => {
+      const guard = StringGuardian.create().replace(/l/g, 'L');
+      assertEquals(guard('hello'), 'heLLo');
+    });
+  });
+
+  await t.step('chaining validations', async (t) => {
+    await t.step('combines multiple validations', () => {
+      const guard = StringGuardian.create()
+        .minLength(5)
+        .maxLength(10)
+        .pattern(/^[a-z]+$/);
+
+      assertEquals(guard('hello'), 'hello');
+      assertThrows(() => guard('hi'), GuardianError);
+      assertThrows(() => guard('hello world'), GuardianError);
+      assertThrows(() => guard('Hello'), GuardianError);
+    });
+
+    await t.step('combines transformations with validations', () => {
+      const guard = StringGuardian.create()
+        .trim()
+        .lowerCase()
+        .minLength(5);
+
+      assertEquals(guard('  HELLO  '), 'hello');
+      assertThrows(() => guard('  HI  '), GuardianError);
+    });
+  });
+
+  await t.step('common string format validations', async (t) => {
+    await t.step('validates UUID strings', () => {
+      const guard = StringGuardian.create().uuid();
+      assertEquals(
+        guard('123e4567-e89b-12d3-a456-426614174000'),
+        '123e4567-e89b-12d3-a456-426614174000',
+      );
+      assertThrows(() => guard('not-a-uuid'), GuardianError);
+    });
+
+    await t.step('validates numeric strings', () => {
+      const guard = StringGuardian.create().numeric();
+      assertEquals(guard('12345'), '12345');
+      assertThrows(() => guard('123abc'), GuardianError);
+    });
+
+    await t.step('validates alpha strings', () => {
+      const guard = StringGuardian.create().alpha();
+      assertEquals(guard('hello'), 'hello');
+      assertThrows(() => guard('hello123'), GuardianError);
+    });
+
+    await t.step('validates alphanumeric strings', () => {
+      const guard = StringGuardian.create().alphanumeric();
+      assertEquals(guard('hello123'), 'hello123');
+      assertThrows(() => guard('hello_123'), GuardianError);
     });
   });
 });

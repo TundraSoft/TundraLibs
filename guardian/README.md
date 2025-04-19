@@ -48,6 +48,119 @@ const id1 = idValidator('123'); // Returns: '123'
 const id2 = idValidator(456); // Returns: 456
 idValidator('abc'); // Throws: "Expected value to match one of the types: string, number"
 
+// Data transformation example (API reshaping)
+// Input schema validation with strong typing
+interface UserProfile {
+  name: string;
+  dob: Date;
+  email: string;
+  address: string;
+  preferences?: {
+    theme: string;
+    notifications: boolean;
+  };
+}
+
+// Define the input schema validator with proper types
+const profileValidator = Guardian.object<UserProfile>().schema({
+  name: Guardian.string().minLength(2),
+  dob: Guardian.date(),
+  email: Guardian.string().pattern(/^.+@.+\..+$/),
+  address: Guardian.string(),
+  preferences: Guardian.object().schema({
+    theme: Guardian.string().in(['light', 'dark', 'system']),
+    notifications: Guardian.boolean(),
+  }).optional(),
+});
+
+// Transform to API format with different structure and validation
+const apiFormatValidator = profileValidator.mutate((profile) => {
+  // Parse name into components
+  const nameParts = profile.name.split(' ');
+
+  // Create API-ready object with a different structure
+  return Guardian.object().schema({
+    FirstName: Guardian.string().minLength(1),
+    LastName: Guardian.string(),
+    Age: Guardian.number().min(0).max(120),
+    Contact: Guardian.object().schema({
+      Email: Guardian.string().pattern(/^.+@.+\..+$/),
+      Address: Guardian.object().schema({
+        Line1: Guardian.string().minLength(1),
+        Line2: Guardian.string().optional(),
+        Line3: Guardian.string().optional(),
+      }),
+    }),
+    // Additional validation on the transformed data
+    AccountType: Guardian.string().in(['standard', 'premium', 'admin'])
+      .optional('standard'),
+  })({
+    FirstName: nameParts[0],
+    LastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : '',
+    Age: Math.floor(
+      (Date.now() - profile.dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000),
+    ),
+    Contact: {
+      Email: profile.email,
+      Address: parseAddress(profile.address),
+    },
+    AccountType: deriveAccountType(profile),
+    // Additional properties computed from the source data
+    JoinDate: new Date(),
+    LastLogin: new Date(),
+  });
+});
+
+// Helper functions
+function parseAddress(address: string) {
+  const parts = address.split(',').map((p) => p.trim());
+  return {
+    Line1: parts[0] || '',
+    Line2: parts[1] || undefined,
+    Line3: parts.length > 2 ? parts.slice(2).join(', ') : undefined,
+  };
+}
+
+function deriveAccountType(profile: UserProfile): string {
+  if (profile.email.endsWith('@admin.example.com')) return 'admin';
+  if (profile.preferences?.theme === 'dark') return 'premium';
+  return 'standard';
+}
+
+// Input data to validate and transform
+const profile = {
+  name: 'Jane Maria Smith',
+  dob: new Date('1992-04-12'),
+  email: 'jane.smith@admin.example.com',
+  address: '456 Park Ave, Suite 10B, New York, NY 10022',
+  preferences: {
+    theme: 'dark',
+    notifications: true,
+  },
+};
+
+// Validate and transform in one step
+const apiReadyData = apiFormatValidator(profile);
+console.log(apiReadyData);
+/* Result has the transformed structure with additional validation:
+{
+  FirstName: 'Jane',
+  LastName: 'Maria Smith',
+  Age: 31,
+  Contact: {
+    Email: 'jane.smith@admin.example.com',
+    Address: {
+      Line1: '456 Park Ave',
+      Line2: 'Suite 10B',
+      Line3: 'New York, NY 10022'
+    }
+  },
+  AccountType: 'admin',
+  JoinDate: Date(...),
+  LastLogin: Date(...)
+}
+*/
+
 // Real-world example: Validating an API response payload
 const apiResponseValidator = Guardian.object().schema({
   data: Guardian.object().schema({

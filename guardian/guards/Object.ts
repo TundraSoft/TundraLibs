@@ -400,4 +400,77 @@ export class ObjectGuardian<
       return result as Omit<T, K>;
     }) as unknown as GuardianProxy<ObjectGuardian<Omit<T, K>>>;
   }
+
+  /**
+   * Transforms the validated object into a new guardian using a mapping function.
+   * The mapper function must return a Guardian.object() instance.
+   *
+   * @param mapper - A function that transforms the source object to a new Guardian.object()
+   * @returns The Guardian instance returned by the mapper function
+   *
+   * @example
+   * ```ts
+   * // Input profile type
+   * type Profile = {
+   *   name: string;
+   *   dob: Date;
+   *   email: string;
+   *   address: string;
+   * };
+   *
+   * // Map to API format with continued validation
+   * const apiGuard = Guardian.object<Profile>().schema({
+   *   name: Guardian.string(),
+   *   dob: Guardian.date(),
+   *   email: Guardian.string(),
+   *   address: Guardian.string()
+   * }).mutate(profile => {
+   *   // Create transformed data
+   *   const nameParts = profile.name.split(' ');
+   *   const firstName = nameParts[0];
+   *   const lastName = nameParts.slice(1).join(' ');
+   *   const age = Math.floor((new Date().getTime() - profile.dob.getTime()) / 31557600000);
+   *   const addressParts = profile.address.split(',').map(p => p.trim());
+   *
+   *   // Return a new Guardian.object() with validation
+   *   return Guardian.object().schema({
+   *     FirstName: Guardian.string().minLength(1),
+   *     LastName: Guardian.string(),
+   *     DOB: Guardian.date(),
+   *     Age: Guardian.number().min(0),
+   *     Contact: Guardian.object().schema({
+   *       Email: Guardian.string(),
+   *       Address: Guardian.object().schema({
+   *         Line1: Guardian.string(),
+   *         Line2: Guardian.string().optional()
+   *       })
+   *     })
+   *   })({
+   *     FirstName: firstName,
+   *     LastName: lastName,
+   *     DOB: profile.dob,
+   *     Age: age,
+   *     Contact: {
+   *       Email: profile.email,
+   *       Address: {
+   *         Line1: addressParts[0] || '',
+   *         Line2: addressParts[1] || undefined
+   *       }
+   *     }
+   *   });
+   * });
+   * ```
+   */
+  public mutate<R extends Record<string, unknown>>(
+    mapper: (source: T) => GuardianProxy<ObjectGuardian<R>>,
+  ): GuardianProxy<ObjectGuardian<R>> {
+    return this.transform((obj) => {
+      // Call the mapper function to get a validated Guardian.object()
+      const guardianResult = mapper(obj as T);
+
+      // Extract the validated object from the Guardian result
+      // Since guardianResult is itself a function that returns R
+      return guardianResult as unknown as R;
+    }) as unknown as GuardianProxy<ObjectGuardian<R>>;
+  }
 }
