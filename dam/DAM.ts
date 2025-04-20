@@ -72,4 +72,4 @@ class InstanceManagement {
   }
 }
 
-export const DAM = new InstanceManagement();
+export const DAM: InstanceManagement = new InstanceManagement();
