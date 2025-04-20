@@ -1,6 +1,6 @@
 import { PostgresEngine } from '../mod.ts';
 import { PostgresEngineQueryError } from '../errors/mod.ts';
-import { DAMEngineQueryError } from '../../errors/mod.ts';
+import { DAMEngineConfigError, DAMEngineQueryError } from '../../errors/mod.ts';
 import { QueryParameters, type QueryResult } from '../../../query/mod.ts';
 
 import * as asserts from '$asserts';
@@ -91,7 +91,7 @@ function assertQueryResult<T extends Record<string, unknown>>(
 
 //#endregion Test Setup
 
-Deno.test('PostgresEngine', async (t) => {
+Deno.test('DAM.engines.Postgres', async (t) => {
   const engine = createTestPostgresEngine();
 
   // Setup
@@ -521,4 +521,249 @@ Deno.test('PostgresEngine', async (t) => {
       console.error('Test cleanup error:', error);
     }
   }
+});
+
+Deno.test('DAM.engines.Postgres - Options', async (t) => {
+  await t.step(
+    'should validate engine options correctly',
+    async (optionTest) => {
+      await optionTest.step('should validate idleTimeout', () => {
+        // Valid timeout
+        const validEngine = new PostgresEngine('valid-timeout', {
+          host: 'localhost',
+          port: 5432,
+          username: 'postgres',
+          password: 'password',
+          database: 'postgres',
+          idleTimeout: 300,
+        });
+        asserts.assertEquals(validEngine.getOption('idleTimeout'), 300);
+
+        // Invalid timeout
+        asserts.assertThrows(
+          () => {
+            new PostgresEngine('invalid-timeout', {
+              host: 'localhost',
+              port: 5432,
+              username: 'postgres',
+              password: 'password',
+              database: 'postgres',
+              idleTimeout: 3601, // > 3600 maximum
+            });
+          },
+          DAMEngineConfigError,
+          'Idle timeout must be a number between 1 and 3600 seconds',
+        );
+
+        asserts.assertThrows(
+          () => {
+            new PostgresEngine('invalid-timeout-2', {
+              host: 'localhost',
+              port: 5432,
+              username: 'postgres',
+              password: 'password',
+              database: 'postgres',
+              idleTimeout: 0, // < 1 minimum
+            });
+          },
+          DAMEngineConfigError,
+          'Idle timeout must be a number between 1 and 3600 seconds',
+        );
+      });
+
+      await optionTest.step('should validate poolSize', () => {
+        // Valid pool size
+        const validEngine = new PostgresEngine('valid-pool', {
+          host: 'localhost',
+          port: 5432,
+          username: 'postgres',
+          password: 'password',
+          database: 'postgres',
+          poolSize: 5,
+        });
+        asserts.assertEquals(validEngine.getOption('poolSize'), 5);
+
+        // Default pool size
+        const defaultEngine = new PostgresEngine('default-pool', {
+          host: 'localhost',
+          port: 5432,
+          username: 'postgres',
+          password: 'password',
+          database: 'postgres',
+        });
+        asserts.assertEquals(defaultEngine.getOption('poolSize'), 1);
+
+        // Invalid pool size
+        asserts.assertThrows(
+          () => {
+            new PostgresEngine('invalid-pool', {
+              host: 'localhost',
+              port: 5432,
+              username: 'postgres',
+              password: 'password',
+              database: 'postgres',
+              poolSize: 0, // < 1 minimum
+            });
+          },
+          DAMEngineConfigError,
+          'Pool size must be a positive number',
+        );
+      });
+
+      await optionTest.step('should validate port', () => {
+        // Valid port
+        const validEngine = new PostgresEngine('valid-port', {
+          host: 'localhost',
+          port: 5433,
+          username: 'postgres',
+          password: 'password',
+          database: 'postgres',
+        });
+        asserts.assertEquals(validEngine.getOption('port'), 5433);
+
+        // Default port
+        const defaultEngine = new PostgresEngine('default-port', {
+          host: 'localhost',
+          username: 'postgres',
+          password: 'password',
+          database: 'postgres',
+        });
+        asserts.assertEquals(defaultEngine.getOption('port'), 5432);
+
+        // Invalid port
+        asserts.assertThrows(
+          () => {
+            new PostgresEngine('invalid-port', {
+              host: 'localhost',
+              port: 65536, // > 65535 maximum
+              username: 'postgres',
+              password: 'password',
+              database: 'postgres',
+            });
+          },
+          DAMEngineConfigError,
+          'Port must be a number between 1 and 65535',
+        );
+
+        asserts.assertThrows(
+          () => {
+            new PostgresEngine('invalid-port-2', {
+              host: 'localhost',
+              port: 0, // < 1 minimum
+              username: 'postgres',
+              password: 'password',
+              database: 'postgres',
+            });
+          },
+          DAMEngineConfigError,
+          'Port must be a number between 1 and 65535',
+        );
+      });
+
+      await optionTest.step(
+        'should validate connection string parameters',
+        () => {
+          // Invalid username
+          asserts.assertThrows(
+            () => {
+              new PostgresEngine('invalid-username', {
+                host: 'localhost',
+                port: 5432,
+                username: '',
+                password: 'password',
+                database: 'postgres',
+              });
+            },
+            DAMEngineConfigError,
+            'must be a non-empty string',
+          );
+
+          // Invalid password
+          asserts.assertThrows(
+            () => {
+              new PostgresEngine('invalid-password', {
+                host: 'localhost',
+                port: 5432,
+                username: 'postgres',
+                password: '',
+                database: 'postgres',
+              });
+            },
+            DAMEngineConfigError,
+            'must be a non-empty string',
+          );
+
+          // Invalid host
+          asserts.assertThrows(
+            () => {
+              new PostgresEngine('invalid-host', {
+                host: '',
+                port: 5432,
+                username: 'postgres',
+                password: 'password',
+                database: 'postgres',
+              });
+            },
+            DAMEngineConfigError,
+            'must be a non-empty string',
+          );
+
+          // Invalid database
+          asserts.assertThrows(
+            () => {
+              new PostgresEngine('invalid-database', {
+                host: 'localhost',
+                port: 5432,
+                username: 'postgres',
+                password: 'password',
+                database: '',
+              });
+            },
+            DAMEngineConfigError,
+            'must be a non-empty string',
+          );
+        },
+      );
+
+      await optionTest.step('should validate enforceTLS', () => {
+        // Valid enforceTLS
+        const validEngine = new PostgresEngine('valid-tls', {
+          host: 'localhost',
+          port: 5432,
+          username: 'postgres',
+          password: 'password',
+          database: 'postgres',
+          enforceTLS: true,
+        });
+        asserts.assertEquals(validEngine.getOption('enforceTLS'), true);
+
+        // Default enforceTLS
+        const defaultEngine = new PostgresEngine('default-tls', {
+          host: 'localhost',
+          port: 5432,
+          username: 'postgres',
+          password: 'password',
+          database: 'postgres',
+        });
+        asserts.assertEquals(defaultEngine.getOption('enforceTLS'), undefined);
+
+        // Invalid enforceTLS (non-boolean)
+        asserts.assertThrows(
+          () => {
+            new PostgresEngine('invalid-tls', {
+              host: 'localhost',
+              port: 5432,
+              username: 'postgres',
+              password: 'password',
+              database: 'postgres',
+              // @ts-ignore - Testing invalid type
+              enforceTLS: 'yes',
+            });
+          },
+          DAMEngineConfigError,
+          'Enforce TLS must be a boolean',
+        );
+      });
+    },
+  );
 });

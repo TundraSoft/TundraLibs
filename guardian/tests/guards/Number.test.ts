@@ -149,4 +149,150 @@ Deno.test('NumberGuardian', async (t) => {
     assertEquals(guard(10), 10);
     assertThrows(() => guard(7), GuardianError);
   });
+
+  await t.step('ceil transformation', () => {
+    const guard = NumberGuardian.create().ceil();
+    assertEquals(guard(3.14), 4);
+    assertEquals(guard(3), 3);
+    assertEquals(guard(-3.14), -3);
+  });
+
+  await t.step('floor transformation', () => {
+    const guard = NumberGuardian.create().floor();
+    assertEquals(guard(3.14), 3);
+    assertEquals(guard(3), 3);
+    assertEquals(guard(-3.14), -4);
+  });
+
+  await t.step('abs transformation', () => {
+    const guard = NumberGuardian.create().abs();
+    assertEquals(guard(5), 5);
+    assertEquals(guard(-5), 5);
+    assertEquals(guard(0), 0);
+  });
+
+  await t.step('negate transformation', () => {
+    const guard = NumberGuardian.create().negate();
+    assertEquals(guard(5), -5);
+    assertEquals(guard(-5), 5);
+    assertEquals(guard(0), 0);
+  });
+
+  await t.step('clamp transformation', () => {
+    const guard = NumberGuardian.create().clamp(0, 10);
+    assertEquals(guard(5), 5);
+    assertEquals(guard(-5), 0);
+    assertEquals(guard(15), 10);
+  });
+
+  await t.step('toFixed transformation', () => {
+    const guard = NumberGuardian.create().toFixed(2);
+    assertEquals(guard(3.14159), 3.14);
+    assertEquals(guard(3), 3);
+    assertEquals(guard(3.1), 3.1);
+  });
+
+  await t.step('toBigInt transformation', () => {
+    const guard = NumberGuardian.create().toBigInt();
+    assertEquals(guard(123), 123n);
+    assertEquals(guard(0), 0n);
+    assertThrows(() => guard(3.14), Error);
+  });
+
+  await t.step('toString transformation', () => {
+    const guard = NumberGuardian.create().toString();
+    assertEquals(guard(123), '123');
+    assertEquals(guard(123.45), '123.45');
+
+    const hexGuard = NumberGuardian.create().toString(16);
+    assertEquals(hexGuard(255), 'ff');
+  });
+
+  await t.step('toDate transformation', () => {
+    const timestamp = 1609459200000; // 2021-01-01
+    const guard = NumberGuardian.create().toDate();
+    const result = guard(timestamp);
+    assertEquals(result instanceof Date, true);
+    assertEquals(result.getTime(), timestamp);
+  });
+
+  await t.step('odd validation', () => {
+    const guard = NumberGuardian.create().odd();
+    assertEquals(guard(1), 1);
+    assertEquals(guard(3), 3);
+    assertEquals(guard(-5), -5);
+    assertThrows(() => guard(2), GuardianError);
+    assertThrows(() => guard(0), GuardianError);
+  });
+
+  await t.step('even validation', () => {
+    const guard = NumberGuardian.create().even();
+    assertEquals(guard(2), 2);
+    assertEquals(guard(0), 0);
+    assertEquals(guard(-4), -4);
+    assertThrows(() => guard(1), GuardianError);
+    assertThrows(() => guard(3), GuardianError);
+  });
+
+  await t.step('prime validation', () => {
+    const guard = NumberGuardian.create().prime();
+    assertEquals(guard(2), 2);
+    assertEquals(guard(3), 3);
+    assertEquals(guard(5), 5);
+    assertEquals(guard(11), 11);
+    assertThrows(() => guard(4), GuardianError);
+    assertThrows(() => guard(1), GuardianError);
+    assertThrows(() => guard(0), GuardianError);
+    assertThrows(() => guard(-3), GuardianError);
+  });
+
+  await t.step('finite validation', () => {
+    const guard = NumberGuardian.create().finite();
+    assertEquals(guard(123), 123);
+    assertEquals(guard(-123), -123);
+    assertThrows(() => guard(Infinity), GuardianError);
+    assertThrows(() => guard(-Infinity), GuardianError);
+  });
+
+  await t.step('safe validation', () => {
+    const guard = NumberGuardian.create().safe();
+    assertEquals(guard(123), 123);
+    assertEquals(guard(Number.MAX_SAFE_INTEGER), Number.MAX_SAFE_INTEGER);
+    assertThrows(() => guard(Number.MAX_SAFE_INTEGER + 1), GuardianError);
+  });
+
+  await t.step('nonZero validation', () => {
+    const guard = NumberGuardian.create().nonZero();
+    assertEquals(guard(123), 123);
+    assertEquals(guard(-123), -123);
+    assertThrows(() => guard(0), GuardianError);
+  });
+
+  await t.step('divisibleBy validation', () => {
+    const guard = NumberGuardian.create().divisibleBy(3);
+    assertEquals(guard(3), 3);
+    assertEquals(guard(6), 6);
+    assertEquals(guard(0), 0);
+    assertThrows(() => guard(4), GuardianError);
+    assertThrows(() => guard(5), GuardianError);
+  });
+
+  await t.step('percentage validation', () => {
+    const guard = NumberGuardian.create().percentage();
+    assertEquals(guard(0), 0);
+    assertEquals(guard(50), 50);
+    assertEquals(guard(100), 100);
+    assertThrows(() => guard(-1), GuardianError);
+    assertThrows(() => guard(101), GuardianError);
+  });
+
+  await t.step('isTimestamp validation', () => {
+    const guard = NumberGuardian.create().isTimestamp();
+    const now = Date.now();
+    assertEquals(guard(now), now);
+    assertEquals(guard(0), 0);
+
+    // A number that doesn't convert cleanly to a valid timestamp
+    assertThrows(() => guard(Number.MAX_SAFE_INTEGER), GuardianError);
+  });
 });

@@ -4,5 +4,5 @@ export { BooleanGuardian } from './Boolean.ts';
 export { DateGuardian } from './Date.ts';
 export { FunctionGuardian } from './Function.ts';
 export { NumberGuardian } from './Number.ts';
-export { ObjectGuardian } from './Object.ts';
+export { ObjectGuardian, type ObjectSchema } from './Object.ts';
 export { StringGuardian } from './String.ts';

@@ -9,7 +9,6 @@
     "$mongo": "npm:mongodb",
     "$mongo2": "jsr:@db/mongo@^0.33.0",
     "$sqlite": "jsr:@db/sqlite@^0.12.0",
-    "$postgres2": "https://deno.land/x/postgres@v0.19.3/mod.ts",
     "$postgres": "jsr:@bartlomieju/postgres@^0.17.2",
     "$maria": "npm:mariadb@^3.4.0"
   }

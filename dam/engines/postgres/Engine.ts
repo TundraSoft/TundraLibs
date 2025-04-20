@@ -82,6 +82,39 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
   }
 
   //#region Protected Methods
+  /**
+   * Standardizes a query object for PostgreSQL execution
+   *
+   * Extends the base standardization and performs PostgreSQL-specific conversions:
+   * - Converts `:param:` style placeholders to `$param` format for PostgreSQL
+   *
+   * @param query - The query to standardize
+   * @returns {Query} A PostgreSQL-compatible query object
+   *
+   * @throws {DAMEngineQueryError} When referenced parameters are missing
+   * @protected
+   * @override
+   */
+  protected override _standardizeQuery(query: Query): Query {
+    const standardQuery = super._standardizeQuery(query);
+
+    // Convert :param: syntax to $param for PostgreSQL using RegExp.exec
+    let sql = standardQuery.sql;
+    const paramRegex = /:(\w+):/g;
+    let match;
+    while ((match = paramRegex.exec(sql)) !== null) {
+      const fullMatch = match[0];
+      const paramName = match[1];
+      sql = sql.replace(fullMatch, `$${paramName}`);
+      // Reset lastIndex to account for string length changes
+      paramRegex.lastIndex = 0;
+    }
+
+    return {
+      ...standardQuery,
+      sql,
+    };
+  }
   //#region Abstract Methods
   /**
    * Initializes the PostgreSQL connection
@@ -146,40 +179,6 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
       this._stopIdleWatcher();
       this._client = undefined;
     }
-  }
-
-  /**
-   * Standardizes a query object for PostgreSQL execution
-   *
-   * Extends the base standardization and performs PostgreSQL-specific conversions:
-   * - Converts `:param:` style placeholders to `$param` format for PostgreSQL
-   *
-   * @param query - The query to standardize
-   * @returns {Query} A PostgreSQL-compatible query object
-   *
-   * @throws {DAMEngineQueryError} When referenced parameters are missing
-   * @protected
-   * @override
-   */
-  protected override _standardizeQuery(query: Query): Query {
-    const standardQuery = super._standardizeQuery(query);
-
-    // Convert :param: syntax to $param for PostgreSQL using RegExp.exec
-    let sql = standardQuery.sql;
-    const paramRegex = /:(\w+):/g;
-    let match;
-    while ((match = paramRegex.exec(sql)) !== null) {
-      const fullMatch = match[0];
-      const paramName = match[1];
-      sql = sql.replace(fullMatch, `$${paramName}`);
-      // Reset lastIndex to account for string length changes
-      paramRegex.lastIndex = 0;
-    }
-
-    return {
-      ...standardQuery,
-      sql,
-    };
   }
 
   /**

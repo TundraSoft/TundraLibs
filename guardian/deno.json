@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "description": "Validate all things! Guardian is a validation library",
   "exports": {
-    ".": "./mod.ts"
+    ".": "./mod.ts",
+    "./guards": "./guards/mod.ts",
+    "./types": "./types/mod.ts"
   },
   "imports": {
     "$datetime": "jsr:@std/datetime@^0.225.3"

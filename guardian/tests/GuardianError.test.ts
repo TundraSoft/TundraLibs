@@ -107,4 +107,75 @@ Deno.test('GuardianError', async (t) => {
 
     assertStringIncludes(error2.message, 'Unexpected value: bad value');
   });
+
+  await t.step('provides access to location, got and expected values', () => {
+    const error = new GuardianError({
+      got: 'string',
+      expected: 'number',
+      path: 'user.details',
+      key: 'age',
+    });
+
+    // Test location (combination of path and key)
+    assertEquals(error.location, 'user.details.age');
+
+    // Test direct access to got value
+    assertEquals(error.got, 'string');
+
+    // Test direct access to expected value
+    assertEquals(error.expected, 'number');
+
+    // Test with array expected value
+    const error2 = new GuardianError({
+      got: 'red',
+      expected: ['blue', 'green', 'yellow'],
+      comparison: 'in',
+    });
+
+    assertEquals(error2.got, 'red');
+    assertEquals(error2.expected, '(blue, green, yellow)');
+  });
+
+  await t.step('provides location info even with just key or path', () => {
+    const errorWithJustKey = new GuardianError({
+      got: 'string',
+      expected: 'number',
+      key: 'name',
+    });
+
+    assertEquals(errorWithJustKey.location, 'name');
+
+    const errorWithJustPath = new GuardianError({
+      got: 'string',
+      expected: 'number',
+      path: 'user.profile',
+    });
+
+    assertEquals(errorWithJustPath.location, 'user.profile');
+  });
+
+  await t.step('formats expected and got values in error messages', () => {
+    // Test complex objects
+    const complexObject = { id: 1, name: 'Test', nested: { value: true } };
+    const error = new GuardianError({
+      got: complexObject,
+      expected: 'simple object',
+    });
+
+    // Ensure got value is preserved correctly
+    assertEquals(error.got, '{"id":1,"name":"Test","nested":{"value":true}}');
+
+    // Check error message contains serialized representation
+    assertStringIncludes(error.message, JSON.stringify(complexObject));
+
+    // Test with array values
+    const arrayValue = [1, 2, 3, 4, 5];
+    const error2 = new GuardianError({
+      got: arrayValue,
+      expected: 'string',
+    });
+
+    assertEquals(error2.got, '(1, 2, 3, 4, 5)');
+    assertStringIncludes(error2.message, '(1, 2, 3, 4, 5)');
+  });
 });

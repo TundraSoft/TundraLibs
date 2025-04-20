@@ -147,6 +147,10 @@ export class ObjectGuardian<
     }) as unknown as GuardianProxy<ObjectGuardian<S>>;
   }
 
+  // Remove both the optionalSchema and withOptional methods
+
+  // Also remove the private helper method
+
   /**
    * Validates that the object has specific keys.
    *
@@ -462,15 +466,11 @@ export class ObjectGuardian<
    * ```
    */
   public mutate<R extends Record<string, unknown>>(
-    mapper: (source: T) => GuardianProxy<ObjectGuardian<R>>,
+    mapper: (source: T) => R,
   ): GuardianProxy<ObjectGuardian<R>> {
     return this.transform((obj) => {
-      // Call the mapper function to get a validated Guardian.object()
-      const guardianResult = mapper(obj as T);
-
-      // Extract the validated object from the Guardian result
-      // Since guardianResult is itself a function that returns R
-      return guardianResult as unknown as R;
+      // Call the mapper function to get the transformed object
+      return mapper(obj as T);
     }) as unknown as GuardianProxy<ObjectGuardian<R>>;
   }
 }

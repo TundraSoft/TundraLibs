@@ -1,6 +1,6 @@
 import { MariaEngine } from '../Engine.ts';
 import { MariaEngineQueryError } from '../errors/mod.ts';
-import { DAMEngineQueryError } from '../../errors/mod.ts';
+import { DAMEngineConfigError, DAMEngineQueryError } from '../../errors/mod.ts';
 import { QueryParameters, QueryResult } from '../../../query/mod.ts';
 import * as asserts from '$asserts';
 
@@ -82,7 +82,7 @@ function assertQueryResult<T extends Record<string, unknown>>(
   }
 }
 
-Deno.test('MariaEngine', async (t) => {
+Deno.test('DAM.Engines.Maria', async (t) => {
   const engine = createTestMariaEngine();
 
   // Setup
@@ -580,4 +580,219 @@ Deno.test('MariaEngine', async (t) => {
       console.error('Test cleanup error:', error);
     }
   }
+});
+
+Deno.test('DAM.engines.Maria - Options', async (t) => {
+  await t.step(
+    'should validate engine options correctly',
+    async (optionTest) => {
+      await optionTest.step('should validate idleTimeout', () => {
+        // Valid timeout
+        const validEngine = new MariaEngine('valid-timeout', {
+          host: 'localhost',
+          port: 3306,
+          username: 'maria',
+          password: 'password',
+          database: 'mysql',
+          idleTimeout: 300,
+        });
+        asserts.assertEquals(validEngine.getOption('idleTimeout'), 300);
+
+        // Invalid timeout
+        asserts.assertThrows(
+          () => {
+            new MariaEngine('invalid-timeout', {
+              host: 'localhost',
+              port: 3306,
+              username: 'maria',
+              password: 'password',
+              database: 'mysql',
+              idleTimeout: 3601, // > 3600 maximum
+            });
+          },
+          DAMEngineConfigError,
+          'Idle timeout must be a number between 1 and 3600 seconds',
+        );
+      });
+
+      await optionTest.step('should validate connectionTimeout', () => {
+        // Valid connection timeout
+        const validEngine = new MariaEngine('valid-conn-timeout', {
+          host: 'localhost',
+          port: 3306,
+          username: 'maria',
+          password: 'password',
+          database: 'mysql',
+          connectionTimeout: 60,
+        });
+        asserts.assertEquals(validEngine.getOption('connectionTimeout'), 60);
+
+        // Invalid connection timeout
+        asserts.assertThrows(
+          () => {
+            new MariaEngine('invalid-conn-timeout', {
+              host: 'localhost',
+              port: 3306,
+              username: 'maria',
+              password: 'password',
+              database: 'mysql',
+              connectionTimeout: 301, // > 300 maximum
+            });
+          },
+          DAMEngineConfigError,
+          'Connection timeout must be a number between 1 and 300 seconds',
+        );
+      });
+
+      await optionTest.step('should validate poolSize', () => {
+        // Valid pool size
+        const validEngine = new MariaEngine('valid-pool', {
+          host: 'localhost',
+          port: 3306,
+          username: 'maria',
+          password: 'password',
+          database: 'mysql',
+          poolSize: 5,
+        });
+        asserts.assertEquals(validEngine.getOption('poolSize'), 5);
+
+        // Default pool size
+        const defaultEngine = new MariaEngine('default-pool', {
+          host: 'localhost',
+          port: 3306,
+          username: 'maria',
+          password: 'password',
+          database: 'mysql',
+        });
+        asserts.assertEquals(defaultEngine.getOption('poolSize'), 1);
+
+        // Invalid pool size
+        asserts.assertThrows(
+          () => {
+            new MariaEngine('invalid-pool', {
+              host: 'localhost',
+              port: 3306,
+              username: 'maria',
+              password: 'password',
+              database: 'mysql',
+              poolSize: 0, // < 1 minimum
+            });
+          },
+          DAMEngineConfigError,
+          'Pool size must be a positive number',
+        );
+      });
+
+      await optionTest.step('should validate port', () => {
+        // Valid port
+        const validEngine = new MariaEngine('valid-port', {
+          host: 'localhost',
+          port: 3307,
+          username: 'maria',
+          password: 'password',
+          database: 'mysql',
+        });
+        asserts.assertEquals(validEngine.getOption('port'), 3307);
+
+        // Default port
+        const defaultEngine = new MariaEngine('default-port', {
+          host: 'localhost',
+          username: 'maria',
+          password: 'password',
+          database: 'mysql',
+        });
+        asserts.assertEquals(defaultEngine.getOption('port'), 3306);
+
+        // Invalid port
+        asserts.assertThrows(
+          () => {
+            new MariaEngine('invalid-port', {
+              host: 'localhost',
+              port: 65536, // > 65535 maximum
+              username: 'maria',
+              password: 'password',
+              database: 'mysql',
+            });
+          },
+          DAMEngineConfigError,
+          'Port must be a number between 1 and 65535',
+        );
+      });
+
+      await optionTest.step(
+        'should validate connection string parameters',
+        () => {
+          // Invalid username
+          asserts.assertThrows(
+            () => {
+              new MariaEngine('invalid-username', {
+                host: 'localhost',
+                port: 3306,
+                username: '',
+                password: 'password',
+                database: 'mysql',
+              });
+            },
+            DAMEngineConfigError,
+            'must be a non-empty string',
+          );
+
+          // Invalid host
+          asserts.assertThrows(
+            () => {
+              new MariaEngine('invalid-host', {
+                host: '',
+                port: 3306,
+                username: 'maria',
+                password: 'password',
+                database: 'mysql',
+              });
+            },
+            DAMEngineConfigError,
+            'must be a non-empty string',
+          );
+        },
+      );
+
+      await optionTest.step('should validate enforceTLS', () => {
+        // Valid enforceTLS
+        const validEngine = new MariaEngine('valid-tls', {
+          host: 'localhost',
+          port: 3306,
+          username: 'maria',
+          password: 'password',
+          database: 'mysql',
+          enforceTLS: true,
+        });
+        asserts.assertEquals(validEngine.getOption('enforceTLS'), true);
+
+        // Default enforceTLS
+        const defaultEngine = new MariaEngine('default-tls', {
+          host: 'localhost',
+          port: 3306,
+          username: 'maria',
+          password: 'password',
+          database: 'mysql',
+        });
+        asserts.assertEquals(defaultEngine.getOption('enforceTLS'), undefined);
+
+        // Invalid enforceTLS (non-boolean)
+        asserts.assertThrows(
+          () => {
+            new MariaEngine('invalid-tls', {
+              host: 'localhost',
+              port: 3306,
+              username: 'maria',
+              password: 'password',
+              database: 'mysql',
+              // @ts-ignore - Testing invalid type
+              enforceTLS: 'yes',
+            });
+          },
+          DAMEngineConfigError,
+          'Enforce TLS must be a boolean',
+        );
+      });
+    },
+  );
 });

@@ -74,7 +74,7 @@ export class Events<
 
     if (Array.isArray(callback)) {
       for (const cb of callback) {
-        eventCallbacks.delete(cb as EventCallback);
+        eventCallbacks.delete(cb);
       }
     } else {
       eventCallbacks.delete(callback);

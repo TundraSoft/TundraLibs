@@ -78,23 +78,8 @@ const apiFormatValidator = profileValidator.mutate((profile) => {
   // Parse name into components
   const nameParts = profile.name.split(' ');
 
-  // Create API-ready object with a different structure
-  return Guardian.object().schema({
-    FirstName: Guardian.string().minLength(1),
-    LastName: Guardian.string(),
-    Age: Guardian.number().min(0).max(120),
-    Contact: Guardian.object().schema({
-      Email: Guardian.string().pattern(/^.+@.+\..+$/),
-      Address: Guardian.object().schema({
-        Line1: Guardian.string().minLength(1),
-        Line2: Guardian.string().optional(),
-        Line3: Guardian.string().optional(),
-      }),
-    }),
-    // Additional validation on the transformed data
-    AccountType: Guardian.string().in(['standard', 'premium', 'admin'])
-      .optional('standard'),
-  })({
+  // Transform the validated profile data into a new structure
+  return {
     FirstName: nameParts[0],
     LastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : '',
     Age: Math.floor(
@@ -105,11 +90,10 @@ const apiFormatValidator = profileValidator.mutate((profile) => {
       Address: parseAddress(profile.address),
     },
     AccountType: deriveAccountType(profile),
-    // Additional properties computed from the source data
     JoinDate: new Date(),
     LastLogin: new Date(),
-  });
-});
+  };
+}).pick(['FirstName', 'LastName', 'Age']);
 
 // Helper functions
 function parseAddress(address: string) {
@@ -142,22 +126,11 @@ const profile = {
 // Validate and transform in one step
 const apiReadyData = apiFormatValidator(profile);
 console.log(apiReadyData);
-/* Result has the transformed structure with additional validation:
+/* Result has the transformed structure with only selected fields:
 {
   FirstName: 'Jane',
   LastName: 'Maria Smith',
-  Age: 31,
-  Contact: {
-    Email: 'jane.smith@admin.example.com',
-    Address: {
-      Line1: '456 Park Ave',
-      Line2: 'Suite 10B',
-      Line3: 'New York, NY 10022'
-    }
-  },
-  AccountType: 'admin',
-  JoinDate: Date(...),
-  LastLogin: Date(...)
+  Age: 31
 }
 */
 

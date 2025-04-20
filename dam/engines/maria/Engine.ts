@@ -79,65 +79,7 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
     }
   }
 
-  /**
-   * Initializes the MariaDB connection
-   *
-   * Creates a connection pool and verifies connectivity.
-   *
-   * @returns {Promise<void>} Promise that resolves when connected
-   *
-   * @throws {MariaEngineConnectError} When connection fails
-   * @protected
-   */
-  protected async _init(): Promise<void> {
-    try {
-      const options: PoolConfig = {
-        host: this.getOption('host'),
-        port: this.getOption('port'),
-        user: this.getOption('username'),
-        password: this.getOption('password'),
-        database: this.getOption('database'),
-        connectionLimit: this.getOption('poolSize')!,
-        namedPlaceholders: true,
-        idleTimeout: this.getOption('idleTimeout')!,
-      };
-      if (this._caCertificates.length > 0) {
-        options.ssl.caCertificates = this._caCertificates;
-      }
-      if (this.getOption('enforceTLS') === true) {
-        options.ssl.enforceTLS = true;
-      }
-      this._client = createPool(options);
-      const a = await this._client.getConnection();
-      await a.ping();
-      await a.release();
-    } catch (e) {
-      throw new MariaEngineConnectError(
-        {
-          name: this.name,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
-          username: this.getOption('username'),
-        },
-        e as Error,
-      );
-    }
-  }
-
-  /**
-   * Finalizes the MariaDB connection
-   *
-   * Closes the connection pool and releases all resources.
-   *
-   * @returns {Promise<void>} Promise that resolves when disconnected
-   * @protected
-   */
-  protected async _finalize(): Promise<void> {
-    if (this._client) {
-      await this._client.end();
-      this._client = undefined;
-    }
-  }
+  //#region Protected Methods
 
   /**
    * Standardizes a query object for MariaDB execution
@@ -171,6 +113,67 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
       ...standardQuery,
       sql,
     };
+  }
+
+  //#region Abstract Methods
+  /**
+   * Initializes the MariaDB connection
+   *
+   * Creates a connection pool and verifies connectivity.
+   *
+   * @returns {Promise<void>} Promise that resolves when connected
+   *
+   * @throws {MariaEngineConnectError} When connection fails
+   * @protected
+   */
+  protected async _init(): Promise<void> {
+    try {
+      const options: PoolConfig = {
+        host: this.getOption('host'),
+        port: this.getOption('port'),
+        user: this.getOption('username'),
+        password: this.getOption('password'),
+        database: this.getOption('database'),
+        connectionLimit: this.getOption('poolSize')!,
+        namedPlaceholders: true,
+        idleTimeout: this.getOption('idleTimeout')!,
+      };
+      if (this._caCertificates.length > 0) {
+        options.ssl = {
+          rejectUnauthorized: this.getOption('enforceTLS') ?? false,
+          ca: this._caCertificates,
+        };
+      }
+      this._client = createPool(options);
+      const a = await this._client.getConnection();
+      await a.ping();
+      await a.release();
+    } catch (e) {
+      throw new MariaEngineConnectError(
+        {
+          name: this.name,
+          host: this.getOption('host'),
+          port: this.getOption('port'),
+          username: this.getOption('username'),
+        },
+        e as Error,
+      );
+    }
+  }
+
+  /**
+   * Finalizes the MariaDB connection
+   *
+   * Closes the connection pool and releases all resources.
+   *
+   * @returns {Promise<void>} Promise that resolves when disconnected
+   * @protected
+   */
+  protected async _finalize(): Promise<void> {
+    if (this._client) {
+      await this._client.end();
+      this._client = undefined;
+    }
   }
 
   /**
@@ -290,6 +293,8 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
       conn.release();
     }
   }
+
+  //#endregion Abstract Methods
 
   /**
    * Validates and processes MariaDB-specific options
@@ -447,4 +452,5 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
     // deno-lint-ignore no-explicit-any
     return super._processOption(key as any, value);
   }
+  //#endregion Protected Methods
 }

@@ -6,21 +6,24 @@ export { GuardianError } from './GuardianError.ts';
 export { Guardian } from './Guardian.ts';
 
 // Individual guardians
-export { StringGuardian } from './guards/String.ts';
-export { NumberGuardian } from './guards/Number.ts';
-export { BigIntGuardian } from './guards/BigInt.ts';
-export { BooleanGuardian } from './guards/Boolean.ts';
-export { ArrayGuardian } from './guards/Array.ts';
-export { ObjectGuardian } from './guards/Object.ts';
-export { FunctionGuardian } from './guards/Function.ts';
-export { DateGuardian } from './guards/Date.ts';
+export {
+  ArrayGuardian,
+  BigIntGuardian,
+  BooleanGuardian,
+  DateGuardian,
+  FunctionGuardian,
+  NumberGuardian,
+  ObjectGuardian,
+  type ObjectSchema,
+  StringGuardian,
+} from './guards/mod.ts';
 
 // Types
-export type { GuardianType } from './types/GuardianType.ts';
 export type {
   FunctionParameters,
   FunctionType,
   GuardianProxy,
+  GuardianType,
   MaybeAsync,
   MergeParameters,
   ResolvedValue,
