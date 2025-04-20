@@ -10,6 +10,12 @@ export {
   type PostgresEngineOptions,
   PostgresEngineQueryError,
 } from './postgres/mod.ts';
+export {
+  SQLiteEngine,
+  SQLiteEngineConnectError,
+  type SQLiteEngineOptions,
+  SQLiteEngineQueryError,
+} from './sqlite/mod.ts';
 
 export type {
   EngineEvents,

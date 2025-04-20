@@ -1,7 +1,7 @@
 import { assertEngine } from '../mod.ts';
 import * as asserts from '$asserts';
 
-Deno.test('DAN.Engines.assertEngine', () => {
+Deno.test('DAM.Engines.assertEngine', () => {
   // Test with valid engine names
   asserts.assert(assertEngine('POSTGRES'));
   asserts.assert(assertEngine('MARIA'));

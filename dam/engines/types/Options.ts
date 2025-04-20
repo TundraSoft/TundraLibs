@@ -2,16 +2,16 @@ import { type Engine } from '../Engines.ts';
 
 export type EngineOptions = {
   // Number of seconds after which a query is considered slow
-  slowQueryThreshold: number;
+  slowQueryThreshold?: number;
 
   // Max number of connection attempts before status becomes UNABLE
-  maxConnectAttempts: number;
+  maxConnectAttempts?: number;
 
   // The engine type
   engine: Engine;
 
   // Maximum number of concurrent queries
-  maxConcurrent: number;
+  maxConcurrent?: number;
 };
 
 export type EngineServerOptions = {
