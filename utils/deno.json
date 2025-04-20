@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/utils",
-  "version": "0.1.0",
+  "version": "1.0.0-dev",
   "description": "Collection of helper or utility functions which are too small to be a project on their own.",
   "exports": {
     ".": "./mod.ts",

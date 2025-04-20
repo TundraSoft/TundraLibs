@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/restler",
-  "version": "0.1.0",
+  "version": "1.0.0-dev",
   "description": "TODO: Add description",
   "exports": {
     ".": "./mod.ts",

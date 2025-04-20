@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/cacher",
-  "version": "0.1.0",
+  "version": "1.0.0-dev",
   "description": "A simple caching utility. Supports In-Memory/Memcached and Redis caching.",
   "exports": {
     ".": "./mod.ts",
