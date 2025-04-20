@@ -20,3 +20,5 @@ export {
 } from './engines/mod.ts';
 
 export { type Query, QueryParameters, type QueryResult } from './query/mod.ts';
+
+export { DAM } from './DAM.ts';

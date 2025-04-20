@@ -1,4 +1,4 @@
-import { EventOptionKeys, Memoize, Options } from '@tundralibs/utils';
+import { EventOptionKeys, Options } from '@tundralibs/utils';
 import type { EngineEvents, EngineOptions, EngineStatus } from './types/mod.ts';
 import { assertEngine, type Engine } from './Engines.ts';
 import { type Query, QueryParameters, type QueryResult } from '../query/mod.ts';
@@ -190,7 +190,6 @@ export abstract class AbstractEngine<
    * console.log(`Connected to database version ${version}`);
    * ```
    */
-  @Memoize(300)
   public async version(): Promise<string> {
     try {
       if (this.status === 'UNABLE') {
