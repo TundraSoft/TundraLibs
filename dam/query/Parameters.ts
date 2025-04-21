@@ -97,3 +97,7 @@ export class QueryParameters {
     return record;
   }
 }
+
+const q = new QueryParameters();
+
+q.create(123);

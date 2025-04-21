@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/id",
-  "version": "1.0.0-dev",
+  "version": "1.0.0-dev1",
   "description": "Collection of ID generators",
   "exports": {
     ".": "./mod.ts",

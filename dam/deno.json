@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/dam",
-  "version": "1.0.0-dev",
+  "version": "1.0.0-dev1",
   "description": "TODO: Add description",
   "exports": {
     ".": "./mod.ts"
