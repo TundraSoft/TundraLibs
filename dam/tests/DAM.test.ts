@@ -50,7 +50,7 @@ Deno.test('DAM', async (t) => {
         await DAM.test('non-existent-db');
       },
       Error,
-      'Could not find config for non-existent-db',
+      'Could not find connection profile with the name non-existent-db',
     );
   });
 
@@ -73,7 +73,7 @@ Deno.test('DAM', async (t) => {
         DAM.getInstance('non-existent-db');
       },
       Error,
-      'Could not find config for non-existent-db',
+      'Could not find connection profile with the name non-existent-db',
     );
   });
 
@@ -95,7 +95,7 @@ Deno.test('DAM', async (t) => {
         DAM.createInstance('non-existent-db');
       },
       Error,
-      'Could not find config for non-existent-db',
+      'Could not find connection profile with the name non-existent-db',
     );
   });
 });
