@@ -95,6 +95,7 @@
     "./id",
     "./restler",
     "./slogger",
-    "./utils"
+    "./utils",
+    "./vaccine"
   ]
 }

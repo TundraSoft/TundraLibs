@@ -31,7 +31,7 @@ export const simpleFormatter = (template: string): SloggerFormatter => {
  * Standard log format with timestamp, level and message
  * Example: [2023-04-21T15:20:30.123Z] [INFO] User logged in successfully
  */
-export const standardFormat = simpleFormatter(
+export const standardFormat: SloggerFormatter = simpleFormatter(
   '[${isoDate}] [${levelName}] ${message}',
 );
 
@@ -39,7 +39,7 @@ export const standardFormat = simpleFormatter(
  * Detailed log format with additional context
  * Example: 2023-04-21 15:20:30.123 [INFO] [myApp v1.0.0] [server123] [pid:1234] User logged in successfully
  */
-export const detailedFormat = simpleFormatter(
+export const detailedFormat: SloggerFormatter = simpleFormatter(
   '${isoDate} [${levelName}] [${appName}] [${hostname}] ${message}',
 );
 
@@ -47,7 +47,7 @@ export const detailedFormat = simpleFormatter(
  * Compact log format
  * Example: INFO [15:20:30] User logged in successfully
  */
-export const compactFormat = simpleFormatter(
+export const compactFormat: SloggerFormatter = simpleFormatter(
   '${levelName} [${date.toLocaleTimeString()}] ${message}',
 );
 
@@ -55,7 +55,7 @@ export const compactFormat = simpleFormatter(
  * Simple format with just level and message
  * Example: INFO: User logged in successfully
  */
-export const minimalistFormat = simpleFormatter(
+export const minimalistFormat: SloggerFormatter = simpleFormatter(
   '${levelName}: ${message}',
 );
 
@@ -63,6 +63,6 @@ export const minimalistFormat = simpleFormatter(
  * DevOps-friendly format with key-value pairs
  * Example: ts=2023-04-21T15:20:30.123Z level=INFO app=myApp version=1.0.0 msg="User logged in successfully"
  */
-export const keyValueFormat = simpleFormatter(
+export const keyValueFormat: SloggerFormatter = simpleFormatter(
   'ts=${isoDate} level=${levelName} app=${appName} msg="${message}"',
 );

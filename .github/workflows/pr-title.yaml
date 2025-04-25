@@ -37,6 +37,7 @@ jobs:
             restler
             slogger
             utils
+            vaccine
           requireScope: true
           subjectPattern: '^[A-Z].+$'
           subjectPatternError: Subject must start with a capital letter

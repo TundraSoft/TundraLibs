@@ -26,3 +26,6 @@ slogger:
 utils:
   - changed-files:
       - any-glob-to-any-file: utils/*
+vaccine:
+  - changed-files:
+      - any-glob-to-any-file: vaccine/*

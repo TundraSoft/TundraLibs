@@ -1,0 +1,11 @@
+{
+  "name": "@tundralibs/vaccine",
+  "version": "0.1.0-dev2",
+  "description": "TODO: Add description",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "imports": {
+    "$meta": "npm:reflect-metadata@^0.2.2"
+  }
+}

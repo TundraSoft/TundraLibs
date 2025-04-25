@@ -97,6 +97,14 @@ component_management:
       statuses:
         - type: project
           target: 75%
+    - component_id: vaccine
+      name: vaccine
+      paths:
+        - vaccine/**.ts
+        - '!vaccine/**.test.ts'
+      statuses:
+        - type: project
+          target: 75%
 flags:
   crypt:
     paths:
@@ -129,4 +137,8 @@ flags:
   slogger:
     paths:
       - slogger/
+    carryforward: true
+  vaccine:
+    paths:
+      - vaccine/
     carryforward: true

@@ -1,4 +1,4 @@
-import type { SlogObject } from '../types/mod.ts';
+import type { SloggerFormatter, SlogObject } from '../types/mod.ts';
 import { jsonFormatter } from './jsonFormatter.ts';
 
 /**
@@ -183,7 +183,7 @@ function maskMessage(message: string, config: Required<MaskingConfig>): string {
  */
 export function maskingFormatter(
   config: MaskingConfig = {},
-): (log: SlogObject) => string {
+): SloggerFormatter {
   // Merge provided config with defaults
   const fullConfig: Required<MaskingConfig> = {
     sensitiveFields: config.sensitiveFields || [...DEFAULT_SENSITIVE_FIELDS],
@@ -222,4 +222,4 @@ export function maskingFormatter(
 /**
  * Default masking formatter with standard settings
  */
-export const defaultMaskingFormatter = maskingFormatter();
+export const defaultMaskingFormatter: SloggerFormatter = maskingFormatter();

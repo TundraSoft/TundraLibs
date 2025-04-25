@@ -58,6 +58,7 @@ body:
         - restler
         - slogger
         - utils
+        - vaccine
   - type: input
     id: package-version
     attributes:
