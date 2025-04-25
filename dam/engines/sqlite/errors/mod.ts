@@ -1,2 +1,2 @@
-export { SQLiteEngineConnectError } from './Connect.ts';
-export { SQLiteEngineQueryError } from './Query.ts';
+export * from './Connect.ts';
+export * from './Query.ts';

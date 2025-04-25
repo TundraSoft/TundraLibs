@@ -1,4 +1,12 @@
 export {
+  DAMEngineConfigError,
+  DAMEngineConnectError,
+  DAMEngineError,
+  type DAMEngineErrorMeta,
+  DAMEngineQueryError,
+} from './errors/mod.ts';
+
+export {
   MariaEngine,
   MariaEngineConnectError,
   type MariaEngineOptions,

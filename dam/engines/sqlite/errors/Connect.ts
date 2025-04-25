@@ -17,10 +17,11 @@ export class SQLiteEngineConnectError extends DAMEngineConnectError<
     },
     cause?: Error,
   ) {
-    const message =
-      'Failed to connect to SQLite database' + meta.type === 'FILE'
-        ? ' at ' + meta.storagePath
-        : '';
+    let message = 'Failed to connect to SQLite database';
+    if (meta.type === 'FILE' && meta.storagePath) {
+      message += ` at ${meta.storagePath}`;
+    }
+
     super(
       message,
       {

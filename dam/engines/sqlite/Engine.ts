@@ -19,7 +19,7 @@ import type { Query } from '../../query/types/mod.ts';
 import { QueryParameters } from '../../query/mod.ts';
 
 export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
-  public readonly Engine = 'POSTGRES';
+  public readonly Engine = 'SQLITE';
 
   protected _client: Database | undefined;
 
@@ -61,6 +61,162 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
     }
   }
 
+  /**
+   * Creates a new schema/database and attaches it to the current connection.
+   * This method only works in FILE mode.
+   *
+   * @param schemaName The name of the schema to create
+   * @throws {SQLiteEngineSchemaError} If the schema already exists or can't be created
+   */
+  public createSchema(schemaName: string): void {
+    if (this.getOption('type') !== 'FILE') {
+      throw new SQLiteEngineQueryError({
+        name: this.name,
+        query: {
+          sql: `CREATE SCHEMA ${schemaName}`,
+        },
+      }, new Error('Schema creation is only supported in FILE mode'));
+    }
+
+    if (!this._client) {
+      throw new SQLiteEngineQueryError({
+        name: this.name,
+        query: {
+          sql: `CREATE SCHEMA ${schemaName}`,
+        },
+      }, new Error('No database connection'));
+    }
+
+    if (!/^[a-zA-Z0-9_]+$/.test(schemaName)) {
+      throw new SQLiteEngineQueryError(
+        {
+          name: this.name,
+          query: {
+            sql: `CREATE SCHEMA ${schemaName}`,
+          },
+        },
+        new Error(
+          'Schema name can only contain alphanumeric characters and underscores',
+        ),
+      );
+    }
+
+    const baseStore = path.join(
+      this.getOption('storagePath') || '',
+      this.name,
+    );
+    const dbFile = path.join(baseStore, `${schemaName}.db`);
+
+    try {
+      // Check if the schema already exists
+      if (fs.existsSync(dbFile)) {
+        throw new SQLiteEngineQueryError({
+          name: this.name,
+          query: {
+            sql: `CREATE SCHEMA ${schemaName}`,
+          },
+        }, new Error(`Schema '${schemaName}' already exists`));
+      }
+
+      // Create the database file
+      const tempDb = new Database(dbFile, { create: true });
+      tempDb.close();
+
+      // Attach the database to the current connection
+      this._client.exec(`ATTACH DATABASE '${dbFile}' AS ${schemaName}`);
+
+      return;
+    } catch (e) {
+      // If it's already our error type, just rethrow it
+      if (e instanceof SQLiteEngineQueryError) {
+        throw e;
+      }
+
+      // Otherwise wrap the error
+      throw new SQLiteEngineQueryError({
+        name: this.name,
+        query: {
+          sql: `CREATE SCHEMA ${schemaName}`,
+        },
+      }, e as Error);
+    }
+  }
+
+  /**
+   * Drops a schema/database and deletes the associated file.
+   * This method only works in FILE mode.
+   *
+   * @param schemaName The name of the schema to drop
+   * @throws {SQLiteEngineSchemaError} If the schema doesn't exist or can't be dropped
+   */
+  public dropSchema(schemaName: string): void {
+    if (this.getOption('type') !== 'FILE') {
+      throw new SQLiteEngineQueryError({
+        name: this.name,
+        query: {
+          sql: `DROP SCHEMA ${schemaName}`,
+        },
+      }, new Error('Schema deletion is only supported in FILE mode'));
+    }
+
+    if (!this._client) {
+      throw new SQLiteEngineQueryError({
+        name: this.name,
+        query: {
+          sql: `DROP SCHEMA ${schemaName}`,
+        },
+      }, new Error('No database connection'));
+    }
+
+    if (schemaName === 'main') {
+      throw new SQLiteEngineQueryError({
+        name: this.name,
+        query: {
+          sql: `DROP SCHEMA ${schemaName}`,
+        },
+      }, new Error('Cannot drop the main database'));
+    }
+
+    const baseStore = path.join(
+      this.getOption('storagePath') || '',
+      this.name,
+    );
+    const dbFile = path.join(baseStore, `${schemaName}.db`);
+
+    try {
+      // Check if the schema exists
+      if (!fs.existsSync(dbFile)) {
+        throw new SQLiteEngineQueryError({
+          name: this.name,
+          query: {
+            sql: `DROP SCHEMA ${schemaName}`,
+          },
+        }, new Error(`Schema '${schemaName}' does not exist`));
+      }
+
+      // Detach the database
+      this._client.exec(`DETACH DATABASE ${schemaName}`);
+
+      // Delete the file
+      Deno.removeSync(dbFile);
+
+      return;
+    } catch (e) {
+      // If it's already our error type, just rethrow it
+      if (e instanceof SQLiteEngineQueryError) {
+        throw e;
+      }
+
+      // Otherwise wrap the error
+      throw new SQLiteEngineQueryError({
+        name: this.name,
+        query: {
+          sql: `DROP SCHEMA ${schemaName}`,
+        },
+      }, e as Error);
+    }
+  }
+
   //#region Protected Methods
   protected override _standardizeQuery(query: Query): Query {
     const standardQuery = super._standardizeQuery(query);
@@ -96,10 +252,9 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
           if (
             file.isFile && file.name.endsWith('.db') && file.name !== 'main.db'
           ) {
+            const schemaName = file.name.replace('.db', '');
             this._client.exec(
-              `ATTACH DATABASE '${file.path}' AS ${
-                file.name.replace('.db', '')
-              }`,
+              `ATTACH DATABASE '${file.path}' AS ${schemaName}`,
             );
           }
         }
@@ -163,6 +318,50 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
     const params = (query.params instanceof QueryParameters)
       ? query.params.asRecord()
       : query.params;
+
+    // Check for schema creation statements
+    const createSchemaMatch = sql.match(
+      /CREATE\s+(SCHEMA|DATABASE)\s+([a-zA-Z0-9_]+)/i,
+    );
+    if (createSchemaMatch && this.getOption('type') === 'FILE') {
+      const schemaName = createSchemaMatch[2];
+      try {
+        // Create the schema file and attach it
+        this.createSchema(schemaName!);
+        // Return successful result without executing the CREATE SCHEMA statement
+        return {
+          count: 1,
+          data: [] as T[],
+        };
+      } catch (e) {
+        throw new SQLiteEngineQueryError({
+          name: this.name,
+          query,
+        }, e as Error);
+      }
+    }
+
+    // Check for schema drop statements
+    const dropSchemaMatch = sql.match(
+      /DROP\s+(SCHEMA|DATABASE)\s+([a-zA-Z0-9_]+)/i,
+    );
+    if (dropSchemaMatch && this.getOption('type') === 'FILE') {
+      const schemaName = dropSchemaMatch[2];
+      try {
+        // Drop the schema and delete the file
+        this.dropSchema(schemaName!);
+        // Return successful result without executing the DROP SCHEMA statement
+        return {
+          count: 1,
+          data: [] as T[],
+        };
+      } catch (e) {
+        throw new SQLiteEngineQueryError({
+          name: this.name,
+          query,
+        }, e as Error);
+      }
+    }
 
     try {
       // Determine if this is a SELECT query or a modification query

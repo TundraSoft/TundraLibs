@@ -1,8 +1,13 @@
-import { SQLiteEngine, SQLiteEngineQueryError } from '../mod.ts';
+import {
+  SQLiteEngine,
+  SQLiteEngineConnectError,
+  SQLiteEngineQueryError,
+} from '../mod.ts';
 import { DAMEngineConfigError, DAMEngineQueryError } from '../../errors/mod.ts';
 import { QueryParameters, type QueryResult } from '../../../query/mod.ts';
 import * as path from '$path';
 import * as asserts from '$asserts';
+import * as fs from '$fs';
 
 //#region Test Setup
 /**
@@ -23,7 +28,7 @@ function createTestSQLiteFileEngine(
   name = 'test-sqlite-file',
 ): { engine: SQLiteEngine; filePath: string } {
   // Create a temp directory if it doesn't exist
-  const tempDir = path.join(Deno.cwd(), 'temp');
+  const tempDir = './dam/engines/sqlite/fixtures';
   try {
     Deno.mkdirSync(tempDir);
   } catch (e) {
@@ -117,7 +122,6 @@ function assertQueryResult<T extends Record<string, unknown>>(
 }
 
 //#endregion Test Setup
-
 Deno.test('DAM.engines.SQLite - Memory', async (t) => {
   const engine = createTestSQLiteMemoryEngine();
 
@@ -608,6 +612,307 @@ Deno.test('DAM.engines.SQLite - File', async (t) => {
   }
 });
 
+Deno.test('DAM.engines.SQLite - Schema Management', async (t) => {
+  const { engine, filePath } = createTestSQLiteFileEngine('schema-test');
+
+  try {
+    await engine.init();
+
+    await t.step('Schema Create/Drop Operations', async (schemaTest) => {
+      await schemaTest.step(
+        'should create a new schema via method',
+        async () => {
+          await engine.createSchema('test_schema1');
+
+          // Verify schema was created by creating a table in it
+          const result = await engine.query({
+            sql:
+              'CREATE TABLE test_schema1.test_table (id INTEGER PRIMARY KEY, name TEXT)',
+          });
+
+          asserts.assertEquals(result.count, 0); // SQLite returns 0 for DDL statements
+
+          // Insert data to confirm schema works
+          await engine.query({
+            sql:
+              "INSERT INTO test_schema1.test_table (name) VALUES ('test data')",
+          });
+
+          const selectResult = await engine.query({
+            sql: 'SELECT * FROM test_schema1.test_table',
+          });
+
+          asserts.assertEquals(selectResult.count, 1);
+          asserts.assertEquals(selectResult.data[0]?.name, 'test data');
+
+          // Check if the file was created
+          const schemaPath = path.join(
+            './dam/engines/sqlite/fixtures',
+            'schema-test',
+            'test_schema1.db',
+          );
+          asserts.assert(fs.existsSync(schemaPath), 'Schema file should exist');
+        },
+      );
+
+      await schemaTest.step(
+        'should create a schema via SQL query',
+        async () => {
+          const result = await engine.query({
+            sql: 'CREATE SCHEMA test_schema2',
+          });
+
+          asserts.assertEquals(result.count, 1);
+
+          // Verify schema was created by creating a table in it
+          await engine.query({
+            sql:
+              'CREATE TABLE test_schema2.another_table (id INTEGER PRIMARY KEY, value TEXT)',
+          });
+
+          // Check if the file was created
+          const schemaPath = path.join(
+            './dam/engines/sqlite/fixtures',
+            'schema-test',
+            'test_schema2.db',
+          );
+          asserts.assert(fs.existsSync(schemaPath), 'Schema file should exist');
+        },
+      );
+
+      await schemaTest.step(
+        'should handle CREATE DATABASE statement',
+        async () => {
+          const result = await engine.query({
+            sql: 'CREATE DATABASE test_schema3',
+          });
+
+          asserts.assertEquals(result.count, 1);
+
+          // Check if the file was created
+          const schemaPath = path.join(
+            './dam/engines/sqlite/fixtures',
+            'schema-test',
+            'test_schema3.db',
+          );
+          asserts.assert(fs.existsSync(schemaPath), 'Schema file should exist');
+        },
+      );
+
+      await schemaTest.step(
+        'should throw error for duplicate schema',
+        async () => {
+          await asserts.assertRejects(
+            async () => {
+              await engine.createSchema('test_schema1');
+            },
+            SQLiteEngineQueryError,
+            'already exists',
+          );
+        },
+      );
+
+      await schemaTest.step(
+        'should drop a schema and remove file',
+        async () => {
+          await engine.dropSchema('test_schema1');
+
+          // Check that schema file was removed
+          const schemaPath = path.join(
+            './dam/engines/sqlite/fixtures',
+            'schema-test',
+            'test_schema1.db',
+          );
+          asserts.assert(
+            !fs.existsSync(schemaPath),
+            'Schema file should be deleted',
+          );
+
+          // Verify schema is no longer accessible
+          await asserts.assertRejects(
+            async () => {
+              await engine.query({
+                sql: 'SELECT * FROM test_schema1.test_table',
+              });
+            },
+            SQLiteEngineQueryError,
+            'no such table',
+          );
+        },
+      );
+
+      await schemaTest.step(
+        'should throw error for non-existent schema drop',
+        async () => {
+          await asserts.assertRejects(
+            async () => {
+              await engine.dropSchema('nonexistent_schema');
+            },
+            SQLiteEngineQueryError,
+            'does not exist',
+          );
+        },
+      );
+
+      await schemaTest.step(
+        'should throw error for invalid schema name',
+        async () => {
+          await asserts.assertRejects(
+            async () => {
+              await engine.createSchema('invalid-schema-name');
+            },
+            SQLiteEngineQueryError,
+            'can only contain alphanumeric characters',
+          );
+        },
+      );
+
+      await schemaTest.step('should prevent dropping main schema', async () => {
+        await asserts.assertRejects(
+          async () => {
+            await engine.dropSchema('main');
+          },
+          SQLiteEngineQueryError,
+          'Cannot drop the main database',
+        );
+      });
+
+      // Add this test after the "should handle CREATE DATABASE statement" test
+      await schemaTest.step('should drop a schema via SQL query', async () => {
+        // First create a test schema to drop
+        await engine.createSchema('drop_test_schema');
+
+        // Create a table in the schema to verify it exists
+        await engine.query({
+          sql:
+            'CREATE TABLE drop_test_schema.test_table (id INTEGER PRIMARY KEY)',
+        });
+
+        // Verify the schema file exists
+        const schemaPath = path.join(
+          './dam/engines/sqlite/fixtures',
+          'schema-test',
+          'drop_test_schema.db',
+        );
+        asserts.assert(
+          fs.existsSync(schemaPath),
+          'Schema file should exist before dropping',
+        );
+
+        // Now drop the schema with SQL
+        const result = await engine.query({
+          sql: 'DROP SCHEMA drop_test_schema',
+        });
+
+        asserts.assertEquals(result.count, 1);
+
+        // Verify the schema file was removed
+        asserts.assert(
+          !fs.existsSync(schemaPath),
+          'Schema file should be deleted after dropping',
+        );
+
+        // Verify the schema is no longer accessible
+        await asserts.assertRejects(
+          async () => {
+            await engine.query({
+              sql: 'SELECT * FROM drop_test_schema.test_table',
+            });
+          },
+          SQLiteEngineQueryError,
+          'no such table',
+        );
+      });
+
+      await schemaTest.step(
+        'should handle DROP DATABASE statement',
+        async () => {
+          // First create a test schema to drop
+          await engine.createSchema('drop_test_db');
+
+          // Drop using DATABASE keyword instead of SCHEMA
+          const result = await engine.query({
+            sql: 'DROP DATABASE drop_test_db',
+          });
+
+          asserts.assertEquals(result.count, 1);
+
+          // Verify the schema file was removed
+          const dbPath = path.join(
+            './dam/engines/sqlite/fixtures',
+            'schema-test',
+            'drop_test_db.db',
+          );
+          asserts.assert(
+            !fs.existsSync(dbPath),
+            'Database file should be deleted',
+          );
+        },
+      );
+    });
+
+    await t.step('Schema persistence', async (persistTest) => {
+      // Create a new schema for persistence testing
+      await engine.createSchema('persist_schema');
+
+      // Create a table and add data
+      await engine.query({
+        sql:
+          'CREATE TABLE persist_schema.persist_table (id INTEGER PRIMARY KEY, data TEXT)',
+      });
+
+      await engine.query({
+        sql:
+          "INSERT INTO persist_schema.persist_table (data) VALUES ('persistent data')",
+      });
+
+      // Close connection
+      await engine.finalize();
+
+      // Reopen connection and verify schema and data are still there
+      const newEngine = new SQLiteEngine('schema-test', {
+        type: 'FILE',
+        storagePath: './dam/engines/sqlite/fixtures',
+      });
+
+      await newEngine.init();
+
+      // Verify schema was loaded
+      const result = await newEngine.query({
+        sql: 'SELECT * FROM persist_schema.persist_table',
+      });
+
+      asserts.assertEquals(result.count, 1);
+      asserts.assertEquals(result.data[0]?.data, 'persistent data');
+
+      // Clean up
+      await newEngine.dropSchema('persist_schema');
+      await newEngine.dropSchema('test_schema2');
+      await newEngine.dropSchema('test_schema3');
+      await newEngine.finalize();
+    });
+  } catch (error) {
+    console.error('Schema test error:', error);
+    throw error;
+  } finally {
+    // Cleanup
+    try {
+      if (engine.status === 'CONNECTED') {
+        await engine.finalize();
+      }
+      // Clean up the test directory
+      const testDir = path.join('./dam/engines/sqlite/fixtures', 'schema-test');
+      try {
+        Deno.removeSync(testDir, { recursive: true });
+      } catch (e) {
+        // Might be already removed or locked
+      }
+    } catch (error) {
+      console.error('Schema test cleanup error:', error);
+    }
+  }
+});
+
 Deno.test('DAM.engines.SQLite - Options', async (t) => {
   await t.step(
     'should validate engine options correctly',
@@ -622,7 +927,7 @@ Deno.test('DAM.engines.SQLite - Options', async (t) => {
       });
 
       await optionsTest.step('should accept valid FILE type with path', () => {
-        const tempDir = path.join(Deno.cwd(), 'temp');
+        const tempDir = './dam/engines/sqlite/fixtures';
         try {
           Deno.mkdirSync(tempDir, { recursive: true });
         } catch (e) {
@@ -733,7 +1038,7 @@ Deno.test('DAM.engines.SQLite - Options', async (t) => {
       });
 
       await initTest.step('should initialize with file mode', async () => {
-        const tempDir = path.join(Deno.cwd(), 'temp');
+        const tempDir = './dam/engines/sqlite/fixtures';
         try {
           Deno.mkdirSync(tempDir, { recursive: true });
         } catch (e) {
@@ -760,4 +1065,155 @@ Deno.test('DAM.engines.SQLite - Options', async (t) => {
       });
     },
   );
+});
+
+Deno.test('DAM.engines.SQLite - Error Classes', async (t) => {
+  await t.step('SQLiteEngineConnectError', async (connectErrorTest) => {
+    await connectErrorTest.step('should create memory-type error', () => {
+      const error = new SQLiteEngineConnectError(
+        { name: 'test-db', type: 'MEMORY' },
+        new Error('Original error'),
+      );
+
+      asserts.assertEquals(error.name, 'SQLiteEngineConnectError');
+      console.log(error.message, '-');
+      asserts.assert(
+        error.message.includes('Failed to connect to SQLite database'),
+      );
+      asserts.assertEquals(error.context.engine, 'SQLITE');
+      asserts.assertEquals(error.context.name, 'test-db');
+      asserts.assertEquals(error.context.type, 'MEMORY');
+      asserts.assertEquals((error.cause as Error)?.message, 'Original error');
+    });
+
+    await connectErrorTest.step(
+      'should create file-type error with path',
+      () => {
+        const error = new SQLiteEngineConnectError(
+          { name: 'test-file-db', type: 'FILE', storagePath: '/path/to/db' },
+          new Error('File error'),
+        );
+
+        asserts.assertEquals(error.name, 'SQLiteEngineConnectError');
+        asserts.assert(
+          error.message.includes('Failed to connect to SQLite database'),
+        );
+        asserts.assertEquals(error.context.engine, 'SQLITE');
+        asserts.assertEquals(error.context.name, 'test-file-db');
+        asserts.assertEquals(error.context.type, 'FILE');
+        asserts.assertEquals(error.context.storagePath, '/path/to/db');
+        asserts.assertEquals((error.cause as Error)?.message, 'File error');
+      },
+    );
+
+    await connectErrorTest.step('should work without cause', () => {
+      const error = new SQLiteEngineConnectError(
+        { name: 'no-cause-db', type: 'MEMORY' },
+      );
+
+      asserts.assertEquals(error.name, 'SQLiteEngineConnectError');
+      asserts.assert(
+        error.message.includes('Failed to connect to SQLite database'),
+      );
+      asserts.assertEquals(error.context.engine, 'SQLITE');
+      asserts.assertEquals(error.context.name, 'no-cause-db');
+      asserts.assertEquals(error.context.type, 'MEMORY');
+      asserts.assertEquals(error.cause, undefined);
+    });
+  });
+
+  await t.step('SQLiteEngineQueryError', async (queryErrorTest) => {
+    await queryErrorTest.step('should create error with query details', () => {
+      const query = { id: 'test-query', sql: 'SELECT * FROM test' };
+      const error = new SQLiteEngineQueryError(
+        { name: 'test-db', query },
+        new Error('Query failed'),
+      );
+
+      asserts.assertEquals(error.name, 'SQLiteEngineQueryError');
+      asserts.assertEquals(error.message, 'Query failed');
+      asserts.assertEquals(error.context.engine, 'SQLITE');
+      asserts.assertEquals(error.context.name, 'test-db');
+      asserts.assertEquals(error.context.query, query);
+      asserts.assertEquals((error.cause as Error)?.message, 'Query failed');
+    });
+
+    await queryErrorTest.step('should work without cause', () => {
+      const query = { id: 'no-cause-query', sql: 'SELECT 1' };
+      const error = new SQLiteEngineQueryError(
+        { name: 'test-db', query },
+      );
+
+      asserts.assertEquals(error.name, 'SQLiteEngineQueryError');
+      asserts.assertEquals(error.message, 'Failed to execute SQLite query');
+      asserts.assertEquals(error.context.engine, 'SQLITE');
+      asserts.assertEquals(error.context.name, 'test-db');
+      asserts.assertEquals(error.context.query, query);
+      asserts.assertEquals(error.cause, undefined);
+    });
+
+    await queryErrorTest.step('should handle SQLite error instances', () => {
+      const query = { id: 'sqlite-error', sql: 'SELECT * FROM non_existent' };
+      // Create a SqliteError-like object since we can't directly instantiate one
+      const sqliteError = new Error('no such table: non_existent');
+      Object.defineProperty(sqliteError, 'constructor', { value: sqliteError });
+
+      const error = new SQLiteEngineQueryError(
+        { name: 'test-db', query },
+        sqliteError,
+      );
+
+      asserts.assertEquals(error.name, 'SQLiteEngineQueryError');
+      asserts.assertEquals(error.message, 'no such table: non_existent');
+      asserts.assertEquals(error.context.engine, 'SQLITE');
+      asserts.assertEquals(error.context.query, query);
+    });
+  });
+
+  await t.step('SQLiteEngineSchemaError', async (schemaErrorTest) => {
+    await schemaErrorTest.step('should create schema creation error', () => {
+      const error = new SQLiteEngineQueryError(
+        { name: 'test-db', query: { sql: `CREATE DATABASE test_schema` } },
+        new Error('Schema already exists'),
+      );
+
+      asserts.assertEquals(error.name, 'SQLiteEngineQueryError');
+      asserts.assert(error.message.includes('Schema already exists'));
+      asserts.assertEquals(error.context.engine, 'SQLITE');
+      asserts.assertEquals(error.context.name, 'test-db');
+      asserts.assertEquals(
+        error.context.query.sql,
+        'CREATE DATABASE test_schema',
+      );
+    });
+
+    await schemaErrorTest.step('should create schema drop error', () => {
+      const error = new SQLiteEngineQueryError(
+        { name: 'test-db', query: { sql: `DROP DATABASE test_schema` } },
+        new Error('Schema does not exist'),
+      );
+
+      asserts.assertEquals(error.name, 'SQLiteEngineQueryError');
+      asserts.assert(error.message.includes('Schema does not exist'));
+      asserts.assertEquals(error.context.engine, 'SQLITE');
+      asserts.assertEquals(
+        error.context.query.sql,
+        'DROP DATABASE test_schema',
+      );
+    });
+
+    await schemaErrorTest.step('should work without cause', () => {
+      const error = new SQLiteEngineQueryError(
+        { name: 'test-db', query: { sql: `CREATE DATABASE test_schema` } },
+      );
+
+      asserts.assertEquals(error.name, 'SQLiteEngineQueryError');
+      asserts.assertEquals(error.context.engine, 'SQLITE');
+      asserts.assertEquals(error.context.name, 'test-db');
+      asserts.assertEquals(
+        error.context.query.sql,
+        'CREATE DATABASE test_schema',
+      );
+    });
+  });
 });

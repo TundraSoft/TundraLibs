@@ -1,9 +1,12 @@
 {
   "name": "@tundralibs/dam",
-  "version": "1.0.0-dev1",
+  "version": "1.0.0-dev2",
   "description": "TODO: Add description",
   "exports": {
-    ".": "./mod.ts"
+    ".": "./mod.ts",
+    "./engines": "./engines/mod.ts",
+    "./errors": "./errors.ts",
+    "./query": "./query/mod.ts"
   },
   "imports": {
     "$mongo": "npm:mongodb",

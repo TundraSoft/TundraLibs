@@ -94,6 +94,7 @@
     "./guardian",
     "./id",
     "./restler",
+    "./slogger",
     "./utils"
   ]
 }

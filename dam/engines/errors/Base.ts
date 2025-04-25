@@ -1,4 +1,4 @@
-import { BaseError } from '@tundralibs/utils';
+import { DAMError } from '../../errors/mod.ts';
 import { Engine } from '../Engines.ts';
 
 /**
@@ -28,14 +28,7 @@ export type DAMEngineErrorMeta = {
  * ```
  */
 export class DAMEngineError<M extends DAMEngineErrorMeta = DAMEngineErrorMeta>
-  extends BaseError<M> {
-  /**
-   * Template for formatting the error message
-   */
-  protected override get _messageTemplate(): string {
-    return '${message}';
-  }
-
+  extends DAMError<M> {
   /**
    * Creates a new DAMEngineError
    *

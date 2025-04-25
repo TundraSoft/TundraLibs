@@ -89,6 +89,14 @@ component_management:
       statuses:
         - type: project
           target: 75%
+    - component_id: slogger
+      name: slogger
+      paths:
+        - slogger/**.ts
+        - '!slogger/**.test.ts'
+      statuses:
+        - type: project
+          target: 75%
 flags:
   crypt:
     paths:
@@ -117,4 +125,8 @@ flags:
   dam:
     paths:
       - dam/
+    carryforward: true
+  slogger:
+    paths:
+      - slogger/
     carryforward: true

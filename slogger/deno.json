@@ -1,0 +1,15 @@
+{
+  "name": "@tundralibs/slogger",
+  "version": "1.0.0-dev2",
+  "description": "Flexible, powerful structured logging library for Deno applications",
+  "exports": {
+    ".": "./mod.ts",
+    "./handlers": "./handlers/mod.ts",
+    "./formatters": "./formatters/mod.ts",
+    "./types": "./types/mod.ts"
+  },
+  "imports": {
+    "$fmt": "jsr:@std/fmt@^1.0.7",
+    "$date": "jsr:@std/datetime@^0.225.4"
+  }
+}

@@ -23,7 +23,7 @@ export class SQLiteEngineQueryError extends DAMEngineQueryError<
     // Extract and translate PostgreSQL-specific error codes
     // @TODO: Add SQLite error code mapping
     if (cause instanceof SqliteError) {
-      console.log(cause);
+      console.log('SQLite error code:', cause.code);
     }
 
     super(message, { engine: 'SQLITE', ...meta }, cause);
