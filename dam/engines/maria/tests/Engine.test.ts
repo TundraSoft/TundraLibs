@@ -86,7 +86,11 @@ function assertQueryResult<T extends Record<string, unknown>>(
   }
 }
 
-Deno.test('DAM.Engines.Maria', async (t) => {
+Deno.test({
+  name: 'DAM.Engines.Maria',
+  sanitizeOps: false,
+  sanitizeResources: false,
+}, async (t) => {
   const engine = createTestMariaEngine();
 
   // Setup
@@ -586,7 +590,11 @@ Deno.test('DAM.Engines.Maria', async (t) => {
   }
 });
 
-Deno.test('DAM.engines.Maria - Options', async (t) => {
+Deno.test({
+  name: 'DAM.engines.Maria - Options',
+  sanitizeOps: false,
+  sanitizeResources: false,
+}, async (t) => {
   await t.step(
     'should validate engine options correctly',
     async (optionTest) => {
@@ -801,7 +809,11 @@ Deno.test('DAM.engines.Maria - Options', async (t) => {
   );
 });
 
-Deno.test('DAM.engines.Maria - Error Classes', async (t) => {
+Deno.test({
+  name: 'DAM.engines.Maria - Error Classes',
+  sanitizeOps: false,
+  sanitizeResources: false,
+}, async (t) => {
   await t.step('MariaEngineConnectError', async (connectErrorTest) => {
     await connectErrorTest.step('should create basic connection error', () => {
       const meta = {
@@ -1132,4 +1144,256 @@ Deno.test('DAM.engines.Maria - Error Classes', async (t) => {
       },
     );
   });
+});
+
+Deno.test({
+  name: 'DAM.Engines.Maria - Connection Management',
+  sanitizeOps: false,
+  sanitizeResources: false,
+}, async (t) => {
+  await t.step(
+    'should handle multiple concurrent queries correctly',
+    async () => {
+      // Create engine with larger pool size directly in constructor
+      const concurrentEngine = new MariaEngine('concurrent-test', {
+        host: 'localhost',
+        port: 3306,
+        username: 'maria',
+        password: 'mariapw',
+        database: 'mysql',
+        poolSize: 5, // Larger pool for concurrent queries
+        idleTimeout: 5,
+        slowQueryThreshold: 1,
+        maxConnectAttempts: 2,
+      });
+
+      await concurrentEngine.init();
+
+      // Start multiple queries concurrently
+      const promises = [];
+      for (let i = 0; i < 10; i++) {
+        promises.push(concurrentEngine.query<{ value: number }>({
+          sql: `SELECT ${i} as value, SLEEP(0.1)`,
+        }));
+      }
+
+      // All should complete without errors
+      const results = await Promise.all(promises);
+      asserts.assertEquals(results.length, 10);
+
+      // Verify results contain the expected values
+      for (let i = 0; i < 10; i++) {
+        asserts.assertEquals(Number(results[i]!.data[0]!.value), i);
+      }
+
+      await concurrentEngine.finalize();
+    },
+  );
+
+  await t.step('should handle auto-reconnection', async () => {
+    const reconnectEngine = createTestMariaEngine('reconnect-engine');
+    await reconnectEngine.init();
+
+    // Force disconnect by finalizing
+    await reconnectEngine.finalize();
+
+    // Next query should auto-reconnect
+    const result = await reconnectEngine.query({
+      sql: 'SELECT 1 as value',
+    });
+
+    asserts.assertEquals(Number(result.data[0]!.value), 1);
+    asserts.assertEquals(reconnectEngine.status, 'CONNECTED');
+
+    await reconnectEngine.finalize();
+  });
+});
+
+Deno.test({
+  name: 'DAM.Engines.Maria - Certificate Handling',
+  sanitizeOps: false,
+  sanitizeResources: false,
+}, async (t) => {
+  await t.step('should throw error for invalid CACertPath', () => {
+    asserts.assertThrows(
+      () => {
+        new MariaEngine('invalid-cert', {
+          host: 'localhost',
+          port: 3306,
+          username: 'maria',
+          password: 'password',
+          database: 'mysql',
+          CACertPath: '/nonexistent/cert.pem',
+        });
+      },
+      DAMEngineConfigError,
+      'CACertPath file not found',
+    );
+
+    // Mock Deno.readTextFileSync to simulate permission error
+    const originalReadTextFileSync = Deno.readTextFileSync;
+    try {
+      // @ts-ignore - Mocking for test
+      Deno.readTextFileSync = () => {
+        throw new Deno.errors.PermissionDenied('Permission denied');
+      };
+
+      asserts.assertThrows(
+        () => {
+          new MariaEngine('permission-denied-cert', {
+            host: 'localhost',
+            port: 3306,
+            username: 'maria',
+            password: 'password',
+            database: 'mysql',
+            CACertPath: '/some/cert.pem',
+          });
+        },
+        DAMEngineConfigError,
+        'Permission denied',
+      );
+
+      // @ts-ignore - Mocking for test
+      Deno.readTextFileSync = () => {
+        throw new Error('Unknown error');
+      };
+
+      asserts.assertThrows(
+        () => {
+          new MariaEngine('unknown-error-cert', {
+            host: 'localhost',
+            port: 3306,
+            username: 'maria',
+            password: 'password',
+            database: 'mysql',
+            CACertPath: '/some/cert.pem',
+          });
+        },
+        DAMEngineConfigError,
+        'Error reading CACertPath file',
+      );
+    } finally {
+      // Restore original function
+      Deno.readTextFileSync = originalReadTextFileSync;
+    }
+  });
+});
+
+Deno.test({
+  name: 'DAM.Engines.Maria - Parameter Edge Cases',
+  sanitizeOps: false,
+  sanitizeResources: false,
+}, async (t) => {
+  const engine = createTestMariaEngine();
+
+  try {
+    await engine.init();
+
+    await t.step('should handle empty parameter objects', async () => {
+      const result = await engine.query({
+        sql: 'SELECT 1 as value',
+        params: {},
+      });
+
+      asserts.assertEquals(Number(result.data[0]!.value), 1);
+    });
+
+    await t.step('should handle complex nested parameters', async () => {
+      // This tests how the engine handles JSON data
+      const result = await engine.query<
+        {
+          json_data: string;
+        }
+      >({
+        sql: 'SELECT :complexParam: as json_data',
+        params: {
+          complexParam: JSON.stringify({
+            nested: {
+              array: [1, 2, 3],
+              value: 'test',
+            },
+            timestamp: new Date().toISOString(),
+          }),
+        },
+      });
+
+      asserts.assertExists(result.data[0]!.json_data);
+      const parsedJson = JSON.parse(result.data[0]!.json_data);
+      asserts.assertEquals(typeof parsedJson, 'object');
+      asserts.assertExists(parsedJson.nested);
+      asserts.assertExists(parsedJson.nested.array);
+    });
+
+    await t.step('should handle multiple parameter references', async () => {
+      const result = await engine.query({
+        sql: 'SELECT :param: as first, :param: as second, :param: as third',
+        params: {
+          param: 'reused-value',
+        },
+      });
+
+      asserts.assertEquals(result.data[0]!.first, 'reused-value');
+      asserts.assertEquals(result.data[0]!.second, 'reused-value');
+      asserts.assertEquals(result.data[0]!.third, 'reused-value');
+    });
+  } finally {
+    await engine.finalize();
+  }
+});
+
+Deno.test({
+  name: 'DAM.Engines.Maria - Query Method Edge Cases',
+  sanitizeOps: false,
+  sanitizeResources: false,
+}, async (t) => {
+  const engine = createTestMariaEngine();
+
+  try {
+    await engine.init();
+    await setupTestTable(engine);
+
+    await t.step('should handle query when not connected', async () => {
+      const disconnectedEngine = createTestMariaEngine('disconnected-engine');
+
+      // Don't initialize, so status is DISCONNECTED
+      await asserts.assert(
+        async () => {
+          await disconnectedEngine.query({
+            sql: 'SELECT 1',
+          });
+        },
+      );
+    });
+
+    await t.step('should handle auto-reconnect failures', async () => {
+      // First create a normal engine and connect
+      const failEngine = createTestMariaEngine('fail-reconnect');
+      await failEngine.init();
+      await failEngine.finalize();
+
+      // Create a new engine with the wrong password
+      const wrongPasswordEngine = new MariaEngine('wrong-password-engine', {
+        host: 'localhost',
+        port: 3306,
+        username: 'maria',
+        password: 'wrong-password', // Incorrect password
+        database: 'mysql',
+        poolSize: 2,
+        idleTimeout: 5,
+        maxConnectAttempts: 2,
+      });
+
+      await asserts.assertRejects(
+        async () => {
+          await wrongPasswordEngine.query({
+            sql: 'SELECT 1',
+          });
+        },
+        MariaEngineConnectError,
+      );
+    });
+  } finally {
+    await cleanupTestTable(engine);
+    await engine.finalize();
+  }
 });

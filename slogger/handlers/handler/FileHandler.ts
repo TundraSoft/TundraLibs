@@ -161,13 +161,13 @@ export class FileHandler extends AbstractHandler {
    * Clean up resources when handler is done
    * Flushes any remaining buffered data and closes the file
    */
-  public override finalize(): void {
+  public override async finalize(): Promise<void> {
     if (this.__fileHandle) {
       this.__flushBuffer();
       this.__fileHandle?.close();
       this.__fileHandle = undefined;
     }
-    super.finalize();
+    await super.finalize();
   }
 
   /**

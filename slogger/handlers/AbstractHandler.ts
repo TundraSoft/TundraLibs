@@ -139,7 +139,6 @@ export abstract class AbstractHandler {
    *
    * @returns Promise that resolves when initialization is complete
    */
-  public init(): void;
   public async init(): Promise<void> {
   }
 
@@ -174,7 +173,6 @@ export abstract class AbstractHandler {
    *
    * @returns Promise that resolves when finalization is complete
    */
-  public finalize(): void;
   public async finalize(): Promise<void> {
   }
 

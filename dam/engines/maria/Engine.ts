@@ -89,6 +89,7 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
    *
    * @param query - The query to standardize
    * @returns {Query} A MariaDB-compatible query object
+   * @warning Mariadb expects named parameters to not repeat, this ensures that it is unique
    *
    * @throws {DAMEngineQueryError} When referenced parameters are missing
    * @protected
@@ -99,18 +100,29 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
 
     // Convert :param: syntax to :param for MariaDB named parameters using RegExp.exec
     let sql = standardQuery.sql;
+    const params =
+      (standardQuery.params instanceof QueryParameters
+        ? standardQuery.params.asRecord()
+        : standardQuery.params) ?? {};
     const paramRegex = /:(\w+):/g;
+    const paramsList: Record<string, number> = {};
     let match;
     while ((match = paramRegex.exec(sql)) !== null) {
       const fullMatch = match[0];
       const paramName = match[1];
-      sql = sql.replace(fullMatch, `:${paramName}`);
+      paramsList[paramName!] = (paramsList[paramName!] ?? 0) + 1;
+      if (paramsList[paramName!]! > 1) {
+        sql = sql.replace(fullMatch, `:${paramName}_${paramsList[paramName!]}`);
+        params[`${paramName}_${paramsList[paramName!]}`] = params[paramName!];
+      } else {
+        sql = sql.replace(fullMatch, `:${paramName}`);
+      }
       // Reset lastIndex to account for string length changes
       paramRegex.lastIndex = 0;
     }
 
     return {
-      ...standardQuery,
+      params,
       sql,
     };
   }

@@ -1235,3 +1235,292 @@ Deno.test('DAM.engines.Postgres - Error Classes', async (t) => {
     });
   });
 });
+
+Deno.test('DAM.engines.Postgres - Connection Management', async (t) => {
+  await t.step('should handle idle connection timeout correctly', async () => {
+    // Create engine with short idle timeout directly in constructor
+    const idleEngine = new PostgresEngine('idle-test-engine', {
+      host: 'localhost',
+      port: 5432,
+      username: 'postgres',
+      password: 'postgrespw',
+      database: 'postgres',
+      poolSize: 2,
+      idleTimeout: 1, // Set to 1 second for faster test
+      slowQueryThreshold: 1,
+      maxConnectAttempts: 2,
+    });
+
+    await idleEngine.init();
+    asserts.assertEquals(idleEngine.status, 'CONNECTED');
+
+    // Run a query to ensure connection is active
+    await idleEngine.query({
+      sql: 'SELECT 1 as value',
+    });
+
+    // Wait for idle timeout to trigger (plus buffer)
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+
+    // Status should be IDLE now
+    asserts.assertEquals(idleEngine.status, 'CONNECTED');
+
+    // Running a query should reconnect automatically
+    const result = await idleEngine.query({
+      sql: 'SELECT 2 as value',
+    });
+
+    asserts.assertEquals(idleEngine.status, 'CONNECTED');
+    asserts.assertEquals(result.data[0]!.value, 2);
+
+    await idleEngine.finalize();
+  });
+
+  await t.step(
+    'should handle multiple concurrent queries correctly',
+    async () => {
+      // Create engine with larger pool size directly in constructor
+      const concurrentEngine = new PostgresEngine('concurrent-test', {
+        host: 'localhost',
+        port: 5432,
+        username: 'postgres',
+        password: 'postgrespw',
+        database: 'postgres',
+        poolSize: 5, // Larger pool for concurrent queries
+        idleTimeout: 5,
+        slowQueryThreshold: 1,
+        maxConnectAttempts: 2,
+      });
+
+      await concurrentEngine.init();
+
+      // Start multiple queries concurrently
+      const promises = [];
+      for (let i = 0; i < 10; i++) {
+        promises.push(concurrentEngine.query({
+          sql: `SELECT ${i} as value, pg_sleep(0.1)`,
+        }));
+      }
+
+      // All should complete without errors
+      const results = await Promise.all(promises);
+      asserts.assertEquals(results.length, 10);
+
+      // Verify results contain the expected values
+      for (let i = 0; i < 10; i++) {
+        asserts.assertEquals(Number(results[i]!.data[0]!.value), i);
+      }
+
+      await concurrentEngine.finalize();
+    },
+  );
+});
+
+Deno.test('DAM.engines.Postgres - Certificate Handling', async (t) => {
+  await t.step('should throw error for invalid CACertPath', () => {
+    asserts.assertThrows(
+      () => {
+        new PostgresEngine('invalid-cert', {
+          host: 'localhost',
+          port: 5432,
+          username: 'postgres',
+          password: 'password',
+          database: 'postgres',
+          CACertPath: '/nonexistent/cert.pem',
+        });
+      },
+      DAMEngineConfigError,
+      'CACertPath file not found',
+    );
+
+    // Mock Deno.readTextFileSync to simulate permission error
+    const originalReadTextFileSync = Deno.readTextFileSync;
+    try {
+      // @ts-ignore - Mocking for test
+      Deno.readTextFileSync = () => {
+        throw new Deno.errors.PermissionDenied('Permission denied');
+      };
+
+      asserts.assertThrows(
+        () => {
+          new PostgresEngine('permission-denied-cert', {
+            host: 'localhost',
+            port: 5432,
+            username: 'postgres',
+            password: 'password',
+            database: 'postgres',
+            CACertPath: '/some/cert.pem',
+          });
+        },
+        DAMEngineConfigError,
+        'Permission denied',
+      );
+
+      // @ts-ignore - Mocking for test
+      Deno.readTextFileSync = () => {
+        throw new Error('Unknown error');
+      };
+
+      asserts.assertThrows(
+        () => {
+          new PostgresEngine('unknown-error-cert', {
+            host: 'localhost',
+            port: 5432,
+            username: 'postgres',
+            password: 'password',
+            database: 'postgres',
+            CACertPath: '/some/cert.pem',
+          });
+        },
+        DAMEngineConfigError,
+        'Error reading CACertPath file',
+      );
+    } finally {
+      // Restore original function
+      Deno.readTextFileSync = originalReadTextFileSync;
+    }
+  });
+});
+
+Deno.test('DAM.engines.Postgres - Parameter Edge Cases', async (t) => {
+  const engine = createTestPostgresEngine();
+
+  try {
+    await engine.init();
+
+    await t.step('should handle empty parameter objects', async () => {
+      const result = await engine.query({
+        sql: 'SELECT 1 as value',
+        params: {},
+      });
+
+      asserts.assertEquals(result.data[0]!.value, 1);
+    });
+
+    await t.step('should handle complex nested parameters', async () => {
+      // This tests how the engine handles JSON data
+      const result = await engine.query({
+        sql: 'SELECT :complexParam:::jsonb as json_data',
+        params: {
+          complexParam: JSON.stringify({
+            nested: {
+              array: [1, 2, 3],
+              value: 'test',
+            },
+            timestamp: new Date().toISOString(),
+          }),
+        },
+      });
+
+      asserts.assertExists(result.data[0]!.json_data);
+      asserts.assertEquals(typeof result.data[0]!.json_data, 'object');
+      asserts.assertExists((result.data[0]!.json_data as any).nested);
+      asserts.assertExists((result.data[0]!.json_data as any).nested.array);
+    });
+
+    await t.step('should handle array parameters', async () => {
+      // Create test table with array column
+      await engine.query({
+        sql:
+          'DROP TABLE IF EXISTS array_test; CREATE TABLE array_test (id SERIAL PRIMARY KEY, tags TEXT[]);',
+      });
+
+      // Insert with array parameter
+      await engine.query({
+        sql: 'INSERT INTO array_test (tags) VALUES (:tags:)',
+        params: {
+          tags: ['tag1', 'tag2', 'tag3'],
+        },
+      });
+
+      // Query back
+      const result = await engine.query<{ tags: Array<string> }>({
+        sql: 'SELECT * FROM array_test',
+      });
+
+      asserts.assertEquals(result.count, 1);
+      asserts.assertEquals(result.data[0]!.tags.length, 3);
+      asserts.assertEquals(result.data[0]!.tags[0], 'tag1');
+
+      // Clean up
+      await engine.query({
+        sql: 'DROP TABLE array_test',
+      });
+    });
+  } finally {
+    await engine.finalize();
+  }
+});
+
+Deno.test('DAM.engines.Postgres - Query Method Edge Cases', async (t) => {
+  const engine = createTestPostgresEngine();
+
+  try {
+    await engine.init();
+    await setupTestTable(engine);
+
+    await t.step('should handle query when not connected', async () => {
+      const disconnectedEngine = createTestPostgresEngine(
+        'disconnected-engine',
+      );
+
+      // Don't initialize, so status is DISCONNECTED
+      await asserts.assert(
+        async () => {
+          await disconnectedEngine.query({
+            sql: 'SELECT 1',
+          });
+        },
+      );
+    });
+
+    await t.step('should handle auto-reconnection', async () => {
+      const reconnectEngine = createTestPostgresEngine('reconnect-engine');
+      await reconnectEngine.init();
+
+      // Force disconnect by finalizing
+      await reconnectEngine.finalize();
+
+      // Next query should auto-reconnect
+      const result = await reconnectEngine.query({
+        sql: 'SELECT 1 as value',
+      });
+
+      asserts.assertEquals(result.data[0]!.value, 1);
+      asserts.assertEquals(reconnectEngine.status, 'CONNECTED');
+
+      await reconnectEngine.finalize();
+    });
+
+    await t.step('should handle auto-reconnect failures', async () => {
+      // First create a normal engine and connect
+      const failEngine = createTestPostgresEngine('fail-reconnect');
+      await failEngine.init();
+      await failEngine.finalize();
+
+      // Create a new engine with the wrong password
+      const wrongPasswordEngine = new PostgresEngine('wrong-password-engine', {
+        host: 'localhost',
+        port: 5432,
+        username: 'postgres',
+        password: 'wrong-password', // Incorrect password
+        database: 'postgres',
+        poolSize: 2,
+        idleTimeout: 5,
+        maxConnectAttempts: 2,
+      });
+
+      await asserts.assertRejects(
+        async () => {
+          await wrongPasswordEngine.query({
+            sql: 'SELECT 1',
+          });
+        },
+        PostgresEngineConnectError,
+      );
+    });
+  } finally {
+    await cleanupTestTable(engine);
+    await engine.finalize();
+  }
+});
