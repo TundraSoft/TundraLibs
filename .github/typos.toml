@@ -1,6 +1,10 @@
 [default]
 check-filename = true
 
+[default.extend-words]
+# Added for OQL filter
+nin = "nin"
+
 [files]
 extend-exclude = [
   "*.json",

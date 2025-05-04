@@ -66,7 +66,7 @@ const assertBaseExpression: (x: unknown) => asserts x is BaseExpression = (
   x: unknown,
 ) => {
   if (x === null || typeof x !== 'object') {
-    throw new TypeError('Expression must ba an object with $expr property');
+    throw new TypeError('Expression must be an object with $expr property');
   }
   if (
     !('$expr' in x) || typeof x.$expr !== 'string' ||

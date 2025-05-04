@@ -5,8 +5,7 @@
   "exports": {
     ".": "./mod.ts",
     "./engines": "./engines/mod.ts",
-    "./errors": "./errors.ts",
-    "./query": "./query/mod.ts"
+    "./errors": "./errors.ts"
   },
   "imports": {
     "$mongo": "npm:mongodb",
