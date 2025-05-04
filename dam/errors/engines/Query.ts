@@ -1,5 +1,5 @@
 import { DAMEngineError, type DAMEngineErrorMeta } from './Base.ts';
-import type { Query } from '../../query/mod.ts';
+import type { Query } from '../../types/mod.ts';
 
 export class DAMEngineQueryError<
   M extends DAMEngineErrorMeta & {
