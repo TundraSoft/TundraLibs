@@ -2,7 +2,7 @@ import { PostgresError } from '$postgres';
 import {
   DAMEngineConnectError,
   type DAMEngineErrorMeta,
-} from '../../errors/mod.ts';
+} from '../../../errors/mod.ts';
 
 export class PostgresEngineConnectError extends DAMEngineConnectError<
   DAMEngineErrorMeta & { host: string; port: number; username: string }

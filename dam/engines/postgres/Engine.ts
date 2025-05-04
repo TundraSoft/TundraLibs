@@ -1,15 +1,13 @@
 import { ClientOptions, Pool } from '$postgres';
 import { EventOptionKeys } from '@tundralibs/utils';
-import { AbstractEngine } from '../AbstractEngine.ts';
-import { DAMEngineConfigError } from '../errors/mod.ts';
+import { AbstractEngine } from '../../AbstractEngine.ts';
+import { DAMEngineConfigError } from '../../errors/mod.ts';
 import {
   PostgresEngineConnectError,
   PostgresEngineQueryError,
 } from './errors/mod.ts';
-import type { EngineEvents } from '../types/mod.ts';
+import type { EngineEvents, Query } from '../../types/mod.ts';
 import type { PostgresEngineOptions } from './types/mod.ts';
-import type { Query } from '../../query/types/mod.ts';
-import { QueryParameters } from '../../query/mod.ts';
 
 /**
  * PostgreSQL database engine implementation
@@ -145,7 +143,7 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
       if (this.getOption('enforceTLS')) {
         options.tls!.enforce = true;
       }
-      this._client = new Pool(options, this.getOption('poolSize')!);
+      this._client = new Pool(options, this.getOption('poolSize') ?? 1);
       // Connect to the database to check if the connection is valid
       const a = await this._client.connect();
       // release it
@@ -227,7 +225,7 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
         // Match the version number using RegExp.exec
         const versionRegex = /PostgreSQL ([\d.]+)/;
         const match = versionRegex.exec(v);
-        if (match && match[1]) {
+        if (match?.[1]) {
           return match[1];
         }
       }
@@ -264,9 +262,7 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
       }, new Error('No database connection'));
     }
     const sql = query.sql;
-    const params = (query.params instanceof QueryParameters)
-      ? query.params.asRecord()
-      : query.params;
+    const params = query.params ?? {};
     const client = await this._client.connect();
     try {
       // Stop idle timer when a query starts
@@ -276,7 +272,7 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
 
       const res = await client.queryObject<T>(sql, params);
       return {
-        count: res.rows.length || res.rowCount || 0,
+        count: res.rows.length ?? res.rowCount ?? 0,
         data: res.rows,
       };
     } catch (e) {
@@ -377,9 +373,7 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
         }
         break;
       case 'poolSize':
-        if (value === null || value === undefined) {
-          value = 1 as PostgresEngineOptions[K];
-        }
+        value ??= 1 as PostgresEngineOptions[K];
         if (typeof value !== 'number' || value < 1) {
           throw new DAMEngineConfigError(
             'Pool size must be a positive number.',

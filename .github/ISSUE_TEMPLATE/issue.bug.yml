@@ -55,6 +55,9 @@ body:
         - dam
         - guardian
         - id
+        - norm
+        - oql
+        - pact
         - restler
         - slogger
         - utils

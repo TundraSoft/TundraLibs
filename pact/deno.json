@@ -1,0 +1,9 @@
+{
+  "name": "@tundralibs/pact",
+  "version": "0.1.0",
+  "description": "Permission and Access Control Toolkit",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "imports": {}
+}

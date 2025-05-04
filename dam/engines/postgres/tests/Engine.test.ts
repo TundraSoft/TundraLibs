@@ -3,8 +3,11 @@ import {
   PostgresEngineConnectError,
   PostgresEngineQueryError,
 } from '../mod.ts';
-import { DAMEngineConfigError, DAMEngineQueryError } from '../../errors/mod.ts';
-import { QueryParameters, type QueryResult } from '../../../query/mod.ts';
+import {
+  DAMEngineConfigError,
+  DAMEngineQueryError,
+} from '../../../errors/mod.ts';
+import type { QueryResult } from '../../../types/mod.ts';
 import { PostgresError } from '$postgres';
 
 import * as asserts from '$asserts';
@@ -166,29 +169,6 @@ Deno.test('DAM.engines.Postgres', async (t) => {
             ),
         );
       });
-
-      await queryTest.step(
-        'should handle QueryParameters instance',
-        async () => {
-          const params = new QueryParameters('p');
-          const activeParam = params.create(true);
-
-          const result = await engine.query({
-            id: 'params-instance',
-            sql:
-              `SELECT COUNT(*) as count FROM test_users WHERE active = :${activeParam}:`,
-            params: params,
-          });
-
-          // Fix: Use proper type assertion and null checking
-          assertQueryResult(result, 1);
-          // Manual check for the count property
-          const count = result.data[0]?.count;
-          asserts.assertExists(count);
-          // PostgreSQL COUNT returns bigint, so use toString for stable comparison
-          asserts.assertEquals(count.toString(), '2');
-        },
-      );
 
       await queryTest.step('should throw error for invalid SQL', async () => {
         await asserts.assertRejects(

@@ -3,8 +3,11 @@ import {
   SQLiteEngineConnectError,
   SQLiteEngineQueryError,
 } from '../mod.ts';
-import { DAMEngineConfigError, DAMEngineQueryError } from '../../errors/mod.ts';
-import { QueryParameters, type QueryResult } from '../../../query/mod.ts';
+import {
+  DAMEngineConfigError,
+  DAMEngineQueryError,
+} from '../../../errors/mod.ts';
+import { type QueryResult } from '../../../types/mod.ts';
 import * as path from '$path';
 import * as asserts from '$asserts';
 import * as fs from '$fs';
@@ -179,27 +182,6 @@ Deno.test('DAM.engines.SQLite - Memory', async (t) => {
             ),
         );
       });
-
-      await queryTest.step(
-        'should handle QueryParameters instance',
-        async () => {
-          const params = new QueryParameters('p');
-          const activeParam = params.create(1);
-
-          const result = await engine.query({
-            id: 'params-instance',
-            sql:
-              `SELECT COUNT(*) as count FROM test_users WHERE active = :${activeParam}:`,
-            params: params,
-          });
-
-          assertQueryResult(result, 1);
-          const count = result.data[0]?.count;
-          asserts.assertExists(count);
-          // SQLite COUNT returns number, not bigint
-          asserts.assertEquals(count, 2);
-        },
-      );
 
       await queryTest.step('should throw error for invalid SQL', async () => {
         await asserts.assertRejects(

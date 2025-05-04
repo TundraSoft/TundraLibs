@@ -7,16 +7,14 @@ import {
 import * as path from '$path';
 import * as fs from '$fs';
 import { EventOptionKeys } from '@tundralibs/utils';
-import { AbstractEngine } from '../AbstractEngine.ts';
-import { DAMEngineConfigError } from '../errors/mod.ts';
+import { AbstractEngine } from '../../AbstractEngine.ts';
+import { DAMEngineConfigError } from '../../errors/mod.ts';
 import {
   SQLiteEngineConnectError,
   SQLiteEngineQueryError,
 } from './errors/mod.ts';
-import type { EngineEvents } from '../types/mod.ts';
+import type { EngineEvents, Query } from '../../types/mod.ts';
 import type { SQLiteEngineOptions } from './types/mod.ts';
-import type { Query } from '../../query/types/mod.ts';
-import { QueryParameters } from '../../query/mod.ts';
 
 export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
   public readonly Engine = 'SQLITE';
@@ -87,7 +85,7 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
       }, new Error('No database connection'));
     }
 
-    if (!/^[a-zA-Z0-9_]+$/.test(schemaName)) {
+    if (!/^\w+$/.test(schemaName)) {
       throw new SQLiteEngineQueryError(
         {
           name: this.name,
@@ -102,7 +100,7 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
     }
 
     const baseStore = path.join(
-      this.getOption('storagePath') || '',
+      this.getOption('storagePath') ?? '',
       this.name,
     );
     const dbFile = path.join(baseStore, `${schemaName}.db`);
@@ -178,7 +176,7 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
     }
 
     const baseStore = path.join(
-      this.getOption('storagePath') || '',
+      this.getOption('storagePath') ?? '',
       this.name,
     );
     const dbFile = path.join(baseStore, `${schemaName}.db`);
@@ -315,14 +313,11 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
     }
 
     const sql = query.sql;
-    const params = (query.params instanceof QueryParameters)
-      ? query.params.asRecord()
-      : query.params;
+    const params = query.params ?? {};
 
     // Check for schema creation statements
-    const createSchemaMatch = sql.match(
-      /CREATE\s+(SCHEMA|DATABASE)\s+([a-zA-Z0-9_]+)/i,
-    );
+    const createSchemaRegex = /CREATE\s+(SCHEMA|DATABASE)\s+(\w+)/i;
+    const createSchemaMatch = createSchemaRegex.exec(sql);
     if (createSchemaMatch && this.getOption('type') === 'FILE') {
       const schemaName = createSchemaMatch[2];
       try {
@@ -342,9 +337,9 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
     }
 
     // Check for schema drop statements
-    const dropSchemaMatch = sql.match(
-      /DROP\s+(SCHEMA|DATABASE)\s+([a-zA-Z0-9_]+)/i,
-    );
+    // Check for schema drop statements
+    const dropSchemaRegex = /DROP\s+(SCHEMA|DATABASE)\s+(\w+)/i;
+    const dropSchemaMatch = dropSchemaRegex.exec(sql);
     if (dropSchemaMatch && this.getOption('type') === 'FILE') {
       const schemaName = dropSchemaMatch[2];
       try {

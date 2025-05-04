@@ -1,4 +1,4 @@
-import type { EngineOptions } from '../../types/mod.ts';
+import type { EngineOptions } from '../../../types/mod.ts';
 
 export type SQLiteEngineOptions = EngineOptions & {
   engine: 'SQLITE';

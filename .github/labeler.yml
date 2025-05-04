@@ -17,6 +17,15 @@ guardian:
 id:
   - changed-files:
       - any-glob-to-any-file: id/*
+norm:
+  - changed-files:
+      - any-glob-to-any-file: norm/*
+oql:
+  - changed-files:
+      - any-glob-to-any-file: oql/*
+pact:
+  - changed-files:
+      - any-glob-to-any-file: pact/*
 restler:
   - changed-files:
       - any-glob-to-any-file: restler/*

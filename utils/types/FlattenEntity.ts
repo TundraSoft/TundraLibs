@@ -1,5 +1,5 @@
 import type { UnionToIntersection } from './UnionToIntersection.ts';
-
+import type { UnArray } from '@tundralibs/utils';
 /**
  * Recursively flattens an entity type, preserving the nested structure as dot-separated keys.
  *
@@ -13,12 +13,19 @@ export type FlattenEntity<
   KeyPrefix extends string = '',
 > = UnionToIntersection<
   {
+    // Simple sub object
     [K in keyof T]: T[K] extends Record<string, unknown> ? FlattenEntity<
         T[K],
-        KeyPrefix extends '' ? `${K & string}` : `${KeyPrefix}.${K & string}`
+        KeyPrefix extends '' ? `${K & string}` : `${KeyPrefix}.$${K & string}`
       >
+      // Array of sub objects
+      : T[K] extends Array<Record<string, unknown>> ? FlattenEntity<
+          UnArray<T[K]>,
+          KeyPrefix extends '' ? `${K & string}` : `${KeyPrefix}.$${K & string}`
+        >
+      // Normal value
       : {
-        [KK in KeyPrefix extends '' ? K : `$${KeyPrefix}.${K & string}`]: T[K];
+        [KK in KeyPrefix extends '' ? K : `$${KeyPrefix}.$${K & string}`]: T[K];
       };
   }[keyof T] extends infer O ? { [P in keyof O]: O[P] } : never
 > extends infer O ? { [P in keyof O]: O[P] } : never;

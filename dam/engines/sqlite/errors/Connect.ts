@@ -1,7 +1,7 @@
 import {
   DAMEngineConnectError,
   type DAMEngineErrorMeta,
-} from '../../errors/mod.ts';
+} from '../../../errors/mod.ts';
 
 /**
  * Error thrown when connection to a SQLite database fails

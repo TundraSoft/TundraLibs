@@ -2,7 +2,7 @@ import type {
   EngineOptions,
   EngineServerOptions,
   EngineTLSOptions,
-} from '../../types/mod.ts';
+} from '../../../types/mod.ts';
 
 export type PostgresEngineOptions =
   & EngineOptions

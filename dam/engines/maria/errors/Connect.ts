@@ -2,7 +2,7 @@ import { SqlError } from '$maria';
 import {
   DAMEngineConnectError,
   type DAMEngineErrorMeta,
-} from '../../errors/mod.ts';
+} from '../../../errors/mod.ts';
 
 export class MariaEngineConnectError extends DAMEngineConnectError<
   DAMEngineErrorMeta & { host: string; port: number; username: string }

@@ -2,8 +2,8 @@ import { SqlError } from '$maria';
 import {
   type DAMEngineErrorMeta,
   DAMEngineQueryError,
-} from '../../errors/mod.ts';
-import type { Query } from '../../../query/mod.ts';
+} from '../../../errors/mod.ts';
+import type { Query } from '../../../types/mod.ts';
 
 /**
  * MariaDB-specific query execution error

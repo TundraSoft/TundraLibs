@@ -1,12 +1,4 @@
 export {
-  DAMEngineConfigError,
-  DAMEngineConnectError,
-  DAMEngineError,
-  type DAMEngineErrorMeta,
-  DAMEngineQueryError,
-} from './errors/mod.ts';
-
-export {
   MariaEngine,
   MariaEngineConnectError,
   type MariaEngineOptions,
@@ -24,15 +16,3 @@ export {
   type SQLiteEngineOptions,
   SQLiteEngineQueryError,
 } from './sqlite/mod.ts';
-
-export type {
-  EngineEvents,
-  EngineOptions,
-  EngineServerOptions,
-  EngineStatus,
-  EngineTLSOptions,
-} from './types/mod.ts';
-
-export { AbstractEngine } from './AbstractEngine.ts';
-
-export { assertEngine, type Engine, EngineList, Engines } from './Engines.ts';

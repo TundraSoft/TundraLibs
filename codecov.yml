@@ -105,6 +105,30 @@ component_management:
       statuses:
         - type: project
           target: 75%
+    - component_id: pact
+      name: pact
+      paths:
+        - pact/**.ts
+        - '!pact/**.test.ts'
+      statuses:
+        - type: project
+          target: 75%
+    - component_id: norm
+      name: norm
+      paths:
+        - norm/**.ts
+        - '!norm/**.test.ts'
+      statuses:
+        - type: project
+          target: 75%
+    - component_id: oql
+      name: oql
+      paths:
+        - oql/**.ts
+        - '!oql/**.test.ts'
+      statuses:
+        - type: project
+          target: 75%
 flags:
   crypt:
     paths:
@@ -141,4 +165,16 @@ flags:
   vaccine:
     paths:
       - vaccine/
+    carryforward: true
+  pact:
+    paths:
+      - pact/
+    carryforward: true
+  norm:
+    paths:
+      - norm/
+    carryforward: true
+  oql:
+    paths:
+      - oql/
     carryforward: true

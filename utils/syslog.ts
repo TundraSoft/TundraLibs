@@ -35,7 +35,7 @@ export enum SyslogFacilities {
 export type SyslogSeverity = keyof typeof SyslogSeverities;
 export type SyslogFacility = keyof typeof SyslogFacilities;
 
-type StructuredDataKey = `${string}@${string}`;
+export type StructuredDataKey = `${string}@${string}`;
 
 export interface SyslogObject {
   facility: SyslogFacilities;

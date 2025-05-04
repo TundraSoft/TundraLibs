@@ -1,15 +1,13 @@
 import { createPool, Pool, type PoolConfig } from '$maria';
 import { EventOptionKeys } from '@tundralibs/utils';
-import { AbstractEngine } from '../AbstractEngine.ts';
-import { DAMEngineConfigError } from '../errors/mod.ts';
+import { AbstractEngine } from '../../AbstractEngine.ts';
+import { DAMEngineConfigError } from '../../errors/mod.ts';
 import {
   MariaEngineConnectError,
   MariaEngineQueryError,
 } from './errors/mod.ts';
-import type { EngineEvents } from '../types/mod.ts';
+import type { EngineEvents, Query } from '../../types/mod.ts';
 import type { MariaEngineOptions } from './types/mod.ts';
-import type { Query } from '../../query/types/mod.ts';
-import { QueryParameters } from '../../query/mod.ts';
 
 /**
  * MariaDB database engine implementation
@@ -68,7 +66,6 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
   ) {
     super(name, options, {
       poolSize: 1,
-      engine: 'MARIA',
       port: 3306,
       idleTimeout: 180, // 3 minutes
       connectionTimeout: 30, // 30 seconds
@@ -100,20 +97,17 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
 
     // Convert :param: syntax to :param for MariaDB named parameters using RegExp.exec
     let sql = standardQuery.sql;
-    const params =
-      (standardQuery.params instanceof QueryParameters
-        ? standardQuery.params.asRecord()
-        : standardQuery.params) ?? {};
+    const params = standardQuery.params ?? {};
     const paramRegex = /:(\w+):/g;
     const paramsList: Record<string, number> = {};
     let match;
     while ((match = paramRegex.exec(sql)) !== null) {
       const fullMatch = match[0];
-      const paramName = match[1];
-      paramsList[paramName!] = (paramsList[paramName!] ?? 0) + 1;
-      if (paramsList[paramName!]! > 1) {
-        sql = sql.replace(fullMatch, `:${paramName}_${paramsList[paramName!]}`);
-        params[`${paramName}_${paramsList[paramName!]}`] = params[paramName!];
+      const paramName = match[1]!;
+      paramsList[paramName] = (paramsList[paramName] ?? 0) + 1;
+      if (paramsList[paramName] > 1) {
+        sql = sql.replace(fullMatch, `:${paramName}_${paramsList[paramName]}`);
+        params[`${paramName}_${paramsList[paramName]}`] = params[paramName];
       } else {
         sql = sql.replace(fullMatch, `:${paramName}`);
       }
@@ -270,9 +264,7 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
     }
 
     const sql = query.sql;
-    const params = (query.params instanceof QueryParameters)
-      ? query.params.asRecord()
-      : query.params;
+    const params = query.params ?? {};
 
     const conn = await this._client.getConnection();
     try {
@@ -391,7 +383,7 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
       case 'host':
         if (!value || typeof value !== 'string' || value.trim().length === 0) {
           throw new DAMEngineConfigError(
-            `${key} must be a non-empty string.`,
+            `${String(key)} must be a non-empty string.`,
             {
               name: this.name || 'N/A',
               engine: this.Engine || 'N/A',

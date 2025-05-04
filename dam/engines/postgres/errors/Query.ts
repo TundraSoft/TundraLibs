@@ -2,8 +2,8 @@ import { PostgresError } from '$postgres';
 import {
   type DAMEngineErrorMeta,
   DAMEngineQueryError,
-} from '../../errors/mod.ts';
-import type { Query } from '../../../query/mod.ts';
+} from '../../../errors/mod.ts';
+import type { Query } from '../../../types/mod.ts';
 
 /**
  * PostgreSQL-specific query execution error

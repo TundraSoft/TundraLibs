@@ -3,8 +3,11 @@ import {
   MariaEngineConnectError,
   MariaEngineQueryError,
 } from '../mod.ts';
-import { DAMEngineConfigError, DAMEngineQueryError } from '../../errors/mod.ts';
-import { QueryParameters, QueryResult } from '../../../query/mod.ts';
+import {
+  DAMEngineConfigError,
+  DAMEngineQueryError,
+} from '../../../errors/mod.ts';
+import type { QueryResult } from '../../../types/mod.ts';
 import * as asserts from '$asserts';
 import { SqlError } from '$maria';
 
@@ -148,28 +151,6 @@ Deno.test({
             ),
         );
       });
-
-      await queryTest.step(
-        'should handle QueryParameters instance',
-        async () => {
-          const params = new QueryParameters('p');
-          const activeParam = params.create(true);
-
-          const result = await engine.query({
-            id: 'params-instance',
-            sql:
-              `SELECT COUNT(*) as count FROM test_users WHERE active = :${activeParam}`,
-            params: params,
-          });
-
-          assertQueryResult(result, 1);
-
-          // Manual check for the count property - MariaDB returns this differently than Postgres
-          const count = result.data[0]?.count;
-          asserts.assertExists(count);
-          asserts.assertEquals(Number(count), 2);
-        },
-      );
 
       await queryTest.step('should throw error for invalid SQL', async () => {
         await asserts.assertRejects(

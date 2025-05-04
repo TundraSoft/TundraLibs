@@ -1,0 +1,9 @@
+{
+  "name": "@tundralibs/oql",
+  "version": "0.1.0",
+  "description": "Object Query Language for Tundra. A unified query language to access and manipulate data in different databases.",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "imports": {}
+}

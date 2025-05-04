@@ -3,8 +3,8 @@ import { SqliteError } from '$sqlite';
 import {
   type DAMEngineErrorMeta,
   DAMEngineQueryError,
-} from '../../errors/mod.ts';
-import type { Query } from '../../../query/mod.ts';
+} from '../../../errors/mod.ts';
+import type { Query } from '../../../types/mod.ts';
 
 /**
  * Error thrown when a query to a SQLite database fails
