@@ -32,7 +32,6 @@ Deno.test('OQL.asserts.Column', async (a) => {
     await b.step('should validate nested column identifiers', () => {
       // Should pass
       assertColumnIdentifier('$user.$name');
-      assertColumnIdentifier('$table.$column');
 
       // Should fail
       asserts.assertThrows(

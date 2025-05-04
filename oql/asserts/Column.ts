@@ -1,6 +1,7 @@
 import type { ColumnDefinition, ColumnIdentifier } from '../types/mod.ts';
 import {
   type DataType,
+  DataTypes,
   DateDataTypes,
   DecimalDataTypes,
   StringDataTypes,
@@ -46,7 +47,7 @@ export const assertDataType: (x: unknown) => asserts x is DataType = (
     throw new TypeError(`Expected a string, but received: ${typeof x}`);
   }
 
-  if (!Object.keys(DateDataTypes).includes(x)) {
+  if (!Object.keys(DataTypes).includes(x)) {
     throw new TypeError(`Invalid data type: ${x}`);
   }
 };

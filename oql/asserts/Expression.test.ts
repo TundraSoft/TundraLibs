@@ -42,7 +42,7 @@ Deno.test('OQL.asserts.Expression', async (a) => {
       asserts.assertThrows(
         () => assertExpression(null),
         TypeError,
-        'must ba an object',
+        'Expression must be an object with $expr property',
       );
 
       asserts.assertThrows(

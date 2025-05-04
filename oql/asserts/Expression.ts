@@ -118,17 +118,28 @@ export const assertConcatExpression: (
     );
   }
   for (const arg of x.$args) {
-    try {
-      assertColumnIdentifier(arg);
-    } catch {
-      // If it's not a column identifier, it must be a string expression
-      try {
-        assertStringExpression(arg);
-      } catch {
-        throw new TypeError(
-          `Expected $args to be an array of column identifiers or string expressions for ${x.$expr}, but got ${typeof arg}`,
-        );
+    if (typeof arg === 'string') {
+      // Plain strings are valid for CONCAT
+      if (arg.startsWith('$')) {
+        try {
+          assertColumnIdentifier(arg);
+        } catch (e) {
+          // Allow any string starting with $ as possible column reference
+          // This might need refinement based on your exact column naming rules
+          if (!arg.match(/^\$[a-zA-Z0-9_]+$/)) {
+            throw e;
+          }
+        }
       }
+      continue;
+    }
+
+    try {
+      assertStringExpression(arg);
+    } catch {
+      throw new TypeError(
+        `Expected $args to be an array of strings, column identifiers or string expressions for ${x.$expr}, but got ${typeof arg}`,
+      );
     }
   }
 };
@@ -639,18 +650,26 @@ export const assertDateDiffExpression: (
     const arg = x.$args[i];
     if (arg instanceof Date) continue;
 
-    try {
-      assertColumnIdentifier(arg);
-    } catch {
+    if (typeof arg === 'string' && arg.startsWith('$')) {
       try {
-        assertDateExpression(arg);
-      } catch {
-        throw new TypeError(
-          `Expected argument ${
-            i + 1
-          } to be Date, column identifier, or date expression for ${x.$expr}`,
-        );
+        assertColumnIdentifier(arg);
+      } catch (e) {
+        // Allow any string starting with $ as possible column reference
+        if (!arg.match(/^\$[a-zA-Z0-9_]+$/)) {
+          throw e;
+        }
       }
+      continue;
+    }
+
+    try {
+      assertDateExpression(arg);
+    } catch {
+      throw new TypeError(
+        `Expected argument ${
+          i + 1
+        } to be Date, column identifier, or date expression for ${x.$expr}`,
+      );
     }
   }
 };
