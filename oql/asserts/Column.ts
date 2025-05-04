@@ -2,7 +2,6 @@ import type { ColumnDefinition, ColumnIdentifier } from '../types/mod.ts';
 import {
   type DataType,
   DataTypes,
-  DateDataTypes,
   DecimalDataTypes,
   StringDataTypes,
 } from '../const/DataTypes.ts';

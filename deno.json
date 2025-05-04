@@ -32,7 +32,8 @@
       "./.sonarlint",
       "./.devcontainer",
       "**/fixtures/**",
-      "**/tests/**"
+      "**/tests/**",
+      "**/*.test.ts"
     ]
   },
   "fmt": {
