@@ -28,7 +28,7 @@ Deno.test('Cacher.MemCacher', async (t) => {
       try {
         await memcached.clear();
         await memcached.finalize();
-      } catch (e) {
+      } catch {
         // Ignore errors during teardown
       }
     }

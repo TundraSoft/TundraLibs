@@ -247,4 +247,4 @@ class Manager {
  * });
  * ```
  */
-export const CacherManager = new Manager();
+export const CacherManager: Manager = new Manager();

@@ -4,14 +4,13 @@ import {
   CacherError,
   CacherOperationError,
 } from '../errors/mod.ts';
-import { Engine } from '../Engines.ts';
 
 Deno.test('Cacher.Errors', async (t) => {
   await t.step('CacherError', async (t) => {
     await t.step('should create a basic error with metadata', () => {
       const metadata = {
         name: 'test-cacher',
-        engine: 'MEMORY' as Engine,
+        engine: 'MEMORY',
         extra: 'test-data',
       };
 
@@ -26,7 +25,7 @@ Deno.test('Cacher.Errors', async (t) => {
       const cause = new Error('Original error');
       const metadata = {
         name: 'test-cacher',
-        engine: 'MEMORY' as Engine,
+        engine: 'MEMORY',
       };
 
       const error = new CacherError('Error with cause', metadata, cause);
@@ -40,7 +39,7 @@ Deno.test('Cacher.Errors', async (t) => {
     await t.step('should create a config error with metadata', () => {
       const metadata = {
         name: 'test-cacher',
-        engine: 'MEMORY' as Engine,
+        engine: 'MEMORY',
         configKey: 'defaultExpiry',
         configValue: -1,
       };
@@ -57,7 +56,7 @@ Deno.test('Cacher.Errors', async (t) => {
     await t.step('should extend CacherError', () => {
       const metadata = {
         name: 'test-cacher',
-        engine: 'MEMORY' as Engine,
+        engine: 'MEMORY',
         configKey: 'defaultExpiry',
         configValue: -1,
       };
@@ -72,7 +71,7 @@ Deno.test('Cacher.Errors', async (t) => {
     await t.step('should create an operation error with metadata', () => {
       const metadata = {
         name: 'test-cacher',
-        engine: 'MEMORY' as Engine,
+        engine: 'MEMORY',
         operation: 'SET' as const,
         key: 'test-key',
         expiry: -1,
@@ -90,7 +89,7 @@ Deno.test('Cacher.Errors', async (t) => {
     await t.step('should extend CacherError', () => {
       const metadata = {
         name: 'test-cacher',
-        engine: 'MEMORY' as Engine,
+        engine: 'MEMORY',
         operation: 'GET' as const,
         key: 'test-key',
       };
@@ -107,7 +106,7 @@ Deno.test('Cacher.Errors', async (t) => {
       // that the basic structure follows the pattern of extending CacherError
       const error = new CacherError('Base error', {
         name: 'test-cacher',
-        engine: 'MEMORY' as Engine,
+        engine: 'MEMORY',
       });
 
       asserts.assert('message' in error);

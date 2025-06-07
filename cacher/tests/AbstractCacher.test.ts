@@ -1,12 +1,11 @@
 import * as asserts from '$asserts';
 import { AbstractCacher } from '../AbstractCacher.ts';
 import { CacherConfigError, CacherOperationError } from '../errors/mod.ts';
-import { Engine } from '../Engines.ts';
 import type { CacherOptions, CacheValue } from '../types/mod.ts';
 
 // Test implementation of AbstractCacher
 class TestCacher extends AbstractCacher {
-  public readonly Engine: Engine = 'MEMORY';
+  public readonly Engine: string = 'MEMORY';
 
   private store: Record<string, CacheValue> = {};
 
@@ -48,7 +47,6 @@ Deno.test('Cacher.AbstractCacher', async (t) => {
     await t.step('should create an instance with valid options', () => {
       const cacher = new TestCacher('test-cacher', {
         defaultExpiry: 600,
-        engine: 'MEMORY',
       });
 
       asserts.assert(cacher instanceof AbstractCacher);
@@ -73,15 +71,6 @@ Deno.test('Cacher.AbstractCacher', async (t) => {
         () => new TestCacher('test-cacher', { defaultExpiry: 300000 }),
         CacherConfigError,
         'Default Expiry (defaultExpiry) must be a positive number between 0 and 216000',
-      );
-    });
-
-    await t.step('should throw for invalid engine', () => {
-      asserts.assertThrows(
-        // @ts-ignore - Testing invalid engine
-        () => new TestCacher('test-cacher', { engine: 'INVALID_ENGINE' }),
-        CacherConfigError,
-        'Unknown or unsupported engine',
       );
     });
   });

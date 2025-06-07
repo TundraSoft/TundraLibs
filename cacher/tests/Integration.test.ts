@@ -1,14 +1,12 @@
 import * as asserts from '$asserts';
-import { MemoryCacher, type MemoryCacherOptions } from '../engines/mod.ts';
-import { Engine } from '../Engines.ts';
-import type { CacherOptions } from '../types/mod.ts';
+import { MemoryCacher } from '../engines/mod.ts';
 import { AbstractCacher } from '../AbstractCacher.ts';
 
 // Simplified helper for creating cachers of different types
-function createCacher(engine: Engine, name: string): AbstractCacher<any> {
+function createCacher(engine: string, name: string): AbstractCacher<any> {
   // For now, we'll only use MemoryCacher for integration tests
   // since it doesn't require external connections
-  return new MemoryCacher(name, { engine: 'MEMORY' } as MemoryCacherOptions);
+  return new MemoryCacher(name, {});
 }
 
 Deno.test('Cacher.Integration', async (t) => {
