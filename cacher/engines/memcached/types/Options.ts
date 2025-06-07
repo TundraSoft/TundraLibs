@@ -17,11 +17,6 @@ import type { CacherOptions } from '../../../types/mod.ts';
  */
 export type MemCacherOptions = CacherOptions & {
   /**
-   * The cacher engine identifier. Must be 'MEMCACHED'.
-   */
-  engine: 'MEMCACHED';
-
-  /**
    * The Memcached server host.
    * Required.
    */

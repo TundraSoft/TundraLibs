@@ -64,7 +64,7 @@ export class MemCacher extends AbstractCacher<MemCacherOptions> {
    */
   constructor(name: string, options: Partial<MemCacherOptions>) {
     options = {
-      ...{ engine: 'MEMCACHED', port: 11211, maxBufferSize: 10 },
+      ...{ port: 11211, maxBufferSize: 10 },
       ...options,
     };
     super(name, options);

@@ -72,7 +72,7 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
    */
   constructor(name: string, options: Partial<RedisCacherOptions>) {
     options = {
-      ...{ engine: 'REDIS', port: 6379 },
+      ...{ port: 6379 },
       ...options,
     };
     super(name, options);
@@ -273,7 +273,7 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
    * @protected
    * @override
    */
-  protected override _processOption<K extends keyof RedisCacherOptions>(
+  protected override _processOption<K extends keyof RedisCacherOptions>( //NOSONAR
     key: K,
     value: RedisCacherOptions[K],
   ): RedisCacherOptions[K] {

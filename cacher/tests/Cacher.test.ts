@@ -1,48 +1,51 @@
 import * as asserts from '$asserts';
-import { Cacher } from '../Cacher.ts';
+import { CacherManager } from '../CacheManager.ts';
 import { CacherConfigError } from '../errors/mod.ts';
 import { MemCacher, MemoryCacher, RedisCacher } from '../engines/mod.ts';
-
-// Helper to ensure all cachers are destroyed after tests
-const destroyAll = async () => {
-  await Cacher.destroyAll();
-};
 
 Deno.test('Cacher Instance Manager', async (t) => {
   await t.step('creating instances', async (d) => {
     await d.step('should create a MemoryCacher instance', async () => {
       try {
-        const cacher = await Cacher.create('memory-test', {
-          engine: 'MEMORY',
-        });
+        const cacher = await CacherManager.create(
+          'MEMORY',
+          'memory-test',
+          {
+            engine: 'MEMORY',
+          },
+        );
 
         asserts.assert(cacher instanceof MemoryCacher);
         asserts.assertEquals(cacher.name, 'memory-test');
         asserts.assertEquals(cacher.Engine, 'MEMORY');
       } finally {
-        await Cacher.destroy('memory-test');
+        await CacherManager.destroy('memory-test');
       }
     });
 
     await d.step('should create a MemCacher instance', async () => {
       try {
-        const cacher = await Cacher.create('memcached-test', {
-          engine: 'MEMCACHED',
-          host: 'localhost',
-          port: 11211,
-        });
+        const cacher = await CacherManager.create(
+          'MEMCACHED',
+          'memcached-test',
+          {
+            engine: 'MEMCACHED',
+            host: 'localhost',
+            port: 11211,
+          },
+        );
 
         asserts.assert(cacher instanceof MemCacher);
         asserts.assertEquals(cacher.name, 'memcached-test');
         asserts.assertEquals(cacher.Engine, 'MEMCACHED');
       } finally {
-        await Cacher.destroy('memcached-test');
+        await CacherManager.destroy('memcached-test');
       }
     });
 
     await d.step('should create a RedisCacher instance', async () => {
       try {
-        const cacher = await Cacher.create('redis-test', {
+        const cacher = await CacherManager.create('REDIS', 'redis-test', {
           engine: 'REDIS',
           host: 'localhost',
           port: 6379,
@@ -52,14 +55,14 @@ Deno.test('Cacher Instance Manager', async (t) => {
         asserts.assertEquals(cacher.name, 'redis-test');
         asserts.assertEquals(cacher.Engine, 'REDIS');
       } finally {
-        await Cacher.destroy('redis-test');
+        await CacherManager.destroy('redis-test');
       }
     });
 
     await d.step('should reject invalid options for MemCacher', async () => {
       await asserts.assertRejects(
         async () => {
-          await Cacher.create('invalid-memcached', {
+          await CacherManager.create('MEMCACHED', 'invalid-memcached', {
             engine: 'MEMCACHED',
             // Missing host
           });
@@ -72,7 +75,7 @@ Deno.test('Cacher Instance Manager', async (t) => {
     await d.step('should reject invalid options for RedisCacher', async () => {
       await asserts.assertRejects(
         async () => {
-          await Cacher.create('invalid-redis', {
+          await CacherManager.create('REDIS', 'invalid-redis', {
             engine: 'REDIS',
             // Missing host
           });
@@ -85,12 +88,10 @@ Deno.test('Cacher Instance Manager', async (t) => {
     await d.step('should reject unknown engine', async () => {
       await asserts.assertRejects(
         async () => {
-          await Cacher.create('invalid-engine', {
-            engine: 'UNKNOWN' as any,
-          });
+          await CacherManager.create('BAH', 'invalid-engine', {});
         },
         Error,
-        'Unsupported engine',
+        "Cache engine 'BAH' not found",
       );
     });
   });
@@ -99,39 +100,39 @@ Deno.test('Cacher Instance Manager', async (t) => {
     await d.step('should get an existing instance', async () => {
       try {
         // Create first
-        await Cacher.create('get-test', {
+        await CacherManager.create('MEMORY', 'get-test', {
           engine: 'MEMORY',
         });
 
         // Then get
-        const instance = Cacher.get('get-test');
+        const instance = CacherManager.get('get-test');
 
         asserts.assertNotEquals(instance, undefined);
         asserts.assert(instance instanceof MemoryCacher);
       } finally {
-        await Cacher.destroy('get-test');
+        await CacherManager.destroy('get-test');
       }
     });
 
     await d.step('should return undefined for non-existent instance', () => {
-      const instance = Cacher.get('non-existent');
+      const instance = CacherManager.get('non-existent');
       asserts.assertEquals(instance, undefined);
     });
 
     await d.step('should trim instance names when getting', async () => {
       try {
         // Create with normal name
-        await Cacher.create('trim-test', {
+        await CacherManager.create('MEMORY', 'trim-test', {
           engine: 'MEMORY',
         });
 
         // Get with spaces
-        const instance = Cacher.get('  trim-test  ');
+        const instance = CacherManager.get('  trim-test  ');
 
         asserts.assertNotEquals(instance, undefined);
         asserts.assert(instance instanceof MemoryCacher);
       } finally {
-        await Cacher.destroy('trim-test');
+        await CacherManager.destroy('trim-test');
       }
     });
   });
@@ -139,19 +140,19 @@ Deno.test('Cacher Instance Manager', async (t) => {
   await t.step('checking instance existence', async (d) => {
     await d.step('should return true for existing instance', async () => {
       try {
-        await Cacher.create('has-test', {
+        await CacherManager.create('MEMORY', 'has-test', {
           engine: 'MEMORY',
         });
 
-        const exists = Cacher.has('has-test');
+        const exists = CacherManager.has('has-test');
         asserts.assertEquals(exists, true);
       } finally {
-        await Cacher.destroy('has-test');
+        await CacherManager.destroy('has-test');
       }
     });
 
     await d.step('should return false for non-existent instance', () => {
-      const exists = Cacher.has('non-existent');
+      const exists = CacherManager.has('non-existent');
       asserts.assertEquals(exists, false);
     });
   });
@@ -159,46 +160,52 @@ Deno.test('Cacher Instance Manager', async (t) => {
   await t.step('destroying instances', async (d) => {
     await d.step('should destroy a specific instance', async () => {
       // Create
-      await Cacher.create('destroy-test', {
+      await CacherManager.create('MEMORY', 'destroy-test', {
         engine: 'MEMORY',
       });
 
       // Verify it exists
-      asserts.assertEquals(Cacher.has('destroy-test'), true);
+      asserts.assertEquals(CacherManager.has('destroy-test'), true);
 
       // Destroy
-      await Cacher.destroy('destroy-test');
+      await CacherManager.destroy('destroy-test');
 
       // Verify it's gone
-      asserts.assertEquals(Cacher.has('destroy-test'), false);
+      asserts.assertEquals(CacherManager.has('destroy-test'), false);
     });
 
     await d.step(
       'should do nothing when destroying non-existent instance',
       async () => {
-        const result = await Cacher.destroy('non-existent');
+        const result = await CacherManager.destroy('non-existent');
         asserts.assertEquals(result, undefined);
       },
     );
 
     await d.step('should destroy all instances', async () => {
       // Create multiple instances
-      await Cacher.create('destroy-all-1', { engine: 'MEMORY' });
-      await Cacher.create('destroy-all-2', { engine: 'MEMORY' });
-      await Cacher.create('destroy-all-3', { engine: 'MEMORY' });
+      await CacherManager.create('MEMORY', 'destroy-all-1', {
+        engine: 'MEMORY',
+      });
+      await CacherManager.create('MEMORY', 'destroy-all-2', {
+        engine: 'MEMORY',
+      });
+      await CacherManager.create('MEMORY', 'destroy-all-3', {
+        engine: 'MEMORY',
+      });
 
       // Verify they exist
-      asserts.assertEquals(Cacher.has('destroy-all-1'), true);
-      asserts.assertEquals(Cacher.has('destroy-all-2'), true);
-      asserts.assertEquals(Cacher.has('destroy-all-3'), true);
+      asserts.assertEquals(CacherManager.has('destroy-all-1'), true);
+      asserts.assertEquals(CacherManager.has('destroy-all-2'), true);
+      asserts.assertEquals(CacherManager.has('destroy-all-3'), true);
 
       // Destroy all
-      await Cacher.destroyAll();
+      await CacherManager.destroyAll();
 
       // Verify they're all gone
-      asserts.assertEquals(Cacher.has('destroy-all-1'), false);
-      asserts.assertEquals(Cacher.has('destroy-all-2'), false);
-      asserts.assertEquals(Cacher.has('destroy-all-3'), false);
+      asserts.assertEquals(CacherManager.has('destroy-all-1'), false);
+      asserts.assertEquals(CacherManager.has('destroy-all-2'), false);
+      asserts.assertEquals(CacherManager.has('destroy-all-3'), false);
     });
   });
 
@@ -208,19 +215,19 @@ Deno.test('Cacher Instance Manager', async (t) => {
       async () => {
         try {
           // Create first instance
-          const instance1 = await Cacher.create('reuse-test', {
+          const instance1 = await CacherManager.create('MEMORY', 'reuse-test', {
             engine: 'MEMORY',
           });
 
           // Try to create again with same name
-          const instance2 = await Cacher.create('reuse-test', {
+          const instance2 = await CacherManager.create('MEMORY', 'reuse-test', {
             engine: 'MEMORY',
           });
 
           // Should be the same instance
           asserts.assertStrictEquals(instance1, instance2);
         } finally {
-          await Cacher.destroy('reuse-test');
+          await CacherManager.destroy('reuse-test');
         }
       },
     );
@@ -229,27 +236,35 @@ Deno.test('Cacher Instance Manager', async (t) => {
       'should be able to create new instance after destroying',
       async () => {
         // Create
-        const instance1 = await Cacher.create('recreate-test', {
-          engine: 'MEMORY',
-        });
+        const instance1 = await CacherManager.create(
+          'MEMORY',
+          'recreate-test',
+          {
+            engine: 'MEMORY',
+          },
+        );
 
         // Destroy
-        await Cacher.destroy('recreate-test');
+        await CacherManager.destroy('recreate-test');
 
         // Create again
-        const instance2 = await Cacher.create('recreate-test', {
-          engine: 'MEMORY',
-        });
+        const instance2 = await CacherManager.create(
+          'MEMORY',
+          'recreate-test',
+          {
+            engine: 'MEMORY',
+          },
+        );
 
         // Should be different instances
         asserts.assertNotStrictEquals(instance1, instance2);
 
         // Clean up
-        await Cacher.destroy('recreate-test');
+        await CacherManager.destroy('recreate-test');
       },
     );
   });
 
   // Final cleanup
-  await Cacher.destroyAll();
+  await CacherManager.destroyAll();
 });

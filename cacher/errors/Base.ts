@@ -1,5 +1,4 @@
 import { BaseError } from '@tundralibs/utils';
-import { Engine } from '../Engines.ts';
 /**
  * Metadata for Cacher errors.
  * All Cacher errors include at minimum the name and engine of the cacher implementation.
@@ -8,7 +7,7 @@ export type CacherErrorMeta = {
   /** The cacher instance name */
   name: string;
   /** The Engine */
-  engine: Engine;
+  engine: string;
 } & Record<string, unknown>;
 
 /**

@@ -1,6 +1,5 @@
 import { Options } from '@tundralibs/utils';
 import { CacherOptions, CacheValue, CacheValueOptions } from './types/mod.ts';
-import { assertEngine, type Engine } from './Engines.ts';
 import { CacherConfigError, CacherOperationError } from './errors/mod.ts';
 
 /**
@@ -23,9 +22,9 @@ export abstract class AbstractCacher<O extends CacherOptions = CacherOptions>
   extends Options<O> {
   /**
    * The engine type identifier for this cacher.
-   * Must be set by implementing classes to a valid {@link Engine} value.
+   * Must be set by implementing classes.
    */
-  public abstract readonly Engine: Engine;
+  public abstract readonly Engine: string;
 
   /**
    * The name of this cacher instance.
@@ -285,37 +284,22 @@ export abstract class AbstractCacher<O extends CacherOptions = CacherOptions>
     key: K,
     value: O[K],
   ): O[K] {
-    switch (key) {
-      case 'defaultExpiry':
-        value ??= 300 as O[K];
-        if (
-          typeof value !== 'number' || isNaN(value) || value < 0 ||
-          value > 216000
-        ) {
-          throw new CacherConfigError(
-            `Default Expiry (${key}) must be a positive number between 0 and 216000.`,
-            {
-              name: 'adf',
-              engine: 'MEMCACHED',
-              configKey: 'defaultExpiry',
-              configValue: value,
-            },
-          );
-        }
-        break;
-      case 'engine':
-        if (!assertEngine(value)) {
-          throw new CacherConfigError(
-            `Unknown or unsupported engine (${value}).`,
-            {
-              name: 'sdf',
-              engine: 'MEMCACHED',
-              configKey: 'engine',
-              configValue: value,
-            },
-          );
-        }
-        break;
+    if (key === 'defaultExpiry') {
+      value ??= 300 as O[K];
+      if (
+        typeof value !== 'number' || isNaN(value) || value < 0 ||
+        value > 216000
+      ) {
+        throw new CacherConfigError(
+          `Default Expiry (${key}) must be a positive number between 0 and 216000.`,
+          {
+            name: this.name ?? 'N/A',
+            engine: this.Engine ?? 'N/A',
+            configKey: 'defaultExpiry',
+            configValue: value,
+          },
+        );
+      }
     }
     return super._processOption(key, value) as O[K];
   }

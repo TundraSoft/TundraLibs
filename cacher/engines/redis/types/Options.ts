@@ -19,11 +19,6 @@ import type { CacherOptions } from '../../../types/mod.ts';
  */
 export type RedisCacherOptions = CacherOptions & {
   /**
-   * The cacher engine identifier. Must be 'REDIS'.
-   */
-  engine: 'REDIS';
-
-  /**
    * The Redis server host.
    * Required.
    */

@@ -16,9 +16,4 @@ import type { CacherOptions } from '../../../types/mod.ts';
  * };
  * ```
  */
-export type MemoryCacherOptions = CacherOptions & {
-  /**
-   * The cacher engine identifier. Must be 'MEMORY'.
-   */
-  engine: 'MEMORY';
-};
+export type MemoryCacherOptions = CacherOptions;

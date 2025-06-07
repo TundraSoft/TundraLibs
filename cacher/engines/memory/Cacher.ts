@@ -58,10 +58,6 @@ export class MemoryCacher extends AbstractCacher<MemoryCacherOptions> {
    * @param options - Configuration options for this cacher
    */
   constructor(name: string, options: Partial<MemoryCacherOptions>) {
-    options = {
-      ...{ engine: 'MEMORY' },
-      ...options,
-    };
     super(name, options);
   }
 

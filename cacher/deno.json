@@ -4,7 +4,9 @@
   "description": "A simple caching utility. Supports In-Memory/Memcached and Redis caching.",
   "exports": {
     ".": "./mod.ts",
-    "./engines": "./engines/mod.ts"
+    "./engines": "./engines/mod.ts",
+    "./types": "./types/mod.ts",
+    "./errors": "./errors/mod.ts"
   },
   "imports": {
     "$redis": "jsr:@db/redis@^0.38.0",
