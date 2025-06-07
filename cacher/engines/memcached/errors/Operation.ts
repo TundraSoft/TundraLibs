@@ -8,6 +8,7 @@ import { CacherOperationError } from '../../../errors/mod.ts';
  *
  * @extends CacherOperationError
  * @see {@link MemCacher} The class that might throw this error
+ * @see {@link CacherOperationError} The base error class for operation failures
  * @example
  * ```ts
  * try {

@@ -37,6 +37,10 @@ export class RedisCacherOperationError extends CacherOperationError {
     },
     cause?: Error,
   ) {
-    super('Error performing ${operation}', { engine: 'REDIS', ...meta }, cause);
+    super(
+      'Error performing ${operation}',
+      { engine: 'REDIS', ...meta },
+      cause,
+    );
   }
 }

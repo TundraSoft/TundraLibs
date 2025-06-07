@@ -8,6 +8,7 @@ import { CacherError } from '../../../errors/Base.ts';
  *
  * @extends CacherError
  * @see {@link RedisCacher} The class that might throw this error
+ * @see {@link RedisCacherOptions} For the connection configuration options
  * @example
  * ```ts
  * try {
@@ -44,8 +45,8 @@ export class RedisCacherConnectError extends CacherError {
     cause?: Error,
   ) {
     super(
-      `Error/Failed to establish connection with REDIS Server (\${host}:\${port} ${
-        (!meta.username) ? ' (with credentials)' : ''
+      `Error/Failed to establish connection with REDIS Server (${meta.host}:${meta.port}${
+        (meta.username) ? ' (with credentials)' : ''
       })`,
       { engine: 'REDIS', ...meta },
       cause,

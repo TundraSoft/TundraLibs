@@ -3,8 +3,10 @@ import type { CacherOptions } from '../../../types/mod.ts';
 /**
  * Configuration options for the Redis cacher.
  *
- * @extends CacherOptions
+ * @extends CacherOptions Base options inherited by all cachers
  * @see {@link RedisCacher} The class that uses these options
+ * @see {@link CacherOptions} For common caching options
+ * @see {@link RedisCacherConnectError} Error thrown when connection fails due to invalid options
  * @example
  * ```ts
  * const options: RedisCacherOptions = {
@@ -47,6 +49,7 @@ export type RedisCacherOptions = CacherOptions & {
 
   /**
    * Path to TLS certificate file for secure connections.
+   * If provided, enables secure connection to Redis server.
    */
-  certPath: string;
+  certPath?: string;
 };

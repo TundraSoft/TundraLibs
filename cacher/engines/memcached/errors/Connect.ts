@@ -8,6 +8,7 @@ import { CacherError } from '../../../errors/Base.ts';
  *
  * @extends CacherError
  * @see {@link MemCacher} The class that might throw this error
+ * @see {@link MemCacherOptions} For the connection configuration options
  * @example
  * ```ts
  * try {
@@ -44,9 +45,10 @@ export class MemCacherConnectError extends CacherError {
     cause?: Error,
   ) {
     super(
-      `Error/Failed to establish connection with MEMCACHED Server (\${host}:\${port} ${
-        (!meta.username) ? ' (with credentials)' : ''
-      })`,
+      'Error/Failed to establish connection with MEMCACHED Server (${host}:${port}' +
+        (meta.username)
+        ? ' (with credentials)'
+        : '' + ')',
       { engine: 'MEMCACHED', ...meta },
       cause,
     );

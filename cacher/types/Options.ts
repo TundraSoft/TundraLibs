@@ -1,5 +1,20 @@
 /**
- * Options for configuring the cache driver.
+ * Base configuration options for all cache drivers.
+ *
+ * These options are common to all cacher implementations and can be extended
+ * by specific implementations with their own additional options.
+ *
+ * @see {@link AbstractCacher} The base class for all cacher implementations
+ * @see {@link MemoryCacherOptions} Options for in-memory caching
+ * @see {@link MemCacherOptions} Options for Memcached integration
+ * @see {@link RedisCacherOptions} Options for Redis integration
+ * @see {@link CacherConfigError} Error thrown when options are invalid
+ * @example
+ * ```ts
+ * const baseOptions: CacherOptions = {
+ *   defaultExpiry: 300 // 5 minutes
+ * };
+ * ```
  */
 export type CacherOptions = {
   /**

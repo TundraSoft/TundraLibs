@@ -10,9 +10,7 @@ Deno.test('Cacher Instance Manager', async (t) => {
         const cacher = await CacherManager.create(
           'MEMORY',
           'memory-test',
-          {
-            engine: 'MEMORY',
-          },
+          {},
         );
 
         asserts.assert(cacher instanceof MemoryCacher);
@@ -29,7 +27,6 @@ Deno.test('Cacher Instance Manager', async (t) => {
           'MEMCACHED',
           'memcached-test',
           {
-            engine: 'MEMCACHED',
             host: 'localhost',
             port: 11211,
           },

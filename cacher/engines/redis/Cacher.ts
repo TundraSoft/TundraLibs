@@ -303,7 +303,7 @@ export class RedisCacher extends AbstractCacher<RedisCacherOptions> {
         }
         break;
       case 'db':
-        if (value !== undefined || value !== null) {
+        if (value !== undefined && value !== null) {
           if (typeof value !== 'number' || value < 0) {
             throw new CacherConfigError(
               'Redis db must be a positive number',
