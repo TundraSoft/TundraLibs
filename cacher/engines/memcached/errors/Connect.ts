@@ -46,9 +46,7 @@ export class MemCacherConnectError extends CacherError {
   ) {
     super(
       'Error/Failed to establish connection with MEMCACHED Server (${host}:${port}' +
-        (meta.username)
-        ? ' (with credentials)'
-        : '' + ')',
+        (meta.username ? ' with credentials' : '') + ')',
       { engine: 'MEMCACHED', ...meta },
       cause,
     );

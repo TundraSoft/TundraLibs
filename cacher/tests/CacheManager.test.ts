@@ -65,7 +65,7 @@ Deno.test('Cacher Instance Manager', async (t) => {
           });
         },
         CacherConfigError,
-        'Missing required property: host',
+        'Host is required',
       );
     });
 
@@ -78,7 +78,7 @@ Deno.test('Cacher Instance Manager', async (t) => {
           });
         },
         CacherConfigError,
-        'Missing required property: host',
+        'Host is required',
       );
     });
 

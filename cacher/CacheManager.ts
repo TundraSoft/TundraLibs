@@ -64,7 +64,7 @@ class Manager {
    */
   private registerDefaultEngines(): void {
     this.addCacheEngine('MEMORY', MemoryCacher);
-    this.addCacheEngine('MEMCACHE', MemCacher);
+    this.addCacheEngine('MEMCACHED', MemCacher);
     this.addCacheEngine('REDIS', RedisCacher);
   }
 

@@ -14,7 +14,6 @@ Deno.test('Memcached Error Classes', async (t) => {
           host: 'localhost',
           port: 11211,
         });
-
         asserts.assert(error.message.includes('localhost:11211'));
         asserts.assert(error.message.includes('MEMCACHED Server'));
         asserts.assertEquals(error.name, 'MemCacherConnectError');
