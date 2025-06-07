@@ -17,13 +17,13 @@ coverage:
       default:
         target: 70%
         threshold: 5%
-    changes: 'yes'
+    changes: true
 comment:
   layout: 'reach, diff, flags, files, footer'
   behavior: default
   require_changes: false
-  require_base: 'no'
-  require_head: 'yes'
+  require_base: false
+  require_head: true
   after_n_builds: 1
 component_management:
   default_rules:

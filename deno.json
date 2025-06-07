@@ -80,7 +80,7 @@
     "check:lint": "deno lint",
     "check:types": "deno check **/*.ts",
     "test": "deno task test:run && deno task test:report && deno task test:bench",
-    "test:run": "deno test --allow-read --allow-write --allow-env --allow-net --allow-ffi --allow-sys --parallel --coverage=coverage --junit-path=./test-report.xml",
+    "test:run": "deno test --allow-read --allow-write --allow-env --allow-net --allow-ffi --allow-sys --unstable-ffi --parallel --coverage=coverage --junit-path=./test-report.xml",
     "test:report": "deno coverage coverage --lcov cov --output=coverage/report.lcov",
     "test:bench": "deno bench --allow-read --allow-write --allow-env --allow-net --allow-ffi --allow-sys || true",
     "workspace:add": "deno run --allow-read --allow-sys --allow-write .github/workspace.ts add",

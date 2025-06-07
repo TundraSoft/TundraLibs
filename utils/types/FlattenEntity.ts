@@ -25,7 +25,10 @@ export type FlattenEntity<
         >
       // Normal value
       : {
-        [KK in KeyPrefix extends '' ? K : `$${KeyPrefix}.$${K & string}`]: T[K];
+        [
+          KK in KeyPrefix extends '' ? `$${K & string}`
+            : `$${KeyPrefix}.$${K & string}`
+        ]: T[K];
       };
   }[keyof T] extends infer O ? { [P in keyof O]: O[P] } : never
 > extends infer O ? { [P in keyof O]: O[P] } : never;

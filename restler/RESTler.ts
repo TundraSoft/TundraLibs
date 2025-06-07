@@ -139,7 +139,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     options: RESTlerMethodPayload & RESTlerRequestOptions,
   ): Promise<RESTlerResponse<B>> {
     await this._authInjector(endpoint, options);
-    const request = this._processEndpoint(endpoint, options);
+    const request = this.__processEndpoint(endpoint, options);
     const response: RESTlerResponse<B> = {
       url: request.url,
       status: null,
@@ -149,16 +149,16 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     const start = performance.now();
     try {
       if (this.getOption('socketPath')) {
-        const resp = await this._makeUnixSocketRequest(request);
-        response.status = resp.status as StatusCode;
-        response.statusText = STATUS_TEXT[resp.status as StatusCode] ||
+        const resp = await this.__makeUnixSocketRequest(request);
+        response.status = resp.status;
+        response.statusText = STATUS_TEXT[resp.status] ??
           'Unknown';
         response.headers = resp.headers;
         response.body = resp.body as B;
       } else {
-        const resp = await this._makeFetchRequest(request);
+        const resp = await this.__makeFetchRequest(request);
         response.status = resp.status as StatusCode;
-        response.statusText = STATUS_TEXT[resp.status as StatusCode] ||
+        response.statusText = STATUS_TEXT[resp.status as StatusCode] ??
           'Unknown';
         response.headers = Object.fromEntries(resp.headers.entries());
         const contentType = resp.headers.get('content-type');
@@ -175,17 +175,17 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       // Check for rate limiting
       if (response.status && this._rateLimitStatus.includes(response.status)) {
         // Extract rate limit information from headers
-        const limit = this._extractHeaderNumber(
+        const limit = this.__extractHeaderNumber(
           response.headers,
           'x-ratelimit-limit',
           'ratelimit-limit',
         );
-        const remaining = this._extractHeaderNumber(
+        const remaining = this.__extractHeaderNumber(
           response.headers,
           'x-ratelimit-remaining',
           'ratelimit-remaining',
         );
-        const reset = this._extractHeaderNumber(
+        const reset = this.__extractHeaderNumber(
           response.headers,
           'x-ratelimit-reset',
           'ratelimit-reset',
@@ -240,7 +240,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @param ...headerNames - Possible header names to check (case-insensitive)
    * @returns The numeric value from the header, or undefined if not found or not a number
    */
-  protected _extractHeaderNumber(
+  private __extractHeaderNumber(
     headers: Record<string, string> | undefined,
     ...headerNames: string[]
   ): number | undefined {
@@ -275,15 +275,15 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @returns A complete request object ready to be executed
    * @throws {Error} If the endpoint configuration is invalid
    */
-  protected _processEndpoint(
+  private __processEndpoint(
     endpoint: RESTlerEndpoint,
     options: RESTlerMethodPayload & RESTlerRequestOptions,
   ): RESTlerRequest {
     if (endpoint.baseURL && this._validateBaseURL(endpoint.baseURL) === false) {
       throw new Error('Invalid endpoint baseURL');
     }
-    const version = endpoint.version || this.getOption('version') || '';
-    const baseURL = endpoint.baseURL || this.getOption('baseURL');
+    const version = endpoint.version ?? this.getOption('version') ?? '';
+    const baseURL = endpoint.baseURL ?? this.getOption('baseURL');
     const headers: Record<string, string> = this._defaultHeaders;
     const port = endpoint.port || this.getOption('port');
     if (endpoint.port && !this._validatePort(endpoint.port)) {
@@ -335,7 +335,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @param request - The prepared request object
    * @returns Promise resolving to a fetch Response
    */
-  protected async _makeFetchRequest(
+  private async __makeFetchRequest(
     request: RESTlerRequest,
   ): Promise<Response> {
     const headers = new Headers(request.headers);
@@ -396,7 +396,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @returns Promise resolving to a response object
    * @throws {RESTlerRequestError} If there's an error communicating with the socket
    */
-  protected async _makeUnixSocketRequest( //NOSONAR
+  private async __makeUnixSocketRequest( //NOSONAR
     request: RESTlerRequest,
   ): Promise<
     { status: StatusCode; body: ResponseBody; headers: Record<string, string> }
@@ -420,7 +420,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
             request.headers['Content-Type'] = 'application/xml';
             break;
           case 'FORM':
-            body = this._objectToUrlEncoded(
+            body = this.__objectToUrlEncoded(
               request.payload as Record<string, string>,
             );
             request.headers['Content-Type'] =
@@ -455,7 +455,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       }\r\n\r\n${body}`;
 
       // Send request to socket and get response
-      const resp = await this._communicateWithUnixSocket(finalRequest);
+      const resp = await this.__communicateWithUnixSocket(finalRequest);
 
       // Parse response
       const [headerText, ...bodyParts] = resp.split('\r\n\r\n');
@@ -500,7 +500,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       );
 
       const rawBody = bodyParts.join('\r\n\r\n');
-      const decodedResponse = this._decodeChunkedResponse(rawBody);
+      const decodedResponse = this.__decodeChunkedResponse(rawBody);
 
       const processedBody = this._parseResponseBody(
         decodedResponse,
@@ -531,7 +531,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @returns The raw HTTP response as a string
    * @throws {Error} If there's an error communicating with the socket
    */
-  protected async _communicateWithUnixSocket(
+  private async __communicateWithUnixSocket(
     requestData: string,
   ): Promise<string> {
     const enc = new TextEncoder();
@@ -565,7 +565,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @param response - The raw response string that may be chunked
    * @returns The decoded response body
    */
-  private _decodeChunkedResponse(response: string): string {
+  private __decodeChunkedResponse(response: string): string {
     // Check if the response is chunked by looking for chunk size indicators
     if (!/^[0-9a-f]+\r\n/i.test(response)) {
       return response; // Not chunked, return as is
@@ -601,7 +601,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @param data - The data object to encode
    * @returns URL-encoded string
    */
-  private _objectToUrlEncoded(data: Record<string, string>): string {
+  private __objectToUrlEncoded(data: Record<string, string>): string {
     return Object.entries(data)
       .map(([key, value]) =>
         `${encodeURIComponent(key)}=${encodeURIComponent(value)}`

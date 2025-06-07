@@ -50,7 +50,7 @@ Deno.test('Slogger', async (t) => {
     const logger = new Slogger({
       appName: 'TestApp',
       level: SyslogSeverities.INFO,
-      handlers: {},
+      handlers: [],
     });
 
     asserts.assertEquals(logger.appName, 'TestApp');
@@ -64,7 +64,7 @@ Deno.test('Slogger', async (t) => {
           new Slogger({
             appName: 'a'.repeat(31), // Too long
             level: SyslogSeverities.INFO,
-            handlers: {},
+            handlers: [],
           }),
         Error,
         'appName must be a non-empty string with max length 30',
@@ -76,7 +76,7 @@ Deno.test('Slogger', async (t) => {
             // @ts-expect-error Testing invalid type
             appName: 123,
             level: SyslogSeverities.INFO,
-            handlers: {},
+            handlers: [],
           }),
         Error,
         'appName must be a non-empty string',
@@ -87,7 +87,7 @@ Deno.test('Slogger', async (t) => {
           new Slogger({
             appName: '',
             level: SyslogSeverities.INFO,
-            handlers: {},
+            handlers: [],
           }),
         Error,
         'appName must be a non-empty string',
@@ -101,7 +101,7 @@ Deno.test('Slogger', async (t) => {
             appName: 'TestApp',
             // @ts-expect-error Testing invalid level
             level: -1,
-            handlers: {},
+            handlers: [],
           }),
         Error,
         'Invalid log level',
@@ -113,7 +113,7 @@ Deno.test('Slogger', async (t) => {
             appName: 'TestApp',
             // @ts-expect-error Testing invalid level
             level: 8,
-            handlers: {},
+            handlers: [],
           }),
         Error,
         'Invalid log level',
@@ -125,7 +125,7 @@ Deno.test('Slogger', async (t) => {
             appName: 'TestApp',
             // @ts-expect-error Testing invalid level
             level: 'INFO',
-            handlers: {},
+            handlers: [],
           }),
         Error,
         'Invalid log level',
@@ -138,16 +138,15 @@ Deno.test('Slogger', async (t) => {
           new Slogger({
             appName: 'TestApp',
             level: SyslogSeverities.INFO,
-            handlers: {
-              handler1: {
+            handlers: [
+              {
+                name: 'handler1',
                 type: 'TestHandler',
-                options: {
-                  level: SyslogSeverities.INFO,
-                  // @ts-expect-error Testing invalid formatter type
-                  formatter: 123,
-                },
+                level: SyslogSeverities.INFO,
+                // @ts-expect-error Testing invalid formatter type
+                formatter: 123,
               },
-            },
+            ],
           }),
         Error,
         'must be a string or function',
@@ -158,15 +157,14 @@ Deno.test('Slogger', async (t) => {
           new Slogger({
             appName: 'TestApp',
             level: SyslogSeverities.INFO,
-            handlers: {
-              handler1: {
+            handlers: [
+              {
+                name: 'handler1',
                 type: 'TestHandler',
-                options: {
-                  level: SyslogSeverities.INFO,
-                  formatter: 'non-existent-formatter',
-                },
+                level: SyslogSeverities.INFO,
+                formatter: 'non-existent-formatter',
               },
-            },
+            ],
           }),
         Error,
         'not found',
@@ -177,14 +175,13 @@ Deno.test('Slogger', async (t) => {
           new Slogger({
             appName: 'TestApp',
             level: SyslogSeverities.INFO,
-            handlers: {
-              handler1: {
+            handlers: [
+              {
+                name: 'handler1',
                 type: 'NonExistentHandler',
-                options: {
-                  level: SyslogSeverities.INFO,
-                },
+                level: SyslogSeverities.INFO,
               },
-            },
+            ],
           }),
         Error,
         'not found',
@@ -257,14 +254,13 @@ Deno.test('Slogger', async (t) => {
     const logger = new Slogger({
       appName: 'TestApp',
       level: SyslogSeverities.INFO,
-      handlers: {
-        handler1: {
+      handlers: [
+        {
+          name: 'handler1',
           type: 'TestHandler',
-          options: {
-            level: SyslogSeverities.INFO,
-          },
+          level: SyslogSeverities.INFO,
         },
-      },
+      ],
     });
 
     // @ts-expect-error Accessing protected property for testing
@@ -303,52 +299,17 @@ Deno.test('Slogger', async (t) => {
     asserts.assertEquals((handlers[0] as TestHandler).initCalled, true);
   });
 
-  await t.step('supports both configuration formats', () => {
-    // Legacy format
-    const legacyLogger = new Slogger({
-      appName: 'LegacyApp',
-      level: SyslogSeverities.INFO,
-      handlers: {
-        handler1: {
-          type: 'TestHandler',
-          options: {
-            level: SyslogSeverities.INFO,
-          },
-        },
-      },
-    });
-
-    // New format
-    const newLogger = new Slogger({
-      appName: 'NewApp',
-      level: SyslogSeverities.INFO,
-      handlers: [
-        {
-          name: 'handler1',
-          type: 'TestHandler',
-          level: SyslogSeverities.INFO,
-        },
-      ],
-    });
-
-    // @ts-expect-error Accessing protected property for testing
-    asserts.assertEquals(legacyLogger._handlers.length, 1);
-    // @ts-expect-error Accessing protected property for testing
-    asserts.assertEquals(newLogger._handlers.length, 1);
-  });
-
   await t.step('log level filtering', async () => {
     const logger = new Slogger({
       appName: 'TestApp',
       level: SyslogSeverities.WARNING, // Only WARNING and higher priority
-      handlers: {
-        handler1: {
+      handlers: [
+        {
+          name: 'handler1',
           type: 'TestHandler',
-          options: {
-            level: SyslogSeverities.INFO, // Handler accepts INFO and higher
-          },
+          level: SyslogSeverities.INFO, // Handler accepts INFO and higher
         },
-      },
+      ],
     });
 
     // @ts-expect-error Accessing protected property for testing
@@ -377,14 +338,13 @@ Deno.test('Slogger', async (t) => {
     const logger2 = new Slogger({
       appName: 'TestApp',
       level: SyslogSeverities.DEBUG, // Accept all logs
-      handlers: {
-        handler2: {
+      handlers: [
+        {
+          name: 'handler2',
           type: 'TestHandler',
-          options: {
-            level: SyslogSeverities.ERROR, // Only ERROR and lower
-          },
+          level: SyslogSeverities.ERROR, // Only ERROR and lower
         },
-      },
+      ],
     });
 
     // @ts-expect-error Accessing protected property for testing
@@ -411,14 +371,13 @@ Deno.test('Slogger', async (t) => {
     const logger = new Slogger({
       appName: 'TestApp',
       level: SyslogSeverities.DEBUG, // Accept all logs
-      handlers: {
-        handler1: {
+      handlers: [
+        {
+          name: 'handler1',
           type: 'TestHandler',
-          options: {
-            level: SyslogSeverities.DEBUG,
-          },
+          level: SyslogSeverities.DEBUG,
         },
-      },
+      ],
     });
 
     // @ts-expect-error Accessing protected property for testing
@@ -460,14 +419,13 @@ Deno.test('Slogger', async (t) => {
     const logger = new Slogger({
       appName: 'TestApp',
       level: SyslogSeverities.INFO,
-      handlers: {
-        handler1: {
+      handlers: [
+        {
+          name: 'handler1',
           type: 'TestHandler',
-          options: {
-            level: SyslogSeverities.INFO,
-          },
+          level: SyslogSeverities.INFO,
         },
-      },
+      ],
     });
 
     // @ts-expect-error Accessing protected property for testing
@@ -512,14 +470,13 @@ Deno.test('Slogger', async (t) => {
       const logger = new Slogger({
         appName: 'TestApp',
         level: SyslogSeverities.INFO,
-        handlers: {
-          handler1: {
+        handlers: [
+          {
+            name: 'handler1',
             type: 'TestHandler',
-            options: {
-              level: SyslogSeverities.INFO,
-            },
+            level: SyslogSeverities.INFO,
           },
-        },
+        ],
       });
 
       // @ts-expect-error Accessing protected property for testing
@@ -555,7 +512,7 @@ Deno.test('Slogger', async (t) => {
     const logger = new Slogger({
       appName: 'TestApp',
       level: SyslogSeverities.INFO,
-      handlers: {},
+      handlers: [],
     });
 
     // @ts-expect-error Accessing protected property for testing
@@ -584,14 +541,13 @@ Deno.test('Slogger', async (t) => {
     const logger = new Slogger({
       appName: 'TestApp',
       level: SyslogSeverities.INFO,
-      handlers: {
-        handler1: {
+      handlers: [
+        {
+          name: 'handler1',
           type: 'TestHandler',
-          options: {
-            level: SyslogSeverities.INFO,
-          },
+          level: SyslogSeverities.INFO,
         },
-      },
+      ],
     });
 
     // @ts-expect-error Accessing protected property for testing

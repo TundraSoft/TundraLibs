@@ -13,14 +13,6 @@ export type SloggerHandlerOption = Omit<HandlerOptions, 'formatter'> & {
   formatter?: string | SloggerFormatter;
 };
 
-// Legacy nested configuration structure (for backwards compatibility)
-export type LegacyHandlerConfig = {
-  [name: string]: {
-    type: string;
-    options: SloggerHandlerOption;
-  };
-};
-
 // New simplified handler configuration
 export type HandlerConfig = {
   name: string;
@@ -34,7 +26,7 @@ export type SloggerOptions = {
   /** Application name for logging context */
   appName: string;
   level: SyslogSeverities;
-  handlers: HandlerConfig[] | LegacyHandlerConfig;
+  handlers: HandlerConfig[];
   /** Optional global sampling configuration to apply to all handlers */
   sampling?: SamplingOptions;
 };
@@ -135,69 +127,6 @@ export class Slogger {
         } catch (error) {
           throw new Error(
             `Failed to initialize handler '${handlerConfig.name}': ${
-              (error as Error).message
-            }`,
-          );
-        }
-      }
-    } else {
-      // Legacy format
-      for (const [handlerName, handlerConfig] of Object.entries(handlers)) {
-        try {
-          // Extract type and options from handler config
-          const { type, options } = handlerConfig;
-
-          // ...existing validation code...
-          if (!type || typeof type !== 'string') {
-            throw new Error(
-              `Handler '${handlerName}' requires a valid type string`,
-            );
-          }
-
-          if (!options || typeof options !== 'object') {
-            throw new Error(
-              `Handler options for '${handlerName}' must be an object`,
-            );
-          }
-          if (!options.level) {
-            options.level = this.level;
-          }
-          if (typeof options.level !== 'number') {
-            throw new Error(
-              `Handler '${handlerName}' requires a valid log level`,
-            );
-          }
-
-          // Resolve formatter if provided as string
-          if (options.formatter) {
-            if (typeof options.formatter === 'string') {
-              const formatter = LogManager.getFormatter(options.formatter);
-              if (!formatter) {
-                throw new Error(`Formatter '${options.formatter}' not found`);
-              }
-              options.formatter = formatter;
-            } else if (typeof options.formatter !== 'function') {
-              throw new Error(
-                `Formatter for handler '${handlerName}' must be a string or function`,
-              );
-            }
-          }
-
-          // Apply global sampling configuration if provided and not overridden at handler level
-          if (sampling && !options.sampling) {
-            options.sampling = sampling;
-          }
-
-          // Create and register the handler
-          const handler = LogManager.createHandler(
-            type,
-            handlerName,
-            options as HandlerOptions,
-          );
-          this.registerHandler(handler);
-        } catch (error) {
-          throw new Error(
-            `Failed to initialize handler '${handlerName}': ${
               (error as Error).message
             }`,
           );
