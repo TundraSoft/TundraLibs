@@ -1,4 +1,4 @@
-import { assertEquals, assertStringIncludes } from '$asserts';
+import { assertEquals } from '$asserts';
 import { GuardianError } from '../GuardianError.ts';
 
 Deno.test('GuardianError', async (t) => {

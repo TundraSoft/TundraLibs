@@ -139,7 +139,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     options: RESTlerMethodPayload & RESTlerRequestOptions,
   ): Promise<RESTlerResponse<B>> {
     await this._authInjector(endpoint, options);
-    const request = this.__processEndpoint(endpoint, options);
+    const request = this._processEndpoint(endpoint, options);
     const response: RESTlerResponse<B> = {
       url: request.url,
       status: null,
@@ -175,17 +175,17 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       // Check for rate limiting
       if (response.status && this._rateLimitStatus.includes(response.status)) {
         // Extract rate limit information from headers
-        const limit = this.__extractHeaderNumber(
+        const limit = this._extractHeaderNumber(
           response.headers,
           'x-ratelimit-limit',
           'ratelimit-limit',
         );
-        const remaining = this.__extractHeaderNumber(
+        const remaining = this._extractHeaderNumber(
           response.headers,
           'x-ratelimit-remaining',
           'ratelimit-remaining',
         );
-        const reset = this.__extractHeaderNumber(
+        const reset = this._extractHeaderNumber(
           response.headers,
           'x-ratelimit-reset',
           'ratelimit-reset',
@@ -240,7 +240,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @param ...headerNames - Possible header names to check (case-insensitive)
    * @returns The numeric value from the header, or undefined if not found or not a number
    */
-  private __extractHeaderNumber(
+  protected _extractHeaderNumber(
     headers: Record<string, string> | undefined,
     ...headerNames: string[]
   ): number | undefined {
@@ -275,7 +275,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @returns A complete request object ready to be executed
    * @throws {Error} If the endpoint configuration is invalid
    */
-  private __processEndpoint(
+  protected _processEndpoint(
     endpoint: RESTlerEndpoint,
     options: RESTlerMethodPayload & RESTlerRequestOptions,
   ): RESTlerRequest {
