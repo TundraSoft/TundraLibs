@@ -14,6 +14,7 @@ import {
   optional,
   test,
 } from './helpers/mod.ts';
+import { GuardianError } from './GuardianError.ts';
 
 /**
  * Generic constructor type for Guardian classes
@@ -193,5 +194,36 @@ export abstract class BaseGuardian<F extends FunctionType> {
     const Class = (this as any).constructor;
     const { guardian } = this;
     return new Class(optional<F, R>(guardian, defaultValue)).proxy();
+  }
+
+  public validate(
+    value: unknown,
+  ): [
+    GuardianError | null,
+    ResolvedValue<ReturnType<F>> | undefined,
+  ] {
+    try {
+      const result = this.guardian(value);
+      if (isPromiseLike(result)) {
+        throw new Error('Guardian validation cannot return a Promise');
+      }
+      return [null, result as ResolvedValue<ReturnType<F>>];
+    } catch (error) {
+      if (error instanceof GuardianError) {
+        return [error, undefined];
+      } else {
+        return [
+          new GuardianError(
+            {
+              got: value,
+              expected: this.guardian.name,
+              comparison: 'validate',
+            },
+            (error as Error).message || 'Validation failed',
+          ),
+          undefined,
+        ];
+      }
+    }
   }
 }

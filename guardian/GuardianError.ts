@@ -1,4 +1,8 @@
-import { BaseError, variableReplacer } from '@tundralibs/utils';
+import {
+  BaseError,
+  type BaseErrorJson,
+  variableReplacer,
+} from '@tundralibs/utils';
 
 export type GuardianErrorMeta = {
   // Value got
@@ -7,10 +11,8 @@ export type GuardianErrorMeta = {
   expected?: unknown;
   // Comparison type
   comparison?: string;
-  // Key (if in object or array)
-  key?: string;
-  // Path if part of nested object or array
-  path?: string;
+  // Used by array and object guardians to store the source of the error
+  cause?: Record<string, GuardianError>;
 };
 
 export class GuardianError extends BaseError<GuardianErrorMeta> {
@@ -26,12 +28,6 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     message?: string,
   ) {
     if (message === undefined) {
-      let location = '';
-      if (meta.path || meta.key) {
-        location = meta.path && meta.key
-          ? `${meta.path}.${meta.key}`
-          : meta.path || meta.key || '';
-      }
       if (meta.got !== undefined && meta.expected !== undefined) {
         message = `Expected value ${
           meta.comparison && meta.comparison.startsWith('not') ? 'not ' : ''
@@ -51,25 +47,8 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
       } else {
         message = 'Validation failed';
       }
-      message = `${message}${
-        location.trim().length > 0 ? ` (at '${location}')` : ''
-      }`;
     }
     super(message!, meta);
-  }
-
-  get path(): string | undefined {
-    return this.context.path;
-  }
-
-  get key(): string | undefined {
-    return this.context.key;
-  }
-
-  get location(): string | undefined {
-    return this.context.path && this.context.key
-      ? `${this.context.path}.${this.context.key}`
-      : this.context.path || this.context.key;
   }
 
   get got(): string | undefined {
@@ -82,6 +61,41 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     return this.context.expected
       ? GuardianError.__formatValue(this.context.expected)
       : undefined;
+  }
+
+  public override toJSON(): BaseErrorJson {
+    let causeValue: Record<string, string> | undefined = undefined;
+
+    if (this.context.cause) {
+      // Loop through causes and convert them to JSON
+      causeValue = {};
+      for (const [key, error] of Object.entries(this.context.cause)) {
+        causeValue[key] = error.message;
+      }
+    }
+
+    return {
+      name: this.name,
+      message: this._baseMessage,
+      context: this.context,
+      timeStamp: this.timeStamp.toISOString(),
+      stack: this.stack,
+      causes: causeValue,
+    };
+  }
+  public addCause(key: string, error: GuardianError): void {
+    if (this.context.cause === undefined) {
+      this.context.cause = {};
+    }
+    this.context.cause[key] = error;
+  }
+
+  public listCauses(): Array<string> {
+    return this.context.cause ? Object.keys(this.context.cause) : [];
+  }
+
+  public causeSize(): number {
+    return this.context.cause ? Object.keys(this.context.cause).length : 0;
   }
 
   private static __formatValue(value: unknown): string {

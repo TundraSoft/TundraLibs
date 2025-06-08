@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from '$asserts';
+import { assertArrayIncludes, assertEquals, assertThrows } from '$asserts';
 import { GuardianError } from '../../GuardianError.ts';
 import {
   NumberGuardian,
@@ -87,7 +87,7 @@ Deno.test('ObjectGuardian', async (t) => {
         throw new Error('Should have thrown');
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
-        assertEquals((error as GuardianError).context.key, 'age');
+        assertArrayIncludes((error as GuardianError).listCauses(), ['age']);
       }
     });
 
@@ -110,7 +110,7 @@ Deno.test('ObjectGuardian', async (t) => {
       assertThrows(
         () => guard({ name: 'John', extra: true }),
         GuardianError,
-        'Unexpected properties: extra',
+        'Schema validation failed',
       );
     });
 
@@ -127,7 +127,7 @@ Deno.test('ObjectGuardian', async (t) => {
         assertThrows(
           () => guard({ name: 'John', extra: true }),
           GuardianError,
-          'Unexpected properties: extra',
+          'Schema validation failed',
         );
       },
     );
@@ -225,7 +225,7 @@ Deno.test('ObjectGuardian', async (t) => {
         throw new Error('Should have thrown');
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
-        assertEquals((error as GuardianError).context.key, 'b');
+        assertArrayIncludes((error as GuardianError).listCauses(), ['b']);
       }
     });
   });

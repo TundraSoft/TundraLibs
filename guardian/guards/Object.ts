@@ -90,13 +90,26 @@ export class ObjectGuardian<
     options: {
       strict?: boolean; // If true, rejects objects with properties not in schema
       additionalProperties?: boolean; // If false (and strict is false), rejects objects with properties not in schema
+      message?: string; // Custom error message for validation failure
     } = {},
   ): GuardianProxy<ObjectGuardian<S>> {
-    const { strict = false, additionalProperties = true } = options;
+    const {
+      strict = false,
+      additionalProperties = true,
+      message = 'Schema validation failed',
+    } = options;
 
     return this.transform((obj) => {
       const result: Record<string, unknown> = {};
       const schemaKeys = Object.keys(schema);
+      const errors = new GuardianError(
+        {
+          got: obj,
+          expected: schemaKeys,
+          comparison: 'schema',
+        },
+        message,
+      );
 
       // Check for extra properties
       if (strict || !additionalProperties) {
@@ -105,14 +118,19 @@ export class ObjectGuardian<
         );
 
         if (extraKeys.length > 0) {
-          throw new GuardianError(
-            {
-              got: extraKeys,
-              expected: schemaKeys,
-              comparison: 'schema',
-            },
-            `Unexpected properties: ${extraKeys.join(', ')}`,
-          );
+          extraKeys.map((key) => {
+            errors.addCause(
+              key,
+              new GuardianError(
+                {
+                  got: obj[key],
+                  expected: schemaKeys,
+                  comparison: 'schema',
+                },
+                `Unexpected property '${key}' in strict mode`,
+              ),
+            );
+          });
         }
       }
 
@@ -125,12 +143,19 @@ export class ObjectGuardian<
           result[key] = propertyGuardian(value);
         } catch (error) {
           if (error instanceof GuardianError) {
-            error.context.key = error.context.key
-              ? `${key}.${error.context.key}`
-              : key;
-            error.context.path = error.context.path || '';
+            errors.addCause(key, error);
+          } else {
+            errors.addCause(
+              key,
+              new GuardianError(
+                {
+                  got: value,
+                  comparison: 'unhandled',
+                },
+                `Unexpected error validating value ${(error as Error).message}`,
+              ),
+            );
           }
-          throw error;
         }
       }
 
@@ -142,7 +167,9 @@ export class ObjectGuardian<
           }
         }
       }
-
+      if (errors.causeSize() > 0) {
+        throw errors;
+      }
       return result as S;
     }) as unknown as GuardianProxy<ObjectGuardian<S>>;
   }
@@ -247,21 +274,41 @@ export class ObjectGuardian<
    */
   public values<V>(
     valueGuardian: FunctionType<V>,
+    message?: string,
   ): GuardianProxy<ObjectGuardian<Record<string, V>>> {
     return this.transform((obj) => {
       const result: Record<string, V> = {};
-
+      const errors = new GuardianError(
+        {
+          got: obj,
+          expected: 'object with validated values',
+          comparison: 'values',
+        },
+        message ?? 'Object value validation failed',
+      );
       for (const [key, value] of Object.entries(obj)) {
         try {
           result[key] = valueGuardian(value);
         } catch (error) {
           if (error instanceof GuardianError) {
-            error.context.key = key;
+            errors.addCause(key, error);
+          } else {
+            errors.addCause(
+              key,
+              new GuardianError(
+                {
+                  got: value,
+                  comparison: 'unhandled',
+                },
+                `Unexpected error validating value ${(error as Error).message}`,
+              ),
+            );
           }
-          throw error;
         }
       }
-
+      if (errors.causeSize() > 0) {
+        throw errors;
+      }
       return result;
     }) as unknown as GuardianProxy<ObjectGuardian<Record<string, V>>>;
   }
@@ -324,10 +371,15 @@ export class ObjectGuardian<
    */
   public properties<P extends Partial<T>>(
     props: { [K in keyof P]: FunctionType<P[K]> },
+    message?: string,
   ): GuardianProxy<this> {
     const result = this.transform((obj) => {
       const result: Record<string, unknown> = { ...obj };
-
+      const errors = new GuardianError({
+        got: obj,
+        expected: Object.keys(props),
+        comparison: 'properties',
+      }, message ?? 'Validation failed for object properties');
       for (const [key, guardian] of Object.entries(props)) {
         // Skip if property doesn't exist
         if (!(key in obj)) continue;
@@ -336,12 +388,24 @@ export class ObjectGuardian<
           result[key] = guardian(obj[key]);
         } catch (error) {
           if (error instanceof GuardianError) {
-            error.context.key = key;
+            errors.addCause(key, error);
+          } else {
+            errors.addCause(
+              key,
+              new GuardianError(
+                {
+                  got: obj[key],
+                  comparison: 'unhandled',
+                },
+                `Unexpected error validating value ${(error as Error).message}`,
+              ),
+            );
           }
-          throw error;
         }
       }
-
+      if (errors.causeSize() > 0) {
+        throw errors;
+      }
       return result as T;
     });
 

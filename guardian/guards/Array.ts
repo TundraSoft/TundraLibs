@@ -21,8 +21,6 @@ import { getType } from '../helpers/mod.ts';
  */
 export class ArrayGuardian<T = unknown>
   extends BaseGuardian<FunctionType<T[]>> {
-  private elementGuardian?: FunctionType<T>;
-
   /**
    * Creates a new ArrayGuardian instance that validates if a value is an array.
    *
@@ -68,19 +66,27 @@ export class ArrayGuardian<T = unknown>
    */
   public of<U>(
     elementGuardian: FunctionType<U>,
+    message?: string,
   ): GuardianProxy<ArrayGuardian<U>> {
     return this.transform((array) => {
+      const errors = new GuardianError(
+        {
+          got: array,
+          expected: `array of ${elementGuardian.name}`,
+          comparison: 'type',
+        },
+        message ?? 'Validation failed for array elements',
+      );
       return array.map((element, index) => {
         try {
           return elementGuardian(element);
         } catch (error) {
           if (error instanceof GuardianError) {
-            // Add array index to error path
-            error.context.path = error.context.path
-              ? `${error.context.path}[${index}]`
-              : `[${index}]`;
+            errors.addCause('' + index, error);
           }
-          throw error;
+        }
+        if (errors.causeSize() > 0) {
+          throw errors;
         }
       });
     }) as unknown as GuardianProxy<ArrayGuardian<U>>;

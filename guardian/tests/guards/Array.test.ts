@@ -1,4 +1,4 @@
-import { assertEquals, assertThrows } from '$asserts';
+import { assertArrayIncludes, assertEquals, assertThrows } from '$asserts';
 import { GuardianError } from '../../GuardianError.ts';
 import {
   ArrayGuardian,
@@ -86,7 +86,7 @@ Deno.test('ArrayGuardian', async (t) => {
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
         assertEquals(
-          (error as GuardianError).context.path?.includes('[1]'),
+          (error as GuardianError).listCauses().includes('1'),
           true,
         );
       }
@@ -281,7 +281,7 @@ Deno.test('ArrayGuardian', async (t) => {
         throw new Error('Should have thrown');
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
-        assertEquals((error as GuardianError).context.path, '[2]');
+        assertArrayIncludes((error as GuardianError).listCauses(), ['2']);
       }
     });
 
@@ -298,9 +298,9 @@ Deno.test('ArrayGuardian', async (t) => {
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
         // Should include both array indices in path
-        assertEquals(
-          (error as GuardianError).context.path?.includes('[1][1]'),
-          true,
+        assertArrayIncludes(
+          (error as GuardianError).listCauses(),
+          ['1'],
         );
       }
     });
