@@ -8,9 +8,9 @@ export {
 } from './engines/mod.ts';
 
 export {
+  type CacherEngineErrorCode,
+  CacherEngineErrorCodes,
   CacherError,
-  type CacherErrorCode,
-  CacherErrorCodes,
 } from './errors/mod.ts';
 
 export type {
