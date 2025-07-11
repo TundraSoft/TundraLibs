@@ -1,37 +1,100 @@
 /**
- * ULID - Universally Unique Lexicographically Sortable Identifier
+ * @fileoverview ULID - Universally Unique Lexicographically Sortable Identifier
  *
- * Implementation of the ULID specification:
- * - 128-bit compatibility with UUID
- * - 1.21e+24 unique ULIDs per millisecond
- * - Lexicographically sortable
- * - Canonically encoded as a 26 character string
- * - Case insensitive
- * - No special characters (URL safe)
- * - Monotonic sort order
+ * A specification compliant implementation of ULID for Deno.
+ * ULIDs are 128-bit identifiers that are lexicographically sortable
+ * and compatible with UUID while being more readable and efficient.
  *
- * Format: ttttttttttrrrrrrrrrrrrrrrr
- * - First 10 chars: timestamp (48 bits)
- * - Last 16 chars: randomness (80 bits)
+ * **ULID Features:**
+ * - **128-bit compatibility** with UUID
+ * - **1.21e+24 unique ULIDs** per millisecond
+ * - **Lexicographically sortable** by creation time
+ * - **Canonically encoded** as a 26-character string
+ * - **Case insensitive** and **URL safe**
+ * - **No special characters** (uses Crockford's Base32)
+ * - **Monotonic sort order** within the same millisecond (optional)
+ *
+ * **Format Structure:**
+ * ```
+ * ttttttttttrrrrrrrrrrrrrrrr
+ * ├─────────┤├─────────────┤
+ * │    10   ││     16      │
+ * │ chars   ││   chars     │
+ * │timestamp││ randomness  │
+ * ```
+ *
+ * @see {@link https://github.com/ulid/spec} ULID Specification
+ *
+ * @example
+ * ```typescript
+ * import { ulid, monotonicUlid, getTimestamp } from './ulid.ts';
+ *
+ * // Generate a ULID
+ * const id = ulid(); // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+ *
+ * // Generate with specific timestamp
+ * const customId = ulid(Date.now()); // Use current time explicitly
+ *
+ * // Generate monotonic ULIDs (sorted within same millisecond)
+ * const mono1 = monotonicUlid(); // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+ * const mono2 = monotonicUlid(); // "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+ *
+ * // Extract timestamp from ULID
+ * const timestamp = getTimestamp(id); // Returns original timestamp
+ * ```
  */
 
-// Crockford's Base32 (excludes I, L, O, U to avoid confusion)
+// Crockford's Base32 alphabet (excludes I, L, O, U to avoid visual confusion)
 const ENCODING = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-const ENCODING_LEN = ENCODING.length;
-const TIME_LEN = 10; // 10 characters to encode timestamp
-const RANDOM_LEN = 16; // 16 characters to encode random bytes
+const ENCODING_LEN = ENCODING.length; // 32
+
+/** Length of the timestamp component in characters */
+const TIME_LEN = 10; // 10 characters to encode 48-bit timestamp
+
+/** Length of the randomness component in characters */
+const RANDOM_LEN = 16; // 16 characters to encode 80-bit randomness
+
+/** Total length of a ULID string */
 const ULID_LEN = TIME_LEN + RANDOM_LEN; // 26 total characters
 
-// Store previous state for monotonic ULIDs
+// Monotonic ULID state management
 let lastTime = 0;
 let lastRandom: Uint8Array | null = null;
 
 /**
- * Generate a ULID string
+ * Generates a ULID (Universally Unique Lexicographically Sortable Identifier).
  *
- * @param timestamp Optional timestamp (in ms), defaults to current time
- * @param monotonic Whether to ensure monotonicity when multiple IDs are generated in the same millisecond
- * @returns A 26-character ULID string
+ * Creates a 26-character string identifier that combines a timestamp component
+ * with cryptographically secure randomness. The resulting ID is lexicographically
+ * sortable by creation time and provides excellent collision resistance.
+ *
+ * @param timestamp - Unix timestamp in milliseconds (default: current time)
+ * @param monotonic - Ensures lexicographic ordering within same millisecond (default: false)
+ * @returns A 26-character ULID string using Crockford's Base32 encoding
+ *
+ * @throws {Error} If timestamp is outside valid range (0 to 2^48-1)
+ *
+ * @example
+ * ```typescript
+ * // Generate a ULID with current timestamp
+ * const id1 = ulid(); // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+ *
+ * // Generate with specific timestamp
+ * const id2 = ulid(1609459200000); // New Year 2021
+ *
+ * // Generate monotonic ULIDs (sorted within same millisecond)
+ * const mono1 = ulid(Date.now(), true);
+ * const mono2 = ulid(Date.now(), true); // Guaranteed > mono1 if same timestamp
+ *
+ * // For high-frequency generation in same process
+ * const batch = Array.from({ length: 1000 }, () => ulid(Date.now(), true));
+ * // All IDs will be lexicographically sorted
+ * ```
+ *
+ * @security
+ * - 80 bits of cryptographically secure randomness
+ * - Resistant to timing attacks
+ * - No predictable patterns in random component
  */
 export function ulid(timestamp?: number, monotonic = false): string {
   const time = timestamp === undefined ? Date.now() : timestamp;
@@ -63,10 +126,21 @@ export function ulid(timestamp?: number, monotonic = false): string {
 }
 
 /**
- * Encode time as Crockford's Base32
+ * Encodes a timestamp as a Crockford's Base32 string.
+ *
+ * Converts a Unix timestamp (milliseconds) into a 10-character
+ * Base32 string using Crockford's alphabet. The encoding preserves
+ * lexicographic ordering of timestamps.
+ *
+ * @param time - Unix timestamp in milliseconds (0 to 2^48-1)
+ * @returns 10-character Base32 encoded timestamp
+ *
+ * @throws {Error} If timestamp is outside valid 48-bit range
+ *
+ * @internal
  */
 function encodeTime(time: number): string {
-  if (time < 0 || time > 0xFFFFFFFFFFFF) { // 48 bits max
+  if (time < 0 || time > 0xFFFFFFFFFFFF) { // 48 bits max (281,474,976,710,655 ms)
     throw new Error('Time must be between 0 and 281474976710655');
   }
 
@@ -81,7 +155,16 @@ function encodeTime(time: number): string {
 }
 
 /**
- * Encode random bytes as Crockford's Base32
+ * Encodes random bytes as a Crockford's Base32 string.
+ *
+ * Converts 10 bytes (80 bits) of random data into a 16-character
+ * Base32 string. Uses bit manipulation to efficiently process
+ * 5 bits at a time for optimal Base32 encoding.
+ *
+ * @param randomBytes - 10-byte array of random data
+ * @returns 16-character Base32 encoded random string
+ *
+ * @internal
  */
 function encodeRandom(randomBytes: Uint8Array): string {
   let result = '';
@@ -115,18 +198,34 @@ function encodeRandom(randomBytes: Uint8Array): string {
 }
 
 /**
- * Increment random bytes for monotonic ULIDs
+ * Increments random bytes for monotonic ULID generation.
+ *
+ * Performs a carry-over increment operation on the random byte array,
+ * similar to adding 1 to a big-endian integer. This ensures that
+ * subsequent ULIDs with the same timestamp are lexicographically ordered.
+ *
+ * @param randomBytes - The random bytes to increment
+ * @returns A new array with incremented bytes
+ *
+ * @internal
+ *
+ * @example
+ * ```typescript
+ * const bytes = new Uint8Array([0x00, 0x00, 0xFF, 0xFF]);
+ * const incremented = incrementRandom(bytes); // [0x00, 0x01, 0x00, 0x00]
+ * ```
  */
 function incrementRandom(randomBytes: Uint8Array): Uint8Array {
   const newRandomBytes = new Uint8Array(randomBytes);
 
-  // Start from the last byte and increment with carry
+  // Perform carry-over increment from right to left (big-endian)
   for (let i = newRandomBytes.length - 1; i >= 0; i--) {
-    if (newRandomBytes[i]! === 0xFF) {
-      newRandomBytes[i] = 0;
+    const currentByte = newRandomBytes[i]!;
+    if (currentByte === 0xFF) {
+      newRandomBytes[i] = 0; // Overflow, carry to next byte
     } else {
-      newRandomBytes[i]!++;
-      break;
+      newRandomBytes[i] = currentByte + 1;
+      break; // No carry needed
     }
   }
 
@@ -134,7 +233,27 @@ function incrementRandom(randomBytes: Uint8Array): Uint8Array {
 }
 
 /**
- * Extract the timestamp from a ULID string
+ * Extracts the timestamp component from a ULID string.
+ *
+ * Decodes the first 10 characters of a ULID to retrieve the original
+ * Unix timestamp (in milliseconds) when the ULID was created.
+ * Useful for debugging, logging, or time-based queries.
+ *
+ * @param id - A valid 26-character ULID string
+ * @returns Unix timestamp in milliseconds
+ *
+ * @throws {Error} If ULID format is invalid (incorrect length or characters)
+ *
+ * @example
+ * ```typescript
+ * const id = ulid(); // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+ * const timestamp = getTimestamp(id); // 1546300800000
+ * const date = new Date(timestamp); // 2019-01-01T00:00:00.000Z
+ *
+ * // Validate ULID age
+ * const ageMs = Date.now() - getTimestamp(someUlid);
+ * const ageHours = ageMs / (1000 * 60 * 60);
+ * ```
  */
 export function getTimestamp(id: string): number {
   if (id.length !== ULID_LEN) {
@@ -158,8 +277,38 @@ export function getTimestamp(id: string): number {
 }
 
 /**
- * Generate a monotonic ULID
- * Ensures that ULIDs created within the same millisecond are lexicographically sortable
+ * Generates a monotonic ULID with guaranteed lexicographic ordering.
+ *
+ * Creates ULIDs that maintain lexicographic sort order even when generated
+ * within the same millisecond. This is achieved by incrementing the random
+ * component when the timestamp hasn't changed since the last generation.
+ *
+ * **Benefits of Monotonic ULIDs:**
+ * - Guaranteed sort order within same millisecond
+ * - Better database index performance
+ * - Consistent ordering in high-frequency scenarios
+ * - Maintains randomness across different timestamps
+ *
+ * @param timestamp - Unix timestamp in milliseconds (default: current time)
+ * @returns A 26-character monotonic ULID string
+ *
+ * @example
+ * ```typescript
+ * // Generate multiple ULIDs in same millisecond
+ * const ids = Array.from({ length: 100 }, () => monotonicUlid());
+ *
+ * // Verify they're sorted (they will be!)
+ * const sorted = [...ids].sort();
+ * console.log(ids.every((id, i) => id === sorted[i])); // true
+ *
+ * // Use for high-frequency logging
+ * const logId1 = monotonicUlid(); // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+ * const logId2 = monotonicUlid(); // "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+ * // logId2 > logId1 guaranteed
+ * ```
+ *
+ * Note: This implementation maintains global state and is not thread-safe
+ * across multiple isolates or workers. Use regular `ulid()` for concurrent scenarios.
  */
 export function monotonicUlid(timestamp?: number): string {
   return ulid(timestamp, true);

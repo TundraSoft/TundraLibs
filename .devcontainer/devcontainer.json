@@ -22,14 +22,11 @@
         "editor.tabSize": 2,
         "editor.formatOnSave": true
       },
-
       // Add the IDs of extensions you want installed when the container is created.
       "extensions": [
         "denoland.vscode-deno",
         "benjaminbenais.copilot-theme",
         "GitHub.copilot",
-        "hashrock.fresh-framework-helper",
-        "hashrock.fresh-mini-codegen",
         "laurencebahiirwa.deno-std-lib-snippets",
         "SonarSource.sonarlint-vscode"
       ]

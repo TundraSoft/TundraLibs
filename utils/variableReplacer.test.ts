@@ -116,4 +116,85 @@ Deno.test('utils.variableReplacer', async (t) => {
       'Number: 42, String: hello, Boolean: true, Null: null, Undefined: ${und}',
     );
   });
+
+  // Additional comprehensive tests
+  await t.step('should handle empty strings and special characters', () => {
+    const msg = 'Empty: "${empty}", Special: ${special}';
+    const context = {
+      empty: '',
+      special: 'Hello "World" & <Test>',
+    };
+
+    const result = variableReplacer(msg, context);
+    asserts.assertEquals(result, 'Empty: "", Special: Hello "World" & <Test>');
+  });
+
+  await t.step('should work with custom regex patterns', () => {
+    const msg = 'Hello {{name}}, you are {{age}} years old.';
+    const context = { name: 'Alice', age: 30 };
+    const customRegex = /\{\{([^}]+)\}\}/g;
+
+    const result = variableReplacer(msg, context, customRegex);
+    asserts.assertEquals(result, 'Hello Alice, you are 30 years old.');
+  });
+
+  await t.step('should handle complex nested arrays', () => {
+    const msg = 'Users: ${users}, Tags: ${project.tags}';
+    const context = {
+      users: ['Alice', 'Bob', 'Charlie'],
+      project: {
+        tags: ['typescript', 'deno', 'utility'],
+      },
+    };
+
+    const result = variableReplacer(msg, context);
+    asserts.assertEquals(
+      result,
+      'Users: (Alice, Bob, Charlie), Tags: (typescript, deno, utility)',
+    );
+  });
+
+  await t.step('should handle arrays and object properties', () => {
+    const msg = 'Items: ${items}, Status: ${config.status}';
+    const context = {
+      items: ['first', 'second', 'third'],
+      config: { status: 'active', version: '1.0' },
+    };
+
+    const result = variableReplacer(msg, context);
+    asserts.assertEquals(
+      result,
+      'Items: (first, second, third), Status: active',
+    );
+  });
+
+  await t.step('should handle edge case with empty context', () => {
+    const msg = 'Hello ${name}!';
+    const context = {};
+
+    const result = variableReplacer(msg, context);
+    asserts.assertEquals(result, 'Hello ${name}!');
+  });
+
+  await t.step('should handle multiple occurrences of same placeholder', () => {
+    const msg = '${name} said "${message}". ${name} was happy.';
+    const context = {
+      name: 'Alice',
+      message: 'Hello World',
+    };
+
+    const result = variableReplacer(msg, context);
+    asserts.assertEquals(result, 'Alice said "Hello World". Alice was happy.');
+  });
+
+  await t.step('should preserve spaces and formatting', () => {
+    const msg = '  Spaced: ${value}  \n  Newline: ${other}  ';
+    const context = {
+      value: 'test',
+      other: 'content',
+    };
+
+    const result = variableReplacer(msg, context);
+    asserts.assertEquals(result, '  Spaced: test  \n  Newline: content  ');
+  });
 });

@@ -49,19 +49,13 @@ body:
       description: Select the package where you found the bug
       multiple: false
       options:
-        - Workflow
-        - cacher
-        - crypt
-        - dam
-        - guardian
-        - id
-        - norm
-        - oql
-        - pact
-        - restler
-        - slogger
-        - utils
-        - vaccine
+        - Workflow/Infrastructure
+        - '@tundralibs/cacher'
+        - '@tundralibs/crypt'
+        - '@tundralibs/guardian'
+        - '@tundralibs/id'
+        - '@tundralibs/slogger'
+        - '@tundralibs/utils'
   - type: input
     id: package-version
     attributes:
@@ -95,12 +89,36 @@ body:
     validations:
       required: true
   - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal Reproduction
+      description: Provide a minimal code example that reproduces the issue
+      placeholder: |
+        ```typescript
+        import { someFunction } from "@tundralibs/package";
+
+        // Code that demonstrates the bug
+        const result = someFunction();
+        console.log(result); // Expected: X, Actual: Y
+        ```
+      render: typescript
+    validations:
+      required: true
+  - type: textarea
     id: logs
     attributes:
-      label: Logs
-      description: Logs
-      placeholder: >-
-        Paste the output of logs. You can fetch this by running docker log
-        <container-name>
+      label: Error Messages/Logs
+      description: 'Any error messages, stack traces, or relevant log output'
+      placeholder: >
+        Paste any error messages or logs here. Include stack traces if
+        available.
+
+
+        Example:
+
+        Error: Something went wrong
+            at someFunction (file:///path/to/file.ts:123:45)
+            at ...
+      render: shell
     validations:
       required: false

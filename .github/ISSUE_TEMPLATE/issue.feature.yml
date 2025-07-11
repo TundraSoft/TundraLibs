@@ -1,8 +1,9 @@
 name: Feature Request
 description: Request a new Feature
 title: '[FEAT]: '
-labels: ['feat', 'enhancement']
-# assignees:
+labels:
+  - feat
+  - enhancement
 body:
   - type: markdown
     attributes:
@@ -15,6 +16,36 @@ body:
       options:
         - label: I have searched the existing issues
           required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Target Package
+      description: Which package should this feature be added to?
+      multiple: false
+      options:
+        - '@tundralibs/cacher'
+        - '@tundralibs/crypt'
+        - '@tundralibs/guardian'
+        - '@tundralibs/id'
+        - '@tundralibs/slogger'
+        - '@tundralibs/utils'
+        - New package
+        - Infrastructure/Tooling
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      multiple: false
+      options:
+        - Low - Nice to have
+        - Medium - Would be helpful
+        - High - Important for my use case
+        - Critical - Blocking my project
+    validations:
+      required: true
   - type: textarea
     id: feature-description
     attributes:
@@ -31,6 +62,21 @@ body:
       placeholder: Explain how this feature would benefit users or improve the project
     validations:
       required: true
+  - type: textarea
+    id: proposed-api
+    attributes:
+      label: Proposed API (Optional)
+      description: 'If you have ideas for how this feature should work, describe the API'
+      placeholder: |
+        ```typescript
+        // Example of how you envision using this feature
+        import { newFunction } from "@tundralibs/package";
+
+        const result = newFunction(options);
+        ```
+      render: typescript
+    validations:
+      required: false
   - type: input
     id: contact
     attributes:
@@ -43,7 +89,9 @@ body:
     id: feature-additional
     attributes:
       label: Additional Information
-      description: Any references, documentation, or examples that might help us implement this feature?
-      placeholder: Links, screenshots, sketches, or other helpful resources
+      description: >-
+        Any references, documentation, or examples that might help us implement
+        this feature?
+      placeholder: 'Links, screenshots, sketches, or other helpful resources'
     validations:
       required: false

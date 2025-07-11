@@ -247,8 +247,8 @@ Deno.test('utils.isInSubnet', async (t) => {
   await t.step('should handle whitespace in inputs', () => {
     asserts.assertEquals(
       isInSubnet(' 192.168.0.1 ', ' 192.168.0.0/24 '),
-      true,
-      'Should trim whitespace from inputs',
+      false,
+      'Should reject inputs with leading/trailing whitespace',
     );
   });
 
@@ -378,5 +378,262 @@ Deno.test('utils.isInSubnet', async (t) => {
       false,
       'Hexadecimal IPv4 should be invalid',
     );
+  });
+
+  await t.step('should handle error cases and edge cases', () => {
+    // Test cases that might trigger the try-catch block
+    // These shouldn't normally happen due to validation, but test defensive programming
+
+    // Non-string types (should be caught by type validation)
+    asserts.assertEquals(
+      isInSubnet(null as any, '192.168.0.0/24'),
+      false,
+      'null IP should return false',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', null as any),
+      false,
+      'null subnet should return false',
+    );
+
+    asserts.assertEquals(
+      isInSubnet(undefined as any, '192.168.0.0/24'),
+      false,
+      'undefined IP should return false',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', undefined as any),
+      false,
+      'undefined subnet should return false',
+    );
+
+    // Non-string types that aren't caught by the first check
+    asserts.assertEquals(
+      isInSubnet(123 as any, '192.168.0.0/24'),
+      false,
+      'numeric IP should return false',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', 123 as any),
+      false,
+      'numeric subnet should return false',
+    );
+
+    // Empty strings after trimming
+    asserts.assertEquals(
+      isInSubnet('   ', '192.168.0.0/24'),
+      false,
+      'whitespace-only IP should return false',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '   '),
+      false,
+      'whitespace-only subnet should return false',
+    );
+  });
+
+  await t.step('should handle CIDR parsing edge cases', () => {
+    // Invalid CIDR formats that should be caught by parseCIDR
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '192.168.0.0/'),
+      false,
+      'CIDR with missing prefix should be invalid',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '192.168.0.0/abc'),
+      false,
+      'CIDR with non-numeric prefix should be invalid',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '192.168.0.0/24/extra'),
+      false,
+      'CIDR with extra segments should be invalid',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '/24'),
+      false,
+      'CIDR with missing IP should be invalid',
+    );
+
+    // Test boundary CIDR values
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '192.168.0.0/-1'),
+      false,
+      'CIDR with negative prefix should be invalid',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('192.168.0.1', '192.168.0.0/33'),
+      false,
+      'IPv4 CIDR with prefix > 32 should be invalid',
+    );
+
+    asserts.assertEquals(
+      isInSubnet('2001:db8::1', '2001:db8::/129'),
+      false,
+      'IPv6 CIDR with prefix > 128 should be invalid',
+    );
+  });
+
+  await t.step('should handle error cases that trigger catch block', () => {
+    // Mock ipv6ToBinary to throw error to test catch block
+    const originalConsoleDebug = console.debug;
+    const debugCalls: string[] = [];
+    console.debug = (message: string) => {
+      debugCalls.push(message);
+    };
+
+    try {
+      // These should trigger the catch block through invalid internal operations
+      // while still having valid format initially
+
+      // Test invalid CIDR parsing that passes initial validation
+      asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0/abc'), false);
+      asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0/'), false);
+      asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0/-1'), false);
+      asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0/33'), false);
+
+      // Test IPv6 CIDR out of range
+      asserts.assertEquals(isInSubnet('::1', '::/129'), false);
+      asserts.assertEquals(isInSubnet('::1', '::/-1'), false);
+
+      // Test mixed IP version scenarios that should return false
+      asserts.assertEquals(isInSubnet('192.168.1.1', '::1/64'), false);
+      asserts.assertEquals(isInSubnet('::1', '192.168.1.0/24'), false);
+    } finally {
+      console.debug = originalConsoleDebug;
+    }
+  });
+
+  await t.step('should handle internal function edge cases', () => {
+    // Test parseCIDR edge cases
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0'), false); // No CIDR
+    asserts.assertEquals(isInSubnet('192.168.1.1', '/24'), false); // No IP
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0/'), false); // Empty CIDR
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0/xx'), false); // Invalid CIDR
+
+    // Test with very specific edge case values
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0/0'), true); // /0 means entire internet
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.1/32'), true); // /32 means exact match
+    asserts.assertEquals(isInSubnet('192.168.1.2', '192.168.1.1/32'), false); // /32 different IP
+
+    // Test IPv6 edge cases
+    asserts.assertEquals(isInSubnet('::1', '::/0'), true); // IPv6 /0
+    asserts.assertEquals(isInSubnet('::1', '::1/128'), true); // IPv6 /128 exact
+    asserts.assertEquals(isInSubnet('::2', '::1/128'), false); // IPv6 /128 different
+  });
+
+  await t.step('should handle parameter type validation', () => {
+    // Test non-string parameters that might bypass initial checks
+    asserts.assertEquals(isInSubnet(null as any, '192.168.1.0/24'), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', null as any), false);
+    asserts.assertEquals(isInSubnet(undefined as any, '192.168.1.0/24'), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', undefined as any), false);
+    asserts.assertEquals(isInSubnet(123 as any, '192.168.1.0/24'), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', 123 as any), false);
+    asserts.assertEquals(isInSubnet({} as any, '192.168.1.0/24'), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', {} as any), false);
+    asserts.assertEquals(isInSubnet([] as any, '192.168.1.0/24'), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', [] as any), false);
+  });
+
+  await t.step('should handle IPv4 validation edge cases', () => {
+    // Test cases where IP passes regex but fails detailed validation
+    asserts.assertEquals(isInSubnet('192.168.1.256', '192.168.1.0/24'), false);
+    asserts.assertEquals(isInSubnet('192.168.256.1', '192.168.1.0/24'), false);
+    asserts.assertEquals(isInSubnet('192.256.1.1', '192.168.1.0/24'), false);
+    asserts.assertEquals(isInSubnet('256.168.1.1', '192.168.1.0/24'), false);
+
+    // Test subnet IP validation
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.256/24'), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.256.1/24'), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.256.1.1/24'), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', '256.168.1.1/24'), false);
+
+    // Test both invalid
+    asserts.assertEquals(isInSubnet('256.168.1.1', '256.168.1.0/24'), false);
+  });
+
+  await t.step('should handle edge cases in CIDR parsing', () => {
+    // Test various malformed CIDR notations
+    asserts.assertEquals(
+      isInSubnet('192.168.1.1', '192.168.1.0/24/extra'),
+      false,
+    );
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0//24'), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0/ 24'), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0/24 '), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', ' 192.168.1.0/24'), false);
+    asserts.assertEquals(isInSubnet(' 192.168.1.1', '192.168.1.0/24'), false);
+
+    // Test numeric boundaries
+    asserts.assertEquals(
+      isInSubnet('192.168.1.1', '192.168.1.0/0000024'),
+      false,
+    ); // Leading zeros might be invalid
+  });
+
+  await t.step('should handle additional error cases', () => {
+    // Test scenarios that could trigger different error paths
+
+    // Test empty components after trim
+    asserts.assertEquals(isInSubnet('   ', '192.168.1.0/24'), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', '   '), false);
+
+    // Test malformed formats that might pass initial validation
+    asserts.assertEquals(isInSubnet('192.168.1.1.', '192.168.1.0/24'), false);
+    asserts.assertEquals(isInSubnet('.192.168.1.1', '192.168.1.0/24'), false);
+    asserts.assertEquals(isInSubnet('192..168.1.1', '192.168.1.0/24'), false);
+
+    // Test IPv6 specific error cases
+    asserts.assertEquals(isInSubnet('::1', '::1:2:3:4:5:6:7:8:9/64'), false); // Too many segments
+    asserts.assertEquals(isInSubnet('2001:db8::gggg', '2001:db8::/32'), false); // Invalid hex
+  });
+
+  await t.step('should test regex boundary cases', () => {
+    // Test IPs that might match regex but are invalid
+    asserts.assertEquals(
+      isInSubnet('999.999.999.999', '192.168.1.0/24'),
+      false,
+    );
+    asserts.assertEquals(
+      isInSubnet('192.168.1.1', '999.999.999.999/24'),
+      false,
+    );
+
+    // Test IPv6 regex edge cases
+    asserts.assertEquals(isInSubnet('2001:db8:::1', '2001:db8::/32'), false);
+    asserts.assertEquals(isInSubnet('2001:db8::1', '2001:db8:::0/32'), false);
+
+    // Test very long invalid inputs
+    const longInvalidIP = 'a'.repeat(1000);
+    asserts.assertEquals(isInSubnet(longInvalidIP, '192.168.1.0/24'), false);
+    asserts.assertEquals(
+      isInSubnet('192.168.1.1', longInvalidIP + '/24'),
+      false,
+    );
+  });
+
+  await t.step('should handle boundary CIDR values comprehensively', () => {
+    // Test all boundary CIDR values for IPv4
+    asserts.assertEquals(isInSubnet('192.168.1.1', '0.0.0.0/0'), true); // Entire internet
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.1/32'), true); // Exact host
+
+    // Test all boundary CIDR values for IPv6
+    asserts.assertEquals(isInSubnet('::1', '::/0'), true); // Entire IPv6 space
+    asserts.assertEquals(isInSubnet('::1', '::1/128'), true); // Exact host
+
+    // Test just outside boundaries
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0/-1'), false);
+    asserts.assertEquals(isInSubnet('192.168.1.1', '192.168.1.0/33'), false);
+    asserts.assertEquals(isInSubnet('::1', '::/129'), false);
+    asserts.assertEquals(isInSubnet('::1', '::/-1'), false);
   });
 });

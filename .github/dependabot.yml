@@ -5,3 +5,56 @@ updates:
     directory: '/'
     schedule:
       interval: 'daily'
+    # Auto-merge minor and patch updates for actions
+    open-pull-requests-limit: 10
+    reviewers:
+      - "tundralibs-team"
+    assignees:
+      - "tundralibs-team"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # Monitor Deno/JSR dependencies in main workspace
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    target-branch: 'main'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # Monitor id workspace
+  - package-ecosystem: 'github-actions'
+    directory: '/id'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: "scope"
+
+  # Monitor utils workspace  
+  - package-ecosystem: 'github-actions'
+    directory: '/utils'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: "scope"
+
+  # Monitor crypt workspace
+  - package-ecosystem: 'github-actions'
+    directory: '/crypt'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: "scope"

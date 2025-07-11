@@ -445,4 +445,197 @@ Deno.test('OTP', async (t) => {
       );
     });
   });
+
+  await t.step('OTP error handling and edge cases', async (h) => {
+    await h.step('test binary key validation - short binary key', async () => {
+      const shortBinaryKey = new Uint8Array([1, 2, 3, 4, 5]); // < 16 bytes
+
+      await asserts.assertRejects(
+        () => HOTP(shortBinaryKey, 0, 6, 'SHA-1'),
+        Error,
+        'Secret key should be at least 16 bytes long',
+      );
+
+      await asserts.assertRejects(
+        () => TOTP(shortBinaryKey, Date.now(), 30, 6, 'SHA-1'),
+        Error,
+        'Secret key should be at least 16 bytes long',
+      );
+    });
+
+    await h.step(
+      'test verifyTOTP with negative counter in time window',
+      async () => {
+        const key = '12345678901234567890';
+        const earlyTime = 15000; // 15 seconds (half a period)
+        const validOTP = await TOTP(key, earlyTime, 30, 6, 'SHA-1');
+
+        // Test with a window that would create negative counter values
+        // Counter at earlyTime would be 0, so window=2 would check counter -2, -1, 0, 1, 2
+        const isValid = await verifyTOTP(
+          validOTP,
+          key,
+          2,
+          earlyTime,
+          30,
+          6,
+          'SHA-1',
+        );
+        asserts.assertEquals(isValid, true);
+      },
+    );
+
+    await h.step('test verifyTOTP with empty/invalid OTP strings', async () => {
+      const key = '12345678901234567890';
+      const time = 59000;
+
+      // Empty OTP
+      const emptyResult = await verifyTOTP('', key, 1, time, 30, 6, 'SHA-1');
+      asserts.assertEquals(emptyResult, false);
+
+      // Non-numeric OTP
+      const nonNumericResult = await verifyTOTP(
+        'abcdef',
+        key,
+        1,
+        time,
+        30,
+        6,
+        'SHA-1',
+      );
+      asserts.assertEquals(nonNumericResult, false);
+
+      // Wrong length OTP
+      const wrongLengthResult = await verifyTOTP(
+        '12345',
+        key,
+        1,
+        time,
+        30,
+        6,
+        'SHA-1',
+      );
+      asserts.assertEquals(wrongLengthResult, false);
+    });
+
+    await h.step('test verifyHOTP with empty/invalid OTP strings', async () => {
+      const key = '12345678901234567890';
+      const counter = 0;
+
+      // Empty OTP
+      const emptyResult = await verifyHOTP('', key, counter, 6, 'SHA-1');
+      asserts.assertEquals(emptyResult, false);
+
+      // Non-numeric OTP
+      const nonNumericResult = await verifyHOTP(
+        'abcdef',
+        key,
+        counter,
+        6,
+        'SHA-1',
+      );
+      asserts.assertEquals(nonNumericResult, false);
+
+      // Wrong length OTP
+      const wrongLengthResult = await verifyHOTP(
+        '12345',
+        key,
+        counter,
+        6,
+        'SHA-1',
+      );
+      asserts.assertEquals(wrongLengthResult, false);
+    });
+
+    await h.step('test error handling in generate function', async () => {
+      // Test floating point counter
+      await asserts.assertRejects(
+        () => HOTP('12345678901234567890', 1.5, 6, 'SHA-1'),
+        Error,
+        'Counter must be a non-negative integer',
+      );
+
+      // Test floating point length
+      await asserts.assertRejects(
+        () => HOTP('12345678901234567890', 0, 6.5, 'SHA-1'),
+        Error,
+        'OTP length must be a non-negative integer',
+      );
+
+      // Test zero length
+      await asserts.assertRejects(
+        () => HOTP('12345678901234567890', 0, 0, 'SHA-1'),
+        Error,
+        'OTP length must be a non-negative integer',
+      );
+    });
+
+    await h.step('test verifyTOTP with floating point window', async () => {
+      const key = '12345678901234567890';
+      const time = 59000;
+
+      await asserts.assertRejects(
+        () => verifyTOTP('123456', key, 1.5, time, 30, 6, 'SHA-1'),
+        Error,
+        'Window must be a non-negative integer',
+      );
+    });
+
+    await h.step('test crypto error handling paths', async () => {
+      // Test with a mock scenario that might cause crypto errors
+      // This is tricky to test directly, but we can test with unusual inputs
+      const key = '12345678901234567890';
+
+      // Test with very large counter that might cause issues
+      const veryLargeCounter = Number.MAX_SAFE_INTEGER;
+      const otp = await HOTP(key, veryLargeCounter, 6, 'SHA-1');
+      asserts.assertEquals(otp.length, 6);
+      asserts.assertEquals(/^\d{6}$/.test(otp), true);
+    });
+
+    await h.step('test dynamic truncation edge cases', async () => {
+      // Test that the dynamic truncation algorithm works correctly
+      // by testing with known inputs that exercise different offset values
+      const key = 'test1234567890123456'; // Different key to get different hash patterns
+      const counter = 12345;
+
+      const otp = await HOTP(key, counter, 8, 'SHA-256');
+      asserts.assertEquals(otp.length, 8);
+      asserts.assertEquals(/^\d{8}$/.test(otp), true);
+
+      // Verify the same OTP is generated consistently
+      const otp2 = await HOTP(key, counter, 8, 'SHA-256');
+      asserts.assertEquals(otp, otp2);
+    });
+
+    await h.step('test TOTP time counter edge cases', async () => {
+      const key = '12345678901234567890';
+
+      // Test at exact time boundaries
+      const exactTime = 30000; // Exactly 30 seconds (1 time step)
+      const otp1 = await TOTP(key, exactTime - 1, 30, 6, 'SHA-1'); // 29.999 seconds
+      const otp2 = await TOTP(key, exactTime, 30, 6, 'SHA-1'); // 30.000 seconds
+
+      // These should be different time steps
+      asserts.assertNotEquals(otp1, otp2);
+    });
+
+    await h.step(
+      'test OTP generation with various algorithms and edge lengths',
+      async () => {
+        const key = '12345678901234567890';
+        const counter = 0;
+
+        // Test minimum length
+        const minOtp = await HOTP(key, counter, 1, 'SHA-1');
+        asserts.assertEquals(minOtp.length, 1);
+        asserts.assertEquals(/^\d{1}$/.test(minOtp), true);
+
+        // Test maximum reasonable length
+        const maxOtp = await HOTP(key, counter, 10, 'SHA-512');
+        asserts.assertEquals(maxOtp.length, 10);
+        asserts.assertEquals(/^\d{10}$/.test(maxOtp), true);
+      },
+    );
+  });
 });

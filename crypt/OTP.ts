@@ -61,16 +61,33 @@ function validateInputs(
 
 /**
  * Generates a one-time password (OTP) using HMAC-based algorithm.
+ *
  * Implements the algorithm described in RFC 4226 (HOTP) and RFC 6238 (TOTP).
+ * Uses dynamic truncation to extract a numeric code from the HMAC digest.
+ * This is an internal function used by both {@link HOTP} and {@link TOTP}.
  *
- * @param {string | Uint8Array} key - The secret key for HMAC.
- * @param {number} counter - The counter value.
- * @param {number} [length=6] - The length of the OTP.
- * @param {DigestAlgorithms} [algo='SHA-256'] - The hash algorithm to use. ({@link DigestAlgorithms})
- * @returns {Promise<string>} A promise that resolves to the generated OTP.
+ * @param {string | Uint8Array} key - The secret key for HMAC (minimum 16 characters/bytes)
+ * @param {number} counter - The counter value (non-negative integer)
+ * @param {number} [length=6] - The length of the OTP (positive integer)
+ * @param {DigestAlgorithms} [algo='SHA-256'] - The hash algorithm to use ({@link DigestAlgorithms})
+ * @returns {Promise<string>} A promise that resolves to the generated OTP (zero-padded)
  *
- * @see {@link https://tools.ietf.org/html/rfc4226|RFC 4226 - HOTP}
- * @see {@link https://tools.ietf.org/html/rfc6238|RFC 6238 - TOTP}
+ * @throws {Error} When the secret key is shorter than 16 characters/bytes
+ * @throws {Error} When the counter is not a non-negative integer
+ * @throws {Error} When the OTP length is not a positive integer
+ * @throws {Error} When the algorithm is not supported
+ * @throws {Error} When OTP generation fails
+ *
+ * @example
+ * ```typescript
+ * // Generate a 6-digit HOTP
+ * const otp = await generate('mySecretKey123456', 0, 6, 'SHA-1');
+ * console.log(otp); // "755224"
+ * ```
+ *
+ * @see {@link https://tools.ietf.org/html/rfc4226} RFC 4226 - HOTP
+ * @see {@link https://tools.ietf.org/html/rfc6238} RFC 6238 - TOTP
+ * @see {@link DigestAlgorithms} for supported algorithms
  */
 const generate = async (
   key: string | Uint8Array,
@@ -121,14 +138,48 @@ const generate = async (
 /**
  * Verifies a Time-based One-Time Password (TOTP).
  *
- * @param {string} otp - The OTP to verify
- * @param {string | Uint8Array} key - The secret key for HMAC
+ * Checks if the provided OTP is valid within a specified time window.
+ * The verification allows for clock drift by checking multiple time steps
+ * before and after the current time.
+ *
+ * @param {string} otp - The OTP to verify (must be numeric and match expected length)
+ * @param {string | Uint8Array} key - The secret key for HMAC (minimum 16 characters/bytes)
  * @param {number} [window=1] - The number of time steps to check before and after the current one
- * @param {number} [epoch=Date.now()] - The epoch time
- * @param {number} [period=30] - The time period in seconds
- * @param {number} [length=6] - The length of the OTP
- * @param {DigestAlgorithms} [algo='SHA-256'] - The hash algorithm to use
- * @returns {Promise<boolean>} True if the OTP is valid, false otherwise
+ * @param {number} [epoch=Date.now()] - The epoch time in milliseconds
+ * @param {number} [period=30] - The time period in seconds (must be at least 1)
+ * @param {number} [length=6] - The length of the OTP (positive integer)
+ * @param {DigestAlgorithms} [algo='SHA-256'] - The hash algorithm to use ({@link DigestAlgorithms})
+ * @returns {Promise<boolean>} A promise that resolves to true if the OTP is valid, false otherwise
+ *
+ * @throws {Error} When the time period is less than 1 second
+ * @throws {Error} When the window is not a non-negative integer
+ * @throws {Error} When the secret key is too short
+ * @throws {Error} When OTP verification fails
+ *
+ * @example
+ * ```typescript
+ * // Verify a TOTP with default settings
+ * const isValid = await verifyTOTP('123456', 'mySecretKey123456');
+ * console.log(isValid); // true or false
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Verify with custom time window and period
+ * const isValid = await verifyTOTP(
+ *   '987654',
+ *   'mySecretKey123456',
+ *   2,        // window: ±2 time steps
+ *   Date.now(),
+ *   30,       // 30-second periods
+ *   6,        // 6-digit OTP
+ *   'SHA-1'
+ * );
+ * ```
+ *
+ * @see {@link TOTP} for generating TOTP codes
+ * @see {@link verifyHOTP} for counter-based verification
+ * @see {@link DigestAlgorithms} for supported algorithms
  */
 export const verifyTOTP = async (
   otp: string,

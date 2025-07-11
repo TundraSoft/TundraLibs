@@ -30,16 +30,16 @@ export class FileHandler extends AbstractHandler {
   public readonly mode = 'file';
   protected _storePath: string;
   protected _fileName: string;
-  private _maxFileSize: number;
+  private readonly _maxFileSize: number;
   protected _bufferSize: number;
 
   protected _logFile: string;
 
   protected __fileHandle: Deno.FsFile | undefined = undefined;
   private __pointer: number = 0;
-  private __buffer: Uint8Array;
+  private readonly __buffer: Uint8Array;
 
-  private __encoder: TextEncoder = new TextEncoder();
+  private readonly __encoder: TextEncoder = new TextEncoder();
 
   /** Current file size in bytes - used for rotation checks */
   private __currentFileSize: number = 0;
@@ -64,24 +64,6 @@ export class FileHandler extends AbstractHandler {
     // Validate store path
     if (!options.storePath || typeof options.storePath !== 'string') {
       throw new Error('FileHandler requires a valid storePath string');
-    }
-    // Ensure the directory exists
-    try {
-      ensureDirSync(variableReplacer(options.storePath, variables));
-    } catch (e) {
-      if (
-        e instanceof Deno.errors.PermissionDenied ||
-        e instanceof Deno.errors.NotCapable
-      ) {
-        throw new Error(
-          `Permission denied to create log directory ${options.storePath}`,
-        );
-      }
-      throw new Error(
-        `Failed to create log directory ${options.storePath}: ${
-          (e as Error).message
-        }`,
-      );
     }
     this._storePath = options.storePath;
 
@@ -121,6 +103,35 @@ export class FileHandler extends AbstractHandler {
    */
   public override async init(): Promise<void> {
     if (!this.__fileHandle) {
+      // Ensure the directory exists before creating the file
+      const variables = {
+        name: this.name,
+        date: format(new Date(), 'YYYY-MM-dd'),
+        day: format(new Date(), 'dd'),
+        month: format(new Date(), 'MM'),
+        year: format(new Date(), 'YYYY'),
+        hour: format(new Date(), 'HH'),
+      };
+
+      const expandedStorePath = variableReplacer(this._storePath, variables);
+      try {
+        ensureDirSync(expandedStorePath);
+      } catch (e) {
+        if (
+          e instanceof Deno.errors.PermissionDenied ||
+          e instanceof Deno.errors.NotCapable
+        ) {
+          throw new Error(
+            `Permission denied to create log directory ${expandedStorePath}`,
+          );
+        }
+        throw new Error(
+          `Failed to create log directory ${expandedStorePath}: ${
+            (e as Error).message
+          }`,
+        );
+      }
+
       // Check if file exists and get its size for rotation tracking
       try {
         const fileInfo = await Deno.stat(this._logFile);
@@ -153,7 +164,7 @@ export class FileHandler extends AbstractHandler {
     await super.handle(log);
 
     if (log.level <= SyslogSeverities.ERROR) {
-      this.__flushBuffer();
+      await this.__flushBuffer();
     }
   }
 
@@ -163,7 +174,7 @@ export class FileHandler extends AbstractHandler {
    */
   public override async finalize(): Promise<void> {
     if (this.__fileHandle) {
-      this.__flushBuffer();
+      await this.__flushBuffer();
       this.__fileHandle?.close();
       this.__fileHandle = undefined;
     }
@@ -176,26 +187,46 @@ export class FileHandler extends AbstractHandler {
    *
    * @param message - The formatted log message
    */
-  protected override _handle(message: string): Promise<void> | void {
-    const encodedMessage = this.__encoder.encode(message + '\n');
-    const messageLength = encodedMessage.length;
-
-    // Check if message fits in current buffer
-    if (this.__pointer + messageLength > this._bufferSize) {
-      this.__flushBuffer();
+  protected override async _handle(message: string): Promise<void> {
+    if (!this.__fileHandle) {
+      throw new Error('FileHandler not initialized - call init() first');
     }
 
-    // Add message to buffer at current pointer position
-    this.__buffer.set(encodedMessage, this.__pointer);
-    this.__pointer += messageLength;
+    try {
+      const encodedMessage = this.__encoder.encode(message + '\n');
+      const messageLength = encodedMessage.length;
 
-    // Track file size for rotation
-    this.__currentFileSize += messageLength;
+      // Check if single message is larger than buffer size
+      if (messageLength > this._bufferSize) {
+        // Flush current buffer first
+        if (this.__pointer > 0) {
+          await this.__flushBuffer();
+        }
+        // Write large message directly to file
+        await this.__writeDirectToFile(encodedMessage);
+        this.__currentFileSize += messageLength;
+      } else {
+        // Check if message fits in current buffer
+        if (this.__pointer + messageLength > this._bufferSize) {
+          await this.__flushBuffer();
+        }
 
-    // Check if rotation is needed after this write
-    if (this.__currentFileSize >= this._maxFileSize) {
-      this.__flushBuffer();
-      this.__rotateLogFile();
+        // Add message to buffer at current pointer position
+        this.__buffer.set(encodedMessage, this.__pointer);
+        this.__pointer += messageLength;
+        this.__currentFileSize += messageLength;
+      }
+
+      // Check if rotation is needed after this write
+      if (this.__currentFileSize >= this._maxFileSize) {
+        await this.__flushBuffer();
+        await this.__rotateLogFile();
+      }
+    } catch (error) {
+      // Fallback to console if file writing fails
+      console.error(`FileHandler error: ${(error as Error).message}`);
+      console.log(message);
+      throw error; // Re-throw after logging to console
     }
   }
 
@@ -204,16 +235,38 @@ export class FileHandler extends AbstractHandler {
    * Called when buffer is full, on high severity logs,
    * when rotation is needed, or when handler is finalized
    */
-  private __flushBuffer(): void {
+  private async __flushBuffer(): Promise<void> {
     if (this.__pointer > 0 && this.__fileHandle) {
-      let written = 0;
-      while (written < this.__pointer) {
-        written += this.__fileHandle.writeSync(
-          this.__buffer.subarray(written, this.__pointer),
-        );
-      }
+      const dataToWrite = this.__buffer.subarray(0, this.__pointer);
+      await this.__writeDirectToFile(dataToWrite);
       this.__resetBuffer();
     }
+  }
+
+  /**
+   * Writes data directly to the file handle
+   * @param data - The data to write to the file
+   */
+  private async __writeDirectToFile(data: Uint8Array): Promise<void> {
+    if (!this.__fileHandle) {
+      throw new Error('File handle is not available');
+    }
+
+    let written = 0;
+    while (written < data.length) {
+      const bytesWritten = await this.__fileHandle.write(
+        data.subarray(written),
+      );
+      if (bytesWritten === null || bytesWritten === 0) {
+        throw new Error(
+          'Failed to write to file - write returned null or zero bytes',
+        );
+      }
+      written += bytesWritten;
+    }
+
+    // Ensure data is synced to disk for reliability
+    await this.__fileHandle.sync();
   }
 
   /**
@@ -230,7 +283,7 @@ export class FileHandler extends AbstractHandler {
    */
   private async __rotateLogFile(): Promise<void> {
     // Ensure buffer is flushed
-    this.__flushBuffer();
+    await this.__flushBuffer();
 
     // Close current file
     if (this.__fileHandle) {
@@ -239,13 +292,14 @@ export class FileHandler extends AbstractHandler {
     }
 
     // Create new filename with timestamp
-    const timestamp = format(new Date(), 'YYYY-MM-dd_HH-mm-ss');
+    const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
     const dir = path.dirname(this._logFile);
     const base = path.basename(this._logFile);
-    const rotatedFile = path.join(dir, `${base}.${timestamp}`);
+    const rotatedFile = path.join(dir, `${base}_${timestamp}`);
 
     // Rename current file to include timestamp
     try {
+      console.log(`Rotating log file: ${this._logFile} -> ${rotatedFile}`);
       await Deno.rename(this._logFile, rotatedFile);
     } catch (e) {
       console.error(`Failed to rotate log file: ${(e as Error).message}`);

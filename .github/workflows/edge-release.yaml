@@ -1,0 +1,93 @@
+name: Edge Release
+permissions:
+  contents: read
+  id-token: write
+'on':
+  pull_request:
+    types:
+      - opened
+      - synchronize
+    branches:
+      - main
+    paths:
+      - cacher/**
+      - crypt/**
+      - guardian/**
+      - id/**
+      - slogger/**
+      - utils/**
+jobs:
+  edge-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+        with:
+          ref: '${{ github.event.pull_request.head.sha }}'
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Detect changed workspaces
+        id: changes
+        run: >
+          echo "Detecting workspace changes..."
+
+
+          # Get base and head commits
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+
+          # Check for changes in each workspace dynamically
+
+          CHANGED_WORKSPACES=""
+
+          WORKSPACES=$(jq -r '.workspace[]' deno.json | sed 's|^./||')
+
+
+          for workspace in $WORKSPACES; do
+            if git diff --name-only $BASE_SHA..$HEAD_SHA | grep -q "^$workspace/"; then
+              CHANGED_WORKSPACES="$CHANGED_WORKSPACES $workspace"
+            fi
+          done
+
+
+          echo "changed-workspaces=$(echo $CHANGED_WORKSPACES | xargs)" >>
+          $GITHUB_OUTPUT
+
+          echo "Changed workspaces: $CHANGED_WORKSPACES"
+      - name: Update workspace versions to edge
+        if: steps.changes.outputs.changed-workspaces != ''
+        run: |
+          CHANGED_WORKSPACES="${{ steps.changes.outputs.changed-workspaces }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          SHORT_SHA="${{ github.event.pull_request.head.sha }}"
+          SHORT_SHA=${SHORT_SHA:0:7}
+
+          for workspace in $CHANGED_WORKSPACES; do
+            if [ -f "$workspace/deno.json" ]; then
+              echo "Updating $workspace to edge version..."
+              
+              # Get current version and create edge version
+              CURRENT_VERSION=$(jq -r '.version' "$workspace/deno.json")
+              EDGE_VERSION="${CURRENT_VERSION}-edge.${PR_NUMBER}.${SHORT_SHA}"
+              
+              # Update version to edge in deno.json
+              jq --arg version "$EDGE_VERSION" '.version = $version' "$workspace/deno.json" > "$workspace/deno.json.tmp"
+              mv "$workspace/deno.json.tmp" "$workspace/deno.json"
+              
+              echo "✅ Updated $workspace to $EDGE_VERSION"
+            fi
+          done
+      - name: Publish edge versions
+        if: steps.changes.outputs.changed-workspaces != ''
+        run: "CHANGED_WORKSPACES=\"${{ steps.changes.outputs.changed-workspaces }}\"\n\necho \"\U0001F680 Publishing edge versions for: $CHANGED_WORKSPACES\"\n\nfor workspace in $CHANGED_WORKSPACES; do\n  if [ -d \"$workspace\" ]; then\n    echo \"Publishing $workspace edge version...\"\n    cd \"$workspace\"\n    \n    # Publish edge version (JSR will treat it as pre-release)\n    deno publish || echo \"⚠️ Failed to publish $workspace edge version\"\n    \n    cd ..\n  fi\ndone\n"
+      - name: Comment on PR with edge info
+        if: steps.changes.outputs.changed-workspaces != ''
+        uses: actions/github-script@v7
+        with:
+          script: "const changedWorkspaces = '${{ steps.changes.outputs.changed-workspaces }}';\n\nif (!changedWorkspaces) return;\n\nconst workspaces = changedWorkspaces.split(' ');\nconst prNumber = '${{ github.event.pull_request.number }}';\nconst shortSha = '${{ github.event.pull_request.head.sha }}'.substring(0, 7);\n\nlet comment = `## \U0001F680 Edge Versions Published\\n\\n`;\ncomment += `This PR has published bleeding-edge versions for testing:\\n\\n`;\n\n// We need to get current versions to show the actual edge versions\nconst fs = require('fs');\n\nworkspaces.forEach(workspace => {\n  try {\n    const denoJson = JSON.parse(fs.readFileSync(`${workspace}/deno.json`, 'utf8'));\n    const currentVersion = denoJson.version;\n    const edgeVersion = currentVersion.includes('-edge.') ? currentVersion : `${currentVersion}-edge.${prNumber}.${shortSha}`;\n    comment += `- \\`@tundralibs/${workspace}@${edgeVersion}\\`\\n`;\n  } catch (e) {\n    comment += `- \\`@tundralibs/${workspace}@edge\\` (version detection failed)\\n`;\n  }\n});\n\ncomment += `\\n### Testing This PR\\n\\n`;\ncomment += `\\`\\`\\`bash\\n`;\nworkspaces.forEach(workspace => {\n  try {\n    const denoJson = JSON.parse(fs.readFileSync(`${workspace}/deno.json`, 'utf8'));\n    const edgeVersion = denoJson.version;\n    comment += `deno add @tundralibs/${workspace}@${edgeVersion}\\n`;\n  } catch (e) {\n    comment += `deno add @tundralibs/${workspace}@edge\\n`;\n  }\n});\ncomment += `\\`\\`\\`\\n\\n`;\ncomment += `⚠️ **Warning**: Edge versions are unstable and should only be used for testing.\\n\\n`;\ncomment += `\U0001F4E6 **Stable version**: Use the latest numbered version for production.`;\n\n// Find existing edge comment\nconst comments = await github.rest.issues.listComments({\n  owner: context.repo.owner,\n  repo: context.repo.repo,\n  issue_number: context.issue.number,\n});\n\nconst existingComment = comments.data.find(comment => \n  comment.body.includes('\U0001F680 Edge Versions Published')\n);\n\nif (existingComment) {\n  await github.rest.issues.updateComment({\n    owner: context.repo.owner,\n    repo: context.repo.repo,\n    comment_id: existingComment.id,\n    body: comment\n  });\n} else {\n  await github.rest.issues.createComment({\n    owner: context.repo.owner,\n    repo: context.repo.repo,\n    issue_number: context.issue.number,\n    body: comment\n  });\n}\n"

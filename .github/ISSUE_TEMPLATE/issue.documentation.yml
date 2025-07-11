@@ -1,0 +1,101 @@
+name: Documentation Issue
+description: 'Report missing, unclear, or incorrect documentation'
+title: '[DOCS]: '
+labels:
+  - documentation
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve our documentation!
+  - type: checkboxes
+    attributes:
+      label: Is this a new issue?
+      description: Please search to see if this issue is already reported.
+      options:
+        - label: I have searched the existing issues
+          required: true
+  - type: dropdown
+    id: doc-type
+    attributes:
+      label: Documentation Type
+      description: What type of documentation needs improvement?
+      multiple: false
+      options:
+        - README
+        - API Documentation
+        - Code Examples
+        - Contributing Guidelines
+        - Setup/Installation
+        - JSR Package Documentation
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      description: Which package's documentation needs improvement?
+      multiple: false
+      options:
+        - '@tundralibs/cacher'
+        - '@tundralibs/crypt'
+        - '@tundralibs/guardian'
+        - '@tundralibs/id'
+        - '@tundralibs/slogger'
+        - '@tundralibs/utils'
+        - Repository/General
+        - All packages
+    validations:
+      required: true
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: What's wrong with the documentation?
+      multiple: false
+      options:
+        - Missing documentation
+        - Incorrect information
+        - Unclear explanation
+        - Outdated content
+        - Broken links
+        - Typos/Grammar
+        - Missing examples
+    validations:
+      required: true
+  - type: textarea
+    id: current-state
+    attributes:
+      label: Current Documentation
+      description: What does the current documentation say (if anything)?
+      placeholder: Copy/paste the current documentation text or describe what's missing
+    validations:
+      required: false
+  - type: textarea
+    id: suggested-improvement
+    attributes:
+      label: Suggested Improvement
+      description: How should the documentation be improved?
+      placeholder: 'Describe what should be added, changed, or clarified'
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Documentation Location
+      description: Where is this documentation located?
+      placeholder: >-
+        File path, URL, or section name (e.g., README.md#installation,
+        https://jsr.io/@tundralibs/id)
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context about this documentation issue?
+      placeholder: 'Screenshots, links to related issues, or other helpful information'
+    validations:
+      required: false

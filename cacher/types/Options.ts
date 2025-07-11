@@ -1,5 +1,5 @@
 /**
- * Base configuration options for all cache drivers.
+ * Base configuration options for all cache engines.
  *
  * These options are common to all cacher implementations and can be extended
  * by specific implementations with their own additional options.
@@ -8,7 +8,7 @@
  * @see {@link MemoryCacherOptions} Options for in-memory caching
  * @see {@link MemCacherOptions} Options for Memcached integration
  * @see {@link RedisCacherOptions} Options for Redis integration
- * @see {@link CacherConfigError} Error thrown when options are invalid
+ * @see {@link CacherEngineError} Error thrown when options are invalid
  * @example
  * ```ts
  * const baseOptions: CacherOptions = {

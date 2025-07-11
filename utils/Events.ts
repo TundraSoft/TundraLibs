@@ -1,10 +1,156 @@
+/**
+ * @fileoverview Type-safe event system with advanced asynchronous support.
+ *
+ * This module provides a robust, type-safe event handling system that supports
+ * both synchronous and asynchronous event callbacks. It's designed for building
+ * reactive applications, implementing the observer pattern, and creating
+ * decoupled architectures.
+ *
+ * **Key Features:**
+ * - Full TypeScript support with generic event typing
+ * - Synchronous and asynchronous event emission
+ * - Multiple callback registration (arrays supported)
+ * - One-time event listeners with automatic cleanup
+ * - Memory leak prevention with proper cleanup
+ * - Error isolation (individual callback failures don't affect others)
+ * - Method chaining for fluent API design
+ *
+ * **Performance:**
+ * - O(1) event registration and removal
+ * - O(n) event emission where n is the number of listeners
+ * - Memory-efficient Set-based storage
+ * - Automatic cleanup for one-time listeners
+ *
+ * **Common Patterns:**
+ * - Observer pattern implementation
+ * - Plugin/hook systems
+ * - State change notifications
+ * - Lifecycle event management
+ * - Reactive programming foundations
+ *
+ * @example Basic usage:
+ * ```typescript
+ * interface MyEvents {
+ *   userLogin: (user: User) => void;
+ *   dataUpdate: (data: any[]) => Promise<void>;
+ *   error: (error: Error) => void;
+ * }
+ *
+ * const events = new Events<MyEvents>();
+ * events.on('userLogin', (user) => console.log(`Welcome ${user.name}!`));
+ * events.emit('userLogin', currentUser);
+ * ```
+ */
+
 // deno-lint-ignore-file
-export type EventCallback = (...args: any[]) => unknown | Promise<unknown>;
 
 /**
- * A class that provides event handling capabilities.
+ * Type alias for event callback functions.
  *
- * @template E - An object that maps event names to their corresponding callback types.
+ * Event callbacks can be either synchronous or asynchronous and can accept
+ * any number of arguments. The return value can be any type or a Promise.
+ *
+ * @example Synchronous callback:
+ * ```typescript
+ * const syncCallback: EventCallback = (message: string) => {
+ *   console.log(message);
+ *   return 'processed';
+ * };
+ * ```
+ *
+ * @example Asynchronous callback:
+ * ```typescript
+ * const asyncCallback: EventCallback = async (data: ApiData) => {
+ *   await processData(data);
+ *   return { success: true };
+ * };
+ * ```
+ */
+export type EventCallback = (...args: any[]) => unknown;
+
+/**
+ * Advanced type-safe event handling system with comprehensive async support.
+ *
+ * This class provides a powerful foundation for implementing event-driven architectures
+ * with full TypeScript support. It enables decoupled communication between components,
+ * reactive programming patterns, and clean separation of concerns.
+ *
+ * **Event Lifecycle:**
+ * 1. **Registration**: Event listeners are registered with `on()` or `once()`
+ * 2. **Emission**: Events are triggered with `emit()` or `emitSync()`
+ * 3. **Execution**: All registered callbacks are executed (with error isolation)
+ * 4. **Cleanup**: One-time listeners are automatically removed after execution
+ *
+ * **Error Handling:**
+ * Individual callback failures are isolated and don't prevent other callbacks
+ * from executing. This ensures system resilience and prevents cascade failures.
+ *
+ * **Memory Management:**
+ * The class uses Map and Set for efficient storage and provides methods for
+ * cleanup to prevent memory leaks in long-running applications.
+ *
+ * @template E - Object type mapping event names to their callback signatures
+ *
+ * @example Basic typed events:
+ * ```typescript
+ * interface ApplicationEvents {
+ *   startup: () => void;
+ *   userAction: (action: string, userId: string) => void;
+ *   error: (error: Error, context?: string) => void;
+ *   dataChanged: (newData: any[], oldData: any[]) => Promise<void>;
+ * }
+ *
+ * class Application extends Events<ApplicationEvents> {
+ *   constructor() {
+ *     super();
+ *     this.on('startup', () => console.log('App started'));
+ *     this.on('error', (err, ctx) => this.logError(err, ctx));
+ *   }
+ *
+ *   start() {
+ *     this.emit('startup');
+ *   }
+ * }
+ * ```
+ *
+ * @example Plugin system with events:
+ * ```typescript
+ * interface PluginEvents {
+ *   pluginLoaded: (plugin: Plugin) => void;
+ *   beforeExecute: (command: string) => boolean; // Can cancel execution
+ *   afterExecute: (command: string, result: any) => void;
+ * }
+ *
+ * class PluginManager extends Events<PluginEvents> {
+ *   async executeCommand(command: string) {
+ *     // Allow plugins to intercept
+ *     const results = await this.emitSync('beforeExecute', command);
+ *     if (results.some(r => r === false)) return; // Cancelled
+ *
+ *     const result = await this.runCommand(command);
+ *     this.emit('afterExecute', command, result);
+ *   }
+ * }
+ * ```
+ *
+ * @example Reactive data flow:
+ * ```typescript
+ * interface DataEvents {
+ *   dataLoaded: (data: DataSet) => void;
+ *   dataFiltered: (filtered: DataSet, filters: FilterOptions) => void;
+ *   dataError: (error: Error) => void;
+ * }
+ *
+ * class DataProcessor extends Events<DataEvents> {
+ *   constructor() {
+ *     super();
+ *     // Chain reactive transformations
+ *     this.on('dataLoaded', (data) => this.validateData(data));
+ *     this.on('dataLoaded', (data) => this.cacheData(data));
+ *     this.on('dataFiltered', (filtered) => this.updateUI(filtered));
+ *   }
+ * }
+ * ```
  */
 export class Events<
   E extends Record<string, EventCallback> = Record<string, EventCallback>,

@@ -83,6 +83,12 @@
     "test:run": "deno test --allow-read --allow-write --allow-env --allow-net --allow-ffi --allow-sys --unstable-ffi --parallel --coverage=coverage --junit-path=./test-report.xml",
     "test:report": "deno coverage coverage --lcov cov --output=coverage/report.lcov",
     "test:bench": "deno bench --allow-read --allow-write --allow-env --allow-net --allow-ffi --allow-sys || true",
+    "bench": "deno bench --allow-read --allow-write --allow-env --allow-net --allow-ffi --allow-sys",
+    "bench:json": "deno bench --allow-read --allow-write --allow-env --allow-net --allow-ffi --allow-sys --json",
+    "security": "trivy fs --config .trivy.yaml .",
+    "security:repo": "trivy repo --config .trivy.yaml .",
+    "security:config": "trivy config --config .trivy.yaml .",
+    "security:all": "deno task security && deno task security:repo && deno task security:config",
     "workspace:add": "deno run --allow-read --allow-sys --allow-write .github/workspace.ts add",
     "workspace:remove": "deno run --allow-read --allow-sys --allow-write .github/workspace.ts remove",
     "workspace:sync": "deno run --allow-read --allow-sys --allow-write .github/workspace.ts sync"
@@ -91,15 +97,9 @@
   "workspace": [
     "./cacher",
     "./crypt",
-    "./dam",
     "./guardian",
     "./id",
-    "./norm",
-    "./oql",
-    "./pact",
-    "./restler",
     "./slogger",
-    "./utils",
-    "./vaccine"
+    "./utils"
   ]
 }

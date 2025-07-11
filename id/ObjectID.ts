@@ -1,12 +1,62 @@
+/**
+ * @fileoverview MongoDB-Style ObjectID Generator
+ *
+ * Generates unique identifiers similar to MongoDB's ObjectId format, providing
+ * a distributed-friendly ID generation system that embeds timestamp, machine,
+ * process, and counter information for enhanced uniqueness and traceability.
+ *
+ * @author TundraSoft
+ *
+ * @example
+ * ```typescript
+ * import { ObjectID } from './ObjectID.ts';
+ *
+ * // Create an ObjectID generator with default settings
+ * const generateId = ObjectID();
+ * const id1 = generateId(); // "507f1f77bcf86cd799439011abc123"
+ * const id2 = generateId(); // "507f1f77bcf86cd799439011abc124"
+ *
+ * // Create with custom counter and machine ID
+ * const customGen = ObjectID(1000, "srv01");
+ * const customId = customGen(); // Uses "srv01" as machine identifier
+ * ```
+ */
+
 import { ALPHA_NUMERIC, nanoID } from './nanoID.ts';
 
 /**
- * Generates a unique ID similar to MongoDB's ObjectId.
+ * Creates a MongoDB-style ObjectID generator function.
  *
- * @param {number} counter - An optional counter to ensure uniqueness. Defaults to 0.
- * @param {string} machineId - An optional machine identifier. If not provided, a random ID is generated.
- * @param {number} machineIdLength - Length of the machine ID if auto-generated. Default is 3.
- * @returns {() => string} A function that generates unique IDs.
+ * ObjectIDs are 24-character hexadecimal strings composed of:
+ * - 8 chars: Unix timestamp (seconds since epoch)
+ * - 3 chars: Millisecond component for enhanced precision
+ * - 3 chars: Machine identifier (auto-generated or provided)
+ * - 4 chars: Process identifier (derived from Deno.pid)
+ * - 2 chars: Worker identifier (random, for collision resistance)
+ * - 6 chars: Incrementing counter (padded with zeros)
+ *
+ * @param counter - Initial counter value for uniqueness (default: 0)
+ * @param machineId - Machine identifier string. If not provided, auto-generated
+ * @param machineIdLength - Length of auto-generated machine ID (default: 3)
+ * @returns A function that generates unique ObjectID strings
+ *
+ * @throws {Error} If counter is negative
+ * @throws {Error} If machineIdLength is less than 1
+ *
+ * @example
+ * ```typescript
+ * // Basic usage with defaults
+ * const genId = ObjectID();
+ * const id1 = genId(); // "65a1b2c3d4e5f67890abcdef123456"
+ *
+ * // Custom counter and machine ID
+ * const serverGen = ObjectID(5000, "web01");
+ * const serverId = serverGen(); // Uses "web01" as machine identifier
+ *
+ * // Auto-generated machine ID with custom length
+ * const longMachineGen = ObjectID(0, undefined, 5);
+ * const longId = longMachineGen(); // Uses 5-character machine ID
+ * ```
  */
 export function ObjectID(
   counter: number = 0,

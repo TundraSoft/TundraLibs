@@ -1,5 +1,5 @@
 import { type PrivateObject, privateObject } from '@tundralibs/utils';
-import { AbstractCacher } from '../../AbstractCacher.ts';
+import { AbstractEngine } from '../../AbstractEngine.ts';
 import type { CacheValue } from '../../types/mod.ts';
 import type { MemoryCacherOptions } from './types/mod.ts';
 
@@ -15,7 +15,7 @@ import type { MemoryCacherOptions } from './types/mod.ts';
  * across multiple processes or servers.
  *
  * @extends AbstractCacher<MemoryCacherOptions>
- * @see {@link AbstractCacher} for details on the base implementation
+ * @see {@link AbstractEngine} for details on the base implementation
  * @see {@link MemoryCacherOptions} for configuration options
  * @example
  * ```ts
@@ -32,7 +32,7 @@ import type { MemoryCacherOptions } from './types/mod.ts';
  * await cache.clear();
  * ```
  */
-export class MemoryCacher extends AbstractCacher<MemoryCacherOptions> {
+export class MemoryCacher extends AbstractEngine<MemoryCacherOptions> {
   /**
    * The engine identifier for in-memory cacher.
    */

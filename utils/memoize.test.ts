@@ -357,4 +357,318 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertEquals(caught, true);
     asserts.assertEquals(counter, 3, 'Failures should never be memoized');
   });
+
+  await t.step('should handle function input validation', () => {
+    // Test non-function input
+    asserts.assertThrows(
+      () => memoize(null as any),
+      TypeError,
+      'Expected a function',
+    );
+
+    asserts.assertThrows(
+      () => memoize(undefined as any),
+      TypeError,
+      'Expected a function',
+    );
+
+    asserts.assertThrows(
+      () => memoize('not a function' as any),
+      TypeError,
+      'Expected a function',
+    );
+
+    asserts.assertThrows(
+      () => memoize(123 as any),
+      TypeError,
+      'Expected a function',
+    );
+
+    asserts.assertThrows(
+      () => memoize({} as any),
+      TypeError,
+      'Expected a function',
+    );
+  });
+
+  await t.step('should handle cache expiration edge cases', async () => {
+    let counter = 0;
+    const fn = () => ++counter;
+
+    // Test with very small timeout
+    const memoizedFn = memoize(fn, 0.001); // 1ms timeout
+
+    asserts.assertEquals(memoizedFn(), 1);
+    asserts.assertEquals(memoizedFn(), 1); // Should be cached
+
+    // Wait for cache to expire
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    asserts.assertEquals(memoizedFn(), 2); // Should execute again after expiration
+  });
+
+  await t.step('should handle cache key creation edge cases', () => {
+    let counter = 0;
+    const fn = (...args: any[]) => ++counter;
+    const memoizedFn = memoize(fn, 60);
+
+    // Test with circular reference objects
+    const circular: any = { value: 1 };
+    circular.self = circular;
+
+    // These should not throw and should create different cache entries
+    const result1 = memoizedFn(circular);
+    const result2 = memoizedFn(circular);
+
+    // Due to non-serializable args, each call gets a unique key, so no caching
+    asserts.assertEquals(result1, 1);
+    asserts.assertEquals(result2, 2);
+
+    // Test with functions as arguments
+    const func1 = () => 'test';
+    const func2 = () => 'test';
+
+    const result3 = memoizedFn(func1);
+    const result4 = memoizedFn(func2);
+
+    // Different function objects should get different cache keys
+    asserts.assertEquals(result3, 3);
+    asserts.assertEquals(result4, 4);
+  });
+
+  await t.step(
+    'should handle concurrent async call deduplication',
+    async () => {
+      let counter = 0;
+      const asyncFn = async (value: string): Promise<string> => {
+        counter++;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        return `${value}-${counter}`;
+      };
+
+      const memoizedFn = memoize(asyncFn, 60);
+
+      // Start multiple concurrent calls with same arguments
+      const promises = [
+        memoizedFn('test'),
+        memoizedFn('test'),
+        memoizedFn('test'),
+      ];
+
+      const results = await Promise.all(promises);
+
+      // All should return the same result and function should only execute once
+      asserts.assertEquals(results[0], 'test-1');
+      asserts.assertEquals(results[1], 'test-1');
+      asserts.assertEquals(results[2], 'test-1');
+      asserts.assertEquals(counter, 1);
+    },
+  );
+
+  await t.step('should handle promise rejection cleanup', async () => {
+    let counter = 0;
+    const failingAsyncFn = async (shouldFail: boolean): Promise<string> => {
+      counter++;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      if (shouldFail) {
+        throw new Error(`Failure ${counter}`);
+      }
+      return `Success ${counter}`;
+    };
+
+    const memoizedFn = memoize(failingAsyncFn, 60);
+
+    // First call fails
+    try {
+      await memoizedFn(true);
+      asserts.fail('Should have thrown');
+    } catch (error) {
+      asserts.assert(error instanceof Error);
+      asserts.assertEquals(error.message, 'Failure 1');
+    }
+
+    // Second call with same args should execute again (not cached due to error)
+    try {
+      await memoizedFn(true);
+      asserts.fail('Should have thrown');
+    } catch (error) {
+      asserts.assert(error instanceof Error);
+      asserts.assertEquals(error.message, 'Failure 2');
+    }
+
+    // Successful call should be cached
+    const result1 = await memoizedFn(false);
+    const result2 = await memoizedFn(false);
+
+    asserts.assertEquals(result1, 'Success 3');
+    asserts.assertEquals(result2, 'Success 3'); // Cached
+    asserts.assertEquals(counter, 3);
+  });
+
+  await t.step('should handle synchronous function error cases', () => {
+    let counter = 0;
+    const throwingFn = (shouldThrow: boolean): number => {
+      counter++;
+      if (shouldThrow) {
+        throw new Error(`Error ${counter}`);
+      }
+      return counter;
+    };
+
+    const memoizedFn = memoize(throwingFn, 60);
+
+    // Errors should not be cached
+    asserts.assertThrows(
+      () => memoizedFn(true),
+      Error,
+      'Error 1',
+    );
+
+    asserts.assertThrows(
+      () => memoizedFn(true),
+      Error,
+      'Error 2',
+    );
+
+    // Successful calls should be cached
+    asserts.assertEquals(memoizedFn(false), 3);
+    asserts.assertEquals(memoizedFn(false), 3); // Cached
+    asserts.assertEquals(counter, 3);
+  });
+
+  await t.step('should handle cache expiration correctly', async () => {
+    let counter = 0;
+    const fn = () => ++counter;
+    const memoizedFn = memoize(fn, 0.1); // 100ms timeout
+
+    // Initial calls
+    asserts.assertEquals(memoizedFn(), 1);
+    asserts.assertEquals(memoizedFn(), 1); // Cached
+
+    // Wait for cache to expire
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    // Should execute again
+    asserts.assertEquals(memoizedFn(), 2);
+    asserts.assertEquals(memoizedFn(), 2); // New cached value
+  });
+
+  await t.step('should handle complex object arguments', () => {
+    let counter = 0;
+    const fn = (obj: any) => ({ ...obj, counter: ++counter });
+    const memoizedFn = memoize(fn, 60);
+
+    const input1 = { a: 1, b: [1, 2, 3] };
+    const input2 = { a: 1, b: [1, 2, 3] }; // Same content, different object
+    const input3 = { a: 2, b: [1, 2, 3] }; // Different content
+
+    const result1 = memoizedFn(input1);
+    const result2 = memoizedFn(input2); // Should be cached
+    const result3 = memoizedFn(input3); // Should not be cached
+
+    asserts.assertEquals(result1.counter, 1);
+    asserts.assertEquals(result2.counter, 1); // Same as result1 (cached)
+    asserts.assertEquals(result3.counter, 2); // New execution
+  });
+
+  await t.step('should handle zero and negative timeout values', () => {
+    let counter = 0;
+    const fn = () => ++counter;
+
+    // Zero timeout should use 0 (immediate expiration)
+    const memoizedFn1 = memoize(fn, 0);
+    asserts.assertEquals(memoizedFn1(), 1);
+
+    // Negative timeout should be treated as 0 (Math.max)
+    const memoizedFn2 = memoize(fn, -10);
+    asserts.assertEquals(memoizedFn2(), 2);
+  });
+
+  await t.step('should handle decorator on various method types', () => {
+    class TestClass {
+      static counter = 0;
+      private value = 0;
+
+      @Memoize(60)
+      regularMethod(input: number): number {
+        TestClass.counter++;
+        return input * 2;
+      }
+
+      @Memoize(60)
+      get computedValue(): number {
+        TestClass.counter++;
+        return this.value * 3;
+      }
+
+      setValue(val: number) {
+        this.value = val;
+      }
+    }
+
+    const instance = new TestClass();
+
+    // Test regular method
+    asserts.assertEquals(instance.regularMethod(5), 10);
+    asserts.assertEquals(instance.regularMethod(5), 10); // Cached
+    asserts.assertEquals(TestClass.counter, 1);
+
+    // Test getter
+    instance.setValue(10);
+    asserts.assertEquals(instance.computedValue, 30);
+    asserts.assertEquals(instance.computedValue, 30); // Cached
+    asserts.assertEquals(TestClass.counter, 2);
+  });
+
+  await t.step('should handle decorator without constructor', () => {
+    // Test case where this.constructor might not exist
+    const descriptor: PropertyDescriptor = {
+      value: function (this: any, x: number) {
+        return x * 2;
+      },
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    };
+
+    // Apply decorator to function without constructor context
+    Memoize(60)({}, 'testMethod', descriptor);
+
+    // Should not throw and descriptor should be modified
+    asserts.assert(typeof descriptor.value === 'function');
+  });
+
+  await t.step('should handle getter decorator without constructor', () => {
+    const descriptor: PropertyDescriptor = {
+      get: function (this: any) {
+        return 42;
+      },
+      enumerable: true,
+      configurable: true,
+    };
+
+    // Apply decorator to getter without constructor context
+    Memoize(60)({}, 'testGetter', descriptor);
+
+    // Should not throw and descriptor should be modified
+    asserts.assert(typeof descriptor.get === 'function');
+  });
+
+  await t.step('should handle neither value nor get descriptor', () => {
+    const descriptor: PropertyDescriptor = {
+      writable: true,
+      enumerable: true,
+      configurable: true,
+      // No value or get property
+    };
+
+    const originalDescriptor = { ...descriptor };
+
+    // Apply decorator - should not modify descriptor
+    Memoize(60)({}, 'testProperty', descriptor);
+
+    // Should return the same descriptor unchanged
+    asserts.assertEquals(descriptor.value, originalDescriptor.value);
+    asserts.assertEquals(descriptor.get, originalDescriptor.get);
+  });
 });

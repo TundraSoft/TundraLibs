@@ -1,3 +1,6 @@
-export { CacherError, type CacherErrorMeta } from './Base.ts';
-export { CacherConfigError } from './Config.ts';
-export { CacherOperationError } from './Operation.ts';
+export { CacherError } from './Base.ts';
+export { CacherEngineError, type CacherErrorMeta } from './EngineError.ts';
+export {
+  type CacherEngineErrorCode,
+  CacherEngineErrorCodes,
+} from './EngineErrorCodes.ts';

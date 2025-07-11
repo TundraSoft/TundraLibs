@@ -33,19 +33,11 @@ component_management:
         branches:
           - '!main'
   individual_components:
-    - component_id: crypt
-      name: crypt
+    - component_id: utils
+      name: utils
       paths:
-        - crypt/**.ts
-        - '!crypt/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
-    - component_id: guardian
-      name: guardian
-      paths:
-        - guardian/**.ts
-        - '!guardian/**.test.ts'
+        - utils/**.ts
+        - '!utils/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -57,19 +49,11 @@ component_management:
       statuses:
         - type: project
           target: 75%
-    - component_id: restler
-      name: RESTler
+    - component_id: crypt
+      name: crypt
       paths:
-        - restler/**.ts
-        - '!restler/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
-    - component_id: utils
-      name: utils
-      paths:
-        - utils/**.ts
-        - '!utils/**.test.ts'
+        - crypt/**.ts
+        - '!crypt/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -81,11 +65,11 @@ component_management:
       statuses:
         - type: project
           target: 75%
-    - component_id: dam
-      name: dam
+    - component_id: guardian
+      name: guardian
       paths:
-        - dam/**.ts
-        - '!dam/**.test.ts'
+        - guardian/**.ts
+        - '!guardian/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -97,84 +81,32 @@ component_management:
       statuses:
         - type: project
           target: 75%
-    - component_id: vaccine
-      name: vaccine
-      paths:
-        - vaccine/**.ts
-        - '!vaccine/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
-    - component_id: pact
-      name: pact
-      paths:
-        - pact/**.ts
-        - '!pact/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
-    - component_id: norm
-      name: norm
-      paths:
-        - norm/**.ts
-        - '!norm/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
-    - component_id: oql
-      name: oql
-      paths:
-        - oql/**.ts
-        - '!oql/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
 flags:
-  crypt:
+  default:
     paths:
-      - crypt/
-    carryforward: true
-  guardian:
-    paths:
-      - guardian/
-    carryforward: true
-  id:
-    paths:
-      - id/
-    carryforward: true
-  restler:
-    paths:
-      - restler/
+      - '**/*.ts'
     carryforward: true
   utils:
     paths:
       - utils/
     carryforward: true
+  id:
+    paths:
+      - id/
+    carryforward: true
+  crypt:
+    paths:
+      - crypt/
+    carryforward: true
   cacher:
     paths:
       - cacher/
     carryforward: true
-  dam:
+  guardian:
     paths:
-      - dam/
+      - guardian/
     carryforward: true
   slogger:
     paths:
       - slogger/
-    carryforward: true
-  vaccine:
-    paths:
-      - vaccine/
-    carryforward: true
-  pact:
-    paths:
-      - pact/
-    carryforward: true
-  norm:
-    paths:
-      - norm/
-    carryforward: true
-  oql:
-    paths:
-      - oql/
     carryforward: true

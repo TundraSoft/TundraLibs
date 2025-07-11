@@ -1,0 +1,23 @@
+# Trivy ignore file
+
+# Use this file to ignore specific vulnerabilities that are false positives
+
+# or have been assessed as acceptable risk
+
+# Example format:
+
+# CVE-2023-12345
+
+# GHSA-xxxx-xxxx-xxxx
+
+# Ignore test dependencies vulnerabilities (if any)
+
+# Add specific CVEs here if needed
+
+# Ignore low severity issues in development dependencies
+
+# (Uncomment and add specific CVEs as needed)
+
+# Deno-specific ignores
+
+# Add any Deno runtime CVEs that don't apply to this project context

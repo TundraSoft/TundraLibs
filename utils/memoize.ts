@@ -1,25 +1,87 @@
-// deno-lint-ignore-file
-// memoize.ts
+// deno-lint-ignore-file no-explicit-any
+/**
+ * @fileoverview Comprehensive memoization utilities for function and method caching.
+ *
+ * This module provides advanced memoization capabilities for both standalone functions
+ * and class methods. It supports asynchronous operations, custom timeouts, and handles
+ * edge cases like non-serializable arguments and promise rejection handling.
+ *
+ * Features:
+ * - Function memoization with customizable TTL (Time To Live)
+ * - Method decorator for class-based memoization
+ * - Async function support with deduplication
+ * - Memory management and automatic cache cleanup
+ * - Safe handling of non-serializable arguments
+ * - TypeScript-first design with full type safety
+ */
 
 /**
- * Type for the cached item with expiration
+ * Type for the cached item with expiration metadata.
+ *
+ * @template T - The type of the cached data
  */
 type CachedItem<T> = {
+  /** Expiration timestamp in milliseconds since epoch */
   expire: number;
+  /** The cached data value */
   data: T;
 };
 
 /**
- * Creates a safe cache key from the function arguments
+ * Creates a safe cache key from function arguments.
+ *
+ * This function attempts to create a deterministic string representation of the
+ * function arguments for use as a cache key. It handles edge cases where arguments
+ * cannot be serialized (circular references, functions, etc.) or where serialization
+ * produces non-unique results by falling back to a time-based unique identifier.
+ *
+ * @template T - Array type of the function arguments
  * @param args - Function arguments to create key from
- * @returns A string representation of the arguments
+ * @returns A string representation suitable for use as a cache key
+ *
+ * @example
+ * ```typescript
+ * createCacheKey([1, 2, "hello"]); // '[1,2,"hello"]'
+ * createCacheKey([{ a: 1 }, [1, 2]]); // '[{"a":1},[1,2]]'
+ *
+ * // Handles circular references gracefully
+ * const circular = { a: 1 };
+ * circular.self = circular;
+ * createCacheKey([circular]); // Falls back to unique timestamp-based key
+ *
+ * // Handles functions gracefully
+ * const func = () => 'test';
+ * createCacheKey([func]); // Falls back to unique timestamp-based key
+ * ```
  */
 const createCacheKey = <T extends Array<unknown>>(args: T): string => {
   try {
-    return JSON.stringify(args);
-  } catch (error) {
-    // If arguments can't be stringified, use a fallback approach
-    return `${Date.now()}_${Math.random()}`;
+    // Check if any argument is a function or other non-serializable type
+    const hasNonSerializable = args.some((arg) =>
+      typeof arg === 'function' ||
+      typeof arg === 'symbol' ||
+      typeof arg === 'undefined'
+    );
+
+    if (hasNonSerializable) {
+      // Use fallback for non-serializable arguments
+      return `non_serializable_${Date.now()}_${Math.random()}`;
+    }
+
+    const stringified = JSON.stringify(args);
+
+    // Check if JSON.stringify converted something to null that shouldn't be
+    if (stringified.includes('null') && !args.some((arg) => arg === null)) {
+      // JSON.stringify converted non-null values to null, use fallback
+      return `non_serializable_${Date.now()}_${Math.random()}`;
+    }
+
+    return stringified;
+  } catch (_error) {
+    // If arguments can't be stringified (circular refs, etc.),
+    // use a fallback approach with timestamp and random component
+    // This ensures we don't cache non-serializable arguments incorrectly
+    return `non_serializable_${Date.now()}_${Math.random()}`;
   }
 };
 
@@ -150,7 +212,7 @@ export const memoize = <T extends (...args: any[]) => any>(
  */
 export function Memoize(timeout: number = 30 * 60): MethodDecorator {
   return (
-    target: object,
+    _target: object,
     propertyKey: string | symbol,
     descriptor: PropertyDescriptor,
   ) => {

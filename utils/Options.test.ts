@@ -7,7 +7,8 @@ Deno.test('utils.Options', async (t) => {
   type Evnt = { change: () => void };
   class TypedOptions extends Options<Opt, Evnt> {
     constructor(opt: EventOptionKeys<Opt, Evnt>) {
-      super(opt, { b: 10 });
+      super();
+      super._setOptions(opt, { b: 10 });
     }
 
     update() {
@@ -45,9 +46,11 @@ Deno.test('utils.Options', async (t) => {
         Record<string, EventCallback>
       >,
     ) {
-      super(opt, { b: 10 });
+      super();
+      super._setOptions(opt, { b: 10 });
     }
 
+    //@ts-ignore
     update() {
       this._setOption('a', 'hello');
       this._setOption('b', 20);

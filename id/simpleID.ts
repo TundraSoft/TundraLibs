@@ -1,13 +1,68 @@
-import { format } from '$datetime';
 /**
- * Generates a sequential ID based on the current date and
- * a seed value. The resulting id is a BigInt which is concatenated
- * date and seed value (padded if required)
+ * @fileoverview Simple Date-Based Sequential ID Generator
  *
- * @param seed number The seed to start with
- * @param minLen number The min length of seed value added to the date
- * @param includeMicroseconds boolean Whether to include microseconds in the timestamp for better collision resistance
- * @returns A function that generates a unique ID.
+ * Generates human-readable sequential IDs based on the current date and an
+ * incrementing counter. Perfect for applications requiring date-traceable
+ * identifiers like invoices, orders, or daily sequences.
+ *
+ * @author TundraSoft
+ *
+ * @example
+ * ```typescript
+ * import { simpleID } from './simpleID.ts';
+ *
+ * // Basic daily sequence
+ * const dailySeq = simpleID();
+ * const id1 = dailySeq(); // 202412260001n (YYYYMMDDNNNN format)
+ * const id2 = dailySeq(); // 202412260002n
+ *
+ * // With microsecond precision
+ * const preciseSeq = simpleID(0, 4, true);
+ * const preciseId = preciseSeq(); // 20241226123456789012n
+ * ```
+ */
+
+import { format } from '$datetime';
+
+/**
+ * Creates a date-based sequential ID generator.
+ *
+ * Generates BigInt IDs composed of:
+ * - Date component: YYYYMMDD format (8 digits)
+ * - Microsecond component: Optional high-precision timestamp (6 digits)
+ * - Counter component: Zero-padded incrementing number (configurable length)
+ *
+ * The counter automatically resets to 0 at the start of each new day,
+ * ensuring predictable daily sequences.
+ *
+ * @param seed - Initial counter value (default: 0)
+ * @param minLen - Minimum length of the counter component (default: 4)
+ * @param includeMicroseconds - Whether to include microsecond precision (default: false)
+ * @returns Generator function that produces date-based sequential IDs
+ *
+ * @throws {Error} If minLen is less than 1
+ *
+ * @example
+ * ```typescript
+ * // Daily invoice numbers (YYYYMMDDNNNN)
+ * const invoiceGen = simpleID(1000, 4);
+ * const invoice1 = invoiceGen(); // 202412261000n
+ * const invoice2 = invoiceGen(); // 202412261001n
+ *
+ * // Order numbers with longer counter
+ * const orderGen = simpleID(0, 6);
+ * const order1 = orderGen(); // 20241226000001n
+ * const order2 = orderGen(); // 20241226000002n
+ *
+ * // High-precision timestamps
+ * const logGen = simpleID(0, 3, true);
+ * const logId = logGen(); // 20241226143052789123n
+ * //                         YYYYMMDDHHMMSSΜΜΜCCC
+ *
+ * // Next day automatically resets counter
+ * // (assuming date changes)
+ * const nextDayId = invoiceGen(); // 202412270000n (counter reset)
+ * ```
  */
 export const simpleID = (
   seed = 0,
@@ -21,7 +76,8 @@ export const simpleID = (
   let currentSeed = seed;
   let dt = new Date();
   let dtno = format(dt, 'yyyyMMdd');
-  // Add microsecond component for enhanced uniqueness
+
+  // Microsecond component for enhanced uniqueness when enabled
   let microTime = includeMicroseconds
     ? performance.now().toString().replace('.', '').padEnd(6, '0').substring(
       0,
@@ -29,9 +85,22 @@ export const simpleID = (
     )
     : '';
 
+  /**
+   * Generates the next ID in the daily sequence.
+   *
+   * @returns A BigInt ID combining date, optional microseconds, and counter
+   *
+   * @example
+   * ```typescript
+   * const gen = simpleID(100, 4, false);
+   * const id1 = gen(); // 20241226100n
+   * const id2 = gen(); // 20241226101n
+   * ```
+   */
   return () => {
     const now = new Date();
-    // Reset the date if it's a new day
+
+    // Check if we've entered a new day - reset counter if so
     if (
       dt.getDate() !== now.getDate() ||
       dt.getMonth() !== now.getMonth() ||
@@ -39,19 +108,19 @@ export const simpleID = (
     ) {
       dt = now;
       dtno = format(dt, 'yyyyMMdd');
-      currentSeed = 0; // Reset seed
+      currentSeed = 0; // Reset counter for new day
     }
 
+    // Update microsecond precision for each call when enabled
     if (includeMicroseconds) {
-      // Update microsecond precision on each call for better uniqueness
       microTime = performance.now().toString().replace('.', '').padEnd(6, '0')
         .substring(0, 6);
     }
 
-    currentSeed++; // Increment after potential reset
+    currentSeed++; // Increment counter after potential reset
     const cnt = String(currentSeed).padStart(minLen, '0');
 
-    // Include microseconds in the ID if requested
+    // Combine components: date + [microseconds] + counter
     return BigInt(`${dtno}${includeMicroseconds ? microTime : ''}${cnt}`);
   };
 };

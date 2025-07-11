@@ -2,39 +2,40 @@ workflows:
   - changed-files:
       - any-glob-to-any-file: .github/*
       - any-glob-to-any-file: .vscode/*
+performance:
+  - changed-files:
+      - any-glob-to-any-file: '**/*.bench.ts'
+      - any-glob-to-any-file: .github/workflows/benchmark.yaml
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: CHANGELOG.md
+      - any-glob-to-any-file: '**/README.md'
+      - any-glob-to-any-file: .github/workflows/release.yaml
+publishing:
+  - changed-files:
+      - any-glob-to-any-file: .github/workflows/publish.yaml
+      - any-glob-to-any-file: .github/workflows/release.yaml
+security:
+  - changed-files:
+      - any-glob-to-any-file: .github/workflows/security.yaml
+      - any-glob-to-any-file: .trivy.yaml
+      - any-glob-to-any-file: .trivyignore
+      - any-glob-to-any-file: .github/SECURITY.md
 cacher:
   - changed-files:
       - any-glob-to-any-file: cacher/*
 crypt:
   - changed-files:
       - any-glob-to-any-file: crypt/*
-dam:
-  - changed-files:
-      - any-glob-to-any-file: dam/*
 guardian:
   - changed-files:
       - any-glob-to-any-file: guardian/*
 id:
   - changed-files:
       - any-glob-to-any-file: id/*
-norm:
-  - changed-files:
-      - any-glob-to-any-file: norm/*
-oql:
-  - changed-files:
-      - any-glob-to-any-file: oql/*
-pact:
-  - changed-files:
-      - any-glob-to-any-file: pact/*
-restler:
-  - changed-files:
-      - any-glob-to-any-file: restler/*
 slogger:
   - changed-files:
       - any-glob-to-any-file: slogger/*
 utils:
   - changed-files:
       - any-glob-to-any-file: utils/*
-vaccine:
-  - changed-files:
-      - any-glob-to-any-file: vaccine/*

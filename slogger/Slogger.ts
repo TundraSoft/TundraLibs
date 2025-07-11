@@ -151,23 +151,40 @@ export class Slogger {
   public async log(
     level: SyslogSeverities,
     message: string,
-    context: Record<string, unknown> = {},
+    context: Record<string, unknown> | (() => Record<string, unknown>) = {},
   ): Promise<void> {
+    // Pre-filter based on log level to avoid expensive operations
     if (level > this.level) {
       return;
     }
+
+    // Check if any handlers would actually process this log level
+    const hasActiveHandlers = this._handlers.some((handler) =>
+      level <= handler.level
+    );
+    if (!hasActiveHandlers) {
+      return;
+    }
+
+    // Lazy evaluation of context
+    const resolvedContext = typeof context === 'function' ? context() : context;
+
+    // Lazy message processing only when needed
+    const processedMessage = variableReplacer(message, resolvedContext);
+
     const logObject: SlogObject = {
       id: ulid(),
       appName: this.appName,
       hostname: this.hostname,
       levelName: SyslogSeverities[level] as SyslogSeverity,
       level,
-      context,
-      message: variableReplacer(message, context),
+      context: resolvedContext,
+      message: processedMessage,
       date: new Date(),
       isoDate: new Date().toISOString(),
       timestamp: new Date().getTime(),
     };
+
     for (const handler of this._handlers) {
       await handler.handle(logObject);
     }
@@ -175,14 +192,14 @@ export class Slogger {
 
   public debug(
     message: string,
-    context: Record<string, unknown> = {},
+    context: Record<string, unknown> | (() => Record<string, unknown>) = {},
   ): void {
     this.log(SyslogSeverities.DEBUG, message, context);
   }
 
   public info(
     message: string,
-    context: Record<string, unknown> = {},
+    context: Record<string, unknown> | (() => Record<string, unknown>) = {},
   ): void {
     this.log(SyslogSeverities.INFO, message, context);
   }
@@ -191,14 +208,14 @@ export class Slogger {
 
   public notice(
     message: string,
-    context: Record<string, unknown> = {},
+    context: Record<string, unknown> | (() => Record<string, unknown>) = {},
   ): void {
     this.log(SyslogSeverities.NOTICE, message, context);
   }
 
   public warn(
     message: string,
-    context: Record<string, unknown> = {},
+    context: Record<string, unknown> | (() => Record<string, unknown>) = {},
   ): void {
     this.log(SyslogSeverities.WARNING, message, context);
   }
@@ -207,7 +224,7 @@ export class Slogger {
 
   public err(
     message: string,
-    context: Record<string, unknown> = {},
+    context: Record<string, unknown> | (() => Record<string, unknown>) = {},
   ): void {
     this.log(SyslogSeverities.ERROR, message, context);
   }
@@ -216,7 +233,7 @@ export class Slogger {
 
   public crit(
     message: string,
-    context: Record<string, unknown> = {},
+    context: Record<string, unknown> | (() => Record<string, unknown>) = {},
   ): void {
     this.log(SyslogSeverities.CRITICAL, message, context);
   }
@@ -225,14 +242,14 @@ export class Slogger {
 
   public alert(
     message: string,
-    context: Record<string, unknown> = {},
+    context: Record<string, unknown> | (() => Record<string, unknown>) = {},
   ): void {
     this.log(SyslogSeverities.ALERT, message, context);
   }
 
   public emerg(
     message: string,
-    context: Record<string, unknown> = {},
+    context: Record<string, unknown> | (() => Record<string, unknown>) = {},
   ): void {
     this.log(SyslogSeverities.EMERGENCY, message, context);
   }

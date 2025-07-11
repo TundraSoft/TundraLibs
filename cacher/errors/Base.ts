@@ -1,23 +1,13 @@
 import { BaseError } from '@tundralibs/utils';
 /**
- * Metadata for Cacher errors.
- * All Cacher errors include at minimum the name and engine of the cacher implementation.
- */
-export type CacherErrorMeta = {
-  /** The cacher instance name */
-  name: string;
-  /** The Engine */
-  engine: string;
-} & Record<string, unknown>;
-
-/**
  * Base error class for all Cacher errors.
  * Extends BaseError from @tundralibs/utils with Cacher-specific metadata.
  *
  * @template M Type of error metadata, must extend CacherErrorMeta
  */
-export class CacherError<M extends CacherErrorMeta = CacherErrorMeta>
-  extends BaseError<M> {
+export class CacherError<
+  M extends Record<string, unknown> = Record<string, unknown>,
+> extends BaseError<M> {
   protected override get _messageTemplate(): string {
     return '${message}';
   }

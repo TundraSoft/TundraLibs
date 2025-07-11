@@ -1,51 +1,64 @@
-name: 'Publish Packages'
-
+name: Publish
 permissions:
-  contents: write
-
-on:
+  contents: read
+  id-token: write
+'on':
   workflow_dispatch:
     inputs:
       dryRun:
-        description: 'Perform a dry run (no actual publishing)'
+        description: Perform a dry run (no actual publishing)
         required: true
         default: true
         type: boolean
-
-  push:
-    paths-ignore:
-      - .dockerignore
-      - .gitignore
-      - .github/ISSUE_TEMPLATE/*
-      - .github/PULL_REQUEST_TEMPLATE*
-      - '**.md'
-      - ./LICENSE
-  pull_request:
-    branches: [main]
-
+      workspace:
+        description: Specific workspace to publish
+        required: true
+        type: choice
+        options:
+          - all
+          - cacher
+          - crypt
+          - guardian
+          - id
+          - slogger
+          - utils
+      reason:
+        description: Reason for emergency publish
+        required: true
+        type: string
 jobs:
-  publish:
+  emergency-publish:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions:
-      contents: read
-      id-token: write
-    # Only run on push events or workflow_dispatch on main branch
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
-
     steps:
       - name: Clone repository
         uses: actions/checkout@v4
-
       - name: Set up Deno
         uses: denoland/setup-deno@v2
         with:
           deno-version: canary
-
+      - name: Log emergency publish reason
+        run: "echo \"\U0001F6A8 EMERGENCY PUBLISH INITIATED\"\necho \"Workspace: ${{ github.event.inputs.workspace }}\"\necho \"Reason: ${{ github.event.inputs.reason }}\"\necho \"Initiated by: ${{ github.actor }}\"\necho \"Dry run: ${{ github.event.inputs.dryRun }}\"\n"
+      - name: Validate workspace
+        run: |
+          WORKSPACE="${{ github.event.inputs.workspace }}"
+          if [ "$WORKSPACE" != "all" ]; then
+            if [ ! -d "$WORKSPACE" ] || [ ! -f "$WORKSPACE/deno.json" ]; then
+              echo "❌ Error: Workspace '$WORKSPACE' does not exist or is not configured"
+              echo "Available workspaces:"
+              jq -r '.workspace[]' deno.json | sed 's|^./||'
+              exit 1
+            fi
+            echo "✅ Workspace '$WORKSPACE' is valid"
+          fi
       - name: Publish (dry run)
-        if: (github.event_name == 'workflow_dispatch' && github.event.inputs.dryRun == 'true') || github.ref != 'refs/heads/main' || github.event_name == 'pull_request'
-        run: deno publish --dry-run
-
-      - name: Publish
-        if: (github.event_name == 'workflow_dispatch' && github.event.inputs.dryRun == 'false' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-        run: deno publish
+        if: github.event.inputs.dryRun == 'true'
+        run: "if [ \"${{ github.event.inputs.workspace }}\" = \"all\" ]; then\n  echo \"\U0001F50D Dry run: Publishing all workspaces\"\n  deno publish --dry-run\nelse\n  echo \"\U0001F50D Dry run: Publishing workspace ${{ github.event.inputs.workspace }}\"\n  cd \"${{ github.event.inputs.workspace }}\"\n  deno publish --dry-run\nfi\n"
+      - name: Emergency Publish
+        if: github.event.inputs.dryRun == 'false'
+        run: "if [ \"${{ github.event.inputs.workspace }}\" = \"all\" ]; then\n  echo \"\U0001F680 Emergency publishing all workspaces\"\n  deno publish\nelse\n  echo \"\U0001F680 Emergency publishing workspace ${{ github.event.inputs.workspace }}\"\n  cd \"${{ github.event.inputs.workspace }}\"\n  deno publish\nfi\n"
+      - name: Create emergency publish issue
+        if: github.event.inputs.dryRun == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: "await github.rest.issues.create({\n  owner: context.repo.owner,\n  repo: context.repo.repo,\n  title: `\U0001F6A8 Emergency Publish: ${{ github.event.inputs.workspace }}`,\n  body: `## Emergency Publish Log\n  \n  **Workspace:** ${{ github.event.inputs.workspace }}\n  **Reason:** ${{ github.event.inputs.reason }}\n  **Initiated by:** @${{ github.actor }}\n  **Timestamp:** ${new Date().toISOString()}\n  **Workflow:** [View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n  \n  ## Action Required\n  \n  - [ ] Review the reason for emergency publish\n  - [ ] Update CHANGELOG.md if needed\n  - [ ] Verify published packages are working correctly\n  - [ ] Consider if version bump is needed for next regular release\n  \n  This issue was automatically created to track emergency publishes outside the normal release pipeline.`,\n  labels: ['emergency', 'publishing', 'needs-review']\n});\n"

@@ -1,12 +1,12 @@
 {
   "name": "@tundralibs/cacher",
-  "version": "1.0.0-dev2",
-  "description": "Simple extendable caching library. Supports Redis, memcached, and in-memory caching OOB. Can be extended to support other caching engines.",
+  "version": "0.1.0",
+  "description": "TODO: Add description",
   "exports": {
     ".": "./mod.ts",
+    "./errors": "./errors/mod.ts",
     "./engines": "./engines/mod.ts",
-    "./types": "./types/mod.ts",
-    "./errors": "./errors/mod.ts"
+    "./types": "./types.ts"
   },
   "imports": {
     "$redis": "jsr:@db/redis@^0.38.0",

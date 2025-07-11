@@ -113,7 +113,7 @@ export abstract class AbstractHandler {
     }
 
     try {
-      const test = this.formatter.call(this, {
+      const test = this.formatter({
         id: '1',
         appName: 'test',
         hostname: 'test',
@@ -184,7 +184,7 @@ export abstract class AbstractHandler {
    * @returns Formatted log message string
    */
   protected _format(log: SlogObject): string {
-    return this.formatter.call(this, log);
+    return this.formatter(log);
   }
 
   /**

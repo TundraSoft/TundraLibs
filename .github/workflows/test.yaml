@@ -49,10 +49,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Docker on macOS
-        if: matrix.os == 'macOS-latest'
-        run: brew install --cask docker
-
       - name: Set up Deno
         uses: denoland/setup-deno@v2
         with:

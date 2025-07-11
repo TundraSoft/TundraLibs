@@ -1,0 +1,258 @@
+name: 'Performance Benchmarks'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - .dockerignore
+      - .gitignore
+      - .github/ISSUE_TEMPLATE/*
+      - .github/PULL_REQUEST_TEMPLATE*
+      - '**.md'
+      - ./LICENSE
+      - .vscode/*
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - .dockerignore
+      - .gitignore
+      - .github/ISSUE_TEMPLATE/*
+      - .github/PULL_REQUEST_TEMPLATE*
+      - '**.md'
+      - ./LICENSE
+      - .vscode/*
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: 'Create new performance baseline'
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run benchmarks
+        run: |
+          # Create benchmarks directory if it doesn't exist
+          mkdir -p .github/benchmarks
+          
+          # Run benchmarks and capture output
+          echo "Running benchmarks..."
+          deno bench --allow-read --allow-write --allow-env --allow-net --allow-ffi --allow-sys --json > benchmark-results.json || true
+          
+          # Format results for better readability
+          echo "## 🏃‍♂️ Benchmark Results" > benchmark-summary.md
+          echo "" >> benchmark-summary.md
+          echo "| Benchmark | Operations/sec | Time per op | Relative |" >> benchmark-summary.md
+          echo "|-----------|----------------|-------------|----------|" >> benchmark-summary.md
+          
+          # Parse JSON results and create markdown table
+          if [ -f benchmark-results.json ]; then
+            deno eval "
+              const results = JSON.parse(Deno.readTextFileSync('benchmark-results.json'));
+              const benchmarks = results.benchmarks || [];
+              for (const bench of benchmarks) {
+                const name = bench.name || 'Unknown';
+                const opsPerSec = bench.measuredRunsAvgSuccess ? Math.round(1000000000 / bench.measuredRunsAvgSuccess) : 'N/A';
+                const timePerOp = bench.measuredRunsAvgSuccess ? (bench.measuredRunsAvgSuccess / 1000000).toFixed(3) + 'ms' : 'N/A';
+                console.log(\`| \${name} | \${opsPerSec} | \${timePerOp} | 1.00x |\`);
+              }
+            " >> benchmark-summary.md || echo "| No benchmarks found | - | - | - |" >> benchmark-summary.md
+          else
+            echo "| No benchmark results | - | - | - |" >> benchmark-summary.md
+          fi
+
+      - name: Store benchmark results
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Store results with timestamp
+          TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          
+          # Create benchmark history file
+          cp benchmark-results.json ".github/benchmarks/benchmark-${TIMESTAMP}-${COMMIT_SHA}.json" || true
+          
+          # Keep only last 10 benchmark files to avoid repo bloat
+          cd .github/benchmarks
+          ls -t benchmark-*.json | tail -n +11 | xargs -r rm
+          
+          # Update latest baseline
+          cp "benchmark-${TIMESTAMP}-${COMMIT_SHA}.json" latest-baseline.json || true
+
+      - name: Compare with baseline (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -f .github/benchmarks/latest-baseline.json ]; then
+            echo "## 📊 Performance Comparison" >> benchmark-summary.md
+            echo "" >> benchmark-summary.md
+            echo "Comparing against main branch baseline..." >> benchmark-summary.md
+            echo "" >> benchmark-summary.md
+            
+            # Simple comparison script
+            deno eval "
+              try {
+                const baseline = JSON.parse(Deno.readTextFileSync('.github/benchmarks/latest-baseline.json'));
+                const current = JSON.parse(Deno.readTextFileSync('benchmark-results.json'));
+                
+                const baselineBenches = new Map();
+                (baseline.benchmarks || []).forEach(b => baselineBenches.set(b.name, b.measuredRunsAvgSuccess));
+                
+                console.log('| Benchmark | Current | Baseline | Change |');
+                console.log('|-----------|---------|----------|--------|');
+                
+                (current.benchmarks || []).forEach(bench => {
+                  const name = bench.name;
+                  const currentTime = bench.measuredRunsAvgSuccess;
+                  const baselineTime = baselineBenches.get(name);
+                  
+                  if (baselineTime && currentTime) {
+                    const change = ((currentTime - baselineTime) / baselineTime * 100).toFixed(2);
+                    const changeIcon = change > 5 ? '🔴' : change < -5 ? '🟢' : '🟡';
+                    console.log(\`| \${name} | \${(currentTime/1000000).toFixed(3)}ms | \${(baselineTime/1000000).toFixed(3)}ms | \${changeIcon} \${change}% |\`);
+                  } else {
+                    console.log(\`| \${name} | \${(currentTime/1000000).toFixed(3)}ms | N/A | 🆕 New |\`);
+                  }
+                });
+              } catch (e) {
+                console.log('| Error comparing benchmarks | - | - | ❌ |');
+              }
+            " >> benchmark-summary.md
+          else
+            echo "No baseline found for comparison." >> benchmark-summary.md
+          fi
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('benchmark-summary.md', 'utf8');
+            
+            // Find existing benchmark comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const existingComment = comments.data.find(comment => 
+              comment.body.includes('🏃‍♂️ Benchmark Results')
+            );
+            
+            if (existingComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: summary
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: summary
+              });
+            }
+
+      - name: Create performance regression issue
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            try {
+              const baseline = JSON.parse(fs.readFileSync('.github/benchmarks/latest-baseline.json', 'utf8'));
+              const current = JSON.parse(fs.readFileSync('benchmark-results.json', 'utf8'));
+              
+              const regressions = [];
+              const baselineBenches = new Map();
+              (baseline.benchmarks || []).forEach(b => baselineBenches.set(b.name, b.measuredRunsAvgSuccess));
+              
+              (current.benchmarks || []).forEach(bench => {
+                const baselineTime = baselineBenches.get(bench.name);
+                if (baselineTime && bench.measuredRunsAvgSuccess) {
+                  const change = ((bench.measuredRunsAvgSuccess - baselineTime) / baselineTime * 100);
+                  if (change > 10) { // More than 10% slower
+                    regressions.push({
+                      name: bench.name,
+                      change: change.toFixed(2),
+                      current: (bench.measuredRunsAvgSuccess/1000000).toFixed(3),
+                      baseline: (baselineTime/1000000).toFixed(3)
+                    });
+                  }
+                }
+              });
+              
+              if (regressions.length > 0) {
+                let issueBody = '## 🚨 Performance Regression Detected\n\n';
+                issueBody += `Found ${regressions.length} benchmark(s) with significant performance regression (>10% slower):\n\n`;
+                issueBody += '| Benchmark | Current | Baseline | Regression |\n';
+                issueBody += '|-----------|---------|----------|------------|\n';
+                
+                regressions.forEach(reg => {
+                  issueBody += `| ${reg.name} | ${reg.current}ms | ${reg.baseline}ms | ${reg.change}% |\n`;
+                });
+                
+                issueBody += `\n**PR:** #${context.issue.number}\n`;
+                issueBody += `**Commit:** ${context.sha}\n`;
+                issueBody += `**Branch:** ${context.head_ref}\n`;
+                
+                // Only create issue if it doesn't already exist for this PR
+                const issues = await github.rest.issues.listForRepo({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  labels: 'performance-regression'
+                });
+                
+                const existingIssue = issues.data.find(issue => 
+                  issue.body && issue.body.includes(`PR:** #${context.issue.number}`)
+                );
+                
+                if (!existingIssue) {
+                  await github.rest.issues.create({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    title: `🚨 Performance Regression in PR #${context.issue.number}`,
+                    body: issueBody,
+                    labels: ['performance-regression', 'bug']
+                  });
+                }
+              }
+            } catch (e) {
+              console.log('Could not check for performance regressions:', e.message);
+            }
+
+      - name: Commit benchmark results
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          if [ -n "$(git status --porcelain .github/benchmarks/)" ]; then
+            git add .github/benchmarks/
+            git commit -m "chore(benchmarks): Update performance benchmarks [skip ci]"
+            git push
+          else
+            echo "No benchmark changes to commit"
+          fi

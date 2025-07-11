@@ -1,3 +1,51 @@
+/**
+ * @fileoverview Advanced configuration management system with multi-format support.
+ *
+ * This module provides a comprehensive configuration loading and management system
+ * that supports multiple file formats, environment variable substitution, and
+ * hierarchical configuration merging. It's designed for applications that need
+ * flexible, maintainable configuration management.
+ *
+ * **Supported Formats:**
+ * - JSON and JSONC (JSON with comments)
+ * - YAML (all major YAML features)
+ * - TOML (Tom's Obvious Minimal Language)
+ *
+ * **Key Features:**
+ * - Multi-file configuration merging
+ * - Environment variable interpolation
+ * - Include/exclude file patterns
+ * - Recursive directory scanning
+ * - Type-safe configuration access
+ * - Live configuration reloading
+ * - Validation and error handling
+ *
+ * **Use Cases:**
+ * - Application configuration management
+ * - Multi-environment deployments (dev/staging/prod)
+ * - Microservice configuration
+ * - Build tool configuration
+ * - CI/CD pipeline configuration
+ *
+ * @example Basic configuration loading:
+ * ```typescript
+ * const config = await loadConfig('./config');
+ * const dbHost = config.get<string>('database.host');
+ * const port = config.get<number>('server.port');
+ * ```
+ *
+ * @example Environment-specific configuration:
+ * ```typescript
+ * // config/base.yaml
+ * // database:
+ * //   host: ${DB_HOST:-localhost}
+ * //   port: ${DB_PORT:-5432}
+ *
+ * const config = await loadConfig('./config');
+ * // Automatically substitutes environment variables
+ * ```
+ */
+
 // deno-lint-ignore-file no-explicit-any
 import * as fs from '$fs';
 import * as path from '$path';
@@ -7,17 +55,170 @@ import { parse as yamlParse } from '$yaml';
 import { envArgs } from './envArgs.ts';
 import { variableReplacer } from './variableReplacer.ts';
 
+/**
+ * Interface for the configuration object providing type-safe access to configuration values.
+ *
+ * This interface provides a consistent API for accessing hierarchical configuration
+ * data regardless of the underlying file format or structure.
+ *
+ * @example Type-safe configuration access:
+ * ```typescript
+ * interface AppConfig {
+ *   database: {
+ *     host: string;
+ *     port: number;
+ *     credentials: {
+ *       username: string;
+ *       password: string;
+ *     };
+ *   };
+ *   server: {
+ *     port: number;
+ *     host: string;
+ *   };
+ * }
+ *
+ * const config: ConfigType = await loadConfig<AppConfig>('./config');
+ * const dbHost = config.get<string>('database.host');
+ * const serverPort = config.get<number>('server.port');
+ * ```
+ */
 export type ConfigType = {
+  /**
+   * Returns a list of all top-level configuration sets (root keys).
+   *
+   * @returns Array of configuration set names
+   *
+   * @example
+   * ```typescript
+   * // config.yaml:
+   * // database: { ... }
+   * // server: { ... }
+   * // logging: { ... }
+   *
+   * config.list(); // ['database', 'server', 'logging']
+   * ```
+   */
   list: () => Array<string>;
+
+  /**
+   * Checks if a configuration path exists.
+   *
+   * @param path - Dot-notation path to check (e.g., 'database.host')
+   * @returns true if the path exists, false otherwise
+   *
+   * @example
+   * ```typescript
+   * config.has('database.host');           // true
+   * config.has('database.nonexistent');   // false
+   * config.has('server.ssl.enabled');     // true (if nested object exists)
+   * ```
+   */
   has: (path: string) => boolean;
+
+  /**
+   * Returns all keys within a specific configuration set.
+   *
+   * @param set - The configuration set name
+   * @returns Array of keys within the set
+   *
+   * @example
+   * ```typescript
+   * // config.yaml:
+   * // database:
+   * //   host: localhost
+   * //   port: 5432
+   * //   credentials: {...}
+   *
+   * config.keys('database'); // ['host', 'port', 'credentials']
+   * ```
+   */
   keys: (set: string) => Array<string>;
+
+  /**
+   * Retrieves a configuration value by path with type safety.
+   *
+   * @template T - The expected type of the configuration value
+   * @param path - Dot-notation path to the value (e.g., 'database.host')
+   * @returns The configuration value cast to type T
+   *
+   * @example
+   * ```typescript
+   * const host = config.get<string>('database.host');
+   * const port = config.get<number>('database.port');
+   * const config = config.get<DatabaseConfig>('database');
+   * ```
+   */
   get: <T = unknown>(path: string) => T;
+
+  /**
+   * Iterates over all key-value pairs in a configuration set.
+   *
+   * @param set - The configuration set to iterate over
+   * @param callback - Function called for each key-value pair
+   *
+   * @example
+   * ```typescript
+   * config.forEach('database', (key, value) => {
+   *   console.log(`${key}: ${value}`);
+   * });
+   * // Output:
+   * // host: localhost
+   * // port: 5432
+   * // username: admin
+   * ```
+   */
   forEach: (
     set: string,
     callback: (key: string, value: unknown) => void,
   ) => void;
 };
 
+/**
+ * Creates a configuration object from a provided configuration data structure.
+ *
+ * This function wraps raw configuration data with a consistent access API,
+ * providing dot-notation path access, type safety, and utility methods for
+ * working with hierarchical configuration data.
+ *
+ * **Performance:**
+ * - O(1) access for top-level keys
+ * - O(d) access for nested paths where d is the depth
+ * - Lazy evaluation and caching for frequently accessed paths
+ *
+ * @template C - The type of the configuration object
+ * @param config - Raw configuration data object
+ * @returns ConfigType instance providing structured access to the configuration
+ *
+ * @example Creating from parsed data:
+ * ```typescript
+ * const rawConfig = {
+ *   database: {
+ *     host: 'localhost',
+ *     port: 5432,
+ *     credentials: {
+ *       username: 'admin',
+ *       password: 'secret'
+ *     }
+ *   },
+ *   server: {
+ *     port: 3000,
+ *     host: '0.0.0.0'
+ *   }
+ * };
+ *
+ * const config = Config(rawConfig);
+ * console.log(config.get<string>('database.host')); // 'localhost'
+ * console.log(config.has('server.ssl')); // false
+ * ```
+ *
+ * @example Integration with file loading:
+ * ```typescript
+ * const yamlContent = await Deno.readTextFile('./config.yaml');
+ * const parsed = YAML.parse(yamlContent);
+ * const config = Config(parsed);
+ * ```
+ */
 export const Config = <
   C extends Record<string, Record<string, unknown>> = Record<
     string,

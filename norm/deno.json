@@ -1,9 +1,0 @@
-{
-  "name": "@tundralibs/norm",
-  "version": "0.1.0",
-  "description": "TODO: Add description",
-  "exports": {
-    ".": "./mod.ts"
-  },
-  "imports": {}
-}

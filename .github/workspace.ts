@@ -24,6 +24,33 @@ type PRTitleSchema = {
   };
 };
 
+type EdgeReleaseSchema = {
+  on: {
+    pull_request: {
+      types: string[];
+      branches: string[];
+      paths: string[];
+    };
+  };
+  [key: string]: unknown;
+};
+
+type PublishSchema = {
+  on: {
+    workflow_dispatch: {
+      inputs: {
+        workspace: {
+          type: string;
+          options: string[];
+          [key: string]: unknown;
+        };
+        [key: string]: unknown;
+      };
+    };
+  };
+  [key: string]: unknown;
+};
+
 type IssueTemplateSchema = {
   name: string;
   description: string;
@@ -45,7 +72,12 @@ type IssueTemplateSchema = {
 
 const LABELER_YML = '.github/labeler.yml';
 const PR_TITLE_YML = '.github/workflows/pr-title.yaml';
-const ISSUE_YML = '.github/ISSUE_TEMPLATE/issue.bug.yml';
+const EDGE_RELEASE_YML = '.github/workflows/edge-release.yaml';
+const PUBLISH_YML = '.github/workflows/publish.yaml';
+const ISSUE_BUG_YML = '.github/ISSUE_TEMPLATE/issue.bug.yml';
+const ISSUE_FEATURE_YML = '.github/ISSUE_TEMPLATE/issue.feature.yml';
+const ISSUE_DOCUMENTATION_YML = '.github/ISSUE_TEMPLATE/issue.documentation.yml';
+const ISSUE_PERFORMANCE_YML = '.github/ISSUE_TEMPLATE/issue.performance.yml';
 const CODECOV_YML = './codecov.yml';
 const WORKSPACE_NAME_PATTERN = new RegExp(/^@[a-z0-9-]+\/[a-z0-9-]+$/);
 const WORKSPACE_SCOPE = 'tundralibs';
@@ -234,26 +266,146 @@ const updateWorkflows = async (
     await Deno.writeTextFile(PR_TITLE_YML, yaml.stringify(prtitleContent));
   }
 
-  if (await fs.exists(ISSUE_YML)) {
-    const issueContent = yaml.parse(
-      await Deno.readTextFile(ISSUE_YML),
-    ) as IssueTemplateSchema;
-    
-    // Find the dropdown for package selection
-    const packageDropdown = issueContent.body.find(
-      item => item.type === 'dropdown' && item.id === 'package'
-    );
-    
-    if (packageDropdown) {
-      // Reset options to include common packages and all workspaces
-      packageDropdown.attributes.options = [
-        'Workflow',
-        ...workspaces.sort()
-      ];
-      
-      // Write the updated content back to the file
-      await Deno.writeTextFile(ISSUE_YML, yaml.stringify(issueContent));
+  // Update edge-release workflow paths
+  await updateEdgeReleaseWorkflow(workspaces, deleteList);
+  
+  // Update publish workflow options
+  await updatePublishWorkflow(workspaces, deleteList);
+
+  // Update issue templates
+  await updateIssueTemplates(workspaces, deleteList);
+};
+
+/**
+ * Updates all issue templates with workspace package options
+ * @param workspaces - Array of workspace names 
+ * @param deleteList - Optional array of workspace names to remove
+ * 
+ * This function updates all issue templates to include the current workspaces
+ * in JSR package format (@tundralibs/workspace-name). It handles:
+ * - Bug reports: Includes workflow/infrastructure and multiple package options
+ * - Feature requests: Includes new package and tooling options
+ * - Documentation: Includes repository-wide options
+ * - Performance: Focuses on package-specific issues
+ */
+const updateIssueTemplates = async (
+  workspaces: string[],
+  deleteList?: string[],
+): Promise<void> => {
+  // Convert workspace names to JSR package format
+  const jsrPackages = workspaces.map(name => `@${WORKSPACE_SCOPE}/${name}`);
+  
+  // Define the issue template files to update
+  const issueTemplates = [
+    {
+      file: ISSUE_BUG_YML,
+      packageOptions: [
+        'Workflow/Infrastructure',
+        ...jsrPackages.sort(),
+      ]
+    },
+    {
+      file: ISSUE_FEATURE_YML,
+      packageOptions: [
+        ...jsrPackages.sort(),
+        'New package',
+        'Infrastructure/Tooling'
+      ]
+    },
+    {
+      file: ISSUE_DOCUMENTATION_YML,
+      packageOptions: [
+        ...jsrPackages.sort(),
+        'Repository/General',
+        'All packages'
+      ]
+    },
+    {
+      file: ISSUE_PERFORMANCE_YML,
+      packageOptions: [
+        ...jsrPackages.sort(),
+        'Multiple packages'
+      ]
     }
+  ];
+
+  // Update each issue template
+  for (const template of issueTemplates) {
+    if (await fs.exists(template.file)) {
+      try {
+        const issueContent = yaml.parse(
+          await Deno.readTextFile(template.file),
+        ) as IssueTemplateSchema;
+        
+        // Find the dropdown for package selection
+        const packageDropdown = issueContent.body.find(
+          item => item.type === 'dropdown' && item.id === 'package'
+        );
+        
+        if (packageDropdown) {
+          // Update options with the JSR package format
+          packageDropdown.attributes.options = template.packageOptions;
+          
+          // Write the updated content back to the file
+          await Deno.writeTextFile(template.file, yaml.stringify(issueContent));
+          console.log(`Updated package options in ${template.file}`);
+        } else {
+          console.warn(`No package dropdown found in ${template.file}`);
+        }
+      } catch (error) {
+        console.warn(`Failed to update ${template.file}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    } else {
+      console.warn(`Issue template not found: ${template.file}`);
+    }
+  }
+};
+
+/**
+ * Updates the edge-release workflow paths trigger with current workspaces
+ * @param workspaces - Array of workspace names
+ * @param deleteList - Optional array of workspace names to remove
+ */
+const updateEdgeReleaseWorkflow = async (
+  workspaces: string[],
+  deleteList?: string[],
+): Promise<void> => {
+  if (await fs.exists(EDGE_RELEASE_YML)) {
+    const edgeReleaseContent = yaml.parse(
+      await Deno.readTextFile(EDGE_RELEASE_YML),
+    ) as EdgeReleaseSchema;
+    
+    // Update the paths trigger to include all current workspaces
+    const paths = workspaces.map(workspace => `${workspace}/**`);
+    edgeReleaseContent.on.pull_request.paths = paths;
+    
+    await Deno.writeTextFile(EDGE_RELEASE_YML, yaml.stringify(edgeReleaseContent));
+  } else {
+    console.warn(`Edge release workflow not found at ${EDGE_RELEASE_YML}`);
+  }
+};
+
+/**
+ * Updates the publish workflow workspace options with current workspaces
+ * @param workspaces - Array of workspace names
+ * @param deleteList - Optional array of workspace names to remove
+ */
+const updatePublishWorkflow = async (
+  workspaces: string[],
+  deleteList?: string[],
+): Promise<void> => {
+  if (await fs.exists(PUBLISH_YML)) {
+    const publishContent = yaml.parse(
+      await Deno.readTextFile(PUBLISH_YML),
+    ) as PublishSchema;
+    
+    // Update the workspace options to include 'all' plus current workspaces
+    const options = ['all', ...workspaces.sort()];
+    publishContent.on.workflow_dispatch.inputs.workspace.options = options;
+    
+    await Deno.writeTextFile(PUBLISH_YML, yaml.stringify(publishContent));
+  } else {
+    console.warn(`Publish workflow not found at ${PUBLISH_YML}`);
   }
 };
 

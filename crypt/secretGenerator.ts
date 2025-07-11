@@ -1,39 +1,52 @@
 import { encodeBase64, encodeHex } from '$encoding';
 
 /**
- * Output encoding options for the secret generator
+ * Output encoding options for the secret generator.
+ *
+ * - `hex`: Hexadecimal encoding (0-9, a-f)
+ * - `base64`: Base64 encoding (A-Z, a-z, 0-9, +, /)
+ * - `raw`: Raw binary data as Uint8Array
+ * - `alphanumeric`: Alphanumeric characters (A-Z, a-z, 0-9)
  */
 export type SecretEncoding = 'hex' | 'base64' | 'raw' | 'alphanumeric';
 
 /**
- * Options for secret generation
+ * Configuration options for secret generation.
+ *
+ * Provides fine-grained control over secret generation including length,
+ * encoding, formatting, and output customization.
  */
 export interface SecretGeneratorOptions {
   /**
-   * Length of the secret in bytes
+   * Length of the secret in bytes.
+   * Must be a positive integer.
    */
   byteLength: number;
 
   /**
-   * Optional prefix to add to the secret
+   * Optional prefix to add to the secret.
+   * Only applied for string outputs (ignored for raw encoding).
    * @default ''
    */
   prefix?: string;
 
   /**
-   * Interval at which to insert hyphens
+   * Interval at which to insert hyphens for readability.
+   * Set to 0 to disable hyphen insertion.
    * @default 0 (no hyphens)
    */
   hyphenInterval?: number;
 
   /**
-   * Encoding to use for the output
+   * Encoding to use for the output.
    * @default 'hex'
+   * @see {@link SecretEncoding} for available options
    */
   encoding?: SecretEncoding;
 
   /**
-   * Whether to force lowercase output (for string outputs only)
+   * Whether to force lowercase output.
+   * Only applies to string outputs (hex, base64, alphanumeric).
    * @default false
    */
   lowercase?: boolean;
@@ -42,41 +55,51 @@ export interface SecretGeneratorOptions {
 /**
  * Generates a cryptographically secure random secret suitable for encryption algorithms.
  *
- * @param {number | SecretGeneratorOptions} byteLengthOrOptions - The length of the secret in bytes or an options object
- * @param {SecretEncoding} encoding - The encoding to use for the output ('hex', 'base64', 'alphanumeric', or 'raw').
- *                                   Defaults to 'hex'.
- * @param {string} prefix - An optional prefix to be added to the secret. Only applied for string outputs.
- *                         Defaults to an empty string.
- * @param {number} hyphenInterval - The interval at which hyphens should be inserted. Defaults to 0 (no hyphens).
- * @returns {string | Uint8Array} The generated secret in the specified encoding (string) or as a Uint8Array if raw.
+ * Uses `crypto.getRandomValues()` to generate cryptographically strong random data.
+ * Supports multiple output encodings and formatting options for different use cases.
+ * Can accept either simple parameters or a comprehensive options object.
+ *
+ * @param {number | SecretGeneratorOptions} byteLengthOrOptions - The length of the secret in bytes or an options object ({@link SecretGeneratorOptions})
+ * @param {SecretEncoding} [encoding='hex'] - The encoding to use for the output ({@link SecretEncoding})
+ * @param {string} [prefix=''] - An optional prefix to be added to the secret (ignored for raw encoding)
+ * @param {number} [hyphenInterval=0] - The interval at which hyphens should be inserted (0 = no hyphens)
+ * @returns {string | Uint8Array} The generated secret in the specified encoding (string) or as a Uint8Array if raw
+ *
+ * @throws {Error} When byteLength is not a positive integer
+ * @throws {Error} When hyphenInterval is not a non-negative integer
+ * @throws {Error} When encoding is not supported
  *
  * @example
+ * ```typescript
  * // Generate a 32-byte (256-bit) secret in hex format
  * const secret = secretGenerator(32);
- * console.log(secret); // Logs a 64-character hex string (32 bytes)
+ * console.log(secret); // "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456"
+ * ```
  *
  * @example
- * // Generate a 16-byte (128-bit) secret in base64 format
+ * ```typescript
+ * // Generate a 16-byte secret in base64 format
  * const secret = secretGenerator(16, 'base64');
- * console.log(secret); // Logs a base64-encoded string
+ * console.log(secret); // "aBcDeFgHiJkLmNoPqRsTuV=="
+ * ```
  *
  * @example
- * // Generate a 24-byte (192-bit) secret as raw bytes
+ * ```typescript
+ * // Generate raw binary data
  * const secret = secretGenerator(24, 'raw');
- * console.log(secret); // Logs a Uint8Array of 24 bytes
+ * console.log(secret); // Uint8Array(24) [...]
+ * ```
  *
  * @example
- * // Generate a secret with a prefix
- * const secret = secretGenerator(32, 'hex', 'key:');
- * console.log(secret); // Logs a prefixed hex string
+ * ```typescript
+ * // Generate with prefix and hyphens
+ * const secret = secretGenerator(16, 'hex', 'api-key:', 4);
+ * console.log(secret); // "api-key:a1b2-c3d4-e5f6-7890-1234-5678-9abc-def0"
+ * ```
  *
  * @example
- * // Generate a secret with hyphens inserted at intervals
- * const secret = secretGenerator(16, 'hex', '', 4);
- * console.log(secret); // Logs a hex string with hyphens every 4 characters
- *
- * @example
- * // Generate a secret using options object
+ * ```typescript
+ * // Generate using options object
  * const secret = secretGenerator({
  *   byteLength: 16,
  *   encoding: 'alphanumeric',
@@ -84,7 +107,12 @@ export interface SecretGeneratorOptions {
  *   hyphenInterval: 4,
  *   lowercase: true
  * });
- * console.log(secret); // Logs a formatted alphanumeric key
+ * console.log(secret); // "key-ab1c-d2e3-f4g5-h6i7"
+ * ```
+ *
+ * @see {@link SecretEncoding} for encoding options
+ * @see {@link SecretGeneratorOptions} for detailed configuration
+ * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues} Web Crypto API getRandomValues
  */
 export const secretGenerator = (
   byteLengthOrOptions: number | SecretGeneratorOptions,

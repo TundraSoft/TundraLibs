@@ -31,6 +31,16 @@ export const isSubnet = (ip: string): boolean => {
   const [addressPart, subnetPart] = parts;
   if (!addressPart || !subnetPart) return false;
 
+  // Validate that neither part contains extra whitespace
+  if (addressPart !== addressPart.trim() || subnetPart !== subnetPart.trim()) {
+    return false;
+  }
+
+  // Validate that subnetPart contains only digits with no leading zeros
+  if (!/^(0|[1-9]\d*)$/.test(subnetPart)) {
+    return false;
+  }
+
   // Check if it's IPv6
   if (addressPart.includes(':')) {
     return isIPv6Subnet(addressPart, parseInt(subnetPart, 10));

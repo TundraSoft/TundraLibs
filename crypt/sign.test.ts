@@ -256,4 +256,116 @@ Deno.test('signing', async (t) => {
       Error,
     );
   });
+
+  await t.step('error handling and edge cases', async (h) => {
+    const secret = 'abcdefghijklmnopqrstuvwx';
+    const data = 'my data';
+
+    await h.step('verifyHMAC with empty signature', async () => {
+      await asserts.assertRejects(
+        async () => {
+          await verifyHMAC('SHA-256', secret, data, '');
+        },
+        Error,
+        'Signature must be a non-empty string',
+      );
+    });
+
+    await h.step('verifyHMAC with null signature', async () => {
+      await asserts.assertRejects(
+        async () => {
+          await verifyHMAC('SHA-256', secret, data, null as any);
+        },
+        Error,
+        'Signature must be a non-empty string',
+      );
+    });
+
+    await h.step('verifyHMAC with undefined signature', async () => {
+      await asserts.assertRejects(
+        async () => {
+          await verifyHMAC('SHA-256', secret, data, undefined as any);
+        },
+        Error,
+        'Signature must be a non-empty string',
+      );
+    });
+
+    await h.step('test crypto subtle error handling in signHMAC', async () => {
+      // Test with invalid key that should cause crypto.subtle to throw
+      const invalidKey = '';
+      await asserts.assertRejects(
+        async () => {
+          await signHMAC('SHA-256', invalidKey, data);
+        },
+        Error,
+      );
+    });
+
+    await h.step(
+      'test crypto subtle error handling in verifyHMAC',
+      async () => {
+        // Test with invalid key that should cause crypto.subtle to throw
+        const invalidKey = '';
+        const validSignature =
+          'c58318d62aa0ef514fff9e7facff8fafa576e31922f76cf479d1e5856834e5b9';
+        await asserts.assertRejects(
+          async () => {
+            await verifyHMAC('SHA-256', invalidKey, data, validSignature);
+          },
+          Error,
+        );
+      },
+    );
+
+    await h.step(
+      'test crypto subtle error handling in sign wrapper',
+      async () => {
+        // Test with invalid key that should cause crypto.subtle to throw
+        const invalidKey = '';
+        await asserts.assertRejects(
+          async () => {
+            await sign('HMAC:SHA-256', invalidKey, data);
+          },
+          Error,
+        );
+      },
+    );
+
+    await h.step(
+      'test crypto subtle error handling in verify wrapper',
+      async () => {
+        // Test with invalid key that should cause crypto.subtle to throw
+        const invalidKey = '';
+        const validSignature =
+          'c58318d62aa0ef514fff9e7facff8fafa576e31922f76cf479d1e5856834e5b9';
+        await asserts.assertRejects(
+          async () => {
+            await verify('HMAC:SHA-256', invalidKey, data, validSignature);
+          },
+          Error,
+        );
+      },
+    );
+
+    await h.step('test invalid signature with non-hex characters', async () => {
+      await asserts.assertRejects(
+        async () => {
+          await verifyHMAC('SHA-256', secret, data, 'gg' + 'h'.repeat(62));
+        },
+        Error,
+        'Invalid signature format',
+      );
+    });
+
+    await h.step('test signature with odd length hex string', async () => {
+      await asserts.assertRejects(
+        async () => {
+          await verifyHMAC('SHA-256', secret, data, 'abc'); // odd length
+        },
+        Error,
+        'Invalid signature format',
+      );
+    });
+  });
 });

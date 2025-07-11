@@ -1,0 +1,127 @@
+name: Performance Issue
+description: Report performance problems or regressions
+title: '[PERF]: '
+labels:
+  - performance
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: >
+        Thanks for reporting a performance issue! Performance is important for
+        library adoption.
+  - type: checkboxes
+    attributes:
+      label: Is this a new issue?
+      description: Please search to see if this issue is already reported.
+      options:
+        - label: I have searched the existing issues
+          required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Package
+      description: Which package has the performance issue?
+      multiple: false
+      options:
+        - '@tundralibs/cacher'
+        - '@tundralibs/crypt'
+        - '@tundralibs/guardian'
+        - '@tundralibs/id'
+        - '@tundralibs/slogger'
+        - '@tundralibs/utils'
+        - Multiple packages
+    validations:
+      required: true
+  - type: dropdown
+    id: perf-type
+    attributes:
+      label: Performance Issue Type
+      description: What kind of performance problem is this?
+      multiple: false
+      options:
+        - Slower than expected
+        - Performance regression
+        - Memory usage
+        - CPU usage
+        - Blocking/hanging operations
+        - Comparison with alternatives
+    validations:
+      required: true
+  - type: input
+    id: deno-version
+    attributes:
+      label: Deno Version
+      description: What Deno version are you using?
+      placeholder: 'e.g., 2.1.0'
+    validations:
+      required: true
+  - type: input
+    id: package-version
+    attributes:
+      label: Package Version
+      description: What package version are you using?
+      placeholder: 'e.g., 1.2.3'
+    validations:
+      required: true
+  - type: textarea
+    id: performance-details
+    attributes:
+      label: Performance Details
+      description: Describe the performance issue in detail
+      placeholder: |
+        - What operation is slow?
+        - How slow is it compared to expectations?
+        - When did you first notice this?
+        - Does it happen consistently?
+    validations:
+      required: true
+  - type: textarea
+    id: benchmark-code
+    attributes:
+      label: Benchmark/Test Code
+      description: Provide code that demonstrates the performance issue
+      placeholder: >
+        ```typescript
+
+        import { slowFunction } from "@tundralibs/package";
+
+
+        // Code that demonstrates the performance problem
+
+        const start = performance.now();
+
+        const result = slowFunction(largeInput);
+
+        const end = performance.now();
+
+        console.log(`Operation took ${end - start}ms`); // Expected: <50ms,
+        Actual: 2000ms
+
+        ```
+      render: typescript
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Runtime environment details
+      placeholder: |
+        - OS: macOS/Linux/Windows
+        - CPU: 
+        - Memory:
+        - Any relevant system specs
+    validations:
+      required: false
+  - type: textarea
+    id: comparison
+    attributes:
+      label: Performance Comparison
+      description: How does this compare to alternatives or previous versions?
+      placeholder: |
+        - Compared to version X.Y.Z: 
+        - Compared to [alternative library]:
+        - Expected performance based on:
+    validations:
+      required: false

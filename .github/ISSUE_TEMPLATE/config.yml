@@ -1,8 +1,14 @@
 blank_issues_enabled: false
-# contact_links:
-#   - name: GitHub Community Support
-#     url: https://github.com/orgs/community/discussions
-#     about: Please ask and answer questions here.
-#   - name: GitHub Security Bug Bounty
-#     url: https://bounty.github.com/
-#     about: Please report security vulnerabilities here.
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/TundraSoft/TundraLibs/blob/main/README.md
+    about: Check the documentation for usage examples and API reference
+  - name: 💬 Discussions  
+    url: https://github.com/TundraSoft/TundraLibs/discussions
+    about: Ask questions, share ideas, or get help from the community
+  - name: 🔒 Security Policy
+    url: https://github.com/TundraSoft/TundraLibs/blob/main/.github/SECURITY.md
+    about: Learn about our security policy and how to report vulnerabilities
+  - name: 🚨 Report Security Vulnerability
+    url: https://github.com/TundraSoft/TundraLibs/security/advisories/new  
+    about: Report security vulnerabilities privately (recommended for sensitive issues)

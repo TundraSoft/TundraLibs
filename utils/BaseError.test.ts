@@ -330,6 +330,86 @@ Deno.test(
       const error2 = new BaseError('Test error', {}, noStackError);
       const snippet2 = error2.getCodeSnippet();
       asserts.assertEquals(snippet2, 'No stack trace available');
+
+      // Test insufficient stack trace
+      const insufficientStackError = new Error('Insufficient stack');
+      Object.defineProperty(insufficientStackError, 'stack', {
+        value: 'Error: Insufficient stack',
+        configurable: true,
+        writable: true,
+      });
+
+      const error3 = new BaseError('Test error', {}, insufficientStackError);
+      const snippet3 = error3.getCodeSnippet();
+      asserts.assertEquals(snippet3, 'Insufficient stack trace information');
+
+      // Test invalid stack trace format (empty line)
+      const invalidStackError = new Error('Invalid stack');
+      Object.defineProperty(invalidStackError, 'stack', {
+        value: 'Error: Invalid stack\n',
+        configurable: true,
+        writable: true,
+      });
+
+      const error4 = new BaseError('Test error', {}, invalidStackError);
+      const snippet4 = error4.getCodeSnippet();
+      asserts.assertEquals(snippet4, 'Invalid stack trace format');
+
+      // Test stack trace with invalid line number (non-numeric)
+      const invalidLineError = new Error('Invalid line');
+      Object.defineProperty(invalidLineError, 'stack', {
+        value:
+          'Error: Invalid line\n    at Object.<anonymous> (/some/file.ts:abc:5)',
+        configurable: true,
+        writable: true,
+      });
+
+      const error5 = new BaseError('Test error', {}, invalidLineError);
+      const snippet5 = error5.getCodeSnippet();
+      asserts.assertEquals(snippet5, 'Could not parse stack trace');
+
+      // Test stack trace with negative line number regex doesn't match
+      const negativeLineError = new Error('Negative line');
+      Object.defineProperty(negativeLineError, 'stack', {
+        value:
+          'Error: Negative line\n    at Object.<anonymous> (/some/file.ts:-1:5)',
+        configurable: true,
+        writable: true,
+      });
+
+      const error6 = new BaseError('Test error', {}, negativeLineError);
+      const snippet6 = error6.getCodeSnippet();
+      asserts.assertEquals(snippet6, 'Could not parse stack trace');
+    });
+
+    await t.step('should handle line number validation edge cases', () => {
+      // Create a temporary test file for this specific test
+      const tempFilePath = '/tmp/baseError_test_' + Date.now() + '.ts';
+      Deno.writeTextFileSync(
+        tempFilePath,
+        '// Test file\nconsole.log("test");',
+      );
+
+      try {
+        // Create a stack trace that will match the regex but have line 0 (which becomes -1 after -1)
+        const zeroLineError = new Error('Zero line');
+        Object.defineProperty(zeroLineError, 'stack', {
+          value: `Error: Zero line\n    at ${tempFilePath}:0:5`,
+          configurable: true,
+          writable: true,
+        });
+
+        const error = new BaseError('Test error', {}, zeroLineError);
+        const snippet = error.getCodeSnippet();
+        asserts.assertEquals(snippet, 'Invalid line number in stack trace');
+      } finally {
+        // Clean up the temp file
+        try {
+          Deno.removeSync(tempFilePath);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
     });
   },
 );
