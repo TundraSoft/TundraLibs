@@ -129,6 +129,15 @@ jobs:
 
       - name: Run tests
         run: deno task test:run && deno task test:bench && deno coverage coverage --lcov cov --output=coverage/report.lcov
+        env:
+          MEMCACHED_HOST: localhost
+          MEMCACHED_PORT: 11211
+          MEMCACHED_SIZE: 10
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          # REDIS_USERNAME: 
+          # REDIS_PASSWORD:
+          REDIS_DB: 0
       
       - name: Collect coverage
         if: (matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x') && (github.event_name != 'workflow_dispatch' || github.event.inputs.submitReports == 'true')
