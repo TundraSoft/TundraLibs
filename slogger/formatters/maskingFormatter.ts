@@ -64,11 +64,11 @@ const DEFAULT_SENSITIVE_PATTERNS = [
   // Credit card numbers: 16 digits, may have spaces or dashes
   /\b(?:\d[ -]*?){13,16}\b/g,
   // API keys, tokens, etc. (common formats)
-  /(?:api[_-\s]?key|token|secret|password)[:=]\s*["']?([a-zA-Z0-9_.-]+)["']?/gi,
+  /(?:api[_\s-]?key|token|secret|password)[:=]\s*["']?([a-zA-Z0-9_.-]+)["']?/gi,
   // Email addresses
   /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
   // SSN format (US)
-  /\b\d{3}[-]?\d{2}[-]?\d{4}\b/g,
+  /\b\d{3}-?\d{2}-?\d{4}\b/g,
 ];
 
 /**
@@ -190,9 +190,7 @@ export function maskingFormatter(
     sensitivePatterns: config.sensitivePatterns ||
       [...DEFAULT_SENSITIVE_PATTERNS],
     maskChar: config.maskChar || '*',
-    strategy: config.strategy !== undefined
-      ? config.strategy
-      : MaskingStrategy.FULL,
+    strategy: config.strategy ?? MaskingStrategy.FULL,
     showChars: config.showChars || 4,
     recursive: config.recursive !== false,
     baseFormatter: config.baseFormatter || jsonFormatter,
@@ -209,7 +207,7 @@ export function maskingFormatter(
     // Mask sensitive fields in the context
     if (clonedLog.context && typeof clonedLog.context === 'object') {
       clonedLog.context = maskObject(
-        clonedLog.context as Record<string, unknown>,
+        clonedLog.context,
         fullConfig,
       );
     }

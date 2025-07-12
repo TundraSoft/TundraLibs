@@ -118,7 +118,7 @@ export class ObjectGuardian<
         );
 
         if (extraKeys.length > 0) {
-          extraKeys.map((key) => {
+          extraKeys.forEach((key) => {
             errors.addCause(
               key,
               new GuardianError(

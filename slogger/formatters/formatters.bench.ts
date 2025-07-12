@@ -1,8 +1,6 @@
 import { SyslogSeverities } from '@tundralibs/utils';
 import { SlogObject } from '../types/mod.ts';
 import {
-  binaryFormatter,
-  compactBinaryFormatter,
   compactFormat,
   detailedFormat,
   jsonFormatter,
@@ -12,7 +10,6 @@ import {
   minimalistFormat,
   simpleFormatter,
   standardFormat,
-  streamingBinaryFormatter,
 } from './mod.ts';
 
 // Helper to create a standard log object for benchmarking
@@ -131,45 +128,6 @@ Deno.bench({
   },
 });
 
-// Benchmark binary formatters
-Deno.bench({
-  name: 'Binary Formatter - Standard',
-  fn() {
-    binaryFormatter(simpleLog);
-  },
-});
-
-Deno.bench({
-  name: 'Binary Formatter - Compact',
-  fn() {
-    compactBinaryFormatter(simpleLog);
-  },
-});
-
-Deno.bench({
-  name: 'Binary Formatter - Streaming Simple',
-  fn() {
-    streamingBinaryFormatter(simpleLog);
-  },
-});
-
-Deno.bench({
-  name: 'Binary Formatter - Streaming Complex',
-  fn() {
-    streamingBinaryFormatter(complexLog);
-  },
-});
-
-// Benchmark formatter comparison for same log
-Deno.bench({
-  name: 'Formatter - Standard vs JSON vs Binary',
-  fn() {
-    standardFormat(simpleLog);
-    jsonFormatter(simpleLog);
-    binaryFormatter(simpleLog);
-  },
-});
-
 // Benchmark with large string formatting
 Deno.bench({
   name: 'String Formatter - Large Message (1KB)',
@@ -207,7 +165,6 @@ Deno.bench({
   name: 'Binary vs JSON vs String - Complex Log',
   fn() {
     // Test each formatter type for comparison
-    binaryFormatter(complexLog);
     jsonFormatter(complexLog);
     detailedFormat(complexLog);
   },

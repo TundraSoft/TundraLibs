@@ -192,41 +192,34 @@ export class FileHandler extends AbstractHandler {
       throw new Error('FileHandler not initialized - call init() first');
     }
 
-    try {
-      const encodedMessage = this.__encoder.encode(message + '\n');
-      const messageLength = encodedMessage.length;
+    const encodedMessage = this.__encoder.encode(message + '\n');
+    const messageLength = encodedMessage.length;
 
-      // Check if single message is larger than buffer size
-      if (messageLength > this._bufferSize) {
-        // Flush current buffer first
-        if (this.__pointer > 0) {
-          await this.__flushBuffer();
-        }
-        // Write large message directly to file
-        await this.__writeDirectToFile(encodedMessage);
-        this.__currentFileSize += messageLength;
-      } else {
-        // Check if message fits in current buffer
-        if (this.__pointer + messageLength > this._bufferSize) {
-          await this.__flushBuffer();
-        }
-
-        // Add message to buffer at current pointer position
-        this.__buffer.set(encodedMessage, this.__pointer);
-        this.__pointer += messageLength;
-        this.__currentFileSize += messageLength;
-      }
-
-      // Check if rotation is needed after this write
-      if (this.__currentFileSize >= this._maxFileSize) {
+    // Check if single message is larger than buffer size
+    if (messageLength > this._bufferSize) {
+      // Flush current buffer first
+      if (this.__pointer > 0) {
         await this.__flushBuffer();
-        await this.__rotateLogFile();
       }
-    } catch (error) {
-      // Fallback to console if file writing fails
-      console.error(`FileHandler error: ${(error as Error).message}`);
-      console.log(message);
-      throw error; // Re-throw after logging to console
+      // Write large message directly to file
+      await this.__writeDirectToFile(encodedMessage);
+      this.__currentFileSize += messageLength;
+    } else {
+      // Check if message fits in current buffer
+      if (this.__pointer + messageLength > this._bufferSize) {
+        await this.__flushBuffer();
+      }
+
+      // Add message to buffer at current pointer position
+      this.__buffer.set(encodedMessage, this.__pointer);
+      this.__pointer += messageLength;
+      this.__currentFileSize += messageLength;
+    }
+
+    // Check if rotation is needed after this write
+    if (this.__currentFileSize >= this._maxFileSize) {
+      await this.__flushBuffer();
+      await this.__rotateLogFile();
     }
   }
 
@@ -298,12 +291,7 @@ export class FileHandler extends AbstractHandler {
     const rotatedFile = path.join(dir, `${base}_${timestamp}`);
 
     // Rename current file to include timestamp
-    try {
-      console.log(`Rotating log file: ${this._logFile} -> ${rotatedFile}`);
-      await Deno.rename(this._logFile, rotatedFile);
-    } catch (e) {
-      console.error(`Failed to rotate log file: ${(e as Error).message}`);
-    }
+    await Deno.rename(this._logFile, rotatedFile);
 
     // Reset file size counter
     this.__currentFileSize = 0;

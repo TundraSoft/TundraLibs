@@ -60,7 +60,7 @@ export abstract class AbstractHandler {
    * @param options - Configuration options for the handler
    * @throws Error if name is invalid or options are invalid
    */
-  constructor(name: string, options: HandlerOptions) {
+  constructor(name: string, options: HandlerOptions) { // NOSONAR
     if (typeof name !== 'string' || name.trim() === '' || name.length > 30) {
       throw new Error(
         'Handler name must be a non-empty string with max length 30',
@@ -140,6 +140,7 @@ export abstract class AbstractHandler {
    * @returns Promise that resolves when initialization is complete
    */
   public async init(): Promise<void> {
+    return await Promise.resolve();
   }
 
   /**
@@ -174,6 +175,7 @@ export abstract class AbstractHandler {
    * @returns Promise that resolves when finalization is complete
    */
   public async finalize(): Promise<void> {
+    return await Promise.resolve();
   }
 
   /**

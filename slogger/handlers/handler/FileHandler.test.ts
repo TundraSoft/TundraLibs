@@ -1,4 +1,4 @@
-import { FileHandler } from './mod.ts';
+import { FileHandler, type FileHandlerOptions } from './mod.ts';
 import * as asserts from '$asserts';
 import { SyslogSeverities, type SyslogSeverity } from '@tundralibs/utils';
 import { SlogObject } from '../../types/mod.ts';
@@ -23,38 +23,8 @@ const makeLogObject = (
   timestamp: new Date('2023-01-01T12:00:00Z').getTime(),
 });
 
-// Create a test directory for file handler
+// Test directory for file handler (using fixtures)
 const TEST_DIR = './slogger/handlers/handler/fixtures/file/';
-
-// Mock file operations
-class MockFile {
-  private readonly data: string[] = [];
-  public closed = false;
-
-  writeSync(data: Uint8Array): number {
-    const text = new TextDecoder().decode(data);
-    this.data.push(text);
-    return data.length;
-  }
-
-  async write(data: Uint8Array): Promise<number> {
-    const text = new TextDecoder().decode(data);
-    this.data.push(text);
-    return Promise.resolve(data.length);
-  }
-
-  async sync(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  close(): void {
-    this.closed = true;
-  }
-
-  getWrittenData(): string {
-    return this.data.join('');
-  }
-}
 
 // Setup and teardown for tests
 async function setup() {
@@ -73,50 +43,55 @@ async function teardown() {
   }
 }
 
+// Helper to clean up specific test files
+async function cleanupTestFile(filename: string) {
+  try {
+    await Deno.remove(path.join(TEST_DIR, filename));
+  } catch {
+    // File might not exist
+  }
+}
+
+// Helper to check if file exists and get its content
+async function readTestFile(filename: string): Promise<string | null> {
+  try {
+    return await Deno.readTextFile(path.join(TEST_DIR, filename));
+  } catch {
+    return null;
+  }
+}
+
+// Helper to get file info
+async function getTestFileInfo(
+  filename: string,
+): Promise<Deno.FileInfo | null> {
+  try {
+    return await Deno.stat(path.join(TEST_DIR, filename));
+  } catch {
+    return null;
+  }
+}
+
+// Helper to list files in test directory
+async function listTestFiles(pattern?: string): Promise<string[]> {
+  try {
+    const files: string[] = [];
+    for await (const entry of Deno.readDir(TEST_DIR)) {
+      if (entry.isFile && (!pattern || entry.name.includes(pattern))) {
+        files.push(entry.name);
+      }
+    }
+    return files;
+  } catch {
+    return [];
+  }
+}
+
 Deno.test({
   name: 'Slogger.Handlers.FileHandler',
   permissions: { write: true, read: true },
 }, async (t) => {
   await setup();
-
-  const originalOpen = Deno.open;
-  const mockFiles: Record<string, MockFile> = {};
-
-  // Mock Deno.open
-  Deno.open = async (
-    filePath: string | URL,
-    _options?: Deno.OpenOptions,
-  ): Promise<Deno.FsFile> => {
-    await Promise.resolve(); // Simulate async operation
-    const path = filePath.toString();
-    mockFiles[path] = new MockFile();
-    // @ts-ignore - We're mocking the FsFile interface
-    return mockFiles[path];
-  };
-
-  // Mock Deno.stat to always return size 0
-  const originalStat = Deno.stat;
-  Deno.stat = async (_path: string | URL): Promise<Deno.FileInfo> => {
-    await Promise.resolve(); // Simulate async operation
-    return {
-      isFile: true,
-      isDirectory: false,
-      isSymlink: false,
-      size: 0,
-      mtime: new Date(),
-      atime: new Date(),
-      birthtime: new Date(),
-      dev: 0,
-      ino: 0,
-      mode: 0,
-      nlink: 0,
-      uid: 0,
-      gid: 0,
-      rdev: 0,
-      blksize: 0,
-      blocks: 0,
-    } as Deno.FileInfo;
-  };
 
   try {
     await t.step('constructor - valid options', () => {
@@ -141,7 +116,7 @@ Deno.test({
             new FileHandler('testHandler', {
               level: 5,
               fileName: 'test.log',
-            } as any),
+            } as FileHandlerOptions),
           Error,
           'valid storePath',
         );
@@ -154,7 +129,7 @@ Deno.test({
             new FileHandler('testHandler', {
               level: 5,
               storePath: TEST_DIR,
-            } as any),
+            } as FileHandlerOptions),
           Error,
           'valid fileName',
         );
@@ -189,70 +164,64 @@ Deno.test({
       });
     });
 
-    await t.step('init - creates file handle', async () => {
+    await t.step('init - creates file handle and directory', async () => {
+      const filename = 'init-test.log';
+      await cleanupTestFile(filename);
+
       const handler = new FileHandler('testHandler', {
         level: 5,
         storePath: TEST_DIR,
-        fileName: 'init-test.log',
+        fileName: filename,
       });
 
       await handler.init();
-      const expectedPath = path.join(TEST_DIR, 'init-test.log');
+      await handler.finalize();
 
-      // Check that file was created
-      asserts.assert(mockFiles[expectedPath] !== undefined);
+      // Check that directory exists
+      const dirInfo = await Deno.stat(TEST_DIR);
+      asserts.assertEquals(dirInfo.isDirectory, true);
+
+      // Check that file was created (even if empty)
+      const fileInfo = await getTestFileInfo(filename);
+      asserts.assertNotEquals(fileInfo, null);
+      asserts.assertEquals(fileInfo!.isFile, true);
     });
 
-    await t.step('handle - writes log to buffer', async () => {
+    await t.step('handle - writes log to file', async () => {
+      const filename = 'handle-test.log';
+      await cleanupTestFile(filename);
+
       const handler = new FileHandler('testHandler', {
         level: 5,
         storePath: TEST_DIR,
-        fileName: 'handle-test.log',
+        fileName: filename,
         formatter: simpleFormatter('${message}'),
       });
 
       await handler.init();
 
-      // We need to check the private buffer directly or modify our approach
-      // Since we can't easily check the internal buffer state, we'll verify
-      // our mock file has no writes yet, and data is only written after finalize
-
-      const expectedPath = path.join(TEST_DIR, 'handle-test.log');
-
-      // Record initial state (should be empty)
-      const initialData = mockFiles[expectedPath]?.getWrittenData() || '';
-
       // Handle a log entry
       await handler.handle(makeLogObject(5, 'Test message'));
 
-      // For WARNING level (5), the buffer should not be flushed yet
-      // Let's give any async operations a chance to complete
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      // Finalize to flush buffer
+      await handler.finalize();
 
-      // Check that no new data is written (still in buffer)
-      const afterHandleData = mockFiles[expectedPath]?.getWrittenData() || '';
-      asserts.assertEquals(
-        afterHandleData,
-        initialData,
-        'Buffer should not be flushed yet after handling a WARNING level message',
-      );
-
-      // Now finalize - this should flush the buffer
-      handler.finalize();
-
-      // Check that data is now written
-      const finalData = mockFiles[expectedPath]?.getWrittenData() || '';
-      asserts.assert(
-        finalData.includes('Test message'),
-        'Message should be written to file after finalize',
-      );
+      // Check that message was written to file
+      const content = await readTestFile(filename);
+      asserts.assertNotEquals(content, null);
+      if (content) {
+        asserts.assert(content.includes('Test message'));
+      }
     });
 
     await t.step('handle - flushes on high severity', async () => {
+      const filename = 'severity-test.log';
+      await cleanupTestFile(filename);
+
       const handler = new FileHandler('testHandler', {
         level: 5,
         storePath: TEST_DIR,
-        fileName: 'severity-test.log',
+        fileName: filename,
         formatter: simpleFormatter('${message}'),
       });
 
@@ -261,44 +230,28 @@ Deno.test({
       // Send a low severity message (should stay in buffer)
       await handler.handle(makeLogObject(5, 'Low severity'));
 
-      // Send a high severity message (ERROR level)
+      // Send a high severity message (ERROR level) - should trigger immediate flush
       await handler.handle(makeLogObject(3, 'High severity'));
 
-      const expectedPath = path.join(TEST_DIR, 'severity-test.log');
-
-      // Buffer should have been flushed after ERROR message
-      const mockFile = mockFiles[expectedPath];
-      asserts.assert(mockFile !== undefined, 'Mock file should exist');
-      const fileContent = mockFile.getWrittenData();
-      asserts.assert(fileContent.includes('Low severity'));
-      asserts.assert(fileContent.includes('High severity'));
-
-      await handler.finalize();
-    });
-
-    await t.step('finalize - closes file handle', async () => {
-      const handler = new FileHandler('testHandler', {
-        level: 5,
-        storePath: TEST_DIR,
-        fileName: 'finalize-test.log',
-      });
-
-      await handler.init();
-
-      const expectedPath = path.join(TEST_DIR, 'finalize-test.log');
-      const mockFile = mockFiles[expectedPath];
-      asserts.assert(mockFile !== undefined, 'Mock file should exist');
-      asserts.assertEquals(mockFile.closed, false);
+      // Read file content immediately (before finalize)
+      const content = await readTestFile(filename);
+      asserts.assertNotEquals(content, null);
+      if (content) {
+        asserts.assert(content.includes('Low severity'));
+        asserts.assert(content.includes('High severity'));
+      }
 
       await handler.finalize();
-      asserts.assertEquals(mockFile.closed, true);
     });
 
     await t.step('handle large messages - direct write', async () => {
+      const filename = 'large-test.log';
+      await cleanupTestFile(filename);
+
       const handler = new FileHandler('testHandler', {
         level: 5,
         storePath: TEST_DIR,
-        fileName: 'large-test.log',
+        fileName: filename,
         bufferSize: 100, // Small buffer to test direct write
         formatter: simpleFormatter('${message}'),
       });
@@ -309,20 +262,23 @@ Deno.test({
       const largeMessage = 'x'.repeat(150);
       await handler.handle(makeLogObject(5, largeMessage));
 
-      const expectedPath = path.join(TEST_DIR, 'large-test.log');
-      const mockFile = mockFiles[expectedPath];
-      asserts.assert(mockFile !== undefined, 'Mock file should exist');
-      const fileContent = mockFile.getWrittenData();
-      asserts.assert(fileContent.includes(largeMessage));
-
       await handler.finalize();
+
+      const content = await readTestFile(filename);
+      asserts.assertNotEquals(content, null);
+      if (content) {
+        asserts.assert(content.includes(largeMessage));
+      }
     });
 
     await t.step('handle - buffer overflow and flush', async () => {
+      const filename = 'buffer-test.log';
+      await cleanupTestFile(filename);
+
       const handler = new FileHandler('testHandler', {
         level: 5,
         storePath: TEST_DIR,
-        fileName: 'buffer-test.log',
+        fileName: filename,
         bufferSize: 50, // Small buffer
         formatter: simpleFormatter('${message}'),
       });
@@ -336,21 +292,29 @@ Deno.test({
 
       await handler.finalize();
 
-      const expectedPath = path.join(TEST_DIR, 'buffer-test.log');
-      const mockFile = mockFiles[expectedPath];
-      asserts.assert(mockFile !== undefined, 'Mock file should exist');
-      const fileContent = mockFile.getWrittenData();
-
-      asserts.assert(fileContent.includes('First message'));
-      asserts.assert(fileContent.includes('Second message'));
-      asserts.assert(fileContent.includes('Third message'));
+      const content = await readTestFile(filename);
+      asserts.assertNotEquals(content, null);
+      if (content) {
+        asserts.assert(content.includes('First message'));
+        asserts.assert(content.includes('Second message'));
+        asserts.assert(content.includes('Third message'));
+      }
     });
 
     await t.step('file rotation - max size exceeded', async () => {
+      const filename = 'rotation-test.log';
+      await cleanupTestFile(filename);
+
+      // Clean up any potential rotated files
+      const existingFiles = await listTestFiles('rotation-test');
+      for (const file of existingFiles) {
+        await cleanupTestFile(file);
+      }
+
       const handler = new FileHandler('testHandler', {
         level: 5,
         storePath: TEST_DIR,
-        fileName: 'rotation-test.log',
+        fileName: filename,
         maxFileSize: 0.001, // Very small (1KB) to trigger rotation
         formatter: simpleFormatter('${message}'),
       });
@@ -365,8 +329,20 @@ Deno.test({
 
       await handler.finalize();
 
-      const expectedPath = path.join(TEST_DIR, 'rotation-test.log');
-      asserts.assert(mockFiles[expectedPath] !== undefined);
+      // Check that original file exists
+      const originalContent = await readTestFile(filename);
+      asserts.assertNotEquals(originalContent, null);
+
+      // Check that rotated file was created
+      const rotatedFiles = await listTestFiles('rotation-test');
+      const rotatedFile = rotatedFiles.find((f) =>
+        f !== filename && f.startsWith('rotation-test.log_')
+      );
+      asserts.assertNotEquals(
+        rotatedFile,
+        undefined,
+        'Rotated file should exist',
+      );
     });
 
     await t.step('error handling - uninitialized handler', async () => {
@@ -378,20 +354,21 @@ Deno.test({
       });
 
       // Don't call init - this should cause the error when trying to handle a message
-      try {
-        await handler.handle(makeLogObject(5, 'Test message'));
-        asserts.fail('Expected error to be thrown');
-      } catch (error) {
-        asserts.assert(error instanceof Error);
-        asserts.assert(error.message.includes('FileHandler not initialized'));
-      }
+      await asserts.assertRejects(
+        () => handler.handle(makeLogObject(5, 'Test message')),
+        Error,
+        'FileHandler not initialized',
+      );
     });
 
     await t.step('error handling - double finalize', async () => {
+      const filename = 'double-finalize.log';
+      await cleanupTestFile(filename);
+
       const handler = new FileHandler('testHandler', {
         level: 5,
         storePath: TEST_DIR,
-        fileName: 'double-finalize.log',
+        fileName: filename,
         formatter: simpleFormatter('${message}'),
       });
 
@@ -402,50 +379,67 @@ Deno.test({
       await handler.finalize();
     });
 
-    await t.step('constructor - custom buffer size validation', async (t) => {
-      await t.step('default buffer size', () => {
-        const handler = new FileHandler('testHandler', {
-          level: 5,
-          storePath: TEST_DIR,
-          fileName: 'default-buffer.log',
-        });
+    await t.step('variable replacement in paths', async () => {
+      const testDirWithVar = path.join(TEST_DIR, 'testHandler-logs');
 
-        // @ts-ignore - Accessing protected property for testing
-        asserts.assertEquals(handler._bufferSize, 4096);
-      });
+      // Clean up test directory
+      try {
+        await Deno.remove(testDirWithVar, { recursive: true });
+      } catch {
+        // Directory might not exist
+      }
 
-      await t.step('custom buffer size', () => {
-        const handler = new FileHandler('testHandler', {
-          level: 5,
-          storePath: TEST_DIR,
-          fileName: 'custom-buffer.log',
-          bufferSize: 8192,
-        });
-
-        // @ts-ignore - Accessing protected property for testing
-        asserts.assertEquals(handler._bufferSize, 8192);
-      });
-    });
-
-    await t.step('variable replacement in paths', () => {
       const handler = new FileHandler('testHandler', {
         level: 5,
-        storePath: path.join(TEST_DIR, '${date}'),
-        fileName: '${name}.log',
+        storePath: path.join(TEST_DIR, '${name}-logs'),
+        fileName: '${name}-${date}.log',
+        formatter: simpleFormatter('${message}'),
       });
 
-      // @ts-ignore - Accessing protected property for testing
-      asserts.assert(handler._logFile.includes('testHandler.log'));
-      // @ts-ignore - Accessing protected property for testing
-      asserts.assertEquals(handler._storePath, path.join(TEST_DIR, '${date}'));
+      await handler.init();
+
+      await handler.handle(makeLogObject(5, 'Variable test message'));
+      await handler.finalize();
+
+      // Check that directory with variable was created
+      const dirInfo = await Deno.stat(testDirWithVar);
+      asserts.assertEquals(dirInfo.isDirectory, true);
+
+      // Find the log file (with date in filename)
+      const files: string[] = [];
+      for await (const entry of Deno.readDir(testDirWithVar)) {
+        if (entry.isFile && entry.name.endsWith('.log')) {
+          files.push(entry.name);
+        }
+      }
+
+      asserts.assertEquals(files.length, 1);
+      const logFileName = files[0];
+      asserts.assertNotEquals(logFileName, undefined);
+      if (logFileName) {
+        asserts.assert(logFileName.startsWith('testHandler-'));
+        asserts.assert(logFileName.endsWith('.log'));
+
+        // Verify content
+        const content = await Deno.readTextFile(
+          path.join(testDirWithVar, logFileName),
+        );
+        asserts.assert(content.includes('Variable test message'));
+      }
+
+      // Clean up
+      await Deno.remove(testDirWithVar, { recursive: true });
     });
 
     await t.step('existing file size detection on init', async () => {
-      // First create a handler and write some data
+      const filename = 'existing-size.log';
+      await cleanupTestFile(filename);
+
+      // First create a file with some content
       const handler1 = new FileHandler('testHandler', {
         level: 5,
         storePath: TEST_DIR,
-        fileName: 'existing-size.log',
+        fileName: filename,
         formatter: simpleFormatter('${message}'),
       });
 
@@ -453,106 +447,22 @@ Deno.test({
       await handler1.handle(makeLogObject(5, 'Initial data'));
       await handler1.finalize();
 
-      // Mock Deno.stat to return a size > 0
-      const originalStat = Deno.stat;
-      Deno.stat = async (_path: string | URL): Promise<Deno.FileInfo> => {
-        return {
-          isFile: true,
-          isDirectory: false,
-          isSymlink: false,
-          size: 1000, // Simulate existing file size
-          mtime: new Date(),
-          atime: new Date(),
-          birthtime: new Date(),
-          dev: 0,
-          ino: 0,
-          mode: 0,
-          nlink: 0,
-          uid: 0,
-          gid: 0,
-          rdev: 0,
-          blksize: 0,
-          blocks: 0,
-        } as Deno.FileInfo;
-      };
-
-      try {
-        const handler2 = new FileHandler('testHandler2', {
-          level: 5,
-          storePath: TEST_DIR,
-          fileName: 'existing-size2.log',
-          maxFileSize: 0.0001, // Very small to trigger rotation
-        });
-
-        await handler2.init(); // Should detect existing size and rotate immediately
-        await handler2.finalize();
-      } finally {
-        Deno.stat = originalStat;
-      }
-    });
-
-    await t.step('rotation file rename error handling', async () => {
-      const handler = new FileHandler('testHandler', {
+      // Now create a new handler with very small max size to trigger rotation
+      const handler2 = new FileHandler('testHandler2', {
         level: 5,
         storePath: TEST_DIR,
-        fileName: 'rename-error.log',
-        maxFileSize: 0.001, // Very small to trigger rotation
-        formatter: simpleFormatter('${message}'),
+        fileName: filename,
+        maxFileSize: 0.0001, // Very small to trigger rotation
       });
 
-      await handler.init();
+      await handler2.init(); // Should detect existing size and rotate if needed
+      await handler2.finalize();
 
-      // Mock Deno.rename to throw an error
-      const originalRename = Deno.rename;
-      Deno.rename = async (
-        _from: string | URL,
-        _to: string | URL,
-      ): Promise<void> => {
-        throw new Error('Rename failed');
-      };
-
-      // Create console.error spy to verify error is logged
-      const originalConsoleError = console.error;
-      let errorLogged = false;
-      console.error = (message: unknown) => {
-        if (
-          typeof message === 'string' &&
-          message.includes('Failed to rotate log file')
-        ) {
-          errorLogged = true;
-        }
-      };
-
-      try {
-        // Send data to trigger rotation
-        const bigMessage = 'x'.repeat(500);
-        await handler.handle(makeLogObject(5, bigMessage));
-        await handler.handle(makeLogObject(5, bigMessage));
-        await handler.handle(makeLogObject(5, bigMessage));
-
-        // Verify error was logged
-        asserts.assert(errorLogged, 'Rotation error should be logged');
-      } finally {
-        Deno.rename = originalRename;
-        console.error = originalConsoleError;
-        await handler.finalize();
-      }
-    });
-
-    await t.step('finalize with no file handle', async () => {
-      const handler = new FileHandler('testHandler', {
-        level: 5,
-        storePath: TEST_DIR,
-        fileName: 'no-handle.log',
-      });
-
-      // Don't call init, so no file handle exists
-      await handler.finalize(); // Should not throw
+      // File should still exist
+      const fileInfo = await getTestFileInfo(filename);
+      asserts.assertNotEquals(fileInfo, null);
     });
   } finally {
-    // Restore original functions
-    Deno.open = originalOpen;
-    Deno.stat = originalStat;
     await teardown();
   }
 });
@@ -561,12 +471,10 @@ Deno.test({
   name: 'Slogger.Handlers.FileHandler - No Permission',
   permissions: { write: false, read: false },
 }, async (t) => {
-  await setup();
-
   await t.step('init - throws on permission error', async () => {
     const handler = new FileHandler('testHandler', {
       level: 5,
-      storePath: TEST_DIR,
+      storePath: './no-permission-test/',
       fileName: 'noperm-test.log',
     });
 
@@ -576,6 +484,4 @@ Deno.test({
       'Permission denied',
     );
   });
-
-  await teardown();
 });

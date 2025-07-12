@@ -13,9 +13,3 @@ export {
   simpleFormatter,
   standardFormat,
 } from './string.ts';
-export {
-  binaryFormatter,
-  compactBinaryFormatter,
-  StreamingBinaryFormatter,
-  streamingBinaryFormatter,
-} from './binaryFormatter.ts';
