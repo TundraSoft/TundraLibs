@@ -80,6 +80,27 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
         configKey: 'host',
       });
     }
+    // Username must be present if password is set
+    if (
+      this.hasOption('password') === true &&
+      this.hasOption('username') === false
+    ) {
+      throw new CacherEngineError('CONFIG_MISSING', {
+        name: this.name,
+        engine: this.Engine,
+        configKey: 'username',
+      });
+    }
+    if (
+      this.hasOption('username') === true &&
+      this.hasOption('password') === false
+    ) {
+      throw new CacherEngineError('CONFIG_MISSING', {
+        name: this.name,
+        engine: this.Engine,
+        configKey: 'password',
+      });
+    }
   }
 
   /**
@@ -318,16 +339,21 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
         break;
       case 'username':
       case 'password':
-        if (value !== undefined && value !== null) {
-          if (typeof value === 'string' && value.length === 0) {
-            value = undefined as RedisCacherOptions[K];
-          } else {
+        if (
+          value !== undefined && value !== null
+        ) {
+          if (typeof value !== 'string') {
             throw new CacherEngineError('CONFIG_INVALID', {
               name: this.name,
               engine: this.Engine,
               configKey: key,
               reason: 'must be a string',
             });
+          }
+          if (typeof value === 'string' && value.trim().length > 0) {
+            value = value.trim() as RedisCacherOptions[K];
+          } else {
+            value = undefined as RedisCacherOptions[K];
           }
         }
         break;

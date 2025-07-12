@@ -75,40 +75,33 @@ export const signHMAC = async (
   secret: string,
   data: string | Uint8Array,
 ): Promise<string> => {
-  try {
-    validateDigestAlgorithm(digest);
+  validateDigestAlgorithm(digest);
 
-    const key = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(secret),
-      {
-        name: 'HMAC',
-        hash: digest,
-      },
-      false,
-      ['sign'],
-    );
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    {
+      name: 'HMAC',
+      hash: digest,
+    },
+    false,
+    ['sign'],
+  );
 
-    const dataToSign = typeof data === 'string'
-      ? new TextEncoder().encode(data)
-      : data;
+  const dataToSign = typeof data === 'string'
+    ? new TextEncoder().encode(data)
+    : data;
 
-    const signature = await crypto.subtle.sign(
-      {
-        name: 'HMAC',
-        hash: digest,
-      },
-      key,
-      dataToSign,
-    );
+  const signature = await crypto.subtle.sign(
+    {
+      name: 'HMAC',
+      hash: digest,
+    },
+    key,
+    dataToSign,
+  );
 
-    return encodeHex(signature);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(`Signing failed: ${String(error)}`);
-  }
+  return encodeHex(signature);
 };
 
 /**
@@ -139,50 +132,43 @@ export const verifyHMAC = async (
   data: string | Uint8Array,
   signature: string,
 ): Promise<boolean> => {
-  try {
-    validateDigestAlgorithm(digest);
+  validateDigestAlgorithm(digest);
 
-    if (!signature || typeof signature !== 'string') {
-      throw new Error('Signature must be a non-empty string');
-    }
-
-    const key = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(secret),
-      {
-        name: 'HMAC',
-        hash: digest,
-      },
-      false,
-      ['verify'],
-    );
-
-    const dataToVerify = typeof data === 'string'
-      ? new TextEncoder().encode(data)
-      : data;
-
-    let signatureBytes: Uint8Array;
-    try {
-      signatureBytes = decodeHex(signature);
-    } catch {
-      throw new Error('Invalid signature format. Must be a hex string');
-    }
-
-    return crypto.subtle.verify(
-      {
-        name: 'HMAC',
-        hash: digest,
-      },
-      key,
-      signatureBytes,
-      dataToVerify,
-    );
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(`Verification failed: ${String(error)}`);
+  if (!signature || typeof signature !== 'string') {
+    throw new Error('Signature must be a non-empty string');
   }
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    {
+      name: 'HMAC',
+      hash: digest,
+    },
+    false,
+    ['verify'],
+  );
+
+  const dataToVerify = typeof data === 'string'
+    ? new TextEncoder().encode(data)
+    : data;
+
+  let signatureBytes: Uint8Array;
+  try {
+    signatureBytes = decodeHex(signature);
+  } catch {
+    throw new Error('Invalid signature format. Must be a hex string');
+  }
+
+  return crypto.subtle.verify(
+    {
+      name: 'HMAC',
+      hash: digest,
+    },
+    key,
+    signatureBytes,
+    dataToVerify,
+  );
 };
 
 /**
@@ -211,25 +197,18 @@ export const sign = (
   secret: string,
   data: string | Uint8Array,
 ): Promise<string> => {
-  try {
-    const [algorithm, hash] = mode.split(':');
-    if (algorithm !== 'HMAC') {
-      throw new Error('Invalid signing mode. Must be HMAC');
-    }
-
-    if (!hash) {
-      throw new Error(
-        'Invalid signing mode format. Expected "HMAC:HASH_ALGORITHM"',
-      );
-    }
-
-    return signHMAC(hash as DigestAlgorithms, secret, data);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(`Signing failed: ${String(error)}`);
+  const [algorithm, hash] = mode.split(':');
+  if (algorithm !== 'HMAC') {
+    throw new Error('Invalid signing mode. Must be HMAC');
   }
+
+  if (!hash) {
+    throw new Error(
+      'Invalid signing mode format. Expected "HMAC:HASH_ALGORITHM"',
+    );
+  }
+
+  return signHMAC(hash as DigestAlgorithms, secret, data);
 };
 
 /**
@@ -260,23 +239,16 @@ export const verify = (
   data: string | Uint8Array,
   signature: string,
 ): Promise<boolean> => {
-  try {
-    const [algorithm, hash] = mode.split(':');
-    if (algorithm !== 'HMAC') {
-      throw new Error('Invalid signing mode. Must be HMAC');
-    }
-
-    if (!hash) {
-      throw new Error(
-        'Invalid signing mode format. Expected "HMAC:HASH_ALGORITHM"',
-      );
-    }
-
-    return verifyHMAC(hash as DigestAlgorithms, secret, data, signature);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(`Verification failed: ${String(error)}`);
+  const [algorithm, hash] = mode.split(':');
+  if (algorithm !== 'HMAC') {
+    throw new Error('Invalid signing mode. Must be HMAC');
   }
+
+  if (!hash) {
+    throw new Error(
+      'Invalid signing mode format. Expected "HMAC:HASH_ALGORITHM"',
+    );
+  }
+
+  return verifyHMAC(hash as DigestAlgorithms, secret, data, signature);
 };

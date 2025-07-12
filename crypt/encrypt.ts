@@ -59,55 +59,48 @@ export const encryptAES = async (
   secret: string,
   data: string | Uint8Array,
 ): Promise<string> => {
-  try {
-    const [algorithm, lengthStr] = mode.split(':');
-    const length = parseInt(lengthStr || '0', 10);
+  const [algorithm, lengthStr] = mode.split(':');
+  const length = parseInt(lengthStr || '0', 10);
 
-    if (!['AES-GCM', 'AES-CBC'].includes(algorithm!)) {
-      throw new Error(
-        'Invalid AES encryption mode. Must be AES-GCM or AES-CBC',
-      );
-    }
-
-    if (![128, 256, 384, 512].includes(length)) {
-      throw new Error('Invalid AES key length. Must be 128, 256, 384 or 512');
-    }
-
-    const key = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(secret),
-      {
-        name: algorithm!,
-        length: length,
-      },
-      false,
-      ['encrypt'],
+  if (!['AES-GCM', 'AES-CBC'].includes(algorithm!)) {
+    throw new Error(
+      'Invalid AES encryption mode. Must be AES-GCM or AES-CBC',
     );
-
-    const iv = crypto.getRandomValues(new Uint8Array(16));
-    const dataToEncrypt = typeof data === 'string'
-      ? new TextEncoder().encode(data)
-      : data;
-
-    // Note: AES-CBC uses PKCS#7 padding by default in Web Crypto API
-    const encryptConfig: AesGcmParams | AesCbcParams = {
-      name: algorithm!,
-      iv,
-    };
-
-    const encrypted = await crypto.subtle.encrypt(
-      encryptConfig,
-      key,
-      dataToEncrypt,
-    );
-
-    return `${encodeHex(encrypted)}:${encodeHex(iv)}`;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(`Encryption failed: ${String(error)}`);
   }
+
+  if (![128, 256, 384, 512].includes(length)) {
+    throw new Error('Invalid AES key length. Must be 128, 256, 384 or 512');
+  }
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    {
+      name: algorithm!,
+      length: length,
+    },
+    false,
+    ['encrypt'],
+  );
+
+  const iv = crypto.getRandomValues(new Uint8Array(16));
+  const dataToEncrypt = typeof data === 'string'
+    ? new TextEncoder().encode(data)
+    : data;
+
+  // Note: AES-CBC uses PKCS#7 padding by default in Web Crypto API
+  const encryptConfig: AesGcmParams | AesCbcParams = {
+    name: algorithm!,
+    iv,
+  };
+
+  const encrypted = await crypto.subtle.encrypt(
+    encryptConfig,
+    key,
+    dataToEncrypt,
+  );
+
+  return `${encodeHex(encrypted)}:${encodeHex(iv)}`;
 };
 
 /**
@@ -161,63 +154,56 @@ export const decryptAES = async (
   data: string,
   returnBinary = false,
 ): Promise<string | Uint8Array> => {
-  try {
-    const [algorithm, lengthStr] = mode.split(':');
-    const length = parseInt(lengthStr || '0', 10);
+  const [algorithm, lengthStr] = mode.split(':');
+  const length = parseInt(lengthStr || '0', 10);
 
-    if (!['AES-GCM', 'AES-CBC'].includes(algorithm!)) {
-      throw new Error(
-        'Invalid AES encryption mode. Must be AES-GCM or AES-CBC',
-      );
-    }
-
-    if (![128, 256, 384, 512].includes(length)) {
-      throw new Error('Invalid AES key length. Must be 128, 256, 384 or 512');
-    }
-
-    const parts = data.split(':');
-    if (parts.length !== 2) {
-      throw new Error('Invalid encrypted data format. Expected "data:iv"');
-    }
-
-    const [encrypted, iv] = parts.map((x) => decodeHex(x));
-
-    const key = await crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(secret),
-      {
-        name: algorithm!,
-        length: length,
-      },
-      false,
-      ['decrypt'],
+  if (!['AES-GCM', 'AES-CBC'].includes(algorithm!)) {
+    throw new Error(
+      'Invalid AES encryption mode. Must be AES-GCM or AES-CBC',
     );
-
-    // Note: AES-CBC uses PKCS#7 padding by default in Web Crypto API
-    if (!iv || iv.length === 0) {
-      throw new Error('Initialization vector (IV) is undefined');
-    }
-
-    const decryptConfig: AesGcmParams | AesCbcParams = {
-      name: algorithm!,
-      iv,
-    };
-
-    const decrypted = await crypto.subtle.decrypt(
-      decryptConfig,
-      key,
-      encrypted!,
-    );
-
-    return returnBinary
-      ? new Uint8Array(decrypted)
-      : new TextDecoder().decode(decrypted);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(`Decryption failed: ${String(error)}`);
   }
+
+  if (![128, 256, 384, 512].includes(length)) {
+    throw new Error('Invalid AES key length. Must be 128, 256, 384 or 512');
+  }
+
+  const parts = data.split(':');
+  if (parts.length !== 2) {
+    throw new Error('Invalid encrypted data format. Expected "data:iv"');
+  }
+
+  const [encrypted, iv] = parts.map((x) => decodeHex(x));
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    {
+      name: algorithm!,
+      length: length,
+    },
+    false,
+    ['decrypt'],
+  );
+
+  // Note: AES-CBC uses PKCS#7 padding by default in Web Crypto API
+  if (!iv || iv.length === 0) {
+    throw new Error('Initialization vector (IV) is undefined');
+  }
+
+  const decryptConfig: AesGcmParams | AesCbcParams = {
+    name: algorithm!,
+    iv,
+  };
+
+  const decrypted = await crypto.subtle.decrypt(
+    decryptConfig,
+    key,
+    encrypted!,
+  );
+
+  return returnBinary
+    ? new Uint8Array(decrypted)
+    : new TextDecoder().decode(decrypted);
 };
 
 /**

@@ -95,44 +95,34 @@ const generate = async (
   length: number = 6,
   algo: DigestAlgorithms = 'SHA-256',
 ): Promise<string> => {
-  try {
-    // Validate inputs
-    validateInputs(key, counter, length, algo);
+  // Validate inputs
+  validateInputs(key, counter, length, algo);
 
-    // Prepare key for HMAC
-    const keyData = typeof key === 'string'
-      ? new TextEncoder().encode(key)
-      : key;
+  // Prepare key for HMAC
+  const keyData = typeof key === 'string' ? new TextEncoder().encode(key) : key;
 
-    // Import key for HMAC
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      keyData,
-      { name: 'HMAC', hash: algo },
-      false,
-      ['sign'],
-    );
+  // Import key for HMAC
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: algo },
+    false,
+    ['sign'],
+  );
 
-    // Generate HMAC
-    const digest = new Uint8Array(
-      await crypto.subtle.sign('HMAC', cryptoKey, numberToBytes(counter)),
-    );
+  // Generate HMAC
+  const digest = new Uint8Array(
+    await crypto.subtle.sign('HMAC', cryptoKey, numberToBytes(counter)),
+  );
 
-    // Extract code using dynamic truncation (RFC 4226 section 5.4)
-    const offset = (digest[digest.byteLength - 1] ?? 0) & 0x0f;
-    const code =
-      new DataView(digest.buffer, digest.byteOffset, digest.byteLength)
-        .getUint32(offset) & 0x7fffffff;
+  // Extract code using dynamic truncation (RFC 4226 section 5.4)
+  const offset = (digest[digest.byteLength - 1] ?? 0) & 0x0f;
+  const code = new DataView(digest.buffer, digest.byteOffset, digest.byteLength)
+    .getUint32(offset) & 0x7fffffff;
 
-    // Generate code modulo 10^length and pad with leading zeros if needed
-    const op = (code % 10 ** length).toString();
-    return sprintf('%0' + length + 's', op);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(`OTP generation failed: ${String(error)}`);
-  }
+  // Generate code modulo 10^length and pad with leading zeros if needed
+  const op = (code % 10 ** length).toString();
+  return sprintf('%0' + length + 's', op);
 };
 
 /**
@@ -190,38 +180,31 @@ export const verifyTOTP = async (
   length: number = 6,
   algo: DigestAlgorithms = 'SHA-256',
 ): Promise<boolean> => {
-  try {
-    if (period < 1) {
-      throw new Error('Time period must be at least 1 second');
-    }
-
-    if (window < 0 || !Number.isInteger(window)) {
-      throw new Error('Window must be a non-negative integer');
-    }
-
-    if (!otp || otp.length !== length || !/^\d+$/.test(otp)) {
-      return false;
-    }
-
-    const currentCounter = Math.floor(epoch / (period * 1000));
-
-    for (let i = -window; i <= window; i++) {
-      const counter = currentCounter + i;
-      if (counter < 0) continue;
-
-      const generatedOTP = await generate(key, counter, length, algo);
-      if (otp === generatedOTP) {
-        return true;
-      }
-    }
-
-    return false;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(`OTP verification failed: ${String(error)}`);
+  if (period < 1) {
+    throw new Error('Time period must be at least 1 second');
   }
+
+  if (window < 0 || !Number.isInteger(window)) {
+    throw new Error('Window must be a non-negative integer');
+  }
+
+  if (!otp || otp.length !== length || !/^\d+$/.test(otp)) {
+    return false;
+  }
+
+  const currentCounter = Math.floor(epoch / (period * 1000));
+
+  for (let i = -window; i <= window; i++) {
+    const counter = currentCounter + i;
+    if (counter < 0) continue;
+
+    const generatedOTP = await generate(key, counter, length, algo);
+    if (otp === generatedOTP) {
+      return true;
+    }
+  }
+
+  return false;
 };
 
 /**
@@ -241,19 +224,12 @@ export const verifyHOTP = async (
   length: number = 6,
   algo: DigestAlgorithms = 'SHA-256',
 ): Promise<boolean> => {
-  try {
-    if (!otp || otp.length !== length || !/^\d+$/.test(otp)) {
-      return false;
-    }
-
-    const generatedOTP = await generate(key, counter, length, algo);
-    return otp === generatedOTP;
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(`OTP verification failed: ${String(error)}`);
+  if (!otp || otp.length !== length || !/^\d+$/.test(otp)) {
+    return false;
   }
+
+  const generatedOTP = await generate(key, counter, length, algo);
+  return otp === generatedOTP;
 };
 
 /**

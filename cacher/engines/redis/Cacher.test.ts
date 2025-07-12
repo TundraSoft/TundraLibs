@@ -58,6 +58,20 @@ Deno.test('Cacher.RedisCacher', async (t) => {
         () => {
           const _ = new RedisCacher('redis-test', {
             port: 6379,
+            // @ts-ignore
+            host: null,
+          });
+        },
+        CacherEngineError,
+        'Configuration key host is missing',
+      );
+
+      asserts.assertThrows(
+        () => {
+          const _ = new RedisCacher('redis-test', {
+            port: 6379,
+            // @ts-ignore
+            host: undefined,
           });
         },
         CacherEngineError,
@@ -124,6 +138,56 @@ Deno.test('Cacher.RedisCacher', async (t) => {
           } as unknown as RedisCacherOptions);
         },
         CacherEngineError,
+      );
+
+      asserts.assertThrows(
+        () => {
+          const _ = new RedisCacher('redis-test', {
+            port: 6379,
+            host: 'localhost',
+            // @ts-ignore
+            password: 1132,
+          });
+        },
+        CacherEngineError,
+        'Configuration value for password is invalid: must be a string',
+      );
+
+      asserts.assertThrows(
+        () => {
+          const _ = new RedisCacher('redis-test', {
+            port: 6379,
+            host: 'localhost',
+            // @ts-ignore
+            password: 1132,
+          });
+        },
+        CacherEngineError,
+        'Configuration value for password is invalid: must be a string',
+      );
+
+      asserts.assertThrows(
+        () => {
+          const _ = new RedisCacher('redis-test', {
+            port: 6379,
+            host: 'localhost',
+            password: '1132',
+          });
+        },
+        CacherEngineError,
+        'Configuration key username is missing',
+      );
+
+      asserts.assertThrows(
+        () => {
+          const _ = new RedisCacher('redis-test', {
+            port: 6379,
+            host: 'localhost',
+            username: '1132',
+          });
+        },
+        CacherEngineError,
+        'Configuration key password is missing',
       );
     });
 

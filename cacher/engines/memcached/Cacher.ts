@@ -161,11 +161,7 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
    */
   protected async _set(key: string, value: CacheValue): Promise<void> {
     try {
-      if (value.expiry > 0) {
-        await this._client!.set(key, JSON.stringify(value), value.expiry);
-      } else {
-        await this._client!.set(key, JSON.stringify(value));
-      }
+      await this._client!.set(key, JSON.stringify(value), value.expiry);
       // Delay by 100ms to ensure the data is set
       // await new Promise((resolve) => setTimeout(resolve, 1));
     } catch (e) {
@@ -269,12 +265,12 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
   ): MemCacherOptions[K] {
     switch (key) {
       case 'host':
-        if (value === undefined || value === null) {
+        if (typeof value !== 'string' || value.trim() === '') {
           throw new CacherEngineError('CONFIG_MISSING', {
             name: this.name,
             engine: this.Engine,
             configKey: key,
-            reason: 'Host is required',
+            reason: 'Host is required and must be a non-empty string',
           });
         }
         break;

@@ -88,6 +88,41 @@ Deno.test('Cacher.MemCached', async (t) => {
         },
         CacherEngineError,
       );
+
+      asserts.assertThrows(
+        () => {
+          const _ = new MemCacher('memory-test', {
+            host: null,
+            port: 11211,
+          } as unknown as MemCacherOptions);
+        },
+        CacherEngineError,
+        'Configuration key host is missing',
+      );
+
+      asserts.assertThrows(
+        () => {
+          const _ = new MemCacher('memory-test', {
+            host: 'localhost',
+            port: 11211,
+            maxBufferSize: -1,
+          } as unknown as MemCacherOptions);
+        },
+        CacherEngineError,
+        'Configuration value for maxBufferSize is invalid: must be a positive number',
+      );
+
+      asserts.assertThrows(
+        () => {
+          const _ = new MemCacher('memory-test', {
+            host: 'localhost',
+            port: 11211,
+            maxBufferSize: 'dasfsdf',
+          } as unknown as MemCacherOptions);
+        },
+        CacherEngineError,
+        'Configuration value for maxBufferSize is invalid: must be a positive number',
+      );
     });
 
     await d.step('should allow custom defaultExpiry', () => {
