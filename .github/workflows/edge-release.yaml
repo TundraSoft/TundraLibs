@@ -14,6 +14,7 @@ permissions:
       - crypt/**
       - guardian/**
       - id/**
+      - restler/**
       - slogger/**
       - utils/**
 jobs:

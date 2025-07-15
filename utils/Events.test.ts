@@ -69,17 +69,13 @@ Deno.test('utils.Events', async (t) => {
       let timer1: ReturnType<typeof setTimeout> | undefined;
       const cb = async (_name: string) => {
         // Delay
-        await new Promise((resolve) => {
-          timer1 = setTimeout(resolve, 250);
-        });
+        await Promise.resolve(); // Simulate async operation
         cnt++;
       };
       let timer2: ReturnType<typeof setTimeout> | undefined;
       const cb2 = async (_name: string) => {
         // Delay
-        await new Promise((resolve) => {
-          timer2 = setTimeout(resolve, 250);
-        });
+        await Promise.resolve(); // Simulate async operation
         cnt++;
       };
       events.on('hello', [cb, cb2]);

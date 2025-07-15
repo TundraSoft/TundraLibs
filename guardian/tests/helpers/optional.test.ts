@@ -2,7 +2,7 @@ import { assertEquals, assertRejects } from '$asserts';
 import { optional } from '../../helpers/mod.ts';
 import { GuardianError } from '../../GuardianError.ts';
 
-Deno.test('Guardian.helpers.optional', async (t) => {
+Deno.test('guardian.helpers.optional', async (t) => {
   await t.step(
     'passes through undefined value without calling guardian',
     () => {

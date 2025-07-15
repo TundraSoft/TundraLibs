@@ -37,6 +37,7 @@ jobs:
             crypt
             guardian
             id
+            restler
             slogger
             utils
           requireScope: true

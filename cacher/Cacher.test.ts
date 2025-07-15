@@ -77,7 +77,7 @@ class FailingMockEngine extends AbstractEngine {
   }
 }
 
-Deno.test('Cacher', async (t) => {
+Deno.test('cacher.core', async (t) => {
   // Helper to reset Cacher state between tests
   const resetCacher = async () => {
     await Cacher.clear();

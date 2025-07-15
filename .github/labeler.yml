@@ -33,6 +33,9 @@ guardian:
 id:
   - changed-files:
       - any-glob-to-any-file: id/*
+restler:
+  - changed-files:
+      - any-glob-to-any-file: restler/*
 slogger:
   - changed-files:
       - any-glob-to-any-file: slogger/*

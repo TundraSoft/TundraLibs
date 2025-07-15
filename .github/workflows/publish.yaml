@@ -20,6 +20,7 @@ permissions:
           - crypt
           - guardian
           - id
+          - restler
           - slogger
           - utils
       reason:

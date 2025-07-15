@@ -230,15 +230,8 @@ Deno.test(
         'Failed to connect to redis at redis.example.com:6379 database 1 for cache userCache',
       );
     });
-  },
-);
 
-/**
- * Test edge cases and error scenarios for CacherError
- */
-Deno.test(
-  'cacher.errors.CacherError.EdgeCases',
-  async (t) => {
+    // Edge cases and error scenarios
     await t.step('should handle empty metadata gracefully', () => {
       const meta = {} as { name: string; engine: string };
       const error = new CacherError('Empty meta error', meta);

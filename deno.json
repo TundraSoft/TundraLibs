@@ -99,6 +99,7 @@
     "./crypt",
     "./guardian",
     "./id",
+    "./restler",
     "./slogger",
     "./utils"
   ]

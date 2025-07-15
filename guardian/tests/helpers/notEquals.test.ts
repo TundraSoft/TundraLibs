@@ -2,7 +2,7 @@ import { assertEquals, assertThrows } from '$asserts';
 import { GuardianError } from '../../GuardianError.ts';
 import { notEquals } from '../../helpers/mod.ts';
 
-Deno.test('Guardian.helpers.notEquals', async (t) => {
+Deno.test('guardian.helpers.notEquals', async (t) => {
   await t.step(
     'passes value when it does not equal the forbidden value',
     () => {

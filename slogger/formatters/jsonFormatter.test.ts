@@ -2,7 +2,7 @@ import * as asserts from '$asserts';
 import { jsonFormatter } from './jsonFormatter.ts';
 import type { SlogObject } from '../types/mod.ts';
 
-Deno.test('Slogger.Formatters.jsonFormatter', async (t) => {
+Deno.test('slogger.formatters.jsonFormatter', async (t) => {
   await t.step('jsonFormatter - basic formatting', () => {
     const logObject: SlogObject = {
       id: '1',

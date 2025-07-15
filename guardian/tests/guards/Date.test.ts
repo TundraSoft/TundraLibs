@@ -2,7 +2,7 @@ import { assertEquals, assertThrows } from '$asserts';
 import { GuardianError } from '../../GuardianError.ts';
 import { DateGuardian } from '../../guards/mod.ts';
 
-Deno.test('DateGuardian', async (t) => {
+Deno.test('guardian.date', async (t) => {
   await t.step('create', async (t) => {
     await t.step('passes through Date objects', () => {
       const guard = DateGuardian.create();

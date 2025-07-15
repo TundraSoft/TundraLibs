@@ -1,35 +1,35 @@
 import { sign, verify } from './mod.ts';
 
 Deno.bench({
-  name: 'sign - HMAC:SHA-1',
+  name: 'crypt.Sign - HMAC:SHA-1',
   fn: async () => {
     await sign('HMAC:SHA-1', 'abcdefghijklmnopqrstuvwx', 'my data');
   },
 });
 
 Deno.bench({
-  name: 'sign - HMAC:SHA-256',
+  name: 'crypt.Sign - HMAC:SHA-256',
   fn: async () => {
     await sign('HMAC:SHA-256', 'abcdefghijklmnopqrstuvwx', 'my data');
   },
 });
 
 Deno.bench({
-  name: 'sign - HMAC:SHA-384',
+  name: 'crypt.Sign - HMAC:SHA-384',
   fn: async () => {
     await sign('HMAC:SHA-384', 'abcdefghijklmnopqrstuvwx', 'my data');
   },
 });
 
 Deno.bench({
-  name: 'sign - HMAC:SHA-512',
+  name: 'crypt.Sign - HMAC:SHA-512',
   fn: async () => {
     await sign('HMAC:SHA-512', 'abcdefghijklmnopqrstuvwx', 'my data');
   },
 });
 
 Deno.bench({
-  name: 'verify - HMAC:SHA-1',
+  name: 'crypt.Verify - HMAC:SHA-1',
   fn: async () => {
     await verify(
       'HMAC:SHA-1',
@@ -41,7 +41,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'verify - HMAC:SHA-256',
+  name: 'crypt.Verify - HMAC:SHA-256',
   fn: async () => {
     await verify(
       'HMAC:SHA-1',
@@ -53,7 +53,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'verify - HMAC:SHA-384',
+  name: 'crypt.Verify - HMAC:SHA-384',
   fn: async () => {
     await verify(
       'HMAC:SHA-1',
@@ -65,7 +65,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'verify - HMAC:SHA-512',
+  name: 'crypt.Verify - HMAC:SHA-512',
   fn: async () => {
     await verify(
       'HMAC:SHA-512',

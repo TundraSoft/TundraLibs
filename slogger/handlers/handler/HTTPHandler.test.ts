@@ -32,7 +32,7 @@ interface MockFetchCall {
 }
 
 Deno.test(
-  { name: 'Slogger.Handlers.HTTPHandler', permissions: { net: true } },
+  { name: 'slogger.handlers.httpHandler', permissions: { net: true } },
   async (t) => {
     const originalFetch = globalThis.fetch;
     const mockFetchCalls: MockFetchCall[] = [];
@@ -244,7 +244,7 @@ Deno.test(
 );
 
 Deno.test({
-  name: 'Slogger.Handlers.HTTPHandler - No Permission',
+  name: 'slogger.handlers.httpHandler - No Permission',
   permissions: { net: false },
 }, async (t) => {
   await t.step('Must throw when no permissions', () => {

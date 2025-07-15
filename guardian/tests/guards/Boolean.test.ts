@@ -2,7 +2,7 @@ import { assertEquals, assertThrows } from '$asserts';
 import { GuardianError } from '../../GuardianError.ts';
 import { BooleanGuardian } from '../../guards/mod.ts';
 
-Deno.test('BooleanGuardian', async (t) => {
+Deno.test('guardian.boolean', async (t) => {
   await t.step('create', async (t) => {
     await t.step('passes through boolean values', () => {
       const guard = BooleanGuardian.create();

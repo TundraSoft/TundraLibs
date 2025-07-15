@@ -9,7 +9,7 @@ import {
 } from './string.ts';
 import type { SlogObject } from '../types/mod.ts';
 
-Deno.test('Slogger.Formatters.stringFormatter', async (t) => {
+Deno.test('slogger.formatters.stringFormatter', async (t) => {
   // Create a sample log object for testing
   const testDate = new Date('2023-01-01T12:00:00Z');
   const sampleLog: SlogObject = {

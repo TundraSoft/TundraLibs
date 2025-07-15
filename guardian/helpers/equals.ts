@@ -24,11 +24,3 @@ export const equals = <T>(
     return value;
   };
 };
-
-// const obj = { test: 1 };
-// try {
-//   const objTest = equals('12');
-//   objTest();
-// } catch (e) {
-//   console.log(e);
-// }

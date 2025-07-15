@@ -5,7 +5,7 @@ import { FunctionGuardian } from '../../guards/mod.ts';
 const delay = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms * 1000));
 
-Deno.test('FunctionGuardian', async (t) => {
+Deno.test('guardian.function', async (t) => {
   await t.step('create', async (t) => {
     await t.step('passes through function values', () => {
       const func = (a: number, b: number) => a + b;

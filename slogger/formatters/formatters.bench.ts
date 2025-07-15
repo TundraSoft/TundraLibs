@@ -59,35 +59,35 @@ const complexLog = makeLogObject('Complex benchmark operation completed', {
 
 // Benchmark simple string formatters
 Deno.bench({
-  name: 'String Formatter - Standard Format',
+  name: 'slogger.String Formatter Standard - Format',
   fn() {
     standardFormat(simpleLog);
   },
 });
 
 Deno.bench({
-  name: 'String Formatter - Detailed Format',
+  name: 'slogger.String Formatter Detailed - Format',
   fn() {
     detailedFormat(simpleLog);
   },
 });
 
 Deno.bench({
-  name: 'String Formatter - Compact Format',
+  name: 'slogger.String Formatter Compact - Format',
   fn() {
     compactFormat(simpleLog);
   },
 });
 
 Deno.bench({
-  name: 'String Formatter - Minimalist Format',
+  name: 'slogger.String Formatter Minimalist - Format',
   fn() {
     minimalistFormat(simpleLog);
   },
 });
 
 Deno.bench({
-  name: 'String Formatter - Key-Value Format',
+  name: 'slogger.String Formatter - Key-Value Format',
   fn() {
     keyValueFormat(simpleLog);
   },
@@ -95,14 +95,14 @@ Deno.bench({
 
 // Benchmark JSON formatter
 Deno.bench({
-  name: 'JSON Formatter - Simple Log',
+  name: 'slogger.JSON Formatter Simple - Log',
   fn() {
     jsonFormatter(simpleLog);
   },
 });
 
 Deno.bench({
-  name: 'JSON Formatter - Complex Log',
+  name: 'slogger.JSON Formatter Complex - Log',
   fn() {
     jsonFormatter(complexLog);
   },
@@ -110,7 +110,7 @@ Deno.bench({
 
 // Benchmark masking formatter
 Deno.bench({
-  name: 'Masking Formatter - Default Masking',
+  name: 'slogger.Masking Formatter Default - Masking',
   fn() {
     const formatter = maskingFormatter();
     formatter(complexLog);
@@ -118,7 +118,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'Masking Formatter - Aggressive Masking',
+  name: 'slogger.Masking Formatter Aggressive - Masking',
   fn() {
     const formatter = maskingFormatter({
       sensitiveFields: ['user', 'request', 'response', 'metadata'],
@@ -130,7 +130,7 @@ Deno.bench({
 
 // Benchmark with large string formatting
 Deno.bench({
-  name: 'String Formatter - Large Message (1KB)',
+  name: 'slogger.String Formatter Large - Message (1KB)',
   fn() {
     const largeMessage = 'X'.repeat(1024); // 1KB message
     const largeLog = makeLogObject(largeMessage);
@@ -140,7 +140,7 @@ Deno.bench({
 
 // Benchmark template variable replacement performance
 Deno.bench({
-  name: 'String Formatter - Complex Template',
+  name: 'slogger.String Formatter Complex - Template',
   fn() {
     const complexTemplate =
       '${timestamp} ${hostname}:${appName}[${id}] ${levelName}: ${message} | Context: ${context} | Date: ${date} | ISO: ${isoDate}';
@@ -151,7 +151,7 @@ Deno.bench({
 
 // Benchmark custom formatter function vs template
 Deno.bench({
-  name: 'Custom Formatter Function vs Template',
+  name: 'slogger.Custom Formatter Function vs - Template',
   fn() {
     const customFormatter = (log: SlogObject): string => {
       return `${log.timestamp} ${log.hostname}:${log.appName}[${log.id}] ${log.levelName}: ${log.message}`;
@@ -162,7 +162,7 @@ Deno.bench({
 
 // Benchmark different formatter efficiency
 Deno.bench({
-  name: 'Binary vs JSON vs String - Complex Log',
+  name: 'slogger.Binary vs JSON vs String Complex - Log',
   fn() {
     // Test each formatter type for comparison
     jsonFormatter(complexLog);

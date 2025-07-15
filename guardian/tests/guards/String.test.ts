@@ -2,7 +2,7 @@ import { assertEquals, assertThrows } from '$asserts';
 import { GuardianError } from '../../GuardianError.ts';
 import { StringGuardian } from '../../guards/String.ts';
 
-Deno.test('StringGuardian', async (t) => {
+Deno.test('guardian.string', async (t) => {
   await t.step('create', async (t) => {
     await t.step('passes through string values', () => {
       const guard = StringGuardian.create();

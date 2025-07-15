@@ -81,6 +81,14 @@ component_management:
       statuses:
         - type: project
           target: 75%
+    - component_id: restler
+      name: restler
+      paths:
+        - restler/**.ts
+        - '!restler/**.test.ts'
+      statuses:
+        - type: project
+          target: 75%
 flags:
   default:
     paths:
@@ -109,4 +117,8 @@ flags:
   slogger:
     paths:
       - slogger/
+    carryforward: true
+  restler:
+    paths:
+      - restler/
     carryforward: true

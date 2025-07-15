@@ -28,11 +28,10 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
    */
   public static readonly patterns: Record<string, RegExp> = {
     email: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
-    url:
-      /^(https?:\/\/)((([^:@\/\n]+)(:([^:@\/\n]+))?@)?)([^:\/\n]+)(:(\d+))?(\/[^?#]*)?(\?[^#]*)?(#.*)?$/,
+    url: /^https?:\/\/[^\s/$.?#].[^\s]*$/i,
     alpha: /^[a-zA-Z]+$/,
     alphanumeric: /^[a-zA-Z0-9]+$/,
-    numeric: /^[0-9\.]+$/,
+    numeric: /^[0-9.]+$/,
     uuid:
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
   };
@@ -300,7 +299,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
    */
   public email(error?: string): GuardianProxy<this> {
     return this.pattern(
-      StringGuardian.patterns['email']!,
+      StringGuardian.patterns.email as RegExp,
       error || 'Expected value (${got}) to be a valid email',
     );
   }
@@ -338,7 +337,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
    */
   public url(error?: string): GuardianProxy<this> {
     return this.pattern(
-      StringGuardian.patterns['url']!,
+      StringGuardian.patterns.url as RegExp,
       error || 'Expected value (${got}) to be a valid URL',
     );
   }
@@ -357,7 +356,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
    */
   public alpha(error?: string): GuardianProxy<this> {
     return this.pattern(
-      StringGuardian.patterns['alpha']!,
+      StringGuardian.patterns.alpha as RegExp,
       error || 'Expected value (${got}) to contain only alphabets',
     );
   }
@@ -376,7 +375,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
    */
   public alphanumeric(error?: string): GuardianProxy<this> {
     return this.pattern(
-      StringGuardian.patterns['alphanumeric']!,
+      StringGuardian.patterns.alphanumeric as RegExp,
       error ||
         'Expected value (${got}) to contain only alphanumeric characters',
     );
@@ -396,7 +395,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
    */
   public numeric(error?: string): GuardianProxy<this> {
     return this.pattern(
-      StringGuardian.patterns['numeric']!,
+      StringGuardian.patterns.numeric as RegExp,
       error || 'Expected value (${got}) to contain only numbers',
     );
   }
@@ -415,7 +414,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
    */
   public uuid(error?: string): GuardianProxy<this> {
     return this.pattern(
-      StringGuardian.patterns['uuid']!,
+      StringGuardian.patterns.uuid as RegExp,
       error || 'Expected value (${got}) to be a valid UUID',
     );
   }

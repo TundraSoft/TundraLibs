@@ -1,7 +1,7 @@
 import { assertEquals } from '$asserts';
 import { isPromiseLike } from '../../helpers/mod.ts';
 
-Deno.test('Guardian.helpers.isPromiseLike', async (t) => {
+Deno.test('guardian.helpers.isPromiseLike', async (t) => {
   await t.step('identifies native Promise objects', () => {
     const promise = Promise.resolve('test');
     assertEquals(isPromiseLike(promise), true);
@@ -16,7 +16,7 @@ Deno.test('Guardian.helpers.isPromiseLike', async (t) => {
 
   await t.step('identifies Promise-like objects from async functions', () => {
     const asyncFnResult = (async () => {
-      await 1;
+      await Promise.resolve(); // Simulate async operation
       return 'test';
     })();
     assertEquals(isPromiseLike(asyncFnResult), true);

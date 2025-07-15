@@ -1,8 +1,9 @@
+// NOSONAR
 import { assertEquals, assertThrows } from '$asserts';
 import { GuardianError } from '../../GuardianError.ts';
 import { BigIntGuardian } from '../../guards/mod.ts';
 
-Deno.test('BigIntGuardian', async (t) => {
+Deno.test('guardian.bigInt', async (t) => {
   await t.step('create', async (t) => {
     await t.step('passes through bigint values', () => {
       const guard = BigIntGuardian.create();

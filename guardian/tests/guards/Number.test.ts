@@ -2,7 +2,7 @@ import { assertEquals, assertThrows } from '$asserts';
 import { GuardianError } from '../../GuardianError.ts';
 import { NumberGuardian } from '../../guards/Number.ts';
 
-Deno.test('NumberGuardian', async (t) => {
+Deno.test('guardian.number', async (t) => {
   await t.step('create', async (t) => {
     await t.step('passes through number values', () => {
       const guard = NumberGuardian.create();

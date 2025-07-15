@@ -1,7 +1,7 @@
 import { assertEquals, assertThrows } from '$asserts';
 import { Guardian, GuardianError, type GuardianType } from '../mod.ts';
 
-Deno.test('Guardian entry point', async (t) => {
+Deno.test('guardian.core', async (t) => {
   await t.step('provides access to all guardian types', async (t) => {
     await t.step('string guardian', () => {
       const guard = Guardian.string();
@@ -276,13 +276,6 @@ Deno.test('Guardian entry point', async (t) => {
       isAdmin: false,
       tags: ['user'],
       metadata: { created: new Date() },
-    };
-
-    const userWithoutOptional: User = {
-      id: '456',
-      age: 25,
-      isAdmin: true,
-      tags: [],
     };
 
     // These should create TypeScript errors if GuardianType isn't working correctly

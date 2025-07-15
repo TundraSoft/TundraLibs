@@ -45,7 +45,7 @@ class TestHandler extends AbstractHandler {
 // Register the test handler with LogManager
 LogManager.addHandler('TestHandler', TestHandler);
 
-Deno.test('Slogger', async (t) => {
+Deno.test('slogger.core', async (t) => {
   await t.step('constructor - valid options', () => {
     const logger = new Slogger({
       appName: 'TestApp',

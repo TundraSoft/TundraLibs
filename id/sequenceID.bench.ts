@@ -1,13 +1,13 @@
 import { sequenceID } from './mod.ts';
 
 Deno.bench({
-  name: `Generate sequenceId`,
+  name: `id.Generate sequenceId`,
 }, () => {
   sequenceID();
 });
 
 Deno.bench({
-  name: `Generate sequenceId - Overriding`,
+  name: `id.Generate sequenceId Overriding`,
 }, () => {
   sequenceID(134);
 });

@@ -21,7 +21,7 @@ const makeLogObject = (
   timestamp: 1672574400000,
 });
 
-Deno.test('maskingFormatter', async (t) => {
+Deno.test('slogger.formatters.maskingFormatter', async (t) => {
   await t.step('should mask sensitive fields with default settings', () => {
     const formatter = maskingFormatter();
 

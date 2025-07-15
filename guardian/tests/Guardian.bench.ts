@@ -6,18 +6,18 @@ const validObject = { name: 'John', age: 30, email: 'john@example.com' };
 const validArray = [1, 2, 3, 4, 5];
 
 // Simple validation benchmarks
-Deno.bench('String validation - Direct check', () => {
+Deno.bench('guardian.String validation - Direct check', () => {
   if (typeof validString !== 'string' || validString.length < 3) {
     throw new Error('Invalid string');
   }
 });
 
-Deno.bench('String validation - Guardian', () => {
+Deno.bench('guardian.String validation - Guardian', () => {
   Guardian.string().minLength(3)(validString);
 });
 
 // Object validation benchmarks
-Deno.bench('Object validation - Direct check', () => {
+Deno.bench('guardian.Object validation - Direct check', () => {
   if (
     typeof validObject !== 'object' || validObject === null ||
     typeof validObject.name !== 'string' || validObject.name.length < 2 ||
@@ -28,7 +28,7 @@ Deno.bench('Object validation - Direct check', () => {
   }
 });
 
-Deno.bench('Object validation - Guardian', () => {
+Deno.bench('guardian.Object validation - Guardian', () => {
   Guardian.object().schema({
     name: Guardian.string().minLength(2),
     age: Guardian.number().min(18),
@@ -37,7 +37,7 @@ Deno.bench('Object validation - Guardian', () => {
 });
 
 // Array validation benchmarks
-Deno.bench('Array validation - Direct check', () => {
+Deno.bench('guardian.Array validation - Direct check', () => {
   if (!Array.isArray(validArray)) {
     throw new Error('Not an array');
   }
@@ -49,12 +49,12 @@ Deno.bench('Array validation - Direct check', () => {
   }
 });
 
-Deno.bench('Array validation - Guardian', () => {
+Deno.bench('guardian.Array validation - Guardian', () => {
   Guardian.array().of(Guardian.number().min(0))(validArray);
 });
 
 // Complex validation chains
-Deno.bench('Complex validation - Direct check', () => {
+Deno.bench('guardian.Complex validation - Direct check', () => {
   if (
     typeof validObject !== 'object' ||
     validObject === null ||
@@ -74,7 +74,7 @@ Deno.bench('Complex validation - Direct check', () => {
   }
 });
 
-Deno.bench('Complex validation - Guardian', () => {
+Deno.bench('guardian.Complex validation - Guardian', () => {
   Guardian.object()
     .schema({
       name: Guardian.string().minLength(2),
@@ -84,7 +84,7 @@ Deno.bench('Complex validation - Guardian', () => {
 });
 
 // Union type validation
-Deno.bench('Union type validation - Direct check', () => {
+Deno.bench('guardian.Union type validation - Direct check', () => {
   const id: unknown = '123';
   if (
     (typeof id !== 'string' && typeof id !== 'number') ||
@@ -95,7 +95,7 @@ Deno.bench('Union type validation - Direct check', () => {
   }
 });
 
-Deno.bench('Union type validation - Guardian', () => {
+Deno.bench('guardian.Union type validation - Guardian', () => {
   const idGuard = Guardian.oneOf([
     Guardian.string().pattern(/^\d+$/),
     Guardian.number().integer().min(0),
@@ -124,7 +124,7 @@ const nestedObject = {
   ],
 };
 
-Deno.bench('Nested object validation - Guardian', () => {
+Deno.bench('guardian.Nested object validation - Guardian', () => {
   const postGuard = Guardian.object().schema({
     id: Guardian.number().positive(),
     title: Guardian.string().minLength(1),
@@ -150,7 +150,7 @@ Deno.bench('Nested object validation - Guardian', () => {
 });
 
 // Optional fields test
-Deno.bench('Optional fields - Direct check', () => {
+Deno.bench('guardian.Optional fields - Direct check', () => {
   const obj = { name: 'John', age: 30 };
 
   if (
@@ -163,7 +163,7 @@ Deno.bench('Optional fields - Direct check', () => {
   }
 });
 
-Deno.bench('Optional fields - Guardian', () => {
+Deno.bench('guardian.Optional fields - Guardian', () => {
   Guardian.object().schema({
     name: Guardian.string(),
     age: Guardian.number(),
@@ -172,7 +172,7 @@ Deno.bench('Optional fields - Guardian', () => {
 });
 
 // Error case benchmarks
-Deno.bench('Error handling - Direct check', () => {
+Deno.bench('guardian.Error handling - Direct check', () => {
   try {
     const value = 'not a number';
     if (typeof value !== 'number') {
@@ -183,7 +183,7 @@ Deno.bench('Error handling - Direct check', () => {
   }
 });
 
-Deno.bench('Error handling - Guardian', () => {
+Deno.bench('guardian.Error handling - Guardian', () => {
   try {
     Guardian.number()('not a number');
   } catch {

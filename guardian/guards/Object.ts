@@ -70,6 +70,93 @@ export class ObjectGuardian<
   }
 
   /**
+   * Validates extra properties in strict mode
+   */
+  private validateExtraProperties(
+    obj: Record<string, unknown>,
+    schemaKeys: string[],
+    errors: GuardianError,
+    strict: boolean,
+    additionalProperties: boolean,
+  ): void {
+    if (strict || !additionalProperties) {
+      const extraKeys = Object.keys(obj).filter(
+        (key) => !schemaKeys.includes(key),
+      );
+
+      if (extraKeys.length > 0) {
+        extraKeys.forEach((key) => {
+          errors.addCause(
+            key,
+            new GuardianError(
+              {
+                got: obj[key],
+                expected: schemaKeys,
+                comparison: 'schema',
+              },
+              `Unexpected property '${key}' in strict mode`,
+            ),
+          );
+        });
+      }
+    }
+  }
+
+  /**
+   * Validates and transforms properties according to schema
+   */
+  private validateSchemaProperties<S extends Record<string, unknown>>(
+    obj: Record<string, unknown>,
+    schema: ObjectSchema<S>,
+    schemaKeys: string[],
+    errors: GuardianError,
+    result: Record<string, unknown>,
+  ): void {
+    for (const key of schemaKeys) {
+      const value = obj[key];
+      const propertyGuardian = schema[key] as FunctionType<unknown>;
+
+      try {
+        result[key] = propertyGuardian(value);
+      } catch (error) {
+        if (error instanceof GuardianError) {
+          errors.addCause(key, error);
+        } else {
+          errors.addCause(
+            key,
+            new GuardianError(
+              {
+                got: value,
+                comparison: 'unhandled',
+              },
+              `Unexpected error validating value ${(error as Error).message}`,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Copies additional properties if allowed
+   */
+  private copyAdditionalProperties(
+    obj: Record<string, unknown>,
+    schemaKeys: string[],
+    result: Record<string, unknown>,
+    strict: boolean,
+    additionalProperties: boolean,
+  ): void {
+    if (!strict && additionalProperties) {
+      for (const key of Object.keys(obj)) {
+        if (!schemaKeys.includes(key)) {
+          result[key] = obj[key];
+        }
+      }
+    }
+  }
+
+  /**
    * Validates an object against a schema of property guardians.
    *
    * @param schema - An object mapping property names to guardians
@@ -112,61 +199,26 @@ export class ObjectGuardian<
       );
 
       // Check for extra properties
-      if (strict || !additionalProperties) {
-        const extraKeys = Object.keys(obj).filter(
-          (key) => !schemaKeys.includes(key),
-        );
-
-        if (extraKeys.length > 0) {
-          extraKeys.forEach((key) => {
-            errors.addCause(
-              key,
-              new GuardianError(
-                {
-                  got: obj[key],
-                  expected: schemaKeys,
-                  comparison: 'schema',
-                },
-                `Unexpected property '${key}' in strict mode`,
-              ),
-            );
-          });
-        }
-      }
+      this.validateExtraProperties(
+        obj,
+        schemaKeys,
+        errors,
+        strict,
+        additionalProperties,
+      );
 
       // Validate and transform properties according to schema
-      for (const key of schemaKeys) {
-        const value = obj[key];
-        const propertyGuardian = schema[key]!;
-
-        try {
-          result[key] = propertyGuardian(value);
-        } catch (error) {
-          if (error instanceof GuardianError) {
-            errors.addCause(key, error);
-          } else {
-            errors.addCause(
-              key,
-              new GuardianError(
-                {
-                  got: value,
-                  comparison: 'unhandled',
-                },
-                `Unexpected error validating value ${(error as Error).message}`,
-              ),
-            );
-          }
-        }
-      }
+      this.validateSchemaProperties(obj, schema, schemaKeys, errors, result);
 
       // Copy additional properties
-      if (!strict && additionalProperties) {
-        for (const key of Object.keys(obj)) {
-          if (!schemaKeys.includes(key)) {
-            result[key] = obj[key];
-          }
-        }
-      }
+      this.copyAdditionalProperties(
+        obj,
+        schemaKeys,
+        result,
+        strict,
+        additionalProperties,
+      );
+
       if (errors.causeSize() > 0) {
         throw errors;
       }

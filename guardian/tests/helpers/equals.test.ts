@@ -1,7 +1,7 @@
 import { assertEquals, assertThrows } from '$asserts';
 import { equals } from '../../helpers/mod.ts';
 
-Deno.test('Guardian.helpers.equals', async (t) => {
+Deno.test('guardian.helpers.equals', async (t) => {
   await t.step('passes value when it equals expected value', () => {
     const equalsTest = equals(5);
     assertEquals(equalsTest(5), 5);

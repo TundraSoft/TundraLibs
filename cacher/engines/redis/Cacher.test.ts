@@ -5,7 +5,7 @@ import { envArgs } from '@tundralibs/utils';
 
 const env = envArgs('./cacher/engines/');
 
-Deno.test('Cacher.RedisCacher', async (t) => {
+Deno.test('cacher.engines.redis', async (t) => {
   let redis: RedisCacher;
 
   // Setup and teardown for tests that need an initialized client

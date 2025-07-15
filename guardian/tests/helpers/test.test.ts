@@ -4,7 +4,7 @@ import { test } from '../../helpers/mod.ts';
 // Delay for a given number of milliseconds
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-Deno.test('Guardian.helpers.test', async (t) => {
+Deno.test('guardian.helpers.test', async (t) => {
   // Basic functionality
   await t.step('passes value when test function returns true', () => {
     const testFn = test((value: number) => value > 5);

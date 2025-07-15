@@ -44,7 +44,7 @@ class AsyncGuardian extends BaseGuardian<(v: unknown) => Promise<number>> {
   }
 }
 
-Deno.test('BaseGuardian', async (t) => {
+Deno.test('guardian.baseGuardian', async (t) => {
   await t.step('proxy method allows function calls', () => {
     const guardian = TestGuardian.create();
     assertEquals(guardian(42), 42);
@@ -84,7 +84,7 @@ Deno.test('BaseGuardian', async (t) => {
       const asyncGuardian = AsyncTestGuardian.create();
 
       const transformed = asyncGuardian.transform(async (n) => {
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await Promise.resolve(); // Simulate async operation
         return n * 2;
       });
 

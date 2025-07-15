@@ -19,7 +19,7 @@ const ips: string[] = [
 ];
 
 Deno.bench({
-  name: 'utils/isPublicIP - Check public ip addresses',
+  name: 'utils.isPublicIP - Check public ip addresses',
 }, () => {
-  isPublicIP(ips[Math.floor(Math.random() * ips.length)]!);
+  isPublicIP(ips[Math.floor(Math.random() * ips.length)]!); // NOSONAR
 });

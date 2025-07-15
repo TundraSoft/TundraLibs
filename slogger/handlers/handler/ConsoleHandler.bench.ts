@@ -23,7 +23,7 @@ const makeLogObject = (
 
 // Benchmark ConsoleHandler with simple formatter
 Deno.bench({
-  name: 'ConsoleHandler - Simple Formatter',
+  name: 'slogger.ConsoleHandler Simple - Formatter',
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
@@ -43,7 +43,7 @@ Deno.bench({
 
 // Benchmark ConsoleHandler with JSON formatter
 Deno.bench({
-  name: 'ConsoleHandler - JSON Formatter',
+  name: 'slogger.ConsoleHandler JSON - Formatter',
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
@@ -67,7 +67,7 @@ Deno.bench({
 
 // Benchmark ConsoleHandler with large messages
 Deno.bench({
-  name: 'ConsoleHandler - Large Messages (1KB)',
+  name: 'slogger.ConsoleHandler Large - Messages (1KB)',
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
@@ -86,7 +86,7 @@ Deno.bench({
 
 // Benchmark ConsoleHandler with different severity levels
 Deno.bench({
-  name: 'ConsoleHandler - Emergency Level',
+  name: 'slogger.ConsoleHandler Emergency - Level',
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
@@ -106,7 +106,7 @@ Deno.bench({
 
 // Benchmark ConsoleHandler with debug level
 Deno.bench({
-  name: 'ConsoleHandler - Debug Level',
+  name: 'slogger.ConsoleHandler Debug - Level',
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
@@ -126,7 +126,7 @@ Deno.bench({
 
 // Benchmark ConsoleHandler with structured data
 Deno.bench({
-  name: 'ConsoleHandler - Structured Context Data',
+  name: 'slogger.ConsoleHandler Structured Context - Data',
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
@@ -170,7 +170,7 @@ Deno.bench({
 
 // Benchmark ConsoleHandler initialization overhead
 Deno.bench({
-  name: 'ConsoleHandler - Init/Finalize Overhead',
+  name: 'slogger.ConsoleHandler - Init/Finalize Overhead',
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark

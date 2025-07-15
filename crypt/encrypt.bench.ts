@@ -1,56 +1,56 @@
 import { decrypt, encrypt } from './mod.ts';
 
 Deno.bench({
-  name: 'encrypt - AES-GCM:1',
+  name: 'crypt.Encrypt - AES-GCM:128',
   fn: async () => {
     await encrypt('AES-GCM:128', 'abcdefghijklmnopqrstuvwx', 'hello world');
   },
 });
 
 Deno.bench({
-  name: 'encrypt - AES-GCM:256',
+  name: 'crypt.Encrypt - AES-GCM:256',
   fn: async () => {
     await encrypt('AES-GCM:256', 'abcdefghijklmnopqrstuvwx', 'hello world');
   },
 });
 
 Deno.bench({
-  name: 'encrypt - AES-GCM:384',
+  name: 'crypt.Encrypt - AES-GCM:384',
   fn: async () => {
     await encrypt('AES-GCM:384', 'abcdefghijklmnopqrstuvwx', 'hello world');
   },
 });
 
 Deno.bench({
-  name: 'encrypt - AES-GCM:512',
+  name: 'crypt.Encrypt - AES-GCM:512',
   fn: async () => {
     await encrypt('AES-GCM:512', 'abcdefghijklmnopqrstuvwx', 'hello world');
   },
 });
 
 Deno.bench({
-  name: 'encrypt - AES-CBC:1',
+  name: 'crypt.Encrypt - AES-CBC:128',
   fn: async () => {
     await encrypt('AES-CBC:128', 'abcdefghijklmnopqrstuvwx', 'hello world');
   },
 });
 
 Deno.bench({
-  name: 'encrypt - AES-CBC:256',
+  name: 'crypt.Encrypt - AES-CBC:256',
   fn: async () => {
     await encrypt('AES-CBC:256', 'abcdefghijklmnopqrstuvwx', 'hello world');
   },
 });
 
 Deno.bench({
-  name: 'encrypt - AES-CBC:384',
+  name: 'crypt.Encrypt - AES-CBC:384',
   fn: async () => {
     await encrypt('AES-CBC:384', 'abcdefghijklmnopqrstuvwx', 'hello world');
   },
 });
 
 Deno.bench({
-  name: 'encrypt - AES-CBC:512',
+  name: 'crypt.Encrypt - AES-CBC:512',
   fn: async () => {
     await encrypt('AES-CBC:512', 'abcdefghijklmnopqrstuvwx', 'hello world');
   },
@@ -58,7 +58,7 @@ Deno.bench({
 
 // Decrypt
 Deno.bench({
-  name: 'decrypt - AES-GCM:1',
+  name: 'crypt.Decrypt - AES-GCM:128',
   fn: async () => {
     await decrypt(
       'AES-GCM:128',
@@ -69,7 +69,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'decrypt - AES-GCM:256',
+  name: 'crypt.Decrypt - AES-GCM:256',
   fn: async () => {
     await decrypt(
       'AES-GCM:256',
@@ -80,7 +80,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'decrypt - AES-GCM:384',
+  name: 'crypt.Decrypt - AES-GCM:384',
   fn: async () => {
     await decrypt(
       'AES-GCM:384',
@@ -91,7 +91,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'decrypt - AES-GCM:512',
+  name: 'crypt.Decrypt - AES-GCM:512',
   fn: async () => {
     await decrypt(
       'AES-GCM:512',
@@ -102,7 +102,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'decrypt - AES-CBC:1',
+  name: 'crypt.Decrypt - AES-CBC:128',
   fn: async () => {
     await decrypt(
       'AES-CBC:128',
@@ -113,7 +113,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'decrypt - AES-CBC:256',
+  name: 'crypt.Decrypt - AES-CBC:256',
   fn: async () => {
     await decrypt(
       'AES-CBC:256',
@@ -124,7 +124,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'decrypt - AES-CBC:384',
+  name: 'crypt.Decrypt - AES-CBC:384',
   fn: async () => {
     await decrypt(
       'AES-CBC:384',
@@ -135,7 +135,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'decrypt - AES-CBC:512',
+  name: 'crypt.Decrypt - AES-CBC:512',
   fn: async () => {
     await decrypt(
       'AES-CBC:512',

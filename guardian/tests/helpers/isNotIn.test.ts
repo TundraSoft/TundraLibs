@@ -1,7 +1,7 @@
 import { assertEquals, assertThrows } from '$asserts';
 import { isNotIn } from '../../helpers/mod.ts';
 
-Deno.test('Guardian.helpers.isNotIn', async (t) => {
+Deno.test('guardian.helpers.isNotIn', async (t) => {
   await t.step('passes value when it is not one of allowed values', () => {
     const oneOfTest = isNotIn([1, 2, 3]);
     assertEquals(oneOfTest(4), 4);

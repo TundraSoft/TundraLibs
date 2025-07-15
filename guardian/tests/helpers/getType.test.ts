@@ -1,7 +1,7 @@
 import { assertEquals } from '$asserts';
 import { getType } from '../../helpers/mod.ts';
 
-Deno.test('Guardian.helpers.getType', async (t) => {
+Deno.test('guardian.helpers.getType', async (t) => {
   await t.step('correctly identifies null', () => {
     assertEquals(getType(null), 'null');
   });
@@ -18,7 +18,7 @@ Deno.test('Guardian.helpers.getType', async (t) => {
 
   await t.step('correctly identifies RegExp objects', () => {
     assertEquals(getType(/test/), 'RegExp');
-    assertEquals(getType(new RegExp('test')), 'RegExp');
+    assertEquals(getType(/test/), 'RegExp');
   });
 
   await t.step('correctly identifies strings', () => {

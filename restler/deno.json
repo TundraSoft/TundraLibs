@@ -1,0 +1,14 @@
+{
+  "name": "@tundralibs/restler",
+  "version": "1.0.0-dev2",
+  "description": "RESTler is a library providing an easy way to integrate with RESTful APIs in Deno",
+  "exports": {
+    ".": "./mod.ts",
+    "./types": "./types/mod.ts",
+    "./errors": "./errors/mod.ts"
+  },
+  "imports": {
+    "$http": "jsr:@std/http@^1.0.13",
+    "$xml": "jsr:@libs/xml@^6.0.4"
+  }
+}

@@ -1,7 +1,7 @@
 import { variableReplacer } from './variableReplacer.ts';
 
 Deno.bench({
-  name: 'utils/variableReplacer - Replace variables in string',
+  name: 'utils.variableReplacer - Replace variables in string',
 }, () => {
   variableReplacer(
     'Hello ${user.firstName} ${user.lastName}, your ID is ${user.id}',
@@ -16,7 +16,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'utils/variableReplacer - Replace variables with nested objects',
+  name: 'utils.variableReplacer - Replace variables with nested objects',
 }, () => {
   variableReplacer(
     'Project: ${project.name} (${project.details.status})',

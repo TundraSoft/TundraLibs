@@ -6,7 +6,7 @@ import {
 } from '$asserts';
 import { secretGenerator } from './secretGenerator.ts';
 
-Deno.test('secretGenerator', async (t) => {
+Deno.test('crypt.secretGenerator', async (t) => {
   await t.step('Generate secret with default parameters', () => {
     const secret = secretGenerator(32) as string;
     assertEquals(typeof secret, 'string');

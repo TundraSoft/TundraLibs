@@ -17,7 +17,7 @@ class TestHandler extends AbstractHandler {
   }
 }
 
-Deno.test('LogManager', async (t) => {
+Deno.test('slogger.logManager', async (t) => {
   await t.step('default handlers and formatters', () => {
     // Check that default handlers are registered
     const handlerTypes = LogManager.getHandlerTypes();

@@ -6,7 +6,7 @@ import {
   StringGuardian,
 } from '../../guards/mod.ts';
 
-Deno.test('ArrayGuardian', async (t) => {
+Deno.test('guardian.array', async (t) => {
   await t.step('create', async (t) => {
     await t.step('passes through array values', () => {
       const guard = ArrayGuardian.create();

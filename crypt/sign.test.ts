@@ -8,7 +8,7 @@ import {
   verifyHMAC,
 } from './mod.ts';
 
-Deno.test('signing', async (t) => {
+Deno.test('crypt.sign', async (t) => {
   await t.step('sign and verify HMAC', async (h) => {
     const secret = 'abcdefghijklmnopqrstuvwx';
     const data = 'my data';

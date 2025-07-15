@@ -13,7 +13,7 @@ const subnets: string[] = [
 
 for (const subnet of subnets) {
   Deno.bench({
-    name: `utils.isSubnet - ${subnet}`,
+    name: `utils.isSubnet ${subnet}`,
   }, () => {
     isSubnet(subnet);
   });

@@ -44,7 +44,7 @@ async function cleanupBenchmarkDir() {
 
 // Benchmark FileHandler with small messages
 Deno.bench({
-  name: 'FileHandler - Small Messages (100 chars)',
+  name: 'slogger.FileHandler Small - Messages (100 chars)',
   permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
@@ -69,7 +69,7 @@ Deno.bench({
 
 // Benchmark FileHandler with large messages
 Deno.bench({
-  name: 'FileHandler - Large Messages (1KB)',
+  name: 'slogger.FileHandler Large - Messages (1KB)',
   permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
@@ -94,7 +94,7 @@ Deno.bench({
 
 // Benchmark FileHandler with JSON formatter
 Deno.bench({
-  name: 'FileHandler - JSON Formatter',
+  name: 'slogger.FileHandler JSON - Formatter',
   permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
@@ -123,7 +123,7 @@ Deno.bench({
 
 // Benchmark FileHandler with high-severity auto-flush
 Deno.bench({
-  name: 'FileHandler - Error Level (Auto-Flush)',
+  name: 'slogger.FileHandler Error - Level (Auto-Flush)',
   permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
@@ -152,7 +152,7 @@ Deno.bench({
 
 // Benchmark FileHandler with info level (buffered)
 Deno.bench({
-  name: 'FileHandler - Info Level (Buffered)',
+  name: 'slogger.FileHandler Info - Level (Buffered)',
   permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
@@ -178,7 +178,7 @@ Deno.bench({
 
 // Benchmark FileHandler with different buffer sizes
 Deno.bench({
-  name: 'FileHandler - Small Buffer (1KB)',
+  name: 'slogger.FileHandler Small - Buffer (1KB)',
   permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
@@ -199,7 +199,7 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'FileHandler - Large Buffer (64KB)',
+  name: 'slogger.FileHandler Large - Buffer (64KB)',
   permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
@@ -221,7 +221,7 @@ Deno.bench({
 
 // Benchmark FileHandler initialization overhead
 Deno.bench({
-  name: 'FileHandler - Init/Finalize Overhead',
+  name: 'slogger.FileHandler - Init/Finalize Overhead',
   permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();

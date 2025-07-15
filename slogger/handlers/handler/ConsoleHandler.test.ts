@@ -22,7 +22,7 @@ const makeLogObject = (
   timestamp: new Date('2023-01-01T12:00:00Z').getTime(),
 });
 
-Deno.test('Slogger.Handlers.ConsoleHandler', async (t) => {
+Deno.test('slogger.handlers.consoleHandler', async (t) => {
   // Save and mock console.log
   const originalConsoleLog = console.log;
   const consoleLogCalls: string[] = [];

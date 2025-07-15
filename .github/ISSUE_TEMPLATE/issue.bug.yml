@@ -54,6 +54,7 @@ body:
         - '@tundralibs/crypt'
         - '@tundralibs/guardian'
         - '@tundralibs/id'
+        - '@tundralibs/restler'
         - '@tundralibs/slogger'
         - '@tundralibs/utils'
   - type: input

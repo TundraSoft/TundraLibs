@@ -279,15 +279,8 @@ Deno.test(
       asserts.assertEquals(error.constructor.name, 'CacherEngineError');
       asserts.assertEquals(error.name, 'CacherEngineError');
     });
-  },
-);
 
-/**
- * Test error code handling and edge cases for CacherEngineError
- */
-Deno.test(
-  'cacher.errors.CacherEngineError.ErrorCodes',
-  async (t) => {
+    // Test error code handling
     await t.step('should handle invalid error codes gracefully', () => {
       const meta: CacherErrorMeta = { name: 'cache1', engine: 'memory' };
 
@@ -414,15 +407,8 @@ Deno.test(
         });
       },
     );
-  },
-);
 
-/**
- * Test edge cases and error scenarios for CacherEngineError
- */
-Deno.test(
-  'cacher.errors.CacherEngineError.EdgeCases',
-  async (t) => {
+    // Test edge cases and error scenarios
     await t.step('should handle missing template variables gracefully', () => {
       const meta: CacherErrorMeta = { name: 'cache1', engine: 'redis' };
 

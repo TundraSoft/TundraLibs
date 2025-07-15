@@ -88,7 +88,7 @@ async function listTestFiles(pattern?: string): Promise<string[]> {
 }
 
 Deno.test({
-  name: 'Slogger.Handlers.FileHandler',
+  name: 'slogger.handlers.fileHandler',
   permissions: { write: true, read: true },
 }, async (t) => {
   await setup();
@@ -468,7 +468,7 @@ Deno.test({
 });
 
 Deno.test({
-  name: 'Slogger.Handlers.FileHandler - No Permission',
+  name: 'slogger.handlers.fileHandler - No Permission',
   permissions: { write: false, read: false },
 }, async (t) => {
   await t.step('init - throws on permission error', async () => {

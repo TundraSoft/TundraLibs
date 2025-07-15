@@ -4,7 +4,7 @@ import { CacherEngineError } from '../../errors/mod.ts';
 import { envArgs } from '@tundralibs/utils';
 
 const env = envArgs('./cacher/engines/');
-Deno.test('Cacher.MemCached', async (t) => {
+Deno.test('cacher.engines.memcached', async (t) => {
   let memcached: MemCacher;
 
   // Helper function to create a delay

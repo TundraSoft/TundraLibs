@@ -58,7 +58,7 @@ const makeLogObject = (
   timestamp: new Date('2023-01-01T12:00:00Z').getTime(),
 });
 
-Deno.test('Slogger.Handlers.AbstractHandler', async (t) => {
+Deno.test('slogger.handlers.abstractHandler', async (t) => {
   await t.step('constructor - valid options', () => {
     const handler = new TestHandler('testHandler', {
       level: 5,

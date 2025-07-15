@@ -50,16 +50,9 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
         }
       }
 
-      // Value is not a valid number
       throw new GuardianError(
         {
-          got: Array.isArray(value)
-            ? 'array'
-            : value === undefined
-            ? 'undefined'
-            : value === null
-            ? null
-            : typeof value,
+          got: getType(value),
           expected: 'number',
           comparison: 'type',
           type: getType(value),

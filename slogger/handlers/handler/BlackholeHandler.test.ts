@@ -3,7 +3,7 @@ import * as asserts from '$asserts';
 import { SyslogSeverities, type SyslogSeverity } from '@tundralibs/utils';
 import { SlogObject } from '../../types/mod.ts';
 
-Deno.test('Slogger.Handlers.BlackholeHandler', async (t) => {
+Deno.test('slogger.handlers.blackholeHandler', async (t) => {
   const makeLogObject = (
     level: SyslogSeverities,
     message: string,

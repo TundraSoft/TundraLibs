@@ -1,7 +1,7 @@
 import { assertEquals, assertRejects } from '$asserts';
 import { digest, type DigestAlgorithms } from './mod.ts';
 
-Deno.test('digest', async (t) => {
+Deno.test('crypt.digest', async (t) => {
   await t.step('digest - Basic Hashing with SHA-1', async () => {
     const algorithm: DigestAlgorithms = 'SHA-1';
     const data = 'my data';

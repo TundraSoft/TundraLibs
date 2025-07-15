@@ -1,7 +1,7 @@
 import * as asserts from '$asserts';
 import { MemoryCacher } from './mod.ts';
 
-Deno.test('Cacher.MemoryCacher', async (t) => {
+Deno.test('cacher.engines.memory', async (t) => {
   await t.step('initialization', async (t) => {
     await t.step('should create an instance with default options', async () => {
       const cacher = new MemoryCacher('memory-test', {});

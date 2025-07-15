@@ -19,4 +19,6 @@
     "connectionId": "Sonar",
     "projectKey": "TundraSoft_TundraLibs"
   },
+  // "sonarlint.testFilePattern": "**/*.test.ts",
+  "sonarlint.analysisExcludesStandalone": "**/.vscode-test/**, **/.vscode/**, **/*.test.ts, **/tests/**, **/tests/**.test.ts, .github/**",
 }

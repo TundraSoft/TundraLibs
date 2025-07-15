@@ -6,7 +6,7 @@ import {
   StringGuardian,
 } from '../../guards/mod.ts';
 
-Deno.test('ObjectGuardian', async (t) => {
+Deno.test('guardian.object', async (t) => {
   await t.step('create', async (t) => {
     await t.step('passes through object values', () => {
       const guard = ObjectGuardian.create();

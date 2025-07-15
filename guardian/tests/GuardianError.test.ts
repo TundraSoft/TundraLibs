@@ -1,7 +1,7 @@
 import { assertEquals } from '$asserts';
 import { GuardianError } from '../GuardianError.ts';
 
-Deno.test('GuardianError', async (t) => {
+Deno.test('guardian.error', async (t) => {
   await t.step('constructor', async (t) => {
     await t.step('creates error with default message', () => {
       const error = new GuardianError({
