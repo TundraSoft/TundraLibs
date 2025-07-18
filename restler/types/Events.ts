@@ -37,6 +37,21 @@ export type RESTlerEvents = {
   ) => void;
 
   /**
+   * Called when authentication is made.
+   * This is emitted by the implementation class when authentication is made successfully.
+   * It is available so that the credentials can be logged/stored for repeated use.
+   *
+   * @param vendor - Vendor identifier of the RESTler client implementation
+   * @param data - The authentication data, which can be any type
+   *              (e.g., token, username/password, etc.) depending on the authentication method used.
+   *              This is optional and can be undefined if no data is available.
+   */
+  authentication: (
+    vendor: string,
+    data?: unknown,
+  ) => void;
+
+  /**
    * Called when rate limiting is detected.
    * This is emitted when the response status code matches one of the codes in _rateLimitStatus.
    *

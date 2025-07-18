@@ -133,6 +133,43 @@ Deno.test('guardian.object', async (t) => {
     );
   });
 
+  await t.step('keyValue', async (t) => {
+    await t.step('validates object key-value pairs', () => {
+      const guard = ObjectGuardian.create().keyValue(
+        StringGuardian.create(),
+        NumberGuardian.create().min(0),
+      );
+
+      const validObj = { key1: 1, key2: 42 };
+      assertEquals(guard(validObj), validObj);
+
+      assertThrows(
+        () => guard({ key1: 'value1', key2: -5 }),
+        GuardianError,
+      );
+      assertThrows(
+        () => guard({ key1: 'sdf', key2: 42 }),
+        GuardianError,
+      );
+    });
+
+    await t.step('includes property name in error path', () => {
+      const guard = ObjectGuardian.create().keyValue(
+        StringGuardian.create().minLength(3),
+        NumberGuardian.create().min(0),
+      );
+
+      try {
+        guard({ 12: 123, 'key2': -5 });
+        throw new Error('Should have thrown');
+      } catch (error) {
+        assertEquals(error instanceof GuardianError, true);
+        assertArrayIncludes((error as GuardianError).listCauses(), [
+          'value:key2',
+        ]);
+      }
+    });
+  });
   await t.step('keys', async (t) => {
     await t.step('passes when object has specified keys', () => {
       const guard = ObjectGuardian.create().keys(['name', 'age']);

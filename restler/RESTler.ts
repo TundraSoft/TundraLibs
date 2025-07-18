@@ -111,6 +111,8 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * Subclasses should override this method to add authentication headers or perform
    * authentication requests before making the actual API call.
    *
+   * **NOTE** The implementation should handle calling the event `authentication` - (`this.emit('authentication', ...)`)
+   *
    * @param request - The endpoint configuration
    * @param options - Request options and payload
    * @returns Void or Promise<void> if async authentication is needed

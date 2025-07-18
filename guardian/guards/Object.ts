@@ -226,9 +226,99 @@ export class ObjectGuardian<
     }) as unknown as GuardianProxy<ObjectGuardian<S>>;
   }
 
-  // Remove both the optionalSchema and withOptional methods
+  /**
+   * Validates that all keys and values in the object match the specified patterns.
+   * Useful for dynamic objects where you know the pattern but not the exact keys.
+   *
+   * @param keyGuardian - Guardian to validate each key with
+   * @param valueGuardian - Guardian to validate each value with
+   * @param message - Custom error message for validation failure
+   * @returns A new Guardian instance with the key-value pattern validation applied
+   *
+   * @example
+   * ```ts
+   * // Keys must be 3-character strings, values must be numbers
+   * const objGuard = ObjectGuardian.create().keyValue(
+   *   Guardian.string().length(3),
+   *   Guardian.number()
+   * );
+   *
+   * objGuard({ ABC: 123, XYZ: 456 }); // Returns: { ABC: 123, XYZ: 456 }
+   * objGuard({ AB: 123 }); // Throws: key validation error
+   * objGuard({ ABC: "hello" }); // Throws: value validation error
+   * ```
+   */
+  public keyValue<K extends string, V>(
+    keyGuardian: FunctionType<K>,
+    valueGuardian: FunctionType<V>,
+    message?: string,
+  ): GuardianProxy<ObjectGuardian<Record<K, V>>> {
+    return this.transform((obj) => {
+      const result: Record<K, V> = {} as Record<K, V>;
+      const errors = new GuardianError(
+        {
+          got: obj,
+          expected: 'object with validated keys and values',
+          comparison: 'keyValue',
+        },
+        message ?? 'Object key-value pattern validation failed',
+      );
 
-  // Also remove the private helper method
+      for (const [key, value] of Object.entries(obj)) {
+        let validatedKey: K;
+        let validatedValue: V;
+
+        // Validate key
+        try {
+          validatedKey = keyGuardian(key);
+        } catch (error) {
+          if (error instanceof GuardianError) {
+            errors.addCause(`key:${key}`, error);
+          } else {
+            errors.addCause(
+              `key:${key}`,
+              new GuardianError(
+                {
+                  got: key,
+                  comparison: 'unhandled',
+                },
+                `Unexpected error validating key ${(error as Error).message}`,
+              ),
+            );
+          }
+          continue;
+        }
+
+        // Validate value
+        try {
+          validatedValue = valueGuardian(value);
+        } catch (error) {
+          if (error instanceof GuardianError) {
+            errors.addCause(`value:${key}`, error);
+          } else {
+            errors.addCause(
+              `value:${key}`,
+              new GuardianError(
+                {
+                  got: value,
+                  comparison: 'unhandled',
+                },
+                `Unexpected error validating value ${(error as Error).message}`,
+              ),
+            );
+          }
+          continue;
+        }
+
+        result[validatedKey] = validatedValue;
+      }
+
+      if (errors.causeSize() > 0) {
+        throw errors;
+      }
+      return result;
+    }) as unknown as GuardianProxy<ObjectGuardian<Record<K, V>>>;
+  }
 
   /**
    * Validates that the object has specific keys.
