@@ -12,6 +12,13 @@ export type {
   UnionToIntersection,
 } from './types/mod.ts';
 export { BaseError, type BaseErrorJson } from './BaseError.ts';
+export {
+  assertLoadConfigOptions,
+  Config,
+  type ConfigType,
+  loadConfig,
+  type LoadConfigOptions,
+} from './Config.ts';
 export { envArgs } from './envArgs.ts';
 export { type EventCallback, Events } from './Events.ts';
 export { getFreePort } from './getFreePort.ts';

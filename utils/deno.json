@@ -1,11 +1,12 @@
 {
   "name": "@tundralibs/utils",
-  "version": "1.0.0-dev2",
+  "version": "1.0.0-dev3",
   "description": "Collection of helper or utility functions which are too small to be a project on their own.",
   "exports": {
     ".": "./mod.ts",
     "./types": "./types/mod.ts",
     "./BaseError": "./BaseError.ts",
+    "./Config": "./Config.ts",
     "./envArgs": "./envArgs.ts",
     "./Events": "./Events.ts",
     "./getFreePort": "./getFreePort.ts",

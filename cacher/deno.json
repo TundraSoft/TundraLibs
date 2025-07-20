@@ -1,12 +1,12 @@
 {
   "name": "@tundralibs/cacher",
-  "version": "0.1.0",
+  "version": "1.0.0-dev3",
   "description": "TODO: Add description",
   "exports": {
     ".": "./mod.ts",
     "./errors": "./errors/mod.ts",
     "./engines": "./engines/mod.ts",
-    "./types": "./types.ts"
+    "./types": "./types/mod.ts"
   },
   "imports": {
     "$redis": "jsr:@db/redis@^0.38.0",

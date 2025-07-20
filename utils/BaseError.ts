@@ -163,7 +163,7 @@ export class BaseError<
    * ```
    */
   protected get _messageTemplate(): string {
-    return '[${timeStamp}] ${message}';
+    return '${message}';
   }
 
   /**

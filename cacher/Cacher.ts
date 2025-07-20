@@ -477,4 +477,4 @@ class Manager {
   }
 }
 
-export const Cacher = new Manager();
+export const Cacher: Manager = new Manager();

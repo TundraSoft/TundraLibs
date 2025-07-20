@@ -231,47 +231,52 @@ export const Config = <
   return {
     list: () => _configSets,
     has: (path: string): boolean => {
-      const paths = (path as unknown as string).split('.');
-      const set = paths.shift() as string;
-      if (!_configSets.includes(set)) {
+      const paths = path.split('.');
+      const set = paths.shift();
+      if (!set || !_configSets.includes(set)) {
         return false;
       }
-      let obj: any = _data[set]!;
+      let obj: any = _data[set];
       while (paths.length > 0) {
         const key = paths.shift();
-        if (obj[key as string] === undefined) {
+        if (!key || obj[key] === undefined) {
           return false;
         } else {
-          obj = obj[key as string];
+          obj = obj[key];
         }
       }
       return true;
     },
     keys: <K extends keyof C | string>(set: K): Array<string> => {
-      if (!_configSets.includes(set as string)) {
-        throw new Error(`Config set "${set as string}" does not exist`);
+      const setKey = set as string;
+      if (!_configSets.includes(setKey)) {
+        throw new Error(`Config set "${setKey}" does not exist`);
       }
-      return Object.keys(_data[set as string]!);
+      const configSet = _data[setKey];
+      return configSet ? Object.keys(configSet) : [];
     },
     get: <T = unknown>(path: string): T => {
-      const paths = (path as unknown as string).split('.');
-      const set = paths.shift() as string;
-      if (!_configSets.includes(set)) {
+      const paths = path.split('.');
+      const set = paths.shift();
+      if (!set || !_configSets.includes(set)) {
         throw new Error(`Config set "${set}" does not exist`);
       }
-      let obj: any = _data[set]!;
+      let obj: any = _data[set];
       const traversed: Array<string> = [];
       while (paths.length > 0) {
         const key = paths.shift();
-        traversed.push(key as string);
-        if (Object.keys(obj).includes(key as string) === false) {
+        if (!key) {
+          break;
+        }
+        traversed.push(key);
+        if (Object.keys(obj).includes(key) === false) {
           throw new Error(
             `Config item "${
               traversed.join('.')
             }" does not exist in set "${set}`,
           );
         } else {
-          obj = obj[key as string];
+          obj = obj[key];
         }
       }
       return obj;
@@ -280,10 +285,12 @@ export const Config = <
       if (!_configSets.includes(set)) {
         throw new Error(`Config set "${set}" does not exist`);
       }
-      const obj = _data[set]!;
-      for (const key of Object.keys(obj)) {
-        const value = obj[key];
-        callback(key, value);
+      const obj = _data[set];
+      if (obj) {
+        for (const key of Object.keys(obj)) {
+          const value = obj[key];
+          callback(key, value);
+        }
       }
     },
   };
@@ -353,70 +360,100 @@ export const assertLoadConfigOptions = (
   return true;
 };
 
-export const loadConfig = async (options: LoadConfigOptions) => {
+/**
+ * Loads environment variables based on options
+ */
+const loadEnvironmentVariables = (
+  options: LoadConfigOptions,
+): Record<string, string> => {
+  if (options.env === undefined || typeof options.env === 'boolean') {
+    return options.env ? envArgs(options.path).asObject() : {};
+  } else if (typeof options.env === 'string') {
+    return envArgs(options.env).asObject();
+  }
+  return {};
+};
+
+/**
+ * Parses configuration file content based on file extension
+ */
+const parseConfigContent = (
+  content: string,
+  ext: string,
+  filePath: string,
+): Record<string, unknown> => {
+  try {
+    switch (ext) {
+      case '.toml':
+        return tomlParse(content);
+      case '.yaml':
+      case '.yml':
+        return yamlParse(content) as Record<string, unknown>;
+      case '.json':
+      case '.js':
+      default:
+        return jsonParse(content) as Record<string, unknown>;
+    }
+  } catch {
+    const formatMap: Record<string, string> = {
+      '.toml': 'TOML',
+      '.yaml': 'YML',
+      '.yml': 'YML',
+      '.json': 'JSON',
+      '.js': 'JSON',
+    };
+    const format = formatMap[ext] || 'JSON';
+    throw new Error(`Error parsing config file - ${format}: ${filePath}`);
+  }
+};
+
+/**
+ * Processes configuration files from the specified path
+ */
+const processConfigFiles = async (
+  options: LoadConfigOptions,
+  env: Record<string, string>,
+): Promise<Record<string, Record<string, unknown>>> => {
+  const configs: Record<string, Record<string, unknown>> = {};
+
+  const files = await Array.fromAsync(fs.walk(options.path, {
+    includeDirs: false,
+    includeFiles: true,
+    match: options.include,
+    skip: options.exclude,
+    exts: ['json', 'js', 'toml', 'yaml', 'yml'],
+  }));
+
+  for (const file of files) {
+    const fd = path.parse(file.path);
+    const name = fd.name.toLowerCase();
+
+    if (configs[name]) {
+      throw new Error(`Duplicate config file found: ${file.path}`);
+    }
+
+    const content = variableReplacer(await Deno.readTextFile(file.path), env);
+    const parsed = parseConfigContent(content, fd.ext, file.path);
+    configs[name] = parsed;
+  }
+
+  return configs;
+};
+
+export const loadConfig = async (
+  options: LoadConfigOptions,
+): Promise<ConfigType> => {
   const defaults: Partial<LoadConfigOptions> = {
     exclude: [],
   };
   options = { ...defaults, ...options };
   assertLoadConfigOptions(options);
-  let env: Record<string, string> = {};
-  if (options.env === undefined || typeof options.env === 'boolean') {
-    if (options.env) {
-      env = envArgs(options.path).asObject();
-    }
-  } else if (typeof options.env === 'string') {
-    env = envArgs(options.env).asObject();
-  }
-  const configs: Record<string, Record<string, unknown>> = {};
+
+  const env = loadEnvironmentVariables(options);
+
   try {
-    const files = await Array.fromAsync(fs.walk(options.path, {
-      includeDirs: false,
-      includeFiles: true,
-      match: options.include,
-      skip: options.exclude,
-      exts: ['json', 'js', 'toml', 'yaml', 'yml'],
-    }));
-    for (const file of files) {
-      const fd = path.parse(file.path);
-      const name = fd.name.toLowerCase();
-      if (configs[name]) {
-        throw new Error(`Duplicate config file found: ${file.path}`);
-      }
-      const ext = fd.ext;
-      // Read the file
-      const content = variableReplacer(await Deno.readTextFile(file.path), env);
-      // Replace env
-      let parsed: Record<string, unknown>;
-      switch (ext) {
-        case '.toml':
-          try {
-            parsed = tomlParse(content);
-          } catch {
-            throw new Error(
-              `Error parsing config file - TOML: ${file.path}`,
-            );
-          }
-          break;
-        case '.yaml':
-        case '.yml':
-          try {
-            parsed = yamlParse(content) as Record<string, unknown>;
-          } catch {
-            throw new Error(`Error parsing config file - YML: ${file.path}`);
-          }
-          break;
-        case '.json':
-        case '.js':
-        default:
-          try {
-            parsed = jsonParse(content) as Record<string, unknown>;
-          } catch {
-            throw new Error(`Error parsing config file - JSON: ${file.path}`);
-          }
-          break;
-      }
-      configs[name] = parsed;
-    }
+    const configs = await processConfigFiles(options, env);
+    return Config<typeof configs>(configs);
   } catch (e) {
     if ((e as Error).message.includes('Duplicate config file')) {
       throw e;
@@ -433,5 +470,4 @@ export const loadConfig = async (options: LoadConfigOptions) => {
       throw new Error(`Error loading config: ${(e as Error).message}`);
     }
   }
-  return Config<typeof configs>(configs);
 };

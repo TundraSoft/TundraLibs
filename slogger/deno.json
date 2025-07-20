@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/slogger",
-  "version": "1.0.0-dev2",
+  "version": "1.0.0-dev3",
   "description": "Flexible, powerful structured logging library for Deno applications",
   "exports": {
     ".": "./mod.ts",

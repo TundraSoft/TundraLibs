@@ -22,6 +22,6 @@ export const CacherEngineErrorCodes = {
     'Invalid parameters for operation ${operation}: ${reason}',
   OPERATION_PERMISSION_DENIED: 'Permission denied for operation ${operation}',
   //#endregion Operation Errors
-} as const satisfies Record<string, string>;
+} as const;
 
 export type CacherEngineErrorCode = keyof typeof CacherEngineErrorCodes;
