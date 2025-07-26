@@ -90,8 +90,15 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     this.context.cause[key] = error;
   }
 
-  public listCauses(): Array<string> {
-    return this.context.cause ? Object.keys(this.context.cause) : [];
+  public listCauses(): Record<string, string> {
+    if (!this.context.cause) {
+      return {};
+    }
+    const causes: Record<string, string> = {};
+    for (const [key, error] of Object.entries(this.context.cause)) {
+      causes[key] = error.message;
+    }
+    return causes;
   }
 
   public causeSize(): number {

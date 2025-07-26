@@ -293,15 +293,21 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       // Validate port!!!
       throw new Error('Invalid port');
     }
-    if (endpoint.basicAuth) {
-      const { username, password } = endpoint.basicAuth;
-      if (!username || !password) {
-        throw new Error('Basic auth requires a username and password');
+    if (endpoint.auth) {
+      if (!this._validateAuth(endpoint.auth)) {
+        throw new RESTlerConfigError(
+          `Invalid auth configuration for endpoint ${endpoint.path}`,
+          { vendor: this.vendor, key: 'auth', value: endpoint.auth },
+        );
       }
-      headers['Authorization'] = `Basic ${btoa(`${username}:${password}`)}`; //NOSONAR
-    }
-    if (endpoint.bearerToken) {
-      headers['Authorization'] = `Bearer ${endpoint.bearerToken}`;
+      if (typeof endpoint.auth === 'string') {
+        headers['Authorization'] = `Bearer ${endpoint.auth}`;
+      } else if (
+        typeof endpoint.auth === 'object'
+      ) {
+        const { username, password } = endpoint.auth;
+        headers['Authorization'] = `Basic ${btoa(`${username}:${password}`)}`; //NOSONAR
+      }
     }
     if (options.headers) {
       Object.entries(options.headers).forEach(([key, value]) => {
@@ -734,6 +740,14 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           );
         }
         break;
+      case 'auth':
+        if (!this._validateAuth(value)) {
+          throw new RESTlerConfigError(
+            `Auth must be a string (Bearer token) or an object with username and password.`,
+            { vendor: this.vendor, key: key, value: value },
+          );
+        }
+        break;
     }
     return super._processOption(key, value) as O[K];
   }
@@ -886,6 +900,30 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       } catch {
         return false;
       }
+    }
+    return false;
+  }
+
+  /**
+   * Validates an auth option value.
+   *
+   * @param value - Value to validate
+   * @returns Whether the value is valid
+   */
+  protected _validateAuth(
+    value: unknown,
+  ): value is RESTlerOptions['auth'] {
+    if (!value) return true;
+    if (typeof value === 'string') {
+      return value.length > 0;
+    }
+    if (
+      typeof value === 'object' && 'username' in value && 'password' in value &&
+      typeof value.username === 'string' && typeof value.password === 'string'
+    ) {
+      return (
+        value.username.length > 0 && value.password.length > 0
+      );
     }
     return false;
   }

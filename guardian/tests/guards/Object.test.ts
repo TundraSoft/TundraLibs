@@ -87,7 +87,10 @@ Deno.test('guardian.object', async (t) => {
         throw new Error('Should have thrown');
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
-        assertArrayIncludes((error as GuardianError).listCauses(), ['age']);
+        assertEquals(
+          (error as GuardianError).listCauses().age,
+          'Expected value (-5) to be greater than or equal to 0',
+        );
       }
     });
 
@@ -164,9 +167,10 @@ Deno.test('guardian.object', async (t) => {
         throw new Error('Should have thrown');
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
-        assertArrayIncludes((error as GuardianError).listCauses(), [
-          'value:key2',
-        ]);
+        assertEquals((error as GuardianError).listCauses(), {
+          'key:12': 'Expected value must be at least 3 characters long',
+          'value:key2': 'Expected value (-5) to be greater than or equal to 0',
+        });
       }
     });
   });
@@ -262,7 +266,9 @@ Deno.test('guardian.object', async (t) => {
         throw new Error('Should have thrown');
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
-        assertArrayIncludes((error as GuardianError).listCauses(), ['b']);
+        assertEquals((error as GuardianError).listCauses(), {
+          b: 'Expected value to be a string, got number',
+        });
       }
     });
   });

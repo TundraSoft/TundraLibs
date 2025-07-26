@@ -86,8 +86,8 @@ Deno.test('guardian.array', async (t) => {
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
         assertEquals(
-          (error as GuardianError).listCauses().includes('1'),
-          true,
+          (error as GuardianError).listCauses()['1'],
+          'Expected value to be a string, got number',
         );
       }
     });
@@ -281,7 +281,10 @@ Deno.test('guardian.array', async (t) => {
         throw new Error('Should have thrown');
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
-        assertArrayIncludes((error as GuardianError).listCauses(), ['2']);
+        assertEquals(
+          (error as GuardianError).listCauses()['2'],
+          'Expected value (10) to be less than or equal to 5',
+        );
       }
     });
 
@@ -298,9 +301,9 @@ Deno.test('guardian.array', async (t) => {
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
         // Should include both array indices in path
-        assertArrayIncludes(
-          (error as GuardianError).listCauses(),
-          ['1'],
+        assertEquals(
+          (error as GuardianError).listCauses()['1'],
+          'Validation failed for array elements',
         );
       }
     });

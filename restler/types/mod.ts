@@ -1,3 +1,4 @@
+export type { RESTlerAuth } from './Auth.ts';
 export type {
   RESTlerContentType,
   RESTlerContentTypePayload,

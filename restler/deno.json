@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/restler",
-  "version": "1.0.0-dev3",
+  "version": "1.0.0-dev4",
   "description": "RESTler is a library providing an easy way to integrate with RESTful APIs in Deno",
   "exports": {
     ".": "./mod.ts",

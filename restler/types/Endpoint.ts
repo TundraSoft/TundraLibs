@@ -1,3 +1,5 @@
+import type { RESTlerAuth } from './Auth.ts';
+
 /**
  * Configuration for a RESTler API endpoint.
  * Defines the URL, authentication, and other properties for making a request.
@@ -28,19 +30,11 @@ export type RESTlerEndpoint = {
   version?: string;
 
   /**
-   * Optional HTTP Basic Authentication credentials.
-   * If provided, a Basic Auth header will be added to the request.
+   * Optional authentication configuration.
+   * Can be a bearer token string or an object with username and password for basic auth.
+   * @see {@link RESTlerAuth}
    */
-  basicAuth?: {
-    username: string;
-    password: string;
-  };
-
-  /**
-   * Optional Bearer token for authentication.
-   * If provided, an Authorization header with the Bearer token will be added.
-   */
-  bearerToken?: string;
+  auth?: RESTlerAuth;
 
   /**
    * Optional query parameters to add to the URL.

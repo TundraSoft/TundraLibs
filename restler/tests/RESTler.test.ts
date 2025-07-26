@@ -52,7 +52,7 @@ class TestRESTler extends RESTler {
     request: RESTlerEndpoint,
     _options: RESTlerMethodPayload & RESTlerRequestOptions,
   ): void {
-    request.bearerToken = 'test-token';
+    request.auth = 'test-token';
   }
 
   // Make _validateX methods public for testing
@@ -122,7 +122,7 @@ class AsyncAuthTestRESTler extends TestRESTler {
     // Simulate async auth operation
     await new Promise((resolve) => setTimeout(resolve, 10));
     this.authCalled = true;
-    request.bearerToken = 'async-auth-token';
+    request.auth = 'async-auth-token';
   }
 }
 
@@ -404,7 +404,7 @@ Deno.test('restler.core', async (t) => {
       const request = client.processEndpoint(
         {
           path: '/users',
-          bearerToken: 'token123',
+          auth: 'token123',
         },
         { method: 'GET' },
       );
@@ -419,7 +419,7 @@ Deno.test('restler.core', async (t) => {
       const request = client.processEndpoint(
         {
           path: '/users',
-          basicAuth: {
+          auth: {
             username: 'user',
             password: 'pass',
           },
@@ -437,24 +437,24 @@ Deno.test('restler.core', async (t) => {
         () =>
           client.processEndpoint({
             path: '/users',
-            basicAuth: {
+            auth: {
               username: 'user',
             },
           } as RESTlerEndpoint, { method: 'GET' }),
         Error,
-        'Basic auth requires a username and password',
+        'Invalid auth configuration for endpoint',
       );
 
       asserts.assertThrows(
         () =>
           client.processEndpoint({
             path: '/users',
-            basicAuth: {
+            auth: {
               password: 'pass',
             },
           } as RESTlerEndpoint, { method: 'GET' }),
         Error,
-        'Basic auth requires a username and password',
+        'Invalid auth configuration for endpoint',
       );
     });
 
@@ -976,7 +976,7 @@ Deno.test('restler.core', async (t) => {
             _options: RESTlerMethodPayload & RESTlerRequestOptions,
           ): void {
             // Add auth header to all requests
-            request.bearerToken = 'auth-token-123';
+            request.auth = 'auth-token-123';
           }
         }
 

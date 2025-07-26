@@ -41,7 +41,7 @@ Deno.test('guardian.error', async (t) => {
       error.addCause('prop2', new GuardianError({ got: 42 }, 'Error 2'));
 
       assertEquals(error.causeSize(), 2);
-      assertEquals(error.listCauses().sort(), ['prop1', 'prop2']);
+      assertEquals(Object.keys(error.listCauses()).sort(), ['prop1', 'prop2']);
     });
 
     await t.step('converts to JSON with causes', () => {

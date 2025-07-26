@@ -1,4 +1,5 @@
 import type { RESTlerContentType } from './ContentType.ts';
+import type { RESTlerAuth } from './Auth.ts';
 
 /**
  * Configuration options for RESTler clients.
@@ -51,4 +52,11 @@ export type RESTlerOptions = {
    * Can be a path to a CA certificate file, or an object with certificate and key paths.
    */
   tls?: string | { certificate: string; key: string };
+
+  /**
+   * Optional authentication configuration.
+   * Can be a bearer token string or an object with username and password for basic auth.
+   * @see {@link RESTlerAuth}
+   */
+  auth?: RESTlerAuth;
 };
