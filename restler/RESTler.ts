@@ -300,14 +300,16 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           { vendor: this.vendor, key: 'auth', value: endpoint.auth },
         );
       }
-      if (typeof endpoint.auth === 'string') {
-        headers['Authorization'] = `Bearer ${endpoint.auth}`;
-      } else if (
-        typeof endpoint.auth === 'object'
-      ) {
-        const { username, password } = endpoint.auth;
-        headers['Authorization'] = `Basic ${btoa(`${username}:${password}`)}`; //NOSONAR
-      }
+    } else if (this.hasOption('auth')) {
+      endpoint.auth = this.getOption('auth');
+    }
+    if (typeof endpoint.auth === 'string') {
+      headers['Authorization'] = `Bearer ${endpoint.auth}`;
+    } else if (
+      typeof endpoint.auth === 'object'
+    ) {
+      const { username, password } = endpoint.auth;
+      headers['Authorization'] = `Basic ${btoa(`${username}:${password}`)}`; //NOSONAR
     }
     if (options.headers) {
       Object.entries(options.headers).forEach(([key, value]) => {
