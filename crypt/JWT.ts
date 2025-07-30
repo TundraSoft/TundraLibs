@@ -13,7 +13,7 @@
  */
 
 import { decodeBase64Url, encodeBase64Url } from '$encoding';
-import { signHMAC, verifyHMAC } from '@tundralibs/crypt/sign';
+import { signHMAC, verifyHMAC } from './sign.ts';
 import { BaseError } from '@tundralibs/utils';
 
 /**
