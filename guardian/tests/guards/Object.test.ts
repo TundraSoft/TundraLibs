@@ -1,6 +1,7 @@
 import { assertArrayIncludes, assertEquals, assertThrows } from '$asserts';
 import { GuardianError } from '../../GuardianError.ts';
 import {
+  BooleanGuardian,
   NumberGuardian,
   ObjectGuardian,
   StringGuardian,
@@ -124,16 +125,48 @@ Deno.test('guardian.object', async (t) => {
           name: StringGuardian.create(),
         };
         const guard = ObjectGuardian.create().schema(schema, {
+          strict: false,
           additionalProperties: false,
         });
 
-        assertThrows(
-          () => guard({ name: 'John', extra: true }),
-          GuardianError,
-          'Schema validation failed',
-        );
+        // Should pass and ignore extra properties (not copy them)
+        assertEquals(guard({ name: 'John', extra: true }), { name: 'John' });
       },
     );
+
+    await t.step('additionalProperties=true vs strict=false behavior', () => {
+      const schema = {
+        name: StringGuardian.create(),
+      };
+
+      // additionalProperties=true (default): allows and copies extra properties
+      const flexibleGuard = ObjectGuardian.create().schema(schema, {
+        additionalProperties: true,
+      });
+      assertEquals(
+        flexibleGuard({ name: 'John', extra: true }),
+        // @ts-ignore
+        { name: 'John', extra: true },
+      );
+
+      // additionalProperties=false: ignores extra properties (doesn't copy them)
+      const ignoreExtraGuard = ObjectGuardian.create().schema(schema, {
+        additionalProperties: false,
+      });
+      assertEquals(
+        ignoreExtraGuard({ name: 'John', extra: true }),
+        { name: 'John' }, // extra property not copied
+      );
+
+      // strict=true: throws on any extra properties
+      const strictGuard = ObjectGuardian.create().schema(schema, {
+        strict: true,
+      });
+      assertThrows(
+        () => strictGuard({ name: 'John', extra: true }),
+        GuardianError,
+      );
+    });
   });
 
   await t.step('keyValue', async (t) => {
@@ -416,15 +449,14 @@ Deno.test('guardian.object', async (t) => {
           { name: 'John', email: 'john@example.com' },
         );
 
-        assertThrows(
-          () =>
-            guard({
-              name: 'John',
-              age: 30,
-              email: 'john@example.com',
-              extra: true,
-            }),
-          GuardianError,
+        assertEquals(
+          guard({
+            name: 'John',
+            age: 30,
+            email: 'john@example.com',
+            extra: true,
+          }),
+          { name: 'John', email: 'john@example.com' },
         );
       },
     );

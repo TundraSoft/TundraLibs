@@ -8,7 +8,8 @@
     "./encrypt": "./encrypt.ts",
     "./OTP": "./OTP.ts",
     "./secretGenerator": "./secretGenerator.ts",
-    "./sign": "./sign.ts"
+    "./sign": "./sign.ts",
+    "./JWT": "./JWT.ts"
   },
   "imports": {
     "$encoding": "jsr:@std/encoding@1.0.8",

@@ -6,6 +6,17 @@ export {
   encryptAES,
   type EncryptionModes,
 } from './encrypt.ts';
+export {
+  issueJWT,
+  type JWTAlgorithm,
+  JWTError,
+  type JWTErrorCode,
+  JWTErrorCodes,
+  type JWTHeader,
+  type JWTPayload,
+  type JWTVerifyOptions,
+  verifyJWT,
+} from './JWT.ts';
 export { HOTP, TOTP, verifyHOTP, verifyTOTP } from './OTP.ts';
 export {
   sign,

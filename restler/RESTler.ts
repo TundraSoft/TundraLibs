@@ -283,7 +283,10 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     options: RESTlerMethodPayload & RESTlerRequestOptions,
   ): RESTlerRequest {
     if (endpoint.baseURL && this._validateBaseURL(endpoint.baseURL) === false) {
-      throw new Error('Invalid endpoint baseURL');
+      throw new RESTlerConfigError(
+        'Invalid endpoint baseURL ${value}',
+        { vendor: this.vendor, key: 'baseUrl', value: endpoint.baseURL },
+      );
     }
     const version = endpoint.version ?? this.getOption('version') ?? '';
     const baseURL = endpoint.baseURL ?? this.getOption('baseURL');
@@ -291,7 +294,10 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     const port = endpoint.port || this.getOption('port');
     if (endpoint.port && !this._validatePort(endpoint.port)) {
       // Validate port!!!
-      throw new Error('Invalid port');
+      throw new RESTlerConfigError(
+        'Invalid port ${value}',
+        { vendor: this.vendor, key: 'port', value: endpoint.port },
+      );
     }
     if (endpoint.auth) {
       if (!this._validateAuth(endpoint.auth)) {
@@ -334,7 +340,9 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       headers: headers,
       timeout: options.timeout || this.getOption('timeout'),
       method: options.method,
-      contentType: 'contentType' in options ? options.contentType : undefined,
+      contentType: 'contentType' in options
+        ? options.contentType
+        : this.getOption('contentType'),
       payload: 'payload' in options ? options.payload : undefined,
     } as RESTlerRequest;
   }
@@ -356,8 +364,12 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       client = Deno.createHttpClient(this._tls);
     }
     let payload: BodyInit | undefined = undefined;
-    if ('contentType' in request) {
-      switch (request.contentType) {
+    const contentType = ('contentType' in request)
+      ? request.contentType
+      : this.getOption('contentType');
+    if ('payload' in request && request.payload !== undefined) {
+      switch (contentType) {
+        default: // Default to JSON
         case 'JSON':
           payload = JSON.stringify(request.payload);
           break;
@@ -373,7 +385,9 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           payload = request.payload as FormData;
           break;
         case 'TEXT':
-          payload = request.payload as BodyInit;
+          payload = (typeof request.payload === 'string')
+            ? request.payload
+            : JSON.stringify(request.payload);
           break;
       }
     }
@@ -417,43 +431,40 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       request.headers = request.headers || {};
       request.headers['Host'] = 'localhost';
       request.headers['Connection'] = 'close';
-
+      const contentType = ('contentType' in request)
+        ? request.contentType
+        : this.getOption('contentType');
+      const payload = ('payload' in request) ? request.payload : undefined;
       let body = '';
       // Handle different content types
-      if ('contentType' in request && request.payload !== undefined) {
-        switch (request.contentType) {
-          case 'JSON':
-            body = JSON.stringify(request.payload);
-            request.headers['Content-Type'] = 'application/json';
-            break;
-          case 'XML':
-            body = XMLStringify(request.payload as Record<string, unknown>);
-            request.headers['Content-Type'] = 'application/xml';
-            break;
-          case 'FORM':
-            body = this.__objectToUrlEncoded(
-              request.payload as Record<string, string>,
-            );
-            request.headers['Content-Type'] =
-              'application/x-www-form-urlencoded';
-            break;
-          case 'TEXT':
-            body = typeof request.payload === 'string'
-              ? request.payload
-              : String(request.payload);
-            request.headers['Content-Type'] = 'text/plain';
-            break;
-          default:
-            body = JSON.stringify(request.payload);
-            if (!request.headers['Content-Type']) {
-              request.headers['Content-Type'] = 'application/json';
-            }
-        }
-      } else if ('payload' in request && request.payload !== undefined) {
-        // Default to JSON if contentType is not specified
-        body = JSON.stringify(request.payload);
-        if (!request.headers['Content-Type']) {
+      switch (contentType) {
+        default:
+        case 'JSON':
+          body = payload ? JSON.stringify(payload) : '';
           request.headers['Content-Type'] = 'application/json';
+          break;
+        case 'XML':
+          body = payload
+            ? XMLStringify(payload as Record<string, unknown>)
+            : '';
+          request.headers['Content-Type'] = 'application/xml';
+          break;
+        case 'FORM':
+          body = payload
+            ? this.__objectToUrlEncoded(
+              payload as Record<string, string>,
+            )
+            : '';
+          request.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+          break;
+        case 'TEXT': {
+          if (payload) {
+            body = typeof payload === 'string'
+              ? payload
+              : JSON.stringify(payload); // Convert non-string payloads to string
+          }
+          request.headers['Content-Type'] = 'text/plain';
+          break;
         }
       }
 
@@ -566,7 +577,11 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
 
       return resp;
     } catch (error) {
-      throw new Error('Socket communication error: ' + error, { cause: error });
+      // @TODO: Create specific error for socket communication
+      throw new RESTlerError('Socket communication error', {
+        vendor: this.vendor,
+      }, error as Error);
+      // throw new Error('Socket communication error: ' + error, { cause: error });
     }
   }
 

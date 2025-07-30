@@ -77,9 +77,8 @@ export class ObjectGuardian<
     schemaKeys: string[],
     errors: GuardianError,
     strict: boolean,
-    additionalProperties: boolean,
   ): void {
-    if (strict || !additionalProperties) {
+    if (strict) {
       const extraKeys = Object.keys(obj).filter(
         (key) => !schemaKeys.includes(key),
       );
@@ -100,6 +99,8 @@ export class ObjectGuardian<
         });
       }
     }
+    // If strict=false, never throw errors for extra properties
+    // The additionalProperties flag only controls copying, not validation
   }
 
   /**
@@ -154,6 +155,7 @@ export class ObjectGuardian<
         }
       }
     }
+    // If strict=true or additionalProperties=false, don't copy extra properties
   }
 
   /**
@@ -161,15 +163,27 @@ export class ObjectGuardian<
    *
    * @param schema - An object mapping property names to guardians
    * @param options - Options for schema validation
+   * @param options.strict - If true, throws errors for objects with properties not in schema
+   * @param options.additionalProperties - If true (default), copies additional properties to result when strict=false
+   * @param options.message - Custom error message for validation failure
    * @returns A new Guardian instance with the schema validation applied
    *
    * @example
    * ```ts
-   * const userGuard = ObjectGuardian.create().schema({
-   *   name: StringGuardian.create(),
-   *   age: NumberGuardian.create().min(0)
-   * });
-   * const user = userGuard({ name: 'John', age: 30 }); // Returns: { name: 'John', age: 30 }
+   * // strict=true: Throws on extra properties
+   * const strictGuard = ObjectGuardian.create().schema({
+   *   name: StringGuardian.create()
+   * }, { strict: true });
+   *
+   * // strict=false, additionalProperties=false: Ignores extra properties (doesn't copy them)
+   * const ignoreExtraGuard = ObjectGuardian.create().schema({
+   *   name: StringGuardian.create()
+   * }, { strict: false, additionalProperties: false });
+   *
+   * // strict=false, additionalProperties=true (default): Copies extra properties
+   * const flexibleGuard = ObjectGuardian.create().schema({
+   *   name: StringGuardian.create()
+   * }, { strict: false, additionalProperties: true });
    * ```
    */
   public schema<S extends Record<string, unknown>>(
@@ -186,7 +200,7 @@ export class ObjectGuardian<
       message = 'Schema validation failed',
     } = options;
 
-    return this.transform((obj) => {
+    return this.transform((obj: Record<string, unknown>) => {
       const result: Record<string, unknown> = {};
       const schemaKeys = Object.keys(schema);
       const errors = new GuardianError(
@@ -204,7 +218,6 @@ export class ObjectGuardian<
         schemaKeys,
         errors,
         strict,
-        additionalProperties,
       );
 
       // Validate and transform properties according to schema
