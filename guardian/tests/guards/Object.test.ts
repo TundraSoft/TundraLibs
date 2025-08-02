@@ -1,4 +1,9 @@
-import { assertArrayIncludes, assertEquals, assertThrows } from '$asserts';
+import {
+  assert,
+  assertArrayIncludes,
+  assertEquals,
+  assertThrows,
+} from '$asserts';
 import { GuardianError } from '../../GuardianError.ts';
 import {
   BooleanGuardian,
@@ -460,5 +465,24 @@ Deno.test('guardian.object', async (t) => {
         );
       },
     );
+
+    await t.step('complex guardian with nested object error handling', () => {
+      const guard = ObjectGuardian.create().schema({
+        name: StringGuardian.create().minLength(10),
+        details: ObjectGuardian.create().properties({
+          age: NumberGuardian.create().min(0),
+          address: StringGuardian.create(),
+        }),
+      });
+      try {
+        guard({ name: 'John', details: { age: -5, address: '123 St' } });
+      } catch (error) {
+        const errorList = (error as GuardianError).listCauses();
+        assertEquals(errorList, {
+          name: 'Expected value must be at least 10 characters long',
+          'details.age': 'Expected value (-5) to be greater than or equal to 0',
+        });
+      }
+    });
   });
 });
