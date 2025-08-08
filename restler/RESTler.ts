@@ -379,6 +379,8 @@ export abstract class RESTler<
       signal: controller.signal,
       body: request.body ? this._makeRequestBody(request.body) : undefined,
       client: this._httpClientOptions(),
+      cache: 'no-store',
+      redirect: 'follow',
     };
     try {
       return await fetch(endpoint, fetchOptions);
