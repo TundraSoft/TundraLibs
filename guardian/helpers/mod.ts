@@ -5,4 +5,5 @@ export { isNotIn } from './isNotIn.ts';
 export { isPromiseLike } from './isPromiseLike.ts';
 export { notEquals } from './notEquals.ts';
 export { optional } from './optional.ts';
+export type { OptionalOptions } from './optional.ts';
 export { test } from './test.ts';

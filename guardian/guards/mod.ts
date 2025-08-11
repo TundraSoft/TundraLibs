@@ -6,3 +6,4 @@ export { FunctionGuardian } from './Function.ts';
 export { NumberGuardian } from './Number.ts';
 export { ObjectGuardian, type ObjectSchema } from './Object.ts';
 export { StringGuardian } from './String.ts';
+export { UnknownGuardian } from './Unknown.ts';

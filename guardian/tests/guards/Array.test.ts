@@ -300,10 +300,10 @@ Deno.test('guardian.array', async (t) => {
         throw new Error('Should have thrown');
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
-        // Should include both array indices in path
+        // Should include both array indices in path (1.1 = second array, second element)
         assertEquals(
-          (error as GuardianError).listCauses()['1'],
-          'Validation failed for array elements',
+          (error as GuardianError).listCauses()['1.1'],
+          'Expected positive number, got -4',
         );
       }
     });

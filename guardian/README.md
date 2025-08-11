@@ -11,6 +11,8 @@ Guardian is a type-safe validation library for TypeScript and JavaScript. It pro
 - Extensible design for custom validations
 - Union type support with `oneOf`
 - Automatic type coercion when appropriate
+- **Enhanced null and undefined handling** with `optional()` and `notNullable()` methods
+- **Flexible null behavior configuration** with `treatNullAsUndefined` option
 - No dependencies
 
 ## Basic Usage
@@ -27,7 +29,7 @@ nameValidator(123); // Throws: "Expected string, got number"
 const userValidator = Guardian.object().schema({
   name: Guardian.string().minLength(2),
   age: Guardian.number().min(18),
-  email: Guardian.string().optional(),
+  email: Guardian.string().optional(), // Optional field with undefined handling
   roles: Guardian.array().of(Guardian.string()),
 });
 
@@ -192,6 +194,168 @@ const apiResponse = apiResponseValidator({
     pageCount: 1,
   },
 });
+```
+
+## Null and Undefined Handling
+
+Guardian provides flexible and powerful null handling with two complementary approaches:
+
+### `optional()` Method
+
+The `optional()` method makes any validator handle `undefined` (and optionally `null`) values gracefully by providing default values.
+
+```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+// Basic optional usage
+const nameValidator = Guardian.string().minLength(2).optional('Anonymous');
+
+nameValidator('John'); // Returns: 'John'
+nameValidator(undefined); // Returns: 'Anonymous'
+nameValidator(null); // Returns: 'Anonymous' (by default, null is treated as undefined)
+
+// Optional without default value
+const optionalString = Guardian.string().optional();
+optionalString('hello'); // Returns: 'hello'
+optionalString(undefined); // Returns: undefined
+optionalString(null); // Returns: undefined (converted from null)
+
+// Configure null handling behavior
+const strictOptional = Guardian.string().optional('default', {
+  treatNullAsUndefined: false,
+});
+
+strictOptional(undefined); // Returns: 'default'
+strictOptional(null); // Passes null through to validator (would throw error)
+```
+
+#### Optional Behavior Options
+
+- **`treatNullAsUndefined: true`** (default): Both `null` and `undefined` trigger default value usage
+- **`treatNullAsUndefined: false`**: Only `undefined` triggers default value usage; `null` passes through to the validator
+
+### `notNullable()` Method
+
+The `notNullable()` method explicitly rejects `null` values while allowing `undefined` to pass through.
+
+```typescript
+// Explicit null rejection
+const nonNullString = Guardian.string().notNullable();
+
+nonNullString('hello'); // Returns: 'hello'
+nonNullString(undefined); // Returns: undefined
+nonNullString(null); // Throws: "Expected value to not be null"
+
+// Custom error message
+const strictValidator = Guardian.unknown().notNullable(
+  'Null values are not allowed',
+);
+strictValidator(null); // Throws: "Null values are not allowed"
+```
+
+### Combining `notNullable()` and `optional()`
+
+These methods work together to provide precise control over null and undefined handling:
+
+```typescript
+// Reject null but allow undefined with default
+const validator = Guardian.string()
+  .notNullable()
+  .optional('default value');
+
+validator('hello'); // Returns: 'hello'
+validator(undefined); // Returns: 'default value'
+validator(null); // Throws: "Expected value to not be null"
+
+// API field validation example
+const apiFieldValidator = Guardian.string()
+  .optional('fallback_value', { treatNullAsUndefined: false })
+  .notNullable();
+
+apiFieldValidator(undefined); // Returns: 'fallback_value'
+apiFieldValidator('actual_value'); // Returns: 'actual_value'
+apiFieldValidator(null); // Throws: "Expected value to not be null"
+```
+
+### Real-World Usage Examples
+
+#### API Response Validation
+
+```typescript
+// Handling API responses where null and undefined have different meanings
+const userProfileValidator = Guardian.object().schema({
+  id: Guardian.number().notNullable(),
+  name: Guardian.string().notNullable(),
+  email: Guardian.string().optional(), // undefined means not provided
+  avatar: Guardian.string().optional('default-avatar.png', {
+    treatNullAsUndefined: false,
+  }), // null means explicitly no avatar
+  preferences: Guardian.object().schema({
+    theme: Guardian.string().optional('light'),
+    notifications: Guardian.boolean().optional(true),
+  }).optional({}), // Default to empty preferences object
+});
+
+// This validates and provides sensible defaults
+const profile = userProfileValidator({
+  id: 123,
+  name: 'John Doe',
+  email: undefined, // Uses undefined (no email provided)
+  avatar: null, // Would use default since treatNullAsUndefined: false treats null as undefined for default
+  // preferences omitted entirely - gets default empty object
+});
+```
+
+#### Form Data Validation
+
+```typescript
+// Form validation with proper null/undefined distinction
+const formValidator = Guardian.object().schema({
+  firstName: Guardian.string().notNullable(),
+  lastName: Guardian.string().notNullable(),
+  middleName: Guardian.string().optional(), // Optional field
+  age: Guardian.number().min(0).optional(),
+  subscribe: Guardian.boolean().optional(false), // Default to false
+  notes: Guardian.string().optional('', { treatNullAsUndefined: false }), // Empty string for null
+});
+```
+
+#### Environment Variable Validation
+
+```typescript
+// Environment variables where undefined means "not set" and null shouldn't occur
+const envValidator = Guardian.object().schema({
+  NODE_ENV: Guardian.string().in(['development', 'production', 'test'])
+    .optional('development'),
+  PORT: Guardian.string().pattern(/^\d+$/).transform(parseInt).optional(3000),
+  DATABASE_URL: Guardian.string().notNullable(), // Required
+  API_KEY: Guardian.string().optional(), // Optional but if provided, must be valid
+});
+
+const env = envValidator(process.env);
+```
+
+### Migration Guide
+
+If you're upgrading from an older version:
+
+- **Default behavior unchanged**: `optional()` without options works the same as before
+- **New `notNullable()` method**: Use for explicit null rejection
+- **Enhanced `optional()`**: Now accepts options parameter for fine-grained null handling
+- **Backward compatible**: Existing code continues to work without changes
+
+```typescript
+// Old approach (still works)
+const validator = Guardian.string().optional('default');
+
+// New approach with explicit null handling
+const validator = Guardian.string()
+  .notNullable() // Explicitly reject null
+  .optional('default'); // Handle undefined with default
+
+// Or configure optional behavior
+const validator = Guardian.string()
+  .optional('default', { treatNullAsUndefined: false });
 ```
 
 ## Performance

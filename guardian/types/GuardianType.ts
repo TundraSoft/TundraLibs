@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import type { BaseGuardian } from '../BaseGuardian.ts';
 import type { FunctionType, GuardianProxy } from './mod.ts';
+import type { UnknownGuardian } from '../guards/Unknown.ts';
 
 /**
  * Extracts the validated type from a guardian.
@@ -11,6 +12,9 @@ import type { FunctionType, GuardianProxy } from './mod.ts';
 export type GuardianType<G> =
   // Handle MutatedGuardian case
   G extends { __mutatedType: infer M } ? M
+    // Handle UnknownGuardian specifically
+    : G extends UnknownGuardian ? unknown
+    : G extends GuardianProxy<UnknownGuardian> ? unknown
     // Handle the most common case first: G is a function
     : G extends FunctionType<infer R, any[]> ? RemapOptionals<R>
     // G is a Guardian instance

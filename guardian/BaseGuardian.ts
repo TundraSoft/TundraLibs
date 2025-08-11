@@ -177,12 +177,14 @@ export abstract class BaseGuardian<F extends FunctionType> {
    *
    * @template R - The type of the default value, defaults to undefined
    * @param defaultValue - The default value or a function that returns the default value
+   * @param options - Options for controlling null handling behavior
    * @returns A new Guardian instance with the optional behavior applied
    */
   public optional<
     R extends ResolvedValue<ReturnType<F>> | undefined = undefined,
   >(
     defaultValue?: R | (() => R),
+    options?: { treatNullAsUndefined?: boolean },
   ): GuardianProxy<
     this,
     FunctionType<
@@ -193,7 +195,22 @@ export abstract class BaseGuardian<F extends FunctionType> {
     // deno-lint-ignore no-explicit-any
     const Class = (this as any).constructor;
     const { guardian } = this;
-    return new Class(optional<F, R>(guardian, defaultValue)).proxy();
+    return new Class(optional<F, R>(guardian, defaultValue, options || {}))
+      .proxy();
+  }
+
+  /**
+   * Validates that the result of the guardian function is not null
+   * This is a stricter version of notNull() that specifically targets nullable types
+   *
+   * @param error - Optional error message to use when validation fails
+   * @returns A new Guardian instance with the notNullable validation applied
+   */
+  public notNullable(error?: string): GuardianProxy<this> {
+    return this.test(
+      (value) => value !== null,
+      error || 'Expected value to not be null',
+    );
   }
 
   public validate(

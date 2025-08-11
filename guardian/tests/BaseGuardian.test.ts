@@ -145,6 +145,45 @@ Deno.test('guardian.baseGuardian', async (t) => {
     assertEquals(optional(10), 10);
   });
 
+  await t.step('notNullable method', () => {
+    // Create a more permissive guardian for null testing
+    class PermissiveGuardian extends BaseGuardian<(value: unknown) => unknown> {
+      static create() {
+        return new PermissiveGuardian((value: unknown): unknown => {
+          return value; // Pass through any value
+        }).proxy();
+      }
+    }
+
+    const guardian = PermissiveGuardian.create();
+    const notNullable = guardian.notNullable();
+
+    assertEquals(notNullable(10), 10);
+    assertEquals(notNullable(0), 0);
+    assertEquals(notNullable('hello'), 'hello');
+    assertEquals(notNullable(undefined), undefined);
+    assertThrows(
+      () => notNullable(null),
+      GuardianError,
+      'Expected value to not be null',
+    );
+  });
+
+  await t.step('notNullable with custom error', () => {
+    class PermissiveGuardian extends BaseGuardian<(value: unknown) => unknown> {
+      static create() {
+        return new PermissiveGuardian((value: unknown): unknown => {
+          return value;
+        }).proxy();
+      }
+    }
+
+    const guardian = PermissiveGuardian.create();
+    const notNullable = guardian.notNullable('Custom null error');
+
+    assertThrows(() => notNullable(null), GuardianError, 'Custom null error');
+  });
+
   await t.step('complex chaining works correctly', () => {
     const guardian = TestGuardian.create()
       .transform((n) => n + 1)
