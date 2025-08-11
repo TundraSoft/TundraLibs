@@ -78,7 +78,7 @@ Deno.test('guardian.helpers.optional', async (t) => {
 
     // null is NOT the same as undefined for optional handling
     // null should be passed to the guardian function
-    // assertEquals(optionalGuardian(null as any), 'NULL');
+    assertEquals(optionalGuardian(null), 'NULL');
     assertEquals(optionalGuardian(undefined), undefined);
     assertEquals(optionalGuardian('hello'), 'HELLO');
   });
@@ -144,8 +144,8 @@ Deno.test('guardian.helpers.optional', async (t) => {
     };
 
     const optionalGuardian = optional(guardian, 'default');
-    assertEquals(optionalGuardian(null), 'DEFAULT');
-    assertEquals(optionalGuardian(undefined), 'DEFAULT');
+    assertEquals(optionalGuardian(null), 'NULL_RESULT'); // null passes through to guardian
+    assertEquals(optionalGuardian(undefined), 'DEFAULT'); // undefined uses default
   });
 
   await t.step('preserves error context from guardian', async () => {
@@ -172,63 +172,46 @@ Deno.test('guardian.helpers.optional', async (t) => {
     }
   });
 
-  await t.step('treatNullAsUndefined option controls null handling', () => {
+  await t.step('null vs undefined behavior', () => {
     const guardian = (value: string | null | undefined): string => {
       if (value === null) return 'NULL_RESULT';
       if (value === undefined) return 'UNDEFINED_RESULT';
       return value.toUpperCase();
     };
 
-    // Default behavior (treatNullAsUndefined: true)
-    const optionalDefault = optional(guardian, 'DEFAULT');
-    assertEquals(optionalDefault(null), 'DEFAULT');
-    assertEquals(optionalDefault(undefined), 'DEFAULT');
-    assertEquals(optionalDefault('hello'), 'HELLO');
+    const optionalGuardian = optional(guardian, 'DEFAULT');
 
-    // Explicit treatNullAsUndefined: true
-    const optionalTrueOption = optional(guardian, 'DEFAULT', {
-      treatNullAsUndefined: true,
-    });
-    assertEquals(optionalTrueOption(null), 'DEFAULT');
-    assertEquals(optionalTrueOption(undefined), 'DEFAULT');
-    assertEquals(optionalTrueOption('hello'), 'HELLO');
+    // Only undefined triggers the default value behavior
+    assertEquals(optionalGuardian(undefined), 'DEFAULT');
 
-    // treatNullAsUndefined: false (null passes through)
-    const optionalFalseOption = optional(guardian, 'DEFAULT', {
-      treatNullAsUndefined: false,
-    });
-    assertEquals(optionalFalseOption(null), 'NULL_RESULT'); // null passes through to guardian
-    assertEquals(optionalFalseOption(undefined), 'DEFAULT'); // undefined still uses default
-    assertEquals(optionalFalseOption('hello'), 'HELLO');
+    // null passes through to the guardian
+    assertEquals(optionalGuardian(null), 'NULL_RESULT');
+
+    // regular values work normally
+    assertEquals(optionalGuardian('hello'), 'HELLO');
+  });
+
+  await t.step('null vs undefined behavior without default value', () => {
+    const guardian = (value: string | null | undefined): string => {
+      if (value === null) return 'NULL_RESULT';
+      if (value === undefined) return 'UNDEFINED_RESULT';
+      return value.toUpperCase();
+    };
+
+    const optionalGuardian = optional(guardian);
+
+    // undefined short-circuits and returns undefined
+    assertEquals(optionalGuardian(undefined), undefined);
+
+    // null passes through to guardian
+    assertEquals(optionalGuardian(null), 'NULL_RESULT');
+
+    // regular values work normally
+    assertEquals(optionalGuardian('hello'), 'HELLO');
   });
 
   await t.step(
-    'treatNullAsUndefined option works without default value',
-    () => {
-      const guardian = (value: string | null | undefined): string => {
-        if (value === null) return 'NULL_RESULT';
-        if (value === undefined) return 'UNDEFINED_RESULT';
-        return value.toUpperCase();
-      };
-
-      // Default behavior (treatNullAsUndefined: true) - both null and undefined short-circuit
-      const optionalDefault = optional(guardian);
-      assertEquals(optionalDefault(null), undefined); // null converted to undefined when treatNullAsUndefined: true
-      assertEquals(optionalDefault(undefined), undefined);
-      assertEquals(optionalDefault('hello'), 'HELLO');
-
-      // treatNullAsUndefined: false - only undefined short-circuits
-      const optionalFalseOption = optional(guardian, undefined, {
-        treatNullAsUndefined: false,
-      });
-      assertEquals(optionalFalseOption(null), 'NULL_RESULT'); // null passes through to guardian
-      assertEquals(optionalFalseOption(undefined), undefined); // undefined still short-circuits
-      assertEquals(optionalFalseOption('hello'), 'HELLO');
-    },
-  );
-
-  await t.step(
-    'treatNullAsUndefined option works with async default generators',
+    'works with async default generators and null handling',
     async () => {
       const guardian = (value: number | null): number => {
         if (value === null) return -1;
@@ -240,19 +223,16 @@ Deno.test('guardian.helpers.optional', async (t) => {
         return 42;
       };
 
-      // treatNullAsUndefined: true (default)
-      const optionalDefault = optional(guardian, asyncDefaultGen);
-      assertEquals(await optionalDefault(null), 84); // null -> default 42 -> guardian transforms to 84
-      assertEquals(await optionalDefault(undefined), 84); // undefined -> default 42 -> guardian transforms to 84
-      assertEquals(optionalDefault(10), 20);
+      const optionalGuardian = optional(guardian, asyncDefaultGen);
 
-      // treatNullAsUndefined: false
-      const optionalFalseOption = optional(guardian, asyncDefaultGen, {
-        treatNullAsUndefined: false,
-      });
-      assertEquals(optionalFalseOption(null), -1); // null passes through, gets transformed by guardian
-      assertEquals(await optionalFalseOption(undefined), 84); // undefined uses async default 42 -> guardian transforms to 84
-      assertEquals(optionalFalseOption(10), 20);
+      // undefined should use async default
+      assertEquals(await optionalGuardian(undefined), 84); // undefined -> default 42 -> guardian transforms to 84
+
+      // null should pass through to guardian
+      assertEquals(optionalGuardian(null), -1); // null passes through, gets transformed by guardian
+
+      // regular values work normally
+      assertEquals(optionalGuardian(10), 20);
     },
   );
 });

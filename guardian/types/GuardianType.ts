@@ -16,21 +16,33 @@ export type GuardianType<G> =
     : G extends UnknownGuardian ? unknown
     : G extends GuardianProxy<UnknownGuardian> ? unknown
     // Handle the most common case first: G is a function
-    : G extends FunctionType<infer R, any[]> ? RemapOptionals<R>
+    : G extends FunctionType<infer R, any[]> ? ProcessGuardianReturnType<R>
     // G is a Guardian instance
     : G extends BaseGuardian<infer F>
-      ? F extends FunctionType<infer R, any[]> ? RemapOptionals<R> : never
+      ? F extends FunctionType<infer R, any[]> ? ProcessGuardianReturnType<R>
+      : never
     // G is a GuardianProxy
     : G extends GuardianProxy<infer B>
       ? B extends BaseGuardian<infer F>
-        ? F extends FunctionType<infer R, any[]> ? RemapOptionals<R> : never
+        ? F extends FunctionType<infer R, any[]> ? ProcessGuardianReturnType<R>
+        : never
       : never
     // G has a guardian property
     : G extends { guardian: infer F }
-      ? F extends FunctionType<infer R, any[]> ? RemapOptionals<R> : never
+      ? F extends FunctionType<infer R, any[]> ? ProcessGuardianReturnType<R>
+      : never
     // G has mutate property that returns another guardian with transformed type
     : G extends { mutate: <T>(fn: (value: any) => T) => infer M }
-      ? M extends (value: any) => infer R ? RemapOptionals<R> : never
+      ? M extends (value: any) => infer R ? ProcessGuardianReturnType<R> : never
+    : never;
+
+/**
+ * Processes guardian return types to handle nullable, optional, and async variations
+ */
+type ProcessGuardianReturnType<T> =
+  (T extends Promise<infer U> ? ProcessGuardianReturnType<U>
+    : T extends object ? RemapOptionals<T>
+    : T) extends infer O ? { [K in keyof O]: O[K] }
     : never;
 
 /**

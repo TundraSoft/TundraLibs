@@ -145,7 +145,7 @@ Deno.test('guardian.baseGuardian', async (t) => {
     assertEquals(optional(10), 10);
   });
 
-  await t.step('notNullable method', () => {
+  await t.step('nullable method', () => {
     // Create a more permissive guardian for null testing
     class PermissiveGuardian extends BaseGuardian<(value: unknown) => unknown> {
       static create() {
@@ -156,32 +156,92 @@ Deno.test('guardian.baseGuardian', async (t) => {
     }
 
     const guardian = PermissiveGuardian.create();
-    const notNullable = guardian.notNullable();
+    const nullable = guardian.nullable();
 
-    assertEquals(notNullable(10), 10);
-    assertEquals(notNullable(0), 0);
-    assertEquals(notNullable('hello'), 'hello');
-    assertEquals(notNullable(undefined), undefined);
+    assertEquals(nullable(10), 10);
+    assertEquals(nullable(0), 0);
+    assertEquals(nullable('hello'), 'hello');
+    assertEquals(nullable(undefined), undefined);
+    assertEquals(nullable(null), null); // null passes through without calling guardian
+  });
+
+  await t.step('nullable with type-strict guardian', () => {
+    const guardian = TestGuardian.create();
+    const nullable = guardian.nullable();
+
+    assertEquals(nullable(42), 42);
+    assertEquals(nullable(0), 0);
+    assertEquals(nullable(null), null); // null short-circuits before type checking
+
+    // Non-null, non-number values should still throw
     assertThrows(
-      () => notNullable(null),
+      () => nullable('not a number'),
       GuardianError,
-      'Expected value to not be null',
+    );
+    assertThrows(
+      () => nullable(undefined),
+      GuardianError,
     );
   });
 
-  await t.step('notNullable with custom error', () => {
-    class PermissiveGuardian extends BaseGuardian<(value: unknown) => unknown> {
-      static create() {
-        return new PermissiveGuardian((value: unknown): unknown => {
-          return value;
-        }).proxy();
-      }
-    }
+  await t.step('nullable preserves transformations', () => {
+    const guardian = TestGuardian.create()
+      .transform((n) => n * 2)
+      .nullable();
 
-    const guardian = PermissiveGuardian.create();
-    const notNullable = guardian.notNullable('Custom null error');
+    assertEquals(guardian(5), 10); // 5 * 2 = 10
+    assertEquals(guardian(null), null); // null short-circuits
+    assertThrows(() => guardian('not a number'), GuardianError);
+  });
 
-    assertThrows(() => notNullable(null), GuardianError, 'Custom null error');
+  await t.step('nullable works with chaining', () => {
+    const guardian = TestGuardian.create()
+      .test((n) => n > 0, 'Must be positive')
+      .nullable();
+
+    assertEquals(guardian(5), 5);
+    assertEquals(guardian(null), null); // null bypasses validation
+    assertThrows(() => guardian(-5), GuardianError, 'Must be positive');
+    assertThrows(() => guardian('string'), GuardianError);
+  });
+
+  await t.step('nullable with complex validation chain', () => {
+    const guardian = TestGuardian.create()
+      .transform((n) => n + 1)
+      .test((n) => n < 10, 'Too large')
+      .nullable();
+
+    assertEquals(guardian(5), 6); // 5 + 1 = 6
+    assertEquals(guardian(null), null); // null bypasses everything
+    assertThrows(() => guardian(20), GuardianError, 'Too large'); // 20 + 1 = 21 > 10
+  });
+
+  await t.step('combining nullable with optional', () => {
+    // Create a guardian that's both nullable and optional
+    // Order matters: optional should be applied last to handle undefined
+    const guardian = TestGuardian.create()
+      .optional(100) // Handle undefined first
+      .nullable(); // Then allow null
+
+    assertEquals(guardian(42), 42); // Valid number
+    assertEquals(guardian(undefined), 100); // Undefined uses optional default
+    assertEquals(guardian(null), null); // Null passes through nullable
+  });
+
+  await t.step('nullable vs optional behavior differences', () => {
+    const nullableGuardian = TestGuardian.create().nullable();
+    const optionalGuardian = TestGuardian.create().optional(999);
+
+    // Both should handle their respective "special" values
+    assertEquals(nullableGuardian(null), null);
+    assertEquals(optionalGuardian(undefined), 999);
+
+    // But they should behave differently for the other's special value
+    assertThrows(() => nullableGuardian(undefined), GuardianError); // undefined not handled by nullable
+
+    // Now that treatNullAsUndefined is removed, null should pass through to the guardian
+    // which will throw because TestGuardian expects numbers
+    assertThrows(() => optionalGuardian(null), GuardianError); // null passes through and fails type check
   });
 
   await t.step('complex chaining works correctly', () => {
@@ -310,6 +370,46 @@ Deno.test('guardian.baseGuardian', async (t) => {
       const [error2, result2] = guardian.validate(undefined);
       assertEquals(error2, null);
       assertEquals(result2, 999);
+    });
+
+    await t.step('handles nullable guardians', () => {
+      const guardian = TestGuardian.create().nullable();
+
+      // Valid defined value
+      const [error1, result1] = guardian.validate(42);
+      assertEquals(error1, null);
+      assertEquals(result1, 42);
+
+      // Null value passes through
+      const [error2, result2] = guardian.validate(null);
+      assertEquals(error2, null);
+      assertEquals(result2, null);
+
+      // Invalid value still throws
+      const [error3, result3] = guardian.validate('not a number');
+      assertEquals(result3, undefined);
+      assertEquals(error3 instanceof GuardianError, true);
+    });
+
+    await t.step('nullable with transformation in validate', () => {
+      const guardian = TestGuardian.create()
+        .transform((n) => n * 3)
+        .nullable();
+
+      // Valid case
+      const [error1, result1] = guardian.validate(5);
+      assertEquals(error1, null);
+      assertEquals(result1, 15); // 5 * 3
+
+      // Null case
+      const [error2, result2] = guardian.validate(null);
+      assertEquals(error2, null);
+      assertEquals(result2, null);
+
+      // Invalid case
+      const [error3, result3] = guardian.validate('string');
+      assertEquals(result3, undefined);
+      assertEquals(error3 instanceof GuardianError, true);
     });
 
     await t.step('complex chained validation with validate', () => {

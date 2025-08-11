@@ -455,9 +455,8 @@ Deno.test('guardian.unknown', async (t) => {
 
         assertEquals(guard('test'), 'test');
         assertEquals(guard(undefined), undefined);
-        // With the new optional behavior, null is treated as undefined by default
-        // so it returns the default value (undefined in this case) instead of throwing
-        assertEquals(guard(null), undefined);
+        // null should be passed to the guardian and rejected by notNull
+        assertThrows(() => guard(null), GuardianError);
       });
 
       await t.step('works with transform', () => {
@@ -473,64 +472,68 @@ Deno.test('guardian.unknown', async (t) => {
     },
   );
 
-  await t.step('new null handling features', async (t) => {
-    await t.step('notNullable method works correctly', () => {
-      const guard = UnknownGuardian.create().notNullable();
+  await t.step('new null and undefined handling features', async (t) => {
+    await t.step('nullable method works correctly', () => {
+      const guard = UnknownGuardian.create().nullable();
 
       assertEquals(guard('test'), 'test');
       assertEquals(guard(0), 0);
       assertEquals(guard(false), false);
       assertEquals(guard(undefined), undefined);
-      assertThrows(() => guard(null), GuardianError);
+      assertEquals(guard(null), null); // null passes through
     });
 
-    await t.step('notNullable with custom error message', () => {
-      const guard = UnknownGuardian.create().notNullable('Cannot be null!');
+    await t.step('optional method works correctly', () => {
+      const guard = UnknownGuardian.create().optional('default');
 
-      assertThrows(() => guard(null), GuardianError, 'Cannot be null!');
+      assertEquals(guard('test'), 'test');
+      assertEquals(guard(undefined), 'default'); // undefined uses default
+      // Note: null would go through to the underlying guardian
     });
 
-    await t.step('optional with treatNullAsUndefined: false', () => {
+    await t.step('combining optional with notNull validation', () => {
       const guard = UnknownGuardian.create()
         .notNull() // Will reject null
-        .optional('default', { treatNullAsUndefined: false });
+        .optional('default');
 
       assertEquals(guard('test'), 'test');
       assertEquals(guard(undefined), 'default'); // undefined uses default
       assertThrows(() => guard(null), GuardianError); // null passes through and gets rejected by notNull()
     });
 
-    await t.step('optional with treatNullAsUndefined: true (default)', () => {
+    await t.step('combining nullable with optional', () => {
       const guard = UnknownGuardian.create()
-        .notNull()
-        .optional('default'); // default behavior
+        .nullable()
+        .optional('default');
 
       assertEquals(guard('test'), 'test');
-      assertEquals(guard(undefined), 'default');
-      assertEquals(guard(null), 'default'); // null also uses default
+      assertEquals(guard(undefined), 'default'); // undefined uses default
+      assertEquals(guard(null), null); // null passes through nullable
     });
 
-    await t.step('combining notNullable with optional', () => {
+    await t.step('combining notNull with optional', () => {
       const guard = UnknownGuardian.create()
-        .notNullable()
-        .optional('default', { treatNullAsUndefined: false });
+        .notNull()
+        .optional('default');
 
       assertEquals(guard('test'), 'test');
       assertEquals(guard(undefined), 'default');
-      assertThrows(() => guard(null), GuardianError); // null rejected by notNullable
+      assertThrows(() => guard(null), GuardianError); // null rejected by notNull
     });
 
     await t.step('practical example: API field validation', () => {
-      // Simulate an API where null means "explicitly no value" and undefined means "use default"
+      // Simulate an API where null is allowed but undefined gets a default
       const apiFieldGuard = UnknownGuardian.create()
-        .optional('fallback_value', { treatNullAsUndefined: false })
-        .test((value: unknown) => typeof value === 'string', 'Must be string');
+        .nullable() // Allow null values to pass through
+        .optional('fallback_value') // Provide default for undefined
+        .test(
+          (value: unknown) => value === null || typeof value === 'string',
+          'Must be string or null',
+        );
 
       assertEquals(apiFieldGuard(undefined), 'fallback_value'); // undefined -> default
       assertEquals(apiFieldGuard('actual_value'), 'actual_value'); // string passes
-      // null passes through unchanged (not treated as undefined), but fails the string test
-      assertThrows(() => apiFieldGuard(null), GuardianError, 'Must be string');
-      assertThrows(() => apiFieldGuard(123), GuardianError); // number fails string test
+      assertEquals(apiFieldGuard(null), null); // null is explicitly allowed
     });
   });
 
