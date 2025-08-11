@@ -7,11 +7,6 @@
 
 ### High Priority
 
-- **Cross-Field Validations**: Validate relationships between multiple fields in an object
-  - Example: startDate < endDate, password === confirmPassword
-  - Implementation: Add `.refine()` method to ObjectGuardian
-  - Impact: Solves common real-world validation scenarios
-
 - **Conditional Validations**: Allow validation rules to depend on other field values
   - Example: shipping address required only for physical products
   - Implementation: Add `.when()` method with condition logic

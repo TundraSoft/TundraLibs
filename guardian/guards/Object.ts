@@ -692,4 +692,133 @@ export class ObjectGuardian<
       return mapper(obj as T);
     }) as unknown as GuardianProxy<ObjectGuardian<R>>;
   }
+
+  /**
+   * Extends the current ObjectGuardian with additional properties from another ObjectGuardian.
+   * The result type combines both schemas using TypeScript intersection types.
+   *
+   * @param extension - Another ObjectGuardian to extend this one with
+   * @returns A new ObjectGuardian with the combined type
+   *
+   * @example
+   * ```ts
+   * const baseGuard = Guardian.object().schema({
+   *   id: Guardian.number(),
+   *   name: Guardian.string()
+   * });
+   *
+   * const contactGuard = Guardian.object().schema({
+   *   email: Guardian.string(),
+   *   phone: Guardian.string().optional()
+   * });
+   *
+   * const extendedGuard = baseGuard.extend(contactGuard);
+   * // Result type: { id: number, name: string } & { email: string, phone?: string }
+   *
+   * const result = extendedGuard({
+   *   id: 123,
+   *   name: 'John',
+   *   email: 'john@example.com'
+   * });
+   * ```
+   */
+  public extend<E extends Record<string, unknown>>(
+    extension: GuardianProxy<ObjectGuardian<E>>,
+  ): GuardianProxy<ObjectGuardian<T & E>> {
+    return this.transform((obj) => {
+      // First, the object is validated by the base guardian (this)
+      // Now we need to validate it with the extension guardian and merge results
+      const extensionResult = extension(obj);
+
+      // Merge the base result with the extension result
+      return { ...obj, ...extensionResult } as T & E;
+    }) as unknown as GuardianProxy<ObjectGuardian<T & E>>;
+  }
+
+  /**
+   * Adds cross-field validation to an object by applying a custom refinement function.
+   * The refinement function receives the validated object and can perform complex validations
+   * that depend on relationships between multiple fields.
+   *
+   * @param refineFn - Function that receives the validated object and returns true if valid, or throws/returns false if invalid
+   * @param message - Custom error message when refinement fails
+   * @returns A new ObjectGuardian with the refinement applied
+   *
+   * @example
+   * ```ts
+   * // Date range validation
+   * const eventGuard = Guardian.object().schema({
+   *   startDate: Guardian.date(),
+   *   endDate: Guardian.date(),
+   *   title: Guardian.string()
+   * }).refine(
+   *   (event) => event.startDate < event.endDate,
+   *   'Start date must be before end date'
+   * );
+   *
+   * // Password confirmation
+   * const signupGuard = Guardian.object().schema({
+   *   email: Guardian.string().email(),
+   *   password: Guardian.string().minLength(8),
+   *   confirmPassword: Guardian.string()
+   * }).refine(
+   *   (data) => data.password === data.confirmPassword,
+   *   'Password and confirm password must match'
+   * );
+   *
+   * // Complex business rule
+   * const orderGuard = Guardian.object().schema({
+   *   items: Guardian.array().of(Guardian.object()),
+   *   shippingAddress: Guardian.string().optional(),
+   *   orderType: Guardian.string()
+   * }).refine(
+   *   (order) => {
+   *     if (order.orderType === 'physical') {
+   *       return order.shippingAddress !== undefined;
+   *     }
+   *     return true;
+   *   },
+   *   'Shipping address is required for physical orders'
+   * );
+   * ```
+   */
+  public refine(
+    refineFn: (value: T) => boolean,
+    message?: string,
+  ): GuardianProxy<ObjectGuardian<T>> {
+    return this.transform((obj) => {
+      // The object has already been validated by the base guardian
+      const typedObj = obj as T;
+
+      try {
+        const isValid = refineFn(typedObj);
+        if (!isValid) {
+          throw new GuardianError(
+            {
+              got: obj,
+              expected: 'object passing refinement validation',
+              comparison: 'refine',
+            },
+            message || 'Object failed refinement validation',
+          );
+        }
+      } catch (error) {
+        if (error instanceof GuardianError) {
+          throw error;
+        }
+        // If the refinement function throws, wrap it in a GuardianError
+        throw new GuardianError(
+          {
+            got: obj,
+            expected: 'object passing refinement validation',
+            comparison: 'refine',
+          },
+          message ||
+            `Refinement validation failed: ${(error as Error).message}`,
+        );
+      }
+
+      return typedObj;
+    }) as unknown as GuardianProxy<ObjectGuardian<T>>;
+  }
 }
