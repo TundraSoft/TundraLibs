@@ -149,5 +149,28 @@ export class UnknownGuardian extends BaseGuardian<FunctionType<unknown>> {
       error || `Expected instance of ${constructor.name}`,
     );
   }
+
+  /**
+   * Converts the UnknownGuardian to an OpenAPI schema object
+   * Note: Unknown types map to no specific type in OpenAPI (allows any value)
+   * @returns An OpenAPI schema representation of this UnknownGuardian
+   */
+  public openapi(): import('../types/OpenAPISchema.ts').ObjectOpenAPISchema {
+    const schema: import('../types/OpenAPISchema.ts').ObjectOpenAPISchema = {
+      type: 'object',
+      description: 'Any value (unknown type)',
+      additionalProperties: true,
+    };
+
+    // Add metadata if available
+    if (this.metadata.title) schema.title = this.metadata.title;
+    if (this.metadata.description) {
+      schema.description = this.metadata.description;
+    }
+    if (this.metadata.deprecated) schema.deprecated = this.metadata.deprecated;
+    if (this.metadata.examples) schema.examples = this.metadata.examples;
+
+    return schema;
+  }
   //#endregion Validations
 }

@@ -540,5 +540,40 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
       suffix,
     );
   }
+
+  /**
+   * Converts the StringGuardian to an OpenAPI schema object
+   * @returns An OpenAPI schema representation of this StringGuardian
+   */
+  public openapi(): import('../types/OpenAPISchema.ts').StringOpenAPISchema {
+    const schema: import('../types/OpenAPISchema.ts').StringOpenAPISchema = {
+      type: 'string',
+    };
+
+    // Add metadata if available
+    if (this.metadata.title) schema.title = this.metadata.title;
+    if (this.metadata.description) {
+      schema.description = this.metadata.description;
+    }
+    if (this.metadata.deprecated) schema.deprecated = this.metadata.deprecated;
+    if (this.metadata.examples) schema.examples = this.metadata.examples;
+
+    // Try to infer constraints from the guardian function
+    // This is a basic implementation - could be enhanced to introspect the function
+    const funcStr = this.guardian.toString();
+
+    // Check for common patterns
+    if (funcStr.includes('email')) {
+      schema.format = 'email';
+    } else if (funcStr.includes('uuid')) {
+      schema.format = 'uuid';
+    } else if (funcStr.includes('url') || funcStr.includes('uri')) {
+      schema.format = 'uri';
+    } else if (funcStr.includes('date')) {
+      schema.format = 'date-time';
+    }
+
+    return schema;
+  }
   //#endregion Validations
 }

@@ -242,4 +242,28 @@ export class ArrayGuardian<T = unknown>
       error || `Expected array to include ${value}`,
     );
   }
+
+  /**
+   * Converts the ArrayGuardian to an OpenAPI schema object
+   * @returns An OpenAPI schema representation of this ArrayGuardian
+   */
+  public openapi(): import('../types/OpenAPISchema.ts').ArrayOpenAPISchema {
+    const schema: import('../types/OpenAPISchema.ts').ArrayOpenAPISchema = {
+      type: 'array',
+      items: { type: 'string' }, // Default to string, should be overridden by element guardian
+    };
+
+    // Add metadata if available
+    if (this.metadata.title) schema.title = this.metadata.title;
+    if (this.metadata.description) {
+      schema.description = this.metadata.description;
+    }
+    if (this.metadata.deprecated) schema.deprecated = this.metadata.deprecated;
+    if (this.metadata.examples) schema.examples = this.metadata.examples;
+
+    // TODO: Extract element schema from guardian function if possible
+    // This is a basic implementation that could be enhanced with better introspection
+
+    return schema;
+  }
 }

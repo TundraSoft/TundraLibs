@@ -472,5 +472,26 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
       bits,
     );
   }
+
+  /**
+   * Converts the BigIntGuardian to an OpenAPI schema object
+   * @returns An OpenAPI schema representation of this BigIntGuardian
+   */
+  public openapi(): import('../types/OpenAPISchema.ts').NumberOpenAPISchema {
+    const schema: import('../types/OpenAPISchema.ts').NumberOpenAPISchema = {
+      type: 'integer',
+      format: 'int64', // BigInt is typically represented as int64 in OpenAPI
+    };
+
+    // Add metadata if available
+    if (this.metadata.title) schema.title = this.metadata.title;
+    if (this.metadata.description) {
+      schema.description = this.metadata.description;
+    }
+    if (this.metadata.deprecated) schema.deprecated = this.metadata.deprecated;
+    if (this.metadata.examples) schema.examples = this.metadata.examples;
+
+    return schema;
+  }
   //#endregion Validations
 }

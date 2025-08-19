@@ -525,5 +525,33 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
       error || 'Expected value to be a timestamp, got ${got}',
     );
   }
+
+  /**
+   * Converts the NumberGuardian to an OpenAPI schema object
+   * @returns An OpenAPI schema representation of this NumberGuardian
+   */
+  public openapi(): import('../types/OpenAPISchema.ts').NumberOpenAPISchema {
+    const schema: import('../types/OpenAPISchema.ts').NumberOpenAPISchema = {
+      type: 'number',
+    };
+
+    // Add metadata if available
+    if (this.metadata.title) schema.title = this.metadata.title;
+    if (this.metadata.description) {
+      schema.description = this.metadata.description;
+    }
+    if (this.metadata.deprecated) schema.deprecated = this.metadata.deprecated;
+    if (this.metadata.examples) schema.examples = this.metadata.examples;
+
+    // Try to infer constraints from the guardian function
+    const funcStr = this.guardian.toString();
+
+    // Check for integer type
+    if (funcStr.includes('integer') || funcStr.includes('Integer')) {
+      schema.type = 'integer';
+    }
+
+    return schema;
+  }
   //#endregion Validations
 }

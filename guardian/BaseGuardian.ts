@@ -5,6 +5,7 @@ import type {
   MergeParameters,
   ResolvedValue,
 } from './types/mod.ts';
+import type { OpenAPISchema } from './types/OpenAPISchema.ts';
 import {
   equals,
   isIn,
@@ -38,11 +39,33 @@ export abstract class BaseGuardian<F extends FunctionType> {
   public readonly guardian: F;
 
   /**
+   * Metadata for documentation and OpenAPI schema generation
+   */
+  public readonly metadata: {
+    description?: string;
+    title?: string;
+    examples?: unknown[];
+    deprecated?: boolean;
+  } = {};
+
+  /**
    * Creates a new BaseGuardian instance
    * @param guardian - The function to be wrapped
+   * @param metadata - Optional metadata for documentation
    */
-  public constructor(guardian: F) {
+  public constructor(
+    guardian: F,
+    metadata?: {
+      description?: string;
+      title?: string;
+      examples?: unknown[];
+      deprecated?: boolean;
+    },
+  ) {
     this.guardian = guardian;
+    if (metadata) {
+      this.metadata = { ...metadata };
+    }
   }
 
   /**
@@ -234,6 +257,43 @@ export abstract class BaseGuardian<F extends FunctionType> {
 
     return new Class(nullableFunction).proxy();
   }
+
+  /**
+   * Adds descriptive metadata to the guardian for documentation purposes
+   * @param description - Human readable description of what this guardian validates
+   * @param title - Optional short title for the schema
+   * @param examples - Optional array of example valid values
+   * @param deprecated - Optional flag to mark this schema as deprecated
+   * @returns A new guardian instance with the metadata attached
+   */
+  public describe(
+    description: string,
+    options?: {
+      title?: string;
+      examples?: unknown[];
+      deprecated?: boolean;
+    },
+  ): GuardianProxy<this> {
+    const newMetadata = {
+      ...this.metadata,
+      description,
+      ...options,
+    };
+
+    return new (this.constructor as new (
+      guardian: F,
+      metadata: typeof newMetadata,
+    ) => this)(
+      this.guardian,
+      newMetadata,
+    ).proxy();
+  }
+
+  /**
+   * Converts the guardian to an OpenAPI schema object
+   * @returns An OpenAPI schema representation of this guardian
+   */
+  public abstract openapi(): OpenAPISchema;
 
   public validate(
     value: unknown,

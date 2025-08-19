@@ -62,7 +62,8 @@ type RemapOptionals<T> = T extends object ?
     & {
       [
         K in keyof T as undefined extends T[K] ? K
-          : null extends T[K] ? K : never
+          : null extends T[K] ? K
+          : never
       ]?: T[K];
     }
   : T;

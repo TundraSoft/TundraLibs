@@ -173,5 +173,27 @@ export class FunctionGuardian<
       error || 'Expected function to be synchronous',
     );
   }
+
+  /**
+   * Converts the FunctionGuardian to an OpenAPI schema object
+   * Note: OpenAPI doesn't have a native function type, so this returns a generic object schema
+   * @returns An OpenAPI schema representation of this FunctionGuardian
+   */
+  public openapi(): import('../types/OpenAPISchema.ts').ObjectOpenAPISchema {
+    const schema: import('../types/OpenAPISchema.ts').ObjectOpenAPISchema = {
+      type: 'object',
+      description: 'Function type (not natively supported in OpenAPI)',
+    };
+
+    // Add metadata if available
+    if (this.metadata.title) schema.title = this.metadata.title;
+    if (this.metadata.description) {
+      schema.description = this.metadata.description;
+    }
+    if (this.metadata.deprecated) schema.deprecated = this.metadata.deprecated;
+    if (this.metadata.examples) schema.examples = this.metadata.examples;
+
+    return schema;
+  }
   //#endregion Validations
 }

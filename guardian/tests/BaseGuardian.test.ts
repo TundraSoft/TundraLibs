@@ -15,6 +15,13 @@ class TestGuardian extends BaseGuardian<(value: unknown) => number> {
       return value;
     }).proxy();
   }
+
+  openapi() {
+    return {
+      type: 'number' as const,
+      description: 'Test number guardian',
+    };
+  }
 }
 
 class ThrowingGuardian extends BaseGuardian<(value: unknown) => number> {
@@ -25,6 +32,13 @@ class ThrowingGuardian extends BaseGuardian<(value: unknown) => number> {
       }
       return value;
     }).proxy();
+  }
+
+  openapi() {
+    return {
+      type: 'number' as const,
+      description: 'Test throwing guardian',
+    };
   }
 }
 
@@ -41,6 +55,13 @@ class AsyncGuardian extends BaseGuardian<(v: unknown) => Promise<number>> {
         return value;
       },
     ).proxy();
+  }
+
+  openapi() {
+    return {
+      type: 'number' as const,
+      description: 'Test async guardian',
+    };
   }
 }
 
@@ -77,6 +98,13 @@ Deno.test('guardian.baseGuardian', async (t) => {
               return value;
             },
           ).proxy();
+        }
+
+        openapi() {
+          return {
+            type: 'number' as const,
+            description: 'Test async guardian',
+          };
         }
       }
 
@@ -152,6 +180,14 @@ Deno.test('guardian.baseGuardian', async (t) => {
         return new PermissiveGuardian((value: unknown): unknown => {
           return value; // Pass through any value
         }).proxy();
+      }
+
+      openapi() {
+        return {
+          type: 'object' as const,
+          description: 'Test permissive guardian',
+          additionalProperties: true,
+        };
       }
     }
 

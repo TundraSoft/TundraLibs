@@ -19,3 +19,14 @@ export type {
   UnknownGuardianSchema,
 } from './GuardianSchema.ts';
 export { isSchemaType } from './GuardianSchema.ts';
+export type {
+  ArrayOpenAPISchema,
+  BaseOpenAPISchema,
+  BooleanOpenAPISchema,
+  NullableOpenAPISchema,
+  NumberOpenAPISchema,
+  ObjectOpenAPISchema,
+  OneOfOpenAPISchema,
+  OpenAPISchema,
+  StringOpenAPISchema,
+} from './OpenAPISchema.ts';

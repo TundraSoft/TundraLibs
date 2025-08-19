@@ -782,6 +782,30 @@ export class ObjectGuardian<
    * );
    * ```
    */
+  /**
+   * Adds a custom refinement to the object validation.
+   * Refinements allow for complex cross-field validations and business logic.
+   *
+   * @param refineFn - Function that takes the validated object and returns true if valid
+   * @param message - Custom error message when refinement fails
+   * @returns A new Guardian instance with the refinement applied
+   *
+   * @example
+   * ```ts
+   * const orderGuard = Guardian.object().schema({
+   *   type: Guardian.string(),
+   *   shippingAddress: Guardian.string().optional()
+   * }).refine(
+   *   (order) => {
+   *     if (order.type === 'physical' && !order.shippingAddress) {
+   *       return false;
+   *     }
+   *     return true;
+   *   },
+   *   'Shipping address is required for physical orders'
+   * );
+   * ```
+   */
   public refine(
     refineFn: (value: T) => boolean,
     message?: string,
@@ -820,5 +844,29 @@ export class ObjectGuardian<
 
       return typedObj;
     }) as unknown as GuardianProxy<ObjectGuardian<T>>;
+  }
+
+  /**
+   * Converts the ObjectGuardian to an OpenAPI schema object
+   * @returns An OpenAPI schema representation of this ObjectGuardian
+   */
+  public openapi(): import('../types/OpenAPISchema.ts').ObjectOpenAPISchema {
+    const schema: import('../types/OpenAPISchema.ts').ObjectOpenAPISchema = {
+      type: 'object',
+    };
+
+    // Add metadata if available
+    if (this.metadata.title) schema.title = this.metadata.title;
+    if (this.metadata.description) {
+      schema.description = this.metadata.description;
+    }
+    if (this.metadata.deprecated) schema.deprecated = this.metadata.deprecated;
+    if (this.metadata.examples) schema.examples = this.metadata.examples;
+
+    // TODO: Extract object schema from guardian function if possible
+    // This is a basic implementation that could be enhanced with better introspection
+    // to extract properties and required fields from the schema method calls
+
+    return schema;
   }
 }

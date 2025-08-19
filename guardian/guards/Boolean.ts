@@ -98,4 +98,24 @@ export class BooleanGuardian extends BaseGuardian<FunctionType<boolean>> {
       error || 'Expected value to be FALSE, got ${got}',
     );
   }
+
+  /**
+   * Converts the BooleanGuardian to an OpenAPI schema object
+   * @returns An OpenAPI schema representation of this BooleanGuardian
+   */
+  public openapi(): import('../types/OpenAPISchema.ts').BooleanOpenAPISchema {
+    const schema: import('../types/OpenAPISchema.ts').BooleanOpenAPISchema = {
+      type: 'boolean',
+    };
+
+    // Add metadata if available
+    if (this.metadata.title) schema.title = this.metadata.title;
+    if (this.metadata.description) {
+      schema.description = this.metadata.description;
+    }
+    if (this.metadata.deprecated) schema.deprecated = this.metadata.deprecated;
+    if (this.metadata.examples) schema.examples = this.metadata.examples;
+
+    return schema;
+  }
 }

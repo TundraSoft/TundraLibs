@@ -1,5 +1,4 @@
 import { Guardian } from '../Guardian.ts';
-import { GuardianType } from '@tundralibs/guardian';
 import type { GuardianSchema } from '../types/mod.ts';
 
 // Example usage of Guardian JSON functionality

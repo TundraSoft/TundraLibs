@@ -47,6 +47,19 @@ export type {
   ResolvedValue,
 } from './types/mod.ts';
 
+// OpenAPI types
+export type {
+  ArrayOpenAPISchema,
+  BaseOpenAPISchema,
+  BooleanOpenAPISchema,
+  NullableOpenAPISchema,
+  NumberOpenAPISchema,
+  ObjectOpenAPISchema,
+  OneOfOpenAPISchema,
+  OpenAPISchema,
+  StringOpenAPISchema,
+} from './types/mod.ts';
+
 // Helper functions
 export {
   equals,
