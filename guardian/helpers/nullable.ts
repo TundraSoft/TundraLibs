@@ -2,8 +2,9 @@ import type { FunctionType, MergeParameters } from '../types/mod.ts';
 import { GuardianError } from '../GuardianError.ts';
 
 /**
- * Wraps a guardian function to handle null first arguments.
+ * Wraps a guardian function to handle null and undefined (missing key) arguments.
  * When the first argument is null, it returns null without calling the guardian.
+ * When the first argument is undefined (missing key), it returns null without calling the guardian.
  * For all other values, it calls the original guardian function.
  *
  * @param guardian The function to wrap
@@ -14,14 +15,19 @@ export const nullable = <F extends FunctionType>(
   guardian: F,
 ): FunctionType<
   ReturnType<F> | null | Promise<ReturnType<F> | null>,
-  MergeParameters<Parameters<F> | [null?]>
+  MergeParameters<Parameters<F> | [null?] | [undefined?]>
 > => {
   return (
-    ...args: MergeParameters<Parameters<F> | [null?]>
+    ...args: MergeParameters<Parameters<F> | [null?] | [undefined?]>
   ): ReturnType<F> | null | Promise<ReturnType<F> | null> => {
     try {
       // Handle null - return null without calling guardian
       if (args[0] === null) {
+        return null;
+      }
+
+      // Handle undefined (missing key) - return null as default, same as optional behavior
+      if (args[0] === undefined) {
         return null;
       }
 

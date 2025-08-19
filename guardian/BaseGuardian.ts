@@ -11,7 +11,6 @@ import {
   isNotIn,
   isPromiseLike,
   notEquals,
-  nullable,
   optional,
   test,
 } from './helpers/mod.ts';
@@ -176,6 +175,8 @@ export abstract class BaseGuardian<F extends FunctionType> {
   /**
    * Makes the guardian function optional, providing a default value if the result is undefined
    *
+   * Note: This should be the final operation in your validation chain.
+   *
    * @template R - The type of the default value, defaults to undefined
    * @param defaultValue - The default value or a function that returns the default value
    * @returns A new Guardian instance with the optional behavior applied
@@ -187,34 +188,51 @@ export abstract class BaseGuardian<F extends FunctionType> {
   ): GuardianProxy<
     this,
     FunctionType<
-      ReturnType<F> | R,
+      MaybeAsync<ReturnType<F>, ReturnType<F> | R>,
       MergeParameters<Parameters<F> | [undefined?]>
     >
   > {
     // deno-lint-ignore no-explicit-any
     const Class = (this as any).constructor;
     const { guardian } = this;
-    return new Class(optional<F, R>(guardian, defaultValue))
-      .proxy();
+    return new Class(optional<F, R>(guardian, defaultValue)).proxy();
   }
 
   /**
-   * Allows null values to be set for the type.
+   * Allows null values to be set for the type and provides null as default for missing keys.
    *
-   * @returns A new Guardian instance with the null behavior applied
+   * Note: This should be the final operation in your validation chain.
+   *
+   * @returns A new Guardian instance with the nullable behavior applied
    */
   public nullable(): GuardianProxy<
     this,
     FunctionType<
       MaybeAsync<ReturnType<F>, ReturnType<F> | null>,
-      MergeParameters<Parameters<F> | [null?]>
+      MergeParameters<Parameters<F> | [null?] | [undefined?]>
     >
   > {
     // deno-lint-ignore no-explicit-any
     const Class = (this as any).constructor;
     const { guardian } = this;
 
-    return new Class(nullable(guardian)).proxy();
+    // Create a custom nullable function that handles both null and undefined
+    const nullableFunction = (value: unknown): ReturnType<F> | null => {
+      // Handle null - return null without calling guardian
+      if (value === null) {
+        return null;
+      }
+
+      // Handle undefined (missing key) - return null as default
+      if (value === undefined) {
+        return null;
+      }
+
+      // For all other values, call the original guardian
+      return guardian(value) as ReturnType<F>;
+    };
+
+    return new Class(nullableFunction).proxy();
   }
 
   public validate(

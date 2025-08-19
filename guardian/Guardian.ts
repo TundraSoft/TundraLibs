@@ -10,9 +10,11 @@ import {
   StringGuardian,
   UnknownGuardian,
 } from './guards/mod.ts';
-import type { GuardianProxy } from './types/mod.ts';
+import type { GuardianProxy, GuardianSchema } from './types/mod.ts';
 import type { GuardianType } from './types/GuardianType.ts';
 import { GuardianError } from './GuardianError.ts';
+import { parse } from './parse.ts';
+import { serialize } from './serialize.ts';
 
 /**
  * Main entry point to access all guardian types.
@@ -244,5 +246,54 @@ export class Guardian {
    */
   static type<G>(_guardian: G): GuardianType<G> {
     return undefined as unknown as GuardianType<G>;
+  }
+
+  /**
+   * Creates a Guardian from a JSON schema definition
+   *
+   * @param schema - The JSON schema to convert to a Guardian
+   * @returns A Guardian function that validates according to the schema
+   *
+   * @example
+   * ```ts
+   * const schema = {
+   *   type: 'object',
+   *   schema: {
+   *     name: { type: 'string', minLength: 1 },
+   *     age: { type: 'number', min: 0, max: 120 },
+   *     email: { type: 'string', email: true, optional: true }
+   *   }
+   * };
+   *
+   * const userGuard = Guardian.fromJSON(schema);
+   * const user = userGuard({
+   *   name: 'John Doe',
+   *   age: 30,
+   *   email: 'john@example.com'
+   * }); // Returns validated user object
+   * ```
+   */
+  static fromJSON(schema: GuardianSchema): (value: unknown) => any {
+    return parse(schema);
+  }
+
+  /**
+   * Converts a Guardian instance to a JSON schema representation
+   *
+   * Note: This is a basic implementation that may not capture all validation rules.
+   * For full serialization support, Guardians need to store their validation metadata.
+   *
+   * @param guardian - The Guardian function to convert to JSON
+   * @returns A JSON schema representation of the Guardian
+   *
+   * @example
+   * ```ts
+   * const stringGuard = Guardian.string().minLength(3).maxLength(10);
+   * const schema = Guardian.toJSON(stringGuard);
+   * // Returns: { type: 'string', minLength: 3, maxLength: 10 }
+   * ```
+   */
+  static serialize(guardian: any): GuardianSchema {
+    return serialize(guardian);
   }
 }

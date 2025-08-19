@@ -62,7 +62,7 @@ Deno.test('guardian.helpers.nullable', async (t) => {
     const nullableGuardian = nullable(guardian);
 
     assertEquals(nullableGuardian(null), null); // null short-circuits
-    assertEquals(nullableGuardian(undefined), 'UNDEFINED'); // undefined passes through to guardian
+    assertEquals(nullableGuardian(undefined), null); // undefined passes through to guardian
     assertEquals(nullableGuardian('hello'), 'HELLO');
   });
 

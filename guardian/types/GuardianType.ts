@@ -21,10 +21,11 @@ export type GuardianType<G> =
     : G extends BaseGuardian<infer F>
       ? F extends FunctionType<infer R, any[]> ? ProcessGuardianReturnType<R>
       : never
-    // G is a GuardianProxy
-    : G extends GuardianProxy<infer B>
-      ? B extends BaseGuardian<infer F>
-        ? F extends FunctionType<infer R, any[]> ? ProcessGuardianReturnType<R>
+    // G is a GuardianProxy - this is the key case for chained guardians
+    : G extends GuardianProxy<infer B, infer F>
+      ? F extends FunctionType<infer R, any[]> ? ProcessGuardianReturnType<R>
+      : B extends BaseGuardian<infer BF>
+        ? BF extends FunctionType<infer R, any[]> ? ProcessGuardianReturnType<R>
         : never
       : never
     // G has a guardian property
@@ -39,22 +40,30 @@ export type GuardianType<G> =
 /**
  * Processes guardian return types to handle nullable, optional, and async variations
  */
-type ProcessGuardianReturnType<T> =
-  (T extends Promise<infer U> ? ProcessGuardianReturnType<U>
-    : T extends object ? RemapOptionals<T>
-    : T) extends infer O ? { [K in keyof O]: O[K] }
-    : never;
+type ProcessGuardianReturnType<T> = T extends Promise<infer U>
+  ? ProcessGuardianReturnType<U>
+  : T extends object ? T extends Record<string, unknown> ? RemapOptionals<T>
+    : T
+  : T;
 
 /**
  * Simplified helper type to handle optional properties at the top level without recursion
+ * Properties are optional if they can be undefined OR null (since nullable properties
+ * auto-assign null for missing keys, just like optional properties auto-assign undefined)
  */
 type RemapOptionals<T> = T extends object ?
-    & { [K in keyof T as undefined extends T[K] ? never : K]: T[K] }
     & {
-      [K in keyof T as undefined extends T[K] ? K : never]?: Exclude<
-        T[K],
-        undefined
-      >;
+      [
+        K in keyof T as undefined extends T[K] ? never
+          : null extends T[K] ? never
+          : K
+      ]: T[K];
+    }
+    & {
+      [
+        K in keyof T as undefined extends T[K] ? K
+          : null extends T[K] ? K : never
+      ]?: T[K];
     }
   : T;
 

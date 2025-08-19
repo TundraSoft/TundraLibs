@@ -479,7 +479,7 @@ Deno.test('guardian.unknown', async (t) => {
       assertEquals(guard('test'), 'test');
       assertEquals(guard(0), 0);
       assertEquals(guard(false), false);
-      assertEquals(guard(undefined), undefined);
+      assertEquals(guard(undefined), null); // undefined becomes null
       assertEquals(guard(null), null); // null passes through
     });
 

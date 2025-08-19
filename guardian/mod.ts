@@ -18,6 +18,24 @@ export {
   StringGuardian,
 } from './guards/mod.ts';
 
+// JSON Schema support
+export { parse } from './parse.ts';
+export { serialize } from './serialize.ts';
+export type {
+  ArrayGuardianSchema,
+  BaseGuardianSchema,
+  BigIntGuardianSchema,
+  BooleanGuardianSchema,
+  DateGuardianSchema,
+  FunctionGuardianSchema,
+  GuardianSchema,
+  NumberGuardianSchema,
+  ObjectGuardianSchema,
+  OneOfGuardianSchema,
+  StringGuardianSchema,
+  UnknownGuardianSchema,
+} from './types/mod.ts';
+
 // Types
 export type {
   FunctionParameters,
