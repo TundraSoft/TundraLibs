@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/guardian",
-  "version": "1.0.0-dev4.5",
+  "version": "1.0.0-dev4.7",
   "description": "Validate all things! Guardian is a validation library",
   "exports": {
     ".": "./mod.ts",
@@ -10,6 +10,7 @@
     "./serialize": "./serialize.ts"
   },
   "imports": {
-    "$datetime": "jsr:@std/datetime@^0.225.3"
+    "$datetime": "jsr:@std/datetime@^0.225.3",
+    "$pg": "npm:pg@^8.16.3"
   }
 }

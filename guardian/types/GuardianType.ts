@@ -47,25 +47,26 @@ type ProcessGuardianReturnType<T> = T extends Promise<infer U>
   : T;
 
 /**
- * Simplified helper type to handle optional properties at the top level without recursion
- * Properties are optional if they can be undefined OR null (since nullable properties
- * auto-assign null for missing keys, just like optional properties auto-assign undefined)
+ * Helper type to handle optional properties correctly
+ * - Properties that can be undefined (from .optional()) become optional in the interface
+ * - Properties that can only be null (from .nullable()) stay required but keep the null type
+ * - Properties that can be both undefined and null become optional with null in the type
  */
-type RemapOptionals<T> = T extends object ?
+type RemapOptionals<T> = T extends object ? (
     & {
+      // Required properties: cannot be undefined (but may be null)
       [
-        K in keyof T as undefined extends T[K] ? never
-          : null extends T[K] ? never
-          : K
+        K in keyof T as undefined extends T[K] ? never : K
       ]: T[K];
     }
     & {
+      // Optional properties: can be undefined
       [
-        K in keyof T as undefined extends T[K] ? K
-          : null extends T[K] ? K
-          : never
+        K in keyof T as undefined extends T[K] ? K : never
       ]?: T[K];
     }
+  ) extends infer O ? { [K in keyof O]: O[K] }
+  : never
   : T;
 
 /**

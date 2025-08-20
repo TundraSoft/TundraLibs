@@ -525,11 +525,11 @@ Deno.test('guardian.unknown', async (t) => {
       // Simulate an API where null is allowed but undefined gets a default
       const apiFieldGuard = UnknownGuardian.create()
         .nullable() // Allow null values to pass through
-        .optional('fallback_value') // Provide default for undefined
         .test(
           (value: unknown) => value === null || typeof value === 'string',
           'Must be string or null',
-        );
+        )
+        .optional('fallback_value'); // Provide default for undefined - must be last
 
       assertEquals(apiFieldGuard(undefined), 'fallback_value'); // undefined -> default
       assertEquals(apiFieldGuard('actual_value'), 'actual_value'); // string passes
