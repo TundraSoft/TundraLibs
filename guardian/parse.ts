@@ -204,19 +204,24 @@ function buildArrayGuardian(schema: ArrayGuardianSchema): any {
 }
 
 function buildObjectGuardian(schema: ObjectGuardianSchema): any {
-  let guardian = Guardian.object(schema.error);
   if (schema.schema) {
     const objectSchema: Record<string, any> = {};
     for (const [key, fieldSchema] of Object.entries(schema.schema)) {
       objectSchema[key] = buildFromSchema(fieldSchema);
     }
-    guardian = guardian.schema(objectSchema, {
+    const guardian = Guardian.schema(objectSchema, {
       strict: schema.strict,
       additionalProperties: schema.additionalProperties,
+      message: schema.error,
     });
+    // Note: notEmpty validation is not available on SchemaGuardian
+    // For schema-based objects, use schema validation to ensure required fields
+    return guardian;
+  } else {
+    let guardian = Guardian.object(schema.error);
+    if (schema.notEmpty) guardian = guardian.notEmpty();
+    return guardian;
   }
-  if (schema.notEmpty) guardian = guardian.notEmpty();
-  return guardian;
 }
 
 function buildFunctionGuardian(schema: FunctionGuardianSchema): any {

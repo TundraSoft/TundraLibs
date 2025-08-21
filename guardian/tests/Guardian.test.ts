@@ -67,7 +67,7 @@ Deno.test('guardian.core', async (t) => {
     });
 
     await t.step('works with complex schemas', () => {
-      const userGuard = Guardian.object().schema({
+      const userGuard = Guardian.schema({
         id: Guardian.oneOf([Guardian.string(), Guardian.number()]),
         name: Guardian.string(),
       });
@@ -114,7 +114,7 @@ Deno.test('guardian.core', async (t) => {
   });
 
   await t.step('supports complex validation chains', () => {
-    const userGuard = Guardian.object().schema({
+    const userGuard = Guardian.schema({
       name: Guardian.string().minLength(3),
       age: Guardian.number().min(18),
       email: Guardian.string().optional(),
@@ -147,7 +147,7 @@ Deno.test('guardian.core', async (t) => {
   });
 
   await t.step('supports type inference with GuardianType', () => {
-    const userGuard = Guardian.object().schema({
+    const userGuard = Guardian.schema({
       name: Guardian.string(),
       age: Guardian.number(),
       active: Guardian.boolean(),
@@ -163,15 +163,15 @@ Deno.test('guardian.core', async (t) => {
   await t.step('integrates all validations correctly', async (t) => {
     await t.step('handles complex nested validations', () => {
       // Simplified complex guard to isolate the issue
-      const complexGuard = Guardian.object().schema({
-        user: Guardian.object().schema({
+      const complexGuard = Guardian.schema({
+        user: Guardian.schema({
           id: Guardian.string().pattern(/^\d+$/),
-          profile: Guardian.object().schema({
+          profile: Guardian.schema({
             name: Guardian.string().minLength(2),
             age: Guardian.number().min(18),
           }),
         }),
-        metadata: Guardian.object().schema({
+        metadata: Guardian.schema({
           version: Guardian.number(),
         }),
       });
@@ -244,7 +244,7 @@ Deno.test('guardian.core', async (t) => {
       );
 
       // Then test it in a schema
-      const api = Guardian.object().schema({
+      const api = Guardian.schema({
         endpoint: urlGuardian,
         method: Guardian.string().in(['GET', 'POST']),
       });
@@ -257,12 +257,12 @@ Deno.test('guardian.core', async (t) => {
   });
 
   await t.step('GuardianType utility works correctly', () => {
-    const userGuard = Guardian.object().schema({
+    const userGuard = Guardian.schema({
       id: Guardian.string(),
       age: Guardian.number(),
       isAdmin: Guardian.boolean(),
       tags: Guardian.array().of(Guardian.string()),
-      metadata: Guardian.object().schema({
+      metadata: Guardian.schema({
         created: Guardian.date(),
       }).optional(),
     });

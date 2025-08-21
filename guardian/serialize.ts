@@ -17,6 +17,14 @@ export function serialize(guardian: any): GuardianSchema {
     throw new Error('Guardian must be a function');
   }
   const constructorName = guardian.constructor?.name || guardian.name || '';
+
+  // Check for SchemaGuardian first (before ObjectGuardian)
+  if (
+    constructorName.includes('Schema') || constructorName === 'SchemaGuardian'
+  ) {
+    return schemaGuardianToJSON(guardian);
+  }
+
   if (constructorName.includes('String') || guardian._type === 'string') {
     return stringGuardianToJSON(guardian);
   }
@@ -198,6 +206,34 @@ function objectGuardianToJSON(guardian: any): ObjectGuardianSchema {
       }
     }
   }
+  return schema;
+}
+
+function schemaGuardianToJSON(guardian: any): ObjectGuardianSchema {
+  const schema: ObjectGuardianSchema = { type: 'object' };
+
+  // SchemaGuardian always has a schema property
+  if (guardian.schema) {
+    schema.schema = {} as Record<string, any>;
+    for (const [k, g] of Object.entries(guardian.schema)) {
+      (schema.schema as any)[k] = serialize(g);
+    }
+  }
+
+  // Get schema options
+  if (guardian.schemaOptions) {
+    const options = guardian.schemaOptions;
+    if (options.strict !== undefined) {
+      schema.strict = options.strict;
+    }
+    if (options.additionalProperties !== undefined) {
+      schema.additionalProperties = options.additionalProperties;
+    }
+    if (options.message) {
+      schema.error = options.message;
+    }
+  }
+
   return schema;
 }
 

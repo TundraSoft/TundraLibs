@@ -7,6 +7,8 @@ import {
   FunctionGuardian,
   NumberGuardian,
   ObjectGuardian,
+  type ObjectSchema,
+  SchemaGuardian,
   StringGuardian,
   UnknownGuardian,
 } from './guards/mod.ts';
@@ -14,7 +16,6 @@ import type { GuardianProxy, GuardianSchema } from './types/mod.ts';
 import type { GuardianType } from './types/GuardianType.ts';
 import { GuardianError } from './GuardianError.ts';
 import { parse } from './parse.ts';
-import { serialize } from './serialize.ts';
 
 /**
  * Main entry point to access all guardian types.
@@ -100,6 +101,39 @@ export class Guardian {
     error?: string,
   ): GuardianProxy<ObjectGuardian<T>> {
     return ObjectGuardian.create<T>(error);
+  }
+
+  /**
+   * Creates a schema guardian for validating objects with a specific structure
+   *
+   * @param schema - Object schema defining the structure and validation rules
+   * @param options - Schema validation options
+   * @returns A schema guardian instance
+   *
+   * @example
+   * ```ts
+   * const userSchema = Guardian.schema({
+   *   name: Guardian.string().minLength(2),
+   *   age: Guardian.number().min(0),
+   *   email: Guardian.string().email().optional()
+   * }, { additionalProperties: false });
+   *
+   * const user = userSchema({
+   *   name: 'John',
+   *   age: 30,
+   *   email: 'john@example.com'
+   * }); // Returns validated user object
+   * ```
+   */
+  static schema<T extends Record<string, unknown>>(
+    schema: ObjectSchema<T>,
+    options?: {
+      strict?: boolean;
+      additionalProperties?: boolean;
+      message?: string;
+    },
+  ): GuardianProxy<SchemaGuardian<T>> {
+    return SchemaGuardian.create(schema, options || {});
   }
 
   /**
@@ -275,25 +309,5 @@ export class Guardian {
    */
   static fromJSON(schema: GuardianSchema): (value: unknown) => any {
     return parse(schema);
-  }
-
-  /**
-   * Converts a Guardian instance to a JSON schema representation
-   *
-   * Note: This is a basic implementation that may not capture all validation rules.
-   * For full serialization support, Guardians need to store their validation metadata.
-   *
-   * @param guardian - The Guardian function to convert to JSON
-   * @returns A JSON schema representation of the Guardian
-   *
-   * @example
-   * ```ts
-   * const stringGuard = Guardian.string().minLength(3).maxLength(10);
-   * const schema = Guardian.toJSON(stringGuard);
-   * // Returns: { type: 'string', minLength: 3, maxLength: 10 }
-   * ```
-   */
-  static serialize(guardian: any): GuardianSchema {
-    return serialize(guardian);
   }
 }

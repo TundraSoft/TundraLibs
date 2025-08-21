@@ -20,7 +20,6 @@ export {
 
 // JSON Schema support
 export { parse } from './parse.ts';
-export { serialize } from './serialize.ts';
 export type {
   ArrayGuardianSchema,
   BaseGuardianSchema,
