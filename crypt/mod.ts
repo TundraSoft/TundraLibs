@@ -1,29 +1,79 @@
-export { digest, type DigestAlgorithms } from './digest.ts';
+export {
+  digest,
+  type DigestAlgorithms,
+  validateDigestAlgorithm,
+} from './digest/mod.ts';
+
 export {
   decrypt,
   decryptAES,
   encrypt,
   encryptAES,
   type EncryptionModes,
-} from './encrypt.ts';
+} from './encrypt/mod.ts';
+
+export {
+  type BIP39Options,
+  type BIP39Result,
+  type BIP39WordCount,
+  type ECKeyOptions,
+  type EllipticCurve,
+  generate12WordSeed,
+  generate24WordSeed,
+  generateAlphanumericSecret,
+  generateBase64Secret,
+  generateBIP39Mnemonic,
+  type GeneratedKeyPair,
+  generateECDHKeys,
+  generateECDSAKeys,
+  generateECKeyPair,
+  generateHexSecret,
+  generateKeyPair,
+  generatePassword,
+  generateRSAEncryptionKeys,
+  generateRSAKeyPair,
+  generateRSASigningKeys,
+  generateSeedPhrase,
+  generateToken,
+  type KeyAlgorithm,
+  type KeyFormat,
+  mnemonicToSeed,
+  randomFloat,
+  randomInt,
+  randomNumber,
+  type RandomNumberOptions,
+  type RSAHashAlgorithm,
+  type RSAKeyOptions,
+  type RSAKeySize,
+  type SecretEncoding,
+  secretGenerator,
+  type SecretGeneratorOptions,
+  validateBIP39Mnemonic,
+  validateSeedPhrase,
+} from './generators/mod.ts';
+
 export {
   issueJWT,
   type JWTAlgorithm,
   JWTError,
-  type JWTErrorCode,
   JWTErrorCodes,
   type JWTHeader,
   type JWTPayload,
-  type JWTVerifyOptions,
   verifyJWT,
-} from './JWT.ts';
-export { HOTP, TOTP, verifyHOTP, verifyTOTP } from './OTP.ts';
+} from './JWT/mod.ts';
+
+export {
+  // type DigestAlgorithms,
+  generateHOTP,
+  generateTOTP,
+  verifyHOTP,
+  verifyTOTP,
+} from './OTP/mod.ts';
+
 export {
   sign,
   signHMAC,
   type SigningModes,
   verify,
   verifyHMAC,
-} from './sign.ts';
-export { type SecretEncoding, secretGenerator } from './secretGenerator.ts';
-export { deriveKey, validateKey } from './utils.ts';
+} from './sign/mod.ts';

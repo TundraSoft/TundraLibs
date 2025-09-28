@@ -10,7 +10,7 @@ import {
   type JWTAlgorithm,
   type JWTPayload,
   verifyJWT,
-} from './JWT.ts';
+} from './mod.ts';
 
 // Test secret for benchmarking
 const BENCH_SECRET =

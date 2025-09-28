@@ -89,6 +89,30 @@ component_management:
       statuses:
         - type: project
           target: 75%
+    - component_id: pact
+      name: pact
+      paths:
+        - pact/**.ts
+        - '!pact/**.test.ts'
+      statuses:
+        - type: project
+          target: 75%
+    - component_id: norm
+      name: norm
+      paths:
+        - norm/**.ts
+        - '!norm/**.test.ts'
+      statuses:
+        - type: project
+          target: 75%
+    - component_id: openapi
+      name: openapi
+      paths:
+        - openapi/**.ts
+        - '!openapi/**.test.ts'
+      statuses:
+        - type: project
+          target: 75%
 flags:
   default:
     paths:
@@ -121,4 +145,16 @@ flags:
   restler:
     paths:
       - restler/
+    carryforward: true
+  pact:
+    paths:
+      - pact/
+    carryforward: true
+  norm:
+    paths:
+      - norm/
+    carryforward: true
+  openapi:
+    paths:
+      - openapi/
     carryforward: true

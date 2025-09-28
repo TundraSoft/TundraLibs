@@ -1573,6 +1573,7 @@ Deno.test('restler.core', async (t) => {
       let timeoutTriggered = false;
 
       const originalSetTimeout = globalThis.setTimeout;
+      //@ts-ignore  Temporarily override setTimeout to simulate immediate timeout
       globalThis.setTimeout = (
         callback: (...args: any[]) => void,
         _timeout?: number,

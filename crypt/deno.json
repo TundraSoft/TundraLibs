@@ -4,12 +4,12 @@
   "description": "Collection of cryptographic functions",
   "exports": {
     ".": "./mod.ts",
-    "./digest": "./digest.ts",
-    "./encrypt": "./encrypt.ts",
-    "./OTP": "./OTP.ts",
-    "./secretGenerator": "./secretGenerator.ts",
-    "./sign": "./sign.ts",
-    "./JWT": "./JWT.ts"
+    "./digest": "./digest/mod.ts",
+    "./encrypt": "./encrypt/mod.ts",
+    "./OTP": "./OTP/mod.ts",
+    "./generators": "./generators/mod.ts",
+    "./sign": "./sign/mod.ts",
+    "./JWT": "./JWT/mod.ts"
   },
   "imports": {
     "$encoding": "jsr:@std/encoding@1.0.8",

@@ -1,11 +1,5 @@
 import { encodeHex } from '$encoding';
-
-/**
- * Supported cryptographic hash algorithms for digest operations.
- *
- * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest} Web Crypto API digest algorithms
- */
-export type DigestAlgorithms = 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512';
+import type { DigestAlgorithms } from './types.ts';
 
 /**
  * Generates a cryptographic hash of the given data using the specified algorithm.

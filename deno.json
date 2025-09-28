@@ -99,6 +99,9 @@
     "./crypt",
     "./guardian",
     "./id",
+    "./norm",
+    "./openapi",
+    "./pact",
     "./restler",
     "./slogger",
     "./utils"
