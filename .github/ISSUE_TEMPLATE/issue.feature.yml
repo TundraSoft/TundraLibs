@@ -25,8 +25,11 @@ body:
       options:
         - '@tundralibs/cacher'
         - '@tundralibs/crypt'
+        - '@tundralibs/dam'
         - '@tundralibs/guardian'
         - '@tundralibs/id'
+        - '@tundralibs/norm'
+        - '@tundralibs/openapi'
         - '@tundralibs/restler'
         - '@tundralibs/slogger'
         - '@tundralibs/utils'

@@ -1,9 +1,4 @@
-name: 'Release Pipeline'
-
-permissions:
-  contents: write
-  id-token: write
-  pull-requests: read
+name: "Release Pipeline"
 
 on:
   pull_request:
@@ -12,41 +7,47 @@ on:
   workflow_dispatch:
     inputs:
       force_release:
-        description: 'Force release even if no changes detected'
+        description: "Force release even if no changes detected"
         required: false
         default: false
         type: boolean
       release_type:
-        description: 'Type of release (patch, minor, major)'
+        description: "Type of release"
         required: false
-        default: 'patch'
+        default: "patch"
         type: choice
         options:
           - patch
           - minor
           - major
 
+permissions:
+  contents: write
+  id-token: write
+  pull-requests: read
+
 jobs:
-  # First job: Check if release is needed
-  check-changes:
+  # Detect changes and determine if release is needed
+  detect-changes:
+    name: "Detect Changes"
     runs-on: ubuntu-latest
     if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     outputs:
-      has-workspace-changes: ${{ steps.changes.outputs.has-changes }}
+      has-changes: ${{ steps.changes.outputs.has-changes }}
       changed-workspaces: ${{ steps.changes.outputs.changed-workspaces }}
       pr-title: ${{ steps.pr-info.outputs.title }}
       pr-number: ${{ steps.pr-info.outputs.number }}
-      pr-body: ${{ steps.pr-info.outputs.body }}
       pr-author: ${{ steps.pr-info.outputs.author }}
       pr-url: ${{ steps.pr-info.outputs.url }}
+      release-type: ${{ steps.release-type.outputs.type }}
 
     steps:
-      - name: Clone repository
+      - name: "Checkout code"
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Get PR information
+      - name: "Get PR information"
         id: pr-info
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
@@ -54,310 +55,297 @@ jobs:
             echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
             echo "author=${{ github.event.pull_request.user.login }}" >> $GITHUB_OUTPUT
             echo "url=${{ github.event.pull_request.html_url }}" >> $GITHUB_OUTPUT
-            echo 'body<<EOF' >> $GITHUB_OUTPUT
-            echo '${{ github.event.pull_request.body }}' >> $GITHUB_OUTPUT
-            echo 'EOF' >> $GITHUB_OUTPUT
           else
             echo "title=Manual Release" >> $GITHUB_OUTPUT
             echo "number=manual" >> $GITHUB_OUTPUT
             echo "author=${{ github.actor }}" >> $GITHUB_OUTPUT
             echo "url=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_OUTPUT
-            echo "body=Manual release triggered via workflow dispatch" >> $GITHUB_OUTPUT
           fi
 
-      - name: Check for workspace changes
+      - name: "Determine release type"
+        id: release-type
+        run: |
+          PR_TITLE="${{ steps.pr-info.outputs.title }}"
+          MANUAL_TYPE="${{ github.event.inputs.release_type }}"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            RELEASE_TYPE="$MANUAL_TYPE"
+          elif [[ "$PR_TITLE" =~ ^BREAKING ]]; then
+            RELEASE_TYPE="major"
+          elif [[ "$PR_TITLE" =~ ^feat ]]; then
+            RELEASE_TYPE="minor"
+          else
+            RELEASE_TYPE="patch"
+          fi
+
+          echo "type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+          echo "🏷️  Release type: $RELEASE_TYPE"
+
+      - name: "Check for workspace changes"
         id: changes
         run: |
-          echo "Checking for changes in workspace files..."
-          
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.force_release }}" = "true" ]; then
+          echo "🔍 Checking for workspace changes..."
+
+          # Force release if requested
+          if [ "${{ github.event.inputs.force_release }}" = "true" ]; then
+            echo "🚀 Force release requested"
             echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "changed-workspaces=all" >> $GITHUB_OUTPUT
-            echo "Force release requested"
             exit 0
           fi
-          
-          # Get the merge commit or last commit
+
+          # Get changed files
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # Get changes from the PR
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           else
-            # Get changes from last commit
             BASE_SHA="HEAD~1"
             HEAD_SHA="HEAD"
           fi
-          
+
           echo "Comparing $BASE_SHA..$HEAD_SHA"
-          
-          # Check for changes in workspace directories, excluding workflow files
           CHANGED_FILES=$(git diff --name-only $BASE_SHA..$HEAD_SHA)
-          echo "Changed files:"
-          echo "$CHANGED_FILES"
-          
-          # Get workspace directories from deno.json
-          WORKSPACE_DIRS=$(jq -r '.workspace[]' deno.json | sed 's|^./||' | paste -sd '|' -)
-          
-          # Filter out non-workspace changes
-          WORKSPACE_CHANGES=$(echo "$CHANGED_FILES" | grep -E "^($WORKSPACE_DIRS)/" | grep -v '.github/' || true)
-          
+
+          # Get workspace directories
+          WORKSPACES=$(jq -r '.workspace[]' deno.json | sed 's|^./||')
+          WORKSPACE_PATTERN=$(echo "$WORKSPACES" | paste -sd '|' -)
+
+          # Filter for workspace changes
+          WORKSPACE_CHANGES=$(echo "$CHANGED_FILES" | grep -E "^($WORKSPACE_PATTERN)/" || true)
+
           if [ -z "$WORKSPACE_CHANGES" ]; then
-            echo "No workspace changes detected"
+            echo "ℹ️  No workspace changes detected"
             echo "has-changes=false" >> $GITHUB_OUTPUT
             echo "changed-workspaces=" >> $GITHUB_OUTPUT
           else
-            echo "Workspace changes detected:"
-            echo "$WORKSPACE_CHANGES"
-            echo "has-changes=true" >> $GITHUB_OUTPUT
+            echo "✅ Workspace changes detected"
             
             # Determine which workspaces changed
             CHANGED_WORKSPACES=""
-            WORKSPACES=$(jq -r '.workspace[]' deno.json | sed 's|^./||')
             for workspace in $WORKSPACES; do
               if echo "$WORKSPACE_CHANGES" | grep -q "^$workspace/"; then
                 CHANGED_WORKSPACES="$CHANGED_WORKSPACES $workspace"
               fi
             done
             
+            echo "has-changes=true" >> $GITHUB_OUTPUT
             echo "changed-workspaces=$(echo $CHANGED_WORKSPACES | xargs)" >> $GITHUB_OUTPUT
+            echo "📦 Changed workspaces: $CHANGED_WORKSPACES"
           fi
 
-  # Second job: Update changelog
+  # Update CHANGELOG.md
   update-changelog:
+    name: "Update Changelog"
     runs-on: ubuntu-latest
-    needs: check-changes
-    if: needs.check-changes.outputs.has-workspace-changes == 'true'
+    needs: detect-changes
+    if: needs.detect-changes.outputs.has-changes == 'true'
     outputs:
-      changelog-updated: ${{ steps.changelog.outputs.updated }}
+      updated: ${{ steps.changelog.outputs.updated }}
 
     steps:
-      - name: Clone repository
+      - name: "Checkout code"
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Set up Git
+      - name: "Setup Git"
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-      - name: Update CHANGELOG.md
+      - name: "Update CHANGELOG.md"
         id: changelog
         run: |
           # Create CHANGELOG.md if it doesn't exist
           if [ ! -f CHANGELOG.md ]; then
-            echo "# Changelog" > CHANGELOG.md
-            echo "" >> CHANGELOG.md
-            echo "All notable changes to this project will be documented in this file." >> CHANGELOG.md
-            echo "" >> CHANGELOG.md
-            echo "The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)," >> CHANGELOG.md
-            echo "and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)." >> CHANGELOG.md
-            echo "" >> CHANGELOG.md
+            cat > CHANGELOG.md << 'EOF'
+          # Changelog
+
+          All notable changes to this project will be documented in this file.
+
+          The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+          and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+          EOF
             git add CHANGELOG.md
             git commit -m "docs: Create initial CHANGELOG.md"
           fi
-          
-          # Get current date
-          CURRENT_DATE=$(date +"%Y-%m-%d")
-          
-          # Prepare changelog entry
-          TEMP_FILE=$(mktemp)
-          
-          # Parse PR title for conventional commit type
-          PR_TITLE="${{ needs.check-changes.outputs.pr-title }}"
-          echo "Processing PR: $PR_TITLE"
-          
-          # Extract type and scope from conventional commit format
+
+          # Parse PR title for commit type
+          PR_TITLE="${{ needs.detect-changes.outputs.pr-title }}"
+          COMMIT_TYPE="chore"
+
           if [[ "$PR_TITLE" =~ ^([a-z]+)(\([^)]+\))?: ]]; then
             COMMIT_TYPE="${BASH_REMATCH[1]}"
-            COMMIT_SCOPE="${BASH_REMATCH[2]}"
-          else
-            COMMIT_TYPE="chore"
-            COMMIT_SCOPE=""
           fi
-          
+
           # Determine changelog category
           case "$COMMIT_TYPE" in
-            "feat")
-              CATEGORY="### Added"
-              ;;
-            "fix")
-              CATEGORY="### Fixed"
-              ;;
-            "perf")
-              CATEGORY="### Performance"
-              ;;
-            "docs")
-              CATEGORY="### Documentation"
-              ;;
-            "style"|"refactor")
-              CATEGORY="### Changed"
-              ;;
-            "test")
-              CATEGORY="### Testing"
-              ;;
-            "BREAKING")
-              CATEGORY="### BREAKING CHANGES"
-              ;;
-            *)
-              CATEGORY="### Changed"
-              ;;
+            "feat") CATEGORY="### Added" ;;
+            "fix") CATEGORY="### Fixed" ;;
+            "perf") CATEGORY="### Performance" ;;
+            "docs") CATEGORY="### Documentation" ;;
+            "BREAKING") CATEGORY="### BREAKING CHANGES" ;;
+            *) CATEGORY="### Changed" ;;
           esac
-          
+
           # Create changelog entry
+          CURRENT_DATE=$(date +"%Y-%m-%d")
+          CLEAN_TITLE=$(echo "$PR_TITLE" | sed -E 's/^[a-z]+(\([^)]+\))?: //')
+
+          TEMP_FILE=$(mktemp)
           echo "## [Unreleased] - $CURRENT_DATE" > $TEMP_FILE
           echo "" >> $TEMP_FILE
           echo "$CATEGORY" >> $TEMP_FILE
-          
-          # Clean up PR title (remove conventional commit prefix)
-          CLEAN_TITLE=$(echo "$PR_TITLE" | sed -E 's/^[a-z]+(\([^)]+\))?: //')
-          
+
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            echo "- $CLEAN_TITLE ([#${{ needs.check-changes.outputs.pr-number }}](${{ needs.check-changes.outputs.pr-url }})) by @${{ needs.check-changes.outputs.pr-author }}" >> $TEMP_FILE
+            echo "- $CLEAN_TITLE ([#${{ needs.detect-changes.outputs.pr-number }}](${{ needs.detect-changes.outputs.pr-url }})) by @${{ needs.detect-changes.outputs.pr-author }}" >> $TEMP_FILE
           else
-            echo "- $CLEAN_TITLE (Manual release by @${{ needs.check-changes.outputs.pr-author }})" >> $TEMP_FILE
+            echo "- $CLEAN_TITLE (Manual release by @${{ needs.detect-changes.outputs.pr-author }})" >> $TEMP_FILE
           fi
-          
-          # Add affected workspaces info
-          CHANGED_WORKSPACES="${{ needs.check-changes.outputs.changed-workspaces }}"
+
+          # Add affected workspaces
+          CHANGED_WORKSPACES="${{ needs.detect-changes.outputs.changed-workspaces }}"
           if [ "$CHANGED_WORKSPACES" != "all" ] && [ -n "$CHANGED_WORKSPACES" ]; then
             echo "  - Affected workspaces: $CHANGED_WORKSPACES" >> $TEMP_FILE
           fi
-          
+
           echo "" >> $TEMP_FILE
-          
-          # Prepend to existing CHANGELOG.md (after the header)
+
+          # Insert into CHANGELOG.md
           if grep -q "## \[" CHANGELOG.md; then
-            # Insert before first version entry
-            awk '/^## \[/{if(!inserted){print temp_content; inserted=1}} {print}' temp_content="$(cat $TEMP_FILE)" CHANGELOG.md > CHANGELOG_NEW.md
-            mv CHANGELOG_NEW.md CHANGELOG.md
+            awk '/^## \[/{if(!inserted){print temp_content; inserted=1}} {print}' temp_content="$(cat $TEMP_FILE)" CHANGELOG.md > CHANGELOG.new
+            mv CHANGELOG.new CHANGELOG.md
           else
-            # Append to end of header
             echo "" >> CHANGELOG.md
             cat $TEMP_FILE >> CHANGELOG.md
           fi
-          
+
           rm $TEMP_FILE
-          
-          # Check if changelog was actually modified
-          if git diff --quiet CHANGELOG.md; then
-            echo "No changes to CHANGELOG.md"
-            echo "updated=false" >> $GITHUB_OUTPUT
-          else
-            echo "CHANGELOG.md updated"
-            echo "updated=true" >> $GITHUB_OUTPUT
+
+          # Commit if changed
+          if ! git diff --quiet CHANGELOG.md; then
             git add CHANGELOG.md
             git commit -m "docs: Update CHANGELOG.md"
             git push
+            echo "updated=true" >> $GITHUB_OUTPUT
+          else
+            echo "updated=false" >> $GITHUB_OUTPUT
           fi
 
-  # Third job: Bump versions
+  # Bump versions
   bump-versions:
+    name: "Bump Versions"
     runs-on: ubuntu-latest
-    needs: [check-changes, update-changelog]
-    if: needs.update-changelog.outputs.changelog-updated == 'true'
+    needs: [detect-changes, update-changelog]
+    if: needs.update-changelog.outputs.updated == 'true'
     outputs:
-      version-bumped: ${{ steps.bump.outputs.bumped }}
-      new-versions: ${{ steps.bump.outputs.versions }}
+      bumped: ${{ steps.bump.outputs.bumped }}
+      versions: ${{ steps.bump.outputs.versions }}
 
     steps:
-      - name: Clone repository
+      - name: "Checkout code"
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Set up Deno
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
-      - name: Set up Git
+      - name: "Setup Git"
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-      - name: Pull latest changes
+      - name: "Pull latest changes"
         run: git pull origin main
 
-      - name: Bump versions
+      - name: "Bump versions"
         id: bump
         run: |
-          echo "Bumping versions for changed workspaces..."
-          
-          # Determine bump type from PR title or input
-          PR_TITLE="${{ needs.check-changes.outputs.pr-title }}"
-          RELEASE_TYPE="${{ github.event.inputs.release_type }}"
-          
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            BUMP_TYPE="$RELEASE_TYPE"
-          elif [[ "$PR_TITLE" =~ ^BREAKING ]]; then
-            BUMP_TYPE="major"
-          elif [[ "$PR_TITLE" =~ ^feat ]]; then
-            BUMP_TYPE="minor"
-          else
-            BUMP_TYPE="patch"
-          fi
-          
-          echo "Using bump type: $BUMP_TYPE"
-          
-          # Run the bump command
-          deno run -A jsr:@deno/bump-workspaces@^0.1/cli --$BUMP_TYPE
-          
-          # Check if any versions were actually bumped
-          if git diff --quiet; then
-            echo "No version changes detected"
-            echo "bumped=false" >> $GITHUB_OUTPUT
-            echo "versions=" >> $GITHUB_OUTPUT
-          else
-            echo "Versions bumped"
-            echo "bumped=true" >> $GITHUB_OUTPUT
+          RELEASE_TYPE="${{ needs.detect-changes.outputs.release-type }}"
+          CHANGED_WORKSPACES="${{ needs.detect-changes.outputs.changed-workspaces }}"
+
+          echo "🏷️  Bumping versions (type: $RELEASE_TYPE)"
+
+          # Function to bump semantic version
+          bump_version() {
+            local version="$1"
+            local type="$2"
             
-            # Get new versions
-            VERSIONS=""
-            # Read workspaces from deno.json
+            IFS='.' read -r major minor patch <<< "$version"
+            
+            case "$type" in
+              "major") echo "$((major + 1)).0.0" ;;
+              "minor") echo "$major.$((minor + 1)).0" ;;
+              "patch") echo "$major.$minor.$((patch + 1))" ;;
+            esac
+          }
+
+          # Determine workspaces to bump
+          if [ "$CHANGED_WORKSPACES" = "all" ]; then
             WORKSPACES=$(jq -r '.workspace[]' deno.json | sed 's|^./||')
-            for workspace in $WORKSPACES; do
-              if [ -f "$workspace/deno.json" ]; then
-                VERSION=$(grep '"version"' "$workspace/deno.json" | cut -d'"' -f4)
-                VERSIONS="$VERSIONS $workspace:$VERSION"
-              fi
-            done
+          else
+            WORKSPACES="$CHANGED_WORKSPACES"
+          fi
+
+          VERSIONS=""
+          BUMPED=false
+
+          for workspace in $WORKSPACES; do
+            if [ -f "$workspace/deno.json" ]; then
+              CURRENT_VERSION=$(jq -r '.version' "$workspace/deno.json")
+              NEW_VERSION=$(bump_version "$CURRENT_VERSION" "$RELEASE_TYPE")
+              
+              echo "📦 $workspace: $CURRENT_VERSION → $NEW_VERSION"
+              
+              # Update version in deno.json
+              jq --arg version "$NEW_VERSION" '.version = $version' "$workspace/deno.json" > "$workspace/deno.json.tmp"
+              mv "$workspace/deno.json.tmp" "$workspace/deno.json"
+              
+              VERSIONS="$VERSIONS $workspace:$NEW_VERSION"
+              BUMPED=true
+            fi
+          done
+
+          if [ "$BUMPED" = true ]; then
+            echo "bumped=true" >> $GITHUB_OUTPUT
             echo "versions=$(echo $VERSIONS | xargs)" >> $GITHUB_OUTPUT
             
             git add .
-            git commit -m "chore: Bump versions ($BUMP_TYPE)"
+            git commit -m "chore: Bump versions ($RELEASE_TYPE)"
             git push
+          else
+            echo "bumped=false" >> $GITHUB_OUTPUT
+            echo "versions=" >> $GITHUB_OUTPUT
           fi
 
-  # Fourth job: Update changelog with version numbers
+  # Finalize changelog with version numbers
   finalize-changelog:
+    name: "Finalize Changelog"
     runs-on: ubuntu-latest
-    needs: [check-changes, update-changelog, bump-versions]
-    if: needs.bump-versions.outputs.version-bumped == 'true'
+    needs: [detect-changes, update-changelog, bump-versions]
+    if: needs.bump-versions.outputs.bumped == 'true'
 
     steps:
-      - name: Clone repository
+      - name: "Checkout code"
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Git
+      - name: "Setup Git"
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
-      - name: Pull latest changes
+      - name: "Pull latest changes"
         run: git pull origin main
 
-      - name: Update changelog with version numbers
+      - name: "Update changelog with version numbers"
         run: |
-          # Replace [Unreleased] with actual version numbers
-          NEW_VERSIONS="${{ needs.bump-versions.outputs.new-versions }}"
+          NEW_VERSIONS="${{ needs.bump-versions.outputs.versions }}"
           CURRENT_DATE=$(date +"%Y-%m-%d")
-          
-          # Create version string from workspace versions
+
+          # Create version string
           VERSION_STRING=""
           for version_info in $NEW_VERSIONS; do
             workspace=$(echo $version_info | cut -d':' -f1)
@@ -368,90 +356,151 @@ jobs:
               VERSION_STRING="$VERSION_STRING, $workspace@$version"
             fi
           done
-          
-          # Replace the [Unreleased] entry
+
+          # Replace [Unreleased] with version string
           sed -i "s/## \[Unreleased\] - $CURRENT_DATE/## [$VERSION_STRING] - $CURRENT_DATE/" CHANGELOG.md
-          
+
           git add CHANGELOG.md
           git commit -m "docs: Finalize CHANGELOG.md with version numbers"
           git push
 
-  # Fifth job: Publish to JSR
+  # Publish to JSR
   publish:
+    name: "Publish to JSR"
     runs-on: ubuntu-latest
-    needs: [check-changes, update-changelog, bump-versions, finalize-changelog]
-    if: needs.bump-versions.outputs.version-bumped == 'true'
+    needs: [detect-changes, update-changelog, bump-versions, finalize-changelog]
+    if: needs.bump-versions.outputs.bumped == 'true'
     timeout-minutes: 30
 
     steps:
-      - name: Clone repository
+      - name: "Checkout code"
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Deno
+      - name: "Setup Deno"
         uses: denoland/setup-deno@v2
         with:
           deno-version: canary
 
-      - name: Pull latest changes
+      - name: "Pull latest changes"
         run: git pull origin main
 
-      - name: Publish to JSR
+      - name: "Publish to JSR"
         run: |
-          echo "Publishing updated workspaces to JSR..."
-          
-          # Publish each workspace that had changes
-          CHANGED_WORKSPACES="${{ needs.check-changes.outputs.changed-workspaces }}"
-          
+          CHANGED_WORKSPACES="${{ needs.detect-changes.outputs.changed-workspaces }}"
+
+          # Determine workspaces to publish
           if [ "$CHANGED_WORKSPACES" = "all" ]; then
-            echo "Publishing all workspaces..."
-            deno publish
+            WORKSPACES=$(jq -r '.workspace[]' deno.json | sed 's|^./||')
           else
-            echo "Publishing specific workspaces: $CHANGED_WORKSPACES"
-            for workspace in $CHANGED_WORKSPACES; do
-              if [ -d "$workspace" ]; then
-                echo "Publishing $workspace..."
-                cd "$workspace"
-                deno publish
-                cd ..
-              fi
-            done
+            WORKSPACES="$CHANGED_WORKSPACES"
           fi
 
-  # Final job: Create GitHub release
+          echo "🚀 Publishing workspaces to JSR: $WORKSPACES"
+
+          SUCCESS_COUNT=0
+          FAILED_COUNT=0
+          FAILED_WORKSPACES=""
+
+          for workspace in $WORKSPACES; do
+            if [ -d "$workspace" ] && [ -f "$workspace/deno.json" ]; then
+              echo "📦 Publishing $workspace..."
+              
+              cd "$workspace"
+              
+              # Show package info
+              echo "Package: $(jq -r '.name' deno.json) v$(jq -r '.version' deno.json)"
+              
+              # Validate first
+              if [ ! -f "mod.ts" ]; then
+                echo "⚠️  $workspace/mod.ts not found, skipping"
+                cd ..
+                continue
+              fi
+              
+              # Dry run
+              if deno publish --dry-run --quiet; then
+                # Publish
+                if deno publish --quiet; then
+                  echo "✅ Successfully published $workspace"
+                  SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+                else
+                  echo "❌ Failed to publish $workspace"
+                  FAILED_COUNT=$((FAILED_COUNT + 1))
+                  FAILED_WORKSPACES="$FAILED_WORKSPACES $workspace"
+                fi
+              else
+                echo "❌ Dry run failed for $workspace"
+                FAILED_COUNT=$((FAILED_COUNT + 1))
+                FAILED_WORKSPACES="$FAILED_WORKSPACES $workspace"
+              fi
+              
+              cd ..
+            fi
+          done
+
+          echo "📊 Publishing Results:"
+          echo "✅ Success: $SUCCESS_COUNT"
+          echo "❌ Failed: $FAILED_COUNT"
+
+          if [ $FAILED_COUNT -gt 0 ]; then
+            echo "Failed workspaces: $FAILED_WORKSPACES"
+            echo "⚠️  Some publishes failed, but continuing with release"
+          fi
+
+  # Create GitHub release
   create-release:
+    name: "Create GitHub Release"
     runs-on: ubuntu-latest
-    needs: [check-changes, update-changelog, bump-versions, finalize-changelog, publish]
-    if: needs.bump-versions.outputs.version-bumped == 'true'
+    needs:
+      [
+        detect-changes,
+        update-changelog,
+        bump-versions,
+        finalize-changelog,
+        publish,
+      ]
+    if: needs.bump-versions.outputs.bumped == 'true'
 
     steps:
-      - name: Clone repository
+      - name: "Checkout code"
         uses: actions/checkout@v4
 
-      - name: Pull latest changes
+      - name: "Pull latest changes"
         run: git pull origin main
 
-      - name: Create GitHub Release
+      - name: "Create release tag"
+        id: tag
+        run: |
+          NEW_VERSIONS="${{ needs.bump-versions.outputs.versions }}"
+          RELEASE_TAG="release-$(date +%Y%m%d-%H%M%S)"
+
+          git tag $RELEASE_TAG
+          git push origin $RELEASE_TAG
+
+          echo "tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
+      - name: "Create GitHub Release"
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.bump-versions.outputs.new-versions }}
-          name: Release ${{ needs.bump-versions.outputs.new-versions }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: Release ${{ needs.bump-versions.outputs.versions }}
           body: |
-            ## What's Changed
-            
-            ${{ needs.check-changes.outputs.pr-title }}
-            
-            **Affected Workspaces:** ${{ needs.check-changes.outputs.changed-workspaces }}
-            
-            **Versions:**
-            ${{ needs.bump-versions.outputs.new-versions }}
-            
-            **Full Changelog:** https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md
-            
+            ## 🚀 What's Changed
+
+            **PR:** ${{ needs.detect-changes.outputs.pr-title }}
+            **Type:** ${{ needs.detect-changes.outputs.release-type }}
+            **Workspaces:** ${{ needs.detect-changes.outputs.changed-workspaces }}
+
+            ### 📦 Published Versions
+            ${{ needs.bump-versions.outputs.versions }}
+
+            ### 📖 Full Changelog
+            https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md
+
             ---
-            
-            ${{ needs.check-changes.outputs.pr-body }}
+            *This release was automatically created by the release pipeline.*
           draft: false
           prerelease: false
         env:

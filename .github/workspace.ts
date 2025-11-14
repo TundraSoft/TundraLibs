@@ -74,6 +74,10 @@ const LABELER_YML = '.github/labeler.yml';
 const PR_TITLE_YML = '.github/workflows/pr-title.yaml';
 const EDGE_RELEASE_YML = '.github/workflows/edge-release.yaml';
 const PUBLISH_YML = '.github/workflows/publish.yaml';
+const RELEASE_YML = '.github/workflows/release.yaml';
+const TEST_YML = '.github/workflows/test.yaml';
+const BENCHMARK_YML = '.github/workflows/benchmark.yaml';
+const SECURITY_YML = '.github/workflows/security.yaml';
 const ISSUE_BUG_YML = '.github/ISSUE_TEMPLATE/issue.bug.yml';
 const ISSUE_FEATURE_YML = '.github/ISSUE_TEMPLATE/issue.feature.yml';
 const ISSUE_DOCUMENTATION_YML = '.github/ISSUE_TEMPLATE/issue.documentation.yml';
@@ -246,24 +250,47 @@ const updateWorkflows = async (
         ],
       }];
     }
-    await Deno.writeTextFile(LABELER_YML, yaml.stringify(labelerContent));
+    
+    // Use proper YAML stringification options to preserve formatting
+    const yamlOptions = {
+      indent: 2,
+      noArrayIndent: false,
+      skipInvalid: false,
+      flowLevel: -1,
+      sortKeys: false,
+      lineWidth: 80,
+      noRefs: false,
+      noCompatMode: false,
+      condenseFlow: false,
+      quotingType: '"',
+      forceQuotes: false,
+    };
+    
+    await Deno.writeTextFile(LABELER_YML, yaml.stringify(labelerContent, yamlOptions));
   }
 
   if (await fs.exists(PR_TITLE_YML)) {
-    const prtitleContent = yaml.parse(
-      await Deno.readTextFile(PR_TITLE_YML),
-    ) as PRTitleSchema;
-    const scopes: string[] = prtitleContent.jobs.main.steps[0]!.with.scopes
+    // Read the original file content as text to preserve formatting
+    const originalContent = await Deno.readTextFile(PR_TITLE_YML);
+    
+    // Parse to get the current scopes
+    const prtitleContent = yaml.parse(originalContent) as PRTitleSchema;
+    const currentScopes: string[] = prtitleContent.jobs.main.steps[0]!.with.scopes
       .split('\n').map((s: string) => s.trim()).filter((scope: string) =>
         scope && scope.length > 0 && workspaces.includes(scope) === false
       ).filter((scope: string) => !deleteList?.includes(scope));
-    if (workspaces.length === 0) {
-      scopes.push('');
-    }
-    // Add them back
-    prtitleContent.jobs.main.steps[0]!.with.scopes = [...scopes, ...workspaces]
-      .join('\n');
-    await Deno.writeTextFile(PR_TITLE_YML, yaml.stringify(prtitleContent));
+    
+    // Create the new scopes list
+    const newScopes = [...currentScopes, ...workspaces].sort();
+    const scopesString = newScopes.join('\n            ');
+    
+    // Use regex to replace only the scopes section, preserving YAML formatting
+    const updatedContent = originalContent.replace(
+      /(scopes:\s*\|\-?\s*\n)([\s\S]*?)(\n\s*requireScope:)/,
+      `$1            ${scopesString}$3`
+    );
+    
+    await Deno.writeTextFile(PR_TITLE_YML, updatedContent);
   }
 
   // Update edge-release workflow paths
@@ -271,6 +298,18 @@ const updateWorkflows = async (
   
   // Update publish workflow options
   await updatePublishWorkflow(workspaces, deleteList);
+
+  // Update release workflow paths
+  await updateReleaseWorkflow(workspaces, deleteList);
+  
+  // Update test workflow paths  
+  await updateTestWorkflow(workspaces, deleteList);
+  
+  // Update benchmark workflow paths
+  await updateBenchmarkWorkflow(workspaces, deleteList);
+  
+  // Update security workflow paths
+  await updateSecurityWorkflow(workspaces, deleteList);
 
   // Update issue templates
   await updateIssueTemplates(workspaces, deleteList);
@@ -346,8 +385,23 @@ const updateIssueTemplates = async (
           // Update options with the JSR package format
           packageDropdown.attributes.options = template.packageOptions;
           
+          // Use proper YAML stringification options to preserve formatting
+          const yamlOptions = {
+            indent: 2,
+            noArrayIndent: true,
+            skipInvalid: false,
+            flowLevel: -1,
+            sortKeys: false,
+            lineWidth: 80,
+            noRefs: false,
+            noCompatMode: false,
+            condenseFlow: false,
+            quotingType: '"',
+            forceQuotes: false,
+          };
+          
           // Write the updated content back to the file
-          await Deno.writeTextFile(template.file, yaml.stringify(issueContent));
+          await Deno.writeTextFile(template.file, yaml.stringify(issueContent, yamlOptions));
           console.log(`Updated package options in ${template.file}`);
         } else {
           console.warn(`No package dropdown found in ${template.file}`);
@@ -371,15 +425,20 @@ const updateEdgeReleaseWorkflow = async (
   deleteList?: string[],
 ): Promise<void> => {
   if (await fs.exists(EDGE_RELEASE_YML)) {
-    const edgeReleaseContent = yaml.parse(
-      await Deno.readTextFile(EDGE_RELEASE_YML),
-    ) as EdgeReleaseSchema;
+    // Read original content to preserve formatting
+    const originalContent = await Deno.readTextFile(EDGE_RELEASE_YML);
     
-    // Update the paths trigger to include all current workspaces
+    // Create the new paths array
     const paths = workspaces.map(workspace => `${workspace}/**`);
-    edgeReleaseContent.on.pull_request.paths = paths;
+    const pathsString = paths.map(path => `      - ${path}`).join('\n');
     
-    await Deno.writeTextFile(EDGE_RELEASE_YML, yaml.stringify(edgeReleaseContent));
+    // Use regex to replace only the paths section, preserving YAML formatting
+    const updatedContent = originalContent.replace(
+      /(paths:\s*\n)([\s\S]*?)(\n\s*jobs:)/,
+      `$1${pathsString}$3`
+    );
+    
+    await Deno.writeTextFile(EDGE_RELEASE_YML, updatedContent);
   } else {
     console.warn(`Edge release workflow not found at ${EDGE_RELEASE_YML}`);
   }
@@ -395,17 +454,163 @@ const updatePublishWorkflow = async (
   deleteList?: string[],
 ): Promise<void> => {
   if (await fs.exists(PUBLISH_YML)) {
-    const publishContent = yaml.parse(
-      await Deno.readTextFile(PUBLISH_YML),
-    ) as PublishSchema;
+    // Read original content to preserve formatting
+    const originalContent = await Deno.readTextFile(PUBLISH_YML);
     
-    // Update the workspace options to include 'all' plus current workspaces
-    const options = ['all', ...workspaces.sort()];
-    publishContent.on.workflow_dispatch.inputs.workspace.options = options;
+    // Create the new options array (include 'all' option)
+    const workspaceOptions = ['all', ...workspaces.sort()];
+    const optionsString = workspaceOptions.map(option => `          - ${option}`).join('\n');
     
-    await Deno.writeTextFile(PUBLISH_YML, yaml.stringify(publishContent));
+    // Use regex to replace only the options section, preserving YAML formatting
+    const updatedContent = originalContent.replace(
+      /(options:\s*\n)([\s\S]*?)(\n\s*reason:)/,
+      `$1${optionsString}$3`
+    );
+    
+    await Deno.writeTextFile(PUBLISH_YML, updatedContent);
   } else {
     console.warn(`Publish workflow not found at ${PUBLISH_YML}`);
+  }
+};
+
+/**
+ * Updates the release workflow paths trigger with current workspaces
+ * @param workspaces - Array of workspace names
+ * @param deleteList - Optional array of workspace names to remove
+ */
+const updateReleaseWorkflow = async (
+  workspaces: string[],
+  deleteList?: string[],
+): Promise<void> => {
+  if (await fs.exists(RELEASE_YML)) {
+    // Read original content to preserve formatting
+    const originalContent = await Deno.readTextFile(RELEASE_YML);
+    
+    // Create the new paths array for both pull_request and push triggers
+    const paths = workspaces.map(workspace => `${workspace}/**`);
+    const pathsString = paths.map(path => `      - ${path}`).join('\n');
+    
+    // Update both pull_request and push trigger paths
+    let updatedContent = originalContent.replace(
+      /(pull_request:\s*[\s\S]*?paths:\s*\n)([\s\S]*?)(\n\s*push:)/,
+      `$1${pathsString}$3`
+    );
+    
+    updatedContent = updatedContent.replace(
+      /(push:\s*[\s\S]*?paths:\s*\n)([\s\S]*?)(\n\s*jobs:)/,
+      `$1${pathsString}$3`
+    );
+    
+    await Deno.writeTextFile(RELEASE_YML, updatedContent);
+  } else {
+    console.warn(`Release workflow not found at ${RELEASE_YML}`);
+  }
+};
+
+/**
+ * Updates the test workflow paths trigger with current workspaces
+ * @param workspaces - Array of workspace names
+ * @param deleteList - Optional array of workspace names to remove
+ */
+const updateTestWorkflow = async (
+  workspaces: string[],
+  deleteList?: string[],
+): Promise<void> => {
+  if (await fs.exists(TEST_YML)) {
+    // Read original content to preserve formatting
+    const originalContent = await Deno.readTextFile(TEST_YML);
+    
+    // Create the new paths array
+    const paths = workspaces.map(workspace => `${workspace}/**`);
+    const pathsString = paths.map(path => `      - ${path}`).join('\n');
+    
+    // Update both pull_request and push trigger paths
+    let updatedContent = originalContent.replace(
+      /(pull_request:\s*[\s\S]*?paths:\s*\n)([\s\S]*?)(\n\s*push:)/,
+      `$1${pathsString}$3`
+    );
+    
+    updatedContent = updatedContent.replace(
+      /(push:\s*[\s\S]*?paths:\s*\n)([\s\S]*?)(\n\s*jobs:)/,
+      `$1${pathsString}$3`
+    );
+    
+    await Deno.writeTextFile(TEST_YML, updatedContent);
+  } else {
+    console.warn(`Test workflow not found at ${TEST_YML}`);
+  }
+};
+
+/**
+ * Updates the benchmark workflow paths trigger with current workspaces
+ * @param workspaces - Array of workspace names
+ * @param deleteList - Optional array of workspace names to remove
+ */
+const updateBenchmarkWorkflow = async (
+  workspaces: string[],
+  deleteList?: string[],
+): Promise<void> => {
+  if (await fs.exists(BENCHMARK_YML)) {
+    // Read original content to preserve formatting
+    const originalContent = await Deno.readTextFile(BENCHMARK_YML);
+    
+    // Create the new paths array
+    const paths = workspaces.map(workspace => `${workspace}/**`);
+    const pathsString = paths.map(path => `      - ${path}`).join('\n');
+    
+    // Update both pull_request and push trigger paths
+    let updatedContent = originalContent.replace(
+      /(pull_request:\s*[\s\S]*?paths:\s*\n)([\s\S]*?)(\n\s*push:)/,
+      `$1${pathsString}$3`
+    );
+    
+    updatedContent = updatedContent.replace(
+      /(push:\s*[\s\S]*?paths:\s*\n)([\s\S]*?)(\n\s*jobs:)/,
+      `$1${pathsString}$3`
+    );
+    
+    await Deno.writeTextFile(BENCHMARK_YML, updatedContent);
+  } else {
+    console.warn(`Benchmark workflow not found at ${BENCHMARK_YML}`);
+  }
+};
+
+/**
+ * Updates the security workflow paths trigger with current workspaces
+ * @param workspaces - Array of workspace names
+ * @param deleteList - Optional array of workspace names to remove
+ */
+const updateSecurityWorkflow = async (
+  workspaces: string[],
+  deleteList?: string[],
+): Promise<void> => {
+  if (await fs.exists(SECURITY_YML)) {
+    // Read original content to preserve formatting
+    const originalContent = await Deno.readTextFile(SECURITY_YML);
+    
+    // Create the new paths array
+    const paths = workspaces.map(workspace => `${workspace}/**`);
+    const pathsString = paths.map(path => `      - ${path}`).join('\n');
+    
+    // Update both pull_request and push trigger paths if they exist
+    let updatedContent = originalContent;
+    if (updatedContent.includes('pull_request:')) {
+      updatedContent = updatedContent.replace(
+        /(pull_request:\s*[\s\S]*?paths:\s*\n)([\s\S]*?)(\n\s*push:)/,
+        `$1${pathsString}$3`
+      );
+    }
+    
+    if (updatedContent.includes('push:')) {
+      updatedContent = updatedContent.replace(
+        /(push:\s*[\s\S]*?paths:\s*\n)([\s\S]*?)(\n\s*jobs:)/,
+        `$1${pathsString}$3`
+      );
+    }
+    
+    await Deno.writeTextFile(SECURITY_YML, updatedContent);
+  } else {
+    console.warn(`Security workflow not found at ${SECURITY_YML}`);
   }
 };
 

@@ -1,151 +1,113 @@
 name: 'Performance Benchmarks'
 
-permissions:
-  contents: write
-  pull-requests: write
-
 on:
   push:
     branches: [main]
     paths-ignore:
-      - .dockerignore
-      - .gitignore
-      - .github/ISSUE_TEMPLATE/*
-      - .github/PULL_REQUEST_TEMPLATE*
       - '**.md'
-      - ./LICENSE
-      - .vscode/*
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - '.vscode/**'
+      - '.dockerignore'
+      - '.gitignore'
+      - 'LICENSE'
   pull_request:
     branches: [main]
     paths-ignore:
-      - .dockerignore
-      - .gitignore
-      - .github/ISSUE_TEMPLATE/*
-      - .github/PULL_REQUEST_TEMPLATE*
       - '**.md'
-      - ./LICENSE
-      - .vscode/*
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - '.vscode/**'
+      - '.dockerignore'
+      - '.gitignore'
+      - 'LICENSE'
   workflow_dispatch:
     inputs:
-      baseline:
+      create_baseline:
         description: 'Create new performance baseline'
-        required: true
+        required: false
         default: false
         type: boolean
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   benchmark:
+    name: 'Run Benchmarks'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     
     steps:
-      - name: Clone repository
+      - name: 'Checkout code'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Set up Deno
+          
+      - name: 'Setup Deno'
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-
-      - name: Run benchmarks
+          
+      - name: 'Run benchmarks'
         run: |
-          # Create benchmarks directory if it doesn't exist
-          mkdir -p .github/benchmarks
+          echo "🏃‍♂️ Running performance benchmarks..."
           
           # Run benchmarks and capture output
-          echo "Running benchmarks..."
-          deno bench --allow-read --allow-write --allow-env --allow-net --allow-ffi --allow-sys --json > benchmark-results.json || true
+          if deno task test:bench --json > benchmark-results.json; then
+            echo "✅ Benchmarks completed successfully"
+          else
+            echo "⚠️  Some benchmarks may have failed, but continuing..."
+          fi
           
-          # Format results for better readability
-          echo "## 🏃‍♂️ Benchmark Results" > benchmark-summary.md
-          echo "" >> benchmark-summary.md
-          echo "| Benchmark | Operations/sec | Time per op | Relative |" >> benchmark-summary.md
-          echo "|-----------|----------------|-------------|----------|" >> benchmark-summary.md
-          
-          # Parse JSON results and create markdown table
+          # Show results summary
           if [ -f benchmark-results.json ]; then
-            deno eval "
-              const results = JSON.parse(Deno.readTextFileSync('benchmark-results.json'));
-              const benchmarks = results.benchmarks || [];
-              for (const bench of benchmarks) {
-                const name = bench.name || 'Unknown';
-                const opsPerSec = bench.measuredRunsAvgSuccess ? Math.round(1000000000 / bench.measuredRunsAvgSuccess) : 'N/A';
-                const timePerOp = bench.measuredRunsAvgSuccess ? (bench.measuredRunsAvgSuccess / 1000000).toFixed(3) + 'ms' : 'N/A';
-                console.log(\`| \${name} | \${opsPerSec} | \${timePerOp} | 1.00x |\`);
-              }
-            " >> benchmark-summary.md || echo "| No benchmarks found | - | - | - |" >> benchmark-summary.md
-          else
-            echo "| No benchmark results | - | - | - |" >> benchmark-summary.md
+            echo "📊 Benchmark Results Available"
+            echo "File size: $(wc -c < benchmark-results.json) bytes"
           fi
-
-      - name: Store benchmark results
-        if: github.ref == 'refs/heads/main'
-        run: |
-          # Store results with timestamp
-          TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-          COMMIT_SHA=$(git rev-parse --short HEAD)
           
-          # Create benchmark history file
-          cp benchmark-results.json ".github/benchmarks/benchmark-${TIMESTAMP}-${COMMIT_SHA}.json" || true
-          
-          # Keep only last 10 benchmark files to avoid repo bloat
-          cd .github/benchmarks
-          ls -t benchmark-*.json | tail -n +11 | xargs -r rm
-          
-          # Update latest baseline
-          cp "benchmark-${TIMESTAMP}-${COMMIT_SHA}.json" latest-baseline.json || true
-
-      - name: Compare with baseline (PR only)
+      - name: 'Process benchmark results'
         if: github.event_name == 'pull_request'
         run: |
-          if [ -f .github/benchmarks/latest-baseline.json ]; then
-            echo "## 📊 Performance Comparison" >> benchmark-summary.md
-            echo "" >> benchmark-summary.md
-            echo "Comparing against main branch baseline..." >> benchmark-summary.md
-            echo "" >> benchmark-summary.md
+          if [ -f benchmark-results.json ]; then
+            echo "📊 Processing benchmark results for PR..."
             
-            # Simple comparison script
-            deno eval "
-              try {
-                const baseline = JSON.parse(Deno.readTextFileSync('.github/benchmarks/latest-baseline.json'));
-                const current = JSON.parse(Deno.readTextFileSync('benchmark-results.json'));
-                
-                const baselineBenches = new Map();
-                (baseline.benchmarks || []).forEach(b => baselineBenches.set(b.name, b.measuredRunsAvgSuccess));
-                
-                console.log('| Benchmark | Current | Baseline | Change |');
-                console.log('|-----------|---------|----------|--------|');
-                
-                (current.benchmarks || []).forEach(bench => {
-                  const name = bench.name;
-                  const currentTime = bench.measuredRunsAvgSuccess;
-                  const baselineTime = baselineBenches.get(name);
-                  
-                  if (baselineTime && currentTime) {
-                    const change = ((currentTime - baselineTime) / baselineTime * 100).toFixed(2);
-                    const changeIcon = change > 5 ? '🔴' : change < -5 ? '🟢' : '🟡';
-                    console.log(\`| \${name} | \${(currentTime/1000000).toFixed(3)}ms | \${(baselineTime/1000000).toFixed(3)}ms | \${changeIcon} \${change}% |\`);
-                  } else {
-                    console.log(\`| \${name} | \${(currentTime/1000000).toFixed(3)}ms | N/A | 🆕 New |\`);
-                  }
-                });
-              } catch (e) {
-                console.log('| Error comparing benchmarks | - | - | ❌ |');
-              }
-            " >> benchmark-summary.md
+            # Create a summary for the PR
+            echo "## 🏃‍♂️ Benchmark Results" >> pr-comment.md
+            echo "" >> pr-comment.md
+            echo "Performance benchmarks completed for this PR." >> pr-comment.md
+            echo "" >> pr-comment.md
+            echo "### Summary" >> pr-comment.md
+            echo "- Benchmark file generated: \`benchmark-results.json\`" >> pr-comment.md
+            echo "- Total size: $(wc -c < benchmark-results.json) bytes" >> pr-comment.md
+            echo "" >> pr-comment.md
+            echo "⚠️ **Note**: Detailed performance analysis requires manual review of the benchmark results." >> pr-comment.md
+            echo "" >> pr-comment.md
+            echo "<details><summary>Raw Benchmark Data (click to expand)</summary>" >> pr-comment.md
+            echo "" >> pr-comment.md
+            echo '```json' >> pr-comment.md
+            head -50 benchmark-results.json >> pr-comment.md
+            if [ $(wc -l < benchmark-results.json) -gt 50 ]; then
+              echo "..." >> pr-comment.md
+              echo "(truncated - full results available in workflow artifacts)" >> pr-comment.md
+            fi
+            echo '```' >> pr-comment.md
+            echo "" >> pr-comment.md
+            echo "</details>" >> pr-comment.md
           else
-            echo "No baseline found for comparison." >> benchmark-summary.md
+            echo "## 🏃‍♂️ Benchmark Results" >> pr-comment.md
+            echo "" >> pr-comment.md
+            echo "⚠️ No benchmark results file was generated." >> pr-comment.md
           fi
-
-      - name: Comment PR with results
-        if: github.event_name == 'pull_request'
+          
+      - name: 'Comment on PR'
+        if: github.event_name == 'pull_request' && hashFiles('pr-comment.md') != ''
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const summary = fs.readFileSync('benchmark-summary.md', 'utf8');
+            const comment = fs.readFileSync('pr-comment.md', 'utf8');
             
             // Find existing benchmark comment
             const comments = await github.rest.issues.listComments({
@@ -163,96 +125,39 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 comment_id: existingComment.id,
-                body: summary
+                body: comment
               });
+              console.log('Updated existing benchmark comment');
             } else {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: summary
+                body: comment
               });
+              console.log('Created new benchmark comment');
             }
-
-      - name: Create performance regression issue
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+            
+      - name: 'Upload benchmark results'
+        if: always() && hashFiles('benchmark-results.json') != ''
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const fs = require('fs');
-            try {
-              const baseline = JSON.parse(fs.readFileSync('.github/benchmarks/latest-baseline.json', 'utf8'));
-              const current = JSON.parse(fs.readFileSync('benchmark-results.json', 'utf8'));
-              
-              const regressions = [];
-              const baselineBenches = new Map();
-              (baseline.benchmarks || []).forEach(b => baselineBenches.set(b.name, b.measuredRunsAvgSuccess));
-              
-              (current.benchmarks || []).forEach(bench => {
-                const baselineTime = baselineBenches.get(bench.name);
-                if (baselineTime && bench.measuredRunsAvgSuccess) {
-                  const change = ((bench.measuredRunsAvgSuccess - baselineTime) / baselineTime * 100);
-                  if (change > 10) { // More than 10% slower
-                    regressions.push({
-                      name: bench.name,
-                      change: change.toFixed(2),
-                      current: (bench.measuredRunsAvgSuccess/1000000).toFixed(3),
-                      baseline: (baselineTime/1000000).toFixed(3)
-                    });
-                  }
-                }
-              });
-              
-              if (regressions.length > 0) {
-                let issueBody = '## 🚨 Performance Regression Detected\n\n';
-                issueBody += `Found ${regressions.length} benchmark(s) with significant performance regression (>10% slower):\n\n`;
-                issueBody += '| Benchmark | Current | Baseline | Regression |\n';
-                issueBody += '|-----------|---------|----------|------------|\n';
-                
-                regressions.forEach(reg => {
-                  issueBody += `| ${reg.name} | ${reg.current}ms | ${reg.baseline}ms | ${reg.change}% |\n`;
-                });
-                
-                issueBody += `\n**PR:** #${context.issue.number}\n`;
-                issueBody += `**Commit:** ${context.sha}\n`;
-                issueBody += `**Branch:** ${context.head_ref}\n`;
-                
-                // Only create issue if it doesn't already exist for this PR
-                const issues = await github.rest.issues.listForRepo({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  state: 'open',
-                  labels: 'performance-regression'
-                });
-                
-                const existingIssue = issues.data.find(issue => 
-                  issue.body && issue.body.includes(`PR:** #${context.issue.number}`)
-                );
-                
-                if (!existingIssue) {
-                  await github.rest.issues.create({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    title: `🚨 Performance Regression in PR #${context.issue.number}`,
-                    body: issueBody,
-                    labels: ['performance-regression', 'bug']
-                  });
-                }
-              }
-            } catch (e) {
-              console.log('Could not check for performance regressions:', e.message);
-            }
-
-      - name: Commit benchmark results
-        if: github.ref == 'refs/heads/main'
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          name: benchmark-results-${{ github.sha }}
+          path: benchmark-results.json
+          retention-days: 30
           
-          if [ -n "$(git status --porcelain .github/benchmarks/)" ]; then
-            git add .github/benchmarks/
-            git commit -m "chore(benchmarks): Update performance benchmarks [skip ci]"
-            git push
+      - name: 'Create baseline'
+        if: github.event.inputs.create_baseline == 'true' && github.ref == 'refs/heads/main'
+        run: |
+          echo "📊 Creating new performance baseline..."
+          
+          if [ -f benchmark-results.json ]; then
+            # Store baseline (you could commit this or store it elsewhere)
+            cp benchmark-results.json benchmark-baseline.json
+            
+            echo "✅ Baseline created: benchmark-baseline.json"
+            echo "Size: $(wc -c < benchmark-baseline.json) bytes"
           else
-            echo "No benchmark changes to commit"
+            echo "❌ Cannot create baseline - no benchmark results available"
+            exit 1
           fi

@@ -1,65 +1,189 @@
-name: Publish
-permissions:
-  contents: read
-  id-token: write
-'on':
+name: "Emergency Publish"
+
+on:
   workflow_dispatch:
     inputs:
-      dryRun:
-        description: Perform a dry run (no actual publishing)
-        required: true
-        default: true
-        type: boolean
       workspace:
-        description: Specific workspace to publish
+        description: "Workspace to publish"
         required: true
         type: choice
         options:
           - all
           - cacher
           - crypt
+          - dam
           - guardian
           - id
+          - norm
+          - openapi
           - restler
           - slogger
           - utils
       reason:
-        description: Reason for emergency publish
+        description: "Reason for emergency publish"
         required: true
         type: string
+      dry_run:
+        description: "Dry run mode (recommended to test first)"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+  issues: write
+
 jobs:
   emergency-publish:
+    name: "Emergency Publish"
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
     steps:
-      - name: Clone repository
+      - name: "Checkout code"
         uses: actions/checkout@v4
-      - name: Set up Deno
+
+      - name: "Setup Deno"
         uses: denoland/setup-deno@v2
         with:
           deno-version: canary
-      - name: Log emergency publish reason
-        run: "echo \"\U0001F6A8 EMERGENCY PUBLISH INITIATED\"\necho \"Workspace: ${{ github.event.inputs.workspace }}\"\necho \"Reason: ${{ github.event.inputs.reason }}\"\necho \"Initiated by: ${{ github.actor }}\"\necho \"Dry run: ${{ github.event.inputs.dryRun }}\"\n"
-      - name: Validate workspace
+
+      - name: "Validate inputs"
         run: |
+          echo "🚨 EMERGENCY PUBLISH INITIATED"
+          echo "Workspace: ${{ github.event.inputs.workspace }}"
+          echo "Reason: ${{ github.event.inputs.reason }}"
+          echo "Initiated by: ${{ github.actor }}"
+          echo "Dry run: ${{ github.event.inputs.dry_run }}"
+
+          # Validate workspace exists
           WORKSPACE="${{ github.event.inputs.workspace }}"
           if [ "$WORKSPACE" != "all" ]; then
             if [ ! -d "$WORKSPACE" ] || [ ! -f "$WORKSPACE/deno.json" ]; then
               echo "❌ Error: Workspace '$WORKSPACE' does not exist or is not configured"
-              echo "Available workspaces:"
-              jq -r '.workspace[]' deno.json | sed 's|^./||'
               exit 1
             fi
-            echo "✅ Workspace '$WORKSPACE' is valid"
           fi
-      - name: Publish (dry run)
-        if: github.event.inputs.dryRun == 'true'
-        run: "if [ \"${{ github.event.inputs.workspace }}\" = \"all\" ]; then\n  echo \"\U0001F50D Dry run: Publishing all workspaces\"\n  deno publish --dry-run\nelse\n  echo \"\U0001F50D Dry run: Publishing workspace ${{ github.event.inputs.workspace }}\"\n  cd \"${{ github.event.inputs.workspace }}\"\n  deno publish --dry-run\nfi\n"
-      - name: Emergency Publish
-        if: github.event.inputs.dryRun == 'false'
-        run: "if [ \"${{ github.event.inputs.workspace }}\" = \"all\" ]; then\n  echo \"\U0001F680 Emergency publishing all workspaces\"\n  deno publish\nelse\n  echo \"\U0001F680 Emergency publishing workspace ${{ github.event.inputs.workspace }}\"\n  cd \"${{ github.event.inputs.workspace }}\"\n  deno publish\nfi\n"
-      - name: Create emergency publish issue
-        if: github.event.inputs.dryRun == 'false'
+
+      - name: "Emergency publish"
+        run: |
+          WORKSPACE="${{ github.event.inputs.workspace }}"
+          DRY_RUN="${{ github.event.inputs.dry_run }}"
+
+          # Determine workspaces to publish
+          if [ "$WORKSPACE" = "all" ]; then
+            WORKSPACES=$(jq -r '.workspace[]' deno.json | sed 's|^./||')
+            echo "📦 Publishing ALL workspaces: $WORKSPACES"
+          else
+            WORKSPACES="$WORKSPACE"
+            echo "📦 Publishing single workspace: $WORKSPACE"
+          fi
+
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "🧪 DRY RUN MODE - No actual publishing will occur"
+          fi
+
+          SUCCESS_COUNT=0
+          FAILED_COUNT=0
+          FAILED_WORKSPACES=""
+
+          for workspace in $WORKSPACES; do
+            if [ -d "$workspace" ] && [ -f "$workspace/deno.json" ]; then
+              echo ""
+              echo "🔍 Processing $workspace..."
+              cd "$workspace"
+              
+              # Show package info
+              PACKAGE_NAME=$(jq -r '.name' deno.json)
+              PACKAGE_VERSION=$(jq -r '.version' deno.json)
+              echo "Package: $PACKAGE_NAME v$PACKAGE_VERSION"
+              
+              # Validate package
+              if [ ! -f "mod.ts" ]; then
+                echo "⚠️  mod.ts not found, skipping $workspace"
+                cd ..
+                continue
+              fi
+              
+              # Always do a dry run first
+              echo "🧪 Running dry run for $workspace..."
+              if deno publish --dry-run; then
+                echo "✅ Dry run successful for $workspace"
+                
+                if [ "$DRY_RUN" = "false" ]; then
+                  echo "🚀 Publishing $workspace..."
+                  if deno publish; then
+                    echo "✅ Successfully published $workspace"
+                    SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+                  else
+                    echo "❌ Failed to publish $workspace"
+                    FAILED_COUNT=$((FAILED_COUNT + 1))
+                    FAILED_WORKSPACES="$FAILED_WORKSPACES $workspace"
+                  fi
+                else
+                  echo "🧪 Dry run mode - would publish $workspace"
+                  SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+                fi
+              else
+                echo "❌ Dry run failed for $workspace"
+                FAILED_COUNT=$((FAILED_COUNT + 1))
+                FAILED_WORKSPACES="$FAILED_WORKSPACES $workspace"
+              fi
+              
+              cd ..
+            else
+              echo "⚠️  Workspace $workspace not found or invalid"
+            fi
+          done
+
+          echo ""
+          echo "📊 Emergency Publish Results:"
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "🧪 DRY RUN - No actual publishing performed"
+          fi
+          echo "✅ Success: $SUCCESS_COUNT"
+          echo "❌ Failed: $FAILED_COUNT"
+
+          if [ $FAILED_COUNT -gt 0 ]; then
+            echo "Failed workspaces: $FAILED_WORKSPACES"
+            if [ "$DRY_RUN" = "false" ]; then
+              echo "⚠️  Some workspaces failed to publish!"
+              exit 1
+            fi
+          fi
+
+      - name: "Create tracking issue"
+        if: github.event.inputs.dry_run == 'false'
         uses: actions/github-script@v7
         with:
-          script: "await github.rest.issues.create({\n  owner: context.repo.owner,\n  repo: context.repo.repo,\n  title: `\U0001F6A8 Emergency Publish: ${{ github.event.inputs.workspace }}`,\n  body: `## Emergency Publish Log\n  \n  **Workspace:** ${{ github.event.inputs.workspace }}\n  **Reason:** ${{ github.event.inputs.reason }}\n  **Initiated by:** @${{ github.actor }}\n  **Timestamp:** ${new Date().toISOString()}\n  **Workflow:** [View Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})\n  \n  ## Action Required\n  \n  - [ ] Review the reason for emergency publish\n  - [ ] Update CHANGELOG.md if needed\n  - [ ] Verify published packages are working correctly\n  - [ ] Consider if version bump is needed for next regular release\n  \n  This issue was automatically created to track emergency publishes outside the normal release pipeline.`,\n  labels: ['emergency', 'publishing', 'needs-review']\n});\n"
+          script: |
+            const workspace = '${{ github.event.inputs.workspace }}';
+            const reason = '${{ github.event.inputs.reason }}';
+            const actor = '${{ github.actor }}';
+            const runUrl = `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Emergency Publish: ${workspace}`,
+              body: `## Emergency Publish Tracking
+              
+              **Workspace:** ${workspace}
+              **Reason:** ${reason}
+              **Initiated by:** @${actor}
+              **Timestamp:** ${new Date().toISOString()}
+              **Workflow:** [View Run](${runUrl})
+              
+              ## Action Required
+              
+              - [ ] Review the reason for emergency publish
+              - [ ] Update CHANGELOG.md if needed
+              - [ ] Verify published packages are working correctly
+              - [ ] Consider if version bump is needed for next regular release
+              
+              This issue was automatically created to track emergency publishes outside the normal release pipeline.`,
+              labels: ['emergency', 'publishing', 'needs-review']
+            });
+
+            console.log(`Created tracking issue: ${issue.data.html_url}`);
