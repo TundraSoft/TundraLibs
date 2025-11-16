@@ -150,8 +150,7 @@ export abstract class BaseGuardian<T> {
     if (!newGuardian._isAsync) {
       try {
         // Test with a dummy value to see if it returns a promise
-        const testResult = validator({} as T);
-        if (isPromiseLike(testResult)) {
+        if (isPromiseLike(validator)) {
           newGuardian._isAsync = true;
         }
       } catch {
