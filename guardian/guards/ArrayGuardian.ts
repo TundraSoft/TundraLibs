@@ -1,5 +1,5 @@
 import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError } from '../GuardianError.ts';
+import { GuardianError, type GuardianErrorMeta } from '../GuardianError.ts';
 import type { GuardianMetaData } from '../types/mod.ts';
 
 /**
@@ -65,26 +65,31 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   of<U>(elementGuardian: BaseGuardian<U>): ArrayGuardian<U> {
-    return this.step((value: Array<T>) => {
-      const validatedElements: U[] = [];
-      for (let i = 0; i < value.length; i++) {
-        try {
-          validatedElements.push(elementGuardian.parse(value[i]));
-        } catch (error) {
-          if (error instanceof GuardianError) {
-            throw new GuardianError(
-              `Array element at index ${i}: ${error.message}`,
-              {
-                ...error.context,
-                type: 'array_element',
-              } as any,
-            );
+    return this.step(
+      (value: Array<T>) => {
+        const validatedElements: U[] = [];
+        for (let i = 0; i < value.length; i++) {
+          try {
+            validatedElements.push(elementGuardian.parse(value[i]));
+          } catch (error) {
+            if (error instanceof GuardianError) {
+              // Re-throw with array context - this preserves the element error structure
+              throw new GuardianError(
+                `Array element at index ${i}: ${error.message}`,
+                {
+                  ...error.context,
+                  type: 'array_element',
+                } as GuardianErrorMeta,
+              );
+            }
+            throw error;
           }
-          throw error;
         }
-      }
-      return validatedElements;
-    }, 'Validate array elements') as ArrayGuardian<U>;
+        return validatedElements;
+      },
+      'Validate array elements',
+      'custom',
+    ) as ArrayGuardian<U>;
   }
 
   //#endregion
@@ -106,20 +111,24 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   length(length: number, message?: string): ArrayGuardian<T> {
-    return this.step((value: Array<T>) => {
-      if (value.length !== length) {
-        throw new GuardianError(
-          message || 'Expected array length ${expected}, got ${got}',
-          {
-            expected: length,
-            got: value.length,
-            comparison: 'length',
-            type: 'array_length',
-          },
-        );
-      }
-      return value;
-    }) as ArrayGuardian<T>;
+    return this.step(
+      (value: Array<T>) => {
+        if (value.length !== length) {
+          throw new GuardianError(
+            message || `Expected array length ${length}, got ${value.length}`,
+            {
+              expected: length,
+              got: value.length,
+              comparison: 'equals',
+              type: 'validation',
+            },
+          );
+        }
+        return value;
+      },
+      message || 'Array length validation failed',
+      'equals',
+    ) as ArrayGuardian<T>;
   }
 
   /**
@@ -137,21 +146,25 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   minLength(minLength: number, message?: string): ArrayGuardian<T> {
-    return this.step((value: Array<T>) => {
-      if (value.length < minLength) {
-        throw new GuardianError(
-          message ||
-            'Array length must be at least ${expected}, got ${got}',
-          {
-            expected: minLength,
-            got: value.length,
-            comparison: 'minLength',
-            type: 'array_min_length',
-          },
-        );
-      }
-      return value;
-    }) as ArrayGuardian<T>;
+    return this.step(
+      (value: Array<T>) => {
+        if (value.length < minLength) {
+          throw new GuardianError(
+            message ||
+              `Array length must be at least ${minLength}, got ${value.length}`,
+            {
+              expected: minLength,
+              got: value.length,
+              comparison: 'gte',
+              type: 'validation',
+            },
+          );
+        }
+        return value;
+      },
+      message || 'Array minimum length validation failed',
+      'gte',
+    ) as ArrayGuardian<T>;
   }
 
   /**
@@ -169,21 +182,25 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   maxLength(maxLength: number, message?: string): ArrayGuardian<T> {
-    return this.step((value: Array<T>) => {
-      if (value.length > maxLength) {
-        throw new GuardianError(
-          message ||
-            'Array length must be at most ${expected}, got ${got}',
-          {
-            expected: maxLength,
-            got: value.length,
-            comparison: 'maxLength',
-            type: 'array_max_length',
-          },
-        );
-      }
-      return value;
-    }) as ArrayGuardian<T>;
+    return this.step(
+      (value: Array<T>) => {
+        if (value.length > maxLength) {
+          throw new GuardianError(
+            message ||
+              `Array length must be at most ${maxLength}, got ${value.length}`,
+            {
+              expected: maxLength,
+              got: value.length,
+              comparison: 'lte',
+              type: 'validation',
+            },
+          );
+        }
+        return value;
+      },
+      message || 'Array maximum length validation failed',
+      'lte',
+    ) as ArrayGuardian<T>;
   }
 
   /**
@@ -221,35 +238,41 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   unique(message?: string): ArrayGuardian<T> {
-    return this.step((value: Array<T>) => {
-      const seen = new Set<T>();
-      const duplicates: T[] = [];
+    return this.step(
+      (value: Array<T>) => {
+        const seen = new Set<T>();
+        const duplicates: T[] = [];
 
-      for (const item of value) {
-        if (seen.has(item)) {
-          if (!duplicates.includes(item)) {
-            duplicates.push(item);
+        for (const item of value) {
+          if (seen.has(item)) {
+            if (!duplicates.includes(item)) {
+              duplicates.push(item);
+            }
+          } else {
+            seen.add(item);
           }
-        } else {
-          seen.add(item);
         }
-      }
 
-      if (duplicates.length > 0) {
-        throw new GuardianError(
-          message ||
-            'Array must contain unique elements, found duplicates: ${got}',
-          {
-            expected: 'unique elements',
-            got: duplicates,
-            comparison: 'unique',
-            type: 'array_duplicate',
-          },
-        );
-      }
+        if (duplicates.length > 0) {
+          throw new GuardianError(
+            message ||
+              `Array must contain unique elements, found duplicates: ${
+                duplicates.join(', ')
+              }`,
+            {
+              expected: 'unique elements',
+              got: duplicates,
+              comparison: 'unique',
+              type: 'validation',
+            },
+          );
+        }
 
-      return value;
-    }) as ArrayGuardian<T>;
+        return value;
+      },
+      message || 'Array must contain unique elements',
+      'unique',
+    ) as ArrayGuardian<T>;
   }
 
   /**
@@ -267,20 +290,16 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   includes(element: T, message?: string): ArrayGuardian<T> {
-    return this.step((value: Array<T>) => {
-      if (!value.includes(element)) {
-        throw new GuardianError(
-          message || 'Array must include ${expected}',
-          {
-            expected: element,
-            got: value,
-            comparison: 'includes',
-            type: 'array_missing_element',
-          },
-        );
-      }
-      return value;
-    }) as ArrayGuardian<T>;
+    return this.step(
+      (value: Array<T>) => {
+        if (!value.includes(element)) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      message || `Array must include ${element}`,
+      'includes',
+    ) as ArrayGuardian<T>;
   }
 
   /**
@@ -298,20 +317,16 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   excludes(element: T, message?: string): ArrayGuardian<T> {
-    return this.step((value: Array<T>) => {
-      if (value.includes(element)) {
-        throw new GuardianError(
-          message || 'Array must not include ${expected}',
-          {
-            expected: element,
-            got: value,
-            comparison: 'excludes',
-            type: 'array_forbidden_element',
-          },
-        );
-      }
-      return value;
-    }) as ArrayGuardian<T>;
+    return this.step(
+      (value: Array<T>) => {
+        if (value.includes(element)) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      message || `Array must not include ${element}`,
+      'excludes',
+    ) as ArrayGuardian<T>;
   }
 
   //#endregion
@@ -445,4 +460,3 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
 
   //#endregion
 }
-

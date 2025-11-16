@@ -32,6 +32,7 @@ export abstract class BaseGuardian<T> {
   protected _isNullable = false;
   protected _hasOptional = false;
   protected _optionalDefault?: T | (() => T) | (() => Promise<T>);
+  protected _isImmutable = false;
 
   /**
    * Gets the metadata associated with this guardian.
@@ -117,48 +118,96 @@ export abstract class BaseGuardian<T> {
    *
    * @template U - The output type of this step
    * @param validator - Function that validates and optionally transforms the value
-   * @param description - Optional description of what this step does
-   * @returns A new Guardian instance with the added step
+   * @param errorMessage - Custom error message to use if validation fails
+   * @param comparison - Type of comparison being performed (for error context)
+   * @returns This Guardian instance (mutated) or new instance if immutable
    *
    * @example
    * ```ts
-   * guardian.step((value) => {
-   *   if (value.length < 5) {
-   *     throw new GuardianError('Too short', { ... });
-   *   }
-   *   return value;
-   * }, 'Minimum length validation');
+   * guardian.step(
+   *   (value) => {
+   *     if (value.length < 5) throw new Error(); // Just throw any error
+   *     return value;
+   *   },
+   *   'Value must be at least 5 characters',
+   *   'minLength'
+   * );
    * ```
    */
   step<U>(
     validator: GuardianTransform<T, U>,
-    _description?: string,
+    errorMessage = 'Validation failed',
+    comparison = 'custom',
   ): BaseGuardian<U> {
-    // Create composed transform function
-    const composedTransform: GuardianTransform<unknown, U> = (
-      input: unknown,
-    ) => {
-      const intermediateResult = this._composedTransform(input);
-      return validator(intermediateResult as T);
+    // Create enhanced transform function with error handling
+    const enhancedValidator: GuardianTransform<T, U> = (value: T) => {
+      try {
+        return validator(value);
+      } catch (originalError) {
+        // If it's already a GuardianError and this is a transform/custom validation, preserve it
+        if (
+          originalError instanceof GuardianError &&
+          (comparison === 'transform' || comparison === 'custom' ||
+            comparison === 'equals' || comparison === 'gte' ||
+            comparison === 'lte' || comparison === 'unique' ||
+            comparison === 'includes' || comparison === 'excludes')
+        ) {
+          throw originalError;
+        }
+
+        // Otherwise, wrap any error in GuardianError with custom message
+        throw new GuardianError(errorMessage, {
+          // expected: 'valid value',
+          got: value,
+          comparison,
+          type: 'validation',
+        });
+      }
     };
 
-    const newGuardian = this._clone<U>();
-    newGuardian._composedTransform = composedTransform;
-    newGuardian._originalTransform = composedTransform;
-
-    // Check if this step introduces async behavior
-    if (!newGuardian._isAsync) {
-      try {
-        // Test with a dummy value to see if it returns a promise
-        if (isPromiseLike(validator)) {
-          newGuardian._isAsync = true;
+    // If immutable, create new instance
+    if (this._isImmutable) {
+      const composedTransform: GuardianTransform<unknown, U> = (
+        input: unknown,
+      ) => {
+        const intermediateResult = this._composedTransform(input);
+        if (isPromiseLike(intermediateResult)) {
+          return intermediateResult.then((resolved) =>
+            enhancedValidator(resolved as T)
+          );
         }
-      } catch {
-        // Ignore errors during async detection
-      }
+        return enhancedValidator(intermediateResult as T);
+      };
+
+      const isStepAsync = isPromiseLike(validator);
+      const willBeAsync = this._isAsync || isStepAsync;
+
+      return this._createStep<U>(
+        composedTransform,
+        willBeAsync,
+        this._metaData,
+      );
     }
 
-    return newGuardian;
+    // Mutate in place for better performance
+    const oldTransform = this._composedTransform;
+    const newTransform: GuardianTransform<unknown, U> = (input: unknown) => {
+      const intermediateResult = oldTransform(input);
+      if (isPromiseLike(intermediateResult)) {
+        return intermediateResult.then((resolved) =>
+          enhancedValidator(resolved as T)
+        );
+      }
+      return enhancedValidator(intermediateResult as T);
+    };
+    (this as unknown as BaseGuardian<U>)._composedTransform = newTransform;
+
+    // Update async flag if this step introduces async behavior
+    if (!this._isAsync && isPromiseLike(validator)) {
+      this._isAsync = true;
+    }
+
+    return this as unknown as BaseGuardian<U>;
   }
 
   /**
@@ -166,22 +215,22 @@ export abstract class BaseGuardian<T> {
    *
    * @template U - The new output type
    * @param transformer - Function that transforms the value to a new type
-   * @param description - Optional description of the transformation
-   * @returns A new Guardian instance with the new type
+   * @param error - Custom error message for transformation failures
+   * @returns This Guardian instance (mutated) or new instance if immutable
    *
    * @example
    * ```ts
    * const numberGuardian = stringGuardian.mutate(
    *   (str) => parseInt(str, 10),
-   *   'Parse string to number'
+   *   'Failed to parse string to number'
    * );
    * ```
    */
   mutate<U>(
     transformer: GuardianTransform<T, U>,
-    description?: string,
+    error = 'Type transformation failed',
   ): BaseGuardian<U> {
-    return this.step(transformer, description || 'Type transformation');
+    return this.step(transformer, error, 'transform');
   }
 
   /**
@@ -189,7 +238,7 @@ export abstract class BaseGuardian<T> {
    *
    * @param expected - The expected value
    * @param message - Optional custom error message
-   * @returns A new Guardian instance with the equality validation
+   * @returns This Guardian instance (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -199,21 +248,16 @@ export abstract class BaseGuardian<T> {
    * ```
    */
   equals(expected: T, message?: string): BaseGuardian<T> {
-    return this.step((value: T) => {
-      if (value !== expected) {
-        throw new GuardianError(
-          message ||
-            'Expected ${expected}, got ${got}',
-          {
-            expected,
-            got: value,
-            comparison: 'equals',
-            type: 'value_mismatch',
-          },
-        );
-      }
-      return value;
-    });
+    return this.step(
+      (value: T) => {
+        if (value !== expected) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      message || `Expected ${expected}, got actual value`,
+      'equals',
+    );
   }
 
   /**
@@ -221,7 +265,7 @@ export abstract class BaseGuardian<T> {
    *
    * @param forbidden - The forbidden value
    * @param message - Optional custom error message
-   * @returns A new Guardian instance with the inequality validation
+   * @returns This Guardian instance (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -231,20 +275,16 @@ export abstract class BaseGuardian<T> {
    * ```
    */
   notEquals(forbidden: T, message?: string): BaseGuardian<T> {
-    return this.step((value: T) => {
-      if (value === forbidden) {
-        throw new GuardianError(
-          message || 'Value must not equal ${expected}',
-          {
-            expected: forbidden,
-            got: value,
-            comparison: 'notEquals',
-            type: 'forbidden_value',
-          },
-        );
-      }
-      return value;
-    });
+    return this.step(
+      (value: T) => {
+        if (value === forbidden) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      message || `Value must not equal ${forbidden}`,
+      'notEquals',
+    );
   }
 
   /**
@@ -252,7 +292,7 @@ export abstract class BaseGuardian<T> {
    *
    * @param allowedValues - Array of allowed values
    * @param message - Optional custom error message
-   * @returns A new Guardian instance with the inclusion validation
+   * @returns This Guardian instance (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -262,20 +302,16 @@ export abstract class BaseGuardian<T> {
    * ```
    */
   in(allowedValues: readonly T[], message?: string): BaseGuardian<T> {
-    return this.step((value: T) => {
-      if (!allowedValues.includes(value)) {
-        throw new GuardianError(
-          message || 'Value must be one of: ${expected}',
-          {
-            expected: allowedValues,
-            got: value,
-            comparison: 'in',
-            type: 'not_in_list',
-          },
-        );
-      }
-      return value;
-    });
+    return this.step(
+      (value: T) => {
+        if (!allowedValues.includes(value)) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      message || `Value must be one of: [${allowedValues.join(', ')}]`,
+      'in',
+    );
   }
 
   /**
@@ -283,7 +319,7 @@ export abstract class BaseGuardian<T> {
    *
    * @param forbiddenValues - Array of forbidden values
    * @param message - Optional custom error message
-   * @returns A new Guardian instance with the exclusion validation
+   * @returns This Guardian instance (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -293,27 +329,23 @@ export abstract class BaseGuardian<T> {
    * ```
    */
   notIn(forbiddenValues: readonly T[], message?: string): BaseGuardian<T> {
-    return this.step((value: T) => {
-      if (forbiddenValues.includes(value)) {
-        throw new GuardianError(
-          message || 'Value must not be one of: ${expected}',
-          {
-            expected: forbiddenValues,
-            got: value,
-            comparison: 'notIn',
-            type: 'forbidden_value',
-          },
-        );
-      }
-      return value;
-    });
+    return this.step(
+      (value: T) => {
+        if (forbiddenValues.includes(value)) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      message || `Value must not be one of: [${forbiddenValues.join(', ')}]`,
+      'notIn',
+    );
   }
 
   /**
    * Makes this guardian accept null values.
    * When null is encountered, it passes through without further validation.
    *
-   * @returns A new Guardian instance that accepts T | null
+   * @returns This Guardian instance (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -324,15 +356,14 @@ export abstract class BaseGuardian<T> {
    * ```
    */
   nullable(): BaseGuardian<T | null> {
-    // Use step method but ensure we preserve state correctly
-    const newGuardian = this.step((x: T) => x as T | null);
+    if (this._isImmutable) {
+      const newGuardian = this.clone();
+      newGuardian._isNullable = true;
+      return newGuardian as BaseGuardian<T | null>;
+    }
 
-    // Copy all state from this guardian to the new one after step creates it
-    newGuardian._isNullable = true;
-    newGuardian._hasOptional = this._hasOptional;
-    (newGuardian as unknown as this)._optionalDefault = this._optionalDefault;
-
-    return newGuardian;
+    this._isNullable = true;
+    return this as BaseGuardian<T | null>;
   }
 
   /**
@@ -359,24 +390,23 @@ export abstract class BaseGuardian<T> {
   optional<D>(
     defaultValue?: D | (() => D) | (() => Promise<D>),
   ): BaseGuardian<T | D | undefined> {
-    // Use step method but ensure we preserve state correctly
-    const newGuardian = this.step((x: T) => x as T | D | undefined);
-
-    // Copy all state from this guardian to the new one after step creates it
-    newGuardian._isNullable = this._isNullable;
-    newGuardian._hasOptional = true;
-    (newGuardian as unknown as BaseGuardian<T | D | undefined>)
-      ._optionalDefault = defaultValue;
-
-    // We can't reliably detect if a function is async without calling it
-    // So we'll mark the guardian as potentially async if a function is provided
-    // The actual async detection will happen during parsing
-    if (typeof defaultValue === 'function') {
-      // We assume it might be async since we can't tell without calling it
-      // This will be refined during actual parsing
+    if (this._isImmutable) {
+      const newGuardian = this.clone();
+      newGuardian._hasOptional = true;
+      // Type assertion needed for generic flexibility
+      (newGuardian as BaseGuardian<T | D | undefined>)._optionalDefault =
+        defaultValue as T | (() => T) | (() => Promise<T>) | undefined;
+      return newGuardian as BaseGuardian<T | D | undefined>;
     }
 
-    return newGuardian;
+    this._hasOptional = true;
+    // Type assertion needed for generic flexibility
+    (this as BaseGuardian<T | D | undefined>)._optionalDefault = defaultValue as
+      | T
+      | (() => T)
+      | (() => Promise<T>)
+      | undefined;
+    return this as BaseGuardian<T | D | undefined>;
   }
 
   /**
@@ -581,34 +611,105 @@ export abstract class BaseGuardian<T> {
   }
 
   /**
+   * Creates an immutable copy of this guardian.
+   * All subsequent method calls will create new instances instead of mutating.
+   *
+   * @returns A new immutable Guardian instance
+   *
+   * @example
+   * ```ts
+   * const base = Guardian.string();
+   * const immutable = base.immutable();
+   * const email = immutable.email();     // Creates new instance
+   * const phone = immutable.pattern();   // Creates new instance
+   * // base and immutable are unchanged
+   * ```
+   */
+  immutable(): BaseGuardian<T> {
+    const clone = this._createStep(
+      this._composedTransform,
+      this._isAsync,
+      this._metaData,
+    );
+    clone._isImmutable = true;
+    return clone;
+  }
+
+  /**
+   * Alias for immutable() - creates an immutable copy of this guardian.
+   *
+   * @returns A new immutable Guardian instance
+   */
+  freeze(): BaseGuardian<T> {
+    return this.immutable();
+  }
+
+  /**
+   * Creates a copy of this guardian for explicit cloning.
+   * Unlike immutable(), the copy remains mutable.
+   *
+   * @returns A new mutable Guardian instance
+   *
+   * @example
+   * ```ts
+   * const base = Guardian.string().minLength(5);
+   * const copy = base.clone();
+   * copy.email();        // Mutates copy, base unchanged
+   * base.pattern();      // Mutates base, copy unchanged
+   * ```
+   */
+  clone(): BaseGuardian<T> {
+    return this._createStep(
+      this._composedTransform,
+      this._isAsync,
+      this._metaData,
+    );
+  }
+
+  /**
+   * Creates a new guardian instance for method chaining efficiently.
+   * Only copies essential properties instead of full cloning.
+   *
+   * @template U - The new output type
+   * @param transform - The new composed transform function
+   * @param isAsync - Whether the new guardian will be async
+   * @param metaData - Optional metadata to copy
+   * @returns A new guardian instance
+   * @internal
+   */
+  protected _createStep<U>(
+    transform: GuardianTransform<unknown, U>,
+    isAsync: boolean,
+    metaData?: GuardianMetaData,
+  ): BaseGuardian<U> {
+    // Create new instance using the same constructor
+    const newGuardian = Object.setPrototypeOf({
+      _composedTransform: transform,
+      _originalTransform: transform,
+      _isAsync: isAsync,
+      _isNullable: this._isNullable,
+      _hasOptional: this._hasOptional,
+      _optionalDefault: this._optionalDefault,
+      _metaData: metaData ? { ...metaData } : undefined,
+    }, this.constructor.prototype);
+
+    return newGuardian;
+  }
+
+  /**
    * Creates a clone of this guardian for method chaining.
+   * @deprecated Use _createStep for more efficient step creation
    *
    * @template U - The new output type
    * @returns A new guardian instance
    * @internal
    */
   protected _clone<U>(): BaseGuardian<U> {
-    // Try the most straightforward approach - create new instance and copy everything
-    const clone = Object.setPrototypeOf({}, this.constructor.prototype);
-
-    // Copy all enumerable and non-enumerable own properties
-    const propertyNames = Object.getOwnPropertyNames(this);
-    for (const prop of propertyNames) {
-      const descriptor = Object.getOwnPropertyDescriptor(this, prop);
-      if (descriptor) {
-        if (prop === '_metaData' && descriptor.value) {
-          // Clone metadata
-          Object.defineProperty(clone, prop, {
-            ...descriptor,
-            value: { ...descriptor.value },
-          });
-        } else {
-          Object.defineProperty(clone, prop, descriptor);
-        }
-      }
-    }
-
-    return clone;
+    return this._createStep<U>(
+      this._composedTransform as unknown as GuardianTransform<unknown, U>,
+      this._isAsync,
+      this._metaData,
+    );
   }
 
   /**

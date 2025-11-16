@@ -105,17 +105,9 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
       try {
         return JSON.stringify(value);
       } catch {
-        throw new GuardianError(
-          message || 'Failed to serialize value to JSON',
-          {
-            expected: 'serializable value',
-            got: value,
-            comparison: 'json_serialization',
-            type: 'transformation',
-          },
-        );
+        throw new Error(); // Just throw any error, mutate will wrap it
       }
-    }, 'JSON serialization');
+    }, message || 'Failed to serialize value to JSON');
   }
 
   /**
@@ -139,20 +131,16 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
     guard: (value: unknown) => value is U,
     message?: string,
   ): BaseGuardian<U> {
-    return this.step((value: T) => {
-      if (!guard(value)) {
-        throw new GuardianError(
-          message || 'Value failed type guard validation',
-          {
-            expected: 'value to pass type guard',
-            got: typeof value,
-            comparison: 'type_guard',
-            type: 'type_guard_failure',
-          },
-        );
-      }
-      return value as U;
-    }, 'Type narrowing') as BaseGuardian<U>;
+    return this.step(
+      (value: T) => {
+        if (!guard(value)) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value as U;
+      },
+      message || 'Value failed type guard validation',
+      'custom',
+    ) as BaseGuardian<U>;
   }
 
   /**
@@ -178,18 +166,10 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
   ): BaseGuardian<U> {
     return this.mutate((value: T) => {
       if (!typeGuard(value)) {
-        throw new GuardianError(
-          'Value failed type guard assertion',
-          {
-            expected: 'type guard to pass',
-            got: typeof value,
-            comparison: 'type_guard',
-            type: 'type_assertion',
-          },
-        );
+        throw new Error(); // Just throw any error, mutate will wrap it
       }
       return value;
-    }, description || 'Type guard assertion') as BaseGuardian<U>;
+    }, description || 'Type guard assertion failed') as BaseGuardian<U>;
   }
 
   /**
@@ -228,17 +208,9 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
   nonNullish(): BaseGuardian<NonNullable<T>> {
     return this.mutate((value: T) => {
       if (value == null) {
-        throw new GuardianError(
-          'Expected non-nullish value, got null or undefined',
-          {
-            expected: 'non-nullish value',
-            got: value,
-            comparison: 'non_nullish',
-            type: 'validation',
-          },
-        );
+        throw new Error(); // Just throw any error, mutate will wrap it
       }
       return value as NonNullable<T>;
-    }, 'Non-nullish validation');
+    }, 'Expected non-nullish value, got null or undefined');
   }
 }

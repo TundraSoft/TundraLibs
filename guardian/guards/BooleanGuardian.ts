@@ -42,7 +42,7 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
    * Validates that the boolean value is true.
    *
    * @param errorMessage - Optional custom error message
-   * @returns New BooleanGuardian with true validation
+   * @returns This BooleanGuardian (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -52,43 +52,35 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
    * ```
    */
   true(errorMessage?: string): BooleanGuardian {
-    return this.step((value: boolean) => {
-      if (value !== true) {
-        throw new GuardianError(
-          errorMessage || 'Expected true but got ${got}',
-          {
-            expected: true,
-            got: value,
-            comparison: 'equals',
-            type: 'boolean',
-          },
-        );
-      }
-      return value;
-    }, 'True validation') as BooleanGuardian;
+    return this.step(
+      (value: boolean) => {
+        if (value !== true) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      errorMessage || 'Expected true but got false',
+      'equals',
+    ) as BooleanGuardian;
   }
 
   /**
    * Validates that the boolean value is false.
    *
    * @param errorMessage - Optional custom error message
-   * @returns New BooleanGuardian with false validation
+   * @returns This BooleanGuardian (mutated) or new instance if immutable
    */
   false(errorMessage?: string): BooleanGuardian {
-    return this.step((value: boolean) => {
-      if (value !== false) {
-        throw new GuardianError(
-          errorMessage || 'Expected false but got ${got}',
-          {
-            expected: false,
-            got: value,
-            comparison: 'equals',
-            type: 'boolean',
-          },
-        );
-      }
-      return value;
-    }, 'False validation') as BooleanGuardian;
+    return this.step(
+      (value: boolean) => {
+        if (value !== false) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      errorMessage || 'Expected false but got true',
+      'equals',
+    ) as BooleanGuardian;
   }
 
   //#endregion

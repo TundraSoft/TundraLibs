@@ -54,20 +54,16 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    * ```
    */
   min(value: bigint, errorMessage?: string): BigIntGuardian {
-    return this.step((num: bigint) => {
-      if (num < value) {
-        throw new GuardianError(
-          errorMessage || 'BigInt must be at least ${expected}',
-          {
-            expected: value,
-            got: num,
-            comparison: 'min',
-            type: 'bigint',
-          },
-        );
-      }
-      return num;
-    }, `Minimum value validation (${value})`) as BigIntGuardian;
+    return this.step(
+      (num: bigint) => {
+        if (num < value) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || `BigInt must be at least ${value}`,
+      'gte',
+    ) as BigIntGuardian;
   }
 
   /**
@@ -78,20 +74,16 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    * @returns New BigIntGuardian with maximum value validation
    */
   max(value: bigint, errorMessage?: string): BigIntGuardian {
-    return this.step((num: bigint) => {
-      if (num > value) {
-        throw new GuardianError(
-          errorMessage || 'BigInt must be at most ${expected}',
-          {
-            expected: value,
-            got: num,
-            comparison: 'max',
-            type: 'bigint',
-          },
-        );
-      }
-      return num;
-    }, `Maximum value validation (${value})`) as BigIntGuardian;
+    return this.step(
+      (num: bigint) => {
+        if (num > value) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || `BigInt must be at most ${value}`,
+      'lte',
+    ) as BigIntGuardian;
   }
 
   //#endregion
@@ -105,20 +97,16 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    * @returns New BigIntGuardian with positive validation
    */
   positive(errorMessage?: string): BigIntGuardian {
-    return this.step((num: bigint) => {
-      if (num <= 0n) {
-        throw new GuardianError(
-          errorMessage || 'BigInt must be positive',
-          {
-            expected: '> 0n',
-            got: num,
-            comparison: 'positive',
-            type: 'bigint',
-          },
-        );
-      }
-      return num;
-    }, 'Positive validation') as BigIntGuardian;
+    return this.step(
+      (num: bigint) => {
+        if (num <= 0n) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || 'BigInt must be positive (> 0)',
+      'gt',
+    ) as BigIntGuardian;
   }
 
   /**
@@ -128,20 +116,16 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    * @returns New BigIntGuardian with negative validation
    */
   negative(errorMessage?: string): BigIntGuardian {
-    return this.step((num: bigint) => {
-      if (num >= 0n) {
-        throw new GuardianError(
-          errorMessage || 'BigInt must be negative',
-          {
-            expected: '< 0n',
-            got: num,
-            comparison: 'negative',
-            type: 'bigint',
-          },
-        );
-      }
-      return num;
-    }, 'Negative validation') as BigIntGuardian;
+    return this.step(
+      (num: bigint) => {
+        if (num >= 0n) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || 'BigInt must be negative (< 0)',
+      'lt',
+    ) as BigIntGuardian;
   }
 
   /**
@@ -151,20 +135,16 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    * @returns New BigIntGuardian with non-negative validation
    */
   nonNegative(errorMessage?: string): BigIntGuardian {
-    return this.step((num: bigint) => {
-      if (num < 0n) {
-        throw new GuardianError(
-          errorMessage || 'BigInt must be non-negative',
-          {
-            expected: '>= 0n',
-            got: num,
-            comparison: 'nonNegative',
-            type: 'bigint',
-          },
-        );
-      }
-      return num;
-    }, 'Non-negative validation') as BigIntGuardian;
+    return this.step(
+      (num: bigint) => {
+        if (num < 0n) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || 'BigInt must be non-negative (>= 0)',
+      'gte',
+    ) as BigIntGuardian;
   }
 
   //#endregion

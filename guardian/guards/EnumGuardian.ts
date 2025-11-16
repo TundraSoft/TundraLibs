@@ -69,20 +69,16 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
    * @returns New EnumGuardian with exclusion validation
    */
   exclude(excludedValues: T[], errorMessage?: string): EnumGuardian<T> {
-    return this.step((value: T) => {
-      if (excludedValues.includes(value)) {
-        throw new GuardianError(
-          errorMessage || 'Value must not be one of: ${expected}',
-          {
-            expected: excludedValues.join(', '),
-            got: value,
-            comparison: 'exclude',
-            type: 'enum',
-          },
-        );
-      }
-      return value;
-    }, `Exclude values: ${excludedValues.join(', ')}`) as EnumGuardian<T>;
+    return this.step(
+      (value: T) => {
+        if (excludedValues.includes(value)) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      errorMessage || `Value must not be one of: ${excludedValues.join(', ')}`,
+      'notIn',
+    ) as EnumGuardian<T>;
   }
 
   //#endregion

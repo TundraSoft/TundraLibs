@@ -46,7 +46,7 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @param length - Minimum required length
    * @param errorMessage - Optional custom error message
-   * @returns New StringGuardian with minimum length validation
+   * @returns This StringGuardian (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -56,20 +56,16 @@ export class StringGuardian extends BaseGuardian<string> {
    * ```
    */
   minLength(length: number, errorMessage?: string): StringGuardian {
-    return this.step((value: string) => {
-      if (value.length < length) {
-        throw new GuardianError(
-          errorMessage || 'String must be at least ${expected} characters long',
-          {
-            expected: length,
-            got: value.length,
-            comparison: 'minLength',
-            type: 'string',
-          },
-        );
-      }
-      return value;
-    }, `Minimum length validation (${length})`) as StringGuardian;
+    return this.step(
+      (value: string) => {
+        if (value.length < length) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      errorMessage || `String must be at least ${length} characters long`,
+      'minLength',
+    ) as StringGuardian;
   }
 
   /**
@@ -77,7 +73,7 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @param length - Maximum allowed length
    * @param errorMessage - Optional custom error message
-   * @returns New StringGuardian with maximum length validation
+   * @returns This StringGuardian (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -87,20 +83,16 @@ export class StringGuardian extends BaseGuardian<string> {
    * ```
    */
   maxLength(length: number, errorMessage?: string): StringGuardian {
-    return this.step((value: string) => {
-      if (value.length > length) {
-        throw new GuardianError(
-          errorMessage || 'String must be at most ${expected} characters long',
-          {
-            expected: length,
-            got: value.length,
-            comparison: 'maxLength',
-            type: 'string',
-          },
-        );
-      }
-      return value;
-    }, `Maximum length validation (${length})`) as StringGuardian;
+    return this.step(
+      (value: string) => {
+        if (value.length > length) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      errorMessage || `String must be at most ${length} characters long`,
+      'maxLength',
+    ) as StringGuardian;
   }
 
   /**
@@ -108,23 +100,19 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @param length - Exact required length
    * @param errorMessage - Optional custom error message
-   * @returns New StringGuardian with exact length validation
+   * @returns This StringGuardian (mutated) or new instance if immutable
    */
   length(length: number, errorMessage?: string): StringGuardian {
-    return this.step((value: string) => {
-      if (value.length !== length) {
-        throw new GuardianError(
-          errorMessage || 'String must be exactly ${expected} characters long',
-          {
-            expected: length,
-            got: value.length,
-            comparison: 'length',
-            type: 'string',
-          },
-        );
-      }
-      return value;
-    }, `Exact length validation (${length})`) as StringGuardian;
+    return this.step(
+      (value: string) => {
+        if (value.length !== length) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      errorMessage || `String must be exactly ${length} characters long`,
+      'length',
+    ) as StringGuardian;
   }
 
   /**
@@ -132,7 +120,7 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @param pattern - Regular expression pattern to match
    * @param errorMessage - Optional custom error message
-   * @returns New StringGuardian with regex validation
+   * @returns This StringGuardian (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -142,43 +130,35 @@ export class StringGuardian extends BaseGuardian<string> {
    * ```
    */
   regex(pattern: RegExp, errorMessage?: string): StringGuardian {
-    return this.step((value: string) => {
-      if (!pattern.test(value)) {
-        throw new GuardianError(
-          errorMessage || 'String does not match pattern ${expected}',
-          {
-            expected: pattern,
-            got: value,
-            comparison: 'regex',
-            type: 'string',
-          },
-        );
-      }
-      return value;
-    }, `Regex validation (${pattern})`) as StringGuardian;
+    return this.step(
+      (value: string) => {
+        if (!pattern.test(value)) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      errorMessage || `String does not match pattern ${pattern}`,
+      'pattern',
+    ) as StringGuardian;
   }
 
   /**
    * Validates that string is not empty (after trimming whitespace).
    *
    * @param errorMessage - Optional custom error message
-   * @returns New StringGuardian with non-empty validation
+   * @returns This StringGuardian (mutated) or new instance if immutable
    */
   nonEmpty(errorMessage?: string): StringGuardian {
-    return this.step((value: string) => {
-      if (value.trim().length === 0) {
-        throw new GuardianError(
-          errorMessage || 'String cannot be empty',
-          {
-            expected: 'non-empty string',
-            got: 'empty string',
-            comparison: 'nonEmpty',
-            type: 'string',
-          },
-        );
-      }
-      return value;
-    }, 'Non-empty validation') as StringGuardian;
+    return this.step(
+      (value: string) => {
+        if (value.trim().length === 0) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      errorMessage || 'String cannot be empty',
+      'nonEmpty',
+    ) as StringGuardian;
   }
 
   /**
@@ -199,25 +179,21 @@ export class StringGuardian extends BaseGuardian<string> {
    * Validates string is a valid URL.
    *
    * @param errorMessage - Optional custom error message
-   * @returns New StringGuardian with URL validation
+   * @returns This StringGuardian (mutated) or new instance if immutable
    */
   url(errorMessage?: string): StringGuardian {
-    return this.step((value: string) => {
-      try {
-        new URL(value);
-        return value;
-      } catch {
-        throw new GuardianError(
-          errorMessage || 'Invalid URL format',
-          {
-            expected: 'valid URL',
-            got: value,
-            comparison: 'url',
-            type: 'string',
-          },
-        );
-      }
-    }, 'URL validation') as StringGuardian;
+    return this.step(
+      (value: string) => {
+        try {
+          new URL(value);
+          return value;
+        } catch {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+      },
+      errorMessage || 'Invalid URL format',
+      'url',
+    ) as StringGuardian;
   }
 
   //#endregion
@@ -285,21 +261,16 @@ export class StringGuardian extends BaseGuardian<string> {
    * ```
    */
   toNumber(errorMessage?: string): NumberGuardian {
-    const transformedGuardian = this.mutate((value: string) => {
-      const num = Number(value);
-      if (isNaN(num)) {
-        throw new GuardianError(
-          errorMessage || 'Cannot convert string to number',
-          {
-            expected: 'numeric string',
-            got: value,
-            comparison: 'conversion',
-            type: 'string_to_number',
-          },
-        );
-      }
-      return num;
-    }, 'String to number transformation');
+    const transformedGuardian = this.mutate(
+      (value: string) => {
+        const num = Number(value);
+        if (isNaN(num)) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || 'Cannot convert string to number',
+    );
 
     // Create a new NumberGuardian with the same composed transform
     const numberGuardian = new NumberGuardian();
@@ -316,21 +287,16 @@ export class StringGuardian extends BaseGuardian<string> {
    * @returns New NumberGuardian with integer transformation
    */
   toInt(radix = 10, errorMessage?: string): NumberGuardian {
-    const transformedGuardian = this.mutate((value: string) => {
-      const num = parseInt(value, radix);
-      if (isNaN(num)) {
-        throw new GuardianError(
-          errorMessage || 'Cannot convert string to integer',
-          {
-            expected: 'integer string',
-            got: value,
-            comparison: 'conversion',
-            type: 'number',
-          },
-        );
-      }
-      return num;
-    }, `String to integer transformation (radix: ${radix})`);
+    const transformedGuardian = this.mutate(
+      (value: string) => {
+        const num = parseInt(value, radix);
+        if (isNaN(num)) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || 'Cannot convert string to integer',
+    );
 
     // Create a new NumberGuardian with the same composed transform
     const numberGuardian = new NumberGuardian();

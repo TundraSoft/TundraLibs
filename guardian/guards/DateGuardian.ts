@@ -65,20 +65,13 @@ export class DateGuardian extends BaseGuardian<Date> {
   min(date: Date, errorMessage?: string): DateGuardian {
     return this.step(
       (value: Date) => {
-        if (value.getTime() < date.getTime()) {
-          throw new GuardianError(
-            errorMessage || 'Date must be at or after ${expected}',
-            {
-              expected: format(date, 'yyyy-MM-dd'),
-              got: format(value, 'yyyy-MM-dd'),
-              comparison: 'min',
-              type: 'date',
-            },
-          );
+        if (value < date) {
+          throw new Error(); // Just throw any error, step will wrap it
         }
         return value;
       },
-      `Minimum date validation (${format(date, 'yyyy-MM-dd')})`,
+      errorMessage || `Date must be after ${date.toISOString()}`,
+      'gte',
     ) as DateGuardian;
   }
 
@@ -93,19 +86,12 @@ export class DateGuardian extends BaseGuardian<Date> {
     return this.step(
       (value: Date) => {
         if (value.getTime() > date.getTime()) {
-          throw new GuardianError(
-            errorMessage || 'Date must be at or before ${expected}',
-            {
-              expected: format(date, 'yyyy-MM-dd'),
-              got: format(value, 'yyyy-MM-dd'),
-              comparison: 'max',
-              type: 'date',
-            },
-          );
+          throw new Error(); // Just throw any error, step will wrap it
         }
         return value;
       },
-      `Maximum date validation (${format(date, 'yyyy-MM-dd')})`,
+      errorMessage || `Date must be at or before ${date.toISOString()}`,
+      'lte',
     ) as DateGuardian;
   }
 
@@ -116,21 +102,17 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns New DateGuardian with past date validation
    */
   past(errorMessage?: string): DateGuardian {
-    return this.step((value: Date) => {
-      const now = new Date();
-      if (value.getTime() >= now.getTime()) {
-        throw new GuardianError(
-          errorMessage || 'Date must be in the past',
-          {
-            expected: 'past date',
-            got: format(value, 'yyyy-MM-dd HH:mm:ss'),
-            comparison: 'past',
-            type: 'date',
-          },
-        );
-      }
-      return value;
-    }, 'Past date validation') as DateGuardian;
+    return this.step(
+      (value: Date) => {
+        const now = new Date();
+        if (value.getTime() >= now.getTime()) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      errorMessage || 'Date must be in the past',
+      'lt',
+    ) as DateGuardian;
   }
 
   /**
@@ -140,21 +122,17 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns New DateGuardian with future date validation
    */
   future(errorMessage?: string): DateGuardian {
-    return this.step((value: Date) => {
-      const now = new Date();
-      if (value.getTime() <= now.getTime()) {
-        throw new GuardianError(
-          errorMessage || 'Date must be in the future',
-          {
-            expected: 'future date',
-            got: format(value, 'yyyy-MM-dd HH:mm:ss'),
-            comparison: 'future',
-            type: 'date',
-          },
-        );
-      }
-      return value;
-    }, 'Future date validation') as DateGuardian;
+    return this.step(
+      (value: Date) => {
+        const now = new Date();
+        if (value <= now) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      errorMessage || 'Date must be in the future',
+      'gt',
+    ) as DateGuardian;
   }
 
   //#endregion
@@ -179,20 +157,16 @@ export class DateGuardian extends BaseGuardian<Date> {
       'Saturday',
     ];
 
-    return this.step((value: Date) => {
-      if (value.getDay() !== weekday) {
-        throw new GuardianError(
-          errorMessage || 'Date must be on ${expected}',
-          {
-            expected: weekdayNames[weekday],
-            got: weekdayNames[value.getDay()],
-            comparison: 'weekday',
-            type: 'date',
-          },
-        );
-      }
-      return value;
-    }, `Weekday validation (${weekdayNames[weekday]})`) as DateGuardian;
+    return this.step(
+      (value: Date) => {
+        if (value.getDay() !== weekday) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      errorMessage || `Date must be on ${weekdayNames[weekday]}`,
+      'weekday',
+    ) as DateGuardian;
   }
 
   /**
@@ -202,21 +176,17 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns New DateGuardian with business hours validation
    */
   businessHours(errorMessage?: string): DateGuardian {
-    return this.step((value: Date) => {
-      const hours = value.getHours();
-      if (hours < 9 || hours >= 17) {
-        throw new GuardianError(
-          errorMessage || 'Date must be during business hours (9 AM - 5 PM)',
-          {
-            expected: '9 AM - 5 PM',
-            got: format(value, 'HH:mm'),
-            comparison: 'businessHours',
-            type: 'date',
-          },
-        );
-      }
-      return value;
-    }, 'Business hours validation') as DateGuardian;
+    return this.step(
+      (value: Date) => {
+        const hours = value.getHours();
+        if (hours < 9 || hours >= 17) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return value;
+      },
+      errorMessage || 'Date must be during business hours (9 AM - 5 PM)',
+      'businessHours',
+    ) as DateGuardian;
   }
 
   //#endregion

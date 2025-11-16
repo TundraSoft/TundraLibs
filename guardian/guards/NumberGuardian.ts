@@ -53,7 +53,7 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @param value - Minimum allowed value
    * @param errorMessage - Optional custom error message
-   * @returns New NumberGuardian with minimum value validation
+   * @returns This NumberGuardian (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -63,20 +63,16 @@ export class NumberGuardian extends BaseGuardian<number> {
    * ```
    */
   min(value: number, errorMessage?: string): NumberGuardian {
-    return this.step((num: number) => {
-      if (num < value) {
-        throw new GuardianError(
-          errorMessage || 'Number must be at least ${expected}',
-          {
-            expected: value,
-            got: num,
-            comparison: 'min',
-            type: 'number',
-          },
-        );
-      }
-      return num;
-    }, `Minimum value validation (${value})`) as NumberGuardian;
+    return this.step(
+      (num: number) => {
+        if (num < value) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || `Number must be at least ${value}`,
+      'gte',
+    ) as NumberGuardian;
   }
 
   /**
@@ -84,7 +80,7 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @param value - Maximum allowed value
    * @param errorMessage - Optional custom error message
-   * @returns New NumberGuardian with maximum value validation
+   * @returns This NumberGuardian (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -94,20 +90,16 @@ export class NumberGuardian extends BaseGuardian<number> {
    * ```
    */
   max(value: number, errorMessage?: string): NumberGuardian {
-    return this.step((num: number) => {
-      if (num > value) {
-        throw new GuardianError(
-          errorMessage || 'Number must be at most ${expected}',
-          {
-            expected: value,
-            got: num,
-            comparison: 'max',
-            type: 'number',
-          },
-        );
-      }
-      return num;
-    }, `Maximum value validation (${value})`) as NumberGuardian;
+    return this.step(
+      (num: number) => {
+        if (num > value) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || `Number must be at most ${value}`,
+      'lte',
+    ) as NumberGuardian;
   }
 
   //#endregion
@@ -118,92 +110,76 @@ export class NumberGuardian extends BaseGuardian<number> {
    * Validates that number is positive (> 0).
    *
    * @param errorMessage - Optional custom error message
-   * @returns New NumberGuardian with positive validation
+   * @returns This NumberGuardian (mutated) or new instance if immutable
    */
   positive(errorMessage?: string): NumberGuardian {
-    return this.step((num: number) => {
-      if (num <= 0) {
-        throw new GuardianError(
-          errorMessage || 'Number must be positive',
-          {
-            expected: '> 0',
-            got: num,
-            comparison: 'positive',
-            type: 'number',
-          },
-        );
-      }
-      return num;
-    }, 'Positive validation') as NumberGuardian;
+    return this.step(
+      (num: number) => {
+        if (num <= 0) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || 'Number must be positive (> 0)',
+      'gt',
+    ) as NumberGuardian;
   }
 
   /**
    * Validates that number is negative (< 0).
    *
    * @param errorMessage - Optional custom error message
-   * @returns New NumberGuardian with negative validation
+   * @returns This NumberGuardian (mutated) or new instance if immutable
    */
   negative(errorMessage?: string): NumberGuardian {
-    return this.step((num: number) => {
-      if (num >= 0) {
-        throw new GuardianError(
-          errorMessage || 'Number must be negative',
-          {
-            expected: '< 0',
-            got: num,
-            comparison: 'negative',
-            type: 'number',
-          },
-        );
-      }
-      return num;
-    }, 'Negative validation') as NumberGuardian;
+    return this.step(
+      (num: number) => {
+        if (num >= 0) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || 'Number must be negative (< 0)',
+      'lt',
+    ) as NumberGuardian;
   }
 
   /**
    * Validates that number is non-negative (>= 0).
    *
    * @param errorMessage - Optional custom error message
-   * @returns New NumberGuardian with non-negative validation
+   * @returns This NumberGuardian (mutated) or new instance if immutable
    */
   nonNegative(errorMessage?: string): NumberGuardian {
-    return this.step((num: number) => {
-      if (num < 0) {
-        throw new GuardianError(
-          errorMessage || 'Number must be non-negative',
-          {
-            expected: '>= 0',
-            got: num,
-            comparison: 'nonNegative',
-            type: 'number',
-          },
-        );
-      }
-      return num;
-    }, 'Non-negative validation') as NumberGuardian;
+    return this.step(
+      (num: number) => {
+        if (num < 0) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || 'Number must be non-negative (>= 0)',
+      'gte',
+    ) as NumberGuardian;
   }
 
   /**
    * Validates that number is non-positive (<= 0).
    *
    * @param errorMessage - Optional custom error message
-   * @returns New NumberGuardian with non-positive validation
+   * @returns This NumberGuardian (mutated) or new instance if immutable
    */
   nonPositive(errorMessage?: string): NumberGuardian {
-    return this.step((num: number) => {
-      if (num > 0) {
-        throw new GuardianError(
-          errorMessage || 'Number must be non-positive',
-          {
-            expected: '<= 0',
-            got: num,
-            comparison: 'nonPositive',
-            type: 'number',
-          },
-        );
-      }
-      return num;
-    }, 'Non-positive validation') as NumberGuardian;
+    return this.step(
+      (num: number) => {
+        if (num > 0) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || 'Number must be non-positive (<= 0)',
+      'lte',
+    ) as NumberGuardian;
   }
 
   //#endregion
@@ -214,7 +190,7 @@ export class NumberGuardian extends BaseGuardian<number> {
    * Validates that number is an integer.
    *
    * @param errorMessage - Optional custom error message
-   * @returns New NumberGuardian with integer validation
+   * @returns This NumberGuardian (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -224,43 +200,35 @@ export class NumberGuardian extends BaseGuardian<number> {
    * ```
    */
   integer(errorMessage?: string): NumberGuardian {
-    return this.step((num: number) => {
-      if (!Number.isInteger(num)) {
-        throw new GuardianError(
-          errorMessage || 'Number must be an integer',
-          {
-            expected: 'integer',
-            got: num,
-            comparison: 'integer',
-            type: 'number',
-          },
-        );
-      }
-      return num;
-    }, 'Integer validation') as NumberGuardian;
+    return this.step(
+      (num: number) => {
+        if (!Number.isInteger(num)) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || 'Number must be an integer',
+      'integer',
+    ) as NumberGuardian;
   }
 
   /**
    * Validates that number is finite (not Infinity or -Infinity).
    *
    * @param errorMessage - Optional custom error message
-   * @returns New NumberGuardian with finite validation
+   * @returns This NumberGuardian (mutated) or new instance if immutable
    */
   finite(errorMessage?: string): NumberGuardian {
-    return this.step((num: number) => {
-      if (!Number.isFinite(num)) {
-        throw new GuardianError(
-          errorMessage || 'Number must be finite',
-          {
-            expected: 'finite number',
-            got: num,
-            comparison: 'finite',
-            type: 'number',
-          },
-        );
-      }
-      return num;
-    }, 'Finite validation') as NumberGuardian;
+    return this.step(
+      (num: number) => {
+        if (!Number.isFinite(num)) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || 'Number must be finite',
+      'finite',
+    ) as NumberGuardian;
   }
 
   /**
@@ -270,21 +238,17 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @returns New NumberGuardian with safe integer validation
    */
   safeInteger(errorMessage?: string): NumberGuardian {
-    return this.step((num: number) => {
-      if (!Number.isSafeInteger(num)) {
-        throw new GuardianError(
-          errorMessage || 'Number must be a safe integer',
-          {
-            expected:
-              `between ${Number.MIN_SAFE_INTEGER} and ${Number.MAX_SAFE_INTEGER}`,
-            got: num,
-            comparison: 'safeInteger',
-            type: 'number',
-          },
-        );
-      }
-      return num;
-    }, 'Safe integer validation') as NumberGuardian;
+    return this.step(
+      (num: number) => {
+        if (!Number.isSafeInteger(num)) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage ||
+        `Number must be a safe integer (between ${Number.MIN_SAFE_INTEGER} and ${Number.MAX_SAFE_INTEGER})`,
+      'safeInteger',
+    ) as NumberGuardian;
   }
 
   /**
@@ -292,7 +256,7 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @param divisor - The divisor to check against
    * @param errorMessage - Optional custom error message
-   * @returns New NumberGuardian with multiple validation
+   * @returns This NumberGuardian (mutated) or new instance if immutable
    *
    * @example
    * ```ts
@@ -302,20 +266,16 @@ export class NumberGuardian extends BaseGuardian<number> {
    * ```
    */
   multipleOf(divisor: number, errorMessage?: string): NumberGuardian {
-    return this.step((num: number) => {
-      if (num % divisor !== 0) {
-        throw new GuardianError(
-          errorMessage || `Number must be a multiple of ${divisor}`,
-          {
-            expected: `multiple of ${divisor}`,
-            got: num,
-            comparison: 'multipleOf',
-            type: 'number',
-          },
-        );
-      }
-      return num;
-    }, `Multiple of ${divisor} validation`) as NumberGuardian;
+    return this.step(
+      (num: number) => {
+        if (num % divisor !== 0) {
+          throw new Error(); // Just throw any error, step will wrap it
+        }
+        return num;
+      },
+      errorMessage || `Number must be a multiple of ${divisor}`,
+      'multipleOf',
+    ) as NumberGuardian;
   }
 
   //#endregion
