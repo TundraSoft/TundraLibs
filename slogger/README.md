@@ -20,7 +20,7 @@ Slogger is a high-performance, flexible structured logging library for Deno appl
 ## 📦 Installation
 
 ```typescript
-import { Slogger } from 'https://deno.land/x/tundralibs@v1.0.0/slogger/mod.ts';
+import { Slogger } from 'jsr:@tundralibs@v1.0.0/slogger';
 ```
 
 Or add to your `deno.json`:
@@ -28,7 +28,7 @@ Or add to your `deno.json`:
 ```json
 {
   "imports": {
-    "@tundralibs/slogger": "https://deno.land/x/tundralibs@v1.0.0/slogger/mod.ts"
+    "@tundralibs/slogger": "jsr:@tundralibs@v1.0.0/slogger"
   }
 }
 ```
@@ -104,7 +104,6 @@ const logger = new Slogger({
 | Console logging         | 50,000+ | With string formatter      |
 | File logging (buffered) | 35,000+ | 4KB buffer, async writes   |
 | JSON formatting         | 40,000+ | Standard JSON formatter    |
-| Binary formatting       | 75,000+ | Compact binary format      |
 | Lazy context evaluation | 80,000+ | When logs are filtered out |
 
 ### Memory Usage
@@ -192,29 +191,6 @@ logger.info('User authenticated', {
   apiKey: 'secret123',
 });
 // Output: User authenticated {"email":"u***@example.com","apiKey":"***"}
-```
-
-### Binary Formatter (High-Throughput)
-
-```typescript
-import {
-  binaryFormatter,
-  compactBinaryFormatter,
-  streamingBinaryFormatter,
-} from '@tundralibs/slogger';
-
-// For maximum performance
-const highThroughputLogger = new Slogger({
-  appName: 'HighVolumeApp',
-  level: SyslogSeverities.INFO,
-  handlers: [{
-    name: 'binary-file',
-    type: 'file',
-    storePath: './logs',
-    fileName: 'app.bin',
-    formatter: streamingBinaryFormatter, // 30-50% smaller than JSON
-  }],
-});
 ```
 
 ## 🎛️ Handlers

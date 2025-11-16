@@ -43,6 +43,7 @@
     "proseWrap": "preserve",
     "semiColons": true,
     "singleQuote": true,
+    "trailingCommas": "onlyMultiLine",
     "exclude": [
       "./.vscode",
       "./.git",
@@ -97,11 +98,11 @@
   "workspace": [
     "./cacher",
     "./crypt",
+    "./dam",
     "./guardian",
     "./id",
     "./norm",
     "./openapi",
-    "./pact",
     "./restler",
     "./slogger",
     "./utils"

@@ -4,15 +4,27 @@ import {
   variableReplacer,
 } from '@tundralibs/utils';
 
+// export type GuardianErrorMetaType =
+//   | 'string'
+//   | 'number'
+//   | 'boolean'
+//   | 'array'
+//   | 'object'
+//   | 'null'
+//   | 'undefined'
+//   | 'function'
+//   | 'bigint'
+//   | 'symbol'
+//   | 'Date'
+//   | 'RegExp';
+
 export type GuardianErrorMeta = {
-  // Value got
-  got?: unknown;
-  // Expected value
-  expected?: unknown;
-  // Comparison type
-  comparison?: string;
-  // Used by array and object guardians to store the source of the error
-  cause?: Record<string, GuardianError>;
+  cause?: Record<string, GuardianError>; // Nested validation errors
+  // meta info about this error
+  type?: string; // string, number, boolean, array, object, etc.
+  got: unknown; // Actual value received
+  expected?: unknown; // Expected value/type
+  comparison: string; // Type of validation (e.g., 'type', 'min', 'max')
 };
 
 export class GuardianError extends BaseError<GuardianErrorMeta> {
@@ -21,46 +33,11 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
   }
 
   constructor(
-    meta:
-      & GuardianErrorMeta
-      & { cause?: [GuardianError] }
-      & Record<string, unknown>,
-    message?: string,
+    message: string,
+    meta: GuardianErrorMeta,
   ) {
-    if (message === undefined) {
-      if (meta.got !== undefined && meta.expected !== undefined) {
-        message = `Expected value ${
-          meta.comparison && meta.comparison.startsWith('not') ? 'not ' : ''
-        }to be ${GuardianError.__formatValue(meta.expected)}, but got ${
-          GuardianError.__formatValue(meta.got)
-        }`;
-      } else if (meta.expected !== undefined) {
-        message = `Expected value to ${
-          meta.comparison && meta.comparison.startsWith('not') ? 'not ' : ''
-        }be ${
-          GuardianError.__formatValue(
-            meta.expected,
-          )
-        }`;
-      } else if (meta.got) {
-        message = `Unexpected value: ${GuardianError.__formatValue(meta.got)}`;
-      } else {
-        message = 'Validation failed';
-      }
-    }
-    super(message!, meta);
-  }
-
-  get got(): string | undefined {
-    return this.context.got
-      ? GuardianError.__formatValue(this.context.got)
-      : undefined;
-  }
-
-  get expected(): string | undefined {
-    return this.context.expected
-      ? GuardianError.__formatValue(this.context.expected)
-      : undefined;
+    // Message must be passed
+    super(message, meta);
   }
 
   public override toJSON(): BaseErrorJson {
@@ -83,6 +60,7 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
       causes: causeValue,
     };
   }
+
   public addCause(key: string, error: GuardianError): void {
     if (this.context.cause === undefined) {
       this.context.cause = {};
@@ -126,7 +104,7 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     } else if (value === null) {
       return 'null';
     } else if (typeof value === 'boolean') {
-      return value ? 'TRUE' : 'FALSE';
+      return value === true ? 'TRUE' : 'FALSE';
     } else {
       return value.toString();
     }

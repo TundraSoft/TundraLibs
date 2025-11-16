@@ -1,0 +1,378 @@
+import * as asserts from '$asserts';
+import { Guardian, GuardianError } from '../../mod.ts';
+
+Deno.test('guardian.ObjectGuardian', async (t) => {
+  await t.step('Creation and basic functionality', async (t) => {
+    await t.step('should create an ObjectGuardian with empty schema', () => {
+      const guard = Guardian.object({});
+      const result = guard.parse({});
+      asserts.assertEquals(result, {});
+    });
+
+    await t.step('should create an ObjectGuardian with schema', () => {
+      const guard = Guardian.object({
+        name: Guardian.string(),
+        age: Guardian.number(),
+      });
+
+      const result = guard.parse({ name: 'John', age: 30 });
+      asserts.assertEquals(result.name, 'John');
+      asserts.assertEquals(result.age, 30);
+    });
+
+    await t.step('should have default passthrough mode', () => {
+      const guard = Guardian.object({
+        name: Guardian.string(),
+      });
+
+      const result = guard.parse({ name: 'John', extra: 'value' });
+      asserts.assertEquals(result.name, 'John');
+      asserts.assertEquals((result as any).extra, 'value');
+    });
+  });
+
+  await t.step('Validation modes', async (t) => {
+    await t.step(
+      'Passthrough mode (default) - should allow additional properties',
+      () => {
+        const guard = Guardian.object({
+          name: Guardian.string(),
+          age: Guardian.number(),
+        });
+
+        const input = { name: 'John', age: 30, extra: 'allowed' };
+        const result = guard.parse(input);
+        asserts.assertEquals(result.name, 'John');
+        asserts.assertEquals(result.age, 30);
+        asserts.assertEquals((result as any).extra, 'allowed');
+      },
+    );
+
+    await t.step('should validate required properties', () => {
+      const guard = Guardian.object({
+        name: Guardian.string(),
+        age: Guardian.number(),
+      });
+
+      asserts.assertThrows(
+        () => guard.parse({ name: 'John' }),
+        GuardianError,
+      );
+    });
+
+    await t.step('Strict mode - should reject additional properties', () => {
+      const guard = Guardian.object({
+        name: Guardian.string(),
+        age: Guardian.number(),
+      }).strict();
+
+      asserts.assertThrows(
+        () => guard.parse({ name: 'John', age: 30, extra: 'not allowed' }),
+        GuardianError,
+      );
+    });
+
+    await t.step(
+      'Strict mode - should pass when no additional properties',
+      () => {
+        const guard = Guardian.object({
+          name: Guardian.string(),
+          age: Guardian.number(),
+        }).strict();
+
+        const result = guard.parse({ name: 'John', age: 30 });
+        asserts.assertEquals(result.name, 'John');
+        asserts.assertEquals(result.age, 30);
+      },
+    );
+
+    await t.step('Strip mode - should remove additional properties', () => {
+      const guard = Guardian.object({
+        name: Guardian.string(),
+        age: Guardian.number(),
+      }).strip();
+
+      const result = guard.parse({ name: 'John', age: 30, extra: 'removed' });
+      asserts.assertEquals(result.name, 'John');
+      asserts.assertEquals(result.age, 30);
+      asserts.assertEquals((result as any).extra, undefined);
+    });
+  });
+
+  await t.step('Schema manipulation', async (t) => {
+    await t.step(
+      'extend method - should extend schema with new properties',
+      () => {
+        const baseGuard = Guardian.object({
+          name: Guardian.string(),
+        });
+
+        const extendedGuard = baseGuard.extend({
+          age: Guardian.number(),
+          email: Guardian.string(),
+        });
+
+        const result = extendedGuard.parse({
+          name: 'John',
+          age: 30,
+          email: 'john@example.com',
+        });
+
+        asserts.assertEquals(result.name, 'John');
+        asserts.assertEquals(result.age, 30);
+        asserts.assertEquals(result.email, 'john@example.com');
+      },
+    );
+
+    await t.step('pick method - should pick specific properties', () => {
+      const fullGuard = Guardian.object({
+        id: Guardian.number(),
+        name: Guardian.string(),
+        email: Guardian.string(),
+        password: Guardian.string(),
+      });
+
+      const publicGuard = fullGuard.pick('id', 'name', 'email');
+      const result = publicGuard.parse({
+        id: 1,
+        name: 'John',
+        email: 'john@example.com',
+      });
+
+      asserts.assertEquals(result.id, 1);
+      asserts.assertEquals(result.name, 'John');
+      asserts.assertEquals(result.email, 'john@example.com');
+    });
+
+    await t.step('omit method - should omit specific properties', () => {
+      const fullGuard = Guardian.object({
+        id: Guardian.number(),
+        name: Guardian.string(),
+        email: Guardian.string(),
+        password: Guardian.string(),
+      });
+
+      const safeGuard = fullGuard.omit('password');
+      const result = safeGuard.parse({
+        id: 1,
+        name: 'John',
+        email: 'john@example.com',
+      });
+
+      asserts.assertEquals(result.id, 1);
+      asserts.assertEquals(result.name, 'John');
+      asserts.assertEquals(result.email, 'john@example.com');
+    });
+  });
+
+  await t.step('Error handling', async (t) => {
+    await t.step('should reject non-objects', () => {
+      const guard = Guardian.object({});
+
+      asserts.assertThrows(() => guard.parse('not an object'), GuardianError);
+      asserts.assertThrows(() => guard.parse(123), GuardianError);
+      asserts.assertThrows(() => guard.parse(null), GuardianError);
+      asserts.assertThrows(() => guard.parse([]), GuardianError);
+    });
+  });
+
+  await t.step('SafeParse functionality', async (t) => {
+    await t.step('should return success result for valid data', () => {
+      const guard = Guardian.object({
+        name: Guardian.string(),
+        age: Guardian.number().optional(),
+      });
+
+      const [error, data] = guard.safeParse({ name: 'John', age: 30 });
+      asserts.assertEquals(error, null);
+      asserts.assertEquals(data?.name, 'John');
+      asserts.assertEquals(data?.age, 30);
+    });
+
+    await t.step('should return error result for invalid data', () => {
+      const guard = Guardian.object({
+        name: Guardian.string(),
+        age: Guardian.number(),
+      });
+
+      const [error, data] = guard.safeParse({ name: 'John' });
+      asserts.assertEquals(data, undefined);
+      asserts.assertEquals(error instanceof GuardianError, true);
+    });
+  });
+
+  await t.step('Refine functionality', async (t) => {
+    await t.step('should validate password confirmation', () => {
+      const registerSchema = Guardian.object({
+        email: Guardian.string(),
+        password: Guardian.string(),
+        confirmPassword: Guardian.string(),
+      }).refine(
+        (data) => data.password === data.confirmPassword,
+        'Passwords do not match',
+      );
+
+      // Valid case
+      const validData = {
+        email: 'john@example.com',
+        password: 'secure123',
+        confirmPassword: 'secure123',
+      };
+      const result = registerSchema.parse(validData);
+      asserts.assertEquals(result.email, 'john@example.com');
+      asserts.assertEquals(result.password, 'secure123');
+
+      // Invalid case
+      asserts.assertThrows(
+        () =>
+          registerSchema.parse({
+            email: 'john@example.com',
+            password: 'secure123',
+            confirmPassword: 'different',
+          }),
+        GuardianError,
+        'Passwords do not match',
+      );
+    });
+
+    await t.step('should validate conditional requirements', () => {
+      const userSchema = Guardian.object({
+        age: Guardian.number(),
+        hasParentalConsent: Guardian.boolean().optional(),
+      }).refine(
+        (data) => data.age >= 18 || data.hasParentalConsent === true,
+        'Users under 18 must have parental consent',
+      );
+
+      // Valid: adult user
+      const adultUser = userSchema.parse({ age: 25 });
+      asserts.assertEquals(adultUser.age, 25);
+
+      // Valid: minor with consent
+      const minorWithConsent = userSchema.parse({
+        age: 16,
+        hasParentalConsent: true,
+      });
+      asserts.assertEquals(minorWithConsent.age, 16);
+      asserts.assertEquals(minorWithConsent.hasParentalConsent, true);
+
+      // Invalid: minor without consent
+      asserts.assertThrows(
+        () => userSchema.parse({ age: 16 }),
+        GuardianError,
+        'Users under 18 must have parental consent',
+      );
+    });
+
+    await t.step('should support multiple refinements with superRefine', () => {
+      const eventSchema = Guardian.object({
+        startDate: Guardian.string(), // Simplified for testing
+        endDate: Guardian.string(),
+        price: Guardian.number(),
+        discountCode: Guardian.string().optional(),
+      }).superRefine([
+        {
+          validator: (data) => data.endDate > data.startDate,
+          message: 'End date must be after start date',
+        },
+        {
+          validator: (data) => !data.discountCode || data.price > 10,
+          message: 'Discount codes only valid for purchases over $10',
+        },
+      ]);
+
+      // Valid case
+      const validEvent = eventSchema.parse({
+        startDate: '2025-01-01',
+        endDate: '2025-01-02',
+        price: 25,
+        discountCode: 'SAVE10',
+      });
+      asserts.assertEquals(validEvent.price, 25);
+
+      // Invalid: end date before start date
+      asserts.assertThrows(
+        () =>
+          eventSchema.parse({
+            startDate: '2025-01-02',
+            endDate: '2025-01-01',
+            price: 25,
+          }),
+        GuardianError,
+        'End date must be after start date',
+      );
+
+      // Invalid: discount on low price
+      asserts.assertThrows(
+        () =>
+          eventSchema.parse({
+            startDate: '2025-01-01',
+            endDate: '2025-01-02',
+            price: 5,
+            discountCode: 'SAVE10',
+          }),
+        GuardianError,
+        'Discount codes only valid for purchases over $10',
+      );
+    });
+
+    await t.step('should handle async refinements', async () => {
+      const asyncSchema = Guardian.object({
+        username: Guardian.string(),
+        email: Guardian.string(),
+      }).refine(
+        async (data) => {
+          // Simulate async validation (e.g., checking if username is unique)
+          await new Promise((resolve) => setTimeout(resolve, 1));
+          return data.username !== 'taken';
+        },
+        'Username is already taken',
+      );
+
+      // Valid case
+      const validUser = await asyncSchema.parseAsync({
+        username: 'available',
+        email: 'user@example.com',
+      });
+      asserts.assertEquals(validUser.username, 'available');
+
+      // Invalid case - should throw error
+      let caught = false;
+      try {
+        await asyncSchema.parseAsync({
+          username: 'taken',
+          email: 'user@example.com',
+        });
+      } catch (error) {
+        caught = true;
+        asserts.assertInstanceOf(error, GuardianError);
+        asserts.assert(
+          (error as GuardianError).message.includes(
+            'Username is already taken',
+          ),
+        );
+      }
+
+      if (!caught) {
+        asserts.fail(
+          'Expected async validation to throw an error for invalid input',
+        );
+      }
+    });
+
+    await t.step('should reject async refinements in sync parsing', () => {
+      const asyncSchema = Guardian.object({
+        username: Guardian.string(),
+      }).refine(
+        async (data) => data.username !== 'taken',
+        'Username is already taken',
+      );
+
+      asserts.assertThrows(
+        () => asyncSchema.parse({ username: 'test' }),
+        GuardianError,
+        'Cannot use parse() with async validation steps. Use parseAsync() instead',
+      );
+    });
+  });
+});

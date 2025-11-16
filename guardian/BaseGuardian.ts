@@ -1,328 +1,622 @@
-import type {
-  FunctionType,
-  GuardianProxy,
-  MaybeAsync,
-  MergeParameters,
-  ResolvedValue,
-} from './types/mod.ts';
-import type { OpenAPISchema } from './types/OpenAPISchema.ts';
-import {
-  equals,
-  isIn,
-  isNotIn,
-  isPromiseLike,
-  notEquals,
-  optional,
-  test,
-} from './helpers/mod.ts';
 import { GuardianError } from './GuardianError.ts';
+import { isPromiseLike } from './helpers/mod.ts';
+import type {
+  GuardianMetaData,
+  GuardianSafeParseResult,
+  GuardianTransform,
+} from './types/mod.ts';
 
 /**
- * Generic constructor type for Guardian classes
- * @template V - Guardian class type extending BaseGuardian
- * @template F - Function type of the guardian, defaults to V['guardian']
+ * Abstract base class for all Guardian validators.
+ * Provides a fluent API for building validation pipelines with step-based transformations.
+ *
+ * @template T - The output type after all validations and transformations
+ *
+ * @example
+ * ```ts
+ * const schema = new StringGuardian()
+ *   .minLength(3)
+ *   .step((val) => val.toUpperCase())
+ *   .step((val) => val.trim());
+ *
+ * const result = schema.parse('  hello  '); // 'HELLO'
+ * ```
+ *
+ * @since 1.0.0
  */
-export type GuardianConstructor<
-  V extends BaseGuardian<F>,
-  F extends FunctionType = V['guardian'],
-> = new (guardian: F) => V;
-
-/**
- * Abstract base class for creating chainable validation guardians
- * Provides a foundation for building type-safe validation chains
- * @template F - Function type that the guardian wraps
- */
-export abstract class BaseGuardian<F extends FunctionType> {
-  /**
-   * The wrapped guardian function
-   */
-  public readonly guardian: F;
+export abstract class BaseGuardian<T> {
+  protected _composedTransform: GuardianTransform<unknown, T>;
+  protected _originalTransform: GuardianTransform<unknown, T>;
+  protected _metaData: GuardianMetaData | undefined = undefined;
+  protected _isAsync = false;
+  protected _isNullable = false;
+  protected _hasOptional = false;
+  protected _optionalDefault?: T | (() => T) | (() => Promise<T>);
 
   /**
-   * Metadata for documentation and OpenAPI schema generation
+   * Gets the metadata associated with this guardian.
+   *
+   * @returns The metadata or undefined if not set
    */
-  public readonly metadata: {
-    description?: string;
-    title?: string;
-    examples?: unknown[];
-    deprecated?: boolean;
-  } = {};
+  get metaData(): GuardianMetaData | undefined {
+    return this._metaData;
+  }
 
   /**
-   * Creates a new BaseGuardian instance
-   * @param guardian - The function to be wrapped
-   * @param metadata - Optional metadata for documentation
+   * Sets the description for this guardian.
+   *
+   * @param description - Human-readable description of what this guardian validates
    */
-  public constructor(
-    guardian: F,
-    metadata?: {
-      description?: string;
-      title?: string;
-      examples?: unknown[];
-      deprecated?: boolean;
-    },
-  ) {
-    this.guardian = guardian;
-    if (metadata) {
-      this.metadata = { ...metadata };
+  set description(description: string) {
+    if (!this._metaData) {
+      this._metaData = { description };
+    } else {
+      this._metaData.description = description;
     }
   }
 
   /**
-   * Transforms the output of the guardian function using a transformation function
-   * Preserves asynchronous behavior if the original guardian returns a Promise
+   * Sets the title for this guardian.
    *
-   * @template T - The return type of the transformation function
-   * @template V - The type of the resulting Guardian instance
-   * @param fn - The transformation function to apply to the guardian's result
-   * @param constructor - Optional constructor for the resulting Guardian, defaults to this.constructor
-   * @returns A new Guardian instance with the transformed function
+   * @param title - Short title for this guardian
    */
-  public transform<
-    T,
-    V extends BaseGuardian<
-      FunctionType<MaybeAsync<ReturnType<F>, T>, Parameters<F>>
-    >,
-  >(
-    fn: FunctionType<T, [ResolvedValue<ReturnType<F>>]>,
-    constructor: GuardianConstructor<V> = this
-      .constructor as GuardianConstructor<V>,
-  ): GuardianProxy<V> {
-    const { guardian } = this;
+  set title(title: string) {
+    if (!this._metaData) {
+      this._metaData = { description: '', title };
+    } else {
+      this._metaData.title = title;
+    }
+  }
 
-    return new constructor(
-      ((...args): T | PromiseLike<T> => {
-        const res = guardian(...args);
-        if (!isPromiseLike(res)) {
-          return fn(res);
+  /**
+   * Sets examples for this guardian.
+   *
+   * @param examples - Array of example values that would pass validation
+   */
+  set examples(examples: Array<unknown>) {
+    if (!this._metaData) {
+      this._metaData = { description: '', examples };
+    } else {
+      this._metaData.examples = examples;
+    }
+  }
+
+  /**
+   * Marks this guardian as deprecated.
+   *
+   * @param deprecated - Whether this guardian is deprecated
+   */
+  set deprecated(deprecated: boolean) {
+    if (!this._metaData) {
+      this._metaData = { description: '', deprecated };
+    } else {
+      this._metaData.deprecated = deprecated;
+    }
+  }
+
+  /**
+   * Creates a new BaseGuardian instance.
+   *
+   * @param initialTransform - The initial transformation function
+   * @param metaData - Optional metadata for this guardian
+   */
+  constructor(
+    initialTransform: GuardianTransform<unknown, T>,
+    metaData?: GuardianMetaData,
+  ) {
+    this._composedTransform = initialTransform;
+    this._originalTransform = initialTransform;
+
+    if (metaData) {
+      this._metaData = metaData;
+    }
+  }
+
+  /**
+   * Adds a validation step to the pipeline.
+   *
+   * @template U - The output type of this step
+   * @param validator - Function that validates and optionally transforms the value
+   * @param description - Optional description of what this step does
+   * @returns A new Guardian instance with the added step
+   *
+   * @example
+   * ```ts
+   * guardian.step((value) => {
+   *   if (value.length < 5) {
+   *     throw new GuardianError('Too short', { ... });
+   *   }
+   *   return value;
+   * }, 'Minimum length validation');
+   * ```
+   */
+  step<U>(
+    validator: GuardianTransform<T, U>,
+    _description?: string,
+  ): BaseGuardian<U> {
+    // Create composed transform function
+    const composedTransform: GuardianTransform<unknown, U> = (
+      input: unknown,
+    ) => {
+      const intermediateResult = this._composedTransform(input);
+      return validator(intermediateResult as T);
+    };
+
+    const newGuardian = this._clone<U>();
+    newGuardian._composedTransform = composedTransform;
+    newGuardian._originalTransform = composedTransform;
+
+    // Check if this step introduces async behavior
+    if (!newGuardian._isAsync) {
+      try {
+        // Test with a dummy value to see if it returns a promise
+        const testResult = validator({} as T);
+        if (isPromiseLike(testResult)) {
+          newGuardian._isAsync = true;
         }
-
-        return res.then((ret) =>
-          fn(ret as ResolvedValue<ReturnType<F>>)
-        ) as PromiseLike<T>;
-      }) as FunctionType<MaybeAsync<ReturnType<F>, T>, Parameters<F>>,
-    ).proxy();
-  }
-
-  /**
-   * Creates a proxy that combines the guardian function with the instance methods
-   * Allows for direct invocation of the guardian while maintaining access to chainable methods
-   *
-   * @returns A proxy object that acts both as the guardian function and provides access to instance methods
-   */
-  public proxy(): GuardianProxy<this> {
-    return new Proxy(this.guardian, {
-      get: (_target: unknown, prop: string): this[keyof this] | F[keyof F] => {
-        return (prop in this)
-          ? this[prop as keyof this]
-          : this.guardian[prop as keyof F];
-      },
-    }) as GuardianProxy<this>;
-  }
-
-  /**
-   * Tests the result of the guardian function using a provided test function
-   *
-   * @param fn - The test function to apply to the guardian's result
-   * @param error - Optional error message to use if the test fails
-   * @returns A new Guardian instance with the test applied
-   */
-  public test(
-    fn: FunctionType<unknown, [ResolvedValue<ReturnType<F>>]>,
-    error?: string,
-    expected?: unknown,
-  ): GuardianProxy<this> {
-    return this.transform(test(fn, error, expected));
-  }
-
-  /**
-   * Checks if the result of the guardian function equals a specified value
-   *
-   * @template T - The type of the value to compare against
-   * @param value - The value to compare against the guardian's result
-   * @param error - Optional error message to use if the comparison fails
-   * @returns A new Guardian instance with the equality check applied
-   */
-  public equals<T extends ResolvedValue<ReturnType<F>>>(
-    value: T,
-    error?: string,
-  ): GuardianProxy<this, FunctionType<T, Parameters<F>>> {
-    return this.transform(equals(value, error));
-  }
-
-  /**
-   * Checks if the result of the guardian function does not equal a specified value
-   *
-   * @template T - The type of the value to compare against
-   * @param value - The value to compare against the guardian's result
-   * @param error - Optional error message to use if the comparison fails
-   * @returns A new Guardian instance with the inequality check applied
-   */
-  public notEquals<T extends ResolvedValue<ReturnType<F>>>(
-    value: T,
-    error?: string,
-  ): GuardianProxy<this, FunctionType<T, Parameters<F>>> {
-    return this.transform(notEquals(value, error));
-  }
-
-  /**
-   * Checks if the result of the guardian function is in a specified array of values
-   *
-   * @template T - The type of the values to compare against
-   * @param values - The array of values to compare against the guardian's result
-   * @param error - Optional error message to use if the comparison fails
-   * @returns A new Guardian instance with the inclusion check applied
-   */
-  public in<T extends ResolvedValue<ReturnType<F>>>(
-    values: T[],
-    error?: string,
-  ): GuardianProxy<this, FunctionType<T, Parameters<F>>> {
-    return this.transform(isIn(values, error));
-  }
-
-  /**
-   * Checks if the result of the guardian function is not in a specified array of values
-   *
-   * @template T - The type of the values to compare against
-   * @param values - The array of values to compare against the guardian's result
-   * @param error - Optional error message to use if the comparison fails
-   * @returns A new Guardian instance with the exclusion check applied
-   */
-  public notIn<T extends ResolvedValue<ReturnType<F>>>(
-    values: T[],
-    error?: string,
-  ): GuardianProxy<this, FunctionType<T, Parameters<F>>> {
-    return this.transform(isNotIn(values, error));
-  }
-
-  /**
-   * Makes the guardian function optional, providing a default value if the result is undefined
-   *
-   * Note: This should be the final operation in your validation chain.
-   *
-   * @template R - The type of the default value, defaults to undefined
-   * @param defaultValue - The default value or a function that returns the default value
-   * @returns A new Guardian instance with the optional behavior applied
-   */
-  public optional<
-    R extends ResolvedValue<ReturnType<F>> | undefined = undefined,
-  >(
-    defaultValue?: R | (() => R),
-  ): GuardianProxy<
-    this,
-    FunctionType<
-      MaybeAsync<ReturnType<F>, ReturnType<F> | R>,
-      MergeParameters<Parameters<F> | [undefined?]>
-    >
-  > {
-    // deno-lint-ignore no-explicit-any
-    const Class = (this as any).constructor;
-    const { guardian } = this;
-    return new Class(optional<F, R>(guardian, defaultValue)).proxy();
-  }
-
-  /**
-   * Allows null values to be set for the type and provides null as default for missing keys.
-   *
-   * Note: This should be the final operation in your validation chain.
-   *
-   * @returns A new Guardian instance with the nullable behavior applied
-   */
-  public nullable(): GuardianProxy<
-    this,
-    FunctionType<
-      MaybeAsync<ReturnType<F>, ReturnType<F> | null>,
-      MergeParameters<Parameters<F> | [null?] | [undefined?]>
-    >
-  > {
-    // deno-lint-ignore no-explicit-any
-    const Class = (this as any).constructor;
-    const { guardian } = this;
-
-    // Create a custom nullable function that handles both null and undefined
-    const nullableFunction = (value: unknown): ReturnType<F> | null => {
-      // Handle null - return null without calling guardian
-      if (value === null) {
-        return null;
+      } catch {
+        // Ignore errors during async detection
       }
+    }
 
-      // Handle undefined (missing key) - return null as default
-      if (value === undefined) {
-        return null;
+    return newGuardian;
+  }
+
+  /**
+   * Adds a transformation step that changes the type.
+   *
+   * @template U - The new output type
+   * @param transformer - Function that transforms the value to a new type
+   * @param description - Optional description of the transformation
+   * @returns A new Guardian instance with the new type
+   *
+   * @example
+   * ```ts
+   * const numberGuardian = stringGuardian.mutate(
+   *   (str) => parseInt(str, 10),
+   *   'Parse string to number'
+   * );
+   * ```
+   */
+  mutate<U>(
+    transformer: GuardianTransform<T, U>,
+    description?: string,
+  ): BaseGuardian<U> {
+    return this.step(transformer, description || 'Type transformation');
+  }
+
+  /**
+   * Validates that the value equals the expected value.
+   *
+   * @param expected - The expected value
+   * @param message - Optional custom error message
+   * @returns A new Guardian instance with the equality validation
+   *
+   * @example
+   * ```ts
+   * const exactValue = Guardian.string().equals('hello');
+   * exactValue.parse('hello'); // 'hello'
+   * exactValue.parse('world'); // throws GuardianError
+   * ```
+   */
+  equals(expected: T, message?: string): BaseGuardian<T> {
+    return this.step((value: T) => {
+      if (value !== expected) {
+        throw new GuardianError(
+          message ||
+            'Expected ${expected}, got ${got}',
+          {
+            expected,
+            got: value,
+            comparison: 'equals',
+            type: 'value_mismatch',
+          },
+        );
       }
-
-      // For all other values, call the original guardian
-      return guardian(value) as ReturnType<F>;
-    };
-
-    return new Class(nullableFunction).proxy();
+      return value;
+    });
   }
 
   /**
-   * Adds descriptive metadata to the guardian for documentation purposes
-   * @param description - Human readable description of what this guardian validates
-   * @param title - Optional short title for the schema
-   * @param examples - Optional array of example valid values
-   * @param deprecated - Optional flag to mark this schema as deprecated
-   * @returns A new guardian instance with the metadata attached
+   * Validates that the value does not equal the forbidden value.
+   *
+   * @param forbidden - The forbidden value
+   * @param message - Optional custom error message
+   * @returns A new Guardian instance with the inequality validation
+   *
+   * @example
+   * ```ts
+   * const notEmpty = Guardian.string().notEquals('');
+   * notEmpty.parse('hello'); // 'hello'
+   * notEmpty.parse(''); // throws GuardianError
+   * ```
    */
-  public describe(
-    description: string,
-    options?: {
-      title?: string;
-      examples?: unknown[];
-      deprecated?: boolean;
-    },
-  ): GuardianProxy<this> {
-    const newMetadata = {
-      ...this.metadata,
-      description,
-      ...options,
-    };
-
-    return new (this.constructor as new (
-      guardian: F,
-      metadata: typeof newMetadata,
-    ) => this)(
-      this.guardian,
-      newMetadata,
-    ).proxy();
+  notEquals(forbidden: T, message?: string): BaseGuardian<T> {
+    return this.step((value: T) => {
+      if (value === forbidden) {
+        throw new GuardianError(
+          message || 'Value must not equal ${expected}',
+          {
+            expected: forbidden,
+            got: value,
+            comparison: 'notEquals',
+            type: 'forbidden_value',
+          },
+        );
+      }
+      return value;
+    });
   }
 
   /**
-   * Converts the guardian to an OpenAPI schema object
-   * @returns An OpenAPI schema representation of this guardian
+   * Validates that the value is included in the allowed values array.
+   *
+   * @param allowedValues - Array of allowed values
+   * @param message - Optional custom error message
+   * @returns A new Guardian instance with the inclusion validation
+   *
+   * @example
+   * ```ts
+   * const color = Guardian.string().in(['red', 'green', 'blue']);
+   * color.parse('red'); // 'red'
+   * color.parse('yellow'); // throws GuardianError
+   * ```
    */
-  public abstract openapi(): OpenAPISchema;
+  in(allowedValues: readonly T[], message?: string): BaseGuardian<T> {
+    return this.step((value: T) => {
+      if (!allowedValues.includes(value)) {
+        throw new GuardianError(
+          message || 'Value must be one of: ${expected}',
+          {
+            expected: allowedValues,
+            got: value,
+            comparison: 'in',
+            type: 'not_in_list',
+          },
+        );
+      }
+      return value;
+    });
+  }
 
-  public validate(
-    value: unknown,
-  ): [
-    GuardianError | null,
-    ResolvedValue<ReturnType<F>> | undefined,
-  ] {
+  /**
+   * Validates that the value is not included in the forbidden values array.
+   *
+   * @param forbiddenValues - Array of forbidden values
+   * @param message - Optional custom error message
+   * @returns A new Guardian instance with the exclusion validation
+   *
+   * @example
+   * ```ts
+   * const noSwears = Guardian.string().notIn(['damn', 'hell']);
+   * noSwears.parse('hello'); // 'hello'
+   * noSwears.parse('damn'); // throws GuardianError
+   * ```
+   */
+  notIn(forbiddenValues: readonly T[], message?: string): BaseGuardian<T> {
+    return this.step((value: T) => {
+      if (forbiddenValues.includes(value)) {
+        throw new GuardianError(
+          message || 'Value must not be one of: ${expected}',
+          {
+            expected: forbiddenValues,
+            got: value,
+            comparison: 'notIn',
+            type: 'forbidden_value',
+          },
+        );
+      }
+      return value;
+    });
+  }
+
+  /**
+   * Makes this guardian accept null values.
+   * When null is encountered, it passes through without further validation.
+   *
+   * @returns A new Guardian instance that accepts T | null
+   *
+   * @example
+   * ```ts
+   * const nullableString = Guardian.string().nullable();
+   * nullableString.parse('hello'); // 'hello'
+   * nullableString.parse(null); // null
+   * nullableString.parse(undefined); // throws GuardianError
+   * ```
+   */
+  nullable(): BaseGuardian<T | null> {
+    // Use step method but ensure we preserve state correctly
+    const newGuardian = this.step((x: T) => x as T | null);
+
+    // Copy all state from this guardian to the new one after step creates it
+    newGuardian._isNullable = true;
+    newGuardian._hasOptional = this._hasOptional;
+    (newGuardian as unknown as this)._optionalDefault = this._optionalDefault;
+
+    return newGuardian;
+  }
+
+  /**
+   * Makes this guardian handle undefined values by providing a default value.
+   * If no default is provided, undefined will pass through.
+   *
+   * @param defaultValue - Default value, function, or async function to use when input is undefined
+   * @returns A new Guardian instance that handles undefined values
+   *
+   * @example
+   * ```ts
+   * const optionalString = Guardian.string().optional('default');
+   * optionalString.parse('hello'); // 'hello'
+   * optionalString.parse(undefined); // 'default'
+   *
+   * const asyncOptional = Guardian.string().optional(async () => await getDefaultValue());
+   * await asyncOptional.parseAsync(undefined); // result from getDefaultValue()
+   * ```
+   */
+  optional(): BaseGuardian<T | undefined>;
+  optional<D>(
+    defaultValue: D | (() => D) | (() => Promise<D>),
+  ): BaseGuardian<T | D>;
+  optional<D>(
+    defaultValue?: D | (() => D) | (() => Promise<D>),
+  ): BaseGuardian<T | D | undefined> {
+    // Use step method but ensure we preserve state correctly
+    const newGuardian = this.step((x: T) => x as T | D | undefined);
+
+    // Copy all state from this guardian to the new one after step creates it
+    newGuardian._isNullable = this._isNullable;
+    newGuardian._hasOptional = true;
+    (newGuardian as unknown as BaseGuardian<T | D | undefined>)
+      ._optionalDefault = defaultValue;
+
+    // We can't reliably detect if a function is async without calling it
+    // So we'll mark the guardian as potentially async if a function is provided
+    // The actual async detection will happen during parsing
+    if (typeof defaultValue === 'function') {
+      // We assume it might be async since we can't tell without calling it
+      // This will be refined during actual parsing
+    }
+
+    return newGuardian;
+  }
+
+  /**
+   * Synchronously parses and validates the input value.
+   *
+   * @param input - The value to validate
+   * @returns The validated and transformed value
+   * @throws {Error} If any async steps are present
+   * @throws {GuardianError} If validation fails
+   *
+   * @example
+   * ```ts
+   * const result = guardian.parse('hello'); // string
+   * ```
+   */
+  parse(input: unknown): T {
+    if (this._isAsync) {
+      throw new GuardianError(
+        'Cannot use parse() with async validation steps. Use parseAsync() instead.',
+        {
+          expected: 'synchronous guardian',
+          got: 'guardian with async steps',
+          comparison: 'sync',
+          type: 'usage',
+        },
+      );
+    }
+
+    // Handle optional (undefined) first
+    if (this._hasOptional && input === undefined) {
+      if (this._optionalDefault === undefined) {
+        // No default provided, return undefined as valid for optional fields
+        return undefined as T;
+      } else if (typeof this._optionalDefault === 'function') {
+        const result = (this._optionalDefault as () => T | Promise<T>)();
+        if (isPromiseLike(result)) {
+          throw new GuardianError(
+            'Cannot use async default in sync parse. Use parseAsync() instead.',
+            {
+              expected: 'synchronous default',
+              got: 'async function',
+              comparison: 'sync',
+              type: 'usage',
+            },
+          );
+        }
+        // Pass the result through validation
+        input = result;
+      } else {
+        // Use the default value, but pass it through validation
+        input = this._optionalDefault;
+      }
+    }
+
+    // Handle nullable (null) second
+    if (this._isNullable && input === null) {
+      return null as T;
+    }
+
     try {
-      const result = this.guardian(value);
-      if (isPromiseLike(result)) {
-        throw new Error('Guardian validation cannot return a Promise');
+      return this._composedTransform(input) as T;
+    } catch (error) {
+      if (error instanceof GuardianError) {
+        throw error;
+      } else {
+        throw new GuardianError(
+          'Validation failed',
+          {
+            expected: 'valid value',
+            got: input,
+            comparison: 'custom',
+            type: 'validation',
+          },
+        );
       }
-      return [null, result as ResolvedValue<ReturnType<F>>];
+    }
+  }
+
+  /**
+   * Asynchronously parses and validates the input value.
+   *
+   * @param input - The value to validate
+   * @returns Promise that resolves to the validated and transformed value
+   * @throws {GuardianError} If validation fails
+   *
+   * @example
+   * ```ts
+   * const result = await guardian.parseAsync('hello'); // string
+   * ```
+   */
+  async parseAsync(input: unknown): Promise<T> {
+    // Handle optional (undefined) first
+    if (this._hasOptional && input === undefined) {
+      if (this._optionalDefault === undefined) {
+        // No default provided, return undefined as valid for optional fields
+        return undefined as T;
+      } else if (typeof this._optionalDefault === 'function') {
+        const result = (this._optionalDefault as () => T | Promise<T>)();
+        // Pass the result through validation
+        input = isPromiseLike(result) ? await result : result;
+      } else {
+        // Use the default value, but pass it through validation
+        input = this._optionalDefault;
+      }
+    }
+
+    // Handle nullable (null) second
+    if (this._isNullable && input === null) {
+      return null as T;
+    }
+
+    try {
+      const result = this._composedTransform(input);
+      return isPromiseLike(result) ? await result : result;
+    } catch (error) {
+      if (error instanceof GuardianError) {
+        throw error;
+      } else {
+        throw new GuardianError(
+          'Validation failed',
+          {
+            expected: 'valid value',
+            got: input,
+            comparison: 'custom',
+            type: 'validation',
+          },
+        );
+      }
+    }
+  }
+
+  /**
+   * Safely parses the input, returning a result object instead of throwing.
+   *
+   * @param input - The value to validate
+   * @returns Object with success flag and either data or error
+   *
+   * @example
+   * ```ts
+   * const [error, data] = guardian.safeParse('hello');
+   * if (error) {
+   *   console.error('Validation failed:', error.message);
+   * } else {
+   *   console.log('Valid data:', data);
+   * }
+   * ```
+   */
+  safeParse(input: unknown): GuardianSafeParseResult<T> {
+    try {
+      const data = this.parse(input);
+      return [null, data];
     } catch (error) {
       if (error instanceof GuardianError) {
         return [error, undefined];
       } else {
         return [
           new GuardianError(
+            'Unexpected error during validation',
             {
-              got: value,
-              expected: this.guardian.name,
-              comparison: 'validate',
+              expected: 'valid input',
+              got: input,
+              comparison: 'unknown',
+              type: 'unexpected',
             },
-            (error as Error).message || 'Validation failed',
           ),
           undefined,
         ];
       }
     }
   }
+
+  /**
+   * Safely parses the input asynchronously, returning a result tuple instead of throwing.
+   *
+   * @param input - The value to validate
+   * @returns Promise of [error, data] tuple
+   */
+  async safeParseAsync(
+    input: unknown,
+  ): Promise<GuardianSafeParseResult<T>> {
+    try {
+      const data = await this.parseAsync(input);
+      return [null, data];
+    } catch (error) {
+      if (error instanceof GuardianError) {
+        return [error, undefined];
+      } else {
+        return [
+          new GuardianError(
+            'Unexpected error during validation',
+            {
+              expected: 'valid input',
+              got: input,
+              comparison: 'unknown',
+              type: 'unexpected',
+            },
+          ),
+          undefined,
+        ];
+      }
+    }
+  }
+
+  /**
+   * Creates a clone of this guardian for method chaining.
+   *
+   * @template U - The new output type
+   * @returns A new guardian instance
+   * @internal
+   */
+  protected _clone<U>(): BaseGuardian<U> {
+    // Try the most straightforward approach - create new instance and copy everything
+    const clone = Object.setPrototypeOf({}, this.constructor.prototype);
+
+    // Copy all enumerable and non-enumerable own properties
+    const propertyNames = Object.getOwnPropertyNames(this);
+    for (const prop of propertyNames) {
+      const descriptor = Object.getOwnPropertyDescriptor(this, prop);
+      if (descriptor) {
+        if (prop === '_metaData' && descriptor.value) {
+          // Clone metadata
+          Object.defineProperty(clone, prop, {
+            ...descriptor,
+            value: { ...descriptor.value },
+          });
+        } else {
+          Object.defineProperty(clone, prop, descriptor);
+        }
+      }
+    }
+
+    return clone;
+  }
+
+  /**
+   * Executes all validation steps in sequence.
+   *
+   * @param input - The initial input value
+   * @returns The final transformed value (possibly a Promise)
+   * @internal
+   */
 }

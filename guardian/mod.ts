@@ -1,72 +1,70 @@
-// Base exports
-export { BaseGuardian } from './BaseGuardian.ts';
-export { GuardianError } from './GuardianError.ts';
+/**
+ * Guardian - A TypeScript validation library with fluent API.
+ *
+ * Guardian provides a Zod-like validation library with step-based validation,
+ * type transformations, and comprehensive error handling.
+ *
+ * @example
+ * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
+ * // Basic string validation
+ * const name = Guardian.string().minLength(2).maxLength(50);
+ *
+ * // Number validation with transformations
+ * const age = Guardian.number().positive().integer().max(120);
+ *
+ * // String to number transformation
+ * const stringToNumber = Guardian.string().regex(/^\d+$/).toNumber();
+ *
+ * // Complex validation pipeline
+ * const email = Guardian.string()
+ *   .trim()
+ *   .toLowerCase()
+ *   .email('Invalid email format');
+ *
+ * // Parse values
+ * const validName = name.parse('John'); // 'John'
+ * const validAge = age.parse(25); // 25
+ * const convertedNumber = stringToNumber.parse('123'); // 123
+ *
+ * // Safe parsing
+ * const result = email.safeParse('JOHN@EXAMPLE.COM');
+ * if (result.success) {
+ *   console.log(result.data); // 'john@example.com'
+ * }
+ * ```
+ *
+ * @module
+ * @since 1.0.0
+ */
 
-// Main entry point
+// Export main Guardian factory
 export { Guardian } from './Guardian.ts';
 
-// Individual guardians
+// Export base classes for advanced usage
+export { BaseGuardian } from './BaseGuardian.ts';
 export {
   ArrayGuardian,
   BigIntGuardian,
   BooleanGuardian,
   DateGuardian,
-  FunctionGuardian,
+  EnumGuardian,
   NumberGuardian,
   ObjectGuardian,
-  type ObjectSchema,
   StringGuardian,
+  UnknownGuardian,
 } from './guards/mod.ts';
 
-// JSON Schema support
-export { parse } from './parse.ts';
+// Export error classes
+export { GuardianError } from './GuardianError.ts';
+
+// Export types
 export type {
-  ArrayGuardianSchema,
-  BaseGuardianSchema,
-  BigIntGuardianSchema,
-  BooleanGuardianSchema,
-  DateGuardianSchema,
-  FunctionGuardianSchema,
-  GuardianSchema,
-  NumberGuardianSchema,
-  ObjectGuardianSchema,
-  OneOfGuardianSchema,
-  StringGuardianSchema,
-  UnknownGuardianSchema,
+  GuardianMetaData,
+  GuardianSafeParseResult,
+  GuardianTransform,
 } from './types/mod.ts';
 
-// Types
-export type {
-  FunctionParameters,
-  FunctionType,
-  GuardianProxy,
-  GuardianType,
-  MaybeAsync,
-  MergeParameters,
-  ResolvedValue,
-} from './types/mod.ts';
-
-// OpenAPI types
-export type {
-  ArrayOpenAPISchema,
-  BaseOpenAPISchema,
-  BooleanOpenAPISchema,
-  NullableOpenAPISchema,
-  NumberOpenAPISchema,
-  ObjectOpenAPISchema,
-  OneOfOpenAPISchema,
-  OpenAPISchema,
-  StringOpenAPISchema,
-} from './types/mod.ts';
-
-// Helper functions
-export {
-  equals,
-  getType,
-  isIn,
-  isNotIn,
-  isPromiseLike,
-  notEquals,
-  optional,
-  test,
-} from './helpers/mod.ts';
+// Re-export error meta type
+export type { GuardianErrorMeta } from './GuardianError.ts';
