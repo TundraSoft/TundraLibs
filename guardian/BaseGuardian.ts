@@ -150,7 +150,8 @@ export abstract class BaseGuardian<T> {
           (comparison === 'transform' || comparison === 'custom' ||
             comparison === 'equals' || comparison === 'gte' ||
             comparison === 'lte' || comparison === 'unique' ||
-            comparison === 'includes' || comparison === 'excludes')
+            comparison === 'includes' || comparison === 'excludes' ||
+            comparison === 'oneOf')
         ) {
           throw originalError;
         }

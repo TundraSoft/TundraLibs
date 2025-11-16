@@ -9,8 +9,14 @@ import {
   StringGuardian,
   UnknownGuardian,
 } from './guards/mod.ts';
+import type { BaseGuardian } from './BaseGuardian.ts';
 import type { ObjectSchema } from './guards/ObjectGuardian.ts';
-import type { GuardianMetaData } from './types/mod.ts';
+import type {
+  GuardianInfer,
+  GuardianInferInput,
+  GuardianMetaData,
+} from './types/mod.ts';
+import { GuardianError } from './GuardianError.ts';
 
 /**
  * Guardian factory class providing static methods to create validators.
@@ -26,13 +32,68 @@ import type { GuardianMetaData } from './types/mod.ts';
  * const user = Guardian.object({
  *   name: Guardian.string().nonEmpty(),
  *   age: Guardian.number().min(0).max(120).integer(),
- *   email: Guardian.string().email().optional(),
+ *   email: Guardian.string(),
  * });
+ *
+ * // Type inference
+ * type User = Guardian.infer<typeof user>;
+ * type UserInput = Guardian.inferInput<typeof user>;
  * ```
  *
  * @since 1.0.0
  */
 export class Guardian {
+  /**
+   * Type utility to infer the output type from a Guardian instance.
+   *
+   * @example
+   * ```ts
+   * const schema = Guardian.object({ name: Guardian.string() });
+   * type Output = Guardian.infer<typeof schema>; // { name: string }
+   * ```
+   */
+  static infer<T extends BaseGuardian<unknown>>(
+    _guardian: T,
+  ): GuardianInfer<T> {
+    throw new Error(
+      'Guardian.infer is a type-only utility and should not be called at runtime',
+    );
+  }
+
+  /**
+   * Type utility to infer the input type for a Guardian instance.
+   *
+   * @example
+   * ```ts
+   * const schema = Guardian.string().transform(s => parseInt(s));
+   * type Input = Guardian.inferInput<typeof schema>; // string
+   * type Output = Guardian.infer<typeof schema>; // number
+   * ```
+   */
+  static inferInput<T extends BaseGuardian<unknown>>(
+    _guardian: T,
+  ): GuardianInferInput<T> {
+    throw new Error(
+      'Guardian.inferInput is a type-only utility and should not be called at runtime',
+    );
+  }
+
+  /**
+   * Runtime utility to get the type information from a guardian.
+   * Useful for debugging and runtime type introspection.
+   *
+   * @param guardian - Guardian instance to inspect
+   * @returns Type information string
+   *
+   * @example
+   * ```ts
+   * const schema = Guardian.string().minLength(3);
+   * const typeInfo = Guardian.type(schema); // "StringGuardian"
+   * ```
+   */
+  static type(guardian: BaseGuardian<unknown>): string {
+    return guardian.constructor.name;
+  }
   /**
    * Creates a string validator.
    *
@@ -74,64 +135,83 @@ export class Guardian {
   }
 
   /**
-   * Creates a string validator that accepts only literal values.
+   * Creates a validator that accepts values matching any of the provided guardians.
+   * Tries each guardian in order and returns the result from the first successful validation.
+   * The error message is mandatory to clearly communicate what types are expected.
    *
-   * @param values - Array of allowed literal string values
+   * @template T - Array of guardian types
+   * @param guardians - Array of guardians to try in order
+   * @param errorMessage - Mandatory error message describing what types are expected
    * @param metaData - Optional metadata for the validator
-   * @returns New StringGuardian with literal validation
+   * @returns New UnknownGuardian with oneOf validation logic
    *
    * @example
    * ```ts
-   * const status = Guardian.literal(['pending', 'approved', 'rejected']);
-   * status.parse('pending'); // 'pending'
-   * status.parse('invalid'); // throws GuardianError
+   * const userIdOrEmail = Guardian.oneOf([
+   *   Guardian.number().positive().integer(),
+   *   Guardian.string().regex(/^[^@]+@[^@]+$/)
+   * ], 'UserId or Email is required');
+   *
+   * userIdOrEmail.parse(123); // 123
+   * userIdOrEmail.parse('user@example.com'); // 'user@example.com'
+   * userIdOrEmail.parse('invalid'); // throws GuardianError: UserId or Email is required
    * ```
    */
-  static literal(
-    values: readonly string[],
+  static oneOf<T extends readonly BaseGuardian<unknown>[]>(
+    guardians: T,
+    errorMessage: string,
     metaData?: GuardianMetaData,
-  ): StringGuardian {
-    const stringGuardian = new StringGuardian(metaData);
-    return stringGuardian.step((value: string) => {
-      if (!values.includes(value)) {
-        throw new Error(
-          `Expected one of [${values.join(', ')}] but got: ${value}`,
-        );
-      }
-      return value;
-    }, `Literal validation: [${values.join(', ')}]`) as StringGuardian;
-  }
+  ): UnknownGuardian<T[number] extends BaseGuardian<infer U> ? U : never> {
+    if (!guardians || guardians.length === 0) {
+      throw new Error('oneOf requires at least one guardian');
+    }
+    if (!errorMessage || errorMessage.trim().length === 0) {
+      throw new Error('oneOf requires a non-empty error message');
+    }
 
-  // Note: The following methods are placeholders for future implementation
-  // They are included here for API completeness but will throw errors when called
+    return new UnknownGuardian(metaData).step(
+      (input: unknown) => {
+        const errors: GuardianError[] = [];
 
-  /**
-   * @internal
-   * @deprecated Not yet implemented
-   */
-  static union<T extends readonly unknown[]>(
-    _validators: { [K in keyof T]: T[K] },
-  ): never {
-    throw new Error('Union validators not yet implemented');
-  }
+        // Try each guardian in order
+        for (let i = 0; i < guardians.length; i++) {
+          const guardian = guardians[i];
+          if (!guardian) continue;
 
-  /**
-   * @internal
-   * @deprecated Not yet implemented
-   */
-  static optional<T>(_validator: unknown): never {
-    throw new Error('Optional validators not yet implemented');
-  }
+          try {
+            return guardian.parse(input);
+          } catch (error) {
+            if (error instanceof GuardianError) {
+              errors.push(error);
+            } else {
+              errors.push(
+                new GuardianError(`Guardian ${i} threw unexpected error`, {
+                  got: input,
+                  expected: 'valid input for one of the oneOf members',
+                  comparison: 'oneOf',
+                  type: 'oneOf_validation',
+                }),
+              );
+            }
+          }
+        }
 
-  /**
-   * @internal
-   * @deprecated Not yet implemented
-   */
-  static nullable<T>(_validator: unknown): never {
-    throw new Error('Nullable validators not yet implemented');
-  }
-
-  /**
+        // If we get here, none of the guardians succeeded
+        throw new GuardianError(errorMessage, {
+          got: input,
+          expected: 'value matching one of the oneOf types',
+          comparison: 'oneOf',
+          type: 'oneOf_validation',
+          cause: errors.reduce((acc, error, index) => {
+            acc[`option_${index}`] = error;
+            return acc;
+          }, {} as Record<string, GuardianError>),
+        });
+      },
+      errorMessage,
+      'oneOf',
+    ) as UnknownGuardian<T[number] extends BaseGuardian<infer U> ? U : never>;
+  } /**
    * Creates an array validator.
    *
    * @template T - The element type of the array (defaults to unknown)
@@ -152,6 +232,7 @@ export class Guardian {
    * stringArray.parse(['hello', 'world']); // ['hello', 'world']
    * ```
    */
+
   static array<T = unknown>(metaData?: GuardianMetaData): ArrayGuardian<T> {
     return new ArrayGuardian<T>(metaData);
   }
@@ -231,18 +312,28 @@ export class Guardian {
   }
 
   /**
-   * Creates an enum validator.
+   * Creates an enum validator that accepts only values from the provided list.
+   * This is the preferred way to handle literal values and enums.
    *
-   * @template T - The enum type
-   * @param allowedValues - Array of allowed enum values
+   * @template T - The enum/literal type
+   * @param allowedValues - Array of allowed enum values or literals
    * @param metaData - Optional metadata for the validator
    * @returns New EnumGuardian instance
    *
    * @example
    * ```ts
+   * // TypeScript enum
    * enum Color { Red = 'red', Green = 'green', Blue = 'blue' }
-   * const schema = Guardian.enum(Object.values(Color));
-   * const result = schema.parse('red'); // 'red'
+   * const colorSchema = Guardian.enum(Object.values(Color));
+   * colorSchema.parse('red'); // 'red'
+   *
+   * // String literals
+   * const statusSchema = Guardian.enum(['pending', 'approved', 'rejected'] as const);
+   * statusSchema.parse('pending'); // 'pending'
+   *
+   * // Number literals
+   * const prioritySchema = Guardian.enum([1, 2, 3, 4, 5] as const);
+   * prioritySchema.parse(3); // 3
    * ```
    */
   static enum<T>(

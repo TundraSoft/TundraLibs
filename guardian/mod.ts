@@ -61,6 +61,8 @@ export { GuardianError } from './GuardianError.ts';
 
 // Export types
 export type {
+  GuardianInfer,
+  GuardianInferInput,
   GuardianMetaData,
   GuardianSafeParseResult,
   GuardianTransform,
