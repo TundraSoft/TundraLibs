@@ -1,18 +1,24 @@
 import * as asserts from '$asserts';
-import { Guardian, GuardianError } from '../../mod.ts';
+import {
+  BooleanGuardian,
+  GuardianError,
+  NumberGuardian,
+  ObjectGuardian,
+  StringGuardian,
+} from '../../mod.ts';
 
 Deno.test('guardian.ObjectGuardian', async (t) => {
   await t.step('Creation and basic functionality', async (t) => {
     await t.step('should create an ObjectGuardian with empty schema', () => {
-      const guard = Guardian.object({});
+      const guard = new ObjectGuardian({});
       const result = guard.parse({});
       asserts.assertEquals(result, {});
     });
 
     await t.step('should create an ObjectGuardian with schema', () => {
-      const guard = Guardian.object({
-        name: Guardian.string(),
-        age: Guardian.number(),
+      const guard = new ObjectGuardian({
+        name: new StringGuardian(),
+        age: new NumberGuardian(),
       });
 
       const result = guard.parse({ name: 'John', age: 30 });
@@ -21,8 +27,8 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     });
 
     await t.step('should have default passthrough mode', () => {
-      const guard = Guardian.object({
-        name: Guardian.string(),
+      const guard = new ObjectGuardian({
+        name: new StringGuardian(),
       });
 
       const result = guard.parse({ name: 'John', extra: 'value' });
@@ -35,9 +41,9 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     await t.step(
       'Passthrough mode (default) - should allow additional properties',
       () => {
-        const guard = Guardian.object({
-          name: Guardian.string(),
-          age: Guardian.number(),
+        const guard = new ObjectGuardian({
+          name: new StringGuardian(),
+          age: new NumberGuardian(),
         });
 
         const input = { name: 'John', age: 30, extra: 'allowed' };
@@ -49,9 +55,9 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     );
 
     await t.step('should validate required properties', () => {
-      const guard = Guardian.object({
-        name: Guardian.string(),
-        age: Guardian.number(),
+      const guard = new ObjectGuardian({
+        name: new StringGuardian(),
+        age: new NumberGuardian(),
       });
 
       asserts.assertThrows(
@@ -61,9 +67,9 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     });
 
     await t.step('Strict mode - should reject additional properties', () => {
-      const guard = Guardian.object({
-        name: Guardian.string(),
-        age: Guardian.number(),
+      const guard = new ObjectGuardian({
+        name: new StringGuardian(),
+        age: new NumberGuardian(),
       }).strict();
 
       asserts.assertThrows(
@@ -75,9 +81,9 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     await t.step(
       'Strict mode - should pass when no additional properties',
       () => {
-        const guard = Guardian.object({
-          name: Guardian.string(),
-          age: Guardian.number(),
+        const guard = new ObjectGuardian({
+          name: new StringGuardian(),
+          age: new NumberGuardian(),
         }).strict();
 
         const result = guard.parse({ name: 'John', age: 30 });
@@ -87,9 +93,9 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     );
 
     await t.step('Strip mode - should remove additional properties', () => {
-      const guard = Guardian.object({
-        name: Guardian.string(),
-        age: Guardian.number(),
+      const guard = new ObjectGuardian({
+        name: new StringGuardian(),
+        age: new NumberGuardian(),
       }).strip();
 
       const result = guard.parse({ name: 'John', age: 30, extra: 'removed' });
@@ -103,13 +109,13 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     await t.step(
       'extend method - should extend schema with new properties',
       () => {
-        const baseGuard = Guardian.object({
-          name: Guardian.string(),
+        const baseGuard = new ObjectGuardian({
+          name: new StringGuardian(),
         });
 
         const extendedGuard = baseGuard.extend({
-          age: Guardian.number(),
-          email: Guardian.string(),
+          age: new NumberGuardian(),
+          email: new StringGuardian(),
         });
 
         const result = extendedGuard.parse({
@@ -125,11 +131,11 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     );
 
     await t.step('pick method - should pick specific properties', () => {
-      const fullGuard = Guardian.object({
-        id: Guardian.number(),
-        name: Guardian.string(),
-        email: Guardian.string(),
-        password: Guardian.string(),
+      const fullGuard = new ObjectGuardian({
+        id: new NumberGuardian(),
+        name: new StringGuardian(),
+        email: new StringGuardian(),
+        password: new StringGuardian(),
       });
 
       const publicGuard = fullGuard.pick('id', 'name', 'email');
@@ -145,11 +151,11 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     });
 
     await t.step('omit method - should omit specific properties', () => {
-      const fullGuard = Guardian.object({
-        id: Guardian.number(),
-        name: Guardian.string(),
-        email: Guardian.string(),
-        password: Guardian.string(),
+      const fullGuard = new ObjectGuardian({
+        id: new NumberGuardian(),
+        name: new StringGuardian(),
+        email: new StringGuardian(),
+        password: new StringGuardian(),
       });
 
       const safeGuard = fullGuard.omit('password');
@@ -167,7 +173,7 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
 
   await t.step('Error handling', async (t) => {
     await t.step('should reject non-objects', () => {
-      const guard = Guardian.object({});
+      const guard = new ObjectGuardian({});
 
       asserts.assertThrows(() => guard.parse('not an object'), GuardianError);
       asserts.assertThrows(() => guard.parse(123), GuardianError);
@@ -178,9 +184,9 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
 
   await t.step('SafeParse functionality', async (t) => {
     await t.step('should return success result for valid data', () => {
-      const guard = Guardian.object({
-        name: Guardian.string(),
-        age: Guardian.number().optional(),
+      const guard = new ObjectGuardian({
+        name: new StringGuardian(),
+        age: new NumberGuardian().optional(),
       });
 
       const [error, data] = guard.safeParse({ name: 'John', age: 30 });
@@ -190,9 +196,9 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     });
 
     await t.step('should return error result for invalid data', () => {
-      const guard = Guardian.object({
-        name: Guardian.string(),
-        age: Guardian.number(),
+      const guard = new ObjectGuardian({
+        name: new StringGuardian(),
+        age: new NumberGuardian(),
       });
 
       const [error, data] = guard.safeParse({ name: 'John' });
@@ -203,10 +209,10 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
 
   await t.step('Refine functionality', async (t) => {
     await t.step('should validate password confirmation', () => {
-      const registerSchema = Guardian.object({
-        email: Guardian.string(),
-        password: Guardian.string(),
-        confirmPassword: Guardian.string(),
+      const registerSchema = new ObjectGuardian({
+        email: new StringGuardian(),
+        password: new StringGuardian(),
+        confirmPassword: new StringGuardian(),
       }).refine(
         (data) => data.password === data.confirmPassword,
         'Passwords do not match',
@@ -236,9 +242,9 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     });
 
     await t.step('should validate conditional requirements', () => {
-      const userSchema = Guardian.object({
-        age: Guardian.number(),
-        hasParentalConsent: Guardian.boolean().optional(),
+      const userSchema = new ObjectGuardian({
+        age: new NumberGuardian(),
+        hasParentalConsent: new BooleanGuardian().optional(),
       }).refine(
         (data) => data.age >= 18 || data.hasParentalConsent === true,
         'Users under 18 must have parental consent',
@@ -265,11 +271,11 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     });
 
     await t.step('should support multiple refinements with superRefine', () => {
-      const eventSchema = Guardian.object({
-        startDate: Guardian.string(), // Simplified for testing
-        endDate: Guardian.string(),
-        price: Guardian.number(),
-        discountCode: Guardian.string().optional(),
+      const eventSchema = new ObjectGuardian({
+        startDate: new StringGuardian(), // Simplified for testing
+        endDate: new StringGuardian(),
+        price: new NumberGuardian(),
+        discountCode: new StringGuardian().optional(),
       }).superRefine([
         {
           validator: (data) => data.endDate > data.startDate,
@@ -317,9 +323,9 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     });
 
     await t.step('should handle async refinements', async () => {
-      const asyncSchema = Guardian.object({
-        username: Guardian.string(),
-        email: Guardian.string(),
+      const asyncSchema = new ObjectGuardian({
+        username: new StringGuardian(),
+        email: new StringGuardian(),
       }).refine(
         async (data) => {
           // Simulate async validation (e.g., checking if username is unique)
@@ -361,8 +367,8 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
     });
 
     await t.step('should reject async refinements in sync parsing', () => {
-      const asyncSchema = Guardian.object({
-        username: Guardian.string(),
+      const asyncSchema = new ObjectGuardian({
+        username: new StringGuardian(),
       }).refine(
         async (data) => data.username !== 'taken',
         'Username is already taken',

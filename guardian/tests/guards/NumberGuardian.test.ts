@@ -1,10 +1,10 @@
 import * as asserts from '$asserts';
-import { Guardian, GuardianError, NumberGuardian } from '../../mod.ts';
+import { GuardianError, NumberGuardian } from '../../mod.ts';
 
 Deno.test('guardian.NumberGuardian', async (t) => {
   await t.step('basic functionality', async (t) => {
     await t.step('should validate number type', () => {
-      const schema = Guardian.number();
+      const schema = new NumberGuardian();
 
       asserts.assertEquals(schema.parse(123), 123);
       asserts.assertEquals(schema.parse(3.14), 3.14);
@@ -18,12 +18,12 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should reject NaN', () => {
-      const schema = Guardian.number();
+      const schema = new NumberGuardian();
       asserts.assertThrows(() => schema.parse(NaN), GuardianError);
     });
 
     await t.step('should accept Infinity', () => {
-      const schema = Guardian.number();
+      const schema = new NumberGuardian();
       asserts.assertEquals(schema.parse(Infinity), Infinity);
       asserts.assertEquals(schema.parse(-Infinity), -Infinity);
     });
@@ -31,7 +31,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
 
   await t.step('range validations', async (t) => {
     await t.step('should validate minimum value', () => {
-      const schema = Guardian.number().min(10);
+      const schema = new NumberGuardian().min(10);
 
       asserts.assertEquals(schema.parse(10), 10);
       asserts.assertEquals(schema.parse(15), 15);
@@ -40,7 +40,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should validate maximum value', () => {
-      const schema = Guardian.number().max(100);
+      const schema = new NumberGuardian().max(100);
 
       asserts.assertEquals(schema.parse(100), 100);
       asserts.assertEquals(schema.parse(50), 50);
@@ -49,7 +49,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should combine min and max', () => {
-      const schema = Guardian.number().min(10).max(100);
+      const schema = new NumberGuardian().min(10).max(100);
 
       asserts.assertEquals(schema.parse(50), 50);
       asserts.assertThrows(() => schema.parse(5), GuardianError);
@@ -59,7 +59,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
 
   await t.step('sign validations', async (t) => {
     await t.step('should validate positive numbers', () => {
-      const schema = Guardian.number().positive();
+      const schema = new NumberGuardian().positive();
 
       asserts.assertEquals(schema.parse(1), 1);
       asserts.assertEquals(schema.parse(0.1), 0.1);
@@ -68,7 +68,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should validate negative numbers', () => {
-      const schema = Guardian.number().negative();
+      const schema = new NumberGuardian().negative();
 
       asserts.assertEquals(schema.parse(-1), -1);
       asserts.assertEquals(schema.parse(-0.1), -0.1);
@@ -77,7 +77,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should validate non-negative numbers', () => {
-      const schema = Guardian.number().nonNegative();
+      const schema = new NumberGuardian().nonNegative();
 
       asserts.assertEquals(schema.parse(0), 0);
       asserts.assertEquals(schema.parse(1), 1);
@@ -85,7 +85,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should validate non-positive numbers', () => {
-      const schema = Guardian.number().nonPositive();
+      const schema = new NumberGuardian().nonPositive();
 
       asserts.assertEquals(schema.parse(0), 0);
       asserts.assertEquals(schema.parse(-1), -1);
@@ -95,7 +95,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
 
   await t.step('integer and finite validations', async (t) => {
     await t.step('should validate integers', () => {
-      const schema = Guardian.number().integer();
+      const schema = new NumberGuardian().integer();
 
       asserts.assertEquals(schema.parse(42), 42);
       asserts.assertEquals(schema.parse(-10), -10);
@@ -105,7 +105,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should validate finite numbers', () => {
-      const schema = Guardian.number().finite();
+      const schema = new NumberGuardian().finite();
 
       asserts.assertEquals(schema.parse(123), 123);
       asserts.assertEquals(schema.parse(-456), -456);
@@ -114,7 +114,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should validate safe integers', () => {
-      const schema = Guardian.number().safeInteger();
+      const schema = new NumberGuardian().safeInteger();
 
       asserts.assertEquals(schema.parse(42), 42);
       asserts.assertEquals(
@@ -135,7 +135,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
 
   await t.step('multipleOf validation', async (t) => {
     await t.step('should validate multiples', () => {
-      const schema = Guardian.number().multipleOf(5);
+      const schema = new NumberGuardian().multipleOf(5);
 
       asserts.assertEquals(schema.parse(0), 0);
       asserts.assertEquals(schema.parse(5), 5);
@@ -146,7 +146,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should work with decimal multiples', () => {
-      const schema = Guardian.number().multipleOf(0.5);
+      const schema = new NumberGuardian().multipleOf(0.5);
 
       asserts.assertEquals(schema.parse(1.5), 1.5);
       asserts.assertEquals(schema.parse(2.0), 2.0);
@@ -156,7 +156,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
 
   await t.step('mathematical transformations', async (t) => {
     await t.step('should round numbers', () => {
-      const schema = Guardian.number().round();
+      const schema = new NumberGuardian().round();
 
       asserts.assertEquals(schema.parse(3.7), 4);
       asserts.assertEquals(schema.parse(3.2), 3);
@@ -165,7 +165,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should floor numbers', () => {
-      const schema = Guardian.number().floor();
+      const schema = new NumberGuardian().floor();
 
       asserts.assertEquals(schema.parse(3.7), 3);
       asserts.assertEquals(schema.parse(3.2), 3);
@@ -174,7 +174,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should ceil numbers', () => {
-      const schema = Guardian.number().ceil();
+      const schema = new NumberGuardian().ceil();
 
       asserts.assertEquals(schema.parse(3.7), 4);
       asserts.assertEquals(schema.parse(3.2), 4);
@@ -183,7 +183,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should truncate numbers', () => {
-      const schema = Guardian.number().trunc();
+      const schema = new NumberGuardian().trunc();
 
       asserts.assertEquals(schema.parse(3.7), 3);
       asserts.assertEquals(schema.parse(3.2), 3);
@@ -192,7 +192,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should get absolute value', () => {
-      const schema = Guardian.number().abs();
+      const schema = new NumberGuardian().abs();
 
       asserts.assertEquals(schema.parse(5), 5);
       asserts.assertEquals(schema.parse(-5), 5);
@@ -202,7 +202,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
 
   await t.step('type transformations', async (t) => {
     await t.step('should convert number to string', () => {
-      const schema = Guardian.number().toString();
+      const schema = new NumberGuardian().toString();
 
       asserts.assertEquals(schema.parse(123), '123');
       asserts.assertEquals(schema.parse(3.14), '3.14');
@@ -210,14 +210,14 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should convert number to string with radix', () => {
-      const schema = Guardian.number().toString(16);
+      const schema = new NumberGuardian().toString(16);
 
       asserts.assertEquals(schema.parse(255), 'ff');
       asserts.assertEquals(schema.parse(16), '10');
     });
 
     await t.step('should convert number to BigInt', () => {
-      const schema = Guardian.number().toBigInt();
+      const schema = new NumberGuardian().toBigInt();
 
       asserts.assertEquals(schema.parse(123), 123n);
       asserts.assertEquals(schema.parse(-42), -42n);
@@ -225,7 +225,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should convert number to Date', () => {
-      const schema = Guardian.number().toDate();
+      const schema = new NumberGuardian().toDate();
       const timestamp = Date.now();
 
       const date = schema.parse(timestamp);
@@ -238,7 +238,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
 
   await t.step('chained validations', async (t) => {
     await t.step('should chain multiple validations', () => {
-      const schema = Guardian.number()
+      const schema = new NumberGuardian()
         .positive()
         .integer()
         .max(100)
@@ -256,7 +256,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should chain transformations', () => {
-      const schema = Guardian.number().abs().round();
+      const schema = new NumberGuardian().abs().round();
 
       asserts.assertEquals(schema.parse(-3.7), 4);
       asserts.assertEquals(schema.parse(2.2), 2);
@@ -265,7 +265,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
 
   await t.step('safe parsing', async (t) => {
     await t.step('should return success result for valid input', () => {
-      const schema = Guardian.number().positive();
+      const schema = new NumberGuardian().positive();
       const result = schema.safeParse(42);
 
       const [error, data] = result;
@@ -274,7 +274,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should return error result for invalid input', () => {
-      const schema = Guardian.number().positive();
+      const schema = new NumberGuardian().positive();
       const result = schema.safeParse(-1);
 
       const [error, data] = result;
@@ -285,7 +285,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
 
   await t.step('error handling', async (t) => {
     await t.step('should provide detailed error messages', () => {
-      const schema = Guardian.number().min(10);
+      const schema = new NumberGuardian().min(10);
 
       asserts.assertThrows(
         () => schema.parse(5),
@@ -295,7 +295,7 @@ Deno.test('guardian.NumberGuardian', async (t) => {
     });
 
     await t.step('should support custom error messages', () => {
-      const schema = Guardian.number().min(10, 'Too small!');
+      const schema = new NumberGuardian().min(10, 'Too small!');
 
       asserts.assertThrows(
         () => schema.parse(5),

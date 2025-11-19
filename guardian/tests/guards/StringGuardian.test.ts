@@ -1,10 +1,10 @@
 import * as asserts from '$asserts';
-import { Guardian, GuardianError, StringGuardian } from '../../mod.ts';
+import { GuardianError, StringGuardian } from '../../mod.ts';
 
 Deno.test('guardian.StringGuardian', async (t) => {
   await t.step('basic functionality', async (t) => {
     await t.step('should validate string type', () => {
-      const schema = Guardian.string();
+      const schema = new StringGuardian();
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
       asserts.assertThrows(() => schema.parse(123), GuardianError);
@@ -13,12 +13,12 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
 
     await t.step('should handle empty strings', () => {
-      const schema = Guardian.string();
+      const schema = new StringGuardian();
       asserts.assertEquals(schema.parse(''), '');
     });
 
     await t.step('should preserve string values', () => {
-      const schema = Guardian.string();
+      const schema = new StringGuardian();
       const testCases = ['hello', 'world', '123', 'special!@#$%'];
 
       for (const testCase of testCases) {
@@ -29,7 +29,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
 
   await t.step('length validations', async (t) => {
     await t.step('should validate minimum length', () => {
-      const schema = Guardian.string().minLength(3);
+      const schema = new StringGuardian().minLength(3);
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
       asserts.assertEquals(schema.parse('abc'), 'abc');
@@ -38,7 +38,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
 
     await t.step('should validate maximum length', () => {
-      const schema = Guardian.string().maxLength(5);
+      const schema = new StringGuardian().maxLength(5);
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
       asserts.assertEquals(schema.parse('hi'), 'hi');
@@ -46,7 +46,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
 
     await t.step('should validate exact length', () => {
-      const schema = Guardian.string().length(5);
+      const schema = new StringGuardian().length(5);
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
       asserts.assertThrows(() => schema.parse('hi'), GuardianError);
@@ -54,7 +54,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
 
     await t.step('should combine length validations', () => {
-      const schema = Guardian.string().minLength(2).maxLength(10);
+      const schema = new StringGuardian().minLength(2).maxLength(10);
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
       asserts.assertThrows(() => schema.parse('h'), GuardianError);
@@ -64,7 +64,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
 
   await t.step('regex validation', async (t) => {
     await t.step('should validate against regex patterns', () => {
-      const lettersOnly = Guardian.string().regex(/^[a-zA-Z]+$/);
+      const lettersOnly = new StringGuardian().regex(/^[a-zA-Z]+$/);
 
       asserts.assertEquals(lettersOnly.parse('hello'), 'hello');
       asserts.assertEquals(lettersOnly.parse('Hello'), 'Hello');
@@ -73,7 +73,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
 
     await t.step('should validate email format', () => {
-      const email = Guardian.string().email();
+      const email = new StringGuardian().email();
 
       asserts.assertEquals(email.parse('user@example.com'), 'user@example.com');
       asserts.assertEquals(
@@ -86,7 +86,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
 
     await t.step('should validate URL format', () => {
-      const url = Guardian.string().url();
+      const url = new StringGuardian().url();
 
       asserts.assertEquals(
         url.parse('https://example.com'),
@@ -104,28 +104,28 @@ Deno.test('guardian.StringGuardian', async (t) => {
 
   await t.step('transformations', async (t) => {
     await t.step('should transform to uppercase', () => {
-      const schema = Guardian.string().toUpperCase();
+      const schema = new StringGuardian().toUpperCase();
 
       asserts.assertEquals(schema.parse('hello'), 'HELLO');
       asserts.assertEquals(schema.parse('Hello World'), 'HELLO WORLD');
     });
 
     await t.step('should transform to lowercase', () => {
-      const schema = Guardian.string().toLowerCase();
+      const schema = new StringGuardian().toLowerCase();
 
       asserts.assertEquals(schema.parse('HELLO'), 'hello');
       asserts.assertEquals(schema.parse('Hello World'), 'hello world');
     });
 
     await t.step('should trim whitespace', () => {
-      const schema = Guardian.string().trim();
+      const schema = new StringGuardian().trim();
 
       asserts.assertEquals(schema.parse('  hello  '), 'hello');
       asserts.assertEquals(schema.parse('\n\tworld\n'), 'world');
     });
 
     await t.step('should chain transformations', () => {
-      const schema = Guardian.string().trim().toLowerCase().toUpperCase();
+      const schema = new StringGuardian().trim().toLowerCase().toUpperCase();
 
       asserts.assertEquals(schema.parse('  Hello World  '), 'HELLO WORLD');
     });
@@ -133,7 +133,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
 
   await t.step('type transformations', async (t) => {
     await t.step('should convert string to number', () => {
-      const schema = Guardian.string().toNumber();
+      const schema = new StringGuardian().toNumber();
 
       asserts.assertEquals(schema.parse('123'), 123);
       asserts.assertEquals(schema.parse('3.14'), 3.14);
@@ -144,7 +144,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
 
     await t.step('should convert string to integer', () => {
-      const schema = Guardian.string().toInt();
+      const schema = new StringGuardian().toInt();
 
       asserts.assertEquals(schema.parse('123'), 123);
       asserts.assertEquals(schema.parse('-42'), -42);
@@ -154,7 +154,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
 
     await t.step('should convert string to date', () => {
-      const schema = Guardian.string().toDate();
+      const schema = new StringGuardian().toDate();
 
       const date = schema.parse('2023-01-01T00:00:00.000Z');
       asserts.assert(date instanceof Date);
@@ -166,7 +166,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
 
   await t.step('safe parsing', async (t) => {
     await t.step('should return success result for valid input', () => {
-      const schema = Guardian.string().minLength(3);
+      const schema = new StringGuardian().minLength(3);
       const result = schema.safeParse('hello');
 
       const [error, data] = result;
@@ -175,7 +175,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
 
     await t.step('should return error result for invalid input', () => {
-      const schema = Guardian.string().minLength(3);
+      const schema = new StringGuardian().minLength(3);
       const result = schema.safeParse('hi');
 
       const [error, data] = result;
@@ -186,7 +186,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
 
   await t.step('error handling', async (t) => {
     await t.step('should provide detailed error messages', () => {
-      const schema = Guardian.string().minLength(5);
+      const schema = new StringGuardian().minLength(5);
 
       asserts.assertThrows(
         () => schema.parse('hi'),
@@ -196,7 +196,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
 
     await t.step('should support custom error messages', () => {
-      const schema = Guardian.string().minLength(5, 'Too short!');
+      const schema = new StringGuardian().minLength(5, 'Too short!');
 
       asserts.assertThrows(
         () => schema.parse('hi'),
@@ -214,12 +214,12 @@ Deno.test('guardian.StringGuardian', async (t) => {
         examples: ['John', 'Jane'],
       };
 
-      const schema = Guardian.string(metaData);
+      const schema = new StringGuardian(metaData);
       asserts.assertEquals(schema.metaData, metaData);
     });
 
     await t.step('should allow setting metadata properties', () => {
-      const schema = Guardian.string();
+      const schema = new StringGuardian();
       schema.description = 'Test description';
       schema.title = 'Test Title';
       schema.examples = ['example1', 'example2'];

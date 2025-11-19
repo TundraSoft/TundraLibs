@@ -1,12 +1,11 @@
 import * as asserts from '$asserts';
-import { Guardian } from '../../Guardian.ts';
 import { UnknownGuardian } from '../../guards/UnknownGuardian.ts';
 import { GuardianError } from '../../GuardianError.ts';
 
 Deno.test('guardian.UnknownGuardian', async (t) => {
   await t.step('basic functionality', async (t) => {
     await t.step('should accept any value', () => {
-      const unknownGuard = Guardian.unknown();
+      const unknownGuard = new UnknownGuardian();
 
       // Test various types
       asserts.assertEquals(unknownGuard.parse('hello'), 'hello');
@@ -20,7 +19,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     });
 
     await t.step('should preserve value identity', () => {
-      const unknownGuard = Guardian.unknown();
+      const unknownGuard = new UnknownGuardian();
       const obj = { test: 'value' };
       const arr = [1, 2, 3];
 
@@ -29,7 +28,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     });
 
     await t.step('should work with special values', () => {
-      const unknownGuard = Guardian.unknown();
+      const unknownGuard = new UnknownGuardian();
 
       asserts.assertEquals(unknownGuard.parse(0), 0);
       asserts.assertEquals(unknownGuard.parse(-0), -0);
@@ -48,7 +47,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
 
   await t.step('type transformations', async (t) => {
     await t.step('should convert to string', () => {
-      const stringGuard = Guardian.unknown().toStringValue();
+      const stringGuard = new UnknownGuardian().toStringValue();
 
       asserts.assertEquals(stringGuard.parse('hello'), 'hello');
       asserts.assertEquals(stringGuard.parse(42), '42');
@@ -65,14 +64,14 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     });
 
     await t.step('should handle symbol to string conversion', () => {
-      const stringGuard = Guardian.unknown().toStringValue();
+      const stringGuard = new UnknownGuardian().toStringValue();
       const sym = Symbol('test');
       const result = stringGuard.parse(sym);
       asserts.assert(result.startsWith('Symbol(test)'));
     });
 
     await t.step('should handle function to string conversion', () => {
-      const stringGuard = Guardian.unknown().toStringValue();
+      const stringGuard = new UnknownGuardian().toStringValue();
       const fn = () => 'hello';
       const result = stringGuard.parse(fn);
       asserts.assert(typeof result === 'string');
@@ -80,7 +79,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     });
 
     await t.step('should convert to JSON', () => {
-      const jsonGuard = Guardian.unknown().toJSON();
+      const jsonGuard = new UnknownGuardian().toJSON();
 
       asserts.assertEquals(jsonGuard.parse('hello'), '"hello"');
       asserts.assertEquals(jsonGuard.parse(42), '42');
@@ -94,7 +93,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     });
 
     await t.step('should handle JSON serialization errors', () => {
-      const jsonGuard = Guardian.unknown().toJSON();
+      const jsonGuard = new UnknownGuardian().toJSON();
 
       // Create an object that can't be serialized (BigInt)
       const unserializable = BigInt(123);
@@ -106,7 +105,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     });
 
     await t.step('should use custom error message for JSON failures', () => {
-      const jsonGuard = Guardian.unknown().toJSON('Custom JSON error');
+      const jsonGuard = new UnknownGuardian().toJSON('Custom JSON error');
 
       // Use BigInt which can't be JSON serialized
       const unserializable = BigInt(456);
@@ -123,7 +122,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     await t.step('should narrow to string type', () => {
       const isString = (value: unknown): value is string =>
         typeof value === 'string';
-      const stringGuard = Guardian.unknown().narrow(isString);
+      const stringGuard = new UnknownGuardian().narrow(isString);
 
       asserts.assertEquals(stringGuard.parse('hello'), 'hello');
       asserts.assertThrows(
@@ -136,7 +135,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     await t.step('should narrow to number type', () => {
       const isNumber = (value: unknown): value is number =>
         typeof value === 'number';
-      const numberGuard = Guardian.unknown().narrow(isNumber);
+      const numberGuard = new UnknownGuardian().narrow(isNumber);
 
       asserts.assertEquals(numberGuard.parse(42), 42);
       asserts.assertThrows(
@@ -149,7 +148,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     await t.step('should use custom error message for narrowing', () => {
       const isString = (value: unknown): value is string =>
         typeof value === 'string';
-      const stringGuard = Guardian.unknown().narrow(
+      const stringGuard = new UnknownGuardian().narrow(
         isString,
         'Expected a string value',
       );
@@ -165,7 +164,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
 
   await t.step('nullish validations', async (t) => {
     await t.step('should validate nullish values', () => {
-      const nullishGuard = Guardian.unknown().nullish();
+      const nullishGuard = new UnknownGuardian().nullish();
 
       asserts.assertEquals(nullishGuard.parse(null), null);
       asserts.assertEquals(nullishGuard.parse(undefined), undefined);
@@ -181,7 +180,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     });
 
     await t.step('should validate non-nullish values', () => {
-      const nonNullishGuard = Guardian.unknown().nonNullish();
+      const nonNullishGuard = new UnknownGuardian().nonNullish();
 
       asserts.assertEquals(nonNullishGuard.parse('hello'), 'hello');
       asserts.assertEquals(nonNullishGuard.parse(42), 42);
@@ -202,7 +201,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     await t.step('should apply type guard assertion', () => {
       const isString = (value: unknown): value is string =>
         typeof value === 'string';
-      const assertGuard = Guardian.unknown().as(isString);
+      const assertGuard = new UnknownGuardian().as(isString);
 
       asserts.assertEquals(assertGuard.parse('hello'), 'hello');
       asserts.assertThrows(
@@ -212,7 +211,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     });
 
     await t.step('should apply custom transformation using mutate', () => {
-      const transformGuard = Guardian.unknown().mutate((value: unknown) => {
+      const transformGuard = new UnknownGuardian().mutate((value: unknown) => {
         return typeof value === 'string' ? value.toUpperCase() : String(value);
       });
 
@@ -221,7 +220,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     });
 
     await t.step('should handle transformation errors', () => {
-      const transformGuard = Guardian.unknown().mutate(() => {
+      const transformGuard = new UnknownGuardian().mutate(() => {
         throw new Error('Transformation failed');
       });
 
@@ -234,7 +233,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
 
   await t.step('safe parsing', async (t) => {
     await t.step('should return success for valid values', () => {
-      const unknownGuard = Guardian.unknown();
+      const unknownGuard = new UnknownGuardian();
 
       const [error, data] = unknownGuard.safeParse('hello');
       asserts.assertEquals(error, null);
@@ -242,7 +241,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     });
 
     await t.step('should handle transformation failures in safeParse', () => {
-      const failingGuard = Guardian.unknown()
+      const failingGuard = new UnknownGuardian()
         .mutate(() => {
           throw new Error('Transformation failed');
         });
@@ -255,7 +254,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
 
   await t.step('chaining operations', async (t) => {
     await t.step('should chain multiple transformations', () => {
-      const chainedGuard = Guardian.unknown()
+      const chainedGuard = new UnknownGuardian()
         .as((value: unknown): value is string => typeof value === 'string')
         .mutate((str: string) => str.toUpperCase())
         .mutate((str: string) => str + '!');
@@ -267,7 +266,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
       const isNumber = (value: unknown): value is number =>
         typeof value === 'number';
 
-      const chainedGuard = Guardian.unknown()
+      const chainedGuard = new UnknownGuardian()
         .narrow(isNumber)
         .mutate((num: number) => num * 2)
         .mutate((num: number) => `Result: ${num}`);
@@ -283,7 +282,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
 
   await t.step('error handling', async (t) => {
     await t.step('should preserve error context in transformations', () => {
-      const guard = Guardian.unknown().mutate(() => {
+      const guard = new UnknownGuardian().mutate(() => {
         throw new GuardianError(
           'Custom validation error',
           {
@@ -303,7 +302,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     });
 
     await t.step('should wrap non-Guardian errors', () => {
-      const guard = Guardian.unknown().mutate(() => {
+      const guard = new UnknownGuardian().mutate(() => {
         throw new TypeError('Regular error');
       });
 
@@ -315,13 +314,13 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
 
   await t.step('async support', async (t) => {
     await t.step('should support async parsing', async () => {
-      const guard = Guardian.unknown();
+      const guard = new UnknownGuardian();
       const result = await guard.parseAsync('hello');
       asserts.assertEquals(result, 'hello');
     });
 
     await t.step('should handle async parsing errors', async () => {
-      const guard = Guardian.unknown().mutate(() => {
+      const guard = new UnknownGuardian().mutate(() => {
         throw new GuardianError('Sync transformation error', {
           expected: 'valid value',
           got: 'invalid',

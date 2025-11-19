@@ -1,5 +1,5 @@
 import * as asserts from '$asserts';
-import { EnumGuardian, Guardian, GuardianError } from '../../mod.ts';
+import { EnumGuardian, GuardianError } from '../../mod.ts';
 
 Deno.test('guardian.EnumGuardian', async (t) => {
   await t.step('basic functionality', async (t) => {

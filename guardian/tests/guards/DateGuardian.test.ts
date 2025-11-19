@@ -1,5 +1,5 @@
 import * as asserts from '$asserts';
-import { DateGuardian, Guardian, GuardianError } from '../../mod.ts';
+import { DateGuardian, GuardianError } from '../../mod.ts';
 
 Deno.test('guardian.DateGuardian', async (t) => {
   await t.step('basic functionality', async (t) => {

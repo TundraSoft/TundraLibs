@@ -1,5 +1,5 @@
 import * as asserts from '$asserts';
-import { BigIntGuardian, Guardian, GuardianError } from '../../mod.ts';
+import { BigIntGuardian, GuardianError } from '../../mod.ts';
 
 Deno.test('guardian.BigIntGuardian', async (t) => {
   await t.step('basic functionality', async (t) => {

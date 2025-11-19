@@ -1,5 +1,5 @@
 import * as asserts from '$asserts';
-import { BooleanGuardian, Guardian, GuardianError } from '../../mod.ts';
+import { BooleanGuardian, GuardianError } from '../../mod.ts';
 
 Deno.test('guardian.BooleanGuardian', async (t) => {
   await t.step('basic functionality', async (t) => {

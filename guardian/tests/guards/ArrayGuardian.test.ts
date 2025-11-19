@@ -1,6 +1,5 @@
 import * as asserts from '$asserts';
 import { Guardian } from '../../Guardian.ts';
-import { ArrayGuardian } from '../../guards/ArrayGuardian.ts';
 import { GuardianError } from '../../GuardianError.ts';
 
 Deno.test('guardian.ArrayGuardian', async (t) => {
