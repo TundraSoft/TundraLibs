@@ -110,10 +110,25 @@ export class ObjectGuardian<
   }
 
   /**
+   * Override parse to ensure refinements are applied after transforms.
+   */
+  override parse(input: unknown): TOutput {
+    // First apply the composed transform (includes any chained transforms)
+    const transformedResult = super.parse(input);
+
+    // Then apply object-specific refinements to the transformed result
+    return this._applyRefinements(transformedResult);
+  }
+
+  /**
    * Override parseAsync to support async refinement validations.
    */
   override async parseAsync(input: unknown): Promise<TOutput> {
-    return await this._validateObjectAsync(input) as TOutput;
+    // First apply the composed transform (includes any chained transforms)
+    const transformedResult = await super.parseAsync(input);
+
+    // Then apply object-specific refinements to the transformed result
+    return await this._applyRefinementsAsync(transformedResult);
   }
 
   /**
@@ -447,6 +462,9 @@ export class ObjectGuardian<
       this.metaData,
     );
     result._mode = this._mode;
+    // NOTE: Don't copy refinements during transform as they expect TOutput type
+    // Refinements should be added after transform using refine() method
+    // result._refinements remains empty for the new type
     (result as unknown as {
       _composedTransform: GuardianTransform<unknown, TNewOutput>;
     })._composedTransform = (transformedGuardian as unknown as {
@@ -501,6 +519,13 @@ export class ObjectGuardian<
     path?: string,
   ): ObjectGuardian<TInput, TOutput> {
     const newGuardian = this._cloneObjectGuardian();
+
+    // CRITICAL FIX: Copy the composed transform from the current guardian
+    (newGuardian as unknown as {
+      _composedTransform: GuardianTransform<unknown, TOutput>;
+    })._composedTransform = (this as unknown as {
+      _composedTransform: GuardianTransform<unknown, TOutput>;
+    })._composedTransform;
 
     // Add this refinement to the list
     newGuardian._refinements = [
@@ -566,6 +591,14 @@ export class ObjectGuardian<
     );
     cloned._mode = this._mode;
     cloned._refinements = [...this._refinements];
+
+    // CRITICAL FIX: Copy the composed transform to ensure chaining works
+    (cloned as unknown as {
+      _composedTransform: GuardianTransform<unknown, TOutput>;
+    })._composedTransform = (this as unknown as {
+      _composedTransform: GuardianTransform<unknown, TOutput>;
+    })._composedTransform;
+
     return cloned;
   }
 
@@ -728,6 +761,121 @@ export class ObjectGuardian<
     }
 
     return result as TInput | (TInput & Record<string, unknown>);
+  }
+
+  /**
+   * Apply refinements to already validated/transformed data.
+   */
+  private _applyRefinements(data: TOutput): TOutput {
+    for (const refinement of this._refinements) {
+      try {
+        const isValid = refinement.validator(data);
+
+        // Check for async refinement in sync parsing
+        if (isValid instanceof Promise) {
+          throw new GuardianError(
+            'Cannot use parse() with async validation steps. Use parseAsync() instead.',
+            {
+              expected: 'synchronous validation',
+              got: 'async refinement',
+              comparison: 'refinement_validation',
+              type: 'async_validation',
+            },
+          );
+        }
+
+        if (!isValid) {
+          const refinementError = new GuardianError(refinement.message, {
+            expected: 'refinement validation to pass',
+            got: data,
+            comparison: 'refinement_validation',
+            type: 'refinement_failure',
+          });
+
+          // Add path information if provided
+          if (refinement.path) {
+            refinementError.addCause(refinement.path, refinementError);
+          }
+
+          throw refinementError;
+        }
+      } catch (error) {
+        if (error instanceof GuardianError) {
+          throw error;
+        }
+
+        // Handle unexpected errors during refinement
+        const refinementError = new GuardianError(
+          `Refinement validation failed: ${error}`,
+          {
+            expected: 'refinement validation to complete',
+            got: data,
+            comparison: 'refinement_validation',
+            type: 'refinement_error',
+          },
+        );
+
+        // Add path information if provided
+        if (refinement.path) {
+          refinementError.addCause(refinement.path, refinementError);
+        }
+
+        throw refinementError;
+      }
+    }
+
+    return data;
+  }
+
+  /**
+   * Apply refinements to already validated/transformed data (async version).
+   */
+  private async _applyRefinementsAsync(data: TOutput): Promise<TOutput> {
+    for (const refinement of this._refinements) {
+      try {
+        const isValid = await refinement.validator(data);
+
+        if (!isValid) {
+          const refinementError = new GuardianError(refinement.message, {
+            expected: 'refinement validation to pass',
+            got: data,
+            comparison: 'refinement_validation',
+            type: 'refinement_failure',
+          });
+
+          // Add path information if provided
+          if (refinement.path) {
+            refinementError.addCause(refinement.path, refinementError);
+          }
+
+          throw refinementError;
+        }
+      } catch (error) {
+        if (error instanceof GuardianError) {
+          throw error;
+        }
+
+        // Handle unexpected errors during refinement
+        const refinementError = new GuardianError(
+          `Refinement validation failed: ${error}`,
+          {
+            expected: 'refinement validation to complete',
+            got: data,
+            comparison: 'refinement_validation',
+            type: 'refinement_error',
+          },
+        );
+
+        // Add path information if provided
+        if (refinement.path) {
+          refinementError.addCause(refinement.path, refinementError);
+        }
+
+        throw refinementError;
+      }
+    }
+
+    return data;
   }
 
   /**

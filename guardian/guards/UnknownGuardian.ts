@@ -1,5 +1,4 @@
 import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError } from '../GuardianError.ts';
 import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
 
 /**

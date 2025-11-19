@@ -69,20 +69,38 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
   }
 
   public listCauses(): Record<string, string> {
-    if (!this.context.cause) {
+    return this._listCausesWithVisited(new Set());
+  }
+
+  private _listCausesWithVisited(
+    visited: Set<GuardianError>,
+  ): Record<string, string> {
+    if (!this.context.cause || visited.has(this)) {
       return {};
     }
+
+    // Add this error to visited set to prevent infinite recursion
+    visited.add(this);
+
     const causes: Record<string, string> = {};
     for (const [key, error] of Object.entries(this.context.cause)) {
-      const subCauses = error.listCauses();
-      if (Object.keys(subCauses).length === 0) {
-        causes[key] = error.message;
+      if (visited.has(error)) {
+        // Circular reference detected - just use the error message
+        causes[key] = `${error.message} [circular]`;
       } else {
-        for (const [subKey, subError] of Object.entries(subCauses)) {
-          causes[`${key}.${subKey}`] = subError;
+        const subCauses = error._listCausesWithVisited(visited);
+        if (Object.keys(subCauses).length === 0) {
+          causes[key] = error.message;
+        } else {
+          for (const [subKey, subError] of Object.entries(subCauses)) {
+            causes[`${key}.${subKey}`] = subError;
+          }
         }
       }
     }
+
+    // Remove this error from visited set when done (backtrack)
+    visited.delete(this);
     return causes;
   }
 
