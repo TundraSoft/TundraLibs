@@ -2,7 +2,7 @@ import {
   BaseError,
   type BaseErrorJson,
   variableReplacer,
-} from '@tundralibs/utils';
+} from "@tundralibs/utils";
 
 // export type GuardianErrorMetaType =
 //   | 'string'
@@ -29,7 +29,7 @@ export type GuardianErrorMeta = {
 
 export class GuardianError extends BaseError<GuardianErrorMeta> {
   protected override get _messageTemplate(): string {
-    return '${message}';
+    return "${message}";
   }
 
   constructor(
@@ -110,19 +110,19 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
 
   private static __formatValue(value: unknown): string {
     if (Array.isArray(value)) {
-      return `(${value.map((v) => GuardianError.__formatValue(v)).join(', ')})`;
+      return `(${value.map((v) => GuardianError.__formatValue(v)).join(", ")})`;
     } else if (value instanceof Date) {
       return value.toISOString();
     } else if (value instanceof RegExp) {
       return value.toString();
-    } else if (typeof value === 'object') {
+    } else if (typeof value === "object") {
       return JSON.stringify(value);
     } else if (value === undefined) {
-      return 'undefined';
+      return "undefined";
     } else if (value === null) {
-      return 'null';
-    } else if (typeof value === 'boolean') {
-      return value === true ? 'TRUE' : 'FALSE';
+      return "null";
+    } else if (typeof value === "boolean") {
+      return value === true ? "TRUE" : "FALSE";
     } else {
       return value.toString();
     }

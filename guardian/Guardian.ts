@@ -8,15 +8,15 @@ import {
   ObjectGuardian,
   StringGuardian,
   UnknownGuardian,
-} from './guards/mod.ts';
-import type { BaseGuardian } from './BaseGuardian.ts';
-import type { ObjectSchema } from './guards/ObjectGuardian.ts';
+} from "./guards/mod.ts";
+import type { BaseGuardian } from "./BaseGuardian.ts";
+import type { ObjectSchema } from "./guards/ObjectGuardian.ts";
 import type {
   GuardianInfer,
   GuardianInferInput,
   GuardianMetaData,
-} from './types/mod.ts';
-import { GuardianError } from './GuardianError.ts';
+} from "./types/mod.ts";
+import { GuardianError } from "./GuardianError.ts";
 
 /**
  * Guardian factory class providing static methods to create validators.
@@ -56,7 +56,7 @@ export class Guardian {
     _guardian: T,
   ): GuardianInfer<T> {
     throw new Error(
-      'Guardian.infer is a type-only utility and should not be called at runtime',
+      "Guardian.infer is a type-only utility and should not be called at runtime",
     );
   }
 
@@ -74,7 +74,7 @@ export class Guardian {
     _guardian: T,
   ): GuardianInferInput<T> {
     throw new Error(
-      'Guardian.inferInput is a type-only utility and should not be called at runtime',
+      "Guardian.inferInput is a type-only utility and should not be called at runtime",
     );
   }
 
@@ -163,13 +163,13 @@ export class Guardian {
     metaData?: GuardianMetaData,
   ): UnknownGuardian<T[number] extends BaseGuardian<infer U> ? U : never> {
     if (!guardians || guardians.length === 0) {
-      throw new Error('oneOf requires at least one guardian');
+      throw new Error("oneOf requires at least one guardian");
     }
     if (!errorMessage || errorMessage.trim().length === 0) {
-      throw new Error('oneOf requires a non-empty error message');
+      throw new Error("oneOf requires a non-empty error message");
     }
 
-    return new UnknownGuardian(metaData).step(
+    return new UnknownGuardian(metaData).process(
       (input: unknown) => {
         const errors: GuardianError[] = [];
 
@@ -187,9 +187,9 @@ export class Guardian {
               errors.push(
                 new GuardianError(`Guardian ${i} threw unexpected error`, {
                   got: input,
-                  expected: 'valid input for one of the oneOf members',
-                  comparison: 'oneOf',
-                  type: 'oneOf_validation',
+                  expected: "valid input for one of the oneOf members",
+                  comparison: "oneOf",
+                  type: "oneOf_validation",
                 }),
               );
             }
@@ -199,22 +199,23 @@ export class Guardian {
         // If we get here, none of the guardians succeeded
         throw new GuardianError(errorMessage, {
           got: input,
-          expected: 'value matching one of the oneOf types',
-          comparison: 'oneOf',
-          type: 'oneOf_validation',
+          expected: "value matching one of the oneOf types",
+          comparison: "oneOf",
+          type: "oneOf_validation",
           cause: errors.reduce((acc, error, index) => {
             acc[`option_${index}`] = error;
             return acc;
           }, {} as Record<string, GuardianError>),
         });
       },
-      errorMessage,
-      'oneOf',
     ) as UnknownGuardian<T[number] extends BaseGuardian<infer U> ? U : never>;
-  } /**
+  }
+
+  /**
    * Creates an array validator.
    *
    * @template T - The element type of the array (defaults to unknown)
+   * @param elementGuardian - Optional guardian to validate each element
    * @param metaData - Optional metadata for the validator
    * @returns New ArrayGuardian instance
    *
@@ -225,16 +226,14 @@ export class Guardian {
    * anyArray.parse([1, 'hello', true]); // [1, 'hello', true]
    *
    * // Array with typed elements
-   * const stringArray = Guardian.array()
-   *   .of(Guardian.string().minLength(3))
+   * const stringArray = Guardian.array(Guardian.string().minLength(3))
    *   .minLength(1)
    *   .maxLength(10);
    * stringArray.parse(['hello', 'world']); // ['hello', 'world']
    * ```
    */
-
-  static array<T = unknown>(metaData?: GuardianMetaData): ArrayGuardian<T> {
-    return new ArrayGuardian<T>(metaData);
+  static array<T = unknown>(elementGuardian?: BaseGuardian<T>, metaData?: GuardianMetaData): ArrayGuardian<T> {
+    return new ArrayGuardian<T>(elementGuardian, metaData);
   }
 
   /**

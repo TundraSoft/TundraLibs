@@ -1,6 +1,6 @@
-import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError, type GuardianErrorMeta } from '../GuardianError.ts';
-import type { GuardianMetaData } from '../types/mod.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { GuardianError, type GuardianErrorMeta } from "../GuardianError.ts";
+import type { GuardianMetaData } from "../types/mod.ts";
 
 /**
  * Guardian for array validation and transformation.
@@ -10,8 +10,7 @@ import type { GuardianMetaData } from '../types/mod.ts';
  *
  * @example
  * ```ts
- * const schema = new ArrayGuardian()
- *   .of(Guardian.string().minLength(3))
+ * const schema = new ArrayGuardian(Guardian.string().minLength(3))
  *   .minLength(1)
  *   .maxLength(10);
  *
@@ -21,56 +20,38 @@ import type { GuardianMetaData } from '../types/mod.ts';
  * @example
  * ```ts
  * // Array of unknown elements (default)
- * const anyArray = Guardian.array().minLength(1);
+ * const anyArray = new ArrayGuardian().minLength(1);
  * const result = anyArray.parse([1, 'hello', true]); // [1, 'hello', true]
  * ```
  *
  * @since 1.0.0
  */
 export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
+  private _elementGuardian?: BaseGuardian<T>;
+
   /**
    * Creates a new ArrayGuardian instance.
    *
+   * @param elementGuardian - Optional guardian to validate each element
    * @param metaData - Optional metadata for this guardian
    */
-  constructor(metaData?: GuardianMetaData) {
+  constructor(elementGuardian?: BaseGuardian<T>, metaData?: GuardianMetaData) {
     super((input: unknown) => {
       if (!Array.isArray(input)) {
-        throw new GuardianError('Expected array but got ${got}', {
-          expected: 'array',
+        throw new GuardianError("Expected array but got ${got}", {
+          expected: "array",
           got: typeof input,
-          comparison: 'type',
-          type: 'array',
+          comparison: "type",
+          type: "array",
         });
       }
 
-      return input as Array<T>;
-    }, metaData);
-  }
-
-  //#region Element Validation
-
-  /**
-   * Validates each element in the array using the provided guardian.
-   *
-   * @template U - The new element type after validation
-   * @param elementGuardian - Guardian to validate each element
-   * @returns New ArrayGuardian with element validation
-   *
-   * @example
-   * ```ts
-   * const stringArray = Guardian.array().of(Guardian.string());
-   * stringArray.parse(['hello', 'world']); // ['hello', 'world']
-   * stringArray.parse(['hello', 42]); // throws GuardianError
-   * ```
-   */
-  of<U>(elementGuardian: BaseGuardian<U>): ArrayGuardian<U> {
-    return this.step(
-      (value: Array<T>) => {
-        const validatedElements: U[] = [];
-        for (let i = 0; i < value.length; i++) {
+      // If we have an element guardian, validate each element
+      if (this._elementGuardian) {
+        const validatedElements: T[] = [];
+        for (let i = 0; i < input.length; i++) {
           try {
-            validatedElements.push(elementGuardian.parse(value[i]));
+            validatedElements.push(this._elementGuardian.parse(input[i]));
           } catch (error) {
             if (error instanceof GuardianError) {
               // Re-throw with array context - this preserves the element error structure
@@ -78,7 +59,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
                 `Array element at index ${i}: ${error.message}`,
                 {
                   ...error.context,
-                  type: 'array_element',
+                  type: "array_element",
                 } as GuardianErrorMeta,
               );
             }
@@ -86,11 +67,17 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
           }
         }
         return validatedElements;
-      },
-      'Validate array elements',
-      'custom',
-    ) as ArrayGuardian<U>;
+      }
+
+      return input as Array<T>;
+    }, metaData);
+    
+    this._elementGuardian = elementGuardian;
   }
+
+  //#region Element Validation
+
+  // Element validation is now handled in the constructor
 
   //#endregion
 
@@ -111,7 +98,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   length(length: number, message?: string): ArrayGuardian<T> {
-    return this.step(
+    return this.process(
       (value: Array<T>) => {
         if (value.length !== length) {
           throw new GuardianError(
@@ -119,15 +106,13 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
             {
               expected: length,
               got: value.length,
-              comparison: 'equals',
-              type: 'validation',
+              comparison: "equals",
+              type: "validation",
             },
           );
         }
         return value;
       },
-      message || 'Array length validation failed',
-      'equals',
     ) as ArrayGuardian<T>;
   }
 
@@ -146,7 +131,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   minLength(minLength: number, message?: string): ArrayGuardian<T> {
-    return this.step(
+    return this.process(
       (value: Array<T>) => {
         if (value.length < minLength) {
           throw new GuardianError(
@@ -155,15 +140,13 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
             {
               expected: minLength,
               got: value.length,
-              comparison: 'gte',
-              type: 'validation',
+              comparison: "gte",
+              type: "validation",
             },
           );
         }
         return value;
       },
-      message || 'Array minimum length validation failed',
-      'gte',
     ) as ArrayGuardian<T>;
   }
 
@@ -182,7 +165,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   maxLength(maxLength: number, message?: string): ArrayGuardian<T> {
-    return this.step(
+    return this.process(
       (value: Array<T>) => {
         if (value.length > maxLength) {
           throw new GuardianError(
@@ -191,15 +174,13 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
             {
               expected: maxLength,
               got: value.length,
-              comparison: 'lte',
-              type: 'validation',
+              comparison: "lte",
+              type: "validation",
             },
           );
         }
         return value;
       },
-      message || 'Array maximum length validation failed',
-      'lte',
     ) as ArrayGuardian<T>;
   }
 
@@ -217,7 +198,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   nonEmpty(message?: string): ArrayGuardian<T> {
-    return this.minLength(1, message || 'Array must not be empty');
+    return this.minLength(1, message || "Array must not be empty");
   }
 
   //#endregion
@@ -238,7 +219,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   unique(message?: string): ArrayGuardian<T> {
-    return this.step(
+    return this.process(
       (value: Array<T>) => {
         const seen = new Set<T>();
         const duplicates: T[] = [];
@@ -257,21 +238,19 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
           throw new GuardianError(
             message ||
               `Array must contain unique elements, found duplicates: ${
-                duplicates.join(', ')
+                duplicates.join(", ")
               }`,
             {
-              expected: 'unique elements',
+              expected: "unique elements",
               got: duplicates,
-              comparison: 'unique',
-              type: 'validation',
+              comparison: "unique",
+              type: "validation",
             },
           );
         }
 
         return value;
       },
-      message || 'Array must contain unique elements',
-      'unique',
     ) as ArrayGuardian<T>;
   }
 
@@ -284,22 +263,23 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
-   * const mustHaveHello = Guardian.array().of(Guardian.string()).includes('hello');
+   * const mustHaveHello = Guardian.array(Guardian.string()).includes('hello');
    * mustHaveHello.parse(['hello', 'world']); // ['hello', 'world']
    * mustHaveHello.parse(['world']); // throws GuardianError
    * ```
    */
-  includes(element: T, message?: string): ArrayGuardian<T> {
-    return this.step(
-      (value: Array<T>) => {
-        if (!value.includes(element)) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      message || `Array must include ${element}`,
-      'includes',
-    ) as ArrayGuardian<T>;
+  includes(element: T, _message?: string): ArrayGuardian<T> {
+    return this.process((value: Array<T>) => {
+      if (!value.includes(element)) {
+        throw new GuardianError(_message || `Array must include ${element}`, {
+          expected: `array including ${element}`,
+          got: value,
+          comparison: "includes",
+          type: "validation",
+        });
+      }
+      return value;
+    }) as ArrayGuardian<T>;
   }
 
   /**
@@ -311,22 +291,26 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
-   * const noHello = Guardian.array().of(Guardian.string()).excludes('hello');
+   * const noHello = Guardian.array(Guardian.string()).excludes('hello');
    * noHello.parse(['world', 'test']); // ['world', 'test']
    * noHello.parse(['hello', 'world']); // throws GuardianError
    * ```
    */
-  excludes(element: T, message?: string): ArrayGuardian<T> {
-    return this.step(
-      (value: Array<T>) => {
-        if (value.includes(element)) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      message || `Array must not include ${element}`,
-      'excludes',
-    ) as ArrayGuardian<T>;
+  excludes(element: T, _message?: string): ArrayGuardian<T> {
+    return this.process((value: Array<T>) => {
+      if (value.includes(element)) {
+        throw new GuardianError(
+          _message || `Array must not include ${element}`,
+          {
+            expected: `array excluding ${element}`,
+            got: value,
+            comparison: "excludes",
+            type: "validation",
+          },
+        );
+      }
+      return value;
+    }) as ArrayGuardian<T>;
   }
 
   //#endregion
@@ -343,18 +327,18 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
-   * const doubled = Guardian.array().of(Guardian.number())
+   * const doubled = Guardian.array(Guardian.number())
    *   .map(x => x * 2);
    * doubled.parse([1, 2, 3]); // [2, 4, 6]
    * ```
    */
   map<U>(
     mapper: (item: T, index: number, array: Array<T>) => U,
-    description?: string,
+    __description?: string,
   ): ArrayGuardian<U> {
-    return this.step((value: Array<T>) => {
+    return this.process((value: Array<T>) => {
       return value.map(mapper);
-    }, description || 'Map array elements') as ArrayGuardian<U>;
+    }) as ArrayGuardian<U>;
   }
 
   /**
@@ -366,18 +350,18 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
-   * const evens = Guardian.array().of(Guardian.number())
+   * const evens = Guardian.array(Guardian.number())
    *   .filter(x => x % 2 === 0);
    * evens.parse([1, 2, 3, 4]); // [2, 4]
    * ```
    */
   filter(
     predicate: (item: T, index: number, array: Array<T>) => boolean,
-    description?: string,
+    __description?: string,
   ): ArrayGuardian<T> {
-    return this.step((value: Array<T>) => {
+    return this.process((value: Array<T>) => {
       return value.filter(predicate);
-    }, description || 'Filter array elements') as ArrayGuardian<T>;
+    }) as ArrayGuardian<T>;
   }
 
   /**
@@ -393,10 +377,10 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * firstThree.parse([1, 2, 3, 4, 5]); // [1, 2, 3]
    * ```
    */
-  take(n: number, description?: string): ArrayGuardian<T> {
-    return this.step((value: Array<T>) => {
+  take(n: number, __description?: string): ArrayGuardian<T> {
+    return this.process((value: Array<T>) => {
       return value.slice(0, n);
-    }, description || `Take first ${n} elements`) as ArrayGuardian<T>;
+    }) as ArrayGuardian<T>;
   }
 
   /**
@@ -412,10 +396,10 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * skipTwo.parse([1, 2, 3, 4, 5]); // [3, 4, 5]
    * ```
    */
-  skip(n: number, description?: string): ArrayGuardian<T> {
-    return this.step((value: Array<T>) => {
+  skip(n: number, __description?: string): ArrayGuardian<T> {
+    return this.process((value: Array<T>) => {
       return value.slice(n);
-    }, description || `Skip first ${n} elements`) as ArrayGuardian<T>;
+    }) as ArrayGuardian<T>;
   }
 
   /**
@@ -427,17 +411,17 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
-   * const sorted = Guardian.array().of(Guardian.number()).sort();
+   * const sorted = Guardian.array(Guardian.number()).sort();
    * sorted.parse([3, 1, 4, 1, 5]); // [1, 1, 3, 4, 5]
    * ```
    */
   sort(
     compareFunction?: (a: T, b: T) => number,
-    description?: string,
+    __description?: string,
   ): ArrayGuardian<T> {
-    return this.step((value: Array<T>) => {
+    return this.process((value: Array<T>) => {
       return [...value].sort(compareFunction);
-    }, description || 'Sort array elements') as ArrayGuardian<T>;
+    }) as ArrayGuardian<T>;
   }
 
   /**
@@ -448,14 +432,14 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
-   * const reversed = Guardian.array().of(Guardian.string()).reverse();
+   * const reversed = Guardian.array(Guardian.string()).reverse();
    * reversed.parse(['a', 'b', 'c']); // ['c', 'b', 'a']
    * ```
    */
-  reverse(description?: string): ArrayGuardian<T> {
-    return this.step((value: Array<T>) => {
+  reverse(): ArrayGuardian<T> {
+    return this.process((value: Array<T>) => {
       return [...value].reverse();
-    }, description || 'Reverse array elements') as ArrayGuardian<T>;
+    }) as ArrayGuardian<T>;
   }
 
   //#endregion

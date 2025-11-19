@@ -1,13 +1,13 @@
-import * as asserts from '$asserts';
-import { isPromiseLike } from '../../helpers/mod.ts';
+import * as asserts from "$asserts";
+import { isPromiseLike } from "../../helpers/mod.ts";
 
 /**
  * Comprehensive test suite for isPromiseLike helper function.
  * Tests detection of promise-like objects (thenables) and async functions.
  */
-Deno.test('guardian.helpers.isPromiseLike', async (t) => {
-  await t.step('Native Promises', async (e) => {
-    await e.step('basic promises', () => {
+Deno.test("guardian.helpers.isPromiseLike", async (t) => {
+  await t.step("Native Promises", async (e) => {
+    await e.step("basic promises", () => {
       asserts.assertEquals(isPromiseLike(Promise.resolve()), true);
       asserts.assertEquals(
         isPromiseLike(Promise.reject().catch(() => {})),
@@ -16,7 +16,7 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       asserts.assertEquals(isPromiseLike(new Promise(() => {})), true);
     });
 
-    await e.step('promise methods', () => {
+    await e.step("promise methods", () => {
       asserts.assertEquals(isPromiseLike(Promise.all([])), true);
       asserts.assertEquals(isPromiseLike(Promise.race([])), true);
       asserts.assertEquals(isPromiseLike(Promise.allSettled([])), true);
@@ -26,16 +26,16 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       );
     });
 
-    await e.step('resolved and rejected promises', () => {
-      asserts.assertEquals(isPromiseLike(Promise.resolve('value')), true);
+    await e.step("resolved and rejected promises", () => {
+      asserts.assertEquals(isPromiseLike(Promise.resolve("value")), true);
       asserts.assertEquals(isPromiseLike(Promise.resolve(42)), true);
       asserts.assertEquals(isPromiseLike(Promise.resolve(null)), true);
       asserts.assertEquals(isPromiseLike(Promise.resolve(undefined)), true);
     });
   });
 
-  await t.step('Thenable objects', async (e) => {
-    await e.step('basic thenables', () => {
+  await t.step("Thenable objects", async (e) => {
+    await e.step("basic thenables", () => {
       const basicThenable = {
         then: () => {},
       };
@@ -46,22 +46,22 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
           onResolve: (value: unknown) => void,
           onReject: (reason: unknown) => void,
         ) => {
-          onResolve('success');
+          onResolve("success");
         },
       };
       asserts.assertEquals(isPromiseLike(thenableWithArgs), true);
     });
 
-    await e.step('complex thenables', () => {
+    await e.step("complex thenables", () => {
       const complexThenable = {
         then: function (
           onResolve: (value: unknown) => void,
           onReject: (reason: unknown) => void,
         ) {
           if (Math.random() > 0.5) {
-            onResolve('success');
+            onResolve("success");
           } else {
-            onReject(new Error('failure'));
+            onReject(new Error("failure"));
           }
         },
         catch: function (onReject: (reason: unknown) => void) {
@@ -79,11 +79,11 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       asserts.assertEquals(isPromiseLike(promiseLikeObject), true);
     });
 
-    await e.step('edge cases with then method', () => {
+    await e.step("edge cases with then method", () => {
       // then method that throws
       const throwingThenable = {
         then() {
-          throw new Error('then throws');
+          throw new Error("then throws");
         },
       };
       asserts.assertEquals(isPromiseLike(throwingThenable), true);
@@ -110,17 +110,17 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
     });
   });
 
-  await t.step('Async functions', async (e) => {
-    await e.step('arrow functions', () => {
+  await t.step("Async functions", async (e) => {
+    await e.step("arrow functions", () => {
       asserts.assertEquals(isPromiseLike(async () => {}), true);
-      asserts.assertEquals(isPromiseLike(async () => 'value'), true);
+      asserts.assertEquals(isPromiseLike(async () => "value"), true);
       asserts.assertEquals(isPromiseLike(async (x: number) => x * 2), true);
     });
 
-    await e.step('function declarations', () => {
+    await e.step("function declarations", () => {
       async function namedAsyncFn() {}
       async function asyncWithReturn() {
-        return 'value';
+        return "value";
       }
       async function asyncWithParams(a: number, b: string) {
         return { a, b };
@@ -131,7 +131,7 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       asserts.assertEquals(isPromiseLike(asyncWithParams), true);
     });
 
-    await e.step('async generator functions', () => {
+    await e.step("async generator functions", () => {
       async function* asyncGenerator() {
         yield 1;
         yield 2;
@@ -140,14 +140,14 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       asserts.assertEquals(isPromiseLike(asyncGenerator), true);
     });
 
-    await e.step('async methods', () => {
+    await e.step("async methods", () => {
       class TestClass {
         async method() {
-          return 'async method';
+          return "async method";
         }
 
         async *asyncGeneratorMethod() {
-          yield 'value';
+          yield "value";
         }
       }
 
@@ -157,19 +157,19 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
     });
   });
 
-  await t.step('Non-promise-like values', async (e) => {
-    await e.step('primitives', () => {
+  await t.step("Non-promise-like values", async (e) => {
+    await e.step("primitives", () => {
       asserts.assertEquals(isPromiseLike(null), false);
       asserts.assertEquals(isPromiseLike(undefined), false);
-      asserts.assertEquals(isPromiseLike('string'), false);
+      asserts.assertEquals(isPromiseLike("string"), false);
       asserts.assertEquals(isPromiseLike(42), false);
       asserts.assertEquals(isPromiseLike(true), false);
       asserts.assertEquals(isPromiseLike(false), false);
-      asserts.assertEquals(isPromiseLike(Symbol('test')), false);
+      asserts.assertEquals(isPromiseLike(Symbol("test")), false);
       asserts.assertEquals(isPromiseLike(BigInt(123)), false);
     });
 
-    await e.step('regular functions', () => {
+    await e.step("regular functions", () => {
       asserts.assertEquals(isPromiseLike(() => {}), false);
       asserts.assertEquals(isPromiseLike(function () {}), false);
       asserts.assertEquals(isPromiseLike(function named() {}), false);
@@ -186,7 +186,7 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       asserts.assertEquals(isPromiseLike(Array.isArray), false);
     });
 
-    await e.step('objects without then method', () => {
+    await e.step("objects without then method", () => {
       asserts.assertEquals(isPromiseLike({}), false);
       asserts.assertEquals(isPromiseLike([]), false);
       asserts.assertEquals(isPromiseLike(new Date()), false);
@@ -204,9 +204,9 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       asserts.assertEquals(isPromiseLike(objectWithOtherMethods), false);
     });
 
-    await e.step('objects with non-function then property', () => {
+    await e.step("objects with non-function then property", () => {
       const objectWithThenString = {
-        then: 'not a function',
+        then: "not a function",
       };
       asserts.assertEquals(isPromiseLike(objectWithThenString), false);
 
@@ -227,7 +227,7 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
     });
   });
 
-  await t.step('Functions with then property', () => {
+  await t.step("Functions with then property", () => {
     // Regular functions with then property should NOT be considered promise-like
     const functionWithThen = () => {};
     (functionWithThen as unknown as { then: () => void }).then = () => {};
@@ -235,24 +235,24 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
 
     // Only async functions should be considered promise-like, not regular functions
     function regularFunction() {
-      return 'not async';
+      return "not async";
     }
     (regularFunction as unknown as { then: () => void }).then = () => {};
     asserts.assertEquals(isPromiseLike(regularFunction), false);
   });
 
-  await t.step('Class instances', async (e) => {
-    await e.step('regular classes', () => {
+  await t.step("Class instances", async (e) => {
+    await e.step("regular classes", () => {
       class RegularClass {
         value = 42;
       }
       asserts.assertEquals(isPromiseLike(new RegularClass()), false);
     });
 
-    await e.step('classes with then method', () => {
+    await e.step("classes with then method", () => {
       class ClassWithThen {
         then() {
-          return 'not a real thenable';
+          return "not a real thenable";
         }
       }
       asserts.assertEquals(isPromiseLike(new ClassWithThen()), true);
@@ -268,7 +268,7 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       asserts.assertEquals(isPromiseLike(new PromiseLikeClass()), true);
     });
 
-    await e.step('classes themselves', () => {
+    await e.step("classes themselves", () => {
       class TestClass {}
       class AsyncClass {
         async method() {}
@@ -280,7 +280,7 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
     });
   });
 
-  await t.step('Prototype chain handling', () => {
+  await t.step("Prototype chain handling", () => {
     // Object with then in prototype
     const parent = { then: () => {} };
     const child = Object.create(parent);
@@ -293,12 +293,12 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
     asserts.assertEquals(isPromiseLike(child2), true);
 
     // Prototype with non-function then
-    const parentWithBadThen = { then: 'not a function' };
+    const parentWithBadThen = { then: "not a function" };
     const childOfBadThen = Object.create(parentWithBadThen);
     asserts.assertEquals(isPromiseLike(childOfBadThen), false);
   });
 
-  await t.step('Third-party promise libraries', () => {
+  await t.step("Third-party promise libraries", () => {
     // Simulate popular promise library patterns
 
     // Bluebird-style promise
@@ -333,13 +333,13 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       done: () => {},
       fail: () => {},
       always: () => {},
-      state: () => 'pending',
+      state: () => "pending",
     };
     asserts.assertEquals(isPromiseLike(jqueryDeferred), true);
   });
 
-  await t.step('Special object types', async (e) => {
-    await e.step('frozen and sealed objects', () => {
+  await t.step("Special object types", async (e) => {
+    await e.step("frozen and sealed objects", () => {
       const frozenThenable = Object.freeze({ then: () => {} });
       asserts.assertEquals(isPromiseLike(frozenThenable), true);
 
@@ -350,7 +350,7 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       asserts.assertEquals(isPromiseLike(frozenNonThenable), false);
     });
 
-    await e.step('objects with null prototype', () => {
+    await e.step("objects with null prototype", () => {
       const nullProtoThenable = Object.create(null);
       nullProtoThenable.then = () => {};
       asserts.assertEquals(isPromiseLike(nullProtoThenable), true);
@@ -360,10 +360,10 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       asserts.assertEquals(isPromiseLike(nullProtoNonThenable), false);
     });
 
-    await e.step('array-like objects with then', () => {
+    await e.step("array-like objects with then", () => {
       const arrayLikeWithThen = {
-        0: 'first',
-        1: 'second',
+        0: "first",
+        1: "second",
         length: 2,
         then: () => {},
       };
@@ -376,23 +376,23 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
         return argsLike;
       }
 
-      const argsLikeWithThen = createArgsLikeWithThen('a', 'b', 'c');
+      const argsLikeWithThen = createArgsLikeWithThen("a", "b", "c");
       asserts.assertEquals(isPromiseLike(argsLikeWithThen), true);
     });
 
-    await e.step('error objects with then method', () => {
-      const errorWithThen = new Error('test error');
+    await e.step("error objects with then method", () => {
+      const errorWithThen = new Error("test error");
       (errorWithThen as unknown as { then: () => void }).then = () => {};
       asserts.assertEquals(isPromiseLike(errorWithThen), true);
 
-      const customErrorWithThen = new TypeError('type error');
+      const customErrorWithThen = new TypeError("type error");
       (customErrorWithThen as unknown as { then: () => void }).then = () => {};
       asserts.assertEquals(isPromiseLike(customErrorWithThen), true);
     });
   });
 
-  await t.step('Edge cases and safety', async (e) => {
-    await e.step('circular references', () => {
+  await t.step("Edge cases and safety", async (e) => {
+    await e.step("circular references", () => {
       const circular: { then?: () => unknown; self?: unknown } = {};
       circular.then = () => circular;
       circular.self = circular;
@@ -405,7 +405,7 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       asserts.assertEquals(isPromiseLike(circularNonThenable), false);
     });
 
-    await e.step('arguments object', () => {
+    await e.step("arguments object", () => {
       function testArgs() {
         return isPromiseLike(arguments);
       }
@@ -414,12 +414,12 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       asserts.assertEquals(testArgs(), false);
     });
 
-    await e.step('toString() failures', () => {
+    await e.step("toString() failures", () => {
       // Function with problematic toString
       const funcWithBadToString = async () => {};
-      Object.defineProperty(funcWithBadToString, 'toString', {
+      Object.defineProperty(funcWithBadToString, "toString", {
         value: () => {
-          throw new Error('toString fails');
+          throw new Error("toString fails");
         },
       });
 
@@ -428,15 +428,15 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
     });
   });
 
-  await t.step('Performance and consistency', async (e) => {
-    await e.step('consistent behavior', () => {
+  await t.step("Performance and consistency", async (e) => {
+    await e.step("consistent behavior", () => {
       const testCases = [
         { value: Promise.resolve(), expected: true },
         { value: { then: () => {} }, expected: true },
         { value: async () => {}, expected: true },
         { value: {}, expected: false },
         { value: null, expected: false },
-        { value: 'string', expected: false },
+        { value: "string", expected: false },
         { value: () => {}, expected: false },
       ];
 
@@ -447,14 +447,14 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
             isPromiseLike(value),
             expected,
             `Iteration ${iteration}: ${JSON.stringify(value)} should ${
-              expected ? 'be' : 'not be'
+              expected ? "be" : "not be"
             } promise-like`,
           );
         }
       }
     });
 
-    await e.step('performance requirements', () => {
+    await e.step("performance requirements", () => {
       // Test performance with many checks
       const testValues = [
         Promise.resolve(),
@@ -462,7 +462,7 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
         async () => {},
         {},
         null,
-        'string',
+        "string",
         42,
         () => {},
       ];
@@ -478,11 +478,11 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
       const end = performance.now();
 
       // Should complete quickly even with many iterations
-      asserts.assert(end - start < 100, 'isPromiseLike should be performant');
+      asserts.assert(end - start < 100, "isPromiseLike should be performant");
     });
   });
 
-  await t.step('Documentation examples', () => {
+  await t.step("Documentation examples", () => {
     // Test all examples from the documentation to ensure they work as documented
 
     // Native Promises
@@ -508,7 +508,7 @@ Deno.test('guardian.helpers.isPromiseLike', async (t) => {
     // Non-promise-like values
     asserts.assertEquals(isPromiseLike({}), false);
     asserts.assertEquals(isPromiseLike(() => {}), false); // regular function
-    asserts.assertEquals(isPromiseLike({ then: 'not a function' }), false);
+    asserts.assertEquals(isPromiseLike({ then: "not a function" }), false);
     asserts.assertEquals(isPromiseLike(null), false);
     asserts.assertEquals(isPromiseLike(undefined), false);
   });

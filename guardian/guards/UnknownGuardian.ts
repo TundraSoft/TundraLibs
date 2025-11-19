@@ -1,5 +1,7 @@
-import { BaseGuardian } from '../BaseGuardian.ts';
-import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { GuardianError } from "../GuardianError.ts";
+import type { GuardianMetaData, GuardianTransform } from "../types/mod.ts";
+import { StringGuardian } from "./StringGuardian.ts";
 
 /**
  * Guardian for unknown/any values - accepts any input without validation.
@@ -15,15 +17,19 @@ import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
  * const anyValue = Guardian.unknown();
  * anyValue.parse('hello'); // 'hello'
  * anyValue.parse(42); // 42
- * anyValue.parse(null); // null
- * anyValue.parse(undefined); // undefined
  * anyValue.parse({ foo: 'bar' }); // { foo: 'bar' }
+ * anyValue.parse(null); // throws GuardianError
+ * anyValue.parse(undefined); // throws GuardianError
+ * 
+ * // To allow null values, use nullable() helper:
+ * const nullableValue = Guardian.unknown().nullable();
+ * nullableValue.parse(null); // null
  * ```
  *
  * @example With transformations
  * ```ts
  * const stringified = Guardian.unknown()
- *   .mutate(value => JSON.stringify(value));
+ *   .process(value => JSON.stringify(value));
  *
  * stringified.parse({ name: 'John' }); // '{"name":"John"}'
  * stringified.parse([1, 2, 3]); // '[1,2,3]'
@@ -38,10 +44,26 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    * @param metaData - Optional metadata for documentation and tooling
    */
   constructor(metaData?: GuardianMetaData) {
-    // Pass-through transform that accepts any value
+    // Transform that accepts any value except null and undefined
     const initialTransform: GuardianTransform<unknown, T> = (
       input: unknown,
     ) => {
+      if (input === null) {
+        throw new GuardianError("Expected value but got null", {
+          expected: "non-null value",
+          got: "null",
+          comparison: "type",
+          type: "unknown",
+        });
+      }
+      if (input === undefined) {
+        throw new GuardianError("Expected value but got undefined", {
+          expected: "defined value",
+          got: "undefined",
+          comparison: "type",
+          type: "unknown",
+        });
+      }
       return input as T;
     };
 
@@ -63,27 +85,33 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    * stringified.parse([1, 2, 3]); // '[1,2,3]'
    * ```
    */
-  toStringValue(message?: string): BaseGuardian<string> {
-    return this.mutate((value: T) => {
+  toStringValue(_message?: string): StringGuardian {
+    return this.process((value: T) => {
       try {
-        if (value === null) return 'null';
-        if (value === undefined) return 'undefined';
-        if (typeof value === 'string') return value;
-        if (typeof value === 'number' || typeof value === 'boolean') {
+        if (value === null) return "null";
+        if (value === undefined) return "undefined";
+        if (typeof value === "string") return value;
+        if (typeof value === "number" || typeof value === "boolean") {
           return String(value);
         }
-        if (typeof value === 'bigint') return value.toString();
-        if (typeof value === 'symbol') return value.toString();
-        if (typeof value === 'function') return value.toString();
+        if (typeof value === "bigint") return value.toString();
+        if (typeof value === "symbol") return value.toString();
+        if (typeof value === "function") return value.toString();
 
         // For objects and arrays, use JSON.stringify
         return JSON.stringify(value);
-      } catch {
-        throw new Error(
-          message || 'Failed to convert value to string',
+      } catch (_error) {
+        throw new GuardianError(
+          _message || "Failed to convert value to string",
+          {
+            expected: "stringifiable value",
+            got: typeof value,
+            comparison: "toString",
+            type: "conversion",
+          },
         );
       }
-    }, 'Convert to string');
+    }, StringGuardian) as StringGuardian;
   }
 
   /**
@@ -99,14 +127,22 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    * jsonified.parse([1, 2, 3]); // '[1,2,3]'
    * ```
    */
-  toJSON(message?: string): BaseGuardian<string> {
-    return this.mutate((value: T) => {
+  toJSON(_message?: string): BaseGuardian<string> {
+    return this.process((value: T) => {
       try {
         return JSON.stringify(value);
-      } catch {
-        throw new Error(); // Just throw any error, mutate will wrap it
+      } catch (_error) {
+        throw new GuardianError(
+          _message || "Failed to serialize value to JSON",
+          {
+            expected: "JSON serializable value",
+            got: typeof value,
+            comparison: "toJSON",
+            type: "conversion",
+          },
+        );
       }
-    }, message || 'Failed to serialize value to JSON');
+    });
   }
 
   /**
@@ -128,18 +164,22 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    */
   narrow<U>(
     guard: (value: unknown) => value is U,
-    message?: string,
+    _message?: string,
   ): BaseGuardian<U> {
-    return this.step(
-      (value: T) => {
-        if (!guard(value)) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value as U;
-      },
-      message || 'Value failed type guard validation',
-      'custom',
-    ) as BaseGuardian<U>;
+    return this.process((value: T) => {
+      if (!guard(value)) {
+        throw new GuardianError(
+          _message || "Value failed type guard validation",
+          {
+            expected: "type guard match",
+            got: typeof value,
+            comparison: "narrow",
+            type: "validation",
+          },
+        );
+      }
+      return value as U;
+    }) as BaseGuardian<U>;
   }
 
   /**
@@ -161,14 +201,19 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    */
   as<U>(
     typeGuard: (value: unknown) => value is U,
-    description?: string,
+    __description?: string,
   ): BaseGuardian<U> {
-    return this.mutate((value: T) => {
+    return this.process((value: T) => {
       if (!typeGuard(value)) {
-        throw new Error(); // Just throw any error, mutate will wrap it
+        throw new GuardianError("Type assertion failed", {
+          expected: "type guard match",
+          got: typeof value,
+          comparison: "as",
+          type: "validation",
+        });
       }
       return value;
-    }, description || 'Type guard assertion failed') as BaseGuardian<U>;
+    }) as BaseGuardian<U>;
   }
 
   /**
@@ -187,7 +232,6 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
   nullish(): BaseGuardian<null | undefined> {
     return this.narrow(
       (value: unknown): value is null | undefined => value == null,
-      'Expected null or undefined',
     );
   }
 
@@ -205,11 +249,16 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    * ```
    */
   nonNullish(): BaseGuardian<NonNullable<T>> {
-    return this.mutate((value: T) => {
+    return this.process((value: T) => {
       if (value == null) {
-        throw new Error(); // Just throw any error, mutate will wrap it
+        throw new GuardianError("Value cannot be null or undefined", {
+          expected: "non-nullish value",
+          got: value,
+          comparison: "nonNullish",
+          type: "validation",
+        });
       }
       return value as NonNullable<T>;
-    }, 'Expected non-nullish value, got null or undefined');
+    });
   }
 }

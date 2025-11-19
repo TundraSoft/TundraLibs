@@ -1,4 +1,4 @@
-import type { GuardianError } from '../GuardianError.ts';
+import type { GuardianError } from "../GuardianError.ts";
 
 /**
  * Result tuple for safe parsing operations.

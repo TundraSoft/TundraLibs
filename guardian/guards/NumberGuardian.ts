@@ -1,6 +1,9 @@
-import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError } from '../GuardianError.ts';
-import type { GuardianMetaData } from '../types/mod.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { GuardianError } from "../GuardianError.ts";
+import type { GuardianMetaData, GuardianTransform } from "../types/mod.ts";
+import { DateGuardian } from "./DateGuardian.ts";
+import { StringGuardian } from "./StringGuardian.ts";
+import { BigIntGuardian } from "./BigIntGuardian.ts";
 
 /**
  * Guardian for number validation and transformation.
@@ -23,27 +26,42 @@ export class NumberGuardian extends BaseGuardian<number> {
    * Creates a new NumberGuardian instance.
    *
    * @param metaData - Optional metadata for this guardian
+   * @param initialTransform - Optional composed transformation from previous guardian
    */
-  constructor(metaData?: GuardianMetaData) {
-    super((input: unknown) => {
-      if (typeof input !== 'number') {
-        throw new GuardianError('Expected number but got ${got}', {
-          expected: 'number',
+  constructor(metaData?: GuardianMetaData, initialTransform?: GuardianTransform<unknown, number>) {
+    const defaultNumberValidation = (input: unknown) => {
+      if (typeof input !== "number") {
+        throw new GuardianError("Expected number but got ${got}", {
+          expected: "number",
           got: typeof input,
-          comparison: 'type',
-          type: 'number',
+          comparison: "type",
+          type: "number",
         });
       }
       if (isNaN(input)) {
-        throw new GuardianError('Number cannot be NaN', {
-          expected: 'valid number',
-          got: 'NaN',
-          comparison: 'nan',
-          type: 'number',
+        throw new GuardianError("Number cannot be NaN", {
+          expected: "valid number",
+          got: "NaN",
+          comparison: "nan",
+          type: "number",
         });
       }
       return input;
-    }, metaData);
+    };
+
+    let finalTransform: GuardianTransform<unknown, number>;
+    if (initialTransform) {
+      // Chain: initialTransform -> then number validation
+      finalTransform = (input: unknown) => {
+        const result = initialTransform(input);
+        return defaultNumberValidation(result);
+      };
+    } else {
+      // Just number validation
+      finalTransform = defaultNumberValidation;
+    }
+
+    super(finalTransform, metaData);
   }
 
   //#region Range Validation Methods
@@ -63,16 +81,20 @@ export class NumberGuardian extends BaseGuardian<number> {
    * ```
    */
   min(value: number, errorMessage?: string): NumberGuardian {
-    return this.step(
-      (num: number) => {
-        if (num < value) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return num;
-      },
-      errorMessage || `Number must be at least ${value}`,
-      'gte',
-    ) as NumberGuardian;
+    return this.process((num: number) => {
+      if (num < value) {
+        throw new GuardianError(
+          errorMessage || `Number must be at least ${value}`,
+          {
+            expected: `>= ${value}`,
+            got: num,
+            comparison: "min",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
   }
 
   /**
@@ -90,16 +112,20 @@ export class NumberGuardian extends BaseGuardian<number> {
    * ```
    */
   max(value: number, errorMessage?: string): NumberGuardian {
-    return this.step(
-      (num: number) => {
-        if (num > value) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return num;
-      },
-      errorMessage || `Number must be at most ${value}`,
-      'lte',
-    ) as NumberGuardian;
+    return this.process((num: number) => {
+      if (num > value) {
+        throw new GuardianError(
+          errorMessage || `Number must be at most ${value}`,
+          {
+            expected: `<= ${value}`,
+            got: num,
+            comparison: "max",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
   }
 
   //#endregion
@@ -113,16 +139,20 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @returns This NumberGuardian (mutated) or new instance if immutable
    */
   positive(errorMessage?: string): NumberGuardian {
-    return this.step(
-      (num: number) => {
-        if (num <= 0) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return num;
-      },
-      errorMessage || 'Number must be positive (> 0)',
-      'gt',
-    ) as NumberGuardian;
+    return this.process((num: number) => {
+      if (num <= 0) {
+        throw new GuardianError(
+          errorMessage || "Number must be positive (> 0)",
+          {
+            expected: "> 0",
+            got: num,
+            comparison: "positive",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
   }
 
   /**
@@ -132,16 +162,20 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @returns This NumberGuardian (mutated) or new instance if immutable
    */
   negative(errorMessage?: string): NumberGuardian {
-    return this.step(
-      (num: number) => {
-        if (num >= 0) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return num;
-      },
-      errorMessage || 'Number must be negative (< 0)',
-      'lt',
-    ) as NumberGuardian;
+    return this.process((num: number) => {
+      if (num >= 0) {
+        throw new GuardianError(
+          errorMessage || "Number must be negative (< 0)",
+          {
+            expected: "< 0",
+            got: num,
+            comparison: "negative",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
   }
 
   /**
@@ -151,16 +185,20 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @returns This NumberGuardian (mutated) or new instance if immutable
    */
   nonNegative(errorMessage?: string): NumberGuardian {
-    return this.step(
-      (num: number) => {
-        if (num < 0) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return num;
-      },
-      errorMessage || 'Number must be non-negative (>= 0)',
-      'gte',
-    ) as NumberGuardian;
+    return this.process((num: number) => {
+      if (num < 0) {
+        throw new GuardianError(
+          errorMessage || "Number must be non-negative (>= 0)",
+          {
+            expected: ">= 0",
+            got: num,
+            comparison: "nonNegative",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
   }
 
   /**
@@ -170,16 +208,20 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @returns This NumberGuardian (mutated) or new instance if immutable
    */
   nonPositive(errorMessage?: string): NumberGuardian {
-    return this.step(
-      (num: number) => {
-        if (num > 0) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return num;
-      },
-      errorMessage || 'Number must be non-positive (<= 0)',
-      'lte',
-    ) as NumberGuardian;
+    return this.process((num: number) => {
+      if (num > 0) {
+        throw new GuardianError(
+          errorMessage || "Number must be non-positive (<= 0)",
+          {
+            expected: "<= 0",
+            got: num,
+            comparison: "nonPositive",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
   }
 
   //#endregion
@@ -200,16 +242,17 @@ export class NumberGuardian extends BaseGuardian<number> {
    * ```
    */
   integer(errorMessage?: string): NumberGuardian {
-    return this.step(
-      (num: number) => {
-        if (!Number.isInteger(num)) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return num;
-      },
-      errorMessage || 'Number must be an integer',
-      'integer',
-    ) as NumberGuardian;
+    return this.process((num: number) => {
+      if (!Number.isInteger(num)) {
+        throw new GuardianError(errorMessage || "Number must be an integer", {
+          expected: "integer",
+          got: num,
+          comparison: "integer",
+          type: "validation",
+        });
+      }
+      return num;
+    }) as NumberGuardian;
   }
 
   /**
@@ -219,16 +262,17 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @returns This NumberGuardian (mutated) or new instance if immutable
    */
   finite(errorMessage?: string): NumberGuardian {
-    return this.step(
-      (num: number) => {
-        if (!Number.isFinite(num)) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return num;
-      },
-      errorMessage || 'Number must be finite',
-      'finite',
-    ) as NumberGuardian;
+    return this.process((num: number) => {
+      if (!Number.isFinite(num)) {
+        throw new GuardianError(errorMessage || "Number must be finite", {
+          expected: "finite number",
+          got: num,
+          comparison: "finite",
+          type: "validation",
+        });
+      }
+      return num;
+    }) as NumberGuardian;
   }
 
   /**
@@ -238,17 +282,22 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @returns New NumberGuardian with safe integer validation
    */
   safeInteger(errorMessage?: string): NumberGuardian {
-    return this.step(
-      (num: number) => {
-        if (!Number.isSafeInteger(num)) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return num;
-      },
-      errorMessage ||
-        `Number must be a safe integer (between ${Number.MIN_SAFE_INTEGER} and ${Number.MAX_SAFE_INTEGER})`,
-      'safeInteger',
-    ) as NumberGuardian;
+    return this.process((num: number) => {
+      if (!Number.isSafeInteger(num)) {
+        throw new GuardianError(
+          errorMessage ||
+            `Number must be a safe integer (between ${Number.MIN_SAFE_INTEGER} and ${Number.MAX_SAFE_INTEGER})`,
+          {
+            expected:
+              `safe integer (${Number.MIN_SAFE_INTEGER} to ${Number.MAX_SAFE_INTEGER})`,
+            got: num,
+            comparison: "safeInteger",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
   }
 
   /**
@@ -266,16 +315,20 @@ export class NumberGuardian extends BaseGuardian<number> {
    * ```
    */
   multipleOf(divisor: number, errorMessage?: string): NumberGuardian {
-    return this.step(
-      (num: number) => {
-        if (num % divisor !== 0) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return num;
-      },
-      errorMessage || `Number must be a multiple of ${divisor}`,
-      'multipleOf',
-    ) as NumberGuardian;
+    return this.process((num: number) => {
+      if (num % divisor !== 0) {
+        throw new GuardianError(
+          errorMessage || `Number must be a multiple of ${divisor}`,
+          {
+            expected: `multiple of ${divisor}`,
+            got: num,
+            comparison: "multipleOf",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
   }
 
   //#endregion
@@ -295,9 +348,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    * ```
    */
   round(): NumberGuardian {
-    return this.step(
+    return this.process(
       (num: number) => Math.round(num),
-      'Round to nearest integer',
     ) as NumberGuardian;
   }
 
@@ -307,9 +359,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @returns New NumberGuardian that floors the number
    */
   floor(): NumberGuardian {
-    return this.step(
+    return this.process(
       (num: number) => Math.floor(num),
-      'Floor to integer',
     ) as NumberGuardian;
   }
 
@@ -319,9 +370,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @returns New NumberGuardian that ceils the number
    */
   ceil(): NumberGuardian {
-    return this.step(
+    return this.process(
       (num: number) => Math.ceil(num),
-      'Ceil to integer',
     ) as NumberGuardian;
   }
 
@@ -331,9 +381,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @returns New NumberGuardian that truncates the number
    */
   trunc(): NumberGuardian {
-    return this.step(
+    return this.process(
       (num: number) => Math.trunc(num),
-      'Truncate decimal part',
     ) as NumberGuardian;
   }
 
@@ -343,9 +392,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @returns New NumberGuardian with absolute value
    */
   abs(): NumberGuardian {
-    return this.step(
+    return this.process(
       (num: number) => Math.abs(num),
-      'Absolute value',
     ) as NumberGuardian;
   }
 
@@ -370,11 +418,11 @@ export class NumberGuardian extends BaseGuardian<number> {
    */
   override toString(
     radix?: number,
-    description?: string,
-  ): BaseGuardian<string> {
-    return this.mutate((num: number) => {
+    __description?: string,
+  ): StringGuardian {
+    return this.process((num: number) => {
       return num.toString(radix);
-    }, description || 'Convert number to string');
+    }, StringGuardian) as StringGuardian;
   }
 
   /**
@@ -390,45 +438,45 @@ export class NumberGuardian extends BaseGuardian<number> {
    * schema.parse(3.14); // throws GuardianError (must be integer)
    * ```
    */
-  toBigInt(errorMessage?: string): BaseGuardian<bigint> {
-    return this.mutate((num: number) => {
+  toBigInt(errorMessage?: string): BigIntGuardian {
+    return this.process((num: number) => {
       if (!Number.isInteger(num)) {
         throw new GuardianError(
-          errorMessage || 'Cannot convert non-integer to BigInt',
+          errorMessage || "Cannot convert non-integer to BigInt",
           {
-            expected: 'integer',
+            expected: "integer",
             got: num,
-            comparison: 'conversion',
-            type: 'bigint',
+            comparison: "conversion",
+            type: "bigint",
           },
         );
       }
       return BigInt(num);
-    }, 'Number to BigInt transformation');
+    }, BigIntGuardian) as BigIntGuardian;
   }
 
   /**
    * Transforms number to Date (treating number as milliseconds since epoch).
    *
    * @param errorMessage - Optional custom error message
-   * @returns New BaseGuardian<Date> with Date transformation
+   * @returns New DateGuardian with Date transformation
    */
-  toDate(errorMessage?: string): BaseGuardian<Date> {
-    return this.mutate((num: number) => {
+  toDate(errorMessage?: string): DateGuardian {
+    return this.process((num: number) => {
       const date = new Date(num);
       if (isNaN(date.getTime())) {
         throw new GuardianError(
-          errorMessage || 'Cannot convert number to date',
+          errorMessage || "Cannot convert number to date",
           {
-            expected: 'valid timestamp',
+            expected: "valid timestamp",
             got: num,
-            comparison: 'conversion',
-            type: 'date',
+            comparison: "conversion",
+            type: "date",
           },
         );
       }
       return date;
-    }, 'Number to date transformation (as timestamp)');
+    }, DateGuardian) as DateGuardian;
   }
 
   //#endregion

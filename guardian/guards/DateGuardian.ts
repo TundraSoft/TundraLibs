@@ -1,7 +1,7 @@
-import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError } from '../GuardianError.ts';
-import type { GuardianMetaData } from '../types/mod.ts';
-import { format } from '$datetime';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { GuardianError } from "../GuardianError.ts";
+import type { GuardianMetaData, GuardianTransform } from "../types/mod.ts";
+import { format } from "$datetime";
 
 /**
  * Guardian for Date validation and transformation.
@@ -23,27 +23,42 @@ export class DateGuardian extends BaseGuardian<Date> {
    * Creates a new DateGuardian instance.
    *
    * @param metaData - Optional metadata for this guardian
+   * @param initialTransform - Optional composed transformation from previous guardian
    */
-  constructor(metaData?: GuardianMetaData) {
-    super((input: unknown) => {
+  constructor(metaData?: GuardianMetaData, initialTransform?: GuardianTransform<unknown, Date>) {
+    const defaultDateValidation = (input: unknown) => {
       if (!(input instanceof Date)) {
-        throw new GuardianError('Expected Date but got ${got}', {
-          expected: 'Date',
+        throw new GuardianError("Expected Date but got ${got}", {
+          expected: "Date",
           got: typeof input,
-          comparison: 'type',
-          type: 'date',
+          comparison: "type",
+          type: "date",
         });
       }
       if (isNaN(input.getTime())) {
-        throw new GuardianError('Date is invalid', {
-          expected: 'valid Date',
-          got: 'invalid Date',
-          comparison: 'validity',
-          type: 'date',
+        throw new GuardianError("Date is invalid", {
+          expected: "valid Date",
+          got: "invalid Date",
+          comparison: "validity",
+          type: "date",
         });
       }
       return input;
-    }, metaData);
+    };
+
+    let finalTransform: GuardianTransform<unknown, Date>;
+    if (initialTransform) {
+      // Chain: initialTransform -> then date validation
+      finalTransform = (input: unknown) => {
+        const result = initialTransform(input);
+        return defaultDateValidation(result);
+      };
+    } else {
+      // Just date validation
+      finalTransform = defaultDateValidation;
+    }
+
+    super(finalTransform, metaData);
   }
 
   //#region Range Validation Methods
@@ -63,16 +78,20 @@ export class DateGuardian extends BaseGuardian<Date> {
    * ```
    */
   min(date: Date, errorMessage?: string): DateGuardian {
-    return this.step(
-      (value: Date) => {
-        if (value < date) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      errorMessage || `Date must be after ${date.toISOString()}`,
-      'gte',
-    ) as DateGuardian;
+    return this.process((value: Date) => {
+      if (value < date) {
+        throw new GuardianError(
+          errorMessage || `Date must be after ${date.toISOString()}`,
+          {
+            expected: `>= ${date.toISOString()}`,
+            got: value.toISOString(),
+            comparison: "min",
+            type: "validation",
+          },
+        );
+      }
+      return value;
+    }) as DateGuardian;
   }
 
   /**
@@ -83,16 +102,20 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns New DateGuardian with maximum date validation
    */
   max(date: Date, errorMessage?: string): DateGuardian {
-    return this.step(
-      (value: Date) => {
-        if (value.getTime() > date.getTime()) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      errorMessage || `Date must be at or before ${date.toISOString()}`,
-      'lte',
-    ) as DateGuardian;
+    return this.process((value: Date) => {
+      if (value.getTime() > date.getTime()) {
+        throw new GuardianError(
+          errorMessage || `Date must be at or before ${date.toISOString()}`,
+          {
+            expected: `<= ${date.toISOString()}`,
+            got: value.toISOString(),
+            comparison: "max",
+            type: "validation",
+          },
+        );
+      }
+      return value;
+    }) as DateGuardian;
   }
 
   /**
@@ -102,17 +125,18 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns New DateGuardian with past date validation
    */
   past(errorMessage?: string): DateGuardian {
-    return this.step(
-      (value: Date) => {
-        const now = new Date();
-        if (value.getTime() >= now.getTime()) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      errorMessage || 'Date must be in the past',
-      'lt',
-    ) as DateGuardian;
+    return this.process((value: Date) => {
+      const now = new Date();
+      if (value.getTime() >= now.getTime()) {
+        throw new GuardianError(errorMessage || "Date must be in the past", {
+          expected: "past date",
+          got: value.toISOString(),
+          comparison: "past",
+          type: "validation",
+        });
+      }
+      return value;
+    }) as DateGuardian;
   }
 
   /**
@@ -122,17 +146,18 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns New DateGuardian with future date validation
    */
   future(errorMessage?: string): DateGuardian {
-    return this.step(
-      (value: Date) => {
-        const now = new Date();
-        if (value <= now) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      errorMessage || 'Date must be in the future',
-      'gt',
-    ) as DateGuardian;
+    return this.process((value: Date) => {
+      const now = new Date();
+      if (value <= now) {
+        throw new GuardianError(errorMessage || "Date must be in the future", {
+          expected: "future date",
+          got: value.toISOString(),
+          comparison: "future",
+          type: "validation",
+        });
+      }
+      return value;
+    }) as DateGuardian;
   }
 
   //#endregion
@@ -148,25 +173,29 @@ export class DateGuardian extends BaseGuardian<Date> {
    */
   weekday(weekday: number, errorMessage?: string): DateGuardian {
     const weekdayNames = [
-      'Sunday',
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
     ];
 
-    return this.step(
-      (value: Date) => {
-        if (value.getDay() !== weekday) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      errorMessage || `Date must be on ${weekdayNames[weekday]}`,
-      'weekday',
-    ) as DateGuardian;
+    return this.process((value: Date) => {
+      if (value.getDay() !== weekday) {
+        throw new GuardianError(
+          errorMessage || `Date must be on ${weekdayNames[weekday]}`,
+          {
+            expected: weekdayNames[weekday],
+            got: weekdayNames[value.getDay()],
+            comparison: "weekday",
+            type: "validation",
+          },
+        );
+      }
+      return value;
+    }) as DateGuardian;
   }
 
   /**
@@ -176,17 +205,21 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns New DateGuardian with business hours validation
    */
   businessHours(errorMessage?: string): DateGuardian {
-    return this.step(
-      (value: Date) => {
-        const hours = value.getHours();
-        if (hours < 9 || hours >= 17) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      errorMessage || 'Date must be during business hours (9 AM - 5 PM)',
-      'businessHours',
-    ) as DateGuardian;
+    return this.process((value: Date) => {
+      const hours = value.getHours();
+      if (hours < 9 || hours >= 17) {
+        throw new GuardianError(
+          errorMessage || "Date must be during business hours (9 AM - 5 PM)",
+          {
+            expected: "business hours (9 AM - 5 PM)",
+            got: `${hours}:00`,
+            comparison: "businessHours",
+            type: "validation",
+          },
+        );
+      }
+      return value;
+    }) as DateGuardian;
   }
 
   //#endregion
@@ -206,10 +239,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * ```
    */
   format(pattern: string): BaseGuardian<string> {
-    return this.mutate(
-      (date: Date) => format(date, pattern),
-      `Date formatting (${pattern})`,
-    );
+    return this.process((date: Date) => format(date, pattern));
   }
 
   /**
@@ -217,11 +247,8 @@ export class DateGuardian extends BaseGuardian<Date> {
    *
    * @returns New BaseGuardian<string> with ISO string transformation
    */
-  toISOString(description?: string): BaseGuardian<string> {
-    return this.mutate(
-      (date: Date) => date.toISOString(),
-      description || 'Convert to ISO string',
-    );
+  toISOString(): BaseGuardian<string> {
+    return this.process((date: Date) => date.toISOString());
   }
 
   /**
@@ -230,9 +257,8 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns New BaseGuardian<number> with timestamp transformation
    */
   toTimestamp(): BaseGuardian<number> {
-    return this.mutate(
+    return this.process(
       (date: Date) => date.getTime(),
-      'Date to timestamp transformation',
     );
   }
 
@@ -242,9 +268,8 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns New BaseGuardian<number> with Unix timestamp transformation
    */
   toUnixTimestamp(): BaseGuardian<number> {
-    return this.mutate(
+    return this.process(
       (date: Date) => Math.floor(date.getTime() / 1000),
-      'Date to Unix timestamp transformation',
     );
   }
 
@@ -261,7 +286,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * ```
    */
   component(
-    component: 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second',
+    component: "year" | "month" | "day" | "hour" | "minute" | "second",
   ): BaseGuardian<number> {
     const extractors = {
       year: (date: Date) => date.getFullYear(),
@@ -272,9 +297,8 @@ export class DateGuardian extends BaseGuardian<Date> {
       second: (date: Date) => date.getSeconds(),
     };
 
-    return this.mutate(
+    return this.process(
       extractors[component],
-      `Extract ${component} from date`,
     );
   }
 

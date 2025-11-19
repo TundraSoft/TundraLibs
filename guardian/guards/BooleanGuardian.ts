@@ -1,6 +1,8 @@
-import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError } from '../GuardianError.ts';
-import type { GuardianMetaData } from '../types/mod.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { GuardianError } from "../GuardianError.ts";
+import type { GuardianMetaData } from "../types/mod.ts";
+import { NumberGuardian } from "./NumberGuardian.ts";
+import { StringGuardian } from "./StringGuardian.ts";
 
 /**
  * Guardian for boolean validation and transformation.
@@ -24,12 +26,12 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
    */
   constructor(metaData?: GuardianMetaData) {
     super((input: unknown) => {
-      if (typeof input !== 'boolean') {
-        throw new GuardianError('Expected boolean but got ${got}', {
-          expected: 'boolean',
+      if (typeof input !== "boolean") {
+        throw new GuardianError("Expected boolean but got ${got}", {
+          expected: "boolean",
           got: typeof input,
-          comparison: 'type',
-          type: 'boolean',
+          comparison: "type",
+          type: "boolean",
         });
       }
       return input;
@@ -52,15 +54,21 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
    * ```
    */
   true(errorMessage?: string): BooleanGuardian {
-    return this.step(
+    return this.process(
       (value: boolean) => {
         if (value !== true) {
-          throw new Error(); // Just throw any error, step will wrap it
+          throw new GuardianError(
+            errorMessage || "Expected true but got false",
+            {
+              expected: true,
+              got: value,
+              comparison: "equals",
+              type: "validation",
+            },
+          );
         }
         return value;
       },
-      errorMessage || 'Expected true but got false',
-      'equals',
     ) as BooleanGuardian;
   }
 
@@ -71,15 +79,21 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
    * @returns This BooleanGuardian (mutated) or new instance if immutable
    */
   false(errorMessage?: string): BooleanGuardian {
-    return this.step(
+    return this.process(
       (value: boolean) => {
         if (value !== false) {
-          throw new Error(); // Just throw any error, step will wrap it
+          throw new GuardianError(
+            errorMessage || "Expected false but got true",
+            {
+              expected: false,
+              got: value,
+              comparison: "equals",
+              type: "validation",
+            },
+          );
         }
         return value;
       },
-      errorMessage || 'Expected false but got true',
-      'equals',
     ) as BooleanGuardian;
   }
 
@@ -92,17 +106,17 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
    *
    * @returns New BaseGuardian<string> with string transformation
    */
-  override toString(description?: string): BaseGuardian<string> {
-    return this.mutate(
+  override toString(_description?: string): StringGuardian {
+    return this.process(
       (value: boolean) => value.toString(),
-      description || 'Convert boolean to string',
-    );
+      StringGuardian
+    ) as StringGuardian;
   }
 
   /**
-   * Transforms boolean to number (1 for true, 0 for false).
+   * Transforms boolean to number (true = 1, false = 0).
    *
-   * @returns New BaseGuardian<number> with number transformation
+   * @returns New NumberGuardian with number transformation
    *
    * @example
    * ```ts
@@ -111,11 +125,11 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
    * schema.parse(false); // 0
    * ```
    */
-  toNumber(): BaseGuardian<number> {
-    return this.mutate(
-      (value: boolean) => value ? 1 : 0,
-      'Boolean to number transformation',
-    );
+  toNumber(): NumberGuardian {
+    return this.process(
+      (value: boolean): number => value ? 1 : 0,
+      NumberGuardian
+    ) as NumberGuardian;
   }
 
   //#endregion

@@ -1,6 +1,6 @@
-import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError } from '../GuardianError.ts';
-import type { GuardianMetaData } from '../types/mod.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { GuardianError } from "../GuardianError.ts";
+import type { GuardianMetaData } from "../types/mod.ts";
 
 /**
  * Guardian for enum validation.
@@ -29,7 +29,7 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
    */
   constructor(allowedValues: readonly T[], metaData?: GuardianMetaData) {
     if (!allowedValues || allowedValues.length === 0) {
-      throw new Error('EnumGuardian requires at least one allowed value');
+      throw new Error("EnumGuardian requires at least one allowed value");
     }
 
     super((input: unknown) => {
@@ -39,11 +39,11 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
         }
       }
 
-      throw new GuardianError('Value must be one of: ${expected}', {
-        expected: allowedValues.join(', '),
+      throw new GuardianError("Value must be one of: ${expected}", {
+        expected: allowedValues.join(", "),
         got: input,
-        comparison: 'enum',
-        type: 'enum',
+        comparison: "enum",
+        type: "enum",
       });
     }, metaData);
 
@@ -69,16 +69,21 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
    * @returns New EnumGuardian with exclusion validation
    */
   exclude(excludedValues: T[], errorMessage?: string): EnumGuardian<T> {
-    return this.step(
-      (value: T) => {
-        if (excludedValues.includes(value)) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      errorMessage || `Value must not be one of: ${excludedValues.join(', ')}`,
-      'notIn',
-    ) as EnumGuardian<T>;
+    return this.process((value: T) => {
+      if (excludedValues.includes(value)) {
+        throw new GuardianError(
+          errorMessage ||
+            `Value must not be one of: ${excludedValues.join(", ")}`,
+          {
+            expected: "excluded value",
+            got: value,
+            comparison: "exclude",
+            type: "validation",
+          },
+        );
+      }
+      return value;
+    }) as EnumGuardian<T>;
   }
 
   //#endregion
@@ -90,10 +95,9 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
    *
    * @returns New BaseGuardian<string> with string transformation
    */
-  override toString(description?: string): BaseGuardian<string> {
-    return this.mutate(
+  override toString(__description?: string): BaseGuardian<string> {
+    return this.process(
       (value: T) => String(value),
-      description || 'Convert enum to string',
     );
   }
 
@@ -107,12 +111,12 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
    * @example
    * ```ts
    * enum Status { Active = 'active', Inactive = 'inactive' }
-   * const schema = new EnumGuardian(Object.values(Status))
-   *   .map(status => status === 'active' ? 1 : 0);
+   * const schema = new EnumGuardian(['active', 'inactive'] as const);
+   * const mapped = schema.map(v => v.toUpperCase());
    * ```
    */
   map<U>(mapper: (value: T) => U): BaseGuardian<U> {
-    return this.mutate(mapper, 'Enum mapping transformation');
+    return this.process(mapper);
   }
 
   //#endregion

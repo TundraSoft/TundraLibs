@@ -1,6 +1,6 @@
-import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError } from '../GuardianError.ts';
-import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { GuardianError } from "../GuardianError.ts";
+import type { GuardianMetaData, GuardianTransform } from "../types/mod.ts";
 
 /**
  * Type definition for object schema - maps property names to their Guardian validators
@@ -12,7 +12,7 @@ export type ObjectSchema<T = Record<string, unknown>> = {
 /**
  * Validation mode for object validation
  */
-export type ObjectValidationMode = 'passthrough' | 'strict' | 'strip';
+export type ObjectValidationMode = "passthrough" | "strict" | "strip";
 
 /**
  * Type for refinement validation functions
@@ -88,7 +88,7 @@ export class ObjectGuardian<
   TOutput extends Record<string, unknown> = TInput,
 > extends BaseGuardian<TOutput> {
   private _schema: ObjectSchema<TInput>;
-  private _mode: ObjectValidationMode = 'passthrough';
+  private _mode: ObjectValidationMode = "passthrough";
   private _refinements: Array<ObjectRefinement<TOutput>> = [];
 
   /**
@@ -137,7 +137,7 @@ export class ObjectGuardian<
    */
   get inputType(): TInput {
     throw new Error(
-      'inputType is for TypeScript inference only and should not be accessed at runtime',
+      "inputType is for TypeScript inference only and should not be accessed at runtime",
     );
   }
 
@@ -165,7 +165,7 @@ export class ObjectGuardian<
       this._schema,
       this.metaData,
     );
-    newGuardian._mode = 'strict';
+    newGuardian._mode = "strict";
     newGuardian._refinements = [
       ...this._refinements as unknown as Array<ObjectRefinement<TInput>>,
     ];
@@ -194,7 +194,7 @@ export class ObjectGuardian<
       this._schema,
       this.metaData,
     );
-    newGuardian._mode = 'strip';
+    newGuardian._mode = "strip";
     newGuardian._refinements = [
       ...this._refinements as unknown as Array<ObjectRefinement<TInput>>,
     ];
@@ -452,11 +452,11 @@ export class ObjectGuardian<
    */
   transform<TNewOutput extends Record<string, unknown>>(
     transformer: (data: TOutput) => TNewOutput,
-    description?: string,
+    __description?: string,
   ): ObjectGuardian<TInput, TNewOutput> {
     const newGuardian = this._cloneObjectGuardian();
-    // Apply the transformation using the existing mutate method
-    const transformedGuardian = newGuardian.mutate(transformer, description);
+    // Apply the transformation using the process method
+    const transformedGuardian = newGuardian.process(transformer);
     const result = new ObjectGuardian<TInput, TNewOutput>(
       this._schema,
       this.metaData,
@@ -609,15 +609,15 @@ export class ObjectGuardian<
     input: unknown,
   ): TInput | (TInput & Record<string, unknown>) {
     // Type validation
-    if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-      const got = typeof input === 'object'
-        ? (input === null ? 'null' : 'array')
+    if (typeof input !== "object" || input === null || Array.isArray(input)) {
+      const got = typeof input === "object"
+        ? (input === null ? "null" : "array")
         : typeof input;
       throw new GuardianError(`Expected object but got ${got}`, {
-        expected: 'object',
+        expected: "object",
         got,
-        comparison: 'type',
-        type: 'object',
+        comparison: "type",
+        type: "object",
       });
     }
 
@@ -625,22 +625,22 @@ export class ObjectGuardian<
     const schemaKeys = new Set(Object.keys(this._schema));
 
     // Strict mode validation - check for extra properties
-    if (this._mode === 'strict') {
+    if (this._mode === "strict") {
       const extraKeys = Object.keys(inputObj).filter((key) =>
         !schemaKeys.has(key)
       );
       if (extraKeys.length > 0) {
         throw new GuardianError(
-          `Unknown ${extraKeys.length === 1 ? 'property' : 'properties'} '${
-            extraKeys.join(', ')
+          `Unknown ${extraKeys.length === 1 ? "property" : "properties"} '${
+            extraKeys.join(", ")
           }' ${
-            extraKeys.length === 1 ? 'is' : 'are'
+            extraKeys.length === 1 ? "is" : "are"
           } not allowed in strict mode`,
           {
-            expected: 'no extra properties',
+            expected: "no extra properties",
             got: extraKeys,
-            comparison: 'strict_validation',
-            type: 'unknown_property',
+            comparison: "strict_validation",
+            type: "unknown_property",
           },
         );
       }
@@ -661,10 +661,10 @@ export class ObjectGuardian<
           errors[key] = new GuardianError(
             `Validation failed for property '${key}': ${error}`,
             {
-              expected: 'valid value',
+              expected: "valid value",
               got: inputObj[key],
-              comparison: 'property_validation',
-              type: 'object_property',
+              comparison: "property_validation",
+              type: "object_property",
             },
           );
         }
@@ -672,7 +672,7 @@ export class ObjectGuardian<
     }
 
     // Handle passthrough properties
-    if (this._mode === 'passthrough') {
+    if (this._mode === "passthrough") {
       for (const [key, value] of Object.entries(inputObj)) {
         if (!schemaKeys.has(key)) {
           result[key] = value;
@@ -686,10 +686,10 @@ export class ObjectGuardian<
       const mainError = new GuardianError(
         `Object validation failed with ${errorCount} error(s)`,
         {
-          expected: 'valid object',
+          expected: "valid object",
           got: input,
-          comparison: 'object_validation',
-          type: 'object',
+          comparison: "object_validation",
+          type: "object",
           cause: errors,
         },
       );
@@ -710,22 +710,22 @@ export class ObjectGuardian<
         // Check for async refinement in sync parsing
         if (isValid instanceof Promise) {
           throw new GuardianError(
-            'Cannot use parse() with async validation steps. Use parseAsync() instead.',
+            "Cannot use parse() with async validation steps. Use parseAsync() instead.",
             {
-              expected: 'synchronous validation',
-              got: 'async refinement',
-              comparison: 'refinement_validation',
-              type: 'async_validation',
+              expected: "synchronous validation",
+              got: "async refinement",
+              comparison: "refinement_validation",
+              type: "async_validation",
             },
           );
         }
 
         if (!isValid) {
           const refinementError = new GuardianError(refinement.message, {
-            expected: 'refinement validation to pass',
+            expected: "refinement validation to pass",
             got: result,
-            comparison: 'refinement_validation',
-            type: 'refinement_failure',
+            comparison: "refinement_validation",
+            type: "refinement_failure",
           });
 
           // Add path information if provided
@@ -744,10 +744,10 @@ export class ObjectGuardian<
         const refinementError = new GuardianError(
           `Refinement validation failed: ${error}`,
           {
-            expected: 'refinement validation to complete',
+            expected: "refinement validation to complete",
             got: result,
-            comparison: 'refinement_validation',
-            type: 'refinement_error',
+            comparison: "refinement_validation",
+            type: "refinement_error",
           },
         );
 
@@ -774,22 +774,22 @@ export class ObjectGuardian<
         // Check for async refinement in sync parsing
         if (isValid instanceof Promise) {
           throw new GuardianError(
-            'Cannot use parse() with async validation steps. Use parseAsync() instead.',
+            "Cannot use parse() with async validation steps. Use parseAsync() instead.",
             {
-              expected: 'synchronous validation',
-              got: 'async refinement',
-              comparison: 'refinement_validation',
-              type: 'async_validation',
+              expected: "synchronous validation",
+              got: "async refinement",
+              comparison: "refinement_validation",
+              type: "async_validation",
             },
           );
         }
 
         if (!isValid) {
           const refinementError = new GuardianError(refinement.message, {
-            expected: 'refinement validation to pass',
+            expected: "refinement validation to pass",
             got: data,
-            comparison: 'refinement_validation',
-            type: 'refinement_failure',
+            comparison: "refinement_validation",
+            type: "refinement_failure",
           });
 
           // Add path information if provided
@@ -808,10 +808,10 @@ export class ObjectGuardian<
         const refinementError = new GuardianError(
           `Refinement validation failed: ${error}`,
           {
-            expected: 'refinement validation to complete',
+            expected: "refinement validation to complete",
             got: data,
-            comparison: 'refinement_validation',
-            type: 'refinement_error',
+            comparison: "refinement_validation",
+            type: "refinement_error",
           },
         );
 
@@ -837,10 +837,10 @@ export class ObjectGuardian<
 
         if (!isValid) {
           const refinementError = new GuardianError(refinement.message, {
-            expected: 'refinement validation to pass',
+            expected: "refinement validation to pass",
             got: data,
-            comparison: 'refinement_validation',
-            type: 'refinement_failure',
+            comparison: "refinement_validation",
+            type: "refinement_failure",
           });
 
           // Add path information if provided
@@ -859,10 +859,10 @@ export class ObjectGuardian<
         const refinementError = new GuardianError(
           `Refinement validation failed: ${error}`,
           {
-            expected: 'refinement validation to complete',
+            expected: "refinement validation to complete",
             got: data,
-            comparison: 'refinement_validation',
-            type: 'refinement_error',
+            comparison: "refinement_validation",
+            type: "refinement_error",
           },
         );
 
@@ -907,10 +907,10 @@ export class ObjectGuardian<
 
         if (!isValid) {
           const refinementError = new GuardianError(refinement.message, {
-            expected: 'refinement validation to pass',
+            expected: "refinement validation to pass",
             got: syncResult,
-            comparison: 'refinement_validation',
-            type: 'refinement_failure',
+            comparison: "refinement_validation",
+            type: "refinement_failure",
           });
 
           // Add path information if provided
@@ -929,10 +929,10 @@ export class ObjectGuardian<
         const refinementError = new GuardianError(
           `Async refinement validation failed: ${error}`,
           {
-            expected: 'refinement validation to complete',
+            expected: "refinement validation to complete",
             got: syncResult,
-            comparison: 'refinement_validation',
-            type: 'refinement_error',
+            comparison: "refinement_validation",
+            type: "refinement_error",
           },
         );
 

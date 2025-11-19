@@ -1,6 +1,8 @@
 # Guardian - TypeScript Validation Library
 
-A powerful, TypeScript-first validation library with fluent API design, inspired by Zod but built with step-based validation and transformation pipeline approach.
+A powerful, TypeScript-first validation library with fluent API design, inspired
+by Zod but built with step-based validation and transformation pipeline
+approach.
 
 ## Features
 
@@ -26,7 +28,7 @@ npx jsr add @tundralibs/guardian
 ## Quick Start
 
 ```typescript
-import { Guardian } from '@tundralibs/guardian';
+import { Guardian } from "@tundralibs/guardian";
 
 // Basic string validation
 const name = Guardian.string()
@@ -34,7 +36,7 @@ const name = Guardian.string()
   .maxLength(50)
   .trim();
 
-const result = name.parse('  John Doe  '); // 'John Doe'
+const result = name.parse("  John Doe  "); // 'John Doe'
 
 // Number validation
 const age = Guardian.number()
@@ -49,7 +51,7 @@ const stringToNumber = Guardian.string()
   .regex(/^\\d+$/)
   .toNumber();
 
-const converted = stringToNumber.parse('123'); // 123 (number)
+const converted = stringToNumber.parse("123"); // 123 (number)
 ```
 
 ## API Reference
@@ -102,16 +104,16 @@ const schema = Guardian.number()
 ```typescript
 const schema = Guardian.string()
   .step((value: string) => {
-    if (!value.includes('@')) {
-      throw new GuardianError('Must contain @', {
-        expected: 'string with @',
+    if (!value.includes("@")) {
+      throw new GuardianError("Must contain @", {
+        expected: "string with @",
         got: value,
-        comparison: 'custom',
-        type: 'string',
+        comparison: "custom",
+        type: "string",
       });
     }
     return value;
-  }, 'Custom @ validation');
+  }, "Custom @ validation");
 ```
 
 ### Async Validation
@@ -123,14 +125,14 @@ const asyncSchema = Guardian.string()
     // Simulate async validation (e.g., database check)
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    if (value === 'taken') {
-      throw new Error('Username already taken');
+    if (value === "taken") {
+      throw new Error("Username already taken");
     }
     return value;
-  }, 'Check availability');
+  }, "Check availability");
 
 // Use parseAsync for async schemas
-const result = await asyncSchema.parseAsync('username');
+const result = await asyncSchema.parseAsync("username");
 ```
 
 ### Safe Parsing
@@ -155,15 +157,15 @@ const asyncResult = await schema.safeParseAsync(10);
 
 ```typescript
 const schema = Guardian.string({
-  description: 'User email address',
-  title: 'Email',
-  examples: ['user@example.com', 'admin@company.org'],
+  description: "User email address",
+  title: "Email",
+  examples: ["user@example.com", "admin@company.org"],
 });
 
 // Or set after creation
-schema.description = 'Updated description';
-schema.title = 'New Title';
-schema.examples = ['example1', 'example2'];
+schema.description = "Updated description";
+schema.title = "New Title";
+schema.examples = ["example1", "example2"];
 
 console.log(schema.metaData);
 ```
@@ -174,7 +176,7 @@ Guardian provides detailed error information:
 
 ```typescript
 try {
-  Guardian.string().minLength(5).parse('hi');
+  Guardian.string().minLength(5).parse("hi");
 } catch (error) {
   if (error instanceof GuardianError) {
     console.log(error.message); // Human readable message
@@ -193,31 +195,31 @@ try {
 const userSchema = Guardian.string()
   .trim() // Remove whitespace
   .toLowerCase() // Normalize case
-  .minLength(3, 'Too short') // Minimum length
-  .maxLength(20, 'Too long') // Maximum length
-  .regex(/^[a-z0-9_]+$/, 'Invalid chars') // Only alphanumeric + underscore
+  .minLength(3, "Too short") // Minimum length
+  .maxLength(20, "Too long") // Maximum length
+  .regex(/^[a-z0-9_]+$/, "Invalid chars") // Only alphanumeric + underscore
   .step(async (username) => { // Custom async validation
     const exists = await checkUserExists(username);
     if (exists) {
-      throw new Error('Username taken');
+      throw new Error("Username taken");
     }
     return username;
-  }, 'Availability check');
+  }, "Availability check");
 
-const username = await userSchema.parseAsync('  JohnDoe123  '); // 'johndoe123'
+const username = await userSchema.parseAsync("  JohnDoe123  "); // 'johndoe123'
 ```
 
 ### Type Transformation Chain
 
 ```typescript
 const priceSchema = Guardian.string()
-  .regex(/^\\$?\\d+(\\.\\d{2})?$/, 'Invalid price format') // $29.99 or 29.99
-  .step((value) => value.replace('$', ''), 'Remove dollar') // Remove $
+  .regex(/^\\$?\\d+(\\.\\d{2})?$/, "Invalid price format") // $29.99 or 29.99
+  .step((value) => value.replace("$", ""), "Remove dollar") // Remove $
   .toNumber() // String → Number
-  .min(0, 'Price cannot be negative') // Validate positive
-  .step((price) => Math.round(price * 100) / 100, 'Round'); // Round to 2 decimals
+  .min(0, "Price cannot be negative") // Validate positive
+  .step((price) => Math.round(price * 100) / 100, "Round"); // Round to 2 decimals
 
-const price = priceSchema.parse('$29.999'); // 30.00
+const price = priceSchema.parse("$29.999"); // 30.00
 ```
 
 ### Conditional Validation
@@ -225,19 +227,19 @@ const price = priceSchema.parse('$29.999'); // 30.00
 ```typescript
 const conditionalSchema = Guardian.string()
   .step((value: string) => {
-    if (value.startsWith('temp_')) {
+    if (value.startsWith("temp_")) {
       // Temporary values need longer length
       if (value.length < 10) {
-        throw new Error('Temporary values must be at least 10 characters');
+        throw new Error("Temporary values must be at least 10 characters");
       }
     } else {
       // Regular values
       if (value.length < 3) {
-        throw new Error('Regular values must be at least 3 characters');
+        throw new Error("Regular values must be at least 3 characters");
       }
     }
     return value;
-  }, 'Conditional validation');
+  }, "Conditional validation");
 ```
 
 ## Comparison with Zod
@@ -256,7 +258,8 @@ const conditionalSchema = Guardian.string()
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see [CONTRIBUTING.md](../CONTRIBUTING.md) for
+guidelines.
 
 ## License
 

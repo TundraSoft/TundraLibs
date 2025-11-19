@@ -1,7 +1,8 @@
-import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError } from '../GuardianError.ts';
-import type { GuardianMetaData } from '../types/mod.ts';
-import { NumberGuardian } from './NumberGuardian.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { GuardianError } from "../GuardianError.ts";
+import type { GuardianMetaData, GuardianTransform } from "../types/mod.ts";
+import { NumberGuardian } from "./NumberGuardian.ts";
+import { DateGuardian } from "./DateGuardian.ts";
 
 /**
  * Guardian for string validation and transformation.
@@ -24,19 +25,33 @@ export class StringGuardian extends BaseGuardian<string> {
    * Creates a new StringGuardian instance.
    *
    * @param metaData - Optional metadata for this guardian
+   * @param initialTransform - Optional composed transformation from previous guardian
    */
-  constructor(metaData?: GuardianMetaData) {
-    super((input: unknown) => {
-      if (typeof input !== 'string') {
-        throw new GuardianError('Expected string but got ${got}', {
-          expected: 'string',
+  constructor(metaData?: GuardianMetaData, initialTransform?: GuardianTransform<unknown, string>) {
+    const defaultStringValidation = (input: unknown) => {
+      if (typeof input !== "string") {
+        throw new GuardianError("Expected string but got ${got}", {
+          expected: "string",
           got: typeof input,
-          comparison: 'type',
-          type: 'string',
+          comparison: "type",
+          type: "string",
         });
       }
       return input;
-    }, metaData);
+    };
+
+    let finalTransform: GuardianTransform<unknown, string>;
+    if (initialTransform) {
+      // Chain the provided transform with default validation
+      finalTransform = (input: unknown) => {
+        const transformedValue = initialTransform(input);
+        return defaultStringValidation(transformedValue);
+      };
+    } else {
+      finalTransform = defaultStringValidation;
+    }
+
+    super(finalTransform, metaData);
   }
 
   //#region Validation Methods
@@ -56,15 +71,10 @@ export class StringGuardian extends BaseGuardian<string> {
    * ```
    */
   minLength(length: number, errorMessage?: string): StringGuardian {
-    return this.step(
-      (value: string) => {
-        if (value.length < length) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
+    return this.test(
+      (value: string) => value.length >= length,
       errorMessage || `String must be at least ${length} characters long`,
-      'minLength',
+      "minLength",
     ) as StringGuardian;
   }
 
@@ -83,15 +93,21 @@ export class StringGuardian extends BaseGuardian<string> {
    * ```
    */
   maxLength(length: number, errorMessage?: string): StringGuardian {
-    return this.step(
+    return this.process(
       (value: string) => {
         if (value.length > length) {
-          throw new Error(); // Just throw any error, step will wrap it
+          throw new GuardianError(
+            errorMessage || `String must be at most ${length} characters long`,
+            {
+              expected: `string with max length ${length}`,
+              got: value,
+              comparison: "maxLength",
+              type: "validation",
+            },
+          );
         }
         return value;
       },
-      errorMessage || `String must be at most ${length} characters long`,
-      'maxLength',
     ) as StringGuardian;
   }
 
@@ -103,15 +119,21 @@ export class StringGuardian extends BaseGuardian<string> {
    * @returns This StringGuardian (mutated) or new instance if immutable
    */
   length(length: number, errorMessage?: string): StringGuardian {
-    return this.step(
+    return this.process(
       (value: string) => {
         if (value.length !== length) {
-          throw new Error(); // Just throw any error, step will wrap it
+          throw new GuardianError(
+            errorMessage || `String must be exactly ${length} characters long`,
+            {
+              expected: `string with length ${length}`,
+              got: value,
+              comparison: "length",
+              type: "validation",
+            },
+          );
         }
         return value;
       },
-      errorMessage || `String must be exactly ${length} characters long`,
-      'length',
     ) as StringGuardian;
   }
 
@@ -130,15 +152,21 @@ export class StringGuardian extends BaseGuardian<string> {
    * ```
    */
   regex(pattern: RegExp, errorMessage?: string): StringGuardian {
-    return this.step(
+    return this.process(
       (value: string) => {
         if (!pattern.test(value)) {
-          throw new Error(); // Just throw any error, step will wrap it
+          throw new GuardianError(
+            errorMessage || `String does not match pattern ${pattern}`,
+            {
+              expected: `string matching ${pattern}`,
+              got: value,
+              comparison: "pattern",
+              type: "validation",
+            },
+          );
         }
         return value;
       },
-      errorMessage || `String does not match pattern ${pattern}`,
-      'pattern',
     ) as StringGuardian;
   }
 
@@ -149,15 +177,21 @@ export class StringGuardian extends BaseGuardian<string> {
    * @returns This StringGuardian (mutated) or new instance if immutable
    */
   nonEmpty(errorMessage?: string): StringGuardian {
-    return this.step(
+    return this.process(
       (value: string) => {
         if (value.trim().length === 0) {
-          throw new Error(); // Just throw any error, step will wrap it
+          throw new GuardianError(
+            errorMessage || "String cannot be empty",
+            {
+              expected: "non-empty string",
+              got: value,
+              comparison: "nonEmpty",
+              type: "validation",
+            },
+          );
         }
         return value;
       },
-      errorMessage || 'String cannot be empty',
-      'nonEmpty',
     ) as StringGuardian;
   }
 
@@ -168,10 +202,10 @@ export class StringGuardian extends BaseGuardian<string> {
    * @returns New StringGuardian with email validation
    */
   email(errorMessage?: string): StringGuardian {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     return this.regex(
       emailRegex,
-      errorMessage || 'Invalid email address format',
+      errorMessage || "Invalid email address format",
     );
   }
 
@@ -182,17 +216,23 @@ export class StringGuardian extends BaseGuardian<string> {
    * @returns This StringGuardian (mutated) or new instance if immutable
    */
   url(errorMessage?: string): StringGuardian {
-    return this.step(
+    return this.process(
       (value: string) => {
         try {
           new URL(value);
           return value;
         } catch {
-          throw new Error(); // Just throw any error, step will wrap it
+          throw new GuardianError(
+            errorMessage || "Invalid URL format",
+            {
+              expected: "valid URL",
+              got: value,
+              comparison: "url",
+              type: "validation",
+            },
+          );
         }
       },
-      errorMessage || 'Invalid URL format',
-      'url',
     ) as StringGuardian;
   }
 
@@ -211,10 +251,10 @@ export class StringGuardian extends BaseGuardian<string> {
    * schema.parse('hello'); // 'HELLO'
    * ```
    */
-  toUpperCase(description?: string): StringGuardian {
-    const transformedGuardian = this.mutate((value: string) => {
+  toUpperCase(_description?: string): StringGuardian {
+    const transformedGuardian = this.process((value: string) => {
       return value.toUpperCase();
-    }, description || 'Convert to uppercase');
+    });
 
     return transformedGuardian as StringGuardian;
   }
@@ -224,10 +264,10 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @returns New StringGuardian that transforms to lowercase
    */
-  toLowerCase(description?: string): StringGuardian {
-    const transformedGuardian = this.mutate((value: string) => {
+  toLowerCase(_description?: string): StringGuardian {
+    const transformedGuardian = this.process((value: string) => {
       return value.toLowerCase();
-    }, description || 'Convert to lowercase');
+    });
 
     return transformedGuardian as StringGuardian;
   }
@@ -237,10 +277,10 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @returns New StringGuardian that trims whitespace
    */
-  trim(description?: string): StringGuardian {
-    return this.mutate((value: string) => {
+  trim(_description?: string): StringGuardian {
+    return this.process((value: string) => {
       return value.trim();
-    }, description || 'Trim whitespace') as StringGuardian;
+    }) as StringGuardian;
   }
 
   //#endregion
@@ -261,72 +301,71 @@ export class StringGuardian extends BaseGuardian<string> {
    * ```
    */
   toNumber(errorMessage?: string): NumberGuardian {
-    const transformedGuardian = this.mutate(
+    return this.process(
       (value: string) => {
         const num = Number(value);
         if (isNaN(num)) {
-          throw new Error(); // Just throw any error, step will wrap it
+          throw new GuardianError(
+            errorMessage || "Cannot convert string to number",
+            {
+              expected: "numeric string",
+              got: value,
+              comparison: "conversion",
+              type: "number",
+            },
+          );
         }
         return num;
-      },
-      errorMessage || 'Cannot convert string to number',
-    );
-
-    // Create a new NumberGuardian with the same composed transform
-    const numberGuardian = new NumberGuardian();
-    (numberGuardian as BaseGuardian<number>)['_composedTransform'] =
-      (transformedGuardian as BaseGuardian<number>)['_composedTransform'];
-    return numberGuardian;
+      }, NumberGuardian) as NumberGuardian;
   }
 
   /**
-   * Transforms string to integer.
+   * Transforms string to a number (integer).
    *
-   * @param radix - Optional radix for parsing (default: 10)
+   * @param radix - The radix for parsing (default: 10)
    * @param errorMessage - Optional custom error message
    * @returns New NumberGuardian with integer transformation
    */
   toInt(radix = 10, errorMessage?: string): NumberGuardian {
-    const transformedGuardian = this.mutate(
-      (value: string) => {
-        const num = parseInt(value, radix);
-        if (isNaN(num)) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return num;
-      },
-      errorMessage || 'Cannot convert string to integer',
-    );
-
-    // Create a new NumberGuardian with the same composed transform
-    const numberGuardian = new NumberGuardian();
-    (numberGuardian as BaseGuardian<number>)['_composedTransform'] =
-      (transformedGuardian as BaseGuardian<number>)['_composedTransform'];
-    return numberGuardian;
+    return this.process((value: string) => {
+      const num = parseInt(value, radix);
+      if (isNaN(num)) {
+        throw new GuardianError(
+          errorMessage || "Cannot convert string to integer",
+          {
+            expected: "integer string",
+            got: value,
+            comparison: "conversion",
+            type: "integer",
+          },
+        );
+      }
+      return num;
+    }, NumberGuardian) as NumberGuardian;
   }
 
   /**
    * Transforms string to a Date object.
    *
    * @param errorMessage - Optional custom error message
-   * @returns New BaseGuardian<Date> with date transformation
+   * @returns New DateGuardian with date transformation
    */
-  toDate(errorMessage?: string): BaseGuardian<Date> {
-    return this.mutate((value: string) => {
+  toDate(errorMessage?: string): DateGuardian {
+    return this.process((value: string) => {
       const date = new Date(value);
       if (isNaN(date.getTime())) {
         throw new GuardianError(
-          errorMessage || 'Cannot convert string to date',
+          errorMessage || "Cannot convert string to date",
           {
-            expected: 'valid date string',
+            expected: "valid date string",
             got: value,
-            comparison: 'conversion',
-            type: 'date',
+            comparison: "conversion",
+            type: "date",
           },
         );
       }
       return date;
-    }, 'String to date transformation');
+    }, DateGuardian) as DateGuardian;
   }
 
   //#endregion

@@ -1,14 +1,22 @@
-import { GuardianError } from './GuardianError.ts';
-import { isPromiseLike } from './helpers/mod.ts';
+import { GuardianError } from "./GuardianError.ts";
+import {
+  equals,
+  isIn,
+  isNotIn,
+  isPromiseLike,
+  notEquals,
+  test,
+} from "./helpers/mod.ts";
 import type {
   GuardianMetaData,
   GuardianSafeParseResult,
   GuardianTransform,
-} from './types/mod.ts';
+} from "./types/mod.ts";
 
 /**
  * Abstract base class for all Guardian validators.
- * Provides a fluent API for building validation pipelines with step-based transformations.
+ * Provides a fluent API for building validation pipelines with process-based transformations.
+ * Includes helper functions for common validation patterns from the old Guardian system.
  *
  * @template T - The output type after all validations and transformations
  *
@@ -16,8 +24,8 @@ import type {
  * ```ts
  * const schema = new StringGuardian()
  *   .minLength(3)
- *   .step((val) => val.toUpperCase())
- *   .step((val) => val.trim());
+ *   .process((val) => val.toUpperCase())
+ *   .process((val) => val.trim());
  *
  * const result = schema.parse('  hello  '); // 'HELLO'
  * ```
@@ -63,7 +71,7 @@ export abstract class BaseGuardian<T> {
    */
   set title(title: string) {
     if (!this._metaData) {
-      this._metaData = { description: '', title };
+      this._metaData = { description: "", title };
     } else {
       this._metaData.title = title;
     }
@@ -76,7 +84,7 @@ export abstract class BaseGuardian<T> {
    */
   set examples(examples: Array<unknown>) {
     if (!this._metaData) {
-      this._metaData = { description: '', examples };
+      this._metaData = { description: "", examples };
     } else {
       this._metaData.examples = examples;
     }
@@ -89,7 +97,7 @@ export abstract class BaseGuardian<T> {
    */
   set deprecated(deprecated: boolean) {
     if (!this._metaData) {
-      this._metaData = { description: '', deprecated };
+      this._metaData = { description: "", deprecated };
     } else {
       this._metaData.deprecated = deprecated;
     }
@@ -98,7 +106,7 @@ export abstract class BaseGuardian<T> {
   /**
    * Creates a new BaseGuardian instance.
    *
-   * @param initialTransform - The initial transformation function
+   * @param initialTransform - The transformation function for this guardian
    * @param metaData - Optional metadata for this guardian
    */
   constructor(
@@ -114,264 +122,214 @@ export abstract class BaseGuardian<T> {
   }
 
   /**
-   * Adds a validation step to the pipeline.
+   * Processes the output using a transformation function.
+   * Preserves asynchronous behavior if the original guardian returns a Promise.
+   * This is the core method that all other validation methods use internally.
    *
-   * @template U - The output type of this step
-   * @param validator - Function that validates and optionally transforms the value
-   * @param errorMessage - Custom error message to use if validation fails
-   * @param comparison - Type of comparison being performed (for error context)
-   * @returns This Guardian instance (mutated) or new instance if immutable
+   * @template U - The output type of the processing function
+   * @template V - The guardian class type for the result
+   * @param fn - The processing function to apply to the guardian's result
+   * @param constructor - Optional constructor for the resulting Guardian, defaults to this.constructor
+   * @returns A new Guardian instance with the processed function
    *
    * @example
    * ```ts
-   * guardian.step(
-   *   (value) => {
-   *     if (value.length < 5) throw new Error(); // Just throw any error
-   *     return value;
-   *   },
-   *   'Value must be at least 5 characters',
-   *   'minLength'
+   * // Simple transformation
+   * guardian.process((str) => str.toUpperCase());
+   *
+   * // Type transformation with constructor
+   * const numberGuardian = stringGuardian.process(
+   *   (str) => parseInt(str, 10),
+   *   NumberGuardian
    * );
    * ```
    */
-  step<U>(
-    validator: GuardianTransform<T, U>,
-    errorMessage = 'Validation failed',
-    comparison = 'custom',
-  ): BaseGuardian<U> {
-    // Create enhanced transform function with error handling
-    const enhancedValidator: GuardianTransform<T, U> = (value: T) => {
-      try {
-        return validator(value);
-      } catch (originalError) {
-        // If it's already a GuardianError and this is a transform/custom validation, preserve it
-        if (
-          originalError instanceof GuardianError &&
-          (comparison === 'transform' || comparison === 'custom' ||
-            comparison === 'equals' || comparison === 'gte' ||
-            comparison === 'lte' || comparison === 'unique' ||
-            comparison === 'includes' || comparison === 'excludes' ||
-            comparison === 'oneOf')
-        ) {
-          throw originalError;
-        }
+  process<U, V extends BaseGuardian<U> = BaseGuardian<U>>(
+    fn: GuardianTransform<T, U>,
+    constructor?: new (
+      metaData?: GuardianMetaData,
+      initialTransform?: GuardianTransform<unknown, U>,
+    ) => V,
+  ): V | BaseGuardian<U> {
+    const currentTransform = this._composedTransform;
 
-        // Otherwise, wrap any error in GuardianError with custom message
-        throw new GuardianError(errorMessage, {
-          // expected: 'valid value',
-          got: value,
-          comparison,
-          type: 'validation',
-        });
+    const composedTransform: GuardianTransform<unknown, U> = (
+      input: unknown,
+    ) => {
+      const intermediateResult = currentTransform(input);
+      if (isPromiseLike(intermediateResult)) {
+        return intermediateResult.then((resolved) => fn(resolved as T));
       }
+      return fn(intermediateResult as T);
     };
 
-    // If immutable, create new instance
-    if (this._isImmutable) {
-      const composedTransform: GuardianTransform<unknown, U> = (
-        input: unknown,
-      ) => {
-        const intermediateResult = this._composedTransform(input);
-        if (isPromiseLike(intermediateResult)) {
-          return intermediateResult.then((resolved) =>
-            enhancedValidator(resolved as T)
-          );
-        }
-        return enhancedValidator(intermediateResult as T);
-      };
-
-      const isStepAsync = isPromiseLike(validator);
-      const willBeAsync = this._isAsync || isStepAsync;
-
-      return this._createStep<U>(
+    let returnInstance: V | BaseGuardian<U> = this as unknown as BaseGuardian<U>;
+    
+    if (constructor) {
+      // Create the instance with guardian-style constructor parameters
+      returnInstance = new constructor(
+        this._metaData,
+        composedTransform
+      );
+    } else if (this._isImmutable) {
+      // If immutable, create new instance
+      returnInstance = this._createStep<U>(
         composedTransform,
-        willBeAsync,
+        this._isAsync,
         this._metaData,
       );
+    } else {
+      // Mutate in place for better performance
+      (this as unknown as BaseGuardian<U>)._composedTransform = composedTransform;
     }
 
-    // Mutate in place for better performance
-    const oldTransform = this._composedTransform;
-    const newTransform: GuardianTransform<unknown, U> = (input: unknown) => {
-      const intermediateResult = oldTransform(input);
-      if (isPromiseLike(intermediateResult)) {
-        return intermediateResult.then((resolved) =>
-          enhancedValidator(resolved as T)
-        );
-      }
-      return enhancedValidator(intermediateResult as T);
-    };
-    (this as unknown as BaseGuardian<U>)._composedTransform = newTransform;
-
-    // Update async flag if this step introduces async behavior
-    if (!this._isAsync && isPromiseLike(validator)) {
-      this._isAsync = true;
-    }
-
-    return this as unknown as BaseGuardian<U>;
+    return returnInstance;
   }
 
   /**
-   * Adds a transformation step that changes the type.
+   * Tests the result using a provided test function.
+   * Uses the helper function from the old Guardian system.
    *
-   * @template U - The new output type
-   * @param transformer - Function that transforms the value to a new type
-   * @param error - Custom error message for transformation failures
-   * @returns This Guardian instance (mutated) or new instance if immutable
+   * @param fn - The test function to apply to the guardian's result
+   * @param error - Optional error message to use if the test fails
+   * @param expected - Optional expected value for error context
+   * @returns A new Guardian instance with the test applied
    *
    * @example
    * ```ts
-   * const numberGuardian = stringGuardian.mutate(
-   *   (str) => parseInt(str, 10),
-   *   'Failed to parse string to number'
+   * guardian.test(
+   *   (str) => str.length >= 5,
+   *   'String must be at least 5 characters'
    * );
    * ```
    */
-  mutate<U>(
-    transformer: GuardianTransform<T, U>,
-    error = 'Type transformation failed',
-  ): BaseGuardian<U> {
-    return this.step(transformer, error, 'transform');
+  test(
+    fn: (value: T) => unknown,
+    error?: string,
+    expected?: unknown,
+  ): BaseGuardian<T> {
+    return this.process(test(fn, error, expected)) as BaseGuardian<T>;
   }
 
   /**
-   * Validates that the value equals the expected value.
+   * Validates that the result equals the expected value.
+   * Uses the helper function from the old Guardian system.
    *
-   * @param expected - The expected value
-   * @param message - Optional custom error message
-   * @returns This Guardian instance (mutated) or new instance if immutable
+   * @param expected - The expected value to compare against
+   * @param error - Optional custom error message
+   * @returns A new Guardian instance with the equals validation applied
    *
    * @example
    * ```ts
-   * const exactValue = Guardian.string().equals('hello');
-   * exactValue.parse('hello'); // 'hello'
-   * exactValue.parse('world'); // throws GuardianError
+   * guardian.equals('expected', 'Value must be "expected"');
    * ```
    */
-  equals(expected: T, message?: string): BaseGuardian<T> {
-    return this.step(
-      (value: T) => {
-        if (value !== expected) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      message || `Expected ${expected}, got actual value`,
-      'equals',
-    );
+  equals(expected: T, error?: string): BaseGuardian<T> {
+    return this.process(equals(expected, error)) as BaseGuardian<T>;
   }
 
   /**
-   * Validates that the value does not equal the forbidden value.
+   * Validates that the result does not equal the expected value.
+   * Uses the helper function from the old Guardian system.
    *
-   * @param forbidden - The forbidden value
-   * @param message - Optional custom error message
-   * @returns This Guardian instance (mutated) or new instance if immutable
+   * @param expected - The value that should not match
+   * @param error - Optional custom error message
+   * @returns A new Guardian instance with the notEquals validation applied
    *
    * @example
    * ```ts
-   * const notEmpty = Guardian.string().notEquals('');
-   * notEmpty.parse('hello'); // 'hello'
-   * notEmpty.parse(''); // throws GuardianError
+   * guardian.notEquals('forbidden', 'Value cannot be "forbidden"');
    * ```
    */
-  notEquals(forbidden: T, message?: string): BaseGuardian<T> {
-    return this.step(
-      (value: T) => {
-        if (value === forbidden) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      message || `Value must not equal ${forbidden}`,
-      'notEquals',
-    );
+  notEquals(expected: T, error?: string): BaseGuardian<T> {
+    return this.process(notEquals(expected, error)) as BaseGuardian<T>;
   }
 
   /**
-   * Validates that the value is included in the allowed values array.
+   * Validates that the result is in the provided array of allowed values.
+   * Uses the helper function from the old Guardian system.
    *
    * @param allowedValues - Array of allowed values
-   * @param message - Optional custom error message
-   * @returns This Guardian instance (mutated) or new instance if immutable
+   * @param error - Optional custom error message
+   * @returns A new Guardian instance with the isIn validation applied
    *
    * @example
    * ```ts
-   * const color = Guardian.string().in(['red', 'green', 'blue']);
-   * color.parse('red'); // 'red'
-   * color.parse('yellow'); // throws GuardianError
+   * guardian.isIn(['a', 'b', 'c'], 'Value must be one of: a, b, c');
    * ```
    */
-  in(allowedValues: readonly T[], message?: string): BaseGuardian<T> {
-    return this.step(
-      (value: T) => {
-        if (!allowedValues.includes(value)) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      message || `Value must be one of: [${allowedValues.join(', ')}]`,
-      'in',
-    );
+  isIn(allowedValues: T[], error?: string): BaseGuardian<T> {
+    return this.process(isIn(allowedValues, error)) as BaseGuardian<T>;
   }
 
   /**
-   * Validates that the value is not included in the forbidden values array.
+   * Validates that the result is not in the provided array of forbidden values.
+   * Uses the helper function from the old Guardian system.
    *
    * @param forbiddenValues - Array of forbidden values
-   * @param message - Optional custom error message
-   * @returns This Guardian instance (mutated) or new instance if immutable
+   * @param error - Optional custom error message
+   * @returns A new Guardian instance with the isNotIn validation applied
    *
    * @example
    * ```ts
-   * const noSwears = Guardian.string().notIn(['damn', 'hell']);
-   * noSwears.parse('hello'); // 'hello'
-   * noSwears.parse('damn'); // throws GuardianError
+   * guardian.isNotIn(['x', 'y', 'z'], 'Value cannot be one of: x, y, z');
    * ```
    */
-  notIn(forbiddenValues: readonly T[], message?: string): BaseGuardian<T> {
-    return this.step(
-      (value: T) => {
-        if (forbiddenValues.includes(value)) {
-          throw new Error(); // Just throw any error, step will wrap it
-        }
-        return value;
-      },
-      message || `Value must not be one of: [${forbiddenValues.join(', ')}]`,
-      'notIn',
-    );
+  isNotIn(forbiddenValues: T[], error?: string): BaseGuardian<T> {
+    return this.process(isNotIn(forbiddenValues, error)) as BaseGuardian<T>;
   }
 
   /**
    * Makes this guardian accept null values.
-   * When null is encountered, it passes through without further validation.
+   * Uses the helper function from the old Guardian system.
    *
-   * @returns This Guardian instance (mutated) or new instance if immutable
+   * @returns A new Guardian instance that accepts null values
    *
    * @example
    * ```ts
    * const nullableString = Guardian.string().nullable();
    * nullableString.parse('hello'); // 'hello'
    * nullableString.parse(null); // null
-   * nullableString.parse(undefined); // throws GuardianError
+   * nullableString.parse(undefined); // null
    * ```
    */
   nullable(): BaseGuardian<T | null> {
+    const currentTransform = this._composedTransform;
+
+    // Create a new transform that bypasses the composed transform for null/undefined
+    const nullableTransform: GuardianTransform<unknown, T | null> = (
+      value: unknown,
+    ) => {
+      // Handle null - return null without calling guardian
+      if (value === null) {
+        return null;
+      }
+
+      // For all other values, call the original composed transform
+      return currentTransform(value) as T;
+    };
+
+    // If immutable, create new instance
     if (this._isImmutable) {
-      const newGuardian = this.clone();
-      newGuardian._isNullable = true;
-      return newGuardian as BaseGuardian<T | null>;
+      return this._createStep<T | null>(
+        nullableTransform,
+        this._isAsync,
+        this._metaData,
+      );
     }
 
-    this._isNullable = true;
-    return this as BaseGuardian<T | null>;
+    // Mutate in place for better performance
+    (this as unknown as BaseGuardian<T | null>)._composedTransform =
+      nullableTransform;
+
+    return this as unknown as BaseGuardian<T | null>;
   }
 
   /**
    * Makes this guardian handle undefined values by providing a default value.
-   * If no default is provided, undefined will pass through.
+   * Uses the helper function from the old Guardian system.
    *
-   * @param defaultValue - Default value, function, or async function to use when input is undefined
+   * @param defaultValue - Default value or function that returns default value
    * @returns A new Guardian instance that handles undefined values
    *
    * @example
@@ -379,35 +337,60 @@ export abstract class BaseGuardian<T> {
    * const optionalString = Guardian.string().optional('default');
    * optionalString.parse('hello'); // 'hello'
    * optionalString.parse(undefined); // 'default'
-   *
-   * const asyncOptional = Guardian.string().optional(async () => await getDefaultValue());
-   * await asyncOptional.parseAsync(undefined); // result from getDefaultValue()
    * ```
    */
   optional(): BaseGuardian<T | undefined>;
+  optional<D>(defaultValue: D | (() => D)): BaseGuardian<T | D>;
   optional<D>(
-    defaultValue: D | (() => D) | (() => Promise<D>),
-  ): BaseGuardian<T | D>;
-  optional<D>(
-    defaultValue?: D | (() => D) | (() => Promise<D>),
+    defaultValue?: D | (() => D),
   ): BaseGuardian<T | D | undefined> {
+    const currentTransform = this._composedTransform;
+
+    // Create a new transform that handles optional logic first
+    const optionalTransform: GuardianTransform<unknown, T | D | undefined> = (
+      value: unknown,
+    ) => {
+      // Handle undefined by returning default
+      if (value === undefined) {
+        if (defaultValue === undefined) {
+          return undefined as D | undefined;
+        }
+
+        if (typeof defaultValue === "function") {
+          const result = (defaultValue as () => D | Promise<D>)();
+          // If the result is a promise, return it for async handling
+          if (result && typeof result === "object" && "then" in result) {
+            // Return a promise that awaits the result and validates it
+            return (result as Promise<D>).then((resolvedValue) =>
+              currentTransform(resolvedValue)
+            ) as T | Promise<T>;
+          }
+          // If the default is a computed value, validate it through the transform
+          return currentTransform(result) as T;
+        }
+
+        // If the default is a direct value, validate it through the transform
+        return currentTransform(defaultValue) as T;
+      }
+
+      // For all other values, call the original composed transform
+      return currentTransform(value) as T;
+    };
+
+    // If immutable, create new instance
     if (this._isImmutable) {
-      const newGuardian = this.clone();
-      newGuardian._hasOptional = true;
-      // Type assertion needed for generic flexibility
-      (newGuardian as BaseGuardian<T | D | undefined>)._optionalDefault =
-        defaultValue as T | (() => T) | (() => Promise<T>) | undefined;
-      return newGuardian as BaseGuardian<T | D | undefined>;
+      return this._createStep<T | D | undefined>(
+        optionalTransform,
+        this._isAsync,
+        this._metaData,
+      );
     }
 
-    this._hasOptional = true;
-    // Type assertion needed for generic flexibility
-    (this as BaseGuardian<T | D | undefined>)._optionalDefault = defaultValue as
-      | T
-      | (() => T)
-      | (() => Promise<T>)
-      | undefined;
-    return this as BaseGuardian<T | D | undefined>;
+    // Mutate in place for better performance
+    (this as unknown as BaseGuardian<T | D | undefined>)._composedTransform =
+      optionalTransform;
+
+    return this as unknown as BaseGuardian<T | D | undefined>;
   }
 
   /**
@@ -426,12 +409,12 @@ export abstract class BaseGuardian<T> {
   parse(input: unknown): T {
     if (this._isAsync) {
       throw new GuardianError(
-        'Cannot use parse() with async validation steps. Use parseAsync() instead.',
+        "Cannot use parse() with async validation steps. Use parseAsync() instead.",
         {
-          expected: 'synchronous guardian',
-          got: 'guardian with async steps',
-          comparison: 'sync',
-          type: 'usage',
+          expected: "synchronous guardian",
+          got: "guardian with async steps",
+          comparison: "sync",
+          type: "usage",
         },
       );
     }
@@ -441,16 +424,16 @@ export abstract class BaseGuardian<T> {
       if (this._optionalDefault === undefined) {
         // No default provided, return undefined as valid for optional fields
         return undefined as T;
-      } else if (typeof this._optionalDefault === 'function') {
+      } else if (typeof this._optionalDefault === "function") {
         const result = (this._optionalDefault as () => T | Promise<T>)();
         if (isPromiseLike(result)) {
           throw new GuardianError(
-            'Cannot use async default in sync parse. Use parseAsync() instead.',
+            "Cannot use async default in sync parse. Use parseAsync() instead.",
             {
-              expected: 'synchronous default',
-              got: 'async function',
-              comparison: 'sync',
-              type: 'usage',
+              expected: "synchronous default",
+              got: "async function",
+              comparison: "sync",
+              type: "usage",
             },
           );
         }
@@ -474,12 +457,12 @@ export abstract class BaseGuardian<T> {
         throw error;
       } else {
         throw new GuardianError(
-          'Validation failed',
+          "Validation failed",
           {
-            expected: 'valid value',
+            expected: "valid value",
             got: input,
-            comparison: 'custom',
-            type: 'validation',
+            comparison: "custom",
+            type: "validation",
           },
         );
       }
@@ -499,26 +482,6 @@ export abstract class BaseGuardian<T> {
    * ```
    */
   async parseAsync(input: unknown): Promise<T> {
-    // Handle optional (undefined) first
-    if (this._hasOptional && input === undefined) {
-      if (this._optionalDefault === undefined) {
-        // No default provided, return undefined as valid for optional fields
-        return undefined as T;
-      } else if (typeof this._optionalDefault === 'function') {
-        const result = (this._optionalDefault as () => T | Promise<T>)();
-        // Pass the result through validation
-        input = isPromiseLike(result) ? await result : result;
-      } else {
-        // Use the default value, but pass it through validation
-        input = this._optionalDefault;
-      }
-    }
-
-    // Handle nullable (null) second
-    if (this._isNullable && input === null) {
-      return null as T;
-    }
-
     try {
       const result = this._composedTransform(input);
       return isPromiseLike(result) ? await result : result;
@@ -527,12 +490,12 @@ export abstract class BaseGuardian<T> {
         throw error;
       } else {
         throw new GuardianError(
-          'Validation failed',
+          "Validation failed",
           {
-            expected: 'valid value',
+            expected: "valid value",
             got: input,
-            comparison: 'custom',
-            type: 'validation',
+            comparison: "custom",
+            type: "validation",
           },
         );
       }
@@ -565,12 +528,12 @@ export abstract class BaseGuardian<T> {
       } else {
         return [
           new GuardianError(
-            'Unexpected error during validation',
+            "Unexpected error during validation",
             {
-              expected: 'valid input',
+              expected: "valid input",
               got: input,
-              comparison: 'unknown',
-              type: 'unexpected',
+              comparison: "unknown",
+              type: "unexpected",
             },
           ),
           undefined,
@@ -597,12 +560,12 @@ export abstract class BaseGuardian<T> {
       } else {
         return [
           new GuardianError(
-            'Unexpected error during validation',
+            "Unexpected error during validation",
             {
-              expected: 'valid input',
+              expected: "valid input",
               got: input,
-              comparison: 'unknown',
-              type: 'unexpected',
+              comparison: "unknown",
+              type: "unexpected",
             },
           ),
           undefined,
@@ -697,27 +660,6 @@ export abstract class BaseGuardian<T> {
     return newGuardian;
   }
 
-  /**
-   * Creates a clone of this guardian for method chaining.
-   * @deprecated Use _createStep for more efficient step creation
-   *
-   * @template U - The new output type
-   * @returns A new guardian instance
-   * @internal
-   */
-  protected _clone<U>(): BaseGuardian<U> {
-    return this._createStep<U>(
-      this._composedTransform as unknown as GuardianTransform<unknown, U>,
-      this._isAsync,
-      this._metaData,
-    );
-  }
 
-  /**
-   * Executes all validation steps in sequence.
-   *
-   * @param input - The initial input value
-   * @returns The final transformed value (possibly a Promise)
-   * @internal
-   */
+
 }
