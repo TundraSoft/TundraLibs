@@ -30,7 +30,7 @@ export class DateGuardian extends BaseGuardian<Date> {
   constructor(initialTransform?: GuardianTransform<unknown, Date>, metaData?: GuardianMetaData) {
     const defaultDateValidation = (input: unknown) => {
       if (!(input instanceof Date)) {
-        throw new GuardianError("Expected Date but got ${got}", {
+        throw new GuardianError(`Expected Date but got ${typeof input}`, {
           expected: "Date",
           got: typeof input,
           comparison: "type",

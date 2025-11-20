@@ -57,7 +57,7 @@ export {
 } from "./guards/mod.ts";
 
 // Export error classes
-export { GuardianError } from "./GuardianError.ts";
+export { GuardianError, type GuardianErrorMeta } from "./GuardianError.ts";
 
 // Export types
 export type {
@@ -67,6 +67,3 @@ export type {
   GuardianSafeParseResult,
   GuardianTransform,
 } from "./types/mod.ts";
-
-// Re-export error meta type
-export type { GuardianErrorMeta } from "./GuardianError.ts";

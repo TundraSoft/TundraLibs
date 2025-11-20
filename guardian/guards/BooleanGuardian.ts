@@ -28,7 +28,7 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
   constructor(initialTransform?: GuardianTransform<unknown, boolean>, metaData?: GuardianMetaData) {
     const defaultTransform = (input: unknown) => {
       if (typeof input !== "boolean") {
-        throw new GuardianError("Expected boolean but got ${got}", {
+        throw new GuardianError(`Expected boolean but got ${typeof input}`, {
           expected: "boolean",
           got: typeof input,
           comparison: "type",

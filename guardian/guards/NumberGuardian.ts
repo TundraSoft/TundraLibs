@@ -32,7 +32,7 @@ export class NumberGuardian extends BaseGuardian<number> {
   constructor(initialTransform?: GuardianTransform<unknown, number>, metaData?: GuardianMetaData) {
     const defaultNumberValidation = (input: unknown) => {
       if (typeof input !== "number") {
-        throw new GuardianError("Expected number but got ${got}", {
+        throw new GuardianError(`Expected number but got ${typeof input}`, {
           expected: "number",
           got: typeof input,
           comparison: "type",

@@ -98,6 +98,12 @@ export abstract class BaseGuardian<T> {
     }
   }
 
+  /**
+   * Gets whether this guardian instance is immutable.
+   * When immutable, all validation methods return new instances instead of mutating.
+   *
+   * @returns True if this guardian is immutable, false otherwise
+   */
   get isImmutable(): boolean {
     return (this._metaData?.isImmutable) === true;
   }
@@ -673,14 +679,19 @@ export abstract class BaseGuardian<T> {
     ) => BaseGuardian<T>)(this._composedTransform, metaDataClone);
   }
 
-
-
   //#region Documentation Methods
 
   /**
    * Generates OpenAPI 3.0 schema definition for this Guardian.
+   * Includes type information, metadata, and validation constraints.
    * 
-   * @returns OpenAPI schema object
+   * @returns OpenAPI schema object that can be used in API documentation
+   *
+   * @example
+   * ```ts
+   * const schema = Guardian.string().minLength(3).toOpenAPI();
+   * // Returns: { type: 'string', minLength: 3 }
+   * ```
    */
   toOpenAPI(): Record<string, unknown> {
     const schema: Record<string, unknown> = {
@@ -713,8 +724,15 @@ export abstract class BaseGuardian<T> {
 
   /**
    * Generates simple Markdown documentation for this Guardian.
+   * Includes title, description, type information, examples, and deprecation warnings.
    * 
-   * @returns Markdown string
+   * @returns Markdown formatted string suitable for documentation
+   *
+   * @example
+   * ```ts
+   * const docs = Guardian.string().title('Username').toMarkdown();
+   * // Returns formatted markdown with type info and examples
+   * ```
    */
   toMarkdown(): string {
     let markdown = "";
@@ -753,8 +771,5 @@ export abstract class BaseGuardian<T> {
     return markdown.trim();
   }
 
-
-
   //#endregion
-
 }

@@ -171,6 +171,159 @@ Deno.test("guardian.ObjectGuardian", async (t) => {
     });
   });
 
+  await t.step("Key validations", async (t) => {
+    await t.step("hasKeys validation", async (t) => {
+      await t.step("should pass when all required keys are present", () => {
+        const guard = new ObjectGuardian({
+          id: new NumberGuardian(),
+          name: new StringGuardian(),
+          email: new StringGuardian().optional(),
+        }).hasKeys(['id', 'name']);
+
+        const result = guard.parse({
+          id: 1,
+          name: "John",
+          email: "john@example.com",
+        });
+
+        asserts.assertEquals(result.id, 1);
+        asserts.assertEquals(result.name, "John");
+        asserts.assertEquals(result.email, "john@example.com");
+      });
+
+      await t.step("should pass when required keys are present (optional missing)", () => {
+        const guard = new ObjectGuardian({
+          id: new NumberGuardian(),
+          name: new StringGuardian(),
+          email: new StringGuardian().optional(),
+        }).hasKeys(['id', 'name']);
+
+        const result = guard.parse({ id: 1, name: "John" });
+        asserts.assertEquals(result.id, 1);
+        asserts.assertEquals(result.name, "John");
+      });
+
+      await t.step("should fail when required keys are missing", () => {
+        const guard = new ObjectGuardian({
+          id: new NumberGuardian().optional(),
+          name: new StringGuardian().optional(),
+          email: new StringGuardian().optional(),
+        }).hasKeys(['id', 'name']);
+
+        asserts.assertThrows(
+          () => guard.parse({ id: 1 }),
+          GuardianError,
+          "Object must contain all required keys: id, name"
+        );
+      });
+
+      await t.step("should use custom error message", () => {
+        const guard = new ObjectGuardian({
+          id: new NumberGuardian().optional(),
+          name: new StringGuardian().optional(),
+        }).hasKeys(['id', 'name'], 'Custom: ID and name are mandatory');
+
+        asserts.assertThrows(
+          () => guard.parse({ id: 1 }),
+          GuardianError,
+          "Custom: ID and name are mandatory"
+        );
+      });
+    });
+
+    await t.step("forbiddenKeys validation", async (t) => {
+      await t.step("should pass when no forbidden keys are present", () => {
+        const guard = new ObjectGuardian({
+          id: new NumberGuardian(),
+          name: new StringGuardian(),
+          email: new StringGuardian(),
+        }).forbiddenKeys(['password', 'secret']);
+
+        const result = guard.parse({
+          id: 1,
+          name: "John",
+          email: "john@example.com",
+        });
+
+        asserts.assertEquals(result.id, 1);
+        asserts.assertEquals(result.name, "John");
+        asserts.assertEquals(result.email, "john@example.com");
+      });
+
+      await t.step("should fail when forbidden keys are present", () => {
+        const guard = new ObjectGuardian({
+          id: new NumberGuardian(),
+          name: new StringGuardian(),
+        }).forbiddenKeys(['password', 'secret']);
+
+        asserts.assertThrows(
+          () => guard.parse({ id: 1, name: "John", password: "secret123" }),
+          GuardianError,
+          "Object must not contain forbidden keys: password, secret"
+        );
+      });
+
+      await t.step("should fail when any forbidden key is present", () => {
+        const guard = new ObjectGuardian({
+          id: new NumberGuardian(),
+          name: new StringGuardian(),
+        }).forbiddenKeys(['password', 'secret', 'private']);
+
+        asserts.assertThrows(
+          () => guard.parse({ id: 1, name: "John", private: "data" }),
+          GuardianError,
+          "Object must not contain forbidden keys: password, secret, private"
+        );
+      });
+
+      await t.step("should use custom error message", () => {
+        const guard = new ObjectGuardian({
+          id: new NumberGuardian(),
+          name: new StringGuardian(),
+        }).forbiddenKeys(['password'], 'Security: Password field not allowed');
+
+        asserts.assertThrows(
+          () => guard.parse({ id: 1, name: "John", password: "secret" }),
+          GuardianError,
+          "Security: Password field not allowed"
+        );
+      });
+    });
+
+    await t.step("chaining key validations", () => {
+      const guard = new ObjectGuardian({
+        id: new NumberGuardian().optional(),
+        name: new StringGuardian().optional(),
+        email: new StringGuardian().optional(),
+      })
+        .hasKeys(['id', 'name'])
+        .forbiddenKeys(['password', 'secret']);
+
+      // Should pass valid input
+      const result = guard.parse({
+        id: 1,
+        name: "John",
+        email: "john@example.com",
+      });
+      asserts.assertEquals(result.id, 1);
+      asserts.assertEquals(result.name, "John");
+
+      // Should fail on missing required key
+      asserts.assertThrows(
+        () => guard.parse({ id: 1, email: "john@example.com" }),
+        GuardianError,
+        "Object must contain all required keys: id, name"
+      );
+
+      // Should fail on forbidden key
+      asserts.assertThrows(
+        () => guard.parse({ id: 1, name: "John", password: "secret" }),
+        GuardianError,
+        "Object must not contain forbidden keys: password, secret"
+      );
+    });
+  });
+
   await t.step("Error handling", async (t) => {
     await t.step("should reject non-objects", () => {
       const guard = new ObjectGuardian({});

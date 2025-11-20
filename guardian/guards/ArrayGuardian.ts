@@ -40,7 +40,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
   constructor(elementGuardian?: BaseGuardian<T>, metaData?: GuardianMetaData) {
     super((input: unknown) => {
       if (!Array.isArray(input)) {
-        throw new GuardianError("Expected array but got ${got}", {
+        throw new GuardianError(`Expected array but got ${typeof input}`, {
           expected: "array",
           got: typeof input,
           comparison: "type",

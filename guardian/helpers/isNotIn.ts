@@ -28,7 +28,7 @@ export const isNotIn = <T>(
         error ||
           `Expected value to not be in (${
             uniqueExpected.join(", ")
-          }), got \${got}`,
+          }), got ${value}`,
         {
           got: value,
           expected: `not in (${uniqueExpected.join(", ")})`,

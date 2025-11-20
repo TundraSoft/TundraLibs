@@ -103,7 +103,7 @@ export class ObjectGuardian<
     const objectTransform: GuardianTransform<unknown, TOutput> = (
       input: unknown,
     ) => {
-      return this._validateObject(input) as TOutput;
+      return this._validateObjectWithoutRefinements(input) as TOutput;
     };
 
     super(objectTransform, metaData);
@@ -126,27 +126,18 @@ export class ObjectGuardian<
    */
   override async parseAsync(input: unknown): Promise<TOutput> {
     // First apply the composed transform (includes any chained transforms)
+    // Note: The base transform uses _validateObjectWithoutRefinements, so no refinements are applied yet
     const transformedResult = await super.parseAsync(input);
 
-    // Then apply object-specific refinements to the transformed result
+    // Then apply object-specific refinements to the transformed result (supporting async)
     return await this._applyRefinementsAsync(transformedResult);
-  }
-
-  /**
-   * Gets the input type for type inspection.
-   * This is a type-only property for TypeScript inference.
-   */
-  get inputType(): TInput {
-    throw new Error(
-      "inputType is for TypeScript inference only and should not be accessed at runtime",
-    );
   }
 
   //#region Validation Modes
 
   /**
-   * Sets the validation mode to strict - only properties defined in the schema are allowed.
-   * Extra properties will cause validation to fail.
+   * Sets the validation mode to strict - allows only properties defined in the schema.
+   * Extra properties in the input will cause validation to fail.
    *
    * @returns This ObjectGuardian (mutated) or new instance if immutable mode
    *
@@ -161,16 +152,15 @@ export class ObjectGuardian<
    * strictUser.parse({ id: 1, name: "John", age: 30 }); // ❌ Extra property 'age'
    * ```
    */
-  strict(): ObjectGuardian<TInput, TInput> {
-    const newGuardian = new ObjectGuardian<TInput, TInput>(
-      this._schema,
-      this.metaData,
-    );
-    newGuardian._mode = "strict";
-    newGuardian._refinements = [
-      ...this._refinements as unknown as Array<ObjectRefinement<TInput>>,
-    ];
-    return newGuardian;
+  strict(): ObjectGuardian<TInput, TOutput> {
+    if (this.isImmutable) {
+      const cloned = this.clone() as ObjectGuardian<TInput, TOutput>;
+      cloned._mode = "strict";
+      return cloned;
+    } else {
+      this._mode = "strict";
+      return this;
+    }
   }
 
   /**
@@ -190,16 +180,96 @@ export class ObjectGuardian<
    * // Returns: { id: 1, name: "John" } (age stripped)
    * ```
    */
-  strip(): ObjectGuardian<TInput, TInput> {
-    const newGuardian = new ObjectGuardian<TInput, TInput>(
-      this._schema,
-      this.metaData,
+  strip(): ObjectGuardian<TInput, TOutput> {
+    if (this.isImmutable) {
+      const cloned = this.clone() as ObjectGuardian<TInput, TOutput>;
+      cloned._mode = "strip";
+      return cloned;
+    } else {
+      this._mode = "strip";
+      return this;
+    }
+  }
+
+  //#endregion
+
+  //#region Key Validations
+
+  /**
+   * Validates that the object contains all the specified keys with defined values.
+   * This validation runs after successful schema validation and checks
+   * that all specified keys are present and have non-undefined values.
+   * 
+   * @param keys - Array of keys that must be present in the object
+   * @param message - Optional custom error message
+   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
+   *
+   * @example
+   * ```ts
+   * const requiredFieldsUser = Guardian.object({
+   *   id: Guardian.number().optional(),
+   *   name: Guardian.string().optional(),
+   *   email: Guardian.string().optional()
+   * }).hasKeys(['id', 'name']);
+   *
+   * // Accepts: { id: 1, name: "John", email: "john@example.com" }
+   * // Accepts: { id: 1, name: "John" }
+   * // Rejects: { id: 1 } - missing 'name'
+   * ```
+   */
+  hasKeys(
+    keys: Array<string>,
+    message?: string
+  ): ObjectGuardian<TInput, TOutput> {
+    const defaultMessage = `Object must contain all required keys: ${keys.join(', ')}`;
+    const validationMessage = message || defaultMessage;
+
+    return this.refine(
+      (data) => {
+        // Check if keys have defined values (not just undefined)
+        const missingKeys = keys.filter(key => {
+          return !(key in data) || data[key] === undefined;
+        });
+        
+        return missingKeys.length === 0;
+      },
+      validationMessage
     );
-    newGuardian._mode = "strip";
-    newGuardian._refinements = [
-      ...this._refinements as unknown as Array<ObjectRefinement<TInput>>,
-    ];
-    return newGuardian;
+  }
+
+  /**
+   * Validates that the object does not contain any of the specified keys.
+   * 
+   * @param keys - Array of keys that must not be present in the object
+   * @param message - Optional custom error message
+   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
+   *
+   * @example
+   * ```ts
+   * const safeUser = Guardian.object({
+   *   id: Guardian.number(),
+   *   name: Guardian.string(),
+   *   email: Guardian.string()
+   * }).forbiddenKeys(['password', 'secret']);
+   *
+   * // Accepts: { id: 1, name: "John", email: "john@example.com" }
+   * // Rejects: { id: 1, name: "John", password: "secret123" }
+   * ```
+   */
+  forbiddenKeys(
+    keys: Array<string>,
+    message?: string
+  ): ObjectGuardian<TInput, TOutput> {
+    const defaultMessage = `Object must not contain forbidden keys: ${keys.join(', ')}`;
+    const validationMessage = message || defaultMessage;
+
+    return this.refine(
+      (data) => {
+        const objectKeys = Object.keys(data);
+        return !keys.some(key => objectKeys.includes(key));
+      },
+      validationMessage
+    );
   }
 
   //#endregion
@@ -211,7 +281,7 @@ export class ObjectGuardian<
    *
    * @template U - Type of the properties to add
    * @param schema - Additional schema properties
-   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
+   * @returns New ObjectGuardian with extended schema
    *
    * @example
    * ```ts
@@ -232,11 +302,24 @@ export class ObjectGuardian<
     const extendedSchema = { ...this._schema, ...schema } as ObjectSchema<
       TInput & U
     >;
+    
+    const baseClone = this.clone();
     const newGuardian = new ObjectGuardian<TInput & U, TInput & U>(
       extendedSchema,
-      this.metaData,
+      baseClone.metaData,
     );
+    
+    // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
+    newGuardian._refinements = [];
+    
+    // Copy the composed transform from the base clone
+    (newGuardian as unknown as {
+      _composedTransform: GuardianTransform<unknown, TInput & U>;
+    })._composedTransform = (baseClone as unknown as {
+      _composedTransform: GuardianTransform<unknown, TInput & U>;
+    })._composedTransform;
+    
     return newGuardian;
   }
 
@@ -245,7 +328,7 @@ export class ObjectGuardian<
    *
    * @template K - Keys to pick from the schema
    * @param keys - Property names to include
-   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
+   * @returns New ObjectGuardian with picked properties
    *
    * @example
    * ```ts
@@ -272,11 +355,23 @@ export class ObjectGuardian<
       }
     }
 
+    const baseClone = this.clone();
     const newGuardian = new ObjectGuardian<Pick<TInput, K>, Pick<TInput, K>>(
       pickedSchema,
-      this.metaData,
+      baseClone.metaData,
     );
+    
+    // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
+    newGuardian._refinements = [];
+    
+    // Copy the composed transform from the base clone
+    (newGuardian as unknown as {
+      _composedTransform: GuardianTransform<unknown, Pick<TInput, K>>;
+    })._composedTransform = (baseClone as unknown as {
+      _composedTransform: GuardianTransform<unknown, Pick<TInput, K>>;
+    })._composedTransform;
+    
     return newGuardian;
   }
 
@@ -285,7 +380,7 @@ export class ObjectGuardian<
    *
    * @template K - Keys to omit from the schema
    * @param keys - Property names to exclude
-   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
+   * @returns New ObjectGuardian without omitted properties
    *
    * @example
    * ```ts
@@ -308,18 +403,30 @@ export class ObjectGuardian<
       delete omittedSchema[key];
     }
 
+    const baseClone = this.clone();
     const newGuardian = new ObjectGuardian<Omit<TInput, K>, Omit<TInput, K>>(
       omittedSchema as ObjectSchema<Omit<TInput, K>>,
-      this.metaData,
+      baseClone.metaData,
     );
+    
+    // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
+    newGuardian._refinements = [];
+    
+    // Copy the composed transform from the base clone
+    (newGuardian as unknown as {
+      _composedTransform: GuardianTransform<unknown, Omit<TInput, K>>;
+    })._composedTransform = (baseClone as unknown as {
+      _composedTransform: GuardianTransform<unknown, Omit<TInput, K>>;
+    })._composedTransform;
+    
     return newGuardian;
   }
 
   /**
    * Makes all properties in the schema optional.
    *
-   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
+   * @returns New ObjectGuardian with all properties optional
    *
    * @example
    * ```ts
@@ -341,18 +448,30 @@ export class ObjectGuardian<
         .optional();
     }
 
+    const baseClone = this.clone();
     const newGuardian = new ObjectGuardian<Partial<TInput>, Partial<TInput>>(
       partialSchema,
-      this.metaData,
+      baseClone.metaData,
     );
+    
+    // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
+    newGuardian._refinements = [];
+    
+    // Copy the composed transform from the base clone
+    (newGuardian as unknown as {
+      _composedTransform: GuardianTransform<unknown, Partial<TInput>>;
+    })._composedTransform = (baseClone as unknown as {
+      _composedTransform: GuardianTransform<unknown, Partial<TInput>>;
+    })._composedTransform;
+    
     return newGuardian;
   }
 
   /**
    * Makes all properties in the schema required (removes optional).
    *
-   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
+   * @returns New ObjectGuardian with all properties required
    *
    * @example
    * ```ts
@@ -381,11 +500,23 @@ export class ObjectGuardian<
         requiredGuard;
     }
 
+    const baseClone = this.clone();
     const newGuardian = new ObjectGuardian<Required<TInput>, Required<TInput>>(
       requiredSchema,
-      this.metaData,
+      baseClone.metaData,
     );
+    
+    // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
+    newGuardian._refinements = [];
+    
+    // Copy the composed transform from the base clone
+    (newGuardian as unknown as {
+      _composedTransform: GuardianTransform<unknown, Required<TInput>>;
+    })._composedTransform = (baseClone as unknown as {
+      _composedTransform: GuardianTransform<unknown, Required<TInput>>;
+    })._composedTransform;
+    
     return newGuardian;
   }
 
@@ -396,7 +527,7 @@ export class ObjectGuardian<
    * @template V - Type of the new property value
    * @param key - Property name
    * @param guard - Guardian for validating the property
-   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
+   * @returns New ObjectGuardian with added property
    *
    * @example
    * ```ts
@@ -415,11 +546,24 @@ export class ObjectGuardian<
     const newSchema = { ...this._schema, [key]: guard } as ObjectSchema<
       TInput & Record<K, V>
     >;
-    const newGuardian = new ObjectGuardian<
-      TInput & Record<K, V>,
-      TInput & Record<K, V>
-    >(newSchema, this.metaData);
+    
+    const baseClone = this.clone();
+    const newGuardian = new ObjectGuardian<TInput & Record<K, V>, TInput & Record<K, V>>(
+      newSchema,
+      baseClone.metaData,
+    );
+    
+    // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
+    newGuardian._refinements = [];
+    
+    // Copy the composed transform from the base clone
+    (newGuardian as unknown as {
+      _composedTransform: GuardianTransform<unknown, TInput & Record<K, V>>;
+    })._composedTransform = (baseClone as unknown as {
+      _composedTransform: GuardianTransform<unknown, TInput & Record<K, V>>;
+    })._composedTransform;
+    
     return newGuardian;
   }
 
@@ -451,22 +595,27 @@ export class ObjectGuardian<
     transformer: (data: TOutput) => TNewOutput,
     __description?: string,
   ): ObjectGuardian<TInput, TNewOutput> {
-    const newGuardian = this._cloneObjectGuardian();
-    // Apply the transformation using the process method
-    const transformedGuardian = newGuardian.process(transformer);
+    // Use the standard BaseGuardian.process method for transformation
+    const transformedGuardian = this.process(transformer);
+    
+    // The result is already a BaseGuardian with TNewOutput type,
+    // but we need to return it as an ObjectGuardian with schema intact
     const result = new ObjectGuardian<TInput, TNewOutput>(
       this._schema,
-      this.metaData,
+      transformedGuardian.metaData,
     );
+    
+    // Copy ObjectGuardian-specific properties
     result._mode = this._mode;
-    // NOTE: Don't copy refinements during transform as they expect TOutput type
-    // Refinements should be added after transform using refine() method
-    // result._refinements remains empty for the new type
+    result._refinements = []; // Empty refinements for new type
+    
+    // Copy the composed transform from the transformed guardian
     (result as unknown as {
       _composedTransform: GuardianTransform<unknown, TNewOutput>;
     })._composedTransform = (transformedGuardian as unknown as {
       _composedTransform: GuardianTransform<unknown, TNewOutput>;
     })._composedTransform;
+    
     return result;
   }
 
@@ -482,7 +631,7 @@ export class ObjectGuardian<
    * @param validator - Function that returns true if validation passes
    * @param message - Error message to show if validation fails
    * @param path - Optional path for error context
-   * @returns New ObjectGuardian with the refinement added
+   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -515,23 +664,20 @@ export class ObjectGuardian<
     message: string,
     path?: string,
   ): ObjectGuardian<TInput, TOutput> {
-    const newGuardian = this._cloneObjectGuardian();
+    if (this.isImmutable) {
+      const cloned = this.clone() as ObjectGuardian<TInput, TOutput>;
+      cloned._refinements = [
+        ...this._refinements,
+        { validator, message, path },
+      ];
+      return cloned;
+    } else {
+      this._refinements.push({ validator, message, path });
+      return this;
+    }
+  }
 
-    // CRITICAL FIX: Copy the composed transform from the current guardian
-    (newGuardian as unknown as {
-      _composedTransform: GuardianTransform<unknown, TOutput>;
-    })._composedTransform = (this as unknown as {
-      _composedTransform: GuardianTransform<unknown, TOutput>;
-    })._composedTransform;
-
-    // Add this refinement to the list
-    newGuardian._refinements = [
-      ...this._refinements,
-      { validator, message, path },
-    ];
-
-    return newGuardian;
-  } /**
+  /**
    * Adds multiple refinements at once using superRefine.
    * This is useful when you need to apply multiple complex validations.
    *
@@ -579,30 +725,10 @@ export class ObjectGuardian<
   //#region Private Methods
 
   /**
-   * Creates a clone of this ObjectGuardian for method chaining.
+   * Core object validation logic without refinements.
+   * This is used by the base transform and handles only schema validation.
    */
-  private _cloneObjectGuardian(): ObjectGuardian<TInput, TOutput> {
-    const cloned = new ObjectGuardian<TInput, TOutput>(
-      this._schema,
-      this.metaData,
-    );
-    cloned._mode = this._mode;
-    cloned._refinements = [...this._refinements];
-
-    // CRITICAL FIX: Copy the composed transform to ensure chaining works
-    (cloned as unknown as {
-      _composedTransform: GuardianTransform<unknown, TOutput>;
-    })._composedTransform = (this as unknown as {
-      _composedTransform: GuardianTransform<unknown, TOutput>;
-    })._composedTransform;
-
-    return cloned;
-  }
-
-  /**
-   * Core object validation logic.
-   */
-  private _validateObject(
+  private _validateObjectWithoutRefinements(
     input: unknown,
   ): TInput | (TInput & Record<string, unknown>) {
     // Type validation
@@ -699,66 +825,10 @@ export class ObjectGuardian<
       throw mainError;
     }
 
-    // Apply refinement validations
-    for (const refinement of this._refinements) {
-      try {
-        const isValid = refinement.validator(result as TOutput);
-
-        // Check for async refinement in sync parsing
-        if (isValid instanceof Promise) {
-          throw new GuardianError(
-            "Cannot use parse() with async validation steps. Use parseAsync() instead.",
-            {
-              expected: "synchronous validation",
-              got: "async refinement",
-              comparison: "refinement_validation",
-              type: "async_validation",
-            },
-          );
-        }
-
-        if (!isValid) {
-          const refinementError = new GuardianError(refinement.message, {
-            expected: "refinement validation to pass",
-            got: result,
-            comparison: "refinement_validation",
-            type: "refinement_failure",
-          });
-
-          // Add path information if provided
-          if (refinement.path) {
-            refinementError.addCause(refinement.path, refinementError);
-          }
-
-          throw refinementError;
-        }
-      } catch (error) {
-        if (error instanceof GuardianError) {
-          throw error;
-        }
-
-        // Handle unexpected errors during refinement
-        const refinementError = new GuardianError(
-          `Refinement validation failed: ${error}`,
-          {
-            expected: "refinement validation to complete",
-            got: result,
-            comparison: "refinement_validation",
-            type: "refinement_error",
-          },
-        );
-
-        // Add path information if provided
-        if (refinement.path) {
-          refinementError.addCause(refinement.path, refinementError);
-        }
-
-        throw refinementError;
-      }
-    }
-
     return result as TInput | (TInput & Record<string, unknown>);
   }
+
+
 
   /**
    * Apply refinements to already validated/transformed data.
@@ -876,73 +946,27 @@ export class ObjectGuardian<
   }
 
   /**
-   * Core async object validation logic with support for async refinements.
+   * Override clone method to properly handle ObjectGuardian-specific properties.
    */
-  private async _validateObjectAsync(
-    input: unknown,
-  ): Promise<TInput | (TInput & Record<string, unknown>)> {
-    // First perform synchronous validation (everything except refinements)
-    const syncResult = await new Promise<
-      TInput | (TInput & Record<string, unknown>)
-    >((resolve, reject) => {
-      try {
-        // Temporarily clear refinements for sync validation
-        const originalRefinements = this._refinements;
-        this._refinements = [];
-        const result = this._validateObject(input);
-        this._refinements = originalRefinements;
-        resolve(result);
-      } catch (error) {
-        reject(error);
-      }
-    });
-
-    // Apply refinement validations (supporting async)
-    for (const refinement of this._refinements) {
-      try {
-        const isValid = await refinement.validator(syncResult as TOutput);
-
-        if (!isValid) {
-          const refinementError = new GuardianError(refinement.message, {
-            expected: "refinement validation to pass",
-            got: syncResult,
-            comparison: "refinement_validation",
-            type: "refinement_failure",
-          });
-
-          // Add path information if provided
-          if (refinement.path) {
-            refinementError.addCause(refinement.path, refinementError);
-          }
-
-          throw refinementError;
-        }
-      } catch (error) {
-        if (error instanceof GuardianError) {
-          throw error;
-        }
-
-        // Handle unexpected errors during async refinement
-        const refinementError = new GuardianError(
-          `Async refinement validation failed: ${error}`,
-          {
-            expected: "refinement validation to complete",
-            got: syncResult,
-            comparison: "refinement_validation",
-            type: "refinement_error",
-          },
-        );
-
-        // Add path information if provided
-        if (refinement.path) {
-          refinementError.addCause(refinement.path, refinementError);
-        }
-
-        throw refinementError;
-      }
-    }
-
-    return syncResult;
+  override clone(): ObjectGuardian<TInput, TOutput> {
+    const baseClone = super.clone();
+    const newGuardian = new ObjectGuardian<TInput, TOutput>(
+      this._schema,
+      baseClone.metaData,
+    );
+    
+    // Copy ObjectGuardian-specific properties
+    newGuardian._mode = this._mode;
+    newGuardian._refinements = [...this._refinements];
+    
+    // Copy the composed transform from the base clone
+    (newGuardian as unknown as {
+      _composedTransform: GuardianTransform<unknown, TOutput>;
+    })._composedTransform = (baseClone as unknown as {
+      _composedTransform: GuardianTransform<unknown, TOutput>;
+    })._composedTransform;
+    
+    return newGuardian;
   }
 
   //#endregion

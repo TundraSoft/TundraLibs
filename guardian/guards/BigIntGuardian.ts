@@ -37,7 +37,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
   constructor(initialTransform?: GuardianTransform<unknown, bigint>, metaData?: GuardianMetaData) {
     const defaultBigIntValidation = (input: unknown) => {
       if (typeof input !== "bigint") {
-        throw new GuardianError("Expected bigint but got ${got}", {
+        throw new GuardianError(`Expected bigint but got ${typeof input}`, {
           expected: "bigint",
           got: typeof input,
           comparison: "type",

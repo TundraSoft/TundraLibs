@@ -139,7 +139,7 @@ export class Guardian {
    * Tries each guardian in order and returns the result from the first successful validation.
    * The error message is mandatory to clearly communicate what types are expected.
    *
-   * @template T - Array of guardian types
+   * @template T - Readonly array of guardian types for union validation
    * @param guardians - Array of guardians to try in order
    * @param errorMessage - Mandatory error message describing what types are expected
    * @param metaData - Optional metadata for the validator
@@ -212,10 +212,10 @@ export class Guardian {
   }
 
   /**
-   * Creates an array validator.
+   * Creates an array validator with optional element validation.
    *
    * @template T - The element type of the array (defaults to unknown)
-   * @param elementGuardian - Optional guardian to validate each element
+   * @param elementGuardian - Optional guardian to validate each array element
    * @param metaData - Optional metadata for the validator
    * @returns New ArrayGuardian instance
    *
@@ -314,8 +314,8 @@ export class Guardian {
    * Creates an enum validator that accepts only values from the provided list.
    * This is the preferred way to handle literal values and enums.
    *
-   * @template T - The enum/literal type
-   * @param allowedValues - Array of allowed enum values or literals
+   * @template T - The enum/literal value type
+   * @param allowedValues - Readonly array of allowed enum values or literals
    * @param metaData - Optional metadata for the validator
    * @returns New EnumGuardian instance
    *
@@ -346,7 +346,7 @@ export class Guardian {
    * Creates an object validator with optional schema definition.
    * Supports strict validation, passthrough mode, and shape transformation.
    *
-   * @template T - The object type defined by the schema
+   * @template T - The object type defined by the schema (defaults to Record<string, unknown>)
    * @param schema - Optional object schema defining property validators
    * @param metaData - Optional metadata for the validator
    * @returns New ObjectGuardian instance

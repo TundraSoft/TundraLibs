@@ -5,9 +5,7 @@
   "exports": {
     ".": "./mod.ts",
     "./guards": "./guards/mod.ts",
-    "./types": "./types/mod.ts",
-    "./parse": "./parse.ts",
-    "./serialize": "./serialize.ts"
+    "./types": "./types/mod.ts"
   },
   "imports": {
     "$datetime": "jsr:@std/datetime@^0.225.3",

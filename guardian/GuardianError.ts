@@ -4,19 +4,7 @@ import {
   variableReplacer,
 } from "@tundralibs/utils";
 
-// export type GuardianErrorMetaType =
-//   | 'string'
-//   | 'number'
-//   | 'boolean'
-//   | 'array'
-//   | 'object'
-//   | 'null'
-//   | 'undefined'
-//   | 'function'
-//   | 'bigint'
-//   | 'symbol'
-//   | 'Date'
-//   | 'RegExp';
+
 
 export type GuardianErrorMeta = {
   cause?: Record<string, GuardianError>; // Nested validation errors

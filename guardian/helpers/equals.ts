@@ -16,7 +16,7 @@ export const equals = <T>(
   return (value: T): T => {
     if (value !== expected) {
       throw new GuardianError(
-        error || "Expected value to be ${expected}, but got ${got}",
+        error || `Expected value to be ${expected}, but got ${value}`,
         {
           expected: expected,
           got: value,

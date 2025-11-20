@@ -16,7 +16,7 @@ export const notEquals = <T>(
   return (value: T): T => {
     if (value === expected) {
       throw new GuardianError(
-        error || "Expected value to not be ${expected}, but got ${got}",
+        error || `Expected value to not be ${expected}, but got ${value}`,
         {
           expected: `not ${expected}`,
           got: value,

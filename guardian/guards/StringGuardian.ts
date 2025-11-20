@@ -60,7 +60,7 @@ export class StringGuardian extends BaseGuardian<string> {
   constructor(initialTransform?: GuardianTransform<unknown, string>, metaData?: GuardianMetaData) {
     const defaultStringValidation = (input: unknown) => {
       if (typeof input !== "string") {
-        throw new GuardianError("Expected string but got ${got}", {
+        throw new GuardianError(`Expected string but got ${typeof input}`, {
           expected: "string",
           got: typeof input,
           comparison: "type",
@@ -257,7 +257,7 @@ export class StringGuardian extends BaseGuardian<string> {
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "email";
     // Pattern removed for format-specific validations
-    result._metaData.pattern; // Remove the regex pattern
+    delete result._metaData.pattern; // Remove the regex pattern
     return result;
   }
 
@@ -304,7 +304,7 @@ export class StringGuardian extends BaseGuardian<string> {
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "alpha";
     // Pattern removed for format-specific validations
-    result._metaData.pattern;
+    delete result._metaData.pattern;
     return result;
   }
 
@@ -324,7 +324,7 @@ export class StringGuardian extends BaseGuardian<string> {
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "alphanumeric";
     // Pattern removed for format-specific validations
-    result._metaData.pattern;
+    delete result._metaData.pattern;
     return result;
   }
 
@@ -340,11 +340,11 @@ export class StringGuardian extends BaseGuardian<string> {
       errorMessage || "String must be a valid UUID",
     );
     
-    // Override pattern constraint with format for OpenAPI
+        // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "uuid";
     // Pattern removed for format-specific validations
-    result._metaData.pattern;
+    delete result._metaData.pattern;
     return result;
   }
 
@@ -360,11 +360,11 @@ export class StringGuardian extends BaseGuardian<string> {
       errorMessage || "String must be a valid UUID v1",
     );
     
-    // Override pattern constraint with format for OpenAPI
+        // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "uuid";
     // Pattern removed for format-specific validations
-    result._metaData.pattern;
+    delete result._metaData.pattern;
     return result;
   }
 
@@ -384,7 +384,7 @@ export class StringGuardian extends BaseGuardian<string> {
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "uuid";
     // Pattern removed for format-specific validations
-    result._metaData.pattern;
+    delete result._metaData.pattern;
     return result;
   }
 
