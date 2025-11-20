@@ -2,11 +2,11 @@ import {
   connect as redisConnect,
   type Redis,
   type RedisConnectOptions,
-} from '$redis';
-import { AbstractEngine } from '../../AbstractEngine.ts';
-import type { CacheValue } from '../../types/mod.ts';
-import { CacherEngineError } from '../../errors/mod.ts';
-import type { RedisCacherOptions } from './types/mod.ts';
+} from "$redis";
+import { AbstractEngine } from "../../AbstractEngine.ts";
+import type { CacheValue } from "../../types/mod.ts";
+import { CacherEngineError } from "../../errors/mod.ts";
+import type { RedisCacherOptions } from "./types/mod.ts";
 
 /**
  * Redis-based cacher implementation.
@@ -45,7 +45,7 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
   /**
    * The engine identifier for Redis cacher.
    */
-  public override readonly Engine = 'REDIS';
+  public override readonly Engine = "REDIS";
 
   /**
    * The Redis client instance.
@@ -73,32 +73,32 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
     };
     super(name, options);
     // Ensure mandatory items present
-    if (this.hasOption('host') === false) {
-      throw new CacherEngineError('CONFIG_MISSING', {
+    if (this.hasOption("host") === false) {
+      throw new CacherEngineError("CONFIG_MISSING", {
         name: this.name,
         engine: this.Engine,
-        configKey: 'host',
+        configKey: "host",
       });
     }
     // Username must be present if password is set
     if (
-      this.hasOption('password') === true &&
-      this.hasOption('username') === false
+      this.hasOption("password") === true &&
+      this.hasOption("username") === false
     ) {
-      throw new CacherEngineError('CONFIG_MISSING', {
+      throw new CacherEngineError("CONFIG_MISSING", {
         name: this.name,
         engine: this.Engine,
-        configKey: 'username',
+        configKey: "username",
       });
     }
     if (
-      this.hasOption('username') === true &&
-      this.hasOption('password') === false
+      this.hasOption("username") === true &&
+      this.hasOption("password") === false
     ) {
-      throw new CacherEngineError('CONFIG_MISSING', {
+      throw new CacherEngineError("CONFIG_MISSING", {
         name: this.name,
         engine: this.Engine,
-        configKey: 'password',
+        configKey: "password",
       });
     }
   }
@@ -113,11 +113,11 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
     if (this._client === undefined) {
       try {
         const opt: RedisConnectOptions = {
-          hostname: this.getOption('host'),
-          port: this.getOption('port'),
-          username: this.getOption('username'),
-          password: this.getOption('password'),
-          db: this.getOption('db'),
+          hostname: this.getOption("host"),
+          port: this.getOption("port"),
+          username: this.getOption("username"),
+          password: this.getOption("password"),
+          db: this.getOption("db"),
           name: this.name,
           maxRetryCount: 1,
         };
@@ -127,14 +127,14 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
         }
         this._client = await redisConnect(opt);
       } catch (e) {
-        throw new CacherEngineError('CONNECTION_FAILED', {
+        throw new CacherEngineError("CONNECTION_FAILED", {
           name: this.name,
           engine: this.Engine,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
-          username: this.getOption('username'),
-          password: this.getOption('password'),
-          db: this.getOption('db'),
+          host: this.getOption("host"),
+          port: this.getOption("port"),
+          username: this.getOption("username"),
+          password: this.getOption("password"),
+          db: this.getOption("db"),
           reason: (e as Error).message,
         }, e as Error);
       }
@@ -178,11 +178,11 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
         return data;
       }
     } catch (e) {
-      throw new CacherEngineError('OPERATION_FAILED', {
+      throw new CacherEngineError("OPERATION_FAILED", {
         name: this.name,
         engine: this.Engine,
-        operation: 'GET',
-        key: key.split(':')[1],
+        operation: "GET",
+        key: key.split(":")[1],
         reason: (e as Error).message,
       }, e as Error);
     }
@@ -205,11 +205,11 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
         await this._client!.expire(key, value.expiry);
       }
     } catch (e) {
-      throw new CacherEngineError('OPERATION_FAILED', {
+      throw new CacherEngineError("OPERATION_FAILED", {
         name: this.name,
         engine: this.Engine,
-        operation: 'SET',
-        key: key.split(':')[1],
+        operation: "SET",
+        key: key.split(":")[1],
         reason: (e as Error).message,
       }, e as Error);
     }
@@ -228,11 +228,11 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
     try {
       await this._client!.del(key);
     } catch (e) {
-      throw new CacherEngineError('OPERATION_FAILED', {
+      throw new CacherEngineError("OPERATION_FAILED", {
         name: this.name,
         engine: this.Engine,
-        operation: 'DELETE',
-        key: key.split(':')[1],
+        operation: "DELETE",
+        key: key.split(":")[1],
         reason: (e as Error).message,
       }, e as Error);
     }
@@ -253,10 +253,10 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
         await this._client!.del(key);
       }
     } catch (e) {
-      throw new CacherEngineError('OPERATION_FAILED', {
+      throw new CacherEngineError("OPERATION_FAILED", {
         name: this.name,
         engine: this.Engine,
-        operation: 'CLEAR',
+        operation: "CLEAR",
         reason: (e as Error).message,
       }, e as Error);
     }
@@ -276,11 +276,11 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
       const res = await this._client!.exists(key);
       return res === 1;
     } catch (e) {
-      throw new CacherEngineError('OPERATION_FAILED', {
+      throw new CacherEngineError("OPERATION_FAILED", {
         name: this.name,
         engine: this.Engine,
-        operation: 'HAS',
-        key: key.split(':')[1],
+        operation: "HAS",
+        key: key.split(":")[1],
         reason: (e as Error).message,
       }, e as Error);
     }
@@ -304,70 +304,70 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
     value: RedisCacherOptions[K],
   ): RedisCacherOptions[K] {
     switch (key) {
-      case 'host':
+      case "host":
         if (value === undefined || value === null) {
-          throw new CacherEngineError('CONFIG_MISSING', {
+          throw new CacherEngineError("CONFIG_MISSING", {
             name: this.name,
             engine: this.Engine,
             configKey: key,
-            reason: 'Host is required',
+            reason: "Host is required",
           });
         }
         break;
-      case 'port':
+      case "port":
         value ??= 6379 as RedisCacherOptions[K]; // Fixed: was incorrectly 6379
-        if (typeof value !== 'number' || value <= 0 || value > 65535) {
-          throw new CacherEngineError('CONFIG_INVALID', {
+        if (typeof value !== "number" || value <= 0 || value > 65535) {
+          throw new CacherEngineError("CONFIG_INVALID", {
             name: this.name,
             engine: this.Engine,
             configKey: key,
-            reason: 'must be a positive number between 0 and 65535',
+            reason: "must be a positive number between 0 and 65535",
           });
         }
         break;
-      case 'db':
+      case "db":
         if (value !== undefined && value !== null) {
-          if (typeof value !== 'number' || value < 0) {
-            throw new CacherEngineError('CONFIG_INVALID', {
+          if (typeof value !== "number" || value < 0) {
+            throw new CacherEngineError("CONFIG_INVALID", {
               name: this.name,
               engine: this.Engine,
               configKey: key,
-              reason: 'must be a positive number',
+              reason: "must be a positive number",
             });
           }
         }
         break;
-      case 'username':
-      case 'password':
+      case "username":
+      case "password":
         if (
           value !== undefined && value !== null
         ) {
-          if (typeof value !== 'string') {
-            throw new CacherEngineError('CONFIG_INVALID', {
+          if (typeof value !== "string") {
+            throw new CacherEngineError("CONFIG_INVALID", {
               name: this.name,
               engine: this.Engine,
               configKey: key,
-              reason: 'must be a string',
+              reason: "must be a string",
             });
           }
-          if (typeof value === 'string' && value.trim().length > 0) {
+          if (typeof value === "string" && value.trim().length > 0) {
             value = value.trim() as RedisCacherOptions[K];
           } else {
             value = undefined as RedisCacherOptions[K];
           }
         }
         break;
-      case 'certPath':
+      case "certPath":
         if (value !== undefined && value !== null) {
-          if (typeof value === 'string' && value.length > 0) {
+          if (typeof value === "string" && value.length > 0) {
             try {
               this._caCerts = [Deno.readTextFileSync(value)];
             } catch (e) {
-              throw new CacherEngineError('CONFIG_INVALID', {
+              throw new CacherEngineError("CONFIG_INVALID", {
                 name: this.name,
                 engine: this.Engine,
                 configKey: key,
-                reason: 'Unable to read certificate file - ' +
+                reason: "Unable to read certificate file - " +
                   (e as Error).message,
               }, e as Error);
             }

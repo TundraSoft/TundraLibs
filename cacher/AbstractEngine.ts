@@ -1,7 +1,7 @@
-import { Options } from '@tundralibs/utils';
-import { CacherOptions, CacheValue, CacheValueOptions } from './types/mod.ts';
+import { Options } from "@tundralibs/utils";
+import { CacherOptions, CacheValue, CacheValueOptions } from "./types/mod.ts";
 
-import { CacherEngineError } from './errors/mod.ts';
+import { CacherEngineError } from "./errors/mod.ts";
 
 /**
  * Base class for all cacher engine implementations.
@@ -89,19 +89,19 @@ export abstract class AbstractEngine<
     opt: CacheValueOptions = {},
   ): Promise<void> {
     await this.init();
-    const expiry = opt.expiry ?? this.getOption('defaultExpiry')!;
+    const expiry = opt.expiry ?? this.getOption("defaultExpiry")!;
     const cacheValue: CacheValue = {
       data: JSON.stringify(value),
       expiry: expiry,
       window: opt.window ?? false,
     };
     if (this._validateExpiry(expiry) === false) {
-      throw new CacherEngineError('OPERATION_INVALID_PARAMS', {
+      throw new CacherEngineError("OPERATION_INVALID_PARAMS", {
         name: this.name,
         engine: this.Engine,
-        operation: 'SET',
+        operation: "SET",
         key: key,
-        reason: 'expiry must be a positive number greater than or equal to 0',
+        reason: "expiry must be a positive number greater than or equal to 0",
       });
     }
     await this._set(this._normalizeKey(key), cacheValue);
@@ -210,14 +210,14 @@ export abstract class AbstractEngine<
     key: K,
     value: O[K],
   ): O[K] {
-    if (key === 'defaultExpiry') {
+    if (key === "defaultExpiry") {
       value ??= 300 as O[K];
       if (this._validateExpiry(value) === false) {
-        throw new CacherEngineError('CONFIG_INVALID', {
+        throw new CacherEngineError("CONFIG_INVALID", {
           name: this.name,
           engine: this.Engine,
-          configKey: 'defaultExpiry',
-          reason: 'must be a positive number greater than or equal to 0',
+          configKey: "defaultExpiry",
+          reason: "must be a positive number greater than or equal to 0",
         });
       }
     }
@@ -226,7 +226,7 @@ export abstract class AbstractEngine<
 
   protected _validateExpiry(expiry: unknown): expiry is number {
     if (
-      typeof expiry !== 'number' || isNaN(expiry) || expiry < 0
+      typeof expiry !== "number" || isNaN(expiry) || expiry < 0
     ) {
       return false;
     }

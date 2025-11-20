@@ -1,4 +1,4 @@
-import { BaseError } from '@tundralibs/utils';
+import { BaseError } from "@tundralibs/utils";
 /**
  * Base error class for all Cacher errors.
  * Extends BaseError from @tundralibs/utils with Cacher-specific metadata.
@@ -9,7 +9,7 @@ export class CacherError<
   M extends Record<string, unknown> = Record<string, unknown>,
 > extends BaseError<M> {
   protected override get _messageTemplate(): string {
-    return '${message}';
+    return "${message}";
   }
   /**
    * Creates a new CacherError.

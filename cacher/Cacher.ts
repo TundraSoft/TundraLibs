@@ -1,8 +1,8 @@
-import { Singleton } from '@tundralibs/utils';
-import type { CacherOptions } from './types/mod.ts';
-import { AbstractEngine } from './AbstractEngine.ts';
-import { MemCacher, MemoryCacher, RedisCacher } from './engines/mod.ts';
-import { CacherError } from './errors/mod.ts';
+import { Singleton } from "@tundralibs/utils";
+import type { CacherOptions } from "./types/mod.ts";
+import { AbstractEngine } from "./AbstractEngine.ts";
+import { MemCacher, MemoryCacher, RedisCacher } from "./engines/mod.ts";
+import { CacherError } from "./errors/mod.ts";
 
 /**
  * Type definition for engine constructor.
@@ -84,25 +84,25 @@ class Manager {
     engine: EngineConstructor,
   ): void {
     // Validate input parameters
-    if (!name || typeof name !== 'string') {
+    if (!name || typeof name !== "string") {
       throw new CacherError(
-        'Engine name must be a non-empty string',
+        "Engine name must be a non-empty string",
         {
-          operation: 'addEngine',
+          operation: "addEngine",
           providedName: name,
-          context: 'Manager',
+          context: "Manager",
         },
       );
     }
 
-    if (!engine || typeof engine !== 'function') {
+    if (!engine || typeof engine !== "function") {
       throw new CacherError(
-        'Engine must be a constructor function',
+        "Engine must be a constructor function",
         {
-          operation: 'addEngine',
+          operation: "addEngine",
           engineName: name,
           providedEngine: typeof engine,
-          context: 'Manager',
+          context: "Manager",
         },
       );
     }
@@ -113,10 +113,10 @@ class Manager {
       throw new CacherError(
         `Engine "${engineName}" is already registered`,
         {
-          operation: 'addEngine',
+          operation: "addEngine",
           engineName: engineName,
           registeredEngines: Array.from(this._engines.keys()),
-          context: 'Manager',
+          context: "Manager",
         },
       );
     }
@@ -173,43 +173,43 @@ class Manager {
     name: unknown,
     options: unknown,
   ): void {
-    if (!engine || typeof engine !== 'string') {
+    if (!engine || typeof engine !== "string") {
       throw new CacherError(
-        'Engine type must be a non-empty string',
+        "Engine type must be a non-empty string",
         {
-          operation: 'create',
+          operation: "create",
           providedEngine: engine,
-          context: 'Manager',
+          context: "Manager",
         },
       );
     }
 
-    if (!name || typeof name !== 'string') {
+    if (!name || typeof name !== "string") {
       throw new CacherError(
-        'Instance name must be a non-empty string',
+        "Instance name must be a non-empty string",
         {
-          operation: 'create',
+          operation: "create",
           engineType: engine,
           providedName: name,
-          context: 'Manager',
+          context: "Manager",
         },
       );
     }
 
     if (
-      !options || typeof options !== 'object' || Array.isArray(options) ||
+      !options || typeof options !== "object" || Array.isArray(options) ||
       options === null
     ) {
       throw new CacherError(
-        'Options must be a valid object',
+        "Options must be a valid object",
         {
-          operation: 'create',
+          operation: "create",
           engineType: engine,
           instanceName: name,
           providedOptions: typeof options,
           isArray: Array.isArray(options),
           isNull: options === null,
-          context: 'Manager',
+          context: "Manager",
         },
       );
     }
@@ -224,10 +224,10 @@ class Manager {
       throw new CacherError(
         `Engine "${engineType}" is not registered`,
         {
-          operation: 'create',
+          operation: "create",
           requestedEngine: engineType,
           availableEngines: Array.from(this._engines.keys()),
-          context: 'Manager',
+          context: "Manager",
         },
       );
     }
@@ -270,14 +270,14 @@ class Manager {
     } catch (error) {
       throw new CacherError(
         `Failed to create instance "${instanceName}": ${
-          error instanceof Error ? error.message : 'Unknown error'
+          error instanceof Error ? error.message : "Unknown error"
         }`,
         {
-          operation: 'create',
+          operation: "create",
           engineType: engineType,
           instanceName: instanceName,
           options: options,
-          context: 'Manager',
+          context: "Manager",
         },
         error instanceof Error ? error : undefined,
       );
@@ -299,11 +299,11 @@ class Manager {
       throw new CacherError(
         `Instance "${instanceName}" already exists with engine type "${existingEngineType}", cannot create with "${engineType}"`,
         {
-          operation: 'create',
+          operation: "create",
           instanceName: instanceName,
           requestedEngine: engineType,
           existingEngine: existingEngineType,
-          context: 'Manager',
+          context: "Manager",
         },
       );
     }
@@ -330,7 +330,7 @@ class Manager {
    * ```
    */
   getInstance(name: string): AbstractEngine | undefined {
-    if (!name || typeof name !== 'string') {
+    if (!name || typeof name !== "string") {
       return undefined;
     }
     return this._instances.get(name.trim());
@@ -343,7 +343,7 @@ class Manager {
    * @returns True if instance exists, false otherwise
    */
   hasInstance(name: string): boolean {
-    if (!name || typeof name !== 'string') {
+    if (!name || typeof name !== "string") {
       return false;
     }
     return this._instances.has(name.trim());
@@ -362,7 +362,7 @@ class Manager {
    * ```
    */
   async removeInstance(name: string): Promise<boolean> {
-    if (!name || typeof name !== 'string') {
+    if (!name || typeof name !== "string") {
       return false;
     }
 
@@ -375,7 +375,7 @@ class Manager {
 
     // Finalize the instance if possible
     try {
-      if ('finalize' in instance && typeof instance.finalize === 'function') {
+      if ("finalize" in instance && typeof instance.finalize === "function") {
         await instance.finalize();
       }
     } catch (error) {
@@ -401,7 +401,7 @@ class Manager {
    * @internal
    */
   removeEngine(name: string): boolean {
-    if (!name || typeof name !== 'string') {
+    if (!name || typeof name !== "string") {
       return false;
     }
 
@@ -444,7 +444,7 @@ class Manager {
       instances.map(async ([name, instance]) => {
         try {
           if (
-            'finalize' in instance && typeof instance.finalize === 'function'
+            "finalize" in instance && typeof instance.finalize === "function"
           ) {
             await instance.finalize();
           }
@@ -463,15 +463,15 @@ class Manager {
 
   private __registeredDefaultEngines(): void {
     this.addEngine(
-      'MEMORY',
+      "MEMORY",
       MemoryCacher as unknown as EngineConstructor,
     );
     this.addEngine(
-      'REDIS',
+      "REDIS",
       RedisCacher as unknown as EngineConstructor,
     );
     this.addEngine(
-      'MEMCACHED',
+      "MEMCACHED",
       MemCacher as unknown as EngineConstructor,
     );
   }
