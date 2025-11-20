@@ -946,10 +946,4 @@ export class ObjectGuardian<
   }
 
   //#endregion
-
-  //#region Documentation Methods
-
-
-
-  //#endregion
 }

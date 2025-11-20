@@ -430,4 +430,236 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
       asserts.assertEquals(result, ["javascript", "typescript", "web"]);
     });
   });
+
+  await t.step("new validation and transformation methods", async (t) => {
+    await t.step("noNulls validation", () => {
+      const noNullsGuard = Guardian.array().noNulls();
+
+      // Should pass arrays without nulls
+      asserts.assertEquals(noNullsGuard.parse([1, 2, 3]), [1, 2, 3]);
+      asserts.assertEquals(noNullsGuard.parse(["a", "b", "c"]), ["a", "b", "c"]);
+      asserts.assertEquals(noNullsGuard.parse([]), []);
+      asserts.assertEquals(noNullsGuard.parse([0, false, ""]), [0, false, ""]);
+
+      // Should reject arrays with null or undefined
+      asserts.assertThrows(
+        () => noNullsGuard.parse([1, null, 3]),
+        GuardianError,
+        "Array must not contain null or undefined values, found at index 1"
+      );
+
+      asserts.assertThrows(
+        () => noNullsGuard.parse([1, undefined, 3]),
+        GuardianError,
+        "Array must not contain null or undefined values, found at index 1"
+      );
+
+      asserts.assertThrows(
+        () => noNullsGuard.parse([null]),
+        GuardianError,
+        "Array must not contain null or undefined values, found at index 0"
+      );
+
+      // Should support custom error message
+      const customMessageGuard = Guardian.array().noNulls("Custom null error");
+      asserts.assertThrows(
+        () => customMessageGuard.parse([1, null, 3]),
+        GuardianError,
+        "Custom null error"
+      );
+    });
+
+    await t.step("flatten transformation", () => {
+      const flattenGuard = Guardian.array().flatten();
+
+      // Basic flattening with default joiner
+      asserts.assertEquals(flattenGuard.parse([1, [2, 3], 4]), "1,2,3,4");
+      asserts.assertEquals(flattenGuard.parse(["a", ["b", "c"], "d"]), "a,b,c,d");
+      asserts.assertEquals(flattenGuard.parse([]), "");
+      asserts.assertEquals(flattenGuard.parse([1]), "1");
+
+      // Custom joiner
+      const customJoinerGuard = Guardian.array().flatten(" | ");
+      asserts.assertEquals(customJoinerGuard.parse([1, [2, 3], 4]), "1 | 2 | 3 | 4");
+      asserts.assertEquals(customJoinerGuard.parse(["hello", ["world"]]), "hello | world");
+
+      // Custom depth
+      const shallowGuard = Guardian.array().flatten(",", 1);
+      asserts.assertEquals(shallowGuard.parse([1, [2, [3, 4]], 5]), "1,2,3,4,5");
+
+      const deepGuard = Guardian.array().flatten(",", 2);
+      asserts.assertEquals(deepGuard.parse([1, [2, [3, [4, 5]]], 6]), "1,2,3,4,5,6");
+
+      // No flattening (depth 0)
+      const noFlattenGuard = Guardian.array().flatten(",", 0);
+      const nestedArray = [1, [2, 3], 4];
+      asserts.assertEquals(noFlattenGuard.parse(nestedArray), "1,2,3,4");
+
+      // Mixed types
+      asserts.assertEquals(flattenGuard.parse([1, [true, "text"], null]), "1,true,text,");
+    });
+
+    await t.step("compact transformation", () => {
+      const compactGuard = Guardian.array().compact();
+
+      // Remove all falsy values
+      asserts.assertEquals(
+        compactGuard.parse([1, null, 2, undefined, 3, false, 4, 0, 5, "", 6, NaN]),
+        [1, 2, 3, 4, 5, 6]
+      );
+
+      // Array with no falsy values
+      asserts.assertEquals(compactGuard.parse([1, 2, 3]), [1, 2, 3]);
+      asserts.assertEquals(compactGuard.parse(["a", "b", "c"]), ["a", "b", "c"]);
+
+      // Array with only falsy values
+      asserts.assertEquals(compactGuard.parse([null, undefined, false, 0, "", NaN]), []);
+
+      // Empty array
+      asserts.assertEquals(compactGuard.parse([]), []);
+
+      // Mixed types with truthy values
+      asserts.assertEquals(
+        compactGuard.parse([1, "hello", true, [], {}, -1, " "]),
+        [1, "hello", true, [], {}, -1, " "]
+      );
+
+      // Keep legitimate zero-like values that are truthy
+      asserts.assertEquals(compactGuard.parse(["0", [0]]), ["0", [0]]);
+    });
+
+    await t.step("onlyUnique transformation", () => {
+      const uniqueGuard = Guardian.array().onlyUnique();
+
+      // Remove duplicates from numbers
+      asserts.assertEquals(uniqueGuard.parse([1, 2, 2, 3, 1, 4]), [1, 2, 3, 4]);
+      
+      // Remove duplicates from strings
+      asserts.assertEquals(uniqueGuard.parse(["a", "b", "a", "c", "b"]), ["a", "b", "c"]);
+
+      // Array with no duplicates
+      asserts.assertEquals(uniqueGuard.parse([1, 2, 3]), [1, 2, 3]);
+
+      // Empty array
+      asserts.assertEquals(uniqueGuard.parse([]), []);
+
+      // Single element
+      asserts.assertEquals(uniqueGuard.parse([1]), [1]);
+
+      // All same elements
+      asserts.assertEquals(uniqueGuard.parse([1, 1, 1, 1]), [1]);
+
+      // Mixed types (maintains insertion order)
+      asserts.assertEquals(
+        uniqueGuard.parse([1, "1", 1, true, "1", false, true]),
+        [1, "1", true, false]
+      );
+
+      // With null and undefined
+      asserts.assertEquals(
+        uniqueGuard.parse([null, undefined, null, 1, undefined, 1]),
+        [null, undefined, 1]
+      );
+
+      // Objects (reference equality)
+      const obj1 = { id: 1 };
+      const obj2 = { id: 2 };
+      const obj3 = { id: 1 }; // Different reference than obj1
+      asserts.assertEquals(
+        uniqueGuard.parse([obj1, obj2, obj1, obj3]),
+        [obj1, obj2, obj3]
+      );
+    });
+
+    await t.step("chaining new methods", () => {
+      // Chain multiple new methods
+      const chainedGuard = Guardian.array()
+        .noNulls()
+        .compact()
+        .onlyUnique();
+
+      asserts.assertEquals(
+        chainedGuard.parse([1, 2, 2, 3, false, 4, 0, 1, ""]),
+        [1, 2, 3, 4]
+      );
+
+      // Chain with existing methods (using untyped array to allow mixed types before filtering)
+      const complexChain = Guardian.array()
+        .compact()
+        .onlyUnique()
+        .sort();
+
+      asserts.assertEquals(
+        complexChain.parse([3, 0, 1, false, 4, 1, 5, 0]),
+        [1, 3, 4, 5]
+      );
+
+      // Flatten with other transformations
+      const flattenChain = Guardian.array()
+        .compact()
+        .flatten(" - ");
+
+      asserts.assertEquals(
+        flattenChain.parse([1, [2, 3], [4]]),
+        "1 - 2 - 3 - 4"
+      );
+    });
+
+    await t.step("edge cases and error handling", () => {
+      // noNulls with custom error message
+      const customErrorGuard = Guardian.array().noNulls("No nulls allowed!");
+      asserts.assertThrows(
+        () => customErrorGuard.parse([1, null]),
+        GuardianError,
+        "No nulls allowed!"
+      );
+
+      // Flatten with deeply nested arrays
+      const deepNested = [1, [2, [3, [4, [5]]]]];
+      asserts.assertEquals(
+        Guardian.array().flatten(",", Infinity).parse(deepNested),
+        "1,2,3,4,5"
+      );
+
+      // Compact with various falsy types
+      const falsyTypes = [
+        0, -0, 0n, false, null, undefined, "", NaN,
+        1, "0", [], {}, " ", true, -1
+      ];
+      const compactResult = Guardian.array().compact().parse(falsyTypes);
+      asserts.assertEquals(compactResult, [1, "0", [], {}, " ", true, -1]);
+
+      // onlyUnique preserves order
+      const orderTest = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3];
+      const uniqueResult = Guardian.array().onlyUnique().parse(orderTest);
+      asserts.assertEquals(uniqueResult, [3, 1, 4, 5, 9, 2, 6]);
+    });
+
+    await t.step("type safety with generics", () => {
+      // Test with typed arrays
+      const numberArrayGuard = Guardian.array(Guardian.number())
+        .compact()
+        .onlyUnique();
+
+      // This should work with numbers (avoid boolean to prevent element validation error)
+      const numberResult = numberArrayGuard.parse([1, 0, 2, 1, 3, 0]);
+      asserts.assertEquals(numberResult, [1, 2, 3]);
+
+      // String array operations
+      const stringArrayGuard = Guardian.array(Guardian.string())
+        .noNulls()
+        .onlyUnique();
+
+      asserts.assertEquals(
+        stringArrayGuard.parse(["a", "b", "a", "c"]),
+        ["a", "b", "c"]
+      );
+
+      // Should reject null in string array
+      asserts.assertThrows(
+        () => stringArrayGuard.parse(["a", null, "b"]),
+        GuardianError
+      );
+    });
+  });
 });

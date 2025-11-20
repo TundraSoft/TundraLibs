@@ -1,6 +1,7 @@
 import { BaseGuardian } from "../BaseGuardian.ts";
 import { GuardianError, type GuardianErrorMeta } from "../GuardianError.ts";
 import type { GuardianMetaData } from "../types/mod.ts";
+import { StringGuardian } from "./StringGuardian.ts";
 
 /**
  * Guardian for array validation and transformation.
@@ -450,6 +451,132 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
   reverse(): ArrayGuardian<T> {
     return this.process((value: Array<T>) => {
       return [...value].reverse();
+    }) as ArrayGuardian<T>;
+  }
+
+  /**
+   * Validates that array contains no null or undefined values.
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
+   *
+   * @example
+   * ```ts
+   * const noNullArray = Guardian.array().noNulls();
+   * noNullArray.parse([1, 2, 3]); // [1, 2, 3]
+   * noNullArray.parse([1, null, 3]); // throws GuardianError
+   * ```
+   */
+  noNulls(errorMessage?: string): ArrayGuardian<T> {
+    return this.process((value: Array<T>) => {
+      const nullIndex = value.findIndex((item) => item === null || item === undefined);
+      if (nullIndex !== -1) {
+        throw new GuardianError(
+          errorMessage || `Array must not contain null or undefined values, found at index ${nullIndex}`,
+          {
+            expected: "array without null/undefined values",
+            got: `null/undefined at index ${nullIndex}`,
+            comparison: "noNulls",
+            type: "validation",
+          },
+        );
+      }
+      return value;
+    }) as ArrayGuardian<T>;
+  }
+
+  /**
+   * Transforms array by flattening nested arrays and joining with separator.
+   * Can be used as an alias for toString with custom joiner.
+   *
+   * @param joiner - String to join flattened elements (default: ",")
+   * @param depth - Maximum depth to flatten (default: 1)
+   * @returns New StringGuardian with flattened string
+   *
+   * @example
+   * ```ts
+   * const flattened = Guardian.array().flatten();
+   * flattened.parse([1, [2, 3], 4]); // "1,2,3,4"
+   * 
+   * const customJoiner = Guardian.array().flatten(" | ");
+   * customJoiner.parse([1, [2, 3], 4]); // "1 | 2 | 3 | 4"
+   * 
+   * const deepFlatten = Guardian.array().flatten(",", 2);
+   * deepFlatten.parse([1, [2, [3, 4]], 5]); // "1,2,3,4,5"
+   * ```
+   */
+  flatten(joiner: string = ",", depth: number = 1): StringGuardian {
+    return this.process((value: Array<T>) => {
+      const flattenArray = (arr: any[], currentDepth: number): any[] => {
+        const result: any[] = [];
+        for (const item of arr) {
+          if (Array.isArray(item) && currentDepth > 0) {
+            result.push(...flattenArray(item, currentDepth - 1));
+          } else {
+            result.push(item);
+          }
+        }
+        return result;
+      };
+
+      const flattened = flattenArray(value, depth);
+      return flattened.join(joiner);
+    }, StringGuardian) as StringGuardian;
+  }
+
+  /**
+   * Transforms array by removing falsy values (null, undefined, false, 0, 0n, "", NaN).
+   *
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
+   *
+   * @example
+   * ```ts
+   * const compacted = Guardian.array().compact();
+   * compacted.parse([1, null, 2, undefined, 3, false, 4, 0, 5, "", 6, NaN]); // [1, 2, 3, 4, 5, 6]
+   * ```
+   */
+  compact(): ArrayGuardian<NonNullable<T>> {
+    return this.process((value: Array<T>) => {
+      return value.filter((item): item is NonNullable<T> => {
+        return item !== null && 
+               item !== undefined && 
+               item !== false && 
+               item !== 0 && 
+               item !== 0n &&
+               item !== "" && 
+               !Number.isNaN(item);
+      });
+    }) as ArrayGuardian<NonNullable<T>>;
+  }
+
+  /**
+   * Transforms array by removing duplicate values, keeping only unique elements.
+   * Uses strict equality (===) for comparison.
+   *
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
+   *
+   * @example
+   * ```ts
+   * const unique = Guardian.array().onlyUnique();
+   * unique.parse([1, 2, 2, 3, 1, 4]); // [1, 2, 3, 4]
+   * 
+   * const uniqueStrings = Guardian.array(Guardian.string()).onlyUnique();
+   * uniqueStrings.parse(["a", "b", "a", "c"]); // ["a", "b", "c"]
+   * ```
+   */
+  onlyUnique(): ArrayGuardian<T> {
+    return this.process((value: Array<T>) => {
+      const seen = new Set<T>();
+      const result: T[] = [];
+      
+      for (const item of value) {
+        if (!seen.has(item)) {
+          seen.add(item);
+          result.push(item);
+        }
+      }
+      
+      return result;
     }) as ArrayGuardian<T>;
   }
 
