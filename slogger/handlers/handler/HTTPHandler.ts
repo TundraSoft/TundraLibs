@@ -1,6 +1,6 @@
-import { jsonFormatter } from '../../formatters/mod.ts';
-import type { SlogObject } from '../../types/Object.ts';
-import { AbstractHandler, type HandlerOptions } from '../AbstractHandler.ts';
+import { jsonFormatter } from "../../formatters/mod.ts";
+import type { SlogObject } from "../../types/Object.ts";
+import { AbstractHandler, type HandlerOptions } from "../AbstractHandler.ts";
 
 /**
  * Configuration options for the HTTP handler
@@ -11,7 +11,7 @@ import { AbstractHandler, type HandlerOptions } from '../AbstractHandler.ts';
  */
 export type HTTPHandlerOptions = HandlerOptions & {
   url: string;
-  method: 'POST' | 'PUT';
+  method: "POST" | "PUT";
   headers?: Record<string, string>;
   batchSize: number;
 };
@@ -23,9 +23,9 @@ export type HTTPHandlerOptions = HandlerOptions & {
  * HTTP endpoint. It's useful for centralized logging systems or log aggregation.
  */
 export class HTTPHandler extends AbstractHandler {
-  public readonly mode = 'http';
+  public readonly mode = "http";
   private _url: string;
-  private _method: 'POST' | 'PUT' | 'PATCH';
+  private _method: "POST" | "PUT" | "PATCH";
   private _batchSize: number;
   private _headers: Record<string, string>;
 
@@ -43,8 +43,8 @@ export class HTTPHandler extends AbstractHandler {
     super(name, options);
 
     // Validate URL
-    if (!options.url || typeof options.url !== 'string') {
-      throw new Error('HTTPHandler requires a valid URL string');
+    if (!options.url || typeof options.url !== "string") {
+      throw new Error("HTTPHandler requires a valid URL string");
     }
     try {
       new URL(options.url); // Will throw if URL is invalid
@@ -54,19 +54,19 @@ export class HTTPHandler extends AbstractHandler {
     this._url = options.url;
     const host = new URL(this._url).host;
     const r = Deno.permissions.requestSync({
-      name: 'net',
+      name: "net",
       host: host,
     });
-    if (r.state === 'denied') {
+    if (r.state === "denied") {
       throw new Error(
         `Permission denied for network access to ${host}`,
       );
     }
 
     // Validate method
-    if (!options.method || !['POST', 'PUT'].includes(options.method)) {
+    if (!options.method || !["POST", "PUT"].includes(options.method)) {
       throw new Error(
-        'HTTPHandler requires a valid HTTP method (POST or PUT)',
+        "HTTPHandler requires a valid HTTP method (POST or PUT)",
       );
     }
     this._method = options.method;
@@ -74,13 +74,13 @@ export class HTTPHandler extends AbstractHandler {
     // Validate batchSize
     const batchSize = options.batchSize ?? 1;
     if (!Number.isInteger(batchSize) || batchSize < 1) {
-      throw new Error('HTTPHandler batchSize must be a positive integer');
+      throw new Error("HTTPHandler batchSize must be a positive integer");
     }
     this._batchSize = batchSize;
 
     // Validate headers
-    if (options.headers && typeof options.headers !== 'object') {
-      throw new Error('HTTPHandler headers must be a valid object if provided');
+    if (options.headers && typeof options.headers !== "object") {
+      throw new Error("HTTPHandler headers must be a valid object if provided");
     }
     this._headers = options.headers ?? {};
   }
@@ -127,7 +127,7 @@ export class HTTPHandler extends AbstractHandler {
     }
     const body = JSON.stringify(this._logs);
     this._logs = [];
-    const headers = new Headers({ 'Content-Type': 'application/json' });
+    const headers = new Headers({ "Content-Type": "application/json" });
     for (const [key, value] of Object.entries(this._headers)) {
       headers.set(key, value);
     }

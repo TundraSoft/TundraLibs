@@ -4,8 +4,8 @@
  * Provides functionality to format log objects as strings using templates
  * with variable replacements. This allows for customizable log formats.
  */
-import type { SloggerFormatter, SlogObject } from '../types/mod.ts';
-import { variableReplacer } from '@tundralibs/utils';
+import type { SloggerFormatter, SlogObject } from "../types/mod.ts";
+import { variableReplacer } from "@tundralibs/utils";
 
 /**
  * Creates a formatter function that uses a template string to format log objects
@@ -32,7 +32,7 @@ export const simpleFormatter = (template: string): SloggerFormatter => {
  * Example: [2023-04-21T15:20:30.123Z] [INFO] User logged in successfully
  */
 export const standardFormat: SloggerFormatter = simpleFormatter(
-  '[${isoDate}] [${levelName}] ${message}',
+  "[${isoDate}] [${levelName}] ${message}",
 );
 
 /**
@@ -40,7 +40,7 @@ export const standardFormat: SloggerFormatter = simpleFormatter(
  * Example: 2023-04-21 15:20:30.123 [INFO] [myApp v1.0.0] [server123] [pid:1234] User logged in successfully
  */
 export const detailedFormat: SloggerFormatter = simpleFormatter(
-  '${isoDate} [${levelName}] [${appName}] [${hostname}] ${message}',
+  "${isoDate} [${levelName}] [${appName}] [${hostname}] ${message}",
 );
 
 /**
@@ -48,7 +48,7 @@ export const detailedFormat: SloggerFormatter = simpleFormatter(
  * Example: INFO [15:20:30] User logged in successfully
  */
 export const compactFormat: SloggerFormatter = simpleFormatter(
-  '${levelName} [${date.toLocaleTimeString()}] ${message}',
+  "${levelName} [${date.toLocaleTimeString()}] ${message}",
 );
 
 /**
@@ -56,7 +56,7 @@ export const compactFormat: SloggerFormatter = simpleFormatter(
  * Example: INFO: User logged in successfully
  */
 export const minimalistFormat: SloggerFormatter = simpleFormatter(
-  '${levelName}: ${message}',
+  "${levelName}: ${message}",
 );
 
 /**

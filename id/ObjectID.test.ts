@@ -1,8 +1,8 @@
-import * as asserts from '$asserts';
-import { ObjectID } from './mod.ts';
+import * as asserts from "$asserts";
+import { ObjectID } from "./mod.ts";
 
-Deno.test('id.objectId', async (t) => {
-  await t.step('Must generate unique ids', () => {
+Deno.test("id.objectId", async (t) => {
+  await t.step("Must generate unique ids", () => {
     const id = ObjectID(),
       iterations = 100000, // The number of parallel executions to simulate
       generatedIds = new Set<string>(); // Set to store the generated IDs
@@ -12,7 +12,7 @@ Deno.test('id.objectId', async (t) => {
     asserts.assertEquals(generatedIds.size, iterations); // Ensure the ID is unique
   });
 
-  await t.step('Ensure the ID is in sequence', () => {
+  await t.step("Ensure the ID is in sequence", () => {
     const id = ObjectID(),
       res1 = id(),
       res2 = id();
@@ -23,20 +23,20 @@ Deno.test('id.objectId', async (t) => {
     ); // Ensure the ID is in sequence
   });
 
-  await t.step('Change seed and length', () => {
+  await t.step("Change seed and length", () => {
     const id = ObjectID(3251),
       res1 = id();
-    asserts.assertEquals(res1.endsWith('3252'), true);
+    asserts.assertEquals(res1.endsWith("3252"), true);
   });
 
-  await t.step('Custom machine ID', () => {
-    const id = ObjectID(0, 'aaa'),
+  await t.step("Custom machine ID", () => {
+    const id = ObjectID(0, "aaa"),
       res1 = id();
-    asserts.assertEquals(res1.substring(11, 14), 'aaa');
+    asserts.assertEquals(res1.substring(11, 14), "aaa");
   });
 
   // Additional test cases
-  await t.step('Timestamp portion should reflect current time', () => {
+  await t.step("Timestamp portion should reflect current time", () => {
     const id = ObjectID();
     const result = id();
     const timestampHex = result.substring(0, 8);
@@ -47,8 +47,8 @@ Deno.test('id.objectId', async (t) => {
     asserts.assert(Math.abs(timestamp - currentTime) < 5); // Within 5 seconds
   });
 
-  await t.step('Process ID portion should be consistent', () => {
-    const id = ObjectID(0, 'xyz');
+  await t.step("Process ID portion should be consistent", () => {
+    const id = ObjectID(0, "xyz");
     const result1 = id();
     const result2 = id();
 
@@ -63,7 +63,7 @@ Deno.test('id.objectId', async (t) => {
     asserts.assertEquals(processId1.includes(expectedProcessId), true);
   });
 
-  await t.step('Multiple instances should have different machine IDs', () => {
+  await t.step("Multiple instances should have different machine IDs", () => {
     // Create two ObjectID generators without specifying machine ID
     const id1 = ObjectID();
     const id2 = ObjectID();
@@ -80,7 +80,7 @@ Deno.test('id.objectId', async (t) => {
     asserts.assertNotEquals(machineId1, machineId2);
   });
 
-  await t.step('Counter should wrap correctly for consecutive calls', () => {
+  await t.step("Counter should wrap correctly for consecutive calls", () => {
     const id = ObjectID(999);
     const results = [];
 
@@ -100,14 +100,14 @@ Deno.test('id.objectId', async (t) => {
   });
 
   await t.step(
-    'must throw if machineIdLength is less than 1 characters',
+    "must throw if machineIdLength is less than 1 characters",
     () => {
       asserts.assertThrows(
         () => {
-          ObjectID(0, 'a', 0);
+          ObjectID(0, "a", 0);
         },
         Error,
-        'Machine ID length must be at least 1',
+        "Machine ID length must be at least 1",
       );
     },
   );

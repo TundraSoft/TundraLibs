@@ -1,5 +1,5 @@
-import * as asserts from '$asserts';
-import { nanoID, ObjectID, sequenceID, simpleID } from './mod.ts';
+import * as asserts from "$asserts";
+import { nanoID, ObjectID, sequenceID, simpleID } from "./mod.ts";
 
 /**
  * Calculates the theoretical collision probability for random IDs
@@ -23,8 +23,8 @@ function birthdayProbability(space: number, attempts: number): number {
   return 1 - probability;
 }
 
-Deno.test('id.collisionResistance', async (t) => {
-  await t.step('simpleID collision test with parallel generation', () => {
+Deno.test("id.collisionResistance", async (t) => {
+  await t.step("simpleID collision test with parallel generation", () => {
     const iterations = 100000;
     const generator = simpleID(0, 6); // 6-digit counter
     const ids = new Set<string>();
@@ -41,7 +41,7 @@ Deno.test('id.collisionResistance', async (t) => {
   });
 
   await t.step(
-    'sequenceID collision test with parallel generation',
+    "sequenceID collision test with parallel generation",
     () => {
       const iterations = 100000;
       const ids = new Set<string>();
@@ -60,7 +60,7 @@ Deno.test('id.collisionResistance', async (t) => {
     },
   );
 
-  await t.step('ObjectID collision test with parallel generation', () => {
+  await t.step("ObjectID collision test with parallel generation", () => {
     const iterations = 100000;
     const generator = ObjectID();
     const ids = new Set<string>();
@@ -74,7 +74,7 @@ Deno.test('id.collisionResistance', async (t) => {
     asserts.assertEquals(ids.size, iterations);
   });
 
-  await t.step('nanoID collision probability analysis', () => {
+  await t.step("nanoID collision probability analysis", () => {
     // For a 21-character ID with 64 possible characters per position
     // The ID space is 64^21 = 2^126, which is enormous
 
@@ -95,11 +95,11 @@ Deno.test('id.collisionResistance', async (t) => {
     // The probability should be extremely low
     asserts.assert(
       oneMillionIds < 1e-20,
-      'Collision probability should be negligible for 1M IDs',
+      "Collision probability should be negligible for 1M IDs",
     );
   });
 
-  await t.step('nanoID collision test with different lengths', () => {
+  await t.step("nanoID collision test with different lengths", () => {
     // Test with shorter IDs to verify collision resistance scales properly
     const iterations = 10000;
     const lengths = [8, 12, 16, 21];
@@ -132,13 +132,13 @@ Deno.test('id.collisionResistance', async (t) => {
     }
   });
 
-  await t.step('Measure ID generation throughput for stress scenario', () => {
+  await t.step("Measure ID generation throughput for stress scenario", () => {
     const iterations = 50000;
     const methods = [
-      { name: 'simpleID', fn: simpleID() },
-      { name: 'sequenceID', fn: () => sequenceID() },
-      { name: 'ObjectID', fn: ObjectID() },
-      { name: 'nanoID', fn: () => nanoID() },
+      { name: "simpleID", fn: simpleID() },
+      { name: "sequenceID", fn: () => sequenceID() },
+      { name: "ObjectID", fn: ObjectID() },
+      { name: "nanoID", fn: () => nanoID() },
     ];
 
     // Measure throughput in IDs per second

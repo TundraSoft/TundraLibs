@@ -1,10 +1,10 @@
-export { jsonFormatter } from './jsonFormatter.ts';
+export { jsonFormatter } from "./jsonFormatter.ts";
 export {
   defaultMaskingFormatter,
   type MaskingConfig,
   maskingFormatter,
   MaskingStrategy,
-} from './maskingFormatter.ts';
+} from "./maskingFormatter.ts";
 export {
   compactFormat,
   detailedFormat,
@@ -12,4 +12,4 @@ export {
   minimalistFormat,
   simpleFormatter,
   standardFormat,
-} from './string.ts';
+} from "./string.ts";

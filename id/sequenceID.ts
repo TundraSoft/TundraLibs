@@ -78,7 +78,7 @@ function initSequenceID(counter: number = 0) {
   return (cnt?: number): bigint => {
     if (cnt !== undefined) {
       if (cnt < 0) {
-        throw new Error('Counter cannot be negative');
+        throw new Error("Counter cannot be negative");
       }
       currentCounter = cnt;
     }
@@ -133,7 +133,7 @@ export function sequenceID(
 ): (counter?: number) => bigint {
   if (cnt !== undefined) {
     if (cnt < 0) {
-      throw new Error('Counter cannot be negative');
+      throw new Error("Counter cannot be negative");
     }
   }
   // Use the appropriate generator

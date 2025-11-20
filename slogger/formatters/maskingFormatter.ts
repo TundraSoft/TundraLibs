@@ -1,5 +1,5 @@
-import type { SloggerFormatter, SlogObject } from '../types/mod.ts';
-import { jsonFormatter } from './jsonFormatter.ts';
+import type { SloggerFormatter, SlogObject } from "../types/mod.ts";
+import { jsonFormatter } from "./jsonFormatter.ts";
 
 /**
  * Masking strategy to use for sensitive fields
@@ -39,22 +39,22 @@ export type MaskingConfig = {
  * Default sensitive field names to mask
  */
 const DEFAULT_SENSITIVE_FIELDS = [
-  'password',
-  'passwd',
-  'secret',
-  'credential',
-  'token',
-  'apiKey',
-  'api_key',
-  'auth',
-  'key',
-  'private',
-  'cvv',
-  'ssn',
-  'creditCard',
-  'credit_card',
-  'cardNumber',
-  'card_number',
+  "password",
+  "passwd",
+  "secret",
+  "credential",
+  "token",
+  "apiKey",
+  "api_key",
+  "auth",
+  "key",
+  "private",
+  "cvv",
+  "ssn",
+  "creditCard",
+  "credit_card",
+  "cardNumber",
+  "card_number",
 ];
 
 /**
@@ -81,7 +81,7 @@ const DEFAULT_SENSITIVE_PATTERNS = [
 function maskValue(value: string, config: Required<MaskingConfig>): string {
   const length = value.length;
 
-  if (length === 0) return '';
+  if (length === 0) return "";
 
   switch (config.strategy) {
     case MaskingStrategy.FULL: {
@@ -130,19 +130,19 @@ function maskObject(
       key.toLowerCase().includes(field.toLowerCase())
     );
 
-    if (isSensitive && typeof value === 'string') {
+    if (isSensitive && typeof value === "string") {
       // Mask sensitive string values
       result[key] = maskValue(value, config);
-    } else if (isSensitive && typeof value === 'number') {
+    } else if (isSensitive && typeof value === "number") {
       // Convert numbers to strings before masking
       result[key] = maskValue(String(value), config);
     } else if (
-      config.recursive && typeof value === 'object' && value !== null
+      config.recursive && typeof value === "object" && value !== null
     ) {
       // Recursively process nested objects
       if (Array.isArray(value)) {
         result[key] = value.map((item) =>
-          typeof item === 'object' && item !== null
+          typeof item === "object" && item !== null
             ? maskObject(item as Record<string, unknown>, config)
             : item
         );
@@ -189,7 +189,7 @@ export function maskingFormatter(
     sensitiveFields: config.sensitiveFields || [...DEFAULT_SENSITIVE_FIELDS],
     sensitivePatterns: config.sensitivePatterns ||
       [...DEFAULT_SENSITIVE_PATTERNS],
-    maskChar: config.maskChar || '*',
+    maskChar: config.maskChar || "*",
     strategy: config.strategy ?? MaskingStrategy.FULL,
     showChars: config.showChars || 4,
     recursive: config.recursive !== false,
@@ -205,7 +205,7 @@ export function maskingFormatter(
     clonedLog.message = maskMessage(clonedLog.message, fullConfig);
 
     // Mask sensitive fields in the context
-    if (clonedLog.context && typeof clonedLog.context === 'object') {
+    if (clonedLog.context && typeof clonedLog.context === "object") {
       clonedLog.context = maskObject(
         clonedLog.context,
         fullConfig,

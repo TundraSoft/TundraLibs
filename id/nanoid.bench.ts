@@ -6,7 +6,7 @@ import {
   NUMBERS,
   PASSWORD,
   WEB_SAFE,
-} from './mod.ts';
+} from "./mod.ts";
 
 Deno.bench({
   name: `id.Generate nanoID of length 10 characters using alphabets`,

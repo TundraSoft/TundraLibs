@@ -2,14 +2,14 @@ import {
   SyslogSeverities,
   SyslogSeverity,
   variableReplacer,
-} from '@tundralibs/utils';
-import { ulid } from '@tundralibs/id';
-import { AbstractHandler, type HandlerOptions } from './handlers/mod.ts';
-import type { SloggerFormatter, SlogObject } from './types/mod.ts';
-import { LogManager } from './LogManager.ts';
-import { SamplingOptions } from './handlers/AbstractHandler.ts';
+} from "@tundralibs/utils";
+import { ulid } from "@tundralibs/id";
+import { AbstractHandler, type HandlerOptions } from "./handlers/mod.ts";
+import type { SloggerFormatter, SlogObject } from "./types/mod.ts";
+import { LogManager } from "./LogManager.ts";
+import { SamplingOptions } from "./handlers/AbstractHandler.ts";
 
-export type SloggerHandlerOption = Omit<HandlerOptions, 'formatter'> & {
+export type SloggerHandlerOption = Omit<HandlerOptions, "formatter"> & {
   formatter?: string | SloggerFormatter;
 };
 
@@ -41,17 +41,17 @@ export class Slogger {
   constructor(options: SloggerOptions) {
     // Validate basic options
     if (
-      !options.appName || typeof options.appName !== 'string' ||
+      !options.appName || typeof options.appName !== "string" ||
       options.appName.length > 30
     ) {
-      throw new Error('appName must be a non-empty string with max length 30');
+      throw new Error("appName must be a non-empty string with max length 30");
     }
     this.appName = options.appName;
-    this.hostname = Deno.hostname() || 'localhost';
+    this.hostname = Deno.hostname() || "localhost";
 
     // Validate log level with more descriptive error
     if (
-      typeof options.level !== 'number' || options.level < 0 ||
+      typeof options.level !== "number" || options.level < 0 ||
       options.level > 7
     ) {
       throw new Error(
@@ -66,7 +66,7 @@ export class Slogger {
     }
 
     // Register cleanup on process exit
-    addEventListener('unload', this._unload.bind(this));
+    addEventListener("unload", this._unload.bind(this));
   }
 
   /**
@@ -74,7 +74,7 @@ export class Slogger {
    * @private
    */
   private _initializeHandlers(
-    handlers: SloggerOptions['handlers'],
+    handlers: SloggerOptions["handlers"],
     sampling?: SamplingOptions,
   ): void {
     // Handle both array (new) and object (legacy) formats
@@ -85,27 +85,27 @@ export class Slogger {
           const { name, type, ...options } = handlerConfig;
 
           // Validate handler options
-          if (!name || typeof name !== 'string') {
-            throw new Error('Handler requires a valid name string');
+          if (!name || typeof name !== "string") {
+            throw new Error("Handler requires a valid name string");
           }
 
-          if (!type || typeof type !== 'string') {
+          if (!type || typeof type !== "string") {
             throw new Error(`Handler '${name}' requires a valid type string`);
           }
 
-          if (typeof options.level !== 'number') {
+          if (typeof options.level !== "number") {
             throw new Error(`Handler '${name}' requires a valid log level`);
           }
 
           // Resolve formatter if provided as string
           if (options.formatter) {
-            if (typeof options.formatter === 'string') {
+            if (typeof options.formatter === "string") {
               const formatter = LogManager.getFormatter(options.formatter);
               if (!formatter) {
                 throw new Error(`Formatter '${options.formatter}' not found`);
               }
               options.formatter = formatter;
-            } else if (typeof options.formatter !== 'function') {
+            } else if (typeof options.formatter !== "function") {
               throw new Error(
                 `Formatter for handler '${name}' must be a string or function`,
               );
@@ -143,7 +143,7 @@ export class Slogger {
    */
   public registerHandler(handler: AbstractHandler): void {
     if (!(handler instanceof AbstractHandler)) {
-      throw new Error('Handler must be an instance of AbstractHandler');
+      throw new Error("Handler must be an instance of AbstractHandler");
     }
     this._handlers.push(handler);
   }
@@ -167,7 +167,7 @@ export class Slogger {
     }
 
     // Lazy evaluation of context
-    const resolvedContext = typeof context === 'function' ? context() : context;
+    const resolvedContext = typeof context === "function" ? context() : context;
 
     // Lazy message processing only when needed
     const processedMessage = variableReplacer(message, resolvedContext);

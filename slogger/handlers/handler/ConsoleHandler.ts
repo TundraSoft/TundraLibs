@@ -1,6 +1,6 @@
-import type { SlogObject } from '../../types/Object.ts';
-import { AbstractHandler, type HandlerOptions } from '../AbstractHandler.ts';
-import { blue, bold, brightYellow, red, yellow } from '$fmt/colors';
+import type { SlogObject } from "../../types/Object.ts";
+import { AbstractHandler, type HandlerOptions } from "../AbstractHandler.ts";
+import { blue, bold, brightYellow, red, yellow } from "$fmt/colors";
 
 /**
  * Configuration options for Console handler
@@ -17,7 +17,7 @@ export type ConsoleHandlerOptions = HandlerOptions & {
  * colorization based on log level.
  */
 export class ConsoleHandler extends AbstractHandler {
-  public readonly mode = 'console';
+  public readonly mode = "console";
 
   protected _colorize: boolean;
 

@@ -1,8 +1,8 @@
-import * as asserts from '$asserts';
-import { sequenceID } from './mod.ts';
+import * as asserts from "$asserts";
+import { sequenceID } from "./mod.ts";
 
-Deno.test('id.sequenceId', async (t) => {
-  await t.step('ensure the values are in sequence', () => {
+Deno.test("id.sequenceId", async (t) => {
+  await t.step("ensure the values are in sequence", () => {
     for (let i = 0; i < 100; i++) {
       const seq = sequenceID();
       const res1 = seq(),
@@ -11,14 +11,14 @@ Deno.test('id.sequenceId', async (t) => {
     }
   });
 
-  await t.step('ensure the sequence is getting overridden', () => {
+  await t.step("ensure the sequence is getting overridden", () => {
     const seq = sequenceID();
     const res1 = seq(),
       res2 = seq(3251);
     asserts.assertNotEquals(res2, res1 + 1n);
   });
 
-  await t.step('check for collission on sample set of 100000', () => {
+  await t.step("check for collission on sample set of 100000", () => {
     const iterations = 100000; // The number of parallel executions to simulate
     const generatedIds = new Set<bigint>(); // Set to store the generated IDs
     const seq = sequenceID();
@@ -35,23 +35,23 @@ Deno.test('id.sequenceId', async (t) => {
   });
 
   // Additional test cases
-  await t.step('handle very large override values', () => {
+  await t.step("handle very large override values", () => {
     const largeNumber = Number.MAX_SAFE_INTEGER;
     const seq = sequenceID(largeNumber);
     const id = seq();
-    asserts.assertEquals(typeof id, 'bigint');
+    asserts.assertEquals(typeof id, "bigint");
     const nextId = seq();
     asserts.assertEquals(nextId - id, 1n);
   });
 
-  await t.step('handle zero as override value', () => {
+  await t.step("handle zero as override value", () => {
     const seq = sequenceID(0);
     const id = seq();
-    asserts.assertEquals(typeof id, 'bigint');
+    asserts.assertEquals(typeof id, "bigint");
     asserts.assertEquals(id >= 0n, true);
   });
 
-  await t.step('verify sequence persistence after multiple calls', () => {
+  await t.step("verify sequence persistence after multiple calls", () => {
     const seq = sequenceID();
     const startId = seq();
     const calls = 10;
@@ -66,7 +66,7 @@ Deno.test('id.sequenceId', async (t) => {
     asserts.assertEquals(lastId - startId, BigInt(calls));
   });
 
-  await t.step('test cross-instance collision resistance', () => {
+  await t.step("test cross-instance collision resistance", () => {
     // Create multiple sequences at the same time
     const sequences = [];
     const count = 100;
@@ -80,13 +80,13 @@ Deno.test('id.sequenceId', async (t) => {
     asserts.assertEquals(uniqueSequences.size, count);
   });
 
-  await t.step('test negative counter value', () => {
+  await t.step("test negative counter value", () => {
     asserts.assertThrows(
       () => sequenceID(-1),
       Error,
-      'Counter cannot be negative',
+      "Counter cannot be negative",
     );
     const d = sequenceID(10);
-    asserts.assertThrows(() => d(-1), Error, 'Counter cannot be negative');
+    asserts.assertThrows(() => d(-1), Error, "Counter cannot be negative");
   });
 });

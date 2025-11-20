@@ -1,7 +1,7 @@
-import { ConsoleHandler } from './ConsoleHandler.ts';
-import { SyslogSeverities } from '@tundralibs/utils';
-import { SlogObject } from '../../types/mod.ts';
-import { jsonFormatter, simpleFormatter } from '../../formatters/mod.ts';
+import { ConsoleHandler } from "./ConsoleHandler.ts";
+import { SyslogSeverities } from "@tundralibs/utils";
+import { SlogObject } from "../../types/mod.ts";
+import { jsonFormatter, simpleFormatter } from "../../formatters/mod.ts";
 
 // Helper to create a standard log object for benchmarking
 const makeLogObject = (
@@ -9,10 +9,10 @@ const makeLogObject = (
   message: string,
   context: Record<string, unknown> = {},
 ): SlogObject => ({
-  id: '1',
-  appName: 'benchApp',
-  hostname: 'localhost',
-  levelName: 'INFO',
+  id: "1",
+  appName: "benchApp",
+  hostname: "localhost",
+  levelName: "INFO",
   level,
   context,
   message,
@@ -23,18 +23,18 @@ const makeLogObject = (
 
 // Benchmark ConsoleHandler with simple formatter
 Deno.bench({
-  name: 'slogger.ConsoleHandler Simple - Formatter',
+  name: "slogger.ConsoleHandler Simple - Formatter",
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
-    const handler = new ConsoleHandler('benchHandler', {
+    const handler = new ConsoleHandler("benchHandler", {
       level: 7,
-      formatter: simpleFormatter('${date} [${levelName}] ${message}'),
+      formatter: simpleFormatter("${date} [${levelName}] ${message}"),
     });
 
     await handler.init();
     await handler.handle(
-      makeLogObject(SyslogSeverities.INFO, 'Benchmark message'),
+      makeLogObject(SyslogSeverities.INFO, "Benchmark message"),
     );
     await handler.finalize();
     console.log = c.log; // Restore console output
@@ -43,21 +43,21 @@ Deno.bench({
 
 // Benchmark ConsoleHandler with JSON formatter
 Deno.bench({
-  name: 'slogger.ConsoleHandler JSON - Formatter',
+  name: "slogger.ConsoleHandler JSON - Formatter",
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
-    const handler = new ConsoleHandler('benchHandler', {
+    const handler = new ConsoleHandler("benchHandler", {
       level: 7,
       formatter: jsonFormatter,
     });
 
     await handler.init();
     await handler.handle(
-      makeLogObject(SyslogSeverities.INFO, 'JSON benchmark message', {
+      makeLogObject(SyslogSeverities.INFO, "JSON benchmark message", {
         timestamp: Date.now(),
         randomData: Math.random(),
-        nestedObject: { key: 'value', number: 42 },
+        nestedObject: { key: "value", number: 42 },
       }),
     );
     await handler.finalize();
@@ -67,17 +67,17 @@ Deno.bench({
 
 // Benchmark ConsoleHandler with large messages
 Deno.bench({
-  name: 'slogger.ConsoleHandler Large - Messages (1KB)',
+  name: "slogger.ConsoleHandler Large - Messages (1KB)",
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
-    const handler = new ConsoleHandler('benchHandler', {
+    const handler = new ConsoleHandler("benchHandler", {
       level: 7,
-      formatter: simpleFormatter('${message}'),
+      formatter: simpleFormatter("${message}"),
     });
 
     await handler.init();
-    const largeMessage = 'X'.repeat(1024); // 1KB message
+    const largeMessage = "X".repeat(1024); // 1KB message
     await handler.handle(makeLogObject(SyslogSeverities.INFO, largeMessage));
     await handler.finalize();
     console.log = c.log; // Restore console output
@@ -86,18 +86,18 @@ Deno.bench({
 
 // Benchmark ConsoleHandler with different severity levels
 Deno.bench({
-  name: 'slogger.ConsoleHandler Emergency - Level',
+  name: "slogger.ConsoleHandler Emergency - Level",
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
-    const handler = new ConsoleHandler('benchHandler', {
+    const handler = new ConsoleHandler("benchHandler", {
       level: 7,
-      formatter: simpleFormatter('[${levelName}] ${message}'),
+      formatter: simpleFormatter("[${levelName}] ${message}"),
     });
 
     await handler.init();
     await handler.handle(
-      makeLogObject(SyslogSeverities.EMERGENCY, 'Emergency message'),
+      makeLogObject(SyslogSeverities.EMERGENCY, "Emergency message"),
     );
     await handler.finalize();
     console.log = c.log; // Restore console output
@@ -106,18 +106,18 @@ Deno.bench({
 
 // Benchmark ConsoleHandler with debug level
 Deno.bench({
-  name: 'slogger.ConsoleHandler Debug - Level',
+  name: "slogger.ConsoleHandler Debug - Level",
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
-    const handler = new ConsoleHandler('benchHandler', {
+    const handler = new ConsoleHandler("benchHandler", {
       level: 7,
-      formatter: simpleFormatter('[${levelName}] ${message}'),
+      formatter: simpleFormatter("[${levelName}] ${message}"),
     });
 
     await handler.init();
     await handler.handle(
-      makeLogObject(SyslogSeverities.DEBUG, 'Debug message'),
+      makeLogObject(SyslogSeverities.DEBUG, "Debug message"),
     );
     await handler.finalize();
     console.log = c.log; // Restore console output
@@ -126,11 +126,11 @@ Deno.bench({
 
 // Benchmark ConsoleHandler with structured data
 Deno.bench({
-  name: 'slogger.ConsoleHandler Structured Context - Data',
+  name: "slogger.ConsoleHandler Structured Context - Data",
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
-    const handler = new ConsoleHandler('benchHandler', {
+    const handler = new ConsoleHandler("benchHandler", {
       level: 7,
       formatter: jsonFormatter,
     });
@@ -138,12 +138,12 @@ Deno.bench({
     await handler.init();
 
     const complexContext = {
-      user: { id: 42, name: 'User42', email: 'user42@example.com' },
+      user: { id: 42, name: "User42", email: "user42@example.com" },
       request: {
-        method: 'POST',
-        url: '/api/endpoint',
-        headers: { 'Content-Type': 'application/json' },
-        body: { action: 'benchmark' },
+        method: "POST",
+        url: "/api/endpoint",
+        headers: { "Content-Type": "application/json" },
+        body: { action: "benchmark" },
       },
       performance: {
         startTime: Date.now(),
@@ -151,15 +151,15 @@ Deno.bench({
         memoryUsage: Math.random() * 100,
       },
       metadata: {
-        version: '1.0.0',
-        environment: 'benchmark',
-        tags: ['performance', 'test'],
+        version: "1.0.0",
+        environment: "benchmark",
+        tags: ["performance", "test"],
       },
     };
 
     await handler.handle(makeLogObject(
       SyslogSeverities.INFO,
-      'Complex structured log entry',
+      "Complex structured log entry",
       complexContext,
     ));
 
@@ -170,13 +170,13 @@ Deno.bench({
 
 // Benchmark ConsoleHandler initialization overhead
 Deno.bench({
-  name: 'slogger.ConsoleHandler - Init/Finalize Overhead',
+  name: "slogger.ConsoleHandler - Init/Finalize Overhead",
   async fn() {
     const c = console;
     console.log = () => {}; // Suppress console output during benchmark
-    const handler = new ConsoleHandler('benchHandler', {
+    const handler = new ConsoleHandler("benchHandler", {
       level: 7,
-      formatter: simpleFormatter('${date} [${levelName}] ${message}'),
+      formatter: simpleFormatter("${date} [${levelName}] ${message}"),
     });
 
     await handler.init();

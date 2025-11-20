@@ -30,13 +30,13 @@
  */
 
 /** Numeric characters 0-9 */
-export const NUMBERS = '0123456789';
+export const NUMBERS = "0123456789";
 
 /** Lowercase alphabetic characters a-z */
-export const ALPHABETS = 'abcdefghijklmnopqrstuvwxyz';
+export const ALPHABETS = "abcdefghijklmnopqrstuvwxyz";
 
 /** Web-safe characters: a-z, A-Z, 0-9, _, - (URL-safe) */
-export const WEB_SAFE = ALPHABETS + '_' + NUMBERS + '-';
+export const WEB_SAFE = ALPHABETS + "_" + NUMBERS + "-";
 
 /** Alphanumeric characters: a-z, A-Z, 0-9 */
 export const ALPHA_NUMERIC: string = ALPHABETS + NUMBERS +
@@ -46,7 +46,7 @@ export const ALPHA_NUMERIC: string = ALPHABETS + NUMBERS +
 export const ALPHA_NUMERIC_CASE = ALPHABETS + NUMBERS;
 
 /** Password-safe characters including special symbols */
-export const PASSWORD = '!@$%^&*' + WEB_SAFE;
+export const PASSWORD = "!@$%^&*" + WEB_SAFE;
 
 /**
  * Generates an array of cryptographically secure random numbers.
@@ -65,7 +65,7 @@ export const PASSWORD = '!@$%^&*' + WEB_SAFE;
  */
 const random = function (length: number): Uint32Array {
   if (length < 1) {
-    throw new Error('Length must be greater than 0');
+    throw new Error("Length must be greater than 0");
   }
   return crypto.getRandomValues(new Uint32Array(length));
 };
@@ -103,15 +103,15 @@ const random = function (length: number): Uint32Array {
 export function nanoID(size = 21, base: string = WEB_SAFE): string {
   // Input validation
   if (size < 1) {
-    throw new Error('Size should be greater than 0');
+    throw new Error("Size should be greater than 0");
   }
 
   if (!base || base.length === 0) {
-    throw new Error('Base string cannot be empty');
+    throw new Error("Base string cannot be empty");
   }
 
   // Performance optimizations
-  let id = '';
+  let id = "";
   let i = 0;
 
   // Calculate mask based on base length

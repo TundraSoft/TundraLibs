@@ -1,9 +1,9 @@
-import type { SlogObject } from '../../types/Object.ts';
-import { AbstractHandler, type HandlerOptions } from '../AbstractHandler.ts';
-import * as path from '$path';
-import { ensureDirSync } from '$fs';
-import { format } from '$date';
-import { SyslogSeverities, variableReplacer } from '@tundralibs/utils';
+import type { SlogObject } from "../../types/Object.ts";
+import { AbstractHandler, type HandlerOptions } from "../AbstractHandler.ts";
+import * as path from "$path";
+import { ensureDirSync } from "$fs";
+import { format } from "$date";
+import { SyslogSeverities, variableReplacer } from "@tundralibs/utils";
 
 /**
  * Configuration options for the File handler
@@ -27,7 +27,7 @@ export type FileHandlerOptions = HandlerOptions & {
  * for better performance.
  */
 export class FileHandler extends AbstractHandler {
-  public readonly mode = 'file';
+  public readonly mode = "file";
   protected _storePath: string;
   protected _fileName: string;
   private readonly _maxFileSize: number;
@@ -55,37 +55,37 @@ export class FileHandler extends AbstractHandler {
     super(name, options);
     const variables = {
       name: this.name,
-      date: format(new Date(), 'YYYY-MM-dd'),
-      day: format(new Date(), 'dd'),
-      month: format(new Date(), 'MM'),
-      year: format(new Date(), 'YYYY'),
-      hour: format(new Date(), 'HH'),
+      date: format(new Date(), "YYYY-MM-dd"),
+      day: format(new Date(), "dd"),
+      month: format(new Date(), "MM"),
+      year: format(new Date(), "YYYY"),
+      hour: format(new Date(), "HH"),
     };
     // Validate store path
-    if (!options.storePath || typeof options.storePath !== 'string') {
-      throw new Error('FileHandler requires a valid storePath string');
+    if (!options.storePath || typeof options.storePath !== "string") {
+      throw new Error("FileHandler requires a valid storePath string");
     }
     this._storePath = options.storePath;
 
     // Validate file name
-    if (!options.fileName || typeof options.fileName !== 'string') {
-      throw new Error('FileHandler requires a valid fileName string');
+    if (!options.fileName || typeof options.fileName !== "string") {
+      throw new Error("FileHandler requires a valid fileName string");
     }
     this._fileName = options.fileName;
 
     // Validate max file size
     if (
-      options.maxFileSize && (typeof options.maxFileSize !== 'number' ||
+      options.maxFileSize && (typeof options.maxFileSize !== "number" ||
         options.maxFileSize <= 0)
     ) {
-      throw new Error('FileHandler requires a positive maxFileSize');
+      throw new Error("FileHandler requires a positive maxFileSize");
     }
     this._maxFileSize = (options.maxFileSize || 50) * 1024 * 1024; // Default to 50MB
 
     // Set buffer size
     this._bufferSize = options.bufferSize ?? 4096;
     if (this._bufferSize <= 0) {
-      throw new Error('FileHandler batchSize must be a positive number');
+      throw new Error("FileHandler batchSize must be a positive number");
     }
 
     this.__buffer = new Uint8Array(this._bufferSize);
@@ -106,11 +106,11 @@ export class FileHandler extends AbstractHandler {
       // Ensure the directory exists before creating the file
       const variables = {
         name: this.name,
-        date: format(new Date(), 'YYYY-MM-dd'),
-        day: format(new Date(), 'dd'),
-        month: format(new Date(), 'MM'),
-        year: format(new Date(), 'YYYY'),
-        hour: format(new Date(), 'HH'),
+        date: format(new Date(), "YYYY-MM-dd"),
+        day: format(new Date(), "dd"),
+        month: format(new Date(), "MM"),
+        year: format(new Date(), "YYYY"),
+        hour: format(new Date(), "HH"),
       };
 
       const expandedStorePath = variableReplacer(this._storePath, variables);
@@ -189,10 +189,10 @@ export class FileHandler extends AbstractHandler {
    */
   protected override async _handle(message: string): Promise<void> {
     if (!this.__fileHandle) {
-      throw new Error('FileHandler not initialized - call init() first');
+      throw new Error("FileHandler not initialized - call init() first");
     }
 
-    const encodedMessage = this.__encoder.encode(message + '\n');
+    const encodedMessage = this.__encoder.encode(message + "\n");
     const messageLength = encodedMessage.length;
 
     // Check if single message is larger than buffer size
@@ -242,7 +242,7 @@ export class FileHandler extends AbstractHandler {
    */
   private async __writeDirectToFile(data: Uint8Array): Promise<void> {
     if (!this.__fileHandle) {
-      throw new Error('File handle is not available');
+      throw new Error("File handle is not available");
     }
 
     let written = 0;
@@ -252,7 +252,7 @@ export class FileHandler extends AbstractHandler {
       );
       if (bytesWritten === null || bytesWritten === 0) {
         throw new Error(
-          'Failed to write to file - write returned null or zero bytes',
+          "Failed to write to file - write returned null or zero bytes",
         );
       }
       written += bytesWritten;
@@ -285,7 +285,7 @@ export class FileHandler extends AbstractHandler {
     }
 
     // Create new filename with timestamp
-    const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm-ss');
+    const timestamp = format(new Date(), "yyyy-MM-dd_HH-mm-ss");
     const dir = path.dirname(this._logFile);
     const base = path.basename(this._logFile);
     const rotatedFile = path.join(dir, `${base}_${timestamp}`);
