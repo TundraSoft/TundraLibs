@@ -2,7 +2,9 @@
 
 ## ✅ **Complete BIP39 Implementation with Ethereum Integration**
 
-This document summarizes the comprehensive BIP39 implementation that generates cryptographically secure mnemonic phrases and derives Ethereum wallets for testnet use.
+This document summarizes the comprehensive BIP39 implementation that generates
+cryptographically secure mnemonic phrases and derives Ethereum wallets for
+testnet use.
 
 ## 🧪 **Test Results Summary**
 
@@ -91,7 +93,7 @@ const mnemonic = await generate12WordSeed();
 // With passphrase
 const secure = await generateBIP39Mnemonic({
   wordCount: 24,
-  passphrase: 'my-secure-passphrase',
+  passphrase: "my-secure-passphrase",
 });
 
 // Validation
@@ -150,8 +152,10 @@ crypt/generators/
 The consolidated test suite (`bip39.test.ts`) provides comprehensive coverage:
 
 - **✅ Core BIP39 Functions**: Generation, validation, seed derivation
-- **✅ Ethereum Integration**: Key derivation, address generation, HD wallet structure
-- **✅ Security Validation**: Entropy quality, uniqueness, deterministic behavior
+- **✅ Ethereum Integration**: Key derivation, address generation, HD wallet
+  structure
+- **✅ Security Validation**: Entropy quality, uniqueness, deterministic
+  behavior
 - **✅ Performance Testing**: Speed and scalability measurements
 - **✅ Edge Cases**: Invalid inputs, error handling, boundary conditions
 - **✅ Real-world Usage**: MetaMask import, testnet compatibility

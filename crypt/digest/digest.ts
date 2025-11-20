@@ -1,5 +1,5 @@
-import { encodeHex } from '$encoding';
-import type { DigestAlgorithms } from './types.ts';
+import { encodeHex } from "$encoding";
+import type { DigestAlgorithms } from "./types.ts";
 
 /**
  * Generates a cryptographic hash of the given data using the specified algorithm.
@@ -35,11 +35,11 @@ export const digest = async (
   algorithm: DigestAlgorithms,
   data: string | Uint8Array,
 ): Promise<string> => {
-  if (!['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'].includes(algorithm)) {
-    throw new Error('The provided algorithm name is not supported');
+  if (!["SHA-1", "SHA-256", "SHA-384", "SHA-512"].includes(algorithm)) {
+    throw new Error("The provided algorithm name is not supported");
   }
 
-  const dataToHash = typeof data === 'string'
+  const dataToHash = typeof data === "string"
     ? new TextEncoder().encode(data)
     : data;
 

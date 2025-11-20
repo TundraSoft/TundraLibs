@@ -1,6 +1,6 @@
-import { BaseError } from '@tundralibs/utils';
+import { BaseError } from "@tundralibs/utils";
 
-import type { JWTHeader, JWTPayload } from './types.ts';
+import type { JWTHeader, JWTPayload } from "./types.ts";
 
 /**
  * Standard JWT error codes and their corresponding messages.
@@ -24,29 +24,29 @@ import type { JWTHeader, JWTPayload } from './types.ts';
  */
 export const JWTErrorCodes = {
   /** JWT token has passed its expiration time */
-  EXPIRED_TOKEN: 'JWT token is expired',
+  EXPIRED_TOKEN: "JWT token is expired",
   /** JWT token is not yet valid (nbf claim) */
-  NOT_ACTIVE: 'JWT token is not yet active',
+  NOT_ACTIVE: "JWT token is not yet active",
   /** General JWT validation failure with specific cause */
-  INVALID_JWT: 'JWT token is invalid - ${causeMessage}',
+  INVALID_JWT: "JWT token is invalid - ${causeMessage}",
   /** Secret key is invalid, empty, or malformed */
-  INVALID_SECRET: 'Invalid or empty secret provided - ${causeMessage}',
+  INVALID_SECRET: "Invalid or empty secret provided - ${causeMessage}",
   /** Payload contains invalid data or structure */
-  INVALID_PAYLOAD: 'Invalid payload format or content - ${causeMessage}',
+  INVALID_PAYLOAD: "Invalid payload format or content - ${causeMessage}",
   /** JWT header is malformed or contains invalid data */
-  INVALID_HEADER: 'Invalid JWT header format - ${causeMessage}',
+  INVALID_HEADER: "Invalid JWT header format - ${causeMessage}",
   /** Signature verification failed */
-  INVALID_SIGNATURE: 'JWT signature verification failed - ${causeMessage}',
+  INVALID_SIGNATURE: "JWT signature verification failed - ${causeMessage}",
   /** Token format doesn't match JWT structure (header.payload.signature) */
-  INVALID_FORMAT: 'Invalid JWT token format - ${causeMessage}',
+  INVALID_FORMAT: "Invalid JWT token format - ${causeMessage}",
   /** Algorithm specified in header is not supported */
-  UNSUPPORTED_ALGORITHM: 'Unsupported JWT algorithm - ${causeMessage}',
+  UNSUPPORTED_ALGORITHM: "Unsupported JWT algorithm - ${causeMessage}",
   /** Standard or custom claims validation failed */
-  INVALID_CLAIMS: 'Invalid JWT claims - ${causeMessage}',
+  INVALID_CLAIMS: "Invalid JWT claims - ${causeMessage}",
   /** Token exceeds the maximum allowed age */
-  MAX_AGE_EXCEEDED: 'JWT exceeds maximum age',
+  MAX_AGE_EXCEEDED: "JWT exceeds maximum age",
   /** Unexpected error during JWT processing */
-  UNKNOWN_ERROR: 'Unknown JWT error - ${causeMessage}',
+  UNKNOWN_ERROR: "Unknown JWT error - ${causeMessage}",
 };
 
 /**
@@ -172,24 +172,24 @@ export class JWTError<
    * });
    * ```
    */
-  constructor(code: JWTErrorCode, meta?: Omit<M, 'code'>, cause?: Error) {
+  constructor(code: JWTErrorCode, meta?: Omit<M, "code">, cause?: Error) {
     const context: M = { code, ...meta } as M;
     if (!JWTErrorCodes[code]) {
       context.originalCode = code;
-      code = 'INVALID_JWT';
+      code = "INVALID_JWT";
     }
     context.code = code;
 
     // Handle template interpolation for causeMessage
     let message = JWTErrorCodes[code];
-    if (message.includes('${causeMessage}') && context.causeMessage) {
+    if (message.includes("${causeMessage}") && context.causeMessage) {
       message = message.replace(
-        '${causeMessage}',
+        "${causeMessage}",
         String(context.causeMessage),
       );
     }
 
     super(message, context, cause);
-    this.name = 'JWTError';
+    this.name = "JWTError";
   }
 }

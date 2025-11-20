@@ -14,7 +14,7 @@
  *
  * @see {@link https://tools.ietf.org/html/rfc7518#section-3.2} RFC 7518 - HMAC with SHA-2 Functions
  */
-export type JWTAlgorithm = 'HS256' | 'HS384' | 'HS512';
+export type JWTAlgorithm = "HS256" | "HS384" | "HS512";
 
 /**
  * JWT payload structure containing standard and custom claims.
@@ -82,7 +82,7 @@ export type JWTHeader = {
   /** Signing algorithm used */
   alg: JWTAlgorithm;
   /** Token type (always 'JWT') */
-  typ: 'JWT';
+  typ: "JWT";
 };
 
 /**

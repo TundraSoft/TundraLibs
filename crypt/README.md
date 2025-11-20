@@ -1,6 +1,8 @@
 # Crypt Module
 
-A comprehensive cryptographic library for Deno/TypeScript that provides secure encryption, hashing, JWT handling, and cryptographic key/secret generation capabilities.
+A comprehensive cryptographic library for Deno/TypeScript that provides secure
+encryption, hashing, JWT handling, and cryptographic key/secret generation
+capabilities.
 
 ## Features
 
@@ -21,7 +23,7 @@ import {
   generateBIP39Mnemonic,
   generateHexSecret,
   generateRSAKeyPair,
-} from './mod.ts';
+} from "./mod.ts";
 
 // Generate a BIP39 mnemonic seed phrase
 const mnemonic = await generateBIP39Mnemonic({ wordCount: 12 });
@@ -29,19 +31,19 @@ console.log(mnemonic.phrase);
 // Output: "abandon ability able about above absent absorb abstract absurd abuse access accident"
 
 // Generate RSA key pair
-const keyPair = await generateRSAKeyPair({ format: 'PEM' });
+const keyPair = await generateRSAKeyPair({ format: "PEM" });
 
 // Generate secure random secret
 const secret = generateHexSecret(32); // 32-byte hex string
 
 // Encrypt data with AES
-const plaintext = 'Secret message';
+const plaintext = "Secret message";
 const key = await crypto.subtle.generateKey(
-  { name: 'AES-GCM', length: 256 },
+  { name: "AES-GCM", length: 256 },
   false,
-  ['encrypt', 'decrypt'],
+  ["encrypt", "decrypt"],
 );
-const encrypted = await encryptAES(plaintext, key, 'GCM');
+const encrypted = await encryptAES(plaintext, key, "GCM");
 ```
 
 ## Module Structure
@@ -80,7 +82,7 @@ import {
   generateHexSecret,
   generatePassword,
   generateToken,
-} from './generators/mod.ts';
+} from "./generators/mod.ts";
 
 // Generate hex-encoded secret
 const hexSecret = generateHexSecret(32); // 64-character hex string
@@ -95,18 +97,18 @@ const password = generatePassword(16); // 16-character password
 #### Key Pair Generation
 
 ```typescript
-import { generateECKeyPair, generateRSAKeyPair } from './generators/mod.ts';
+import { generateECKeyPair, generateRSAKeyPair } from "./generators/mod.ts";
 
 // RSA key pairs
 const rsaKeys = await generateRSAKeyPair({
   modulusLength: 2048,
-  format: 'PEM',
+  format: "PEM",
 });
 
 // ECDSA key pairs
 const ecKeys = await generateECKeyPair({
-  namedCurve: 'P-256',
-  format: 'JWK',
+  namedCurve: "P-256",
+  format: "JWK",
 });
 ```
 
@@ -118,42 +120,42 @@ import {
   generate24WordSeed,
   generateBIP39Mnemonic,
   validateBIP39Mnemonic,
-} from './generators/mod.ts';
+} from "./generators/mod.ts";
 
 // Generate standard 12-word mnemonic
 const mnemonic12 = await generate12WordSeed();
 
 // Generate 24-word mnemonic with passphrase
-const mnemonic24 = await generate24WordSeed('my passphrase');
+const mnemonic24 = await generate24WordSeed("my passphrase");
 
 // Custom configuration
 const custom = await generateBIP39Mnemonic({
   wordCount: 15,
-  passphrase: 'secure passphrase',
+  passphrase: "secure passphrase",
   wordlist: customWordList, // Optional custom 2048-word list
 });
 
 // Validate existing mnemonic
-const isValid = await validateBIP39Mnemonic('abandon ability able...');
+const isValid = await validateBIP39Mnemonic("abandon ability able...");
 ```
 
 ### Encryption
 
 ```typescript
-import { decryptAES, encryptAES } from './crypt/mod.ts';
+import { decryptAES, encryptAES } from "./crypt/mod.ts";
 
 // Generate AES key
 const key = await crypto.subtle.generateKey(
-  { name: 'AES-GCM', length: 256 },
+  { name: "AES-GCM", length: 256 },
   false,
-  ['encrypt', 'decrypt'],
+  ["encrypt", "decrypt"],
 );
 
 // Encrypt with AES-GCM (default)
-const encrypted = await encryptAES('secret data', key);
+const encrypted = await encryptAES("secret data", key);
 
 // Encrypt with AES-CTR
-const encryptedCTR = await encryptAES('secret data', key, 'CTR');
+const encryptedCTR = await encryptAES("secret data", key, "CTR");
 
 // Decrypt
 const decrypted = await decryptAES(encrypted, key);
@@ -162,9 +164,9 @@ const decrypted = await decryptAES(encrypted, key);
 ### Hashing
 
 ```typescript
-import { sha1, sha256, sha512 } from './hash/mod.ts';
+import { sha1, sha256, sha512 } from "./hash/mod.ts";
 
-const data = 'Hello, World!';
+const data = "Hello, World!";
 
 const hash256 = await sha256(data);
 const hash512 = await sha512(data);
@@ -174,20 +176,20 @@ const hash1 = await sha1(data);
 ### JWT
 
 ```typescript
-import { createJWT, verifyJWT } from './jwt/mod.ts';
+import { createJWT, verifyJWT } from "./jwt/mod.ts";
 
 // Create JWT
-const payload = { userId: 123, role: 'admin' };
-const secret = 'your-secret-key';
+const payload = { userId: 123, role: "admin" };
+const secret = "your-secret-key";
 const token = await createJWT(payload, secret, {
-  algorithm: 'HS256',
-  expiresIn: '1h',
+  algorithm: "HS256",
+  expiresIn: "1h",
 });
 
 // Verify JWT
 const verified = await verifyJWT(token, secret);
 if (verified.valid) {
-  console.log('Payload:', verified.payload);
+  console.log("Payload:", verified.payload);
 }
 ```
 
@@ -195,7 +197,8 @@ if (verified.valid) {
 
 ### Cryptographically Secure Random Generation
 
-All generators use `crypto.getRandomValues()` for cryptographically secure randomness.
+All generators use `crypto.getRandomValues()` for cryptographically secure
+randomness.
 
 ### Standard Compliance
 
@@ -222,56 +225,56 @@ import {
   generateBIP39Mnemonic,
   generateRSAKeyPair,
   sha256,
-} from './mod.ts';
+} from "./mod.ts";
 
 async function cryptoWorkflow() {
   // 1. Generate seed phrase for key derivation
   const mnemonic = await generateBIP39Mnemonic({
     wordCount: 24,
-    passphrase: 'additional-security',
+    passphrase: "additional-security",
   });
 
-  console.log('Seed phrase:', mnemonic.phrase);
+  console.log("Seed phrase:", mnemonic.phrase);
   console.log(
-    'Derived seed:',
-    Array.from(mnemonic.seed).map((b) => b.toString(16).padStart(2, '0')).join(
-      '',
+    "Derived seed:",
+    Array.from(mnemonic.seed).map((b) => b.toString(16).padStart(2, "0")).join(
+      "",
     ),
   );
 
   // 2. Generate RSA key pair for signatures
   const keyPair = await generateRSAKeyPair({
     modulusLength: 2048,
-    format: 'PEM',
+    format: "PEM",
   });
 
   // 3. Create encrypted data
   const aesKey = await crypto.subtle.generateKey(
-    { name: 'AES-GCM', length: 256 },
+    { name: "AES-GCM", length: 256 },
     false,
-    ['encrypt', 'decrypt'],
+    ["encrypt", "decrypt"],
   );
 
-  const sensitiveData = 'Top secret information';
+  const sensitiveData = "Top secret information";
   const encrypted = await encryptAES(sensitiveData, aesKey);
 
   // 4. Create JWT for authentication
   const jwtPayload = {
-    sub: '1234567890',
-    name: 'John Doe',
+    sub: "1234567890",
+    name: "John Doe",
     iat: Math.floor(Date.now() / 1000),
   };
 
-  const jwtSecret = 'your-jwt-secret';
+  const jwtSecret = "your-jwt-secret";
   const token = await createJWT(jwtPayload, jwtSecret, {
-    algorithm: 'HS256',
-    expiresIn: '24h',
+    algorithm: "HS256",
+    expiresIn: "24h",
   });
 
   // 5. Hash data for integrity verification
   const dataHash = await sha256(sensitiveData);
 
-  console.log('Workflow completed successfully!');
+  console.log("Workflow completed successfully!");
   return {
     mnemonic: mnemonic.phrase,
     publicKey: keyPair.publicKey,

@@ -49,11 +49,11 @@ export type RandomNumberOptions = {
 export function randomInt(min: number, max: number): number {
   // Validate inputs
   if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max)) {
-    throw new Error('Min and max must be safe integers');
+    throw new Error("Min and max must be safe integers");
   }
 
   if (min > max) {
-    throw new Error('Min cannot be greater than max');
+    throw new Error("Min cannot be greater than max");
   }
 
   if (min === max) {
@@ -88,7 +88,7 @@ export function randomInt(min: number, max: number): number {
  */
 export function randomFloat(min: number, max: number, precision = 16): number {
   if (min >= max) {
-    throw new Error('Min must be less than max for floating point numbers');
+    throw new Error("Min must be less than max for floating point numbers");
   }
 
   // Generate a random fraction with high precision

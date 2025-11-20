@@ -1,9 +1,9 @@
 import {
   type DigestAlgorithms,
   validateDigestAlgorithm,
-} from '../digest/mod.ts';
-import { decodeHex } from '$encoding';
-import type { SigningModes } from './types.ts';
+} from "../digest/mod.ts";
+import { decodeHex } from "$encoding";
+import type { SigningModes } from "./types.ts";
 
 /**
  * Parses a PEM-formatted public key string to extract the raw key data.
@@ -15,15 +15,15 @@ import type { SigningModes } from './types.ts';
 const parsePEMPublicKey = (pemKey: string): Uint8Array => {
   // Remove PEM headers, footers, and whitespace
   const base64Key = pemKey
-    .replace(/-----BEGIN [A-Z ]+-----/, '')
-    .replace(/-----END [A-Z ]+-----/, '')
-    .replace(/\s/g, '');
+    .replace(/-----BEGIN [A-Z ]+-----/, "")
+    .replace(/-----END [A-Z ]+-----/, "")
+    .replace(/\s/g, "");
 
   try {
     // Decode the base64 key data
     return Uint8Array.from(atob(base64Key), (c) => c.charCodeAt(0));
   } catch (_error) {
-    throw new Error('Invalid PEM public key format');
+    throw new Error("Invalid PEM public key format");
   }
 };
 
@@ -57,22 +57,22 @@ export const verifyHMAC = async (
 ): Promise<boolean> => {
   validateDigestAlgorithm(digest);
 
-  if (!signature || typeof signature !== 'string') {
-    throw new Error('Signature must be a non-empty string');
+  if (!signature || typeof signature !== "string") {
+    throw new Error("Signature must be a non-empty string");
   }
 
   const key = await crypto.subtle.importKey(
-    'raw',
+    "raw",
     new TextEncoder().encode(secret),
     {
-      name: 'HMAC',
+      name: "HMAC",
       hash: digest,
     },
     false,
-    ['verify'],
+    ["verify"],
   );
 
-  const dataToVerify = typeof data === 'string'
+  const dataToVerify = typeof data === "string"
     ? new TextEncoder().encode(data)
     : data;
 
@@ -80,12 +80,12 @@ export const verifyHMAC = async (
   try {
     signatureBytes = decodeHex(signature);
   } catch {
-    throw new Error('Invalid signature format. Must be a hex string');
+    throw new Error("Invalid signature format. Must be a hex string");
   }
 
   return crypto.subtle.verify(
     {
-      name: 'HMAC',
+      name: "HMAC",
       hash: digest,
     },
     key,
@@ -139,8 +139,8 @@ export const verifyRSA = async (
   data: string | Uint8Array,
   signature: string,
 ): Promise<boolean> => {
-  const parts = mode.split(':');
-  if (parts.length !== 3 || parts[0] !== 'RSA-PSS') {
+  const parts = mode.split(":");
+  if (parts.length !== 3 || parts[0] !== "RSA-PSS") {
     throw new Error(
       'Invalid RSA mode format. Expected "RSA-PSS:keySize:hashAlgorithm"',
     );
@@ -157,18 +157,18 @@ export const verifyRSA = async (
   const keySize = parseInt(lengthStr, 10);
   if (![2048, 3072, 4096].includes(keySize)) {
     throw new Error(
-      'Invalid RSA key size. Must be 2048, 3072, or 4096',
+      "Invalid RSA key size. Must be 2048, 3072, or 4096",
     );
   }
 
-  if (!['SHA-256', 'SHA-384', 'SHA-512'].includes(hashAlgorithm)) {
+  if (!["SHA-256", "SHA-384", "SHA-512"].includes(hashAlgorithm)) {
     throw new Error(
-      'Invalid hash algorithm. Must be SHA-256, SHA-384, or SHA-512',
+      "Invalid hash algorithm. Must be SHA-256, SHA-384, or SHA-512",
     );
   }
 
-  if (!signature || typeof signature !== 'string') {
-    throw new Error('Signature must be a non-empty string');
+  if (!signature || typeof signature !== "string") {
+    throw new Error("Signature must be a non-empty string");
   }
 
   // Parse the PEM public key
@@ -176,18 +176,18 @@ export const verifyRSA = async (
 
   // Import the public key
   const cryptoKey = await crypto.subtle.importKey(
-    'spki',
+    "spki",
     keyData,
     {
-      name: 'RSA-PSS',
+      name: "RSA-PSS",
       hash: hashAlgorithm,
     },
     false,
-    ['verify'],
+    ["verify"],
   );
 
   // Prepare the data to verify
-  const dataToVerify = typeof data === 'string'
+  const dataToVerify = typeof data === "string"
     ? new TextEncoder().encode(data)
     : data;
 
@@ -196,22 +196,22 @@ export const verifyRSA = async (
   try {
     signatureBytes = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
   } catch (_error) {
-    throw new Error('Invalid signature format. Must be a base64 string');
+    throw new Error("Invalid signature format. Must be a base64 string");
   }
 
   // Calculate salt length based on hash algorithm (typically hash length)
-  const saltLength = hashAlgorithm === 'SHA-256'
+  const saltLength = hashAlgorithm === "SHA-256"
     ? 32
-    : hashAlgorithm === 'SHA-384'
+    : hashAlgorithm === "SHA-384"
     ? 48
-    : hashAlgorithm === 'SHA-512'
+    : hashAlgorithm === "SHA-512"
     ? 64
     : 32;
 
   // Verify the signature
   return crypto.subtle.verify(
     {
-      name: 'RSA-PSS',
+      name: "RSA-PSS",
       saltLength,
     },
     cryptoKey,
@@ -257,12 +257,12 @@ export const verify = (
   data: string | Uint8Array,
   signature: string,
 ): Promise<boolean> => {
-  if (mode.startsWith('RSA-')) {
+  if (mode.startsWith("RSA-")) {
     return verifyRSA(mode, secret, data, signature);
   } else {
-    const [algorithm, hash] = mode.split(':');
-    if (algorithm !== 'HMAC') {
-      throw new Error('Invalid signing mode. Must be HMAC or RSA-PSS');
+    const [algorithm, hash] = mode.split(":");
+    if (algorithm !== "HMAC") {
+      throw new Error("Invalid signing mode. Must be HMAC or RSA-PSS");
     }
 
     if (!hash) {

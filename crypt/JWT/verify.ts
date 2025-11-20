@@ -1,8 +1,8 @@
-import { JWTError } from './Error.ts';
-import type { JWTHeader, JWTPayload, JWTVerifyOptions } from './types.ts';
-import { decodeBase64Url } from '$encoding';
-import { verifyHMAC } from '../sign/mod.ts';
-import { JWT_ALGORITHM_MAP, validateClaims } from './helpers.ts';
+import { JWTError } from "./Error.ts";
+import type { JWTHeader, JWTPayload, JWTVerifyOptions } from "./types.ts";
+import { decodeBase64Url } from "$encoding";
+import { verifyHMAC } from "../sign/mod.ts";
+import { JWT_ALGORITHM_MAP, validateClaims } from "./helpers.ts";
 
 /**
  * Verifies a JWT token and returns its validated payload.
@@ -79,22 +79,22 @@ export const verifyJWT = async (
   secret: string,
   options: JWTVerifyOptions = {},
 ): Promise<JWTPayload> => {
-  if (!token || typeof token !== 'string') {
-    throw new JWTError('INVALID_FORMAT', {
-      causeMessage: 'Token must be a non-empty string',
+  if (!token || typeof token !== "string") {
+    throw new JWTError("INVALID_FORMAT", {
+      causeMessage: "Token must be a non-empty string",
     });
   }
 
-  if (!secret || typeof secret !== 'string') {
-    throw new JWTError('INVALID_SECRET', {
-      causeMessage: 'Secret must be a non-empty string',
+  if (!secret || typeof secret !== "string") {
+    throw new JWTError("INVALID_SECRET", {
+      causeMessage: "Secret must be a non-empty string",
     });
   }
 
-  const parts = token.split('.');
+  const parts = token.split(".");
   if (parts.length !== 3) {
-    throw new JWTError('INVALID_FORMAT', {
-      causeMessage: 'Invalid JWT format',
+    throw new JWTError("INVALID_FORMAT", {
+      causeMessage: "Invalid JWT format",
     });
   }
 
@@ -103,8 +103,8 @@ export const verifyJWT = async (
   const signature = parts[2];
 
   if (!headerBase64 || !payloadBase64 || !signature) {
-    throw new JWTError('INVALID_FORMAT', {
-      causeMessage: 'Invalid JWT format - missing parts',
+    throw new JWTError("INVALID_FORMAT", {
+      causeMessage: "Invalid JWT format - missing parts",
     });
   }
 
@@ -114,23 +114,23 @@ export const verifyJWT = async (
     const headerJson = new TextDecoder().decode(decodeBase64Url(headerBase64));
     header = JSON.parse(headerJson);
   } catch (error) {
-    throw new JWTError('INVALID_HEADER', {
-      causeMessage: 'Invalid JWT header',
+    throw new JWTError("INVALID_HEADER", {
+      causeMessage: "Invalid JWT header",
     }, error instanceof Error ? error : undefined);
   }
 
-  if (!header.alg || !header.typ || header.typ !== 'JWT') {
-    throw new JWTError('INVALID_HEADER', {
-      causeMessage: 'Invalid JWT header format',
+  if (!header.alg || !header.typ || header.typ !== "JWT") {
+    throw new JWTError("INVALID_HEADER", {
+      causeMessage: "Invalid JWT header format",
       header,
     });
   }
 
-  if (!['HS256', 'HS384', 'HS512'].includes(header.alg)) {
-    throw new JWTError('UNSUPPORTED_ALGORITHM', {
+  if (!["HS256", "HS384", "HS512"].includes(header.alg)) {
+    throw new JWTError("UNSUPPORTED_ALGORITHM", {
       causeMessage: `Unsupported algorithm: ${header.alg}`,
       algorithm: header.alg,
-      supportedAlgorithms: ['HS256', 'HS384', 'HS512'],
+      supportedAlgorithms: ["HS256", "HS384", "HS512"],
     });
   }
 
@@ -141,16 +141,16 @@ export const verifyJWT = async (
   try {
     const isValid = await verifyHMAC(hashAlgorithm, secret, data, signature);
     if (!isValid) {
-      throw new JWTError('INVALID_SIGNATURE', {
-        causeMessage: 'Invalid signature',
+      throw new JWTError("INVALID_SIGNATURE", {
+        causeMessage: "Invalid signature",
       });
     }
   } catch (error) {
     if (error instanceof JWTError) {
       throw error;
     }
-    throw new JWTError('INVALID_SIGNATURE', {
-      causeMessage: 'Signature verification failed',
+    throw new JWTError("INVALID_SIGNATURE", {
+      causeMessage: "Signature verification failed",
     }, error instanceof Error ? error : undefined);
   }
 
@@ -162,8 +162,8 @@ export const verifyJWT = async (
     );
     payload = JSON.parse(payloadJson);
   } catch (error) {
-    throw new JWTError('INVALID_PAYLOAD', {
-      causeMessage: 'Invalid JWT payload',
+    throw new JWTError("INVALID_PAYLOAD", {
+      causeMessage: "Invalid JWT payload",
     }, error instanceof Error ? error : undefined);
   }
 

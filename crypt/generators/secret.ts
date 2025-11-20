@@ -1,4 +1,4 @@
-import { encodeBase64, encodeHex } from '$encoding';
+import { encodeBase64, encodeHex } from "$encoding";
 
 /**
  * Output encoding options for the secret generator.
@@ -7,7 +7,7 @@ import { encodeBase64, encodeHex } from '$encoding';
  * - `BASE64`: Base64 encoding (A-Z, a-z, 0-9, +, /)
  * - `ALPHANUMERIC`: Alphanumeric characters (A-Z, a-z, 0-9)
  */
-export type SecretEncoding = 'HEX' | 'BASE64' | 'ALPHANUMERIC';
+export type SecretEncoding = "HEX" | "BASE64" | "ALPHANUMERIC";
 
 /**
  * Configuration options for secret generation.
@@ -128,8 +128,8 @@ export type SecretGeneratorOptions = {
  */
 export const secretGenerator = (
   byteLengthOrOptions: number | SecretGeneratorOptions,
-  encoding: SecretEncoding = 'HEX',
-  prefix = '',
+  encoding: SecretEncoding = "HEX",
+  prefix = "",
   hyphenInterval = 0,
 ): string => {
   // Parse options
@@ -139,10 +139,10 @@ export const secretGenerator = (
   let finalHyphenInterval: number;
   let lowercase = false;
 
-  if (typeof byteLengthOrOptions === 'object') {
+  if (typeof byteLengthOrOptions === "object") {
     byteLength = byteLengthOrOptions.byteLength;
-    finalEncoding = byteLengthOrOptions.encoding ?? 'HEX';
-    finalPrefix = byteLengthOrOptions.prefix ?? '';
+    finalEncoding = byteLengthOrOptions.encoding ?? "HEX";
+    finalPrefix = byteLengthOrOptions.prefix ?? "";
     finalHyphenInterval = byteLengthOrOptions.hyphenInterval ?? 0;
     lowercase = byteLengthOrOptions.lowercase ?? false;
   } else {
@@ -154,14 +154,14 @@ export const secretGenerator = (
 
   // Validate input
   if (!Number.isInteger(byteLength) || byteLength <= 0) {
-    throw new Error('byteLength must be a positive integer');
+    throw new Error("byteLength must be a positive integer");
   }
 
   if (
     finalHyphenInterval < 0 ||
     (finalHyphenInterval > 0 && !Number.isInteger(finalHyphenInterval))
   ) {
-    throw new Error('hyphenInterval must be a non-negative integer');
+    throw new Error("hyphenInterval must be a non-negative integer");
   }
 
   // Generate random bytes
@@ -171,15 +171,15 @@ export const secretGenerator = (
   let result: string;
 
   switch (finalEncoding) {
-    case 'HEX':
+    case "HEX":
       result = encodeHex(bytes);
       break;
 
-    case 'BASE64':
+    case "BASE64":
       result = encodeBase64(bytes);
       break;
 
-    case 'ALPHANUMERIC': {
+    case "ALPHANUMERIC": {
       // Generate enough characters to represent the byte length
       // Each byte can be represented by 1 alphanumeric character
       result = Array.from(bytes)
@@ -190,7 +190,7 @@ export const secretGenerator = (
           if (mod < 36) return String.fromCharCode(65 + mod - 10); // A-Z
           return String.fromCharCode(97 + mod - 36); // a-z
         })
-        .join('');
+        .join("");
       break;
     }
 
@@ -210,8 +210,8 @@ export const secretGenerator = (
 
   // Add hyphens if needed (but only to the core secret, not the prefix)
   if (finalHyphenInterval > 0) {
-    const regex = new RegExp(`.{1,${finalHyphenInterval}}`, 'g');
-    formattedResult = result.match(regex)!.join('-');
+    const regex = new RegExp(`.{1,${finalHyphenInterval}}`, "g");
+    formattedResult = result.match(regex)!.join("-");
   }
 
   // Add prefix
@@ -243,13 +243,13 @@ export const secretGenerator = (
  */
 export const generateHexSecret = (
   byteLength: number,
-  prefix = '',
+  prefix = "",
   hyphenInterval = 0,
   lowercase = false,
 ): string =>
   secretGenerator({
     byteLength,
-    encoding: 'HEX',
+    encoding: "HEX",
     prefix,
     hyphenInterval,
     lowercase,
@@ -280,13 +280,13 @@ export const generateHexSecret = (
  */
 export const generateBase64Secret = (
   byteLength: number,
-  prefix = '',
+  prefix = "",
   hyphenInterval = 0,
   lowercase = false,
 ): string =>
   secretGenerator({
     byteLength,
-    encoding: 'BASE64',
+    encoding: "BASE64",
     prefix,
     hyphenInterval,
     lowercase,
@@ -318,13 +318,13 @@ export const generateBase64Secret = (
  */
 export const generateAlphanumericSecret = (
   byteLength: number,
-  prefix = '',
+  prefix = "",
   hyphenInterval = 0,
   lowercase = false,
 ): string =>
   secretGenerator({
     byteLength,
-    encoding: 'ALPHANUMERIC',
+    encoding: "ALPHANUMERIC",
     prefix,
     hyphenInterval,
     lowercase,
@@ -352,12 +352,12 @@ export const generateAlphanumericSecret = (
  * ```
  */
 export const generateToken = (
-  prefix = '',
+  prefix = "",
   lowercase = true,
 ): string =>
   secretGenerator({
     byteLength: 32,
-    encoding: 'HEX',
+    encoding: "HEX",
     prefix,
     lowercase,
   });
@@ -389,6 +389,6 @@ export const generatePassword = (
 ): string =>
   secretGenerator({
     byteLength: length,
-    encoding: 'ALPHANUMERIC',
+    encoding: "ALPHANUMERIC",
     hyphenInterval: includeHyphens ? 4 : 0,
   });

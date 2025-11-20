@@ -1,8 +1,8 @@
-import { encodeBase64Url } from '$encoding';
-import { JWTError } from './Error.ts';
-import { type JWTAlgorithm, type JWTHeader, type JWTPayload } from './types.ts';
-import { signHMAC } from '../sign/mod.ts';
-import { JWT_ALGORITHM_MAP, validatePayload } from './helpers.ts';
+import { encodeBase64Url } from "$encoding";
+import { JWTError } from "./Error.ts";
+import { type JWTAlgorithm, type JWTHeader, type JWTPayload } from "./types.ts";
+import { signHMAC } from "../sign/mod.ts";
+import { JWT_ALGORITHM_MAP, validatePayload } from "./helpers.ts";
 
 /**
  * Issues (creates) a JWT token with the specified algorithm, payload, and secret.
@@ -62,15 +62,15 @@ export const issueJWT = async (
   payload: JWTPayload,
   secret: string,
 ): Promise<string> => {
-  if (!secret || typeof secret !== 'string') {
-    throw new JWTError('INVALID_SECRET', {
-      causeMessage: 'Secret must be a non-empty string',
+  if (!secret || typeof secret !== "string") {
+    throw new JWTError("INVALID_SECRET", {
+      causeMessage: "Secret must be a non-empty string",
     });
   }
 
-  if (!payload || typeof payload !== 'object') {
-    throw new JWTError('INVALID_PAYLOAD', {
-      causeMessage: 'Payload must be an object',
+  if (!payload || typeof payload !== "object") {
+    throw new JWTError("INVALID_PAYLOAD", {
+      causeMessage: "Payload must be an object",
     });
   }
 
@@ -80,7 +80,7 @@ export const issueJWT = async (
 
   const header: JWTHeader = {
     alg: algo,
-    typ: 'JWT',
+    typ: "JWT",
   };
 
   try {
@@ -93,9 +93,9 @@ export const issueJWT = async (
 
     return `${data}.${signature}`;
   } catch (error) {
-    throw new JWTError('UNKNOWN_ERROR', {
+    throw new JWTError("UNKNOWN_ERROR", {
       causeMessage: `Failed to create JWT: ${
-        error instanceof Error ? error.message : 'Unknown error'
+        error instanceof Error ? error.message : "Unknown error"
       }`,
     }, error instanceof Error ? error : undefined);
   }

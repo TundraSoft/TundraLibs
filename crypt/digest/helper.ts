@@ -1,4 +1,4 @@
-import { DigestAlgorithms } from './types.ts';
+import { DigestAlgorithms } from "./types.ts";
 
 /**
  * Validates that the digest algorithm is supported for HMAC operations.
@@ -13,9 +13,9 @@ import { DigestAlgorithms } from './types.ts';
  * ```
  */
 export const validateDigestAlgorithm = (digest: DigestAlgorithms): void => {
-  if (!['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'].includes(digest)) {
+  if (!["SHA-1", "SHA-256", "SHA-384", "SHA-512"].includes(digest)) {
     throw new Error(
-      'Invalid HMAC hash. Must be SHA-1, SHA-256, SHA-384 or SHA-512',
+      "Invalid HMAC hash. Must be SHA-1, SHA-256, SHA-384 or SHA-512",
     );
   }
 };
