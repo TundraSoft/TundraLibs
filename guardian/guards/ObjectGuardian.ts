@@ -373,14 +373,10 @@ export class ObjectGuardian<
       // Create a new guardian without optional behavior
       // This is a simplified approach - in practice, you might need more sophisticated logic
       const requiredGuard = guard.clone();
-      (requiredGuard as BaseGuardian<unknown> & {
-        _hasOptional: boolean;
-        _optionalDefault?: unknown;
-      })._hasOptional = false;
-      (requiredGuard as BaseGuardian<unknown> & {
-        _hasOptional: boolean;
-        _optionalDefault?: unknown;
-      })._optionalDefault = undefined;
+      // Remove optional flag from the cloned guard to make it required
+      if (requiredGuard._metaData) {
+        requiredGuard._metaData.isOptional = false;
+      }
       (requiredSchema as Record<string, BaseGuardian<unknown>>)[key] =
         requiredGuard;
     }
@@ -953,16 +949,7 @@ export class ObjectGuardian<
 
   //#region Documentation Methods
 
-  /**
-   * @override
-   */
-  protected override _enrichOpenAPISchema(schema: Record<string, unknown>, funcStr: string): void {
-    // Don't call super for objects - we don't want generic format inference
-    
-    // TODO: Add properties schema if we have shape info
-    // This would require storing the shape guardian references
-    schema.additionalProperties = true;
-  }
+
 
   //#endregion
 }

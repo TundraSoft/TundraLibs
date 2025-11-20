@@ -45,9 +45,9 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    *
    * @param metaData - Optional metadata for documentation and tooling
    */
-  constructor(metaData?: GuardianMetaData) {
+  constructor(initialTransform?: GuardianTransform<unknown, T>, metaData?: GuardianMetaData) {
     // Transform that accepts any value except null and undefined
-    const initialTransform: GuardianTransform<unknown, T> = (
+    const defaultTransform: GuardianTransform<unknown, T> = (
       input: unknown,
     ) => {
       if (input === null) {
@@ -69,7 +69,7 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
       return input as T;
     };
 
-    super(initialTransform, metaData);
+    super(initialTransform || defaultTransform, metaData);
   }
 
   /**

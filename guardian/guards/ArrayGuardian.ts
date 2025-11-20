@@ -151,7 +151,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
     ) as ArrayGuardian<T>;
     
     // Store constraint for OpenAPI generation
-    result._constraints.minItems = minLength;
+    if (!result._metaData) result._metaData = {};
+    result._metaData.minItems = minLength;
     return result;
   }
 
@@ -189,7 +190,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
     ) as ArrayGuardian<T>;
     
     // Store constraint for OpenAPI generation
-    result._constraints.maxItems = maxLength;
+    if (!result._metaData) result._metaData = {};
+    result._metaData.maxItems = maxLength;
     return result;
   }
 
@@ -455,18 +457,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
 
   //#region Documentation Methods
 
-  /**
-   * @override
-   */
-  protected override _enrichOpenAPISchema(schema: Record<string, unknown>, funcStr: string): void {
-    // Don't call super for arrays - we don't want generic format inference
-    
-    // Add stored constraints to schema
-    Object.assign(schema, this._constraints);
-    
-    // TODO: Add items schema if we have element guardian info
-    // This would require storing the element guardian reference
-  }
+
 
   //#endregion
 }

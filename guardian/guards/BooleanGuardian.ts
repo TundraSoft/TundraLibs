@@ -1,6 +1,6 @@
 import { BaseGuardian } from "../BaseGuardian.ts";
 import { GuardianError } from "../GuardianError.ts";
-import type { GuardianMetaData } from "../types/mod.ts";
+import type { GuardianMetaData, GuardianTransform } from "../types/mod.ts";
 import { NumberGuardian } from "./NumberGuardian.ts";
 import { StringGuardian } from "./StringGuardian.ts";
 
@@ -25,8 +25,8 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
    *
    * @param metaData - Optional metadata for this guardian
    */
-  constructor(metaData?: GuardianMetaData) {
-    super((input: unknown) => {
+  constructor(initialTransform?: GuardianTransform<unknown, boolean>, metaData?: GuardianMetaData) {
+    const defaultTransform = (input: unknown) => {
       if (typeof input !== "boolean") {
         throw new GuardianError("Expected boolean but got ${got}", {
           expected: "boolean",
@@ -35,8 +35,10 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
           type: "boolean",
         });
       }
-      return input;
-    }, metaData);
+      return input as boolean;
+    };
+    
+    super(initialTransform || defaultTransform, metaData);
   }
 
   //#region Validation Methods

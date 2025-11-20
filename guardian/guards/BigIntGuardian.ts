@@ -25,10 +25,16 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
   /**
    * Creates a new BigIntGuardian instance.
    *
-   * @param metaData - Optional metadata for this guardian
    * @param initialTransform - Optional composed transformation from previous guardian
+   * @param metaData - Optional metadata for this guardian
    */
-  constructor(metaData?: GuardianMetaData, initialTransform?: GuardianTransform<unknown, bigint>) {
+  /**
+   * Creates a new BigIntGuardian instance.
+   *
+   * @param initialTransform - Optional composed transformation from previous guardian
+   * @param metaData - Optional metadata for this guardian
+   */
+  constructor(initialTransform?: GuardianTransform<unknown, bigint>, metaData?: GuardianMetaData) {
     const defaultBigIntValidation = (input: unknown) => {
       if (typeof input !== "bigint") {
         throw new GuardianError("Expected bigint but got ${got}", {

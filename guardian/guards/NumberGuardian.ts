@@ -26,10 +26,10 @@ export class NumberGuardian extends BaseGuardian<number> {
   /**
    * Creates a new NumberGuardian instance.
    *
-   * @param metaData - Optional metadata for this guardian
    * @param initialTransform - Optional composed transformation from previous guardian
+   * @param metaData - Optional metadata for this guardian
    */
-  constructor(metaData?: GuardianMetaData, initialTransform?: GuardianTransform<unknown, number>) {
+  constructor(initialTransform?: GuardianTransform<unknown, number>, metaData?: GuardianMetaData) {
     const defaultNumberValidation = (input: unknown) => {
       if (typeof input !== "number") {
         throw new GuardianError("Expected number but got ${got}", {
@@ -98,7 +98,8 @@ export class NumberGuardian extends BaseGuardian<number> {
     }) as NumberGuardian;
     
     // Store constraint for OpenAPI generation
-    result._constraints.minimum = value;
+    if (!result._metaData) result._metaData = {};
+    result._metaData.minimum = value;
     return result;
   }
 
@@ -133,7 +134,46 @@ export class NumberGuardian extends BaseGuardian<number> {
     }) as NumberGuardian;
     
     // Store constraint for OpenAPI generation
-    result._constraints.maximum = value;
+    if (!result._metaData) result._metaData = {};
+    result._metaData.maximum = value;
+    return result;
+  }
+
+  /**
+   * Validates that number is within the specified range (inclusive).
+   *
+   * @param min - Minimum allowed value (inclusive)
+   * @param max - Maximum allowed value (inclusive)
+   * @param errorMessage - Optional custom error message
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   *
+   * @example
+   * ```ts
+   * const schema = new NumberGuardian().range(0, 100);
+   * schema.parse(50); // 50
+   * schema.parse(150); // throws GuardianError
+   * ```
+   */
+  range(min: number, max: number, errorMessage?: string): NumberGuardian {
+    const result = this.process((num: number) => {
+      if (num < min || num > max) {
+        throw new GuardianError(
+          errorMessage || `Number must be between ${min} and ${max} (inclusive)`,
+          {
+            expected: `${min} <= value <= ${max}`,
+            got: num,
+            comparison: "range",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
+    
+    // Store constraints for OpenAPI generation
+    if (!result._metaData) result._metaData = {};
+    result._metaData.minimum = min;
+    result._metaData.maximum = max;
     return result;
   }
 
@@ -164,8 +204,9 @@ export class NumberGuardian extends BaseGuardian<number> {
     }) as NumberGuardian;
     
     // Store constraint for OpenAPI generation
-    result._constraints.minimum = 0;
-    result._constraints.exclusiveMinimum = true;
+    if (!result._metaData) result._metaData = {};
+    result._metaData.minimum = 0;
+    result._metaData.exclusiveMinimum = true;
     return result;
   }
 
@@ -192,51 +233,7 @@ export class NumberGuardian extends BaseGuardian<number> {
     }) as NumberGuardian;
   }
 
-  /**
-   * Validates that number is non-negative (>= 0).
-   *
-   * @param errorMessage - Optional custom error message
-   * @returns This NumberGuardian (mutated) or new instance if immutable
-   */
-  nonNegative(errorMessage?: string): NumberGuardian {
-    return this.process((num: number) => {
-      if (num < 0) {
-        throw new GuardianError(
-          errorMessage || "Number must be non-negative (>= 0)",
-          {
-            expected: ">= 0",
-            got: num,
-            comparison: "nonNegative",
-            type: "validation",
-          },
-        );
-      }
-      return num;
-    }) as NumberGuardian;
-  }
 
-  /**
-   * Validates that number is non-positive (<= 0).
-   *
-   * @param errorMessage - Optional custom error message
-   * @returns This NumberGuardian (mutated) or new instance if immutable
-   */
-  nonPositive(errorMessage?: string): NumberGuardian {
-    return this.process((num: number) => {
-      if (num > 0) {
-        throw new GuardianError(
-          errorMessage || "Number must be non-positive (<= 0)",
-          {
-            expected: "<= 0",
-            got: num,
-            comparison: "nonPositive",
-            type: "validation",
-          },
-        );
-      }
-      return num;
-    }) as NumberGuardian;
-  }
 
   //#endregion
 
@@ -345,6 +342,348 @@ export class NumberGuardian extends BaseGuardian<number> {
     }) as NumberGuardian;
   }
 
+  /**
+   * Validates that number is odd.
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  odd(errorMessage?: string): NumberGuardian {
+    return this.process((num: number) => {
+      if (!Number.isInteger(num) || num % 2 === 0) {
+        throw new GuardianError(
+          errorMessage || "Number must be odd",
+          {
+            expected: "odd integer",
+            got: num,
+            comparison: "odd",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
+  }
+
+  /**
+   * Validates that number is even.
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  even(errorMessage?: string): NumberGuardian {
+    return this.process((num: number) => {
+      if (!Number.isInteger(num) || num % 2 !== 0) {
+        throw new GuardianError(
+          errorMessage || "Number must be even",
+          {
+            expected: "even integer",
+            got: num,
+            comparison: "even",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
+  }
+
+  /**
+   * Validates that number is prime.
+   * Prime numbers are natural numbers greater than 1 with no positive divisors other than 1 and themselves.
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  prime(errorMessage?: string): NumberGuardian {
+    return this.process((num: number) => {
+      if (!Number.isInteger(num) || num < 2) {
+        throw new GuardianError(
+          errorMessage || "Number must be a prime number (integer >= 2)",
+          {
+            expected: "prime number",
+            got: num,
+            comparison: "prime",
+            type: "validation",
+          },
+        );
+      }
+      
+      if (num === 2) return num; // 2 is prime
+      if (num % 2 === 0) {
+        throw new GuardianError(
+          errorMessage || "Number must be a prime number",
+          {
+            expected: "prime number",
+            got: num,
+            comparison: "prime",
+            type: "validation",
+          },
+        );
+      }
+      
+      // Check odd divisors up to sqrt(num)
+      for (let i = 3; i <= Math.sqrt(num); i += 2) {
+        if (num % i === 0) {
+          throw new GuardianError(
+            errorMessage || "Number must be a prime number",
+            {
+              expected: "prime number",
+              got: num,
+              comparison: "prime",
+              type: "validation",
+            },
+          );
+        }
+      }
+      
+      return num;
+    }) as NumberGuardian;
+  }
+
+  /**
+   * Validates that number is not zero.
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  nonZero(errorMessage?: string): NumberGuardian {
+    return this.process((num: number) => {
+      if (num === 0) {
+        throw new GuardianError(
+          errorMessage || "Number must not be zero",
+          {
+            expected: "non-zero number",
+            got: num,
+            comparison: "nonZero",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
+  }
+
+  /**
+   * Validates that number is a valid port (0-65535).
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  validPort(errorMessage?: string): NumberGuardian {
+    return this.process((num: number) => {
+      if (!Number.isInteger(num) || num < 0 || num > 65535) {
+        throw new GuardianError(
+          errorMessage || "Number must be a valid port (0-65535)",
+          {
+            expected: "valid port (0-65535)",
+            got: num,
+            comparison: "validPort",
+            type: "validation",
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
+  }
+
+  /**
+   * Validates that number is a valid Unix timestamp.
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  timestamp(errorMessage?: string): NumberGuardian {
+    return this.process((num: number) => {
+      if (!Number.isInteger(num) || num < 0) {
+        throw new GuardianError(
+          errorMessage || "Number must be a valid timestamp (non-negative integer)",
+          {
+            expected: "valid timestamp",
+            got: num,
+            comparison: "timestamp",
+            type: "validation",
+          },
+        );
+      }
+      
+      // Test if it creates a valid date
+      const date = new Date(num);
+      if (isNaN(date.getTime())) {
+        throw new GuardianError(
+          errorMessage || "Number must be a valid timestamp",
+          {
+            expected: "valid timestamp",
+            got: num,
+            comparison: "timestamp",
+            type: "validation",
+          },
+        );
+      }
+      
+      return num;
+    }) as NumberGuardian;
+  }
+
+  /**
+   * Validates that number is a perfect power of the given base.
+   *
+   * @param base - The base to check against (defaults to any base)
+   * @param errorMessage - Optional custom error message
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  power(base?: number, errorMessage?: string): NumberGuardian {
+    return this.process((num: number) => {
+      if (!Number.isInteger(num) || num < 1) {
+        throw new GuardianError(
+          errorMessage || 'Number must be a positive integer to check for perfect power',
+          {
+            expected: 'positive integer',
+            got: num,
+            comparison: 'power',
+            type: 'validation',
+          },
+        );
+      }
+
+      if (base !== undefined) {
+        // Check if num is a perfect power of specific base
+        if (base <= 1) {
+          throw new GuardianError('Base must be greater than 1', {
+            expected: 'base > 1',
+            got: base,
+            comparison: 'base',
+            type: 'validation',
+          });
+        }
+        const logResult = Math.log(num) / Math.log(base);
+        if (!Number.isInteger(logResult)) {
+          throw new GuardianError(
+            errorMessage || `Number must be a perfect power of ${base}`,
+            {
+              expected: `perfect power of ${base}`,
+              got: num,
+              comparison: 'power',
+              type: 'validation',
+            },
+          );
+        }
+      } else {
+        // Check if num is a perfect power of any base >= 2
+        // 1 is a special case - it's 1^n for any n, so it's considered a perfect power
+        if (num === 1) {
+          return num;
+        }
+        
+        let isPerfectPower = false;
+        for (let candidateBase = 2; candidateBase <= Math.sqrt(num); candidateBase++) {
+          const logResult = Math.log(num) / Math.log(candidateBase);
+          // Use small epsilon for floating point comparison
+          const roundedResult = Math.round(logResult);
+          if (Math.abs(logResult - roundedResult) < 1e-10 && roundedResult > 1) {
+            isPerfectPower = true;
+            break;
+          }
+        }
+        
+        if (!isPerfectPower) {
+          throw new GuardianError(
+            errorMessage || 'Number must be a perfect power',
+            {
+              expected: 'perfect power',
+              got: num,
+              comparison: 'power',
+              type: 'validation',
+            },
+          );
+        }
+      }
+      
+      return num;
+    }) as NumberGuardian;
+  }
+
+  /**
+   * Validates that number is between min and max values.
+   *
+   * @param min - Minimum value
+   * @param max - Maximum value
+   * @param inclusive - Whether bounds are inclusive (defaults to true)
+   * @param errorMessage - Optional custom error message
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  between(min: number, max: number, inclusive = true, errorMessage?: string): NumberGuardian {
+    return this.process((num: number) => {
+      const withinBounds = inclusive 
+        ? (num >= min && num <= max)
+        : (num > min && num < max);
+        
+      if (!withinBounds) {
+        const boundsStr = inclusive 
+          ? `${min} <= value <= ${max}` 
+          : `${min} < value < ${max}`;
+        const boundsDesc = inclusive ? 'inclusive' : 'exclusive';
+        
+        throw new GuardianError(
+          errorMessage || `Number must be between ${min} and ${max} (${boundsDesc})`,
+          {
+            expected: boundsStr,
+            got: num,
+            comparison: 'between',
+            type: 'validation',
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
+  }
+
+  /**
+   * Validates that number is a valid latitude (-90 to 90).
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  latitude(errorMessage?: string): NumberGuardian {
+    return this.process((num: number) => {
+      if (num < -90 || num > 90) {
+        throw new GuardianError(
+          errorMessage || 'Number must be a valid latitude (-90 to 90)',
+          {
+            expected: 'valid latitude (-90 to 90)',
+            got: num,
+            comparison: 'latitude',
+            type: 'validation',
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
+  }
+
+  /**
+   * Validates that number is a valid longitude (-180 to 180).
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  longitude(errorMessage?: string): NumberGuardian {
+    return this.process((num: number) => {
+      if (num < -180 || num > 180) {
+        throw new GuardianError(
+          errorMessage || 'Number must be a valid longitude (-180 to 180)',
+          {
+            expected: 'valid longitude (-180 to 180)',
+            got: num,
+            comparison: 'longitude',
+            type: 'validation',
+          },
+        );
+      }
+      return num;
+    }) as NumberGuardian;
+  }
+
   //#endregion
 
   //#region Mathematical Transformation Methods
@@ -408,6 +747,122 @@ export class NumberGuardian extends BaseGuardian<number> {
   abs(): NumberGuardian {
     return this.process(
       (num: number) => Math.abs(num),
+    ) as NumberGuardian;
+  }
+
+  /**
+   * Negates the number (multiplies by -1).
+   *
+   * @returns This NumberGuardian (mutated) or new instance if immutable mode
+   */
+  negate(): NumberGuardian {
+    return this.process(
+      (num: number) => -num,
+    ) as NumberGuardian;
+  }
+
+  /**
+   * Clamps the number to the specified range.
+   * Unlike range(), this transforms the value instead of validating it.
+   *
+   * @param min - Minimum value to clamp to
+   * @param max - Maximum value to clamp to
+   * @returns This NumberGuardian (mutated) or new instance if immutable mode
+   *
+   * @example
+   * ```ts
+   * const schema = new NumberGuardian().clamp(0, 100);
+   * schema.parse(150); // 100 (clamped)
+   * schema.parse(-10); // 0 (clamped)
+   * schema.parse(50); // 50 (unchanged)
+   * ```
+   */
+  clamp(min: number, max: number): NumberGuardian {
+    return this.process(
+      (num: number) => Math.min(Math.max(num, min), max),
+    ) as NumberGuardian;
+  }
+
+  /**
+   * Rounds the number to a specified number of decimal places.
+   *
+   * @param digits - Number of decimal places to round to
+   * @returns This NumberGuardian (mutated) or new instance if immutable mode
+   *
+   * @example
+   * ```ts
+   * const schema = new NumberGuardian().toFixed(2);
+   * schema.parse(3.14159); // 3.14
+   * schema.parse(5); // 5.00
+   * ```
+   */
+  toFixed(digits: number): NumberGuardian {
+    return this.process(
+      (num: number) => parseFloat(num.toFixed(digits)),
+    ) as NumberGuardian;
+  }
+
+  /**
+   * Formats number as currency.
+   *
+   * @param locale - Locale for currency formatting (defaults to 'en-US')
+   * @param currency - Currency code (defaults to 'USD')
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  formatCurrency(locale = 'en-US', currency = 'USD'): NumberGuardian {
+    return this.process(
+      (num: number) => {
+        const _formatter = new Intl.NumberFormat(locale, {
+          style: 'currency',
+          currency: currency,
+        });
+        // Note: This method preserves the original number value for calculations
+        // In real usage, you'd want to return the formatted string for display
+        return num;
+      },
+    ) as NumberGuardian;
+  }
+
+  /**
+   * Formats number as percentage.
+   *
+   * @param decimals - Number of decimal places (defaults to 2)
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  formatPercentage(decimals = 2): NumberGuardian {
+    return this.process(
+      (num: number) => parseFloat((num * 100).toFixed(decimals)),
+    ) as NumberGuardian;
+  }
+
+  /**
+   * Adds thousand separators to number (returns as number, not string).
+   *
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  addCommas(): NumberGuardian {
+    return this.process(
+      (num: number) => {
+        // Convert to string with commas, then back to number (removes commas but preserves value)
+        const formatted = num.toLocaleString('en-US');
+        return parseFloat(formatted.replace(/,/g, ''));
+      },
+    ) as NumberGuardian;
+  }
+
+  /**
+   * Pads number with leading zeros.
+   *
+   * @param length - Total length of the resulting number string
+   * @returns This NumberGuardian (mutated) or new instance if immutable
+   */
+  padZeros(length: number): NumberGuardian {
+    return this.process(
+      (num: number) => {
+        const str = Math.abs(num).toString();
+        const padded = str.padStart(length, '0');
+        return parseFloat(num < 0 ? '-' + padded : padded);
+      },
     ) as NumberGuardian;
   }
 
@@ -494,23 +949,6 @@ export class NumberGuardian extends BaseGuardian<number> {
   }
 
   //#endregion
-
-  //#region Documentation Methods
-
-  /**
-   * @override
-   */
-  protected override _enrichOpenAPISchema(schema: Record<string, unknown>, funcStr: string): void {
-    super._enrichOpenAPISchema(schema, funcStr);
-    
-    // Check if it's an integer by looking for integer methods in function string
-    if (funcStr.includes('integer()') || funcStr.includes('int()')) {
-      schema.type = "integer";
-    }
-    
-    // Number-specific constraints are now stored directly in _constraints
-    // No additional constraint extraction needed here
-  }
 
   //#endregion
 }

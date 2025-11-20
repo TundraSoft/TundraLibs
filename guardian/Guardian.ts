@@ -111,7 +111,7 @@ export class Guardian {
    * ```
    */
   static string(metaData?: GuardianMetaData): StringGuardian {
-    return new StringGuardian(metaData);
+    return new StringGuardian(undefined, metaData);
   }
 
   /**
@@ -131,7 +131,7 @@ export class Guardian {
    * ```
    */
   static number(metaData?: GuardianMetaData): NumberGuardian {
-    return new NumberGuardian(metaData);
+    return new NumberGuardian(undefined, metaData);
   }
 
   /**
@@ -169,7 +169,7 @@ export class Guardian {
       throw new Error("oneOf requires a non-empty error message");
     }
 
-    return new UnknownGuardian(metaData).process(
+    return new UnknownGuardian(undefined, metaData).process(
       (input: unknown) => {
         const errors: GuardianError[] = [];
 
@@ -257,7 +257,7 @@ export class Guardian {
    * ```
    */
   static unknown<T = unknown>(metaData?: GuardianMetaData): UnknownGuardian<T> {
-    return new UnknownGuardian<T>(metaData);
+    return new UnknownGuardian<T>(undefined, metaData);
   }
 
   /**
@@ -273,7 +273,7 @@ export class Guardian {
    * ```
    */
   static boolean(metaData?: GuardianMetaData): BooleanGuardian {
-    return new BooleanGuardian(metaData);
+    return new BooleanGuardian(undefined, metaData);
   }
 
   /**
@@ -291,7 +291,7 @@ export class Guardian {
    * ```
    */
   static date(metaData?: GuardianMetaData): DateGuardian {
-    return new DateGuardian(metaData);
+    return new DateGuardian(undefined, metaData);
   }
 
   /**
@@ -307,7 +307,7 @@ export class Guardian {
    * ```
    */
   static bigint(metaData?: GuardianMetaData): BigIntGuardian {
-    return new BigIntGuardian(metaData);
+    return new BigIntGuardian(undefined, metaData);
   }
 
   /**

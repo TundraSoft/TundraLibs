@@ -24,10 +24,10 @@ export class DateGuardian extends BaseGuardian<Date> {
   /**
    * Creates a new DateGuardian instance.
    *
-   * @param metaData - Optional metadata for this guardian
    * @param initialTransform - Optional composed transformation from previous guardian
+   * @param metaData - Optional metadata for this guardian
    */
-  constructor(metaData?: GuardianMetaData, initialTransform?: GuardianTransform<unknown, Date>) {
+  constructor(initialTransform?: GuardianTransform<unknown, Date>, metaData?: GuardianMetaData) {
     const defaultDateValidation = (input: unknown) => {
       if (!(input instanceof Date)) {
         throw new GuardianError("Expected Date but got ${got}", {
