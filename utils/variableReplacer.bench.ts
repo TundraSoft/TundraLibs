@@ -1,14 +1,14 @@
-import { variableReplacer } from './variableReplacer.ts';
+import { variableReplacer } from "./variableReplacer.ts";
 
 Deno.bench({
-  name: 'utils.variableReplacer - Replace variables in string',
+  name: "utils.variableReplacer - Replace variables in string",
 }, () => {
   variableReplacer(
-    'Hello ${user.firstName} ${user.lastName}, your ID is ${user.id}',
+    "Hello ${user.firstName} ${user.lastName}, your ID is ${user.id}",
     {
       user: {
-        firstName: 'John',
-        lastName: 'Doe',
+        firstName: "John",
+        lastName: "Doe",
         id: 12345,
       },
     },
@@ -16,16 +16,16 @@ Deno.bench({
 });
 
 Deno.bench({
-  name: 'utils.variableReplacer - Replace variables with nested objects',
+  name: "utils.variableReplacer - Replace variables with nested objects",
 }, () => {
   variableReplacer(
-    'Project: ${project.name} (${project.details.status})',
+    "Project: ${project.name} (${project.details.status})",
     {
       project: {
-        name: 'TundraLibs',
+        name: "TundraLibs",
         details: {
-          status: 'Active',
-          owner: 'TundraSoft',
+          status: "Active",
+          owner: "TundraSoft",
           lastUpdated: new Date(),
         },
       },

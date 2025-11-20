@@ -1,17 +1,17 @@
-import { assertEquals } from '$asserts';
-import { isSubnet } from './isSubnet.ts';
+import { assertEquals } from "$asserts";
+import { isSubnet } from "./isSubnet.ts";
 
-Deno.test('utils.isSubnet', async (t) => {
-  await t.step('IPv4 valid subnets', () => {
+Deno.test("utils.isSubnet", async (t) => {
+  await t.step("IPv4 valid subnets", () => {
     const validSubnets = [
-      '192.168.0.0/24',
-      '10.0.0.0/8',
-      '172.16.0.0/12',
-      '0.0.0.0/0',
-      '255.255.255.255/32',
-      '192.168.1.0/16',
-      '1.2.3.4/32',
-      '100.64.0.0/10', // Carrier-grade NAT
+      "192.168.0.0/24",
+      "10.0.0.0/8",
+      "172.16.0.0/12",
+      "0.0.0.0/0",
+      "255.255.255.255/32",
+      "192.168.1.0/16",
+      "1.2.3.4/32",
+      "100.64.0.0/10", // Carrier-grade NAT
     ];
 
     validSubnets.forEach((subnet) => {
@@ -19,42 +19,42 @@ Deno.test('utils.isSubnet', async (t) => {
     });
   });
 
-  await t.step('IPv4 boundary subnet masks', () => {
+  await t.step("IPv4 boundary subnet masks", () => {
     // Test all valid subnet mask boundaries for IPv4
     assertEquals(
-      isSubnet('192.168.0.0/0'),
+      isSubnet("192.168.0.0/0"),
       true,
-      'Subnet mask 0 should be valid',
+      "Subnet mask 0 should be valid",
     );
     assertEquals(
-      isSubnet('192.168.0.0/32'),
+      isSubnet("192.168.0.0/32"),
       true,
-      'Subnet mask 32 should be valid',
+      "Subnet mask 32 should be valid",
     );
     assertEquals(
-      isSubnet('192.168.0.0/33'),
+      isSubnet("192.168.0.0/33"),
       false,
-      'Subnet mask 33 should be invalid',
+      "Subnet mask 33 should be invalid",
     );
     assertEquals(
-      isSubnet('192.168.0.0/-1'),
+      isSubnet("192.168.0.0/-1"),
       false,
-      'Negative subnet mask should be invalid',
+      "Negative subnet mask should be invalid",
     );
   });
 
-  await t.step('IPv4 invalid subnets', () => {
+  await t.step("IPv4 invalid subnets", () => {
     const invalidSubnets = [
-      '192.168.0.256/24', // Invalid IP
-      '192.168.0.0/33', // Invalid subnet
-      '192.168.0/-1', // Invalid subnet
-      '192.168.0.1', // Missing subnet
-      '192.168.0.1/', // Empty subnet
-      '192.168.0.1/invalid', // Non-numeric subnet
-      '192.168/24', // Incomplete IP
-      '192.168.0.0.0/24', // Too many segments
-      '192.168.01.1/24', // Leading zeros
-      '192.168.1.1/24/extra', // Extra parts after subnet
+      "192.168.0.256/24", // Invalid IP
+      "192.168.0.0/33", // Invalid subnet
+      "192.168.0/-1", // Invalid subnet
+      "192.168.0.1", // Missing subnet
+      "192.168.0.1/", // Empty subnet
+      "192.168.0.1/invalid", // Non-numeric subnet
+      "192.168/24", // Incomplete IP
+      "192.168.0.0.0/24", // Too many segments
+      "192.168.01.1/24", // Leading zeros
+      "192.168.1.1/24/extra", // Extra parts after subnet
     ];
 
     invalidSubnets.forEach((subnet) => {
@@ -62,16 +62,16 @@ Deno.test('utils.isSubnet', async (t) => {
     });
   });
 
-  await t.step('IPv6 valid subnets', () => {
+  await t.step("IPv6 valid subnets", () => {
     const validSubnets = [
-      '2001:db8::/32',
-      'fe80::/10',
-      '::1/128',
-      '::/0',
-      '2001:db8:85a3::8a2e:370:7334/64',
-      'fe80::1:2:3:4/64',
-      '2001:db8::/48',
-      'ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/128',
+      "2001:db8::/32",
+      "fe80::/10",
+      "::1/128",
+      "::/0",
+      "2001:db8:85a3::8a2e:370:7334/64",
+      "fe80::1:2:3:4/64",
+      "2001:db8::/48",
+      "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff/128",
     ];
 
     validSubnets.forEach((subnet) => {
@@ -79,67 +79,67 @@ Deno.test('utils.isSubnet', async (t) => {
     });
   });
 
-  await t.step('IPv6 compression formats', () => {
+  await t.step("IPv6 compression formats", () => {
     // Different ways to represent the same IPv6 subnet should all be valid
     assertEquals(
-      isSubnet('2001:0db8:0000:0000:0000:0000:0000:0000/32'),
+      isSubnet("2001:0db8:0000:0000:0000:0000:0000:0000/32"),
       true,
-      'Full IPv6 notation',
+      "Full IPv6 notation",
     );
     assertEquals(
-      isSubnet('2001:db8:0:0:0:0:0:0/32'),
+      isSubnet("2001:db8:0:0:0:0:0:0/32"),
       true,
-      'IPv6 without leading zeros',
+      "IPv6 without leading zeros",
     );
     assertEquals(
-      isSubnet('2001:db8::/32'),
+      isSubnet("2001:db8::/32"),
       true,
-      'IPv6 with double-colon compression',
+      "IPv6 with double-colon compression",
     );
     assertEquals(
-      isSubnet('2001:db8:0:0::0:0/32'),
+      isSubnet("2001:db8:0:0::0:0/32"),
       true,
-      'IPv6 with partial compression',
+      "IPv6 with partial compression",
     );
   });
 
-  await t.step('IPv6 boundary subnet masks', () => {
+  await t.step("IPv6 boundary subnet masks", () => {
     // Test valid subnet mask boundaries for IPv6
     assertEquals(
-      isSubnet('2001:db8::/0'),
+      isSubnet("2001:db8::/0"),
       true,
-      'Subnet mask 0 should be valid',
+      "Subnet mask 0 should be valid",
     );
     assertEquals(
-      isSubnet('2001:db8::/128'),
+      isSubnet("2001:db8::/128"),
       true,
-      'Subnet mask 128 should be valid',
+      "Subnet mask 128 should be valid",
     );
     assertEquals(
-      isSubnet('2001:db8::/129'),
+      isSubnet("2001:db8::/129"),
       false,
-      'Subnet mask 129 should be invalid',
+      "Subnet mask 129 should be invalid",
     );
     assertEquals(
-      isSubnet('2001:db8::/-1'),
+      isSubnet("2001:db8::/-1"),
       false,
-      'Negative subnet mask should be invalid',
+      "Negative subnet mask should be invalid",
     );
   });
 
-  await t.step('IPv6 invalid subnets', () => {
+  await t.step("IPv6 invalid subnets", () => {
     const invalidSubnets = [
-      '2001:db8::/129', // Invalid subnet
-      '2001:db8::/256', // Invalid subnet
-      '2001:db8::-1', // Invalid subnet format
-      '2001:db8::', // Missing subnet
-      '2001:db8::/', // Empty subnet
-      '2001:db8::/invalid', // Non-numeric subnet
-      '2001:db8:::1/64', // Invalid compression
-      '2001:db8::g000/64', // Invalid hex
-      '2001:db8::1::2/64', // Multiple compression
-      '2001:db8:1:2:3:4:5:6:7/64', // Too many segments
-      '2001:db8::1/32/extra', // Extra parts after subnet
+      "2001:db8::/129", // Invalid subnet
+      "2001:db8::/256", // Invalid subnet
+      "2001:db8::-1", // Invalid subnet format
+      "2001:db8::", // Missing subnet
+      "2001:db8::/", // Empty subnet
+      "2001:db8::/invalid", // Non-numeric subnet
+      "2001:db8:::1/64", // Invalid compression
+      "2001:db8::g000/64", // Invalid hex
+      "2001:db8::1::2/64", // Multiple compression
+      "2001:db8:1:2:3:4:5:6:7/64", // Too many segments
+      "2001:db8::1/32/extra", // Extra parts after subnet
     ];
 
     invalidSubnets.forEach((subnet) => {
@@ -147,12 +147,12 @@ Deno.test('utils.isSubnet', async (t) => {
     });
   });
 
-  await t.step('Input validation', () => {
+  await t.step("Input validation", () => {
     const invalidInputs = [
-      '', // Empty string
-      ' ', // Whitespace
-      'invalid', // Invalid format
-      '192.168.1.1/24/', // Extra slash
+      "", // Empty string
+      " ", // Whitespace
+      "invalid", // Invalid format
+      "192.168.1.1/24/", // Extra slash
       undefined, // undefined
       null, // null
       {}, // object
@@ -167,26 +167,26 @@ Deno.test('utils.isSubnet', async (t) => {
     });
   });
 
-  await t.step('Whitespace handling', () => {
+  await t.step("Whitespace handling", () => {
     assertEquals(
-      isSubnet('  192.168.0.0/24  '),
+      isSubnet("  192.168.0.0/24  "),
       true,
-      'Should handle surrounding whitespace',
+      "Should handle surrounding whitespace",
     );
     assertEquals(
-      isSubnet('2001:db8::1/64 '),
+      isSubnet("2001:db8::1/64 "),
       true,
-      'Should handle trailing whitespace',
+      "Should handle trailing whitespace",
     );
     assertEquals(
-      isSubnet(' fe80::/10'),
+      isSubnet(" fe80::/10"),
       true,
-      'Should handle leading whitespace',
+      "Should handle leading whitespace",
     );
     assertEquals(
-      isSubnet('\t10.0.0.0/8\n'),
+      isSubnet("\t10.0.0.0/8\n"),
       true,
-      'Should handle tab and newline whitespace',
+      "Should handle tab and newline whitespace",
     );
   });
 });

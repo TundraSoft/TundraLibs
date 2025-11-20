@@ -80,7 +80,7 @@ export const encryptAES = async (
 
   const key = await crypto.subtle.importKey(
     "raw",
-    keyBytes,
+    keyBytes as BufferSource,
     {
       name: algorithm!,
       length: length,
@@ -177,10 +177,10 @@ export const encryptRSA = async (
 
     cryptoKey = await crypto.subtle.importKey(
       "spki",
-      keyData,
+      keyData as BufferSource,
       {
         name: "RSA-OAEP",
-        hash: hashAlgorithm,
+        hash: "SHA-256",
       },
       false,
       ["encrypt"],
@@ -216,7 +216,7 @@ export const encryptRSA = async (
       name: "RSA-OAEP",
     },
     cryptoKey,
-    dataToEncrypt,
+    dataToEncrypt as BufferSource,
   );
 
   // Return as base64 for RSA (standard format)
@@ -244,7 +244,7 @@ const encryptAESCTR = async (
       length: 128, // Counter length in bits
     },
     key,
-    data,
+    data as BufferSource,
   );
 
   return `${encodeHex(encrypted)}:${encodeHex(counter)}`;
@@ -274,7 +274,7 @@ const encryptAESGCMCBC = async (
   const encrypted = await crypto.subtle.encrypt(
     encryptConfig,
     key,
-    data,
+    data as BufferSource,
   );
 
   return `${encodeHex(encrypted)}:${encodeHex(iv)}`;

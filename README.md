@@ -4,7 +4,8 @@
 [![Benchmark](https://github.com/tundralibs/tundralibs/actions/workflows/benchmark.yaml/badge.svg)](https://github.com/tundralibs/tundralibs/actions/workflows/benchmark.yaml)
 [![JSR](https://jsr.io/badges/@tundralibs)](https://jsr.io/@tundralibs)
 
-A collection of high-quality, well-tested TypeScript utilities for Deno, organized as a modern monorepo with automatic releases and performance tracking.
+A collection of high-quality, well-tested TypeScript utilities for Deno,
+organized as a modern monorepo with automatic releases and performance tracking.
 
 ## 📦 Packages
 
@@ -33,32 +34,34 @@ deno add @tundralibs/utils@1.5.0-edge.125.ghi9012
 deno add @tundralibs/crypt @tundralibs/id @tundralibs/utils
 ```
 
-> **🚀 Edge Versions**: Every PR automatically publishes edge versions (e.g., `@1.2.0-edge.123.abc1234`) for testing new features before they're released. Perfect for early adopters and contributors!
+> **🚀 Edge Versions**: Every PR automatically publishes edge versions (e.g.,
+> `@1.2.0-edge.123.abc1234`) for testing new features before they're released.
+> Perfect for early adopters and contributors!
 
 ### Usage Examples
 
 ```typescript
 // Cryptographic operations
-import { decrypt, digest, encrypt, TOTP } from '@tundralibs/crypt';
+import { decrypt, digest, encrypt, TOTP } from "@tundralibs/crypt";
 
 // Generate TOTP code
-const secret = 'JBSWY3DPEHPK3PXP';
+const secret = "JBSWY3DPEHPK3PXP";
 const code = TOTP(secret);
 console.log(code); // 6-digit TOTP code
 
 // Encrypt/decrypt data
 const key = await crypto.subtle.generateKey(
-  { name: 'AES-GCM', length: 256 },
+  { name: "AES-GCM", length: 256 },
   true,
-  ['encrypt', 'decrypt'],
+  ["encrypt", "decrypt"],
 );
-const encrypted = await encrypt('Hello World', key);
+const encrypted = await encrypt("Hello World", key);
 const decrypted = await decrypt(encrypted, key);
 ```
 
 ```typescript
 // ID generation
-import { nanoID, ObjectID, ULID } from '@tundralibs/id';
+import { nanoID, ObjectID, ULID } from "@tundralibs/id";
 
 // Generate various ID types
 const nano = nanoID(); // URL-safe, customizable
@@ -68,11 +71,11 @@ const objectId = ObjectID(); // MongoDB-style ObjectID
 
 ```typescript
 // Utility functions
-import { Events, memoize, throttle } from '@tundralibs/utils';
+import { Events, memoize, throttle } from "@tundralibs/utils";
 
 // Throttle function calls
 const throttledFn = throttle(() => {
-  console.log('Called at most once per second');
+  console.log("Called at most once per second");
 }, 1000);
 
 // Memoize expensive operations
@@ -82,7 +85,7 @@ const memoizedFn = memoize((x: number) => {
 
 // Event handling
 const events = new Events<{ userLogin: { userId: string } }>();
-events.on('userLogin', ({ userId }) => {
+events.on("userLogin", ({ userId }) => {
   console.log(`User ${userId} logged in`);
 });
 ```
@@ -129,7 +132,8 @@ deno task test:bench         # Benchmarks only
 
 ## 📖 Documentation
 
-- **[Contributing Guide](./CONTRIBUTING.md)** - Comprehensive development workflow
+- **[Contributing Guide](./CONTRIBUTING.md)** - Comprehensive development
+  workflow
 - **[Changelog](./CHANGELOG.md)** - Release history and changes
 - **[API Documentation](https://jsr.io/@tundralibs)** - Complete API reference
 
@@ -194,7 +198,8 @@ gh workflow run publish.yaml \
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md) for detailed information about:
+We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md)
+for detailed information about:
 
 - **Development setup** and workflow
 - **Branch naming** and PR guidelines
@@ -220,8 +225,10 @@ This project is licensed under the [MIT License](./LICENSE).
 
 - **[JSR Registry](https://jsr.io/@tundralibs)** - Package registry
 - **[GitHub](https://github.com/tundralibs/tundralibs)** - Source code
-- **[Issues](https://github.com/tundralibs/tundralibs/issues)** - Bug reports and feature requests
-- **[Discussions](https://github.com/tundralibs/tundralibs/discussions)** - Community discussions
+- **[Issues](https://github.com/tundralibs/tundralibs/issues)** - Bug reports
+  and feature requests
+- **[Discussions](https://github.com/tundralibs/tundralibs/discussions)** -
+  Community discussions
 
 ## 🙏 Acknowledgments
 

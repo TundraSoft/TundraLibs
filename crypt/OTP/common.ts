@@ -16,7 +16,7 @@ export const numberToBytes = (data: number): Uint8Array => {
   const buffer = new ArrayBuffer(8);
   const view = new DataView(buffer);
   view.setBigUint64(0, BigInt(data), false); // false for big-endian
-  return new Uint8Array(buffer);
+  return new Uint8Array(buffer) as Uint8Array;
 };
 
 /**
@@ -104,7 +104,7 @@ export const generate = async (
   // Import key for HMAC
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    keyData,
+    keyData as BufferSource,
     { name: "HMAC", hash: algo },
     false,
     ["sign"],
@@ -112,7 +112,7 @@ export const generate = async (
 
   // Generate HMAC
   const digest = new Uint8Array(
-    await crypto.subtle.sign("HMAC", cryptoKey, numberToBytes(counter)),
+    await crypto.subtle.sign("HMAC", cryptoKey, numberToBytes(counter) as BufferSource),
   );
 
   // Extract code using dynamic truncation (RFC 4226 section 5.4)

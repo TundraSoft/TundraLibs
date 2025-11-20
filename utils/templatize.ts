@@ -183,7 +183,7 @@ export const templatize = <T extends string>(
         const key = variable.slice(2, -1) as keyof TemplateValues<T>;
         // Replace the variable placeholder with the provided value
         // Use empty string as fallback for missing values (nullish coalescing)
-        return acc.replace(variable, values[key] ?? '');
+        return acc.replace(variable, values[key] ?? "");
       }, template);
   }
 };

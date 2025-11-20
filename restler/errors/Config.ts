@@ -1,4 +1,4 @@
-import { RESTlerError, RESTlerErrorMeta } from './Base.ts';
+import { RESTlerError, RESTlerErrorMeta } from "./Base.ts";
 
 /**
  * Error class for configuration-related errors in RESTler.

@@ -1,6 +1,7 @@
 # TundraLibs Development Guide
 
-A comprehensive guide for contributing to the TundraLibs monorepo with Deno workspaces.
+A comprehensive guide for contributing to the TundraLibs monorepo with Deno
+workspaces.
 
 ## 🚀 Quick Start
 
@@ -54,7 +55,8 @@ gh run watch                              # Monitor progress
 
 ## 🏗️ Project Structure
 
-TundraLibs is organized as a Deno workspace monorepo with the following structure:
+TundraLibs is organized as a Deno workspace monorepo with the following
+structure:
 
 ```
 TundraLibs/
@@ -149,7 +151,8 @@ BREAKING(utils): Remove deprecated Config.load method
 - [ ] **Documentation updated** - Update README.md and JSDoc comments
 - [ ] **Performance verified** - Run benchmarks for performance-critical changes
 - ✅ **Workspace-specific** - only changed workspaces get edge releases
-- ✅ **Unique versions** - each PR gets its own edge version with PR number and commit hash
+- ✅ **Unique versions** - each PR gets its own edge version with PR number and
+  commit hash
 - ✅ **PR comments** - Automatic notification with exact version strings
 
 #### Testing Edge Versions
@@ -165,7 +168,8 @@ import { encrypt } from '@tundralibs/crypt@2.1.0-edge.123.abc1234';
 deno add @tundralibs/crypt@2.1.0
 ```
 
-⚠️ **Important**: Edge versions are **unstable** and should never be used in production.
+⚠️ **Important**: Edge versions are **unstable** and should never be used in
+production.
 
 ---
 
@@ -259,7 +263,8 @@ deno task security:all         # Full security scan
 
 ## 🧪 Testing Workflows
 
-For comprehensive workflow testing, see [`.docs/WorkflowTesting.md`](.docs/WorkflowTesting.md).
+For comprehensive workflow testing, see
+[`.docs/WorkflowTesting.md`](.docs/WorkflowTesting.md).
 
 ### Quick Testing Commands
 
@@ -283,7 +288,8 @@ gh workflow run publish.yaml --ref dev1.0.0 --field workspace=utils --field dry_
 ### Safe Testing Sequence
 
 1. **Quality Gates**: `gh workflow run test.yaml --ref dev1.0.0`
-2. **Emergency Publish (Dry)**: `gh workflow run publish.yaml --ref dev1.0.0 --field workspace=utils --field dry_run=true --field reason='Testing'`
+2. **Emergency Publish (Dry)**:
+   `gh workflow run publish.yaml --ref dev1.0.0 --field workspace=utils --field dry_run=true --field reason='Testing'`
 3. **Security Scan**: `gh workflow run security.yaml --ref dev1.0.0`
 4. **Benchmarks**: `gh workflow run benchmark.yaml --ref dev1.0.0`
 
@@ -359,7 +365,9 @@ deno task security:config      # Configuration security scan
 
 **Reporting Security Issues:**
 
-- Use [private vulnerability reporting](https://github.com/TundraSoft/TundraLibs/security/advisories/new) for sensitive issues
+- Use
+  [private vulnerability reporting](https://github.com/TundraSoft/TundraLibs/security/advisories/new)
+  for sensitive issues
 - See [SECURITY.md](.github/SECURITY.md) for full security policy
 
 ## 🔧 Troubleshooting
@@ -458,13 +466,16 @@ deno task bench:json > after.json
 
 ## 📚 Resources
 
-- **[Workflow Testing Guide](.docs/WorkflowTesting.md)** - Complete testing reference
+- **[Workflow Testing Guide](.docs/WorkflowTesting.md)** - Complete testing
+  reference
 - **[JSR Registry](https://jsr.io/@tundralibs)** - Published packages
 - **[Deno Manual](https://deno.land/manual)** - Deno documentation
-- **[Conventional Commits](https://conventionalcommits.org/)** - Commit format reference
+- **[Conventional Commits](https://conventionalcommits.org/)** - Commit format
+  reference
 
 ---
 
 **Happy coding! 🎉**
 
-For questions or suggestions about this guide, please open an issue or discussion.
+For questions or suggestions about this guide, please open an issue or
+discussion.

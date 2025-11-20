@@ -1,5 +1,5 @@
-import * as path from '$path';
-import { variableReplacer } from './variableReplacer.ts';
+import * as path from "$path";
+import { variableReplacer } from "./variableReplacer.ts";
 
 /**
  * JSON representation of a BaseError instance.
@@ -93,7 +93,7 @@ export class BaseError<
   declare public readonly context: M;
 
   /** The original message before template processing */
-  protected _baseMessage: string = '';
+  protected _baseMessage: string = "";
 
   /**
    * Creates a new BaseError instance.
@@ -163,7 +163,7 @@ export class BaseError<
    * ```
    */
   protected get _messageTemplate(): string {
-    return '${message}';
+    return "${message}";
   }
 
   /**
@@ -217,32 +217,32 @@ export class BaseError<
 
     const stackTrace = this.cause ? (this.cause as Error).stack : this.stack;
     if (!stackTrace) {
-      return 'No stack trace available';
+      return "No stack trace available";
     }
 
-    const stackLines = stackTrace.split('\n');
+    const stackLines = stackTrace.split("\n");
     if (stackLines.length <= 1) {
-      return 'Insufficient stack trace information';
+      return "Insufficient stack trace information";
     }
 
     const stackLine = stackLines[1]?.trim();
     if (!stackLine) {
-      return 'Invalid stack trace format';
+      return "Invalid stack trace format";
     }
 
     const regex = /at\s+(?:[^@]*@)?(?:file:\/\/)?(.*):(\d+):(\d+)/i;
     const match = regex.exec(stackLine);
     if (!match?.[1] || !match?.[2]) {
-      return 'Could not parse stack trace';
+      return "Could not parse stack trace";
     }
 
     const [, filePath, lineStr] = match;
     try {
       const fileContent = Deno.readTextFileSync(path.toFileUrl(filePath));
-      const lines = fileContent.split('\n');
+      const lines = fileContent.split("\n");
       const errorLine = parseInt(lineStr, 10) - 1;
       if (isNaN(errorLine) || errorLine < 0) {
-        return 'Invalid line number in stack trace';
+        return "Invalid line number in stack trace";
       }
 
       const startLine = Math.max(0, errorLine - contextLines);
@@ -251,12 +251,12 @@ export class BaseError<
       const snippet = lines.slice(startLine, endLine)
         .map((codeLine, index) => {
           const currentLine = startLine + index + 1;
-          const lineIndicator = currentLine === errorLine + 1 ? '>' : ' ';
+          const lineIndicator = currentLine === errorLine + 1 ? ">" : " ";
           return `${lineIndicator} ${
             currentLine.toString().padStart(4)
           } | ${codeLine}`;
         })
-        .join('\n');
+        .join("\n");
 
       return snippet.trim();
     } catch (error) {

@@ -267,7 +267,7 @@ Deno.test("crypt.generators.key", async (t) => {
     assert(keyPair.privateKey instanceof CryptoKey);
     assertEquals(keyPair.publicKey.algorithm.name, "RSA-OAEP");
     assertEquals(
-      (keyPair.publicKey.algorithm as RsaHashedKeyGenParams).hash.name,
+      ((keyPair.publicKey.algorithm as RsaHashedKeyGenParams).hash as { name: string }).name,
       "SHA-384"
     );
   });
@@ -283,7 +283,7 @@ Deno.test("crypt.generators.key", async (t) => {
     assert(keyPair.privateKey instanceof CryptoKey);
     assertEquals(keyPair.publicKey.algorithm.name, "RSA-PSS");
     assertEquals(
-      (keyPair.publicKey.algorithm as RsaHashedKeyGenParams).hash.name,
+      ((keyPair.publicKey.algorithm as RsaHashedKeyGenParams).hash as { name: string }).name,
       "SHA-512"
     );
   });

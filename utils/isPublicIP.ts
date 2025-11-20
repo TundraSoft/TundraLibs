@@ -4,24 +4,24 @@ import {
   isIPv4InRange,
   isValidIPv4,
   isValidIPv6Structure,
-} from './ipUtils.ts';
+} from "./ipUtils.ts";
 
 // Define private network ranges as [startIP, CIDR mask]
 type IPRange = [string, number];
 
 const ipv4Ranges: IPRange[] = [
-  ['10.0.0.0', 8], // Private network (RFC 1918)
-  ['172.16.0.0', 12], // Private network (RFC 1918)
-  ['192.168.0.0', 16], // Private network (RFC 1918)
-  ['169.254.0.0', 16], // Link-local (RFC 3927)
-  ['127.0.0.0', 8], // Localhost (RFC 1122)
-  ['0.0.0.0', 8], // Current network (RFC 1122)
+  ["10.0.0.0", 8], // Private network (RFC 1918)
+  ["172.16.0.0", 12], // Private network (RFC 1918)
+  ["192.168.0.0", 16], // Private network (RFC 1918)
+  ["169.254.0.0", 16], // Link-local (RFC 3927)
+  ["127.0.0.0", 8], // Localhost (RFC 1122)
+  ["0.0.0.0", 8], // Current network (RFC 1122)
 ];
 
 // Unique local addresses and link-local addresses for IPv6
 const ipv6Ranges: IPRange[] = [
-  ['fc00::', 7], // Unique local address (RFC 4193)
-  ['fe80::', 10], // Link-local address (RFC 4291)
+  ["fc00::", 7], // Unique local address (RFC 4193)
+  ["fe80::", 10], // Link-local address (RFC 4291)
 ];
 
 /**
@@ -37,7 +37,7 @@ const ipv6Ranges: IPRange[] = [
  * isPublicIP('fe80::1') // false (link-local)
  */
 export const isPublicIP = (ip: string): boolean => {
-  if (!ip || typeof ip !== 'string') return false;
+  if (!ip || typeof ip !== "string") return false;
 
   ip = ip.trim();
 
@@ -52,17 +52,17 @@ export const isPublicIP = (ip: string): boolean => {
   // IPv6 check - use regex and additional structure validation
   if (IPV6_REGEX.test(ip) && isValidIPv6Structure(ip)) {
     const normalizedIP = ip.toLowerCase();
-    if (normalizedIP === '::1') return false; // localhost
+    if (normalizedIP === "::1") return false; // localhost
 
     // Handle fc00::/7 range (unique local addresses) which covers fc00:: to fdff::
     // This includes both fc and fd prefixes
-    if (normalizedIP.startsWith('fc') || normalizedIP.startsWith('fd')) {
+    if (normalizedIP.startsWith("fc") || normalizedIP.startsWith("fd")) {
       return false;
     }
 
     // Check other IPv6 ranges like fe80::/10 (link-local)
     return !ipv6Ranges.some(([prefix, _cidr]) =>
-      normalizedIP.startsWith(prefix.split(':')[0]!)
+      normalizedIP.startsWith(prefix.split(":")[0]!)
     );
   }
 

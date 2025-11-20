@@ -1,11 +1,11 @@
 // deno-lint-ignore-file no-explicit-any
 // throttle.test.ts
 
-import * as asserts from '$asserts';
-import { Throttle, throttle } from './throttle.ts';
+import * as asserts from "$asserts";
+import { Throttle, throttle } from "./throttle.ts";
 
-Deno.test('utils.throttle', async (t) => {
-  await t.step('should throttle function calls', async () => {
+Deno.test("utils.throttle", async (t) => {
+  await t.step("should throttle function calls", async () => {
     let counter = 0;
     const add = (a: number, b: number): number => {
       counter++;
@@ -27,7 +27,7 @@ Deno.test('utils.throttle', async (t) => {
     asserts.assertEquals(counter, 3);
   });
 
-  await t.step('should throttle async function calls', async () => {
+  await t.step("should throttle async function calls", async () => {
     let counter = 0;
     const add = async (a: number, b: number): Promise<number> => {
       counter++;
@@ -51,7 +51,7 @@ Deno.test('utils.throttle', async (t) => {
   });
 
   await t.step(
-    'should throttle function calls with arguments ignored',
+    "should throttle function calls with arguments ignored",
     async () => {
       let counter = 0;
       const add = (a: number, b: number): number => {
@@ -76,7 +76,7 @@ Deno.test('utils.throttle', async (t) => {
   );
 
   await t.step(
-    'should throttle async function calls with arguments ignored',
+    "should throttle async function calls with arguments ignored",
     async () => {
       let counter = 0;
       const add = async (a: number, b: number): Promise<number> => {
@@ -101,7 +101,7 @@ Deno.test('utils.throttle', async (t) => {
     },
   );
 
-  await t.step('should throttle method calls', async () => {
+  await t.step("should throttle method calls", async () => {
     class Calculator {
       static counter = 0;
       @Throttle(500)
@@ -125,7 +125,7 @@ Deno.test('utils.throttle', async (t) => {
     asserts.assertEquals(Calculator.counter, 3);
   });
 
-  await t.step('should throttle async method calls', async () => {
+  await t.step("should throttle async method calls", async () => {
     class Calculator {
       static counter = 0;
       @Throttle(500)
@@ -150,7 +150,7 @@ Deno.test('utils.throttle', async (t) => {
   });
 
   await t.step(
-    'should throttle method calls with arguments ignored',
+    "should throttle method calls with arguments ignored",
     async () => {
       class Calculator {
         static counter = 0;
@@ -178,12 +178,12 @@ Deno.test('utils.throttle', async (t) => {
     },
   );
 
-  await t.step('should handle function errors gracefully', async () => {
+  await t.step("should handle function errors gracefully", async () => {
     let counter = 0;
     const errorFn = (throwError: boolean): number => {
       counter++;
       if (throwError) {
-        throw new Error('Test error');
+        throw new Error("Test error");
       }
       return 42;
     };
@@ -193,10 +193,10 @@ Deno.test('utils.throttle', async (t) => {
     // First call throws error
     try {
       throttledFn(true);
-      asserts.fail('Should have thrown an error');
+      asserts.fail("Should have thrown an error");
     } catch (error) {
       asserts.assert(error instanceof Error);
-      asserts.assertEquals(error.message, 'Test error');
+      asserts.assertEquals(error.message, "Test error");
     }
 
     // Second call should work and be executed (not throttled by error)
@@ -207,7 +207,7 @@ Deno.test('utils.throttle', async (t) => {
     await new Promise((resolve) => setTimeout(resolve, 10));
   });
 
-  await t.step('should handle circular reference arguments', async () => {
+  await t.step("should handle circular reference arguments", async () => {
     let counter = 0;
     const circularFn = (_obj: any): number => {
       counter++;
@@ -215,7 +215,7 @@ Deno.test('utils.throttle', async (t) => {
     };
 
     const throttledFn = throttle(circularFn, 500);
-    const circular: any = { prop: 'value' };
+    const circular: any = { prop: "value" };
     circular.self = circular;
 
     // Should not throw and successfully throttle
@@ -229,7 +229,7 @@ Deno.test('utils.throttle', async (t) => {
     asserts.assertEquals(counter, 2);
   });
 
-  await t.step('should clean up memory after delay expires', async () => {
+  await t.step("should clean up memory after delay expires", async () => {
     let counter = 0;
     const fn = (): number => {
       counter++;
@@ -256,7 +256,7 @@ Deno.test('utils.throttle', async (t) => {
     asserts.assertEquals(counter, 3);
   });
 
-  await t.step('should handle zero delay throttling', () => {
+  await t.step("should handle zero delay throttling", () => {
     let counter = 0;
     const fn = (): number => {
       counter++;
@@ -272,21 +272,21 @@ Deno.test('utils.throttle', async (t) => {
     asserts.assertEquals(counter, 3);
   });
 
-  await t.step('should handle decorator on non-function properties', () => {
+  await t.step("should handle decorator on non-function properties", () => {
     const descriptor: PropertyDescriptor = {
-      value: 'not a function',
+      value: "not a function",
       writable: true,
       enumerable: true,
       configurable: true,
     };
 
     // The decorator should not modify non-function properties
-    Throttle(1000)({}, 'test', descriptor);
-    asserts.assertEquals(descriptor.value, 'not a function');
+    Throttle(1000)({}, "test", descriptor);
+    asserts.assertEquals(descriptor.value, "not a function");
   });
 
   await t.step(
-    'should handle async function that is already running',
+    "should handle async function that is already running",
     async () => {
       let counter = 0;
       const slowAsyncFn = async (): Promise<number> => {
@@ -313,7 +313,7 @@ Deno.test('utils.throttle', async (t) => {
     },
   );
 
-  await t.step('should reset call log when delay has expired', async () => {
+  await t.step("should reset call log when delay has expired", async () => {
     let counter = 0;
     const fn = (): number => {
       counter++;
@@ -334,7 +334,7 @@ Deno.test('utils.throttle', async (t) => {
     asserts.assertEquals(counter, 2);
   });
 
-  await t.step('should handle empty arguments correctly', () => {
+  await t.step("should handle empty arguments correctly", () => {
     let counter = 0;
     const fn = (...args: any[]): number => {
       counter++;
@@ -353,7 +353,7 @@ Deno.test('utils.throttle', async (t) => {
     asserts.assertEquals(counter, 2);
   });
 
-  await t.step('should handle time fallback functionality', () => {
+  await t.step("should handle time fallback functionality", () => {
     // In Deno, performance API is always available, but we can test that
     // the throttle function works correctly regardless
     let counter = 0;
@@ -368,7 +368,7 @@ Deno.test('utils.throttle', async (t) => {
     asserts.assertEquals(counter, 1);
   });
 
-  await t.step('should handle safeStringify with complex objects', () => {
+  await t.step("should handle safeStringify with complex objects", () => {
     let counter = 0;
     const fn = (...args: any[]): number => {
       counter++;
@@ -378,7 +378,7 @@ Deno.test('utils.throttle', async (t) => {
     const throttledFn = throttle(fn, 100);
 
     // Test with various non-serializable objects
-    const symbol = Symbol('test');
+    const symbol = Symbol("test");
     const func = () => {};
     const date = new Date();
     const regex = /test/;
@@ -390,13 +390,13 @@ Deno.test('utils.throttle', async (t) => {
     throttledFn(regex);
 
     // Multiple calls with same type should be throttled
-    throttledFn(Symbol('test2'));
+    throttledFn(Symbol("test2"));
     throttledFn(() => {});
 
     asserts.assert(counter >= 1);
   });
 
-  await t.step('should handle undefined return values', async () => {
+  await t.step("should handle undefined return values", async () => {
     let counter = 0;
     const fn = (): void => {
       counter++;
@@ -416,7 +416,7 @@ Deno.test('utils.throttle', async (t) => {
 
   // Note: Removed async rejection test due to uncaught promise handling complexity in test environment
 
-  await t.step('should handle async promise finally cleanup', async () => {
+  await t.step("should handle async promise finally cleanup", async () => {
     let counter = 0;
     let finallyCounter = 0;
 
@@ -453,7 +453,7 @@ Deno.test('utils.throttle', async (t) => {
     asserts.assertEquals(finallyCounter, 2);
   });
 
-  await t.step('should handle edge case with very small delays', async () => {
+  await t.step("should handle edge case with very small delays", async () => {
     let counter = 0;
     const fn = (): number => {
       counter++;
@@ -474,7 +474,7 @@ Deno.test('utils.throttle', async (t) => {
     asserts.assertEquals(counter, 2);
   });
 
-  await t.step('should handle decorator with getter methods', () => {
+  await t.step("should handle decorator with getter methods", () => {
     class TestClass {
       private _value = 0;
       static counter = 0;
@@ -504,7 +504,7 @@ Deno.test('utils.throttle', async (t) => {
   });
 
   await t.step(
-    'should handle concurrent async calls with different arguments',
+    "should handle concurrent async calls with different arguments",
     async () => {
       let counter = 0;
       const asyncFn = async (id: number): Promise<string> => {
@@ -531,9 +531,9 @@ Deno.test('utils.throttle', async (t) => {
         promise3,
       ]);
 
-      asserts.assertEquals(result1, 'result-1');
-      asserts.assertEquals(result2, 'result-2');
-      asserts.assertEquals(result3, 'result-1');
+      asserts.assertEquals(result1, "result-1");
+      asserts.assertEquals(result2, "result-2");
+      asserts.assertEquals(result3, "result-1");
       asserts.assertEquals(counter, 2); // Only two actual executions
     },
   );

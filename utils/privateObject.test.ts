@@ -1,65 +1,65 @@
-import * as asserts from '$asserts';
+import * as asserts from "$asserts";
 
-import { privateObject } from './privateObject.ts';
-import type { PrivateObject } from './privateObject.ts';
+import { privateObject } from "./privateObject.ts";
+import type { PrivateObject } from "./privateObject.ts";
 
-Deno.test('utils.privateObject', async (t) => {
+Deno.test("utils.privateObject", async (t) => {
   let secretObject: PrivateObject;
 
-  await t.step('sealed object', async (t) => {
-    await t.step('get should return the value for a given key', () => {
+  await t.step("sealed object", async (t) => {
+    await t.step("get should return the value for a given key", () => {
       secretObject = privateObject<Record<string, unknown>>({
-        key1: 'value1',
-        key2: 'value2',
+        key1: "value1",
+        key2: "value2",
       }, false);
-      asserts.assertEquals(secretObject.get('key1'), 'value1');
-      asserts.assertEquals(secretObject.get('key2'), 'value2');
-      asserts.assertEquals(secretObject.get('key3'), undefined);
+      asserts.assertEquals(secretObject.get("key1"), "value1");
+      asserts.assertEquals(secretObject.get("key2"), "value2");
+      asserts.assertEquals(secretObject.get("key3"), undefined);
     });
 
     await t.step(
-      'has should return true if the key exists, otherwise false',
+      "has should return true if the key exists, otherwise false",
       () => {
         secretObject = privateObject<Record<string, unknown>>({
-          key1: 'value1',
-          key2: 'value2',
+          key1: "value1",
+          key2: "value2",
         }, false);
-        asserts.assertEquals(secretObject.has('key1'), true);
-        asserts.assertEquals(secretObject.has('key2'), true);
-        asserts.assertEquals(secretObject.has('key3'), false);
+        asserts.assertEquals(secretObject.has("key1"), true);
+        asserts.assertEquals(secretObject.has("key2"), true);
+        asserts.assertEquals(secretObject.has("key3"), false);
       },
     );
 
-    await t.step('set should set the value for a given key', () => {
+    await t.step("set should set the value for a given key", () => {
       secretObject = privateObject<Record<string, unknown>>({
-        key1: 'value1',
-        key2: 'value2',
+        key1: "value1",
+        key2: "value2",
       }, false);
-      secretObject.set('key1', 'new value');
-      asserts.assertEquals(secretObject.get('key1'), 'value1'); // Should not change
-      secretObject.set('key3', 'value3');
-      asserts.assertEquals(secretObject.get('key3'), undefined);
-      asserts.assertEquals(secretObject.has('key3'), false);
+      secretObject.set("key1", "new value");
+      asserts.assertEquals(secretObject.get("key1"), "value1"); // Should not change
+      secretObject.set("key3", "value3");
+      asserts.assertEquals(secretObject.get("key3"), undefined);
+      asserts.assertEquals(secretObject.has("key3"), false);
     });
 
     await t.step(
-      'delete should remove the key and its value from the object',
+      "delete should remove the key and its value from the object",
       () => {
         secretObject = privateObject<Record<string, unknown>>({
-          key1: 'value1',
-          key2: 'value2',
+          key1: "value1",
+          key2: "value2",
         }, false);
-        secretObject.delete('key1');
-        asserts.assertEquals(secretObject.get('key1'), 'value1');
-        asserts.assertEquals(secretObject.has('key1'), true);
-        secretObject.delete('key3'); // Deleting non-existing key should not throw error
+        secretObject.delete("key1");
+        asserts.assertEquals(secretObject.get("key1"), "value1");
+        asserts.assertEquals(secretObject.has("key1"), true);
+        secretObject.delete("key3"); // Deleting non-existing key should not throw error
       },
     );
 
-    await t.step('test foreach', () => {
+    await t.step("test foreach", () => {
       secretObject = privateObject<Record<string, unknown>>({
-        key1: 'value1',
-        key2: 'value2',
+        key1: "value1",
+        key2: "value2",
       }, false);
       const keys: string[] = [];
       const values: unknown[] = [];
@@ -67,25 +67,25 @@ Deno.test('utils.privateObject', async (t) => {
         keys.push(key);
         values.push(value);
       });
-      asserts.assertEquals(keys, ['key1', 'key2']);
-      asserts.assertEquals(values, ['value1', 'value2']);
+      asserts.assertEquals(keys, ["key1", "key2"]);
+      asserts.assertEquals(values, ["value1", "value2"]);
     });
 
-    await t.step('should return correct keys', () => {
+    await t.step("should return correct keys", () => {
       secretObject = privateObject<Record<string, unknown>>({
-        key1: 'value1',
-        key2: 'value2',
+        key1: "value1",
+        key2: "value2",
       }, false);
       const keys = secretObject.keys();
       asserts.assertEquals(keys.length, 2);
-      asserts.assertEquals(keys.includes('key1'), true);
-      asserts.assertEquals(keys.includes('key2'), true);
+      asserts.assertEquals(keys.includes("key1"), true);
+      asserts.assertEquals(keys.includes("key2"), true);
     });
 
-    await t.step('should return the object through asObject', () => {
+    await t.step("should return the object through asObject", () => {
       const originalObj = {
-        key1: 'value1',
-        key2: 'value2',
+        key1: "value1",
+        key2: "value2",
       };
       secretObject = privateObject<Record<string, unknown>>(originalObj, false);
       const returnedObj = secretObject.asObject();
@@ -93,67 +93,67 @@ Deno.test('utils.privateObject', async (t) => {
     });
   });
 
-  await t.step('unsealed object', async (t) => {
-    await t.step('initialize empty and set', () => {
+  await t.step("unsealed object", async (t) => {
+    await t.step("initialize empty and set", () => {
       secretObject = privateObject<Record<string, unknown>>();
-      asserts.assertEquals(secretObject.has('key1'), false);
-      secretObject.set('key1', 'value1');
-      asserts.assertEquals(secretObject.get('key1'), 'value1');
+      asserts.assertEquals(secretObject.has("key1"), false);
+      secretObject.set("key1", "value1");
+      asserts.assertEquals(secretObject.get("key1"), "value1");
     });
 
-    await t.step('get should return the value for a given key', () => {
+    await t.step("get should return the value for a given key", () => {
       secretObject = privateObject<Record<string, unknown>>({
-        key1: 'value1',
-        key2: 'value2',
+        key1: "value1",
+        key2: "value2",
       });
-      asserts.assertEquals(secretObject.get('key1'), 'value1');
-      asserts.assertEquals(secretObject.get('key2'), 'value2');
-      asserts.assertEquals(secretObject.get('key3'), undefined);
+      asserts.assertEquals(secretObject.get("key1"), "value1");
+      asserts.assertEquals(secretObject.get("key2"), "value2");
+      asserts.assertEquals(secretObject.get("key3"), undefined);
     });
 
     await t.step(
-      'has should return true if the key exists, otherwise false',
+      "has should return true if the key exists, otherwise false",
       () => {
         secretObject = privateObject<Record<string, unknown>>({
-          key1: 'value1',
-          key2: 'value2',
+          key1: "value1",
+          key2: "value2",
         });
-        asserts.assertEquals(secretObject.has('key1'), true);
-        asserts.assertEquals(secretObject.has('key2'), true);
-        asserts.assertEquals(secretObject.has('key3'), false);
+        asserts.assertEquals(secretObject.has("key1"), true);
+        asserts.assertEquals(secretObject.has("key2"), true);
+        asserts.assertEquals(secretObject.has("key3"), false);
       },
     );
 
-    await t.step('set should set the value for a given key', () => {
+    await t.step("set should set the value for a given key", () => {
       secretObject = privateObject<Record<string, unknown>>({
-        key1: 'value1',
-        key2: 'value2',
+        key1: "value1",
+        key2: "value2",
       });
-      secretObject.set('key1', 'new value');
-      asserts.assertEquals(secretObject.get('key1'), 'new value');
-      secretObject.set('key3', 'value3');
-      asserts.assertEquals(secretObject.get('key3'), 'value3');
-      asserts.assertEquals(secretObject.has('key3'), true);
+      secretObject.set("key1", "new value");
+      asserts.assertEquals(secretObject.get("key1"), "new value");
+      secretObject.set("key3", "value3");
+      asserts.assertEquals(secretObject.get("key3"), "value3");
+      asserts.assertEquals(secretObject.has("key3"), true);
     });
 
     await t.step(
-      'delete should remove the key and its value from the object',
+      "delete should remove the key and its value from the object",
       () => {
         secretObject = privateObject<Record<string, unknown>>({
-          key1: 'value1',
-          key2: 'value2',
+          key1: "value1",
+          key2: "value2",
         });
-        secretObject.delete('key1');
-        asserts.assertEquals(secretObject.get('key1'), undefined);
-        asserts.assertEquals(secretObject.has('key1'), false);
-        secretObject.delete('key3'); // Deleting non-existing key should not throw error
+        secretObject.delete("key1");
+        asserts.assertEquals(secretObject.get("key1"), undefined);
+        asserts.assertEquals(secretObject.has("key1"), false);
+        secretObject.delete("key3"); // Deleting non-existing key should not throw error
       },
     );
 
-    await t.step('test foreach', () => {
+    await t.step("test foreach", () => {
       secretObject = privateObject<Record<string, unknown>>({
-        key1: 'value1',
-        key2: 'value2',
+        key1: "value1",
+        key2: "value2",
       });
       const keys: string[] = [];
       const values: unknown[] = [];
@@ -161,56 +161,56 @@ Deno.test('utils.privateObject', async (t) => {
         keys.push(key);
         values.push(value);
       });
-      asserts.assertEquals(keys, ['key1', 'key2']);
-      asserts.assertEquals(values, ['value1', 'value2']);
+      asserts.assertEquals(keys, ["key1", "key2"]);
+      asserts.assertEquals(values, ["value1", "value2"]);
     });
 
-    await t.step('test clear', () => {
+    await t.step("test clear", () => {
       secretObject = privateObject<Record<string, unknown>>({
-        key1: 'value1',
-        key2: 'value2',
+        key1: "value1",
+        key2: "value2",
       });
       secretObject.clear();
       asserts.assertEquals(secretObject.keys(), []);
       // Should not clear the object if mutations are disabled
       secretObject = privateObject<Record<string, unknown>>({
-        key1: 'value1',
-        key2: 'value2',
+        key1: "value1",
+        key2: "value2",
       }, false);
       secretObject.clear();
-      asserts.assertEquals(secretObject.keys(), ['key1', 'key2']);
+      asserts.assertEquals(secretObject.keys(), ["key1", "key2"]);
     });
 
-    await t.step('should handle complex object values', () => {
+    await t.step("should handle complex object values", () => {
       const complexObject = {
-        simple: 'string',
+        simple: "string",
         array: [1, 2, 3],
         nested: { a: 1, b: 2 },
-        func: () => 'function',
+        func: () => "function",
       };
 
       secretObject = privateObject<Record<string, unknown>>();
-      secretObject.set('complex', complexObject);
+      secretObject.set("complex", complexObject);
 
       // Check direct reference preservation
-      asserts.assertStrictEquals(secretObject.get('complex'), complexObject);
+      asserts.assertStrictEquals(secretObject.get("complex"), complexObject);
 
       // Check that modifying the original affects the private object
       complexObject.array.push(4);
-      const retrieved = secretObject.get('complex') as typeof complexObject;
+      const retrieved = secretObject.get("complex") as typeof complexObject;
       asserts.assertEquals(retrieved.array, [1, 2, 3, 4]);
     });
 
-    await t.step('should handle null and undefined values', () => {
+    await t.step("should handle null and undefined values", () => {
       secretObject = privateObject<Record<string, unknown>>({
         nullValue: null,
         undefinedValue: undefined,
       });
 
-      asserts.assertEquals(secretObject.get('nullValue'), null);
-      asserts.assertEquals(secretObject.get('undefinedValue'), undefined);
-      asserts.assertEquals(secretObject.has('nullValue'), true);
-      asserts.assertEquals(secretObject.has('undefinedValue'), true);
+      asserts.assertEquals(secretObject.get("nullValue"), null);
+      asserts.assertEquals(secretObject.get("undefinedValue"), undefined);
+      asserts.assertEquals(secretObject.has("nullValue"), true);
+      asserts.assertEquals(secretObject.has("undefinedValue"), true);
     });
   });
 });

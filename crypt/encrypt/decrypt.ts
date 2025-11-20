@@ -125,7 +125,7 @@ export const decryptAES = async (
 
   const key = await crypto.subtle.importKey(
     "raw",
-    keyBytes,
+    keyBytes as BufferSource,
     {
       name: algorithm!,
       length: keyLength * 8, // Convert back to bits
@@ -238,10 +238,10 @@ export const decryptRSA = async (
   // Import the private key
   const cryptoKey = await crypto.subtle.importKey(
     "pkcs8",
-    keyData,
+    keyData as BufferSource,
     {
       name: "RSA-OAEP",
-      hash: hashAlgorithm,
+      hash: "SHA-256",
     },
     false,
     ["decrypt"],
@@ -256,17 +256,15 @@ export const decryptRSA = async (
   }
 
   // Decrypt the data
-  const decrypted = await crypto.subtle.decrypt(
-    {
-      name: "RSA-OAEP",
-    },
+  const decryptedData = await crypto.subtle.decrypt(
+    "RSA-OAEP",
     cryptoKey,
-    encryptedData,
+    encryptedData as BufferSource,
   );
 
   return returnBinary
-    ? new Uint8Array(decrypted)
-    : new TextDecoder().decode(decrypted);
+    ? new Uint8Array(decryptedData)
+    : new TextDecoder().decode(decryptedData);
 };
 
 /**

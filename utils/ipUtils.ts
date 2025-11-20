@@ -145,7 +145,7 @@ export const IPV6_MAX_SUBNET = 128;
 export const isValidIPv4 = (ip: string): boolean => {
   if (!IPV4_REGEX.test(ip)) return false;
 
-  return ip.split('.').every((octet) => {
+  return ip.split(".").every((octet) => {
     const num = parseInt(octet, 10);
     return num >= 0 && num <= 255;
   });
@@ -183,7 +183,7 @@ export const isValidIPv6Structure = (ip: string): boolean => {
 
   // Check for invalid colon sequences
   const invalidColonPattern = /:{3,}/;
-  if (ip.includes(':::') || invalidColonPattern.exec(ip)) {
+  if (ip.includes(":::") || invalidColonPattern.exec(ip)) {
     return false;
   }
 
@@ -193,12 +193,12 @@ export const isValidIPv6Structure = (ip: string): boolean => {
   }
 
   // Validate IPv4 part if present
-  if (ip.includes('.')) {
+  if (ip.includes(".")) {
     return validateIPv6WithIPv4Part(ip);
   }
 
   // Validate segment count for non-compressed addresses
-  if (!ip.includes('::')) {
+  if (!ip.includes("::")) {
     return validateFullIPv6Segments(ip);
   }
 
@@ -218,15 +218,15 @@ function validateIPv6WithIPv4Part(ip: string): boolean {
   if (!isValidIPv4(ipv4Part)) return false;
 
   // Check segment count for IPv4-mapped addresses
-  const segments = ip.split(':');
-  return ip.includes('::') || segments.length === 7;
+  const segments = ip.split(":");
+  return ip.includes("::") || segments.length === 7;
 }
 
 /**
  * Helper function to validate full IPv6 addresses (no compression).
  */
 function validateFullIPv6Segments(ip: string): boolean {
-  const segments = ip.split(':');
+  const segments = ip.split(":");
   return segments.length === 8;
 }
 
@@ -234,9 +234,9 @@ function validateFullIPv6Segments(ip: string): boolean {
  * Helper function to validate IPv6 hexadecimal segments.
  */
 function validateIPv6HexSegments(ip: string): boolean {
-  const segments = ip.split(':');
+  const segments = ip.split(":");
   return segments.every((segment) => {
-    return segment === '' || IPV6_SEGMENT.test(segment) ||
+    return segment === "" || IPV6_SEGMENT.test(segment) ||
       IPV4_REGEX.test(segment);
   });
 }
@@ -271,7 +271,7 @@ function validateIPv6HexSegments(ip: string): boolean {
  * ```
  */
 export const ipv4ToHexSegments = (ipv4: string): string[] => {
-  const octets = ipv4.split('.').map((o) => parseInt(o, 10));
+  const octets = ipv4.split(".").map((o) => parseInt(o, 10));
   if (octets.length !== 4 || octets.some(isNaN)) {
     throw new Error(`Invalid IPv4 address: ${ipv4}`);
   }
@@ -329,12 +329,12 @@ export const expandIPv6 = (ip: string): string | null => {
   }
 
   // Handle IPv4-mapped IPv6 addresses
-  if (normalizedIP.includes('.')) {
+  if (normalizedIP.includes(".")) {
     return expandIPv6WithIPv4Part(normalizedIP);
   }
 
   // Handle compressed notation (::)
-  if (normalizedIP.includes('::')) {
+  if (normalizedIP.includes("::")) {
     return expandCompressedIPv6(normalizedIP);
   }
 
@@ -353,7 +353,7 @@ function isValidIPv6Input(ip: string): boolean {
 
   // Check for invalid colon sequences
   const invalidColonPattern = /:{3,}/;
-  if (ip.includes(':::') || invalidColonPattern.exec(ip)) {
+  if (ip.includes(":::") || invalidColonPattern.exec(ip)) {
     return false;
   }
 
@@ -371,15 +371,15 @@ function expandIPv6WithIPv4Part(ip: string): string | null {
   const ipv4Part = ipv4PartMatch[0];
   if (!isValidIPv4(ipv4Part)) return null;
 
-  const prefix = ip.substring(0, ip.indexOf(ipv4Part)).replace(/::$/, ':');
+  const prefix = ip.substring(0, ip.indexOf(ipv4Part)).replace(/::$/, ":");
   const hexSegments = ipv4ToHexSegments(ipv4Part);
 
   // Handle specific IPv4-mapped formats
-  if (prefix === '::ffff:' || prefix === ':ffff:') {
-    return '0:0:0:0:0:ffff:' + hexSegments.join(':');
+  if (prefix === "::ffff:" || prefix === ":ffff:") {
+    return "0:0:0:0:0:ffff:" + hexSegments.join(":");
   }
-  if (prefix === '::' || prefix === ':') {
-    return '0:0:0:0:0:0:' + hexSegments.join(':');
+  if (prefix === "::" || prefix === ":") {
+    return "0:0:0:0:0:0:" + hexSegments.join(":");
   }
 
   // Handle other formats with IPv4 part
@@ -394,23 +394,23 @@ function expandMixedIPv6Format(
   hexSegments: string[],
   originalIP: string,
 ): string | null {
-  const prefixParts = prefix.split(':').filter((p) => p !== '');
+  const prefixParts = prefix.split(":").filter((p) => p !== "");
 
   if (prefixParts.length > 6) return null;
 
-  if (originalIP.includes('::')) {
+  if (originalIP.includes("::")) {
     const missingGroups = 6 - prefixParts.length;
     if (missingGroups < 0) return null;
 
-    const zeroGroups = Array(missingGroups).fill('0');
-    const expandedParts = prefix.startsWith(':')
+    const zeroGroups = Array(missingGroups).fill("0");
+    const expandedParts = prefix.startsWith(":")
       ? [...zeroGroups, ...prefixParts]
       : [...prefixParts, ...zeroGroups];
 
-    return [...expandedParts, ...hexSegments].join(':');
+    return [...expandedParts, ...hexSegments].join(":");
   }
 
-  return [...prefixParts, ...hexSegments].join(':');
+  return [...prefixParts, ...hexSegments].join(":");
 }
 
 /**
@@ -420,29 +420,29 @@ function expandCompressedIPv6(ip: string): string | null {
   // Ensure there's only one double colon
   if ((ip.match(/::/g) || []).length > 1) return null;
 
-  const [left, right] = ip.split('::');
-  const leftParts = left ? left.split(':') : [];
-  const rightParts = right ? right.split(':') : [];
+  const [left, right] = ip.split("::");
+  const leftParts = left ? left.split(":") : [];
+  const rightParts = right ? right.split(":") : [];
 
   // Calculate how many zero groups to insert
   const missingGroups = 8 - (leftParts.length + rightParts.length);
   if (missingGroups < 0) return null;
 
   // Create the expanded address
-  const zeroGroups = Array(missingGroups).fill('0');
+  const zeroGroups = Array(missingGroups).fill("0");
   const expandedParts = [...leftParts, ...zeroGroups, ...rightParts];
 
   // Ensure we have exactly 8 parts and replace empty segments
   return expandedParts
-    .map((part) => part ?? '0')
-    .join(':');
+    .map((part) => part ?? "0")
+    .join(":");
 }
 
 /**
  * Expands full IPv6 notation (no compression).
  */
 function expandFullIPv6(ip: string): string | null {
-  const parts = ip.split(':');
+  const parts = ip.split(":");
   if (parts.length !== 8) return null;
 
   // Verify each part is valid hex
@@ -453,7 +453,7 @@ function expandFullIPv6(ip: string): string | null {
     }
   }
 
-  return parts.join(':');
+  return parts.join(":");
 }
 
 /**
@@ -487,9 +487,9 @@ function expandFullIPv6(ip: string): string | null {
  * ```
  */
 export const ipv4ToBinary = (ip: string): string => {
-  return ip.split('.')
-    .map((part) => parseInt(part, 10).toString(2).padStart(8, '0'))
-    .join('');
+  return ip.split(".")
+    .map((part) => parseInt(part, 10).toString(2).padStart(8, "0"))
+    .join("");
 };
 
 /**
@@ -539,9 +539,9 @@ export const ipv6ToBinary = (ip: string): string => {
   }
 
   // Convert each hexadecimal segment to binary
-  return expandedIP.split(':')
-    .map((segment) => parseInt(segment, 16).toString(2).padStart(16, '0'))
-    .join('');
+  return expandedIP.split(":")
+    .map((segment) => parseInt(segment, 16).toString(2).padStart(16, "0"))
+    .join("");
 };
 
 /**
@@ -584,7 +584,7 @@ export const ipv6ToBinary = (ip: string): string => {
  * ```
  */
 export const ipv4ToLong = (ip: string): number => {
-  return ip.split('.')
+  return ip.split(".")
     .reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
 };
 

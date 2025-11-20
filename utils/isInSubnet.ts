@@ -1,11 +1,11 @@
-import { isSubnet } from './isSubnet.ts';
+import { isSubnet } from "./isSubnet.ts";
 import {
   IPV4_REGEX,
   ipv4ToBinary,
   IPV6_REGEX,
   ipv6ToBinary,
   isValidIPv4,
-} from './ipUtils.ts';
+} from "./ipUtils.ts";
 
 /**
  * Validates if an IP address is within a subnet range using CIDR notation.
@@ -143,7 +143,7 @@ function isIPv6InSubnet(ip: string, subnetIP: string, cidr: number): boolean {
  * @returns Object with subnetIP and cidr, or null if invalid
  */
 function parseCIDR(subnet: string): { subnetIP: string; cidr: number } | null {
-  const [subnetIP, cidrStr] = subnet.split('/');
+  const [subnetIP, cidrStr] = subnet.split("/");
   if (!subnetIP || !cidrStr) return null;
 
   const cidr = parseInt(cidrStr, 10);
@@ -154,7 +154,7 @@ function parseCIDR(subnet: string): { subnetIP: string; cidr: number } | null {
 
 export const isInSubnet = (ip: string, subnet: string): boolean => {
   // Basic input validation
-  if (!ip || !subnet || typeof ip !== 'string' || typeof subnet !== 'string') {
+  if (!ip || !subnet || typeof ip !== "string" || typeof subnet !== "string") {
     return false;
   }
 

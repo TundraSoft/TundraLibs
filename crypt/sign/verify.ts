@@ -89,8 +89,8 @@ export const verifyHMAC = async (
       hash: digest,
     },
     key,
-    signatureBytes,
-    dataToVerify,
+    signatureBytes as BufferSource,
+    dataToVerify as BufferSource,
   );
 };
 
@@ -177,7 +177,7 @@ export const verifyRSA = async (
   // Import the public key
   const cryptoKey = await crypto.subtle.importKey(
     "spki",
-    keyData,
+    keyData as BufferSource,
     {
       name: "RSA-PSS",
       hash: hashAlgorithm,
@@ -215,8 +215,8 @@ export const verifyRSA = async (
       saltLength,
     },
     cryptoKey,
-    signatureBytes,
-    dataToVerify,
+    signatureBytes as BufferSource,
+    dataToVerify as BufferSource,
   );
 };
 

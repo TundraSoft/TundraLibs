@@ -57,7 +57,7 @@ interface GetFreePortOptions {
 export class PortError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'PortError';
+    this.name = "PortError";
   }
 }
 
@@ -136,13 +136,13 @@ export const getFreePort = ({
 }: GetFreePortOptions = {}): number => {
   // Validate input parameters
   if (min < 0 || min > 65535) {
-    throw new PortError('Minimum port must be between 0 and 65535');
+    throw new PortError("Minimum port must be between 0 and 65535");
   }
   if (max < 0 || max > 65535) {
-    throw new PortError('Maximum port must be between 0 and 65535');
+    throw new PortError("Maximum port must be between 0 and 65535");
   }
   if (max < min) {
-    throw new PortError('Maximum port must be greater than minimum port');
+    throw new PortError("Maximum port must be greater than minimum port");
   }
 
   // Calculate available range to prevent infinite loops
@@ -151,7 +151,7 @@ export const getFreePort = ({
     exclude.filter((port) => port >= min && port <= max).length;
 
   if (excludedInRange >= availableRange) {
-    throw new PortError('All ports in range are excluded');
+    throw new PortError("All ports in range are excluded");
   }
 
   // Prevent infinite loops by limiting attempts, but be more generous

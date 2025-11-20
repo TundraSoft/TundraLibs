@@ -261,7 +261,7 @@ export function Once(
   _propertyKey: string | symbol,
   descriptor: PropertyDescriptor,
 ): PropertyDescriptor {
-  if (typeof descriptor.value === 'function') {
+  if (typeof descriptor.value === "function") {
     descriptor.value = once(descriptor.value);
   }
   return descriptor;

@@ -1,4 +1,4 @@
-import type { RESTlerAuth } from './Auth.ts';
+import type { RESTlerAuth } from "./Auth.ts";
 
 /**
  * Configuration for a RESTler API endpoint.

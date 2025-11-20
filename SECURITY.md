@@ -11,7 +11,9 @@ We actively support and provide security updates for the following versions:
 
 ## Reporting a Vulnerability
 
-We take the security of TundraLibs seriously. If you believe you have found a security vulnerability in any of our packages, please report it to us as described below.
+We take the security of TundraLibs seriously. If you believe you have found a
+security vulnerability in any of our packages, please report it to us as
+described below.
 
 ### How to Report
 
@@ -21,7 +23,8 @@ Instead, please use:
 
 **GitHub Security Advisories**
 
-- Go to the [Security tab](https://github.com/TundraSoft/TundraLibs/security/advisories/new)
+- Go to the
+  [Security tab](https://github.com/TundraSoft/TundraLibs/security/advisories/new)
 - Click "Report a vulnerability"
 - Fill out the form with details
 
@@ -67,7 +70,8 @@ When contributing to TundraLibs:
 3. **Development**: We develop and test a fix
 4. **Coordination**: We coordinate the release with you (if desired)
 5. **Release**: We release the fix and publish a security advisory
-6. **Recognition**: We acknowledge your contribution (unless you prefer anonymity)
+6. **Recognition**: We acknowledge your contribution (unless you prefer
+   anonymity)
 
 ### Security Advisories
 
@@ -76,7 +80,8 @@ https://github.com/TundraSoft/TundraLibs/security/advisories
 
 ### Contact
 
-For any questions about this security policy, please create an issue or contact the maintainers.
+For any questions about this security policy, please create an issue or contact
+the maintainers.
 
 ---
 

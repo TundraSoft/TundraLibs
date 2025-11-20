@@ -1,29 +1,29 @@
-import * as asserts from '$asserts';
-import { getFreePort, PortError } from './getFreePort.ts';
+import * as asserts from "$asserts";
+import { getFreePort, PortError } from "./getFreePort.ts";
 
-Deno.test('utils.getFreePort', async (t) => {
-  await t.step('returns a port within the specified range', () => {
+Deno.test("utils.getFreePort", async (t) => {
+  await t.step("returns a port within the specified range", () => {
     const port = getFreePort({ min: 3000, max: 4000 });
-    asserts.assert(port >= 3000 && port <= 4000, 'Port should be within range');
+    asserts.assert(port >= 3000 && port <= 4000, "Port should be within range");
   });
 
-  await t.step('respects excluded ports', () => {
+  await t.step("respects excluded ports", () => {
     const exclude = [3000, 3001, 3002];
     const port = getFreePort({ min: 3000, max: 3010, exclude });
     asserts.assert(
       !exclude.includes(port),
-      'Port should not be in excluded list',
+      "Port should not be in excluded list",
     );
-    asserts.assert(port >= 3000 && port <= 3010, 'Port should be within range');
+    asserts.assert(port >= 3000 && port <= 3010, "Port should be within range");
   });
 
-  await t.step('works with min equal to max', () => {
+  await t.step("works with min equal to max", () => {
     // We need to pick a port that's likely to be free
     const port = getFreePort({ min: 9876, max: 9876 });
-    asserts.assertEquals(port, 9876, 'Port should equal the specified value');
+    asserts.assertEquals(port, 9876, "Port should equal the specified value");
   });
 
-  await t.step('finds a free port when some ports are busy', () => {
+  await t.step("finds a free port when some ports are busy", () => {
     // Define a small range of ports
     const min = 7000;
     const max = 7009;
@@ -48,7 +48,7 @@ Deno.test('utils.getFreePort', async (t) => {
       // At least some ports should be busy now
       asserts.assert(
         busyPorts.length > 0,
-        'At least one port should be occupied',
+        "At least one port should be occupied",
       );
 
       // getFreePort should find the one free port (7009) or another free port if all test ports are busy
@@ -57,13 +57,13 @@ Deno.test('utils.getFreePort', async (t) => {
       // The port shouldn't be in our list of busy ports
       asserts.assert(
         !busyPorts.includes(port),
-        'The returned port should not be one of the busy ports',
+        "The returned port should not be one of the busy ports",
       );
 
       // The port should be within our specified range
       asserts.assert(
         port >= min && port <= max,
-        'Port should be within specified range',
+        "Port should be within specified range",
       );
     } finally {
       // Clean up by closing all listeners
@@ -73,45 +73,45 @@ Deno.test('utils.getFreePort', async (t) => {
     }
   });
 
-  await t.step('throws on invalid range', () => {
+  await t.step("throws on invalid range", () => {
     asserts.assertThrows(
       () => getFreePort({ min: 5000, max: 4000 }),
       PortError,
-      'Maximum port must be greater than minimum port',
+      "Maximum port must be greater than minimum port",
     );
   });
 
-  await t.step('throws on invalid port numbers', () => {
+  await t.step("throws on invalid port numbers", () => {
     asserts.assertThrows(
       () => getFreePort({ min: -1 }),
       PortError,
-      'Minimum port must be between 0 and 65535',
+      "Minimum port must be between 0 and 65535",
     );
 
     asserts.assertThrows(
       () => getFreePort({ max: 65536 }),
       PortError,
-      'Maximum port must be between 0 and 65535',
+      "Maximum port must be between 0 and 65535",
     );
   });
 
-  await t.step('uses default range when no options provided', () => {
+  await t.step("uses default range when no options provided", () => {
     const port = getFreePort();
     asserts.assert(
       port >= 1024 && port <= 65535,
-      'Port should be within default range',
+      "Port should be within default range",
     );
   });
 
-  await t.step('throws when all ports in range are excluded', () => {
+  await t.step("throws when all ports in range are excluded", () => {
     asserts.assertThrows(
       () => getFreePort({ min: 3000, max: 3002, exclude: [3000, 3001, 3002] }),
       PortError,
-      'All ports in range are excluded',
+      "All ports in range are excluded",
     );
   });
 
-  await t.step('ignores excluded ports outside range', () => {
+  await t.step("ignores excluded ports outside range", () => {
     const port = getFreePort({
       min: 4000,
       max: 4000,
@@ -120,16 +120,16 @@ Deno.test('utils.getFreePort', async (t) => {
     asserts.assertEquals(
       port,
       4000,
-      'Should ignore excluded ports outside range',
+      "Should ignore excluded ports outside range",
     );
   });
 
-  await t.step('handles empty exclude array', () => {
+  await t.step("handles empty exclude array", () => {
     const port = getFreePort({ min: 8000, max: 8000, exclude: [] });
-    asserts.assertEquals(port, 8000, 'Should handle empty exclude array');
+    asserts.assertEquals(port, 8000, "Should handle empty exclude array");
   });
 
-  await t.step('handles large exclude list', () => {
+  await t.step("handles large exclude list", () => {
     const largeExclude = Array.from({ length: 100 }, (_, i) => 2000 + i);
     const port = getFreePort({
       min: 3000,
@@ -138,11 +138,11 @@ Deno.test('utils.getFreePort', async (t) => {
     });
     asserts.assert(
       port >= 3000 && port <= 3100,
-      'Should handle large exclude list',
+      "Should handle large exclude list",
     );
   });
 
-  await t.step('returns different ports on multiple calls', () => {
+  await t.step("returns different ports on multiple calls", () => {
     const ports = new Set();
     for (let i = 0; i < 10; i++) {
       const port = getFreePort({ min: 10000, max: 20000 });
@@ -150,10 +150,10 @@ Deno.test('utils.getFreePort', async (t) => {
     }
     // We should get some variety in port selection (not always the same port)
     // This isn't guaranteed due to randomness, but very likely
-    asserts.assert(ports.size >= 1, 'Should return valid ports');
+    asserts.assert(ports.size >= 1, "Should return valid ports");
   });
 
-  await t.step('throws when no free port found after max attempts', () => {
+  await t.step("throws when no free port found after max attempts", () => {
     // This test is difficult to create reliably without mocking, but we can test edge cases
     // Testing with a very small range where all ports are likely busy
     const listeners: Deno.Listener[] = [];
@@ -177,7 +177,7 @@ Deno.test('utils.getFreePort', async (t) => {
         asserts.assertThrows(
           () => getFreePort({ min, max }),
           PortError,
-          'No free port found in range',
+          "No free port found in range",
         );
       }
     } finally {
@@ -188,21 +188,21 @@ Deno.test('utils.getFreePort', async (t) => {
     }
   });
 
-  await t.step('handles boundary port numbers', () => {
+  await t.step("handles boundary port numbers", () => {
     // Test with port 0 (valid but unusual)
     const port = getFreePort({ min: 0, max: 0 });
-    asserts.assertEquals(port, 0, 'Should handle port 0');
+    asserts.assertEquals(port, 0, "Should handle port 0");
 
     // Test with max port number
     const highPort = getFreePort({ min: 65535, max: 65535 });
-    asserts.assertEquals(highPort, 65535, 'Should handle port 65535');
+    asserts.assertEquals(highPort, 65535, "Should handle port 65535");
   });
 
-  await t.step('handles edge case max port validation', () => {
+  await t.step("handles edge case max port validation", () => {
     asserts.assertThrows(
       () => getFreePort({ min: 65536 }),
       PortError,
-      'Minimum port must be between 0 and 65535',
+      "Minimum port must be between 0 and 65535",
     );
   });
 });

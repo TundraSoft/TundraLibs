@@ -89,7 +89,7 @@ export const signHMAC = async (
       hash: digest,
     },
     key,
-    dataToSign,
+    dataToSign as BufferSource,
   );
 
   return encodeHex(signature);
@@ -170,7 +170,7 @@ export const signRSA = async (
   // Import the private key
   const cryptoKey = await crypto.subtle.importKey(
     "pkcs8",
-    keyData,
+    keyData as BufferSource,
     {
       name: "RSA-PSS",
       hash: hashAlgorithm,
@@ -200,7 +200,7 @@ export const signRSA = async (
       saltLength,
     },
     cryptoKey,
-    dataToSign,
+    dataToSign as BufferSource,
   );
 
   // Return the signature as base64

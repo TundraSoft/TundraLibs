@@ -40,10 +40,8 @@
     "indentWidth": 2,
     "lineWidth": 80,
     "useTabs": false,
-    "proseWrap": "preserve",
-    "semiColons": true,
     "singleQuote": true,
-    "trailingCommas": "onlyMultiLine",
+    "semiColons": true, 
     "exclude": [
       "./.vscode",
       "./.git",
@@ -98,12 +96,9 @@
   "workspace": [
     "./cacher",
     "./crypt",
-    "./dam",
     "./guardian",
     "./id",
-    "./norm",
-    "./openapi",
-    "./restler",
+    "./restler", 
     "./slogger",
     "./utils"
   ]

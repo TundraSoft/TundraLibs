@@ -1,8 +1,8 @@
-import * as asserts from '$asserts';
-import { Memoize, memoize } from './memoize.ts';
+import * as asserts from "$asserts";
+import { Memoize, memoize } from "./memoize.ts";
 
-Deno.test('utils.memoize', async (t) => {
-  await t.step('should memoize the result of a function', () => {
+Deno.test("utils.memoize", async (t) => {
+  await t.step("should memoize the result of a function", () => {
     let counter = 0;
     const add = (a: number, b: number): number => {
       counter++;
@@ -17,7 +17,7 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertEquals(counter, 2);
   });
 
-  await t.step('should memoize the result of a method', () => {
+  await t.step("should memoize the result of a method", () => {
     class Calculator {
       counter = 0;
       @Memoize(1)
@@ -36,7 +36,7 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertEquals(calc.counter, 2);
   });
 
-  await t.step('should memoize the result of an async function', async () => {
+  await t.step("should memoize the result of an async function", async () => {
     let counter = 0;
     const add = async (a: number, b: number): Promise<number> => {
       // Set a 500ms delay to simulate an async operation
@@ -53,7 +53,7 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertEquals(counter, 2);
   });
 
-  await t.step('should memoize the result of an async method', async () => {
+  await t.step("should memoize the result of an async method", async () => {
     class Calculator {
       static counter = 0;
       @Memoize(1)
@@ -74,7 +74,7 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertEquals(Calculator.counter, 2);
   });
 
-  await t.step('should reset the cache after the timeout', async () => {
+  await t.step("should reset the cache after the timeout", async () => {
     let counter = 0;
     const add = async (a: number, b: number): Promise<number> => {
       // Set a 500ms delay to simulate an async operation
@@ -93,7 +93,7 @@ Deno.test('utils.memoize', async (t) => {
   });
 
   await t.step(
-    'should reset the cache after the timeout for a method',
+    "should reset the cache after the timeout for a method",
     async () => {
       class Calculator {
         static counter = 0;
@@ -117,11 +117,11 @@ Deno.test('utils.memoize', async (t) => {
     },
   );
 
-  await t.step('should handle functions that throw errors', () => {
+  await t.step("should handle functions that throw errors", () => {
     let counter = 0;
     const division = (a: number, b: number): number => {
       counter++;
-      if (b === 0) throw new Error('Division by zero');
+      if (b === 0) throw new Error("Division by zero");
       return a / b;
     };
 
@@ -139,7 +139,7 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertThrows(
       () => memoizedDivision(10, 0),
       Error,
-      'Division by zero',
+      "Division by zero",
     );
     asserts.assertEquals(counter, 2);
 
@@ -147,12 +147,12 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertThrows(
       () => memoizedDivision(10, 0),
       Error,
-      'Division by zero',
+      "Division by zero",
     );
     asserts.assertEquals(counter, 3);
   });
 
-  await t.step('should correctly memoize with complex object arguments', () => {
+  await t.step("should correctly memoize with complex object arguments", () => {
     let counter = 0;
     const processObject = (obj: Record<string, unknown>): string => {
       counter++;
@@ -161,9 +161,9 @@ Deno.test('utils.memoize', async (t) => {
 
     const memoizedProcess = memoize(processObject, 60);
 
-    const obj1 = { name: 'Test', nested: { value: 42 } };
-    const obj2 = { name: 'Test', nested: { value: 42 } }; // Same structure but different reference
-    const obj3 = { name: 'Test', nested: { value: 43 } }; // Different value
+    const obj1 = { name: "Test", nested: { value: 42 } };
+    const obj2 = { name: "Test", nested: { value: 42 } }; // Same structure but different reference
+    const obj3 = { name: "Test", nested: { value: 43 } }; // Different value
 
     const result1 = memoizedProcess(obj1);
     asserts.assertEquals(counter, 1);
@@ -179,7 +179,7 @@ Deno.test('utils.memoize', async (t) => {
   });
 
   await t.step(
-    'should memoize getter methods in a class with decorator',
+    "should memoize getter methods in a class with decorator",
     async () => {
       class Person {
         private _name: string;
@@ -200,41 +200,41 @@ Deno.test('utils.memoize', async (t) => {
         }
       }
 
-      const person = new Person('Smith');
+      const person = new Person("Smith");
 
       // First call should compute
-      asserts.assertEquals(person.fullName, 'Mr/Ms. Smith');
+      asserts.assertEquals(person.fullName, "Mr/Ms. Smith");
       asserts.assertEquals(person.getCallCount(), 1);
 
       // Second call should use cached value
-      asserts.assertEquals(person.fullName, 'Mr/Ms. Smith');
+      asserts.assertEquals(person.fullName, "Mr/Ms. Smith");
       asserts.assertEquals(person.getCallCount(), 1);
 
       // After timeout, should recompute
       await new Promise((resolve) => setTimeout(resolve, 1100));
-      asserts.assertEquals(person.fullName, 'Mr/Ms. Smith');
+      asserts.assertEquals(person.fullName, "Mr/Ms. Smith");
       asserts.assertEquals(person.getCallCount(), 2);
     },
   );
 
-  await t.step('should handle non-serializable arguments', () => {
+  await t.step("should handle non-serializable arguments", () => {
     let counter = 0;
 
     // Function with circular reference argument
     const processCircular = (obj: Record<string, unknown>): string => {
       counter++;
-      return String(obj.id || 'unknown');
+      return String(obj.id || "unknown");
     };
 
     const memoizedProcess = memoize(processCircular, 60);
 
     // Create an object with a circular reference
-    const circularObj: Record<string, unknown> = { id: 'circular' };
+    const circularObj: Record<string, unknown> = { id: "circular" };
     circularObj.self = circularObj; // Create circular reference
 
     // First call
     const result1 = memoizedProcess(circularObj);
-    asserts.assertEquals(result1, 'circular');
+    asserts.assertEquals(result1, "circular");
     asserts.assertEquals(counter, 1);
 
     // Second call with same object
@@ -242,15 +242,15 @@ Deno.test('utils.memoize', async (t) => {
 
     // We expect the fallback key generation to consider this a different object
     // since we can't reliably stringify circular objects
-    asserts.assertEquals(result2, 'circular');
+    asserts.assertEquals(result2, "circular");
     asserts.assertEquals(
       counter,
       2,
-      'Counter should increment for non-serializable objects',
+      "Counter should increment for non-serializable objects",
     );
   });
 
-  await t.step('should handle concurrent async calls correctly', async () => {
+  await t.step("should handle concurrent async calls correctly", async () => {
     let counter = 0;
     const slowOperation = async (id: string): Promise<string> => {
       counter++;
@@ -261,27 +261,27 @@ Deno.test('utils.memoize', async (t) => {
     const memoizedOperation = memoize(slowOperation, 60);
 
     // Start two concurrent calls with the same argument
-    const promise1 = memoizedOperation('same-id');
-    const promise2 = memoizedOperation('same-id');
+    const promise1 = memoizedOperation("same-id");
+    const promise2 = memoizedOperation("same-id");
 
     // Both should resolve with the same result
     const [result1, result2] = await Promise.all([promise1, promise2]);
 
-    asserts.assertEquals(result1, 'Result for same-id');
-    asserts.assertEquals(result2, 'Result for same-id');
+    asserts.assertEquals(result1, "Result for same-id");
+    asserts.assertEquals(result2, "Result for same-id");
     asserts.assertEquals(
       counter,
       1,
-      'Function should only be called once for concurrent requests',
+      "Function should only be called once for concurrent requests",
     );
 
     // Different argument should trigger a new call
-    const result3 = await memoizedOperation('different-id');
-    asserts.assertEquals(result3, 'Result for different-id');
+    const result3 = await memoizedOperation("different-id");
+    asserts.assertEquals(result3, "Result for different-id");
     asserts.assertEquals(counter, 2);
   });
 
-  await t.step('should handle edge case timeouts', () => {
+  await t.step("should handle edge case timeouts", () => {
     let counter = 0;
     const simpleOp = (): number => {
       counter++;
@@ -292,7 +292,7 @@ Deno.test('utils.memoize', async (t) => {
     const zeroTimeoutMemoized = memoize(simpleOp, 0);
     zeroTimeoutMemoized();
     zeroTimeoutMemoized();
-    asserts.assertEquals(counter, 2, 'Zero timeout should not cache');
+    asserts.assertEquals(counter, 2, "Zero timeout should not cache");
 
     // Reset counter
     counter = 0;
@@ -301,7 +301,7 @@ Deno.test('utils.memoize', async (t) => {
     const negativeTimeoutMemoized = memoize(simpleOp, -10);
     negativeTimeoutMemoized();
     negativeTimeoutMemoized();
-    asserts.assertEquals(counter, 2, 'Negative timeout should not cache');
+    asserts.assertEquals(counter, 2, "Negative timeout should not cache");
 
     // Reset counter
     counter = 0;
@@ -310,26 +310,26 @@ Deno.test('utils.memoize', async (t) => {
     const longTimeoutMemoized = memoize(simpleOp, 3600); // 1 hour
     longTimeoutMemoized();
     longTimeoutMemoized();
-    asserts.assertEquals(counter, 1, 'Long timeout should cache as expected');
+    asserts.assertEquals(counter, 1, "Long timeout should cache as expected");
   });
 
-  await t.step('should handle rejected promises correctly', async () => {
+  await t.step("should handle rejected promises correctly", async () => {
     let counter = 0;
 
     const failingOperation = async (shouldFail: boolean): Promise<string> => {
       counter++;
       await new Promise((resolve) => setTimeout(resolve, 50));
       if (shouldFail) {
-        throw new Error('Operation failed');
+        throw new Error("Operation failed");
       }
-      return 'Success';
+      return "Success";
     };
 
     const memoizedOperation = memoize(failingOperation, 60);
 
     // Test successful case
     const successResult = await memoizedOperation(false);
-    asserts.assertEquals(successResult, 'Success');
+    asserts.assertEquals(successResult, "Success");
     asserts.assertEquals(counter, 1);
 
     // Same call should be memoized
@@ -342,10 +342,10 @@ Deno.test('utils.memoize', async (t) => {
       await memoizedOperation(true);
     } catch (error) {
       caught = true;
-      asserts.assertEquals((error as Error).message, 'Operation failed');
+      asserts.assertEquals((error as Error).message, "Operation failed");
     }
-    asserts.assertEquals(caught, true, 'Should throw the expected error');
-    asserts.assertEquals(counter, 2, 'Failure should not be cached');
+    asserts.assertEquals(caught, true, "Should throw the expected error");
+    asserts.assertEquals(counter, 2, "Failure should not be cached");
 
     // Same failing call should not be memoized
     caught = false;
@@ -355,43 +355,43 @@ Deno.test('utils.memoize', async (t) => {
       caught = true;
     }
     asserts.assertEquals(caught, true);
-    asserts.assertEquals(counter, 3, 'Failures should never be memoized');
+    asserts.assertEquals(counter, 3, "Failures should never be memoized");
   });
 
-  await t.step('should handle function input validation', () => {
+  await t.step("should handle function input validation", () => {
     // Test non-function input
     asserts.assertThrows(
       () => memoize(null as any),
       TypeError,
-      'Expected a function',
+      "Expected a function",
     );
 
     asserts.assertThrows(
       () => memoize(undefined as any),
       TypeError,
-      'Expected a function',
+      "Expected a function",
     );
 
     asserts.assertThrows(
-      () => memoize('not a function' as any),
+      () => memoize("not a function" as any),
       TypeError,
-      'Expected a function',
+      "Expected a function",
     );
 
     asserts.assertThrows(
       () => memoize(123 as any),
       TypeError,
-      'Expected a function',
+      "Expected a function",
     );
 
     asserts.assertThrows(
       () => memoize({} as any),
       TypeError,
-      'Expected a function',
+      "Expected a function",
     );
   });
 
-  await t.step('should handle cache expiration edge cases', async () => {
+  await t.step("should handle cache expiration edge cases", async () => {
     let counter = 0;
     const fn = () => ++counter;
 
@@ -407,7 +407,7 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertEquals(memoizedFn(), 2); // Should execute again after expiration
   });
 
-  await t.step('should handle cache key creation edge cases', () => {
+  await t.step("should handle cache key creation edge cases", () => {
     let counter = 0;
     const fn = (...args: any[]) => ++counter;
     const memoizedFn = memoize(fn, 60);
@@ -425,8 +425,8 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertEquals(result2, 2);
 
     // Test with functions as arguments
-    const func1 = () => 'test';
-    const func2 = () => 'test';
+    const func1 = () => "test";
+    const func2 = () => "test";
 
     const result3 = memoizedFn(func1);
     const result4 = memoizedFn(func2);
@@ -437,7 +437,7 @@ Deno.test('utils.memoize', async (t) => {
   });
 
   await t.step(
-    'should handle concurrent async call deduplication',
+    "should handle concurrent async call deduplication",
     async () => {
       let counter = 0;
       const asyncFn = async (value: string): Promise<string> => {
@@ -450,22 +450,22 @@ Deno.test('utils.memoize', async (t) => {
 
       // Start multiple concurrent calls with same arguments
       const promises = [
-        memoizedFn('test'),
-        memoizedFn('test'),
-        memoizedFn('test'),
+        memoizedFn("test"),
+        memoizedFn("test"),
+        memoizedFn("test"),
       ];
 
       const results = await Promise.all(promises);
 
       // All should return the same result and function should only execute once
-      asserts.assertEquals(results[0], 'test-1');
-      asserts.assertEquals(results[1], 'test-1');
-      asserts.assertEquals(results[2], 'test-1');
+      asserts.assertEquals(results[0], "test-1");
+      asserts.assertEquals(results[1], "test-1");
+      asserts.assertEquals(results[2], "test-1");
       asserts.assertEquals(counter, 1);
     },
   );
 
-  await t.step('should handle promise rejection cleanup', async () => {
+  await t.step("should handle promise rejection cleanup", async () => {
     let counter = 0;
     const failingAsyncFn = async (shouldFail: boolean): Promise<string> => {
       counter++;
@@ -481,31 +481,31 @@ Deno.test('utils.memoize', async (t) => {
     // First call fails
     try {
       await memoizedFn(true);
-      asserts.fail('Should have thrown');
+      asserts.fail("Should have thrown");
     } catch (error) {
       asserts.assert(error instanceof Error);
-      asserts.assertEquals(error.message, 'Failure 1');
+      asserts.assertEquals(error.message, "Failure 1");
     }
 
     // Second call with same args should execute again (not cached due to error)
     try {
       await memoizedFn(true);
-      asserts.fail('Should have thrown');
+      asserts.fail("Should have thrown");
     } catch (error) {
       asserts.assert(error instanceof Error);
-      asserts.assertEquals(error.message, 'Failure 2');
+      asserts.assertEquals(error.message, "Failure 2");
     }
 
     // Successful call should be cached
     const result1 = await memoizedFn(false);
     const result2 = await memoizedFn(false);
 
-    asserts.assertEquals(result1, 'Success 3');
-    asserts.assertEquals(result2, 'Success 3'); // Cached
+    asserts.assertEquals(result1, "Success 3");
+    asserts.assertEquals(result2, "Success 3"); // Cached
     asserts.assertEquals(counter, 3);
   });
 
-  await t.step('should handle synchronous function error cases', () => {
+  await t.step("should handle synchronous function error cases", () => {
     let counter = 0;
     const throwingFn = (shouldThrow: boolean): number => {
       counter++;
@@ -521,13 +521,13 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertThrows(
       () => memoizedFn(true),
       Error,
-      'Error 1',
+      "Error 1",
     );
 
     asserts.assertThrows(
       () => memoizedFn(true),
       Error,
-      'Error 2',
+      "Error 2",
     );
 
     // Successful calls should be cached
@@ -536,7 +536,7 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertEquals(counter, 3);
   });
 
-  await t.step('should handle cache expiration correctly', async () => {
+  await t.step("should handle cache expiration correctly", async () => {
     let counter = 0;
     const fn = () => ++counter;
     const memoizedFn = memoize(fn, 0.1); // 100ms timeout
@@ -553,7 +553,7 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertEquals(memoizedFn(), 2); // New cached value
   });
 
-  await t.step('should handle complex object arguments', () => {
+  await t.step("should handle complex object arguments", () => {
     let counter = 0;
     const fn = (obj: any) => ({ ...obj, counter: ++counter });
     const memoizedFn = memoize(fn, 60);
@@ -571,7 +571,7 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertEquals(result3.counter, 2); // New execution
   });
 
-  await t.step('should handle zero and negative timeout values', () => {
+  await t.step("should handle zero and negative timeout values", () => {
     let counter = 0;
     const fn = () => ++counter;
 
@@ -584,7 +584,7 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertEquals(memoizedFn2(), 2);
   });
 
-  await t.step('should handle decorator on various method types', () => {
+  await t.step("should handle decorator on various method types", () => {
     class TestClass {
       static counter = 0;
       private value = 0;
@@ -620,7 +620,7 @@ Deno.test('utils.memoize', async (t) => {
     asserts.assertEquals(TestClass.counter, 2);
   });
 
-  await t.step('should handle decorator without constructor', () => {
+  await t.step("should handle decorator without constructor", () => {
     // Test case where this.constructor might not exist
     const descriptor: PropertyDescriptor = {
       value: function (this: any, x: number) {
@@ -632,13 +632,13 @@ Deno.test('utils.memoize', async (t) => {
     };
 
     // Apply decorator to function without constructor context
-    Memoize(60)({}, 'testMethod', descriptor);
+    Memoize(60)({}, "testMethod", descriptor);
 
     // Should not throw and descriptor should be modified
-    asserts.assert(typeof descriptor.value === 'function');
+    asserts.assert(typeof descriptor.value === "function");
   });
 
-  await t.step('should handle getter decorator without constructor', () => {
+  await t.step("should handle getter decorator without constructor", () => {
     const descriptor: PropertyDescriptor = {
       get: function (this: any) {
         return 42;
@@ -648,13 +648,13 @@ Deno.test('utils.memoize', async (t) => {
     };
 
     // Apply decorator to getter without constructor context
-    Memoize(60)({}, 'testGetter', descriptor);
+    Memoize(60)({}, "testGetter", descriptor);
 
     // Should not throw and descriptor should be modified
-    asserts.assert(typeof descriptor.get === 'function');
+    asserts.assert(typeof descriptor.get === "function");
   });
 
-  await t.step('should handle neither value nor get descriptor', () => {
+  await t.step("should handle neither value nor get descriptor", () => {
     const descriptor: PropertyDescriptor = {
       writable: true,
       enumerable: true,
@@ -665,7 +665,7 @@ Deno.test('utils.memoize', async (t) => {
     const originalDescriptor = { ...descriptor };
 
     // Apply decorator - should not modify descriptor
-    Memoize(60)({}, 'testProperty', descriptor);
+    Memoize(60)({}, "testProperty", descriptor);
 
     // Should return the same descriptor unchanged
     asserts.assertEquals(descriptor.value, originalDescriptor.value);

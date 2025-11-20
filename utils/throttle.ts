@@ -22,7 +22,7 @@
 //#region Compatibility Layer
 // Determine the appropriate time function based on the environment
 let getCurrentTime: () => number;
-if (typeof performance !== 'undefined' && performance.now) {
+if (typeof performance !== "undefined" && performance.now) {
   // Use high-resolution timer when available (sub-millisecond precision)
   getCurrentTime = () => performance.now();
 } else {
@@ -162,7 +162,7 @@ export const throttle = <T extends (...args: any[]) => any>(
     } catch {
       // If JSON.stringify fails (e.g., circular references), use a simpler approach
       return String(
-        args.map((arg) => typeof arg === 'object' ? 'object' : arg),
+        args.map((arg) => typeof arg === "object" ? "object" : arg),
       );
     }
   };
@@ -308,7 +308,7 @@ export const Throttle =
     _propertyKey: string | symbol,
     descriptor: PropertyDescriptor,
   ) => {
-    if (typeof descriptor.value === 'function') {
+    if (typeof descriptor.value === "function") {
       const original = descriptor.value;
       descriptor.value = throttle(original, delay, ignoreArgs);
     }

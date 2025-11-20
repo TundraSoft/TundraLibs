@@ -46,7 +46,7 @@ export const digest = async (
   return encodeHex(
     await crypto.subtle.digest(
       algorithm,
-      dataToHash,
+      dataToHash as BufferSource,
     ),
   );
 };
