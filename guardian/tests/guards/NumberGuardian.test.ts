@@ -85,8 +85,6 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(0), GuardianError);
       asserts.assertThrows(() => schema.parse(1), GuardianError);
     });
-
-
   });
 
   await t.step("integer and finite validations", async (t) => {
@@ -182,7 +180,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(7), 7);
       asserts.assertEquals(schema.parse(11), 11);
       asserts.assertEquals(schema.parse(13), 13);
-      
+
       asserts.assertThrows(() => schema.parse(1), GuardianError); // not prime
       asserts.assertThrows(() => schema.parse(4), GuardianError); // not prime
       asserts.assertThrows(() => schema.parse(6), GuardianError); // not prime
@@ -210,7 +208,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(443), 443);
       asserts.assertEquals(schema.parse(8080), 8080);
       asserts.assertEquals(schema.parse(65535), 65535);
-      
+
       asserts.assertThrows(() => schema.parse(-1), GuardianError);
       asserts.assertThrows(() => schema.parse(65536), GuardianError);
       asserts.assertThrows(() => schema.parse(80.5), GuardianError); // not integer
@@ -223,7 +221,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(now), now);
       asserts.assertEquals(schema.parse(0), 0); // Unix epoch
       asserts.assertEquals(schema.parse(1609459200000), 1609459200000); // Jan 1, 2021
-      
+
       asserts.assertThrows(() => schema.parse(-1), GuardianError); // negative
       asserts.assertThrows(() => schema.parse(3.14), GuardianError); // not integer
     });
@@ -290,7 +288,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(50), 50);
       asserts.assertEquals(schema.parse(0), 0);
       asserts.assertEquals(schema.parse(100), 100);
-      
+
       // Values outside range get clamped
       asserts.assertEquals(schema.parse(-10), 0); // clamped to min
       asserts.assertEquals(schema.parse(150), 100); // clamped to max
@@ -306,7 +304,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema2.parse(3.146), 3.15); // rounds up
       asserts.assertEquals(schema2.parse(5), 5);
       asserts.assertEquals(schema2.parse(2.999), 3);
-      
+
       asserts.assertEquals(schema0.parse(3.14), 3);
       asserts.assertEquals(schema0.parse(3.7), 4);
     });
@@ -455,10 +453,10 @@ Deno.test("guardian.NumberGuardian", async (t) => {
 
       asserts.assertEquals(schema.parse(5), 5);
       asserts.assertEquals(callCount, 0); // function not called for valid input
-      
+
       asserts.assertEquals(schema.parse(undefined), 100);
       asserts.assertEquals(callCount, 1); // function called for undefined
-      
+
       asserts.assertEquals(schema.parse(undefined), 100);
       asserts.assertEquals(callCount, 2); // function called again
     });
@@ -469,28 +467,28 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(nullableSchema.parse(5), 5);
       asserts.assertEquals(nullableSchema.parse(null), null);
       asserts.assertThrows(() => nullableSchema.parse(-1), GuardianError);
-      
+
       // Test optional
       const optionalSchema = new NumberGuardian().positive().optional(99);
       asserts.assertEquals(optionalSchema.parse(5), 5);
       asserts.assertEquals(optionalSchema.parse(undefined), 99);
       asserts.assertThrows(() => optionalSchema.parse(-1), GuardianError);
     });
-    
+
     await t.step("should handle nullable().optional() chaining", () => {
       const schema = new NumberGuardian().positive().nullable().optional(100);
-      
-      asserts.assertEquals(schema.parse(5), 5);           // valid number
-      asserts.assertEquals(schema.parse(null), null);     // null preserved
+
+      asserts.assertEquals(schema.parse(5), 5); // valid number
+      asserts.assertEquals(schema.parse(null), null); // null preserved
       asserts.assertEquals(schema.parse(undefined), 100); // default used
       asserts.assertThrows(() => schema.parse(-1), GuardianError); // validation still works
     });
-    
+
     await t.step("should handle optional().nullable() chaining", () => {
       const schema = new NumberGuardian().positive().optional(100).nullable();
-      
-      asserts.assertEquals(schema.parse(5), 5);           // valid number
-      asserts.assertEquals(schema.parse(null), null);     // null preserved
+
+      asserts.assertEquals(schema.parse(5), 5); // valid number
+      asserts.assertEquals(schema.parse(null), null); // null preserved
       asserts.assertEquals(schema.parse(undefined), 100); // default used
       asserts.assertThrows(() => schema.parse(-1), GuardianError); // validation still works
     });
@@ -500,7 +498,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       const nullableSchema = new NumberGuardian().abs().nullable();
       asserts.assertEquals(nullableSchema.parse(-5), 5); // abs transformation applied
       asserts.assertEquals(nullableSchema.parse(null), null);
-      
+
       // Test optional with transformations
       const optionalSchema = new NumberGuardian().abs().optional(10);
       asserts.assertEquals(optionalSchema.parse(-5), 5); // abs transformation applied
@@ -528,7 +526,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(3), 3);
       asserts.assertEquals(schema.parse(5), 5);
       asserts.assertEquals(schema.parse(7), 7);
-      
+
       asserts.assertThrows(() => schema.parse(2), GuardianError); // even, not odd
       asserts.assertThrows(() => schema.parse(9), GuardianError); // not prime
       asserts.assertThrows(() => schema.parse(0), GuardianError); // not in range
@@ -544,7 +542,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(-50.789), 50.8); // abs -> clamp -> toFixed
       asserts.assertEquals(schema.parse(150.234), 100); // clamp -> toFixed
       asserts.assertEquals(schema.parse(25.666), 25.7); // toFixed
-      
+
       // The clamp ensures we never get 0, so positive validation always passes
       // unless input was exactly 0 after abs
       const zeroSchema = new NumberGuardian().abs().positive();
@@ -645,7 +643,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
 
     await t.step("formatCurrency with different locale", () => {
-      const schema = new NumberGuardian().formatCurrency('de-DE', 'EUR');
+      const schema = new NumberGuardian().formatCurrency("de-DE", "EUR");
 
       const result = schema.parse(1234.56);
       asserts.assertEquals(typeof result, "number");

@@ -1,9 +1,9 @@
 /**
  * Guardian vs Zod Performance Comparison
- * 
+ *
  * Benchmarks comparing Guardian against Zod for equivalent validation scenarios.
  * This helps track Guardian's performance relative to a well-established library.
- * 
+ *
  * Run with: deno bench guardian/tests/guardian-vs-zod.bench.ts --allow-all
  */
 
@@ -343,7 +343,10 @@ Deno.bench("Transform Chain - Zod", () => {
 // =============================================================================
 
 Deno.bench("Refine Simple - Guardian", () => {
-  const guard = Guardian.string().test((s: string) => s.includes("@"), "Must contain @");
+  const guard = Guardian.string().test(
+    (s: string) => s.includes("@"),
+    "Must contain @",
+  );
   guard.parse("user@domain.com");
 });
 
@@ -357,8 +360,9 @@ Deno.bench("Refine Complex - Guardian", () => {
     password: Guardian.string(),
     confirmPassword: Guardian.string(),
   }).test(
-    (data: { password: string; confirmPassword: string }) => data.password === data.confirmPassword,
-    "Passwords must match"
+    (data: { password: string; confirmPassword: string }) =>
+      data.password === data.confirmPassword,
+    "Passwords must match",
   );
   guard.parse({ password: "secret", confirmPassword: "secret" });
 });
@@ -369,7 +373,7 @@ Deno.bench("Refine Complex - Zod", () => {
     confirmPassword: z.string(),
   }).refine(
     (data) => data.password === data.confirmPassword,
-    "Passwords must match"
+    "Passwords must match",
   );
   schema.parse({ password: "secret", confirmPassword: "secret" });
 });
@@ -417,11 +421,11 @@ Deno.bench("Large Array - Zod", () => {
 Deno.bench("Large Object - Guardian", () => {
   const guard = Guardian.object(
     Object.fromEntries(
-      Array.from({ length: 100 }, (_, i) => [`field${i}`, Guardian.string()])
-    )
+      Array.from({ length: 100 }, (_, i) => [`field${i}`, Guardian.string()]),
+    ),
   );
   const largeObject = Object.fromEntries(
-    Array.from({ length: 100 }, (_, i) => [`field${i}`, `value${i}`])
+    Array.from({ length: 100 }, (_, i) => [`field${i}`, `value${i}`]),
   );
   guard.parse(largeObject);
 });
@@ -429,11 +433,11 @@ Deno.bench("Large Object - Guardian", () => {
 Deno.bench("Large Object - Zod", () => {
   const schema = z.object(
     Object.fromEntries(
-      Array.from({ length: 100 }, (_, i) => [`field${i}`, z.string()])
-    )
+      Array.from({ length: 100 }, (_, i) => [`field${i}`, z.string()]),
+    ),
   );
   const largeObject = Object.fromEntries(
-    Array.from({ length: 100 }, (_, i) => [`field${i}`, `value${i}`])
+    Array.from({ length: 100 }, (_, i) => [`field${i}`, `value${i}`]),
   );
   schema.parse(largeObject);
 });
@@ -460,7 +464,7 @@ Deno.bench("User Registration - Guardian", () => {
     terms: Guardian.boolean().equals(true),
   }).test(
     (data: any) => data.password === data.confirmPassword,
-    "Passwords do not match"
+    "Passwords do not match",
   );
 
   guard.parse({
@@ -491,7 +495,7 @@ Deno.bench("User Registration - Zod", () => {
     terms: z.boolean().refine((val) => val === true),
   }).refine(
     (data) => data.password === data.confirmPassword,
-    "Passwords do not match"
+    "Passwords do not match",
   );
 
   schema.parse({
@@ -506,4 +510,6 @@ Deno.bench("User Registration - Zod", () => {
 
 console.log("🔥 Guardian vs Zod benchmarks completed!");
 console.log("📊 Compare the results to see relative performance differences.");
-console.log("💡 Run with: deno bench guardian/tests/guardian-vs-zod.bench.ts --allow-all");
+console.log(
+  "💡 Run with: deno bench guardian/tests/guardian-vs-zod.bench.ts --allow-all",
+);

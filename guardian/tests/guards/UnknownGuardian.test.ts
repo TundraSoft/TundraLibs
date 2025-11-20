@@ -17,32 +17,32 @@ Deno.test("guardian.UnknownGuardian", async (t) => {
     });
 
     await t.step("rejects null values by default", () => {
-    const unknownGuard = new UnknownGuardian();
-    asserts.assertThrows(
-      () => unknownGuard.parse(null),
-      GuardianError,
-      "Expected value but got null"
-    );
-  });
+      const unknownGuard = new UnknownGuardian();
+      asserts.assertThrows(
+        () => unknownGuard.parse(null),
+        GuardianError,
+        "Expected value but got null",
+      );
+    });
 
-  await t.step("rejects undefined values by default", () => {
-    const unknownGuard = new UnknownGuardian();
-    asserts.assertThrows(
-      () => unknownGuard.parse(undefined),
-      GuardianError,
-      "Expected value but got undefined"
-    );
-  });
+    await t.step("rejects undefined values by default", () => {
+      const unknownGuard = new UnknownGuardian();
+      asserts.assertThrows(
+        () => unknownGuard.parse(undefined),
+        GuardianError,
+        "Expected value but got undefined",
+      );
+    });
 
-  await t.step("allows null when nullable is used", () => {
-    const unknownGuard = new UnknownGuardian().nullable();
-    asserts.assertEquals(unknownGuard.parse(null), null);
-  });
+    await t.step("allows null when nullable is used", () => {
+      const unknownGuard = new UnknownGuardian().nullable();
+      asserts.assertEquals(unknownGuard.parse(null), null);
+    });
 
-  await t.step("allows undefined when optional is used", () => {
-    const unknownGuard = new UnknownGuardian().optional();
-    asserts.assertEquals(unknownGuard.parse(undefined), undefined);
-  });
+    await t.step("allows undefined when optional is used", () => {
+      const unknownGuard = new UnknownGuardian().optional();
+      asserts.assertEquals(unknownGuard.parse(undefined), undefined);
+    });
 
     await t.step("should preserve value identity", () => {
       const unknownGuard = new UnknownGuardian();
@@ -88,7 +88,9 @@ Deno.test("guardian.UnknownGuardian", async (t) => {
     });
 
     await t.step("should pass null through when nullable", () => {
-      const nullableStringGuard = new UnknownGuardian().process((value: unknown) => String(value)).nullable();
+      const nullableStringGuard = new UnknownGuardian().process((
+        value: unknown,
+      ) => String(value)).nullable();
 
       // nullable() allows null to pass through without transformation
       asserts.assertEquals(nullableStringGuard.parse(null), null);
@@ -97,7 +99,9 @@ Deno.test("guardian.UnknownGuardian", async (t) => {
     });
 
     await t.step("should convert undefined to string when optional", () => {
-      const optionalStringGuard = new UnknownGuardian().process((value: unknown) => String(value)).optional("undefined");
+      const optionalStringGuard = new UnknownGuardian().process((
+        value: unknown,
+      ) => String(value)).optional("undefined");
 
       asserts.assertEquals(optionalStringGuard.parse(undefined), "undefined");
     });
@@ -131,12 +135,17 @@ Deno.test("guardian.UnknownGuardian", async (t) => {
     });
 
     await t.step("should pass null through when nullable", () => {
-      const nullableJsonGuard = new UnknownGuardian().process((value: unknown) => JSON.stringify(value)).nullable();
+      const nullableJsonGuard = new UnknownGuardian().process((
+        value: unknown,
+      ) => JSON.stringify(value)).nullable();
 
-      // nullable() allows null to pass through without transformation  
+      // nullable() allows null to pass through without transformation
       asserts.assertEquals(nullableJsonGuard.parse(null), null);
       // But non-null values are still transformed
-      asserts.assertEquals(nullableJsonGuard.parse({ name: "John" }), '{"name":"John"}');
+      asserts.assertEquals(
+        nullableJsonGuard.parse({ name: "John" }),
+        '{"name":"John"}',
+      );
     });
 
     await t.step("should handle JSON serialization errors", () => {
@@ -216,8 +225,8 @@ Deno.test("guardian.UnknownGuardian", async (t) => {
 
       // Test null handling
       asserts.assertEquals(nullGuard.parse(null), null);
-      
-      // Test undefined handling  
+
+      // Test undefined handling
       asserts.assertEquals(undefinedGuard.parse(undefined), undefined);
 
       // Both should accept regular values since UnknownGuardian accepts anything
@@ -384,35 +393,41 @@ Deno.test("guardian.UnknownGuardian", async (t) => {
   });
 
   await t.step("nullable and optional chaining", async (t) => {
-    await t.step("nullable().optional() allows null, undefined, and any value", () => {
-      const guard = new UnknownGuardian().nullable().optional();
-      
-      asserts.assertEquals(guard.parse(null), null);
-      asserts.assertEquals(guard.parse(undefined), undefined);
-      asserts.assertEquals(guard.parse("hello"), "hello");
-      asserts.assertEquals(guard.parse(42), 42);
-      asserts.assertEquals(guard.parse(true), true);
-      asserts.assertEquals(guard.parse([1, 2, 3]), [1, 2, 3]);
-      asserts.assertEquals(guard.parse({ foo: "bar" }), { foo: "bar" });
-    });
+    await t.step(
+      "nullable().optional() allows null, undefined, and any value",
+      () => {
+        const guard = new UnknownGuardian().nullable().optional();
 
-    await t.step("optional().nullable() allows undefined, null, and any value", () => {
-      const guard = new UnknownGuardian().optional().nullable();
-      
-      asserts.assertEquals(guard.parse(undefined), undefined);
-      asserts.assertEquals(guard.parse(null), null);
-      asserts.assertEquals(guard.parse("hello"), "hello");
-      asserts.assertEquals(guard.parse(42), 42);
-      asserts.assertEquals(guard.parse(false), false);
-      asserts.assertEquals(guard.parse([1, 2, 3]), [1, 2, 3]);
-      asserts.assertEquals(guard.parse({ foo: "bar" }), { foo: "bar" });
-    });
+        asserts.assertEquals(guard.parse(null), null);
+        asserts.assertEquals(guard.parse(undefined), undefined);
+        asserts.assertEquals(guard.parse("hello"), "hello");
+        asserts.assertEquals(guard.parse(42), 42);
+        asserts.assertEquals(guard.parse(true), true);
+        asserts.assertEquals(guard.parse([1, 2, 3]), [1, 2, 3]);
+        asserts.assertEquals(guard.parse({ foo: "bar" }), { foo: "bar" });
+      },
+    );
+
+    await t.step(
+      "optional().nullable() allows undefined, null, and any value",
+      () => {
+        const guard = new UnknownGuardian().optional().nullable();
+
+        asserts.assertEquals(guard.parse(undefined), undefined);
+        asserts.assertEquals(guard.parse(null), null);
+        asserts.assertEquals(guard.parse("hello"), "hello");
+        asserts.assertEquals(guard.parse(42), 42);
+        asserts.assertEquals(guard.parse(false), false);
+        asserts.assertEquals(guard.parse([1, 2, 3]), [1, 2, 3]);
+        asserts.assertEquals(guard.parse({ foo: "bar" }), { foo: "bar" });
+      },
+    );
 
     await t.step("nullable().optional() preserves value identity", () => {
       const guard = new UnknownGuardian().nullable().optional();
       const obj = { test: "value" };
       const arr = [1, 2, 3];
-      
+
       asserts.assertStrictEquals(guard.parse(obj), obj);
       asserts.assertStrictEquals(guard.parse(arr), arr);
       asserts.assertEquals(guard.parse(null), null);
@@ -423,7 +438,7 @@ Deno.test("guardian.UnknownGuardian", async (t) => {
       const guard = new UnknownGuardian().optional().nullable();
       const obj = { test: "value" };
       const arr = [1, 2, 3];
-      
+
       asserts.assertStrictEquals(guard.parse(obj), obj);
       asserts.assertStrictEquals(guard.parse(arr), arr);
       asserts.assertEquals(guard.parse(undefined), undefined);

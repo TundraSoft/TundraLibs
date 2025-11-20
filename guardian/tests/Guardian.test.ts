@@ -194,7 +194,10 @@ Deno.test("guardian.Guardian", async (t) => {
 
     await t.step("should handle union types with oneOf", () => {
       const idSchema = Guardian.oneOf(
-        [Guardian.number().positive(), Guardian.string().pattern(/^[a-z0-9]+$/i)],
+        [
+          Guardian.number().positive(),
+          Guardian.string().pattern(/^[a-z0-9]+$/i),
+        ],
         "ID must be positive number or alphanumeric string",
       );
 

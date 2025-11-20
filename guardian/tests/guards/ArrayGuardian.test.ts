@@ -354,7 +354,9 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
     });
 
     await t.step("should validate array of emails", () => {
-      const emailArrayGuard = Guardian.array(Guardian.string().pattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/))
+      const emailArrayGuard = Guardian.array(
+        Guardian.string().pattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/),
+      )
         .minLength(1)
         .unique();
 
@@ -420,7 +422,9 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
     });
 
     await t.step("should validate tag system", () => {
-      const tagGuard = Guardian.array(Guardian.string().minLength(1).maxLength(20))
+      const tagGuard = Guardian.array(
+        Guardian.string().minLength(1).maxLength(20),
+      )
         .minLength(1)
         .maxLength(10)
         .unique()
@@ -437,7 +441,11 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
 
       // Should pass arrays without nulls
       asserts.assertEquals(noNullsGuard.parse([1, 2, 3]), [1, 2, 3]);
-      asserts.assertEquals(noNullsGuard.parse(["a", "b", "c"]), ["a", "b", "c"]);
+      asserts.assertEquals(noNullsGuard.parse(["a", "b", "c"]), [
+        "a",
+        "b",
+        "c",
+      ]);
       asserts.assertEquals(noNullsGuard.parse([]), []);
       asserts.assertEquals(noNullsGuard.parse([0, false, ""]), [0, false, ""]);
 
@@ -445,19 +453,19 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
       asserts.assertThrows(
         () => noNullsGuard.parse([1, null, 3]),
         GuardianError,
-        "Array must not contain null or undefined values, found at index 1"
+        "Array must not contain null or undefined values, found at index 1",
       );
 
       asserts.assertThrows(
         () => noNullsGuard.parse([1, undefined, 3]),
         GuardianError,
-        "Array must not contain null or undefined values, found at index 1"
+        "Array must not contain null or undefined values, found at index 1",
       );
 
       asserts.assertThrows(
         () => noNullsGuard.parse([null]),
         GuardianError,
-        "Array must not contain null or undefined values, found at index 0"
+        "Array must not contain null or undefined values, found at index 0",
       );
 
       // Should support custom error message
@@ -465,7 +473,7 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
       asserts.assertThrows(
         () => customMessageGuard.parse([1, null, 3]),
         GuardianError,
-        "Custom null error"
+        "Custom null error",
       );
     });
 
@@ -474,21 +482,36 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
 
       // Basic flattening with default joiner
       asserts.assertEquals(flattenGuard.parse([1, [2, 3], 4]), "1,2,3,4");
-      asserts.assertEquals(flattenGuard.parse(["a", ["b", "c"], "d"]), "a,b,c,d");
+      asserts.assertEquals(
+        flattenGuard.parse(["a", ["b", "c"], "d"]),
+        "a,b,c,d",
+      );
       asserts.assertEquals(flattenGuard.parse([]), "");
       asserts.assertEquals(flattenGuard.parse([1]), "1");
 
       // Custom joiner
       const customJoinerGuard = Guardian.array().flatten(" | ");
-      asserts.assertEquals(customJoinerGuard.parse([1, [2, 3], 4]), "1 | 2 | 3 | 4");
-      asserts.assertEquals(customJoinerGuard.parse(["hello", ["world"]]), "hello | world");
+      asserts.assertEquals(
+        customJoinerGuard.parse([1, [2, 3], 4]),
+        "1 | 2 | 3 | 4",
+      );
+      asserts.assertEquals(
+        customJoinerGuard.parse(["hello", ["world"]]),
+        "hello | world",
+      );
 
       // Custom depth
       const shallowGuard = Guardian.array().flatten(",", 1);
-      asserts.assertEquals(shallowGuard.parse([1, [2, [3, 4]], 5]), "1,2,3,4,5");
+      asserts.assertEquals(
+        shallowGuard.parse([1, [2, [3, 4]], 5]),
+        "1,2,3,4,5",
+      );
 
       const deepGuard = Guardian.array().flatten(",", 2);
-      asserts.assertEquals(deepGuard.parse([1, [2, [3, [4, 5]]], 6]), "1,2,3,4,5,6");
+      asserts.assertEquals(
+        deepGuard.parse([1, [2, [3, [4, 5]]], 6]),
+        "1,2,3,4,5,6",
+      );
 
       // No flattening (depth 0)
       const noFlattenGuard = Guardian.array().flatten(",", 0);
@@ -496,7 +519,10 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
       asserts.assertEquals(noFlattenGuard.parse(nestedArray), "1,2,3,4");
 
       // Mixed types
-      asserts.assertEquals(flattenGuard.parse([1, [true, "text"], null]), "1,true,text,");
+      asserts.assertEquals(
+        flattenGuard.parse([1, [true, "text"], null]),
+        "1,true,text,",
+      );
     });
 
     await t.step("compact transformation", () => {
@@ -504,16 +530,36 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
 
       // Remove all falsy values
       asserts.assertEquals(
-        compactGuard.parse([1, null, 2, undefined, 3, false, 4, 0, 5, "", 6, NaN]),
-        [1, 2, 3, 4, 5, 6]
+        compactGuard.parse([
+          1,
+          null,
+          2,
+          undefined,
+          3,
+          false,
+          4,
+          0,
+          5,
+          "",
+          6,
+          NaN,
+        ]),
+        [1, 2, 3, 4, 5, 6],
       );
 
       // Array with no falsy values
       asserts.assertEquals(compactGuard.parse([1, 2, 3]), [1, 2, 3]);
-      asserts.assertEquals(compactGuard.parse(["a", "b", "c"]), ["a", "b", "c"]);
+      asserts.assertEquals(compactGuard.parse(["a", "b", "c"]), [
+        "a",
+        "b",
+        "c",
+      ]);
 
       // Array with only falsy values
-      asserts.assertEquals(compactGuard.parse([null, undefined, false, 0, "", NaN]), []);
+      asserts.assertEquals(
+        compactGuard.parse([null, undefined, false, 0, "", NaN]),
+        [],
+      );
 
       // Empty array
       asserts.assertEquals(compactGuard.parse([]), []);
@@ -521,7 +567,7 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
       // Mixed types with truthy values
       asserts.assertEquals(
         compactGuard.parse([1, "hello", true, [], {}, -1, " "]),
-        [1, "hello", true, [], {}, -1, " "]
+        [1, "hello", true, [], {}, -1, " "],
       );
 
       // Keep legitimate zero-like values that are truthy
@@ -533,9 +579,13 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
 
       // Remove duplicates from numbers
       asserts.assertEquals(uniqueGuard.parse([1, 2, 2, 3, 1, 4]), [1, 2, 3, 4]);
-      
+
       // Remove duplicates from strings
-      asserts.assertEquals(uniqueGuard.parse(["a", "b", "a", "c", "b"]), ["a", "b", "c"]);
+      asserts.assertEquals(uniqueGuard.parse(["a", "b", "a", "c", "b"]), [
+        "a",
+        "b",
+        "c",
+      ]);
 
       // Array with no duplicates
       asserts.assertEquals(uniqueGuard.parse([1, 2, 3]), [1, 2, 3]);
@@ -552,13 +602,13 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
       // Mixed types (maintains insertion order)
       asserts.assertEquals(
         uniqueGuard.parse([1, "1", 1, true, "1", false, true]),
-        [1, "1", true, false]
+        [1, "1", true, false],
       );
 
       // With null and undefined
       asserts.assertEquals(
         uniqueGuard.parse([null, undefined, null, 1, undefined, 1]),
-        [null, undefined, 1]
+        [null, undefined, 1],
       );
 
       // Objects (reference equality)
@@ -567,7 +617,7 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
       const obj3 = { id: 1 }; // Different reference than obj1
       asserts.assertEquals(
         uniqueGuard.parse([obj1, obj2, obj1, obj3]),
-        [obj1, obj2, obj3]
+        [obj1, obj2, obj3],
       );
     });
 
@@ -580,7 +630,7 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
 
       asserts.assertEquals(
         chainedGuard.parse([1, 2, 2, 3, false, 4, 0, 1, ""]),
-        [1, 2, 3, 4]
+        [1, 2, 3, 4],
       );
 
       // Chain with existing methods (using untyped array to allow mixed types before filtering)
@@ -591,7 +641,7 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
 
       asserts.assertEquals(
         complexChain.parse([3, 0, 1, false, 4, 1, 5, 0]),
-        [1, 3, 4, 5]
+        [1, 3, 4, 5],
       );
 
       // Flatten with other transformations
@@ -601,7 +651,7 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
 
       asserts.assertEquals(
         flattenChain.parse([1, [2, 3], [4]]),
-        "1 - 2 - 3 - 4"
+        "1 - 2 - 3 - 4",
       );
     });
 
@@ -611,20 +661,33 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
       asserts.assertThrows(
         () => customErrorGuard.parse([1, null]),
         GuardianError,
-        "No nulls allowed!"
+        "No nulls allowed!",
       );
 
       // Flatten with deeply nested arrays
       const deepNested = [1, [2, [3, [4, [5]]]]];
       asserts.assertEquals(
         Guardian.array().flatten(",", Infinity).parse(deepNested),
-        "1,2,3,4,5"
+        "1,2,3,4,5",
       );
 
       // Compact with various falsy types
       const falsyTypes = [
-        0, -0, 0n, false, null, undefined, "", NaN,
-        1, "0", [], {}, " ", true, -1
+        0,
+        -0,
+        0n,
+        false,
+        null,
+        undefined,
+        "",
+        NaN,
+        1,
+        "0",
+        [],
+        {},
+        " ",
+        true,
+        -1,
       ];
       const compactResult = Guardian.array().compact().parse(falsyTypes);
       asserts.assertEquals(compactResult, [1, "0", [], {}, " ", true, -1]);
@@ -652,13 +715,13 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
 
       asserts.assertEquals(
         stringArrayGuard.parse(["a", "b", "a", "c"]),
-        ["a", "b", "c"]
+        ["a", "b", "c"],
       );
 
       // Should reject null in string array
       asserts.assertThrows(
         () => stringArrayGuard.parse(["a", null, "b"]),
-        GuardianError
+        GuardianError,
       );
     });
   });
@@ -670,21 +733,21 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
       asserts.assertEquals(schema.parse(null), null);
       asserts.assertThrows(() => schema.parse("not array"), GuardianError);
     });
-    
+
     await t.step("should handle optional arrays", () => {
       const schema = Guardian.array().optional(["default"]);
       asserts.assertEquals(schema.parse([1, 2, 3]), [1, 2, 3]);
       asserts.assertEquals(schema.parse(undefined), ["default"]);
       asserts.assertThrows(() => schema.parse("not array"), GuardianError);
     });
-    
+
     await t.step("should handle nullable().optional() chaining", () => {
       const schema = Guardian.array().nullable().optional(["default"]);
       asserts.assertEquals(schema.parse([1, 2, 3]), [1, 2, 3]);
       asserts.assertEquals(schema.parse(null), null);
       asserts.assertEquals(schema.parse(undefined), ["default"]);
     });
-    
+
     await t.step("should handle optional().nullable() chaining", () => {
       const schema = Guardian.array().optional(["default"]).nullable();
       asserts.assertEquals(schema.parse([1, 2, 3]), [1, 2, 3]);

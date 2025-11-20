@@ -475,7 +475,10 @@ Deno.test("guardian.BigIntGuardian", async (t) => {
 
       // Test invalid radix
       const invalidRadixGuardian = new BigIntGuardian().toString(37);
-      asserts.assertThrows(() => invalidRadixGuardian.parse(10n), GuardianError);
+      asserts.assertThrows(
+        () => invalidRadixGuardian.parse(10n),
+        GuardianError,
+      );
     });
   });
 
@@ -486,21 +489,21 @@ Deno.test("guardian.BigIntGuardian", async (t) => {
       asserts.assertEquals(schema.parse(null), null);
       asserts.assertThrows(() => schema.parse(-1n), GuardianError);
     });
-    
+
     await t.step("should handle optional bigints", () => {
       const schema = new BigIntGuardian().positive().optional(100n);
       asserts.assertEquals(schema.parse(5n), 5n);
       asserts.assertEquals(schema.parse(undefined), 100n);
       asserts.assertThrows(() => schema.parse(-1n), GuardianError);
     });
-    
+
     await t.step("should handle nullable().optional() chaining", () => {
       const schema = new BigIntGuardian().positive().nullable().optional(100n);
       asserts.assertEquals(schema.parse(5n), 5n);
       asserts.assertEquals(schema.parse(null), null);
       asserts.assertEquals(schema.parse(undefined), 100n);
     });
-    
+
     await t.step("should handle optional().nullable() chaining", () => {
       const schema = new BigIntGuardian().positive().optional(100n).nullable();
       asserts.assertEquals(schema.parse(5n), 5n);

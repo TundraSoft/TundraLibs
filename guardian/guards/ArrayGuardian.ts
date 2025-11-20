@@ -73,7 +73,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
 
       return input as Array<T>;
     }, metaData);
-    
+
     this._elementGuardian = elementGuardian;
   }
 
@@ -150,7 +150,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
         return value;
       },
     ) as ArrayGuardian<T>;
-    
+
     // Store constraint for OpenAPI generation
     if (!result._metaData) result._metaData = {};
     result._metaData.minItems = minLength;
@@ -189,7 +189,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
         return value;
       },
     ) as ArrayGuardian<T>;
-    
+
     // Store constraint for OpenAPI generation
     if (!result._metaData) result._metaData = {};
     result._metaData.maxItems = maxLength;
@@ -469,10 +469,13 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    */
   noNulls(errorMessage?: string): ArrayGuardian<T> {
     return this.process((value: Array<T>) => {
-      const nullIndex = value.findIndex((item) => item === null || item === undefined);
+      const nullIndex = value.findIndex((item) =>
+        item === null || item === undefined
+      );
       if (nullIndex !== -1) {
         throw new GuardianError(
-          errorMessage || `Array must not contain null or undefined values, found at index ${nullIndex}`,
+          errorMessage ||
+            `Array must not contain null or undefined values, found at index ${nullIndex}`,
           {
             expected: "array without null/undefined values",
             got: `null/undefined at index ${nullIndex}`,
@@ -497,10 +500,10 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```ts
    * const flattened = Guardian.array().flatten();
    * flattened.parse([1, [2, 3], 4]); // "1,2,3,4"
-   * 
+   *
    * const customJoiner = Guardian.array().flatten(" | ");
    * customJoiner.parse([1, [2, 3], 4]); // "1 | 2 | 3 | 4"
-   * 
+   *
    * const deepFlatten = Guardian.array().flatten(",", 2);
    * deepFlatten.parse([1, [2, [3, 4]], 5]); // "1,2,3,4,5"
    * ```
@@ -538,13 +541,13 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
   compact(): ArrayGuardian<NonNullable<T>> {
     return this.process((value: Array<T>) => {
       return value.filter((item): item is NonNullable<T> => {
-        return item !== null && 
-               item !== undefined && 
-               item !== false && 
-               item !== 0 && 
-               item !== 0n &&
-               item !== "" && 
-               !Number.isNaN(item);
+        return item !== null &&
+          item !== undefined &&
+          item !== false &&
+          item !== 0 &&
+          item !== 0n &&
+          item !== "" &&
+          !Number.isNaN(item);
       });
     }) as ArrayGuardian<NonNullable<T>>;
   }
@@ -559,7 +562,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```ts
    * const unique = Guardian.array().onlyUnique();
    * unique.parse([1, 2, 2, 3, 1, 4]); // [1, 2, 3, 4]
-   * 
+   *
    * const uniqueStrings = Guardian.array(Guardian.string()).onlyUnique();
    * uniqueStrings.parse(["a", "b", "a", "c"]); // ["a", "b", "c"]
    * ```
@@ -568,14 +571,14 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
     return this.process((value: Array<T>) => {
       const seen = new Set<T>();
       const result: T[] = [];
-      
+
       for (const item of value) {
         if (!seen.has(item)) {
           seen.add(item);
           result.push(item);
         }
       }
-      
+
       return result;
     }) as ArrayGuardian<T>;
   }
@@ -583,8 +586,6 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
   //#endregion
 
   //#region Documentation Methods
-
-
 
   //#endregion
 }

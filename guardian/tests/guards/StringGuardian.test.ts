@@ -263,26 +263,50 @@ Deno.test("guardian.StringGuardian", async (t) => {
     await t.step("should validate UUID format", () => {
       const schema = new StringGuardian().uuid();
 
-      asserts.assertEquals(schema.parse("550e8400-e29b-41d4-a716-446655440000"), "550e8400-e29b-41d4-a716-446655440000");
-      asserts.assertEquals(schema.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"), "6ba7b810-9dad-11d1-80b4-00c04fd430c8");
+      asserts.assertEquals(
+        schema.parse("550e8400-e29b-41d4-a716-446655440000"),
+        "550e8400-e29b-41d4-a716-446655440000",
+      );
+      asserts.assertEquals(
+        schema.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"),
+        "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      );
       asserts.assertThrows(() => schema.parse("not-a-uuid"), GuardianError);
-      asserts.assertThrows(() => schema.parse("550e8400-e29b-41d4-a716"), GuardianError);
-      asserts.assertThrows(() => schema.parse("550e8400-e29b-41d4-a716-446655440000-extra"), GuardianError);
+      asserts.assertThrows(
+        () => schema.parse("550e8400-e29b-41d4-a716"),
+        GuardianError,
+      );
+      asserts.assertThrows(
+        () => schema.parse("550e8400-e29b-41d4-a716-446655440000-extra"),
+        GuardianError,
+      );
     });
 
     await t.step("should validate UUID v1 format", () => {
       const schema = new StringGuardian().uuidv1();
 
-      asserts.assertEquals(schema.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"), "6ba7b810-9dad-11d1-80b4-00c04fd430c8");
-      asserts.assertThrows(() => schema.parse("550e8400-e29b-41d4-a716-446655440000"), GuardianError); // v4 UUID
+      asserts.assertEquals(
+        schema.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"),
+        "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      );
+      asserts.assertThrows(
+        () => schema.parse("550e8400-e29b-41d4-a716-446655440000"),
+        GuardianError,
+      ); // v4 UUID
       asserts.assertThrows(() => schema.parse("not-a-uuid"), GuardianError);
     });
 
     await t.step("should validate UUID v4 format", () => {
       const schema = new StringGuardian().uuidv4();
 
-      asserts.assertEquals(schema.parse("550e8400-e29b-41d4-a716-446655440000"), "550e8400-e29b-41d4-a716-446655440000");
-      asserts.assertThrows(() => schema.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"), GuardianError); // v1 UUID
+      asserts.assertEquals(
+        schema.parse("550e8400-e29b-41d4-a716-446655440000"),
+        "550e8400-e29b-41d4-a716-446655440000",
+      );
+      asserts.assertThrows(
+        () => schema.parse("6ba7b810-9dad-11d1-80b4-00c04fd430c8"),
+        GuardianError,
+      ); // v1 UUID
       asserts.assertThrows(() => schema.parse("not-a-uuid"), GuardianError);
     });
   });
@@ -428,28 +452,33 @@ Deno.test("guardian.StringGuardian", async (t) => {
       asserts.assertEquals(nullableSchema.parse("hello"), "hello");
       asserts.assertEquals(nullableSchema.parse(null), null);
       asserts.assertThrows(() => nullableSchema.parse("x"), GuardianError);
-      
+
       // Test optional
-      const optionalSchema = new StringGuardian().minLength(2).optional("default");
+      const optionalSchema = new StringGuardian().minLength(2).optional(
+        "default",
+      );
       asserts.assertEquals(optionalSchema.parse("hello"), "hello");
       asserts.assertEquals(optionalSchema.parse(undefined), "default");
       asserts.assertThrows(() => optionalSchema.parse("x"), GuardianError);
     });
-    
+
     await t.step("should handle nullable().optional() chaining", () => {
-      const schema = new StringGuardian().minLength(2).nullable().optional("default");
-      
-      asserts.assertEquals(schema.parse("hello"), "hello");     // valid string
-      asserts.assertEquals(schema.parse(null), null);          // null preserved
+      const schema = new StringGuardian().minLength(2).nullable().optional(
+        "default",
+      );
+
+      asserts.assertEquals(schema.parse("hello"), "hello"); // valid string
+      asserts.assertEquals(schema.parse(null), null); // null preserved
       asserts.assertEquals(schema.parse(undefined), "default"); // default used
       asserts.assertThrows(() => schema.parse("x"), GuardianError); // validation still works
     });
-    
+
     await t.step("should handle optional().nullable() chaining", () => {
-      const schema = new StringGuardian().minLength(2).optional("default").nullable();
-      
-      asserts.assertEquals(schema.parse("hello"), "hello");     // valid string
-      asserts.assertEquals(schema.parse(null), null);          // null preserved
+      const schema = new StringGuardian().minLength(2).optional("default")
+        .nullable();
+
+      asserts.assertEquals(schema.parse("hello"), "hello"); // valid string
+      asserts.assertEquals(schema.parse(null), null); // null preserved
       asserts.assertEquals(schema.parse(undefined), "default"); // default used
       asserts.assertThrows(() => schema.parse("x"), GuardianError); // validation still works
     });
@@ -464,7 +493,10 @@ Deno.test("guardian.StringGuardian", async (t) => {
     await t.step("should work with format validations", () => {
       const schema = new StringGuardian().email().nullable();
 
-      asserts.assertEquals(schema.parse("test@example.com"), "test@example.com");
+      asserts.assertEquals(
+        schema.parse("test@example.com"),
+        "test@example.com",
+      );
       asserts.assertEquals(schema.parse(null), null);
       asserts.assertThrows(() => schema.parse("invalid-email"), GuardianError);
     });
@@ -531,11 +563,17 @@ Deno.test("guardian.StringGuardian", async (t) => {
       asserts.assertEquals(schema.parse("0.0.0.0"), "0.0.0.0");
       asserts.assertEquals(schema.parse("255.255.255.255"), "255.255.255.255");
 
-      // Valid IPv6  
-      asserts.assertEquals(schema.parse("2001:0db8:85a3:0000:0000:8a2e:0370:7334"), "2001:0db8:85a3:0000:0000:8a2e:0370:7334");
+      // Valid IPv6
+      asserts.assertEquals(
+        schema.parse("2001:0db8:85a3:0000:0000:8a2e:0370:7334"),
+        "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+      );
 
       // Invalid
-      asserts.assertThrows(() => schema.parse("256.256.256.256"), GuardianError);
+      asserts.assertThrows(
+        () => schema.parse("256.256.256.256"),
+        GuardianError,
+      );
       asserts.assertThrows(() => schema.parse("not-an-ip"), GuardianError);
     });
 
@@ -551,7 +589,10 @@ Deno.test("guardian.StringGuardian", async (t) => {
     await t.step("ipv6 validation", () => {
       const schema = new StringGuardian().ipv6();
 
-      asserts.assertEquals(schema.parse("2001:0db8:85a3:0000:0000:8a2e:0370:7334"), "2001:0db8:85a3:0000:0000:8a2e:0370:7334");
+      asserts.assertEquals(
+        schema.parse("2001:0db8:85a3:0000:0000:8a2e:0370:7334"),
+        "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+      );
       asserts.assertThrows(() => schema.parse("192.168.1.1"), GuardianError);
       asserts.assertThrows(() => schema.parse("invalid-ipv6"), GuardianError);
     });
@@ -574,29 +615,50 @@ Deno.test("guardian.StringGuardian", async (t) => {
     await t.step("macAddress validation", () => {
       const schema = new StringGuardian().macAddress();
 
-      asserts.assertEquals(schema.parse("00:11:22:33:44:55"), "00:11:22:33:44:55");
-      asserts.assertEquals(schema.parse("AA-BB-CC-DD-EE-FF"), "AA-BB-CC-DD-EE-FF");
+      asserts.assertEquals(
+        schema.parse("00:11:22:33:44:55"),
+        "00:11:22:33:44:55",
+      );
+      asserts.assertEquals(
+        schema.parse("AA-BB-CC-DD-EE-FF"),
+        "AA-BB-CC-DD-EE-FF",
+      );
       asserts.assertThrows(() => schema.parse("00:11:22:33:44"), GuardianError);
-      asserts.assertThrows(() => schema.parse("GG:HH:II:JJ:KK:LL"), GuardianError);
+      asserts.assertThrows(
+        () => schema.parse("GG:HH:II:JJ:KK:LL"),
+        GuardianError,
+      );
     });
 
     await t.step("creditCard validation", () => {
       const schema = new StringGuardian().creditCard();
 
       // Test valid Visa (starts with 4)
-      asserts.assertEquals(schema.parse("4000000000000002"), "4000000000000002");
-      
+      asserts.assertEquals(
+        schema.parse("4000000000000002"),
+        "4000000000000002",
+      );
+
       // Test invalid (fails Luhn check)
-      asserts.assertThrows(() => schema.parse("4000000000000000"), GuardianError);
+      asserts.assertThrows(
+        () => schema.parse("4000000000000000"),
+        GuardianError,
+      );
       asserts.assertThrows(() => schema.parse("123456"), GuardianError);
     });
 
     await t.step("creditCard validation by type", () => {
-      const visaSchema = new StringGuardian().creditCard('visa');
-      const mastercardSchema = new StringGuardian().creditCard('mastercard');
+      const visaSchema = new StringGuardian().creditCard("visa");
+      const mastercardSchema = new StringGuardian().creditCard("mastercard");
 
-      asserts.assertEquals(visaSchema.parse("4000000000000002"), "4000000000000002");
-      asserts.assertThrows(() => mastercardSchema.parse("4000000000000002"), GuardianError); // Visa number on Mastercard schema
+      asserts.assertEquals(
+        visaSchema.parse("4000000000000002"),
+        "4000000000000002",
+      );
+      asserts.assertThrows(
+        () => mastercardSchema.parse("4000000000000002"),
+        GuardianError,
+      ); // Visa number on Mastercard schema
     });
 
     await t.step("slug validation", () => {
@@ -642,7 +704,10 @@ Deno.test("guardian.StringGuardian", async (t) => {
     await t.step("ascii validation", () => {
       const schema = new StringGuardian().ascii();
 
-      asserts.assertEquals(schema.parse("Hello World 123!"), "Hello World 123!");
+      asserts.assertEquals(
+        schema.parse("Hello World 123!"),
+        "Hello World 123!",
+      );
       asserts.assertThrows(() => schema.parse("Héllo"), GuardianError); // non-ASCII
       asserts.assertThrows(() => schema.parse("🌍"), GuardianError); // emoji
     });
@@ -653,18 +718,36 @@ Deno.test("guardian.StringGuardian", async (t) => {
       asserts.assertEquals(schema.parse("normal text"), "normal text");
       asserts.assertEquals(schema.parse("user123"), "user123");
       asserts.assertThrows(() => schema.parse("' OR '1'='1"), GuardianError);
-      asserts.assertThrows(() => schema.parse("UNION SELECT * FROM users"), GuardianError);
-      asserts.assertThrows(() => schema.parse("; DROP TABLE users"), GuardianError);
+      asserts.assertThrows(
+        () => schema.parse("UNION SELECT * FROM users"),
+        GuardianError,
+      );
+      asserts.assertThrows(
+        () => schema.parse("; DROP TABLE users"),
+        GuardianError,
+      );
     });
 
     await t.step("noXss validation", () => {
       const schema = new StringGuardian().noXss();
 
       asserts.assertEquals(schema.parse("normal text"), "normal text");
-      asserts.assertEquals(schema.parse("safe HTML content"), "safe HTML content");
-      asserts.assertThrows(() => schema.parse("<script>alert('xss')</script>"), GuardianError);
-      asserts.assertThrows(() => schema.parse("<img onload='alert(1)' src='x'>"), GuardianError);
-      asserts.assertThrows(() => schema.parse("javascript:alert(1)"), GuardianError);
+      asserts.assertEquals(
+        schema.parse("safe HTML content"),
+        "safe HTML content",
+      );
+      asserts.assertThrows(
+        () => schema.parse("<script>alert('xss')</script>"),
+        GuardianError,
+      );
+      asserts.assertThrows(
+        () => schema.parse("<img onload='alert(1)' src='x'>"),
+        GuardianError,
+      );
+      asserts.assertThrows(
+        () => schema.parse("javascript:alert(1)"),
+        GuardianError,
+      );
     });
   });
 
@@ -722,7 +805,7 @@ Deno.test("guardian.StringGuardian", async (t) => {
     });
 
     await t.step("padStart transformation", () => {
-      const schema = new StringGuardian().padStart(5, '0');
+      const schema = new StringGuardian().padStart(5, "0");
 
       asserts.assertEquals(schema.parse("123"), "00123");
       asserts.assertEquals(schema.parse("12345"), "12345");
@@ -730,7 +813,7 @@ Deno.test("guardian.StringGuardian", async (t) => {
     });
 
     await t.step("padEnd transformation", () => {
-      const schema = new StringGuardian().padEnd(5, '0');
+      const schema = new StringGuardian().padEnd(5, "0");
 
       asserts.assertEquals(schema.parse("123"), "12300");
       asserts.assertEquals(schema.parse("12345"), "12345");
@@ -742,7 +825,10 @@ Deno.test("guardian.StringGuardian", async (t) => {
 
       asserts.assertEquals(schema.parse("normal text"), "normal text");
       asserts.assertEquals(schema.parse("<script>alert('bad')</script>"), "");
-      asserts.assertEquals(schema.parse("Hello & <world>"), "Hello &amp; &lt;world&gt;");
+      asserts.assertEquals(
+        schema.parse("Hello & <world>"),
+        "Hello &amp; &lt;world&gt;",
+      );
       asserts.assertEquals(schema.parse('onclick="alert(1)"'), "");
     });
 
@@ -769,7 +855,10 @@ Deno.test("guardian.StringGuardian", async (t) => {
       const schema = new StringGuardian().creditCard().optional();
 
       asserts.assertEquals(schema.parse(undefined), undefined);
-      asserts.assertEquals(schema.parse("4000000000000002"), "4000000000000002");
+      asserts.assertEquals(
+        schema.parse("4000000000000002"),
+        "4000000000000002",
+      );
       asserts.assertThrows(() => schema.parse(null), GuardianError);
       asserts.assertThrows(() => schema.parse("invalid"), GuardianError);
     });

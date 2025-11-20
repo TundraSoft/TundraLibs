@@ -34,7 +34,10 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    * @param initialTransform - Optional composed transformation from previous guardian
    * @param metaData - Optional metadata for this guardian
    */
-  constructor(initialTransform?: GuardianTransform<unknown, bigint>, metaData?: GuardianMetaData) {
+  constructor(
+    initialTransform?: GuardianTransform<unknown, bigint>,
+    metaData?: GuardianMetaData,
+  ) {
     const defaultBigIntValidation = (input: unknown) => {
       if (typeof input !== "bigint") {
         throw new GuardianError(`Expected bigint but got ${typeof input}`, {
@@ -256,7 +259,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (num < min || num > max) {
         throw new GuardianError(
-          errorMessage || `BigInt must be between ${min} and ${max} (inclusive)`,
+          errorMessage ||
+            `BigInt must be between ${min} and ${max} (inclusive)`,
           {
             expected: `${min} <= value <= ${max}`,
             got: num,
@@ -454,7 +458,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     if (num < 2n) return false;
     if (num === 2n) return true;
     if (num % 2n === 0n) return false;
-    
+
     const limit = this._bigIntSqrt(num);
     for (let i = 3n; i <= limit; i += 2n) {
       if (num % i === 0n) return false;
@@ -466,17 +470,17 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    * Helper function to calculate square root of BigInt.
    */
   private _bigIntSqrt(num: bigint): bigint {
-    if (num < 0n) throw new Error('Square root of negative number');
+    if (num < 0n) throw new Error("Square root of negative number");
     if (num < 2n) return num;
-    
+
     let x = num;
     let y = (x + 1n) / 2n;
-    
+
     while (y < x) {
       x = y;
       y = (x + num / x) / 2n;
     }
-    
+
     return x;
   }
 
@@ -486,10 +490,10 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
   private _isPerfectPower(num: bigint, base?: bigint): boolean {
     if (num < 1n) return false;
     if (num === 1n) return true;
-    
+
     if (base !== undefined) {
       if (base <= 1n) return false;
-      
+
       let power = base;
       while (power < num) {
         power *= base;
@@ -497,7 +501,11 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
       return power === num;
     } else {
       // Check if num is a perfect power of any base >= 2
-      for (let candidateBase = 2n; candidateBase <= this._bigIntSqrt(num); candidateBase++) {
+      for (
+        let candidateBase = 2n;
+        candidateBase <= this._bigIntSqrt(num);
+        candidateBase++
+      ) {
         let power = candidateBase;
         while (power < num) {
           power *= candidateBase;
@@ -564,7 +572,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
   power(base?: bigint, errorMessage?: string): BigIntGuardian {
     return this.process((num: bigint) => {
       if (!this._isPerfectPower(num, base)) {
-        const baseStr = base ? ` of ${base}` : '';
+        const baseStr = base ? ` of ${base}` : "";
         throw new GuardianError(
           errorMessage || `BigInt must be a perfect power${baseStr}`,
           {
@@ -612,7 +620,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
   bitLength(expectedLength?: number, errorMessage?: string): BigIntGuardian {
     return this.process((num: bigint) => {
       const actualLength = num.toString(2).length;
-      
+
       if (expectedLength !== undefined && actualLength !== expectedLength) {
         throw new GuardianError(
           errorMessage || `BigInt must have bit length ${expectedLength}`,

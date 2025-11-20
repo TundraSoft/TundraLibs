@@ -140,7 +140,7 @@ export abstract class BaseGuardian<T> {
    * ```ts
    * // Transform string to uppercase
    * guardian.process((str) => str.toUpperCase());
-   * 
+   *
    * // Transform string to number with type conversion
    * const numberGuardian = stringGuardian.process(
    *   (str) => parseInt(str, 10),
@@ -150,7 +150,10 @@ export abstract class BaseGuardian<T> {
    */
   process<U, V extends BaseGuardian<U> = BaseGuardian<U>>(
     fn: GuardianTransform<T, U>,
-    constructor?: new (initialTransform?: GuardianTransform<unknown, U>, metaData?: GuardianMetaData) => V,
+    constructor?: new (
+      initialTransform?: GuardianTransform<unknown, U>,
+      metaData?: GuardianMetaData,
+    ) => V,
   ): V | BaseGuardian<U> {
     // Prevent further processing after nullable() or optional()
     if (this._metaData?.isNullable) {
@@ -189,7 +192,7 @@ export abstract class BaseGuardian<T> {
     };
 
     let returnInstance: V | BaseGuardian<U>;
-    
+
     if (constructor) {
       // Create the instance with the provided constructor
       returnInstance = new constructor(composedTransform, this._metaData);
@@ -200,7 +203,8 @@ export abstract class BaseGuardian<T> {
       returnInstance = cloned;
     } else {
       // Mutate in place for better performance
-      (this as unknown as BaseGuardian<U>)._composedTransform = composedTransform;
+      (this as unknown as BaseGuardian<U>)._composedTransform =
+        composedTransform;
       returnInstance = this as unknown as BaseGuardian<U>;
     }
 
@@ -357,8 +361,11 @@ export abstract class BaseGuardian<T> {
       // Mutate in place for better performance
       // Use process with identity transform but modify the composed transform to handle null/undefined
       const currentTransform = this._composedTransform;
-      
-      const nullableTransform: GuardianTransform<unknown, T | null | undefined> = (
+
+      const nullableTransform: GuardianTransform<
+        unknown,
+        T | null | undefined
+      > = (
         value: unknown,
       ) => {
         // Handle null - return null without calling the composed transform
@@ -375,12 +382,13 @@ export abstract class BaseGuardian<T> {
         // For all other values, call the current composed transform
         return currentTransform(value) as T;
       };
-      (this as unknown as BaseGuardian<T | null | undefined>)._composedTransform = nullableTransform;
+      (this as unknown as BaseGuardian<T | null | undefined>)
+        ._composedTransform = nullableTransform;
       if (!this._metaData) {
-        this._metaData = { };
+        this._metaData = {};
       }
       this._metaData.isNullable = true;
-      
+
       // Always return the broadest type to handle chaining
       return this as BaseGuardian<T | null | undefined>;
     }
@@ -420,8 +428,11 @@ export abstract class BaseGuardian<T> {
     // Store the current transform before setting finisher flags
     // This allows us to use it in the optionalTransform even after finisher protection is enabled
     const currentTransform = this._composedTransform;
-    
-    const optionalTransform: GuardianTransform<unknown, T | D | undefined | null> = (
+
+    const optionalTransform: GuardianTransform<
+      unknown,
+      T | D | undefined | null
+    > = (
       value: unknown,
     ) => {
       // Handle undefined by returning default or undefined
@@ -468,7 +479,8 @@ export abstract class BaseGuardian<T> {
       ) => this)(optionalTransform, newMetaData);
     } else {
       // Mutate in place for better performance
-      (this as unknown as BaseGuardian<T | D | undefined | null>)._composedTransform = optionalTransform;
+      (this as unknown as BaseGuardian<T | D | undefined | null>)
+        ._composedTransform = optionalTransform;
       if (!this._metaData) {
         this._metaData = { isOptional: true };
       } else {
@@ -647,7 +659,7 @@ export abstract class BaseGuardian<T> {
    * const base = Guardian.string();
    * const immutable = base.immutable();
    * const email = immutable.email();     // Returns new instance (immutable mode)
-   * const phone = immutable.pattern();   // Returns new instance (immutable mode)  
+   * const phone = immutable.pattern();   // Returns new instance (immutable mode)
    * // base and immutable are unchanged
    * ```
    */
@@ -683,9 +695,7 @@ export abstract class BaseGuardian<T> {
    * ```
    */
   clone(): BaseGuardian<T> {
-    const metaDataClone = this._metaData
-      ? { ...this._metaData }
-      : undefined;
+    const metaDataClone = this._metaData ? { ...this._metaData } : undefined;
     // Delete isImmutable flag for the clone
     if (metaDataClone && metaDataClone.isImmutable) {
       delete metaDataClone.isImmutable;
@@ -701,7 +711,7 @@ export abstract class BaseGuardian<T> {
   /**
    * Generates OpenAPI 3.0 schema definition for this Guardian.
    * Includes type information, metadata, and validation constraints.
-   * 
+   *
    * @returns OpenAPI schema object that can be used in API documentation
    *
    * @example
@@ -712,25 +722,40 @@ export abstract class BaseGuardian<T> {
    */
   toOpenAPI(): Record<string, unknown> {
     const schema: Record<string, unknown> = {
-      type: this._type
+      type: this._type,
     };
-    
+
     // Add metadata if available
     if (this._metaData) {
       if (this._metaData.title) schema.title = this._metaData.title;
-      if (this._metaData.description) schema.description = this._metaData.description;
-      if (this._metaData.deprecated) schema.deprecated = this._metaData.deprecated;
+      if (this._metaData.description) {
+        schema.description = this._metaData.description;
+      }
+      if (this._metaData.deprecated) {
+        schema.deprecated = this._metaData.deprecated;
+      }
       if (this._metaData.examples) schema.examples = this._metaData.examples;
       if (this._metaData.format) schema.format = this._metaData.format;
-      
+
       // Handle nullable
       if (this._metaData.isNullable) {
         schema.nullable = true;
       }
-      
+
       // Add any additional constraints from metadata
       for (const [key, value] of Object.entries(this._metaData)) {
-        if (!['description', 'title', 'examples', 'deprecated', 'format', 'isAsync', 'isNullable', 'isOptional'].includes(key)) {
+        if (
+          ![
+            "description",
+            "title",
+            "examples",
+            "deprecated",
+            "format",
+            "isAsync",
+            "isNullable",
+            "isOptional",
+          ].includes(key)
+        ) {
           schema[key] = value;
         }
       }
@@ -742,7 +767,7 @@ export abstract class BaseGuardian<T> {
   /**
    * Generates simple Markdown documentation for this Guardian.
    * Includes title, description, type information, examples, and deprecation warnings.
-   * 
+   *
    * @returns Markdown formatted string suitable for documentation
    *
    * @example
@@ -776,7 +801,9 @@ export abstract class BaseGuardian<T> {
     // Examples
     if (this._metaData?.examples && this._metaData.examples.length > 0) {
       markdown += `**Examples:** `;
-      markdown += this._metaData.examples.map(ex => `\`${JSON.stringify(ex)}\``).join(", ");
+      markdown += this._metaData.examples.map((ex) =>
+        `\`${JSON.stringify(ex)}\``
+      ).join(", ");
       markdown += "\n\n";
     }
 

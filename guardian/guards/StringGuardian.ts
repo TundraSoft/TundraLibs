@@ -33,11 +33,15 @@ export class StringGuardian extends BaseGuardian<string> {
     alpha: /^[a-zA-Z]+$/,
     alphanumeric: /^[a-zA-Z0-9]+$/,
     numeric: /^[0-9.]+$/,
-    uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    uuidv1: /^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    uuidv4: /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    uuid:
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    uuidv1:
+      /^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    uuidv4:
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     phone: /^(\+?1-?)?(\([0-9]{3}\)|[0-9]{3})[-\.\s]?[0-9]{3}[-\.\s]?[0-9]{4}$/,
-    ipv4: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
+    ipv4:
+      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
     ipv6: /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/,
     macAddress: /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
     creditCardVisa: /^4[0-9]{12}(?:[0-9]{3})?$/,
@@ -46,7 +50,8 @@ export class StringGuardian extends BaseGuardian<string> {
     creditCard: /^(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13})$/,
     slug: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
     hexColor: /^#(?:[0-9a-fA-F]{3}){1,2}$/,
-    domain: /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/,
+    domain:
+      /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/,
     ascii: /^[ -~]*$/,
     noWhitespace: /^\S*$/,
   };
@@ -57,7 +62,10 @@ export class StringGuardian extends BaseGuardian<string> {
    * @param initialTransform - Optional composed transformation from previous guardian
    * @param metaData - Optional metadata for this guardian
    */
-  constructor(initialTransform?: GuardianTransform<unknown, string>, metaData?: GuardianMetaData) {
+  constructor(
+    initialTransform?: GuardianTransform<unknown, string>,
+    metaData?: GuardianMetaData,
+  ) {
     const defaultStringValidation = (input: unknown) => {
       if (typeof input !== "string") {
         throw new GuardianError(`Expected string but got ${typeof input}`, {
@@ -103,16 +111,19 @@ export class StringGuardian extends BaseGuardian<string> {
   minLength(length: number, errorMessage?: string): StringGuardian {
     const result = this.process((str: string) => {
       if (str.length < length) {
-        throw new GuardianError(errorMessage || `String must be at least ${length} characters long`, {
-          expected: length,
-          got: str.length,
-          comparison: "minLength",
-          type: "string",
-        });
+        throw new GuardianError(
+          errorMessage || `String must be at least ${length} characters long`,
+          {
+            expected: length,
+            got: str.length,
+            comparison: "minLength",
+            type: "string",
+          },
+        );
       }
       return str;
     }) as StringGuardian;
-    
+
     // Store constraint for OpenAPI generation
     if (!result._metaData) result._metaData = {};
     result._metaData.minLength = length;
@@ -136,16 +147,19 @@ export class StringGuardian extends BaseGuardian<string> {
   maxLength(length: number, errorMessage?: string): StringGuardian {
     const result = this.process((str: string) => {
       if (str.length > length) {
-        throw new GuardianError(errorMessage ?? `String must be at most ${length} characters long`, {
-          expected: length,
-          got: str.length,
-          comparison: "maxLength",
-          type: "string",
-        });
+        throw new GuardianError(
+          errorMessage ?? `String must be at most ${length} characters long`,
+          {
+            expected: length,
+            got: str.length,
+            comparison: "maxLength",
+            type: "string",
+          },
+        );
       }
       return str;
     }) as StringGuardian;
-    
+
     if (!result._metaData) result._metaData = {};
     result._metaData.maxLength = length;
     return result;
@@ -208,7 +222,7 @@ export class StringGuardian extends BaseGuardian<string> {
         return value;
       },
     ) as StringGuardian;
-    
+
     // Store pattern for OpenAPI generation
     if (!result._metaData) result._metaData = {};
     result._metaData.pattern = pattern.source;
@@ -252,7 +266,7 @@ export class StringGuardian extends BaseGuardian<string> {
       emailRegex,
       errorMessage || "Invalid email address format",
     );
-    
+
     // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "email";
@@ -281,7 +295,7 @@ export class StringGuardian extends BaseGuardian<string> {
         });
       }
     }) as StringGuardian;
-    
+
     // Store format for OpenAPI generation
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "uri";
@@ -299,7 +313,7 @@ export class StringGuardian extends BaseGuardian<string> {
       StringGuardian.patterns.alpha as RegExp,
       errorMessage || "String must contain only alphabetic characters",
     );
-    
+
     // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "alpha";
@@ -319,7 +333,7 @@ export class StringGuardian extends BaseGuardian<string> {
       StringGuardian.patterns.alphanumeric as RegExp,
       errorMessage || "String must contain only alphanumeric characters",
     );
-    
+
     // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "alphanumeric";
@@ -339,8 +353,8 @@ export class StringGuardian extends BaseGuardian<string> {
       StringGuardian.patterns.uuid as RegExp,
       errorMessage || "String must be a valid UUID",
     );
-    
-        // Override pattern constraint with format for OpenAPI
+
+    // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "uuid";
     // Pattern removed for format-specific validations
@@ -359,8 +373,8 @@ export class StringGuardian extends BaseGuardian<string> {
       StringGuardian.patterns.uuidv1 as RegExp,
       errorMessage || "String must be a valid UUID v1",
     );
-    
-        // Override pattern constraint with format for OpenAPI
+
+    // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "uuid";
     // Pattern removed for format-specific validations
@@ -379,7 +393,7 @@ export class StringGuardian extends BaseGuardian<string> {
       StringGuardian.patterns.uuidv4 as RegExp,
       errorMessage || "String must be a valid UUID v4",
     );
-    
+
     // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
     result._metaData.format = "uuid";
@@ -539,16 +553,19 @@ export class StringGuardian extends BaseGuardian<string> {
    * @param errorMessage - Optional custom error message
    * @returns This StringGuardian (mutated) or new instance if immutable
    */
-  phone(pattern: RegExp = StringGuardian.patterns.phone!, errorMessage?: string): StringGuardian {
+  phone(
+    pattern: RegExp = StringGuardian.patterns.phone!,
+    errorMessage?: string,
+  ): StringGuardian {
     return this.process((value: string) => {
       if (!pattern.test(value)) {
         throw new GuardianError(
-          errorMessage || 'String must be a valid phone number',
+          errorMessage || "String must be a valid phone number",
           {
-            expected: 'valid phone number',
+            expected: "valid phone number",
             got: value,
-            comparison: 'phone',
-            type: 'validation',
+            comparison: "phone",
+            type: "validation",
           },
         );
       }
@@ -566,15 +583,15 @@ export class StringGuardian extends BaseGuardian<string> {
     return this.process((value: string) => {
       const isIpv4 = StringGuardian.patterns.ipv4!.test(value);
       const isIpv6 = StringGuardian.patterns.ipv6!.test(value);
-      
+
       if (!isIpv4 && !isIpv6) {
         throw new GuardianError(
-          errorMessage || 'String must be a valid IP address (IPv4 or IPv6)',
+          errorMessage || "String must be a valid IP address (IPv4 or IPv6)",
           {
-            expected: 'valid IP address',
+            expected: "valid IP address",
             got: value,
-            comparison: 'ipAddress',
-            type: 'validation',
+            comparison: "ipAddress",
+            type: "validation",
           },
         );
       }
@@ -591,7 +608,7 @@ export class StringGuardian extends BaseGuardian<string> {
   ipv4(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.ipv4!,
-      errorMessage || 'String must be a valid IPv4 address',
+      errorMessage || "String must be a valid IPv4 address",
     );
   }
 
@@ -600,11 +617,11 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @param errorMessage - Optional custom error message
    * @returns This StringGuardian (mutated) or new instance if immutable
-   */  
+   */
   ipv6(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.ipv6!,
-      errorMessage || 'String must be a valid IPv6 address',
+      errorMessage || "String must be a valid IPv6 address",
     );
   }
 
@@ -619,18 +636,18 @@ export class StringGuardian extends BaseGuardian<string> {
       // Check if it's a valid IPv4 first
       if (!StringGuardian.patterns.ipv4!.test(value)) {
         throw new GuardianError(
-          errorMessage || 'String must be a valid internal IPv4 address',
+          errorMessage || "String must be a valid internal IPv4 address",
           {
-            expected: 'valid internal IPv4 address',
+            expected: "valid internal IPv4 address",
             got: value,
-            comparison: 'internalIp',
-            type: 'validation',
+            comparison: "internalIp",
+            type: "validation",
           },
         );
       }
 
-      const parts = value.split('.').map(Number);
-      const isInternal = 
+      const parts = value.split(".").map(Number);
+      const isInternal =
         // 10.0.0.0/8
         (parts[0] === 10) ||
         // 172.16.0.0/12
@@ -642,12 +659,13 @@ export class StringGuardian extends BaseGuardian<string> {
 
       if (!isInternal) {
         throw new GuardianError(
-          errorMessage || 'String must be a valid internal IP address',
+          errorMessage || "String must be a valid internal IP address",
           {
-            expected: 'internal IP address (10.x.x.x, 172.16-31.x.x, 192.168.x.x, 127.x.x.x)',
+            expected:
+              "internal IP address (10.x.x.x, 172.16-31.x.x, 192.168.x.x, 127.x.x.x)",
             got: value,
-            comparison: 'internalIp',
-            type: 'validation',
+            comparison: "internalIp",
+            type: "validation",
           },
         );
       }
@@ -664,7 +682,7 @@ export class StringGuardian extends BaseGuardian<string> {
   macAddress(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.macAddress!,
-      errorMessage || 'String must be a valid MAC address',
+      errorMessage || "String must be a valid MAC address",
     );
   }
 
@@ -675,27 +693,30 @@ export class StringGuardian extends BaseGuardian<string> {
    * @param errorMessage - Optional custom error message
    * @returns This StringGuardian (mutated) or new instance if immutable
    */
-  creditCard(type: 'visa' | 'mastercard' | 'amex' | 'any' = 'any', errorMessage?: string): StringGuardian {
+  creditCard(
+    type: "visa" | "mastercard" | "amex" | "any" = "any",
+    errorMessage?: string,
+  ): StringGuardian {
     return this.process((value: string) => {
       let pattern: RegExp;
       let typeName: string;
 
       switch (type) {
-        case 'visa':
+        case "visa":
           pattern = StringGuardian.patterns.creditCardVisa!;
-          typeName = 'Visa';
+          typeName = "Visa";
           break;
-        case 'mastercard':
+        case "mastercard":
           pattern = StringGuardian.patterns.creditCardMastercard!;
-          typeName = 'Mastercard';
+          typeName = "Mastercard";
           break;
-        case 'amex':
+        case "amex":
           pattern = StringGuardian.patterns.creditCardAmex!;
-          typeName = 'American Express';
+          typeName = "American Express";
           break;
         default:
           pattern = StringGuardian.patterns.creditCard!;
-          typeName = 'credit card';
+          typeName = "credit card";
           break;
       }
 
@@ -705,17 +726,17 @@ export class StringGuardian extends BaseGuardian<string> {
           {
             expected: `valid ${typeName} number`,
             got: value,
-            comparison: 'creditCard',
-            type: 'validation',
+            comparison: "creditCard",
+            type: "validation",
           },
         );
       }
 
       // Basic Luhn algorithm check for additional validation
-            const digits = value.replace(/\D/g, '');
+      const digits = value.replace(/\D/g, "");
       let sum = 0;
       let alternate = false;
-      
+
       for (let i = digits.length - 1; i >= 0; i--) {
         let digit = parseInt(digits[i]!);
         if (alternate) {
@@ -732,8 +753,8 @@ export class StringGuardian extends BaseGuardian<string> {
           {
             expected: `valid ${typeName} number (failed checksum)`,
             got: value,
-            comparison: 'creditCard',
-            type: 'validation',
+            comparison: "creditCard",
+            type: "validation",
           },
         );
       }
@@ -751,7 +772,8 @@ export class StringGuardian extends BaseGuardian<string> {
   slug(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.slug!,
-      errorMessage || 'String must be a valid slug (lowercase letters, numbers, hyphens only)',
+      errorMessage ||
+        "String must be a valid slug (lowercase letters, numbers, hyphens only)",
     );
   }
 
@@ -764,7 +786,7 @@ export class StringGuardian extends BaseGuardian<string> {
   hexColor(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.hexColor!,
-      errorMessage || 'String must be a valid hex color code (#RGB or #RRGGBB)',
+      errorMessage || "String must be a valid hex color code (#RGB or #RRGGBB)",
     );
   }
 
@@ -777,7 +799,7 @@ export class StringGuardian extends BaseGuardian<string> {
   domain(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.domain!,
-      errorMessage || 'String must be a valid domain name',
+      errorMessage || "String must be a valid domain name",
     );
   }
 
@@ -790,7 +812,7 @@ export class StringGuardian extends BaseGuardian<string> {
   noWhitespace(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.noWhitespace!,
-      errorMessage || 'String must not contain whitespace characters',
+      errorMessage || "String must not contain whitespace characters",
     );
   }
 
@@ -803,7 +825,7 @@ export class StringGuardian extends BaseGuardian<string> {
   ascii(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.ascii!,
-      errorMessage || 'String must contain only ASCII characters',
+      errorMessage || "String must contain only ASCII characters",
     );
   }
 
@@ -816,22 +838,22 @@ export class StringGuardian extends BaseGuardian<string> {
   noSqlInjection(errorMessage?: string): StringGuardian {
     return this.process((value: string) => {
       const sqlPatterns = [
-        /('|(\x27)|(\x2D)|(-)|(%27)|(%2D))/i,     // Single quotes and dashes
+        /('|(\x27)|(\x2D)|(-)|(%27)|(%2D))/i, // Single quotes and dashes
         /(union|select|insert|delete|update|drop|create|alter|exec|execute)/i, // SQL keywords
-        /(or|and)\\s+['\"]?\\d+['\"]=\\s*['\"]?\\d+/i,   // OR/AND injection patterns
-        /['\"]\\s*(or|and)\\s*['\"]?\\d+/i,              // Quote-based OR/AND patterns
-        /;\s*(drop|delete|truncate|update)/i,           // Semicolon-based injections
+        /(or|and)\\s+['\"]?\\d+['\"]=\\s*['\"]?\\d+/i, // OR/AND injection patterns
+        /['\"]\\s*(or|and)\\s*['\"]?\\d+/i, // Quote-based OR/AND patterns
+        /;\s*(drop|delete|truncate|update)/i, // Semicolon-based injections
       ];
 
       for (const pattern of sqlPatterns) {
         if (pattern.test(value)) {
           throw new GuardianError(
-            errorMessage || 'String contains potential SQL injection patterns',
+            errorMessage || "String contains potential SQL injection patterns",
             {
-              expected: 'string without SQL injection patterns',
+              expected: "string without SQL injection patterns",
               got: value,
-              comparison: 'noSqlInjection',
-              type: 'validation',
+              comparison: "noSqlInjection",
+              type: "validation",
             },
           );
         }
@@ -849,25 +871,25 @@ export class StringGuardian extends BaseGuardian<string> {
   noXss(errorMessage?: string): StringGuardian {
     return this.process((value: string) => {
       const xssPatterns = [
-        /<script[^>]*>.*?<\/script>/gi,           // Script tags
-        /<iframe[^>]*>.*?<\/iframe>/gi,          // Iframe tags
-        /on\w+\s*=\s*[\"'][^\"']*[\"']/gi,     // Event handlers
-        /javascript:/gi,                          // JavaScript protocol
-        /<(img|svg)[^>]*on\w+/gi,               // Image/SVG with events
-        /expression\s*\(/gi,                    // CSS expressions
-        /<\s*link[^>]*>/gi,                     // Link tags
-        /<\s*meta[^>]*>/gi,                     // Meta tags
+        /<script[^>]*>.*?<\/script>/gi, // Script tags
+        /<iframe[^>]*>.*?<\/iframe>/gi, // Iframe tags
+        /on\w+\s*=\s*[\"'][^\"']*[\"']/gi, // Event handlers
+        /javascript:/gi, // JavaScript protocol
+        /<(img|svg)[^>]*on\w+/gi, // Image/SVG with events
+        /expression\s*\(/gi, // CSS expressions
+        /<\s*link[^>]*>/gi, // Link tags
+        /<\s*meta[^>]*>/gi, // Meta tags
       ];
 
       for (const pattern of xssPatterns) {
         if (pattern.test(value)) {
           throw new GuardianError(
-            errorMessage || 'String contains potential XSS patterns',
+            errorMessage || "String contains potential XSS patterns",
             {
-              expected: 'string without XSS patterns',
+              expected: "string without XSS patterns",
               got: value,
-              comparison: 'noXss',
-              type: 'validation',
+              comparison: "noXss",
+              type: "validation",
             },
           );
         }
@@ -936,7 +958,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   stripSpaces(): StringGuardian {
     return this.process((value: string) => {
-      return value.replace(/\s+/g, '');
+      return value.replace(/\s+/g, "");
     }) as StringGuardian;
   }
 
@@ -1002,7 +1024,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   capitalize(): StringGuardian {
     return this.process(
-      (value: string) => value.replace(/\b\w/g, char => char.toUpperCase()),
+      (value: string) => value.replace(/\b\w/g, (char) => char.toUpperCase()),
     ) as StringGuardian;
   }
 
@@ -1013,9 +1035,10 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   camelCase(): StringGuardian {
     return this.process(
-      (value: string) => value
-        .toLowerCase()
-        .replace(/[^a-zA-Z0-9]+(.)/g, (_, char) => char.toUpperCase()),
+      (value: string) =>
+        value
+          .toLowerCase()
+          .replace(/[^a-zA-Z0-9]+(.)/g, (_, char) => char.toUpperCase()),
     ) as StringGuardian;
   }
 
@@ -1026,13 +1049,14 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   snakeCase(): StringGuardian {
     return this.process(
-      (value: string) => value
-        .replace(/([A-Z])/g, '_$1')
-        .toLowerCase()
-        .replace(/^_/, '')
-        .replace(/[^a-zA-Z0-9]+/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_|_$/g, ''),
+      (value: string) =>
+        value
+          .replace(/([A-Z])/g, "_$1")
+          .toLowerCase()
+          .replace(/^_/, "")
+          .replace(/[^a-zA-Z0-9]+/g, "_")
+          .replace(/_+/g, "_")
+          .replace(/^_|_$/g, ""),
     ) as StringGuardian;
   }
 
@@ -1043,13 +1067,14 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   kebabCase(): StringGuardian {
     return this.process(
-      (value: string) => value
-        .replace(/([A-Z])/g, '-$1')
-        .toLowerCase()
-        .replace(/^-/, '')
-        .replace(/[^a-zA-Z0-9]+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, ''),
+      (value: string) =>
+        value
+          .replace(/([A-Z])/g, "-$1")
+          .toLowerCase()
+          .replace(/^-/, "")
+          .replace(/[^a-zA-Z0-9]+/g, "-")
+          .replace(/-+/g, "-")
+          .replace(/^-|-$/g, ""),
     ) as StringGuardian;
   }
 
@@ -1060,9 +1085,11 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   pascalCase(): StringGuardian {
     return this.process(
-      (value: string) => value
-        .toLowerCase()
-        .replace(/(?:^|[^a-zA-Z0-9])([a-zA-Z0-9])/g, (_, char) => char.toUpperCase()),
+      (value: string) =>
+        value
+          .toLowerCase()
+          .replace(/(?:^|[^a-zA-Z0-9])([a-zA-Z0-9])/g, (_, char) =>
+            char.toUpperCase()),
     ) as StringGuardian;
   }
 
@@ -1073,7 +1100,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   reverse(): StringGuardian {
     return this.process(
-      (value: string) => value.split('').reverse().join(''),
+      (value: string) => value.split("").reverse().join(""),
     ) as StringGuardian;
   }
 
@@ -1084,7 +1111,7 @@ export class StringGuardian extends BaseGuardian<string> {
    * @param char - Character to pad with (defaults to space)
    * @returns This StringGuardian (mutated) or new instance if immutable
    */
-  padStart(length: number, char = ' '): StringGuardian {
+  padStart(length: number, char = " "): StringGuardian {
     return this.process(
       (value: string) => value.padStart(length, char),
     ) as StringGuardian;
@@ -1097,7 +1124,7 @@ export class StringGuardian extends BaseGuardian<string> {
    * @param char - Character to pad with (defaults to space)
    * @returns This StringGuardian (mutated) or new instance if immutable
    */
-  padEnd(length: number, char = ' '): StringGuardian {
+  padEnd(length: number, char = " "): StringGuardian {
     return this.process(
       (value: string) => value.padEnd(length, char),
     ) as StringGuardian;
@@ -1110,21 +1137,22 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   sanitize(): StringGuardian {
     return this.process(
-      (value: string) => value
-        // Remove script tags and their content
-        .replace(/<script[^>]*>.*?<\/script>/gi, '')
-        // Remove iframe tags and their content
-        .replace(/<iframe[^>]*>.*?<\/iframe>/gi, '')
-        // Remove event handlers
-        .replace(/on\w+\s*=\s*[\"'][^\"']*[\"']/gi, '')
-        // Remove javascript: protocol
-        .replace(/javascript:/gi, '')
-        // Escape HTML entities
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/\"/g, '&quot;')
-        .replace(/'/g, '&#x27;'),
+      (value: string) =>
+        value
+          // Remove script tags and their content
+          .replace(/<script[^>]*>.*?<\/script>/gi, "")
+          // Remove iframe tags and their content
+          .replace(/<iframe[^>]*>.*?<\/iframe>/gi, "")
+          // Remove event handlers
+          .replace(/on\w+\s*=\s*[\"'][^\"']*[\"']/gi, "")
+          // Remove javascript: protocol
+          .replace(/javascript:/gi, "")
+          // Escape HTML entities
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/\"/g, "&quot;")
+          .replace(/'/g, "&#x27;"),
     ) as StringGuardian;
   }
 
@@ -1135,7 +1163,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   normalizeSpace(): StringGuardian {
     return this.process(
-      (value: string) => value.replace(/\s+/g, ' ').trim(),
+      (value: string) => value.replace(/\s+/g, " ").trim(),
     ) as StringGuardian;
   }
 
@@ -1172,7 +1200,9 @@ export class StringGuardian extends BaseGuardian<string> {
           );
         }
         return num;
-      }, NumberGuardian) as NumberGuardian;
+      },
+      NumberGuardian,
+    ) as NumberGuardian;
   }
 
   /**

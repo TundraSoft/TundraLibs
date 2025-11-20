@@ -19,11 +19,15 @@ import type {
 
 // Import the new type utility for object type inference
 type InferGuardianType<T> = T extends BaseGuardian<infer U> ? U : never;
-type InferObjectType<T extends Record<string, BaseGuardian<unknown>>> = {
-  [K in keyof T as undefined extends InferGuardianType<T[K]> ? never : K]: InferGuardianType<T[K]>;
-} & {
-  [K in keyof T as undefined extends InferGuardianType<T[K]> ? K : never]?: Exclude<InferGuardianType<T[K]>, undefined>;
-};
+type InferObjectType<T extends Record<string, BaseGuardian<unknown>>> =
+  & {
+    [K in keyof T as undefined extends InferGuardianType<T[K]> ? never : K]:
+      InferGuardianType<T[K]>;
+  }
+  & {
+    [K in keyof T as undefined extends InferGuardianType<T[K]> ? K : never]?:
+      Exclude<InferGuardianType<T[K]>, undefined>;
+  };
 import { GuardianError } from "./GuardianError.ts";
 
 /**
@@ -240,7 +244,10 @@ export class Guardian {
    * stringArray.parse(['hello', 'world']); // ['hello', 'world']
    * ```
    */
-  static array<T = unknown>(elementGuardian?: BaseGuardian<T>, metaData?: GuardianMetaData): ArrayGuardian<T> {
+  static array<T = unknown>(
+    elementGuardian?: BaseGuardian<T>,
+    metaData?: GuardianMetaData,
+  ): ArrayGuardian<T> {
     return new ArrayGuardian<T>(elementGuardian, metaData);
   }
 

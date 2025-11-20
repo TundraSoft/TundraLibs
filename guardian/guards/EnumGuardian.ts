@@ -40,12 +40,15 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
         }
       }
 
-      throw new GuardianError(`Value must be one of: ${allowedValues.join(", ")}`, {
-        expected: allowedValues.join(", "),
-        got: input,
-        comparison: "enum",
-        type: "enum",
-      });
+      throw new GuardianError(
+        `Value must be one of: ${allowedValues.join(", ")}`,
+        {
+          expected: allowedValues.join(", "),
+          got: input,
+          comparison: "enum",
+          type: "enum",
+        },
+      );
     }, metaData);
 
     this._allowedValues = allowedValues;

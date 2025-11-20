@@ -11,11 +11,15 @@ type InferGuardianType<T> = T extends BaseGuardian<infer U> ? U : never;
  * Type utility to infer the proper object type from a schema
  * This handles optional fields correctly by checking if undefined is part of the Guardian's type
  */
-type InferObjectType<T extends Record<string, BaseGuardian<unknown>>> = {
-  [K in keyof T as undefined extends InferGuardianType<T[K]> ? never : K]: InferGuardianType<T[K]>;
-} & {
-  [K in keyof T as undefined extends InferGuardianType<T[K]> ? K : never]?: Exclude<InferGuardianType<T[K]>, undefined>;
-};
+type InferObjectType<T extends Record<string, BaseGuardian<unknown>>> =
+  & {
+    [K in keyof T as undefined extends InferGuardianType<T[K]> ? never : K]:
+      InferGuardianType<T[K]>;
+  }
+  & {
+    [K in keyof T as undefined extends InferGuardianType<T[K]> ? K : never]?:
+      Exclude<InferGuardianType<T[K]>, undefined>;
+  };
 
 /**
  * Type definition for object schema - maps property names to their Guardian validators
@@ -214,7 +218,7 @@ export class ObjectGuardian<
    * Validates that the object contains all the specified keys with defined values.
    * This validation runs after successful schema validation and checks
    * that all specified keys are present and have non-undefined values.
-   * 
+   *
    * @param keys - Array of keys that must be present in the object
    * @param message - Optional custom error message
    * @returns This ObjectGuardian (mutated) or new instance if immutable mode
@@ -234,27 +238,29 @@ export class ObjectGuardian<
    */
   hasKeys(
     keys: Array<string>,
-    message?: string
+    message?: string,
   ): ObjectGuardian<TInput, TOutput> {
-    const defaultMessage = `Object must contain all required keys: ${keys.join(', ')}`;
+    const defaultMessage = `Object must contain all required keys: ${
+      keys.join(", ")
+    }`;
     const validationMessage = message || defaultMessage;
 
     return this.refine(
       (data) => {
         // Check if keys have defined values (not just undefined)
-        const missingKeys = keys.filter(key => {
+        const missingKeys = keys.filter((key) => {
           return !(key in data) || data[key] === undefined;
         });
-        
+
         return missingKeys.length === 0;
       },
-      validationMessage
+      validationMessage,
     );
   }
 
   /**
    * Validates that the object does not contain any of the specified keys.
-   * 
+   *
    * @param keys - Array of keys that must not be present in the object
    * @param message - Optional custom error message
    * @returns This ObjectGuardian (mutated) or new instance if immutable mode
@@ -273,17 +279,19 @@ export class ObjectGuardian<
    */
   forbiddenKeys(
     keys: Array<string>,
-    message?: string
+    message?: string,
   ): ObjectGuardian<TInput, TOutput> {
-    const defaultMessage = `Object must not contain forbidden keys: ${keys.join(', ')}`;
+    const defaultMessage = `Object must not contain forbidden keys: ${
+      keys.join(", ")
+    }`;
     const validationMessage = message || defaultMessage;
 
     return this.refine(
       (data) => {
         const objectKeys = Object.keys(data);
-        return !keys.some(key => objectKeys.includes(key));
+        return !keys.some((key) => objectKeys.includes(key));
       },
-      validationMessage
+      validationMessage,
     );
   }
 
@@ -317,24 +325,24 @@ export class ObjectGuardian<
     const extendedSchema = { ...this._schema, ...schema } as ObjectSchema<
       TInput & U
     >;
-    
+
     const baseClone = this.clone();
     const newGuardian = new ObjectGuardian<TInput & U, TInput & U>(
       extendedSchema,
       baseClone.metaData,
     );
-    
+
     // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
     newGuardian._refinements = [];
-    
+
     // Copy the composed transform from the base clone
     (newGuardian as unknown as {
       _composedTransform: GuardianTransform<unknown, TInput & U>;
     })._composedTransform = (baseClone as unknown as {
       _composedTransform: GuardianTransform<unknown, TInput & U>;
     })._composedTransform;
-    
+
     return newGuardian;
   }
 
@@ -375,18 +383,18 @@ export class ObjectGuardian<
       pickedSchema,
       baseClone.metaData,
     );
-    
+
     // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
     newGuardian._refinements = [];
-    
+
     // Copy the composed transform from the base clone
     (newGuardian as unknown as {
       _composedTransform: GuardianTransform<unknown, Pick<TInput, K>>;
     })._composedTransform = (baseClone as unknown as {
       _composedTransform: GuardianTransform<unknown, Pick<TInput, K>>;
     })._composedTransform;
-    
+
     return newGuardian;
   }
 
@@ -423,18 +431,18 @@ export class ObjectGuardian<
       omittedSchema as ObjectSchema<Omit<TInput, K>>,
       baseClone.metaData,
     );
-    
+
     // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
     newGuardian._refinements = [];
-    
+
     // Copy the composed transform from the base clone
     (newGuardian as unknown as {
       _composedTransform: GuardianTransform<unknown, Omit<TInput, K>>;
     })._composedTransform = (baseClone as unknown as {
       _composedTransform: GuardianTransform<unknown, Omit<TInput, K>>;
     })._composedTransform;
-    
+
     return newGuardian;
   }
 
@@ -468,18 +476,18 @@ export class ObjectGuardian<
       partialSchema,
       baseClone.metaData,
     );
-    
+
     // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
     newGuardian._refinements = [];
-    
+
     // Copy the composed transform from the base clone
     (newGuardian as unknown as {
       _composedTransform: GuardianTransform<unknown, Partial<TInput>>;
     })._composedTransform = (baseClone as unknown as {
       _composedTransform: GuardianTransform<unknown, Partial<TInput>>;
     })._composedTransform;
-    
+
     return newGuardian;
   }
 
@@ -520,18 +528,18 @@ export class ObjectGuardian<
       requiredSchema,
       baseClone.metaData,
     );
-    
+
     // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
     newGuardian._refinements = [];
-    
+
     // Copy the composed transform from the base clone
     (newGuardian as unknown as {
       _composedTransform: GuardianTransform<unknown, Required<TInput>>;
     })._composedTransform = (baseClone as unknown as {
       _composedTransform: GuardianTransform<unknown, Required<TInput>>;
     })._composedTransform;
-    
+
     return newGuardian;
   }
 
@@ -561,24 +569,27 @@ export class ObjectGuardian<
     const newSchema = { ...this._schema, [key]: guard } as ObjectSchema<
       TInput & Record<K, V>
     >;
-    
+
     const baseClone = this.clone();
-    const newGuardian = new ObjectGuardian<TInput & Record<K, V>, TInput & Record<K, V>>(
+    const newGuardian = new ObjectGuardian<
+      TInput & Record<K, V>,
+      TInput & Record<K, V>
+    >(
       newSchema,
       baseClone.metaData,
     );
-    
+
     // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
     newGuardian._refinements = [];
-    
+
     // Copy the composed transform from the base clone
     (newGuardian as unknown as {
       _composedTransform: GuardianTransform<unknown, TInput & Record<K, V>>;
     })._composedTransform = (baseClone as unknown as {
       _composedTransform: GuardianTransform<unknown, TInput & Record<K, V>>;
     })._composedTransform;
-    
+
     return newGuardian;
   }
 
@@ -612,25 +623,25 @@ export class ObjectGuardian<
   ): ObjectGuardian<TInput, TNewOutput> {
     // Use the standard BaseGuardian.process method for transformation
     const transformedGuardian = this.process(transformer);
-    
+
     // The result is already a BaseGuardian with TNewOutput type,
     // but we need to return it as an ObjectGuardian with schema intact
     const result = new ObjectGuardian<TInput, TNewOutput>(
       this._schema,
       transformedGuardian.metaData,
     );
-    
+
     // Copy ObjectGuardian-specific properties
     result._mode = this._mode;
     result._refinements = []; // Empty refinements for new type
-    
+
     // Copy the composed transform from the transformed guardian
     (result as unknown as {
       _composedTransform: GuardianTransform<unknown, TNewOutput>;
     })._composedTransform = (transformedGuardian as unknown as {
       _composedTransform: GuardianTransform<unknown, TNewOutput>;
     })._composedTransform;
-    
+
     return result;
   }
 
@@ -791,14 +802,17 @@ export class ObjectGuardian<
     for (const [key, guard] of Object.entries(this._schema)) {
       try {
         const value = inputObj[key];
-        
+
         // Check if this is an optional field that's missing from input
-        if (value === undefined && guard.metaData?.isOptional && !(key in inputObj)) {
+        if (
+          value === undefined && guard.metaData?.isOptional &&
+          !(key in inputObj)
+        ) {
           // Skip optional fields that are completely missing from input
           // This matches Zod behavior of omitting missing optional fields
           continue;
         }
-        
+
         result[key] = guard.parse(value);
       } catch (error) {
         if (error instanceof GuardianError) {
@@ -850,8 +864,6 @@ export class ObjectGuardian<
 
     return result as TInput | (TInput & Record<string, unknown>);
   }
-
-
 
   /**
    * Apply refinements to already validated/transformed data.
@@ -977,18 +989,18 @@ export class ObjectGuardian<
       this._schema,
       baseClone.metaData,
     );
-    
+
     // Copy ObjectGuardian-specific properties
     newGuardian._mode = this._mode;
     newGuardian._refinements = [...this._refinements];
-    
+
     // Copy the composed transform from the base clone
     (newGuardian as unknown as {
       _composedTransform: GuardianTransform<unknown, TOutput>;
     })._composedTransform = (baseClone as unknown as {
       _composedTransform: GuardianTransform<unknown, TOutput>;
     })._composedTransform;
-    
+
     return newGuardian;
   }
 

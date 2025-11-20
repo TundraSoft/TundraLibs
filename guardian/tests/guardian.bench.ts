@@ -1,9 +1,9 @@
 /**
  * Guardian Performance Benchmarks
- * 
+ *
  * Comprehensive benchmarks for all Guardian functionality to track performance
  * characteristics and identify optimization opportunities.
- * 
+ *
  * Run with: deno bench guardian/tests/guardian.bench.ts --allow-all
  */
 
@@ -93,7 +93,9 @@ Deno.bench("Number Guardian - Positive Integer", () => {
 });
 
 Deno.bench("Number Guardian - With Transformations", () => {
-  const guard = Guardian.number().process((n: number) => Math.round(n * 100) / 100);
+  const guard = Guardian.number().process((n: number) =>
+    Math.round(n * 100) / 100
+  );
   guard.parse(sampleNumber);
 });
 
@@ -141,7 +143,7 @@ Deno.bench("Array Guardian - Number Array", () => {
 
 Deno.bench("Array Guardian - Complex Element Validation", () => {
   const guard = Guardian.array(
-    Guardian.string().minLength(3).maxLength(20)
+    Guardian.string().minLength(3).maxLength(20),
   );
   guard.parse(sampleArray);
 });
@@ -286,8 +288,14 @@ Deno.bench("Union Guardian - Simple Union", () => {
 
 Deno.bench("Union Guardian - Complex Union", () => {
   const guard = Guardian.oneOf([
-    Guardian.object({ type: Guardian.string().equals("user"), name: Guardian.string() }),
-    Guardian.object({ type: Guardian.string().equals("admin"), permissions: Guardian.array(Guardian.string()) }),
+    Guardian.object({
+      type: Guardian.string().equals("user"),
+      name: Guardian.string(),
+    }),
+    Guardian.object({
+      type: Guardian.string().equals("admin"),
+      permissions: Guardian.array(Guardian.string()),
+    }),
   ], "Expected user or admin object");
   guard.parse({ type: "user", name: "John" });
 });
@@ -313,7 +321,9 @@ Deno.bench("Transform - Object Transformation", () => {
   const guard = Guardian.object({
     firstName: Guardian.string(),
     lastName: Guardian.string(),
-  }).process(({ firstName, lastName }: { firstName: string; lastName: string }) => ({
+  }).process((
+    { firstName, lastName }: { firstName: string; lastName: string },
+  ) => ({
     fullName: `${firstName} ${lastName}`,
     initials: `${firstName[0]}${lastName[0]}`,
   }));
@@ -325,7 +335,10 @@ Deno.bench("Transform - Object Transformation", () => {
 // =============================================================================
 
 Deno.bench("Refine - Simple Refinement", () => {
-  const guard = Guardian.string().test((s: string) => s.includes("@"), "Must contain @");
+  const guard = Guardian.string().test(
+    (s: string) => s.includes("@"),
+    "Must contain @",
+  );
   guard.parse("user@domain.com");
 });
 
@@ -334,8 +347,9 @@ Deno.bench("Refine - Complex Refinement", () => {
     password: Guardian.string(),
     confirmPassword: Guardian.string(),
   }).test(
-    (data: { password: string; confirmPassword: string }) => data.password === data.confirmPassword,
-    "Passwords must match"
+    (data: { password: string; confirmPassword: string }) =>
+      data.password === data.confirmPassword,
+    "Passwords must match",
   );
   guard.parse({ password: "secret", confirmPassword: "secret" });
 });
@@ -400,7 +414,7 @@ Deno.bench("Lazy Guardian - Recursive Schema", () => {
     value: string;
     children?: Node[];
   }
-  
+
   // Simple recursive validation without lazy (for benchmark purposes)
   const nodeGuard = Guardian.object({
     value: Guardian.string(),
@@ -408,7 +422,7 @@ Deno.bench("Lazy Guardian - Recursive Schema", () => {
       value: Guardian.string(),
     })).optional(),
   });
-  
+
   nodeGuard.parse({
     value: "root",
     children: [
@@ -431,11 +445,11 @@ Deno.bench("Scalability - Large Array", () => {
 Deno.bench("Scalability - Large Object", () => {
   const guard = Guardian.object(
     Object.fromEntries(
-      Array.from({ length: 100 }, (_, i) => [`field${i}`, Guardian.string()])
-    )
+      Array.from({ length: 100 }, (_, i) => [`field${i}`, Guardian.string()]),
+    ),
   );
   const largeObject = Object.fromEntries(
-    Array.from({ length: 100 }, (_, i) => [`field${i}`, `value${i}`])
+    Array.from({ length: 100 }, (_, i) => [`field${i}`, `value${i}`]),
   );
   guard.parse(largeObject);
 });
@@ -454,7 +468,7 @@ Deno.bench("Scalability - Deep Nesting", () => {
       }),
     }),
   });
-  
+
   guard.parse({
     level1: {
       level2: {
@@ -477,7 +491,7 @@ Deno.bench("Scalability - Deep Nesting", () => {
 Deno.bench("Reusability - Guard Reuse vs Recreation", () => {
   // This benchmark shows the benefit of reusing guards
   const reusableGuard = Guardian.string().minLength(3).maxLength(10);
-  
+
   // Reuse the same guard multiple times
   for (let i = 0; i < 100; i++) {
     reusableGuard.parse("test");
@@ -493,4 +507,6 @@ Deno.bench("Reusability - Guard Recreation (Anti-pattern)", () => {
 });
 
 console.log("🚀 Guardian benchmarks completed!");
-console.log("Run with: deno bench guardian/tests/guardian.bench.ts --allow-all");
+console.log(
+  "Run with: deno bench guardian/tests/guardian.bench.ts --allow-all",
+);

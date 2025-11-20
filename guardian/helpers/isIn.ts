@@ -29,7 +29,9 @@ export const isIn = <T>(
     if (!uniqueExpected.includes(value)) {
       throw new GuardianError(
         error ||
-          `Expected value to be in (${uniqueExpected.join(", ")}), got ${value}`,
+          `Expected value to be in (${
+            uniqueExpected.join(", ")
+          }), got ${value}`,
         {
           got: value,
           expected: uniqueExpected,

@@ -167,29 +167,35 @@ Deno.test("guardian.EnumGuardian", async (t) => {
   await t.step("nullable and optional chaining", async (t) => {
     const colors = ["red", "green", "blue"] as const;
 
-    await t.step("nullable().optional() allows null, undefined, and valid enum values", () => {
-      const guard = new EnumGuardian(colors).nullable().optional();
-      
-      asserts.assertEquals(guard.parse(null), null);
-      asserts.assertEquals(guard.parse(undefined), undefined);
-      asserts.assertEquals(guard.parse("red"), "red");
-      asserts.assertEquals(guard.parse("green"), "green");
-      asserts.assertEquals(guard.parse("blue"), "blue");
-    });
+    await t.step(
+      "nullable().optional() allows null, undefined, and valid enum values",
+      () => {
+        const guard = new EnumGuardian(colors).nullable().optional();
 
-    await t.step("optional().nullable() allows undefined, null, and valid enum values", () => {
-      const guard = new EnumGuardian(colors).optional().nullable();
-      
-      asserts.assertEquals(guard.parse(undefined), undefined);
-      asserts.assertEquals(guard.parse(null), null);
-      asserts.assertEquals(guard.parse("red"), "red");
-      asserts.assertEquals(guard.parse("green"), "green");
-      asserts.assertEquals(guard.parse("blue"), "blue");
-    });
+        asserts.assertEquals(guard.parse(null), null);
+        asserts.assertEquals(guard.parse(undefined), undefined);
+        asserts.assertEquals(guard.parse("red"), "red");
+        asserts.assertEquals(guard.parse("green"), "green");
+        asserts.assertEquals(guard.parse("blue"), "blue");
+      },
+    );
+
+    await t.step(
+      "optional().nullable() allows undefined, null, and valid enum values",
+      () => {
+        const guard = new EnumGuardian(colors).optional().nullable();
+
+        asserts.assertEquals(guard.parse(undefined), undefined);
+        asserts.assertEquals(guard.parse(null), null);
+        asserts.assertEquals(guard.parse("red"), "red");
+        asserts.assertEquals(guard.parse("green"), "green");
+        asserts.assertEquals(guard.parse("blue"), "blue");
+      },
+    );
 
     await t.step("nullable().optional() rejects invalid enum values", () => {
       const guard = new EnumGuardian(colors).nullable().optional();
-      
+
       asserts.assertThrows(() => guard.parse("yellow"), GuardianError);
       asserts.assertThrows(() => guard.parse("purple"), GuardianError);
       asserts.assertThrows(() => guard.parse(123), GuardianError);
@@ -197,8 +203,8 @@ Deno.test("guardian.EnumGuardian", async (t) => {
 
     await t.step("optional().nullable() rejects invalid enum values", () => {
       const guard = new EnumGuardian(colors).optional().nullable();
-      
-      asserts.assertThrows(() => guard.parse("yellow"), GuardianError);  
+
+      asserts.assertThrows(() => guard.parse("yellow"), GuardianError);
       asserts.assertThrows(() => guard.parse("purple"), GuardianError);
       asserts.assertThrows(() => guard.parse(123), GuardianError);
     });

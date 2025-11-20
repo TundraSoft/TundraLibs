@@ -20,7 +20,7 @@ import { StringGuardian } from "./StringGuardian.ts";
  * anyValue.parse({ foo: 'bar' }); // { foo: 'bar' }
  * anyValue.parse(null); // throws GuardianError
  * anyValue.parse(undefined); // throws GuardianError
- * 
+ *
  * // To allow null values, use nullable() helper:
  * const nullableValue = Guardian.unknown().nullable();
  * nullableValue.parse(null); // null
@@ -45,7 +45,10 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    *
    * @param metaData - Optional metadata for documentation and tooling
    */
-  constructor(initialTransform?: GuardianTransform<unknown, T>, metaData?: GuardianMetaData) {
+  constructor(
+    initialTransform?: GuardianTransform<unknown, T>,
+    metaData?: GuardianMetaData,
+  ) {
     // Transform that accepts any value except null and undefined
     const defaultTransform: GuardianTransform<unknown, T> = (
       input: unknown,

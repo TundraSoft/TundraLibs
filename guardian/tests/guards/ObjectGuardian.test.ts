@@ -178,7 +178,7 @@ Deno.test("guardian.ObjectGuardian", async (t) => {
           id: new NumberGuardian(),
           name: new StringGuardian(),
           email: new StringGuardian().optional(),
-        }).hasKeys(['id', 'name']);
+        }).hasKeys(["id", "name"]);
 
         const result = guard.parse({
           id: 1,
@@ -191,29 +191,32 @@ Deno.test("guardian.ObjectGuardian", async (t) => {
         asserts.assertEquals(result.email, "john@example.com");
       });
 
-      await t.step("should pass when required keys are present (optional missing)", () => {
-        const guard = new ObjectGuardian({
-          id: new NumberGuardian(),
-          name: new StringGuardian(),
-          email: new StringGuardian().optional(),
-        }).hasKeys(['id', 'name']);
+      await t.step(
+        "should pass when required keys are present (optional missing)",
+        () => {
+          const guard = new ObjectGuardian({
+            id: new NumberGuardian(),
+            name: new StringGuardian(),
+            email: new StringGuardian().optional(),
+          }).hasKeys(["id", "name"]);
 
-        const result = guard.parse({ id: 1, name: "John" });
-        asserts.assertEquals(result.id, 1);
-        asserts.assertEquals(result.name, "John");
-      });
+          const result = guard.parse({ id: 1, name: "John" });
+          asserts.assertEquals(result.id, 1);
+          asserts.assertEquals(result.name, "John");
+        },
+      );
 
       await t.step("should fail when required keys are missing", () => {
         const guard = new ObjectGuardian({
           id: new NumberGuardian().optional(),
           name: new StringGuardian().optional(),
           email: new StringGuardian().optional(),
-        }).hasKeys(['id', 'name']);
+        }).hasKeys(["id", "name"]);
 
         asserts.assertThrows(
           () => guard.parse({ id: 1 }),
           GuardianError,
-          "Object must contain all required keys: id, name"
+          "Object must contain all required keys: id, name",
         );
       });
 
@@ -221,12 +224,12 @@ Deno.test("guardian.ObjectGuardian", async (t) => {
         const guard = new ObjectGuardian({
           id: new NumberGuardian().optional(),
           name: new StringGuardian().optional(),
-        }).hasKeys(['id', 'name'], 'Custom: ID and name are mandatory');
+        }).hasKeys(["id", "name"], "Custom: ID and name are mandatory");
 
         asserts.assertThrows(
           () => guard.parse({ id: 1 }),
           GuardianError,
-          "Custom: ID and name are mandatory"
+          "Custom: ID and name are mandatory",
         );
       });
     });
@@ -237,7 +240,7 @@ Deno.test("guardian.ObjectGuardian", async (t) => {
           id: new NumberGuardian(),
           name: new StringGuardian(),
           email: new StringGuardian(),
-        }).forbiddenKeys(['password', 'secret']);
+        }).forbiddenKeys(["password", "secret"]);
 
         const result = guard.parse({
           id: 1,
@@ -254,12 +257,12 @@ Deno.test("guardian.ObjectGuardian", async (t) => {
         const guard = new ObjectGuardian({
           id: new NumberGuardian(),
           name: new StringGuardian(),
-        }).forbiddenKeys(['password', 'secret']);
+        }).forbiddenKeys(["password", "secret"]);
 
         asserts.assertThrows(
           () => guard.parse({ id: 1, name: "John", password: "secret123" }),
           GuardianError,
-          "Object must not contain forbidden keys: password, secret"
+          "Object must not contain forbidden keys: password, secret",
         );
       });
 
@@ -267,12 +270,12 @@ Deno.test("guardian.ObjectGuardian", async (t) => {
         const guard = new ObjectGuardian({
           id: new NumberGuardian(),
           name: new StringGuardian(),
-        }).forbiddenKeys(['password', 'secret', 'private']);
+        }).forbiddenKeys(["password", "secret", "private"]);
 
         asserts.assertThrows(
           () => guard.parse({ id: 1, name: "John", private: "data" }),
           GuardianError,
-          "Object must not contain forbidden keys: password, secret, private"
+          "Object must not contain forbidden keys: password, secret, private",
         );
       });
 
@@ -280,12 +283,12 @@ Deno.test("guardian.ObjectGuardian", async (t) => {
         const guard = new ObjectGuardian({
           id: new NumberGuardian(),
           name: new StringGuardian(),
-        }).forbiddenKeys(['password'], 'Security: Password field not allowed');
+        }).forbiddenKeys(["password"], "Security: Password field not allowed");
 
         asserts.assertThrows(
           () => guard.parse({ id: 1, name: "John", password: "secret" }),
           GuardianError,
-          "Security: Password field not allowed"
+          "Security: Password field not allowed",
         );
       });
     });
@@ -296,8 +299,8 @@ Deno.test("guardian.ObjectGuardian", async (t) => {
         name: new StringGuardian().optional(),
         email: new StringGuardian().optional(),
       })
-        .hasKeys(['id', 'name'])
-        .forbiddenKeys(['password', 'secret']);
+        .hasKeys(["id", "name"])
+        .forbiddenKeys(["password", "secret"]);
 
       // Should pass valid input
       const result = guard.parse({
@@ -312,14 +315,14 @@ Deno.test("guardian.ObjectGuardian", async (t) => {
       asserts.assertThrows(
         () => guard.parse({ id: 1, email: "john@example.com" }),
         GuardianError,
-        "Object must contain all required keys: id, name"
+        "Object must contain all required keys: id, name",
       );
 
       // Should fail on forbidden key
       asserts.assertThrows(
         () => guard.parse({ id: 1, name: "John", password: "secret" }),
         GuardianError,
-        "Object must not contain forbidden keys: password, secret"
+        "Object must not contain forbidden keys: password, secret",
       );
     });
   });

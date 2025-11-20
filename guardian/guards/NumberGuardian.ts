@@ -29,7 +29,10 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @param initialTransform - Optional composed transformation from previous guardian
    * @param metaData - Optional metadata for this guardian
    */
-  constructor(initialTransform?: GuardianTransform<unknown, number>, metaData?: GuardianMetaData) {
+  constructor(
+    initialTransform?: GuardianTransform<unknown, number>,
+    metaData?: GuardianMetaData,
+  ) {
     const defaultNumberValidation = (input: unknown) => {
       if (typeof input !== "number") {
         throw new GuardianError(`Expected number but got ${typeof input}`, {
@@ -96,7 +99,7 @@ export class NumberGuardian extends BaseGuardian<number> {
       }
       return num;
     }) as NumberGuardian;
-    
+
     // Store constraint for OpenAPI generation
     if (!result._metaData) result._metaData = {};
     result._metaData.minimum = value;
@@ -132,7 +135,7 @@ export class NumberGuardian extends BaseGuardian<number> {
       }
       return num;
     }) as NumberGuardian;
-    
+
     // Store constraint for OpenAPI generation
     if (!result._metaData) result._metaData = {};
     result._metaData.maximum = value;
@@ -158,7 +161,8 @@ export class NumberGuardian extends BaseGuardian<number> {
     const result = this.process((num: number) => {
       if (num < min || num > max) {
         throw new GuardianError(
-          errorMessage || `Number must be between ${min} and ${max} (inclusive)`,
+          errorMessage ||
+            `Number must be between ${min} and ${max} (inclusive)`,
           {
             expected: `${min} <= value <= ${max}`,
             got: num,
@@ -169,7 +173,7 @@ export class NumberGuardian extends BaseGuardian<number> {
       }
       return num;
     }) as NumberGuardian;
-    
+
     // Store constraints for OpenAPI generation
     if (!result._metaData) result._metaData = {};
     result._metaData.minimum = min;
@@ -202,7 +206,7 @@ export class NumberGuardian extends BaseGuardian<number> {
       }
       return num;
     }) as NumberGuardian;
-    
+
     // Store constraint for OpenAPI generation
     if (!result._metaData) result._metaData = {};
     result._metaData.minimum = 0;
@@ -232,8 +236,6 @@ export class NumberGuardian extends BaseGuardian<number> {
       return num;
     }) as NumberGuardian;
   }
-
-
 
   //#endregion
 
@@ -408,7 +410,7 @@ export class NumberGuardian extends BaseGuardian<number> {
           },
         );
       }
-      
+
       if (num === 2) return num; // 2 is prime
       if (num % 2 === 0) {
         throw new GuardianError(
@@ -421,7 +423,7 @@ export class NumberGuardian extends BaseGuardian<number> {
           },
         );
       }
-      
+
       // Check odd divisors up to sqrt(num)
       for (let i = 3; i <= Math.sqrt(num); i += 2) {
         if (num % i === 0) {
@@ -436,7 +438,7 @@ export class NumberGuardian extends BaseGuardian<number> {
           );
         }
       }
-      
+
       return num;
     }) as NumberGuardian;
   }
@@ -497,7 +499,8 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (!Number.isInteger(num) || num < 0) {
         throw new GuardianError(
-          errorMessage || "Number must be a valid timestamp (non-negative integer)",
+          errorMessage ||
+            "Number must be a valid timestamp (non-negative integer)",
           {
             expected: "valid timestamp",
             got: num,
@@ -506,7 +509,7 @@ export class NumberGuardian extends BaseGuardian<number> {
           },
         );
       }
-      
+
       // Test if it creates a valid date
       const date = new Date(num);
       if (isNaN(date.getTime())) {
@@ -520,7 +523,7 @@ export class NumberGuardian extends BaseGuardian<number> {
           },
         );
       }
-      
+
       return num;
     }) as NumberGuardian;
   }
@@ -536,12 +539,13 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (!Number.isInteger(num) || num < 1) {
         throw new GuardianError(
-          errorMessage || 'Number must be a positive integer to check for perfect power',
+          errorMessage ||
+            "Number must be a positive integer to check for perfect power",
           {
-            expected: 'positive integer',
+            expected: "positive integer",
             got: num,
-            comparison: 'power',
-            type: 'validation',
+            comparison: "power",
+            type: "validation",
           },
         );
       }
@@ -549,11 +553,11 @@ export class NumberGuardian extends BaseGuardian<number> {
       if (base !== undefined) {
         // Check if num is a perfect power of specific base
         if (base <= 1) {
-          throw new GuardianError('Base must be greater than 1', {
-            expected: 'base > 1',
+          throw new GuardianError("Base must be greater than 1", {
+            expected: "base > 1",
             got: base,
-            comparison: 'base',
-            type: 'validation',
+            comparison: "base",
+            type: "validation",
           });
         }
         const logResult = Math.log(num) / Math.log(base);
@@ -563,8 +567,8 @@ export class NumberGuardian extends BaseGuardian<number> {
             {
               expected: `perfect power of ${base}`,
               got: num,
-              comparison: 'power',
-              type: 'validation',
+              comparison: "power",
+              type: "validation",
             },
           );
         }
@@ -574,31 +578,37 @@ export class NumberGuardian extends BaseGuardian<number> {
         if (num === 1) {
           return num;
         }
-        
+
         let isPerfectPower = false;
-        for (let candidateBase = 2; candidateBase <= Math.sqrt(num); candidateBase++) {
+        for (
+          let candidateBase = 2;
+          candidateBase <= Math.sqrt(num);
+          candidateBase++
+        ) {
           const logResult = Math.log(num) / Math.log(candidateBase);
           // Use small epsilon for floating point comparison
           const roundedResult = Math.round(logResult);
-          if (Math.abs(logResult - roundedResult) < 1e-10 && roundedResult > 1) {
+          if (
+            Math.abs(logResult - roundedResult) < 1e-10 && roundedResult > 1
+          ) {
             isPerfectPower = true;
             break;
           }
         }
-        
+
         if (!isPerfectPower) {
           throw new GuardianError(
-            errorMessage || 'Number must be a perfect power',
+            errorMessage || "Number must be a perfect power",
             {
-              expected: 'perfect power',
+              expected: "perfect power",
               got: num,
-              comparison: 'power',
-              type: 'validation',
+              comparison: "power",
+              type: "validation",
             },
           );
         }
       }
-      
+
       return num;
     }) as NumberGuardian;
   }
@@ -612,25 +622,31 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @param errorMessage - Optional custom error message
    * @returns This NumberGuardian (mutated) or new instance if immutable
    */
-  between(min: number, max: number, inclusive = true, errorMessage?: string): NumberGuardian {
+  between(
+    min: number,
+    max: number,
+    inclusive = true,
+    errorMessage?: string,
+  ): NumberGuardian {
     return this.process((num: number) => {
-      const withinBounds = inclusive 
+      const withinBounds = inclusive
         ? (num >= min && num <= max)
         : (num > min && num < max);
-        
+
       if (!withinBounds) {
-        const boundsStr = inclusive 
-          ? `${min} <= value <= ${max}` 
+        const boundsStr = inclusive
+          ? `${min} <= value <= ${max}`
           : `${min} < value < ${max}`;
-        const boundsDesc = inclusive ? 'inclusive' : 'exclusive';
-        
+        const boundsDesc = inclusive ? "inclusive" : "exclusive";
+
         throw new GuardianError(
-          errorMessage || `Number must be between ${min} and ${max} (${boundsDesc})`,
+          errorMessage ||
+            `Number must be between ${min} and ${max} (${boundsDesc})`,
           {
             expected: boundsStr,
             got: num,
-            comparison: 'between',
-            type: 'validation',
+            comparison: "between",
+            type: "validation",
           },
         );
       }
@@ -648,12 +664,12 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (num < -90 || num > 90) {
         throw new GuardianError(
-          errorMessage || 'Number must be a valid latitude (-90 to 90)',
+          errorMessage || "Number must be a valid latitude (-90 to 90)",
           {
-            expected: 'valid latitude (-90 to 90)',
+            expected: "valid latitude (-90 to 90)",
             got: num,
-            comparison: 'latitude',
-            type: 'validation',
+            comparison: "latitude",
+            type: "validation",
           },
         );
       }
@@ -671,12 +687,12 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (num < -180 || num > 180) {
         throw new GuardianError(
-          errorMessage || 'Number must be a valid longitude (-180 to 180)',
+          errorMessage || "Number must be a valid longitude (-180 to 180)",
           {
-            expected: 'valid longitude (-180 to 180)',
+            expected: "valid longitude (-180 to 180)",
             got: num,
-            comparison: 'longitude',
-            type: 'validation',
+            comparison: "longitude",
+            type: "validation",
           },
         );
       }
@@ -809,11 +825,11 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @param currency - Currency code (defaults to 'USD')
    * @returns This NumberGuardian (mutated) or new instance if immutable
    */
-  formatCurrency(locale = 'en-US', currency = 'USD'): NumberGuardian {
+  formatCurrency(locale = "en-US", currency = "USD"): NumberGuardian {
     return this.process(
       (num: number) => {
         const _formatter = new Intl.NumberFormat(locale, {
-          style: 'currency',
+          style: "currency",
           currency: currency,
         });
         // Note: This method preserves the original number value for calculations
@@ -844,8 +860,8 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process(
       (num: number) => {
         // Convert to string with commas, then back to number (removes commas but preserves value)
-        const formatted = num.toLocaleString('en-US');
-        return parseFloat(formatted.replace(/,/g, ''));
+        const formatted = num.toLocaleString("en-US");
+        return parseFloat(formatted.replace(/,/g, ""));
       },
     ) as NumberGuardian;
   }
@@ -860,8 +876,8 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process(
       (num: number) => {
         const str = Math.abs(num).toString();
-        const padded = str.padStart(length, '0');
-        return parseFloat(num < 0 ? '-' + padded : padded);
+        const padded = str.padStart(length, "0");
+        return parseFloat(num < 0 ? "-" + padded : padded);
       },
     ) as NumberGuardian;
   }

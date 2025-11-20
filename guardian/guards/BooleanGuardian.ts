@@ -25,7 +25,10 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
    *
    * @param metaData - Optional metadata for this guardian
    */
-  constructor(initialTransform?: GuardianTransform<unknown, boolean>, metaData?: GuardianMetaData) {
+  constructor(
+    initialTransform?: GuardianTransform<unknown, boolean>,
+    metaData?: GuardianMetaData,
+  ) {
     const defaultTransform = (input: unknown) => {
       if (typeof input !== "boolean") {
         throw new GuardianError(`Expected boolean but got ${typeof input}`, {
@@ -37,7 +40,7 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
       }
       return input as boolean;
     };
-    
+
     super(initialTransform || defaultTransform, metaData);
   }
 
@@ -112,7 +115,7 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
   override toString(_description?: string): StringGuardian {
     return this.process(
       (value: boolean) => value.toString(),
-      StringGuardian
+      StringGuardian,
     ) as StringGuardian;
   }
 
@@ -131,7 +134,7 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
   toNumber(): NumberGuardian {
     return this.process(
       (value: boolean): number => value ? 1 : 0,
-      NumberGuardian
+      NumberGuardian,
     ) as NumberGuardian;
   }
 
