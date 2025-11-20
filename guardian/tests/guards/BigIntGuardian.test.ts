@@ -478,4 +478,34 @@ Deno.test("guardian.BigIntGuardian", async (t) => {
       asserts.assertThrows(() => invalidRadixGuardian.parse(10n), GuardianError);
     });
   });
+
+  await t.step("nullable and optional", async (t) => {
+    await t.step("should handle nullable bigints", () => {
+      const schema = new BigIntGuardian().positive().nullable();
+      asserts.assertEquals(schema.parse(5n), 5n);
+      asserts.assertEquals(schema.parse(null), null);
+      asserts.assertThrows(() => schema.parse(-1n), GuardianError);
+    });
+    
+    await t.step("should handle optional bigints", () => {
+      const schema = new BigIntGuardian().positive().optional(100n);
+      asserts.assertEquals(schema.parse(5n), 5n);
+      asserts.assertEquals(schema.parse(undefined), 100n);
+      asserts.assertThrows(() => schema.parse(-1n), GuardianError);
+    });
+    
+    await t.step("should handle nullable().optional() chaining", () => {
+      const schema = new BigIntGuardian().positive().nullable().optional(100n);
+      asserts.assertEquals(schema.parse(5n), 5n);
+      asserts.assertEquals(schema.parse(null), null);
+      asserts.assertEquals(schema.parse(undefined), 100n);
+    });
+    
+    await t.step("should handle optional().nullable() chaining", () => {
+      const schema = new BigIntGuardian().positive().optional(100n).nullable();
+      asserts.assertEquals(schema.parse(5n), 5n);
+      asserts.assertEquals(schema.parse(null), null);
+      asserts.assertEquals(schema.parse(undefined), 100n);
+    });
+  });
 });

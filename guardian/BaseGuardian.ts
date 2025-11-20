@@ -338,7 +338,7 @@ export abstract class BaseGuardian<T> {
    * nullableString.parse(undefined); // null
    * ```
    */
-  nullable(): BaseGuardian<T | null> {
+  nullable(): BaseGuardian<T | null | undefined> {
     // Prevent multiple nullable() calls
     if (this._metaData?.isNullable) {
       throw new GuardianError(
@@ -351,18 +351,6 @@ export abstract class BaseGuardian<T> {
         },
       );
     }
-    // Prevent calling nullable() after optional()
-    if (this._metaData?.isOptional) {
-      throw new GuardianError(
-        "Cannot call nullable() after optional(). These are mutually exclusive finisher methods.",
-        {
-          expected: "nullable() before optional()",
-          got: "nullable() after optional()",
-          comparison: "method_order",
-          type: "validation",
-        },
-      );
-    }
     if (this.isImmutable === true) {
       return this.clone().nullable();
     } else {
@@ -370,7 +358,7 @@ export abstract class BaseGuardian<T> {
       // Use process with identity transform but modify the composed transform to handle null/undefined
       const currentTransform = this._composedTransform;
       
-      const nullableTransform: GuardianTransform<unknown, T | null> = (
+      const nullableTransform: GuardianTransform<unknown, T | null | undefined> = (
         value: unknown,
       ) => {
         // Handle null - return null without calling the composed transform
@@ -378,16 +366,23 @@ export abstract class BaseGuardian<T> {
           return null;
         }
 
-        // For all other values (including undefined), call the current composed transform
-        // This allows undefined to be rejected by the original validation
+        // If this guardian is also optional, let the optional transform handle undefined
+        // (it may return a default value or undefined)
+        if (value === undefined && this._metaData?.isOptional) {
+          return currentTransform(value) as T;
+        }
+
+        // For all other values, call the current composed transform
         return currentTransform(value) as T;
       };
-      (this as unknown as BaseGuardian<T | null>)._composedTransform = nullableTransform;
+      (this as unknown as BaseGuardian<T | null | undefined>)._composedTransform = nullableTransform;
       if (!this._metaData) {
         this._metaData = { };
       }
       this._metaData.isNullable = true;
-      return this as BaseGuardian<T | null>;
+      
+      // Always return the broadest type to handle chaining
+      return this as BaseGuardian<T | null | undefined>;
     }
   }
 
@@ -406,10 +401,10 @@ export abstract class BaseGuardian<T> {
    * ```
    */
   optional(): BaseGuardian<T | undefined>;
-  optional<D>(defaultValue: D | (() => D)): BaseGuardian<T | D | undefined>;
+  optional<D>(defaultValue: D | (() => D)): BaseGuardian<T | D>;
   optional<D>(
     _defaultValue?: D | (() => D),
-  ): BaseGuardian<T | D | undefined> {
+  ): BaseGuardian<T | D | undefined> | BaseGuardian<T | D | undefined | null> {
     // Prevent multiple optional() calls
     if (this._metaData?.isOptional) {
       throw new GuardianError(
@@ -422,24 +417,11 @@ export abstract class BaseGuardian<T> {
         },
       );
     }
-    // Prevent calling optional() after nullable()
-    if (this._metaData?.isNullable) {
-      throw new GuardianError(
-        "Cannot call optional() after nullable(). These are mutually exclusive finisher methods.",
-        {
-          expected: "optional() before nullable()",
-          got: "optional() after nullable()",
-          comparison: "method_order",
-          type: "validation",
-        },
-      );
-    }
-
     // Store the current transform before setting finisher flags
     // This allows us to use it in the optionalTransform even after finisher protection is enabled
     const currentTransform = this._composedTransform;
     
-    const optionalTransform: GuardianTransform<unknown, T | D | undefined> = (
+    const optionalTransform: GuardianTransform<unknown, T | D | undefined | null> = (
       value: unknown,
     ) => {
       // Handle undefined by returning default or undefined
@@ -464,6 +446,12 @@ export abstract class BaseGuardian<T> {
         return currentTransform(_defaultValue) as T;
       }
 
+      // If this guardian is also nullable, null should remain null
+      // Otherwise, apply normal transformation which may reject null
+      if (value === null && this._metaData?.isNullable) {
+        return null;
+      }
+
       // For all other values, call the current composed transform
       return currentTransform(value) as T;
     };
@@ -475,12 +463,12 @@ export abstract class BaseGuardian<T> {
       // If immutable, create new instance using constructor
       const newMetaData = { ...this._metaData, isOptional: true };
       returnInstance = new (this.constructor as new (
-        initialTransform?: GuardianTransform<unknown, T | D | undefined>,
+        initialTransform?: GuardianTransform<unknown, T | D | undefined | null>,
         metaData?: GuardianMetaData,
       ) => this)(optionalTransform, newMetaData);
     } else {
       // Mutate in place for better performance
-      (this as unknown as BaseGuardian<T | D | undefined>)._composedTransform = optionalTransform;
+      (this as unknown as BaseGuardian<T | D | undefined | null>)._composedTransform = optionalTransform;
       if (!this._metaData) {
         this._metaData = { isOptional: true };
       } else {
@@ -489,7 +477,12 @@ export abstract class BaseGuardian<T> {
       returnInstance = this;
     }
 
-    return returnInstance as BaseGuardian<T | D | undefined>;
+    // Return the correct type - only include null if nullable is also set
+    if (this._metaData?.isNullable) {
+      return returnInstance as BaseGuardian<T | D | undefined | null>;
+    } else {
+      return returnInstance as BaseGuardian<T | D | undefined>;
+    }
   }
 
   /**

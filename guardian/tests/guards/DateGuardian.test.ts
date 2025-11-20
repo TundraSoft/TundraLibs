@@ -570,4 +570,50 @@ Deno.test("guardian.DateGuardian", async (t) => {
       asserts.assertEquals(diffDays, 5);
     });
   });
+
+  await t.step("nullable and optional chaining", async (t) => {
+    await t.step("nullable().optional() allows null, undefined, and valid date", () => {
+      const guard = new DateGuardian().nullable().optional();
+      
+      asserts.assertEquals(guard.parse(null), null);
+      asserts.assertEquals(guard.parse(undefined), undefined);
+      
+      const testDate = new Date("2023-06-15");
+      asserts.assertEquals(guard.parse(testDate), testDate);
+      
+      const anotherDate = new Date("2024-01-01");
+      asserts.assertEquals(guard.parse(anotherDate), anotherDate);
+    });
+
+    await t.step("optional().nullable() allows undefined, null, and valid date", () => {
+      const guard = new DateGuardian().optional().nullable();
+      
+      asserts.assertEquals(guard.parse(undefined), undefined);
+      asserts.assertEquals(guard.parse(null), null);
+      
+      const testDate = new Date("2023-06-15");
+      asserts.assertEquals(guard.parse(testDate), testDate);
+      
+      const anotherDate = new Date("2024-01-01");
+      asserts.assertEquals(guard.parse(anotherDate), anotherDate);
+    });
+
+    await t.step("nullable().optional() rejects invalid dates", () => {
+      const guard = new DateGuardian().nullable().optional();
+      
+      asserts.assertThrows(() => guard.parse("invalid-date"));
+      asserts.assertThrows(() => guard.parse(123));
+      asserts.assertThrows(() => guard.parse({}));
+      asserts.assertThrows(() => guard.parse(new Date("invalid")));
+    });
+
+    await t.step("optional().nullable() rejects invalid dates", () => {
+      const guard = new DateGuardian().optional().nullable();
+      
+      asserts.assertThrows(() => guard.parse("invalid-date"));
+      asserts.assertThrows(() => guard.parse(123));
+      asserts.assertThrows(() => guard.parse({}));
+      asserts.assertThrows(() => guard.parse(new Date("invalid")));
+    });
+  });
 });

@@ -662,4 +662,34 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
       );
     });
   });
+
+  await t.step("nullable and optional", async (t) => {
+    await t.step("should handle nullable arrays", () => {
+      const schema = Guardian.array().nullable();
+      asserts.assertEquals(schema.parse([1, 2, 3]), [1, 2, 3]);
+      asserts.assertEquals(schema.parse(null), null);
+      asserts.assertThrows(() => schema.parse("not array"), GuardianError);
+    });
+    
+    await t.step("should handle optional arrays", () => {
+      const schema = Guardian.array().optional(["default"]);
+      asserts.assertEquals(schema.parse([1, 2, 3]), [1, 2, 3]);
+      asserts.assertEquals(schema.parse(undefined), ["default"]);
+      asserts.assertThrows(() => schema.parse("not array"), GuardianError);
+    });
+    
+    await t.step("should handle nullable().optional() chaining", () => {
+      const schema = Guardian.array().nullable().optional(["default"]);
+      asserts.assertEquals(schema.parse([1, 2, 3]), [1, 2, 3]);
+      asserts.assertEquals(schema.parse(null), null);
+      asserts.assertEquals(schema.parse(undefined), ["default"]);
+    });
+    
+    await t.step("should handle optional().nullable() chaining", () => {
+      const schema = Guardian.array().optional(["default"]).nullable();
+      asserts.assertEquals(schema.parse([1, 2, 3]), [1, 2, 3]);
+      asserts.assertEquals(schema.parse(null), null);
+      asserts.assertEquals(schema.parse(undefined), ["default"]);
+    });
+  });
 });

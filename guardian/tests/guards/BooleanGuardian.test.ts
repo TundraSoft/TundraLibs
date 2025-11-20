@@ -130,4 +130,36 @@ Deno.test("guardian.BooleanGuardian", async (t) => {
       );
     });
   });
+
+  await t.step("nullable and optional", async (t) => {
+    await t.step("should handle nullable booleans", () => {
+      const schema = new BooleanGuardian().nullable();
+      asserts.assertEquals(schema.parse(true), true);
+      asserts.assertEquals(schema.parse(false), false);
+      asserts.assertEquals(schema.parse(null), null);
+      asserts.assertThrows(() => schema.parse("not boolean"), GuardianError);
+    });
+    
+    await t.step("should handle optional booleans", () => {
+      const schema = new BooleanGuardian().optional(true);
+      asserts.assertEquals(schema.parse(true), true);
+      asserts.assertEquals(schema.parse(false), false);
+      asserts.assertEquals(schema.parse(undefined), true);
+      asserts.assertThrows(() => schema.parse("not boolean"), GuardianError);
+    });
+    
+    await t.step("should handle nullable().optional() chaining", () => {
+      const schema = new BooleanGuardian().nullable().optional(true);
+      asserts.assertEquals(schema.parse(true), true);
+      asserts.assertEquals(schema.parse(null), null);
+      asserts.assertEquals(schema.parse(undefined), true);
+    });
+    
+    await t.step("should handle optional().nullable() chaining", () => {
+      const schema = new BooleanGuardian().optional(true).nullable();
+      asserts.assertEquals(schema.parse(true), true);
+      asserts.assertEquals(schema.parse(null), null);
+      asserts.assertEquals(schema.parse(undefined), true);
+    });
+  });
 });

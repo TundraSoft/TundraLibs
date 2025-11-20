@@ -463,21 +463,48 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(callCount, 2); // function called again
     });
 
-    await t.step("should handle nullable optional", () => {
-      const schema = new NumberGuardian().positive().nullable().optional(99);
-
-      asserts.assertEquals(schema.parse(5), 5);
-      asserts.assertEquals(schema.parse(null), null);
-      asserts.assertEquals(schema.parse(undefined), 99);
-      asserts.assertThrows(() => schema.parse(-1), GuardianError);
+    await t.step("should handle nullable and optional separately", () => {
+      // Test nullable
+      const nullableSchema = new NumberGuardian().positive().nullable();
+      asserts.assertEquals(nullableSchema.parse(5), 5);
+      asserts.assertEquals(nullableSchema.parse(null), null);
+      asserts.assertThrows(() => nullableSchema.parse(-1), GuardianError);
+      
+      // Test optional
+      const optionalSchema = new NumberGuardian().positive().optional(99);
+      asserts.assertEquals(optionalSchema.parse(5), 5);
+      asserts.assertEquals(optionalSchema.parse(undefined), 99);
+      asserts.assertThrows(() => optionalSchema.parse(-1), GuardianError);
+    });
+    
+    await t.step("should handle nullable().optional() chaining", () => {
+      const schema = new NumberGuardian().positive().nullable().optional(100);
+      
+      asserts.assertEquals(schema.parse(5), 5);           // valid number
+      asserts.assertEquals(schema.parse(null), null);     // null preserved
+      asserts.assertEquals(schema.parse(undefined), 100); // default used
+      asserts.assertThrows(() => schema.parse(-1), GuardianError); // validation still works
+    });
+    
+    await t.step("should handle optional().nullable() chaining", () => {
+      const schema = new NumberGuardian().positive().optional(100).nullable();
+      
+      asserts.assertEquals(schema.parse(5), 5);           // valid number
+      asserts.assertEquals(schema.parse(null), null);     // null preserved
+      asserts.assertEquals(schema.parse(undefined), 100); // default used
+      asserts.assertThrows(() => schema.parse(-1), GuardianError); // validation still works
     });
 
     await t.step("should work with transformations", () => {
-      const schema = new NumberGuardian().abs().nullable().optional(10);
-
-      asserts.assertEquals(schema.parse(-5), 5); // abs transformation applied
-      asserts.assertEquals(schema.parse(null), null);
-      asserts.assertEquals(schema.parse(undefined), 10);
+      // Test nullable with transformations
+      const nullableSchema = new NumberGuardian().abs().nullable();
+      asserts.assertEquals(nullableSchema.parse(-5), 5); // abs transformation applied
+      asserts.assertEquals(nullableSchema.parse(null), null);
+      
+      // Test optional with transformations
+      const optionalSchema = new NumberGuardian().abs().optional(10);
+      asserts.assertEquals(optionalSchema.parse(-5), 5); // abs transformation applied
+      asserts.assertEquals(optionalSchema.parse(undefined), 10);
     });
 
     await t.step("should work with validations", () => {

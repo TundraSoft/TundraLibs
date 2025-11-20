@@ -422,13 +422,36 @@ Deno.test("guardian.StringGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse("hi"), GuardianError);
     });
 
-    await t.step("should handle nullable optional", () => {
-      const schema = new StringGuardian().minLength(3).nullable().optional();
-
-      asserts.assertEquals(schema.parse("hello"), "hello");
-      asserts.assertEquals(schema.parse(null), null);
-      asserts.assertEquals(schema.parse(undefined), undefined);
-      asserts.assertThrows(() => schema.parse("hi"), GuardianError);
+    await t.step("should handle nullable and optional separately", () => {
+      // Test nullable
+      const nullableSchema = new StringGuardian().minLength(2).nullable();
+      asserts.assertEquals(nullableSchema.parse("hello"), "hello");
+      asserts.assertEquals(nullableSchema.parse(null), null);
+      asserts.assertThrows(() => nullableSchema.parse("x"), GuardianError);
+      
+      // Test optional
+      const optionalSchema = new StringGuardian().minLength(2).optional("default");
+      asserts.assertEquals(optionalSchema.parse("hello"), "hello");
+      asserts.assertEquals(optionalSchema.parse(undefined), "default");
+      asserts.assertThrows(() => optionalSchema.parse("x"), GuardianError);
+    });
+    
+    await t.step("should handle nullable().optional() chaining", () => {
+      const schema = new StringGuardian().minLength(2).nullable().optional("default");
+      
+      asserts.assertEquals(schema.parse("hello"), "hello");     // valid string
+      asserts.assertEquals(schema.parse(null), null);          // null preserved
+      asserts.assertEquals(schema.parse(undefined), "default"); // default used
+      asserts.assertThrows(() => schema.parse("x"), GuardianError); // validation still works
+    });
+    
+    await t.step("should handle optional().nullable() chaining", () => {
+      const schema = new StringGuardian().minLength(2).optional("default").nullable();
+      
+      asserts.assertEquals(schema.parse("hello"), "hello");     // valid string
+      asserts.assertEquals(schema.parse(null), null);          // null preserved
+      asserts.assertEquals(schema.parse(undefined), "default"); // default used
+      asserts.assertThrows(() => schema.parse("x"), GuardianError); // validation still works
     });
 
     await t.step("should work with transformations", () => {

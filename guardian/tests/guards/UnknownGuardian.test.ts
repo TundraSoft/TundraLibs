@@ -382,4 +382,52 @@ Deno.test("guardian.UnknownGuardian", async (t) => {
       );
     });
   });
+
+  await t.step("nullable and optional chaining", async (t) => {
+    await t.step("nullable().optional() allows null, undefined, and any value", () => {
+      const guard = new UnknownGuardian().nullable().optional();
+      
+      asserts.assertEquals(guard.parse(null), null);
+      asserts.assertEquals(guard.parse(undefined), undefined);
+      asserts.assertEquals(guard.parse("hello"), "hello");
+      asserts.assertEquals(guard.parse(42), 42);
+      asserts.assertEquals(guard.parse(true), true);
+      asserts.assertEquals(guard.parse([1, 2, 3]), [1, 2, 3]);
+      asserts.assertEquals(guard.parse({ foo: "bar" }), { foo: "bar" });
+    });
+
+    await t.step("optional().nullable() allows undefined, null, and any value", () => {
+      const guard = new UnknownGuardian().optional().nullable();
+      
+      asserts.assertEquals(guard.parse(undefined), undefined);
+      asserts.assertEquals(guard.parse(null), null);
+      asserts.assertEquals(guard.parse("hello"), "hello");
+      asserts.assertEquals(guard.parse(42), 42);
+      asserts.assertEquals(guard.parse(false), false);
+      asserts.assertEquals(guard.parse([1, 2, 3]), [1, 2, 3]);
+      asserts.assertEquals(guard.parse({ foo: "bar" }), { foo: "bar" });
+    });
+
+    await t.step("nullable().optional() preserves value identity", () => {
+      const guard = new UnknownGuardian().nullable().optional();
+      const obj = { test: "value" };
+      const arr = [1, 2, 3];
+      
+      asserts.assertStrictEquals(guard.parse(obj), obj);
+      asserts.assertStrictEquals(guard.parse(arr), arr);
+      asserts.assertEquals(guard.parse(null), null);
+      asserts.assertEquals(guard.parse(undefined), undefined);
+    });
+
+    await t.step("optional().nullable() preserves value identity", () => {
+      const guard = new UnknownGuardian().optional().nullable();
+      const obj = { test: "value" };
+      const arr = [1, 2, 3];
+      
+      asserts.assertStrictEquals(guard.parse(obj), obj);
+      asserts.assertStrictEquals(guard.parse(arr), arr);
+      asserts.assertEquals(guard.parse(undefined), undefined);
+      asserts.assertEquals(guard.parse(null), null);
+    });
+  });
 });
