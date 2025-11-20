@@ -10,7 +10,6 @@ import {
   UnknownGuardian,
 } from './guards/mod.ts';
 import type { BaseGuardian } from './BaseGuardian.ts';
-import type { ObjectSchema } from './guards/ObjectGuardian.ts';
 import type {
   GuardianInfer,
   GuardianInferInput,
@@ -408,6 +407,6 @@ export class Guardian {
     schema?: T,
     metaData?: GuardianMetaData,
   ) {
-    return new ObjectGuardian(schema as any, metaData) as any;
+    return new ObjectGuardian(schema, metaData);
   }
 }

@@ -35,9 +35,12 @@
     "*.test.ts": "typescript"
   },
 
-  // Override test runner for TypeScript files
+  // TypeScript settings - keep minimal to let Deno handle IntelliSense
   "typescript.preferences.useAliasesForRenames": false,
-  "typescript.suggest.enabled": false,
+  "typescript.suggest.enabled": true, // Commented out - this was preventing IntelliSense
+  
+  // Ensure Deno takes precedence over TypeScript
+  "typescript.enablePromptUseWorkspaceTsdk": false,
   
   "editor.tabSize": 2,
   "editor.formatOnSave": false,
