@@ -1,6 +1,6 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { GuardianError } from "../GuardianError.ts";
-import type { GuardianMetaData } from "../types/mod.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { GuardianError } from '../GuardianError.ts';
+import type { GuardianMetaData } from '../types/mod.ts';
 
 /**
  * Guardian for enum validation.
@@ -19,7 +19,7 @@ import type { GuardianMetaData } from "../types/mod.ts";
  * @since 1.0.0
  */
 export class EnumGuardian<T> extends BaseGuardian<T> {
-  protected override readonly _type = "string";
+  protected override readonly _type = 'string';
   private readonly _allowedValues: readonly T[];
 
   /**
@@ -30,7 +30,7 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
    */
   constructor(allowedValues: readonly T[], metaData?: GuardianMetaData) {
     if (!allowedValues || allowedValues.length === 0) {
-      throw new Error("EnumGuardian requires at least one allowed value");
+      throw new Error('EnumGuardian requires at least one allowed value');
     }
 
     super((input: unknown) => {
@@ -41,12 +41,12 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
       }
 
       throw new GuardianError(
-        `Value must be one of: ${allowedValues.join(", ")}`,
+        `Value must be one of: ${allowedValues.join(', ')}`,
         {
-          expected: allowedValues.join(", "),
+          expected: allowedValues.join(', '),
           got: input,
-          comparison: "enum",
-          type: "enum",
+          comparison: 'enum',
+          type: 'enum',
         },
       );
     }, metaData);
@@ -77,12 +77,12 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
       if (excludedValues.includes(value)) {
         throw new GuardianError(
           errorMessage ||
-            `Value must not be one of: ${excludedValues.join(", ")}`,
+            `Value must not be one of: ${excludedValues.join(', ')}`,
           {
-            expected: "excluded value",
+            expected: 'excluded value',
             got: value,
-            comparison: "exclude",
-            type: "validation",
+            comparison: 'exclude',
+            type: 'validation',
           },
         );
       }

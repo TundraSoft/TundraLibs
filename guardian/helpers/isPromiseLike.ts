@@ -38,16 +38,16 @@ export function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 
   // Check if it's a thenable (has a callable 'then' method)
   if (
-    typeof value === "object" &&
-    typeof (value as PromiseLike<unknown>).then === "function"
+    typeof value === 'object' &&
+    typeof (value as PromiseLike<unknown>).then === 'function'
   ) {
     return true;
   }
 
   // Check if it's an async function
-  if (typeof value === "function") {
+  if (typeof value === 'function') {
     // Constructor name check - covers most cases including minified code recovery
-    if (value.constructor?.name === "AsyncFunction") {
+    if (value.constructor?.name === 'AsyncFunction') {
       return true;
     }
 

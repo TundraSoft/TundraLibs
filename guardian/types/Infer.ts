@@ -1,4 +1,4 @@
-import type { BaseGuardian } from "../BaseGuardian.ts";
+import type { BaseGuardian } from '../BaseGuardian.ts';
 
 /**
  * Helper type to convert union types with undefined to optional properties

@@ -1,8 +1,8 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { GuardianError } from "../GuardianError.ts";
-import type { GuardianMetaData, GuardianTransform } from "../types/mod.ts";
-import { NumberGuardian } from "./NumberGuardian.ts";
-import { StringGuardian } from "./StringGuardian.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { GuardianError } from '../GuardianError.ts';
+import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
+import { NumberGuardian } from './NumberGuardian.ts';
+import { StringGuardian } from './StringGuardian.ts';
 
 /**
  * Guardian for BigInt validation and transformation.
@@ -20,7 +20,7 @@ import { StringGuardian } from "./StringGuardian.ts";
  * @since 1.0.0
  */
 export class BigIntGuardian extends BaseGuardian<bigint> {
-  protected override readonly _type = "number";
+  protected override readonly _type = 'number';
 
   /**
    * Creates a new BigIntGuardian instance.
@@ -39,12 +39,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     metaData?: GuardianMetaData,
   ) {
     const defaultBigIntValidation = (input: unknown) => {
-      if (typeof input !== "bigint") {
+      if (typeof input !== 'bigint') {
         throw new GuardianError(`Expected bigint but got ${typeof input}`, {
-          expected: "bigint",
+          expected: 'bigint',
           got: typeof input,
-          comparison: "type",
-          type: "bigint",
+          comparison: 'type',
+          type: 'bigint',
         });
       }
       return input;
@@ -88,8 +88,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
           {
             expected: `>= ${value}`,
             got: num,
-            comparison: "min",
-            type: "validation",
+            comparison: 'min',
+            type: 'validation',
           },
         );
       }
@@ -112,8 +112,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
           {
             expected: `<= ${value}`,
             got: num,
-            comparison: "max",
-            type: "validation",
+            comparison: 'max',
+            type: 'validation',
           },
         );
       }
@@ -135,12 +135,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (num <= 0n) {
         throw new GuardianError(
-          errorMessage || "BigInt must be positive (> 0)",
+          errorMessage || 'BigInt must be positive (> 0)',
           {
-            expected: "> 0",
+            expected: '> 0',
             got: num,
-            comparison: "positive",
-            type: "validation",
+            comparison: 'positive',
+            type: 'validation',
           },
         );
       }
@@ -158,12 +158,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (num >= 0n) {
         throw new GuardianError(
-          errorMessage || "BigInt must be negative (< 0)",
+          errorMessage || 'BigInt must be negative (< 0)',
           {
-            expected: "< 0",
+            expected: '< 0',
             got: num,
-            comparison: "negative",
-            type: "validation",
+            comparison: 'negative',
+            type: 'validation',
           },
         );
       }
@@ -181,12 +181,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (num < 0n) {
         throw new GuardianError(
-          errorMessage || "BigInt must be non-negative (>= 0)",
+          errorMessage || 'BigInt must be non-negative (>= 0)',
           {
-            expected: ">= 0",
+            expected: '>= 0',
             got: num,
-            comparison: "nonNegative",
-            type: "validation",
+            comparison: 'nonNegative',
+            type: 'validation',
           },
         );
       }
@@ -233,13 +233,13 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
         num < BigInt(Number.MIN_SAFE_INTEGER)
       ) {
         throw new GuardianError(
-          errorMessage || "BigInt too large to convert safely to number",
+          errorMessage || 'BigInt too large to convert safely to number',
           {
             expected:
               `between ${Number.MIN_SAFE_INTEGER} and ${Number.MAX_SAFE_INTEGER}`,
             got: num,
-            comparison: "conversion",
-            type: "number",
+            comparison: 'conversion',
+            type: 'number',
           },
         );
       }
@@ -264,8 +264,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
           {
             expected: `${min} <= value <= ${max}`,
             got: num,
-            comparison: "range",
-            type: "validation",
+            comparison: 'range',
+            type: 'validation',
           },
         );
       }
@@ -300,8 +300,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
           {
             expected: `> ${value}`,
             got: num,
-            comparison: "greaterThan",
-            type: "validation",
+            comparison: 'greaterThan',
+            type: 'validation',
           },
         );
       }
@@ -324,8 +324,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
           {
             expected: `< ${value}`,
             got: num,
-            comparison: "lessThan",
-            type: "validation",
+            comparison: 'lessThan',
+            type: 'validation',
           },
         );
       }
@@ -348,8 +348,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
           {
             expected: `>= ${value}`,
             got: num,
-            comparison: "greaterThanOrEqual",
-            type: "validation",
+            comparison: 'greaterThanOrEqual',
+            type: 'validation',
           },
         );
       }
@@ -372,8 +372,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
           {
             expected: `<= ${value}`,
             got: num,
-            comparison: "lessThanOrEqual",
-            type: "validation",
+            comparison: 'lessThanOrEqual',
+            type: 'validation',
           },
         );
       }
@@ -391,12 +391,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (num % 2n !== 0n) {
         throw new GuardianError(
-          errorMessage || "BigInt must be even",
+          errorMessage || 'BigInt must be even',
           {
-            expected: "even BigInt",
+            expected: 'even BigInt',
             got: num,
-            comparison: "even",
-            type: "validation",
+            comparison: 'even',
+            type: 'validation',
           },
         );
       }
@@ -414,12 +414,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (num % 2n === 0n) {
         throw new GuardianError(
-          errorMessage || "BigInt must be odd",
+          errorMessage || 'BigInt must be odd',
           {
-            expected: "odd BigInt",
+            expected: 'odd BigInt',
             got: num,
-            comparison: "odd",
-            type: "validation",
+            comparison: 'odd',
+            type: 'validation',
           },
         );
       }
@@ -442,8 +442,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
           {
             expected: `multiple of ${divisor}`,
             got: num,
-            comparison: "multipleOf",
-            type: "validation",
+            comparison: 'multipleOf',
+            type: 'validation',
           },
         );
       }
@@ -470,7 +470,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    * Helper function to calculate square root of BigInt.
    */
   private _bigIntSqrt(num: bigint): bigint {
-    if (num < 0n) throw new Error("Square root of negative number");
+    if (num < 0n) throw new Error('Square root of negative number');
     if (num < 2n) return num;
 
     let x = num;
@@ -526,12 +526,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (!this._isPrime(num)) {
         throw new GuardianError(
-          errorMessage || "BigInt must be prime",
+          errorMessage || 'BigInt must be prime',
           {
-            expected: "prime BigInt",
+            expected: 'prime BigInt',
             got: num,
-            comparison: "prime",
-            type: "validation",
+            comparison: 'prime',
+            type: 'validation',
           },
         );
       }
@@ -549,12 +549,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (this._isPrime(num)) {
         throw new GuardianError(
-          errorMessage || "BigInt must not be prime",
+          errorMessage || 'BigInt must not be prime',
           {
-            expected: "non-prime BigInt",
+            expected: 'non-prime BigInt',
             got: num,
-            comparison: "notPrime",
-            type: "validation",
+            comparison: 'notPrime',
+            type: 'validation',
           },
         );
       }
@@ -572,14 +572,14 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
   power(base?: bigint, errorMessage?: string): BigIntGuardian {
     return this.process((num: bigint) => {
       if (!this._isPerfectPower(num, base)) {
-        const baseStr = base ? ` of ${base}` : "";
+        const baseStr = base ? ` of ${base}` : '';
         throw new GuardianError(
           errorMessage || `BigInt must be a perfect power${baseStr}`,
           {
             expected: `perfect power${baseStr}`,
             got: num,
-            comparison: "power",
-            type: "validation",
+            comparison: 'power',
+            type: 'validation',
           },
         );
       }
@@ -597,12 +597,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (num === 0n) {
         throw new GuardianError(
-          errorMessage || "BigInt must not be zero",
+          errorMessage || 'BigInt must not be zero',
           {
-            expected: "non-zero BigInt",
+            expected: 'non-zero BigInt',
             got: num,
-            comparison: "nonZero",
-            type: "validation",
+            comparison: 'nonZero',
+            type: 'validation',
           },
         );
       }
@@ -627,8 +627,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
           {
             expected: `bit length ${expectedLength}`,
             got: `bit length ${actualLength}`,
-            comparison: "bitLength",
-            type: "validation",
+            comparison: 'bitLength',
+            type: 'validation',
           },
         );
       }
@@ -683,12 +683,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (value === 0n) {
         throw new GuardianError(
-          errorMessage || "Cannot divide by zero",
+          errorMessage || 'Cannot divide by zero',
           {
-            expected: "non-zero divisor",
-            got: "zero divisor",
-            comparison: "division",
-            type: "validation",
+            expected: 'non-zero divisor',
+            got: 'zero divisor',
+            comparison: 'division',
+            type: 'validation',
           },
         );
       }
@@ -707,12 +707,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (value === 0n) {
         throw new GuardianError(
-          errorMessage || "Cannot modulo by zero",
+          errorMessage || 'Cannot modulo by zero',
           {
-            expected: "non-zero modulo",
-            got: "zero modulo",
-            comparison: "modulo",
-            type: "validation",
+            expected: 'non-zero modulo',
+            got: 'zero modulo',
+            comparison: 'modulo',
+            type: 'validation',
           },
         );
       }
@@ -730,12 +730,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (num < 0n) {
         throw new GuardianError(
-          errorMessage || "Cannot calculate square root of negative BigInt",
+          errorMessage || 'Cannot calculate square root of negative BigInt',
           {
-            expected: "non-negative BigInt",
+            expected: 'non-negative BigInt',
             got: num,
-            comparison: "squareRoot",
-            type: "validation",
+            comparison: 'squareRoot',
+            type: 'validation',
           },
         );
       }
@@ -802,12 +802,12 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     return this.process((num: bigint) => {
       if (radix !== undefined && (radix < 2 || radix > 36)) {
         throw new GuardianError(
-          errorMessage || "Radix must be between 2 and 36",
+          errorMessage || 'Radix must be between 2 and 36',
           {
-            expected: "radix between 2 and 36",
+            expected: 'radix between 2 and 36',
             got: radix,
-            comparison: "radix",
-            type: "validation",
+            comparison: 'radix',
+            type: 'validation',
           },
         );
       }

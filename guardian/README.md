@@ -15,7 +15,7 @@ npx jsr add @tundralibs/guardian
 ```
 
 ```typescript
-import { Guardian } from "@tundralibs/guardian";
+import { Guardian } from '@tundralibs/guardian';
 
 // String validation with transformations
 const username = Guardian.string()
@@ -24,7 +24,7 @@ const username = Guardian.string()
   .maxLength(20)
   .pattern(/^[a-zA-Z0-9_]+$/);
 
-const result = username.parse("  john_doe  "); // 'john_doe'
+const result = username.parse('  john_doe  '); // 'john_doe'
 
 // Object schema validation
 const userSchema = Guardian.object({
@@ -36,16 +36,16 @@ const userSchema = Guardian.object({
 
 const user = userSchema.parse({
   id: 1,
-  name: "John Doe",
-  email: "john@example.com",
+  name: 'John Doe',
+  email: 'john@example.com',
 }); // { id: 1, name: "John Doe", email: "john@example.com" }
 
 // Safe parsing (doesn't throw)
-const [error, data] = Guardian.number().safeParse("invalid");
+const [error, data] = Guardian.number().safeParse('invalid');
 if (error) {
-  console.log("Validation failed:", error.message);
+  console.log('Validation failed:', error.message);
 } else {
-  console.log("Valid data:", data);
+  console.log('Valid data:', data);
 }
 ```
 
@@ -77,7 +77,7 @@ Convert between types seamlessly:
 Guardian.string().toNumber(); // "123" → 123
 Guardian.number().toString(); // 123 → "123"
 Guardian.string().toDate(); // "2023-01-01" → Date
-Guardian.object().pick("id", "name"); // Extract specific fields
+Guardian.object().pick('id', 'name'); // Extract specific fields
 ```
 
 ### 🛡️ **Safe & Async Support**
@@ -115,27 +115,27 @@ const registerSchema = Guardian.object({
     .maxLength(20)
     .pattern(
       /^[a-zA-Z0-9_]+$/,
-      "Only letters, numbers, and underscores allowed",
+      'Only letters, numbers, and underscores allowed',
     ),
 
   email: Guardian.string()
     .trim()
     .toLowerCase()
-    .email("Must be a valid email address"),
+    .email('Must be a valid email address'),
 
   password: Guardian.string()
-    .minLength(8, "Password must be at least 8 characters")
+    .minLength(8, 'Password must be at least 8 characters')
     .pattern(
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
-      "Must contain uppercase, lowercase, and number",
+      'Must contain uppercase, lowercase, and number',
     ),
 
   confirmPassword: Guardian.string(),
 
   age: Guardian.number()
     .integer()
-    .min(13, "Must be at least 13 years old")
-    .max(120, "Age seems unrealistic"),
+    .min(13, 'Must be at least 13 years old')
+    .max(120, 'Age seems unrealistic'),
 
   // Optional fields
   phone: Guardian.string().phone().optional(),
@@ -144,7 +144,7 @@ const registerSchema = Guardian.object({
   // Nested objects
   preferences: Guardian.object({
     newsletter: Guardian.boolean().default(false),
-    theme: Guardian.enum(["light", "dark", "auto"]).default("auto"),
+    theme: Guardian.enum(['light', 'dark', 'auto']).default('auto'),
     notifications: Guardian.object({
       email: Guardian.boolean().default(true),
       push: Guardian.boolean().default(false),
@@ -154,26 +154,26 @@ const registerSchema = Guardian.object({
   // Object-level validation
   .refine(
     (data) => data.password === data.confirmPassword,
-    "Passwords do not match",
+    'Passwords do not match',
   )
   .refine(
     async (data) => {
       const exists = await checkUsernameExists(data.username);
       return !exists;
     },
-    "Username is already taken",
+    'Username is already taken',
   );
 
 // Usage
 const userData = await registerSchema.parseAsync({
-  username: "  JohnDoe123  ",
-  email: "JOHN@EXAMPLE.COM",
-  password: "SecurePass123",
-  confirmPassword: "SecurePass123",
+  username: '  JohnDoe123  ',
+  email: 'JOHN@EXAMPLE.COM',
+  password: 'SecurePass123',
+  confirmPassword: 'SecurePass123',
   age: 25,
   preferences: {
     newsletter: true,
-    theme: "dark",
+    theme: 'dark',
   },
 });
 ```
@@ -189,17 +189,17 @@ const productSchema = Guardian.object({
 
   // Price handling with transformation
   price: Guardian.string()
-    .pattern(/^\$?\d+(\.\d{2})?$/, "Invalid price format")
-    .transform((price) => parseFloat(price.replace("$", "")))
-    .min(0, "Price cannot be negative"),
+    .pattern(/^\$?\d+(\.\d{2})?$/, 'Invalid price format')
+    .transform((price) => parseFloat(price.replace('$', '')))
+    .min(0, 'Price cannot be negative'),
 
   // Category with enum validation
   category: Guardian.enum([
-    "electronics",
-    "clothing",
-    "books",
-    "home",
-    "sports",
+    'electronics',
+    'clothing',
+    'books',
+    'home',
+    'sports',
   ]),
 
   // Dynamic attributes based on category
@@ -207,7 +207,7 @@ const productSchema = Guardian.object({
     .transform((attrs, ctx) => {
       const category = ctx.parent?.category;
 
-      if (category === "electronics") {
+      if (category === 'electronics') {
         return Guardian.object({
           brand: Guardian.string().minLength(1),
           model: Guardian.string().minLength(1),
@@ -215,9 +215,9 @@ const productSchema = Guardian.object({
         }).parse(attrs);
       }
 
-      if (category === "clothing") {
+      if (category === 'clothing') {
         return Guardian.object({
-          size: Guardian.enum(["XS", "S", "M", "L", "XL", "XXL"]),
+          size: Guardian.enum(['XS', 'S', 'M', 'L', 'XL', 'XXL']),
           color: Guardian.string().minLength(1),
           material: Guardian.string().minLength(1),
         }).parse(attrs);
@@ -234,7 +234,7 @@ const productSchema = Guardian.object({
   })
     .refine(
       (stock) => stock.available === stock.quantity - stock.reserved,
-      "Available stock calculation is incorrect",
+      'Available stock calculation is incorrect',
     ),
 
   // Tags array with validation
@@ -250,16 +250,16 @@ const productSchema = Guardian.object({
       alt: Guardian.string().optional(),
       primary: Guardian.boolean().default(false),
     }),
-  ).minLength(1, "At least one image is required")
+  ).minLength(1, 'At least one image is required')
     .refine(
       (images) => images.filter((img) => img.primary).length <= 1,
-      "Only one image can be marked as primary",
+      'Only one image can be marked as primary',
     ),
 })
   // Ensure required keys are present
-  .hasKeys(["name", "price", "category", "stock"])
+  .hasKeys(['name', 'price', 'category', 'stock'])
   // Ensure no sensitive internal fields
-  .forbiddenKeys(["internalId", "cost", "profit"]);
+  .forbiddenKeys(['internalId', 'cost', 'profit']);
 ```
 
 ### Configuration File Validation
@@ -267,11 +267,11 @@ const productSchema = Guardian.object({
 ```typescript
 // Application configuration with environment-specific validation
 const configSchema = Guardian.object({
-  environment: Guardian.enum(["development", "staging", "production"]),
+  environment: Guardian.enum(['development', 'staging', 'production']),
 
   server: Guardian.object({
     port: Guardian.number().integer().min(1000).max(65535),
-    host: Guardian.string().default("localhost"),
+    host: Guardian.string().default('localhost'),
     https: Guardian.boolean().default(false),
   }),
 
@@ -281,7 +281,7 @@ const configSchema = Guardian.object({
     ssl: Guardian.boolean().default(false),
     migrations: Guardian.object({
       auto: Guardian.boolean().default(false),
-      path: Guardian.string().default("./migrations"),
+      path: Guardian.string().default('./migrations'),
     }),
   }),
 
@@ -296,33 +296,33 @@ const configSchema = Guardian.object({
 
   redis: Guardian.object({
     url: Guardian.string().url(),
-    keyPrefix: Guardian.string().default("app:"),
+    keyPrefix: Guardian.string().default('app:'),
     ttl: Guardian.number().positive().default(3600), // seconds
   }).optional(),
 
   logging: Guardian.object({
-    level: Guardian.enum(["error", "warn", "info", "debug"]).default("info"),
-    format: Guardian.enum(["json", "text"]).default("json"),
+    level: Guardian.enum(['error', 'warn', 'info', 'debug']).default('info'),
+    format: Guardian.enum(['json', 'text']).default('json'),
     outputs: Guardian.array(
-      Guardian.enum(["console", "file", "syslog"]),
+      Guardian.enum(['console', 'file', 'syslog']),
     ).minLength(1),
   }),
 })
   // Environment-specific validation
   .refine((config) => {
-    if (config.environment === "production") {
+    if (config.environment === 'production') {
       // Production must have HTTPS and strong JWT secret
       return config.server.https && config.auth.jwtSecret.length >= 64;
     }
     return true;
-  }, "Production environment requires HTTPS and strong JWT secret")
+  }, 'Production environment requires HTTPS and strong JWT secret')
   .refine((config) => {
-    if (config.environment === "production") {
+    if (config.environment === 'production') {
       // Production should not auto-migrate
       return !config.database.migrations.auto;
     }
     return true;
-  }, "Auto-migrations should be disabled in production");
+  }, 'Auto-migrations should be disabled in production');
 ```
 
 ### Form Data Processing
@@ -338,13 +338,13 @@ const multiStepFormSchema = Guardian.object({
     lastName: Guardian.string().trim().minLength(1),
     dateOfBirth: Guardian.string().toDate(),
     ssn: Guardian.string()
-      .pattern(/^\d{3}-\d{2}-\d{4}$/, "SSN must be in format XXX-XX-XXXX")
+      .pattern(/^\d{3}-\d{2}-\d{4}$/, 'SSN must be in format XXX-XX-XXXX')
       .optional(),
   }).optional(),
 
   // Step 2: Employment Information
   employment: Guardian.object({
-    status: Guardian.enum(["employed", "unemployed", "student", "retired"]),
+    status: Guardian.enum(['employed', 'unemployed', 'student', 'retired']),
     company: Guardian.string().trim().minLength(1).optional(),
     salary: Guardian.number().positive().optional(),
     startDate: Guardian.string().toDate().optional(),
@@ -363,26 +363,26 @@ const multiStepFormSchema = Guardian.object({
       return data.personalInfo !== undefined;
     }
     return true;
-  }, "Personal information is required for step 1 and above")
+  }, 'Personal information is required for step 1 and above')
   .refine((data) => {
     if (data.step >= 2) {
       return data.employment !== undefined;
     }
     return true;
-  }, "Employment information is required for step 2 and above")
+  }, 'Employment information is required for step 2 and above')
   .refine((data) => {
     if (data.step >= 3) {
       return data.financial !== undefined;
     }
     return true;
-  }, "Financial information is required for step 3")
+  }, 'Financial information is required for step 3')
   // Cross-field validation
   .refine((data) => {
-    if (data.employment?.status === "employed") {
+    if (data.employment?.status === 'employed') {
       return data.employment.company && data.employment.salary;
     }
     return true;
-  }, "Company and salary are required when employed");
+  }, 'Company and salary are required when employed');
 ```
 
 ## Known Issues

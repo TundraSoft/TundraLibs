@@ -1,8 +1,8 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { GuardianError } from "../GuardianError.ts";
-import type { GuardianMetaData, GuardianTransform } from "../types/mod.ts";
-import { NumberGuardian } from "./NumberGuardian.ts";
-import { StringGuardian } from "./StringGuardian.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { GuardianError } from '../GuardianError.ts';
+import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
+import { NumberGuardian } from './NumberGuardian.ts';
+import { StringGuardian } from './StringGuardian.ts';
 
 /**
  * Guardian for boolean validation and transformation.
@@ -19,7 +19,7 @@ import { StringGuardian } from "./StringGuardian.ts";
  * @since 1.0.0
  */
 export class BooleanGuardian extends BaseGuardian<boolean> {
-  protected override readonly _type = "boolean";
+  protected override readonly _type = 'boolean';
   /**
    * Creates a new BooleanGuardian instance.
    *
@@ -30,12 +30,12 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
     metaData?: GuardianMetaData,
   ) {
     const defaultTransform = (input: unknown) => {
-      if (typeof input !== "boolean") {
+      if (typeof input !== 'boolean') {
         throw new GuardianError(`Expected boolean but got ${typeof input}`, {
-          expected: "boolean",
+          expected: 'boolean',
           got: typeof input,
-          comparison: "type",
-          type: "boolean",
+          comparison: 'type',
+          type: 'boolean',
         });
       }
       return input as boolean;
@@ -64,12 +64,12 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
       (value: boolean) => {
         if (value !== true) {
           throw new GuardianError(
-            errorMessage || "Expected true but got false",
+            errorMessage || 'Expected true but got false',
             {
               expected: true,
               got: value,
-              comparison: "equals",
-              type: "validation",
+              comparison: 'equals',
+              type: 'validation',
             },
           );
         }
@@ -89,12 +89,12 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
       (value: boolean) => {
         if (value !== false) {
           throw new GuardianError(
-            errorMessage || "Expected false but got true",
+            errorMessage || 'Expected false but got true',
             {
               expected: false,
               got: value,
-              comparison: "equals",
-              type: "validation",
+              comparison: 'equals',
+              type: 'validation',
             },
           );
         }

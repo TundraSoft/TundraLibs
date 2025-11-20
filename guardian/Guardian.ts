@@ -8,14 +8,14 @@ import {
   ObjectGuardian,
   StringGuardian,
   UnknownGuardian,
-} from "./guards/mod.ts";
-import type { BaseGuardian } from "./BaseGuardian.ts";
-import type { ObjectSchema } from "./guards/ObjectGuardian.ts";
+} from './guards/mod.ts';
+import type { BaseGuardian } from './BaseGuardian.ts';
+import type { ObjectSchema } from './guards/ObjectGuardian.ts';
 import type {
   GuardianInfer,
   GuardianInferInput,
   GuardianMetaData,
-} from "./types/mod.ts";
+} from './types/mod.ts';
 
 // Import the new type utility for object type inference
 type InferGuardianType<T> = T extends BaseGuardian<infer U> ? U : never;
@@ -28,7 +28,7 @@ type InferObjectType<T extends Record<string, BaseGuardian<unknown>>> =
     [K in keyof T as undefined extends InferGuardianType<T[K]> ? K : never]?:
       Exclude<InferGuardianType<T[K]>, undefined>;
   };
-import { GuardianError } from "./GuardianError.ts";
+import { GuardianError } from './GuardianError.ts';
 
 /**
  * Guardian factory class providing static methods to create validators.
@@ -68,7 +68,7 @@ export class Guardian {
     _guardian: T,
   ): GuardianInfer<T> {
     throw new Error(
-      "Guardian.infer is a type-only utility and should not be called at runtime",
+      'Guardian.infer is a type-only utility and should not be called at runtime',
     );
   }
 
@@ -86,7 +86,7 @@ export class Guardian {
     _guardian: T,
   ): GuardianInferInput<T> {
     throw new Error(
-      "Guardian.inferInput is a type-only utility and should not be called at runtime",
+      'Guardian.inferInput is a type-only utility and should not be called at runtime',
     );
   }
 
@@ -175,10 +175,10 @@ export class Guardian {
     metaData?: GuardianMetaData,
   ): UnknownGuardian<T[number] extends BaseGuardian<infer U> ? U : never> {
     if (!guardians || guardians.length === 0) {
-      throw new Error("oneOf requires at least one guardian");
+      throw new Error('oneOf requires at least one guardian');
     }
     if (!errorMessage || errorMessage.trim().length === 0) {
-      throw new Error("oneOf requires a non-empty error message");
+      throw new Error('oneOf requires a non-empty error message');
     }
 
     return new UnknownGuardian(undefined, metaData).process(
@@ -199,9 +199,9 @@ export class Guardian {
               errors.push(
                 new GuardianError(`Guardian ${i} threw unexpected error`, {
                   got: input,
-                  expected: "valid input for one of the oneOf members",
-                  comparison: "oneOf",
-                  type: "oneOf_validation",
+                  expected: 'valid input for one of the oneOf members',
+                  comparison: 'oneOf',
+                  type: 'oneOf_validation',
                 }),
               );
             }
@@ -211,9 +211,9 @@ export class Guardian {
         // If we get here, none of the guardians succeeded
         throw new GuardianError(errorMessage, {
           got: input,
-          expected: "value matching one of the oneOf types",
-          comparison: "oneOf",
-          type: "oneOf_validation",
+          expected: 'value matching one of the oneOf types',
+          comparison: 'oneOf',
+          type: 'oneOf_validation',
           cause: errors.reduce((acc, error, index) => {
             acc[`option_${index}`] = error;
             return acc;

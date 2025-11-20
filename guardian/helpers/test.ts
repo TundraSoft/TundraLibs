@@ -1,6 +1,6 @@
-import type { GuardianTransform } from "../types/mod.ts";
-import { GuardianError } from "../GuardianError.ts";
-import { isPromiseLike } from "./isPromiseLike.ts";
+import type { GuardianTransform } from '../types/mod.ts';
+import { GuardianError } from '../GuardianError.ts';
+import { isPromiseLike } from './isPromiseLike.ts';
 
 /**
  * Creates a function that tests a value against a predicate function
@@ -23,12 +23,12 @@ export const test = <T>(
       return Promise.resolve(result).then((testResult) => {
         if (!testResult) {
           throw new GuardianError(
-            error || "Test validation failed",
+            error || 'Test validation failed',
             {
               got: value,
-              comparison: "test",
+              comparison: 'test',
               expected,
-              type: "validation",
+              type: 'validation',
             },
           );
         }
@@ -38,12 +38,12 @@ export const test = <T>(
 
     if (!result) {
       throw new GuardianError(
-        error || "Test validation failed",
+        error || 'Test validation failed',
         {
           got: value,
-          comparison: "test",
+          comparison: 'test',
           expected,
-          type: "validation",
+          type: 'validation',
         },
       );
     }

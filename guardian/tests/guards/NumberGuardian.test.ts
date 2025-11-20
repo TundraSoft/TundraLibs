@@ -1,9 +1,9 @@
-import * as asserts from "$asserts";
-import { GuardianError, NumberGuardian } from "../../mod.ts";
+import * as asserts from '$asserts';
+import { GuardianError, NumberGuardian } from '../../mod.ts';
 
-Deno.test("guardian.NumberGuardian", async (t) => {
-  await t.step("basic functionality", async (t) => {
-    await t.step("should validate number type", () => {
+Deno.test('guardian.NumberGuardian', async (t) => {
+  await t.step('basic functionality', async (t) => {
+    await t.step('should validate number type', () => {
       const schema = new NumberGuardian();
 
       asserts.assertEquals(schema.parse(123), 123);
@@ -11,26 +11,26 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(-42), -42);
       asserts.assertEquals(schema.parse(0), 0);
 
-      asserts.assertThrows(() => schema.parse("123"), GuardianError);
+      asserts.assertThrows(() => schema.parse('123'), GuardianError);
       asserts.assertThrows(() => schema.parse(null), GuardianError);
       asserts.assertThrows(() => schema.parse(undefined), GuardianError);
       asserts.assertThrows(() => schema.parse(true), GuardianError);
     });
 
-    await t.step("should reject NaN", () => {
+    await t.step('should reject NaN', () => {
       const schema = new NumberGuardian();
       asserts.assertThrows(() => schema.parse(NaN), GuardianError);
     });
 
-    await t.step("should accept Infinity", () => {
+    await t.step('should accept Infinity', () => {
       const schema = new NumberGuardian();
       asserts.assertEquals(schema.parse(Infinity), Infinity);
       asserts.assertEquals(schema.parse(-Infinity), -Infinity);
     });
   });
 
-  await t.step("range validations", async (t) => {
-    await t.step("should validate minimum value", () => {
+  await t.step('range validations', async (t) => {
+    await t.step('should validate minimum value', () => {
       const schema = new NumberGuardian().min(10);
 
       asserts.assertEquals(schema.parse(10), 10);
@@ -39,7 +39,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(-5), GuardianError);
     });
 
-    await t.step("should validate maximum value", () => {
+    await t.step('should validate maximum value', () => {
       const schema = new NumberGuardian().max(100);
 
       asserts.assertEquals(schema.parse(100), 100);
@@ -48,7 +48,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(200), GuardianError);
     });
 
-    await t.step("should combine min and max", () => {
+    await t.step('should combine min and max', () => {
       const schema = new NumberGuardian().min(10).max(100);
 
       asserts.assertEquals(schema.parse(50), 50);
@@ -56,7 +56,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(150), GuardianError);
     });
 
-    await t.step("should validate range (inclusive)", () => {
+    await t.step('should validate range (inclusive)', () => {
       const schema = new NumberGuardian().range(10, 100);
 
       asserts.assertEquals(schema.parse(10), 10);
@@ -67,8 +67,8 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("sign validations", async (t) => {
-    await t.step("should validate positive numbers", () => {
+  await t.step('sign validations', async (t) => {
+    await t.step('should validate positive numbers', () => {
       const schema = new NumberGuardian().positive();
 
       asserts.assertEquals(schema.parse(1), 1);
@@ -77,7 +77,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(-1), GuardianError);
     });
 
-    await t.step("should validate negative numbers", () => {
+    await t.step('should validate negative numbers', () => {
       const schema = new NumberGuardian().negative();
 
       asserts.assertEquals(schema.parse(-1), -1);
@@ -87,8 +87,8 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("integer and finite validations", async (t) => {
-    await t.step("should validate integers", () => {
+  await t.step('integer and finite validations', async (t) => {
+    await t.step('should validate integers', () => {
       const schema = new NumberGuardian().integer();
 
       asserts.assertEquals(schema.parse(42), 42);
@@ -98,7 +98,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(0.1), GuardianError);
     });
 
-    await t.step("should validate finite numbers", () => {
+    await t.step('should validate finite numbers', () => {
       const schema = new NumberGuardian().finite();
 
       asserts.assertEquals(schema.parse(123), 123);
@@ -107,7 +107,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(-Infinity), GuardianError);
     });
 
-    await t.step("should validate safe integers", () => {
+    await t.step('should validate safe integers', () => {
       const schema = new NumberGuardian().safeInteger();
 
       asserts.assertEquals(schema.parse(42), 42);
@@ -127,8 +127,8 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("multipleOf validation", async (t) => {
-    await t.step("should validate multiples", () => {
+  await t.step('multipleOf validation', async (t) => {
+    await t.step('should validate multiples', () => {
       const schema = new NumberGuardian().multipleOf(5);
 
       asserts.assertEquals(schema.parse(0), 0);
@@ -139,7 +139,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(7), GuardianError);
     });
 
-    await t.step("should work with decimal multiples", () => {
+    await t.step('should work with decimal multiples', () => {
       const schema = new NumberGuardian().multipleOf(0.5);
 
       asserts.assertEquals(schema.parse(1.5), 1.5);
@@ -148,8 +148,8 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("advanced validations", async (t) => {
-    await t.step("should validate odd numbers", () => {
+  await t.step('advanced validations', async (t) => {
+    await t.step('should validate odd numbers', () => {
       const schema = new NumberGuardian().odd();
 
       asserts.assertEquals(schema.parse(1), 1);
@@ -160,7 +160,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(3.5), GuardianError); // not integer
     });
 
-    await t.step("should validate even numbers", () => {
+    await t.step('should validate even numbers', () => {
       const schema = new NumberGuardian().even();
 
       asserts.assertEquals(schema.parse(0), 0);
@@ -171,7 +171,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(2.5), GuardianError); // not integer
     });
 
-    await t.step("should validate prime numbers", () => {
+    await t.step('should validate prime numbers', () => {
       const schema = new NumberGuardian().prime();
 
       asserts.assertEquals(schema.parse(2), 2);
@@ -190,7 +190,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(2.5), GuardianError); // not integer
     });
 
-    await t.step("should validate non-zero numbers", () => {
+    await t.step('should validate non-zero numbers', () => {
       const schema = new NumberGuardian().nonZero();
 
       asserts.assertEquals(schema.parse(1), 1);
@@ -200,7 +200,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(0), GuardianError);
     });
 
-    await t.step("should validate port numbers", () => {
+    await t.step('should validate port numbers', () => {
       const schema = new NumberGuardian().validPort();
 
       asserts.assertEquals(schema.parse(0), 0);
@@ -214,7 +214,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(80.5), GuardianError); // not integer
     });
 
-    await t.step("should validate timestamp numbers", () => {
+    await t.step('should validate timestamp numbers', () => {
       const schema = new NumberGuardian().timestamp();
 
       const now = Date.now();
@@ -227,8 +227,8 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("mathematical transformations", async (t) => {
-    await t.step("should round numbers", () => {
+  await t.step('mathematical transformations', async (t) => {
+    await t.step('should round numbers', () => {
       const schema = new NumberGuardian().round();
 
       asserts.assertEquals(schema.parse(3.7), 4);
@@ -237,7 +237,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(-2.2), -2);
     });
 
-    await t.step("should floor numbers", () => {
+    await t.step('should floor numbers', () => {
       const schema = new NumberGuardian().floor();
 
       asserts.assertEquals(schema.parse(3.7), 3);
@@ -246,7 +246,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(-2.2), -3);
     });
 
-    await t.step("should ceil numbers", () => {
+    await t.step('should ceil numbers', () => {
       const schema = new NumberGuardian().ceil();
 
       asserts.assertEquals(schema.parse(3.7), 4);
@@ -255,7 +255,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(-2.2), -2);
     });
 
-    await t.step("should truncate numbers", () => {
+    await t.step('should truncate numbers', () => {
       const schema = new NumberGuardian().trunc();
 
       asserts.assertEquals(schema.parse(3.7), 3);
@@ -264,7 +264,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(-2.2), -2);
     });
 
-    await t.step("should get absolute value", () => {
+    await t.step('should get absolute value', () => {
       const schema = new NumberGuardian().abs();
 
       asserts.assertEquals(schema.parse(5), 5);
@@ -272,7 +272,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(0), 0);
     });
 
-    await t.step("should negate numbers", () => {
+    await t.step('should negate numbers', () => {
       const schema = new NumberGuardian().negate();
 
       asserts.assertEquals(schema.parse(5), -5);
@@ -281,7 +281,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(3.14), -3.14);
     });
 
-    await t.step("should clamp numbers to range", () => {
+    await t.step('should clamp numbers to range', () => {
       const schema = new NumberGuardian().clamp(0, 100);
 
       // Values within range remain unchanged
@@ -296,7 +296,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(999), 100);
     });
 
-    await t.step("should round to fixed decimal places", () => {
+    await t.step('should round to fixed decimal places', () => {
       const schema2 = new NumberGuardian().toFixed(2);
       const schema0 = new NumberGuardian().toFixed(0);
 
@@ -310,23 +310,23 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("type transformations", async (t) => {
-    await t.step("should convert number to string", () => {
+  await t.step('type transformations', async (t) => {
+    await t.step('should convert number to string', () => {
       const schema = new NumberGuardian().toString();
 
-      asserts.assertEquals(schema.parse(123), "123");
-      asserts.assertEquals(schema.parse(3.14), "3.14");
-      asserts.assertEquals(schema.parse(-42), "-42");
+      asserts.assertEquals(schema.parse(123), '123');
+      asserts.assertEquals(schema.parse(3.14), '3.14');
+      asserts.assertEquals(schema.parse(-42), '-42');
     });
 
-    await t.step("should convert number to string with radix", () => {
+    await t.step('should convert number to string with radix', () => {
       const schema = new NumberGuardian().toString(16);
 
-      asserts.assertEquals(schema.parse(255), "ff");
-      asserts.assertEquals(schema.parse(16), "10");
+      asserts.assertEquals(schema.parse(255), 'ff');
+      asserts.assertEquals(schema.parse(16), '10');
     });
 
-    await t.step("should convert number to BigInt", () => {
+    await t.step('should convert number to BigInt', () => {
       const schema = new NumberGuardian().toBigInt();
 
       asserts.assertEquals(schema.parse(123), 123n);
@@ -334,7 +334,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(3.14), GuardianError);
     });
 
-    await t.step("should convert number to Date", () => {
+    await t.step('should convert number to Date', () => {
       const schema = new NumberGuardian().toDate();
       const timestamp = Date.now();
 
@@ -346,8 +346,8 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("chained validations", async (t) => {
-    await t.step("should chain multiple validations", () => {
+  await t.step('chained validations', async (t) => {
+    await t.step('should chain multiple validations', () => {
       const schema = new NumberGuardian()
         .positive()
         .integer()
@@ -365,7 +365,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(7), GuardianError); // not multiple of 5
     });
 
-    await t.step("should chain transformations", () => {
+    await t.step('should chain transformations', () => {
       const schema = new NumberGuardian().abs().round();
 
       asserts.assertEquals(schema.parse(-3.7), 4);
@@ -373,8 +373,8 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("safe parsing", async (t) => {
-    await t.step("should return success result for valid input", () => {
+  await t.step('safe parsing', async (t) => {
+    await t.step('should return success result for valid input', () => {
       const schema = new NumberGuardian().positive();
       const result = schema.safeParse(42);
 
@@ -383,7 +383,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(data, 42);
     });
 
-    await t.step("should return error result for invalid input", () => {
+    await t.step('should return error result for invalid input', () => {
       const schema = new NumberGuardian().positive();
       const result = schema.safeParse(-1);
 
@@ -393,40 +393,40 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("error handling", async (t) => {
-    await t.step("should provide detailed error messages", () => {
+  await t.step('error handling', async (t) => {
+    await t.step('should provide detailed error messages', () => {
       const schema = new NumberGuardian().min(10);
 
       asserts.assertThrows(
         () => schema.parse(5),
         GuardianError,
-        "Number must be at least 10",
+        'Number must be at least 10',
       );
     });
 
-    await t.step("should support custom error messages", () => {
-      const schema = new NumberGuardian().min(10, "Too small!");
+    await t.step('should support custom error messages', () => {
+      const schema = new NumberGuardian().min(10, 'Too small!');
 
       asserts.assertThrows(
         () => schema.parse(5),
         GuardianError,
-        "Too small!",
+        'Too small!',
       );
     });
   });
 
-  await t.step("nullable and optional", async (t) => {
-    await t.step("should handle nullable numbers", () => {
+  await t.step('nullable and optional', async (t) => {
+    await t.step('should handle nullable numbers', () => {
       const schema = new NumberGuardian().positive().nullable();
 
       asserts.assertEquals(schema.parse(5), 5);
       asserts.assertEquals(schema.parse(null), null);
       asserts.assertThrows(() => schema.parse(undefined), GuardianError); // undefined not allowed in nullable
       asserts.assertThrows(() => schema.parse(-1), GuardianError); // still validates positive
-      asserts.assertThrows(() => schema.parse("123"), GuardianError); // still validates type
+      asserts.assertThrows(() => schema.parse('123'), GuardianError); // still validates type
     });
 
-    await t.step("should handle optional numbers", () => {
+    await t.step('should handle optional numbers', () => {
       const schema = new NumberGuardian().positive().optional();
 
       asserts.assertEquals(schema.parse(5), 5);
@@ -435,7 +435,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(-1), GuardianError); // still validates positive
     });
 
-    await t.step("should handle optional with default", () => {
+    await t.step('should handle optional with default', () => {
       const schema = new NumberGuardian().positive().optional(42);
 
       asserts.assertEquals(schema.parse(5), 5);
@@ -444,7 +444,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(-1), GuardianError);
     });
 
-    await t.step("should handle optional with function default", () => {
+    await t.step('should handle optional with function default', () => {
       let callCount = 0;
       const schema = new NumberGuardian().positive().optional(() => {
         callCount++;
@@ -461,7 +461,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(callCount, 2); // function called again
     });
 
-    await t.step("should handle nullable and optional separately", () => {
+    await t.step('should handle nullable and optional separately', () => {
       // Test nullable
       const nullableSchema = new NumberGuardian().positive().nullable();
       asserts.assertEquals(nullableSchema.parse(5), 5);
@@ -475,7 +475,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => optionalSchema.parse(-1), GuardianError);
     });
 
-    await t.step("should handle nullable().optional() chaining", () => {
+    await t.step('should handle nullable().optional() chaining', () => {
       const schema = new NumberGuardian().positive().nullable().optional(100);
 
       asserts.assertEquals(schema.parse(5), 5); // valid number
@@ -484,7 +484,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(-1), GuardianError); // validation still works
     });
 
-    await t.step("should handle optional().nullable() chaining", () => {
+    await t.step('should handle optional().nullable() chaining', () => {
       const schema = new NumberGuardian().positive().optional(100).nullable();
 
       asserts.assertEquals(schema.parse(5), 5); // valid number
@@ -493,7 +493,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(-1), GuardianError); // validation still works
     });
 
-    await t.step("should work with transformations", () => {
+    await t.step('should work with transformations', () => {
       // Test nullable with transformations
       const nullableSchema = new NumberGuardian().abs().nullable();
       asserts.assertEquals(nullableSchema.parse(-5), 5); // abs transformation applied
@@ -505,7 +505,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(optionalSchema.parse(undefined), 10);
     });
 
-    await t.step("should work with validations", () => {
+    await t.step('should work with validations', () => {
       const schema = new NumberGuardian().range(1, 100).nullable();
 
       asserts.assertEquals(schema.parse(50), 50);
@@ -515,8 +515,8 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("complex chaining scenarios", async (t) => {
-    await t.step("should chain new methods with existing ones", () => {
+  await t.step('complex chaining scenarios', async (t) => {
+    await t.step('should chain new methods with existing ones', () => {
       const schema = new NumberGuardian()
         .range(1, 1000)
         .odd()
@@ -532,7 +532,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(0), GuardianError); // not in range
     });
 
-    await t.step("should chain transformations with validations", () => {
+    await t.step('should chain transformations with validations', () => {
       const schema = new NumberGuardian()
         .abs() // transform: make positive
         .clamp(0, 100) // transform: limit to 0-100
@@ -550,8 +550,8 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("new validation methods", async (t) => {
-    await t.step("power validation", () => {
+  await t.step('new validation methods', async (t) => {
+    await t.step('power validation', () => {
       const schema = new NumberGuardian().power();
 
       // Perfect powers (any base)
@@ -572,7 +572,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(0), GuardianError);
     });
 
-    await t.step("power validation with specific base", () => {
+    await t.step('power validation with specific base', () => {
       const schema = new NumberGuardian().power(2);
 
       asserts.assertEquals(schema.parse(4), 4); // 2^2
@@ -583,7 +583,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(5), GuardianError);
     });
 
-    await t.step("between validation", () => {
+    await t.step('between validation', () => {
       const schema = new NumberGuardian().between(5, 10);
 
       asserts.assertEquals(schema.parse(5), 5);
@@ -594,7 +594,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(10.1), GuardianError);
     });
 
-    await t.step("between validation exclusive", () => {
+    await t.step('between validation exclusive', () => {
       const schema = new NumberGuardian().between(5, 10, false);
 
       asserts.assertEquals(schema.parse(7.5), 7.5);
@@ -605,7 +605,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(4.9), GuardianError);
     });
 
-    await t.step("latitude validation", () => {
+    await t.step('latitude validation', () => {
       const schema = new NumberGuardian().latitude();
 
       asserts.assertEquals(schema.parse(0), 0);
@@ -618,7 +618,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(180), GuardianError);
     });
 
-    await t.step("longitude validation", () => {
+    await t.step('longitude validation', () => {
       const schema = new NumberGuardian().longitude();
 
       asserts.assertEquals(schema.parse(0), 0);
@@ -632,25 +632,25 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("new transformation methods", async (t) => {
-    await t.step("formatCurrency transformation", () => {
+  await t.step('new transformation methods', async (t) => {
+    await t.step('formatCurrency transformation', () => {
       const schema = new NumberGuardian().formatCurrency();
 
       // Note: This returns a number, not a string
       const result = schema.parse(1234.56);
-      asserts.assertEquals(typeof result, "number");
+      asserts.assertEquals(typeof result, 'number');
       asserts.assertEquals(result, 1234.56);
     });
 
-    await t.step("formatCurrency with different locale", () => {
-      const schema = new NumberGuardian().formatCurrency("de-DE", "EUR");
+    await t.step('formatCurrency with different locale', () => {
+      const schema = new NumberGuardian().formatCurrency('de-DE', 'EUR');
 
       const result = schema.parse(1234.56);
-      asserts.assertEquals(typeof result, "number");
+      asserts.assertEquals(typeof result, 'number');
       asserts.assertEquals(result, 1234.56);
     });
 
-    await t.step("formatPercentage transformation", () => {
+    await t.step('formatPercentage transformation', () => {
       const schema = new NumberGuardian().formatPercentage();
 
       asserts.assertEquals(schema.parse(0.1234), 12.34);
@@ -658,14 +658,14 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(1), 100);
     });
 
-    await t.step("formatPercentage with custom decimals", () => {
+    await t.step('formatPercentage with custom decimals', () => {
       const schema = new NumberGuardian().formatPercentage(0);
 
       asserts.assertEquals(schema.parse(0.1234), 12);
       asserts.assertEquals(schema.parse(0.5678), 57);
     });
 
-    await t.step("addCommas transformation", () => {
+    await t.step('addCommas transformation', () => {
       const schema = new NumberGuardian().addCommas();
 
       // This returns a number (commas are for display, not storage)
@@ -673,7 +673,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(1234567.89), 1234567.89);
     });
 
-    await t.step("padZeros transformation", () => {
+    await t.step('padZeros transformation', () => {
       const schema = new NumberGuardian().padZeros(5);
 
       asserts.assertEquals(schema.parse(123), 123);
@@ -681,7 +681,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(123456), 123456); // longer than pad length
     });
 
-    await t.step("padZeros with different lengths", () => {
+    await t.step('padZeros with different lengths', () => {
       const shortSchema = new NumberGuardian().padZeros(3);
       const longSchema = new NumberGuardian().padZeros(8);
 
@@ -690,8 +690,8 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("nullable and optional scenarios for new methods", async (t) => {
-    await t.step("nullable power validation", () => {
+  await t.step('nullable and optional scenarios for new methods', async (t) => {
+    await t.step('nullable power validation', () => {
       const schema = new NumberGuardian().power().nullable();
 
       asserts.assertEquals(schema.parse(null), null);
@@ -700,7 +700,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(5), GuardianError);
     });
 
-    await t.step("optional between validation", () => {
+    await t.step('optional between validation', () => {
       const schema = new NumberGuardian().between(5, 10).optional();
 
       asserts.assertEquals(schema.parse(undefined), undefined);
@@ -709,14 +709,14 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(15), GuardianError);
     });
 
-    await t.step("optional with default formatPercentage", () => {
+    await t.step('optional with default formatPercentage', () => {
       const schema = new NumberGuardian().formatPercentage().optional(50);
 
       asserts.assertEquals(schema.parse(undefined), 5000); // 50 * 100
       asserts.assertEquals(schema.parse(0.25), 25);
     });
 
-    await t.step("nullable latitude validation", () => {
+    await t.step('nullable latitude validation', () => {
       const schema = new NumberGuardian().latitude().nullable();
 
       asserts.assertEquals(schema.parse(null), null);
@@ -726,8 +726,8 @@ Deno.test("guardian.NumberGuardian", async (t) => {
     });
   });
 
-  await t.step("chaining with new methods", async (t) => {
-    await t.step("complex validation chain", () => {
+  await t.step('chaining with new methods', async (t) => {
+    await t.step('complex validation chain', () => {
       const schema = new NumberGuardian()
         .positive()
         .between(1, 1000)
@@ -744,7 +744,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertThrows(() => schema.parse(4.5), GuardianError); // not integer
     });
 
-    await t.step("transformation chain", () => {
+    await t.step('transformation chain', () => {
       const schema = new NumberGuardian()
         .abs()
         .clamp(0, 100)
@@ -755,7 +755,7 @@ Deno.test("guardian.NumberGuardian", async (t) => {
       asserts.assertEquals(schema.parse(2), 200); // clamped to 100, then 200%
     });
 
-    await t.step("geographic coordinate validation", () => {
+    await t.step('geographic coordinate validation', () => {
       const latSchema = new NumberGuardian().latitude().toFixed(6);
       const lngSchema = new NumberGuardian().longitude().toFixed(6);
 

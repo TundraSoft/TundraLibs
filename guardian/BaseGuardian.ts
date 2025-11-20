@@ -1,4 +1,4 @@
-import { GuardianError } from "./GuardianError.ts";
+import { GuardianError } from './GuardianError.ts';
 import {
   equals,
   isIn,
@@ -6,12 +6,12 @@ import {
   isPromiseLike,
   notEquals,
   test,
-} from "./helpers/mod.ts";
+} from './helpers/mod.ts';
 import type {
   GuardianMetaData,
   GuardianSafeParseResult,
   GuardianTransform,
-} from "./types/mod.ts";
+} from './types/mod.ts';
 
 /**
  * Abstract base class for all Guardian validators.
@@ -35,7 +35,7 @@ import type {
 export abstract class BaseGuardian<T> {
   protected _composedTransform: GuardianTransform<unknown, T>;
   protected _metaData: GuardianMetaData | undefined = undefined;
-  protected readonly _type: string = "unknown";
+  protected readonly _type: string = 'unknown';
 
   /**
    * Gets the metadata associated with this guardian.
@@ -158,23 +158,23 @@ export abstract class BaseGuardian<T> {
     // Prevent further processing after nullable() or optional()
     if (this._metaData?.isNullable) {
       throw new GuardianError(
-        "Cannot call process() after nullable(). nullable() is a finisher method.",
+        'Cannot call process() after nullable(). nullable() is a finisher method.',
         {
-          expected: "process() before nullable()",
-          got: "process() after nullable()",
-          comparison: "method_order",
-          type: "validation",
+          expected: 'process() before nullable()',
+          got: 'process() after nullable()',
+          comparison: 'method_order',
+          type: 'validation',
         },
       );
     }
     if (this._metaData?.isOptional) {
       throw new GuardianError(
-        "Cannot call process() after optional(). optional() is a finisher method.",
+        'Cannot call process() after optional(). optional() is a finisher method.',
         {
-          expected: "process() before optional()",
-          got: "process() after optional()",
-          comparison: "method_order",
-          type: "validation",
+          expected: 'process() before optional()',
+          got: 'process() after optional()',
+          comparison: 'method_order',
+          type: 'validation',
         },
       );
     }
@@ -236,23 +236,23 @@ export abstract class BaseGuardian<T> {
     // Prevent validation after nullable() or optional()
     if (this._metaData?.isNullable) {
       throw new GuardianError(
-        "Cannot call test() after nullable(). nullable() is a finisher method.",
+        'Cannot call test() after nullable(). nullable() is a finisher method.',
         {
-          expected: "test() before nullable()",
-          got: "test() after nullable()",
-          comparison: "method_order",
-          type: "validation",
+          expected: 'test() before nullable()',
+          got: 'test() after nullable()',
+          comparison: 'method_order',
+          type: 'validation',
         },
       );
     }
     if (this._metaData?.isOptional) {
       throw new GuardianError(
-        "Cannot call test() after optional(). optional() is a finisher method.",
+        'Cannot call test() after optional(). optional() is a finisher method.',
         {
-          expected: "test() before optional()",
-          got: "test() after optional()",
-          comparison: "method_order",
-          type: "validation",
+          expected: 'test() before optional()',
+          got: 'test() after optional()',
+          comparison: 'method_order',
+          type: 'validation',
         },
       );
     }
@@ -346,12 +346,12 @@ export abstract class BaseGuardian<T> {
     // Prevent multiple nullable() calls
     if (this._metaData?.isNullable) {
       throw new GuardianError(
-        "nullable() has already been called on this guardian.",
+        'nullable() has already been called on this guardian.',
         {
-          expected: "single nullable() call",
-          got: "multiple nullable() calls",
-          comparison: "method_order",
-          type: "validation",
+          expected: 'single nullable() call',
+          got: 'multiple nullable() calls',
+          comparison: 'method_order',
+          type: 'validation',
         },
       );
     }
@@ -416,12 +416,12 @@ export abstract class BaseGuardian<T> {
     // Prevent multiple optional() calls
     if (this._metaData?.isOptional) {
       throw new GuardianError(
-        "optional() has already been called on this guardian.",
+        'optional() has already been called on this guardian.',
         {
-          expected: "single optional() call",
-          got: "multiple optional() calls",
-          comparison: "method_order",
-          type: "validation",
+          expected: 'single optional() call',
+          got: 'multiple optional() calls',
+          comparison: 'method_order',
+          type: 'validation',
         },
       );
     }
@@ -441,10 +441,10 @@ export abstract class BaseGuardian<T> {
           return undefined as D | undefined;
         }
 
-        if (typeof _defaultValue === "function") {
+        if (typeof _defaultValue === 'function') {
           const result = (_defaultValue as () => D | Promise<D>)();
           // If the result is a promise, handle it properly
-          if (result && typeof result === "object" && "then" in result) {
+          if (result && typeof result === 'object' && 'then' in result) {
             return (result as Promise<D>).then((resolvedValue) =>
               currentTransform(resolvedValue)
             ) as Promise<T>;
@@ -513,12 +513,12 @@ export abstract class BaseGuardian<T> {
   parse(input: unknown): T {
     if (this._metaData?.isAsync) {
       throw new GuardianError(
-        "Cannot use parse() with async validation steps. Use parseAsync() instead.",
+        'Cannot use parse() with async validation steps. Use parseAsync() instead.',
         {
-          expected: "synchronous guardian",
-          got: "guardian with async steps",
-          comparison: "sync",
-          type: "usage",
+          expected: 'synchronous guardian',
+          got: 'guardian with async steps',
+          comparison: 'sync',
+          type: 'usage',
         },
       );
     }
@@ -532,12 +532,12 @@ export abstract class BaseGuardian<T> {
         throw error;
       } else {
         throw new GuardianError(
-          "Validation failed",
+          'Validation failed',
           {
-            expected: "valid value",
+            expected: 'valid value',
             got: input,
-            comparison: "custom",
-            type: "validation",
+            comparison: 'custom',
+            type: 'validation',
           },
         );
       }
@@ -565,12 +565,12 @@ export abstract class BaseGuardian<T> {
         throw error;
       } else {
         throw new GuardianError(
-          "Validation failed",
+          'Validation failed',
           {
-            expected: "valid value",
+            expected: 'valid value',
             got: input,
-            comparison: "custom",
-            type: "validation",
+            comparison: 'custom',
+            type: 'validation',
           },
         );
       }
@@ -603,12 +603,12 @@ export abstract class BaseGuardian<T> {
       } else {
         return [
           new GuardianError(
-            "Unexpected error during validation",
+            'Unexpected error during validation',
             {
-              expected: "valid input",
+              expected: 'valid input',
               got: input,
-              comparison: "unknown",
-              type: "unexpected",
+              comparison: 'unknown',
+              type: 'unexpected',
             },
           ),
           undefined,
@@ -635,12 +635,12 @@ export abstract class BaseGuardian<T> {
       } else {
         return [
           new GuardianError(
-            "Unexpected error during validation",
+            'Unexpected error during validation',
             {
-              expected: "valid input",
+              expected: 'valid input',
               got: input,
-              comparison: "unknown",
-              type: "unexpected",
+              comparison: 'unknown',
+              type: 'unexpected',
             },
           ),
           undefined,
@@ -746,14 +746,14 @@ export abstract class BaseGuardian<T> {
       for (const [key, value] of Object.entries(this._metaData)) {
         if (
           ![
-            "description",
-            "title",
-            "examples",
-            "deprecated",
-            "format",
-            "isAsync",
-            "isNullable",
-            "isOptional",
+            'description',
+            'title',
+            'examples',
+            'deprecated',
+            'format',
+            'isAsync',
+            'isNullable',
+            'isOptional',
           ].includes(key)
         ) {
           schema[key] = value;
@@ -777,7 +777,7 @@ export abstract class BaseGuardian<T> {
    * ```
    */
   toMarkdown(): string {
-    let markdown = "";
+    let markdown = '';
 
     // Title
     if (this._metaData?.title) {
@@ -794,8 +794,8 @@ export abstract class BaseGuardian<T> {
     if (this._metaData?.format) {
       typeInfo += ` (${this._metaData.format})`;
     }
-    if (this._metaData?.isNullable) typeInfo += ", nullable";
-    if (this._metaData?.isOptional) typeInfo += ", optional";
+    if (this._metaData?.isNullable) typeInfo += ', nullable';
+    if (this._metaData?.isOptional) typeInfo += ', optional';
     markdown += `${typeInfo}\n\n`;
 
     // Examples
@@ -803,8 +803,8 @@ export abstract class BaseGuardian<T> {
       markdown += `**Examples:** `;
       markdown += this._metaData.examples.map((ex) =>
         `\`${JSON.stringify(ex)}\``
-      ).join(", ");
-      markdown += "\n\n";
+      ).join(', ');
+      markdown += '\n\n';
     }
 
     // Deprecation warning

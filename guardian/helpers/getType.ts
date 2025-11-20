@@ -57,19 +57,19 @@
  */
 export const getType = (value: unknown): string => {
   if (value === null) {
-    return "null";
+    return 'null';
   }
 
   if (Array.isArray(value)) {
-    return "array";
+    return 'array';
   }
 
   if (value instanceof Date) {
-    return "Date";
+    return 'Date';
   }
 
   if (value instanceof RegExp) {
-    return "RegExp";
+    return 'RegExp';
   }
 
   return typeof value;

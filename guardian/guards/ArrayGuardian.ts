@@ -1,7 +1,7 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { GuardianError, type GuardianErrorMeta } from "../GuardianError.ts";
-import type { GuardianMetaData } from "../types/mod.ts";
-import { StringGuardian } from "./StringGuardian.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { GuardianError, type GuardianErrorMeta } from '../GuardianError.ts';
+import type { GuardianMetaData } from '../types/mod.ts';
+import { StringGuardian } from './StringGuardian.ts';
 
 /**
  * Guardian for array validation and transformation.
@@ -28,7 +28,7 @@ import { StringGuardian } from "./StringGuardian.ts";
  * @since 1.0.0
  */
 export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
-  protected override readonly _type = "array";
+  protected override readonly _type = 'array';
   private _elementGuardian?: BaseGuardian<T>;
 
   /**
@@ -41,10 +41,10 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
     super((input: unknown) => {
       if (!Array.isArray(input)) {
         throw new GuardianError(`Expected array but got ${typeof input}`, {
-          expected: "array",
+          expected: 'array',
           got: typeof input,
-          comparison: "type",
-          type: "array",
+          comparison: 'type',
+          type: 'array',
         });
       }
 
@@ -61,7 +61,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
                 `Array element at index ${i}: ${error.message}`,
                 {
                   ...error.context,
-                  type: "array_element",
+                  type: 'array_element',
                 } as GuardianErrorMeta,
               );
             }
@@ -108,8 +108,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
             {
               expected: length,
               got: value.length,
-              comparison: "equals",
-              type: "validation",
+              comparison: 'equals',
+              type: 'validation',
             },
           );
         }
@@ -142,8 +142,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
             {
               expected: minLength,
               got: value.length,
-              comparison: "gte",
-              type: "validation",
+              comparison: 'gte',
+              type: 'validation',
             },
           );
         }
@@ -181,8 +181,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
             {
               expected: maxLength,
               got: value.length,
-              comparison: "lte",
-              type: "validation",
+              comparison: 'lte',
+              type: 'validation',
             },
           );
         }
@@ -210,7 +210,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   nonEmpty(message?: string): ArrayGuardian<T> {
-    return this.minLength(1, message || "Array must not be empty");
+    return this.minLength(1, message || 'Array must not be empty');
   }
 
   //#endregion
@@ -250,13 +250,13 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
           throw new GuardianError(
             message ||
               `Array must contain unique elements, found duplicates: ${
-                duplicates.join(", ")
+                duplicates.join(', ')
               }`,
             {
-              expected: "unique elements",
+              expected: 'unique elements',
               got: duplicates,
-              comparison: "unique",
-              type: "validation",
+              comparison: 'unique',
+              type: 'validation',
             },
           );
         }
@@ -286,8 +286,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
         throw new GuardianError(_message || `Array must include ${element}`, {
           expected: `array including ${element}`,
           got: value,
-          comparison: "includes",
-          type: "validation",
+          comparison: 'includes',
+          type: 'validation',
         });
       }
       return value;
@@ -316,8 +316,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
           {
             expected: `array excluding ${element}`,
             got: value,
-            comparison: "excludes",
-            type: "validation",
+            comparison: 'excludes',
+            type: 'validation',
           },
         );
       }
@@ -477,10 +477,10 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
           errorMessage ||
             `Array must not contain null or undefined values, found at index ${nullIndex}`,
           {
-            expected: "array without null/undefined values",
+            expected: 'array without null/undefined values',
             got: `null/undefined at index ${nullIndex}`,
-            comparison: "noNulls",
-            type: "validation",
+            comparison: 'noNulls',
+            type: 'validation',
           },
         );
       }
@@ -508,7 +508,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * deepFlatten.parse([1, [2, [3, 4]], 5]); // "1,2,3,4,5"
    * ```
    */
-  flatten(joiner: string = ",", depth: number = 1): StringGuardian {
+  flatten(joiner: string = ',', depth: number = 1): StringGuardian {
     return this.process((value: Array<T>) => {
       const flattenArray = (arr: any[], currentDepth: number): any[] => {
         const result: any[] = [];
@@ -546,7 +546,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
           item !== false &&
           item !== 0 &&
           item !== 0n &&
-          item !== "" &&
+          item !== '' &&
           !Number.isNaN(item);
       });
     }) as ArrayGuardian<NonNullable<T>>;

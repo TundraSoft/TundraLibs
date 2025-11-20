@@ -1,5 +1,5 @@
-import type { GuardianTransform } from "../types/mod.ts";
-import { GuardianError } from "../GuardianError.ts";
+import type { GuardianTransform } from '../types/mod.ts';
+import { GuardianError } from '../GuardianError.ts';
 
 /**
  * Creates a guardian that validates a value is not in a specified array
@@ -27,13 +27,13 @@ export const isNotIn = <T>(
       throw new GuardianError(
         error ||
           `Expected value to not be in (${
-            uniqueExpected.join(", ")
+            uniqueExpected.join(', ')
           }), got ${value}`,
         {
           got: value,
-          expected: `not in (${uniqueExpected.join(", ")})`,
-          comparison: "notIn",
-          type: "validation",
+          expected: `not in (${uniqueExpected.join(', ')})`,
+          comparison: 'notIn',
+          type: 'validation',
         },
       );
     }

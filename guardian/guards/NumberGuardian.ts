@@ -1,9 +1,9 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { GuardianError } from "../GuardianError.ts";
-import type { GuardianMetaData, GuardianTransform } from "../types/mod.ts";
-import { DateGuardian } from "./DateGuardian.ts";
-import { StringGuardian } from "./StringGuardian.ts";
-import { BigIntGuardian } from "./BigIntGuardian.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { GuardianError } from '../GuardianError.ts';
+import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
+import { DateGuardian } from './DateGuardian.ts';
+import { StringGuardian } from './StringGuardian.ts';
+import { BigIntGuardian } from './BigIntGuardian.ts';
 
 /**
  * Guardian for number validation and transformation.
@@ -22,7 +22,7 @@ import { BigIntGuardian } from "./BigIntGuardian.ts";
  * @since 1.0.0
  */
 export class NumberGuardian extends BaseGuardian<number> {
-  protected override readonly _type = "number";
+  protected override readonly _type = 'number';
   /**
    * Creates a new NumberGuardian instance.
    *
@@ -34,20 +34,20 @@ export class NumberGuardian extends BaseGuardian<number> {
     metaData?: GuardianMetaData,
   ) {
     const defaultNumberValidation = (input: unknown) => {
-      if (typeof input !== "number") {
+      if (typeof input !== 'number') {
         throw new GuardianError(`Expected number but got ${typeof input}`, {
-          expected: "number",
+          expected: 'number',
           got: typeof input,
-          comparison: "type",
-          type: "number",
+          comparison: 'type',
+          type: 'number',
         });
       }
       if (isNaN(input)) {
-        throw new GuardianError("Number cannot be NaN", {
-          expected: "valid number",
-          got: "NaN",
-          comparison: "nan",
-          type: "number",
+        throw new GuardianError('Number cannot be NaN', {
+          expected: 'valid number',
+          got: 'NaN',
+          comparison: 'nan',
+          type: 'number',
         });
       }
       return input;
@@ -92,8 +92,8 @@ export class NumberGuardian extends BaseGuardian<number> {
           {
             expected: `>= ${value}`,
             got: num,
-            comparison: "min",
-            type: "validation",
+            comparison: 'min',
+            type: 'validation',
           },
         );
       }
@@ -128,8 +128,8 @@ export class NumberGuardian extends BaseGuardian<number> {
           {
             expected: `<= ${value}`,
             got: num,
-            comparison: "max",
-            type: "validation",
+            comparison: 'max',
+            type: 'validation',
           },
         );
       }
@@ -166,8 +166,8 @@ export class NumberGuardian extends BaseGuardian<number> {
           {
             expected: `${min} <= value <= ${max}`,
             got: num,
-            comparison: "range",
-            type: "validation",
+            comparison: 'range',
+            type: 'validation',
           },
         );
       }
@@ -195,12 +195,12 @@ export class NumberGuardian extends BaseGuardian<number> {
     const result = this.process((num: number) => {
       if (num <= 0) {
         throw new GuardianError(
-          errorMessage || "Number must be positive (> 0)",
+          errorMessage || 'Number must be positive (> 0)',
           {
-            expected: "> 0",
+            expected: '> 0',
             got: num,
-            comparison: "positive",
-            type: "validation",
+            comparison: 'positive',
+            type: 'validation',
           },
         );
       }
@@ -224,12 +224,12 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (num >= 0) {
         throw new GuardianError(
-          errorMessage || "Number must be negative (< 0)",
+          errorMessage || 'Number must be negative (< 0)',
           {
-            expected: "< 0",
+            expected: '< 0',
             got: num,
-            comparison: "negative",
-            type: "validation",
+            comparison: 'negative',
+            type: 'validation',
           },
         );
       }
@@ -257,11 +257,11 @@ export class NumberGuardian extends BaseGuardian<number> {
   integer(errorMessage?: string): NumberGuardian {
     return this.process((num: number) => {
       if (!Number.isInteger(num)) {
-        throw new GuardianError(errorMessage || "Number must be an integer", {
-          expected: "integer",
+        throw new GuardianError(errorMessage || 'Number must be an integer', {
+          expected: 'integer',
           got: num,
-          comparison: "integer",
-          type: "validation",
+          comparison: 'integer',
+          type: 'validation',
         });
       }
       return num;
@@ -277,11 +277,11 @@ export class NumberGuardian extends BaseGuardian<number> {
   finite(errorMessage?: string): NumberGuardian {
     return this.process((num: number) => {
       if (!Number.isFinite(num)) {
-        throw new GuardianError(errorMessage || "Number must be finite", {
-          expected: "finite number",
+        throw new GuardianError(errorMessage || 'Number must be finite', {
+          expected: 'finite number',
           got: num,
-          comparison: "finite",
-          type: "validation",
+          comparison: 'finite',
+          type: 'validation',
         });
       }
       return num;
@@ -304,8 +304,8 @@ export class NumberGuardian extends BaseGuardian<number> {
             expected:
               `safe integer (${Number.MIN_SAFE_INTEGER} to ${Number.MAX_SAFE_INTEGER})`,
             got: num,
-            comparison: "safeInteger",
-            type: "validation",
+            comparison: 'safeInteger',
+            type: 'validation',
           },
         );
       }
@@ -335,8 +335,8 @@ export class NumberGuardian extends BaseGuardian<number> {
           {
             expected: `multiple of ${divisor}`,
             got: num,
-            comparison: "multipleOf",
-            type: "validation",
+            comparison: 'multipleOf',
+            type: 'validation',
           },
         );
       }
@@ -354,12 +354,12 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (!Number.isInteger(num) || num % 2 === 0) {
         throw new GuardianError(
-          errorMessage || "Number must be odd",
+          errorMessage || 'Number must be odd',
           {
-            expected: "odd integer",
+            expected: 'odd integer',
             got: num,
-            comparison: "odd",
-            type: "validation",
+            comparison: 'odd',
+            type: 'validation',
           },
         );
       }
@@ -377,12 +377,12 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (!Number.isInteger(num) || num % 2 !== 0) {
         throw new GuardianError(
-          errorMessage || "Number must be even",
+          errorMessage || 'Number must be even',
           {
-            expected: "even integer",
+            expected: 'even integer',
             got: num,
-            comparison: "even",
-            type: "validation",
+            comparison: 'even',
+            type: 'validation',
           },
         );
       }
@@ -401,12 +401,12 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (!Number.isInteger(num) || num < 2) {
         throw new GuardianError(
-          errorMessage || "Number must be a prime number (integer >= 2)",
+          errorMessage || 'Number must be a prime number (integer >= 2)',
           {
-            expected: "prime number",
+            expected: 'prime number',
             got: num,
-            comparison: "prime",
-            type: "validation",
+            comparison: 'prime',
+            type: 'validation',
           },
         );
       }
@@ -414,12 +414,12 @@ export class NumberGuardian extends BaseGuardian<number> {
       if (num === 2) return num; // 2 is prime
       if (num % 2 === 0) {
         throw new GuardianError(
-          errorMessage || "Number must be a prime number",
+          errorMessage || 'Number must be a prime number',
           {
-            expected: "prime number",
+            expected: 'prime number',
             got: num,
-            comparison: "prime",
-            type: "validation",
+            comparison: 'prime',
+            type: 'validation',
           },
         );
       }
@@ -428,12 +428,12 @@ export class NumberGuardian extends BaseGuardian<number> {
       for (let i = 3; i <= Math.sqrt(num); i += 2) {
         if (num % i === 0) {
           throw new GuardianError(
-            errorMessage || "Number must be a prime number",
+            errorMessage || 'Number must be a prime number',
             {
-              expected: "prime number",
+              expected: 'prime number',
               got: num,
-              comparison: "prime",
-              type: "validation",
+              comparison: 'prime',
+              type: 'validation',
             },
           );
         }
@@ -453,12 +453,12 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (num === 0) {
         throw new GuardianError(
-          errorMessage || "Number must not be zero",
+          errorMessage || 'Number must not be zero',
           {
-            expected: "non-zero number",
+            expected: 'non-zero number',
             got: num,
-            comparison: "nonZero",
-            type: "validation",
+            comparison: 'nonZero',
+            type: 'validation',
           },
         );
       }
@@ -476,12 +476,12 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (!Number.isInteger(num) || num < 0 || num > 65535) {
         throw new GuardianError(
-          errorMessage || "Number must be a valid port (0-65535)",
+          errorMessage || 'Number must be a valid port (0-65535)',
           {
-            expected: "valid port (0-65535)",
+            expected: 'valid port (0-65535)',
             got: num,
-            comparison: "validPort",
-            type: "validation",
+            comparison: 'validPort',
+            type: 'validation',
           },
         );
       }
@@ -500,12 +500,12 @@ export class NumberGuardian extends BaseGuardian<number> {
       if (!Number.isInteger(num) || num < 0) {
         throw new GuardianError(
           errorMessage ||
-            "Number must be a valid timestamp (non-negative integer)",
+            'Number must be a valid timestamp (non-negative integer)',
           {
-            expected: "valid timestamp",
+            expected: 'valid timestamp',
             got: num,
-            comparison: "timestamp",
-            type: "validation",
+            comparison: 'timestamp',
+            type: 'validation',
           },
         );
       }
@@ -514,12 +514,12 @@ export class NumberGuardian extends BaseGuardian<number> {
       const date = new Date(num);
       if (isNaN(date.getTime())) {
         throw new GuardianError(
-          errorMessage || "Number must be a valid timestamp",
+          errorMessage || 'Number must be a valid timestamp',
           {
-            expected: "valid timestamp",
+            expected: 'valid timestamp',
             got: num,
-            comparison: "timestamp",
-            type: "validation",
+            comparison: 'timestamp',
+            type: 'validation',
           },
         );
       }
@@ -540,12 +540,12 @@ export class NumberGuardian extends BaseGuardian<number> {
       if (!Number.isInteger(num) || num < 1) {
         throw new GuardianError(
           errorMessage ||
-            "Number must be a positive integer to check for perfect power",
+            'Number must be a positive integer to check for perfect power',
           {
-            expected: "positive integer",
+            expected: 'positive integer',
             got: num,
-            comparison: "power",
-            type: "validation",
+            comparison: 'power',
+            type: 'validation',
           },
         );
       }
@@ -553,11 +553,11 @@ export class NumberGuardian extends BaseGuardian<number> {
       if (base !== undefined) {
         // Check if num is a perfect power of specific base
         if (base <= 1) {
-          throw new GuardianError("Base must be greater than 1", {
-            expected: "base > 1",
+          throw new GuardianError('Base must be greater than 1', {
+            expected: 'base > 1',
             got: base,
-            comparison: "base",
-            type: "validation",
+            comparison: 'base',
+            type: 'validation',
           });
         }
         const logResult = Math.log(num) / Math.log(base);
@@ -567,8 +567,8 @@ export class NumberGuardian extends BaseGuardian<number> {
             {
               expected: `perfect power of ${base}`,
               got: num,
-              comparison: "power",
-              type: "validation",
+              comparison: 'power',
+              type: 'validation',
             },
           );
         }
@@ -598,12 +598,12 @@ export class NumberGuardian extends BaseGuardian<number> {
 
         if (!isPerfectPower) {
           throw new GuardianError(
-            errorMessage || "Number must be a perfect power",
+            errorMessage || 'Number must be a perfect power',
             {
-              expected: "perfect power",
+              expected: 'perfect power',
               got: num,
-              comparison: "power",
-              type: "validation",
+              comparison: 'power',
+              type: 'validation',
             },
           );
         }
@@ -637,7 +637,7 @@ export class NumberGuardian extends BaseGuardian<number> {
         const boundsStr = inclusive
           ? `${min} <= value <= ${max}`
           : `${min} < value < ${max}`;
-        const boundsDesc = inclusive ? "inclusive" : "exclusive";
+        const boundsDesc = inclusive ? 'inclusive' : 'exclusive';
 
         throw new GuardianError(
           errorMessage ||
@@ -645,8 +645,8 @@ export class NumberGuardian extends BaseGuardian<number> {
           {
             expected: boundsStr,
             got: num,
-            comparison: "between",
-            type: "validation",
+            comparison: 'between',
+            type: 'validation',
           },
         );
       }
@@ -664,12 +664,12 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (num < -90 || num > 90) {
         throw new GuardianError(
-          errorMessage || "Number must be a valid latitude (-90 to 90)",
+          errorMessage || 'Number must be a valid latitude (-90 to 90)',
           {
-            expected: "valid latitude (-90 to 90)",
+            expected: 'valid latitude (-90 to 90)',
             got: num,
-            comparison: "latitude",
-            type: "validation",
+            comparison: 'latitude',
+            type: 'validation',
           },
         );
       }
@@ -687,12 +687,12 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (num < -180 || num > 180) {
         throw new GuardianError(
-          errorMessage || "Number must be a valid longitude (-180 to 180)",
+          errorMessage || 'Number must be a valid longitude (-180 to 180)',
           {
-            expected: "valid longitude (-180 to 180)",
+            expected: 'valid longitude (-180 to 180)',
             got: num,
-            comparison: "longitude",
-            type: "validation",
+            comparison: 'longitude',
+            type: 'validation',
           },
         );
       }
@@ -825,11 +825,11 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @param currency - Currency code (defaults to 'USD')
    * @returns This NumberGuardian (mutated) or new instance if immutable
    */
-  formatCurrency(locale = "en-US", currency = "USD"): NumberGuardian {
+  formatCurrency(locale = 'en-US', currency = 'USD'): NumberGuardian {
     return this.process(
       (num: number) => {
         const _formatter = new Intl.NumberFormat(locale, {
-          style: "currency",
+          style: 'currency',
           currency: currency,
         });
         // Note: This method preserves the original number value for calculations
@@ -860,8 +860,8 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process(
       (num: number) => {
         // Convert to string with commas, then back to number (removes commas but preserves value)
-        const formatted = num.toLocaleString("en-US");
-        return parseFloat(formatted.replace(/,/g, ""));
+        const formatted = num.toLocaleString('en-US');
+        return parseFloat(formatted.replace(/,/g, ''));
       },
     ) as NumberGuardian;
   }
@@ -876,8 +876,8 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process(
       (num: number) => {
         const str = Math.abs(num).toString();
-        const padded = str.padStart(length, "0");
-        return parseFloat(num < 0 ? "-" + padded : padded);
+        const padded = str.padStart(length, '0');
+        return parseFloat(num < 0 ? '-' + padded : padded);
       },
     ) as NumberGuardian;
   }
@@ -927,12 +927,12 @@ export class NumberGuardian extends BaseGuardian<number> {
     return this.process((num: number) => {
       if (!Number.isInteger(num)) {
         throw new GuardianError(
-          errorMessage || "Cannot convert non-integer to BigInt",
+          errorMessage || 'Cannot convert non-integer to BigInt',
           {
-            expected: "integer",
+            expected: 'integer',
             got: num,
-            comparison: "conversion",
-            type: "bigint",
+            comparison: 'conversion',
+            type: 'bigint',
           },
         );
       }
@@ -951,12 +951,12 @@ export class NumberGuardian extends BaseGuardian<number> {
       const date = new Date(num);
       if (isNaN(date.getTime())) {
         throw new GuardianError(
-          errorMessage || "Cannot convert number to date",
+          errorMessage || 'Cannot convert number to date',
           {
-            expected: "valid timestamp",
+            expected: 'valid timestamp',
             got: num,
-            comparison: "conversion",
-            type: "date",
+            comparison: 'conversion',
+            type: 'date',
           },
         );
       }

@@ -1,7 +1,7 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { GuardianError } from "../GuardianError.ts";
-import type { GuardianMetaData, GuardianTransform } from "../types/mod.ts";
-import { format } from "$datetime";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { GuardianError } from '../GuardianError.ts';
+import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
+import { format } from '$datetime';
 
 /**
  * Guardian for Date validation and transformation.
@@ -19,7 +19,7 @@ import { format } from "$datetime";
  * @since 1.0.0
  */
 export class DateGuardian extends BaseGuardian<Date> {
-  protected override readonly _type = "string";
+  protected override readonly _type = 'string';
 
   /**
    * Creates a new DateGuardian instance.
@@ -34,18 +34,18 @@ export class DateGuardian extends BaseGuardian<Date> {
     const defaultDateValidation = (input: unknown) => {
       if (!(input instanceof Date)) {
         throw new GuardianError(`Expected Date but got ${typeof input}`, {
-          expected: "Date",
+          expected: 'Date',
           got: typeof input,
-          comparison: "type",
-          type: "date",
+          comparison: 'type',
+          type: 'date',
         });
       }
       if (isNaN(input.getTime())) {
-        throw new GuardianError("Date is invalid", {
-          expected: "valid Date",
-          got: "invalid Date",
-          comparison: "validity",
-          type: "date",
+        throw new GuardianError('Date is invalid', {
+          expected: 'valid Date',
+          got: 'invalid Date',
+          comparison: 'validity',
+          type: 'date',
         });
       }
       return input;
@@ -90,8 +90,8 @@ export class DateGuardian extends BaseGuardian<Date> {
           {
             expected: `>= ${date.toISOString()}`,
             got: value.toISOString(),
-            comparison: "min",
-            type: "validation",
+            comparison: 'min',
+            type: 'validation',
           },
         );
       }
@@ -114,8 +114,8 @@ export class DateGuardian extends BaseGuardian<Date> {
           {
             expected: `<= ${date.toISOString()}`,
             got: value.toISOString(),
-            comparison: "max",
-            type: "validation",
+            comparison: 'max',
+            type: 'validation',
           },
         );
       }
@@ -133,11 +133,11 @@ export class DateGuardian extends BaseGuardian<Date> {
     return this.process((value: Date) => {
       const now = new Date();
       if (value.getTime() >= now.getTime()) {
-        throw new GuardianError(errorMessage || "Date must be in the past", {
-          expected: "past date",
+        throw new GuardianError(errorMessage || 'Date must be in the past', {
+          expected: 'past date',
           got: value.toISOString(),
-          comparison: "past",
-          type: "validation",
+          comparison: 'past',
+          type: 'validation',
         });
       }
       return value;
@@ -154,11 +154,11 @@ export class DateGuardian extends BaseGuardian<Date> {
     return this.process((value: Date) => {
       const now = new Date();
       if (value <= now) {
-        throw new GuardianError(errorMessage || "Date must be in the future", {
-          expected: "future date",
+        throw new GuardianError(errorMessage || 'Date must be in the future', {
+          expected: 'future date',
           got: value.toISOString(),
-          comparison: "future",
-          type: "validation",
+          comparison: 'future',
+          type: 'validation',
         });
       }
       return value;
@@ -178,13 +178,13 @@ export class DateGuardian extends BaseGuardian<Date> {
    */
   weekday(weekday: number, errorMessage?: string): DateGuardian {
     const weekdayNames = [
-      "Sunday",
-      "Monday",
-      "Tuesday",
-      "Wednesday",
-      "Thursday",
-      "Friday",
-      "Saturday",
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
     ];
 
     return this.process((value: Date) => {
@@ -194,8 +194,8 @@ export class DateGuardian extends BaseGuardian<Date> {
           {
             expected: weekdayNames[weekday],
             got: weekdayNames[value.getDay()],
-            comparison: "weekday",
-            type: "validation",
+            comparison: 'weekday',
+            type: 'validation',
           },
         );
       }
@@ -214,12 +214,12 @@ export class DateGuardian extends BaseGuardian<Date> {
       const hours = value.getHours();
       if (hours < 9 || hours >= 17) {
         throw new GuardianError(
-          errorMessage || "Date must be during business hours (9 AM - 5 PM)",
+          errorMessage || 'Date must be during business hours (9 AM - 5 PM)',
           {
-            expected: "business hours (9 AM - 5 PM)",
+            expected: 'business hours (9 AM - 5 PM)',
             got: `${hours}:00`,
-            comparison: "businessHours",
-            type: "validation",
+            comparison: 'businessHours',
+            type: 'validation',
           },
         );
       }
@@ -291,7 +291,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * ```
    */
   component(
-    component: "year" | "month" | "day" | "hour" | "minute" | "second",
+    component: 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second',
   ): BaseGuardian<number> {
     const extractors = {
       year: (date: Date) => date.getFullYear(),
@@ -328,8 +328,8 @@ export class DateGuardian extends BaseGuardian<Date> {
           {
             expected: `between ${start.toISOString()} and ${end.toISOString()}`,
             got: date.toISOString(),
-            comparison: "between",
-            type: "validation",
+            comparison: 'between',
+            type: 'validation',
           },
         );
       }
@@ -362,8 +362,8 @@ export class DateGuardian extends BaseGuardian<Date> {
           {
             expected: expectedAge.toString(),
             got: actualAge.toString(),
-            comparison: "age",
-            type: "validation",
+            comparison: 'age',
+            type: 'validation',
           },
         );
       }
@@ -401,8 +401,8 @@ export class DateGuardian extends BaseGuardian<Date> {
           {
             expected: `${minAge} <= age <= ${maxAge}`,
             got: actualAge.toString(),
-            comparison: "ageRange",
-            type: "validation",
+            comparison: 'ageRange',
+            type: 'validation',
           },
         );
       }
@@ -432,8 +432,8 @@ export class DateGuardian extends BaseGuardian<Date> {
           {
             expected: `${minYear} <= year <= ${maxYear}`,
             got: year.toString(),
-            comparison: "yearRange",
-            type: "validation",
+            comparison: 'yearRange',
+            type: 'validation',
           },
         );
       }
@@ -463,8 +463,8 @@ export class DateGuardian extends BaseGuardian<Date> {
           {
             expected: `${minMonth} <= month <= ${maxMonth}`,
             got: month.toString(),
-            comparison: "monthRange",
-            type: "validation",
+            comparison: 'monthRange',
+            type: 'validation',
           },
         );
       }
@@ -494,8 +494,8 @@ export class DateGuardian extends BaseGuardian<Date> {
           {
             expected: `${minDay} <= day <= ${maxDay}`,
             got: day.toString(),
-            comparison: "dayRange",
-            type: "validation",
+            comparison: 'dayRange',
+            type: 'validation',
           },
         );
       }
@@ -521,8 +521,8 @@ export class DateGuardian extends BaseGuardian<Date> {
           {
             expected: `quarter ${quarter}`,
             got: `quarter ${actualQuarter}`,
-            comparison: "quarter",
-            type: "validation",
+            comparison: 'quarter',
+            type: 'validation',
           },
         );
       }
@@ -545,10 +545,10 @@ export class DateGuardian extends BaseGuardian<Date> {
         throw new GuardianError(
           errorMessage || `Date must be in a leap year`,
           {
-            expected: "leap year",
+            expected: 'leap year',
             got: `non-leap year (${year})`,
-            comparison: "leapYear",
-            type: "validation",
+            comparison: 'leapYear',
+            type: 'validation',
           },
         );
       }
@@ -571,10 +571,10 @@ export class DateGuardian extends BaseGuardian<Date> {
         throw new GuardianError(
           errorMessage || `Date must not be in a leap year`,
           {
-            expected: "non-leap year",
+            expected: 'non-leap year',
             got: `leap year (${year})`,
-            comparison: "nonLeapYear",
-            type: "validation",
+            comparison: 'nonLeapYear',
+            type: 'validation',
           },
         );
       }
@@ -596,10 +596,10 @@ export class DateGuardian extends BaseGuardian<Date> {
         throw new GuardianError(
           errorMessage || `Date must be a weekday`,
           {
-            expected: "weekday (Monday-Friday)",
-            got: dayOfWeek === 0 ? "Sunday" : "Saturday",
-            comparison: "weekdays",
-            type: "validation",
+            expected: 'weekday (Monday-Friday)',
+            got: dayOfWeek === 0 ? 'Sunday' : 'Saturday',
+            comparison: 'weekdays',
+            type: 'validation',
           },
         );
       }
@@ -619,21 +619,21 @@ export class DateGuardian extends BaseGuardian<Date> {
 
       if (dayOfWeek !== 0 && dayOfWeek !== 6) {
         const days = [
-          "Sunday",
-          "Monday",
-          "Tuesday",
-          "Wednesday",
-          "Thursday",
-          "Friday",
-          "Saturday",
+          'Sunday',
+          'Monday',
+          'Tuesday',
+          'Wednesday',
+          'Thursday',
+          'Friday',
+          'Saturday',
         ];
         throw new GuardianError(
           errorMessage || `Date must be a weekend`,
           {
-            expected: "weekend (Saturday-Sunday)",
+            expected: 'weekend (Saturday-Sunday)',
             got: days[dayOfWeek],
-            comparison: "weekends",
-            type: "validation",
+            comparison: 'weekends',
+            type: 'validation',
           },
         );
       }
@@ -659,10 +659,10 @@ export class DateGuardian extends BaseGuardian<Date> {
         throw new GuardianError(
           errorMessage || `Date must be a holiday`,
           {
-            expected: "holiday",
+            expected: 'holiday',
             got: dateString,
-            comparison: "holiday",
-            type: "validation",
+            comparison: 'holiday',
+            type: 'validation',
           },
         );
       }
@@ -688,10 +688,10 @@ export class DateGuardian extends BaseGuardian<Date> {
         throw new GuardianError(
           errorMessage || `Date must not be a holiday`,
           {
-            expected: "non-holiday",
+            expected: 'non-holiday',
             got: dateString,
-            comparison: "notHoliday",
-            type: "validation",
+            comparison: 'notHoliday',
+            type: 'validation',
           },
         );
       }
@@ -717,8 +717,8 @@ export class DateGuardian extends BaseGuardian<Date> {
           {
             expected: `timezone offset ${timezoneOffset}`,
             got: `timezone offset ${actualOffset}`,
-            comparison: "timezone",
-            type: "validation",
+            comparison: 'timezone',
+            type: 'validation',
           },
         );
       }
@@ -762,13 +762,13 @@ export class DateGuardian extends BaseGuardian<Date> {
   within(
     amount: number,
     unit:
-      | "milliseconds"
-      | "seconds"
-      | "minutes"
-      | "hours"
-      | "days"
-      | "months"
-      | "years",
+      | 'milliseconds'
+      | 'seconds'
+      | 'minutes'
+      | 'hours'
+      | 'days'
+      | 'months'
+      | 'years',
     errorMessage?: string,
   ): DateGuardian {
     return this.process((date: Date) => {
@@ -792,8 +792,8 @@ export class DateGuardian extends BaseGuardian<Date> {
           {
             expected: `within ${amount} ${unit}`,
             got: `${Math.round(diff / multipliers[unit])} ${unit} away`,
-            comparison: "within",
-            type: "validation",
+            comparison: 'within',
+            type: 'validation',
           },
         );
       }
@@ -812,13 +812,13 @@ export class DateGuardian extends BaseGuardian<Date> {
   recent(
     amount: number,
     unit:
-      | "milliseconds"
-      | "seconds"
-      | "minutes"
-      | "hours"
-      | "days"
-      | "months"
-      | "years",
+      | 'milliseconds'
+      | 'seconds'
+      | 'minutes'
+      | 'hours'
+      | 'days'
+      | 'months'
+      | 'years',
     errorMessage?: string,
   ): DateGuardian {
     return this.within(
@@ -839,13 +839,13 @@ export class DateGuardian extends BaseGuardian<Date> {
   soon(
     amount: number,
     unit:
-      | "milliseconds"
-      | "seconds"
-      | "minutes"
-      | "hours"
-      | "days"
-      | "months"
-      | "years",
+      | 'milliseconds'
+      | 'seconds'
+      | 'minutes'
+      | 'hours'
+      | 'days'
+      | 'months'
+      | 'years',
     errorMessage?: string,
   ): DateGuardian {
     return this.within(
@@ -865,37 +865,37 @@ export class DateGuardian extends BaseGuardian<Date> {
   add(
     amount: number,
     unit:
-      | "milliseconds"
-      | "seconds"
-      | "minutes"
-      | "hours"
-      | "days"
-      | "months"
-      | "years",
+      | 'milliseconds'
+      | 'seconds'
+      | 'minutes'
+      | 'hours'
+      | 'days'
+      | 'months'
+      | 'years',
   ): DateGuardian {
     return this.process((date: Date) => {
       const result = new Date(date);
 
       switch (unit) {
-        case "milliseconds":
+        case 'milliseconds':
           result.setTime(result.getTime() + amount);
           break;
-        case "seconds":
+        case 'seconds':
           result.setTime(result.getTime() + (amount * 1000));
           break;
-        case "minutes":
+        case 'minutes':
           result.setTime(result.getTime() + (amount * 60 * 1000));
           break;
-        case "hours":
+        case 'hours':
           result.setTime(result.getTime() + (amount * 60 * 60 * 1000));
           break;
-        case "days":
+        case 'days':
           result.setDate(result.getDate() + amount);
           break;
-        case "months":
+        case 'months':
           result.setMonth(result.getMonth() + amount);
           break;
-        case "years":
+        case 'years':
           result.setFullYear(result.getFullYear() + amount);
           break;
       }
@@ -911,7 +911,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns This DateGuardian (mutated) or new instance if immutable
    */
   addDays(amount: number): DateGuardian {
-    return this.add(amount, "days");
+    return this.add(amount, 'days');
   }
 
   /**
@@ -921,7 +921,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns This DateGuardian (mutated) or new instance if immutable
    */
   addMonths(amount: number): DateGuardian {
-    return this.add(amount, "months");
+    return this.add(amount, 'months');
   }
 
   /**
@@ -931,7 +931,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns This DateGuardian (mutated) or new instance if immutable
    */
   addYears(amount: number): DateGuardian {
-    return this.add(amount, "years");
+    return this.add(amount, 'years');
   }
 
   /**
@@ -947,25 +947,25 @@ export class DateGuardian extends BaseGuardian<Date> {
       const isPast = diff < 0;
 
       const units = [
-        { name: "year", milliseconds: 365 * 24 * 60 * 60 * 1000 },
-        { name: "month", milliseconds: 30 * 24 * 60 * 60 * 1000 },
-        { name: "day", milliseconds: 24 * 60 * 60 * 1000 },
-        { name: "hour", milliseconds: 60 * 60 * 1000 },
-        { name: "minute", milliseconds: 60 * 1000 },
-        { name: "second", milliseconds: 1000 },
+        { name: 'year', milliseconds: 365 * 24 * 60 * 60 * 1000 },
+        { name: 'month', milliseconds: 30 * 24 * 60 * 60 * 1000 },
+        { name: 'day', milliseconds: 24 * 60 * 60 * 1000 },
+        { name: 'hour', milliseconds: 60 * 60 * 1000 },
+        { name: 'minute', milliseconds: 60 * 1000 },
+        { name: 'second', milliseconds: 1000 },
       ];
 
       for (const unit of units) {
         const count = Math.floor(absDiff / unit.milliseconds);
         if (count >= 1) {
-          const plural = count === 1 ? "" : "s";
+          const plural = count === 1 ? '' : 's';
           return isPast
             ? `${count} ${unit.name}${plural} ago`
             : `in ${count} ${unit.name}${plural}`;
         }
       }
 
-      return "just now";
+      return 'just now';
     });
   }
 
@@ -976,8 +976,8 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns New NumberGuardian with duration
    */
   duration(
-    unit: "milliseconds" | "seconds" | "minutes" | "hours" | "days" =
-      "milliseconds",
+    unit: 'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days' =
+      'milliseconds',
   ): BaseGuardian<number> {
     return this.process((date: Date) => {
       const now = new Date();
@@ -1034,8 +1034,8 @@ export class DateGuardian extends BaseGuardian<Date> {
    */
   diff(
     otherDate: Date,
-    unit: "milliseconds" | "seconds" | "minutes" | "hours" | "days" =
-      "milliseconds",
+    unit: 'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days' =
+      'milliseconds',
   ): BaseGuardian<number> {
     return this.process((date: Date) => {
       const diff = date.getTime() - otherDate.getTime();

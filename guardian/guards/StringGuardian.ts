@@ -1,8 +1,8 @@
-import { BaseGuardian } from "../BaseGuardian.ts";
-import { GuardianError } from "../GuardianError.ts";
-import type { GuardianMetaData, GuardianTransform } from "../types/mod.ts";
-import { NumberGuardian } from "./NumberGuardian.ts";
-import { DateGuardian } from "./DateGuardian.ts";
+import { BaseGuardian } from '../BaseGuardian.ts';
+import { GuardianError } from '../GuardianError.ts';
+import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
+import { NumberGuardian } from './NumberGuardian.ts';
+import { DateGuardian } from './DateGuardian.ts';
 
 /**
  * Guardian for string validation and transformation.
@@ -21,7 +21,7 @@ import { DateGuardian } from "./DateGuardian.ts";
  * @since 1.0.0
  */
 export class StringGuardian extends BaseGuardian<string> {
-  protected override readonly _type = "string";
+  protected override readonly _type = 'string';
 
   /**
    * Collection of commonly used regular expression patterns for string validation.
@@ -67,12 +67,12 @@ export class StringGuardian extends BaseGuardian<string> {
     metaData?: GuardianMetaData,
   ) {
     const defaultStringValidation = (input: unknown) => {
-      if (typeof input !== "string") {
+      if (typeof input !== 'string') {
         throw new GuardianError(`Expected string but got ${typeof input}`, {
-          expected: "string",
+          expected: 'string',
           got: typeof input,
-          comparison: "type",
-          type: "string",
+          comparison: 'type',
+          type: 'string',
         });
       }
       return input;
@@ -116,8 +116,8 @@ export class StringGuardian extends BaseGuardian<string> {
           {
             expected: length,
             got: str.length,
-            comparison: "minLength",
-            type: "string",
+            comparison: 'minLength',
+            type: 'string',
           },
         );
       }
@@ -152,8 +152,8 @@ export class StringGuardian extends BaseGuardian<string> {
           {
             expected: length,
             got: str.length,
-            comparison: "maxLength",
-            type: "string",
+            comparison: 'maxLength',
+            type: 'string',
           },
         );
       }
@@ -181,8 +181,8 @@ export class StringGuardian extends BaseGuardian<string> {
             {
               expected: `string with length ${length}`,
               got: value,
-              comparison: "length",
-              type: "validation",
+              comparison: 'length',
+              type: 'validation',
             },
           );
         }
@@ -214,8 +214,8 @@ export class StringGuardian extends BaseGuardian<string> {
             {
               expected: `string matching ${pattern}`,
               got: value,
-              comparison: "pattern",
-              type: "validation",
+              comparison: 'pattern',
+              type: 'validation',
             },
           );
         }
@@ -240,12 +240,12 @@ export class StringGuardian extends BaseGuardian<string> {
       (value: string) => {
         if (value.trim().length === 0) {
           throw new GuardianError(
-            errorMessage || "String cannot be empty",
+            errorMessage || 'String cannot be empty',
             {
-              expected: "non-empty string",
+              expected: 'non-empty string',
               got: value,
-              comparison: "nonEmpty",
-              type: "validation",
+              comparison: 'nonEmpty',
+              type: 'validation',
             },
           );
         }
@@ -264,12 +264,12 @@ export class StringGuardian extends BaseGuardian<string> {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     const result = this.pattern(
       emailRegex,
-      errorMessage || "Invalid email address format",
+      errorMessage || 'Invalid email address format',
     );
 
     // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
-    result._metaData.format = "email";
+    result._metaData.format = 'email';
     // Pattern removed for format-specific validations
     delete result._metaData.pattern; // Remove the regex pattern
     return result;
@@ -287,18 +287,18 @@ export class StringGuardian extends BaseGuardian<string> {
         new URL(str);
         return str;
       } catch {
-        throw new GuardianError(errorMessage || "Expected valid URL", {
-          expected: "URL format",
+        throw new GuardianError(errorMessage || 'Expected valid URL', {
+          expected: 'URL format',
           got: str,
-          comparison: "format",
-          type: "string",
+          comparison: 'format',
+          type: 'string',
         });
       }
     }) as StringGuardian;
 
     // Store format for OpenAPI generation
     if (!result._metaData) result._metaData = {};
-    result._metaData.format = "uri";
+    result._metaData.format = 'uri';
     return result;
   }
 
@@ -311,12 +311,12 @@ export class StringGuardian extends BaseGuardian<string> {
   alpha(errorMessage?: string): StringGuardian {
     const result = this.pattern(
       StringGuardian.patterns.alpha as RegExp,
-      errorMessage || "String must contain only alphabetic characters",
+      errorMessage || 'String must contain only alphabetic characters',
     );
 
     // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
-    result._metaData.format = "alpha";
+    result._metaData.format = 'alpha';
     // Pattern removed for format-specific validations
     delete result._metaData.pattern;
     return result;
@@ -331,12 +331,12 @@ export class StringGuardian extends BaseGuardian<string> {
   alphanumeric(errorMessage?: string): StringGuardian {
     const result = this.pattern(
       StringGuardian.patterns.alphanumeric as RegExp,
-      errorMessage || "String must contain only alphanumeric characters",
+      errorMessage || 'String must contain only alphanumeric characters',
     );
 
     // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
-    result._metaData.format = "alphanumeric";
+    result._metaData.format = 'alphanumeric';
     // Pattern removed for format-specific validations
     delete result._metaData.pattern;
     return result;
@@ -351,12 +351,12 @@ export class StringGuardian extends BaseGuardian<string> {
   uuid(errorMessage?: string): StringGuardian {
     const result = this.pattern(
       StringGuardian.patterns.uuid as RegExp,
-      errorMessage || "String must be a valid UUID",
+      errorMessage || 'String must be a valid UUID',
     );
 
     // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
-    result._metaData.format = "uuid";
+    result._metaData.format = 'uuid';
     // Pattern removed for format-specific validations
     delete result._metaData.pattern;
     return result;
@@ -371,12 +371,12 @@ export class StringGuardian extends BaseGuardian<string> {
   uuidv1(errorMessage?: string): StringGuardian {
     const result = this.pattern(
       StringGuardian.patterns.uuidv1 as RegExp,
-      errorMessage || "String must be a valid UUID v1",
+      errorMessage || 'String must be a valid UUID v1',
     );
 
     // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
-    result._metaData.format = "uuid";
+    result._metaData.format = 'uuid';
     // Pattern removed for format-specific validations
     delete result._metaData.pattern;
     return result;
@@ -391,12 +391,12 @@ export class StringGuardian extends BaseGuardian<string> {
   uuidv4(errorMessage?: string): StringGuardian {
     const result = this.pattern(
       StringGuardian.patterns.uuidv4 as RegExp,
-      errorMessage || "String must be a valid UUID v4",
+      errorMessage || 'String must be a valid UUID v4',
     );
 
     // Override pattern constraint with format for OpenAPI
     if (!result._metaData) result._metaData = {};
-    result._metaData.format = "uuid";
+    result._metaData.format = 'uuid';
     // Pattern removed for format-specific validations
     delete result._metaData.pattern;
     return result;
@@ -417,8 +417,8 @@ export class StringGuardian extends BaseGuardian<string> {
           {
             expected: `string containing "${substring}"`,
             got: value,
-            comparison: "contains",
-            type: "validation",
+            comparison: 'contains',
+            type: 'validation',
           },
         );
       }
@@ -441,8 +441,8 @@ export class StringGuardian extends BaseGuardian<string> {
           {
             expected: `string not containing "${substring}"`,
             got: value,
-            comparison: "notContains",
-            type: "validation",
+            comparison: 'notContains',
+            type: 'validation',
           },
         );
       }
@@ -465,8 +465,8 @@ export class StringGuardian extends BaseGuardian<string> {
           {
             expected: `string starting with "${prefix}"`,
             got: value,
-            comparison: "startsWith",
-            type: "validation",
+            comparison: 'startsWith',
+            type: 'validation',
           },
         );
       }
@@ -489,8 +489,8 @@ export class StringGuardian extends BaseGuardian<string> {
           {
             expected: `string ending with "${suffix}"`,
             got: value,
-            comparison: "endsWith",
-            type: "validation",
+            comparison: 'endsWith',
+            type: 'validation',
           },
         );
       }
@@ -513,8 +513,8 @@ export class StringGuardian extends BaseGuardian<string> {
           {
             expected: `string not starting with "${prefix}"`,
             got: value,
-            comparison: "notStartsWith",
-            type: "validation",
+            comparison: 'notStartsWith',
+            type: 'validation',
           },
         );
       }
@@ -537,8 +537,8 @@ export class StringGuardian extends BaseGuardian<string> {
           {
             expected: `string not ending with "${suffix}"`,
             got: value,
-            comparison: "notEndsWith",
-            type: "validation",
+            comparison: 'notEndsWith',
+            type: 'validation',
           },
         );
       }
@@ -560,12 +560,12 @@ export class StringGuardian extends BaseGuardian<string> {
     return this.process((value: string) => {
       if (!pattern.test(value)) {
         throw new GuardianError(
-          errorMessage || "String must be a valid phone number",
+          errorMessage || 'String must be a valid phone number',
           {
-            expected: "valid phone number",
+            expected: 'valid phone number',
             got: value,
-            comparison: "phone",
-            type: "validation",
+            comparison: 'phone',
+            type: 'validation',
           },
         );
       }
@@ -586,12 +586,12 @@ export class StringGuardian extends BaseGuardian<string> {
 
       if (!isIpv4 && !isIpv6) {
         throw new GuardianError(
-          errorMessage || "String must be a valid IP address (IPv4 or IPv6)",
+          errorMessage || 'String must be a valid IP address (IPv4 or IPv6)',
           {
-            expected: "valid IP address",
+            expected: 'valid IP address',
             got: value,
-            comparison: "ipAddress",
-            type: "validation",
+            comparison: 'ipAddress',
+            type: 'validation',
           },
         );
       }
@@ -608,7 +608,7 @@ export class StringGuardian extends BaseGuardian<string> {
   ipv4(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.ipv4!,
-      errorMessage || "String must be a valid IPv4 address",
+      errorMessage || 'String must be a valid IPv4 address',
     );
   }
 
@@ -621,7 +621,7 @@ export class StringGuardian extends BaseGuardian<string> {
   ipv6(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.ipv6!,
-      errorMessage || "String must be a valid IPv6 address",
+      errorMessage || 'String must be a valid IPv6 address',
     );
   }
 
@@ -636,17 +636,17 @@ export class StringGuardian extends BaseGuardian<string> {
       // Check if it's a valid IPv4 first
       if (!StringGuardian.patterns.ipv4!.test(value)) {
         throw new GuardianError(
-          errorMessage || "String must be a valid internal IPv4 address",
+          errorMessage || 'String must be a valid internal IPv4 address',
           {
-            expected: "valid internal IPv4 address",
+            expected: 'valid internal IPv4 address',
             got: value,
-            comparison: "internalIp",
-            type: "validation",
+            comparison: 'internalIp',
+            type: 'validation',
           },
         );
       }
 
-      const parts = value.split(".").map(Number);
+      const parts = value.split('.').map(Number);
       const isInternal =
         // 10.0.0.0/8
         (parts[0] === 10) ||
@@ -659,13 +659,13 @@ export class StringGuardian extends BaseGuardian<string> {
 
       if (!isInternal) {
         throw new GuardianError(
-          errorMessage || "String must be a valid internal IP address",
+          errorMessage || 'String must be a valid internal IP address',
           {
             expected:
-              "internal IP address (10.x.x.x, 172.16-31.x.x, 192.168.x.x, 127.x.x.x)",
+              'internal IP address (10.x.x.x, 172.16-31.x.x, 192.168.x.x, 127.x.x.x)',
             got: value,
-            comparison: "internalIp",
-            type: "validation",
+            comparison: 'internalIp',
+            type: 'validation',
           },
         );
       }
@@ -682,7 +682,7 @@ export class StringGuardian extends BaseGuardian<string> {
   macAddress(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.macAddress!,
-      errorMessage || "String must be a valid MAC address",
+      errorMessage || 'String must be a valid MAC address',
     );
   }
 
@@ -694,7 +694,7 @@ export class StringGuardian extends BaseGuardian<string> {
    * @returns This StringGuardian (mutated) or new instance if immutable
    */
   creditCard(
-    type: "visa" | "mastercard" | "amex" | "any" = "any",
+    type: 'visa' | 'mastercard' | 'amex' | 'any' = 'any',
     errorMessage?: string,
   ): StringGuardian {
     return this.process((value: string) => {
@@ -702,21 +702,21 @@ export class StringGuardian extends BaseGuardian<string> {
       let typeName: string;
 
       switch (type) {
-        case "visa":
+        case 'visa':
           pattern = StringGuardian.patterns.creditCardVisa!;
-          typeName = "Visa";
+          typeName = 'Visa';
           break;
-        case "mastercard":
+        case 'mastercard':
           pattern = StringGuardian.patterns.creditCardMastercard!;
-          typeName = "Mastercard";
+          typeName = 'Mastercard';
           break;
-        case "amex":
+        case 'amex':
           pattern = StringGuardian.patterns.creditCardAmex!;
-          typeName = "American Express";
+          typeName = 'American Express';
           break;
         default:
           pattern = StringGuardian.patterns.creditCard!;
-          typeName = "credit card";
+          typeName = 'credit card';
           break;
       }
 
@@ -726,14 +726,14 @@ export class StringGuardian extends BaseGuardian<string> {
           {
             expected: `valid ${typeName} number`,
             got: value,
-            comparison: "creditCard",
-            type: "validation",
+            comparison: 'creditCard',
+            type: 'validation',
           },
         );
       }
 
       // Basic Luhn algorithm check for additional validation
-      const digits = value.replace(/\D/g, "");
+      const digits = value.replace(/\D/g, '');
       let sum = 0;
       let alternate = false;
 
@@ -753,8 +753,8 @@ export class StringGuardian extends BaseGuardian<string> {
           {
             expected: `valid ${typeName} number (failed checksum)`,
             got: value,
-            comparison: "creditCard",
-            type: "validation",
+            comparison: 'creditCard',
+            type: 'validation',
           },
         );
       }
@@ -773,7 +773,7 @@ export class StringGuardian extends BaseGuardian<string> {
     return this.pattern(
       StringGuardian.patterns.slug!,
       errorMessage ||
-        "String must be a valid slug (lowercase letters, numbers, hyphens only)",
+        'String must be a valid slug (lowercase letters, numbers, hyphens only)',
     );
   }
 
@@ -786,7 +786,7 @@ export class StringGuardian extends BaseGuardian<string> {
   hexColor(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.hexColor!,
-      errorMessage || "String must be a valid hex color code (#RGB or #RRGGBB)",
+      errorMessage || 'String must be a valid hex color code (#RGB or #RRGGBB)',
     );
   }
 
@@ -799,7 +799,7 @@ export class StringGuardian extends BaseGuardian<string> {
   domain(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.domain!,
-      errorMessage || "String must be a valid domain name",
+      errorMessage || 'String must be a valid domain name',
     );
   }
 
@@ -812,7 +812,7 @@ export class StringGuardian extends BaseGuardian<string> {
   noWhitespace(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.noWhitespace!,
-      errorMessage || "String must not contain whitespace characters",
+      errorMessage || 'String must not contain whitespace characters',
     );
   }
 
@@ -825,7 +825,7 @@ export class StringGuardian extends BaseGuardian<string> {
   ascii(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.ascii!,
-      errorMessage || "String must contain only ASCII characters",
+      errorMessage || 'String must contain only ASCII characters',
     );
   }
 
@@ -848,12 +848,12 @@ export class StringGuardian extends BaseGuardian<string> {
       for (const pattern of sqlPatterns) {
         if (pattern.test(value)) {
           throw new GuardianError(
-            errorMessage || "String contains potential SQL injection patterns",
+            errorMessage || 'String contains potential SQL injection patterns',
             {
-              expected: "string without SQL injection patterns",
+              expected: 'string without SQL injection patterns',
               got: value,
-              comparison: "noSqlInjection",
-              type: "validation",
+              comparison: 'noSqlInjection',
+              type: 'validation',
             },
           );
         }
@@ -884,12 +884,12 @@ export class StringGuardian extends BaseGuardian<string> {
       for (const pattern of xssPatterns) {
         if (pattern.test(value)) {
           throw new GuardianError(
-            errorMessage || "String contains potential XSS patterns",
+            errorMessage || 'String contains potential XSS patterns',
             {
-              expected: "string without XSS patterns",
+              expected: 'string without XSS patterns',
               got: value,
-              comparison: "noXss",
-              type: "validation",
+              comparison: 'noXss',
+              type: 'validation',
             },
           );
         }
@@ -958,7 +958,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   stripSpaces(): StringGuardian {
     return this.process((value: string) => {
-      return value.replace(/\s+/g, "");
+      return value.replace(/\s+/g, '');
     }) as StringGuardian;
   }
 
@@ -1051,12 +1051,12 @@ export class StringGuardian extends BaseGuardian<string> {
     return this.process(
       (value: string) =>
         value
-          .replace(/([A-Z])/g, "_$1")
+          .replace(/([A-Z])/g, '_$1')
           .toLowerCase()
-          .replace(/^_/, "")
-          .replace(/[^a-zA-Z0-9]+/g, "_")
-          .replace(/_+/g, "_")
-          .replace(/^_|_$/g, ""),
+          .replace(/^_/, '')
+          .replace(/[^a-zA-Z0-9]+/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, ''),
     ) as StringGuardian;
   }
 
@@ -1069,12 +1069,12 @@ export class StringGuardian extends BaseGuardian<string> {
     return this.process(
       (value: string) =>
         value
-          .replace(/([A-Z])/g, "-$1")
+          .replace(/([A-Z])/g, '-$1')
           .toLowerCase()
-          .replace(/^-/, "")
-          .replace(/[^a-zA-Z0-9]+/g, "-")
-          .replace(/-+/g, "-")
-          .replace(/^-|-$/g, ""),
+          .replace(/^-/, '')
+          .replace(/[^a-zA-Z0-9]+/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, ''),
     ) as StringGuardian;
   }
 
@@ -1100,7 +1100,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   reverse(): StringGuardian {
     return this.process(
-      (value: string) => value.split("").reverse().join(""),
+      (value: string) => value.split('').reverse().join(''),
     ) as StringGuardian;
   }
 
@@ -1111,7 +1111,7 @@ export class StringGuardian extends BaseGuardian<string> {
    * @param char - Character to pad with (defaults to space)
    * @returns This StringGuardian (mutated) or new instance if immutable
    */
-  padStart(length: number, char = " "): StringGuardian {
+  padStart(length: number, char = ' '): StringGuardian {
     return this.process(
       (value: string) => value.padStart(length, char),
     ) as StringGuardian;
@@ -1124,7 +1124,7 @@ export class StringGuardian extends BaseGuardian<string> {
    * @param char - Character to pad with (defaults to space)
    * @returns This StringGuardian (mutated) or new instance if immutable
    */
-  padEnd(length: number, char = " "): StringGuardian {
+  padEnd(length: number, char = ' '): StringGuardian {
     return this.process(
       (value: string) => value.padEnd(length, char),
     ) as StringGuardian;
@@ -1140,19 +1140,19 @@ export class StringGuardian extends BaseGuardian<string> {
       (value: string) =>
         value
           // Remove script tags and their content
-          .replace(/<script[^>]*>.*?<\/script>/gi, "")
+          .replace(/<script[^>]*>.*?<\/script>/gi, '')
           // Remove iframe tags and their content
-          .replace(/<iframe[^>]*>.*?<\/iframe>/gi, "")
+          .replace(/<iframe[^>]*>.*?<\/iframe>/gi, '')
           // Remove event handlers
-          .replace(/on\w+\s*=\s*[\"'][^\"']*[\"']/gi, "")
+          .replace(/on\w+\s*=\s*[\"'][^\"']*[\"']/gi, '')
           // Remove javascript: protocol
-          .replace(/javascript:/gi, "")
+          .replace(/javascript:/gi, '')
           // Escape HTML entities
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;")
-          .replace(/\"/g, "&quot;")
-          .replace(/'/g, "&#x27;"),
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/\"/g, '&quot;')
+          .replace(/'/g, '&#x27;'),
     ) as StringGuardian;
   }
 
@@ -1163,7 +1163,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   normalizeSpace(): StringGuardian {
     return this.process(
-      (value: string) => value.replace(/\s+/g, " ").trim(),
+      (value: string) => value.replace(/\s+/g, ' ').trim(),
     ) as StringGuardian;
   }
 
@@ -1190,12 +1190,12 @@ export class StringGuardian extends BaseGuardian<string> {
         const num = Number(value);
         if (isNaN(num)) {
           throw new GuardianError(
-            errorMessage || "Cannot convert string to number",
+            errorMessage || 'Cannot convert string to number',
             {
-              expected: "numeric string",
+              expected: 'numeric string',
               got: value,
-              comparison: "conversion",
-              type: "number",
+              comparison: 'conversion',
+              type: 'number',
             },
           );
         }
@@ -1217,12 +1217,12 @@ export class StringGuardian extends BaseGuardian<string> {
       const num = parseInt(value, radix);
       if (isNaN(num)) {
         throw new GuardianError(
-          errorMessage || "Cannot convert string to integer",
+          errorMessage || 'Cannot convert string to integer',
           {
-            expected: "integer string",
+            expected: 'integer string',
             got: value,
-            comparison: "conversion",
-            type: "integer",
+            comparison: 'conversion',
+            type: 'integer',
           },
         );
       }
@@ -1241,12 +1241,12 @@ export class StringGuardian extends BaseGuardian<string> {
       const date = new Date(value);
       if (isNaN(date.getTime())) {
         throw new GuardianError(
-          errorMessage || "Cannot convert string to date",
+          errorMessage || 'Cannot convert string to date',
           {
-            expected: "valid date string",
+            expected: 'valid date string',
             got: value,
-            comparison: "conversion",
-            type: "date",
+            comparison: 'conversion',
+            type: 'date',
           },
         );
       }

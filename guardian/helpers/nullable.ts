@@ -1,4 +1,4 @@
-import type { GuardianTransform } from "../types/mod.ts";
+import type { GuardianTransform } from '../types/mod.ts';
 
 /**
  * Creates a function that allows null values to pass through

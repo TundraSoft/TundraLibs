@@ -1,5 +1,5 @@
-import type { GuardianTransform } from "../types/mod.ts";
-import { GuardianError } from "../GuardianError.ts";
+import type { GuardianTransform } from '../types/mod.ts';
+import { GuardianError } from '../GuardianError.ts';
 
 /**
  * Creates a function that checks if a value does not equal an expected value
@@ -20,8 +20,8 @@ export const notEquals = <T>(
         {
           expected: `not ${expected}`,
           got: value,
-          comparison: "notEquals",
-          type: "validation",
+          comparison: 'notEquals',
+          type: 'validation',
         },
       );
     }

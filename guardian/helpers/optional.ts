@@ -1,5 +1,5 @@
-import type { GuardianTransform } from "../types/mod.ts";
-import { isPromiseLike } from "./isPromiseLike.ts";
+import type { GuardianTransform } from '../types/mod.ts';
+import { isPromiseLike } from './isPromiseLike.ts';
 
 /**
  * Creates a function that makes a guardian optional with a default value
@@ -23,7 +23,7 @@ export const optional = <
         return undefined as R;
       }
 
-      if (typeof defaultValue === "function") {
+      if (typeof defaultValue === 'function') {
         const result = (defaultValue as () => R)();
         return result;
       }
