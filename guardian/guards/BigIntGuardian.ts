@@ -20,6 +20,8 @@ import { StringGuardian } from "./StringGuardian.ts";
  * @since 1.0.0
  */
 export class BigIntGuardian extends BaseGuardian<bigint> {
+  protected override readonly _type = "number";
+
   /**
    * Creates a new BigIntGuardian instance.
    *
@@ -60,7 +62,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    *
    * @param value - Minimum allowed value
    * @param errorMessage - Optional custom error message
-   * @returns New BigIntGuardian with minimum value validation
+   * @returns This BigIntGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -91,7 +93,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    *
    * @param value - Maximum allowed value
    * @param errorMessage - Optional custom error message
-   * @returns New BigIntGuardian with maximum value validation
+   * @returns This BigIntGuardian (mutated) or new instance if immutable mode
    */
   max(value: bigint, errorMessage?: string): BigIntGuardian {
     return this.process((num: bigint) => {
@@ -118,7 +120,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    * Validates that BigInt is positive (> 0n).
    *
    * @param errorMessage - Optional custom error message
-   * @returns New BigIntGuardian with positive validation
+   * @returns This BigIntGuardian (mutated) or new instance if immutable mode
    */
   positive(errorMessage?: string): BigIntGuardian {
     return this.process((num: bigint) => {
@@ -141,7 +143,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    * Validates that BigInt is negative (< 0n).
    *
    * @param errorMessage - Optional custom error message
-   * @returns New BigIntGuardian with negative validation
+   * @returns This BigIntGuardian (mutated) or new instance if immutable mode
    */
   negative(errorMessage?: string): BigIntGuardian {
     return this.process((num: bigint) => {
@@ -164,7 +166,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    * Validates that BigInt is non-negative (>= 0n).
    *
    * @param errorMessage - Optional custom error message
-   * @returns New BigIntGuardian with non-negative validation
+   * @returns This BigIntGuardian (mutated) or new instance if immutable mode
    */
   nonNegative(errorMessage?: string): BigIntGuardian {
     return this.process((num: bigint) => {

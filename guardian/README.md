@@ -48,7 +48,7 @@ const validAge = age.parse(25); // 25
 
 // Type transformation
 const stringToNumber = Guardian.string()
-  .regex(/^\\d+$/)
+  .pattern(/^\\d+$/)
   .toNumber();
 
 const converted = stringToNumber.parse("123"); // 123 (number)
@@ -63,7 +63,7 @@ const schema = Guardian.string()
   .minLength(3) // Minimum length
   .maxLength(100) // Maximum length
   .length(10) // Exact length
-  .regex(/^[a-zA-Z]+$/) // Match regex pattern
+  .pattern(/^[a-zA-Z]+$/) // Match regex pattern
   .email() // Valid email format
   .url() // Valid URL format
   .nonEmpty() // Not empty after trimming
@@ -197,7 +197,7 @@ const userSchema = Guardian.string()
   .toLowerCase() // Normalize case
   .minLength(3, "Too short") // Minimum length
   .maxLength(20, "Too long") // Maximum length
-  .regex(/^[a-z0-9_]+$/, "Invalid chars") // Only alphanumeric + underscore
+  .pattern(/^[a-z0-9_]+$/, "Invalid chars") // Only alphanumeric + underscore
   .step(async (username) => { // Custom async validation
     const exists = await checkUserExists(username);
     if (exists) {
@@ -213,7 +213,7 @@ const username = await userSchema.parseAsync("  JohnDoe123  "); // 'johndoe123'
 
 ```typescript
 const priceSchema = Guardian.string()
-  .regex(/^\\$?\\d+(\\.\\d{2})?$/, "Invalid price format") // $29.99 or 29.99
+  .pattern(/^\\$?\\d+(\\.\\d{2})?$/, "Invalid price format") // $29.99 or 29.99
   .step((value) => value.replace("$", ""), "Remove dollar") // Remove $
   .toNumber() // String → Number
   .min(0, "Price cannot be negative") // Validate positive

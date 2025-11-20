@@ -13,7 +13,7 @@ import { DateGuardian } from "./DateGuardian.ts";
  * const schema = new StringGuardian()
  *   .minLength(3)
  *   .maxLength(10)
- *   .regex(/^[a-zA-Z]+$/, 'Only letters allowed');
+ *   .pattern(/^[a-zA-Z]+$/, 'Only letters allowed');
  *
  * const result = schema.parse('hello'); // 'hello'
  * ```
@@ -21,6 +21,8 @@ import { DateGuardian } from "./DateGuardian.ts";
  * @since 1.0.0
  */
 export class StringGuardian extends BaseGuardian<string> {
+  protected override readonly _type = "string";
+
   /**
    * Creates a new StringGuardian instance.
    *
@@ -71,11 +73,21 @@ export class StringGuardian extends BaseGuardian<string> {
    * ```
    */
   minLength(length: number, errorMessage?: string): StringGuardian {
-    return this.test(
-      (value: string) => value.length >= length,
-      errorMessage || `String must be at least ${length} characters long`,
-      "minLength",
-    ) as StringGuardian;
+    const result = this.process((str: string) => {
+      if (str.length < length) {
+        throw new GuardianError(errorMessage || `String must be at least ${length} characters long`, {
+          expected: length,
+          got: str.length,
+          comparison: "minLength",
+          type: "string",
+        });
+      }
+      return str;
+    }) as StringGuardian;
+    
+    // Store constraint for OpenAPI generation
+    result._constraints.minLength = length;
+    return result;
   }
 
   /**
@@ -93,22 +105,21 @@ export class StringGuardian extends BaseGuardian<string> {
    * ```
    */
   maxLength(length: number, errorMessage?: string): StringGuardian {
-    return this.process(
-      (value: string) => {
-        if (value.length > length) {
-          throw new GuardianError(
-            errorMessage || `String must be at most ${length} characters long`,
-            {
-              expected: `string with max length ${length}`,
-              got: value,
-              comparison: "maxLength",
-              type: "validation",
-            },
-          );
-        }
-        return value;
-      },
-    ) as StringGuardian;
+    const result = this.process((str: string) => {
+      if (str.length > length) {
+        throw new GuardianError(errorMessage || `String must be at most ${length} characters long`, {
+          expected: length,
+          got: str.length,
+          comparison: "maxLength",
+          type: "string",
+        });
+      }
+      return str;
+    }) as StringGuardian;
+    
+    // Store constraint for OpenAPI generation
+    result._constraints.maxLength = length;
+    return result;
   }
 
   /**
@@ -146,13 +157,13 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
-   * const schema = new StringGuardian().regex(/^[a-zA-Z]+$/, 'Letters only');
+   * const schema = new StringGuardian().pattern(/^[a-zA-Z]+$/, 'Letters only');
    * schema.parse('hello123'); // throws GuardianError
    * schema.parse('hello'); // 'hello'
    * ```
    */
-  regex(pattern: RegExp, errorMessage?: string): StringGuardian {
-    return this.process(
+  pattern(pattern: RegExp, errorMessage?: string): StringGuardian {
+    const result = this.process(
       (value: string) => {
         if (!pattern.test(value)) {
           throw new GuardianError(
@@ -168,6 +179,10 @@ export class StringGuardian extends BaseGuardian<string> {
         return value;
       },
     ) as StringGuardian;
+    
+    // Store pattern for OpenAPI generation
+    result._constraints.pattern = pattern.source;
+    return result;
   }
 
   /**
@@ -199,14 +214,19 @@ export class StringGuardian extends BaseGuardian<string> {
    * Validates string is a valid email address.
    *
    * @param errorMessage - Optional custom error message
-   * @returns New StringGuardian with email validation
+   * @returns This StringGuardian (mutated) or new instance if immutable mode
    */
   email(errorMessage?: string): StringGuardian {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    return this.regex(
+    const result = this.pattern(
       emailRegex,
       errorMessage || "Invalid email address format",
     );
+    
+    // Override pattern constraint with format for OpenAPI
+    result._constraints.format = "email";
+    delete result._constraints.pattern; // Remove the regex pattern
+    return result;
   }
 
   /**
@@ -216,24 +236,23 @@ export class StringGuardian extends BaseGuardian<string> {
    * @returns This StringGuardian (mutated) or new instance if immutable
    */
   url(errorMessage?: string): StringGuardian {
-    return this.process(
-      (value: string) => {
-        try {
-          new URL(value);
-          return value;
-        } catch {
-          throw new GuardianError(
-            errorMessage || "Invalid URL format",
-            {
-              expected: "valid URL",
-              got: value,
-              comparison: "url",
-              type: "validation",
-            },
-          );
-        }
-      },
-    ) as StringGuardian;
+    const result = this.process((str: string) => {
+      try {
+        new URL(str);
+        return str;
+      } catch {
+        throw new GuardianError(errorMessage || "Expected valid URL", {
+          expected: "URL format",
+          got: str,
+          comparison: "format",
+          type: "string",
+        });
+      }
+    }) as StringGuardian;
+    
+    // Store format for OpenAPI generation
+    result._constraints.format = "uri";
+    return result;
   }
 
   //#endregion
@@ -366,6 +385,33 @@ export class StringGuardian extends BaseGuardian<string> {
       }
       return date;
     }, DateGuardian) as DateGuardian;
+  }
+
+  //#endregion
+
+  //#region Documentation Methods
+
+  /**
+   * @override
+   */
+  protected override _enrichOpenAPISchema(schema: Record<string, unknown>, funcStr: string): void {
+    super._enrichOpenAPISchema(schema, funcStr);
+    // String-specific constraints are now stored directly in _constraints
+    // No additional processing needed here
+  }
+
+  /**
+   * Infers string-specific format from function analysis.
+   * @private
+   */
+  private _inferStringFormat(funcStr: string): string | undefined {
+    // Check for specific string validation methods
+    if (funcStr.includes('.email(')) return 'email';
+    if (funcStr.includes('.uuid(')) return 'uuid';
+    if (funcStr.includes('.url(')) return 'uri';
+    if (funcStr.includes('.ipv4(')) return 'ipv4';
+    if (funcStr.includes('.ipv6(')) return 'ipv6';
+    return this._inferFormat(funcStr);
   }
 
   //#endregion

@@ -87,14 +87,17 @@ Deno.test("guardian.UnknownGuardian", async (t) => {
       );
     });
 
-    await t.step("should convert null to string when nullable", () => {
-      const nullableStringGuard = new UnknownGuardian().nullable().process((value: unknown) => String(value));
+    await t.step("should pass null through when nullable", () => {
+      const nullableStringGuard = new UnknownGuardian().process((value: unknown) => String(value)).nullable();
 
-      asserts.assertEquals(nullableStringGuard.parse(null), "null");
+      // nullable() allows null to pass through without transformation
+      asserts.assertEquals(nullableStringGuard.parse(null), null);
+      // But non-null values are still transformed
+      asserts.assertEquals(nullableStringGuard.parse(42), "42");
     });
 
     await t.step("should convert undefined to string when optional", () => {
-      const optionalStringGuard = new UnknownGuardian().optional("undefined").process((value: unknown) => String(value));
+      const optionalStringGuard = new UnknownGuardian().process((value: unknown) => String(value)).optional("undefined");
 
       asserts.assertEquals(optionalStringGuard.parse(undefined), "undefined");
     });
@@ -127,10 +130,13 @@ Deno.test("guardian.UnknownGuardian", async (t) => {
       );
     });
 
-    await t.step("should convert null to JSON when nullable", () => {
-      const nullableJsonGuard = new UnknownGuardian().nullable().process((value: unknown) => JSON.stringify(value));
+    await t.step("should pass null through when nullable", () => {
+      const nullableJsonGuard = new UnknownGuardian().process((value: unknown) => JSON.stringify(value)).nullable();
 
-      asserts.assertEquals(nullableJsonGuard.parse(null), "null");
+      // nullable() allows null to pass through without transformation  
+      asserts.assertEquals(nullableJsonGuard.parse(null), null);
+      // But non-null values are still transformed
+      asserts.assertEquals(nullableJsonGuard.parse({ name: "John" }), '{"name":"John"}');
     });
 
     await t.step("should handle JSON serialization errors", () => {

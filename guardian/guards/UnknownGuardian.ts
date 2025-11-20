@@ -38,6 +38,8 @@ import { StringGuardian } from "./StringGuardian.ts";
  * @since 1.0.0
  */
 export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
+  protected override readonly _type = "unknown";
+
   /**
    * Creates a new UnknownGuardian instance.
    *
@@ -118,7 +120,7 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    * Transforms the unknown value to a JSON string.
    *
    * @param message - Optional custom error message for JSON serialization failures
-   * @returns A new Guardian instance that outputs JSON strings
+   * @returns This Guardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -152,7 +154,7 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    * @template U - The narrowed type
    * @param guard - Type guard function that returns true if value is of type U
    * @param message - Optional custom error message
-   * @returns A new Guardian instance with the narrowed type
+   * @returns This Guardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -189,7 +191,7 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    * @template U - The target type
    * @param typeGuard - Type guard function that returns true if value is of type U
    * @param description - Optional description of the type assertion
-   * @returns A new Guardian instance with the asserted type
+   * @returns This Guardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -219,7 +221,7 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
   /**
    * Checks if the value is null or undefined.
    *
-   * @returns A new Guardian instance that validates nullish values
+   * @returns This Guardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -238,7 +240,7 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
   /**
    * Checks if the value is not null and not undefined.
    *
-   * @returns A new Guardian instance that validates non-nullish values
+   * @returns This Guardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts

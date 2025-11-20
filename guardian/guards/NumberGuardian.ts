@@ -22,6 +22,7 @@ import { BigIntGuardian } from "./BigIntGuardian.ts";
  * @since 1.0.0
  */
 export class NumberGuardian extends BaseGuardian<number> {
+  protected override readonly _type = "number";
   /**
    * Creates a new NumberGuardian instance.
    *
@@ -81,7 +82,7 @@ export class NumberGuardian extends BaseGuardian<number> {
    * ```
    */
   min(value: number, errorMessage?: string): NumberGuardian {
-    return this.process((num: number) => {
+    const result = this.process((num: number) => {
       if (num < value) {
         throw new GuardianError(
           errorMessage || `Number must be at least ${value}`,
@@ -95,6 +96,10 @@ export class NumberGuardian extends BaseGuardian<number> {
       }
       return num;
     }) as NumberGuardian;
+    
+    // Store constraint for OpenAPI generation
+    result._constraints.minimum = value;
+    return result;
   }
 
   /**
@@ -112,7 +117,7 @@ export class NumberGuardian extends BaseGuardian<number> {
    * ```
    */
   max(value: number, errorMessage?: string): NumberGuardian {
-    return this.process((num: number) => {
+    const result = this.process((num: number) => {
       if (num > value) {
         throw new GuardianError(
           errorMessage || `Number must be at most ${value}`,
@@ -126,6 +131,10 @@ export class NumberGuardian extends BaseGuardian<number> {
       }
       return num;
     }) as NumberGuardian;
+    
+    // Store constraint for OpenAPI generation
+    result._constraints.maximum = value;
+    return result;
   }
 
   //#endregion
@@ -139,7 +148,7 @@ export class NumberGuardian extends BaseGuardian<number> {
    * @returns This NumberGuardian (mutated) or new instance if immutable
    */
   positive(errorMessage?: string): NumberGuardian {
-    return this.process((num: number) => {
+    const result = this.process((num: number) => {
       if (num <= 0) {
         throw new GuardianError(
           errorMessage || "Number must be positive (> 0)",
@@ -153,6 +162,11 @@ export class NumberGuardian extends BaseGuardian<number> {
       }
       return num;
     }) as NumberGuardian;
+    
+    // Store constraint for OpenAPI generation
+    result._constraints.minimum = 0;
+    result._constraints.exclusiveMinimum = true;
+    return result;
   }
 
   /**
@@ -279,7 +293,7 @@ export class NumberGuardian extends BaseGuardian<number> {
    * Validates that number is safe integer (within JavaScript's safe integer range).
    *
    * @param errorMessage - Optional custom error message
-   * @returns New NumberGuardian with safe integer validation
+   * @returns This NumberGuardian (mutated) or new instance if immutable mode
    */
   safeInteger(errorMessage?: string): NumberGuardian {
     return this.process((num: number) => {
@@ -338,7 +352,7 @@ export class NumberGuardian extends BaseGuardian<number> {
   /**
    * Rounds the number to the nearest integer.
    *
-   * @returns New NumberGuardian that rounds to nearest integer
+   * @returns This NumberGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -356,7 +370,7 @@ export class NumberGuardian extends BaseGuardian<number> {
   /**
    * Floors the number (rounds down to nearest integer).
    *
-   * @returns New NumberGuardian that floors the number
+   * @returns This NumberGuardian (mutated) or new instance if immutable mode
    */
   floor(): NumberGuardian {
     return this.process(
@@ -367,7 +381,7 @@ export class NumberGuardian extends BaseGuardian<number> {
   /**
    * Ceils the number (rounds up to nearest integer).
    *
-   * @returns New NumberGuardian that ceils the number
+   * @returns This NumberGuardian (mutated) or new instance if immutable mode
    */
   ceil(): NumberGuardian {
     return this.process(
@@ -378,7 +392,7 @@ export class NumberGuardian extends BaseGuardian<number> {
   /**
    * Truncates the number (removes decimal part).
    *
-   * @returns New NumberGuardian that truncates the number
+   * @returns This NumberGuardian (mutated) or new instance if immutable mode
    */
   trunc(): NumberGuardian {
     return this.process(
@@ -389,7 +403,7 @@ export class NumberGuardian extends BaseGuardian<number> {
   /**
    * Gets absolute value of the number.
    *
-   * @returns New NumberGuardian with absolute value
+   * @returns This NumberGuardian (mutated) or new instance if immutable mode
    */
   abs(): NumberGuardian {
     return this.process(
@@ -477,6 +491,25 @@ export class NumberGuardian extends BaseGuardian<number> {
       }
       return date;
     }, DateGuardian) as DateGuardian;
+  }
+
+  //#endregion
+
+  //#region Documentation Methods
+
+  /**
+   * @override
+   */
+  protected override _enrichOpenAPISchema(schema: Record<string, unknown>, funcStr: string): void {
+    super._enrichOpenAPISchema(schema, funcStr);
+    
+    // Check if it's an integer by looking for integer methods in function string
+    if (funcStr.includes('integer()') || funcStr.includes('int()')) {
+      schema.type = "integer";
+    }
+    
+    // Number-specific constraints are now stored directly in _constraints
+    // No additional constraint extraction needed here
   }
 
   //#endregion

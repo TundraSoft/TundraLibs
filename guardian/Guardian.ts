@@ -105,7 +105,7 @@ export class Guardian {
    * const schema = Guardian.string()
    *   .minLength(3)
    *   .maxLength(50)
-   *   .regex(/^[a-zA-Z]+$/);
+   *   .pattern(/^[a-zA-Z]+$/);
    *
    * const result = schema.parse('hello'); // 'hello'
    * ```
@@ -149,7 +149,7 @@ export class Guardian {
    * ```ts
    * const userIdOrEmail = Guardian.oneOf([
    *   Guardian.number().positive().integer(),
-   *   Guardian.string().regex(/^[^@]+@[^@]+$/)
+   *   Guardian.string().pattern(/^[^@]+@[^@]+$/)
    * ], 'UserId or Email is required');
    *
    * userIdOrEmail.parse(123); // 123

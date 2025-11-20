@@ -15,7 +15,7 @@
  * const age = Guardian.number().positive().integer().max(120);
  *
  * // String to number transformation
- * const stringToNumber = Guardian.string().regex(/^\d+$/).toNumber();
+ * const stringToNumber = Guardian.string().pattern(/^\d+$/).toNumber();
  *
  * // Complex validation pipeline
  * const email = Guardian.string()

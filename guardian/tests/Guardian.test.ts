@@ -156,7 +156,7 @@ Deno.test("guardian.Guardian", async (t) => {
       const userSchema = Guardian.object({
         id: Guardian.number().positive(),
         name: Guardian.string().minLength(1),
-        email: Guardian.string().regex(/^[^@]+@[^@]+$/),
+        email: Guardian.string().pattern(/^[^@]+@[^@]+$/),
         profile: Guardian.object({
           age: Guardian.number().min(0).max(150),
           preferences: Guardian.array(Guardian.string()),
@@ -194,7 +194,7 @@ Deno.test("guardian.Guardian", async (t) => {
 
     await t.step("should handle union types with oneOf", () => {
       const idSchema = Guardian.oneOf(
-        [Guardian.number().positive(), Guardian.string().regex(/^[a-z0-9]+$/i)],
+        [Guardian.number().positive(), Guardian.string().pattern(/^[a-z0-9]+$/i)],
         "ID must be positive number or alphanumeric string",
       );
 
@@ -237,8 +237,8 @@ Deno.test("guardian.Guardian", async (t) => {
     );
 
     await t.step("should chain multiple validation errors", () => {
-      const schema = Guardian.string().minLength(5).maxLength(10).regex(
-        /^[A-Z]+$/,
+      const schema = Guardian.string().minLength(5).maxLength(10).pattern(
+        /^[a-zA-Z]+$/,
       );
 
       try {
@@ -383,7 +383,7 @@ Deno.test("guardian.Guardian", async (t) => {
       const schema = Guardian.object({
         id: Guardian.number().positive(),
         name: Guardian.string().minLength(1).maxLength(100),
-        email: Guardian.string().regex(/^[^@]+@[^@]+$/),
+        email: Guardian.string().pattern(/^[^@]+@[^@]+$/),
         tags: Guardian.array(Guardian.string()).maxLength(10),
       });
 

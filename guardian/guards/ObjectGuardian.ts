@@ -87,6 +87,7 @@ export class ObjectGuardian<
   TInput extends Record<string, unknown>,
   TOutput extends Record<string, unknown> = TInput,
 > extends BaseGuardian<TOutput> {
+  protected override readonly _type = "object";
   private _schema: ObjectSchema<TInput>;
   private _mode: ObjectValidationMode = "passthrough";
   private _refinements: Array<ObjectRefinement<TOutput>> = [];
@@ -147,7 +148,7 @@ export class ObjectGuardian<
    * Sets the validation mode to strict - only properties defined in the schema are allowed.
    * Extra properties will cause validation to fail.
    *
-   * @returns New ObjectGuardian with strict validation mode
+   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -176,7 +177,7 @@ export class ObjectGuardian<
    * Sets the validation mode to strip - removes properties not defined in the schema.
    * Only validated properties will be present in the output.
    *
-   * @returns New ObjectGuardian with strip validation mode
+   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -210,7 +211,7 @@ export class ObjectGuardian<
    *
    * @template U - Type of the properties to add
    * @param schema - Additional schema properties
-   * @returns New ObjectGuardian with extended schema
+   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -244,7 +245,7 @@ export class ObjectGuardian<
    *
    * @template K - Keys to pick from the schema
    * @param keys - Property names to include
-   * @returns New ObjectGuardian with only the picked properties
+   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -284,7 +285,7 @@ export class ObjectGuardian<
    *
    * @template K - Keys to omit from the schema
    * @param keys - Property names to exclude
-   * @returns New ObjectGuardian without the omitted properties
+   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -318,7 +319,7 @@ export class ObjectGuardian<
   /**
    * Makes all properties in the schema optional.
    *
-   * @returns New ObjectGuardian with all properties optional
+   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -351,7 +352,7 @@ export class ObjectGuardian<
   /**
    * Makes all properties in the schema required (removes optional).
    *
-   * @returns New ObjectGuardian with all properties required
+   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -399,7 +400,7 @@ export class ObjectGuardian<
    * @template V - Type of the new property value
    * @param key - Property name
    * @param guard - Guardian for validating the property
-   * @returns New ObjectGuardian with the added property
+   * @returns This ObjectGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -946,6 +947,21 @@ export class ObjectGuardian<
     }
 
     return syncResult;
+  }
+
+  //#endregion
+
+  //#region Documentation Methods
+
+  /**
+   * @override
+   */
+  protected override _enrichOpenAPISchema(schema: Record<string, unknown>, funcStr: string): void {
+    // Don't call super for objects - we don't want generic format inference
+    
+    // TODO: Add properties schema if we have shape info
+    // This would require storing the shape guardian references
+    schema.additionalProperties = true;
   }
 
   //#endregion

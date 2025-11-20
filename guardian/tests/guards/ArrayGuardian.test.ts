@@ -354,7 +354,7 @@ Deno.test("guardian.ArrayGuardian", async (t) => {
     });
 
     await t.step("should validate array of emails", () => {
-      const emailArrayGuard = Guardian.array(Guardian.string().regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/))
+      const emailArrayGuard = Guardian.array(Guardian.string().pattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/))
         .minLength(1)
         .unique();
 

@@ -19,6 +19,7 @@ import { StringGuardian } from "./StringGuardian.ts";
  * @since 1.0.0
  */
 export class BooleanGuardian extends BaseGuardian<boolean> {
+  protected override readonly _type = "boolean";
   /**
    * Creates a new BooleanGuardian instance.
    *
@@ -76,7 +77,7 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
    * Validates that the boolean value is false.
    *
    * @param errorMessage - Optional custom error message
-   * @returns This BooleanGuardian (mutated) or new instance if immutable
+   * @returns This BooleanGuardian (mutated) or new instance if immutable mode
    */
   false(errorMessage?: string): BooleanGuardian {
     return this.process(

@@ -41,6 +41,8 @@ export abstract class BaseGuardian<T> {
   protected _hasOptional = false;
   protected _optionalDefault?: T | (() => T) | (() => Promise<T>);
   protected _isImmutable = false;
+  protected readonly _type: string = "unknown";
+  protected _constraints: Record<string, unknown> = {};
 
   /**
    * Gets the metadata associated with this guardian.
@@ -130,7 +132,7 @@ export abstract class BaseGuardian<T> {
    * @template V - The guardian class type for the result
    * @param fn - The processing function to apply to the guardian's result
    * @param constructor - Optional constructor for the resulting Guardian, defaults to this.constructor
-   * @returns A new Guardian instance with the processed function
+   * @returns This Guardian instance (mutated) or new instance if immutable mode or constructor provided
    *
    * @example
    * ```ts
@@ -151,6 +153,30 @@ export abstract class BaseGuardian<T> {
       initialTransform?: GuardianTransform<unknown, U>,
     ) => V,
   ): V | BaseGuardian<U> {
+    // Prevent further processing after nullable() or optional()
+    if (this._isNullable) {
+      throw new GuardianError(
+        "Cannot call process() after nullable(). nullable() is a finisher method.",
+        {
+          expected: "process() before nullable()",
+          got: "process() after nullable()",
+          comparison: "method_order",
+          type: "validation",
+        },
+      );
+    }
+    if (this._hasOptional) {
+      throw new GuardianError(
+        "Cannot call process() after optional(). optional() is a finisher method.",
+        {
+          expected: "process() before optional()",
+          got: "process() after optional()",
+          comparison: "method_order",
+          type: "validation",
+        },
+      );
+    }
+
     const currentTransform = this._composedTransform;
 
     const composedTransform: GuardianTransform<unknown, U> = (
@@ -208,7 +234,31 @@ export abstract class BaseGuardian<T> {
     error?: string,
     expected?: unknown,
   ): BaseGuardian<T> {
-    return this.process(test(fn, error, expected)) as BaseGuardian<T>;
+    // Prevent validation after nullable() or optional()
+    if (this._isNullable) {
+      throw new GuardianError(
+        "Cannot call test() after nullable(). nullable() is a finisher method.",
+        {
+          expected: "test() before nullable()",
+          got: "test() after nullable()",
+          comparison: "method_order",
+          type: "validation",
+        },
+      );
+    }
+    if (this._hasOptional) {
+      throw new GuardianError(
+        "Cannot call test() after optional(). optional() is a finisher method.",
+        {
+          expected: "test() before optional()",
+          got: "test() after optional()",
+          comparison: "method_order",
+          type: "validation",
+        },
+      );
+    }
+
+    return this.process(test(fn, error, expected));
   }
 
   /**
@@ -217,15 +267,15 @@ export abstract class BaseGuardian<T> {
    *
    * @param expected - The expected value to compare against
    * @param error - Optional custom error message
-   * @returns A new Guardian instance with the equals validation applied
+   * @returns This Guardian instance (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
    * guardian.equals('expected', 'Value must be "expected"');
    * ```
    */
-  equals(expected: T, error?: string): BaseGuardian<T> {
-    return this.process(equals(expected, error)) as BaseGuardian<T>;
+  equals(expected: T, error?: string): this {
+    return this.process(equals(expected, error)) as this;
   }
 
   /**
@@ -234,15 +284,15 @@ export abstract class BaseGuardian<T> {
    *
    * @param expected - The value that should not match
    * @param error - Optional custom error message
-   * @returns A new Guardian instance with the notEquals validation applied
+   * @returns This Guardian instance (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
    * guardian.notEquals('forbidden', 'Value cannot be "forbidden"');
    * ```
    */
-  notEquals(expected: T, error?: string): BaseGuardian<T> {
-    return this.process(notEquals(expected, error)) as BaseGuardian<T>;
+  notEquals(expected: T, error?: string): this {
+    return this.process(notEquals(expected, error)) as this;
   }
 
   /**
@@ -251,15 +301,15 @@ export abstract class BaseGuardian<T> {
    *
    * @param allowedValues - Array of allowed values
    * @param error - Optional custom error message
-   * @returns A new Guardian instance with the isIn validation applied
+   * @returns This Guardian instance (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
    * guardian.isIn(['a', 'b', 'c'], 'Value must be one of: a, b, c');
    * ```
    */
-  isIn(allowedValues: T[], error?: string): BaseGuardian<T> {
-    return this.process(isIn(allowedValues, error)) as BaseGuardian<T>;
+  isIn(allowedValues: T[], error?: string): this {
+    return this.process(isIn(allowedValues, error)) as this;
   }
 
   /**
@@ -268,22 +318,22 @@ export abstract class BaseGuardian<T> {
    *
    * @param forbiddenValues - Array of forbidden values
    * @param error - Optional custom error message
-   * @returns A new Guardian instance with the isNotIn validation applied
+   * @returns This Guardian instance (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
    * guardian.isNotIn(['x', 'y', 'z'], 'Value cannot be one of: x, y, z');
    * ```
    */
-  isNotIn(forbiddenValues: T[], error?: string): BaseGuardian<T> {
-    return this.process(isNotIn(forbiddenValues, error)) as BaseGuardian<T>;
+  isNotIn(forbiddenValues: T[], error?: string): this {
+    return this.process(isNotIn(forbiddenValues, error)) as this;
   }
 
   /**
    * Makes this guardian accept null values.
-   * Uses the helper function from the old Guardian system.
+   * Uses the process method for centralized logic.
    *
-   * @returns A new Guardian instance that accepts null values
+   * @returns This Guardian instance (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -293,44 +343,64 @@ export abstract class BaseGuardian<T> {
    * nullableString.parse(undefined); // null
    * ```
    */
-  nullable(): BaseGuardian<T | null> {
-    const currentTransform = this._composedTransform;
+  nullable(): this {
+    // Prevent multiple nullable() calls
+    if (this._isNullable) {
+      throw new GuardianError(
+        "nullable() has already been called on this guardian.",
+        {
+          expected: "single nullable() call",
+          got: "multiple nullable() calls",
+          comparison: "method_order",
+          type: "validation",
+        },
+      );
+    }
 
-    // Create a new transform that bypasses the composed transform for null/undefined
+    // Use process with identity transform but modify the composed transform to handle null/undefined
+    const currentTransform = this._composedTransform;
+    
     const nullableTransform: GuardianTransform<unknown, T | null> = (
       value: unknown,
     ) => {
-      // Handle null - return null without calling guardian
+      // Handle null - return null without calling the composed transform
       if (value === null) {
         return null;
       }
 
-      // For all other values, call the original composed transform
+      // For all other values (including undefined), call the current composed transform
+      // This allows undefined to be rejected by the original validation
       return currentTransform(value) as T;
     };
 
-    // If immutable, create new instance
+    // Use the returnInstance pattern like process() method
+    let returnInstance: this;
+    
     if (this._isImmutable) {
-      return this._createStep<T | null>(
+      // If immutable, create new instance
+      returnInstance = this._createStep<T | null>(
         nullableTransform,
         this._isAsync,
         this._metaData,
-      );
+      ) as this;
+    } else {
+      // Mutate in place for better performance
+      (this as unknown as BaseGuardian<T | null>)._composedTransform = nullableTransform;
+      returnInstance = this;
     }
 
-    // Mutate in place for better performance
-    (this as unknown as BaseGuardian<T | null>)._composedTransform =
-      nullableTransform;
+    // Mark as nullable - this is now a finisher method
+    (returnInstance as BaseGuardian<T | null>)._isNullable = true;
 
-    return this as unknown as BaseGuardian<T | null>;
+    return returnInstance;
   }
 
   /**
    * Makes this guardian handle undefined values by providing a default value.
-   * Uses the helper function from the old Guardian system.
+   * Uses the process method for centralized logic.
    *
    * @param defaultValue - Default value or function that returns default value
-   * @returns A new Guardian instance that handles undefined values
+   * @returns This Guardian instance (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -339,58 +409,77 @@ export abstract class BaseGuardian<T> {
    * optionalString.parse(undefined); // 'default'
    * ```
    */
-  optional(): BaseGuardian<T | undefined>;
-  optional<D>(defaultValue: D | (() => D)): BaseGuardian<T | D>;
+  optional(): this;
+  optional<D>(defaultValue: D | (() => D)): this;
   optional<D>(
-    defaultValue?: D | (() => D),
-  ): BaseGuardian<T | D | undefined> {
-    const currentTransform = this._composedTransform;
+    _defaultValue?: D | (() => D),
+  ): this {
+    // Prevent multiple optional() calls
+    if (this._hasOptional) {
+      throw new GuardianError(
+        "optional() has already been called on this guardian.",
+        {
+          expected: "single optional() call",
+          got: "multiple optional() calls",
+          comparison: "method_order",
+          type: "validation",
+        },
+      );
+    }
 
-    // Create a new transform that handles optional logic first
+    // Store the current transform before setting finisher flags
+    // This allows us to use it in the optionalTransform even after finisher protection is enabled
+    const currentTransform = this._composedTransform;
+    
     const optionalTransform: GuardianTransform<unknown, T | D | undefined> = (
       value: unknown,
     ) => {
-      // Handle undefined by returning default
+      // Handle undefined by returning default or undefined
       if (value === undefined) {
-        if (defaultValue === undefined) {
+        if (_defaultValue === undefined) {
           return undefined as D | undefined;
         }
 
-        if (typeof defaultValue === "function") {
-          const result = (defaultValue as () => D | Promise<D>)();
-          // If the result is a promise, return it for async handling
+        if (typeof _defaultValue === "function") {
+          const result = (_defaultValue as () => D | Promise<D>)();
+          // If the result is a promise, handle it properly
           if (result && typeof result === "object" && "then" in result) {
-            // Return a promise that awaits the result and validates it
             return (result as Promise<D>).then((resolvedValue) =>
               currentTransform(resolvedValue)
-            ) as T | Promise<T>;
+            ) as Promise<T>;
           }
           // If the default is a computed value, validate it through the transform
           return currentTransform(result) as T;
         }
 
         // If the default is a direct value, validate it through the transform
-        return currentTransform(defaultValue) as T;
+        return currentTransform(_defaultValue) as T;
       }
 
-      // For all other values, call the original composed transform
+      // For all other values, call the current composed transform
       return currentTransform(value) as T;
     };
 
-    // If immutable, create new instance
+    // Use the returnInstance pattern like process() method
+    let returnInstance: this;
+    
     if (this._isImmutable) {
-      return this._createStep<T | D | undefined>(
+      // If immutable, create new instance
+      returnInstance = this._createStep<T | D | undefined>(
         optionalTransform,
         this._isAsync,
         this._metaData,
-      );
+      ) as this;
+    } else {
+      // Mutate in place for better performance
+      (this as unknown as BaseGuardian<T | D | undefined>)._composedTransform = optionalTransform;
+      returnInstance = this;
     }
 
-    // Mutate in place for better performance
-    (this as unknown as BaseGuardian<T | D | undefined>)._composedTransform =
-      optionalTransform;
+    // Mark as optional - this is now a finisher method
+    (returnInstance as BaseGuardian<T | D | undefined>)._hasOptional = true;
 
-    return this as unknown as BaseGuardian<T | D | undefined>;
+    return returnInstance;
   }
 
   /**
@@ -419,36 +508,7 @@ export abstract class BaseGuardian<T> {
       );
     }
 
-    // Handle optional (undefined) first
-    if (this._hasOptional && input === undefined) {
-      if (this._optionalDefault === undefined) {
-        // No default provided, return undefined as valid for optional fields
-        return undefined as T;
-      } else if (typeof this._optionalDefault === "function") {
-        const result = (this._optionalDefault as () => T | Promise<T>)();
-        if (isPromiseLike(result)) {
-          throw new GuardianError(
-            "Cannot use async default in sync parse. Use parseAsync() instead.",
-            {
-              expected: "synchronous default",
-              got: "async function",
-              comparison: "sync",
-              type: "usage",
-            },
-          );
-        }
-        // Pass the result through validation
-        input = result;
-      } else {
-        // Use the default value, but pass it through validation
-        input = this._optionalDefault;
-      }
-    }
-
-    // Handle nullable (null) second
-    if (this._isNullable && input === null) {
-      return null as T;
-    }
+    // Optional and nullable logic is now handled in the transform chain
 
     try {
       return this._composedTransform(input) as T;
@@ -584,8 +644,8 @@ export abstract class BaseGuardian<T> {
    * ```ts
    * const base = Guardian.string();
    * const immutable = base.immutable();
-   * const email = immutable.email();     // Creates new instance
-   * const phone = immutable.pattern();   // Creates new instance
+   * const email = immutable.email();     // Returns new instance (immutable mode)
+   * const phone = immutable.pattern();   // Returns new instance (immutable mode)  
    * // base and immutable are unchanged
    * ```
    */
@@ -655,11 +715,119 @@ export abstract class BaseGuardian<T> {
       _hasOptional: this._hasOptional,
       _optionalDefault: this._optionalDefault,
       _metaData: metaData ? { ...metaData } : undefined,
+      _constraints: { ...this._constraints },
     }, this.constructor.prototype);
 
     return newGuardian;
   }
 
+  //#region Documentation Methods
 
+  /**
+   * Generates OpenAPI 3.0 schema definition for this Guardian.
+   * 
+   * @returns OpenAPI schema object
+   */
+  toOpenAPI(): Record<string, unknown> {
+    const schema: Record<string, unknown> = {
+      type: this._type
+    };
+    
+    // Add metadata if available
+    if (this._metaData) {
+      if (this._metaData.title) schema.title = this._metaData.title;
+      if (this._metaData.description) schema.description = this._metaData.description;
+      if (this._metaData.deprecated) schema.deprecated = this._metaData.deprecated;
+      if (this._metaData.examples) schema.examples = this._metaData.examples;
+    }
+
+    // Handle nullable
+    if (this._isNullable) {
+      schema.nullable = true;
+    }
+
+    // Try to infer format and constraints from the transform function
+    const funcStr = this._composedTransform.toString();
+    this._enrichOpenAPISchema(schema, funcStr);
+
+    return schema;
+  }
+
+  /**
+   * Generates simple Markdown documentation for this Guardian.
+   * 
+   * @returns Markdown string
+   */
+  toMarkdown(): string {
+    let markdown = "";
+
+    // Title
+    if (this._metaData?.title) {
+      markdown += `### ${this._metaData.title}\n\n`;
+    }
+
+    // Description
+    if (this._metaData?.description) {
+      markdown += `${this._metaData.description}\n\n`;
+    }
+
+    // Type and format info
+    const funcStr = this._composedTransform.toString();
+    const format = this._inferFormat(funcStr);
+    let typeInfo = `**Type:** ${this._type}`;
+    if (format) {
+      typeInfo += ` (${format})`;
+    }
+    if (this._isNullable) typeInfo += ", nullable";
+    if (this._hasOptional) typeInfo += ", optional";
+    markdown += `${typeInfo}\n\n`;
+
+    // Examples
+    if (this._metaData?.examples && this._metaData.examples.length > 0) {
+      markdown += `**Examples:** `;
+      markdown += this._metaData.examples.map(ex => `\`${JSON.stringify(ex)}\``).join(", ");
+      markdown += "\n\n";
+    }
+
+    // Deprecation warning
+    if (this._metaData?.deprecated) {
+      markdown += `> ⚠️ **Deprecated**\n\n`;
+    }
+
+    return markdown.trim();
+  }
+
+  /**
+   * Enriches OpenAPI schema with format and constraints.
+   * Override in subclasses for type-specific enrichment.
+   * @protected
+   */
+  protected _enrichOpenAPISchema(schema: Record<string, unknown>, funcStr: string): void {
+    // Add stored constraints to schema
+    Object.assign(schema, this._constraints);
+    
+    // Try to infer format from function analysis as fallback
+    const format = this._inferFormat(funcStr);
+    if (format && !schema.format) {
+      schema.format = format;
+    }
+  }
+
+  /**
+   * Infers format from function string analysis.
+   * @protected
+   */
+  protected _inferFormat(funcStr: string): string | undefined {
+    // Only apply to string types - check if this is a string guardian
+    if (this._type !== "string") return undefined;
+    
+    if (funcStr.includes('email()')) return 'email';
+    if (funcStr.includes('uuid()')) return 'uuid';
+    if (funcStr.includes('url()') || funcStr.includes('uri()')) return 'uri';
+    if (funcStr.includes('date()')) return 'date-time';
+    return undefined;
+  }
+
+  //#endregion
 
 }

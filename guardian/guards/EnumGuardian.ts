@@ -19,6 +19,7 @@ import type { GuardianMetaData } from "../types/mod.ts";
  * @since 1.0.0
  */
 export class EnumGuardian<T> extends BaseGuardian<T> {
+  protected override readonly _type = "string";
   private readonly _allowedValues: readonly T[];
 
   /**
@@ -66,7 +67,7 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
    *
    * @param excludedValues - Values to exclude
    * @param errorMessage - Optional custom error message
-   * @returns New EnumGuardian with exclusion validation
+   * @returns This EnumGuardian (mutated) or new instance if immutable mode
    */
   exclude(excludedValues: T[], errorMessage?: string): EnumGuardian<T> {
     return this.process((value: T) => {

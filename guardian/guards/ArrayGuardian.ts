@@ -27,6 +27,7 @@ import type { GuardianMetaData } from "../types/mod.ts";
  * @since 1.0.0
  */
 export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
+  protected override readonly _type = "array";
   private _elementGuardian?: BaseGuardian<T>;
 
   /**
@@ -88,7 +89,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @param length - Exact required length
    * @param message - Optional custom error message
-   * @returns New ArrayGuardian with length validation
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -121,7 +122,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @param minLength - Minimum required length
    * @param message - Optional custom error message
-   * @returns New ArrayGuardian with minimum length validation
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -131,7 +132,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   minLength(minLength: number, message?: string): ArrayGuardian<T> {
-    return this.process(
+    const result = this.process(
       (value: Array<T>) => {
         if (value.length < minLength) {
           throw new GuardianError(
@@ -148,6 +149,10 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
         return value;
       },
     ) as ArrayGuardian<T>;
+    
+    // Store constraint for OpenAPI generation
+    result._constraints.minItems = minLength;
+    return result;
   }
 
   /**
@@ -155,7 +160,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @param maxLength - Maximum allowed length
    * @param message - Optional custom error message
-   * @returns New ArrayGuardian with maximum length validation
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -165,7 +170,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```
    */
   maxLength(maxLength: number, message?: string): ArrayGuardian<T> {
-    return this.process(
+    const result = this.process(
       (value: Array<T>) => {
         if (value.length > maxLength) {
           throw new GuardianError(
@@ -182,13 +187,17 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
         return value;
       },
     ) as ArrayGuardian<T>;
+    
+    // Store constraint for OpenAPI generation
+    result._constraints.maxItems = maxLength;
+    return result;
   }
 
   /**
    * Validates that the array is not empty.
    *
    * @param message - Optional custom error message
-   * @returns New ArrayGuardian with non-empty validation
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -209,7 +218,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * Validates that all elements in the array are unique.
    *
    * @param message - Optional custom error message
-   * @returns New ArrayGuardian with uniqueness validation
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -259,7 +268,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @param element - Element that must be present in the array
    * @param message - Optional custom error message
-   * @returns New ArrayGuardian with inclusion validation
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -287,7 +296,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @param element - Element that must not be present in the array
    * @param message - Optional custom error message
-   * @returns New ArrayGuardian with exclusion validation
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -323,7 +332,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * @template U - The new element type after transformation
    * @param mapper - Function to transform each element
    * @param description - Optional description of the transformation
-   * @returns New ArrayGuardian with mapped elements
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -346,7 +355,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @param predicate - Function to test each element
    * @param description - Optional description of the transformation
-   * @returns New ArrayGuardian with filtered elements
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -369,7 +378,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @param n - Number of elements to take
    * @param description - Optional description of the transformation
-   * @returns New ArrayGuardian with limited elements
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -388,7 +397,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @param n - Number of elements to skip
    * @param description - Optional description of the transformation
-   * @returns New ArrayGuardian with remaining elements
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -407,7 +416,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @param compareFunction - Optional comparison function for sorting
    * @param description - Optional description of the transformation
-   * @returns New ArrayGuardian with sorted elements
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -428,7 +437,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * Transforms array by reversing the order of elements.
    *
    * @param description - Optional description of the transformation
-   * @returns New ArrayGuardian with reversed elements
+   * @returns This ArrayGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -440,6 +449,23 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
     return this.process((value: Array<T>) => {
       return [...value].reverse();
     }) as ArrayGuardian<T>;
+  }
+
+  //#endregion
+
+  //#region Documentation Methods
+
+  /**
+   * @override
+   */
+  protected override _enrichOpenAPISchema(schema: Record<string, unknown>, funcStr: string): void {
+    // Don't call super for arrays - we don't want generic format inference
+    
+    // Add stored constraints to schema
+    Object.assign(schema, this._constraints);
+    
+    // TODO: Add items schema if we have element guardian info
+    // This would require storing the element guardian reference
   }
 
   //#endregion

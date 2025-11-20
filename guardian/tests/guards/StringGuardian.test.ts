@@ -62,9 +62,9 @@ Deno.test("guardian.StringGuardian", async (t) => {
     });
   });
 
-  await t.step("regex validation", async (t) => {
+  await t.step("pattern validation", async (t) => {
     await t.step("should validate against regex patterns", () => {
-      const lettersOnly = new StringGuardian().regex(/^[a-zA-Z]+$/);
+      const lettersOnly = new StringGuardian().pattern(/^[a-zA-Z]+$/);
 
       asserts.assertEquals(lettersOnly.parse("hello"), "hello");
       asserts.assertEquals(lettersOnly.parse("Hello"), "Hello");

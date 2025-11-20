@@ -19,6 +19,8 @@ import { format } from "$datetime";
  * @since 1.0.0
  */
 export class DateGuardian extends BaseGuardian<Date> {
+  protected override readonly _type = "string";
+
   /**
    * Creates a new DateGuardian instance.
    *
@@ -68,7 +70,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    *
    * @param date - Minimum allowed date
    * @param errorMessage - Optional custom error message
-   * @returns New DateGuardian with minimum date validation
+   * @returns This DateGuardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -99,7 +101,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    *
    * @param date - Maximum allowed date
    * @param errorMessage - Optional custom error message
-   * @returns New DateGuardian with maximum date validation
+   * @returns This DateGuardian (mutated) or new instance if immutable mode
    */
   max(date: Date, errorMessage?: string): DateGuardian {
     return this.process((value: Date) => {
@@ -122,7 +124,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * Validates that date is in the past.
    *
    * @param errorMessage - Optional custom error message
-   * @returns New DateGuardian with past date validation
+   * @returns This DateGuardian (mutated) or new instance if immutable mode
    */
   past(errorMessage?: string): DateGuardian {
     return this.process((value: Date) => {
@@ -143,7 +145,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * Validates that date is in the future.
    *
    * @param errorMessage - Optional custom error message
-   * @returns New DateGuardian with future date validation
+   * @returns This DateGuardian (mutated) or new instance if immutable mode
    */
   future(errorMessage?: string): DateGuardian {
     return this.process((value: Date) => {
@@ -169,7 +171,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    *
    * @param weekday - Target weekday (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
    * @param errorMessage - Optional custom error message
-   * @returns New DateGuardian with weekday validation
+   * @returns This DateGuardian (mutated) or new instance if immutable mode
    */
   weekday(weekday: number, errorMessage?: string): DateGuardian {
     const weekdayNames = [
@@ -202,7 +204,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * Validates that date falls within business hours (9 AM - 5 PM).
    *
    * @param errorMessage - Optional custom error message
-   * @returns New DateGuardian with business hours validation
+   * @returns This DateGuardian (mutated) or new instance if immutable mode
    */
   businessHours(errorMessage?: string): DateGuardian {
     return this.process((value: Date) => {
@@ -230,7 +232,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * Formats date to string using the specified pattern.
    *
    * @param pattern - Date format pattern (using $datetime format function)
-   * @returns New BaseGuardian<string> with formatted date string
+   * @returns This Guardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
@@ -245,7 +247,7 @@ export class DateGuardian extends BaseGuardian<Date> {
   /**
    * Transforms date to ISO string.
    *
-   * @returns New BaseGuardian<string> with ISO string transformation
+   * @returns This Guardian (mutated) or new instance if immutable mode
    */
   toISOString(): BaseGuardian<string> {
     return this.process((date: Date) => date.toISOString());
@@ -254,7 +256,7 @@ export class DateGuardian extends BaseGuardian<Date> {
   /**
    * Transforms date to Unix timestamp (milliseconds).
    *
-   * @returns New BaseGuardian<number> with timestamp transformation
+   * @returns This Guardian (mutated) or new instance if immutable mode
    */
   toTimestamp(): BaseGuardian<number> {
     return this.process(
@@ -265,7 +267,7 @@ export class DateGuardian extends BaseGuardian<Date> {
   /**
    * Transforms date to Unix timestamp (seconds).
    *
-   * @returns New BaseGuardian<number> with Unix timestamp transformation
+   * @returns This Guardian (mutated) or new instance if immutable mode
    */
   toUnixTimestamp(): BaseGuardian<number> {
     return this.process(
@@ -277,7 +279,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * Extracts specific component from date.
    *
    * @param component - Date component to extract
-   * @returns New BaseGuardian<number> with extracted component
+   * @returns This Guardian (mutated) or new instance if immutable mode
    *
    * @example
    * ```ts
