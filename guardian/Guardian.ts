@@ -16,6 +16,14 @@ import type {
   GuardianInferInput,
   GuardianMetaData,
 } from "./types/mod.ts";
+
+// Import the new type utility for object type inference
+type InferGuardianType<T> = T extends BaseGuardian<infer U> ? U : never;
+type InferObjectType<T extends Record<string, BaseGuardian<unknown>>> = {
+  [K in keyof T as undefined extends InferGuardianType<T[K]> ? never : K]: InferGuardianType<T[K]>;
+} & {
+  [K in keyof T as undefined extends InferGuardianType<T[K]> ? K : never]?: Exclude<InferGuardianType<T[K]>, undefined>;
+};
 import { GuardianError } from "./GuardianError.ts";
 
 /**
@@ -381,10 +389,18 @@ export class Guardian {
    * }));
    * ```
    */
-  static object<T extends Record<string, unknown> = Record<string, unknown>>(
-    schema?: ObjectSchema<T>,
+  static object<T extends Record<string, BaseGuardian<unknown>>>(
+    schema: T,
     metaData?: GuardianMetaData,
-  ): ObjectGuardian<T> {
-    return new ObjectGuardian(schema, metaData);
+  ): ObjectGuardian<InferObjectType<T>>;
+  static object(
+    schema?: undefined,
+    metaData?: GuardianMetaData,
+  ): ObjectGuardian<Record<string, unknown>>;
+  static object<T extends Record<string, BaseGuardian<unknown>>>(
+    schema?: T,
+    metaData?: GuardianMetaData,
+  ) {
+    return new ObjectGuardian(schema as any, metaData) as any;
   }
 }

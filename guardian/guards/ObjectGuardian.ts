@@ -3,6 +3,21 @@ import { GuardianError } from "../GuardianError.ts";
 import type { GuardianMetaData, GuardianTransform } from "../types/mod.ts";
 
 /**
+ * Helper type to infer the output type from a BaseGuardian
+ */
+type InferGuardianType<T> = T extends BaseGuardian<infer U> ? U : never;
+
+/**
+ * Type utility to infer the proper object type from a schema
+ * This handles optional fields correctly by checking if undefined is part of the Guardian's type
+ */
+type InferObjectType<T extends Record<string, BaseGuardian<unknown>>> = {
+  [K in keyof T as undefined extends InferGuardianType<T[K]> ? never : K]: InferGuardianType<T[K]>;
+} & {
+  [K in keyof T as undefined extends InferGuardianType<T[K]> ? K : never]?: Exclude<InferGuardianType<T[K]>, undefined>;
+};
+
+/**
  * Type definition for object schema - maps property names to their Guardian validators
  */
 export type ObjectSchema<T = Record<string, unknown>> = {
@@ -776,6 +791,14 @@ export class ObjectGuardian<
     for (const [key, guard] of Object.entries(this._schema)) {
       try {
         const value = inputObj[key];
+        
+        // Check if this is an optional field that's missing from input
+        if (value === undefined && guard.metaData?.isOptional && !(key in inputObj)) {
+          // Skip optional fields that are completely missing from input
+          // This matches Zod behavior of omitting missing optional fields
+          continue;
+        }
+        
         result[key] = guard.parse(value);
       } catch (error) {
         if (error instanceof GuardianError) {

@@ -232,9 +232,21 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    * ```
    */
   nullish(): BaseGuardian<null | undefined> {
-    return this.narrow(
-      (value: unknown): value is null | undefined => value == null,
-    );
+    const nullishTransform: GuardianTransform<unknown, null | undefined> = (
+      input: unknown,
+    ) => {
+      if (input === null || input === undefined) {
+        return input as null | undefined;
+      }
+      throw new GuardianError("Expected null or undefined", {
+        expected: "null or undefined",
+        got: typeof input === "object" ? "object" : typeof input,
+        comparison: "nullish",
+        type: "unknown",
+      });
+    };
+
+    return new UnknownGuardian(nullishTransform, this.metaData);
   }
 
   /**

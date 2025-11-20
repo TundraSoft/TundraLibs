@@ -338,7 +338,7 @@ export abstract class BaseGuardian<T> {
    * nullableString.parse(undefined); // null
    * ```
    */
-  nullable(): this {
+  nullable(): BaseGuardian<T | null> {
     // Prevent multiple nullable() calls
     if (this._metaData?.isNullable) {
       throw new GuardianError(
@@ -351,8 +351,20 @@ export abstract class BaseGuardian<T> {
         },
       );
     }
+    // Prevent calling nullable() after optional()
+    if (this._metaData?.isOptional) {
+      throw new GuardianError(
+        "Cannot call nullable() after optional(). These are mutually exclusive finisher methods.",
+        {
+          expected: "nullable() before optional()",
+          got: "nullable() after optional()",
+          comparison: "method_order",
+          type: "validation",
+        },
+      );
+    }
     if (this.isImmutable === true) {
-      return this.clone().nullable() as this;
+      return this.clone().nullable();
     } else {
       // Mutate in place for better performance
       // Use process with identity transform but modify the composed transform to handle null/undefined
@@ -375,7 +387,7 @@ export abstract class BaseGuardian<T> {
         this._metaData = { };
       }
       this._metaData.isNullable = true;
-      return this;
+      return this as BaseGuardian<T | null>;
     }
   }
 
@@ -393,11 +405,11 @@ export abstract class BaseGuardian<T> {
    * optionalString.parse(undefined); // 'default'
    * ```
    */
-  optional(): this;
-  optional<D>(defaultValue: D | (() => D)): this;
+  optional(): BaseGuardian<T | undefined>;
+  optional<D>(defaultValue: D | (() => D)): BaseGuardian<T | D | undefined>;
   optional<D>(
     _defaultValue?: D | (() => D),
-  ): this {
+  ): BaseGuardian<T | D | undefined> {
     // Prevent multiple optional() calls
     if (this._metaData?.isOptional) {
       throw new GuardianError(
@@ -405,6 +417,18 @@ export abstract class BaseGuardian<T> {
         {
           expected: "single optional() call",
           got: "multiple optional() calls",
+          comparison: "method_order",
+          type: "validation",
+        },
+      );
+    }
+    // Prevent calling optional() after nullable()
+    if (this._metaData?.isNullable) {
+      throw new GuardianError(
+        "Cannot call optional() after nullable(). These are mutually exclusive finisher methods.",
+        {
+          expected: "optional() before nullable()",
+          got: "optional() after nullable()",
           comparison: "method_order",
           type: "validation",
         },
@@ -465,7 +489,7 @@ export abstract class BaseGuardian<T> {
       returnInstance = this;
     }
 
-    return returnInstance;
+    return returnInstance as BaseGuardian<T | D | undefined>;
   }
 
   /**
