@@ -510,8 +510,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    */
   flatten(joiner: string = ',', depth: number = 1): StringGuardian {
     return this.process((value: Array<T>) => {
-      const flattenArray = (arr: any[], currentDepth: number): any[] => {
-        const result: any[] = [];
+      const flattenArray = (arr: Array<T>, currentDepth: number): Array<T> => {
+        const result: Array<T> = [];
         for (const item of arr) {
           if (Array.isArray(item) && currentDepth > 0) {
             result.push(...flattenArray(item, currentDepth - 1));
