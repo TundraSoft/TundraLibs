@@ -4,7 +4,7 @@ import {
   IPV4_SEGMENT,
   IPV6_MAX_SUBNET,
   IPV6_SEGMENT,
-} from "./ipUtils.ts";
+} from './ipUtils.ts';
 
 /**
  * Checks if a given string represents a valid IP subnet in CIDR notation.
@@ -20,12 +20,12 @@ import {
  * isSubnet('192.168.1.1')    // false (no subnet)
  */
 export const isSubnet = (ip: string): boolean => {
-  if (typeof ip !== "string") return false;
+  if (typeof ip !== 'string') return false;
 
   const trimmedIp = ip.trim();
   if (!trimmedIp) return false;
 
-  const parts = trimmedIp.split("/");
+  const parts = trimmedIp.split('/');
   if (parts.length !== 2) return false;
 
   const [addressPart, subnetPart] = parts;
@@ -42,7 +42,7 @@ export const isSubnet = (ip: string): boolean => {
   }
 
   // Check if it's IPv6
-  if (addressPart.includes(":")) {
+  if (addressPart.includes(':')) {
     return isIPv6Subnet(addressPart, parseInt(subnetPart, 10));
   }
 
@@ -63,7 +63,7 @@ const isIPv4Subnet = (ip: string, subnet: number): boolean => {
   }
 
   // Validate IPv4 format
-  const segments = ip.split(".");
+  const segments = ip.split('.');
   if (segments.length !== 4) return false;
 
   return segments.every((segment) => {
@@ -88,7 +88,7 @@ const isIPv6Subnet = (ip: string, subnet: number): boolean => {
   const expandedIP = expandIPv6(ip);
   if (!expandedIP) return false;
 
-  const segments = expandedIP.split(":");
+  const segments = expandedIP.split(':');
   if (segments.length !== 8) return false;
 
   return segments.every((segment) => {

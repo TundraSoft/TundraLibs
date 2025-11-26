@@ -5,9 +5,7 @@
     "noImplicitOverride": true,
     "noUncheckedIndexedAccess": true,
     "allowUnreachableCode": false,
-    "noErrorTruncation": true,
-    "emitDecoratorMetadata": true,
-    "experimentalDecorators": true
+    "noErrorTruncation": true
   },
   "unstable": [
     "ffi"
@@ -41,7 +39,7 @@
     "lineWidth": 80,
     "useTabs": false,
     "singleQuote": true,
-    "semiColons": true, 
+    "semiColons": true,
     "exclude": [
       "./.vscode",
       "./.git",
@@ -96,9 +94,10 @@
   "workspace": [
     "./cacher",
     "./crypt",
+    "./dam",
     "./guardian",
     "./id",
-    "./restler", 
+    "./restler",
     "./slogger",
     "./utils"
   ]

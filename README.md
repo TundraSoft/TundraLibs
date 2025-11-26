@@ -42,26 +42,26 @@ deno add @tundralibs/crypt @tundralibs/id @tundralibs/utils
 
 ```typescript
 // Cryptographic operations
-import { decrypt, digest, encrypt, TOTP } from "@tundralibs/crypt";
+import { decrypt, digest, encrypt, TOTP } from '@tundralibs/crypt';
 
 // Generate TOTP code
-const secret = "JBSWY3DPEHPK3PXP";
+const secret = 'JBSWY3DPEHPK3PXP';
 const code = TOTP(secret);
 console.log(code); // 6-digit TOTP code
 
 // Encrypt/decrypt data
 const key = await crypto.subtle.generateKey(
-  { name: "AES-GCM", length: 256 },
+  { name: 'AES-GCM', length: 256 },
   true,
-  ["encrypt", "decrypt"],
+  ['encrypt', 'decrypt'],
 );
-const encrypted = await encrypt("Hello World", key);
+const encrypted = await encrypt('Hello World', key);
 const decrypted = await decrypt(encrypted, key);
 ```
 
 ```typescript
 // ID generation
-import { nanoID, ObjectID, ULID } from "@tundralibs/id";
+import { nanoID, ObjectID, ULID } from '@tundralibs/id';
 
 // Generate various ID types
 const nano = nanoID(); // URL-safe, customizable
@@ -71,11 +71,11 @@ const objectId = ObjectID(); // MongoDB-style ObjectID
 
 ```typescript
 // Utility functions
-import { Events, memoize, throttle } from "@tundralibs/utils";
+import { Events, memoize, throttle } from '@tundralibs/utils';
 
 // Throttle function calls
 const throttledFn = throttle(() => {
-  console.log("Called at most once per second");
+  console.log('Called at most once per second');
 }, 1000);
 
 // Memoize expensive operations
@@ -85,7 +85,7 @@ const memoizedFn = memoize((x: number) => {
 
 // Event handling
 const events = new Events<{ userLogin: { userId: string } }>();
-events.on("userLogin", ({ userId }) => {
+events.on('userLogin', ({ userId }) => {
   console.log(`User ${userId} logged in`);
 });
 ```

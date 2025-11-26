@@ -1,15 +1,15 @@
-import * as asserts from "$asserts";
-import { Cacher } from "./Cacher.ts";
-import { AbstractEngine } from "./AbstractEngine.ts";
-import { CacherError } from "./errors/mod.ts";
-import type { CacherOptions } from "./types/mod.ts";
-import type { CacheValue } from "./types/Value.ts";
+import * as asserts from '$asserts';
+import { Cacher } from './Cacher.ts';
+import { AbstractEngine } from './AbstractEngine.ts';
+import { CacherError } from './errors/mod.ts';
+import type { CacherOptions } from './types/mod.ts';
+import type { CacheValue } from './types/Value.ts';
 
 /**
  * Mock engine for testing purposes
  */
 class MockEngine extends AbstractEngine {
-  public readonly Engine = "MOCK";
+  public readonly Engine = 'MOCK';
 
   private readonly _storage = new Map<string, CacheValue>();
 
@@ -46,11 +46,11 @@ class MockEngine extends AbstractEngine {
  * Mock engine that throws errors during construction
  */
 class FailingMockEngine extends AbstractEngine {
-  public readonly Engine = "FAILING_MOCK";
+  public readonly Engine = 'FAILING_MOCK';
 
   constructor(name: string, options: CacherOptions) {
     super(name, options);
-    throw new Error("Mock construction failure");
+    throw new Error('Mock construction failure');
   }
 
   protected override async _set(
@@ -77,411 +77,411 @@ class FailingMockEngine extends AbstractEngine {
   }
 }
 
-Deno.test("cacher.core", async (t) => {
+Deno.test('cacher.core', async (t) => {
   // Helper to reset Cacher state between tests
   const resetCacher = async () => {
     await Cacher.clear();
     // Remove test engines
-    Cacher.removeEngine("MOCK");
-    Cacher.removeEngine("FAILING");
-    Cacher.removeEngine("TEST_ENGINE");
-    Cacher.removeEngine("WHITESPACE_ENGINE");
-    Cacher.removeEngine("DUPLICATE");
-    Cacher.removeEngine("CUSTOM_ENGINE");
+    Cacher.removeEngine('MOCK');
+    Cacher.removeEngine('FAILING');
+    Cacher.removeEngine('TEST_ENGINE');
+    Cacher.removeEngine('WHITESPACE_ENGINE');
+    Cacher.removeEngine('DUPLICATE');
+    Cacher.removeEngine('CUSTOM_ENGINE');
   };
 
-  await t.step("initialization", async (d) => {
-    await d.step("should have default engines registered", () => {
+  await t.step('initialization', async (d) => {
+    await d.step('should have default engines registered', () => {
       const engines = Cacher.getRegisteredEngines();
 
-      asserts.assert(engines.includes("MEMORY"));
-      asserts.assert(engines.includes("REDIS"));
-      asserts.assert(engines.includes("MEMCACHED"));
+      asserts.assert(engines.includes('MEMORY'));
+      asserts.assert(engines.includes('REDIS'));
+      asserts.assert(engines.includes('MEMCACHED'));
       asserts.assertEquals(engines.length, 3);
     });
 
-    await d.step("should have no active instances initially", () => {
+    await d.step('should have no active instances initially', () => {
       const instances = Cacher.getActiveInstances();
       asserts.assertEquals(instances.length, 0);
     });
   });
 
-  await t.step("addEngine", async (d) => {
+  await t.step('addEngine', async (d) => {
     await resetCacher();
 
-    await d.step("should register a new engine successfully", () => {
-      Cacher.addEngine("MOCK", MockEngine as any);
+    await d.step('should register a new engine successfully', () => {
+      Cacher.addEngine('MOCK', MockEngine as any);
       const engines = Cacher.getRegisteredEngines();
-      asserts.assert(engines.includes("MOCK"));
+      asserts.assert(engines.includes('MOCK'));
     });
 
-    await d.step("should normalize engine names to uppercase", () => {
-      Cacher.addEngine("test_engine", MockEngine as any);
+    await d.step('should normalize engine names to uppercase', () => {
+      Cacher.addEngine('test_engine', MockEngine as any);
       const engines = Cacher.getRegisteredEngines();
-      asserts.assert(engines.includes("TEST_ENGINE"));
+      asserts.assert(engines.includes('TEST_ENGINE'));
     });
 
-    await d.step("should trim whitespace from engine names", () => {
-      Cacher.addEngine("  whitespace_engine  ", MockEngine as any);
+    await d.step('should trim whitespace from engine names', () => {
+      Cacher.addEngine('  whitespace_engine  ', MockEngine as any);
       const engines = Cacher.getRegisteredEngines();
-      asserts.assert(engines.includes("WHITESPACE_ENGINE"));
+      asserts.assert(engines.includes('WHITESPACE_ENGINE'));
     });
 
-    await d.step("should throw error when registering duplicate engine", () => {
+    await d.step('should throw error when registering duplicate engine', () => {
       // First registration should succeed
-      Cacher.addEngine("DUPLICATE", MockEngine as any);
+      Cacher.addEngine('DUPLICATE', MockEngine as any);
 
       // Second registration should fail
       asserts.assertThrows(
-        () => Cacher.addEngine("DUPLICATE", MockEngine as any),
+        () => Cacher.addEngine('DUPLICATE', MockEngine as any),
         CacherError,
         'Engine "DUPLICATE" is already registered',
       );
     });
 
-    await d.step("should throw error for invalid engine name", () => {
+    await d.step('should throw error for invalid engine name', () => {
       asserts.assertThrows(
-        () => Cacher.addEngine("", MockEngine as any),
+        () => Cacher.addEngine('', MockEngine as any),
         CacherError,
-        "Engine name must be a non-empty string",
+        'Engine name must be a non-empty string',
       );
 
       asserts.assertThrows(
         () => Cacher.addEngine(null as any, MockEngine as any),
         CacherError,
-        "Engine name must be a non-empty string",
+        'Engine name must be a non-empty string',
       );
 
       asserts.assertThrows(
         () => Cacher.addEngine(123 as any, MockEngine as any),
         CacherError,
-        "Engine name must be a non-empty string",
+        'Engine name must be a non-empty string',
       );
     });
 
-    await d.step("should throw error for invalid engine constructor", () => {
+    await d.step('should throw error for invalid engine constructor', () => {
       asserts.assertThrows(
-        () => Cacher.addEngine("INVALID", null as any),
+        () => Cacher.addEngine('INVALID', null as any),
         CacherError,
-        "Engine must be a constructor function",
+        'Engine must be a constructor function',
       );
 
       asserts.assertThrows(
-        () => Cacher.addEngine("INVALID", "not-a-function" as any),
+        () => Cacher.addEngine('INVALID', 'not-a-function' as any),
         CacherError,
-        "Engine must be a constructor function",
+        'Engine must be a constructor function',
       );
 
       asserts.assertThrows(
-        () => Cacher.addEngine("INVALID", {} as any),
+        () => Cacher.addEngine('INVALID', {} as any),
         CacherError,
-        "Engine must be a constructor function",
+        'Engine must be a constructor function',
       );
     });
   });
 
-  await t.step("create", async (d) => {
+  await t.step('create', async (d) => {
     await resetCacher();
 
     // Register mock engine for testing
-    if (!Cacher.getRegisteredEngines().includes("MOCK")) {
-      Cacher.addEngine("MOCK", MockEngine as any);
+    if (!Cacher.getRegisteredEngines().includes('MOCK')) {
+      Cacher.addEngine('MOCK', MockEngine as any);
     }
 
-    await d.step("should create a new cache instance", () => {
-      const cache = Cacher.create("MOCK", "test-cache", { defaultExpiry: 300 });
+    await d.step('should create a new cache instance', () => {
+      const cache = Cacher.create('MOCK', 'test-cache', { defaultExpiry: 300 });
 
       asserts.assert(cache instanceof MockEngine);
-      asserts.assertEquals(cache.name, "test-cache");
-      asserts.assertEquals(cache.getOption("defaultExpiry"), 300);
+      asserts.assertEquals(cache.name, 'test-cache');
+      asserts.assertEquals(cache.getOption('defaultExpiry'), 300);
     });
 
-    await d.step("should return existing instance for same name", () => {
-      const cache1 = Cacher.create("MOCK", "same-cache", {
+    await d.step('should return existing instance for same name', () => {
+      const cache1 = Cacher.create('MOCK', 'same-cache', {
         defaultExpiry: 300,
       });
-      const cache2 = Cacher.create("MOCK", "same-cache", {
+      const cache2 = Cacher.create('MOCK', 'same-cache', {
         defaultExpiry: 600,
       });
 
       // Should be the same instance
       asserts.assertStrictEquals(cache1, cache2);
       // Should keep original options
-      asserts.assertEquals(cache1.getOption("defaultExpiry"), 300);
+      asserts.assertEquals(cache1.getOption('defaultExpiry'), 300);
     });
 
-    await d.step("should normalize and trim instance names", () => {
-      const cache = Cacher.create("MOCK", "  test-instance  ", {
+    await d.step('should normalize and trim instance names', () => {
+      const cache = Cacher.create('MOCK', '  test-instance  ', {
         defaultExpiry: 300,
       });
-      asserts.assertEquals(cache.name, "test-instance");
+      asserts.assertEquals(cache.name, 'test-instance');
 
       const instances = Cacher.getActiveInstances();
-      asserts.assert(instances.includes("test-instance"));
+      asserts.assert(instances.includes('test-instance'));
     });
 
-    await d.step("should normalize engine names to uppercase", () => {
-      const cache = Cacher.create("mock", "lowercase-engine", {
+    await d.step('should normalize engine names to uppercase', () => {
+      const cache = Cacher.create('mock', 'lowercase-engine', {
         defaultExpiry: 300,
       });
       asserts.assert(cache instanceof MockEngine);
     });
 
-    await d.step("should throw error for unregistered engine", () => {
+    await d.step('should throw error for unregistered engine', () => {
       asserts.assertThrows(
-        () => Cacher.create("NONEXISTENT", "test", { defaultExpiry: 300 }),
+        () => Cacher.create('NONEXISTENT', 'test', { defaultExpiry: 300 }),
         CacherError,
         'Engine "NONEXISTENT" is not registered',
       );
     });
 
-    await d.step("should throw error for invalid parameters", () => {
+    await d.step('should throw error for invalid parameters', () => {
       // Invalid engine
       asserts.assertThrows(
-        () => Cacher.create("", "test", { defaultExpiry: 300 }),
+        () => Cacher.create('', 'test', { defaultExpiry: 300 }),
         CacherError,
-        "Engine type must be a non-empty string",
+        'Engine type must be a non-empty string',
       );
 
       asserts.assertThrows(
-        () => Cacher.create(null as any, "test", { defaultExpiry: 300 }),
+        () => Cacher.create(null as any, 'test', { defaultExpiry: 300 }),
         CacherError,
-        "Engine type must be a non-empty string",
+        'Engine type must be a non-empty string',
       );
 
       // Invalid name
       asserts.assertThrows(
-        () => Cacher.create("MOCK", "", { defaultExpiry: 300 }),
+        () => Cacher.create('MOCK', '', { defaultExpiry: 300 }),
         CacherError,
-        "Instance name must be a non-empty string",
+        'Instance name must be a non-empty string',
       );
 
       asserts.assertThrows(
-        () => Cacher.create("MOCK", null as any, { defaultExpiry: 300 }),
+        () => Cacher.create('MOCK', null as any, { defaultExpiry: 300 }),
         CacherError,
-        "Instance name must be a non-empty string",
+        'Instance name must be a non-empty string',
       );
 
       // Invalid options
       asserts.assertThrows(
-        () => Cacher.create("MOCK", "test", null as any),
+        () => Cacher.create('MOCK', 'test', null as any),
         CacherError,
-        "Options must be a valid object",
+        'Options must be a valid object',
       );
 
       asserts.assertThrows(
-        () => Cacher.create("MOCK", "test", "not-an-object" as any),
+        () => Cacher.create('MOCK', 'test', 'not-an-object' as any),
         CacherError,
-        "Options must be a valid object",
+        'Options must be a valid object',
       );
 
       asserts.assertThrows(
-        () => Cacher.create("MOCK", "test", [] as any),
+        () => Cacher.create('MOCK', 'test', [] as any),
         CacherError,
-        "Options must be a valid object",
+        'Options must be a valid object',
       );
 
       asserts.assertThrows(
-        () => Cacher.create("MOCK", "test", [1, 2, 3] as any),
+        () => Cacher.create('MOCK', 'test', [1, 2, 3] as any),
         CacherError,
-        "Options must be a valid object",
+        'Options must be a valid object',
       );
     });
 
-    await d.step("should handle engine construction failures", () => {
-      if (!Cacher.getRegisteredEngines().includes("FAILING")) {
-        Cacher.addEngine("FAILING", FailingMockEngine as any);
+    await d.step('should handle engine construction failures', () => {
+      if (!Cacher.getRegisteredEngines().includes('FAILING')) {
+        Cacher.addEngine('FAILING', FailingMockEngine as any);
       }
 
       asserts.assertThrows(
         () =>
-          Cacher.create("FAILING", "failing-instance", { defaultExpiry: 300 }),
+          Cacher.create('FAILING', 'failing-instance', { defaultExpiry: 300 }),
         CacherError,
-        "Failed to create instance",
+        'Failed to create instance',
       );
     });
   });
 
-  await t.step("getInstance", async (d) => {
+  await t.step('getInstance', async (d) => {
     await resetCacher();
-    if (!Cacher.getRegisteredEngines().includes("MOCK")) {
-      Cacher.addEngine("MOCK", MockEngine as any);
+    if (!Cacher.getRegisteredEngines().includes('MOCK')) {
+      Cacher.addEngine('MOCK', MockEngine as any);
     }
 
-    await d.step("should return existing instance", () => {
-      const cache1 = Cacher.create("MOCK", "existing-cache", {
+    await d.step('should return existing instance', () => {
+      const cache1 = Cacher.create('MOCK', 'existing-cache', {
         defaultExpiry: 300,
       });
-      const cache2 = Cacher.getInstance("existing-cache");
+      const cache2 = Cacher.getInstance('existing-cache');
 
       asserts.assertStrictEquals(cache1, cache2);
     });
 
-    await d.step("should return undefined for non-existent instance", () => {
-      const cache = Cacher.getInstance("non-existent");
+    await d.step('should return undefined for non-existent instance', () => {
+      const cache = Cacher.getInstance('non-existent');
       asserts.assertStrictEquals(cache, undefined);
     });
 
-    await d.step("should handle invalid names gracefully", () => {
-      asserts.assertStrictEquals(Cacher.getInstance(""), undefined);
+    await d.step('should handle invalid names gracefully', () => {
+      asserts.assertStrictEquals(Cacher.getInstance(''), undefined);
       asserts.assertStrictEquals(Cacher.getInstance(null as any), undefined);
       asserts.assertStrictEquals(Cacher.getInstance(123 as any), undefined);
     });
 
-    await d.step("should trim whitespace from names", () => {
-      Cacher.create("MOCK", "trimmed-cache", { defaultExpiry: 300 });
-      const cache = Cacher.getInstance("  trimmed-cache  ");
+    await d.step('should trim whitespace from names', () => {
+      Cacher.create('MOCK', 'trimmed-cache', { defaultExpiry: 300 });
+      const cache = Cacher.getInstance('  trimmed-cache  ');
       asserts.assert(cache instanceof MockEngine);
     });
   });
 
-  await t.step("hasInstance", async (d) => {
+  await t.step('hasInstance', async (d) => {
     await resetCacher();
-    if (!Cacher.getRegisteredEngines().includes("MOCK")) {
-      Cacher.addEngine("MOCK", MockEngine as any);
+    if (!Cacher.getRegisteredEngines().includes('MOCK')) {
+      Cacher.addEngine('MOCK', MockEngine as any);
     }
 
-    await d.step("should return true for existing instance", () => {
-      Cacher.create("MOCK", "existing-instance", { defaultExpiry: 300 });
-      asserts.assert(Cacher.hasInstance("existing-instance"));
+    await d.step('should return true for existing instance', () => {
+      Cacher.create('MOCK', 'existing-instance', { defaultExpiry: 300 });
+      asserts.assert(Cacher.hasInstance('existing-instance'));
     });
 
-    await d.step("should return false for non-existent instance", () => {
-      asserts.assert(!Cacher.hasInstance("non-existent-instance"));
+    await d.step('should return false for non-existent instance', () => {
+      asserts.assert(!Cacher.hasInstance('non-existent-instance'));
     });
 
-    await d.step("should handle invalid names gracefully", () => {
-      asserts.assert(!Cacher.hasInstance(""));
+    await d.step('should handle invalid names gracefully', () => {
+      asserts.assert(!Cacher.hasInstance(''));
       asserts.assert(!Cacher.hasInstance(null as any));
       asserts.assert(!Cacher.hasInstance(123 as any));
     });
 
-    await d.step("should trim whitespace from names", () => {
-      Cacher.create("MOCK", "whitespace-instance", { defaultExpiry: 300 });
-      asserts.assert(Cacher.hasInstance("  whitespace-instance  "));
+    await d.step('should trim whitespace from names', () => {
+      Cacher.create('MOCK', 'whitespace-instance', { defaultExpiry: 300 });
+      asserts.assert(Cacher.hasInstance('  whitespace-instance  '));
     });
   });
 
-  await t.step("removeInstance", async (d) => {
+  await t.step('removeInstance', async (d) => {
     await resetCacher();
-    if (!Cacher.getRegisteredEngines().includes("MOCK")) {
-      Cacher.addEngine("MOCK", MockEngine as any);
+    if (!Cacher.getRegisteredEngines().includes('MOCK')) {
+      Cacher.addEngine('MOCK', MockEngine as any);
     }
 
-    await d.step("should remove existing instance", async () => {
-      Cacher.create("MOCK", "removable-instance", { defaultExpiry: 300 });
-      asserts.assert(Cacher.hasInstance("removable-instance"));
+    await d.step('should remove existing instance', async () => {
+      Cacher.create('MOCK', 'removable-instance', { defaultExpiry: 300 });
+      asserts.assert(Cacher.hasInstance('removable-instance'));
 
-      const removed = await Cacher.removeInstance("removable-instance");
+      const removed = await Cacher.removeInstance('removable-instance');
       asserts.assert(removed);
-      asserts.assert(!Cacher.hasInstance("removable-instance"));
+      asserts.assert(!Cacher.hasInstance('removable-instance'));
     });
 
-    await d.step("should return false for non-existent instance", async () => {
-      const removed = await Cacher.removeInstance("non-existent");
+    await d.step('should return false for non-existent instance', async () => {
+      const removed = await Cacher.removeInstance('non-existent');
       asserts.assert(!removed);
     });
 
-    await d.step("should handle invalid names gracefully", async () => {
-      asserts.assert(!(await Cacher.removeInstance("")));
+    await d.step('should handle invalid names gracefully', async () => {
+      asserts.assert(!(await Cacher.removeInstance('')));
       asserts.assert(!(await Cacher.removeInstance(null as any)));
       asserts.assert(!(await Cacher.removeInstance(123 as any)));
     });
 
-    await d.step("should call finalize on instance if available", async () => {
-      const cache = Cacher.create("MOCK", "finalizable-instance", {
+    await d.step('should call finalize on instance if available', async () => {
+      const cache = Cacher.create('MOCK', 'finalizable-instance', {
         defaultExpiry: 300,
       }) as MockEngine;
 
       // Add some data to verify finalize was called
-      await cache.set("test-key", "test-value");
+      await cache.set('test-key', 'test-value');
       asserts.assertEquals(await cache.size(), 1);
 
-      await Cacher.removeInstance("finalizable-instance");
+      await Cacher.removeInstance('finalizable-instance');
 
       // Instance should no longer exist in manager
-      asserts.assert(!Cacher.hasInstance("finalizable-instance"));
+      asserts.assert(!Cacher.hasInstance('finalizable-instance'));
     });
 
-    await d.step("should trim whitespace from names", async () => {
-      Cacher.create("MOCK", "trimmed-removal", { defaultExpiry: 300 });
-      const removed = await Cacher.removeInstance("  trimmed-removal  ");
+    await d.step('should trim whitespace from names', async () => {
+      Cacher.create('MOCK', 'trimmed-removal', { defaultExpiry: 300 });
+      const removed = await Cacher.removeInstance('  trimmed-removal  ');
       asserts.assert(removed);
     });
   });
 
-  await t.step("getRegisteredEngines", async (d) => {
+  await t.step('getRegisteredEngines', async (d) => {
     await resetCacher();
 
-    await d.step("should return sorted list of engines", () => {
+    await d.step('should return sorted list of engines', () => {
       const engines = Cacher.getRegisteredEngines();
 
       // Should include default engines
-      asserts.assert(engines.includes("MEMCACHED"));
-      asserts.assert(engines.includes("MEMORY"));
-      asserts.assert(engines.includes("REDIS"));
+      asserts.assert(engines.includes('MEMCACHED'));
+      asserts.assert(engines.includes('MEMORY'));
+      asserts.assert(engines.includes('REDIS'));
 
       // Should be sorted
       const sortedEngines = [...engines].sort((a, b) => a.localeCompare(b));
       asserts.assertEquals(engines, sortedEngines);
     });
 
-    await d.step("should include custom engines", () => {
-      if (!Cacher.getRegisteredEngines().includes("CUSTOM_ENGINE")) {
-        Cacher.addEngine("CUSTOM_ENGINE", MockEngine as any);
+    await d.step('should include custom engines', () => {
+      if (!Cacher.getRegisteredEngines().includes('CUSTOM_ENGINE')) {
+        Cacher.addEngine('CUSTOM_ENGINE', MockEngine as any);
       }
       const engines = Cacher.getRegisteredEngines();
 
-      asserts.assert(engines.includes("CUSTOM_ENGINE"));
+      asserts.assert(engines.includes('CUSTOM_ENGINE'));
     });
   });
 
-  await t.step("getActiveInstances", async (d) => {
+  await t.step('getActiveInstances', async (d) => {
     await resetCacher();
-    if (!Cacher.getRegisteredEngines().includes("MOCK")) {
-      Cacher.addEngine("MOCK", MockEngine as any);
+    if (!Cacher.getRegisteredEngines().includes('MOCK')) {
+      Cacher.addEngine('MOCK', MockEngine as any);
     }
 
-    await d.step("should return empty array when no instances", () => {
+    await d.step('should return empty array when no instances', () => {
       const instances = Cacher.getActiveInstances();
       asserts.assertEquals(instances.length, 0);
     });
 
-    await d.step("should return sorted list of active instances", () => {
-      Cacher.create("MOCK", "instance-b", { defaultExpiry: 300 });
-      Cacher.create("MOCK", "instance-a", { defaultExpiry: 300 });
-      Cacher.create("MOCK", "instance-c", { defaultExpiry: 300 });
+    await d.step('should return sorted list of active instances', () => {
+      Cacher.create('MOCK', 'instance-b', { defaultExpiry: 300 });
+      Cacher.create('MOCK', 'instance-a', { defaultExpiry: 300 });
+      Cacher.create('MOCK', 'instance-c', { defaultExpiry: 300 });
 
       const instances = Cacher.getActiveInstances();
       asserts.assertEquals(instances, [
-        "instance-a",
-        "instance-b",
-        "instance-c",
+        'instance-a',
+        'instance-b',
+        'instance-c',
       ]);
     });
 
-    await d.step("should update after instance removal", async () => {
-      Cacher.create("MOCK", "temporary-instance", { defaultExpiry: 300 });
+    await d.step('should update after instance removal', async () => {
+      Cacher.create('MOCK', 'temporary-instance', { defaultExpiry: 300 });
       let instances = Cacher.getActiveInstances();
-      asserts.assert(instances.includes("temporary-instance"));
+      asserts.assert(instances.includes('temporary-instance'));
 
-      await Cacher.removeInstance("temporary-instance");
+      await Cacher.removeInstance('temporary-instance');
       instances = Cacher.getActiveInstances();
-      asserts.assertFalse(instances.includes("temporary-instance"));
+      asserts.assertFalse(instances.includes('temporary-instance'));
     });
   });
 
-  await t.step("clear", async (d) => {
+  await t.step('clear', async (d) => {
     await resetCacher();
-    if (!Cacher.getRegisteredEngines().includes("MOCK")) {
-      Cacher.addEngine("MOCK", MockEngine as any);
+    if (!Cacher.getRegisteredEngines().includes('MOCK')) {
+      Cacher.addEngine('MOCK', MockEngine as any);
     }
 
-    await d.step("should remove all instances", async () => {
+    await d.step('should remove all instances', async () => {
       // Create multiple instances
-      Cacher.create("MOCK", "instance-1", { defaultExpiry: 300 });
-      Cacher.create("MOCK", "instance-2", { defaultExpiry: 300 });
-      Cacher.create("MOCK", "instance-3", { defaultExpiry: 300 });
+      Cacher.create('MOCK', 'instance-1', { defaultExpiry: 300 });
+      Cacher.create('MOCK', 'instance-2', { defaultExpiry: 300 });
+      Cacher.create('MOCK', 'instance-3', { defaultExpiry: 300 });
 
       asserts.assertEquals(Cacher.getActiveInstances().length, 3);
 
@@ -490,17 +490,17 @@ Deno.test("cacher.core", async (t) => {
       asserts.assertEquals(Cacher.getActiveInstances().length, 0);
     });
 
-    await d.step("should call finalize on all instances", async () => {
-      const cache1 = Cacher.create("MOCK", "finalizable-1", {
+    await d.step('should call finalize on all instances', async () => {
+      const cache1 = Cacher.create('MOCK', 'finalizable-1', {
         defaultExpiry: 300,
       }) as MockEngine;
-      const cache2 = Cacher.create("MOCK", "finalizable-2", {
+      const cache2 = Cacher.create('MOCK', 'finalizable-2', {
         defaultExpiry: 300,
       }) as MockEngine;
 
       // Add data to verify finalize was called
-      await cache1.set("key1", "value1");
-      await cache2.set("key2", "value2");
+      await cache1.set('key1', 'value1');
+      await cache2.set('key2', 'value2');
 
       await Cacher.clear();
 
@@ -508,52 +508,52 @@ Deno.test("cacher.core", async (t) => {
       asserts.assertEquals(Cacher.getActiveInstances().length, 0);
     });
 
-    await d.step("should handle empty state gracefully", async () => {
+    await d.step('should handle empty state gracefully', async () => {
       // Clear when already empty
       await Cacher.clear();
       asserts.assertEquals(Cacher.getActiveInstances().length, 0);
     });
   });
 
-  await t.step("integration with built-in engines", async (d) => {
+  await t.step('integration with built-in engines', async (d) => {
     await resetCacher();
 
-    await d.step("should create memory cache instances", () => {
-      const cache = Cacher.create("MEMORY", "memory-test", {
+    await d.step('should create memory cache instances', () => {
+      const cache = Cacher.create('MEMORY', 'memory-test', {
         defaultExpiry: 300,
       });
-      asserts.assertEquals(cache.Engine, "MEMORY");
-      asserts.assertEquals(cache.name, "memory-test");
+      asserts.assertEquals(cache.Engine, 'MEMORY');
+      asserts.assertEquals(cache.name, 'memory-test');
     });
 
-    await d.step("should handle different engine types", () => {
-      const memoryCache = Cacher.create("MEMORY", "mem-cache", {
+    await d.step('should handle different engine types', () => {
+      const memoryCache = Cacher.create('MEMORY', 'mem-cache', {
         defaultExpiry: 300,
       });
 
       // Note: Redis and Memcached would require actual server connections
       // so we only test that the manager recognizes them as registered
       const engines = Cacher.getRegisteredEngines();
-      asserts.assert(engines.includes("REDIS"));
-      asserts.assert(engines.includes("MEMCACHED"));
+      asserts.assert(engines.includes('REDIS'));
+      asserts.assert(engines.includes('MEMCACHED'));
 
-      asserts.assertEquals(memoryCache.Engine, "MEMORY");
+      asserts.assertEquals(memoryCache.Engine, 'MEMORY');
     });
   });
 
-  await t.step("edge cases and error handling", async (d) => {
+  await t.step('edge cases and error handling', async (d) => {
     await resetCacher();
 
-    await d.step("should handle rapid create/remove cycles", async () => {
+    await d.step('should handle rapid create/remove cycles', async () => {
       await Cacher.clear(); // Clear any existing instances
-      if (!Cacher.getRegisteredEngines().includes("MOCK")) {
-        Cacher.addEngine("MOCK", MockEngine as any);
+      if (!Cacher.getRegisteredEngines().includes('MOCK')) {
+        Cacher.addEngine('MOCK', MockEngine as any);
       }
 
       // Create and remove instances rapidly
       for (let i = 0; i < 10; i++) {
         const instanceName = `rapid-${i}`;
-        Cacher.create("MOCK", instanceName, { defaultExpiry: 300 });
+        Cacher.create('MOCK', instanceName, { defaultExpiry: 300 });
         asserts.assert(Cacher.hasInstance(instanceName));
 
         await Cacher.removeInstance(instanceName);
@@ -563,16 +563,16 @@ Deno.test("cacher.core", async (t) => {
       asserts.assertEquals(Cacher.getActiveInstances().length, 0);
     });
 
-    await d.step("should handle concurrent operations", async () => {
+    await d.step('should handle concurrent operations', async () => {
       await Cacher.clear(); // Clear any existing instances
-      if (!Cacher.getRegisteredEngines().includes("MOCK")) {
-        Cacher.addEngine("MOCK", MockEngine as any);
+      if (!Cacher.getRegisteredEngines().includes('MOCK')) {
+        Cacher.addEngine('MOCK', MockEngine as any);
       }
 
       // Create instances concurrently
       const promises = Array.from({ length: 5 }, (_, i) => {
         return Promise.resolve(
-          Cacher.create("MOCK", `concurrent-${i}`, { defaultExpiry: 300 }),
+          Cacher.create('MOCK', `concurrent-${i}`, { defaultExpiry: 300 }),
         );
       });
 
@@ -582,20 +582,20 @@ Deno.test("cacher.core", async (t) => {
     });
 
     await d.step(
-      "should handle same instance created multiple times",
+      'should handle same instance created multiple times',
       async () => {
         await Cacher.clear(); // Clear any existing instances
-        if (!Cacher.getRegisteredEngines().includes("MOCK")) {
-          Cacher.addEngine("MOCK", MockEngine as any);
+        if (!Cacher.getRegisteredEngines().includes('MOCK')) {
+          Cacher.addEngine('MOCK', MockEngine as any);
         }
 
-        const cache1 = Cacher.create("MOCK", "duplicate-test", {
+        const cache1 = Cacher.create('MOCK', 'duplicate-test', {
           defaultExpiry: 300,
         });
-        const cache2 = Cacher.create("MOCK", "duplicate-test", {
+        const cache2 = Cacher.create('MOCK', 'duplicate-test', {
           defaultExpiry: 600,
         });
-        const cache3 = Cacher.create("MOCK", "duplicate-test", {
+        const cache3 = Cacher.create('MOCK', 'duplicate-test', {
           defaultExpiry: 900,
         });
 
@@ -604,70 +604,76 @@ Deno.test("cacher.core", async (t) => {
         asserts.assertStrictEquals(cache2, cache3);
 
         // Should maintain original configuration
-        asserts.assertEquals(cache1.getOption("defaultExpiry"), 300);
+        asserts.assertEquals(cache1.getOption('defaultExpiry'), 300);
 
         // Should only have one instance
         asserts.assertEquals(Cacher.getActiveInstances().length, 1);
       },
     );
 
-    await d.step("should handle existing instance with different engine type", async () => {
-      await Cacher.clear();
-      // Remove engines if they exist
-      Cacher.removeEngine("MOCK");
-      Cacher.removeEngine("MOCK2");
-      Cacher.addEngine("MOCK", MockEngine as any);
-      Cacher.addEngine("MOCK2", MockEngine as any);
-      
-      // Create instance with MOCK engine
-      Cacher.create("MOCK", "conflict-test", {});
-      
-      // Try to create same instance with different engine
-      asserts.assertThrows(
-        () => Cacher.create("MOCK2", "conflict-test", {}),
-        CacherError,
-        'Instance "conflict-test" already exists with engine type "MOCK", cannot create with "MOCK2"'
-      );
-    });
+    await d.step(
+      'should handle existing instance with different engine type',
+      async () => {
+        await Cacher.clear();
+        // Remove engines if they exist
+        Cacher.removeEngine('MOCK');
+        Cacher.removeEngine('MOCK2');
+        Cacher.addEngine('MOCK', MockEngine as any);
+        Cacher.addEngine('MOCK2', MockEngine as any);
 
-    await d.step("should handle instance tracking when no tracking data exists", async () => {
-      await Cacher.clear();
-      // Remove engine if it exists
-      Cacher.removeEngine("MOCK");
-      Cacher.addEngine("MOCK", MockEngine as any);
-      
-      // Create instance
-      const cache = Cacher.create("MOCK", "tracking-test", {});
-      
-      // Manually remove tracking data to simulate legacy instance
-      // @ts-ignore - accessing private property for testing
-      Cacher._instanceEngines.delete("tracking-test");
-      
-      // Should still work and update tracking
-      const cache2 = Cacher.create("MOCK", "tracking-test", {});
-      asserts.assertStrictEquals(cache, cache2);
-    });
+        // Create instance with MOCK engine
+        Cacher.create('MOCK', 'conflict-test', {});
+
+        // Try to create same instance with different engine
+        asserts.assertThrows(
+          () => Cacher.create('MOCK2', 'conflict-test', {}),
+          CacherError,
+          'Instance "conflict-test" already exists with engine type "MOCK", cannot create with "MOCK2"',
+        );
+      },
+    );
+
+    await d.step(
+      'should handle instance tracking when no tracking data exists',
+      async () => {
+        await Cacher.clear();
+        // Remove engine if it exists
+        Cacher.removeEngine('MOCK');
+        Cacher.addEngine('MOCK', MockEngine as any);
+
+        // Create instance
+        const cache = Cacher.create('MOCK', 'tracking-test', {});
+
+        // Manually remove tracking data to simulate legacy instance
+        // @ts-ignore - accessing private property for testing
+        Cacher._instanceEngines.delete('tracking-test');
+
+        // Should still work and update tracking
+        const cache2 = Cacher.create('MOCK', 'tracking-test', {});
+        asserts.assertStrictEquals(cache, cache2);
+      },
+    );
   });
 
-  await t.step("removeEngine method", async (d) => {
-    await d.step("should remove existing engine", async () => {
+  await t.step('removeEngine method', async (d) => {
+    await d.step('should remove existing engine', async () => {
       await resetCacher();
-      Cacher.addEngine("TEMP_ENGINE", MockEngine as any);
-      asserts.assert(Cacher.getRegisteredEngines().includes("TEMP_ENGINE"));
-      
-      const removed = Cacher.removeEngine("TEMP_ENGINE");
+      Cacher.addEngine('TEMP_ENGINE', MockEngine as any);
+      asserts.assert(Cacher.getRegisteredEngines().includes('TEMP_ENGINE'));
+
+      const removed = Cacher.removeEngine('TEMP_ENGINE');
       asserts.assertEquals(removed, true);
-      asserts.assert(!Cacher.getRegisteredEngines().includes("TEMP_ENGINE"));
+      asserts.assert(!Cacher.getRegisteredEngines().includes('TEMP_ENGINE'));
     });
 
-    await d.step("should return false for non-existent engine", async () => {
-      const removed = Cacher.removeEngine("NON_EXISTENT");
+    await d.step('should return false for non-existent engine', async () => {
+      const removed = Cacher.removeEngine('NON_EXISTENT');
       asserts.assertEquals(removed, false);
     });
 
-    await d.step("should handle invalid engine names gracefully", () => {
-      asserts.assertEquals(Cacher.removeEngine(""), false);
-      asserts.assertEquals(Cacher.removeEngine("   "), false);
+    await d.step('should handle invalid engine names gracefully', () => {
+      asserts.assertEquals(Cacher.removeEngine(''), false);
+      asserts.assertEquals(Cacher.removeEngine('   '), false);
       // @ts-ignore - testing runtime type checking
       asserts.assertEquals(Cacher.removeEngine(null), false);
       // @ts-ignore - testing runtime type checking
@@ -675,77 +681,82 @@ Deno.test("cacher.core", async (t) => {
     });
   });
 
-  await t.step("finalize error handling", async (d) => {
+  await t.step('finalize error handling', async (d) => {
     class FailingFinalizeEngine extends AbstractEngine {
-      public readonly Engine = "FAILING_FINALIZE";
+      public readonly Engine = 'FAILING_FINALIZE';
       private _storage = new Map<string, CacheValue>();
-      
+
       protected async _set(key: string, value: CacheValue): Promise<void> {
         this._storage.set(key, value);
       }
-      
+
       protected async _get(key: string): Promise<CacheValue | undefined> {
         return this._storage.get(key);
       }
-      
+
       protected async _has(key: string): Promise<boolean> {
         return this._storage.has(key);
       }
-      
+
       protected async _delete(key: string): Promise<void> {
         this._storage.delete(key);
       }
-      
+
       protected async _clear(): Promise<void> {
         this._storage.clear();
       }
-      
+
       public override async finalize(): Promise<void> {
-        throw new Error("Finalize failed");
+        throw new Error('Finalize failed');
       }
     }
 
-    await d.step("should handle finalize errors during removeInstance", async () => {
-      await resetCacher();
-      Cacher.addEngine("FAILING_FINALIZE", FailingFinalizeEngine as any);
-      
-      // Suppress console.warn for this test
-      const originalWarn = console.warn;
-      const warnings: unknown[] = [];
-      console.warn = (...args: unknown[]) => warnings.push(args);
-      
-      try {
-        Cacher.create("FAILING_FINALIZE", "fail-test", {});
-        const removed = await Cacher.removeInstance("fail-test");
-        
-        asserts.assertEquals(removed, true);
-        asserts.assert(!Cacher.hasInstance("fail-test"));
-        asserts.assertEquals(warnings.length, 1);
-        asserts.assert(
-          String((warnings[0] as any[])[0]).includes('Warning: Failed to finalize instance "fail-test":')
-        );
-      } finally {
-        console.warn = originalWarn;
-      }
-    });
+    await d.step(
+      'should handle finalize errors during removeInstance',
+      async () => {
+        await resetCacher();
+        Cacher.addEngine('FAILING_FINALIZE', FailingFinalizeEngine as any);
 
-    await d.step("should handle finalize errors during clear", async () => {
+        // Suppress console.warn for this test
+        const originalWarn = console.warn;
+        const warnings: unknown[] = [];
+        console.warn = (...args: unknown[]) => warnings.push(args);
+
+        try {
+          Cacher.create('FAILING_FINALIZE', 'fail-test', {});
+          const removed = await Cacher.removeInstance('fail-test');
+
+          asserts.assertEquals(removed, true);
+          asserts.assert(!Cacher.hasInstance('fail-test'));
+          asserts.assertEquals(warnings.length, 1);
+          asserts.assert(
+            String((warnings[0] as any[])[0]).includes(
+              'Warning: Failed to finalize instance "fail-test":',
+            ),
+          );
+        } finally {
+          console.warn = originalWarn;
+        }
+      },
+    );
+
+    await d.step('should handle finalize errors during clear', async () => {
       await resetCacher();
       // Remove engine if it exists
-      Cacher.removeEngine("FAILING_FINALIZE");
-      Cacher.addEngine("FAILING_FINALIZE", FailingFinalizeEngine as any);
-      
+      Cacher.removeEngine('FAILING_FINALIZE');
+      Cacher.addEngine('FAILING_FINALIZE', FailingFinalizeEngine as any);
+
       // Suppress console.warn for this test
       const originalWarn = console.warn;
       const warnings: unknown[] = [];
       console.warn = (...args: unknown[]) => warnings.push(args);
-      
+
       try {
-        Cacher.create("FAILING_FINALIZE", "fail-test1", {});
-        Cacher.create("FAILING_FINALIZE", "fail-test2", {});
-        
+        Cacher.create('FAILING_FINALIZE', 'fail-test1', {});
+        Cacher.create('FAILING_FINALIZE', 'fail-test2', {});
+
         await Cacher.clear();
-        
+
         asserts.assertEquals(Cacher.getActiveInstances().length, 0);
         asserts.assertEquals(warnings.length, 2);
       } finally {

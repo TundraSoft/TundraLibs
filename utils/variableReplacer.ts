@@ -96,10 +96,10 @@ export const variableReplacer = (
    * @throws {Error} When a circular reference is detected
    */
   const checkCircularReference = (obj: unknown, visited: Set<object>): void => {
-    if (typeof obj === "object" && obj !== null) {
+    if (typeof obj === 'object' && obj !== null) {
       if (visited.has(obj)) {
         throw new Error(
-          "Circular reference detected during variable replacement",
+          'Circular reference detected during variable replacement',
         );
       }
       visited.add(obj);
@@ -121,11 +121,11 @@ export const variableReplacer = (
   ): Record<string, unknown> => {
     // If value is an array, convert it to a string representation
     if (Array.isArray(value)) {
-      return { [newKey]: `(${value.join(", ")})` };
+      return { [newKey]: `(${value.join(', ')})` };
     }
 
     // If value is a non-null object, recursively flatten it
-    if (typeof value === "object" && value !== null) {
+    if (typeof value === 'object' && value !== null) {
       return flatten(value as Record<string, unknown>, newKey, visited);
     }
 
@@ -161,7 +161,7 @@ export const variableReplacer = (
    */
   const flatten = (
     obj: Record<string, unknown>,
-    parentKey = "",
+    parentKey = '',
     visited = new Set<object>(),
   ): Record<string, unknown> => {
     // Check for circular references before processing

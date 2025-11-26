@@ -1,9 +1,9 @@
-import * as asserts from "$asserts";
-import { WeatherAPI } from "./fixtures/weather/WeatherAPI.ts";
+import * as asserts from '$asserts';
+import { WeatherAPI } from './fixtures/weather/WeatherAPI.ts';
 import type {
   ForecastResponse,
   WeatherResponse,
-} from "./fixtures/weather/types.ts";
+} from './fixtures/weather/types.ts';
 
 // Store original fetch
 const originalFetch = globalThis.fetch;
@@ -17,12 +17,12 @@ const mockWeatherResponse: WeatherResponse = {
   weather: [
     {
       id: 803,
-      main: "Clouds",
-      description: "broken clouds",
-      icon: "04d",
+      main: 'Clouds',
+      description: 'broken clouds',
+      icon: '04d',
     },
   ],
-  base: "stations",
+  base: 'stations',
   main: {
     temp: 15.5,
     feels_like: 14.9,
@@ -43,18 +43,18 @@ const mockWeatherResponse: WeatherResponse = {
   sys: {
     type: 2,
     id: 2019646,
-    country: "GB",
+    country: 'GB',
     sunrise: 1665470880,
     sunset: 1665510929,
   },
   timezone: 3600,
   id: 2643743,
-  name: "London",
+  name: 'London',
   cod: 200,
 };
 
 const mockForecastResponse: ForecastResponse = {
-  cod: "200",
+  cod: '200',
   message: 0,
   cnt: 1,
   list: [
@@ -74,9 +74,9 @@ const mockForecastResponse: ForecastResponse = {
       weather: [
         {
           id: 803,
-          main: "Clouds",
-          description: "broken clouds",
-          icon: "04d",
+          main: 'Clouds',
+          description: 'broken clouds',
+          icon: '04d',
         },
       ],
       clouds: {
@@ -90,19 +90,19 @@ const mockForecastResponse: ForecastResponse = {
       visibility: 10000,
       pop: 0,
       sys: {
-        pod: "d",
+        pod: 'd',
       },
-      dt_txt: "2022-10-11 12:00:00",
+      dt_txt: '2022-10-11 12:00:00',
     },
   ],
   city: {
     id: 2643743,
-    name: "London",
+    name: 'London',
     coord: {
       lat: 51.5085,
       lon: -0.1257,
     },
-    country: "GB",
+    country: 'GB',
     population: 1000000,
     timezone: 3600,
     sunrise: 1665470880,
@@ -122,28 +122,28 @@ const setupWeatherTest = () => {
     const urlObj = new URL(url);
 
     // Capture query parameters for verification
-    capturedParams.apiKey = urlObj.searchParams.get("appid");
-    capturedParams.units = urlObj.searchParams.get("units");
+    capturedParams.apiKey = urlObj.searchParams.get('appid');
+    capturedParams.units = urlObj.searchParams.get('units');
 
-    if (url.includes("/weather")) {
+    if (url.includes('/weather')) {
       return new Response(
         JSON.stringify(mockWeatherResponse),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
-    } else if (url.includes("/forecast")) {
+    } else if (url.includes('/forecast')) {
       return new Response(
         JSON.stringify(mockForecastResponse),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
     }
 
     return new Response(
-      "{}",
-      { status: 404, headers: { "Content-Type": "application/json" } },
+      '{}',
+      { status: 404, headers: { 'Content-Type': 'application/json' } },
     );
   };
 
-  const API_KEY = "test-api-key-12345";
+  const API_KEY = 'test-api-key-12345';
   const api = new WeatherAPI(API_KEY);
 
   return { api, capturedParams };
@@ -153,59 +153,59 @@ const cleanupMock = () => {
   globalThis.fetch = originalFetch;
 };
 
-Deno.test("restler.examples.weatherAPI", async (h) => {
-  await h.step("WeatherAPI", async (t) => {
-    await t.step("should include API key in requests", async () => {
+Deno.test('restler.examples.weatherAPI', async (h) => {
+  await h.step('WeatherAPI', async (t) => {
+    await t.step('should include API key in requests', async () => {
       try {
         const { api, capturedParams } = setupWeatherTest();
-        await api.getCurrentWeather("London");
-        asserts.assertEquals(capturedParams.apiKey, "test-api-key-12345");
+        await api.getCurrentWeather('London');
+        asserts.assertEquals(capturedParams.apiKey, 'test-api-key-12345');
       } finally {
         cleanupMock();
       }
     });
 
-    await t.step("should get current weather by city name", async () => {
+    await t.step('should get current weather by city name', async () => {
       try {
         const { api } = setupWeatherTest();
-        const weather = await api.getCurrentWeather("London");
+        const weather = await api.getCurrentWeather('London');
         asserts.assertNotEquals(weather, null);
-        asserts.assertEquals(weather?.name, "London");
+        asserts.assertEquals(weather?.name, 'London');
         asserts.assertEquals(weather?.main.temp, 15.5);
       } finally {
         cleanupMock();
       }
     });
 
-    await t.step("should get current weather by coordinates", async () => {
+    await t.step('should get current weather by coordinates', async () => {
       try {
         const { api, capturedParams } = setupWeatherTest();
         const weather = await api.getWeatherByCoordinates(51.5085, -0.1257);
         asserts.assertNotEquals(weather, null);
-        asserts.assertEquals(weather?.name, "London");
+        asserts.assertEquals(weather?.name, 'London');
         asserts.assert(capturedParams.apiKey !== null);
       } finally {
         cleanupMock();
       }
     });
 
-    await t.step("should get weather forecast", async () => {
+    await t.step('should get weather forecast', async () => {
       try {
         const { api } = setupWeatherTest();
-        const forecast = await api.getForecast("London");
+        const forecast = await api.getForecast('London');
         asserts.assertNotEquals(forecast, null);
-        asserts.assertEquals(forecast?.city.name, "London");
+        asserts.assertEquals(forecast?.city.name, 'London');
         asserts.assertEquals(forecast?.list.length, 1);
       } finally {
         cleanupMock();
       }
     });
 
-    await t.step("should include units in requests", async () => {
+    await t.step('should include units in requests', async () => {
       try {
         const { api, capturedParams } = setupWeatherTest();
-        await api.getCurrentWeather("London", "imperial");
-        asserts.assertEquals(capturedParams.units, "imperial");
+        await api.getCurrentWeather('London', 'imperial');
+        asserts.assertEquals(capturedParams.units, 'imperial');
       } finally {
         cleanupMock();
       }

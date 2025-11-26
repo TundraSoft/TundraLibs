@@ -1,5 +1,5 @@
-import type { DigestAlgorithms } from "../digest/mod.ts";
-import { sprintf } from "$fmt/printf";
+import type { DigestAlgorithms } from '../digest/mod.ts';
+import { sprintf } from '$fmt/printf';
 
 /**
  * Converts a number to an 8-byte array (Uint8Array).
@@ -10,7 +10,7 @@ import { sprintf } from "$fmt/printf";
  */
 export const numberToBytes = (data: number): Uint8Array => {
   if (!Number.isInteger(data) || data < 0) {
-    throw new Error("Counter must be a non-negative integer");
+    throw new Error('Counter must be a non-negative integer');
   }
 
   const buffer = new ArrayBuffer(8);
@@ -35,27 +35,27 @@ export const validateInputs = (
   algo: DigestAlgorithms,
 ): void => {
   // Validate key
-  if (typeof key === "string") {
+  if (typeof key === 'string') {
     if (!key || key.length < 16) {
-      throw new Error("Secret key should be at least 16 characters long");
+      throw new Error('Secret key should be at least 16 characters long');
     }
   } else if (key.byteLength < 16) {
-    throw new Error("Secret key should be at least 16 bytes long");
+    throw new Error('Secret key should be at least 16 bytes long');
   }
 
   // Validate counter
   if (!Number.isInteger(counter) || counter < 0) {
-    throw new Error("Counter must be a non-negative integer");
+    throw new Error('Counter must be a non-negative integer');
   }
 
   // Validate OTP length
   if (!Number.isInteger(length) || length <= 0) {
-    throw new Error("OTP length must be a non-negative integer");
+    throw new Error('OTP length must be a non-negative integer');
   }
 
   // Validate algorithm
-  if (!["SHA-1", "SHA-256", "SHA-384", "SHA-512"].includes(algo)) {
-    throw new Error("The provided algorithm name is not supported");
+  if (!['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'].includes(algo)) {
+    throw new Error('The provided algorithm name is not supported');
   }
 };
 
@@ -93,26 +93,30 @@ export const generate = async (
   key: string | Uint8Array,
   counter: number,
   length: number = 6,
-  algo: DigestAlgorithms = "SHA-256",
+  algo: DigestAlgorithms = 'SHA-256',
 ): Promise<string> => {
   // Validate inputs
   validateInputs(key, counter, length, algo);
 
   // Prepare key for HMAC
-  const keyData = typeof key === "string" ? new TextEncoder().encode(key) : key;
+  const keyData = typeof key === 'string' ? new TextEncoder().encode(key) : key;
 
   // Import key for HMAC
   const cryptoKey = await crypto.subtle.importKey(
-    "raw",
+    'raw',
     keyData as BufferSource,
-    { name: "HMAC", hash: algo },
+    { name: 'HMAC', hash: algo },
     false,
-    ["sign"],
+    ['sign'],
   );
 
   // Generate HMAC
   const digest = new Uint8Array(
-    await crypto.subtle.sign("HMAC", cryptoKey, numberToBytes(counter) as BufferSource),
+    await crypto.subtle.sign(
+      'HMAC',
+      cryptoKey,
+      numberToBytes(counter) as BufferSource,
+    ),
   );
 
   // Extract code using dynamic truncation (RFC 4226 section 5.4)
@@ -122,5 +126,5 @@ export const generate = async (
 
   // Generate code modulo 10^length and pad with leading zeros if needed
   const op = (code % 10 ** length).toString();
-  return sprintf("%0" + length + "s", op);
+  return sprintf('%0' + length + 's', op);
 };

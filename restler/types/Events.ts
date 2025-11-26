@@ -1,6 +1,6 @@
-import { RESTlerError } from "../errors/mod.ts";
-import type { RESTlerRequest } from "./Request.ts";
-import type { RESTlerResponse } from "./Response.ts";
+import { RESTlerError } from '../errors/mod.ts';
+import type { RESTlerRequest } from './Request.ts';
+import type { RESTlerResponse } from './Response.ts';
 
 /**
  * Event handlers for RESTler clients.

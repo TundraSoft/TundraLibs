@@ -1,12 +1,12 @@
-import { AbstractHandler, type HandlerOptions } from "./AbstractHandler.ts";
-import * as asserts from "$asserts";
-import { SyslogSeverities, type SyslogSeverity } from "@tundralibs/utils";
-import { SlogObject } from "../types/mod.ts";
-import { simpleFormatter } from "../formatters/string.ts";
+import { AbstractHandler, type HandlerOptions } from './AbstractHandler.ts';
+import * as asserts from '$asserts';
+import { SyslogSeverities, type SyslogSeverity } from '@tundralibs/utils';
+import { SlogObject } from '../types/mod.ts';
+import { simpleFormatter } from '../formatters/string.ts';
 
 // Concrete implementation of AbstractHandler for testing
 class TestHandler extends AbstractHandler {
-  public readonly mode = "test";
+  public readonly mode = 'test';
   public handledMessages: string[] = [];
   public throwOnHandle = false;
   public handleCalled = false; // Add property initialization
@@ -18,7 +18,7 @@ class TestHandler extends AbstractHandler {
   protected _handle(message: string): Promise<void> | void {
     this.handleCalled = true; // Set to true when _handle is called
     if (this.throwOnHandle) {
-      throw new Error("Test error in _handle");
+      throw new Error('Test error in _handle');
     }
     this.handledMessages.push(message);
   }
@@ -30,12 +30,12 @@ class TestHandler extends AbstractHandler {
 
   // Override methods to track calls
   public override async init(): Promise<void> {
-    this.handledMessages.push("init called");
+    this.handledMessages.push('init called');
     await super.init();
   }
 
   public override async finalize(): Promise<void> {
-    this.handledMessages.push("finalize called");
+    this.handledMessages.push('finalize called');
     await super.finalize();
   }
 }
@@ -46,125 +46,125 @@ const makeLogObject = (
   message: string,
   context: Record<string, unknown> = {},
 ): SlogObject => ({
-  id: "1",
-  appName: "testApp",
-  hostname: "localhost",
+  id: '1',
+  appName: 'testApp',
+  hostname: 'localhost',
   levelName: SyslogSeverities[level] as SyslogSeverity,
   level,
   context,
   message,
-  date: new Date("2023-01-01T12:00:00Z"),
-  isoDate: new Date("2023-01-01T12:00:00Z").toISOString(),
-  timestamp: new Date("2023-01-01T12:00:00Z").getTime(),
+  date: new Date('2023-01-01T12:00:00Z'),
+  isoDate: new Date('2023-01-01T12:00:00Z').toISOString(),
+  timestamp: new Date('2023-01-01T12:00:00Z').getTime(),
 });
 
-Deno.test("slogger.handlers.abstractHandler", async (t) => {
-  await t.step("constructor - valid options", () => {
-    const handler = new TestHandler("testHandler", {
+Deno.test('slogger.handlers.abstractHandler', async (t) => {
+  await t.step('constructor - valid options', () => {
+    const handler = new TestHandler('testHandler', {
       level: 5,
     });
 
-    asserts.assertEquals(handler.name, "testHandler");
+    asserts.assertEquals(handler.name, 'testHandler');
     asserts.assertEquals(handler.level, 5);
-    asserts.assertEquals(handler.mode, "test");
+    asserts.assertEquals(handler.mode, 'test');
   });
 
-  await t.step("constructor - name validation", async (d) => {
-    await d.step("rejects empty name", () => {
+  await t.step('constructor - name validation', async (d) => {
+    await d.step('rejects empty name', () => {
       asserts.assertThrows(
-        () => new TestHandler("", { level: 5 }),
+        () => new TestHandler('', { level: 5 }),
         Error,
-        "Handler name must be a non-empty string",
+        'Handler name must be a non-empty string',
       );
     });
 
-    await d.step("rejects name exceeding max length", () => {
+    await d.step('rejects name exceeding max length', () => {
       asserts.assertThrows(
-        () => new TestHandler("a".repeat(31), { level: 5 }),
+        () => new TestHandler('a'.repeat(31), { level: 5 }),
         Error,
-        "Handler name must be a non-empty string",
+        'Handler name must be a non-empty string',
       );
     });
 
-    await d.step("trims name", () => {
-      const handler = new TestHandler("  testHandler  ", { level: 5 });
-      asserts.assertEquals(handler.name, "testHandler");
-    });
-  });
-
-  await t.step("constructor - level validation", async (d) => {
-    await d.step("rejects negative level", () => {
-      asserts.assertThrows(
-        // deno-lint-ignore no-explicit-any
-        () => new TestHandler("testHandler", { level: -1 } as any),
-        Error,
-        "Invalid log level",
-      );
-    });
-
-    await d.step("rejects level above 7", () => {
-      asserts.assertThrows(
-        // deno-lint-ignore no-explicit-any
-        () => new TestHandler("testHandler", { level: 8 } as any),
-        Error,
-        "Invalid log level",
-      );
-    });
-
-    await d.step("rejects non-numeric level", () => {
-      asserts.assertThrows(
-        // deno-lint-ignore no-explicit-any
-        () => new TestHandler("testHandler", { level: "ERROR" } as any),
-        Error,
-        "Invalid log level",
-      );
+    await d.step('trims name', () => {
+      const handler = new TestHandler('  testHandler  ', { level: 5 });
+      asserts.assertEquals(handler.name, 'testHandler');
     });
   });
 
-  await t.step("constructor - formatter validation", async (d) => {
-    await d.step("rejects non-function formatter", () => {
+  await t.step('constructor - level validation', async (d) => {
+    await d.step('rejects negative level', () => {
+      asserts.assertThrows(
+        // deno-lint-ignore no-explicit-any
+        () => new TestHandler('testHandler', { level: -1 } as any),
+        Error,
+        'Invalid log level',
+      );
+    });
+
+    await d.step('rejects level above 7', () => {
+      asserts.assertThrows(
+        // deno-lint-ignore no-explicit-any
+        () => new TestHandler('testHandler', { level: 8 } as any),
+        Error,
+        'Invalid log level',
+      );
+    });
+
+    await d.step('rejects non-numeric level', () => {
+      asserts.assertThrows(
+        // deno-lint-ignore no-explicit-any
+        () => new TestHandler('testHandler', { level: 'ERROR' } as any),
+        Error,
+        'Invalid log level',
+      );
+    });
+  });
+
+  await t.step('constructor - formatter validation', async (d) => {
+    await d.step('rejects non-function formatter', () => {
       asserts.assertThrows(
         () =>
-          new TestHandler("testHandler", {
+          new TestHandler('testHandler', {
             level: 5,
             // deno-lint-ignore no-explicit-any
-            formatter: "string" as any,
+            formatter: 'string' as any,
           }),
         Error,
-        "Formatter must be a function",
+        'Formatter must be a function',
       );
     });
 
-    await d.step("rejects formatter that returns non-string", () => {
+    await d.step('rejects formatter that returns non-string', () => {
       asserts.assertThrows(
         () =>
-          new TestHandler("testHandler", {
+          new TestHandler('testHandler', {
             level: 5,
             // deno-lint-ignore no-explicit-any
             formatter: () => 123 as any,
           }),
         Error,
-        "Formatter must return a string",
+        'Formatter must return a string',
       );
     });
 
-    await d.step("rejects formatter that throws", () => {
+    await d.step('rejects formatter that throws', () => {
       asserts.assertThrows(
         () =>
-          new TestHandler("testHandler", {
+          new TestHandler('testHandler', {
             level: 5,
             formatter: () => {
-              throw new Error("Test error");
+              throw new Error('Test error');
             },
           }),
         Error,
-        "Error running formatter",
+        'Error running formatter',
       );
     });
 
-    await d.step("accepts valid formatter", () => {
-      const formatter = simpleFormatter("${message}");
-      const handler = new TestHandler("testHandler", {
+    await d.step('accepts valid formatter', () => {
+      const formatter = simpleFormatter('${message}');
+      const handler = new TestHandler('testHandler', {
         level: 5,
         formatter,
       });
@@ -172,74 +172,74 @@ Deno.test("slogger.handlers.abstractHandler", async (t) => {
     });
   });
 
-  await t.step("handle - respects log levels", async () => {
-    const handler = new TestHandler("testHandler", {
+  await t.step('handle - respects log levels', async () => {
+    const handler = new TestHandler('testHandler', {
       level: SyslogSeverities.WARNING, // Level 4
-      formatter: simpleFormatter("${levelName}: ${message}"),
+      formatter: simpleFormatter('${levelName}: ${message}'),
     });
 
     // This should be handled (level 3 < WARNING level 4)
     await handler.handle(
-      makeLogObject(SyslogSeverities.ERROR, "Error message"),
+      makeLogObject(SyslogSeverities.ERROR, 'Error message'),
     );
 
     // This should be handled (level 4 = WARNING level 4)
     await handler.handle(
-      makeLogObject(SyslogSeverities.WARNING, "Warning message"),
+      makeLogObject(SyslogSeverities.WARNING, 'Warning message'),
     );
 
     // This should NOT be handled (level 6 > WARNING level 4)
-    await handler.handle(makeLogObject(SyslogSeverities.INFO, "Info message"));
+    await handler.handle(makeLogObject(SyslogSeverities.INFO, 'Info message'));
 
     asserts.assertEquals(handler.handledMessages.length, 2);
-    asserts.assert(handler.handledMessages[0]!.includes("Error message"));
-    asserts.assert(handler.handledMessages[1]!.includes("Warning message"));
+    asserts.assert(handler.handledMessages[0]!.includes('Error message'));
+    asserts.assert(handler.handledMessages[1]!.includes('Warning message'));
     asserts.assert(
-      !handler.handledMessages.some((msg) => msg.includes("Info message")),
+      !handler.handledMessages.some((msg) => msg.includes('Info message')),
     );
   });
 
-  await t.step("format - uses provided formatter", () => {
-    const handler = new TestHandler("testHandler", {
+  await t.step('format - uses provided formatter', () => {
+    const handler = new TestHandler('testHandler', {
       level: 5,
-      formatter: simpleFormatter("CUSTOM: ${message}"),
+      formatter: simpleFormatter('CUSTOM: ${message}'),
     });
 
-    const log = makeLogObject(SyslogSeverities.INFO, "Test message");
+    const log = makeLogObject(SyslogSeverities.INFO, 'Test message');
     const formatted = handler.format(log);
 
-    asserts.assertEquals(formatted, "CUSTOM: Test message");
+    asserts.assertEquals(formatted, 'CUSTOM: Test message');
   });
 
-  await t.step("lifecycle methods", async () => {
-    const handler = new TestHandler("testHandler", { level: 5 });
+  await t.step('lifecycle methods', async () => {
+    const handler = new TestHandler('testHandler', { level: 5 });
 
     await handler.init();
-    asserts.assertEquals(handler.handledMessages[0], "init called");
+    asserts.assertEquals(handler.handledMessages[0], 'init called');
 
     await handler.finalize();
-    asserts.assertEquals(handler.handledMessages[1], "finalize called");
+    asserts.assertEquals(handler.handledMessages[1], 'finalize called');
   });
 
-  await t.step("handle - with throwing _handle", async () => {
-    const handler = new TestHandler("testHandler", { level: 5 });
+  await t.step('handle - with throwing _handle', async () => {
+    const handler = new TestHandler('testHandler', { level: 5 });
     handler.throwOnHandle = true;
 
     // Option 1: Use assertThrows instead of try/catch
     await asserts.assertRejects(
       async () => {
         await handler.handle(
-          makeLogObject(SyslogSeverities.CRITICAL, "Test message"),
+          makeLogObject(SyslogSeverities.CRITICAL, 'Test message'),
         );
       },
       Error,
-      "Test error in _handle",
+      'Test error in _handle',
     );
   });
 
-  await t.step("sampling configuration validation", async (d) => {
-    await d.step("accepts valid sampling options", () => {
-      const handler = new TestHandler("testHandler", {
+  await t.step('sampling configuration validation', async (d) => {
+    await d.step('accepts valid sampling options', () => {
+      const handler = new TestHandler('testHandler', {
         level: 5,
         sampling: {
           sampleRate: 0.5, // 50% sampling
@@ -256,54 +256,54 @@ Deno.test("slogger.handlers.abstractHandler", async (t) => {
       );
     });
 
-    await d.step("rejects invalid sample rate", () => {
+    await d.step('rejects invalid sample rate', () => {
       asserts.assertThrows(
         () =>
-          new TestHandler("testHandler", {
+          new TestHandler('testHandler', {
             level: 5,
             sampling: {
               sampleRate: 1.5, // Should be 0-1
             },
           }),
         Error,
-        "Sampling rate must be a number between 0 and 1",
+        'Sampling rate must be a number between 0 and 1',
       );
 
       asserts.assertThrows(
         () =>
-          new TestHandler("testHandler", {
+          new TestHandler('testHandler', {
             level: 5,
             sampling: {
               sampleRate: -0.5, // Should be 0-1
             },
           }),
         Error,
-        "Sampling rate must be a number between 0 and 1",
+        'Sampling rate must be a number between 0 and 1',
       );
     });
 
-    await d.step("rejects invalid bypass level", () => {
+    await d.step('rejects invalid bypass level', () => {
       asserts.assertThrows(
         () =>
-          new TestHandler("testHandler", {
+          new TestHandler('testHandler', {
             level: 5,
             sampling: {
               bypassSamplingForLevel: 8, // Should be 0-7
             },
           }),
         Error,
-        "Bypass sampling level must be a valid log level",
+        'Bypass sampling level must be a valid log level',
       );
     });
   });
 
-  await t.step("sampling behavior", async () => {
+  await t.step('sampling behavior', async () => {
     // Mock Math.random for deterministic testing
     const originalRandom = Math.random;
 
     try {
       // Create a handler with 50% sampling
-      const handler = new TestHandler("testHandler", {
+      const handler = new TestHandler('testHandler', {
         level: SyslogSeverities.DEBUG, // Accept all logs
         sampling: {
           sampleRate: 0.5, // 50% sample rate
@@ -319,7 +319,7 @@ Deno.test("slogger.handlers.abstractHandler", async (t) => {
 
       // This is ERROR level and should bypass sampling regardless of Math.random
       await handler.handle(
-        makeLogObject(SyslogSeverities.ERROR, "Error message"),
+        makeLogObject(SyslogSeverities.ERROR, 'Error message'),
       );
       asserts.assertEquals(handler.handleCalled, true);
 
@@ -332,7 +332,7 @@ Deno.test("slogger.handlers.abstractHandler", async (t) => {
 
       // This is INFO level and should be sampled out
       await handler.handle(
-        makeLogObject(SyslogSeverities.INFO, "Info message"),
+        makeLogObject(SyslogSeverities.INFO, 'Info message'),
       );
       asserts.assertEquals(handler.handleCalled, false);
 
@@ -341,7 +341,7 @@ Deno.test("slogger.handlers.abstractHandler", async (t) => {
 
       // This is INFO level and should be sampled in
       await handler.handle(
-        makeLogObject(SyslogSeverities.INFO, "Info message"),
+        makeLogObject(SyslogSeverities.INFO, 'Info message'),
       );
       asserts.assertEquals(handler.handleCalled, true);
     } finally {

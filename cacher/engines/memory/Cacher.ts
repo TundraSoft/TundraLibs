@@ -1,7 +1,7 @@
-import { type PrivateObject, privateObject } from "@tundralibs/utils";
-import { AbstractEngine } from "../../AbstractEngine.ts";
-import type { CacheValue } from "../../types/mod.ts";
-import type { MemoryCacherOptions } from "./types/mod.ts";
+import { type PrivateObject, privateObject } from '@tundralibs/utils';
+import { AbstractEngine } from '../../AbstractEngine.ts';
+import type { CacheValue } from '../../types/mod.ts';
+import type { MemoryCacherOptions } from './types/mod.ts';
 
 /**
  * In-memory cacher implementation.
@@ -36,7 +36,7 @@ export class MemoryCacher extends AbstractEngine<MemoryCacherOptions> {
   /**
    * The engine identifier for in-memory cacher.
    */
-  public readonly Engine = "MEMORY";
+  public readonly Engine = 'MEMORY';
 
   /**
    * Internal storage for cached values.

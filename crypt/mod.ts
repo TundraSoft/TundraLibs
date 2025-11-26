@@ -2,7 +2,7 @@ export {
   digest,
   type DigestAlgorithms,
   validateDigestAlgorithm,
-} from "./digest/mod.ts";
+} from './digest/mod.ts';
 
 export {
   decrypt,
@@ -10,7 +10,7 @@ export {
   encrypt,
   encryptAES,
   type EncryptionModes,
-} from "./encrypt/mod.ts";
+} from './encrypt/mod.ts';
 
 export {
   type BIP39Options,
@@ -50,7 +50,7 @@ export {
   type SecretGeneratorOptions,
   validateBIP39Mnemonic,
   validateSeedPhrase,
-} from "./generators/mod.ts";
+} from './generators/mod.ts';
 
 export {
   issueJWT,
@@ -60,7 +60,7 @@ export {
   type JWTHeader,
   type JWTPayload,
   verifyJWT,
-} from "./JWT/mod.ts";
+} from './JWT/mod.ts';
 
 export {
   // type DigestAlgorithms,
@@ -68,7 +68,7 @@ export {
   generateTOTP,
   verifyHOTP,
   verifyTOTP,
-} from "./OTP/mod.ts";
+} from './OTP/mod.ts';
 
 export {
   sign,
@@ -76,4 +76,4 @@ export {
   type SigningModes,
   verify,
   verifyHMAC,
-} from "./sign/mod.ts";
+} from './sign/mod.ts';

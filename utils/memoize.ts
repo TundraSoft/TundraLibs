@@ -58,9 +58,9 @@ const createCacheKey = <T extends Array<unknown>>(args: T): string => {
   try {
     // Check if any argument is a function or other non-serializable type
     const hasNonSerializable = args.some((arg) =>
-      typeof arg === "function" ||
-      typeof arg === "symbol" ||
-      typeof arg === "undefined"
+      typeof arg === 'function' ||
+      typeof arg === 'symbol' ||
+      typeof arg === 'undefined'
     );
 
     if (hasNonSerializable) {
@@ -71,7 +71,7 @@ const createCacheKey = <T extends Array<unknown>>(args: T): string => {
     const stringified = JSON.stringify(args);
 
     // Check if JSON.stringify converted something to null that shouldn't be
-    if (stringified.includes("null") && !args.some((arg) => arg === null)) {
+    if (stringified.includes('null') && !args.some((arg) => arg === null)) {
       // JSON.stringify converted non-null values to null, use fallback
       return `non_serializable_${Date.now()}_${Math.random()}`;
     }
@@ -116,8 +116,8 @@ export const memoize = <T extends (...args: any[]) => any>(
   fn: T,
   timeout: number = 30 * 60,
 ): T => {
-  if (typeof fn !== "function") {
-    throw new TypeError("Expected a function");
+  if (typeof fn !== 'function') {
+    throw new TypeError('Expected a function');
   }
 
   // Ensure timeout is a positive number
@@ -216,7 +216,7 @@ export function Memoize(timeout: number = 30 * 60): MethodDecorator {
     propertyKey: string | symbol,
     descriptor: PropertyDescriptor,
   ) => {
-    if (typeof descriptor.value === "function") {
+    if (typeof descriptor.value === 'function') {
       // For normal methods
       const originalMethod = descriptor.value;
 
@@ -245,7 +245,7 @@ export function Memoize(timeout: number = 30 * 60): MethodDecorator {
         // Call the memoized function
         return this.__memoized.get(instanceKey)(...args);
       };
-    } else if (typeof descriptor.get === "function") {
+    } else if (typeof descriptor.get === 'function') {
       // For getters
       const originalGetter = descriptor.get;
 

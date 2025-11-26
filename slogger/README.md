@@ -99,7 +99,8 @@ Comprehensive formatting options:
 
 ### 📊 **Advanced Schema Composition**
 
-- **Handler chaining**: Multiple output destinations with different configurations
+- **Handler chaining**: Multiple output destinations with different
+  configurations
 - **Level filtering**: Per-handler and global log level management
 - **Context enrichment**: Automatic context injection and variable replacement
 - **Performance tuning**: Configurable buffering, batching, and sampling
@@ -109,7 +110,8 @@ Comprehensive formatting options:
 - **Full TypeScript support**: Complete type inference and safety
 - **Comprehensive testing**: 82.6% branch coverage with extensive test suite
 - **Zero dependencies**: Uses only Deno standard library
-- **Flexible configuration**: Simple defaults with advanced customization options
+- **Flexible configuration**: Simple defaults with advanced customization
+  options
 
 ## API Reference
 
@@ -238,25 +240,25 @@ interface HandlerConfig {
 
 ```typescript
 // Standard: [2024-01-15T10:30:00.000Z] INFO MyApp: Message
-'standard'
+'standard';
 
 // Detailed: [2024-01-15T10:30:00.000Z] INFO MyApp (hostname): Message {context}
-'detailed'
+'detailed';
 
 // Compact: INFO: Message
-'compact'
+'compact';
 
 // Minimalist: Message
-'minimalist'
+'minimalist';
 
 // Key-Value: level=INFO app=MyApp message="Message" key=value
-'keyValue'
+'keyValue';
 ```
 
 #### JSON Formatter
 
 ```typescript
-'json' // Outputs structured JSON objects
+'json'; // Outputs structured JSON objects
 ```
 
 #### Masking Formatter
@@ -269,8 +271,8 @@ maskingFormatter({
   maskChar: '*',
   sensitiveFields: ['password', 'apiKey', 'token'],
   customPatterns: [/\b[\w.-]+@[\w.-]+\.\w+\b/g], // Email regex
-  baseFormatter: 'json' // Base formatter to apply masking to
-})
+  baseFormatter: 'json', // Base formatter to apply masking to
+});
 ```
 
 ## Performance Characteristics
@@ -306,18 +308,18 @@ import {
   compactFormat,
   detailedFormat,
   standardFormat,
-} from "@tundralibs/slogger";
+} from '@tundralibs/slogger';
 
 // Standard format: [2024-01-15T10:30:00.000Z] INFO MyApp: User logged in
-logger.info("User logged in", { userId: "123" });
+logger.info('User logged in', { userId: '123' });
 
 // Detailed format with context
 const logger = new Slogger({
-  appName: "MyApp",
+  appName: 'MyApp',
   level: SyslogSeverities.INFO,
   handlers: [{
-    name: "console",
-    type: "console",
+    name: 'console',
+    type: 'console',
     formatter: detailedFormat,
   }],
 });
@@ -345,18 +347,18 @@ import { jsonFormatter } from "@tundralibs/slogger";
 ### Masking Formatter
 
 ```typescript
-import { maskingFormatter, MaskingStrategy } from "@tundralibs/slogger";
+import { maskingFormatter, MaskingStrategy } from '@tundralibs/slogger';
 
 const maskedLogger = new Slogger({
-  appName: "SecureApp",
+  appName: 'SecureApp',
   level: SyslogSeverities.INFO,
   handlers: [{
-    name: "console",
-    type: "console",
+    name: 'console',
+    type: 'console',
     formatter: maskingFormatter({
       strategy: MaskingStrategy.PARTIAL,
-      maskChar: "*",
-      sensitiveFields: ["password", "apiKey", "token"],
+      maskChar: '*',
+      sensitiveFields: ['password', 'apiKey', 'token'],
       customPatterns: [
         /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, // Email regex
       ],
@@ -364,9 +366,9 @@ const maskedLogger = new Slogger({
   }],
 });
 
-logger.info("User authenticated", {
-  email: "user@example.com",
-  apiKey: "secret123",
+logger.info('User authenticated', {
+  email: 'user@example.com',
+  apiKey: 'secret123',
 });
 // Output: User authenticated {"email":"u***@example.com","apiKey":"***"}
 ```
@@ -442,7 +444,7 @@ logger.info("User authenticated", {
 
 ```typescript
 // Context function is only called if log level permits
-logger.debug("Expensive operation", () => ({
+logger.debug('Expensive operation', () => ({
   result: performExpensiveCalculation(),
   metadata: gatherSystemInfo(),
 }));
@@ -476,18 +478,18 @@ const logger = new Slogger({
 ### Custom Formatters
 
 ```typescript
-import type { SlogObject } from "@tundralibs/slogger";
+import type { SlogObject } from '@tundralibs/slogger';
 
 function customFormatter(log: SlogObject): string {
   return `${log.timestamp}|${log.level}|${log.appName}|${log.message}`;
 }
 
 const logger = new Slogger({
-  appName: "CustomApp",
+  appName: 'CustomApp',
   level: SyslogSeverities.INFO,
   handlers: [{
-    name: "custom",
-    type: "console",
+    name: 'custom',
+    type: 'console',
     formatter: customFormatter,
   }],
 });
@@ -497,7 +499,7 @@ const logger = new Slogger({
 
 ```typescript
 // File handler automatically falls back to console on errors
-logger.error("This will be logged even if file writing fails");
+logger.error('This will be logged even if file writing fails');
 
 // HTTP handler batches and retries
 // Failed batches are logged to console as fallback
@@ -509,52 +511,52 @@ logger.error("This will be logged even if file writing fails");
 
 ```typescript
 // Before
-console.log("User logged in:", userId);
-console.error("Database error:", error);
+console.log('User logged in:', userId);
+console.error('Database error:', error);
 
 // After
 const logger = new Slogger({
-  appName: "MyApp",
+  appName: 'MyApp',
   level: SyslogSeverities.INFO,
-  handlers: [{ name: "console", type: "console", formatter: "standard" }],
+  handlers: [{ name: 'console', type: 'console', formatter: 'standard' }],
 });
 
-logger.info("User logged in", { userId });
-logger.error("Database error", { error: error.message, stack: error.stack });
+logger.info('User logged in', { userId });
+logger.error('Database error', { error: error.message, stack: error.stack });
 ```
 
 ### From Winston
 
 ```typescript
 // Before (Winston)
-const winston = require("winston");
+const winston = require('winston');
 const logger = winston.createLogger({
-  level: "info",
+  level: 'info',
   format: winston.format.json(),
   transports: [
-    new winston.transports.File({ filename: "app.log" }),
+    new winston.transports.File({ filename: 'app.log' }),
     new winston.transports.Console(),
   ],
 });
 
 // After (Slogger)
-import { Slogger, SyslogSeverities } from "@tundralibs/slogger";
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
 
 const logger = new Slogger({
-  appName: "MyApp",
+  appName: 'MyApp',
   level: SyslogSeverities.INFO,
   handlers: [
     {
-      name: "file",
-      type: "file",
-      storePath: "./",
-      fileName: "app.log",
-      formatter: "json",
+      name: 'file',
+      type: 'file',
+      storePath: './',
+      fileName: 'app.log',
+      formatter: 'json',
     },
     {
-      name: "console",
-      type: "console",
-      formatter: "standard",
+      name: 'console',
+      type: 'console',
+      formatter: 'standard',
     },
   ],
 });
@@ -564,22 +566,22 @@ const logger = new Slogger({
 
 ```typescript
 // Before (Pino)
-const pino = require("pino");
+const pino = require('pino');
 const logger = pino({
-  level: "info",
+  level: 'info',
   transport: {
-    target: "pino-pretty",
+    target: 'pino-pretty',
   },
 });
 
 // After (Slogger)
 const logger = new Slogger({
-  appName: "MyApp",
+  appName: 'MyApp',
   level: SyslogSeverities.INFO,
   handlers: [{
-    name: "console",
-    type: "console",
-    formatter: "detailed", // Similar to pino-pretty
+    name: 'console',
+    type: 'console',
+    formatter: 'detailed', // Similar to pino-pretty
   }],
 });
 ```
@@ -616,25 +618,25 @@ logger.debug("Request processed", { requestId }); // Subject to sampling
 
 ```typescript
 // Always mask sensitive data
-import { maskingFormatter } from "@tundralibs/slogger";
+import { maskingFormatter } from '@tundralibs/slogger';
 
 const secureLogger = new Slogger({
-  appName: "SecureApp",
+  appName: 'SecureApp',
   level: SyslogSeverities.INFO,
   handlers: [{
-    name: "secure-file",
-    type: "file",
-    storePath: "./secure-logs",
-    fileName: "app.log",
+    name: 'secure-file',
+    type: 'file',
+    storePath: './secure-logs',
+    fileName: 'app.log',
     formatter: maskingFormatter({
       sensitiveFields: [
-        "password",
-        "token",
-        "apiKey",
-        "secret",
-        "creditCard",
-        "ssn",
-        "email",
+        'password',
+        'token',
+        'apiKey',
+        'secret',
+        'creditCard',
+        'ssn',
+        'email',
       ],
     }),
   }],
@@ -645,11 +647,11 @@ const secureLogger = new Slogger({
 
 ```typescript
 // Good: Structured context
-logger.info("User action", {
-  userId: "123",
-  action: "login",
-  ip: "192.168.1.1",
-  userAgent: req.headers["user-agent"],
+logger.info('User action', {
+  userId: '123',
+  action: 'login',
+  ip: '192.168.1.1',
+  userAgent: req.headers['user-agent'],
 });
 
 // Avoid: String interpolation
@@ -663,7 +665,7 @@ logger.info(`User ${userId} performed ${action}`); // Less searchable
 try {
   await riskyOperation();
 } catch (error) {
-  logger.error("Operation failed", {
+  logger.error('Operation failed', {
     error: {
       name: error.name,
       message: error.message,
@@ -671,7 +673,7 @@ try {
       code: error.code,
     },
     context: {
-      operation: "riskyOperation",
+      operation: 'riskyOperation',
       timestamp: Date.now(),
       input: sanitizedInput,
     },
@@ -682,26 +684,26 @@ try {
 ## 🧪 Testing
 
 ```typescript
-import { Slogger, SyslogSeverities } from "@tundralibs/slogger";
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
 
 // Use blackhole handler for tests
 const testLogger = new Slogger({
-  appName: "TestApp",
+  appName: 'TestApp',
   level: SyslogSeverities.ERROR, // Only log errors in tests
   handlers: [{
-    name: "test",
-    type: "blackhole", // No output during tests
+    name: 'test',
+    type: 'blackhole', // No output during tests
   }],
 });
 
 // Or capture logs for assertions
 const logs: string[] = [];
 const captureLogger = new Slogger({
-  appName: "TestApp",
+  appName: 'TestApp',
   level: SyslogSeverities.DEBUG,
   handlers: [{
-    name: "capture",
-    type: "console",
+    name: 'capture',
+    type: 'console',
     formatter: (log) => {
       const formatted = JSON.stringify(log);
       logs.push(formatted);
@@ -752,17 +754,17 @@ const captureLogger = new Slogger({
 
 ```typescript
 // Log metrics for monitoring
-logger.info("Request processed", {
-  method: "GET",
-  path: "/api/users",
+logger.info('Request processed', {
+  method: 'GET',
+  path: '/api/users',
   statusCode: 200,
   responseTime: 45,
-  userAgent: "Mozilla/5.0...",
+  userAgent: 'Mozilla/5.0...',
 });
 
 // Application health
-logger.info("Health check", {
-  status: "healthy",
+logger.info('Health check', {
+  status: 'healthy',
   uptime: process.uptime(),
   memoryUsage: process.memoryUsage(),
   cpuUsage: process.cpuUsage(),
@@ -809,12 +811,12 @@ logger.info("Health check", {
 ```typescript
 // Enable debug logging to troubleshoot
 const debugLogger = new Slogger({
-  appName: "DebugApp",
+  appName: 'DebugApp',
   level: SyslogSeverities.DEBUG,
   handlers: [{
-    name: "debug-console",
-    type: "console",
-    formatter: "detailed",
+    name: 'debug-console',
+    type: 'console',
+    formatter: 'detailed',
   }],
 });
 ```

@@ -1,5 +1,5 @@
-import { generate } from "./common.ts";
-import type { DigestAlgorithms } from "../digest/mod.ts";
+import { generate } from './common.ts';
+import type { DigestAlgorithms } from '../digest/mod.ts';
 
 /**
  * Generates a Time-based One-Time Password (TOTP) as defined in RFC 6238.
@@ -18,10 +18,10 @@ export const generateTOTP = (
   epoch: number = Date.now(),
   period: number = 30,
   length: number = 6,
-  algo: DigestAlgorithms = "SHA-256",
+  algo: DigestAlgorithms = 'SHA-256',
 ): Promise<string> => {
   if (period < 1) {
-    throw new Error("Time period must be at least 1 second");
+    throw new Error('Time period must be at least 1 second');
   }
   const counter = Math.floor(epoch / (period * 1000));
   return generate(key, counter, length, algo);
@@ -80,14 +80,14 @@ export const verifyTOTP = async (
   epoch: number = Date.now(),
   period: number = 30,
   length: number = 6,
-  algo: DigestAlgorithms = "SHA-256",
+  algo: DigestAlgorithms = 'SHA-256',
 ): Promise<boolean> => {
   if (period < 1) {
-    throw new Error("Time period must be at least 1 second");
+    throw new Error('Time period must be at least 1 second');
   }
 
   if (window < 0 || !Number.isInteger(window)) {
-    throw new Error("Window must be a non-negative integer");
+    throw new Error('Window must be a non-negative integer');
   }
 
   if (!otp || otp.length !== length || !/^\d+$/.test(otp)) {

@@ -1,6 +1,6 @@
-import type { RESTlerRequest } from "../types/mod.ts";
-import { RESTlerRequestError } from "./Request.ts";
-import { RESTlerErrorMeta } from "./Base.ts";
+import type { RESTlerRequest } from '../types/mod.ts';
+import { RESTlerRequestError } from './Request.ts';
+import { RESTlerErrorMeta } from './Base.ts';
 
 /**
  * Error class for timeout-related errors in RESTler.
@@ -18,7 +18,7 @@ export class RESTlerTimeoutError extends RESTlerRequestError {
     cause?: Error,
   ) {
     super(
-      "Request timed out after ${request.timeout}s",
+      'Request timed out after ${request.timeout}s',
       meta,
       cause,
     );

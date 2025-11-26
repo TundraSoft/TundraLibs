@@ -1,8 +1,8 @@
-import { Memcached } from "$memcached";
-import { AbstractEngine } from "../../AbstractEngine.ts";
-import type { CacheValue } from "../../types/mod.ts";
-import { CacherEngineError } from "../../errors/mod.ts";
-import type { MemCacherOptions } from "./types/mod.ts";
+import { Memcached } from '$memcached';
+import { AbstractEngine } from '../../AbstractEngine.ts';
+import type { CacheValue } from '../../types/mod.ts';
+import { CacherEngineError } from '../../errors/mod.ts';
+import type { MemCacherOptions } from './types/mod.ts';
 
 /**
  * Memcached-based cacher implementation.
@@ -37,7 +37,7 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
   /**
    * The engine identifier for Memcached cacher.
    */
-  public override readonly Engine = "MEMCACHED";
+  public override readonly Engine = 'MEMCACHED';
 
   /**
    * The Memcached client instance.
@@ -65,11 +65,11 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
     };
     super(name, options);
     // Ensure mandatory items present
-    if (this.hasOption("host") === false) {
-      throw new CacherEngineError("CONFIG_MISSING", {
+    if (this.hasOption('host') === false) {
+      throw new CacherEngineError('CONFIG_MISSING', {
         name: this.name,
         engine: this.Engine,
-        configKey: "host",
+        configKey: 'host',
       });
     }
   }
@@ -85,17 +85,17 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
     if (this._client === undefined) {
       try {
         this._client = new Memcached({
-          host: this.getOption("host"),
-          port: this.getOption("port"),
-          maxBufferSize: this.getOption("maxBufferSize")! * 1024 * 1024,
+          host: this.getOption('host'),
+          port: this.getOption('port'),
+          maxBufferSize: this.getOption('maxBufferSize')! * 1024 * 1024,
         });
-        await this._client.set("__test__", "test");
+        await this._client.set('__test__', 'test');
       } catch (e) {
-        throw new CacherEngineError("CONNECTION_FAILED", {
+        throw new CacherEngineError('CONNECTION_FAILED', {
           name: this.name,
           engine: this.Engine,
-          host: this.getOption("host"),
-          port: this.getOption("port"),
+          host: this.getOption('host'),
+          port: this.getOption('port'),
           reason: (e as Error).message,
         }, e as Error);
       }
@@ -139,11 +139,11 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
         return data;
       }
     } catch (e) {
-      throw new CacherEngineError("OPERATION_FAILED", {
+      throw new CacherEngineError('OPERATION_FAILED', {
         name: this.name,
         engine: this.Engine,
-        operation: "GET",
-        key: key.split(":")[1],
+        operation: 'GET',
+        key: key.split(':')[1],
         reason: (e as Error).message,
       }, e as Error);
     }
@@ -165,11 +165,11 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
       // Delay by 100ms to ensure the data is set
       // await new Promise((resolve) => setTimeout(resolve, 1));
     } catch (e) {
-      throw new CacherEngineError("OPERATION_FAILED", {
+      throw new CacherEngineError('OPERATION_FAILED', {
         name: this.name,
         engine: this.Engine,
-        operation: "SET",
-        key: key.split(":")[1],
+        operation: 'SET',
+        key: key.split(':')[1],
         reason: (e as Error).message,
       }, e as Error);
     }
@@ -188,11 +188,11 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
     try {
       await this._client!.delete(key);
     } catch (e) {
-      throw new CacherEngineError("OPERATION_FAILED", {
+      throw new CacherEngineError('OPERATION_FAILED', {
         name: this.name,
         engine: this.Engine,
-        operation: "DELETE",
-        key: key.split(":")[1],
+        operation: 'DELETE',
+        key: key.split(':')[1],
         reason: (e as Error).message,
       }, e as Error);
     }
@@ -210,10 +210,10 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
     try {
       await this._client!.flush();
     } catch (e) {
-      throw new CacherEngineError("OPERATION_FAILED", {
+      throw new CacherEngineError('OPERATION_FAILED', {
         name: this.name,
         engine: this.Engine,
-        operation: "CLEAR",
+        operation: 'CLEAR',
         reason: (e as Error).message,
       }, e as Error);
     }
@@ -236,11 +236,11 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
       }
       return true;
     } catch (e) {
-      throw new CacherEngineError("OPERATION_FAILED", {
+      throw new CacherEngineError('OPERATION_FAILED', {
         name: this.name,
         engine: this.Engine,
-        operation: "HAS",
-        key: key.split(":")[1],
+        operation: 'HAS',
+        key: key.split(':')[1],
         reason: (e as Error).message,
       }, e as Error);
     }
@@ -264,35 +264,35 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
     value: MemCacherOptions[K],
   ): MemCacherOptions[K] {
     switch (key) {
-      case "host":
-        if (typeof value !== "string" || value.trim() === "") {
-          throw new CacherEngineError("CONFIG_MISSING", {
+      case 'host':
+        if (typeof value !== 'string' || value.trim() === '') {
+          throw new CacherEngineError('CONFIG_MISSING', {
             name: this.name,
             engine: this.Engine,
             configKey: key,
-            reason: "Host is required and must be a non-empty string",
+            reason: 'Host is required and must be a non-empty string',
           });
         }
         break;
-      case "port":
+      case 'port':
         value ??= 11211 as MemCacherOptions[K]; // Fixed: was incorrectly 6379
-        if (typeof value !== "number" || value <= 0 || value > 65535) {
-          throw new CacherEngineError("CONFIG_INVALID", {
+        if (typeof value !== 'number' || value <= 0 || value > 65535) {
+          throw new CacherEngineError('CONFIG_INVALID', {
             name: this.name,
             engine: this.Engine,
             configKey: key,
-            reason: "must be a positive number between 0 and 65535",
+            reason: 'must be a positive number between 0 and 65535',
           });
         }
         break;
-      case "maxBufferSize":
+      case 'maxBufferSize':
         value ??= 10 as MemCacherOptions[K]; // Fixed: was incorrectly 10
-        if (typeof value !== "number" || value <= 0) {
-          throw new CacherEngineError("CONFIG_INVALID", {
+        if (typeof value !== 'number' || value <= 0) {
+          throw new CacherEngineError('CONFIG_INVALID', {
             name: this.name,
             engine: this.Engine,
             configKey: key,
-            reason: "must be a positive number",
+            reason: 'must be a positive number',
           });
         }
         break;

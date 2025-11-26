@@ -1,8 +1,8 @@
-import * as asserts from "$asserts";
-import { Once, once } from "./once.ts";
+import * as asserts from '$asserts';
+import { Once, once } from './once.ts';
 
-Deno.test("utils.once", async (t) => {
-  await t.step("should make a function callable only once", () => {
+Deno.test('utils.once', async (t) => {
+  await t.step('should make a function callable only once', () => {
     let counter = 0;
     const add = (a: number, b: number): number => {
       counter++;
@@ -18,7 +18,7 @@ Deno.test("utils.once", async (t) => {
     asserts.assertEquals(counter, 1);
   });
 
-  await t.step("should make a class method callable only once", () => {
+  await t.step('should make a class method callable only once', () => {
     class Calculator {
       static counter = 0;
       @Once
@@ -38,7 +38,7 @@ Deno.test("utils.once", async (t) => {
     asserts.assertEquals(Calculator.counter, 1);
   });
 
-  await t.step("should make an async function callable once", async () => {
+  await t.step('should make an async function callable once', async () => {
     let counter = 0;
     const add = async (a: number, b: number): Promise<number> => {
       // Set a 500ms delay to simulate an async operation
@@ -56,7 +56,7 @@ Deno.test("utils.once", async (t) => {
     asserts.assertEquals(counter, 1);
   });
 
-  await t.step("should make an async method callable once", async () => {
+  await t.step('should make an async method callable once', async () => {
     class Calculator {
       static counter = 0;
       @Once
@@ -78,26 +78,26 @@ Deno.test("utils.once", async (t) => {
     asserts.assertEquals(Calculator.counter, 1);
   });
 
-  await t.step("should handle errors in once functions", () => {
+  await t.step('should handle errors in once functions', () => {
     let counter = 0;
     const willThrow = (): number => {
       counter++;
-      throw new Error("This function throws");
+      throw new Error('This function throws');
     };
 
     const onceThrow = once(willThrow);
 
     // First call should throw
-    asserts.assertThrows(() => onceThrow(), Error, "This function throws");
+    asserts.assertThrows(() => onceThrow(), Error, 'This function throws');
     asserts.assertEquals(counter, 1);
 
     // Second call should also throw the same error
-    asserts.assertThrows(() => onceThrow(), Error, "This function throws");
+    asserts.assertThrows(() => onceThrow(), Error, 'This function throws');
     // But the function shouldn't be called again
     asserts.assertEquals(counter, 1);
   });
 
-  await t.step("should handle void functions", () => {
+  await t.step('should handle void functions', () => {
     let counter = 0;
     const voidFn = (): void => {
       counter++;

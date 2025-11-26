@@ -1,4 +1,4 @@
-import { ObjectID } from "./mod.ts";
+import { ObjectID } from './mod.ts';
 
 const oid = ObjectID(0);
 Deno.bench({
@@ -7,7 +7,7 @@ Deno.bench({
   oid();
 });
 
-const oid2 = ObjectID(0, "adw");
+const oid2 = ObjectID(0, 'adw');
 Deno.bench({
   name: `id.Generate - ObjectID with manual machine id`,
 }, () => {

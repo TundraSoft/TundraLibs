@@ -1,5 +1,5 @@
-import type { RESTlerRequest } from "../types/mod.ts";
-import { RESTlerError, RESTlerErrorMeta } from "./Base.ts";
+import type { RESTlerRequest } from '../types/mod.ts';
+import { RESTlerError, RESTlerErrorMeta } from './Base.ts';
 
 /**
  * Error class for request-related errors in RESTler.

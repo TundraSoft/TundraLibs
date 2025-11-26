@@ -1,4 +1,4 @@
-import type { RESTlerMethod, RESTlerMethodPayload } from "./Method.ts";
+import type { RESTlerMethod, RESTlerMethodPayload } from './Method.ts';
 
 /**
  * Additional options for a request.

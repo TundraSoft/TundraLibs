@@ -1,6 +1,6 @@
 {
   "name": "TundraLibs",
-  "dockerFile": "Dockerfile",
+  "dockerFile": "dockerfile",
   // Configure tool-specific properties.
   "customizations": {
     // Configure properties specific to VS Code.
@@ -8,7 +8,8 @@
       // Set *default* container specific settings.json values on container create.
       "settings": {
         "deno.enable": true,
-        "deno.unstable": [],
+        "deno.unstable": ["ffi"],
+        "deno.lint": true,
         "deno.cacheOnSave": true,
         "deno.suggest.imports.autoDiscover": true,
         "deno.codeLens.implementations": true,
@@ -16,11 +17,20 @@
         "deno.codeLens.referencesAllFunctions": true,
         "deno.codeLens.test": true,
         "deno.codeLens.testArgs": [
-          "--allow-all",
-          "--no-check"
+          "--allow-read",
+          "--allow-write",
+          "--allow-env",
+          "--allow-net",
+          "--allow-ffi",
+          "--allow-sys",
+          "--unstable-ffi"
         ],
+        "deno.testing.enable": true,
+        "typescript.suggest.enabled": true,
+        "typescript.enablePromptUseWorkspaceTsdk": false,
         "editor.tabSize": 2,
-        "editor.formatOnSave": true
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "denoland.vscode-deno"
       },
       // Add the IDs of extensions you want installed when the container is created.
       "extensions": [

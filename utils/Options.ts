@@ -1,5 +1,5 @@
-import { type EventCallback, Events } from "./Events.ts";
-import { type PrivateObject, privateObject } from "../utils/mod.ts";
+import { type EventCallback, Events } from './Events.ts';
+import { type PrivateObject, privateObject } from '../utils/mod.ts';
 
 /**
  * Helper type that combines option keys with event handler keys prefixed with '_on'.
@@ -215,7 +215,7 @@ export abstract class Options<
     }
     // Loop through and set each option
     for (const key in finalOptions) {
-      if (key.startsWith("_on")) {
+      if (key.startsWith('_on')) {
         this.on(
           key.slice(3) as keyof E,
           finalOptions[key] as unknown as E[keyof E],

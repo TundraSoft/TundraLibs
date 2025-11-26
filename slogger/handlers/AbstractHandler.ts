@@ -1,6 +1,6 @@
-import { SyslogSeverities } from "@tundralibs/utils";
-import type { SloggerFormatter, SlogObject } from "../types/mod.ts";
-import { standardFormat } from "../formatters/mod.ts";
+import { SyslogSeverities } from '@tundralibs/utils';
+import type { SloggerFormatter, SlogObject } from '../types/mod.ts';
+import { standardFormat } from '../formatters/mod.ts';
 
 /**
  * Configuration options for sampling behavior
@@ -61,25 +61,25 @@ export abstract class AbstractHandler {
    * @throws Error if name is invalid or options are invalid
    */
   constructor(name: string, options: HandlerOptions) { // NOSONAR
-    if (typeof name !== "string" || name.trim() === "" || name.length > 30) {
+    if (typeof name !== 'string' || name.trim() === '' || name.length > 30) {
       throw new Error(
-        "Handler name must be a non-empty string with max length 30",
+        'Handler name must be a non-empty string with max length 30',
       );
     }
     this.name = name.trim();
     if (
-      typeof options.level != "number" || options.level < 0 || options.level > 7
+      typeof options.level != 'number' || options.level < 0 || options.level > 7
     ) {
-      throw new Error("Invalid log level");
+      throw new Error('Invalid log level');
     }
     this.level = options.level ?? SyslogSeverities.ERROR;
 
     // Handle formatter - only accept formatter functions
     if (options.formatter) {
-      if (typeof options.formatter === "function") {
+      if (typeof options.formatter === 'function') {
         this.formatter = options.formatter;
       } else {
-        throw new Error("Formatter must be a function");
+        throw new Error('Formatter must be a function');
       }
     } else {
       this.formatter = standardFormat;
@@ -89,23 +89,23 @@ export abstract class AbstractHandler {
     if (options.sampling) {
       if (options.sampling.sampleRate !== undefined) {
         if (
-          typeof options.sampling.sampleRate !== "number" ||
+          typeof options.sampling.sampleRate !== 'number' ||
           options.sampling.sampleRate < 0 ||
           options.sampling.sampleRate > 1
         ) {
-          throw new Error("Sampling rate must be a number between 0 and 1");
+          throw new Error('Sampling rate must be a number between 0 and 1');
         }
         this._sampleRate = options.sampling.sampleRate;
       }
 
       if (options.sampling.bypassSamplingForLevel !== undefined) {
         if (
-          typeof options.sampling.bypassSamplingForLevel !== "number" ||
+          typeof options.sampling.bypassSamplingForLevel !== 'number' ||
           options.sampling.bypassSamplingForLevel < 0 ||
           options.sampling.bypassSamplingForLevel > 7
         ) {
           throw new Error(
-            "Bypass sampling level must be a valid log level (0-7)",
+            'Bypass sampling level must be a valid log level (0-7)',
           );
         }
         this._bypassSamplingLevel = options.sampling.bypassSamplingForLevel;
@@ -114,22 +114,22 @@ export abstract class AbstractHandler {
 
     try {
       const test = this.formatter({
-        id: "1",
-        appName: "test",
-        hostname: "test",
+        id: '1',
+        appName: 'test',
+        hostname: 'test',
         level: 1,
         date: new Date(),
         timestamp: Date.now(),
         isoDate: new Date().toISOString(),
-        levelName: "WARNING",
+        levelName: 'WARNING',
         context: {},
-        message: "test",
+        message: 'test',
       });
-      if (typeof test !== "string") {
-        throw new Error("Formatter must return a string");
+      if (typeof test !== 'string') {
+        throw new Error('Formatter must return a string');
       }
     } catch (e) {
-      throw new Error("Error running formatter: " + e);
+      throw new Error('Error running formatter: ' + e);
     }
   }
 

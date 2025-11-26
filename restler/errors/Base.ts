@@ -1,4 +1,4 @@
-import { BaseError } from "@tundralibs/utils";
+import { BaseError } from '@tundralibs/utils';
 
 /**
  * Metadata for RESTler errors.

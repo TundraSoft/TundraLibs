@@ -1,9 +1,9 @@
 import {
   type DigestAlgorithms,
   validateDigestAlgorithm,
-} from "../digest/mod.ts";
-import type { SigningModes } from "./types.ts";
-import { encodeHex } from "$encoding";
+} from '../digest/mod.ts';
+import type { SigningModes } from './types.ts';
+import { encodeHex } from '$encoding';
 
 /**
  * Parses a PEM-formatted private key string to extract the raw key data.
@@ -15,15 +15,15 @@ import { encodeHex } from "$encoding";
 const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
   // Remove PEM headers, footers, and whitespace
   const base64Key = pemKey
-    .replace(/-----BEGIN [A-Z ]+-----/, "")
-    .replace(/-----END [A-Z ]+-----/, "")
-    .replace(/\s/g, "");
+    .replace(/-----BEGIN [A-Z ]+-----/, '')
+    .replace(/-----END [A-Z ]+-----/, '')
+    .replace(/\s/g, '');
 
   try {
     // Decode the base64 key data
     return Uint8Array.from(atob(base64Key), (c) => c.charCodeAt(0));
   } catch (_error) {
-    throw new Error("Invalid PEM private key format");
+    throw new Error('Invalid PEM private key format');
   }
 };
 
@@ -69,23 +69,23 @@ export const signHMAC = async (
   validateDigestAlgorithm(digest);
 
   const key = await crypto.subtle.importKey(
-    "raw",
+    'raw',
     new TextEncoder().encode(secret),
     {
-      name: "HMAC",
+      name: 'HMAC',
       hash: digest,
     },
     false,
-    ["sign"],
+    ['sign'],
   );
 
-  const dataToSign = typeof data === "string"
+  const dataToSign = typeof data === 'string'
     ? new TextEncoder().encode(data)
     : data;
 
   const signature = await crypto.subtle.sign(
     {
-      name: "HMAC",
+      name: 'HMAC',
       hash: digest,
     },
     key,
@@ -136,8 +136,8 @@ export const signRSA = async (
   privateKey: string,
   data: string | Uint8Array,
 ): Promise<string> => {
-  const parts = mode.split(":");
-  if (parts.length !== 3 || parts[0] !== "RSA-PSS") {
+  const parts = mode.split(':');
+  if (parts.length !== 3 || parts[0] !== 'RSA-PSS') {
     throw new Error(
       'Invalid RSA mode format. Expected "RSA-PSS:keySize:hashAlgorithm"',
     );
@@ -154,13 +154,13 @@ export const signRSA = async (
   const keySize = parseInt(lengthStr, 10);
   if (![2048, 3072, 4096].includes(keySize)) {
     throw new Error(
-      "Invalid RSA key size. Must be 2048, 3072, or 4096",
+      'Invalid RSA key size. Must be 2048, 3072, or 4096',
     );
   }
 
-  if (!["SHA-256", "SHA-384", "SHA-512"].includes(hashAlgorithm)) {
+  if (!['SHA-256', 'SHA-384', 'SHA-512'].includes(hashAlgorithm)) {
     throw new Error(
-      "Invalid hash algorithm. Must be SHA-256, SHA-384, or SHA-512",
+      'Invalid hash algorithm. Must be SHA-256, SHA-384, or SHA-512',
     );
   }
 
@@ -169,34 +169,34 @@ export const signRSA = async (
 
   // Import the private key
   const cryptoKey = await crypto.subtle.importKey(
-    "pkcs8",
+    'pkcs8',
     keyData as BufferSource,
     {
-      name: "RSA-PSS",
+      name: 'RSA-PSS',
       hash: hashAlgorithm,
     },
     false,
-    ["sign"],
+    ['sign'],
   );
 
   // Prepare the data to sign
-  const dataToSign = typeof data === "string"
+  const dataToSign = typeof data === 'string'
     ? new TextEncoder().encode(data)
     : data;
 
   // Calculate salt length based on hash algorithm (typically hash length)
-  const saltLength = hashAlgorithm === "SHA-256"
+  const saltLength = hashAlgorithm === 'SHA-256'
     ? 32
-    : hashAlgorithm === "SHA-384"
+    : hashAlgorithm === 'SHA-384'
     ? 48
-    : hashAlgorithm === "SHA-512"
+    : hashAlgorithm === 'SHA-512'
     ? 64
     : 32;
 
   // Sign the data
   const signature = await crypto.subtle.sign(
     {
-      name: "RSA-PSS",
+      name: 'RSA-PSS',
       saltLength,
     },
     cryptoKey,
@@ -242,12 +242,12 @@ export const sign = (
   secret: string,
   data: string | Uint8Array,
 ): Promise<string> => {
-  if (mode.startsWith("RSA-")) {
+  if (mode.startsWith('RSA-')) {
     return signRSA(mode, secret, data);
   } else {
-    const [algorithm, hash] = mode.split(":");
-    if (algorithm !== "HMAC") {
-      throw new Error("Invalid signing mode. Must be HMAC or RSA-PSS");
+    const [algorithm, hash] = mode.split(':');
+    if (algorithm !== 'HMAC') {
+      throw new Error('Invalid signing mode. Must be HMAC or RSA-PSS');
     }
 
     if (!hash) {

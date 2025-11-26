@@ -1,4 +1,4 @@
-import type { CacherOptions } from "../../../types/mod.ts";
+import type { CacherOptions } from '../../../types/mod.ts';
 
 /**
  * Configuration options for the Memcached cacher.

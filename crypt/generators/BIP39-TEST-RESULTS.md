@@ -93,7 +93,7 @@ const mnemonic = await generate12WordSeed();
 // With passphrase
 const secure = await generateBIP39Mnemonic({
   wordCount: 24,
-  passphrase: "my-secure-passphrase",
+  passphrase: 'my-secure-passphrase',
 });
 
 // Validation

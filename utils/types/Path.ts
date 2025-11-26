@@ -50,7 +50,7 @@
  * ```
  */
 
-import { UnionToIntersection } from "./UnionToIntersection.ts";
+import { UnionToIntersection } from './UnionToIntersection.ts';
 
 /**
  * Recursively generates all possible paths through an object type using dot notation.
@@ -133,19 +133,19 @@ import { UnionToIntersection } from "./UnionToIntersection.ts";
  */
 export type Paths<
   T extends Record<string, unknown>,
-  KeyPrefix extends string = "",
+  KeyPrefix extends string = '',
 > = UnionToIntersection<
   {
     [K in keyof T]: T[K] extends Record<string, unknown> ?
         & Paths<
           T[K],
-          KeyPrefix extends "" ? `${K & string}` : `${KeyPrefix}.${K & string}`
+          KeyPrefix extends '' ? `${K & string}` : `${KeyPrefix}.${K & string}`
         >
         & {
-          [KK in KeyPrefix extends "" ? K : `${KeyPrefix}.${K & string}`]: T[K];
+          [KK in KeyPrefix extends '' ? K : `${KeyPrefix}.${K & string}`]: T[K];
         }
       : {
-        [KK in KeyPrefix extends "" ? K : `${KeyPrefix}.${K & string}`]: T[K];
+        [KK in KeyPrefix extends '' ? K : `${KeyPrefix}.${K & string}`]: T[K];
       };
   }[keyof T] extends infer O ? { [P in keyof O]: O[P] } : never
 > extends infer O ? { [P in keyof O]: O[P] } : never;

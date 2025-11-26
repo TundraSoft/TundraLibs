@@ -1,6 +1,8 @@
 # ID
 
-A comprehensive, high-performance ID generation library for Deno and Node.js. Provides secure, efficient, and collision-resistant unique identifier generation with multiple algorithms optimized for different use cases.
+A comprehensive, high-performance ID generation library for Deno and Node.js.
+Provides secure, efficient, and collision-resistant unique identifier generation
+with multiple algorithms optimized for different use cases.
 
 ## Installation & Quick Start
 
@@ -13,7 +15,7 @@ npx jsr add @tundralibs/id
 ```
 
 ```typescript
-import { nanoID, ObjectID, ulid, sequenceID, simpleID } from '@tundralibs/id';
+import { nanoID, ObjectID, sequenceID, simpleID, ulid } from '@tundralibs/id';
 
 // NanoID - Secure, URL-safe, customizable
 const id1 = nanoID(); // "V1StGXR8_Z5jdHi6B-myT"
@@ -49,7 +51,7 @@ Optimized for speed and efficiency:
 ```typescript
 // Performance benchmarks (1000 iterations):
 // - simpleID: ~7ms
-// - sequenceID: ~0.4ms  
+// - sequenceID: ~0.4ms
 // - ObjectID: ~0.4ms
 // - nanoID: ~3ms
 ```
@@ -70,14 +72,14 @@ Extensive customization options:
 
 ```typescript
 // NanoID with custom character sets
-import { ALPHA_NUMERIC, WEB_SAFE, PASSWORD } from '@tundralibs/id';
+import { ALPHA_NUMERIC, PASSWORD, WEB_SAFE } from '@tundralibs/id';
 
 const alphanumeric = nanoID(10, ALPHA_NUMERIC); // "Kj8F2mN9Qp"
 const webSafe = nanoID(15, WEB_SAFE); // "3k_m8-fn2_qL9xR"
 const secure = nanoID(20, PASSWORD); // "x&2@mK9!zR8$pL4%nF^*"
 
 // ObjectID with custom machine ID
-const customObjectId = ObjectID({ machineId: "ABC123" });
+const customObjectId = ObjectID({ machineId: 'ABC123' });
 
 // Monotonic ULIDs for guaranteed ordering
 const mono1 = monotonicUlid(); // "01ARZ3NDEKTSV4RRFFQ69G5FAV"
@@ -138,7 +140,7 @@ const batchIds = Array.from({ length: 1000 }, () => sequenceID());
 const events = Array.from({ length: 100 }, () => ({
   id: monotonicUlid(),
   timestamp: new Date(),
-  data: {}
+  data: {},
 }));
 // Guaranteed chronological ordering even within same millisecond
 ```
@@ -147,7 +149,7 @@ const events = Array.from({ length: 100 }, () => ({
 
 ```typescript
 // Machine-specific ObjectIDs
-const serverId = "WEB01";
+const serverId = 'WEB01';
 const taskId = ObjectID({ machineId: serverId });
 
 // Extract creation time for debugging
@@ -167,10 +169,12 @@ console.log(`Created: ${new Date(creationTime)}`);
 ```typescript
 nanoID(size?: number, base?: string): string
 ```
+
 - `size`: Length of generated ID (default: 21)
 - `base`: Character set to use (default: WEB_SAFE)
 
 **Character Sets:**
+
 - `NUMBERS`: "0123456789"
 - `ALPHABETS`: "abcdefghijklmnopqrstuvwxyz"
 - `ALPHA_NUMERIC`: Letters + numbers + uppercase
@@ -182,6 +186,7 @@ nanoID(size?: number, base?: string): string
 ```typescript
 ObjectID(options?: { machineId?: string }): string
 ```
+
 - `machineId`: Custom machine identifier (default: auto-generated)
 
 ### ULID
@@ -191,6 +196,7 @@ ulid(timestamp?: number, monotonic?: boolean): string
 monotonicUlid(timestamp?: number): string
 getTimestamp(ulid: string): number
 ```
+
 - `timestamp`: Unix timestamp in milliseconds (default: current time)
 - `monotonic`: Ensure lexicographic ordering within same millisecond
 
@@ -207,12 +213,12 @@ simpleID(seed?: string, length?: number): string
 
 Performance comparison (1000 iterations on modern hardware):
 
-| Generator | Time | Throughput | Use Case |
-|-----------|------|------------|----------|
-| `sequenceID` | 0.4ms | 5.3M/sec | High-frequency, ordered |
-| `ObjectID` | 0.4ms | 5.1M/sec | Database documents |
-| `simpleID` | 7ms | 4.3M/sec | Human-readable with date |
-| `nanoID` | 3ms | 594K/sec | Secure, customizable |
+| Generator    | Time  | Throughput | Use Case                 |
+| ------------ | ----- | ---------- | ------------------------ |
+| `sequenceID` | 0.4ms | 5.3M/sec   | High-frequency, ordered  |
+| `ObjectID`   | 0.4ms | 5.1M/sec   | Database documents       |
+| `simpleID`   | 7ms   | 4.3M/sec   | Human-readable with date |
+| `nanoID`     | 3ms   | 594K/sec   | Secure, customizable     |
 
 ### Security Features
 
@@ -251,7 +257,8 @@ deno test id/errorHandling.test.ts
 ### 🎯 **Current Focus (v1.x)**
 
 - [x] **Core ID generators** - nanoID, ObjectID, ULID, sequential IDs
-- [x] **Comprehensive testing** - Collision resistance and performance validation
+- [x] **Comprehensive testing** - Collision resistance and performance
+      validation
 - [x] **TypeScript support** - Full type safety and inference
 - [ ] **Snowflake ID generator** - Twitter-style distributed IDs
 - [ ] **ID validation suite** - Type detection and format validation
@@ -272,7 +279,8 @@ deno test id/errorHandling.test.ts
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see [CONTRIBUTING.md](../CONTRIBUTING.md) for
+guidelines.
 
 ## License
 
@@ -283,7 +291,7 @@ MIT License - see [LICENSE](../LICENSE) for details.
 Built with ❤️ by the TundraLibs team.
 
 ```typescript
-import { simpleID } from "./simpleID.ts";
+import { simpleID } from './simpleID.ts';
 
 // Basic usage
 const generateID = simpleID();

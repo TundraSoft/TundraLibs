@@ -1,6 +1,6 @@
 {
   "deno.enable": true,
-  "deno.unstable": [],
+  "deno.unstable": ["ffi"],
   "deno.lint": true,
   "deno.cacheOnSave": true,
   "deno.suggest.imports.autoDiscover": true,
@@ -22,7 +22,7 @@
   "deno.testing.enable": true,
   "deno.testing.args": [
     "--allow-read",
-    "--allow-write", 
+    "--allow-write",
     "--allow-env",
     "--allow-net",
     "--allow-ffi",
@@ -37,24 +37,17 @@
 
   // TypeScript settings - keep minimal to let Deno handle IntelliSense
   "typescript.preferences.useAliasesForRenames": false,
-  "typescript.suggest.enabled": true, // Commented out - this was preventing IntelliSense
+  "typescript.suggest.enabled": true,
   
   // Ensure Deno takes precedence over TypeScript
   "typescript.enablePromptUseWorkspaceTsdk": false,
   
   "editor.tabSize": 2,
-  "editor.formatOnSave": false,
+  "editor.formatOnSave": true,
   "editor.defaultFormatter": "denoland.vscode-deno",
   "sonarlint.connectedMode.project": {
     "connectionId": "Sonar",
     "projectKey": "TundraSoft_TundraLibs"
   },
-  // "github.copilot.enable": {
-  //   "*": true,
-  //   "plaintext": false,
-  //   "markdown": false,
-  //   "scminput": false
-  // },
-  // "sonarlint.testFilePattern": "**/*.test.ts",
-  "sonarlint.analysisExcludesStandalone": "**/.vscode-test/**, **/.vscode/**, **/*.test.ts, **/tests/**, **/tests/**.test.ts, .github/**",
+  "sonarlint.analysisExcludesStandalone": "**/.vscode-test/**, **/.vscode/**, **/*.test.ts, **/tests/**, **/tests/**.test.ts, .github/**"
 }

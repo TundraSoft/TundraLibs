@@ -1,5 +1,5 @@
-import { generate } from "./common.ts";
-import type { DigestAlgorithms } from "../digest/mod.ts";
+import { generate } from './common.ts';
+import type { DigestAlgorithms } from '../digest/mod.ts';
 
 /**
  * Generates a counter/hash One-Time Password (HOTP) as defined in RFC 4226.
@@ -16,7 +16,7 @@ export const generateHOTP = (
   key: string | Uint8Array,
   counter: number,
   length: number = 6,
-  algo: DigestAlgorithms = "SHA-256",
+  algo: DigestAlgorithms = 'SHA-256',
 ): Promise<string> => generate(key, counter, length, algo);
 
 /**
@@ -34,7 +34,7 @@ export const verifyHOTP = async (
   key: string | Uint8Array,
   counter: number,
   length: number = 6,
-  algo: DigestAlgorithms = "SHA-256",
+  algo: DigestAlgorithms = 'SHA-256',
 ): Promise<boolean> => {
   if (!otp || otp.length !== length || !/^\d+$/.test(otp)) {
     return false;

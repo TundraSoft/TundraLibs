@@ -9,24 +9,24 @@ exit-code: 0
 # File patterns to skip during filesystem scans
 skip-files:
   # Test files and fixtures
-  - "**/*.test.ts"
-  - "**/test/**"
-  - "**/tests/**"
-  - "**/fixtures/**"
-  - "**/testdata/**"
+  - '**/*.test.ts'
+  - '**/test/**'
+  - '**/tests/**'
+  - '**/fixtures/**'
+  - '**/testdata/**'
 
   # Build artifacts and temporary files
-  - "**/node_modules/**"
-  - "**/coverage/**"
-  - "**/.git/**"
-  - "**/.vscode/**"
-  - "**/.sonarlint/**"
-  - "**/deno.lock"
-  - "**/test-report.xml"
+  - '**/node_modules/**'
+  - '**/coverage/**'
+  - '**/.git/**'
+  - '**/.vscode/**'
+  - '**/.sonarlint/**'
+  - '**/deno.lock'
+  - '**/test-report.xml'
 
   # Documentation
-  - "**/*.md"
-  - "**/LICENSE"
+  - '**/*.md'
+  - '**/LICENSE'
 
 # Directories to skip entirely
 skip-dirs:
@@ -46,11 +46,11 @@ db:
 # File type detection
 file-patterns:
   # Include TypeScript files for dependency scanning
-  - "*.ts"
-  - "*.js"
-  - "*.json"
-  - "deno.json"
-  - "deno.lock"
+  - '*.ts'
+  - '*.js'
+  - '*.json'
+  - 'deno.json'
+  - 'deno.lock'
 
 # Secret scanning settings
 secret:

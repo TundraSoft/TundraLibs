@@ -1,4 +1,4 @@
-import { simpleID } from "./mod.ts";
+import { simpleID } from './mod.ts';
 
 const sid = simpleID(0, 4);
 

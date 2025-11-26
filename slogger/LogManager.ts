@@ -1,16 +1,16 @@
-import { Singleton } from "@tundralibs/utils";
+import { Singleton } from '@tundralibs/utils';
 import {
   AbstractHandler,
   type HandlerOptions,
-} from "./handlers/AbstractHandler.ts";
+} from './handlers/AbstractHandler.ts';
 import {
   BlackholeHandler,
   ConsoleHandler,
   FileHandler,
   HTTPHandler,
-} from "./handlers/mod.ts";
-import type { SloggerFormatter, SlogObject } from "./types/mod.ts";
-import { jsonFormatter } from "./formatters/jsonFormatter.ts";
+} from './handlers/mod.ts';
+import type { SloggerFormatter, SlogObject } from './types/mod.ts';
+import { jsonFormatter } from './formatters/jsonFormatter.ts';
 import {
   compactFormat,
   detailedFormat,
@@ -18,8 +18,8 @@ import {
   minimalistFormat,
   simpleFormatter,
   standardFormat,
-} from "./formatters/string.ts";
-import { Slogger, SloggerHandlerOption, SloggerOptions } from "./Slogger.ts";
+} from './formatters/string.ts';
+import { Slogger, SloggerHandlerOption, SloggerOptions } from './Slogger.ts';
 /**
  * LogManager Singleton
  *
@@ -56,22 +56,22 @@ class Manager {
    * Registers all built-in handler types
    */
   private registerDefaultHandlers(): void {
-    this.addHandler("FileHandler", FileHandler);
-    this.addHandler("ConsoleHandler", ConsoleHandler);
-    this.addHandler("HTTPHandler", HTTPHandler);
-    this.addHandler("BlackholeHandler", BlackholeHandler);
+    this.addHandler('FileHandler', FileHandler);
+    this.addHandler('ConsoleHandler', ConsoleHandler);
+    this.addHandler('HTTPHandler', HTTPHandler);
+    this.addHandler('BlackholeHandler', BlackholeHandler);
   }
 
   /**
    * Registers all built-in formatters
    */
   private registerDefaultFormatters(): void {
-    this.addFormatter("json", jsonFormatter);
-    this.addFormatter("standard", standardFormat);
-    this.addFormatter("detailed", detailedFormat);
-    this.addFormatter("compact", compactFormat);
-    this.addFormatter("minimalist", minimalistFormat);
-    this.addFormatter("keyValue", keyValueFormat);
+    this.addFormatter('json', jsonFormatter);
+    this.addFormatter('standard', standardFormat);
+    this.addFormatter('detailed', detailedFormat);
+    this.addFormatter('compact', compactFormat);
+    this.addFormatter('minimalist', minimalistFormat);
+    this.addFormatter('keyValue', keyValueFormat);
   }
 
   /**
@@ -93,8 +93,8 @@ class Manager {
     ) => AbstractHandler,
   ): void {
     // Validate name
-    if (!name || typeof name !== "string" || name.trim() === "") {
-      throw new Error("Handler name must be a non-empty string");
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      throw new Error('Handler name must be a non-empty string');
     }
 
     // Check for duplicates
@@ -103,8 +103,8 @@ class Manager {
     }
 
     // Validate constructor
-    if (typeof handlerConstructor !== "function") {
-      throw new Error("Handler constructor must be a valid class constructor");
+    if (typeof handlerConstructor !== 'function') {
+      throw new Error('Handler constructor must be a valid class constructor');
     }
 
     // Register the handler
@@ -126,8 +126,8 @@ class Manager {
    */
   public addFormatter(name: string, formatter: SloggerFormatter): void {
     // Validate name
-    if (!name || typeof name !== "string" || name.trim() === "") {
-      throw new Error("Formatter name must be a non-empty string");
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      throw new Error('Formatter name must be a non-empty string');
     }
 
     // Check for duplicates
@@ -136,28 +136,28 @@ class Manager {
     }
 
     // Validate formatter
-    if (typeof formatter !== "function") {
-      throw new Error("Formatter must be a valid function");
+    if (typeof formatter !== 'function') {
+      throw new Error('Formatter must be a valid function');
     }
 
     // Validate formatter output with a test log
     try {
       const testLog = {
-        id: "1",
-        appName: "test",
-        hostname: "test",
+        id: '1',
+        appName: 'test',
+        hostname: 'test',
         level: 1,
         date: new Date(),
         timestamp: Date.now(),
         isoDate: new Date().toISOString(),
-        levelName: "WARNING",
+        levelName: 'WARNING',
         context: {},
-        message: "test",
+        message: 'test',
       } as SlogObject;
 
       const result = formatter(testLog);
-      if (typeof result !== "string") {
-        throw new Error("Formatter must return a string");
+      if (typeof result !== 'string') {
+        throw new Error('Formatter must return a string');
       }
     } catch (e) {
       throw new Error(
@@ -178,8 +178,8 @@ class Manager {
    */
   public createFormatter(name: string, template: string): SloggerFormatter {
     // Validate template
-    if (!template || typeof template !== "string") {
-      throw new Error("Template must be a non-empty string");
+    if (!template || typeof template !== 'string') {
+      throw new Error('Template must be a non-empty string');
     }
 
     // Check for duplicates
@@ -240,7 +240,7 @@ class Manager {
     }
 
     // If formatter is specified by name, resolve it
-    if (options.formatter && typeof options.formatter === "string") {
+    if (options.formatter && typeof options.formatter === 'string') {
       const formatterName = options.formatter;
       const formatter = this.getFormatter(formatterName);
       if (!formatter) {

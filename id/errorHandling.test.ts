@@ -1,20 +1,20 @@
-import * as asserts from "$asserts";
-import { nanoID, ObjectID, sequenceID, simpleID } from "./mod.ts";
+import * as asserts from '$asserts';
+import { nanoID, ObjectID, sequenceID, simpleID } from './mod.ts';
 
-Deno.test("id.errorHandling", async (t) => {
-  await t.step("simpleID should validate input parameters", () => {
+Deno.test('id.errorHandling', async (t) => {
+  await t.step('simpleID should validate input parameters', () => {
     // Test negative minLen
     asserts.assertThrows(
       () => simpleID(0, -1),
       Error,
-      "Minimum length must be at least 1",
+      'Minimum length must be at least 1',
     );
 
     // Test zero minLen
     asserts.assertThrows(
       () => simpleID(0, 0),
       Error,
-      "Minimum length must be at least 1",
+      'Minimum length must be at least 1',
     );
 
     // Valid parameters should not throw
@@ -22,12 +22,12 @@ Deno.test("id.errorHandling", async (t) => {
     asserts.assert(() => simpleID(-10, 5)); // Negative seed is allowed
   });
 
-  await t.step("sequenceID should validate input parameters", () => {
+  await t.step('sequenceID should validate input parameters', () => {
     // Test negative counter
     asserts.assertThrows(
       () => sequenceID(-1),
       Error,
-      "Counter cannot be negative",
+      'Counter cannot be negative',
     );
 
     // Valid parameters should not throw
@@ -35,46 +35,46 @@ Deno.test("id.errorHandling", async (t) => {
     asserts.assert(() => sequenceID(1000));
   });
 
-  await t.step("ObjectID should validate input parameters", () => {
+  await t.step('ObjectID should validate input parameters', () => {
     // Test negative counter
     asserts.assertThrows(
       () => ObjectID(-1)(),
       Error,
-      "Counter cannot be negative",
+      'Counter cannot be negative',
     );
 
     // Valid parameters should not throw
     asserts.assert(() => ObjectID(0)());
-    asserts.assert(() => ObjectID(0, "xyz")());
+    asserts.assert(() => ObjectID(0, 'xyz')());
   });
 
-  await t.step("nanoID should validate input parameters", () => {
+  await t.step('nanoID should validate input parameters', () => {
     // Test invalid size
     asserts.assertThrows(
       () => nanoID(0),
       Error,
-      "Size should be greater than 0",
+      'Size should be greater than 0',
     );
 
     asserts.assertThrows(
       () => nanoID(-5),
       Error,
-      "Size should be greater than 0",
+      'Size should be greater than 0',
     );
 
     // Test empty base string
     asserts.assertThrows(
-      () => nanoID(10, ""),
+      () => nanoID(10, ''),
       Error,
-      "Base string cannot be empty",
+      'Base string cannot be empty',
     );
 
     // Valid parameters should not throw
     asserts.assert(() => nanoID(1));
-    asserts.assert(() => nanoID(100, "AB"));
+    asserts.assert(() => nanoID(100, 'AB'));
   });
 
-  await t.step("Performance benchmark for ID generators", () => {
+  await t.step('Performance benchmark for ID generators', () => {
     // This test verifies that generators remain efficient
     const iterations = 1000;
 

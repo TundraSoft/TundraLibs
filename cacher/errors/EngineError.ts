@@ -1,8 +1,8 @@
-import { CacherError } from "./Base.ts";
+import { CacherError } from './Base.ts';
 import {
   type CacherEngineErrorCode,
   CacherEngineErrorCodes,
-} from "./EngineErrorCodes.ts";
+} from './EngineErrorCodes.ts';
 /**
  * Metadata for Cacher errors.
  * All Cacher errors include at minimum the name and engine of the cacher implementation.
@@ -26,7 +26,7 @@ export class CacherEngineError<M extends CacherErrorMeta = CacherErrorMeta>
   extends CacherError<M> {
   public readonly code: CacherEngineErrorCode;
   protected override get _messageTemplate(): string {
-    return "${message}";
+    return '${message}';
   }
   /**
    * Creates a new CacherError.
@@ -39,7 +39,7 @@ export class CacherEngineError<M extends CacherErrorMeta = CacherErrorMeta>
     // Handle cases where error code is not present in CacherErrorCodes
     if (!CacherEngineErrorCodes[code]) {
       meta.originalCode = code;
-      code = "UNKNOWN_ERROR";
+      code = 'UNKNOWN_ERROR';
     }
     super(CacherEngineErrorCodes[code], meta, cause);
     this.code = code;

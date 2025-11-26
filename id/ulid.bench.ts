@@ -1,29 +1,29 @@
-import { getTimestamp, monotonicUlid, ulid } from "./ulid.ts";
+import { getTimestamp, monotonicUlid, ulid } from './ulid.ts';
 
 // Standard ULID generation
 Deno.bench({
-  name: "id.Generate standard ULID",
+  name: 'id.Generate standard ULID',
 }, () => {
   ulid();
 });
 
 // ULID with custom timestamp
 Deno.bench({
-  name: "id.Generate - ULID with custom timestamp",
+  name: 'id.Generate - ULID with custom timestamp',
 }, () => {
   ulid(1628000000000);
 });
 
 // Monotonic ULID generation
 Deno.bench({
-  name: "id.Generate monotonic ULID",
+  name: 'id.Generate monotonic ULID',
 }, () => {
   monotonicUlid();
 });
 
 // Benchmark batch generation
 Deno.bench({
-  name: "id.Generate 100 ULIDs in a loop",
+  name: 'id.Generate 100 ULIDs in a loop',
 }, () => {
   for (let i = 0; i < 100; i++) {
     ulid();
@@ -32,7 +32,7 @@ Deno.bench({
 
 // Benchmark batch monotonic generation (same timestamp)
 Deno.bench({
-  name: "id.Generate 100 monotonic ULIDs with the same timestamp",
+  name: 'id.Generate 100 monotonic ULIDs with the same timestamp',
 }, () => {
   const timestamp = Date.now();
   for (let i = 0; i < 100; i++) {
@@ -42,7 +42,7 @@ Deno.bench({
 
 // Timestamp extraction
 Deno.bench({
-  name: "id.Extract timestamp from ULID",
+  name: 'id.Extract timestamp from ULID',
 }, () => {
   getTimestamp(ulid());
 });

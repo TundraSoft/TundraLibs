@@ -22,7 +22,7 @@
  * ```
  */
 
-import { format } from "$datetime";
+import { format } from '$datetime';
 
 /**
  * Creates a date-based sequential ID generator.
@@ -70,20 +70,20 @@ export const simpleID = (
   includeMicroseconds = false,
 ): () => bigint => {
   if (minLen < 1) {
-    throw new Error("Minimum length must be at least 1");
+    throw new Error('Minimum length must be at least 1');
   }
 
   let currentSeed = seed;
   let dt = new Date();
-  let dtno = format(dt, "yyyyMMdd");
+  let dtno = format(dt, 'yyyyMMdd');
 
   // Microsecond component for enhanced uniqueness when enabled
   let microTime = includeMicroseconds
-    ? performance.now().toString().replace(".", "").padEnd(6, "0").substring(
+    ? performance.now().toString().replace('.', '').padEnd(6, '0').substring(
       0,
       6,
     )
-    : "";
+    : '';
 
   /**
    * Generates the next ID in the daily sequence.
@@ -107,20 +107,20 @@ export const simpleID = (
       dt.getFullYear() !== now.getFullYear()
     ) {
       dt = now;
-      dtno = format(dt, "yyyyMMdd");
+      dtno = format(dt, 'yyyyMMdd');
       currentSeed = 0; // Reset counter for new day
     }
 
     // Update microsecond precision for each call when enabled
     if (includeMicroseconds) {
-      microTime = performance.now().toString().replace(".", "").padEnd(6, "0")
+      microTime = performance.now().toString().replace('.', '').padEnd(6, '0')
         .substring(0, 6);
     }
 
     currentSeed++; // Increment counter after potential reset
-    const cnt = String(currentSeed).padStart(minLen, "0");
+    const cnt = String(currentSeed).padStart(minLen, '0');
 
     // Combine components: date + [microseconds] + counter
-    return BigInt(`${dtno}${includeMicroseconds ? microTime : ""}${cnt}`);
+    return BigInt(`${dtno}${includeMicroseconds ? microTime : ''}${cnt}`);
   };
 };

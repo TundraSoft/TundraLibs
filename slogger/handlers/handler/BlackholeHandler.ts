@@ -1,4 +1,4 @@
-import { AbstractHandler, type HandlerOptions } from "../AbstractHandler.ts";
+import { AbstractHandler, type HandlerOptions } from '../AbstractHandler.ts';
 
 /**
  * Blackhole Handler that discards all log messages
@@ -10,7 +10,7 @@ import { AbstractHandler, type HandlerOptions } from "../AbstractHandler.ts";
  * - Disabling specific log channels temporarily
  */
 export class BlackholeHandler extends AbstractHandler {
-  public readonly mode = "blackhole";
+  public readonly mode = 'blackhole';
 
   /**
    * Creates a new Blackhole handler instance

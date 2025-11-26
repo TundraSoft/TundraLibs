@@ -1,1 +1,1 @@
-export type { MemCacherOptions } from "./Options.ts";
+export type { MemCacherOptions } from './Options.ts';

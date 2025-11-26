@@ -1,5 +1,5 @@
-import type { StatusCode } from "$http";
-import { RESTlerError } from "../errors/mod.ts";
+import type { StatusCode } from '$http';
+import { RESTlerError } from '../errors/mod.ts';
 
 /**
  * Possible types for response bodies.

@@ -1,5 +1,5 @@
-import type { RESTlerContentType } from "./ContentType.ts";
-import type { RESTlerAuth } from "./Auth.ts";
+import type { RESTlerContentType } from './ContentType.ts';
+import type { RESTlerAuth } from './Auth.ts';
 
 /**
  * Configuration options for RESTler clients.

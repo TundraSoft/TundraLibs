@@ -43,5 +43,5 @@ export type CacheValue = {
  * ```
  */
 export type CacheValueOptions = Partial<
-  Pick<CacheValue, "expiry" | "window">
+  Pick<CacheValue, 'expiry' | 'window'>
 >;

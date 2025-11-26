@@ -1,7 +1,7 @@
-import { STATUS_CODE, STATUS_TEXT, type StatusCode } from "$http/status";
-import { parse as XMLParse, stringify as XMLStringify } from "$xml";
-import * as path from "$path";
-import { type EventOptionKeys, Options } from "@tundralibs/utils";
+import { STATUS_CODE, STATUS_TEXT, type StatusCode } from '$http/status';
+import { parse as XMLParse, stringify as XMLStringify } from '$xml';
+import * as path from '$path';
+import { type EventOptionKeys, Options } from '@tundralibs/utils';
 import type {
   RESTlerEndpoint,
   RESTlerEvents,
@@ -10,14 +10,14 @@ import type {
   RESTlerRequest,
   RESTlerRequestOptions,
   RESTlerResponse,
-} from "./types/mod.ts";
+} from './types/mod.ts';
 import {
   RESTlerConfigError,
   RESTlerError,
   RESTlerRequestError,
   RESTlerTimeoutError,
-} from "./errors/mod.ts";
-import { ResponseBody } from "./types/Response.ts";
+} from './errors/mod.ts';
+import { ResponseBody } from './types/Response.ts';
 
 /**
  * Abstract base class for making RESTful API calls.
@@ -88,22 +88,22 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     super._setOptions(options, {
       ...{
         timeout: 10,
-        contentType: "JSON",
+        contentType: 'JSON',
       },
       ...defaults,
     } as Partial<O>);
-    if (this.hasOption("tls")) {
-      const opt = this.getOption("tls");
-      if (typeof opt === "string") {
+    if (this.hasOption('tls')) {
+      const opt = this.getOption('tls');
+      if (typeof opt === 'string') {
         this._tls = { caCerts: [Deno.readTextFileSync(opt)] };
-      } else if (typeof opt === "object") {
+      } else if (typeof opt === 'object') {
         this._tls = {
           cert: Deno.readTextFileSync(opt.certificate),
           key: Deno.readTextFileSync(opt.key),
         };
       }
     }
-    this._defaultHeaders = this.getOption("headers") || {};
+    this._defaultHeaders = this.getOption('headers') || {};
   }
 
   /**
@@ -151,20 +151,20 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     };
     const start = performance.now();
     try {
-      if (this.getOption("socketPath")) {
+      if (this.getOption('socketPath')) {
         const resp = await this.__makeUnixSocketRequest(request);
         response.status = resp.status;
         response.statusText = STATUS_TEXT[resp.status] ??
-          "Unknown";
+          'Unknown';
         response.headers = resp.headers;
         response.body = resp.body as B;
       } else {
         const resp = await this.__makeFetchRequest(request);
         response.status = resp.status as StatusCode;
         response.statusText = STATUS_TEXT[resp.status as StatusCode] ??
-          "Unknown";
+          'Unknown';
         response.headers = Object.fromEntries(resp.headers.entries());
-        const contentType = resp.headers.get("content-type");
+        const contentType = resp.headers.get('content-type');
         const body = await resp.text();
         response.body = this._parseResponseBody<B>(body, contentType);
       }
@@ -172,7 +172,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
 
       // Check for authentication failure
       if (response.status && this._authStatus.includes(response.status)) {
-        this.emit("authFailure", this.vendor, request, response);
+        this.emit('authFailure', this.vendor, request, response);
       }
 
       // Check for rate limiting
@@ -180,28 +180,28 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         // Extract rate limit information from headers
         const limit = this._extractHeaderNumber(
           response.headers,
-          "x-ratelimit-limit",
-          "ratelimit-limit",
+          'x-ratelimit-limit',
+          'ratelimit-limit',
         );
         const remaining = this._extractHeaderNumber(
           response.headers,
-          "x-ratelimit-remaining",
-          "ratelimit-remaining",
+          'x-ratelimit-remaining',
+          'ratelimit-remaining',
         );
         const reset = this._extractHeaderNumber(
           response.headers,
-          "x-ratelimit-reset",
-          "ratelimit-reset",
+          'x-ratelimit-reset',
+          'ratelimit-reset',
         );
 
-        this.emit("rateLimit", this.vendor, limit, reset, remaining);
+        this.emit('rateLimit', this.vendor, limit, reset, remaining);
       }
 
       return response;
     } catch (error) {
       response.timeTaken = performance.now() - start;
       if (error instanceof Error) {
-        if (error.name === "AbortError") {
+        if (error.name === 'AbortError') {
           response.error = new RESTlerTimeoutError(
             {
               vendor: this.vendor,
@@ -212,7 +212,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           response.error = error;
         } else {
           response.error = new RESTlerRequestError(
-            "Unknown error processing the request",
+            'Unknown error processing the request',
             {
               vendor: this.vendor,
               request: request,
@@ -222,7 +222,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         }
       } else {
         response.error = new RESTlerRequestError(
-          "Unknown error processing the request",
+          'Unknown error processing the request',
           {
             vendor: this.vendor,
             request: request,
@@ -231,7 +231,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       }
       throw response.error;
     } finally {
-      this.emit("call", this.vendor, request, response);
+      this.emit('call', this.vendor, request, response);
     }
   }
 
@@ -284,38 +284,38 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
   ): RESTlerRequest {
     if (endpoint.baseURL && this._validateBaseURL(endpoint.baseURL) === false) {
       throw new RESTlerConfigError(
-        "Invalid endpoint baseURL ${value}",
-        { vendor: this.vendor, key: "baseUrl", value: endpoint.baseURL },
+        'Invalid endpoint baseURL ${value}',
+        { vendor: this.vendor, key: 'baseUrl', value: endpoint.baseURL },
       );
     }
-    const version = endpoint.version ?? this.getOption("version") ?? "";
-    const baseURL = endpoint.baseURL ?? this.getOption("baseURL");
+    const version = endpoint.version ?? this.getOption('version') ?? '';
+    const baseURL = endpoint.baseURL ?? this.getOption('baseURL');
     const headers: Record<string, string> = this._defaultHeaders;
-    const port = endpoint.port || this.getOption("port");
+    const port = endpoint.port || this.getOption('port');
     if (endpoint.port && !this._validatePort(endpoint.port)) {
       // Validate port!!!
       throw new RESTlerConfigError(
-        "Invalid port ${value}",
-        { vendor: this.vendor, key: "port", value: endpoint.port },
+        'Invalid port ${value}',
+        { vendor: this.vendor, key: 'port', value: endpoint.port },
       );
     }
     if (endpoint.auth) {
       if (!this._validateAuth(endpoint.auth)) {
         throw new RESTlerConfigError(
           `Invalid auth configuration for endpoint ${endpoint.path}`,
-          { vendor: this.vendor, key: "auth", value: endpoint.auth },
+          { vendor: this.vendor, key: 'auth', value: endpoint.auth },
         );
       }
-    } else if (this.hasOption("auth")) {
-      endpoint.auth = this.getOption("auth");
+    } else if (this.hasOption('auth')) {
+      endpoint.auth = this.getOption('auth');
     }
-    if (typeof endpoint.auth === "string") {
-      headers["Authorization"] = `Bearer ${endpoint.auth}`;
+    if (typeof endpoint.auth === 'string') {
+      headers['Authorization'] = `Bearer ${endpoint.auth}`;
     } else if (
-      typeof endpoint.auth === "object"
+      typeof endpoint.auth === 'object'
     ) {
       const { username, password } = endpoint.auth;
-      headers["Authorization"] = `Basic ${btoa(`${username}:${password}`)}`; //NOSONAR
+      headers['Authorization'] = `Basic ${btoa(`${username}:${password}`)}`; //NOSONAR
     }
     if (options.headers) {
       Object.entries(options.headers).forEach(([key, value]) => {
@@ -338,12 +338,12 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     return {
       url: url.toString(),
       headers: headers,
-      timeout: options.timeout || this.getOption("timeout"),
+      timeout: options.timeout || this.getOption('timeout'),
       method: options.method,
-      contentType: "contentType" in options
+      contentType: 'contentType' in options
         ? options.contentType
-        : this.getOption("contentType"),
-      payload: "payload" in options ? options.payload : undefined,
+        : this.getOption('contentType'),
+      payload: 'payload' in options ? options.payload : undefined,
     } as RESTlerRequest;
   }
 
@@ -364,28 +364,28 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       client = Deno.createHttpClient(this._tls);
     }
     let payload: BodyInit | undefined = undefined;
-    const contentType = ("contentType" in request)
+    const contentType = ('contentType' in request)
       ? request.contentType
-      : this.getOption("contentType");
-    if ("payload" in request && request.payload !== undefined) {
+      : this.getOption('contentType');
+    if ('payload' in request && request.payload !== undefined) {
       switch (contentType) {
         default: // Default to JSON
-        case "JSON":
+        case 'JSON':
           payload = JSON.stringify(request.payload);
           break;
-        case "XML":
+        case 'XML':
           payload = XMLStringify(request.payload as Record<string, unknown>);
           break;
-        case "BLOB":
+        case 'BLOB':
           payload = request.payload as BodyInit;
           break;
-        case "FORM":
+        case 'FORM':
           // Dont set headers, let fetch set it
-          headers.delete("Content-Type");
+          headers.delete('Content-Type');
           payload = request.payload as FormData;
           break;
-        case "TEXT":
-          payload = (typeof request.payload === "string")
+        case 'TEXT':
+          payload = (typeof request.payload === 'string')
             ? request.payload
             : JSON.stringify(request.payload);
           break;
@@ -396,8 +396,8 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       headers: headers,
       body: payload,
       signal: abortSignal.signal,
-      cache: "no-store",
-      redirect: "follow",
+      cache: 'no-store',
+      redirect: 'follow',
       client: client,
     };
     const timeoutId = setTimeout(() => {
@@ -429,71 +429,71 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     try {
       // Prepare request headers and body
       request.headers = request.headers || {};
-      request.headers["Host"] = "localhost";
-      request.headers["Connection"] = "close";
-      const contentType = ("contentType" in request)
+      request.headers['Host'] = 'localhost';
+      request.headers['Connection'] = 'close';
+      const contentType = ('contentType' in request)
         ? request.contentType
-        : this.getOption("contentType");
-      const payload = ("payload" in request) ? request.payload : undefined;
-      let body = "";
+        : this.getOption('contentType');
+      const payload = ('payload' in request) ? request.payload : undefined;
+      let body = '';
       // Handle different content types
       switch (contentType) {
         default:
-        case "JSON":
-          body = payload ? JSON.stringify(payload) : "";
-          request.headers["Content-Type"] = "application/json";
+        case 'JSON':
+          body = payload ? JSON.stringify(payload) : '';
+          request.headers['Content-Type'] = 'application/json';
           break;
-        case "XML":
+        case 'XML':
           body = payload
             ? XMLStringify(payload as Record<string, unknown>)
-            : "";
-          request.headers["Content-Type"] = "application/xml";
+            : '';
+          request.headers['Content-Type'] = 'application/xml';
           break;
-        case "FORM":
+        case 'FORM':
           body = payload
             ? this.__objectToUrlEncoded(
               payload as Record<string, string>,
             )
-            : "";
-          request.headers["Content-Type"] = "application/x-www-form-urlencoded";
+            : '';
+          request.headers['Content-Type'] = 'application/x-www-form-urlencoded';
           break;
-        case "TEXT": {
+        case 'TEXT': {
           if (payload) {
-            body = typeof payload === "string"
+            body = typeof payload === 'string'
               ? payload
               : JSON.stringify(payload); // Convert non-string payloads to string
           }
-          request.headers["Content-Type"] = "text/plain";
+          request.headers['Content-Type'] = 'text/plain';
           break;
         }
       }
 
-      request.headers["Content-Length"] = body.length.toString();
+      request.headers['Content-Length'] = body.length.toString();
 
       // Format the HTTP request
       const finalRequest = `${request.method} ${request.url} HTTP/1.1\r\n${
         Object.entries(request.headers).map(([key, val]) => `${key}: ${val}`)
-          .join("\r\n")
+          .join('\r\n')
       }\r\n\r\n${body}`;
 
       // Send request to socket and get response
       const resp = await this.__communicateWithUnixSocket(finalRequest);
 
       // Parse response
-      const [headerText, ...bodyParts] = resp.split("\r\n\r\n");
+      const [headerText, ...bodyParts] = resp.split('\r\n\r\n');
       if (!headerText) {
         throw new RESTlerRequestError(
-          "Invalid response from Unix socket",
+          'Invalid response from Unix socket',
           { vendor: this.vendor, request: request },
         );
       }
 
-      const headerLines = headerText.split("\r\n");
+      const headerLines = headerText.split('\r\n');
       const statusLine = headerLines[0];
 
       if (!statusLine) {
         throw new RESTlerRequestError(
-          "Invalid response status line from Unix socket",
+          'Invalid response status line from Unix socket',
           { vendor: this.vendor, request: request },
         );
       }
@@ -501,16 +501,16 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       const statusMatch = /HTTP\/\d\.\d\s+(\d+)\s+(.*)$/.exec(statusLine);
       if (!statusMatch) {
         throw new RESTlerRequestError(
-          "Could not parse status code from response",
+          'Could not parse status code from response',
           { vendor: this.vendor, request: request },
         );
       }
 
-      const status = parseInt(statusMatch[1] || "0") as StatusCode;
+      const status = parseInt(statusMatch[1] || '0') as StatusCode;
 
       const headers = headerLines.slice(1).reduce(
         (acc: Record<string, string>, currentLine) => {
-          const colonIndex = currentLine.indexOf(": ");
+          const colonIndex = currentLine.indexOf(': ');
           if (colonIndex > 0) {
             const key = currentLine.slice(0, colonIndex).trim();
             const value = currentLine.slice(colonIndex + 2).trim();
@@ -521,12 +521,12 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         {},
       );
 
-      const rawBody = bodyParts.join("\r\n\r\n");
+      const rawBody = bodyParts.join('\r\n\r\n');
       const decodedResponse = this.__decodeChunkedResponse(rawBody);
 
       const processedBody = this._parseResponseBody(
         decodedResponse,
-        headers["content-type"],
+        headers['content-type'],
       );
 
       return {
@@ -539,7 +539,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         throw error;
       }
       throw new RESTlerRequestError(
-        "Error communicating with Unix socket",
+        'Error communicating with Unix socket',
         { vendor: this.vendor, request: request },
         error instanceof Error ? error : undefined,
       );
@@ -561,13 +561,13 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
 
     try {
       using socket = await Deno.connect({
-        transport: "unix",
-        path: this.getOption("socketPath") as string,
+        transport: 'unix',
+        path: this.getOption('socketPath') as string,
       });
 
       await socket.write(enc.encode(requestData));
 
-      let resp = "";
+      let resp = '';
       const buffer = new Uint8Array(1024);
       let bytesRead;
 
@@ -578,7 +578,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       return resp;
     } catch (error) {
       // @TODO: Create specific error for socket communication
-      throw new RESTlerError("Socket communication error", {
+      throw new RESTlerError('Socket communication error', {
         vendor: this.vendor,
       }, error as Error);
       // throw new Error('Socket communication error: ' + error, { cause: error });
@@ -597,8 +597,8 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       return response; // Not chunked, return as is
     }
 
-    const lines = response.split("\r\n");
-    let body = "";
+    const lines = response.split('\r\n');
+    let body = '';
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -606,14 +606,14 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
 
       const chunkSize = parseInt(line, 16);
       if (isNaN(chunkSize)) {
-        body += line + "\r\n";
+        body += line + '\r\n';
       } else if (chunkSize === 0) {
         // End of chunked response
         break;
       } else {
         i++; //NOSONAR
         if (i < lines.length) {
-          body += (lines[i] ?? "").substring(0, chunkSize);
+          body += (lines[i] ?? '').substring(0, chunkSize);
         }
       }
     }
@@ -632,7 +632,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       .map(([key, value]) =>
         `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
       )
-      .join("&");
+      .join('&');
   }
 
   /**
@@ -647,16 +647,16 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     contentType: string | null | undefined,
   ): B {
     try {
-      if (!contentType || contentType === "" || contentType.includes("text")) {
+      if (!contentType || contentType === '' || contentType.includes('text')) {
         // If content type is not specified, try to parse as JSON
         try {
           return JSON.parse(body) as B;
         } catch {
           return body as unknown as B;
         }
-      } else if (contentType.includes("json")) {
+      } else if (contentType.includes('json')) {
         return JSON.parse(body) as B;
-      } else if (contentType.includes("xml")) {
+      } else if (contentType.includes('xml')) {
         return XMLParse(body) as unknown as B;
       } else {
         // For any other content type, return as is
@@ -675,7 +675,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @param version - Version string to insert (defaults to empty string)
    * @returns String with version placeholders replaced
    */
-  protected _replaceVersion(param: string, version: string = ""): string {
+  protected _replaceVersion(param: string, version: string = ''): string {
     const versionRegex = /{version}/g;
     return param.replace(versionRegex, version);
   }
@@ -693,7 +693,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     value: O[K],
   ): O[K] {
     switch (key) {
-      case "baseURL":
+      case 'baseURL':
         if (!this._validateBaseURL(value)) {
           throw new RESTlerConfigError(
             `Base URL must be a string and not empty.`,
@@ -701,7 +701,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           );
         }
         break;
-      case "version":
+      case 'version':
         if (!this._validateVersion(value)) {
           throw new RESTlerConfigError(
             `Version must be a string.`,
@@ -709,7 +709,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           );
         }
         break;
-      case "port":
+      case 'port':
         if (!this._validatePort(value)) {
           throw new RESTlerConfigError(
             `Port must be a number between 1 and 65535.`,
@@ -717,7 +717,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           );
         }
         break;
-      case "timeout":
+      case 'timeout':
         if (!this._validateTimeout(value)) {
           throw new RESTlerConfigError(
             `Timeout must be a number greater than 0 and less than 60.`,
@@ -725,7 +725,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           );
         }
         break;
-      case "contentType":
+      case 'contentType':
         if (!this._validateContentType(value)) {
           throw new RESTlerConfigError(
             `Content type must be one of: JSON, XML, FORM, TEXT, BLOB, ARRAY_BUFFER, STREAM.`,
@@ -733,7 +733,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           );
         }
         break;
-      case "headers":
+      case 'headers':
         if (!this._validateHeaders(value)) {
           throw new RESTlerConfigError(
             `Headers must be an object.`,
@@ -741,7 +741,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           );
         }
         break;
-      case "socketPath":
+      case 'socketPath':
         if (!this._validateSocketPath(value)) {
           throw new RESTlerConfigError(
             `Socket path must be a string and point to a valid file.`,
@@ -749,7 +749,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           );
         }
         break;
-      case "tls":
+      case 'tls':
         if (!this._validateTls(value)) {
           throw new RESTlerConfigError(
             `TLS must be a string or an object with certificate and key.`,
@@ -757,7 +757,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           );
         }
         break;
-      case "auth":
+      case 'auth':
         if (!this._validateAuth(value)) {
           throw new RESTlerConfigError(
             `Auth must be a string (Bearer token) or an object with username and password.`,
@@ -777,14 +777,14 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    */
   protected _validateBaseURL(
     value: unknown,
-  ): value is RESTlerOptions["baseURL"] {
-    if (typeof value === "string") {
+  ): value is RESTlerOptions['baseURL'] {
+    if (typeof value === 'string') {
       try {
         const a = new URL(value);
-        if (a.protocol !== "http:" && a.protocol !== "https:") {
+        if (a.protocol !== 'http:' && a.protocol !== 'https:') {
           return false;
         }
-        if (a.host === "") {
+        if (a.host === '') {
           return false;
         }
         return true;
@@ -801,9 +801,9 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @param value - Value to validate
    * @returns Whether the value is valid
    */
-  protected _validatePort(value: unknown): value is RESTlerOptions["port"] {
+  protected _validatePort(value: unknown): value is RESTlerOptions['port'] {
     if (value === undefined || value === null) return true;
-    return typeof value === "number" && (value > 0 && value <= 65535);
+    return typeof value === 'number' && (value > 0 && value <= 65535);
   }
 
   /**
@@ -814,9 +814,9 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    */
   protected _validateVersion(
     value: unknown,
-  ): value is RESTlerOptions["version"] {
+  ): value is RESTlerOptions['version'] {
     return (
-      !value || (typeof value === "string" && value.length > 0)
+      !value || (typeof value === 'string' && value.length > 0)
     );
   }
 
@@ -828,9 +828,9 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    */
   protected _validateTimeout(
     value: unknown,
-  ): value is RESTlerOptions["timeout"] {
+  ): value is RESTlerOptions['timeout'] {
     if (value === undefined || value === null) return true;
-    return (typeof value === "number" && value >= 1 && value <= 60);
+    return (typeof value === 'number' && value >= 1 && value <= 60);
   }
 
   /**
@@ -841,10 +841,10 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    */
   protected _validateContentType(
     value: unknown,
-  ): value is RESTlerOptions["contentType"] {
+  ): value is RESTlerOptions['contentType'] {
     return (
-      !value || (typeof value === "string" &&
-        ["JSON", "XML", "FORM", "TEXT", "BLOB", "ARRAY_BUFFER", "STREAM"]
+      !value || (typeof value === 'string' &&
+        ['JSON', 'XML', 'FORM', 'TEXT', 'BLOB', 'ARRAY_BUFFER', 'STREAM']
           .includes(value.toUpperCase()))
     );
   }
@@ -857,9 +857,9 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    */
   protected _validateHeaders(
     value: unknown,
-  ): value is RESTlerOptions["headers"] {
+  ): value is RESTlerOptions['headers'] {
     return (
-      !value || (typeof value === "object" && value !== null)
+      !value || (typeof value === 'object' && value !== null)
     );
   }
 
@@ -871,11 +871,11 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    */
   protected _validateSocketPath(
     value: unknown,
-  ): value is RESTlerOptions["socketPath"] {
+  ): value is RESTlerOptions['socketPath'] {
     if (!value) {
       return true;
     }
-    if (typeof value === "string") {
+    if (typeof value === 'string') {
       try {
         Deno.statSync(value);
         return true;
@@ -894,11 +894,11 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    */
   protected _validateTls(
     value: unknown,
-  ): value is RESTlerOptions["tls"] {
+  ): value is RESTlerOptions['tls'] {
     if (!value) {
       return true;
     }
-    if (typeof value === "string") {
+    if (typeof value === 'string') {
       try {
         Deno.statSync(value);
         return true;
@@ -907,8 +907,8 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       }
     }
     if (
-      typeof value === "object" && "certificate" in value && "key" in value &&
-      typeof value.certificate === "string" && typeof value.key === "string"
+      typeof value === 'object' && 'certificate' in value && 'key' in value &&
+      typeof value.certificate === 'string' && typeof value.key === 'string'
     ) {
       try {
         Deno.statSync(value.certificate);
@@ -929,14 +929,14 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    */
   protected _validateAuth(
     value: unknown,
-  ): value is RESTlerOptions["auth"] {
+  ): value is RESTlerOptions['auth'] {
     if (!value) return true;
-    if (typeof value === "string") {
+    if (typeof value === 'string') {
       return value.length > 0;
     }
     if (
-      typeof value === "object" && "username" in value && "password" in value &&
-      typeof value.username === "string" && typeof value.password === "string"
+      typeof value === 'object' && 'username' in value && 'password' in value &&
+      typeof value.username === 'string' && typeof value.password === 'string'
     ) {
       return (
         value.username.length > 0 && value.password.length > 0

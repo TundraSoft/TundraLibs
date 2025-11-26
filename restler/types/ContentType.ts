@@ -8,11 +8,11 @@
  * - BLOB: Binary data
  */
 export type RESTlerContentType =
-  | "JSON"
-  | "XML"
-  | "FORM"
-  | "TEXT"
-  | "BLOB";
+  | 'JSON'
+  | 'XML'
+  | 'FORM'
+  | 'TEXT'
+  | 'BLOB';
 
 /**
  * Type definition for content type and associated payload.
@@ -32,9 +32,9 @@ export type RESTlerContentTypePayload<
    * - TEXT: string
    * - BLOB: Blob
    */
-  payload?: P extends "JSON" | "XML" ? Record<string, unknown>
-    : P extends "FORM" ? FormData
-    : P extends "TEXT" ? string
-    : P extends "BLOB" ? Blob
+  payload?: P extends 'JSON' | 'XML' ? Record<string, unknown>
+    : P extends 'FORM' ? FormData
+    : P extends 'TEXT' ? string
+    : P extends 'BLOB' ? Blob
     : never;
 };

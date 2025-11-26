@@ -1,13 +1,13 @@
-import { Slogger } from "./Slogger.ts";
-import * as asserts from "$asserts";
-import { AbstractHandler } from "./handlers/AbstractHandler.ts";
-import { SyslogSeverities } from "@tundralibs/utils";
-import { LogManager } from "./LogManager.ts";
-import { SlogObject } from "./types/mod.ts";
+import { Slogger } from './Slogger.ts';
+import * as asserts from '$asserts';
+import { AbstractHandler } from './handlers/AbstractHandler.ts';
+import { SyslogSeverities } from '@tundralibs/utils';
+import { LogManager } from './LogManager.ts';
+import { SlogObject } from './types/mod.ts';
 
 // Test implementation of AbstractHandler
 class TestHandler extends AbstractHandler {
-  public readonly mode = "test";
+  public readonly mode = 'test';
   public messages: SlogObject[] = [];
   public handleCalled = false;
   public initCalled = false;
@@ -43,31 +43,31 @@ class TestHandler extends AbstractHandler {
 }
 
 // Register the test handler with LogManager
-LogManager.addHandler("TestHandler", TestHandler);
+LogManager.addHandler('TestHandler', TestHandler);
 
-Deno.test("slogger.core", async (t) => {
-  await t.step("constructor - valid options", () => {
+Deno.test('slogger.core', async (t) => {
+  await t.step('constructor - valid options', () => {
     const logger = new Slogger({
-      appName: "TestApp",
+      appName: 'TestApp',
       level: SyslogSeverities.INFO,
       handlers: [],
     });
 
-    asserts.assertEquals(logger.appName, "TestApp");
+    asserts.assertEquals(logger.appName, 'TestApp');
     asserts.assertEquals(logger.level, SyslogSeverities.INFO);
   });
 
-  await t.step("constructor - validation", async (d) => {
-    await d.step("invalid appName", () => {
+  await t.step('constructor - validation', async (d) => {
+    await d.step('invalid appName', () => {
       asserts.assertThrows(
         () =>
           new Slogger({
-            appName: "a".repeat(31), // Too long
+            appName: 'a'.repeat(31), // Too long
             level: SyslogSeverities.INFO,
             handlers: [],
           }),
         Error,
-        "appName must be a non-empty string with max length 30",
+        'appName must be a non-empty string with max length 30',
       );
 
       asserts.assertThrows(
@@ -79,69 +79,69 @@ Deno.test("slogger.core", async (t) => {
             handlers: [],
           }),
         Error,
-        "appName must be a non-empty string",
+        'appName must be a non-empty string',
       );
 
       asserts.assertThrows(
         () =>
           new Slogger({
-            appName: "",
+            appName: '',
             level: SyslogSeverities.INFO,
             handlers: [],
           }),
         Error,
-        "appName must be a non-empty string",
+        'appName must be a non-empty string',
       );
     });
 
-    await d.step("invalid level", () => {
+    await d.step('invalid level', () => {
       asserts.assertThrows(
         () =>
           new Slogger({
-            appName: "TestApp",
+            appName: 'TestApp',
             // @ts-expect-error Testing invalid level
             level: -1,
             handlers: [],
           }),
         Error,
-        "Invalid log level",
+        'Invalid log level',
       );
 
       asserts.assertThrows(
         () =>
           new Slogger({
-            appName: "TestApp",
+            appName: 'TestApp',
             // @ts-expect-error Testing invalid level
             level: 8,
             handlers: [],
           }),
         Error,
-        "Invalid log level",
+        'Invalid log level',
       );
 
       asserts.assertThrows(
         () =>
           new Slogger({
-            appName: "TestApp",
+            appName: 'TestApp',
             // @ts-expect-error Testing invalid level
-            level: "INFO",
+            level: 'INFO',
             handlers: [],
           }),
         Error,
-        "Invalid log level",
+        'Invalid log level',
       );
     });
 
-    await d.step("invalid handler options", () => {
+    await d.step('invalid handler options', () => {
       asserts.assertThrows(
         () =>
           new Slogger({
-            appName: "TestApp",
+            appName: 'TestApp',
             level: SyslogSeverities.INFO,
             handlers: [
               {
-                name: "handler1",
-                type: "TestHandler",
+                name: 'handler1',
+                type: 'TestHandler',
                 level: SyslogSeverities.INFO,
                 // @ts-expect-error Testing invalid formatter type
                 formatter: 123,
@@ -149,59 +149,59 @@ Deno.test("slogger.core", async (t) => {
             ],
           }),
         Error,
-        "must be a string or function",
+        'must be a string or function',
       );
 
       asserts.assertThrows(
         () =>
           new Slogger({
-            appName: "TestApp",
+            appName: 'TestApp',
             level: SyslogSeverities.INFO,
             handlers: [
               {
-                name: "handler1",
-                type: "TestHandler",
+                name: 'handler1',
+                type: 'TestHandler',
                 level: SyslogSeverities.INFO,
-                formatter: "non-existent-formatter",
+                formatter: 'non-existent-formatter',
               },
             ],
           }),
         Error,
-        "not found",
+        'not found',
       );
 
       asserts.assertThrows(
         () =>
           new Slogger({
-            appName: "TestApp",
+            appName: 'TestApp',
             level: SyslogSeverities.INFO,
             handlers: [
               {
-                name: "handler1",
-                type: "NonExistentHandler",
+                name: 'handler1',
+                type: 'NonExistentHandler',
                 level: SyslogSeverities.INFO,
               },
             ],
           }),
         Error,
-        "not found",
+        'not found',
       );
     });
   });
 
   await t.step(
-    "constructor - validation with new configuration format",
+    'constructor - validation with new configuration format',
     async (d) => {
-      await d.step("invalid handler options", () => {
+      await d.step('invalid handler options', () => {
         asserts.assertThrows(
           () =>
             new Slogger({
-              appName: "TestApp",
+              appName: 'TestApp',
               level: SyslogSeverities.INFO,
               handlers: [
                 {
-                  name: "handler1",
-                  type: "TestHandler",
+                  name: 'handler1',
+                  type: 'TestHandler',
                   level: SyslogSeverities.INFO,
                   // @ts-expect-error Testing invalid formatter type
                   formatter: 123,
@@ -209,55 +209,55 @@ Deno.test("slogger.core", async (t) => {
               ],
             }),
           Error,
-          "must be a string or function",
+          'must be a string or function',
         );
 
         asserts.assertThrows(
           () =>
             new Slogger({
-              appName: "TestApp",
+              appName: 'TestApp',
               level: SyslogSeverities.INFO,
               handlers: [
                 {
-                  name: "handler1",
-                  type: "TestHandler",
+                  name: 'handler1',
+                  type: 'TestHandler',
                   level: SyslogSeverities.INFO,
-                  formatter: "non-existent-formatter",
+                  formatter: 'non-existent-formatter',
                 },
               ],
             }),
           Error,
-          "not found",
+          'not found',
         );
 
         asserts.assertThrows(
           () =>
             new Slogger({
-              appName: "TestApp",
+              appName: 'TestApp',
               level: SyslogSeverities.INFO,
               handlers: [
                 {
-                  name: "handler1",
-                  type: "NonExistentHandler",
+                  name: 'handler1',
+                  type: 'NonExistentHandler',
                   level: SyslogSeverities.INFO,
                 },
               ],
             }),
           Error,
-          "not found",
+          'not found',
         );
       });
     },
   );
 
-  await t.step("handler initialization", () => {
+  await t.step('handler initialization', () => {
     const logger = new Slogger({
-      appName: "TestApp",
+      appName: 'TestApp',
       level: SyslogSeverities.INFO,
       handlers: [
         {
-          name: "handler1",
-          type: "TestHandler",
+          name: 'handler1',
+          type: 'TestHandler',
           level: SyslogSeverities.INFO,
         },
       ],
@@ -267,23 +267,23 @@ Deno.test("slogger.core", async (t) => {
     const handlers = logger._handlers;
     asserts.assertEquals(handlers.length, 1);
     asserts.assert(handlers[0] instanceof TestHandler);
-    asserts.assertEquals(handlers[0].name, "handler1");
+    asserts.assertEquals(handlers[0].name, 'handler1');
     asserts.assertEquals(handlers[0].level, SyslogSeverities.INFO);
 
     // Verify init was called
     asserts.assertEquals((handlers[0] as TestHandler).initCalled, true);
   });
 
-  await t.step("handler initialization with new configuration format", () => {
+  await t.step('handler initialization with new configuration format', () => {
     const logger = new Slogger({
-      appName: "TestApp",
+      appName: 'TestApp',
       level: SyslogSeverities.INFO,
       handlers: [
         {
-          name: "handler1",
-          type: "TestHandler",
+          name: 'handler1',
+          type: 'TestHandler',
           level: SyslogSeverities.INFO,
-          formatter: "standard",
+          formatter: 'standard',
         },
       ],
     });
@@ -292,21 +292,21 @@ Deno.test("slogger.core", async (t) => {
     const handlers = logger._handlers;
     asserts.assertEquals(handlers.length, 1);
     asserts.assert(handlers[0] instanceof TestHandler);
-    asserts.assertEquals(handlers[0].name, "handler1");
+    asserts.assertEquals(handlers[0].name, 'handler1');
     asserts.assertEquals(handlers[0].level, SyslogSeverities.INFO);
 
     // Verify init was called
     asserts.assertEquals((handlers[0] as TestHandler).initCalled, true);
   });
 
-  await t.step("log level filtering", async () => {
+  await t.step('log level filtering', async () => {
     const logger = new Slogger({
-      appName: "TestApp",
+      appName: 'TestApp',
       level: SyslogSeverities.WARNING, // Only WARNING and higher priority
       handlers: [
         {
-          name: "handler1",
-          type: "TestHandler",
+          name: 'handler1',
+          type: 'TestHandler',
           level: SyslogSeverities.INFO, // Handler accepts INFO and higher
         },
       ],
@@ -316,32 +316,32 @@ Deno.test("slogger.core", async (t) => {
     const handler = logger._handlers[0] as TestHandler;
 
     // This should pass logger's filter but be handled by the handler (INFO > WARNING)
-    await logger.info("This should be filtered by logger");
+    await logger.info('This should be filtered by logger');
     asserts.assertEquals(handler.messages.length, 0);
 
     // This should pass both filters (WARNING = WARNING)
-    await logger.warning("This should be logged");
+    await logger.warning('This should be logged');
     asserts.assertEquals(handler.messages.length, 1);
-    asserts.assertEquals(handler.messages[0]!.message, "This should be logged");
-    asserts.assertEquals(handler.messages[0]!.levelName, "WARNING");
+    asserts.assertEquals(handler.messages[0]!.message, 'This should be logged');
+    asserts.assertEquals(handler.messages[0]!.levelName, 'WARNING');
 
     // This should pass both filters (ERROR > WARNING)
-    await logger.error("Error message");
+    await logger.error('Error message');
     asserts.assertEquals(handler.messages.length, 2);
-    asserts.assertEquals(handler.messages[1]!.message, "Error message");
-    asserts.assertEquals(handler.messages[1]!.levelName, "ERROR");
+    asserts.assertEquals(handler.messages[1]!.message, 'Error message');
+    asserts.assertEquals(handler.messages[1]!.levelName, 'ERROR');
 
     // Reset handler
     handler.messages = [];
 
     // Test handler-level filtering
     const logger2 = new Slogger({
-      appName: "TestApp",
+      appName: 'TestApp',
       level: SyslogSeverities.DEBUG, // Accept all logs
       handlers: [
         {
-          name: "handler2",
-          type: "TestHandler",
+          name: 'handler2',
+          type: 'TestHandler',
           level: SyslogSeverities.ERROR, // Only ERROR and lower
         },
       ],
@@ -351,30 +351,30 @@ Deno.test("slogger.core", async (t) => {
     const handler2 = logger2._handlers[0] as TestHandler;
 
     // This should pass logger's filter but be filtered by handler
-    await logger2.info("This should be filtered by handler");
+    await logger2.info('This should be filtered by handler');
     asserts.assertEquals(handler2.messages.length, 0);
 
     // This should pass logger's filter but be filtered by handler
-    await logger2.warning("This should be filtered by handler");
+    await logger2.warning('This should be filtered by handler');
     asserts.assertEquals(handler2.messages.length, 0);
 
     // This should pass both filters
-    await logger2.error("This should be logged");
+    await logger2.error('This should be logged');
     asserts.assertEquals(handler2.messages.length, 1);
     asserts.assertEquals(
       handler2.messages[0]!.message,
-      "This should be logged",
+      'This should be logged',
     );
   });
 
-  await t.step("convenience methods", async () => {
+  await t.step('convenience methods', async () => {
     const logger = new Slogger({
-      appName: "TestApp",
+      appName: 'TestApp',
       level: SyslogSeverities.DEBUG, // Accept all logs
       handlers: [
         {
-          name: "handler1",
-          type: "TestHandler",
+          name: 'handler1',
+          type: 'TestHandler',
           level: SyslogSeverities.DEBUG,
         },
       ],
@@ -385,44 +385,44 @@ Deno.test("slogger.core", async (t) => {
     handler.messages = [];
 
     // Test all convenience methods
-    await logger.debug("Debug message");
-    await logger.info("Info message");
-    await logger.information("Information message"); // Alias
-    await logger.notice("Notice message");
-    await logger.warn("Warning message");
-    await logger.warning("Warning message"); // Alias
-    await logger.err("Error message");
-    await logger.error("Error message"); // Alias
-    await logger.crit("Critical message");
-    await logger.critical("Critical message"); // Alias
-    await logger.alert("Alert message");
-    await logger.emerg("Emergency message");
-    await logger.emergency("Emergency message"); // Alias
+    await logger.debug('Debug message');
+    await logger.info('Info message');
+    await logger.information('Information message'); // Alias
+    await logger.notice('Notice message');
+    await logger.warn('Warning message');
+    await logger.warning('Warning message'); // Alias
+    await logger.err('Error message');
+    await logger.error('Error message'); // Alias
+    await logger.crit('Critical message');
+    await logger.critical('Critical message'); // Alias
+    await logger.alert('Alert message');
+    await logger.emerg('Emergency message');
+    await logger.emergency('Emergency message'); // Alias
 
     asserts.assertEquals(handler.messages.length, 13);
-    asserts.assertEquals(handler.messages[0]!.levelName, "DEBUG");
-    asserts.assertEquals(handler.messages[1]!.levelName, "INFO");
-    asserts.assertEquals(handler.messages[2]!.levelName, "INFO");
-    asserts.assertEquals(handler.messages[3]!.levelName, "NOTICE");
-    asserts.assertEquals(handler.messages[4]!.levelName, "WARNING");
-    asserts.assertEquals(handler.messages[5]!.levelName, "WARNING");
-    asserts.assertEquals(handler.messages[6]!.levelName, "ERROR");
-    asserts.assertEquals(handler.messages[7]!.levelName, "ERROR");
-    asserts.assertEquals(handler.messages[8]!.levelName, "CRITICAL");
-    asserts.assertEquals(handler.messages[9]!.levelName, "CRITICAL");
-    asserts.assertEquals(handler.messages[10]!.levelName, "ALERT");
-    asserts.assertEquals(handler.messages[11]!.levelName, "EMERGENCY");
-    asserts.assertEquals(handler.messages[12]!.levelName, "EMERGENCY");
+    asserts.assertEquals(handler.messages[0]!.levelName, 'DEBUG');
+    asserts.assertEquals(handler.messages[1]!.levelName, 'INFO');
+    asserts.assertEquals(handler.messages[2]!.levelName, 'INFO');
+    asserts.assertEquals(handler.messages[3]!.levelName, 'NOTICE');
+    asserts.assertEquals(handler.messages[4]!.levelName, 'WARNING');
+    asserts.assertEquals(handler.messages[5]!.levelName, 'WARNING');
+    asserts.assertEquals(handler.messages[6]!.levelName, 'ERROR');
+    asserts.assertEquals(handler.messages[7]!.levelName, 'ERROR');
+    asserts.assertEquals(handler.messages[8]!.levelName, 'CRITICAL');
+    asserts.assertEquals(handler.messages[9]!.levelName, 'CRITICAL');
+    asserts.assertEquals(handler.messages[10]!.levelName, 'ALERT');
+    asserts.assertEquals(handler.messages[11]!.levelName, 'EMERGENCY');
+    asserts.assertEquals(handler.messages[12]!.levelName, 'EMERGENCY');
   });
 
-  await t.step("context variables", async () => {
+  await t.step('context variables', async () => {
     const logger = new Slogger({
-      appName: "TestApp",
+      appName: 'TestApp',
       level: SyslogSeverities.INFO,
       handlers: [
         {
-          name: "handler1",
-          type: "TestHandler",
+          name: 'handler1',
+          type: 'TestHandler',
           level: SyslogSeverities.INFO,
         },
       ],
@@ -435,25 +435,25 @@ Deno.test("slogger.core", async (t) => {
     // Test with context variables
     const context = {
       userId: 123,
-      action: "login",
+      action: 'login',
       timestamp: new Date().toISOString(),
     };
 
     await logger.info(
-      "User ${userId} performed ${action} at ${timestamp}",
+      'User ${userId} performed ${action} at ${timestamp}',
       context,
     );
 
     asserts.assertEquals(handler.messages.length, 1);
     asserts.assert(
-      handler.messages[0]!.message.includes("User 123 performed login at"),
+      handler.messages[0]!.message.includes('User 123 performed login at'),
     );
     asserts.assertEquals(handler.messages[0]!.context, context);
   });
 
-  await t.step("log message generation", async () => {
+  await t.step('log message generation', async () => {
     // Create a fixed date for testing
-    const testISOString = "2023-01-01T12:00:00.000Z";
+    const testISOString = '2023-01-01T12:00:00.000Z';
     const testTimestamp = 1672574400000;
 
     // Use proper spies for Date methods
@@ -468,12 +468,12 @@ Deno.test("slogger.core", async (t) => {
 
     try {
       const logger = new Slogger({
-        appName: "TestApp",
+        appName: 'TestApp',
         level: SyslogSeverities.INFO,
         handlers: [
           {
-            name: "handler1",
-            type: "TestHandler",
+            name: 'handler1',
+            type: 'TestHandler',
             level: SyslogSeverities.INFO,
           },
         ],
@@ -483,18 +483,18 @@ Deno.test("slogger.core", async (t) => {
       const handler = logger._handlers[0] as TestHandler;
       handler.messages = [];
 
-      await logger.info("Test message");
+      await logger.info('Test message');
 
       asserts.assertEquals(handler.messages.length, 1);
       const log = handler.messages[0]!;
 
       // Verify all log fields
-      asserts.assert(typeof log.id === "string");
-      asserts.assertEquals(log.appName, "TestApp");
-      asserts.assertEquals(log.hostname, Deno.hostname() || "localhost");
+      asserts.assert(typeof log.id === 'string');
+      asserts.assertEquals(log.appName, 'TestApp');
+      asserts.assertEquals(log.hostname, Deno.hostname() || 'localhost');
       asserts.assertEquals(log.level, SyslogSeverities.INFO);
-      asserts.assertEquals(log.levelName, "INFO");
-      asserts.assertEquals(log.message, "Test message");
+      asserts.assertEquals(log.levelName, 'INFO');
+      asserts.assertEquals(log.message, 'Test message');
 
       // These should match our fixed test values
       asserts.assertEquals(log.isoDate, testISOString);
@@ -508,9 +508,9 @@ Deno.test("slogger.core", async (t) => {
     }
   });
 
-  await t.step("handler registration", () => {
+  await t.step('handler registration', () => {
     const logger = new Slogger({
-      appName: "TestApp",
+      appName: 'TestApp',
       level: SyslogSeverities.INFO,
       handlers: [],
     });
@@ -518,7 +518,7 @@ Deno.test("slogger.core", async (t) => {
     // @ts-expect-error Accessing protected property for testing
     asserts.assertEquals(logger._handlers.length, 0);
 
-    const handler = new TestHandler("custom", {
+    const handler = new TestHandler('custom', {
       level: SyslogSeverities.DEBUG,
     });
     logger.registerHandler(handler);
@@ -533,18 +533,18 @@ Deno.test("slogger.core", async (t) => {
       // @ts-expect-error Testing invalid handler
       () => logger.registerHandler({}),
       Error,
-      "Handler must be an instance of AbstractHandler",
+      'Handler must be an instance of AbstractHandler',
     );
   });
 
-  await t.step("finalization", async () => {
+  await t.step('finalization', async () => {
     const logger = new Slogger({
-      appName: "TestApp",
+      appName: 'TestApp',
       level: SyslogSeverities.INFO,
       handlers: [
         {
-          name: "handler1",
-          type: "TestHandler",
+          name: 'handler1',
+          type: 'TestHandler',
           level: SyslogSeverities.INFO,
         },
       ],
@@ -561,7 +561,7 @@ Deno.test("slogger.core", async (t) => {
     asserts.assertEquals(handler.finalizeCalled, true);
   });
 
-  await t.step("global sampling configuration", async () => {
+  await t.step('global sampling configuration', async () => {
     // Mock Math.random for deterministic testing
     const originalRandom = Math.random;
 
@@ -570,12 +570,12 @@ Deno.test("slogger.core", async (t) => {
       Math.random = () => 0.75; // Above 0.5 sampling rate
 
       const logger = new Slogger({
-        appName: "TestApp",
+        appName: 'TestApp',
         level: SyslogSeverities.DEBUG, // Accept all logs
         handlers: [
           {
-            name: "handler1",
-            type: "TestHandler",
+            name: 'handler1',
+            type: 'TestHandler',
             level: SyslogSeverities.DEBUG,
           },
         ],
@@ -590,31 +590,31 @@ Deno.test("slogger.core", async (t) => {
       handler.messages = [];
 
       // This log should be sampled out (random = 0.75 > sampleRate = 0.5)
-      await logger.info("This should be sampled out");
+      await logger.info('This should be sampled out');
       asserts.assertEquals(handler.messages.length, 0);
 
       // Change random to be below sampling rate
       Math.random = () => 0.3; // Below 0.5 sampling rate
 
       // This log should be sampled in (random = 0.3 < sampleRate = 0.5)
-      await logger.info("This should be sampled in");
+      await logger.info('This should be sampled in');
       asserts.assertEquals(handler.messages.length, 1);
 
       // Error logs should bypass sampling regardless of random value
       Math.random = () => 0.75; // Above 0.5 sampling rate
 
       // ERROR level should bypass sampling
-      await logger.error("This should bypass sampling");
+      await logger.error('This should bypass sampling');
       asserts.assertEquals(handler.messages.length, 2);
 
       // Test handler-level override of global sampling
       const logger2 = new Slogger({
-        appName: "TestApp",
+        appName: 'TestApp',
         level: SyslogSeverities.DEBUG,
         handlers: [
           {
-            name: "handler1",
-            type: "TestHandler",
+            name: 'handler1',
+            type: 'TestHandler',
             level: SyslogSeverities.DEBUG,
             sampling: {
               sampleRate: 0.1, // 10% sampling (stricter than global 50%)
@@ -635,7 +635,7 @@ Deno.test("slogger.core", async (t) => {
       Math.random = () => 0.3;
 
       // This should be sampled out by the stricter handler rate
-      await logger2.info("This should be sampled out by handler rate");
+      await logger2.info('This should be sampled out by handler rate');
       asserts.assertEquals(handler2.messages.length, 0);
     } finally {
       Math.random = originalRandom;

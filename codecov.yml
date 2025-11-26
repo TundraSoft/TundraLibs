@@ -1,8 +1,8 @@
 ignore:
-  - "**/tests/**/*.ts"
-  - "**/**.bench.ts"
-  - "**/**.test.ts"
-  - "**/fixtures/**/**"
+  - '**/tests/**/*.ts'
+  - '**/**.bench.ts'
+  - '**/**.test.ts'
+  - '**/fixtures/**/**'
   - .github/**
 coverage:
   precision: 2
@@ -19,7 +19,7 @@ coverage:
         threshold: 5%
     changes: true
 comment:
-  layout: "reach, diff, flags, files, footer"
+  layout: 'reach, diff, flags, files, footer'
   behavior: default
   require_changes: false
   require_base: false
@@ -31,13 +31,13 @@ component_management:
       - type: project
         target: auto
         branches:
-          - "!main"
+          - '!main'
   individual_components:
     - component_id: utils
       name: utils
       paths:
         - utils/**.ts
-        - "!utils/**.test.ts"
+        - '!utils/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -45,7 +45,7 @@ component_management:
       name: id
       paths:
         - id/**.ts
-        - "!id/**.test.ts"
+        - '!id/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -53,7 +53,7 @@ component_management:
       name: crypt
       paths:
         - crypt/**.ts
-        - "!crypt/**.test.ts"
+        - '!crypt/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -61,7 +61,7 @@ component_management:
       name: cacher
       paths:
         - cacher/**.ts
-        - "!cacher/**.test.ts"
+        - '!cacher/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -69,7 +69,7 @@ component_management:
       name: guardian
       paths:
         - guardian/**.ts
-        - "!guardian/**.test.ts"
+        - '!guardian/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -77,7 +77,7 @@ component_management:
       name: slogger
       paths:
         - slogger/**.ts
-        - "!slogger/**.test.ts"
+        - '!slogger/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -85,7 +85,7 @@ component_management:
       name: restler
       paths:
         - restler/**.ts
-        - "!restler/**.test.ts"
+        - '!restler/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -93,7 +93,7 @@ component_management:
       name: pact
       paths:
         - pact/**.ts
-        - "!pact/**.test.ts"
+        - '!pact/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -101,7 +101,7 @@ component_management:
       name: norm
       paths:
         - norm/**.ts
-        - "!norm/**.test.ts"
+        - '!norm/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -109,7 +109,7 @@ component_management:
       name: openapi
       paths:
         - openapi/**.ts
-        - "!openapi/**.test.ts"
+        - '!openapi/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -117,14 +117,14 @@ component_management:
       name: dam
       paths:
         - dam/**.ts
-        - "!dam/**.test.ts"
+        - '!dam/**.test.ts'
       statuses:
         - type: project
           target: 75%
 flags:
   default:
     paths:
-      - "**/*.ts"
+      - '**/*.ts'
     carryforward: true
   utils:
     paths:

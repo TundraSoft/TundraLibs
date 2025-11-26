@@ -3,7 +3,7 @@ export {
   RESTlerError,
   RESTlerRequestError,
   RESTlerTimeoutError,
-} from "./errors/mod.ts";
+} from './errors/mod.ts';
 export type {
   ResponseBody,
   RESTlerContentType,
@@ -16,5 +16,5 @@ export type {
   RESTlerRequest,
   RESTlerRequestOptions,
   RESTlerResponse,
-} from "./types/mod.ts";
-export { RESTler } from "./RESTler.ts";
+} from './types/mod.ts';
+export { RESTler } from './RESTler.ts';

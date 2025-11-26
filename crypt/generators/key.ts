@@ -1,4 +1,4 @@
-import { encodeBase64 } from "$encoding";
+import { encodeBase64 } from '$encoding';
 
 /**
  * Supported asymmetric key algorithms for key pair generation.
@@ -8,7 +8,7 @@ import { encodeBase64 } from "$encoding";
  * - `ECDSA`: Elliptic Curve Digital Signature Algorithm
  * - `ECDH`: Elliptic Curve Diffie-Hellman for key exchange
  */
-export type KeyAlgorithm = "RSA-OAEP" | "RSA-PSS" | "ECDSA" | "ECDH";
+export type KeyAlgorithm = 'RSA-OAEP' | 'RSA-PSS' | 'ECDSA' | 'ECDH';
 
 /**
  * Supported elliptic curves for ECDSA and ECDH algorithms.
@@ -17,7 +17,7 @@ export type KeyAlgorithm = "RSA-OAEP" | "RSA-PSS" | "ECDSA" | "ECDH";
  * - `P-384`: NIST P-384 curve (secp384r1)
  * - `P-521`: NIST P-521 curve (secp521r1)
  */
-export type EllipticCurve = "P-256" | "P-384" | "P-521";
+export type EllipticCurve = 'P-256' | 'P-384' | 'P-521';
 
 /**
  * Supported RSA key sizes in bits.
@@ -31,7 +31,7 @@ export type RSAKeySize = 2048 | 3072 | 4096;
 /**
  * Supported RSA hash algorithms for PSS and OAEP operations.
  */
-export type RSAHashAlgorithm = "SHA-256" | "SHA-384" | "SHA-512";
+export type RSAHashAlgorithm = 'SHA-256' | 'SHA-384' | 'SHA-512';
 
 /**
  * Output format for exported keys.
@@ -41,14 +41,14 @@ export type RSAHashAlgorithm = "SHA-256" | "SHA-384" | "SHA-512";
  * - `JWK`: JSON Web Key format
  * - `RAW`: Raw key material (for symmetric keys only)
  */
-export type KeyFormat = "PEM" | "DER" | "JWK" | "RAW";
+export type KeyFormat = 'PEM' | 'DER' | 'JWK' | 'RAW';
 
 /**
  * Configuration options for RSA key generation.
  */
 export interface RSAKeyOptions {
   /** Algorithm type */
-  algorithm: "RSA-OAEP" | "RSA-PSS";
+  algorithm: 'RSA-OAEP' | 'RSA-PSS';
   /** Key size in bits */
   keySize: RSAKeySize;
   /** Hash algorithm to use */
@@ -64,7 +64,7 @@ export interface RSAKeyOptions {
  */
 export interface ECKeyOptions {
   /** Algorithm type */
-  algorithm: "ECDSA" | "ECDH";
+  algorithm: 'ECDSA' | 'ECDH';
   /** Elliptic curve to use */
   curve: EllipticCurve;
   /** Export format for keys */
@@ -139,7 +139,7 @@ export const generateRSAKeyPair = async (
       hash: hashAlgorithm,
     },
     extractable,
-    algorithm === "RSA-OAEP" ? ["encrypt", "decrypt"] : ["sign", "verify"],
+    algorithm === 'RSA-OAEP' ? ['encrypt', 'decrypt'] : ['sign', 'verify'],
   ) as CryptoKeyPair;
 
   const result: GeneratedKeyPair = {
@@ -149,37 +149,37 @@ export const generateRSAKeyPair = async (
 
   // Export keys if format is specified
   if (format && extractable) {
-    if (format === "PEM") {
+    if (format === 'PEM') {
       // Export as PEM format
       const publicDER = await crypto.subtle.exportKey(
-        "spki",
+        'spki',
         keyPair.publicKey,
       );
       const privateDER = await crypto.subtle.exportKey(
-        "pkcs8",
+        'pkcs8',
         keyPair.privateKey,
       );
 
-      result.publicKeyExported = derToPem(publicDER, "PUBLIC KEY");
-      result.privateKeyExported = derToPem(privateDER, "PRIVATE KEY");
-    } else if (format === "DER") {
+      result.publicKeyExported = derToPem(publicDER, 'PUBLIC KEY');
+      result.privateKeyExported = derToPem(privateDER, 'PRIVATE KEY');
+    } else if (format === 'DER') {
       // Export as DER format
       result.publicKeyExported = await crypto.subtle.exportKey(
-        "spki",
+        'spki',
         keyPair.publicKey,
       );
       result.privateKeyExported = await crypto.subtle.exportKey(
-        "pkcs8",
+        'pkcs8',
         keyPair.privateKey,
       );
-    } else if (format === "JWK") {
+    } else if (format === 'JWK') {
       // Export as JWK format
       result.publicKeyExported = await crypto.subtle.exportKey(
-        "jwk",
+        'jwk',
         keyPair.publicKey,
       );
       result.privateKeyExported = await crypto.subtle.exportKey(
-        "jwk",
+        'jwk',
         keyPair.privateKey,
       );
     } else {
@@ -239,7 +239,7 @@ export const generateECKeyPair = async (
       namedCurve: curve,
     },
     extractable,
-    algorithm === "ECDSA" ? ["sign", "verify"] : ["deriveKey"],
+    algorithm === 'ECDSA' ? ['sign', 'verify'] : ['deriveKey'],
   ) as CryptoKeyPair;
 
   const result: GeneratedKeyPair = {
@@ -249,48 +249,48 @@ export const generateECKeyPair = async (
 
   // Export keys if format is specified
   if (format && extractable) {
-    if (format === "PEM") {
+    if (format === 'PEM') {
       // Export as PEM format
       const publicDER = await crypto.subtle.exportKey(
-        "spki",
+        'spki',
         keyPair.publicKey,
       );
       const privateDER = await crypto.subtle.exportKey(
-        "pkcs8",
+        'pkcs8',
         keyPair.privateKey,
       );
 
-      result.publicKeyExported = derToPem(publicDER, "PUBLIC KEY");
-      result.privateKeyExported = derToPem(privateDER, "PRIVATE KEY");
-    } else if (format === "DER") {
+      result.publicKeyExported = derToPem(publicDER, 'PUBLIC KEY');
+      result.privateKeyExported = derToPem(privateDER, 'PRIVATE KEY');
+    } else if (format === 'DER') {
       // Export as DER format
       result.publicKeyExported = await crypto.subtle.exportKey(
-        "spki",
+        'spki',
         keyPair.publicKey,
       );
       result.privateKeyExported = await crypto.subtle.exportKey(
-        "pkcs8",
+        'pkcs8',
         keyPair.privateKey,
       );
-    } else if (format === "JWK") {
+    } else if (format === 'JWK') {
       // Export as JWK format
       result.publicKeyExported = await crypto.subtle.exportKey(
-        "jwk",
+        'jwk',
         keyPair.publicKey,
       );
       result.privateKeyExported = await crypto.subtle.exportKey(
-        "jwk",
+        'jwk',
         keyPair.privateKey,
       );
-    } else if (format === "RAW") {
+    } else if (format === 'RAW') {
       // Raw format only works for public keys in EC
       result.publicKeyExported = await crypto.subtle.exportKey(
-        "raw",
+        'raw',
         keyPair.publicKey,
       );
       // Private key cannot be exported in raw format for EC
       throw new Error(
-        "Raw format is only supported for EC public keys, not private keys",
+        'Raw format is only supported for EC public keys, not private keys',
       );
     } else {
       throw new Error(
@@ -328,33 +328,33 @@ export const generateKeyPair = async (
   format?: KeyFormat,
 ): Promise<GeneratedKeyPair> => {
   switch (algorithm) {
-    case "RSA-OAEP":
+    case 'RSA-OAEP':
       return await generateRSAKeyPair({
-        algorithm: "RSA-OAEP",
+        algorithm: 'RSA-OAEP',
         keySize: 2048,
-        hashAlgorithm: "SHA-256",
+        hashAlgorithm: 'SHA-256',
         format,
       });
 
-    case "RSA-PSS":
+    case 'RSA-PSS':
       return await generateRSAKeyPair({
-        algorithm: "RSA-PSS",
+        algorithm: 'RSA-PSS',
         keySize: 2048,
-        hashAlgorithm: "SHA-256",
+        hashAlgorithm: 'SHA-256',
         format,
       });
 
-    case "ECDSA":
+    case 'ECDSA':
       return await generateECKeyPair({
-        algorithm: "ECDSA",
-        curve: "P-256",
+        algorithm: 'ECDSA',
+        curve: 'P-256',
         format,
       });
 
-    case "ECDH":
+    case 'ECDH':
       return await generateECKeyPair({
-        algorithm: "ECDH",
-        curve: "P-256",
+        algorithm: 'ECDH',
+        curve: 'P-256',
         format,
       });
 
@@ -372,7 +372,7 @@ export const generateKeyPair = async (
  */
 const derToPem = (der: ArrayBuffer, type: string): string => {
   const base64 = encodeBase64(new Uint8Array(der));
-  const pemBody = base64.match(/.{1,64}/g)?.join("\n") || base64;
+  const pemBody = base64.match(/.{1,64}/g)?.join('\n') || base64;
   return `-----BEGIN ${type}-----\n${pemBody}\n-----END ${type}-----`;
 };
 
@@ -382,9 +382,9 @@ export const generateRSAEncryptionKeys = (
   format?: KeyFormat,
 ) =>
   generateRSAKeyPair({
-    algorithm: "RSA-OAEP",
+    algorithm: 'RSA-OAEP',
     keySize,
-    hashAlgorithm: "SHA-256",
+    hashAlgorithm: 'SHA-256',
     format,
   });
 
@@ -393,28 +393,28 @@ export const generateRSASigningKeys = (
   format?: KeyFormat,
 ) =>
   generateRSAKeyPair({
-    algorithm: "RSA-PSS",
+    algorithm: 'RSA-PSS',
     keySize,
-    hashAlgorithm: "SHA-256",
+    hashAlgorithm: 'SHA-256',
     format,
   });
 
 export const generateECDSAKeys = (
-  curve: EllipticCurve = "P-256",
+  curve: EllipticCurve = 'P-256',
   format?: KeyFormat,
 ) =>
   generateECKeyPair({
-    algorithm: "ECDSA",
+    algorithm: 'ECDSA',
     curve,
     format,
   });
 
 export const generateECDHKeys = (
-  curve: EllipticCurve = "P-256",
+  curve: EllipticCurve = 'P-256',
   format?: KeyFormat,
 ) =>
   generateECKeyPair({
-    algorithm: "ECDH",
+    algorithm: 'ECDH',
     curve,
     format,
   });

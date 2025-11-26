@@ -13,24 +13,24 @@
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt} Web Crypto API encryption
  */
 export type EncryptionModes =
-  | "AES-GCM:128"
-  | "AES-GCM:192"
-  | "AES-GCM:256"
-  | "AES-CBC:128"
-  | "AES-CBC:192"
-  | "AES-CBC:256"
-  | "AES-CTR:128"
-  | "AES-CTR:192"
-  | "AES-CTR:256"
-  | "RSA-OAEP:2048:SHA-1"
-  | "RSA-OAEP:2048:SHA-256"
-  | "RSA-OAEP:2048:SHA-384"
-  | "RSA-OAEP:2048:SHA-512"
-  | "RSA-OAEP:3072:SHA-1"
-  | "RSA-OAEP:3072:SHA-256"
-  | "RSA-OAEP:3072:SHA-384"
-  | "RSA-OAEP:3072:SHA-512"
-  | "RSA-OAEP:4096:SHA-1"
-  | "RSA-OAEP:4096:SHA-256"
-  | "RSA-OAEP:4096:SHA-384"
-  | "RSA-OAEP:4096:SHA-512";
+  | 'AES-GCM:128'
+  | 'AES-GCM:192'
+  | 'AES-GCM:256'
+  | 'AES-CBC:128'
+  | 'AES-CBC:192'
+  | 'AES-CBC:256'
+  | 'AES-CTR:128'
+  | 'AES-CTR:192'
+  | 'AES-CTR:256'
+  | 'RSA-OAEP:2048:SHA-1'
+  | 'RSA-OAEP:2048:SHA-256'
+  | 'RSA-OAEP:2048:SHA-384'
+  | 'RSA-OAEP:2048:SHA-512'
+  | 'RSA-OAEP:3072:SHA-1'
+  | 'RSA-OAEP:3072:SHA-256'
+  | 'RSA-OAEP:3072:SHA-384'
+  | 'RSA-OAEP:3072:SHA-512'
+  | 'RSA-OAEP:4096:SHA-1'
+  | 'RSA-OAEP:4096:SHA-256'
+  | 'RSA-OAEP:4096:SHA-384'
+  | 'RSA-OAEP:4096:SHA-512';

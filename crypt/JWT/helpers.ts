@@ -1,5 +1,5 @@
-import type { JWTAlgorithm, JWTPayload, JWTVerifyOptions } from "./types.ts";
-import { JWTError } from "./Error.ts";
+import type { JWTAlgorithm, JWTPayload, JWTVerifyOptions } from './types.ts';
+import { JWTError } from './Error.ts';
 
 /**
  * Maps JWT algorithms to their corresponding hash algorithms for HMAC operations.
@@ -14,11 +14,11 @@ import { JWTError } from "./Error.ts";
  */
 export const JWT_ALGORITHM_MAP: Record<
   JWTAlgorithm,
-  "SHA-256" | "SHA-384" | "SHA-512"
+  'SHA-256' | 'SHA-384' | 'SHA-512'
 > = {
-  "HS256": "SHA-256",
-  "HS384": "SHA-384",
-  "HS512": "SHA-512",
+  'HS256': 'SHA-256',
+  'HS384': 'SHA-384',
+  'HS512': 'SHA-512',
 };
 
 /**
@@ -64,21 +64,21 @@ export const validatePayload = (payload: JWTPayload): void => {
  * @see {@link https://tools.ietf.org/html/rfc7519#section-4.1} RFC 7519 - Numeric Date Claims
  */
 export const validateNumericClaims = (payload: JWTPayload): void => {
-  if (payload.exp !== undefined && typeof payload.exp !== "number") {
-    throw new JWTError("INVALID_JWT", {
-      causeMessage: "Expiration time (exp) must be a number",
+  if (payload.exp !== undefined && typeof payload.exp !== 'number') {
+    throw new JWTError('INVALID_JWT', {
+      causeMessage: 'Expiration time (exp) must be a number',
     });
   }
 
-  if (payload.nbf !== undefined && typeof payload.nbf !== "number") {
-    throw new JWTError("INVALID_JWT", {
-      causeMessage: "Not before time (nbf) must be a number",
+  if (payload.nbf !== undefined && typeof payload.nbf !== 'number') {
+    throw new JWTError('INVALID_JWT', {
+      causeMessage: 'Not before time (nbf) must be a number',
     });
   }
 
-  if (typeof payload.iat !== "number") {
-    throw new JWTError("INVALID_JWT", {
-      causeMessage: "Issued at (iat) must be a number",
+  if (typeof payload.iat !== 'number') {
+    throw new JWTError('INVALID_JWT', {
+      causeMessage: 'Issued at (iat) must be a number',
     });
   }
 };
@@ -105,17 +105,17 @@ export const validateAudienceClaim = (payload: JWTPayload): void => {
     return;
   }
 
-  if (typeof payload.aud !== "string" && !Array.isArray(payload.aud)) {
-    throw new JWTError("INVALID_CLAIMS", {
-      causeMessage: "Audience (aud) must be a string or array of strings",
+  if (typeof payload.aud !== 'string' && !Array.isArray(payload.aud)) {
+    throw new JWTError('INVALID_CLAIMS', {
+      causeMessage: 'Audience (aud) must be a string or array of strings',
     });
   }
 
   if (Array.isArray(payload.aud)) {
     for (const aud of payload.aud) {
-      if (typeof aud !== "string") {
-        throw new JWTError("INVALID_CLAIMS", {
-          causeMessage: "All audience values must be strings",
+      if (typeof aud !== 'string') {
+        throw new JWTError('INVALID_CLAIMS', {
+          causeMessage: 'All audience values must be strings',
         });
       }
     }
@@ -148,7 +148,7 @@ const validateTimeClaims = (
   // Check expiration
   if (!options.ignoreExpiration && payload.exp !== undefined) {
     if (now > payload.exp + tolerance) {
-      throw new JWTError("EXPIRED_TOKEN", {
+      throw new JWTError('EXPIRED_TOKEN', {
         exp: payload.exp,
         now,
         tolerance,
@@ -159,7 +159,7 @@ const validateTimeClaims = (
   // Check not before
   if (!options.ignoreNotBefore && payload.nbf !== undefined) {
     if (now < payload.nbf - tolerance) {
-      throw new JWTError("NOT_ACTIVE", {
+      throw new JWTError('NOT_ACTIVE', {
         nbf: payload.nbf,
         now,
         tolerance,
@@ -170,7 +170,7 @@ const validateTimeClaims = (
   // Check maximum age
   if (options.maxAge !== undefined && payload.iat !== undefined) {
     if (now - payload.iat > options.maxAge) {
-      throw new JWTError("MAX_AGE_EXCEEDED", {
+      throw new JWTError('MAX_AGE_EXCEEDED', {
         iat: payload.iat,
         maxAge: options.maxAge,
         actualAge: now - payload.iat,
@@ -191,8 +191,8 @@ const validateIssuerClaim = (
       ? options.issuer
       : [options.issuer];
     if (!payload.iss || !expectedIssuers.includes(payload.iss)) {
-      throw new JWTError("INVALID_CLAIMS", {
-        causeMessage: "Invalid issuer",
+      throw new JWTError('INVALID_CLAIMS', {
+        causeMessage: 'Invalid issuer',
         expectedIssuers,
         actualIssuer: payload.iss,
       });
@@ -208,8 +208,8 @@ const validateSubjectClaim = (
   options: JWTVerifyOptions,
 ): void => {
   if (options.subject !== undefined && payload.sub !== options.subject) {
-    throw new JWTError("INVALID_CLAIMS", {
-      causeMessage: "Invalid subject",
+    throw new JWTError('INVALID_CLAIMS', {
+      causeMessage: 'Invalid subject',
       expectedSubject: options.subject,
       actualSubject: payload.sub,
     });
@@ -235,8 +235,8 @@ const validateAudienceClaimOptions = (
       !payload.aud ||
       !expectedAudiences.some((expected) => tokenAudiences.includes(expected))
     ) {
-      throw new JWTError("INVALID_CLAIMS", {
-        causeMessage: "Invalid audience",
+      throw new JWTError('INVALID_CLAIMS', {
+        causeMessage: 'Invalid audience',
         expectedAudiences,
         actualAudience: payload.aud,
       });

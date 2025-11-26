@@ -1,4 +1,4 @@
-import * as asserts from "$asserts";
+import * as asserts from '$asserts';
 import {
   ALPHA_NUMERIC,
   ALPHA_NUMERIC_CASE,
@@ -7,9 +7,9 @@ import {
   NUMBERS,
   PASSWORD,
   WEB_SAFE,
-} from "./mod.ts";
+} from './mod.ts';
 
-Deno.test("id.nanoId", async (t) => {
+Deno.test('id.nanoId', async (t) => {
   const sampleSize = 10000,
     minLength = 6,
     maxLength = 40,
@@ -21,7 +21,7 @@ Deno.test("id.nanoId", async (t) => {
       { data: WEB_SAFE, reg: /^[a-z0-9\_\-{0,}]+$/i }, // NOSONAR
       { data: PASSWORD, reg: /^[a-z0-9\_\-\!\@\$\%\^\&\*{0,}]+$/i }, // NOSONAR
     ];
-  await t.step("Check for length consistency on sample set of 10000", () => {
+  await t.step('Check for length consistency on sample set of 10000', () => {
     for (let i = minLength; i <= maxLength; i++) {
       dictionary.forEach((dict) => {
         for (let j = 0; j < sampleSize; j++) {
@@ -32,7 +32,7 @@ Deno.test("id.nanoId", async (t) => {
   });
 
   await t.step(
-    "Ensure only allowed characters are present on sample set of 10000",
+    'Ensure only allowed characters are present on sample set of 10000',
     () => {
       for (let i = minLength; i <= maxLength; i++) {
         dictionary.forEach((dict) => {
@@ -44,7 +44,7 @@ Deno.test("id.nanoId", async (t) => {
     },
   );
 
-  await t.step("Check if the collision is < 1% on sample set of 10000", () => {
+  await t.step('Check if the collision is < 1% on sample set of 10000', () => {
     let id: string;
     for (let i = minLength; i <= maxLength; i++) {
       for (const dict of dictionary) { // 2. Use for...of loop
@@ -64,7 +64,7 @@ Deno.test("id.nanoId", async (t) => {
   });
 
   // Additional test cases
-  await t.step("Test default parameters", () => {
+  await t.step('Test default parameters', () => {
     // Test default size is 21
     const defaultId = nanoID();
     asserts.assertEquals(defaultId.length, 21);
@@ -80,7 +80,7 @@ Deno.test("id.nanoId", async (t) => {
     asserts.assertEquals(ids.size, 1000);
   });
 
-  await t.step("Test edge cases for size parameter", () => {
+  await t.step('Test edge cases for size parameter', () => {
     // Test very small size
     const tinyId = nanoID(1);
     asserts.assertEquals(tinyId.length, 1);
@@ -89,14 +89,14 @@ Deno.test("id.nanoId", async (t) => {
     asserts.assertThrows(
       () => nanoID(0),
       Error,
-      "Size should be greater than 0",
+      'Size should be greater than 0',
     );
 
     // Test negative size
     asserts.assertThrows(
       () => nanoID(-1),
       Error,
-      "Size should be greater than 0",
+      'Size should be greater than 0',
     );
 
     // // Test large size
@@ -105,15 +105,15 @@ Deno.test("id.nanoId", async (t) => {
     asserts.assertEquals(largeId.length, largeSize);
   });
 
-  await t.step("Test with custom character sets", () => {
+  await t.step('Test with custom character sets', () => {
     // Test with single character base
-    const singleCharBase = "A";
+    const singleCharBase = 'A';
     const singleCharId = nanoID(10, singleCharBase);
     asserts.assertEquals(singleCharId.length, 10);
-    asserts.assertEquals(singleCharId, "AAAAAAAAAA");
+    asserts.assertEquals(singleCharId, 'AAAAAAAAAA');
 
     // Test with custom character set
-    const customBase = "!@#$%^&*()";
+    const customBase = '!@#$%^&*()';
     const customId = nanoID(10, customBase);
     asserts.assertEquals(customId.length, 10);
     for (const char of customId) {
@@ -122,16 +122,16 @@ Deno.test("id.nanoId", async (t) => {
 
     // Test with empty base string
     asserts.assertThrows(
-      () => nanoID(10, ""),
+      () => nanoID(10, ''),
       Error,
-      "Base string cannot be empty",
+      'Base string cannot be empty',
     );
 
     // Test with null base string
     asserts.assertThrows(
       () => nanoID(10, null as any),
       Error,
-      "Base string cannot be empty",
+      'Base string cannot be empty',
     );
 
     // Test with undefined base string - should use default
@@ -140,16 +140,16 @@ Deno.test("id.nanoId", async (t) => {
     asserts.assertMatch(undefinedId, /^[a-z0-9_-]+$/i);
   });
 
-  await t.step("Test distribution of characters", () => {
+  await t.step('Test distribution of characters', () => {
     // Generate a large number of IDs to test character distribution
-    const testBase = "ABC";
+    const testBase = 'ABC';
     const testSize = 10;
     const iterations = 10000;
 
     const charCount = {
-      "A": 0,
-      "B": 0,
-      "C": 0,
+      'A': 0,
+      'B': 0,
+      'C': 0,
     };
 
     for (let i = 0; i < iterations; i++) {
@@ -174,27 +174,27 @@ Deno.test("id.nanoId", async (t) => {
     }
   });
 
-  await t.step("Test random bytes regeneration scenario", () => {
+  await t.step('Test random bytes regeneration scenario', () => {
     // Force a scenario where we need more random bytes
     // Use a base that forces many rejections to trigger byte regeneration
-    const restrictiveBase = "A"; // Only one character, high chance of index >= base.length
-    
+    const restrictiveBase = 'A'; // Only one character, high chance of index >= base.length
+
     // Generate a longer ID to increase chances of needing more random bytes
     const longId = nanoID(100, restrictiveBase);
     asserts.assertEquals(longId.length, 100);
-    asserts.assertEquals(longId, "A".repeat(100));
-    
+    asserts.assertEquals(longId, 'A'.repeat(100));
+
     // Test with base length that's not a power of 2 to trigger mask scenarios
-    const oddBase = "ABCDE"; // 5 characters, not power of 2
+    const oddBase = 'ABCDE'; // 5 characters, not power of 2
     const oddId = nanoID(50, oddBase);
     asserts.assertEquals(oddId.length, 50);
     for (const char of oddId) {
       asserts.assert(oddBase.includes(char));
     }
-    
+
     // Force byte regeneration with very inefficient base (many invalid indices)
     // Base with 3 characters vs mask that will generate many invalid indices
-    const inefficientBase = "XYZ"; // 3 chars, mask will be 7, so 4/8 indices invalid
+    const inefficientBase = 'XYZ'; // 3 chars, mask will be 7, so 4/8 indices invalid
     const forceRegenerationId = nanoID(200, inefficientBase); // Long enough to force regeneration
     asserts.assertEquals(forceRegenerationId.length, 200);
     for (const char of forceRegenerationId) {
@@ -202,9 +202,10 @@ Deno.test("id.nanoId", async (t) => {
     }
   });
 
-  await t.step("Test edge cases with very large character sets", () => {
+  await t.step('Test edge cases with very large character sets', () => {
     // Test with character set close to mask boundary
-    const largeBase = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()_+-=[]{}|;:,.<>?"; // 95 chars
+    const largeBase =
+      '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()_+-=[]{}|;:,.<>?'; // 95 chars
     const largeBaseId = nanoID(20, largeBase);
     asserts.assertEquals(largeBaseId.length, 20);
     for (const char of largeBaseId) {
@@ -212,19 +213,19 @@ Deno.test("id.nanoId", async (t) => {
     }
   });
 
-  await t.step("Test consistency across multiple generations", () => {
+  await t.step('Test consistency across multiple generations', () => {
     // Ensure multiple calls with same parameters produce valid but different results
     const size = 15;
     const base = WEB_SAFE;
     const ids = new Set<string>();
-    
+
     for (let i = 0; i < 1000; i++) {
       const id = nanoID(size, base);
       asserts.assertEquals(id.length, size);
       asserts.assertMatch(id, /^[a-z0-9_-]+$/i);
       ids.add(id);
     }
-    
+
     // Should have generated 1000 unique IDs
     asserts.assertEquals(ids.size, 1000);
   });

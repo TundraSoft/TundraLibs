@@ -1,5 +1,5 @@
-import { decodeHex } from "$encoding";
-import type { EncryptionModes } from "./types.ts";
+import { decodeHex } from '$encoding';
+import type { EncryptionModes } from './types.ts';
 
 /**
  * Parses a PEM-formatted private key string to extract the raw key data.
@@ -11,15 +11,15 @@ import type { EncryptionModes } from "./types.ts";
 const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
   // Remove PEM headers, footers, and whitespace
   const base64Key = pemKey
-    .replace(/-----BEGIN [A-Z ]+-----/, "")
-    .replace(/-----END [A-Z ]+-----/, "")
-    .replace(/\s/g, "");
+    .replace(/-----BEGIN [A-Z ]+-----/, '')
+    .replace(/-----END [A-Z ]+-----/, '')
+    .replace(/\s/g, '');
 
   try {
     // Decode the base64 key data
     return Uint8Array.from(atob(base64Key), (c) => c.charCodeAt(0));
   } catch (_error) {
-    throw new Error("Invalid PEM private key format");
+    throw new Error('Invalid PEM private key format');
   }
 };
 
@@ -93,22 +93,22 @@ export const decryptAES = async (
   data: string,
   returnBinary = false,
 ): Promise<string | Uint8Array> => {
-  const [algorithm, lengthStr] = mode.split(":");
-  const length = parseInt(lengthStr || "0", 10);
+  const [algorithm, lengthStr] = mode.split(':');
+  const length = parseInt(lengthStr || '0', 10);
 
-  if (!["AES-GCM", "AES-CBC", "AES-CTR"].includes(algorithm!)) {
+  if (!['AES-GCM', 'AES-CBC', 'AES-CTR'].includes(algorithm!)) {
     throw new Error(
-      "Invalid AES encryption mode. Must be AES-GCM, AES-CBC, or AES-CTR",
+      'Invalid AES encryption mode. Must be AES-GCM, AES-CBC, or AES-CTR',
     );
   }
 
   if (![128, 192, 256].includes(length)) {
     throw new Error(
-      "Invalid AES key length. Must be 128, 192, or 256",
+      'Invalid AES key length. Must be 128, 192, or 256',
     );
   }
 
-  const parts = data.split(":");
+  const parts = data.split(':');
   if (parts.length !== 2) {
     throw new Error('Invalid encrypted data format. Expected "data:iv"');
   }
@@ -116,7 +116,7 @@ export const decryptAES = async (
   const [encrypted, ivOrCounter] = parts.map((x) => decodeHex(x));
 
   if (!ivOrCounter || ivOrCounter.length === 0) {
-    throw new Error("Initialization vector (IV) or counter is undefined");
+    throw new Error('Initialization vector (IV) or counter is undefined');
   }
 
   // Calculate key size in bytes
@@ -124,21 +124,21 @@ export const decryptAES = async (
   const keyBytes = deriveKey(secret, keyLength);
 
   const key = await crypto.subtle.importKey(
-    "raw",
+    'raw',
     keyBytes as BufferSource,
     {
       name: algorithm!,
       length: keyLength * 8, // Convert back to bits
     },
     false,
-    ["decrypt"],
+    ['decrypt'],
   );
 
   let decryptConfig: AesGcmParams | AesCbcParams | AesCtrParams;
 
-  if (algorithm === "AES-CTR") {
+  if (algorithm === 'AES-CTR') {
     decryptConfig = {
-      name: "AES-CTR",
+      name: 'AES-CTR',
       counter: ivOrCounter,
       length: 64, // Standard counter length for AES-CTR
     };
@@ -204,8 +204,8 @@ export const decryptRSA = async (
   data: string,
   returnBinary = false,
 ): Promise<string | Uint8Array> => {
-  const parts = mode.split(":");
-  if (parts.length !== 3 || parts[0] !== "RSA-OAEP") {
+  const parts = mode.split(':');
+  if (parts.length !== 3 || parts[0] !== 'RSA-OAEP') {
     throw new Error(
       'Invalid RSA mode format. Expected "RSA-OAEP:keySize:hashAlgorithm"',
     );
@@ -222,13 +222,13 @@ export const decryptRSA = async (
   const keySize = parseInt(lengthStr, 10);
   if (![2048, 3072, 4096].includes(keySize)) {
     throw new Error(
-      "Invalid RSA key size. Must be 2048, 3072, or 4096",
+      'Invalid RSA key size. Must be 2048, 3072, or 4096',
     );
   }
 
-  if (!["SHA-1", "SHA-256", "SHA-384", "SHA-512"].includes(hashAlgorithm)) {
+  if (!['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'].includes(hashAlgorithm)) {
     throw new Error(
-      "Invalid hash algorithm. Must be SHA-1, SHA-256, SHA-384, or SHA-512",
+      'Invalid hash algorithm. Must be SHA-1, SHA-256, SHA-384, or SHA-512',
     );
   }
 
@@ -237,14 +237,14 @@ export const decryptRSA = async (
 
   // Import the private key
   const cryptoKey = await crypto.subtle.importKey(
-    "pkcs8",
+    'pkcs8',
     keyData as BufferSource,
     {
-      name: "RSA-OAEP",
-      hash: "SHA-256",
+      name: 'RSA-OAEP',
+      hash: 'SHA-256',
     },
     false,
-    ["decrypt"],
+    ['decrypt'],
   );
 
   // Decode the base64 encrypted data
@@ -252,12 +252,12 @@ export const decryptRSA = async (
   try {
     encryptedData = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
   } catch (_error) {
-    throw new Error("Invalid base64 encrypted data");
+    throw new Error('Invalid base64 encrypted data');
   }
 
   // Decrypt the data
   const decryptedData = await crypto.subtle.decrypt(
-    "RSA-OAEP",
+    'RSA-OAEP',
     cryptoKey,
     encryptedData as BufferSource,
   );
@@ -304,7 +304,7 @@ export const decrypt = (
   data: string,
   returnBinary = false,
 ): Promise<string | Uint8Array> => {
-  if (mode.startsWith("RSA-")) {
+  if (mode.startsWith('RSA-')) {
     return decryptRSA(mode, secret, data, returnBinary);
   } else {
     return decryptAES(mode, secret, data, returnBinary);

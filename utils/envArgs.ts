@@ -53,8 +53,8 @@
  * ```
  */
 
-import * as path from "$path";
-import { type PrivateObject, privateObject } from "./privateObject.ts";
+import * as path from '$path';
+import { type PrivateObject, privateObject } from './privateObject.ts';
 
 /**
  * Loads environment variables from multiple sources into a secure, immutable object.
@@ -181,12 +181,12 @@ import { type PrivateObject, privateObject } from "./privateObject.ts";
  * - Consider using environment-specific .env files for different deployment stages
  */
 export const envArgs = function (
-  envFilePath = "./",
+  envFilePath = './',
   loadDockerSecrets = true,
 ): PrivateObject<Record<string, string>> {
   const env: Record<string, string> = {};
-  const envPermission = Deno.permissions.querySync({ name: "env" });
-  if (envPermission.state === "granted") {
+  const envPermission = Deno.permissions.querySync({ name: 'env' });
+  if (envPermission.state === 'granted') {
     Object.entries(Deno.env.toObject()).forEach(([key, value]) => {
       env[key] = value;
     });
@@ -194,33 +194,33 @@ export const envArgs = function (
 
   try {
     // Simplify path resolution logic
-    const envFile = envFilePath.endsWith(".env")
+    const envFile = envFilePath.endsWith('.env')
       ? envFilePath
-      : path.join(envFilePath, ".env");
+      : path.join(envFilePath, '.env');
 
     const filePermission = Deno.permissions.querySync({
-      name: "read",
+      name: 'read',
       path: envFile,
     });
-    if (filePermission.state === "granted") {
+    if (filePermission.state === 'granted') {
       const data = Deno.readTextFileSync(envFile);
       // Improved regex pattern to avoid Sonar warnings
       const pattern = /^\s*([\w.-]+)\s*=\s*(.+?)?\s*$/;
       const isQuoted = /^(['"])(.*)\1$/;
 
-      data.split("\n").forEach((line) => {
+      data.split('\n').forEach((line) => {
         const match = line.match(pattern);
         if (match) {
           const [, key, value] = match;
           // Make sure key is defined before using it
           if (key) {
             if (!value) {
-              env[key] = "";
+              env[key] = '';
             } else {
               let finalValue = value.trim();
               const quoteMatch = finalValue.match(isQuoted);
               if (quoteMatch) {
-                finalValue = quoteMatch[2] ?? "";
+                finalValue = quoteMatch[2] ?? '';
               }
               env[key] = finalValue;
             }
@@ -235,12 +235,12 @@ export const envArgs = function (
 
   if (loadDockerSecrets) {
     try {
-      const dockerSecretPath = "/run/secrets";
+      const dockerSecretPath = '/run/secrets';
       const dockerSecretPermission = Deno.permissions.querySync({
-        name: "read",
+        name: 'read',
         path: dockerSecretPath,
       });
-      if (dockerSecretPermission.state === "granted") {
+      if (dockerSecretPermission.state === 'granted') {
         for (const file of Deno.readDirSync(dockerSecretPath)) {
           if (file.isFile) {
             const key = file.name;

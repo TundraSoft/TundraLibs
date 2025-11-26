@@ -152,18 +152,18 @@ export interface SyslogObject {
 
 // Define constants for magic numbers
 const FACILITY_SHIFT = 8;
-const NIL_VALUE = "-";
+const NIL_VALUE = '-';
 const MAX_PRI_VALUE = 191;
 const MIN_PRI_VALUE = 0;
 
 const Patterns = {
-  "RFC3164":
+  'RFC3164':
     /^(<(\d+)>)((?:\d{4}\s+)?([Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec]+)?\s*(\d{1,2})\s*(\d{4})?\s*(\d{1,2}:\d{1,2}:\d{1,2}))?\s*([^\s\:]+)?\s*(([^\s\:\[]+)?(\[(\d+|)\])?)?:(.+)/i, //NOSONAR - Allow empty process ID brackets and year-first timestamps
-  "RFC5424":
+  'RFC5424':
     /^<(\d+)?>\d (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\S+)\s*([^\s]+)\s*([^\s]+)\s*([^\s]+)\s*([^\s]+)\s*/i, //NOSONAR
-  "STRUCT": /\[[^\]]+\]\s*/g,
-  "STRUCTID": /\[(([a-zA-Z0-9._-]+)@(\d+(?:\.\d+)*))\s*/, // Allow dots and hyphens in element names
-  "STRUCTKEYS": /([\w.-]+)\s*=\s*(["'])((?:(?=(\\?))\3.)*?)\2/,
+  'STRUCT': /\[[^\]]+\]\s*/g,
+  'STRUCTID': /\[(([a-zA-Z0-9._-]+)@(\d+(?:\.\d+)*))\s*/, // Allow dots and hyphens in element names
+  'STRUCTKEYS': /([\w.-]+)\s*=\s*(["'])((?:(?=(\\?))\3.)*?)\2/,
 };
 
 /**
@@ -233,7 +233,7 @@ function parseStructuredData(structAndMessage: string): {
         while (keyValueMatch) {
           // Even if keyValueMatch[3] is empty, we should still set the value
           if (keyValueMatch[1]) {
-            s[keyValueMatch[1]] = keyValueMatch[3] || "";
+            s[keyValueMatch[1]] = keyValueMatch[3] || '';
           }
           keyValuePairs = keyValuePairs.substring(keyValueMatch[0].length)
             .trim();
@@ -260,23 +260,23 @@ function parseStructuredData(structAndMessage: string): {
  */
 export const parse = (log: string): SyslogObject => {
   if (!log) {
-    throw new Error("Empty log message");
+    throw new Error('Empty log message');
   }
   const logObj: SyslogObject = {
       facility: SyslogFacilities.KERN,
       severity: SyslogSeverities.DEBUG,
       timestamp: new Date(),
-      message: "",
+      message: '',
     },
     BSDMatch = Patterns.RFC3164.exec(log),
     RFCMatch = Patterns.RFC5424.exec(log);
   if (!RFCMatch && !BSDMatch) {
-    throw new Error("Invalid/Unsupported syslog format");
+    throw new Error('Invalid/Unsupported syslog format');
   }
   if (RFCMatch) {
     const priValue = RFCMatch[1];
-    if (priValue === undefined || priValue === "" || priValue === null) {
-      throw new Error("Invalid RFC5424 format: Missing priority value");
+    if (priValue === undefined || priValue === '' || priValue === null) {
+      throw new Error('Invalid RFC5424 format: Missing priority value');
     }
     const pri = parseInt(priValue, 10);
     const { facility, severity, facilityName, severityName } = parsePri(pri);
@@ -305,12 +305,12 @@ export const parse = (log: string): SyslogObject => {
   } else if (BSDMatch) {
     const priValue = BSDMatch[2];
     // Handle empty string case explicitly
-    if (priValue === undefined || priValue === "" || priValue === null) {
-      throw new Error("Invalid RFC3164 format: Missing priority value");
+    if (priValue === undefined || priValue === '' || priValue === null) {
+      throw new Error('Invalid RFC3164 format: Missing priority value');
     }
     const pri = parseInt(priValue, 10);
     if (isNaN(pri)) {
-      throw new Error("Invalid RFC3164 format: Invalid priority value");
+      throw new Error('Invalid RFC3164 format: Invalid priority value');
     }
 
     const { facility, severity, facilityName, severityName } = parsePri(pri);
@@ -335,14 +335,14 @@ export const parse = (log: string): SyslogObject => {
     logObj.appName = (BSDMatch[10] && BSDMatch[10] !== NIL_VALUE)
       ? BSDMatch[10]
       : undefined;
-    if (BSDMatch[12] && BSDMatch[12] !== NIL_VALUE && BSDMatch[12] !== "") {
+    if (BSDMatch[12] && BSDMatch[12] !== NIL_VALUE && BSDMatch[12] !== '') {
       const procId = parseInt(BSDMatch[12], 10);
       if (!isNaN(procId)) {
         logObj.processId = procId;
       }
     }
     const message = BSDMatch[13];
-    logObj.message = message ? message.trim() : "";
+    logObj.message = message ? message.trim() : '';
   }
   return logObj;
 };
@@ -355,16 +355,16 @@ export const parse = (log: string): SyslogObject => {
  * @throws Error if processId is invalid
  */
 export const stringify = (
-  logObj: Omit<SyslogObject, "facilityName" | "severityName">,
+  logObj: Omit<SyslogObject, 'facilityName' | 'severityName'>,
 ): string => {
   if (!logObj.message && !logObj.structuredData) {
-    throw new Error("Either message or structured data must be provided");
+    throw new Error('Either message or structured data must be provided');
   }
   if (
     logObj.processId !== undefined &&
     (isNaN(logObj.processId) || logObj.processId < 0)
   ) {
-    throw new Error("Invalid process ID");
+    throw new Error('Invalid process ID');
   }
   const pri = logObj.facility * FACILITY_SHIFT + logObj.severity;
   const version = 1; // RFC5424 version
@@ -380,7 +380,7 @@ export const stringify = (
       for (const [k, v] of Object.entries(value)) {
         log += ` ${k}="${v}"`;
       }
-      log += "] ";
+      log += '] ';
     }
   }
   log += logObj.message;

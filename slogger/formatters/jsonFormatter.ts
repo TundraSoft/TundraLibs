@@ -4,7 +4,7 @@
  * Provides functionality to format log objects as pretty-printed JSON with
  * proper handling of special types like Date and BigInt.
  */
-import type { SloggerFormatter, SlogObject } from "../types/mod.ts";
+import type { SloggerFormatter, SlogObject } from '../types/mod.ts';
 
 /**
  * Custom JSON stringify replacer function
@@ -21,11 +21,11 @@ import type { SloggerFormatter, SlogObject } from "../types/mod.ts";
 const stringify = (_key: string, value: unknown) => {
   if (value instanceof Date) {
     return value.toISOString();
-  } else if (typeof value === "bigint") {
+  } else if (typeof value === 'bigint') {
     return value.toString();
   } else if (value === null || value === undefined) {
     return null;
-  } else if (typeof value === "object") {
+  } else if (typeof value === 'object') {
     // Return object as is to let JSON.stringify handle it
     return value;
   }

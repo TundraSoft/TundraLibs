@@ -45,7 +45,7 @@
  */
 
 // Crockford's Base32 alphabet (excludes I, L, O, U to avoid visual confusion)
-const ENCODING = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const ENCODING = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const ENCODING_LEN = ENCODING.length; // 32
 
 /** Length of the timestamp component in characters */
@@ -141,10 +141,10 @@ export function ulid(timestamp?: number, monotonic = false): string {
  */
 function encodeTime(time: number): string {
   if (time < 0 || time > 0xFFFFFFFFFFFF) { // 48 bits max (281,474,976,710,655 ms)
-    throw new Error("Time must be between 0 and 281474976710655");
+    throw new Error('Time must be between 0 and 281474976710655');
   }
 
-  let timeStr = "";
+  let timeStr = '';
   for (let i = TIME_LEN - 1; i >= 0; i--) {
     const mod = time % ENCODING_LEN;
     time = Math.floor(time / ENCODING_LEN);
@@ -167,7 +167,7 @@ function encodeTime(time: number): string {
  * @internal
  */
 function encodeRandom(randomBytes: Uint8Array): string {
-  let result = "";
+  let result = '';
 
   // We need to encode 80 bits (10 bytes) as 16 Base32 characters
   // Each Base32 character encodes 5 bits

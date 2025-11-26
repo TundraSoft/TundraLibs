@@ -1,4 +1,4 @@
-import { sequenceID } from "./mod.ts";
+import { sequenceID } from './mod.ts';
 
 Deno.bench({
   name: `id.Generate sequenceId`,

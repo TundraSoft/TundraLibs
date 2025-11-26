@@ -47,13 +47,13 @@
  */
 
 // deno-lint-ignore-file no-explicit-any
-import * as fs from "$fs";
-import * as path from "$path";
-import { parse as jsonParse } from "$jsonc";
-import { parse as tomlParse } from "$toml";
-import { parse as yamlParse } from "$yaml";
-import { envArgs } from "./envArgs.ts";
-import { variableReplacer } from "./variableReplacer.ts";
+import * as fs from '$fs';
+import * as path from '$path';
+import { parse as jsonParse } from '$jsonc';
+import { parse as tomlParse } from '$toml';
+import { parse as yamlParse } from '$yaml';
+import { envArgs } from './envArgs.ts';
+import { variableReplacer } from './variableReplacer.ts';
 
 /**
  * Interface for the configuration object providing type-safe access to configuration values.
@@ -231,7 +231,7 @@ export const Config = <
   return {
     list: () => _configSets,
     has: (path: string): boolean => {
-      const paths = path.split(".");
+      const paths = path.split('.');
       const set = paths.shift();
       if (!set || !_configSets.includes(set)) {
         return false;
@@ -256,7 +256,7 @@ export const Config = <
       return configSet ? Object.keys(configSet) : [];
     },
     get: <T = unknown>(path: string): T => {
-      const paths = path.split(".");
+      const paths = path.split('.');
       const set = paths.shift();
       if (!set || !_configSets.includes(set)) {
         throw new Error(`Config set "${set}" does not exist`);
@@ -272,7 +272,7 @@ export const Config = <
         if (Object.keys(obj).includes(key) === false) {
           throw new Error(
             `Config item "${
-              traversed.join(".")
+              traversed.join('.')
             }" does not exist in set "${set}`,
           );
         } else {
@@ -329,32 +329,32 @@ export type LoadConfigOptions = {
 export const assertLoadConfigOptions = (
   options: unknown,
 ): options is LoadConfigOptions => {
-  if (typeof options !== "object" || options === null) {
-    throw TypeError("Invalid options: expected an object");
+  if (typeof options !== 'object' || options === null) {
+    throw TypeError('Invalid options: expected an object');
   }
   const { path, include, exclude, env } = options as Record<string, unknown>;
-  if (typeof path !== "string") {
-    throw TypeError("Invalid options: path must be a string");
+  if (typeof path !== 'string') {
+    throw TypeError('Invalid options: path must be a string');
   }
   if (
     include !== undefined && !Array.isArray(include) ||
     (Array.isArray(include) && include.some((i) => !(i instanceof RegExp)))
   ) {
-    throw TypeError("Invalid options: include must be an array of RegExp");
+    throw TypeError('Invalid options: include must be an array of RegExp');
   }
   if (
     exclude !== undefined && !Array.isArray(exclude) ||
     (Array.isArray(exclude) && exclude.some((i) => !(i instanceof RegExp)))
   ) {
-    throw TypeError("Invalid options: exclude must be an array of RegExp");
+    throw TypeError('Invalid options: exclude must be an array of RegExp');
   }
   if (
     env !== undefined &&
-    typeof env !== "boolean" &&
-    typeof env !== "string"
+    typeof env !== 'boolean' &&
+    typeof env !== 'string'
   ) {
     throw TypeError(
-      "Invalid options: env must be a boolean or a string",
+      'Invalid options: env must be a boolean or a string',
     );
   }
   return true;
@@ -366,9 +366,9 @@ export const assertLoadConfigOptions = (
 const loadEnvironmentVariables = (
   options: LoadConfigOptions,
 ): Record<string, string> => {
-  if (options.env === undefined || typeof options.env === "boolean") {
+  if (options.env === undefined || typeof options.env === 'boolean') {
     return options.env ? envArgs(options.path).asObject() : {};
-  } else if (typeof options.env === "string") {
+  } else if (typeof options.env === 'string') {
     return envArgs(options.env).asObject();
   }
   return {};
@@ -384,25 +384,25 @@ const parseConfigContent = (
 ): Record<string, unknown> => {
   try {
     switch (ext) {
-      case ".toml":
+      case '.toml':
         return tomlParse(content);
-      case ".yaml":
-      case ".yml":
+      case '.yaml':
+      case '.yml':
         return yamlParse(content) as Record<string, unknown>;
-      case ".json":
-      case ".js":
+      case '.json':
+      case '.js':
       default:
         return jsonParse(content) as Record<string, unknown>;
     }
   } catch {
     const formatMap: Record<string, string> = {
-      ".toml": "TOML",
-      ".yaml": "YML",
-      ".yml": "YML",
-      ".json": "JSON",
-      ".js": "JSON",
+      '.toml': 'TOML',
+      '.yaml': 'YML',
+      '.yml': 'YML',
+      '.json': 'JSON',
+      '.js': 'JSON',
     };
-    const format = formatMap[ext] || "JSON";
+    const format = formatMap[ext] || 'JSON';
     throw new Error(`Error parsing config file - ${format}: ${filePath}`);
   }
 };
@@ -421,7 +421,7 @@ const processConfigFiles = async (
     includeFiles: true,
     match: options.include,
     skip: options.exclude,
-    exts: ["json", "js", "toml", "yaml", "yml"],
+    exts: ['json', 'js', 'toml', 'yaml', 'yml'],
   }));
 
   for (const file of files) {
@@ -455,9 +455,9 @@ export const loadConfig = async (
     const configs = await processConfigFiles(options, env);
     return Config<typeof configs>(configs);
   } catch (e) {
-    if ((e as Error).message.includes("Duplicate config file")) {
+    if ((e as Error).message.includes('Duplicate config file')) {
       throw e;
-    } else if ((e as Error).message.toLowerCase().includes("parse")) {
+    } else if ((e as Error).message.toLowerCase().includes('parse')) {
       throw e;
     } else if (e instanceof Deno.errors.NotFound) {
       throw new Error(`Config path not found: ${options.path}`);
