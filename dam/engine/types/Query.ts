@@ -2,7 +2,7 @@ export type EngineQuery = {
   sql: string;
   params?: Record<string, unknown>;
   transactionId?: string; // Optional transaction context for async-safe transactions
-};
+} & Record<string, unknown>; // Allow additional properties for NoSQL engines like MongoDB
 
 export type EngineQueryResult<
   R extends Record<string, unknown> = Record<string, unknown>,
@@ -24,6 +24,37 @@ export type EngineTransactionOptions = {
   timeout?: number;
   /** Transaction identifier (also used as name/label for monitoring) */
   name?: string;
+};
+
+/**
+ * MongoDB-specific query operations
+ */
+export type MongoDBOperation =
+  | 'find'
+  | 'findOne'
+  | 'insert'
+  | 'insertOne'
+  | 'insertMany'
+  | 'update'
+  | 'updateOne'
+  | 'updateMany'
+  | 'delete'
+  | 'deleteOne'
+  | 'deleteMany'
+  | 'aggregate'
+  | 'count'
+  | 'distinct';
+
+/**
+ * MongoDB-specific query structure
+ * Uses the extended EngineQuery format with NoSQL-specific fields
+ */
+export type MongoDBQuery = EngineQuery & {
+  sql: MongoDBOperation; // Repurpose sql field for operation type
+  collection: string; // Target collection name
+  data?: Record<string, unknown> | Record<string, unknown>[]; // Filter, document(s) to insert, or aggregation pipeline
+  options?: Record<string, unknown>; // MongoDB operation options (limit, sort, projection, etc.)
+  // params field ignored for MongoDB operations
 };
 
 /**
