@@ -304,7 +304,6 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
         clearInterval(this._healthCheckInterval);
         this._healthCheckInterval = undefined;
       }
-
       const damError = error instanceof DAMEngineError
         ? error
         : new DAMEngineError(
@@ -432,7 +431,7 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
       await this.connect();
     }
 
-    // Generate transaction ID - use provided name or generate one
+    // Use provided name as transaction ID, or generate one if not provided
     const transactionId = options?.name || this._generateQueryId('tx');
 
     try {

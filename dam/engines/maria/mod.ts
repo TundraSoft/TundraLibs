@@ -1,4 +1,2 @@
-// MariaDB engine implementation placeholder
-// TODO: Implement MariaDB engine extending AbstractEngine
-
-export {};
+export { MariaDBEngine } from './Engine.ts';
+export type { MariaDBEngineOptions } from './types/mod.ts';

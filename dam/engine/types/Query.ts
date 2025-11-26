@@ -20,9 +20,9 @@ export type EngineQueryResult<
  * Basic transaction options that most engines support
  */
 export type EngineTransactionOptions = {
-  /** Transaction timeout in seconds */
+  /** Transaction timeout in seconds - applies to entire transaction duration */
   timeout?: number;
-  /** Custom transaction name/label for monitoring */
+  /** Transaction identifier (also used as name/label for monitoring) */
   name?: string;
 };
 

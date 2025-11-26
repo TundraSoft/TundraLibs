@@ -411,7 +411,7 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
             // Ignore rollback errors during timeout
           }
         }, timeoutMs);
-        
+
         this._transactionTimeouts.set(transactionId, timeoutId);
       }
 
@@ -459,7 +459,7 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
         clearTimeout(timeoutId);
         this._transactionTimeouts.delete(transactionId);
       }
-      
+
       await client.query('COMMIT');
       client.release();
       this._activeTransactions.delete(transactionId);
@@ -504,7 +504,7 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
         clearTimeout(timeoutId);
         this._transactionTimeouts.delete(transactionId);
       }
-      
+
       await client.query('ROLLBACK');
       client.release();
       this._activeTransactions.delete(transactionId);
@@ -524,7 +524,7 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
    */
   protected async _rollbackAllTransactions(): Promise<void> {
     const errors: Error[] = [];
-    
+
     // Clear all transaction timeouts
     for (const timeoutId of this._transactionTimeouts.values()) {
       clearTimeout(timeoutId);
