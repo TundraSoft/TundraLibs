@@ -43,9 +43,9 @@ Deno.test(
       mariaEngine = new MariaDBEngine('mariadb-test', {
         host: env.get('MARIADB_HOST') || 'localhost',
         port: parseInt(env.get('MARIADB_PORT') || '3306'),
-        database: env.get('MARIADB_DATABASE') || 'test',
-        username: env.get('MARIADB_USERNAME') || 'root',
-        password: env.get('MARIADB_PASSWORD') || 'password',
+        database: env.get('MARIADB_DATABASE') || 'mysql',
+        username: env.get('MARIADB_USERNAME') || 'maria',
+        password: env.get('MARIADB_PASSWORD') || 'mariapw',
         pool: {
           max: 5,
           min: 1,

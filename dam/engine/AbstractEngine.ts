@@ -435,8 +435,8 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
     const transactionId = options?.name || this._generateQueryId('tx');
 
     try {
-      // Start new transaction
-      await this._beginTransaction(options, transactionId);
+      // Start new transaction - pass transactionId in options
+      await this._beginTransaction({ ...options, name: transactionId });
       this._inTransaction = true;
       this.emit('query', this.instanceId, {
         id: transactionId,
@@ -1054,7 +1054,7 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
     R extends Record<string, unknown> = Record<string, unknown>,
   >(
     query: EngineQuery,
-  ): Promise<{ data: R[]; count: number }>;
+  ): { data: R[]; count: number } | Promise<{ data: R[]; count: number }>;
 
   /**
    * Begins a new database transaction.
@@ -1066,8 +1066,7 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
    */
   protected abstract _beginTransaction(
     options?: EngineTransactionOptions,
-    transactionId?: string,
-  ): Promise<void>;
+  ): void | Promise<void>;
 
   /**
    * Commits the current transaction.
@@ -1076,7 +1075,9 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
    * @param transactionId - The transaction ID to commit (optional for non-pooled engines)
    * @throws Should throw appropriate errors for commit failures
    */
-  protected abstract _commitTransaction(transactionId?: string): Promise<void>;
+  protected abstract _commitTransaction(
+    transactionId?: string,
+  ): void | Promise<void>;
 
   /**
    * Rolls back the current transaction.
@@ -1087,7 +1088,7 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
    */
   protected abstract _rollbackTransaction(
     transactionId?: string,
-  ): Promise<void>;
+  ): void | Promise<void>;
 
   /**
    * Rolls back all active transactions.
@@ -1096,7 +1097,7 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
    *
    * @throws Should throw appropriate errors for rollback failures
    */
-  protected abstract _rollbackAllTransactions(): Promise<void>;
+  protected abstract _rollbackAllTransactions(): void | Promise<void>;
 
   /**
    * Check if there are any active transactions.
@@ -1120,6 +1121,6 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
    * }
    * ```
    */
-  protected abstract _healthCheck(): Promise<void>;
+  protected abstract _healthCheck(): void | Promise<void>;
   //#endregion Abstract Methods
 }

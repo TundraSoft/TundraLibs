@@ -376,7 +376,6 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
    */
   protected async _beginTransaction(
     options?: EngineTransactionOptions,
-    transactionId?: string,
   ): Promise<void> {
     if (!this._pool) {
       throw new DAMEngineError('CONNECTION_NOT_AVAILABLE', {
@@ -387,12 +386,24 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
       });
     }
 
+    const transactionId = options?.name;
     if (!transactionId) {
       throw new DAMEngineError('TRANSACTION_NOT_FOUND', {
         instanceId: this.instanceId,
         name: this.name,
         engine: this.Engine,
         reason: 'Transaction ID is required',
+      });
+    }
+
+    // Check if transaction with this ID already exists
+    if (this._activeTransactions.has(transactionId)) {
+      throw new DAMEngineError('TRANSACTION_ALREADY_STARTED', {
+        instanceId: this.instanceId,
+        name: this.name,
+        engine: this.Engine,
+        transactionId,
+        reason: 'Transaction with this ID already exists',
       });
     }
 
