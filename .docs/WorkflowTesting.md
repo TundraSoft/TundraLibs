@@ -1,6 +1,7 @@
 # GitHub Workflow Testing Guide
 
-A comprehensive guide for testing GitHub Actions workflows using GitHub CLI (`gh`).
+A comprehensive guide for testing GitHub Actions workflows using GitHub CLI
+(`gh`).
 
 ## 🚀 Prerequisites
 
@@ -278,4 +279,5 @@ gh workflow run publish.yaml --ref dev1.0.0 --field workspace=utils --field dry_
 
 ---
 
-**💡 Pro Tip**: Always specify `--ref [branch-name]` when testing workflows on development branches to ensure you're testing the latest changes!
+**💡 Pro Tip**: Always specify `--ref [branch-name]` when testing workflows on
+development branches to ensure you're testing the latest changes!

@@ -1,6 +1,7 @@
 # Documentation Templates
 
-This folder contains templates for maintaining consistent documentation across the TundraLibs repository.
+This folder contains templates for maintaining consistent documentation across
+the TundraLibs repository.
 
 ## How to Use These Templates
 

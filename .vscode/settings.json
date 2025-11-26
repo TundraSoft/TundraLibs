@@ -43,7 +43,7 @@
   "typescript.enablePromptUseWorkspaceTsdk": false,
   
   "editor.tabSize": 2,
-  "editor.formatOnSave": true,
+  "editor.formatOnSave": false,
   "editor.defaultFormatter": "denoland.vscode-deno",
   "sonarlint.connectedMode.project": {
     "connectionId": "Sonar",
