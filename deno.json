@@ -5,7 +5,9 @@
     "noImplicitOverride": true,
     "noUncheckedIndexedAccess": true,
     "allowUnreachableCode": false,
-    "noErrorTruncation": true
+    "noErrorTruncation": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true
   },
   "unstable": [
     "ffi"
@@ -94,6 +96,7 @@
   "workspace": [
     "./cacher",
     "./crypt",
+    "./dam",
     "./guardian",
     "./id",
     "./restler",

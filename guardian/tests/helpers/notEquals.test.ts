@@ -7,8 +7,8 @@ import { GuardianError } from '../../GuardianError.ts';
  * Tests inequality validation functionality.
  */
 Deno.test('guardian.helpers.notEquals', async (t) => {
-  await t.step('Basic inequality validation', async (t) => {
-    await t.step('should pass when values are not equal', () => {
+  await t.step('Basic inequality validation', async (u) => {
+    await u.step('should pass when values are not equal', () => {
       const validator = notEquals('hello');
       asserts.assertEquals(validator('world'), 'world');
 
@@ -19,7 +19,7 @@ Deno.test('guardian.helpers.notEquals', async (t) => {
       asserts.assertEquals(booleanValidator(false), false);
     });
 
-    await t.step('should fail when values are equal', () => {
+    await u.step('should fail when values are equal', () => {
       const validator = notEquals('hello');
       asserts.assertThrows(
         () => validator('hello'),
@@ -34,8 +34,8 @@ Deno.test('guardian.helpers.notEquals', async (t) => {
     });
   });
 
-  await t.step('Custom error messages', async (t) => {
-    await t.step('should use custom error message when provided', () => {
+  await t.step('Custom error messages', async (u) => {
+    await u.step('should use custom error message when provided', () => {
       const validator = notEquals('forbidden', 'Custom error message');
       asserts.assertThrows(
         () => validator('forbidden'),
@@ -44,7 +44,7 @@ Deno.test('guardian.helpers.notEquals', async (t) => {
       );
     });
 
-    await t.step('should use default error message when not provided', () => {
+    await u.step('should use default error message when not provided', () => {
       const validator = notEquals('forbidden');
       asserts.assertThrows(
         () => validator('forbidden'),
@@ -53,8 +53,8 @@ Deno.test('guardian.helpers.notEquals', async (t) => {
     });
   });
 
-  await t.step('Type safety and special values', async (t) => {
-    await t.step('should handle null values', () => {
+  await t.step('Type safety and special values', async (u) => {
+    await u.step('should handle null values', () => {
       const validator = notEquals(null as any);
       asserts.assertEquals(validator('not-null' as any), 'not-null');
 
@@ -64,7 +64,7 @@ Deno.test('guardian.helpers.notEquals', async (t) => {
       );
     });
 
-    await t.step('should handle undefined values', () => {
+    await u.step('should handle undefined values', () => {
       const validator = notEquals(undefined as any);
       asserts.assertEquals(validator('not-undefined' as any), 'not-undefined');
 
@@ -74,7 +74,7 @@ Deno.test('guardian.helpers.notEquals', async (t) => {
       );
     });
 
-    await t.step('should handle zero and false', () => {
+    await u.step('should handle zero and false', () => {
       const zeroValidator = notEquals(0);
       asserts.assertEquals(zeroValidator(1), 1);
       asserts.assertEquals(zeroValidator(false as any), false as any);
@@ -84,7 +84,7 @@ Deno.test('guardian.helpers.notEquals', async (t) => {
       asserts.assertEquals(falseValidator(0 as any), 0 as any);
     });
 
-    await t.step('should handle NaN correctly', () => {
+    await u.step('should handle NaN correctly', () => {
       const nanValidator = notEquals(NaN);
       // NaN !== NaN, so NaN should pass the notEquals test
       asserts.assertEquals(nanValidator(NaN), NaN);
@@ -92,8 +92,8 @@ Deno.test('guardian.helpers.notEquals', async (t) => {
     });
   });
 
-  await t.step('Object and array inequality', async (t) => {
-    await t.step('should use reference equality for objects', () => {
+  await t.step('Object and array inequality', async (u) => {
+    await u.step('should use reference equality for objects', () => {
       const obj = { a: 1 };
       const validator = notEquals(obj);
 
@@ -107,7 +107,7 @@ Deno.test('guardian.helpers.notEquals', async (t) => {
       asserts.assertEquals(validator({ a: 1 } as any), { a: 1 });
     });
 
-    await t.step('should use reference equality for arrays', () => {
+    await u.step('should use reference equality for arrays', () => {
       const arr = [1, 2, 3];
       const validator = notEquals(arr);
 
@@ -122,8 +122,8 @@ Deno.test('guardian.helpers.notEquals', async (t) => {
     });
   });
 
-  await t.step('Error metadata', async (t) => {
-    await t.step('should include correct metadata in error', () => {
+  await t.step('Error metadata', async (u) => {
+    await u.step('should include correct metadata in error', () => {
       const validator = notEquals('forbidden');
 
       try {
@@ -142,8 +142,8 @@ Deno.test('guardian.helpers.notEquals', async (t) => {
     });
   });
 
-  await t.step('Edge cases', async (t) => {
-    await t.step('should work with complex objects', () => {
+  await t.step('Edge cases', async (u) => {
+    await u.step('should work with complex objects', () => {
       const complexObj = { nested: { deep: [1, 2, 3] } };
       const validator = notEquals(complexObj);
 
@@ -157,7 +157,7 @@ Deno.test('guardian.helpers.notEquals', async (t) => {
       asserts.assertThrows(() => validator(complexObj), GuardianError);
     });
 
-    await t.step('should work with functions', () => {
+    await u.step('should work with functions', () => {
       const fn1 = () => 'test';
       const fn2 = () => 'test';
       const validator = notEquals(fn1);

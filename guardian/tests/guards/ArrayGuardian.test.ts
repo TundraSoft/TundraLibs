@@ -3,14 +3,14 @@ import { Guardian } from '../../Guardian.ts';
 import { GuardianError } from '../../GuardianError.ts';
 
 Deno.test('guardian.ArrayGuardian', async (t) => {
-  await t.step('basic functionality', async (t) => {
-    await t.step('should validate array type', () => {
+  await t.step('basic functionality', async (u) => {
+    await u.step('should validate array type', () => {
       const arrayGuard = Guardian.array();
       const result = arrayGuard.parse([1, 2, 3]);
       asserts.assertEquals(result, [1, 2, 3]);
     });
 
-    await t.step('should reject non-array values', () => {
+    await u.step('should reject non-array values', () => {
       const arrayGuard = Guardian.array();
       asserts.assertThrows(
         () => arrayGuard.parse('not array'),
@@ -19,13 +19,13 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('should accept empty arrays by default', () => {
+    await u.step('should accept empty arrays by default', () => {
       const arrayGuard = Guardian.array();
       const result = arrayGuard.parse([]);
       asserts.assertEquals(result, []);
     });
 
-    await t.step('should preserve mixed types without element guardian', () => {
+    await u.step('should preserve mixed types without element guardian', () => {
       const arrayGuard = Guardian.array();
       const input = [1, 'hello', true, null];
       const result = arrayGuard.parse(input);
@@ -33,14 +33,14 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
     });
   });
 
-  await t.step('element validation with constructor', async (t) => {
-    await t.step('should validate string elements', () => {
+  await t.step('element validation with constructor', async (u) => {
+    await u.step('should validate string elements', () => {
       const stringArrayGuard = Guardian.array(Guardian.string());
       const result = stringArrayGuard.parse(['hello', 'world']);
       asserts.assertEquals(result, ['hello', 'world']);
     });
 
-    await t.step('should reject invalid element types', () => {
+    await u.step('should reject invalid element types', () => {
       const stringArrayGuard = Guardian.array(Guardian.string());
       asserts.assertThrows(
         () => stringArrayGuard.parse(['hello', 42]),
@@ -49,7 +49,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('should validate number elements with constraints', () => {
+    await u.step('should validate number elements with constraints', () => {
       const positiveNumberArray = Guardian.array(
         Guardian.number().positive(),
       );
@@ -57,7 +57,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       asserts.assertEquals(result, [1, 2, 3]);
     });
 
-    await t.step('should reject elements that fail constraints', () => {
+    await u.step('should reject elements that fail constraints', () => {
       const positiveNumberArray = Guardian.array(
         Guardian.number().positive(),
       );
@@ -68,21 +68,21 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('should handle empty arrays with element validation', () => {
+    await u.step('should handle empty arrays with element validation', () => {
       const stringArrayGuard = Guardian.array(Guardian.string());
       const result = stringArrayGuard.parse([]);
       asserts.assertEquals(result, []);
     });
   });
 
-  await t.step('length validations', async (t) => {
-    await t.step('should validate exact length', () => {
+  await t.step('length validations', async (u) => {
+    await u.step('should validate exact length', () => {
       const exactLengthGuard = Guardian.array().length(3);
       const result = exactLengthGuard.parse([1, 2, 3]);
       asserts.assertEquals(result, [1, 2, 3]);
     });
 
-    await t.step('should reject incorrect exact length', () => {
+    await u.step('should reject incorrect exact length', () => {
       const exactLengthGuard = Guardian.array().length(3);
       asserts.assertThrows(
         () => exactLengthGuard.parse([1, 2]),
@@ -91,13 +91,13 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('should validate minimum length', () => {
+    await u.step('should validate minimum length', () => {
       const minLengthGuard = Guardian.array().minLength(2);
       const result = minLengthGuard.parse([1, 2, 3]);
       asserts.assertEquals(result, [1, 2, 3]);
     });
 
-    await t.step('should reject arrays shorter than minimum', () => {
+    await u.step('should reject arrays shorter than minimum', () => {
       const minLengthGuard = Guardian.array().minLength(2);
       asserts.assertThrows(
         () => minLengthGuard.parse([1]),
@@ -106,13 +106,13 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('should validate maximum length', () => {
+    await u.step('should validate maximum length', () => {
       const maxLengthGuard = Guardian.array().maxLength(3);
       const result = maxLengthGuard.parse([1, 2]);
       asserts.assertEquals(result, [1, 2]);
     });
 
-    await t.step('should reject arrays longer than maximum', () => {
+    await u.step('should reject arrays longer than maximum', () => {
       const maxLengthGuard = Guardian.array().maxLength(3);
       asserts.assertThrows(
         () => maxLengthGuard.parse([1, 2, 3, 4]),
@@ -121,19 +121,19 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('should combine min and max length validations', () => {
+    await u.step('should combine min and max length validations', () => {
       const rangeGuard = Guardian.array().minLength(2).maxLength(4);
       const result = rangeGuard.parse([1, 2, 3]);
       asserts.assertEquals(result, [1, 2, 3]);
     });
 
-    await t.step('should validate non-empty arrays', () => {
+    await u.step('should validate non-empty arrays', () => {
       const nonEmptyGuard = Guardian.array().nonEmpty();
       const result = nonEmptyGuard.parse([1]);
       asserts.assertEquals(result, [1]);
     });
 
-    await t.step('should reject empty arrays when non-empty required', () => {
+    await u.step('should reject empty arrays when non-empty required', () => {
       const nonEmptyGuard = Guardian.array().nonEmpty();
       asserts.assertThrows(
         () => nonEmptyGuard.parse([]),
@@ -143,14 +143,14 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
     });
   });
 
-  await t.step('array validations', async (t) => {
-    await t.step('should validate unique elements', () => {
+  await t.step('array validations', async (u) => {
+    await u.step('should validate unique elements', () => {
       const uniqueGuard = Guardian.array(Guardian.string()).unique();
       const result = uniqueGuard.parse(['a', 'b', 'c']);
       asserts.assertEquals(result, ['a', 'b', 'c']);
     });
 
-    await t.step('should reject duplicate elements', () => {
+    await u.step('should reject duplicate elements', () => {
       const uniqueGuard = Guardian.array(Guardian.string()).unique();
       asserts.assertThrows(
         () => uniqueGuard.parse(['a', 'b', 'a']),
@@ -159,7 +159,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('should validate element inclusion', () => {
+    await u.step('should validate element inclusion', () => {
       const includesGuard = Guardian.array(Guardian.string()).includes(
         'hello',
       );
@@ -167,7 +167,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       asserts.assertEquals(result, ['hello', 'world']);
     });
 
-    await t.step('should reject arrays missing required element', () => {
+    await u.step('should reject arrays missing required element', () => {
       const includesGuard = Guardian.array(Guardian.string()).includes(
         'hello',
       );
@@ -178,7 +178,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('should validate element exclusion', () => {
+    await u.step('should validate element exclusion', () => {
       const excludesGuard = Guardian.array(Guardian.string()).excludes(
         'forbidden',
       );
@@ -186,7 +186,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       asserts.assertEquals(result, ['hello', 'world']);
     });
 
-    await t.step('should reject arrays containing forbidden element', () => {
+    await u.step('should reject arrays containing forbidden element', () => {
       const excludesGuard = Guardian.array(Guardian.string()).excludes(
         'forbidden',
       );
@@ -198,50 +198,50 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
     });
   });
 
-  await t.step('transformations', async (t) => {
-    await t.step('should map array elements', () => {
+  await t.step('transformations', async (u) => {
+    await u.step('should map array elements', () => {
       const mappedGuard = Guardian.array(Guardian.number())
         .map((x) => x * 2);
       const result = mappedGuard.parse([1, 2, 3]);
       asserts.assertEquals(result, [2, 4, 6]);
     });
 
-    await t.step('should map with index', () => {
+    await u.step('should map with index', () => {
       const mappedWithIndexGuard = Guardian.array(Guardian.string())
         .map((x, i) => `${i}: ${x}`);
       const result = mappedWithIndexGuard.parse(['a', 'b', 'c']);
       asserts.assertEquals(result, ['0: a', '1: b', '2: c']);
     });
 
-    await t.step('should filter array elements', () => {
+    await u.step('should filter array elements', () => {
       const filteredGuard = Guardian.array(Guardian.number())
         .filter((x) => x > 2);
       const result = filteredGuard.parse([1, 2, 3, 4, 5]);
       asserts.assertEquals(result, [3, 4, 5]);
     });
 
-    await t.step('should sort array elements', () => {
+    await u.step('should sort array elements', () => {
       const sortedGuard = Guardian.array(Guardian.number())
         .sort();
       const result = sortedGuard.parse([3, 1, 4, 1, 5]);
       asserts.assertEquals(result, [1, 1, 3, 4, 5]);
     });
 
-    await t.step('should sort with custom compare function', () => {
+    await u.step('should sort with custom compare function', () => {
       const sortedGuard = Guardian.array(Guardian.number())
         .sort((a, b) => b - a); // descending
       const result = sortedGuard.parse([3, 1, 4, 1, 5]);
       asserts.assertEquals(result, [5, 4, 3, 1, 1]);
     });
 
-    await t.step('should reverse array elements', () => {
+    await u.step('should reverse array elements', () => {
       const reversedGuard = Guardian.array(Guardian.string())
         .reverse();
       const result = reversedGuard.parse(['a', 'b', 'c']);
       asserts.assertEquals(result, ['c', 'b', 'a']);
     });
 
-    await t.step('should not mutate original array in transformations', () => {
+    await u.step('should not mutate original array in transformations', () => {
       const originalArray = [3, 1, 4];
       const sortedGuard = Guardian.array(Guardian.number())
         .sort();
@@ -251,8 +251,8 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
     });
   });
 
-  await t.step('chained validations', async (t) => {
-    await t.step('should chain multiple array validations', () => {
+  await t.step('chained validations', async (u) => {
+    await u.step('should chain multiple array validations', () => {
       const complexGuard = Guardian.array(Guardian.string().minLength(2))
         .minLength(2)
         .maxLength(5)
@@ -261,7 +261,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       asserts.assertEquals(result, ['hello', 'world']);
     });
 
-    await t.step('should chain validations and transformations', () => {
+    await u.step('should chain validations and transformations', () => {
       const chainedGuard = Guardian.array(Guardian.number().positive())
         .minLength(1)
         .map((x) => x * 2)
@@ -271,7 +271,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       asserts.assertEquals(result, [6, 8, 10]);
     });
 
-    await t.step('should maintain type safety through chaining', () => {
+    await u.step('should maintain type safety through chaining', () => {
       const typedGuard = Guardian.array(Guardian.string())
         .map((s) => s.length)
         .filter((n) => n > 3);
@@ -280,15 +280,15 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
     });
   });
 
-  await t.step('safe parsing', async (t) => {
-    await t.step('should return success result for valid input', () => {
+  await t.step('safe parsing', async (u) => {
+    await u.step('should return success result for valid input', () => {
       const arrayGuard = Guardian.array(Guardian.string());
       const [error, data] = arrayGuard.safeParse(['hello', 'world']);
       asserts.assertEquals(error, null);
       asserts.assertEquals(data, ['hello', 'world']);
     });
 
-    await t.step('should return error result for invalid input', () => {
+    await u.step('should return error result for invalid input', () => {
       const arrayGuard = Guardian.array(Guardian.string());
       const [error, data] = arrayGuard.safeParse(['hello', 42]);
       asserts.assertInstanceOf(error, GuardianError);
@@ -296,7 +296,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       asserts.assertStringIncludes(error!.message, 'Array element at index 1');
     });
 
-    await t.step('should return error result for invalid array type', () => {
+    await u.step('should return error result for invalid array type', () => {
       const arrayGuard = Guardian.array();
       const [error, data] = arrayGuard.safeParse('not array');
       asserts.assertInstanceOf(error, GuardianError);
@@ -308,8 +308,8 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
     });
   });
 
-  await t.step('error handling', async (t) => {
-    await t.step('should provide detailed error messages', () => {
+  await t.step('error handling', async (u) => {
+    await u.step('should provide detailed error messages', () => {
       const stringArrayGuard = Guardian.array(
         Guardian.string().minLength(5),
       );
@@ -320,7 +320,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('should support custom error messages', () => {
+    await u.step('should support custom error messages', () => {
       const customGuard = Guardian.array().length(
         3,
         'Array must have exactly 3 items',
@@ -332,7 +332,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('should preserve error context', () => {
+    await u.step('should preserve error context', () => {
       const arrayGuard = Guardian.array(Guardian.number().min(10));
       try {
         arrayGuard.parse([15, 5, 20]);
@@ -344,8 +344,8 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
     });
   });
 
-  await t.step('complex scenarios', async (t) => {
-    await t.step('should handle nested arrays', () => {
+  await t.step('complex scenarios', async (u) => {
+    await u.step('should handle nested arrays', () => {
       const nestedArrayGuard = Guardian.array(
         Guardian.array(Guardian.number()),
       );
@@ -353,7 +353,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       asserts.assertEquals(result, [[1, 2], [3, 4], [5]]);
     });
 
-    await t.step('should validate array of emails', () => {
+    await u.step('should validate array of emails', () => {
       const emailArrayGuard = Guardian.array(
         Guardian.string().pattern(/^[^\s@]+@[^\s@]+\.[^\s@]+$/),
       )
@@ -367,7 +367,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       asserts.assertEquals(result, ['user1@example.com', 'user2@test.org']);
     });
 
-    await t.step('should handle complex transformation pipeline', () => {
+    await u.step('should handle complex transformation pipeline', () => {
       const pipelineGuard = Guardian.array(Guardian.string().minLength(1))
         .nonEmpty()
         .map((s) => s.trim().toLowerCase())
@@ -386,8 +386,8 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
     });
   });
 
-  await t.step('metadata handling', async (t) => {
-    await t.step('should store and retrieve metadata', () => {
+  await t.step('metadata handling', async (u) => {
+    await u.step('should store and retrieve metadata', () => {
       const metaData = {
         description: 'Array of user IDs',
         title: 'User IDs',
@@ -397,7 +397,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       asserts.assertEquals(arrayGuard.metaData, metaData);
     });
 
-    await t.step('should allow setting metadata properties', () => {
+    await u.step('should allow setting metadata properties', () => {
       const arrayGuard = Guardian.array();
       arrayGuard.description = 'List of names';
       arrayGuard.title = 'Names';
@@ -409,8 +409,8 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
     });
   });
 
-  await t.step('real world usage', async (t) => {
-    await t.step('should validate shopping cart items', () => {
+  await t.step('real world usage', async (u) => {
+    await u.step('should validate shopping cart items', () => {
       // Simulating product IDs as positive integers
       const cartGuard = Guardian.array(Guardian.number().positive().integer())
         .minLength(1)
@@ -421,7 +421,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       asserts.assertEquals(result, [101, 202, 303]);
     });
 
-    await t.step('should validate tag system', () => {
+    await u.step('should validate tag system', () => {
       const tagGuard = Guardian.array(
         Guardian.string().minLength(1).maxLength(20),
       )
@@ -435,8 +435,8 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
     });
   });
 
-  await t.step('new validation and transformation methods', async (t) => {
-    await t.step('noNulls validation', () => {
+  await t.step('new validation and transformation methods', async (u) => {
+    await u.step('noNulls validation', () => {
       const noNullsGuard = Guardian.array().noNulls();
 
       // Should pass arrays without nulls
@@ -477,7 +477,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('flatten transformation', () => {
+    await u.step('flatten transformation', () => {
       const flattenGuard = Guardian.array().flatten();
 
       // Basic flattening with default joiner
@@ -525,7 +525,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('compact transformation', () => {
+    await u.step('compact transformation', () => {
       const compactGuard = Guardian.array().compact();
 
       // Remove all falsy values
@@ -574,7 +574,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       asserts.assertEquals(compactGuard.parse(['0', [0]]), ['0', [0]]);
     });
 
-    await t.step('onlyUnique transformation', () => {
+    await u.step('onlyUnique transformation', () => {
       const uniqueGuard = Guardian.array().onlyUnique();
 
       // Remove duplicates from numbers
@@ -621,7 +621,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('chaining new methods', () => {
+    await u.step('chaining new methods', () => {
       // Chain multiple new methods
       const chainedGuard = Guardian.array()
         .noNulls()
@@ -655,7 +655,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       );
     });
 
-    await t.step('edge cases and error handling', () => {
+    await u.step('edge cases and error handling', () => {
       // noNulls with custom error message
       const customErrorGuard = Guardian.array().noNulls('No nulls allowed!');
       asserts.assertThrows(
@@ -698,7 +698,7 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
       asserts.assertEquals(uniqueResult, [3, 1, 4, 5, 9, 2, 6]);
     });
 
-    await t.step('type safety with generics', () => {
+    await u.step('type safety with generics', () => {
       // Test with typed arrays
       const numberArrayGuard = Guardian.array(Guardian.number())
         .compact()
@@ -726,29 +726,29 @@ Deno.test('guardian.ArrayGuardian', async (t) => {
     });
   });
 
-  await t.step('nullable and optional', async (t) => {
-    await t.step('should handle nullable arrays', () => {
+  await t.step('nullable and optional', async (u) => {
+    await u.step('should handle nullable arrays', () => {
       const schema = Guardian.array().nullable();
       asserts.assertEquals(schema.parse([1, 2, 3]), [1, 2, 3]);
       asserts.assertEquals(schema.parse(null), null);
       asserts.assertThrows(() => schema.parse('not array'), GuardianError);
     });
 
-    await t.step('should handle optional arrays', () => {
+    await u.step('should handle optional arrays', () => {
       const schema = Guardian.array().optional(['default']);
       asserts.assertEquals(schema.parse([1, 2, 3]), [1, 2, 3]);
       asserts.assertEquals(schema.parse(undefined), ['default']);
       asserts.assertThrows(() => schema.parse('not array'), GuardianError);
     });
 
-    await t.step('should handle nullable().optional() chaining', () => {
+    await u.step('should handle nullable().optional() chaining', () => {
       const schema = Guardian.array().nullable().optional(['default']);
       asserts.assertEquals(schema.parse([1, 2, 3]), [1, 2, 3]);
       asserts.assertEquals(schema.parse(null), null);
       asserts.assertEquals(schema.parse(undefined), ['default']);
     });
 
-    await t.step('should handle optional().nullable() chaining', () => {
+    await u.step('should handle optional().nullable() chaining', () => {
       const schema = Guardian.array().optional(['default']).nullable();
       asserts.assertEquals(schema.parse([1, 2, 3]), [1, 2, 3]);
       asserts.assertEquals(schema.parse(null), null);

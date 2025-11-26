@@ -32,8 +32,8 @@ Deno.test('cacher.engines.memcached', async (t) => {
     }
   };
 
-  await t.step('initialization', async (d) => {
-    await d.step('should create an instance with default options', () => {
+  await t.step('initialization', async (u) => {
+    await u.step('should create an instance with default options', () => {
       const cacher = new MemCacher('memory-test', {
         host: 'localhost',
         port: 11211,
@@ -45,7 +45,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
       asserts.assertEquals(cacher.getOption('defaultExpiry'), 300);
     });
 
-    await d.step('set port and maxBufferSize', () => {
+    await u.step('set port and maxBufferSize', () => {
       const cacher = new MemCacher('boo', {
         host: 'localhost',
         port: undefined,
@@ -56,7 +56,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
       asserts.assertEquals(cacher.getOption('maxBufferSize'), 10);
     });
 
-    await d.step('Should throw on invalid config', () => {
+    await u.step('Should throw on invalid config', () => {
       asserts.assertThrows(
         () => {
           const _ = new MemCacher('memory-test', {
@@ -125,7 +125,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
       );
     });
 
-    await d.step('should allow custom defaultExpiry', () => {
+    await u.step('should allow custom defaultExpiry', () => {
       const cacher = new MemCacher('memcached-test', {
         host: 'localhost',
         port: 11211,
@@ -135,7 +135,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
       asserts.assertEquals(cacher.getOption('defaultExpiry'), 600);
     });
 
-    await d.step('should validate port range', () => {
+    await u.step('should validate port range', () => {
       asserts.assertThrows(
         () => {
           const _ = new MemCacher('memcached-test', {
@@ -148,7 +148,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
       );
     });
 
-    await d.step(
+    await u.step(
       'should reuse existing connection on multiple init calls',
       async () => {
         const cacher = new MemCacher('memcached-test', {
@@ -172,14 +172,14 @@ Deno.test('cacher.engines.memcached', async (t) => {
     );
   });
 
-  await t.step('data operations', async (d) => {
+  await t.step('data operations', async (u) => {
     // Setup client before tests
     setupMemcached();
 
     try {
       await memcached.init();
 
-      await d.step('should set and get string data', async () => {
+      await u.step('should set and get string data', async () => {
         const key = 'test-string';
         const value = 'test-value';
 
@@ -189,7 +189,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
         asserts.assertEquals(result, value);
       });
 
-      await d.step('should set and get numeric data', async () => {
+      await u.step('should set and get numeric data', async () => {
         const key = 'test-number';
         const value = 12345;
 
@@ -199,7 +199,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
         asserts.assertEquals(result, value);
       });
 
-      await d.step('should set and get object data', async () => {
+      await u.step('should set and get object data', async () => {
         const key = 'test-object';
         const value = { name: 'test', value: 42, nested: { value: 'nested' } };
 
@@ -209,7 +209,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
         asserts.assertEquals(result, value);
       });
 
-      await d.step('should set and get array data', async () => {
+      await u.step('should set and get array data', async () => {
         const key = 'test-array';
         const value = [1, 2, 'three', { four: 4 }];
 
@@ -219,7 +219,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
         asserts.assertEquals(result, value);
       });
 
-      await d.step('should check if key exists', async () => {
+      await u.step('should check if key exists', async () => {
         const key = 'test-exists';
 
         await memcached.set(key, 'test-value');
@@ -230,7 +230,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
         asserts.assertEquals(notExists, false);
       });
 
-      await d.step('should delete a key', async () => {
+      await u.step('should delete a key', async () => {
         const key = 'test-delete';
 
         await memcached.set(key, 'test-value');
@@ -240,7 +240,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
         asserts.assertEquals(exists, false);
       });
 
-      await d.step('should handle null values', async () => {
+      await u.step('should handle null values', async () => {
         const key = 'test-null';
         await memcached.set(key, null);
         const result = await memcached.get(key);
@@ -248,7 +248,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
         asserts.assertEquals(result, null);
       });
 
-      await d.step('should handle empty strings', async () => {
+      await u.step('should handle empty strings', async () => {
         const key = 'test-empty';
         await memcached.set(key, '');
         const result = await memcached.get<string>(key);
@@ -256,7 +256,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
         asserts.assertEquals(result, '');
       });
 
-      await d.step('should handle large objects', async () => {
+      await u.step('should handle large objects', async () => {
         const key = 'test-large';
         const largeObj = {
           id: 'test',
@@ -285,13 +285,13 @@ Deno.test('cacher.engines.memcached', async (t) => {
     }
   });
 
-  await t.step('expiry functionality', async (d) => {
+  await t.step('expiry functionality', async (u) => {
     setupMemcached();
 
     try {
       await memcached.init();
 
-      await d.step('should respect custom expiry time', async () => {
+      await u.step('should respect custom expiry time', async () => {
         const key = 'test-expiry';
         const value = 'expires-soon';
 
@@ -314,13 +314,13 @@ Deno.test('cacher.engines.memcached', async (t) => {
     }
   });
 
-  await t.step('window mode functionality', async (d) => {
+  await t.step('window mode functionality', async (u) => {
     setupMemcached();
 
     try {
       await memcached.init();
 
-      await d.step(
+      await u.step(
         'should extend expiry when window mode is enabled',
         async () => {
           const key = 'test-window-mode';
@@ -352,8 +352,8 @@ Deno.test('cacher.engines.memcached', async (t) => {
     }
   });
 
-  await t.step('connection errors', async (d) => {
-    await d.step('should throw on wrong connection info', async () => {
+  await t.step('connection errors', async (u) => {
+    await u.step('should throw on wrong connection info', async () => {
       const badCacher = new MemCacher('bad-connection', {
         host: 'nonexistent-host',
         port: 11211,
@@ -369,8 +369,8 @@ Deno.test('cacher.engines.memcached', async (t) => {
     });
   });
 
-  await t.step('error handling', async (d) => {
-    await d.step('should finalize properly', async () => {
+  await t.step('error handling', async (u) => {
+    await u.step('should finalize properly', async () => {
       const cacher = new MemCacher('memcached-test', {
         host: env.get('MEMCACHED_HOST') || 'localhost',
         port: parseInt(env.get('MEMCACHED_PORT'), 0) || 11211,
@@ -396,7 +396,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
       }
     });
 
-    await d.step(
+    await u.step(
       'should throw operation errors for invalid operations',
       async () => {
         // Create a new cacher that's not initialized to test connection errors

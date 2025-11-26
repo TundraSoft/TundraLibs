@@ -153,9 +153,9 @@ const cleanupMock = () => {
   globalThis.fetch = originalFetch;
 };
 
-Deno.test('restler.examples.weatherAPI', async (h) => {
-  await h.step('WeatherAPI', async (t) => {
-    await t.step('should include API key in requests', async () => {
+Deno.test('restler.examples.weatherAPI', async (t) => {
+  await t.step('WeatherAPI', async (u) => {
+    await u.step('should include API key in requests', async () => {
       try {
         const { api, capturedParams } = setupWeatherTest();
         await api.getCurrentWeather('London');
@@ -165,7 +165,7 @@ Deno.test('restler.examples.weatherAPI', async (h) => {
       }
     });
 
-    await t.step('should get current weather by city name', async () => {
+    await u.step('should get current weather by city name', async () => {
       try {
         const { api } = setupWeatherTest();
         const weather = await api.getCurrentWeather('London');
@@ -177,7 +177,7 @@ Deno.test('restler.examples.weatherAPI', async (h) => {
       }
     });
 
-    await t.step('should get current weather by coordinates', async () => {
+    await u.step('should get current weather by coordinates', async () => {
       try {
         const { api, capturedParams } = setupWeatherTest();
         const weather = await api.getWeatherByCoordinates(51.5085, -0.1257);
@@ -189,7 +189,7 @@ Deno.test('restler.examples.weatherAPI', async (h) => {
       }
     });
 
-    await t.step('should get weather forecast', async () => {
+    await u.step('should get weather forecast', async () => {
       try {
         const { api } = setupWeatherTest();
         const forecast = await api.getForecast('London');
@@ -201,7 +201,7 @@ Deno.test('restler.examples.weatherAPI', async (h) => {
       }
     });
 
-    await t.step('should include units in requests', async () => {
+    await u.step('should include units in requests', async () => {
       try {
         const { api, capturedParams } = setupWeatherTest();
         await api.getCurrentWeather('London', 'imperial');

@@ -74,8 +74,8 @@ Deno.test(
         asserts.assertEquals(handler.mode, 'http');
       });
 
-      await t.step('constructor - invalid options', async (t) => {
-        await t.step('missing url', () => {
+      await t.step('constructor - invalid options', async (u) => {
+        await u.step('missing url', () => {
           asserts.assertThrows(
             // @ts-ignore - Testing missing URL
             () =>
@@ -89,7 +89,7 @@ Deno.test(
           );
         });
 
-        await t.step('invalid url', () => {
+        await u.step('invalid url', () => {
           asserts.assertThrows(
             () =>
               new HTTPHandler('testHandler', {
@@ -103,7 +103,7 @@ Deno.test(
           );
         });
 
-        await t.step('invalid method', () => {
+        await u.step('invalid method', () => {
           asserts.assertThrows(
             // @ts-ignore - Testing invalid method
             () =>
@@ -118,7 +118,7 @@ Deno.test(
           );
         });
 
-        await t.step('invalid batchSize', () => {
+        await u.step('invalid batchSize', () => {
           asserts.assertThrows(
             () =>
               new HTTPHandler('testHandler', {
@@ -132,7 +132,7 @@ Deno.test(
           );
         });
 
-        await t.step('invalid headers', () => {
+        await u.step('invalid headers', () => {
           asserts.assertThrows(
             // @ts-ignore - Testing invalid headers
             () =>

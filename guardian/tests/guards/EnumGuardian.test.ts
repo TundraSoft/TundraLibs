@@ -2,8 +2,8 @@ import * as asserts from '$asserts';
 import { EnumGuardian, GuardianError } from '../../mod.ts';
 
 Deno.test('guardian.EnumGuardian', async (t) => {
-  await t.step('basic functionality', async (t) => {
-    await t.step('should validate enum values', () => {
+  await t.step('basic functionality', async (u) => {
+    await u.step('should validate enum values', () => {
       const colors = ['red', 'green', 'blue'] as const;
       const guardian = new EnumGuardian(colors);
 
@@ -17,7 +17,7 @@ Deno.test('guardian.EnumGuardian', async (t) => {
       asserts.assertThrows(() => guardian.parse(null), GuardianError);
     });
 
-    await t.step('should work with number enums', () => {
+    await u.step('should work with number enums', () => {
       const numbers = [1, 2, 3] as const;
       const guardian = new EnumGuardian(numbers);
 
@@ -29,11 +29,11 @@ Deno.test('guardian.EnumGuardian', async (t) => {
       asserts.assertThrows(() => guardian.parse('1'), GuardianError);
     });
 
-    await t.step('should require at least one allowed value', () => {
+    await u.step('should require at least one allowed value', () => {
       asserts.assertThrows(() => new EnumGuardian([]), Error);
     });
 
-    await t.step('should expose allowed values', () => {
+    await u.step('should expose allowed values', () => {
       const values = ['a', 'b', 'c'] as const;
       const guardian = new EnumGuardian(values);
 
@@ -41,8 +41,8 @@ Deno.test('guardian.EnumGuardian', async (t) => {
     });
   });
 
-  await t.step('validation methods', async (t) => {
-    await t.step('should exclude specific values', () => {
+  await t.step('validation methods', async (u) => {
+    await u.step('should exclude specific values', () => {
       const colors = ['red', 'green', 'blue', 'yellow'] as const;
       const guardian = new EnumGuardian(colors).exclude(['yellow']);
 
@@ -53,7 +53,7 @@ Deno.test('guardian.EnumGuardian', async (t) => {
       asserts.assertThrows(() => guardian.parse('yellow'), GuardianError);
     });
 
-    await t.step('should support custom error message for exclusion', () => {
+    await u.step('should support custom error message for exclusion', () => {
       const colors = ['red', 'green', 'blue', 'yellow'] as const;
       const guardian = new EnumGuardian(colors).exclude(
         ['yellow'],
@@ -68,8 +68,8 @@ Deno.test('guardian.EnumGuardian', async (t) => {
     });
   });
 
-  await t.step('transformations', async (t) => {
-    await t.step('should transform to string', () => {
+  await t.step('transformations', async (u) => {
+    await u.step('should transform to string', () => {
       const numbers = [1, 2, 3] as const;
       const guardian = new EnumGuardian(numbers).toString();
 
@@ -78,7 +78,7 @@ Deno.test('guardian.EnumGuardian', async (t) => {
       asserts.assertEquals(guardian.parse(3), '3');
     });
 
-    await t.step('should map values', () => {
+    await u.step('should map values', () => {
       const colors = ['red', 'green', 'blue'] as const;
       const guardian = new EnumGuardian(colors).map((color) =>
         color.toUpperCase()
@@ -89,7 +89,7 @@ Deno.test('guardian.EnumGuardian', async (t) => {
       asserts.assertEquals(guardian.parse('blue'), 'BLUE');
     });
 
-    await t.step('should map to different types', () => {
+    await u.step('should map to different types', () => {
       const status = ['active', 'inactive'] as const;
       const guardian = new EnumGuardian(status).map((s) =>
         s === 'active' ? 1 : 0
@@ -100,8 +100,8 @@ Deno.test('guardian.EnumGuardian', async (t) => {
     });
   });
 
-  await t.step('chained validations', async (t) => {
-    await t.step('should chain exclusions and transformations', () => {
+  await t.step('chained validations', async (u) => {
+    await u.step('should chain exclusions and transformations', () => {
       const colors = ['red', 'green', 'blue', 'yellow'] as const;
       const guardian = new EnumGuardian(colors)
         .exclude(['yellow'])
@@ -112,8 +112,8 @@ Deno.test('guardian.EnumGuardian', async (t) => {
     });
   });
 
-  await t.step('safe parsing', async (t) => {
-    await t.step('should return success result for valid input', () => {
+  await t.step('safe parsing', async (u) => {
+    await u.step('should return success result for valid input', () => {
       const colors = ['red', 'green', 'blue'] as const;
       const guardian = new EnumGuardian(colors);
       const [error, result] = guardian.safeParse('red');
@@ -122,7 +122,7 @@ Deno.test('guardian.EnumGuardian', async (t) => {
       asserts.assertEquals(result, 'red');
     });
 
-    await t.step('should return error result for invalid input', () => {
+    await u.step('should return error result for invalid input', () => {
       const colors = ['red', 'green', 'blue'] as const;
       const guardian = new EnumGuardian(colors);
       const [error, result] = guardian.safeParse('yellow');
@@ -132,8 +132,8 @@ Deno.test('guardian.EnumGuardian', async (t) => {
     });
   });
 
-  await t.step('error handling', async (t) => {
-    await t.step('should provide detailed error messages', () => {
+  await t.step('error handling', async (u) => {
+    await u.step('should provide detailed error messages', () => {
       const colors = ['red', 'green', 'blue'] as const;
       const guardian = new EnumGuardian(colors);
 
@@ -145,8 +145,8 @@ Deno.test('guardian.EnumGuardian', async (t) => {
     });
   });
 
-  await t.step('real world usage', async (t) => {
-    await t.step('should work with TypeScript enums', () => {
+  await t.step('real world usage', async (u) => {
+    await u.step('should work with TypeScript enums', () => {
       // Simulate enum usage
       const UserRole = {
         ADMIN: 'admin',
@@ -164,10 +164,10 @@ Deno.test('guardian.EnumGuardian', async (t) => {
     });
   });
 
-  await t.step('nullable and optional chaining', async (t) => {
+  await t.step('nullable and optional chaining', async (u) => {
     const colors = ['red', 'green', 'blue'] as const;
 
-    await t.step(
+    await u.step(
       'nullable().optional() allows null, undefined, and valid enum values',
       () => {
         const guard = new EnumGuardian(colors).nullable().optional();
@@ -180,7 +180,7 @@ Deno.test('guardian.EnumGuardian', async (t) => {
       },
     );
 
-    await t.step(
+    await u.step(
       'optional().nullable() allows undefined, null, and valid enum values',
       () => {
         const guard = new EnumGuardian(colors).optional().nullable();
@@ -193,7 +193,7 @@ Deno.test('guardian.EnumGuardian', async (t) => {
       },
     );
 
-    await t.step('nullable().optional() rejects invalid enum values', () => {
+    await u.step('nullable().optional() rejects invalid enum values', () => {
       const guard = new EnumGuardian(colors).nullable().optional();
 
       asserts.assertThrows(() => guard.parse('yellow'), GuardianError);
@@ -201,7 +201,7 @@ Deno.test('guardian.EnumGuardian', async (t) => {
       asserts.assertThrows(() => guard.parse(123), GuardianError);
     });
 
-    await t.step('optional().nullable() rejects invalid enum values', () => {
+    await u.step('optional().nullable() rejects invalid enum values', () => {
       const guard = new EnumGuardian(colors).optional().nullable();
 
       asserts.assertThrows(() => guard.parse('yellow'), GuardianError);

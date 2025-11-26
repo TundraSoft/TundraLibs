@@ -115,7 +115,7 @@ Deno.test(
       asserts.assertEquals(typeof snippet, 'string');
       asserts.assertEquals(snippet.includes('Cause error'), true);
       asserts.assertEquals(
-        snippet.includes(`await t.step("get codeSnippet for nested",`),
+        snippet.includes(`await t.step('get codeSnippet for nested',`),
         true,
       );
 

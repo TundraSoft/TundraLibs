@@ -2,8 +2,8 @@ import * as asserts from '$asserts';
 import { BooleanGuardian, GuardianError } from '../../mod.ts';
 
 Deno.test('guardian.BooleanGuardian', async (t) => {
-  await t.step('basic functionality', async (t) => {
-    await t.step('should validate boolean type', () => {
+  await t.step('basic functionality', async (u) => {
+    await u.step('should validate boolean type', () => {
       const guardian = new BooleanGuardian();
 
       asserts.assertEquals(guardian.parse(true), true);
@@ -16,7 +16,7 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
       asserts.assertThrows(() => guardian.parse(undefined), GuardianError);
     });
 
-    await t.step('should preserve boolean values', () => {
+    await u.step('should preserve boolean values', () => {
       const guardian = new BooleanGuardian();
 
       asserts.assertEquals(guardian.parse(true), true);
@@ -24,8 +24,8 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
     });
   });
 
-  await t.step('specific value validations', async (t) => {
-    await t.step('should validate true values', () => {
+  await t.step('specific value validations', async (u) => {
+    await u.step('should validate true values', () => {
       const guardian = new BooleanGuardian().true();
 
       asserts.assertEquals(guardian.parse(true), true);
@@ -37,7 +37,7 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
       );
     });
 
-    await t.step('should validate false values', () => {
+    await u.step('should validate false values', () => {
       const guardian = new BooleanGuardian().false();
 
       asserts.assertEquals(guardian.parse(false), false);
@@ -49,7 +49,7 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
       );
     });
 
-    await t.step('should support custom error messages', () => {
+    await u.step('should support custom error messages', () => {
       const guardian = new BooleanGuardian().true('Must be enabled');
 
       asserts.assertThrows(
@@ -60,15 +60,15 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
     });
   });
 
-  await t.step('transformations', async (t) => {
-    await t.step('should transform to string', () => {
+  await t.step('transformations', async (u) => {
+    await u.step('should transform to string', () => {
       const guardian = new BooleanGuardian().toString();
 
       asserts.assertEquals(guardian.parse(true), 'true');
       asserts.assertEquals(guardian.parse(false), 'false');
     });
 
-    await t.step('should transform to number', () => {
+    await u.step('should transform to number', () => {
       const guardian = new BooleanGuardian().toNumber();
 
       asserts.assertEquals(guardian.parse(true), 1);
@@ -76,8 +76,8 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
     });
   });
 
-  await t.step('chained validations', async (t) => {
-    await t.step('should chain validations', () => {
+  await t.step('chained validations', async (u) => {
+    await u.step('should chain validations', () => {
       const guardian = new BooleanGuardian().true().toString();
 
       asserts.assertEquals(guardian.parse(true), 'true');
@@ -86,8 +86,8 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
     });
   });
 
-  await t.step('safe parsing', async (t) => {
-    await t.step('should return success result for valid input', () => {
+  await t.step('safe parsing', async (u) => {
+    await u.step('should return success result for valid input', () => {
       const guardian = new BooleanGuardian();
       const [error, result] = guardian.safeParse(true);
 
@@ -95,7 +95,7 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
       asserts.assertEquals(result, true);
     });
 
-    await t.step('should return error result for invalid input', () => {
+    await u.step('should return error result for invalid input', () => {
       const guardian = new BooleanGuardian();
       const [error, result] = guardian.safeParse('true');
 
@@ -104,8 +104,8 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
     });
   });
 
-  await t.step('error handling', async (t) => {
-    await t.step('should provide detailed error messages', () => {
+  await t.step('error handling', async (u) => {
+    await u.step('should provide detailed error messages', () => {
       const guardian = new BooleanGuardian();
 
       asserts.assertThrows(
@@ -120,7 +120,7 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
       );
     });
 
-    await t.step('should support custom error messages', () => {
+    await u.step('should support custom error messages', () => {
       const guardian = new BooleanGuardian().true('Custom error message');
 
       asserts.assertThrows(
@@ -131,8 +131,8 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
     });
   });
 
-  await t.step('nullable and optional', async (t) => {
-    await t.step('should handle nullable booleans', () => {
+  await t.step('nullable and optional', async (u) => {
+    await u.step('should handle nullable booleans', () => {
       const schema = new BooleanGuardian().nullable();
       asserts.assertEquals(schema.parse(true), true);
       asserts.assertEquals(schema.parse(false), false);
@@ -140,7 +140,7 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('not boolean'), GuardianError);
     });
 
-    await t.step('should handle optional booleans', () => {
+    await u.step('should handle optional booleans', () => {
       const schema = new BooleanGuardian().optional(true);
       asserts.assertEquals(schema.parse(true), true);
       asserts.assertEquals(schema.parse(false), false);
@@ -148,14 +148,14 @@ Deno.test('guardian.BooleanGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('not boolean'), GuardianError);
     });
 
-    await t.step('should handle nullable().optional() chaining', () => {
+    await u.step('should handle nullable().optional() chaining', () => {
       const schema = new BooleanGuardian().nullable().optional(true);
       asserts.assertEquals(schema.parse(true), true);
       asserts.assertEquals(schema.parse(null), null);
       asserts.assertEquals(schema.parse(undefined), true);
     });
 
-    await t.step('should handle optional().nullable() chaining', () => {
+    await u.step('should handle optional().nullable() chaining', () => {
       const schema = new BooleanGuardian().optional(true).nullable();
       asserts.assertEquals(schema.parse(true), true);
       asserts.assertEquals(schema.parse(null), null);

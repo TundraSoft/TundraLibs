@@ -108,8 +108,8 @@ Deno.test({
       asserts.assertEquals(handler.mode, 'file');
     });
 
-    await t.step('constructor - invalid options', async (t) => {
-      await t.step('missing storePath', () => {
+    await t.step('constructor - invalid options', async (u) => {
+      await u.step('missing storePath', () => {
         asserts.assertThrows(
           // @ts-ignore - Testing missing storePath
           () =>
@@ -122,7 +122,7 @@ Deno.test({
         );
       });
 
-      await t.step('missing fileName', () => {
+      await u.step('missing fileName', () => {
         asserts.assertThrows(
           // @ts-ignore - Testing missing fileName
           () =>
@@ -135,7 +135,7 @@ Deno.test({
         );
       });
 
-      await t.step('invalid maxFileSize', () => {
+      await u.step('invalid maxFileSize', () => {
         asserts.assertThrows(
           () =>
             new FileHandler('testHandler', {
@@ -149,7 +149,7 @@ Deno.test({
         );
       });
 
-      await t.step('invalid bufferSize', () => {
+      await u.step('invalid bufferSize', () => {
         asserts.assertThrows(
           () =>
             new FileHandler('testHandler', {

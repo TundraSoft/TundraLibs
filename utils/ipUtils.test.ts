@@ -11,8 +11,8 @@ import {
 } from './ipUtils.ts';
 
 Deno.test('utils.ipUtils', async (i) => {
-  await i.step('isValidIPv4', async (t) => {
-    await t.step('should return true for valid IPv4 addresses', () => {
+  await i.step('isValidIPv4', async (u) => {
+    await u.step('should return true for valid IPv4 addresses', () => {
       const validIPs = [
         '192.168.0.1',
         '10.0.0.1',
@@ -30,7 +30,7 @@ Deno.test('utils.ipUtils', async (i) => {
       }
     });
 
-    await t.step('should return false for invalid IPv4 addresses', () => {
+    await u.step('should return false for invalid IPv4 addresses', () => {
       const invalidIPs = [
         '192.168.0',
         '192.168.0.1.5',
@@ -52,8 +52,8 @@ Deno.test('utils.ipUtils', async (i) => {
     });
   });
 
-  await i.step('isValidIPv6Structure', async (t) => {
-    await t.step('should return true for valid IPv6 addresses', () => {
+  await i.step('isValidIPv6Structure', async (u) => {
+    await u.step('should return true for valid IPv6 addresses', () => {
       const validIPs = [
         '2001:db8::1',
         '::1',
@@ -74,7 +74,7 @@ Deno.test('utils.ipUtils', async (i) => {
       }
     });
 
-    await t.step('should return false for invalid IPv6 addresses', () => {
+    await u.step('should return false for invalid IPv6 addresses', () => {
       const invalidIPs = [
         '2001:db8', // incomplete
         '2001::db8::1', // multiple ::
@@ -100,8 +100,8 @@ Deno.test('utils.ipUtils', async (i) => {
     });
   });
 
-  await i.step('expandIPv6', async (t) => {
-    await t.step('should expand compressed IPv6 addresses', () => {
+  await i.step('expandIPv6', async (u) => {
+    await u.step('should expand compressed IPv6 addresses', () => {
       const testCases = [
         {
           compressed: '2001:db8::1',
@@ -142,7 +142,7 @@ Deno.test('utils.ipUtils', async (i) => {
       }
     });
 
-    await t.step('should return null for invalid IPv6 addresses', () => {
+    await u.step('should return null for invalid IPv6 addresses', () => {
       const invalidIPs = [
         '',
         '2001:db8', // incomplete
@@ -166,8 +166,8 @@ Deno.test('utils.ipUtils', async (i) => {
     });
   });
 
-  await i.step('expandIPv6 IPv4-mapped formats', async (t) => {
-    await t.step('should handle various IPv4-mapped IPv6 formats', () => {
+  await i.step('expandIPv6 IPv4-mapped formats', async (u) => {
+    await u.step('should handle various IPv4-mapped IPv6 formats', () => {
       const testCases = [
         {
           compressed: '::ffff:192.168.0.1',
@@ -204,7 +204,7 @@ Deno.test('utils.ipUtils', async (i) => {
       }
     });
 
-    await t.step('should return null for invalid mixed formats', () => {
+    await u.step('should return null for invalid mixed formats', () => {
       const invalidCases = [
         '2001:db8:1:2:3:4:5:6:192.168.0.1', // way too many segments (9 total)
         '1:2:3:4:5:6:7:192.168.0.1', // 8 segments including IPv4 mapped (invalid)
@@ -221,8 +221,8 @@ Deno.test('utils.ipUtils', async (i) => {
     });
   });
 
-  await i.step('ipv4ToBinary', async (t) => {
-    await t.step('should convert IPv4 to binary correctly', () => {
+  await i.step('ipv4ToBinary', async (u) => {
+    await u.step('should convert IPv4 to binary correctly', () => {
       const testCases = [
         {
           ip: '192.168.0.1',
@@ -252,8 +252,8 @@ Deno.test('utils.ipUtils', async (i) => {
     });
   });
 
-  await i.step('ipv6ToBinary', async (t) => {
-    await t.step('should convert IPv6 to binary correctly', () => {
+  await i.step('ipv6ToBinary', async (u) => {
+    await u.step('should convert IPv6 to binary correctly', () => {
       // We'll verify the length and some basic properties
       // since full binary string is too large to write out
       const testIPs = [
@@ -288,7 +288,7 @@ Deno.test('utils.ipUtils', async (i) => {
       );
     });
 
-    await t.step('should throw for invalid IPv6 addresses', () => {
+    await u.step('should throw for invalid IPv6 addresses', () => {
       const invalidIPs = [
         '',
         '2001:db8', // incomplete
@@ -310,8 +310,8 @@ Deno.test('utils.ipUtils', async (i) => {
     });
   });
 
-  await i.step('ipv4ToLong', async (t) => {
-    await t.step('should convert IPv4 to long integer correctly', () => {
+  await i.step('ipv4ToLong', async (u) => {
+    await u.step('should convert IPv4 to long integer correctly', () => {
       const testCases = [
         { ip: '0.0.0.0', expected: 0 },
         { ip: '0.0.0.1', expected: 1 },
@@ -332,8 +332,8 @@ Deno.test('utils.ipUtils', async (i) => {
     });
   });
 
-  await i.step('isIPv4InRange', async (t) => {
-    await t.step('should correctly detect IP in range', () => {
+  await i.step('isIPv4InRange', async (u) => {
+    await u.step('should correctly detect IP in range', () => {
       const testCases = [
         {
           ip: '192.168.0.5',
@@ -389,8 +389,8 @@ Deno.test('utils.ipUtils', async (i) => {
     });
   });
 
-  await i.step('ipv4ToHexSegments', async (t) => {
-    await t.step('should convert IPv4 to hex segments correctly', () => {
+  await i.step('ipv4ToHexSegments', async (u) => {
+    await u.step('should convert IPv4 to hex segments correctly', () => {
       const testCases = [
         {
           ip: '192.168.0.1',

@@ -140,9 +140,9 @@ const cleanupMock = () => {
   globalThis.fetch = originalFetch;
 };
 
-Deno.test('restler.examples.jsonPlaceholderAPI', async (h) => {
-  await h.step('JSONPlaceholderAPI', async (t) => {
-    await t.step('should get all posts', async () => {
+Deno.test('restler.examples.jsonPlaceholderAPI', async (t) => {
+  await t.step('JSONPlaceholderAPI', async (u) => {
+    await u.step('should get all posts', async () => {
       setupMockFetch();
       try {
         const api = new JSONPlaceholderAPI();
@@ -155,7 +155,7 @@ Deno.test('restler.examples.jsonPlaceholderAPI', async (h) => {
       }
     });
 
-    await t.step('should get a single post', async () => {
+    await u.step('should get a single post', async () => {
       setupMockFetch();
       try {
         const api = new JSONPlaceholderAPI();
@@ -168,7 +168,7 @@ Deno.test('restler.examples.jsonPlaceholderAPI', async (h) => {
       }
     });
 
-    await t.step('should return null for non-existent post', async () => {
+    await u.step('should return null for non-existent post', async () => {
       setupMockFetch();
       try {
         const api = new JSONPlaceholderAPI();
@@ -179,7 +179,7 @@ Deno.test('restler.examples.jsonPlaceholderAPI', async (h) => {
       }
     });
 
-    await t.step('should get all users', async () => {
+    await u.step('should get all users', async () => {
       setupMockFetch();
       try {
         const api = new JSONPlaceholderAPI();
@@ -192,7 +192,7 @@ Deno.test('restler.examples.jsonPlaceholderAPI', async (h) => {
       }
     });
 
-    await t.step('should get a single user', async () => {
+    await u.step('should get a single user', async () => {
       setupMockFetch();
       try {
         const api = new JSONPlaceholderAPI();
@@ -205,7 +205,7 @@ Deno.test('restler.examples.jsonPlaceholderAPI', async (h) => {
       }
     });
 
-    await t.step('should get comments for a post', async () => {
+    await u.step('should get comments for a post', async () => {
       setupMockFetch();
       try {
         const api = new JSONPlaceholderAPI();
@@ -218,7 +218,7 @@ Deno.test('restler.examples.jsonPlaceholderAPI', async (h) => {
       }
     });
 
-    await t.step('should create a new post', async () => {
+    await u.step('should create a new post', async () => {
       setupMockFetch();
       try {
         const api = new JSONPlaceholderAPI();

@@ -7,15 +7,15 @@ import { GuardianError } from '../../GuardianError.ts';
  * Tests value inclusion validation functionality.
  */
 Deno.test('guardian.helpers.isIn', async (t) => {
-  await t.step('basic functionality', async (t) => {
-    await t.step('should pass when value is in array', () => {
+  await t.step('basic functionality', async (u) => {
+    await u.step('should pass when value is in array', () => {
       const validator = isIn([1, 2, 3]);
       asserts.assertEquals(validator(1), 1);
       asserts.assertEquals(validator(2), 2);
       asserts.assertEquals(validator(3), 3);
     });
 
-    await t.step('should fail when value is not in array', () => {
+    await u.step('should fail when value is not in array', () => {
       const validator = isIn([1, 2, 3]);
 
       asserts.assertThrows(
@@ -31,7 +31,7 @@ Deno.test('guardian.helpers.isIn', async (t) => {
       );
     });
 
-    await t.step('should work with string arrays', () => {
+    await u.step('should work with string arrays', () => {
       const validator = isIn(['apple', 'banana', 'cherry']);
 
       asserts.assertEquals(validator('apple'), 'apple');
@@ -45,8 +45,8 @@ Deno.test('guardian.helpers.isIn', async (t) => {
     });
   });
 
-  await t.step('array validation', async (t) => {
-    await t.step('should throw error for empty array', () => {
+  await t.step('array validation', async (u) => {
+    await u.step('should throw error for empty array', () => {
       asserts.assertThrows(
         () => isIn([]),
         Error,
@@ -54,7 +54,7 @@ Deno.test('guardian.helpers.isIn', async (t) => {
       );
     });
 
-    await t.step('should throw error for non-array input', () => {
+    await u.step('should throw error for non-array input', () => {
       asserts.assertThrows(
         () => isIn('not-array' as any),
         Error,
@@ -74,7 +74,7 @@ Deno.test('guardian.helpers.isIn', async (t) => {
       );
     });
 
-    await t.step('should handle arrays with duplicates', () => {
+    await u.step('should handle arrays with duplicates', () => {
       const validator = isIn([1, 2, 2, 3, 3, 3]);
       asserts.assertEquals(validator(1), 1);
       asserts.assertEquals(validator(2), 2);
@@ -88,8 +88,8 @@ Deno.test('guardian.helpers.isIn', async (t) => {
     });
   });
 
-  await t.step('type handling', async (t) => {
-    await t.step('should work with mixed types', () => {
+  await t.step('type handling', async (u) => {
+    await u.step('should work with mixed types', () => {
       const validator = isIn([1, 'two', true, null]);
 
       asserts.assertEquals(validator(1), 1);
@@ -104,7 +104,7 @@ Deno.test('guardian.helpers.isIn', async (t) => {
       );
     });
 
-    await t.step('should handle reference equality for objects', () => {
+    await u.step('should handle reference equality for objects', () => {
       const obj1 = { id: 1 };
       const obj2 = { id: 2 };
       const validator = isIn([obj1, obj2]);
@@ -120,8 +120,8 @@ Deno.test('guardian.helpers.isIn', async (t) => {
     });
   });
 
-  await t.step('custom error messages', async (t) => {
-    await t.step('should use custom error message when provided', () => {
+  await t.step('custom error messages', async (u) => {
+    await u.step('should use custom error message when provided', () => {
       const validator = isIn([1, 2, 3], 'Must be a valid option');
 
       asserts.assertThrows(
@@ -131,7 +131,7 @@ Deno.test('guardian.helpers.isIn', async (t) => {
       );
     });
 
-    await t.step('should use default error message when not provided', () => {
+    await u.step('should use default error message when not provided', () => {
       const validator = isIn([1, 2, 3]);
 
       asserts.assertThrows(
@@ -142,8 +142,8 @@ Deno.test('guardian.helpers.isIn', async (t) => {
     });
   });
 
-  await t.step('error context', async (t) => {
-    await t.step('should provide correct error context', () => {
+  await t.step('error context', async (u) => {
+    await u.step('should provide correct error context', () => {
       const validator = isIn([1, 2, 3]);
 
       try {
@@ -161,8 +161,8 @@ Deno.test('guardian.helpers.isIn', async (t) => {
     });
   });
 
-  await t.step('edge cases', async (t) => {
-    await t.step('should handle special values', () => {
+  await t.step('edge cases', async (u) => {
+    await u.step('should handle special values', () => {
       const validator = isIn([0, '', false, null, undefined]);
 
       asserts.assertEquals(validator(0), 0);
@@ -178,7 +178,7 @@ Deno.test('guardian.helpers.isIn', async (t) => {
       );
     });
 
-    await t.step('should handle zero and negative numbers', () => {
+    await u.step('should handle zero and negative numbers', () => {
       const validator = isIn([-1, 0, 1]);
 
       asserts.assertEquals(validator(-1), -1);
@@ -192,7 +192,7 @@ Deno.test('guardian.helpers.isIn', async (t) => {
       );
     });
 
-    await t.step('should handle empty strings and whitespace', () => {
+    await u.step('should handle empty strings and whitespace', () => {
       const validator = isIn(['', ' ', '  ', '\n', '\t']);
 
       asserts.assertEquals(validator(''), '');
@@ -209,8 +209,8 @@ Deno.test('guardian.helpers.isIn', async (t) => {
     });
   });
 
-  await t.step('performance considerations', async (t) => {
-    await t.step('should handle large arrays efficiently', () => {
+  await t.step('performance considerations', async (u) => {
+    await u.step('should handle large arrays efficiently', () => {
       const largeArray = Array.from({ length: 1000 }, (_, i) => i);
       const validator = isIn(largeArray);
 
@@ -225,7 +225,7 @@ Deno.test('guardian.helpers.isIn', async (t) => {
       );
     });
 
-    await t.step('should deduplicate array values', () => {
+    await u.step('should deduplicate array values', () => {
       const validator = isIn([1, 1, 2, 2, 3, 3]);
 
       try {

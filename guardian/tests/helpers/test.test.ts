@@ -3,8 +3,8 @@ import { test } from '../../helpers/mod.ts';
 import { GuardianError } from '../../GuardianError.ts';
 
 Deno.test('guardian.helpers.test', async (t) => {
-  await t.step('basic functionality', async (t) => {
-    await t.step('should pass when predicate returns true', () => {
+  await t.step('basic functionality', async (u) => {
+    await u.step('should pass when predicate returns true', () => {
       const validator = test((value: unknown): value is string =>
         typeof value === 'string'
       );
@@ -13,7 +13,7 @@ Deno.test('guardian.helpers.test', async (t) => {
       asserts.assertEquals(validator('test'), 'test');
     });
 
-    await t.step('should fail when predicate returns false', () => {
+    await u.step('should fail when predicate returns false', () => {
       const validator = test((value: unknown): value is string =>
         typeof value === 'string'
       );
@@ -37,7 +37,7 @@ Deno.test('guardian.helpers.test', async (t) => {
       );
     });
 
-    await t.step('should work with different predicates', () => {
+    await u.step('should work with different predicates', () => {
       const isNumber = test((value: unknown): value is number =>
         typeof value === 'number' && !isNaN(value)
       );
@@ -55,8 +55,8 @@ Deno.test('guardian.helpers.test', async (t) => {
     });
   });
 
-  await t.step('predicate validation', async (t) => {
-    await t.step('should handle complex predicates', () => {
+  await t.step('predicate validation', async (u) => {
+    await u.step('should handle complex predicates', () => {
       const isPositiveNumber = test((value: unknown): value is number =>
         typeof value === 'number' && value > 0
       );
@@ -77,7 +77,7 @@ Deno.test('guardian.helpers.test', async (t) => {
       );
     });
 
-    await t.step('should handle object predicates', () => {
+    await u.step('should handle object predicates', () => {
       interface User {
         name: string;
         age: number;
@@ -109,8 +109,8 @@ Deno.test('guardian.helpers.test', async (t) => {
     });
   });
 
-  await t.step('type handling', async (t) => {
-    await t.step('should handle array predicates', () => {
+  await t.step('type handling', async (u) => {
+    await u.step('should handle array predicates', () => {
       const isStringArray = test((value: unknown): value is string[] =>
         Array.isArray(value) && value.every((item) => typeof item === 'string')
       );
@@ -134,7 +134,7 @@ Deno.test('guardian.helpers.test', async (t) => {
       );
     });
 
-    await t.step('should handle union type predicates', () => {
+    await u.step('should handle union type predicates', () => {
       const isStringOrNumber = test((
         value: unknown,
       ): value is string | number =>
@@ -164,8 +164,8 @@ Deno.test('guardian.helpers.test', async (t) => {
     });
   });
 
-  await t.step('custom error messages', async (t) => {
-    await t.step('should use custom error message when provided', () => {
+  await t.step('custom error messages', async (u) => {
+    await u.step('should use custom error message when provided', () => {
       const validator = test(
         (value: unknown): value is string => typeof value === 'string',
         'Value must be a string',
@@ -178,7 +178,7 @@ Deno.test('guardian.helpers.test', async (t) => {
       );
     });
 
-    await t.step('should use default error message when not provided', () => {
+    await u.step('should use default error message when not provided', () => {
       const validator = test((value: unknown): value is string =>
         typeof value === 'string'
       );
@@ -191,8 +191,8 @@ Deno.test('guardian.helpers.test', async (t) => {
     });
   });
 
-  await t.step('error context', async (t) => {
-    await t.step('should provide correct error context', () => {
+  await t.step('error context', async (u) => {
+    await u.step('should provide correct error context', () => {
       const validator = test((value: unknown): value is string =>
         typeof value === 'string'
       );
@@ -211,8 +211,8 @@ Deno.test('guardian.helpers.test', async (t) => {
     });
   });
 
-  await t.step('edge cases', async (t) => {
-    await t.step('should handle null and undefined', () => {
+  await t.step('edge cases', async (u) => {
+    await u.step('should handle null and undefined', () => {
       const allowsNull = test((value: unknown): value is null =>
         value === null
       );
@@ -239,7 +239,7 @@ Deno.test('guardian.helpers.test', async (t) => {
       );
     });
 
-    await t.step('should handle complex nested structures', () => {
+    await u.step('should handle complex nested structures', () => {
       interface NestedData {
         user: {
           profile: {
@@ -297,8 +297,8 @@ Deno.test('guardian.helpers.test', async (t) => {
     });
   });
 
-  await t.step('performance considerations', async (t) => {
-    await t.step('should handle predicates efficiently', () => {
+  await t.step('performance considerations', async (u) => {
+    await u.step('should handle predicates efficiently', () => {
       const validator = test((value: unknown): value is number =>
         typeof value === 'number'
       );
@@ -309,7 +309,7 @@ Deno.test('guardian.helpers.test', async (t) => {
       }
     });
 
-    await t.step('should handle complex predicate logic', () => {
+    await u.step('should handle complex predicate logic', () => {
       const complexValidator = test((value: unknown): value is string => {
         if (typeof value !== 'string') return false;
         if (value.length < 2) return false;

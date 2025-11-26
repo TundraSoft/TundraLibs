@@ -7,15 +7,15 @@ import { GuardianError } from '../../GuardianError.ts';
  * Tests undefined value handling in validation chains.
  */
 Deno.test('guardian.helpers.optional', async (t) => {
-  await t.step('Basic undefined handling', async (t) => {
-    await t.step('should pass undefined values without validation', () => {
+  await t.step('Basic undefined handling', async (u) => {
+    await u.step('should pass undefined values without validation', () => {
       const validator = optional(() => {
         throw new Error('Should not be called for undefined');
       });
       asserts.assertEquals(validator(undefined), undefined);
     });
 
-    await t.step('should call wrapped validator for defined values', () => {
+    await u.step('should call wrapped validator for defined values', () => {
       const validator = optional((value: unknown) => {
         if (value === 'valid') return value as string;
         throw new GuardianError('Invalid value', {
@@ -30,7 +30,7 @@ Deno.test('guardian.helpers.optional', async (t) => {
       asserts.assertThrows(() => validator('invalid'), GuardianError);
     });
 
-    await t.step('should not pass null through as undefined', () => {
+    await u.step('should not pass null through as undefined', () => {
       const validator = optional((value: unknown) => {
         if (value === null) {
           throw new GuardianError('Null not allowed', {
@@ -48,8 +48,8 @@ Deno.test('guardian.helpers.optional', async (t) => {
     });
   });
 
-  await t.step('Type preservation', async (t) => {
-    await t.step('should preserve return type of wrapped validator', () => {
+  await t.step('Type preservation', async (u) => {
+    await u.step('should preserve return type of wrapped validator', () => {
       const stringValidator = optional((value: unknown) => {
         if (typeof value === 'string') return value.toUpperCase();
         throw new Error('Not a string');
@@ -66,7 +66,7 @@ Deno.test('guardian.helpers.optional', async (t) => {
       asserts.assertEquals(numberValidator(undefined), undefined);
     });
 
-    await t.step('should handle complex return types', () => {
+    await u.step('should handle complex return types', () => {
       interface TestObj {
         name: string;
         age: number;
@@ -88,8 +88,8 @@ Deno.test('guardian.helpers.optional', async (t) => {
     });
   });
 
-  await t.step('Error propagation', async (t) => {
-    await t.step('should propagate errors from wrapped validator', () => {
+  await t.step('Error propagation', async (u) => {
+    await u.step('should propagate errors from wrapped validator', () => {
       const validator = optional((value: unknown) => {
         const str = value as string;
         if (str.length < 3) {
@@ -119,7 +119,7 @@ Deno.test('guardian.helpers.optional', async (t) => {
       }
     });
 
-    await t.step('should propagate non-GuardianError exceptions', () => {
+    await u.step('should propagate non-GuardianError exceptions', () => {
       const validator = optional((value: unknown) => {
         const str = value as string;
         if (str === 'throw') {
@@ -134,8 +134,8 @@ Deno.test('guardian.helpers.optional', async (t) => {
     });
   });
 
-  await t.step('Promise handling', async (t) => {
-    await t.step('should handle async validators', async () => {
+  await t.step('Promise handling', async (u) => {
+    await u.step('should handle async validators', async () => {
       const asyncValidator = optional(async (value: unknown) => {
         await new Promise((resolve) => setTimeout(resolve, 1));
         return (value as string).toUpperCase();
@@ -145,7 +145,7 @@ Deno.test('guardian.helpers.optional', async (t) => {
       asserts.assertEquals(await asyncValidator(undefined), undefined);
     });
 
-    await t.step('should handle async validators with errors', async () => {
+    await u.step('should handle async validators with errors', async () => {
       const asyncValidator = optional(async (value: unknown) => {
         await new Promise((resolve) => setTimeout(resolve, 1));
         const str = value as string;
@@ -176,8 +176,8 @@ Deno.test('guardian.helpers.optional', async (t) => {
     });
   });
 
-  await t.step('Chaining with other validators', async (t) => {
-    await t.step('should work in validation chains', () => {
+  await t.step('Chaining with other validators', async (u) => {
+    await u.step('should work in validation chains', () => {
       // Simulate chaining with other validators
       const isString = (value: unknown): value is string => {
         if (typeof value !== 'string') {
@@ -220,8 +220,8 @@ Deno.test('guardian.helpers.optional', async (t) => {
     });
   });
 
-  await t.step('Edge cases and special values', async (t) => {
-    await t.step('should only treat explicit undefined as undefined', () => {
+  await t.step('Edge cases and special values', async (u) => {
+    await u.step('should only treat explicit undefined as undefined', () => {
       const validator = optional((value: any) => {
         return `processed: ${value}`;
       });
@@ -241,7 +241,7 @@ Deno.test('guardian.helpers.optional', async (t) => {
       );
     });
 
-    await t.step('should handle validator that returns undefined', () => {
+    await u.step('should handle validator that returns undefined', () => {
       const validator = optional((value: unknown) => {
         const str = value as string;
         if (str === 'return-undefined') return undefined;
@@ -258,7 +258,7 @@ Deno.test('guardian.helpers.optional', async (t) => {
       asserts.assertEquals(validator('normal'), 'normal');
     });
 
-    await t.step('should handle validator that returns null', () => {
+    await u.step('should handle validator that returns null', () => {
       const validator = optional((value: unknown) => {
         const str = value as string;
         if (str === 'return-null') return null;
@@ -276,8 +276,8 @@ Deno.test('guardian.helpers.optional', async (t) => {
     });
   });
 
-  await t.step('Performance and optimization', async (t) => {
-    await t.step(
+  await t.step('Performance and optimization', async (u) => {
+    await u.step(
       'should short-circuit for undefined without calling validator',
       () => {
         let called = false;
@@ -295,7 +295,7 @@ Deno.test('guardian.helpers.optional', async (t) => {
       },
     );
 
-    await t.step('should handle repeated undefined checks efficiently', () => {
+    await u.step('should handle repeated undefined checks efficiently', () => {
       let callCount = 0;
       const validator = optional(() => {
         callCount++;
@@ -314,8 +314,8 @@ Deno.test('guardian.helpers.optional', async (t) => {
     });
   });
 
-  await t.step('Logical consistency with nullable', async (t) => {
-    await t.step('should handle different special values than nullable', () => {
+  await t.step('Logical consistency with nullable', async (u) => {
+    await u.step('should handle different special values than nullable', () => {
       const optionalValidator = optional((value: unknown) => {
         if (value === null) {
           throw new GuardianError('Null not allowed', {

@@ -7,8 +7,8 @@ import { GuardianError } from '../../GuardianError.ts';
  * Tests equality validation functionality.
  */
 Deno.test('guardian.helpers.equals', async (t) => {
-  await t.step('Basic equality validation', async (t) => {
-    await t.step('should pass when values are equal', () => {
+  await t.step('Basic equality validation', async (u) => {
+    await u.step('should pass when values are equal', () => {
       const validator = equals('hello');
       asserts.assertEquals(validator('hello'), 'hello');
 
@@ -19,7 +19,7 @@ Deno.test('guardian.helpers.equals', async (t) => {
       asserts.assertEquals(booleanValidator(true), true);
     });
 
-    await t.step('should fail when values are not equal', () => {
+    await u.step('should fail when values are not equal', () => {
       const validator = equals('hello');
       asserts.assertThrows(
         () => validator('world'),
@@ -34,8 +34,8 @@ Deno.test('guardian.helpers.equals', async (t) => {
     });
   });
 
-  await t.step('Custom error messages', async (t) => {
-    await t.step('should use custom error message when provided', () => {
+  await t.step('Custom error messages', async (u) => {
+    await u.step('should use custom error message when provided', () => {
       const validator = equals('expected', 'Custom error message');
       asserts.assertThrows(
         () => validator('actual'),
@@ -44,7 +44,7 @@ Deno.test('guardian.helpers.equals', async (t) => {
       );
     });
 
-    await t.step('should use default error message when not provided', () => {
+    await u.step('should use default error message when not provided', () => {
       const validator = equals('expected');
       asserts.assertThrows(
         () => validator('actual'),
@@ -53,8 +53,8 @@ Deno.test('guardian.helpers.equals', async (t) => {
     });
   });
 
-  await t.step('Type safety and special values', async (t) => {
-    await t.step('should handle null values', () => {
+  await t.step('Type safety and special values', async (u) => {
+    await u.step('should handle null values', () => {
       const validator = equals(null);
       asserts.assertEquals(validator(null), null);
 
@@ -64,7 +64,7 @@ Deno.test('guardian.helpers.equals', async (t) => {
       );
     });
 
-    await t.step('should handle undefined values', () => {
+    await u.step('should handle undefined values', () => {
       const validator = equals(undefined);
       asserts.assertEquals(validator(undefined), undefined);
 
@@ -74,7 +74,7 @@ Deno.test('guardian.helpers.equals', async (t) => {
       );
     });
 
-    await t.step('should handle zero and false', () => {
+    await u.step('should handle zero and false', () => {
       const zeroValidator = equals(0);
       asserts.assertEquals(zeroValidator(0), 0);
       asserts.assertThrows(() => zeroValidator('false' as any), GuardianError);
@@ -84,15 +84,15 @@ Deno.test('guardian.helpers.equals', async (t) => {
       asserts.assertThrows(() => falseValidator('0' as any), GuardianError);
     });
 
-    await t.step('should handle NaN correctly', () => {
+    await u.step('should handle NaN correctly', () => {
       const nanValidator = equals(NaN);
       // NaN !== NaN, so this should throw
       asserts.assertThrows(() => nanValidator(NaN), GuardianError);
     });
   });
 
-  await t.step('Object and array equality', async (t) => {
-    await t.step('should use reference equality for objects', () => {
+  await t.step('Object and array equality', async (u) => {
+    await u.step('should use reference equality for objects', () => {
       const obj = { a: 1 };
       const validator = equals(obj);
 
@@ -105,7 +105,7 @@ Deno.test('guardian.helpers.equals', async (t) => {
       );
     });
 
-    await t.step('should use reference equality for arrays', () => {
+    await u.step('should use reference equality for arrays', () => {
       const arr = [1, 2, 3];
       const validator = equals(arr);
 
@@ -119,8 +119,8 @@ Deno.test('guardian.helpers.equals', async (t) => {
     });
   });
 
-  await t.step('Error metadata', async (t) => {
-    await t.step('should include correct metadata in error', () => {
+  await t.step('Error metadata', async (u) => {
+    await u.step('should include correct metadata in error', () => {
       const validator = equals('expected');
 
       try {

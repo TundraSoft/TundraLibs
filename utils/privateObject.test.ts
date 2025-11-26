@@ -6,8 +6,8 @@ import type { PrivateObject } from './privateObject.ts';
 Deno.test('utils.privateObject', async (t) => {
   let secretObject: PrivateObject;
 
-  await t.step('sealed object', async (t) => {
-    await t.step('get should return the value for a given key', () => {
+  await t.step('sealed object', async (u) => {
+    await u.step('get should return the value for a given key', () => {
       secretObject = privateObject<Record<string, unknown>>({
         key1: 'value1',
         key2: 'value2',
@@ -17,7 +17,7 @@ Deno.test('utils.privateObject', async (t) => {
       asserts.assertEquals(secretObject.get('key3'), undefined);
     });
 
-    await t.step(
+    await u.step(
       'has should return true if the key exists, otherwise false',
       () => {
         secretObject = privateObject<Record<string, unknown>>({
@@ -30,7 +30,7 @@ Deno.test('utils.privateObject', async (t) => {
       },
     );
 
-    await t.step('set should set the value for a given key', () => {
+    await u.step('set should set the value for a given key', () => {
       secretObject = privateObject<Record<string, unknown>>({
         key1: 'value1',
         key2: 'value2',
@@ -42,7 +42,7 @@ Deno.test('utils.privateObject', async (t) => {
       asserts.assertEquals(secretObject.has('key3'), false);
     });
 
-    await t.step(
+    await u.step(
       'delete should remove the key and its value from the object',
       () => {
         secretObject = privateObject<Record<string, unknown>>({
@@ -56,7 +56,7 @@ Deno.test('utils.privateObject', async (t) => {
       },
     );
 
-    await t.step('test foreach', () => {
+    await u.step('test foreach', () => {
       secretObject = privateObject<Record<string, unknown>>({
         key1: 'value1',
         key2: 'value2',
@@ -71,7 +71,7 @@ Deno.test('utils.privateObject', async (t) => {
       asserts.assertEquals(values, ['value1', 'value2']);
     });
 
-    await t.step('should return correct keys', () => {
+    await u.step('should return correct keys', () => {
       secretObject = privateObject<Record<string, unknown>>({
         key1: 'value1',
         key2: 'value2',
@@ -82,7 +82,7 @@ Deno.test('utils.privateObject', async (t) => {
       asserts.assertEquals(keys.includes('key2'), true);
     });
 
-    await t.step('should return the object through asObject', () => {
+    await u.step('should return the object through asObject', () => {
       const originalObj = {
         key1: 'value1',
         key2: 'value2',
@@ -93,15 +93,15 @@ Deno.test('utils.privateObject', async (t) => {
     });
   });
 
-  await t.step('unsealed object', async (t) => {
-    await t.step('initialize empty and set', () => {
+  await t.step('unsealed object', async (u) => {
+    await u.step('initialize empty and set', () => {
       secretObject = privateObject<Record<string, unknown>>();
       asserts.assertEquals(secretObject.has('key1'), false);
       secretObject.set('key1', 'value1');
       asserts.assertEquals(secretObject.get('key1'), 'value1');
     });
 
-    await t.step('get should return the value for a given key', () => {
+    await u.step('get should return the value for a given key', () => {
       secretObject = privateObject<Record<string, unknown>>({
         key1: 'value1',
         key2: 'value2',
@@ -111,7 +111,7 @@ Deno.test('utils.privateObject', async (t) => {
       asserts.assertEquals(secretObject.get('key3'), undefined);
     });
 
-    await t.step(
+    await u.step(
       'has should return true if the key exists, otherwise false',
       () => {
         secretObject = privateObject<Record<string, unknown>>({
@@ -124,7 +124,7 @@ Deno.test('utils.privateObject', async (t) => {
       },
     );
 
-    await t.step('set should set the value for a given key', () => {
+    await u.step('set should set the value for a given key', () => {
       secretObject = privateObject<Record<string, unknown>>({
         key1: 'value1',
         key2: 'value2',
@@ -136,7 +136,7 @@ Deno.test('utils.privateObject', async (t) => {
       asserts.assertEquals(secretObject.has('key3'), true);
     });
 
-    await t.step(
+    await u.step(
       'delete should remove the key and its value from the object',
       () => {
         secretObject = privateObject<Record<string, unknown>>({
@@ -150,7 +150,7 @@ Deno.test('utils.privateObject', async (t) => {
       },
     );
 
-    await t.step('test foreach', () => {
+    await u.step('test foreach', () => {
       secretObject = privateObject<Record<string, unknown>>({
         key1: 'value1',
         key2: 'value2',
@@ -165,7 +165,7 @@ Deno.test('utils.privateObject', async (t) => {
       asserts.assertEquals(values, ['value1', 'value2']);
     });
 
-    await t.step('test clear', () => {
+    await u.step('test clear', () => {
       secretObject = privateObject<Record<string, unknown>>({
         key1: 'value1',
         key2: 'value2',
@@ -181,7 +181,7 @@ Deno.test('utils.privateObject', async (t) => {
       asserts.assertEquals(secretObject.keys(), ['key1', 'key2']);
     });
 
-    await t.step('should handle complex object values', () => {
+    await u.step('should handle complex object values', () => {
       const complexObject = {
         simple: 'string',
         array: [1, 2, 3],
@@ -201,7 +201,7 @@ Deno.test('utils.privateObject', async (t) => {
       asserts.assertEquals(retrieved.array, [1, 2, 3, 4]);
     });
 
-    await t.step('should handle null and undefined values', () => {
+    await u.step('should handle null and undefined values', () => {
       secretObject = privateObject<Record<string, unknown>>({
         nullValue: null,
         undefinedValue: undefined,

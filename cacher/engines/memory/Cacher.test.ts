@@ -2,8 +2,8 @@ import * as asserts from '$asserts';
 import { MemoryCacher } from './mod.ts';
 
 Deno.test('cacher.engines.memory', async (t) => {
-  await t.step('initialization', async (t) => {
-    await t.step('should create an instance with default options', async () => {
+  await t.step('initialization', async (u) => {
+    await u.step('should create an instance with default options', async () => {
       const cacher = new MemoryCacher('memory-test', {});
 
       try {
@@ -16,7 +16,7 @@ Deno.test('cacher.engines.memory', async (t) => {
       }
     });
 
-    await t.step('should create an instance with custom options', async () => {
+    await u.step('should create an instance with custom options', async () => {
       const cacher = new MemoryCacher('memory-test', {
         defaultExpiry: 600,
       });
@@ -28,7 +28,7 @@ Deno.test('cacher.engines.memory', async (t) => {
       }
     });
 
-    await t.step('should explicitly initialize without errors', async () => {
+    await u.step('should explicitly initialize without errors', async () => {
       const cacher = new MemoryCacher('memory-test', {});
 
       try {
@@ -45,8 +45,8 @@ Deno.test('cacher.engines.memory', async (t) => {
     });
   });
 
-  await t.step('cache operations', async (t) => {
-    await t.step('should set and get different data types', async () => {
+  await t.step('cache operations', async (u) => {
+    await u.step('should set and get different data types', async () => {
       const cacher = new MemoryCacher('memory-types', {});
 
       try {
@@ -92,7 +92,7 @@ Deno.test('cacher.engines.memory', async (t) => {
       }
     });
 
-    await t.step('should return undefined for non-existent keys', async () => {
+    await u.step('should return undefined for non-existent keys', async () => {
       const cacher = new MemoryCacher('memory-test', {});
 
       try {
@@ -103,7 +103,7 @@ Deno.test('cacher.engines.memory', async (t) => {
       }
     });
 
-    await t.step(
+    await u.step(
       'should handle key case sensitivity and trimming',
       async () => {
         const cacher = new MemoryCacher('memory-test', {});
@@ -124,7 +124,7 @@ Deno.test('cacher.engines.memory', async (t) => {
       },
     );
 
-    await t.step('should check if a key exists', async () => {
+    await u.step('should check if a key exists', async () => {
       const cacher = new MemoryCacher('memory-test', {});
       const testData = { name: 'test', value: 123 };
 
@@ -140,7 +140,7 @@ Deno.test('cacher.engines.memory', async (t) => {
       }
     });
 
-    await t.step('should delete a key', async () => {
+    await u.step('should delete a key', async () => {
       const cacher = new MemoryCacher('memory-test', {});
       const testData = { name: 'test', value: 123 };
 
@@ -155,7 +155,7 @@ Deno.test('cacher.engines.memory', async (t) => {
       }
     });
 
-    await t.step('should clear all keys', async () => {
+    await u.step('should clear all keys', async () => {
       const cacher = new MemoryCacher('memory-test', {});
       const testData = { name: 'test', value: 123 };
 
@@ -174,7 +174,7 @@ Deno.test('cacher.engines.memory', async (t) => {
       }
     });
 
-    await t.step('should respect namespace isolation', async () => {
+    await u.step('should respect namespace isolation', async () => {
       const cacher1 = new MemoryCacher('namespace1', {});
       const cacher2 = new MemoryCacher('namespace2', {});
 
@@ -202,8 +202,8 @@ Deno.test('cacher.engines.memory', async (t) => {
     });
   });
 
-  await t.step('expiry behavior', async (t) => {
-    await t.step('should handle automatic expiry', async () => {
+  await t.step('expiry behavior', async (u) => {
+    await u.step('should handle automatic expiry', async () => {
       const cacher = new MemoryCacher('memory-test', {});
       const testData = { name: 'test', value: 123 };
 
@@ -226,7 +226,7 @@ Deno.test('cacher.engines.memory', async (t) => {
       }
     });
 
-    await t.step('should use default expiry when none provided', async () => {
+    await u.step('should use default expiry when none provided', async () => {
       const cacher = new MemoryCacher('memory-test', {
         defaultExpiry: 0.1, // 100ms default
       });
@@ -250,7 +250,7 @@ Deno.test('cacher.engines.memory', async (t) => {
       }
     });
 
-    await t.step('should handle no expiry when set to 0', async () => {
+    await u.step('should handle no expiry when set to 0', async () => {
       const cacher = new MemoryCacher('memory-test', {});
 
       try {
@@ -268,7 +268,7 @@ Deno.test('cacher.engines.memory', async (t) => {
       }
     });
 
-    await t.step('should handle sliding window expiry', async () => {
+    await u.step('should handle sliding window expiry', async () => {
       const cacher = new MemoryCacher('memory-test', {});
       const testData = { name: 'test', value: 123 };
 
@@ -299,7 +299,7 @@ Deno.test('cacher.engines.memory', async (t) => {
       }
     });
 
-    await t.step('should only refresh window on get, not has', async () => {
+    await u.step('should only refresh window on get, not has', async () => {
       const cacher = new MemoryCacher('memory-test', {});
 
       try {
@@ -328,8 +328,8 @@ Deno.test('cacher.engines.memory', async (t) => {
     });
   });
 
-  await t.step('cleanup', async (t) => {
-    await t.step('should clean up resources on finalize()', async () => {
+  await t.step('cleanup', async (u) => {
+    await u.step('should clean up resources on finalize()', async () => {
       const cacher = new MemoryCacher('memory-test', {});
 
       try {

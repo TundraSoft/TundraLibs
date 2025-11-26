@@ -2,8 +2,8 @@ import * as asserts from '$asserts';
 import { GuardianError, StringGuardian } from '../../mod.ts';
 
 Deno.test('guardian.StringGuardian', async (t) => {
-  await t.step('basic functionality', async (t) => {
-    await t.step('should validate string type', () => {
+  await t.step('basic functionality', async (u) => {
+    await u.step('should validate string type', () => {
       const schema = new StringGuardian();
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
@@ -12,12 +12,12 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse(undefined), GuardianError);
     });
 
-    await t.step('should handle empty strings', () => {
+    await u.step('should handle empty strings', () => {
       const schema = new StringGuardian();
       asserts.assertEquals(schema.parse(''), '');
     });
 
-    await t.step('should preserve string values', () => {
+    await u.step('should preserve string values', () => {
       const schema = new StringGuardian();
       const testCases = ['hello', 'world', '123', 'special!@#$%'];
 
@@ -27,8 +27,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('length validations', async (t) => {
-    await t.step('should validate minimum length', () => {
+  await t.step('length validations', async (u) => {
+    await u.step('should validate minimum length', () => {
       const schema = new StringGuardian().minLength(3);
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
@@ -37,7 +37,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse(''), GuardianError);
     });
 
-    await t.step('should validate maximum length', () => {
+    await u.step('should validate maximum length', () => {
       const schema = new StringGuardian().maxLength(5);
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
@@ -45,7 +45,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('hello world'), GuardianError);
     });
 
-    await t.step('should validate exact length', () => {
+    await u.step('should validate exact length', () => {
       const schema = new StringGuardian().length(5);
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
@@ -53,7 +53,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('hello world'), GuardianError);
     });
 
-    await t.step('should combine length validations', () => {
+    await u.step('should combine length validations', () => {
       const schema = new StringGuardian().minLength(2).maxLength(10);
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
@@ -62,8 +62,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('pattern validation', async (t) => {
-    await t.step('should validate against regex patterns', () => {
+  await t.step('pattern validation', async (u) => {
+    await u.step('should validate against regex patterns', () => {
       const lettersOnly = new StringGuardian().pattern(/^[a-zA-Z]+$/);
 
       asserts.assertEquals(lettersOnly.parse('hello'), 'hello');
@@ -72,7 +72,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => lettersOnly.parse('hello!'), GuardianError);
     });
 
-    await t.step('should validate email format', () => {
+    await u.step('should validate email format', () => {
       const email = new StringGuardian().email();
 
       asserts.assertEquals(email.parse('user@example.com'), 'user@example.com');
@@ -85,7 +85,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => email.parse('user@'), GuardianError);
     });
 
-    await t.step('should validate URL format', () => {
+    await u.step('should validate URL format', () => {
       const url = new StringGuardian().url();
 
       asserts.assertEquals(
@@ -102,37 +102,37 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('transformations', async (t) => {
-    await t.step('should transform to uppercase', () => {
+  await t.step('transformations', async (u) => {
+    await u.step('should transform to uppercase', () => {
       const schema = new StringGuardian().toUpperCase();
 
       asserts.assertEquals(schema.parse('hello'), 'HELLO');
       asserts.assertEquals(schema.parse('Hello World'), 'HELLO WORLD');
     });
 
-    await t.step('should transform to lowercase', () => {
+    await u.step('should transform to lowercase', () => {
       const schema = new StringGuardian().toLowerCase();
 
       asserts.assertEquals(schema.parse('HELLO'), 'hello');
       asserts.assertEquals(schema.parse('Hello World'), 'hello world');
     });
 
-    await t.step('should trim whitespace', () => {
+    await u.step('should trim whitespace', () => {
       const schema = new StringGuardian().trim();
 
       asserts.assertEquals(schema.parse('  hello  '), 'hello');
       asserts.assertEquals(schema.parse('\n\tworld\n'), 'world');
     });
 
-    await t.step('should chain transformations', () => {
+    await u.step('should chain transformations', () => {
       const schema = new StringGuardian().trim().toLowerCase().toUpperCase();
 
       asserts.assertEquals(schema.parse('  Hello World  '), 'HELLO WORLD');
     });
   });
 
-  await t.step('type transformations', async (t) => {
-    await t.step('should convert string to number', () => {
+  await t.step('type transformations', async (u) => {
+    await u.step('should convert string to number', () => {
       const schema = new StringGuardian().toNumber();
 
       asserts.assertEquals(schema.parse('123'), 123);
@@ -143,7 +143,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('not a number'), GuardianError);
     });
 
-    await t.step('should convert string to integer', () => {
+    await u.step('should convert string to integer', () => {
       const schema = new StringGuardian().toInt();
 
       asserts.assertEquals(schema.parse('123'), 123);
@@ -153,7 +153,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse(''), GuardianError); // parseInt('') is NaN
     });
 
-    await t.step('should convert string to date', () => {
+    await u.step('should convert string to date', () => {
       const schema = new StringGuardian().toDate();
 
       const date = schema.parse('2023-01-01T00:00:00.000Z');
@@ -164,8 +164,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('safe parsing', async (t) => {
-    await t.step('should return success result for valid input', () => {
+  await t.step('safe parsing', async (u) => {
+    await u.step('should return success result for valid input', () => {
       const schema = new StringGuardian().minLength(3);
       const result = schema.safeParse('hello');
 
@@ -174,7 +174,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(data, 'hello');
     });
 
-    await t.step('should return error result for invalid input', () => {
+    await u.step('should return error result for invalid input', () => {
       const schema = new StringGuardian().minLength(3);
       const result = schema.safeParse('hi');
 
@@ -184,8 +184,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('error handling', async (t) => {
-    await t.step('should provide detailed error messages', () => {
+  await t.step('error handling', async (u) => {
+    await u.step('should provide detailed error messages', () => {
       const schema = new StringGuardian().minLength(5);
 
       asserts.assertThrows(
@@ -195,7 +195,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       );
     });
 
-    await t.step('should support custom error messages', () => {
+    await u.step('should support custom error messages', () => {
       const schema = new StringGuardian().minLength(5, 'Too short!');
 
       asserts.assertThrows(
@@ -206,8 +206,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('metadata handling', async (t) => {
-    await t.step('should store and retrieve metadata', () => {
+  await t.step('metadata handling', async (u) => {
+    await u.step('should store and retrieve metadata', () => {
       const metaData = {
         description: 'User name field',
         title: 'Name',
@@ -218,7 +218,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(schema.metaData, metaData);
     });
 
-    await t.step('should allow setting metadata properties', () => {
+    await u.step('should allow setting metadata properties', () => {
       const schema = new StringGuardian();
       schema.description = 'Test description';
       schema.title = 'Test Title';
@@ -234,8 +234,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('character validations', async (t) => {
-    await t.step('should validate alpha characters', () => {
+  await t.step('character validations', async (u) => {
+    await u.step('should validate alpha characters', () => {
       const schema = new StringGuardian().alpha();
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
@@ -246,7 +246,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('hello!'), GuardianError);
     });
 
-    await t.step('should validate alphanumeric characters', () => {
+    await u.step('should validate alphanumeric characters', () => {
       const schema = new StringGuardian().alphanumeric();
 
       asserts.assertEquals(schema.parse('hello123'), 'hello123');
@@ -259,8 +259,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('uuid validations', async (t) => {
-    await t.step('should validate UUID format', () => {
+  await t.step('uuid validations', async (u) => {
+    await u.step('should validate UUID format', () => {
       const schema = new StringGuardian().uuid();
 
       asserts.assertEquals(
@@ -282,7 +282,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       );
     });
 
-    await t.step('should validate UUID v1 format', () => {
+    await u.step('should validate UUID v1 format', () => {
       const schema = new StringGuardian().uuidv1();
 
       asserts.assertEquals(
@@ -296,7 +296,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('not-a-uuid'), GuardianError);
     });
 
-    await t.step('should validate UUID v4 format', () => {
+    await u.step('should validate UUID v4 format', () => {
       const schema = new StringGuardian().uuidv4();
 
       asserts.assertEquals(
@@ -311,8 +311,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('content validations', async (t) => {
-    await t.step('should validate contains', () => {
+  await t.step('content validations', async (u) => {
+    await u.step('should validate contains', () => {
       const schema = new StringGuardian().contains('world');
 
       asserts.assertEquals(schema.parse('hello world'), 'hello world');
@@ -322,7 +322,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse(''), GuardianError);
     });
 
-    await t.step('should validate notContains', () => {
+    await u.step('should validate notContains', () => {
       const schema = new StringGuardian().notContains('bad');
 
       asserts.assertEquals(schema.parse('hello world'), 'hello world');
@@ -332,7 +332,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('badger'), GuardianError);
     });
 
-    await t.step('should validate startsWith', () => {
+    await u.step('should validate startsWith', () => {
       const schema = new StringGuardian().startsWith('hello');
 
       asserts.assertEquals(schema.parse('hello world'), 'hello world');
@@ -341,7 +341,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('world hello'), GuardianError);
     });
 
-    await t.step('should validate endsWith', () => {
+    await u.step('should validate endsWith', () => {
       const schema = new StringGuardian().endsWith('world');
 
       asserts.assertEquals(schema.parse('hello world'), 'hello world');
@@ -350,7 +350,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('world hello'), GuardianError);
     });
 
-    await t.step('should validate notStartsWith', () => {
+    await u.step('should validate notStartsWith', () => {
       const schema = new StringGuardian().notStartsWith('bad');
 
       asserts.assertEquals(schema.parse('hello world'), 'hello world');
@@ -359,7 +359,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('badger'), GuardianError);
     });
 
-    await t.step('should validate notEndsWith', () => {
+    await u.step('should validate notEndsWith', () => {
       const schema = new StringGuardian().notEndsWith('bad');
 
       asserts.assertEquals(schema.parse('hello world'), 'hello world');
@@ -368,7 +368,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('not bad'), GuardianError);
     });
 
-    await t.step('should validate notEmpty', () => {
+    await u.step('should validate notEmpty', () => {
       const schema = new StringGuardian().notEmpty();
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
@@ -379,8 +379,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('string transformations', async (t) => {
-    await t.step('should strip spaces', () => {
+  await t.step('string transformations', async (u) => {
+    await u.step('should strip spaces', () => {
       const schema = new StringGuardian().stripSpaces();
 
       asserts.assertEquals(schema.parse('hello world'), 'helloworld');
@@ -389,7 +389,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(schema.parse('nospaces'), 'nospaces');
     });
 
-    await t.step('should replace text', () => {
+    await u.step('should replace text', () => {
       const schema = new StringGuardian().replace('world', 'universe');
 
       asserts.assertEquals(schema.parse('hello world'), 'hello universe');
@@ -397,21 +397,21 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(schema.parse('no match'), 'no match');
     });
 
-    await t.step('should replace with regex', () => {
+    await u.step('should replace with regex', () => {
       const schema = new StringGuardian().replace(/\d+/g, 'X');
 
       asserts.assertEquals(schema.parse('hello123world456'), 'helloXworldX');
       asserts.assertEquals(schema.parse('no numbers'), 'no numbers');
     });
 
-    await t.step('should add prefix', () => {
+    await u.step('should add prefix', () => {
       const schema = new StringGuardian().prefix('Hello ');
 
       asserts.assertEquals(schema.parse('world'), 'Hello world');
       asserts.assertEquals(schema.parse(''), 'Hello ');
     });
 
-    await t.step('should add suffix', () => {
+    await u.step('should add suffix', () => {
       const schema = new StringGuardian().suffix(' world');
 
       asserts.assertEquals(schema.parse('Hello'), 'Hello world');
@@ -419,8 +419,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('nullable and optional', async (t) => {
-    await t.step('should handle nullable strings', () => {
+  await t.step('nullable and optional', async (u) => {
+    await u.step('should handle nullable strings', () => {
       const schema = new StringGuardian().minLength(3).nullable();
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
@@ -429,7 +429,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse(undefined), GuardianError);
     });
 
-    await t.step('should handle optional strings', () => {
+    await u.step('should handle optional strings', () => {
       const schema = new StringGuardian().minLength(3).optional();
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
@@ -438,7 +438,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse(null), GuardianError);
     });
 
-    await t.step('should handle optional with default', () => {
+    await u.step('should handle optional with default', () => {
       const schema = new StringGuardian().minLength(3).optional('default');
 
       asserts.assertEquals(schema.parse('hello'), 'hello');
@@ -446,7 +446,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('hi'), GuardianError);
     });
 
-    await t.step('should handle nullable and optional separately', () => {
+    await u.step('should handle nullable and optional separately', () => {
       // Test nullable
       const nullableSchema = new StringGuardian().minLength(2).nullable();
       asserts.assertEquals(nullableSchema.parse('hello'), 'hello');
@@ -462,7 +462,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => optionalSchema.parse('x'), GuardianError);
     });
 
-    await t.step('should handle nullable().optional() chaining', () => {
+    await u.step('should handle nullable().optional() chaining', () => {
       const schema = new StringGuardian().minLength(2).nullable().optional(
         'default',
       );
@@ -473,7 +473,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('x'), GuardianError); // validation still works
     });
 
-    await t.step('should handle optional().nullable() chaining', () => {
+    await u.step('should handle optional().nullable() chaining', () => {
       const schema = new StringGuardian().minLength(2).optional('default')
         .nullable();
 
@@ -483,14 +483,14 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('x'), GuardianError); // validation still works
     });
 
-    await t.step('should work with transformations', () => {
+    await u.step('should work with transformations', () => {
       const schema = new StringGuardian().trim().toUpperCase().optional();
 
       asserts.assertEquals(schema.parse('  hello  '), 'HELLO');
       asserts.assertEquals(schema.parse(undefined), undefined);
     });
 
-    await t.step('should work with format validations', () => {
+    await u.step('should work with format validations', () => {
       const schema = new StringGuardian().email().nullable();
 
       asserts.assertEquals(
@@ -502,8 +502,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('chained validations', async (t) => {
-    await t.step('should chain multiple validations', () => {
+  await t.step('chained validations', async (u) => {
+    await u.step('should chain multiple validations', () => {
       const schema = new StringGuardian()
         .minLength(3)
         .maxLength(10)
@@ -518,7 +518,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('help'), GuardianError); // doesn't end with o
     });
 
-    await t.step('should chain validations and transformations', () => {
+    await u.step('should chain validations and transformations', () => {
       const schema = new StringGuardian()
         .trim()
         .toLowerCase()
@@ -531,8 +531,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('new validation methods', async (t) => {
-    await t.step('phone validation', () => {
+  await t.step('new validation methods', async (u) => {
+    await u.step('phone validation', () => {
       const schema = new StringGuardian().phone();
 
       // Valid phone numbers
@@ -547,7 +547,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('123-456-78901'), GuardianError);
     });
 
-    await t.step('phone validation with custom pattern', () => {
+    await u.step('phone validation with custom pattern', () => {
       const customPattern = /^\d{3}-\d{3}-\d{4}$/;
       const schema = new StringGuardian().phone(customPattern);
 
@@ -555,7 +555,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('(123) 456-7890'), GuardianError);
     });
 
-    await t.step('ipAddress validation', () => {
+    await u.step('ipAddress validation', () => {
       const schema = new StringGuardian().ipAddress();
 
       // Valid IPv4
@@ -577,7 +577,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('not-an-ip'), GuardianError);
     });
 
-    await t.step('ipv4 validation', () => {
+    await u.step('ipv4 validation', () => {
       const schema = new StringGuardian().ipv4();
 
       asserts.assertEquals(schema.parse('192.168.1.1'), '192.168.1.1');
@@ -586,7 +586,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('2001:db8::1'), GuardianError);
     });
 
-    await t.step('ipv6 validation', () => {
+    await u.step('ipv6 validation', () => {
       const schema = new StringGuardian().ipv6();
 
       asserts.assertEquals(
@@ -597,7 +597,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('invalid-ipv6'), GuardianError);
     });
 
-    await t.step('internalIp validation', () => {
+    await u.step('internalIp validation', () => {
       const schema = new StringGuardian().internalIp();
 
       // Valid internal IPs
@@ -612,7 +612,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('172.15.0.1'), GuardianError); // outside private range
     });
 
-    await t.step('macAddress validation', () => {
+    await u.step('macAddress validation', () => {
       const schema = new StringGuardian().macAddress();
 
       asserts.assertEquals(
@@ -630,7 +630,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       );
     });
 
-    await t.step('creditCard validation', () => {
+    await u.step('creditCard validation', () => {
       const schema = new StringGuardian().creditCard();
 
       // Test valid Visa (starts with 4)
@@ -647,7 +647,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('123456'), GuardianError);
     });
 
-    await t.step('creditCard validation by type', () => {
+    await u.step('creditCard validation by type', () => {
       const visaSchema = new StringGuardian().creditCard('visa');
       const mastercardSchema = new StringGuardian().creditCard('mastercard');
 
@@ -661,7 +661,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       ); // Visa number on Mastercard schema
     });
 
-    await t.step('slug validation', () => {
+    await u.step('slug validation', () => {
       const schema = new StringGuardian().slug();
 
       asserts.assertEquals(schema.parse('hello-world'), 'hello-world');
@@ -671,7 +671,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('hello world'), GuardianError); // space
     });
 
-    await t.step('hexColor validation', () => {
+    await u.step('hexColor validation', () => {
       const schema = new StringGuardian().hexColor();
 
       asserts.assertEquals(schema.parse('#fff'), '#fff');
@@ -681,7 +681,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('#gggggg'), GuardianError); // invalid hex
     });
 
-    await t.step('domain validation', () => {
+    await u.step('domain validation', () => {
       const schema = new StringGuardian().domain();
 
       asserts.assertEquals(schema.parse('example.com'), 'example.com');
@@ -691,7 +691,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('.com'), GuardianError);
     });
 
-    await t.step('noWhitespace validation', () => {
+    await u.step('noWhitespace validation', () => {
       const schema = new StringGuardian().noWhitespace();
 
       asserts.assertEquals(schema.parse('helloworld'), 'helloworld');
@@ -701,7 +701,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('test\n123'), GuardianError);
     });
 
-    await t.step('ascii validation', () => {
+    await u.step('ascii validation', () => {
       const schema = new StringGuardian().ascii();
 
       asserts.assertEquals(
@@ -712,7 +712,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('🌍'), GuardianError); // emoji
     });
 
-    await t.step('noSqlInjection validation', () => {
+    await u.step('noSqlInjection validation', () => {
       const schema = new StringGuardian().noSqlInjection();
 
       asserts.assertEquals(schema.parse('normal text'), 'normal text');
@@ -728,7 +728,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       );
     });
 
-    await t.step('noXss validation', () => {
+    await u.step('noXss validation', () => {
       const schema = new StringGuardian().noXss();
 
       asserts.assertEquals(schema.parse('normal text'), 'normal text');
@@ -751,8 +751,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('new transformation methods', async (t) => {
-    await t.step('capitalize transformation', () => {
+  await t.step('new transformation methods', async (u) => {
+    await u.step('capitalize transformation', () => {
       const schema = new StringGuardian().capitalize();
 
       asserts.assertEquals(schema.parse('hello world'), 'Hello World');
@@ -760,7 +760,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(schema.parse('already Correct'), 'Already Correct');
     });
 
-    await t.step('camelCase transformation', () => {
+    await u.step('camelCase transformation', () => {
       const schema = new StringGuardian().camelCase();
 
       asserts.assertEquals(schema.parse('hello world'), 'helloWorld');
@@ -769,7 +769,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(schema.parse('Already Correct'), 'alreadyCorrect');
     });
 
-    await t.step('snakeCase transformation', () => {
+    await u.step('snakeCase transformation', () => {
       const schema = new StringGuardian().snakeCase();
 
       asserts.assertEquals(schema.parse('hello world'), 'hello_world');
@@ -778,7 +778,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(schema.parse('PascalCase'), 'pascal_case');
     });
 
-    await t.step('kebabCase transformation', () => {
+    await u.step('kebabCase transformation', () => {
       const schema = new StringGuardian().kebabCase();
 
       asserts.assertEquals(schema.parse('hello world'), 'hello-world');
@@ -787,7 +787,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(schema.parse('PascalCase'), 'pascal-case');
     });
 
-    await t.step('pascalCase transformation', () => {
+    await u.step('pascalCase transformation', () => {
       const schema = new StringGuardian().pascalCase();
 
       asserts.assertEquals(schema.parse('hello world'), 'HelloWorld');
@@ -796,7 +796,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(schema.parse('camelCase'), 'Camelcase');
     });
 
-    await t.step('reverse transformation', () => {
+    await u.step('reverse transformation', () => {
       const schema = new StringGuardian().reverse();
 
       asserts.assertEquals(schema.parse('hello'), 'olleh');
@@ -804,7 +804,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(schema.parse('12345'), '54321');
     });
 
-    await t.step('padStart transformation', () => {
+    await u.step('padStart transformation', () => {
       const schema = new StringGuardian().padStart(5, '0');
 
       asserts.assertEquals(schema.parse('123'), '00123');
@@ -812,7 +812,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(schema.parse('123456'), '123456'); // longer than target
     });
 
-    await t.step('padEnd transformation', () => {
+    await u.step('padEnd transformation', () => {
       const schema = new StringGuardian().padEnd(5, '0');
 
       asserts.assertEquals(schema.parse('123'), '12300');
@@ -820,7 +820,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(schema.parse('123456'), '123456'); // longer than target
     });
 
-    await t.step('sanitize transformation', () => {
+    await u.step('sanitize transformation', () => {
       const schema = new StringGuardian().sanitize();
 
       asserts.assertEquals(schema.parse('normal text'), 'normal text');
@@ -832,7 +832,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertEquals(schema.parse('onclick="alert(1)"'), '');
     });
 
-    await t.step('normalizeSpace transformation', () => {
+    await u.step('normalizeSpace transformation', () => {
       const schema = new StringGuardian().normalizeSpace();
 
       asserts.assertEquals(schema.parse('  hello   world  '), 'hello world');
@@ -841,8 +841,8 @@ Deno.test('guardian.StringGuardian', async (t) => {
     });
   });
 
-  await t.step('nullable and optional scenarios', async (t) => {
-    await t.step('nullable phone validation', () => {
+  await t.step('nullable and optional scenarios', async (u) => {
+    await u.step('nullable phone validation', () => {
       const schema = new StringGuardian().phone().nullable();
 
       asserts.assertEquals(schema.parse(null), null);
@@ -851,7 +851,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('invalid'), GuardianError);
     });
 
-    await t.step('optional creditCard validation', () => {
+    await u.step('optional creditCard validation', () => {
       const schema = new StringGuardian().creditCard().optional();
 
       asserts.assertEquals(schema.parse(undefined), undefined);
@@ -863,7 +863,7 @@ Deno.test('guardian.StringGuardian', async (t) => {
       asserts.assertThrows(() => schema.parse('invalid'), GuardianError);
     });
 
-    await t.step('optional with default camelCase', () => {
+    await u.step('optional with default camelCase', () => {
       const schema = new StringGuardian().camelCase().optional('defaultValue');
 
       asserts.assertEquals(schema.parse(undefined), 'defaultvalue');

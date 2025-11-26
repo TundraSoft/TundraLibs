@@ -213,8 +213,8 @@ const cleanupMock = () => {
 };
 
 Deno.test('restler.examples.dockerAPI', async (h) => {
-  await h.step('DockerAPI', async (t) => {
-    await t.step('should initialize with default socket path', () => {
+  await h.step('DockerAPI', async (u) => {
+    await u.step('should initialize with default socket path', () => {
       try {
         setupMock();
         const defaultApi = new DockerAPI();
@@ -224,7 +224,7 @@ Deno.test('restler.examples.dockerAPI', async (h) => {
       }
     });
 
-    await t.step('should accept custom socket path', () => {
+    await u.step('should accept custom socket path', () => {
       try {
         setupMock();
         const customApi = new DockerAPIMock('/var/run/notthere.socket');

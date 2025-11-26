@@ -127,15 +127,15 @@ class AsyncAuthTestRESTler extends TestRESTler {
 }
 
 Deno.test('restler.core', async (t) => {
-  await t.step('constructor option validation', async (t) => {
-    await t.step('should create an instance with valid options', () => {
+  await t.step('constructor option validation', async (u) => {
+    await u.step('should create an instance with valid options', () => {
       const client = new TestRESTler({
         baseURL: 'https://api.example.com',
       });
       asserts.assert(client instanceof RESTler);
     });
 
-    await t.step('should throw for invalid baseURL', () => {
+    await u.step('should throw for invalid baseURL', () => {
       asserts.assertThrows(
         () => new TestRESTler({ baseURL: '' }),
         RESTlerConfigError,
@@ -143,7 +143,7 @@ Deno.test('restler.core', async (t) => {
       );
     });
 
-    await t.step('should throw for invalid baseURL', () => {
+    await u.step('should throw for invalid baseURL', () => {
       asserts.assertThrows(
         () => new TestRESTler({ baseURL: 'sftp://api.test.org' }),
         RESTlerConfigError,
@@ -151,7 +151,7 @@ Deno.test('restler.core', async (t) => {
       );
     });
 
-    await t.step('should throw for invalid port', () => {
+    await u.step('should throw for invalid port', () => {
       asserts.assertThrows(
         () =>
           new TestRESTler({
@@ -163,7 +163,7 @@ Deno.test('restler.core', async (t) => {
       );
     });
 
-    await t.step('should throw for invalid timeout', () => {
+    await u.step('should throw for invalid timeout', () => {
       asserts.assertThrows(
         () =>
           new TestRESTler({
@@ -175,7 +175,7 @@ Deno.test('restler.core', async (t) => {
       );
     });
 
-    await t.step('should throw for invalid contentType', () => {
+    await u.step('should throw for invalid contentType', () => {
       asserts.assertThrows(
         () =>
           new TestRESTler({
@@ -188,7 +188,7 @@ Deno.test('restler.core', async (t) => {
       );
     });
 
-    await t.step('should throw for invalid headers', () => {
+    await u.step('should throw for invalid headers', () => {
       asserts.assertThrows(
         () =>
           new TestRESTler({
@@ -201,7 +201,7 @@ Deno.test('restler.core', async (t) => {
       );
     });
 
-    await t.step('should throw for invalid socketpath', () => {
+    await u.step('should throw for invalid socketpath', () => {
       asserts.assertThrows(
         () =>
           new TestRESTler({
@@ -214,7 +214,7 @@ Deno.test('restler.core', async (t) => {
       );
     });
 
-    await t.step('should throw for invalid certificate config (TLS)', () => {
+    await u.step('should throw for invalid certificate config (TLS)', () => {
       asserts.assertThrows(
         () =>
           new TestRESTler({
@@ -227,7 +227,7 @@ Deno.test('restler.core', async (t) => {
       );
     });
 
-    await t.step('should throw for invalid certificate config (TLS)', () => {
+    await u.step('should throw for invalid certificate config (TLS)', () => {
       asserts.assertThrows(
         () =>
           new TestRESTler({
@@ -242,7 +242,7 @@ Deno.test('restler.core', async (t) => {
       );
     });
 
-    await t.step('should throw for invalid version', () => {
+    await u.step('should throw for invalid version', () => {
       asserts.assertThrows(
         () =>
           new TestRESTler({
@@ -256,12 +256,12 @@ Deno.test('restler.core', async (t) => {
     });
   });
 
-  await t.step('input validation methods', async (t) => {
+  await t.step('input validation methods', async (u) => {
     const client = new TestRESTler({
       baseURL: 'https://api.example.com',
     });
 
-    await t.step('validateBaseURL', () => {
+    await u.step('validateBaseURL', () => {
       asserts.assert(client.validateBaseURL('https://api.example.com'));
       asserts.assert(client.validateBaseURL('http://localhost:8080'));
       asserts.assert(!client.validateBaseURL(''));
@@ -269,7 +269,7 @@ Deno.test('restler.core', async (t) => {
       asserts.assert(!client.validateBaseURL(null));
     });
 
-    await t.step('validatePort', () => {
+    await u.step('validatePort', () => {
       asserts.assertEquals(client.validatePort(80), true);
       asserts.assertEquals(client.validatePort(8080), true);
       asserts.assertEquals(client.validatePort(1), true);
@@ -280,7 +280,7 @@ Deno.test('restler.core', async (t) => {
       asserts.assertEquals(client.validatePort(undefined), true);
     });
 
-    await t.step('validateTimeout', () => {
+    await u.step('validateTimeout', () => {
       asserts.assertEquals(client.validateTimeout(1), true);
       asserts.assertEquals(client.validateTimeout(30), true);
       asserts.assertEquals(client.validateTimeout(60), true);
@@ -290,7 +290,7 @@ Deno.test('restler.core', async (t) => {
       asserts.assertEquals(client.validateTimeout(undefined), true);
     });
 
-    await t.step('validateContentType', () => {
+    await u.step('validateContentType', () => {
       asserts.assertEquals(client.validateContentType('JSON'), true);
       asserts.assertEquals(client.validateContentType('XML'), true);
       asserts.assertEquals(client.validateContentType('FORM'), true);
@@ -300,7 +300,7 @@ Deno.test('restler.core', async (t) => {
       asserts.assertEquals(client.validateContentType(123), false);
     });
 
-    await t.step('validateHeaders', () => {
+    await u.step('validateHeaders', () => {
       asserts.assert(client.validateHeaders({}));
       asserts.assert(
         client.validateHeaders({ 'Content-Type': 'application/json' }),
@@ -336,34 +336,34 @@ Deno.test('restler.core', async (t) => {
     });
   });
 
-  await t.step('version replacement', async (t) => {
+  await t.step('version replacement', async (u) => {
     const client = new TestRESTler({
       baseURL: 'https://api.example.com/v{version}',
       version: '2',
     });
 
-    await t.step('should replace {version} in strings', () => {
+    await u.step('should replace {version} in strings', () => {
       const result = client.replaceVersion('path/to/{version}/resource', '1');
       asserts.assertEquals(result, 'path/to/1/resource');
     });
 
-    await t.step('should handle empty version', () => {
+    await u.step('should handle empty version', () => {
       const result = client.replaceVersion('path/to/{version}/resource');
       asserts.assertEquals(result, 'path/to//resource');
     });
 
-    await t.step('should handle strings without {version}', () => {
+    await u.step('should handle strings without {version}', () => {
       const result = client.replaceVersion('path/to/resource', '1');
       asserts.assertEquals(result, 'path/to/resource');
     });
 
-    await t.step('should handle multiple {version} occurrences', () => {
+    await u.step('should handle multiple {version} occurrences', () => {
       const result = client.replaceVersion('v{version}/path/{version}', '2');
       asserts.assertEquals(result, 'v2/path/2');
     });
   });
 
-  await t.step('processEndpoint', async (t) => {
+  await t.step('processEndpoint', async (u) => {
     const client = new TestRESTler({
       baseURL: 'https://api.example.com/v{version}',
       version: '2',
@@ -372,7 +372,7 @@ Deno.test('restler.core', async (t) => {
       },
     });
 
-    await t.step('should process basic endpoint', () => {
+    await u.step('should process basic endpoint', () => {
       const request = client.processEndpoint(
         { path: '/users' },
         { method: 'GET' },
@@ -382,7 +382,7 @@ Deno.test('restler.core', async (t) => {
       asserts.assertEquals(request.headers!['X-API-Key'], 'default-key');
     });
 
-    await t.step('should handle query parameters', () => {
+    await u.step('should handle query parameters', () => {
       const request = client.processEndpoint(
         {
           path: '/users',
@@ -400,7 +400,7 @@ Deno.test('restler.core', async (t) => {
       asserts.assert(request.url.includes('apiVersion=2'));
     });
 
-    await t.step('should handle bearer token auth', () => {
+    await u.step('should handle bearer token auth', () => {
       const request = client.processEndpoint(
         {
           path: '/users',
@@ -415,7 +415,7 @@ Deno.test('restler.core', async (t) => {
       );
     });
 
-    await t.step('should handle basic auth', () => {
+    await u.step('should handle basic auth', () => {
       const request = client.processEndpoint(
         {
           path: '/users',
@@ -458,7 +458,7 @@ Deno.test('restler.core', async (t) => {
       );
     });
 
-    await t.step('should handle request-specific headers', () => {
+    await u.step('should handle request-specific headers', () => {
       const request = client.processEndpoint(
         { path: '/users' },
         {
@@ -477,7 +477,7 @@ Deno.test('restler.core', async (t) => {
       asserts.assertEquals(request.headers!['X-API-Key'], 'default-key');
     });
 
-    await t.step('should handle custom port', () => {
+    await u.step('should handle custom port', () => {
       const request = client.processEndpoint(
         {
           path: '/users',
@@ -525,7 +525,7 @@ Deno.test('restler.core', async (t) => {
       );
     });
 
-    await t.step('should override baseURL', () => {
+    await u.step('should override baseURL', () => {
       const req = client.processEndpoint({
         baseURL: 'https://api.example.com',
         path: '/users',
@@ -534,8 +534,8 @@ Deno.test('restler.core', async (t) => {
     });
   });
 
-  await t.step('HTTP request methods', async (t) => {
-    await t.step('should make a GET request', async () => {
+  await t.step('HTTP request methods', async (u) => {
+    await u.step('should make a GET request', async () => {
       try {
         // Setup event tracking
         const emittedEvents: Array<
@@ -588,7 +588,7 @@ Deno.test('restler.core', async (t) => {
       }
     });
 
-    await t.step('should make a POST request with JSON body', async () => {
+    await u.step('should make a POST request with JSON body', async () => {
       try {
         const requestData = {
           method: '',
@@ -646,7 +646,7 @@ Deno.test('restler.core', async (t) => {
       }
     });
 
-    await t.step('should handle network errors', async () => {
+    await u.step('should handle network errors', async () => {
       try {
         globalThis.fetch = async () => {
           await 1;
@@ -671,7 +671,7 @@ Deno.test('restler.core', async (t) => {
       }
     });
 
-    await t.step('should handle timeout errors', async () => {
+    await u.step('should handle timeout errors', async () => {
       try {
         globalThis.fetch = async () => {
           await 1;
@@ -697,7 +697,7 @@ Deno.test('restler.core', async (t) => {
       }
     });
 
-    await t.step('should handle non-JSON responses', async () => {
+    await u.step('should handle non-JSON responses', async () => {
       try {
         globalThis.fetch = async () => {
           await 1;
@@ -726,7 +726,7 @@ Deno.test('restler.core', async (t) => {
       }
     });
 
-    await t.step('should handle XML responses', async () => {
+    await u.step('should handle XML responses', async () => {
       try {
         globalThis.fetch = async () => {
           await 1;
@@ -757,7 +757,7 @@ Deno.test('restler.core', async (t) => {
       }
     });
 
-    await t.step('should emit authFailure event ', async () => {
+    await u.step('should emit authFailure event ', async () => {
       try {
         // Set up event tracking
         let authFailureEmitted = false;
@@ -817,7 +817,7 @@ Deno.test('restler.core', async (t) => {
       }
     });
 
-    await t.step('should emit rateLimit event', async () => {
+    await u.step('should emit rateLimit event', async () => {
       try {
         // Set up event tracking
         let rateLimitEmitted = false;
@@ -888,7 +888,7 @@ Deno.test('restler.core', async (t) => {
       }
     });
 
-    await t.step('should capture alternate rate limit headers', async () => {
+    await u.step('should capture alternate rate limit headers', async () => {
       try {
         // Set up event tracking
         let rateLimitEmitted = false;
@@ -948,8 +948,8 @@ Deno.test('restler.core', async (t) => {
     });
   });
 
-  await t.step('authentication', async (t) => {
-    await t.step('should add authentication via _authInjector', async () => {
+  await t.step('authentication', async (u) => {
+    await u.step('should add authentication via _authInjector', async () => {
       try {
         const requestData = {
           headers: {} as Record<string, string>,

@@ -2,8 +2,8 @@ import * as asserts from '$asserts';
 import { DateGuardian, GuardianError } from '../../mod.ts';
 
 Deno.test('guardian.DateGuardian', async (t) => {
-  await t.step('basic functionality', async (t) => {
-    await t.step('should validate date type', () => {
+  await t.step('basic functionality', async (u) => {
+    await u.step('should validate date type', () => {
       const guardian = new DateGuardian();
       const date = new Date('2023-06-15');
 
@@ -15,14 +15,14 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertThrows(() => guardian.parse(undefined), GuardianError);
     });
 
-    await t.step('should reject invalid dates', () => {
+    await u.step('should reject invalid dates', () => {
       const guardian = new DateGuardian();
       const invalidDate = new Date('invalid');
 
       asserts.assertThrows(() => guardian.parse(invalidDate), GuardianError);
     });
 
-    await t.step('should preserve valid dates', () => {
+    await u.step('should preserve valid dates', () => {
       const guardian = new DateGuardian();
       const date = new Date('2023-06-15T14:30:00');
 
@@ -30,8 +30,8 @@ Deno.test('guardian.DateGuardian', async (t) => {
     });
   });
 
-  await t.step('range validations', async (t) => {
-    await t.step('should validate minimum date', () => {
+  await t.step('range validations', async (u) => {
+    await u.step('should validate minimum date', () => {
       const minDate = new Date('2020-01-01');
       const guardian = new DateGuardian().min(minDate);
 
@@ -50,7 +50,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('should validate maximum date', () => {
+    await u.step('should validate maximum date', () => {
       const maxDate = new Date('2030-12-31');
       const guardian = new DateGuardian().max(maxDate);
 
@@ -69,7 +69,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('should combine min and max dates', () => {
+    await u.step('should combine min and max dates', () => {
       const guardian = new DateGuardian()
         .min(new Date('2020-01-01'))
         .max(new Date('2030-12-31'));
@@ -89,7 +89,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('should validate past dates', () => {
+    await u.step('should validate past dates', () => {
       const guardian = new DateGuardian().past();
       const pastDate = new Date('2020-01-01');
 
@@ -100,7 +100,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertThrows(() => guardian.parse(futureDate), GuardianError);
     });
 
-    await t.step('should validate future dates', () => {
+    await u.step('should validate future dates', () => {
       const guardian = new DateGuardian().future();
       const futureDate = new Date(Date.now() + 86400000); // tomorrow
 
@@ -112,8 +112,8 @@ Deno.test('guardian.DateGuardian', async (t) => {
     });
   });
 
-  await t.step('date-specific validations', async (t) => {
-    await t.step('should validate weekday', () => {
+  await t.step('date-specific validations', async (u) => {
+    await u.step('should validate weekday', () => {
       const monday = new Date('2023-06-12'); // Monday
       const tuesday = new Date('2023-06-13'); // Tuesday
 
@@ -123,7 +123,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertThrows(() => mondayGuardian.parse(tuesday), GuardianError);
     });
 
-    await t.step('should validate business hours', () => {
+    await u.step('should validate business hours', () => {
       const businessHour = new Date('2023-06-15T14:00:00'); // 2 PM
       const afterHours = new Date('2023-06-15T20:00:00'); // 8 PM
 
@@ -134,43 +134,43 @@ Deno.test('guardian.DateGuardian', async (t) => {
     });
   });
 
-  await t.step('transformations', async (t) => {
-    await t.step('should format dates', () => {
+  await t.step('transformations', async (u) => {
+    await u.step('should format dates', () => {
       const guardian = new DateGuardian().format('yyyy-MM-dd');
       const date = new Date('2023-06-15T14:30:00');
 
       asserts.assertEquals(guardian.parse(date), '2023-06-15');
     });
 
-    await t.step('should format time', () => {
+    await u.step('should format time', () => {
       const guardian = new DateGuardian().format('HH:mm:ss');
       const date = new Date('2023-06-15T14:30:45');
 
       asserts.assertEquals(guardian.parse(date), '14:30:45');
     });
 
-    await t.step('should format full datetime', () => {
+    await u.step('should format full datetime', () => {
       const guardian = new DateGuardian().format('yyyy-MM-dd HH:mm:ss');
       const date = new Date('2023-06-15T14:30:45');
 
       asserts.assertEquals(guardian.parse(date), '2023-06-15 14:30:45');
     });
 
-    await t.step('should convert to ISO string', () => {
+    await u.step('should convert to ISO string', () => {
       const guardian = new DateGuardian().toISOString();
       const date = new Date('2023-06-15T14:30:00Z');
 
       asserts.assertEquals(guardian.parse(date), '2023-06-15T14:30:00.000Z');
     });
 
-    await t.step('should convert to timestamp', () => {
+    await u.step('should convert to timestamp', () => {
       const guardian = new DateGuardian().toTimestamp();
       const date = new Date('2023-06-15T14:30:00Z');
 
       asserts.assertEquals(guardian.parse(date), date.getTime());
     });
 
-    await t.step('should convert to unix timestamp', () => {
+    await u.step('should convert to unix timestamp', () => {
       const guardian = new DateGuardian().toUnixTimestamp();
       const date = new Date('2023-06-15T14:30:00Z');
 
@@ -180,7 +180,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('should extract date components', () => {
+    await u.step('should extract date components', () => {
       const date = new Date('2023-06-15T14:30:45');
 
       const yearGuardian = new DateGuardian().component('year');
@@ -203,8 +203,8 @@ Deno.test('guardian.DateGuardian', async (t) => {
     });
   });
 
-  await t.step('chained validations', async (t) => {
-    await t.step('should chain date validations', () => {
+  await t.step('chained validations', async (u) => {
+    await u.step('should chain date validations', () => {
       const guardian = new DateGuardian()
         .min(new Date('2020-01-01'))
         .max(new Date('2030-12-31'))
@@ -226,7 +226,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('should chain validations and transformations', () => {
+    await u.step('should chain validations and transformations', () => {
       const guardian = new DateGuardian()
         .past()
         .format('yyyy-MM-dd');
@@ -236,8 +236,8 @@ Deno.test('guardian.DateGuardian', async (t) => {
     });
   });
 
-  await t.step('safe parsing', async (t) => {
-    await t.step('should return success result for valid input', () => {
+  await t.step('safe parsing', async (u) => {
+    await u.step('should return success result for valid input', () => {
       const guardian = new DateGuardian();
       const date = new Date('2023-06-15');
       const [error, result] = guardian.safeParse(date);
@@ -246,7 +246,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertEquals(result, date);
     });
 
-    await t.step('should return error result for invalid input', () => {
+    await u.step('should return error result for invalid input', () => {
       const guardian = new DateGuardian();
       const [error, result] = guardian.safeParse('2023-06-15');
 
@@ -255,8 +255,8 @@ Deno.test('guardian.DateGuardian', async (t) => {
     });
   });
 
-  await t.step('error handling', async (t) => {
-    await t.step('should provide detailed error messages', () => {
+  await t.step('error handling', async (u) => {
+    await u.step('should provide detailed error messages', () => {
       const guardian = new DateGuardian();
 
       asserts.assertThrows(
@@ -271,7 +271,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('should support custom error messages', () => {
+    await u.step('should support custom error messages', () => {
       const guardian = new DateGuardian().past('Date must be in the past');
       const futureDate = new Date(Date.now() + 86400000);
 
@@ -283,8 +283,8 @@ Deno.test('guardian.DateGuardian', async (t) => {
     });
   });
 
-  await t.step('real world usage', async (t) => {
-    await t.step('should validate birth date', () => {
+  await t.step('real world usage', async (u) => {
+    await u.step('should validate birth date', () => {
       const guardian = new DateGuardian()
         .min(new Date('1900-01-01'))
         .max(new Date('2010-12-31'))
@@ -306,7 +306,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('should validate appointment scheduling', () => {
+    await u.step('should validate appointment scheduling', () => {
       const guardian = new DateGuardian()
         .future()
         .weekday(1) // Monday only
@@ -323,8 +323,8 @@ Deno.test('guardian.DateGuardian', async (t) => {
     });
   });
 
-  await t.step('new validation methods', async (t) => {
-    await t.step('between validation', () => {
+  await t.step('new validation methods', async (u) => {
+    await u.step('between validation', () => {
       const start = new Date('2020-01-01');
       const end = new Date('2025-12-31');
       const guardian = new DateGuardian().between(start, end);
@@ -346,7 +346,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('age validation', () => {
+    await u.step('age validation', () => {
       const today = new Date();
       const birthDate = new Date(
         today.getFullYear() - 25,
@@ -365,7 +365,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertThrows(() => guardian.parse(wrongAge), GuardianError);
     });
 
-    await t.step('age range validation', () => {
+    await u.step('age range validation', () => {
       const today = new Date();
       const validAge = new Date(
         today.getFullYear() - 30,
@@ -391,7 +391,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertThrows(() => guardian.parse(tooOld), GuardianError);
     });
 
-    await t.step('year range validation', () => {
+    await u.step('year range validation', () => {
       const guardian = new DateGuardian().yearRange(2020, 2025);
 
       asserts.assertEquals(
@@ -408,7 +408,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('month range validation', () => {
+    await u.step('month range validation', () => {
       const guardian = new DateGuardian().monthRange(6, 8); // June to August
 
       asserts.assertEquals(
@@ -425,7 +425,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('day range validation', () => {
+    await u.step('day range validation', () => {
       const guardian = new DateGuardian().dayRange(15, 25);
 
       asserts.assertEquals(
@@ -442,7 +442,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('quarter validation', () => {
+    await u.step('quarter validation', () => {
       const guardian = new DateGuardian().quarter(2); // Q2: April-June
 
       asserts.assertEquals(
@@ -459,7 +459,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('leap year validation', () => {
+    await u.step('leap year validation', () => {
       const guardian = new DateGuardian().leapYear();
 
       asserts.assertEquals(
@@ -472,7 +472,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('non-leap year validation', () => {
+    await u.step('non-leap year validation', () => {
       const guardian = new DateGuardian().nonLeapYear();
 
       asserts.assertEquals(
@@ -485,7 +485,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('weekdays validation', () => {
+    await u.step('weekdays validation', () => {
       const guardian = new DateGuardian().weekdays();
 
       // Monday (June 12, 2023)
@@ -506,7 +506,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('weekends validation', () => {
+    await u.step('weekends validation', () => {
       const guardian = new DateGuardian().weekends();
 
       // Sunday (June 11, 2023)
@@ -527,7 +527,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('holiday validation', () => {
+    await u.step('holiday validation', () => {
       const holidays = [new Date('2023-07-04'), new Date('2023-12-25')];
       const guardian = new DateGuardian().holiday(holidays);
 
@@ -541,7 +541,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('not holiday validation', () => {
+    await u.step('not holiday validation', () => {
       const holidays = [new Date('2023-07-04'), new Date('2023-12-25')];
       const guardian = new DateGuardian().notHoliday(holidays);
 
@@ -555,7 +555,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       );
     });
 
-    await t.step('within validation', () => {
+    await u.step('within validation', () => {
       const guardian = new DateGuardian().within(1, 'days');
       const now = new Date();
 
@@ -567,7 +567,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertThrows(() => guardian.parse(twoDaysAgo), GuardianError);
     });
 
-    await t.step('recent validation', () => {
+    await u.step('recent validation', () => {
       const guardian = new DateGuardian().recent(1, 'hours');
       const now = new Date();
 
@@ -577,7 +577,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertThrows(() => guardian.parse(twoHoursAgo), GuardianError);
     });
 
-    await t.step('soon validation', () => {
+    await u.step('soon validation', () => {
       const guardian = new DateGuardian().soon(1, 'hours');
       const now = new Date();
 
@@ -591,8 +591,8 @@ Deno.test('guardian.DateGuardian', async (t) => {
     });
   });
 
-  await t.step('transformation methods', async (t) => {
-    await t.step('add time', () => {
+  await t.step('transformation methods', async (u) => {
+    await u.step('add time', () => {
       const date = new Date('2023-06-15T10:30:00');
 
       const addedDays = new DateGuardian().add(5, 'days').parse(date);
@@ -605,7 +605,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertEquals(addedYears.getFullYear(), 2024);
     });
 
-    await t.step('add specific units', () => {
+    await u.step('add specific units', () => {
       const date = new Date('2023-06-15T10:30:00');
 
       const addedDays = new DateGuardian().addDays(10).parse(date);
@@ -618,7 +618,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertEquals(addedYears.getFullYear(), 2025);
     });
 
-    await t.step('to timezone', () => {
+    await u.step('to timezone', () => {
       const date = new Date('2023-06-15T10:30:00');
 
       // Convert to different timezone (offset in minutes)
@@ -626,14 +626,14 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertInstanceOf(converted, Date);
     });
 
-    await t.step('to UTC', () => {
+    await u.step('to UTC', () => {
       const date = new Date('2023-06-15T10:30:00');
 
       const utcDate = new DateGuardian().toUTC().parse(date);
       asserts.assertInstanceOf(utcDate, Date);
     });
 
-    await t.step('format relative', () => {
+    await u.step('format relative', () => {
       const now = new Date();
 
       // Test with a date 2 hours ago
@@ -642,7 +642,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertStringIncludes(relative, 'ago');
     });
 
-    await t.step('duration', () => {
+    await u.step('duration', () => {
       const now = new Date();
 
       const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
@@ -650,7 +650,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertEquals(duration, 1);
     });
 
-    await t.step('week number', () => {
+    await u.step('week number', () => {
       const date = new Date('2023-06-15');
 
       const weekNum = new DateGuardian().weekNumber().parse(date);
@@ -658,7 +658,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assert(weekNum >= 1 && weekNum <= 53);
     });
 
-    await t.step('day of year', () => {
+    await u.step('day of year', () => {
       const date = new Date('2023-01-01');
 
       const dayOfYear = new DateGuardian().dayOfYear().parse(date);
@@ -669,7 +669,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assert(midDayOfYear > 180);
     });
 
-    await t.step('diff', () => {
+    await u.step('diff', () => {
       const date1 = new Date('2023-06-15T10:00:00');
       const date2 = new Date('2023-06-15T12:00:00');
 
@@ -682,8 +682,8 @@ Deno.test('guardian.DateGuardian', async (t) => {
     });
   });
 
-  await t.step('nullable and optional chaining', async (t) => {
-    await t.step(
+  await t.step('nullable and optional chaining', async (u) => {
+    await u.step(
       'nullable().optional() allows null, undefined, and valid date',
       () => {
         const guard = new DateGuardian().nullable().optional();
@@ -699,7 +699,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       },
     );
 
-    await t.step(
+    await u.step(
       'optional().nullable() allows undefined, null, and valid date',
       () => {
         const guard = new DateGuardian().optional().nullable();
@@ -715,7 +715,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       },
     );
 
-    await t.step('nullable().optional() rejects invalid dates', () => {
+    await u.step('nullable().optional() rejects invalid dates', () => {
       const guard = new DateGuardian().nullable().optional();
 
       asserts.assertThrows(() => guard.parse('invalid-date'));
@@ -724,7 +724,7 @@ Deno.test('guardian.DateGuardian', async (t) => {
       asserts.assertThrows(() => guard.parse(new Date('invalid')));
     });
 
-    await t.step('optional().nullable() rejects invalid dates', () => {
+    await u.step('optional().nullable() rejects invalid dates', () => {
       const guard = new DateGuardian().optional().nullable();
 
       asserts.assertThrows(() => guard.parse('invalid-date'));

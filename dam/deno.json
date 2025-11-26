@@ -1,0 +1,17 @@
+{
+  "name": "@tundralibs/dam",
+  "version": "0.1.0",
+  "description": "TODO: Add description",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "imports": {
+    "$pg": "npm:pg@^8.16.3",
+    "$pg_types": "npm:@types/pg@^8.6.6",
+    "$mongo": "npm:mongodb",
+    "$mongo2": "jsr:@db/mongo@^0.33.0",
+    "$sqlite": "jsr:@db/sqlite@^0.12.0",
+    "$postgres": "jsr:@db/postgres@^0.19.5",
+    "$maria": "npm:mariadb@^3.4.0"
+  }
+}

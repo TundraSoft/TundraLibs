@@ -3,57 +3,57 @@ import { Guardian } from '../Guardian.ts';
 import { GuardianError } from '../GuardianError.ts';
 
 Deno.test('guardian.Guardian', async (t) => {
-  await t.step('factory methods', async (t) => {
-    await t.step('should create string guardian', () => {
+  await t.step('factory methods', async (u) => {
+    await u.step('should create string guardian', () => {
       const stringGuard = Guardian.string();
       asserts.assertEquals(stringGuard.parse('hello'), 'hello');
     });
 
-    await t.step('should create number guardian', () => {
+    await u.step('should create number guardian', () => {
       const numberGuard = Guardian.number();
       asserts.assertEquals(numberGuard.parse(42), 42);
     });
 
-    await t.step('should create boolean guardian', () => {
+    await u.step('should create boolean guardian', () => {
       const boolGuard = Guardian.boolean();
       asserts.assertEquals(boolGuard.parse(true), true);
     });
 
-    await t.step('should create array guardian', () => {
+    await u.step('should create array guardian', () => {
       const arrayGuard = Guardian.array();
       asserts.assertEquals(arrayGuard.parse([1, 2, 3]), [1, 2, 3]);
     });
 
-    await t.step('should create object guardian', () => {
+    await u.step('should create object guardian', () => {
       const objGuard = Guardian.object();
       const testObj = { name: 'test' };
       asserts.assertEquals(objGuard.parse(testObj), testObj);
     });
 
-    await t.step('should create date guardian', () => {
+    await u.step('should create date guardian', () => {
       const dateGuard = Guardian.date();
       const testDate = new Date();
       asserts.assertEquals(dateGuard.parse(testDate), testDate);
     });
 
-    await t.step('should create bigint guardian', () => {
+    await u.step('should create bigint guardian', () => {
       const bigintGuard = Guardian.bigint();
       asserts.assertEquals(bigintGuard.parse(42n), 42n);
     });
 
-    await t.step('should create enum guardian', () => {
+    await u.step('should create enum guardian', () => {
       const enumGuard = Guardian.enum(['red', 'green', 'blue']);
       asserts.assertEquals(enumGuard.parse('red'), 'red');
     });
 
-    await t.step('should create unknown guardian', () => {
+    await u.step('should create unknown guardian', () => {
       const unknownGuard = Guardian.unknown();
       asserts.assertEquals(unknownGuard.parse('anything'), 'anything');
     });
   });
 
-  await t.step('oneOf functionality', async (t) => {
-    await t.step('should accept valid first option', () => {
+  await t.step('oneOf functionality', async (u) => {
+    await u.step('should accept valid first option', () => {
       const schema = Guardian.oneOf(
         [Guardian.number().positive(), Guardian.string().minLength(3)],
         'Number or string required',
@@ -61,7 +61,7 @@ Deno.test('guardian.Guardian', async (t) => {
       asserts.assertEquals(schema.parse(42), 42);
     });
 
-    await t.step('should accept valid second option', () => {
+    await u.step('should accept valid second option', () => {
       const schema = Guardian.oneOf(
         [Guardian.number().positive(), Guardian.string().minLength(3)],
         'Number or string required',
@@ -69,7 +69,7 @@ Deno.test('guardian.Guardian', async (t) => {
       asserts.assertEquals(schema.parse('hello'), 'hello');
     });
 
-    await t.step('should reject invalid input with custom message', () => {
+    await u.step('should reject invalid input with custom message', () => {
       const schema = Guardian.oneOf(
         [Guardian.number().positive(), Guardian.string().minLength(3)],
         'Must be positive number or string with 3+ chars',
@@ -82,7 +82,7 @@ Deno.test('guardian.Guardian', async (t) => {
       );
     });
 
-    await t.step('should require error message', () => {
+    await u.step('should require error message', () => {
       asserts.assertThrows(
         () => Guardian.oneOf([Guardian.string()], ''),
         Error,
@@ -90,7 +90,7 @@ Deno.test('guardian.Guardian', async (t) => {
       );
     });
 
-    await t.step('should require at least one guardian', () => {
+    await u.step('should require at least one guardian', () => {
       asserts.assertThrows(
         () => Guardian.oneOf([], 'test'),
         Error,
@@ -98,7 +98,7 @@ Deno.test('guardian.Guardian', async (t) => {
       );
     });
 
-    await t.step('should aggregate errors from all failed attempts', () => {
+    await u.step('should aggregate errors from all failed attempts', () => {
       const schema = Guardian.oneOf(
         [Guardian.number().min(10), Guardian.string().minLength(5)],
         'Must be number ≥10 or string ≥5 chars',
@@ -121,8 +121,8 @@ Deno.test('guardian.Guardian', async (t) => {
     });
   });
 
-  await t.step('type utilities', async (t) => {
-    await t.step('Guardian.type should return constructor name', () => {
+  await t.step('type utilities', async (u) => {
+    await u.step('Guardian.type should return constructor name', () => {
       const stringGuard = Guardian.string();
       const numberGuard = Guardian.number();
       const boolGuard = Guardian.boolean();
@@ -132,7 +132,7 @@ Deno.test('guardian.Guardian', async (t) => {
       asserts.assertEquals(Guardian.type(boolGuard), 'BooleanGuardian');
     });
 
-    await t.step('Guardian.infer should throw at runtime', () => {
+    await u.step('Guardian.infer should throw at runtime', () => {
       const schema = Guardian.string();
       asserts.assertThrows(
         () => Guardian.infer(schema),
@@ -141,7 +141,7 @@ Deno.test('guardian.Guardian', async (t) => {
       );
     });
 
-    await t.step('Guardian.inferInput should throw at runtime', () => {
+    await u.step('Guardian.inferInput should throw at runtime', () => {
       const schema = Guardian.string();
       asserts.assertThrows(
         () => Guardian.inferInput(schema),
@@ -151,8 +151,8 @@ Deno.test('guardian.Guardian', async (t) => {
     });
   });
 
-  await t.step('complex schema composition', async (t) => {
-    await t.step('should create nested object schema', () => {
+  await t.step('complex schema composition', async (u) => {
+    await u.step('should create nested object schema', () => {
       const userSchema = Guardian.object({
         id: Guardian.number().positive(),
         name: Guardian.string().minLength(1),
@@ -177,7 +177,7 @@ Deno.test('guardian.Guardian', async (t) => {
       asserts.assertEquals(result, validUser);
     });
 
-    await t.step('should handle optional fields', () => {
+    await u.step('should handle optional fields', () => {
       const userSchema = Guardian.object({
         id: Guardian.number(),
         name: Guardian.string(),
@@ -192,7 +192,7 @@ Deno.test('guardian.Guardian', async (t) => {
       // Don't assert the whole object since optional behavior may vary
     });
 
-    await t.step('should handle union types with oneOf', () => {
+    await u.step('should handle union types with oneOf', () => {
       const idSchema = Guardian.oneOf(
         [
           Guardian.number().positive(),
@@ -212,8 +212,8 @@ Deno.test('guardian.Guardian', async (t) => {
     });
   });
 
-  await t.step('error aggregation and context', async (t) => {
-    await t.step(
+  await t.step('error aggregation and context', async (u) => {
+    await u.step(
       'should provide detailed error context for nested failures',
       () => {
         const schema = Guardian.object({
@@ -239,7 +239,7 @@ Deno.test('guardian.Guardian', async (t) => {
       },
     );
 
-    await t.step('should chain multiple validation errors', () => {
+    await u.step('should chain multiple validation errors', () => {
       const schema = Guardian.string().minLength(5).maxLength(10).pattern(
         /^[a-zA-Z]+$/,
       );
@@ -255,8 +255,8 @@ Deno.test('guardian.Guardian', async (t) => {
     });
   });
 
-  await t.step('safe parsing', async (t) => {
-    await t.step('should return success tuple for valid input', () => {
+  await t.step('safe parsing', async (u) => {
+    await u.step('should return success tuple for valid input', () => {
       const schema = Guardian.string().minLength(3);
       const result = schema.safeParse('hello');
 
@@ -264,7 +264,7 @@ Deno.test('guardian.Guardian', async (t) => {
       asserts.assertEquals(result[1], 'hello');
     });
 
-    await t.step('should return error tuple for invalid input', () => {
+    await u.step('should return error tuple for invalid input', () => {
       const schema = Guardian.string().minLength(5);
       const result = schema.safeParse('hi');
 
@@ -272,7 +272,7 @@ Deno.test('guardian.Guardian', async (t) => {
       asserts.assertEquals(result[1], undefined);
     });
 
-    await t.step('should work with complex schemas', () => {
+    await u.step('should work with complex schemas', () => {
       const schema = Guardian.object({
         id: Guardian.number(),
         name: Guardian.string(),
@@ -288,8 +288,8 @@ Deno.test('guardian.Guardian', async (t) => {
     });
   });
 
-  await t.step('async validation support', async (t) => {
-    await t.step('should handle async validation steps', async () => {
+  await t.step('async validation support', async (u) => {
+    await u.step('should handle async validation steps', async () => {
       const asyncSchema = Guardian.number()
         .process(
           async (value: number) => {
@@ -311,7 +311,7 @@ Deno.test('guardian.Guardian', async (t) => {
       }
     });
 
-    await t.step('should support safeParseAsync', async () => {
+    await u.step('should support safeParseAsync', async () => {
       const asyncSchema = Guardian.number().process(
         async (value: number) => {
           await new Promise((resolve) => setTimeout(resolve, 1));
@@ -330,8 +330,8 @@ Deno.test('guardian.Guardian', async (t) => {
     });
   });
 
-  await t.step('metadata and context', async (t) => {
-    await t.step('should preserve metadata in guardian instances', () => {
+  await t.step('metadata and context', async (u) => {
+    await u.step('should preserve metadata in guardian instances', () => {
       const schema = Guardian.string({
         description: 'User name field',
         title: 'Name',
@@ -346,7 +346,7 @@ Deno.test('guardian.Guardian', async (t) => {
       ]);
     });
 
-    await t.step('should allow setting metadata properties', () => {
+    await u.step('should allow setting metadata properties', () => {
       const schema = Guardian.string();
       schema.description = 'A test string';
       schema.title = 'Test';
@@ -360,8 +360,8 @@ Deno.test('guardian.Guardian', async (t) => {
     });
   });
 
-  await t.step('performance optimizations', async (t) => {
-    await t.step(
+  await t.step('performance optimizations', async (u) => {
+    await u.step(
       'should maintain high performance for simple validations',
       () => {
         const schema = Guardian.string().minLength(3);
@@ -382,7 +382,7 @@ Deno.test('guardian.Guardian', async (t) => {
       },
     );
 
-    await t.step('should handle complex object validation efficiently', () => {
+    await u.step('should handle complex object validation efficiently', () => {
       const schema = Guardian.object({
         id: Guardian.number().positive(),
         name: Guardian.string().minLength(1).maxLength(100),
@@ -413,8 +413,8 @@ Deno.test('guardian.Guardian', async (t) => {
     });
   });
 
-  await t.step('immutability modes', async (t) => {
-    await t.step('should support immutable mode', () => {
+  await t.step('immutability modes', async (u) => {
+    await u.step('should support immutable mode', () => {
       const baseSchema = Guardian.string();
       const immutableSchema = baseSchema.immutable();
 
@@ -432,7 +432,7 @@ Deno.test('guardian.Guardian', async (t) => {
       asserts.assertEquals(extendedSchema.parse('hello'), 'hello');
     });
 
-    await t.step('should default to mutable mode for performance', () => {
+    await u.step('should default to mutable mode for performance', () => {
       const schema1 = Guardian.string();
       const schema2 = schema1.minLength(3);
 

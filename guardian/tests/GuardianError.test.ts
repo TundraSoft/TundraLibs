@@ -2,8 +2,8 @@ import * as asserts from '$asserts';
 import { GuardianError, type GuardianErrorMeta } from '../GuardianError.ts';
 
 Deno.test('guardian.GuardianError', async (t) => {
-  await t.step('constructor and basic properties', async (t) => {
-    await t.step('should create error with basic meta', () => {
+  await t.step('constructor and basic properties', async (u) => {
+    await u.step('should create error with basic meta', () => {
       const meta: GuardianErrorMeta = {
         got: 'string',
         expected: 'number',
@@ -17,7 +17,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertInstanceOf(error.timeStamp, Date);
     });
 
-    await t.step('should create error with type meta', () => {
+    await u.step('should create error with type meta', () => {
       const meta: GuardianErrorMeta = {
         type: 'string',
         got: 42,
@@ -32,7 +32,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertEquals(error.context.comparison, 'type');
     });
 
-    await t.step('should inherit from Error', () => {
+    await u.step('should inherit from Error', () => {
       const meta: GuardianErrorMeta = {
         got: null,
         comparison: 'required',
@@ -44,8 +44,8 @@ Deno.test('guardian.GuardianError', async (t) => {
     });
   });
 
-  await t.step('cause management', async (t) => {
-    await t.step('should start with no causes', () => {
+  await t.step('cause management', async (u) => {
+    await u.step('should start with no causes', () => {
       const meta: GuardianErrorMeta = {
         got: {},
         comparison: 'object',
@@ -56,7 +56,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertEquals(error.listCauses(), {});
     });
 
-    await t.step('should add single cause', () => {
+    await u.step('should add single cause', () => {
       const parentMeta: GuardianErrorMeta = {
         got: { name: 123 },
         comparison: 'object',
@@ -84,7 +84,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       });
     });
 
-    await t.step('should add multiple causes', () => {
+    await u.step('should add multiple causes', () => {
       const parentMeta: GuardianErrorMeta = {
         got: { name: 123, age: 'invalid' },
         comparison: 'object',
@@ -116,7 +116,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       });
     });
 
-    await t.step('should handle nested causes', () => {
+    await u.step('should handle nested causes', () => {
       const rootError = new GuardianError('Root validation failed', {
         got: { user: { profile: { name: 123 } } },
         comparison: 'object',
@@ -147,7 +147,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       });
     });
 
-    await t.step('should handle circular references', () => {
+    await u.step('should handle circular references', () => {
       const error1 = new GuardianError('Error 1', {
         got: 'value1',
         comparison: 'test',
@@ -167,8 +167,8 @@ Deno.test('guardian.GuardianError', async (t) => {
     });
   });
 
-  await t.step('JSON serialization', async (t) => {
-    await t.step('should serialize basic error to JSON', () => {
+  await t.step('JSON serialization', async (u) => {
+    await u.step('should serialize basic error to JSON', () => {
       const meta: GuardianErrorMeta = {
         type: 'string',
         got: 42,
@@ -186,7 +186,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertEquals(json.causes, undefined);
     });
 
-    await t.step('should serialize error with causes to JSON', () => {
+    await u.step('should serialize error with causes to JSON', () => {
       const parentError = new GuardianError('Parent error', {
         got: { field1: 'invalid', field2: 123 },
         comparison: 'object',
@@ -213,7 +213,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       });
     });
 
-    await t.step('should serialize error without causes as undefined', () => {
+    await u.step('should serialize error without causes as undefined', () => {
       const error = new GuardianError('Simple error', {
         got: 'test',
         comparison: 'validation',
@@ -224,8 +224,8 @@ Deno.test('guardian.GuardianError', async (t) => {
     });
   });
 
-  await t.step('value formatting', async (t) => {
-    await t.step('should format array values', () => {
+  await t.step('value formatting', async (u) => {
+    await u.step('should format array values', () => {
       const meta: GuardianErrorMeta = {
         got: [1, 'hello', true],
         expected: 'string',
@@ -236,7 +236,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertStringIncludes(error.message, '(1, hello, true)');
     });
 
-    await t.step('should format nested array values', () => {
+    await u.step('should format nested array values', () => {
       const meta: GuardianErrorMeta = {
         got: [1, [2, 3], 'hello'],
         expected: 'string',
@@ -247,7 +247,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertStringIncludes(error.message, '(1, 2,3, hello)');
     });
 
-    await t.step('should format Date values', () => {
+    await u.step('should format Date values', () => {
       const testDate = new Date('2023-01-01T00:00:00.000Z');
       const meta: GuardianErrorMeta = {
         got: testDate,
@@ -259,7 +259,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertStringIncludes(error.message, '2023-01-01T00:00:00.000Z');
     });
 
-    await t.step('should format RegExp values', () => {
+    await u.step('should format RegExp values', () => {
       const regex = /test/gi;
       const meta: GuardianErrorMeta = {
         got: regex,
@@ -271,7 +271,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertStringIncludes(error.message, '/test/gi');
     });
 
-    await t.step('should format object values', () => {
+    await u.step('should format object values', () => {
       const obj = { name: 'test', age: 30 };
       const meta: GuardianErrorMeta = {
         got: obj,
@@ -283,7 +283,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertStringIncludes(error.message, '{"name":"test","age":30}');
     });
 
-    await t.step('should format null and undefined values', () => {
+    await u.step('should format null and undefined values', () => {
       const nullMeta: GuardianErrorMeta = {
         got: null,
         expected: 'string',
@@ -308,7 +308,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertStringIncludes(undefinedError.message, 'undefined');
     });
 
-    await t.step('should format boolean values', () => {
+    await u.step('should format boolean values', () => {
       const trueMeta: GuardianErrorMeta = {
         got: true,
         expected: 'string',
@@ -333,7 +333,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertStringIncludes(falseError.message, 'false');
     });
 
-    await t.step('should format primitive values as strings', () => {
+    await u.step('should format primitive values as strings', () => {
       const numberMeta: GuardianErrorMeta = {
         got: 42,
         expected: 'string',
@@ -359,8 +359,8 @@ Deno.test('guardian.GuardianError', async (t) => {
     });
   });
 
-  await t.step('message templating', async (t) => {
-    await t.step('should support variable replacement in messages', () => {
+  await t.step('message templating', async (u) => {
+    await u.step('should support variable replacement in messages', () => {
       const meta: GuardianErrorMeta = {
         type: 'string',
         got: 42,
@@ -378,7 +378,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       );
     });
 
-    await t.step('should handle missing variables gracefully', () => {
+    await u.step('should handle missing variables gracefully', () => {
       const meta: GuardianErrorMeta = {
         got: 42,
         comparison: 'type',
@@ -389,7 +389,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertStringIncludes(error.message, 'Expected undefined');
     });
 
-    await t.step('should include timestamp in message variables', () => {
+    await u.step('should include timestamp in message variables', () => {
       const meta: GuardianErrorMeta = {
         got: 'test',
         comparison: 'validation',
@@ -404,7 +404,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertStringIncludes(error.message, 'Z');
     });
 
-    await t.step('should handle nested variable replacement', () => {
+    await u.step('should handle nested variable replacement', () => {
       const meta: GuardianErrorMeta = {
         got: 'test value',
         comparison: 'validation',
@@ -416,8 +416,8 @@ Deno.test('guardian.GuardianError', async (t) => {
     });
   });
 
-  await t.step('edge cases and error conditions', async (t) => {
-    await t.step('should handle empty causes object', () => {
+  await t.step('edge cases and error conditions', async (u) => {
+    await u.step('should handle empty causes object', () => {
       const meta: GuardianErrorMeta = {
         cause: {},
         got: 'test',
@@ -429,7 +429,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertEquals(error.listCauses(), {});
     });
 
-    await t.step('should handle complex nested objects in got/expected', () => {
+    await u.step('should handle complex nested objects in got/expected', () => {
       const complexObject = {
         nested: {
           array: [1, 2, { deep: 'value' }],
@@ -449,7 +449,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertStringIncludes(error.message, 'nested');
     });
 
-    await t.step('should handle bigint values', () => {
+    await u.step('should handle bigint values', () => {
       const meta: GuardianErrorMeta = {
         got: 42n,
         expected: 'number',
@@ -460,7 +460,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertStringIncludes(error.message, '42');
     });
 
-    await t.step('should handle symbol values', () => {
+    await u.step('should handle symbol values', () => {
       const symbol = Symbol('test');
       const meta: GuardianErrorMeta = {
         got: symbol,
@@ -472,7 +472,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertStringIncludes(error.message, 'Symbol(test)');
     });
 
-    await t.step('should handle function values', () => {
+    await u.step('should handle function values', () => {
       const func = () => 'test';
       const meta: GuardianErrorMeta = {
         got: func,
@@ -486,8 +486,8 @@ Deno.test('guardian.GuardianError', async (t) => {
     });
   });
 
-  await t.step('inheritance and compatibility', async (t) => {
-    await t.step('should be instanceof Error and GuardianError', () => {
+  await t.step('inheritance and compatibility', async (u) => {
+    await u.step('should be instanceof Error and GuardianError', () => {
       const meta: GuardianErrorMeta = {
         got: 'test',
         comparison: 'validation',
@@ -498,7 +498,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertInstanceOf(error, GuardianError);
     });
 
-    await t.step('should have correct error name', () => {
+    await u.step('should have correct error name', () => {
       const meta: GuardianErrorMeta = {
         got: 'test',
         comparison: 'validation',
@@ -508,7 +508,7 @@ Deno.test('guardian.GuardianError', async (t) => {
       asserts.assertEquals(error.name, 'GuardianError');
     });
 
-    await t.step('should have stack trace', () => {
+    await u.step('should have stack trace', () => {
       const meta: GuardianErrorMeta = {
         got: 'test',
         comparison: 'validation',

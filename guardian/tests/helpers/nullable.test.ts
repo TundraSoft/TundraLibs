@@ -7,15 +7,15 @@ import { GuardianError } from '../../GuardianError.ts';
  * Tests null value handling in validation chains.
  */
 Deno.test('guardian.helpers.nullable', async (t) => {
-  await t.step('Basic null handling', async (t) => {
-    await t.step('should pass null values without validation', () => {
+  await t.step('Basic null handling', async (u) => {
+    await u.step('should pass null values without validation', () => {
       const validator = nullable(() => {
         throw new Error('Should not be called for null');
       });
       asserts.assertEquals(validator(null), null);
     });
 
-    await t.step('should call wrapped validator for non-null values', () => {
+    await u.step('should call wrapped validator for non-null values', () => {
       const validator = nullable((value: unknown) => {
         if (value === 'valid') return value as string;
         throw new GuardianError('Invalid value', {
@@ -30,7 +30,7 @@ Deno.test('guardian.helpers.nullable', async (t) => {
       asserts.assertThrows(() => validator('invalid'), GuardianError);
     });
 
-    await t.step('should pass undefined through as null', () => {
+    await u.step('should pass undefined through as null', () => {
       const validator = nullable((value: unknown) => {
         throw new Error('Should not be called for undefined');
       });
@@ -40,8 +40,8 @@ Deno.test('guardian.helpers.nullable', async (t) => {
     });
   });
 
-  await t.step('Type preservation', async (t) => {
-    await t.step('should preserve return type of wrapped validator', () => {
+  await t.step('Type preservation', async (u) => {
+    await u.step('should preserve return type of wrapped validator', () => {
       const stringValidator = nullable((value: unknown) => {
         if (typeof value === 'string') return value.toUpperCase();
         throw new Error('Not a string');
@@ -58,7 +58,7 @@ Deno.test('guardian.helpers.nullable', async (t) => {
       asserts.assertEquals(numberValidator(null), null);
     });
 
-    await t.step('should handle complex return types', () => {
+    await u.step('should handle complex return types', () => {
       interface TestObj {
         name: string;
         age: number;
@@ -80,8 +80,8 @@ Deno.test('guardian.helpers.nullable', async (t) => {
     });
   });
 
-  await t.step('Basic functionality tests', async (t) => {
-    await t.step('should handle null and undefined correctly', () => {
+  await t.step('Basic functionality tests', async (u) => {
+    await u.step('should handle null and undefined correctly', () => {
       const validator = nullable((value: unknown) => {
         return `processed: ${value}`;
       });
@@ -98,7 +98,7 @@ Deno.test('guardian.helpers.nullable', async (t) => {
       asserts.assertEquals((validator as any)(false), 'processed: false');
     });
 
-    await t.step('should short-circuit for null/undefined', () => {
+    await u.step('should short-circuit for null/undefined', () => {
       let called = false;
       const validator = nullable(() => {
         called = true;

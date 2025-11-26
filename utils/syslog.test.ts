@@ -2,9 +2,9 @@ import * as asserts from '$asserts';
 import { SyslogFacilities, SyslogSeverities } from './mod.ts';
 import { parse, stringify } from './syslog.ts';
 
-Deno.test('utils.Syslog', async (s) => {
-  await s.step('parse', async (t) => {
-    await t.step('RFC5424 test #1', () => {
+Deno.test('utils.Syslog', async (t) => {
+  await t.step('parse', async (u) => {
+    await u.step('RFC5424 test #1', () => {
       const logLine =
         '<165>1 2022-01-01T00:00:00.000Z localhost - 123 12345 [ABC@1234 key="value"] Test message';
       const parsed = parse(logLine);
@@ -17,7 +17,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assertEquals(parsed.message, 'Test message');
     });
 
-    await t.step('RFC5424 test #2', () => {
+    await u.step('RFC5424 test #2', () => {
       const logLine =
         '<34>1 2003-10-11T22:14:15.003Z mymachine.example.com su - ID47 [exampleSDID@32473 iut="3"] Hello';
       const parsed = parse(logLine);
@@ -29,7 +29,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assert(parsed.message.includes('Hello'));
     });
 
-    await t.step('RFC5424 test #3', () => {
+    await u.step('RFC5424 test #3', () => {
       const logLine =
         '<190>1 2021-06-15T13:15:00.123Z webserver app - ID42 [meta@123 param="true"] Request processed';
       const parsed = parse(logLine);
@@ -44,7 +44,7 @@ Deno.test('utils.Syslog', async (s) => {
       });
     });
 
-    await t.step('RFC5424 test #4', () => {
+    await u.step('RFC5424 test #4', () => {
       const logLine =
         '<46>1 2020-12-25T07:01:59.999Z dbserver db - 678 [dbwarn@4567 val="high" desc="potential issue"] Query took too long';
       const parsed = parse(logLine);
@@ -60,7 +60,7 @@ Deno.test('utils.Syslog', async (s) => {
       });
     });
 
-    await t.step('RFC5424 test #5', () => {
+    await u.step('RFC5424 test #5', () => {
       const logLine =
         '<46>1 2020-12-25T07:01:59.999Z - - - - - Query took too long';
       const parsed = parse(logLine);
@@ -72,7 +72,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assert(parsed.message.includes('Query took too long'));
     });
 
-    await t.step('RFC3164 test #1', () => {
+    await u.step('RFC3164 test #1', () => {
       const logLine = '<34>Oct 11 22:14:15 mymachine su[230]: hello world';
       const parsed = parse(logLine);
       asserts.assertEquals(parsed.facility, SyslogFacilities.AUTH);
@@ -83,7 +83,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assertEquals(parsed.message, 'hello world');
     });
 
-    await t.step('RFC3164 test #2', () => {
+    await u.step('RFC3164 test #2', () => {
       const logLine =
         `<165>Aug 24 1987 05:34:00 mymachine myproc[10]: sample text`;
       const parsed = parse(logLine);
@@ -95,7 +95,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assertEquals(parsed.message, 'sample text');
     });
 
-    await t.step('RFC3164 test #3', () => {
+    await u.step('RFC3164 test #3', () => {
       const logLine =
         `<13>Mar 15 14:23:01 host1 service[101]: Service started successfully`;
       const parsed = parse(logLine);
@@ -107,7 +107,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assertEquals(parsed.message, 'Service started successfully');
     });
 
-    await t.step('RFC3164 test #4', () => {
+    await u.step('RFC3164 test #4', () => {
       const logLine =
         `<4>Sep 10 22:17:04 anotherhost sshd[324]: User logged in`;
       const parsed = parse(logLine);
@@ -119,7 +119,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assertEquals(parsed.message, 'User logged in');
     });
 
-    await t.step('RFC3164 test #5', () => {
+    await u.step('RFC3164 test #5', () => {
       const logLine = `<4>Sep 10 22:17:04 - sshd[324]: User logged in`;
       const parsed = parse(logLine);
       asserts.assertEquals(parsed.facility, SyslogFacilities.KERN);
@@ -130,7 +130,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assertEquals(parsed.message, 'User logged in');
     });
 
-    await t.step('facilityName and severityName properties', () => {
+    await u.step('facilityName and severityName properties', () => {
       const logLine =
         '<165>1 2022-01-01T00:00:00.000Z localhost - 123 12345 [ABC@1234 key="value"] Test message';
       const parsed = parse(logLine);
@@ -138,7 +138,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assertEquals(parsed.severityName, 'NOTICE');
     });
 
-    await t.step('RFC3164 facilityName and severityName', () => {
+    await u.step('RFC3164 facilityName and severityName', () => {
       const logLine = '<34>Oct 11 22:14:15 mymachine su[230]: hello world';
       const parsed = parse(logLine);
       asserts.assertEquals(parsed.facilityName, 'AUTH');
@@ -146,12 +146,12 @@ Deno.test('utils.Syslog', async (s) => {
     });
   });
 
-  await s.step('Error cases', async (t) => {
-    await t.step('Empty input', () => {
+  await t.step('Error cases', async (u) => {
+    await u.step('Empty input', () => {
       asserts.assertThrows(() => parse(''), Error, 'Empty log message');
     });
 
-    await t.step('Invalid priority', () => {
+    await u.step('Invalid priority', () => {
       asserts.assertThrows(
         () => parse('<192>1 2022-01-01T00:00:00.000Z - - - - -'),
         Error,
@@ -159,7 +159,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('Invalid RFC5424 format', () => {
+    await u.step('Invalid RFC5424 format', () => {
       asserts.assertThrows(
         () => parse('<>1 2022-01-01T00:00:00.000Z - - - - -'),
         Error,
@@ -167,7 +167,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('Invalid RFC3164 format - Missing priority value', () => {
+    await u.step('Invalid RFC3164 format - Missing priority value', () => {
       // More explicit test case with empty angle brackets
       asserts.assertThrows(
         () => parse('<> Oct 11 22:14:15 mymachine su[230]: hello world'),
@@ -184,15 +184,15 @@ Deno.test('utils.Syslog', async (s) => {
     });
   });
 
-  await s.step('Edge cases', async (t) => {
-    await t.step('Maximum valid priority', () => {
+  await t.step('Edge cases', async (u) => {
+    await u.step('Maximum valid priority', () => {
       const logLine = '<191>1 2022-01-01T00:00:00.000Z - - - - -';
       const parsed = parse(logLine);
       asserts.assertEquals(parsed.facility, SyslogFacilities.LOCAL7);
       asserts.assertEquals(parsed.severity, SyslogSeverities.DEBUG);
     });
 
-    await t.step('Multiple structured data elements', () => {
+    await u.step('Multiple structured data elements', () => {
       const logLine =
         '<165>1 2022-01-01T00:00:00.000Z - - - - [test@1 a="1"][test@2 b="2"] message';
       const parsed = parse(logLine);
@@ -200,7 +200,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assertEquals(parsed.structuredData?.['test@2']?.['b'], '2');
     });
 
-    await t.step('Structured data with special characters', () => {
+    await u.step('Structured data with special characters', () => {
       const logLine =
         '<165>1 2022-01-01T00:00:00.000Z - - - - [test@1 key="value with spaces"] message';
       const parsed = parse(logLine);
@@ -210,14 +210,14 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('Invalid processId in RFC5424', () => {
+    await u.step('Invalid processId in RFC5424', () => {
       const logLine =
         '<165>1 2022-01-01T00:00:00.000Z localhost - abc 12345 - Test message';
       const parsed = parse(logLine);
       asserts.assertEquals(parsed.processId, undefined);
     });
 
-    await t.step('Invalid processId in RFC3164', () => {
+    await u.step('Invalid processId in RFC3164', () => {
       const logLine = '<34>Oct 11 22:14:15 mymachine su[abc]: hello world';
       asserts.assertThrows(
         () => parse(logLine),
@@ -228,14 +228,14 @@ Deno.test('utils.Syslog', async (s) => {
       // asserts.assertEquals(parsed.processId, undefined);
     });
 
-    await t.step('Empty structured data element values', () => {
+    await u.step('Empty structured data element values', () => {
       const logLine =
         '<165>1 2022-01-01T00:00:00.000Z - - - - [test@1 key=""] message';
       const parsed = parse(logLine);
       asserts.assertEquals(parsed.structuredData?.['test@1']?.['key'], '');
     });
 
-    await t.step('Truly malformed structured data', () => {
+    await u.step('Truly malformed structured data', () => {
       // This should be properly handled instead of throwing an uncaught error
       const logLine =
         '<165>1 2022-01-01T00:00:00.000Z - - - - [incomplete message';
@@ -245,8 +245,8 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assertEquals(parsed.facility, SyslogFacilities.LOCAL4);
     });
   });
-  await s.step('Additional Edge Cases', async (t) => {
-    await t.step('should handle invalid priority values', () => {
+  await t.step('Additional Edge Cases', async (u) => {
+    await u.step('should handle invalid priority values', () => {
       // Test with negative priority - these are invalid format patterns
       asserts.assertThrows(
         () => parse('<-1>1 2022-01-01T00:00:00.000Z - - - - -'),
@@ -262,7 +262,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('should handle RFC5424 with malformed format', () => {
+    await u.step('should handle RFC5424 with malformed format', () => {
       // Test malformed RFC5424 format
       asserts.assertThrows(
         () => parse('<165>1 - - - - - Test message'),
@@ -271,7 +271,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('should handle RFC3164 without year', () => {
+    await u.step('should handle RFC3164 without year', () => {
       const logLine = '<34>Oct 11 22:14:15 mymachine su[230]: hello world';
       const parsed = parse(logLine);
       // Should default to current year
@@ -281,7 +281,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('should handle RFC3164 with invalid process ID format', () => {
+    await u.step('should handle RFC3164 with invalid process ID format', () => {
       // Process ID should be numeric, test with non-numeric values
       const logLine =
         '<34>Oct 11 22:14:15 mymachine su[notanumber]: hello world';
@@ -293,7 +293,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('should handle structured data parsing edge cases', () => {
+    await u.step('should handle structured data parsing edge cases', () => {
       // Test with malformed structured data that should be handled gracefully
       const logLine =
         '<165>1 2022-01-01T00:00:00.000Z - - - - [malformed structured data] message';
@@ -305,7 +305,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assertEquals(parsed.structuredData, undefined);
     });
 
-    await t.step('should handle empty message in RFC3164', () => {
+    await u.step('should handle empty message in RFC3164', () => {
       // RFC3164 requires a colon followed by content, empty after colon is invalid format
       const logLine = '<34>Oct 11 22:14:15 mymachine su[230]:';
       asserts.assertThrows(
@@ -315,7 +315,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('should handle missing hostname in RFC3164', () => {
+    await u.step('should handle missing hostname in RFC3164', () => {
       // Test case where hostname might be missing or empty
       const logLine = '<34>Oct 11 22:14:15  su[230]: hello world';
       // This may or may not parse depending on the regex - let's test what actually happens
@@ -333,8 +333,8 @@ Deno.test('utils.Syslog', async (s) => {
     });
   });
 
-  await s.step('stringify', async (t) => {
-    await t.step('Basic message', () => {
+  await t.step('stringify', async (u) => {
+    await u.step('Basic message', () => {
       const obj = {
         facility: SyslogFacilities.LOCAL0,
         severity: SyslogSeverities.ERROR,
@@ -347,7 +347,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('With structured data only', () => {
+    await u.step('With structured data only', () => {
       const obj = {
         facility: SyslogFacilities.LOCAL0,
         severity: SyslogSeverities.ERROR,
@@ -363,7 +363,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('Invalid input validation', () => {
+    await u.step('Invalid input validation', () => {
       const obj = {
         facility: SyslogFacilities.LOCAL0,
         severity: SyslogSeverities.ERROR,
@@ -378,7 +378,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('Missing required fields', () => {
+    await u.step('Missing required fields', () => {
       const obj = {
         facility: SyslogFacilities.LOCAL0,
         severity: SyslogSeverities.ERROR,
@@ -392,7 +392,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('With facilityName and severityName', () => {
+    await u.step('With facilityName and severityName', () => {
       const obj = {
         facility: SyslogFacilities.LOCAL0,
         facilityName: SyslogFacilities[SyslogFacilities.LOCAL0],
@@ -407,7 +407,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('RFC5424 version is included', () => {
+    await u.step('RFC5424 version is included', () => {
       const obj = {
         facility: SyslogFacilities.LOCAL0,
         severity: SyslogSeverities.ERROR,
@@ -441,8 +441,8 @@ Deno.test('utils.Syslog', async (s) => {
     );
   });
 
-  await s.step('Stringify Edge Cases', async (t) => {
-    await t.step('should handle NaN process ID', () => {
+  await t.step('Stringify Edge Cases', async (u) => {
+    await u.step('should handle NaN process ID', () => {
       const obj = {
         facility: SyslogFacilities.LOCAL0,
         severity: SyslogSeverities.ERROR,
@@ -457,7 +457,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('should handle zero process ID', () => {
+    await u.step('should handle zero process ID', () => {
       const obj = {
         facility: SyslogFacilities.LOCAL0,
         severity: SyslogSeverities.ERROR,
@@ -470,7 +470,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assert(result.includes('0 -'));
     });
 
-    await t.step('should handle large process ID', () => {
+    await u.step('should handle large process ID', () => {
       const obj = {
         facility: SyslogFacilities.LOCAL0,
         severity: SyslogSeverities.ERROR,
@@ -482,7 +482,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assert(result.includes('65535 -'));
     });
 
-    await t.step(
+    await u.step(
       'should handle multiple structured data elements in stringify',
       () => {
         const obj = {
@@ -504,7 +504,7 @@ Deno.test('utils.Syslog', async (s) => {
       },
     );
 
-    await t.step('should handle empty structured data', () => {
+    await u.step('should handle empty structured data', () => {
       const obj = {
         facility: SyslogFacilities.LOCAL0,
         severity: SyslogSeverities.ERROR,
@@ -518,8 +518,8 @@ Deno.test('utils.Syslog', async (s) => {
     });
   });
 
-  await s.step('Additional coverage for edge cases', async (t) => {
-    await t.step(
+  await t.step('Additional coverage for edge cases', async (u) => {
+    await u.step(
       'should handle facility and severity name mappings comprehensively',
       () => {
         // Test all facility mappings
@@ -584,7 +584,7 @@ Deno.test('utils.Syslog', async (s) => {
       },
     );
 
-    await t.step('should handle unknown facility and severity codes', () => {
+    await u.step('should handle unknown facility and severity codes', () => {
       // Test with out-of-range facility (should handle gracefully)
       const invalidFacilityPriority = (255 * 8) + 3; // Invalid facility
       const logLine1 =
@@ -606,7 +606,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('should handle RFC 3164 parsing edge cases', () => {
+    await u.step('should handle RFC 3164 parsing edge cases', () => {
       // Test with missing hostname (dash)
       const logLine1 = '<34>Oct 11 22:14:15 - su[230]: hello world';
       const parsed1 = parse(logLine1);
@@ -641,7 +641,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assert(parsed5.message !== undefined);
     });
 
-    await t.step('should handle RFC 5424 structured data edge cases', () => {
+    await u.step('should handle RFC 5424 structured data edge cases', () => {
       // Test with malformed structured data
       const logLine1 =
         '<165>1 2022-01-01T00:00:00.000Z localhost - - - [incomplete';
@@ -682,7 +682,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('should handle stringify with valid inputs', () => {
+    await u.step('should handle stringify with valid inputs', () => {
       // Test with complete valid object
       const validObj = {
         facility: SyslogFacilities.LOCAL0,
@@ -697,7 +697,7 @@ Deno.test('utils.Syslog', async (s) => {
       asserts.assert(result.includes('<134>')); // LOCAL0 (16) * 8 + INFO (6) = 134
     });
 
-    await t.step(
+    await u.step(
       'should handle structured data stringification edge cases',
       () => {
         // Test with complex structured data values
@@ -734,7 +734,7 @@ Deno.test('utils.Syslog', async (s) => {
       },
     );
 
-    await t.step('should handle timestamp formatting edge cases', () => {
+    await u.step('should handle timestamp formatting edge cases', () => {
       // Test with various date objects
       const dates = [
         new Date('2022-01-01T00:00:00.000Z'),
@@ -762,7 +762,7 @@ Deno.test('utils.Syslog', async (s) => {
       });
     });
 
-    await t.step('should handle parsing validation edge cases', () => {
+    await u.step('should handle parsing validation edge cases', () => {
       // Test priority parsing at boundaries
       const logLine1 = '<0>1 2022-01-01T00:00:00.000Z localhost - - - Test'; // Min priority
       const parsed1 = parse(logLine1);
@@ -783,7 +783,7 @@ Deno.test('utils.Syslog', async (s) => {
       );
     });
 
-    await t.step('should handle malformed input gracefully', () => {
+    await u.step('should handle malformed input gracefully', () => {
       // Test various malformed inputs that should not crash
       const malformedInputs = [
         '<>test',
