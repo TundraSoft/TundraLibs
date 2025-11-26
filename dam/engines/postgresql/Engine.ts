@@ -23,7 +23,8 @@
  * ```
  */
 
-import { Pool, type PoolClient, type QueryResult, types } from '$pg';
+import { Pool, types } from '$pg';
+import type { PoolClient, QueryResult } from '$pg_types';
 import { type EventOptionKeys } from '@tundralibs/utils';
 import { AbstractEngine } from '../../engine/AbstractEngine.ts';
 import { DAMEngineError } from '../../engine/errors/mod.ts';
@@ -55,24 +56,6 @@ types.setTypeParser(types.builtins.NUMERIC, (val: string) => parseFloat(val)); /
 // Boolean type (return as boolean)
 types.setTypeParser(types.builtins.BOOL, (val: string) => val === 't'); // boolean -> boolean
 
-// Array types (return as proper arrays)
-types.setTypeParser(
-  types.builtins.INT2_ARRAY,
-  (val: string) => JSON.parse(val).map((x: string) => parseInt(x, 10)),
-);
-types.setTypeParser(
-  types.builtins.INT4_ARRAY,
-  (val: string) => JSON.parse(val).map((x: string) => parseInt(x, 10)),
-);
-types.setTypeParser(
-  types.builtins.FLOAT4_ARRAY,
-  (val: string) => JSON.parse(val).map((x: string) => parseFloat(x)),
-);
-types.setTypeParser(
-  types.builtins.FLOAT8_ARRAY,
-  (val: string) => JSON.parse(val).map((x: string) => parseFloat(x)),
-);
-
 // JSON types (already handled by pg library by default, but ensure proper parsing)
 // JSONB and JSON are parsed automatically by pg library
 
@@ -98,6 +81,7 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
 
   private _pool: Pool | null = null;
   private _activeTransactions = new Map<string, PoolClient>();
+  private _transactionTimeouts = new Map<string, number>();
 
   constructor(
     id: string,
@@ -294,7 +278,7 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
       // Close pool
       if (this._pool) {
         await this._pool.end();
-        this._pool = undefined;
+        this._pool = null;
       }
     } catch (error) {
       throw new DAMEngineError('ENGINE_CLEANUP_FAILED', {
@@ -351,7 +335,7 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
             : undefined);
 
         // Execute query
-        const result: QueryResult = await client.query(query.sql, pgParams);
+        const result: QueryResult = await client.query<R>(query.sql, pgParams);
 
         // Update pool stats
         this._updatePoolStats({
@@ -362,7 +346,7 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
         });
 
         return {
-          data: result.rows as R[],
+          data: result.rows,
           count: result.rowCount || 0,
         };
       } finally {
@@ -403,20 +387,36 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
       });
     }
 
+    if (!transactionId) {
+      throw new DAMEngineError('TRANSACTION_NOT_FOUND', {
+        instanceId: this.instanceId,
+        name: this.name,
+        engine: this.Engine,
+        reason: 'Transaction ID is required',
+      });
+    }
+
     try {
       const client = await this._pool.connect();
       await client.query('BEGIN');
 
-      // Set transaction timeout if specified
-      if (options?.timeout) {
-        await client.query(
-          `SET LOCAL statement_timeout = ${options.timeout * 1000}`,
-        );
+      // Set up transaction timeout if specified - applies to entire transaction
+      if (options?.timeout && options.timeout > 0) {
+        const timeoutMs = options.timeout * 1000;
+        const timeoutId = setTimeout(async () => {
+          // Auto-rollback transaction on timeout
+          try {
+            await this._rollbackTransaction(transactionId);
+          } catch {
+            // Ignore rollback errors during timeout
+          }
+        }, timeoutMs);
+        
+        this._transactionTimeouts.set(transactionId, timeoutId);
       }
 
       // Store transaction client with the provided transaction ID
-      const txId = transactionId || crypto.randomUUID();
-      this._activeTransactions.set(txId, client);
+      this._activeTransactions.set(transactionId, client);
     } catch (error) {
       throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
         instanceId: this.instanceId,
@@ -453,6 +453,13 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
     }
 
     try {
+      // Clear transaction timeout if it exists
+      const timeoutId = this._transactionTimeouts.get(transactionId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        this._transactionTimeouts.delete(transactionId);
+      }
+      
       await client.query('COMMIT');
       client.release();
       this._activeTransactions.delete(transactionId);
@@ -491,6 +498,13 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
     }
 
     try {
+      // Clear transaction timeout if it exists
+      const timeoutId = this._transactionTimeouts.get(transactionId);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        this._transactionTimeouts.delete(transactionId);
+      }
+      
       await client.query('ROLLBACK');
       client.release();
       this._activeTransactions.delete(transactionId);
@@ -510,6 +524,12 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
    */
   protected async _rollbackAllTransactions(): Promise<void> {
     const errors: Error[] = [];
+    
+    // Clear all transaction timeouts
+    for (const timeoutId of this._transactionTimeouts.values()) {
+      clearTimeout(timeoutId);
+    }
+    this._transactionTimeouts.clear();
 
     for (const [_transactionId, client] of this._activeTransactions) {
       try {
