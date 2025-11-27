@@ -271,7 +271,7 @@ Deno.test('utils.ipUtils', async (i) => {
           `Binary representation of ${ip} should be 128 bits`,
         );
         asserts.assert(
-          binary.match(/^[01]+$/),
+          /^[01]+$/.exec(binary),
           `Binary representation should only contain 0s and 1s`,
         );
       }

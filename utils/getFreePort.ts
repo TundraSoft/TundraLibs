@@ -171,7 +171,7 @@ export const getFreePort = ({
       const listener = Deno.listen({ port });
       listener.close();
       return port;
-    } catch (_error) {
+    } catch {
       // Port in use or other binding error, continue to next attempt
       // Common reasons: EADDRINUSE (port in use), EACCES (permission denied)
       // We intentionally catch and ignore all errors here as we want to try the next port

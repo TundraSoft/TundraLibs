@@ -217,7 +217,7 @@ function parseStructuredData(structAndMessage: string): {
     return { message: undefined };
   }
   const sd: Record<StructuredDataKey, Record<string, string>> = {};
-  if (structAndMessage.match(Patterns.STRUCT)) {
+  if (new RegExp(Patterns.STRUCT, 'g').test(structAndMessage)) {
     const structData = structAndMessage.matchAll(Patterns.STRUCT);
     for (const struct of structData) {
       structAndMessage = structAndMessage.substring(struct[0].length).trim();
@@ -278,7 +278,7 @@ export const parse = (log: string): SyslogObject => {
     if (priValue === undefined || priValue === '' || priValue === null) {
       throw new Error('Invalid RFC5424 format: Missing priority value');
     }
-    const pri = parseInt(priValue, 10);
+    const pri = Number.parseInt(priValue, 10);
     const { facility, severity, facilityName, severityName } = parsePri(pri);
     logObj.facility = facility;
     logObj.severity = severity;
@@ -288,8 +288,8 @@ export const parse = (log: string): SyslogObject => {
     logObj.hostname = (RFCMatch[3] !== NIL_VALUE) ? RFCMatch[3] : undefined;
     logObj.appName = (RFCMatch[4] !== NIL_VALUE) ? RFCMatch[4] : undefined;
     if (RFCMatch[5] && RFCMatch[5] !== NIL_VALUE) {
-      const procId = parseInt(RFCMatch[5], 10);
-      if (!isNaN(procId)) {
+      const procId = Number.parseInt(RFCMatch[5], 10);
+      if (!Number.isNaN(procId)) {
         logObj.processId = procId;
       }
     }
@@ -308,9 +308,9 @@ export const parse = (log: string): SyslogObject => {
     if (priValue === undefined || priValue === '' || priValue === null) {
       throw new Error('Invalid RFC3164 format: Missing priority value');
     }
-    const pri = parseInt(priValue, 10);
-    if (isNaN(pri)) {
-      throw new Error('Invalid RFC3164 format: Invalid priority value');
+    const pri = Number.parseInt(priValue, 10);
+    if (Number.isNaN(pri)) {
+      throw new TypeError('Invalid RFC3164 format: Invalid priority value');
     }
 
     const { facility, severity, facilityName, severityName } = parsePri(pri);
@@ -321,7 +321,7 @@ export const parse = (log: string): SyslogObject => {
     if (BSDMatch[3]) {
       let year = new Date().getFullYear();
       if (BSDMatch[6]) {
-        year = parseInt(BSDMatch[6]!);
+        year = Number.parseInt(BSDMatch[6]!);
       }
       logObj.timestamp = new Date(
         `${BSDMatch[4]} ${BSDMatch[5]} ${year} ${BSDMatch[7]}`,
@@ -336,8 +336,8 @@ export const parse = (log: string): SyslogObject => {
       ? BSDMatch[10]
       : undefined;
     if (BSDMatch[12] && BSDMatch[12] !== NIL_VALUE && BSDMatch[12] !== '') {
-      const procId = parseInt(BSDMatch[12], 10);
-      if (!isNaN(procId)) {
+      const procId = Number.parseInt(BSDMatch[12], 10);
+      if (!Number.isNaN(procId)) {
         logObj.processId = procId;
       }
     }
@@ -362,7 +362,7 @@ export const stringify = (
   }
   if (
     logObj.processId !== undefined &&
-    (isNaN(logObj.processId) || logObj.processId < 0)
+    (Number.isNaN(logObj.processId) || logObj.processId < 0)
   ) {
     throw new Error('Invalid process ID');
   }

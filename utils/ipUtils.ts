@@ -61,8 +61,9 @@ export const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
  * IPV6_REGEX.test('invalid::format');    // false
  * ```
  */
-export const IPV6_REGEX =
-  /^([0-9a-fA-F]{0,4}:){1,7}([0-9a-fA-F]{0,4}|(\d{1,3}\.){3}\d{1,3})$|^::(ffff:)?(\d{1,3}\.){3}\d{1,3}$/;
+// Basic IPv6 character check: only allow hex digits, colons and dots.
+// More precise structural checks are performed in isValidIPv6Structure.
+export const IPV6_REGEX = /^[0-9a-fA-F:.]+$/;
 
 /**
  * Regular expression for validating individual IPv4 octets (0-255).
@@ -97,6 +98,11 @@ export const IPV6_SEGMENT = /^[0-9A-Fa-f]{1,4}$/;
  * IPv4 addresses are 32 bits, so CIDR values range from /0 to /32.
  */
 export const IPV4_MAX_SUBNET = 32;
+// Bits constants for clarity and to avoid magic numbers flagged by Sonar
+export const IPV4_BITS = 32;
+export const IPV6_BITS = 128;
+export const OCTET_BITS = 8;
+export const IPV6_SEGMENT_BITS = 16;
 
 /**
  * Maximum subnet mask length for IPv6 addresses.
@@ -146,7 +152,7 @@ export const isValidIPv4 = (ip: string): boolean => {
   if (!IPV4_REGEX.test(ip)) return false;
 
   return ip.split('.').every((octet) => {
-    const num = parseInt(octet, 10);
+    const num = Number.parseInt(octet, 10);
     return num >= 0 && num <= 255;
   });
 };
@@ -179,6 +185,11 @@ export const isValidIPv4 = (ip: string): boolean => {
  * ```
  */
 export const isValidIPv6Structure = (ip: string): boolean => {
+  // IPv6 addresses use colons; if no colon is present, it's not IPv6
+  if (!ip.includes(':')) return false;
+
+  // Protect against massive inputs which can cause ReDoS on complex regexes
+  if (ip.length > 45) return false;
   if (!IPV6_REGEX.test(ip)) return false;
 
   // Check for invalid colon sequences
@@ -202,8 +213,12 @@ export const isValidIPv6Structure = (ip: string): boolean => {
     return validateFullIPv6Segments(ip);
   }
 
-  // Validate hex segments
-  return validateIPv6HexSegments(ip);
+  // For compressed addresses, expand and validate the full form
+  const expanded = expandIPv6(ip);
+  if (!expanded) return false;
+  return validateFullIPv6Segments(expanded);
+
+  // All checks are handled above; function returns earlier according to path.
 };
 
 /**
@@ -233,13 +248,9 @@ function validateFullIPv6Segments(ip: string): boolean {
 /**
  * Helper function to validate IPv6 hexadecimal segments.
  */
-function validateIPv6HexSegments(ip: string): boolean {
-  const segments = ip.split(':');
-  return segments.every((segment) => {
-    return segment === '' || IPV6_SEGMENT.test(segment) ||
-      IPV4_REGEX.test(segment);
-  });
-}
+// (previously validateIPv6HexSegments was used for additional per-segment checks,
+// the current logic relies on the full expansion checks above, so it has been
+// removed to simplify validation paths and avoid unused helper functions.)
 
 /**
  * Converts an IPv4 segment to its hexadecimal IPv6 representation.
@@ -271,10 +282,8 @@ function validateIPv6HexSegments(ip: string): boolean {
  * ```
  */
 export const ipv4ToHexSegments = (ipv4: string): string[] => {
-  const octets = ipv4.split('.').map((o) => parseInt(o, 10));
-  if (octets.length !== 4 || octets.some(isNaN)) {
-    throw new Error(`Invalid IPv4 address: ${ipv4}`);
-  }
+  if (!isValidIPv4(ipv4)) throw new Error(`Invalid IPv4 address: ${ipv4}`);
+  const octets = ipv4.split('.').map((o) => Number.parseInt(o, 10));
   // After validation, we know octets has exactly 4 valid numbers
   const [a, b, c, d] = octets as [number, number, number, number];
   return [
@@ -357,6 +366,9 @@ function isValidIPv6Input(ip: string): boolean {
     return false;
   }
 
+  // Simple length guard to mitigate potential regex DoS risks
+  if (ip.length > 45) return false;
+
   return true;
 }
 
@@ -402,7 +414,7 @@ function expandMixedIPv6Format(
     const missingGroups = 6 - prefixParts.length;
     if (missingGroups < 0) return null;
 
-    const zeroGroups = Array(missingGroups).fill('0');
+    const zeroGroups = new Array(missingGroups).fill('0');
     const expandedParts = prefix.startsWith(':')
       ? [...zeroGroups, ...prefixParts]
       : [...prefixParts, ...zeroGroups];
@@ -429,7 +441,7 @@ function expandCompressedIPv6(ip: string): string | null {
   if (missingGroups < 0) return null;
 
   // Create the expanded address
-  const zeroGroups = Array(missingGroups).fill('0');
+  const zeroGroups = new Array(missingGroups).fill('0');
   const expandedParts = [...leftParts, ...zeroGroups, ...rightParts];
 
   // Ensure we have exactly 8 parts and replace empty segments
@@ -487,8 +499,9 @@ function expandFullIPv6(ip: string): string | null {
  * ```
  */
 export const ipv4ToBinary = (ip: string): string => {
+  if (!isValidIPv4(ip)) throw new Error(`Invalid IPv4 address: ${ip}`);
   return ip.split('.')
-    .map((part) => parseInt(part, 10).toString(2).padStart(8, '0'))
+    .map((part) => Number.parseInt(part, 10).toString(2).padStart(8, '0'))
     .join('');
 };
 
@@ -540,7 +553,9 @@ export const ipv6ToBinary = (ip: string): string => {
 
   // Convert each hexadecimal segment to binary
   return expandedIP.split(':')
-    .map((segment) => parseInt(segment, 16).toString(2).padStart(16, '0'))
+    .map((segment) =>
+      Number.parseInt(segment, 16).toString(2).padStart(16, '0')
+    )
     .join('');
 };
 
@@ -584,8 +599,12 @@ export const ipv6ToBinary = (ip: string): string => {
  * ```
  */
 export const ipv4ToLong = (ip: string): number => {
+  if (!isValidIPv4(ip)) throw new Error(`Invalid IPv4 address: ${ip}`);
   return ip.split('.')
-    .reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+    .reduce(
+      (acc, octet) => (acc << OCTET_BITS) + Number.parseInt(octet, 10),
+      0,
+    ) >>> 0;
 };
 
 /**
@@ -644,8 +663,16 @@ export const isIPv4InRange = (
   rangeStart: string,
   cidr: number,
 ): boolean => {
+  if (!isValidIPv4(ip)) throw new Error(`Invalid IPv4 address: ${ip}`);
+  if (!isValidIPv4(rangeStart)) {
+    throw new Error(`Invalid IPv4 range start: ${rangeStart}`);
+  }
+  if (!Number.isInteger(cidr) || cidr < 0 || cidr > IPV4_MAX_SUBNET) {
+    throw new Error(`Invalid CIDR prefix: ${cidr}`);
+  }
+
   const ipLong = ipv4ToLong(ip);
   const rangeLong = ipv4ToLong(rangeStart);
-  const mask = ~((1 << (32 - cidr)) - 1);
+  const mask = ~((1 << (IPV4_BITS - cidr)) - 1);
   return (ipLong & mask) === (rangeLong & mask);
 };

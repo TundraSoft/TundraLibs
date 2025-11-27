@@ -197,25 +197,26 @@ Deno.test({
       const { secretsDir, cleanup } = await mockDockerSecrets(t);
 
       try {
-        // Mock implementation for Docker secrets path - update type signature to match Deno API
-        Deno.readDirSync = function (
-          path: string | URL,
-        ): IteratorObject<Deno.DirEntry, unknown, unknown> {
-          return (function* () {
-            const pathStr = path instanceof URL ? path.pathname : path;
-            if (pathStr === '/run/secrets') {
-              yield* originalReadDirSync(secretsDir);
-            } else {
-              yield* originalReadDirSync(pathStr);
-            }
-          })() as IteratorObject<Deno.DirEntry, unknown, unknown>;
+        const normalize = (p: string | URL) =>
+          (p instanceof URL ? p.pathname : String(p)).replaceAll('\\', '/');
+
+        // Override Deno.readDirSync to route /run/secrets to our mock secretsDir on both Windows and Linux
+        (Deno as any).readDirSync = function (p: string | URL = '.') {
+          const pathStr = p instanceof URL ? p.pathname : String(p);
+          const norm = normalize(p);
+          if (norm.startsWith('/run/secrets')) {
+            return originalReadDirSync(secretsDir);
+          }
+          return originalReadDirSync(pathStr);
         };
 
-        Deno.readTextFileSync = function (path: string | URL): string {
-          const pathStr = path instanceof URL ? path.pathname : path;
-          if (pathStr.startsWith('/run/secrets/')) {
-            const secretName = pathStr.split('/').pop() || '';
-            return originalReadTextFileSync(`${secretsDir}/${secretName}`);
+        // Override Deno.readTextFileSync to read files from mock secretsDir when paths point to /run/secrets
+        (Deno as any).readTextFileSync = function (p: string | URL) {
+          const pathStr = p instanceof URL ? p.pathname : String(p);
+          const norm = normalize(p);
+          if (norm.startsWith('/run/secrets/')) {
+            const secretName = norm.split('/').pop() || '';
+            return originalReadTextFileSync(path.join(secretsDir, secretName));
           }
           return originalReadTextFileSync(pathStr);
         };

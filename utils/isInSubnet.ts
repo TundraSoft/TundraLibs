@@ -146,8 +146,8 @@ function parseCIDR(subnet: string): { subnetIP: string; cidr: number } | null {
   const [subnetIP, cidrStr] = subnet.split('/');
   if (!subnetIP || !cidrStr) return null;
 
-  const cidr = parseInt(cidrStr, 10);
-  if (isNaN(cidr)) return null;
+  const cidr = Number.parseInt(cidrStr, 10);
+  if (Number.isNaN(cidr)) return null;
 
   return { subnetIP, cidr };
 }

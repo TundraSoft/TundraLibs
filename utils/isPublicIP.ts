@@ -62,7 +62,7 @@ export const isPublicIP = (ip: string): boolean => {
 
     // Check other IPv6 ranges like fe80::/10 (link-local)
     return !ipv6Ranges.some(([prefix, _cidr]) =>
-      normalizedIP.startsWith(prefix.split(':')[0]!)
+      normalizedIP.startsWith(prefix.split(':')[0]!) //NOSONAR
     );
   }
 

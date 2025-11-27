@@ -485,10 +485,6 @@ Deno.test('utils.isInSubnet', async (t) => {
   await t.step('should handle error cases that trigger catch block', () => {
     // Mock ipv6ToBinary to throw error to test catch block
     const originalConsoleDebug = console.debug;
-    const debugCalls: string[] = [];
-    console.debug = (message: string) => {
-      debugCalls.push(message);
-    };
 
     try {
       // These should trigger the catch block through invalid internal operations

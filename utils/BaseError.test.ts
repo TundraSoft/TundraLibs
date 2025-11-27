@@ -384,7 +384,9 @@ Deno.test(
 
     await t.step('should handle line number validation edge cases', () => {
       // Create a temporary test file for this specific test
-      const tempFilePath = '/tmp/baseError_test_' + Date.now() + '.ts';
+      //const tempFilePath = '/tmp/baseError_test_' + Date.now() + '.ts';
+      const tempFilePath = Deno.makeTempDirSync() + '/baseError_test_' +
+        Date.now() + '.ts';
       Deno.writeTextFileSync(
         tempFilePath,
         '// Test file\nconsole.log("test");',

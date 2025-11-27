@@ -39,7 +39,7 @@ Deno.test('utils.Syslog', async (t) => {
       asserts.assertEquals(parsed.appName, 'app');
       asserts.assertEquals(parsed.messageId, 'ID42');
       asserts.assert(parsed.message.includes('Request processed'));
-      asserts.assertEquals(parsed.structuredData!['meta@123'], {
+      asserts.assertEquals(parsed.structuredData!['meta@123'], { //NOSONAR
         param: 'true',
       });
     });
@@ -54,7 +54,7 @@ Deno.test('utils.Syslog', async (t) => {
       asserts.assertEquals(parsed.appName, 'db');
       asserts.assertEquals(parsed.messageId, '678');
       asserts.assert(parsed.message.includes('Query took too long'));
-      asserts.assertEquals(parsed.structuredData!['dbwarn@4567'], {
+      asserts.assertEquals(parsed.structuredData!['dbwarn@4567'], { //NOSONAR
         val: 'high',
         desc: 'potential issue',
       });
@@ -224,8 +224,6 @@ Deno.test('utils.Syslog', async (t) => {
         Error,
         'Invalid/Unsupported syslog format',
       );
-      // const parsed = parse(logLine);
-      // asserts.assertEquals(parsed.processId, undefined);
     });
 
     await u.step('Empty structured data element values', () => {
@@ -447,7 +445,7 @@ Deno.test('utils.Syslog', async (t) => {
         facility: SyslogFacilities.LOCAL0,
         severity: SyslogSeverities.ERROR,
         timestamp: new Date(),
-        processId: NaN,
+        processId: Number.NaN,
         message: 'test',
       };
       asserts.assertThrows(
@@ -665,7 +663,7 @@ Deno.test('utils.Syslog', async (t) => {
 
       // Test with escaped quotes in values
       const logLine4 =
-        '<165>1 2022-01-01T00:00:00.000Z localhost - - - [test@123 key="value with \\"quotes\\""] Test';
+        '<165>1 2022-01-01T00:00:00.000Z localhost - - - [test@123 key="value with \\"quotes\\""] Test'; //NOSONAR
       const parsed4 = parse(logLine4);
       asserts.assertEquals(
         parsed4.structuredData?.['test@123']?.['key'],

@@ -240,8 +240,8 @@ export class BaseError<
     try {
       const fileContent = Deno.readTextFileSync(path.toFileUrl(filePath));
       const lines = fileContent.split('\n');
-      const errorLine = parseInt(lineStr, 10) - 1;
-      if (isNaN(errorLine) || errorLine < 0) {
+      const errorLine = Number.parseInt(lineStr, 10) - 1;
+      if (Number.isNaN(errorLine) || errorLine < 0) {
         return 'Invalid line number in stack trace';
       }
 
