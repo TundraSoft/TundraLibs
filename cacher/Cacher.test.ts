@@ -684,7 +684,7 @@ Deno.test('cacher.core', async (t) => {
   await t.step('finalize error handling', async (d) => {
     class FailingFinalizeEngine extends AbstractEngine {
       public readonly Engine = 'FAILING_FINALIZE';
-      private _storage = new Map<string, CacheValue>();
+      private readonly _storage = new Map<string, CacheValue>();
 
       protected async _set(key: string, value: CacheValue): Promise<void> {
         this._storage.set(key, value);

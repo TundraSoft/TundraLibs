@@ -12,10 +12,10 @@ Deno.test('cacher.engines.redis', async (t) => {
   const setupRedis = () => {
     redis = new RedisCacher('redis-test', {
       host: env.get('REDIS_HOST'),
-      port: parseInt(env.get('REDIS_PORT')),
+      port: Number.parseInt(env.get('REDIS_PORT')),
       username: env.get('REDIS_USERNAME'),
       password: env.get('REDIS_PASSWORD'),
-      db: parseInt(env.get('REDIS_DB')),
+      db: Number.parseInt(env.get('REDIS_DB')),
     });
     return redis;
   };
@@ -48,7 +48,7 @@ Deno.test('cacher.engines.redis', async (t) => {
       const cacher = new RedisCacher('boo', {
         host: 'localhost',
         port: undefined,
-      });
+      } as unknown as RedisCacherOptions);
 
       asserts.assertEquals(cacher.getOption('port'), 6379);
     });
@@ -303,7 +303,7 @@ Deno.test('cacher.engines.redis', async (t) => {
         const key = 'test-large';
         const largeObj = {
           id: 'test',
-          items: Array(1000).fill(0).map((_, i) => ({
+          items: new Array(1000).fill(0).map((_, i) => ({
             id: i,
             value: `value-${i}`,
           })),
@@ -311,7 +311,7 @@ Deno.test('cacher.engines.redis', async (t) => {
             deep: {
               deeper: {
                 deepest: 'value',
-                array: Array(100).fill('test'),
+                array: new Array(100).fill('test'),
               },
             },
           },
@@ -465,7 +465,7 @@ Deno.test('cacher.engines.redis', async (t) => {
       // Create a temporary test certificate file
       const tempCert =
         '-----BEGIN CERTIFICATE-----\nMIIC...test...\n-----END CERTIFICATE-----';
-      const tempCertPath = '/tmp/test-cert.pem';
+      const tempCertPath = Deno.makeTempFileSync({ prefix: 'test-cert' });
 
       try {
         Deno.writeTextFileSync(tempCertPath, tempCert);

@@ -15,8 +15,10 @@ Deno.test('cacher.engines.memcached', async (t) => {
   const setupMemcached = () => {
     memcached = new MemCacher('memcached-test', {
       host: env.get('MEMCACHED_HOST'),
-      port: parseInt(env.get('MEMCACHED_PORT')),
-      maxBufferSize: parseInt(env.get('MEMCACHED_SIZE')),
+      port: (env.has('MEMCACHED_PORT'))
+        ? Number.parseInt(env.get('MEMCACHED_PORT'))
+        : undefined,
+      // maxBufferSize: (env.has('MEMCACHED_SIZE')) ? Number.parseInt(env.get('MEMCACHED_SIZE')) : undefined,
     });
     return memcached;
   };
@@ -61,7 +63,7 @@ Deno.test('cacher.engines.memcached', async (t) => {
         () => {
           const _ = new MemCacher('memory-test', {
             port: 11211,
-          });
+          } as unknown as MemCacherOptions);
         },
         CacherEngineError,
         'Configuration key host is missing',

@@ -57,7 +57,7 @@ export class MemoryCacher extends AbstractEngine<MemoryCacherOptions> {
    * @param name - A unique name for this cacher instance
    * @param options - Configuration options for this cacher
    */
-  constructor(name: string, options: Partial<MemoryCacherOptions>) {
+  constructor(name: string, options: MemoryCacherOptions) {
     super(name, options);
   }
 
@@ -105,7 +105,7 @@ export class MemoryCacher extends AbstractEngine<MemoryCacherOptions> {
    */
   protected _get(key: string): CacheValue | undefined {
     const val = this._cache.get(key);
-    if (val && (val.window === true && val.expiry > 0)) {
+    if (val?.window === true && (val?.expiry ?? 0) > 0) {
       clearTimeout(this._expiryTimers.get(key));
       this._expiryTimers.set(
         key,

@@ -144,7 +144,7 @@ Deno.test('cacher.AbstractEngine', async (t) => {
       );
 
       asserts.assertThrows(
-        () => new TestEngine('test', { defaultExpiry: NaN }),
+        () => new TestEngine('test', { defaultExpiry: Number.NaN }),
         CacherEngineError,
         'Configuration value for defaultExpiry is invalid',
       );
@@ -298,7 +298,7 @@ Deno.test('cacher.AbstractEngine', async (t) => {
       );
 
       await asserts.assertRejects(
-        () => engine.set('key1', 'value1', { expiry: NaN }),
+        () => engine.set('key1', 'value1', { expiry: Number.NaN }),
         CacherEngineError,
         'Invalid parameters for operation SET',
       );
@@ -552,7 +552,7 @@ Deno.test('cacher.AbstractEngine', async (t) => {
     await u.step('should handle special characters in keys', async () => {
       const engine = new TestEngine('test', {});
       const specialKey =
-        'key:with!@#$%^&*()_+-={}[]|\\:";\'<>?,./special~chars';
+        'key:with!@#$%^&*()_+-={}[]|\\:";\'<>?,./special~chars'; //NOSONAR
 
       await engine.set(specialKey, 'special-value');
       asserts.assertEquals(await engine.get(specialKey), 'special-value');

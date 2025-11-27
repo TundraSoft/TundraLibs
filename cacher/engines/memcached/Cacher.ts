@@ -58,12 +58,11 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
    * @param options - Configuration options for this cacher
    * @throws {@link CacherConfigError} if required options are missing or invalid
    */
-  constructor(name: string, options: Partial<MemCacherOptions>) {
-    options = {
-      ...{ port: 11211, maxBufferSize: 10 },
-      ...options,
-    };
-    super(name, options);
+  constructor(name: string, options: MemCacherOptions) {
+    super(name, options, {
+      port: 11211,
+      maxBufferSize: 10,
+    });
     // Ensure mandatory items present
     if (this.hasOption('host') === false) {
       throw new CacherEngineError('CONFIG_MISSING', {

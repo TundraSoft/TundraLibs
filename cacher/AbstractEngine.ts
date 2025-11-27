@@ -26,12 +26,13 @@ export abstract class AbstractEngine<
 
   public readonly name: string;
 
-  constructor(name: string, options: Partial<O>) {
+  constructor(name: string, options: O, defaults?: Partial<O>) {
     super();
     this.name = name.trim();
     // Set the options using the protected method
     super._setOptions(options, {
       defaultExpiry: 300,
+      ...defaults,
     } as Partial<O>);
   }
 
@@ -226,7 +227,7 @@ export abstract class AbstractEngine<
 
   protected _validateExpiry(expiry: unknown): expiry is number {
     if (
-      typeof expiry !== 'number' || isNaN(expiry) || expiry < 0
+      typeof expiry !== 'number' || Number.isNaN(expiry) || expiry < 0
     ) {
       return false;
     }

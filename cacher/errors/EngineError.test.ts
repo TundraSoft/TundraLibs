@@ -449,7 +449,7 @@ Deno.test(
     });
 
     await t.step('should preserve stack trace correctly', () => {
-      function createEngineError() {
+      function createEngineError() { //NOSONAR
         const meta: CacherErrorMeta = { name: 'cache1', engine: 'memory' };
         return new CacherEngineError('OPERATION_FAILED', meta);
       }

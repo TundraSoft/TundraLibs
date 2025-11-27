@@ -161,7 +161,7 @@ class Manager {
     this._validateEngineExists(engineType);
     this._handleInstanceCreation(engineType, instanceName, options);
 
-    return this._instances.get(instanceName) as AbstractEngine;
+    return this._instances.get(instanceName)!; //NOSONAR
   }
 
   /**
@@ -244,10 +244,10 @@ class Manager {
     instanceName: string,
     options: T,
   ): void {
-    if (!this._instances.has(instanceName)) {
-      this._createNewInstance(engineType, instanceName, options);
-    } else {
+    if (this._instances.has(instanceName)) {
       this._validateExistingInstance(engineType, instanceName);
+    } else {
+      this._createNewInstance(engineType, instanceName, options);
     }
   }
 
@@ -260,7 +260,7 @@ class Manager {
     instanceName: string,
     options: T,
   ): void {
-    const EngineClass = this._engines.get(engineType)!;
+    const EngineClass = this._engines.get(engineType)!; //NOSONAR
     try {
       this._instances.set(
         instanceName,
@@ -415,7 +415,7 @@ class Manager {
    * @returns Array of registered engine names
    */
   getRegisteredEngines(): string[] {
-    return Array.from(this._engines.keys()).sort();
+    return Array.from(this._engines.keys()).sort((a, b) => a.localeCompare(b));
   }
 
   /**
@@ -424,7 +424,9 @@ class Manager {
    * @returns Array of active instance names
    */
   getActiveInstances(): string[] {
-    return Array.from(this._instances.keys()).sort();
+    return Array.from(this._instances.keys()).sort((a, b) =>
+      a.localeCompare(b)
+    );
   }
 
   /**

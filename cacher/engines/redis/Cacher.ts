@@ -66,12 +66,10 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
    * @param options - Configuration options for this cacher
    * @throws {@link CacherConfigError} if required options are missing or invalid
    */
-  constructor(name: string, options: Partial<RedisCacherOptions>) {
-    options = {
-      ...{ port: 6379 },
-      ...options,
-    };
-    super(name, options);
+  constructor(name: string, options: RedisCacherOptions) {
+    super(name, options, {
+      port: 6379,
+    });
     // Ensure mandatory items present
     if (this.hasOption('host') === false) {
       throw new CacherEngineError('CONFIG_MISSING', {

@@ -258,7 +258,7 @@ Deno.test(
           name: 'cache-with-special-chars!@#$%^&*()',
           engine: 'memory',
           path: '/path/to/cache/file.db',
-          regex: '\\w+\\d+',
+          regex: String.raw`\w+\d+`, //'\\w+\\d+'
           unicode: '🚨 Error occurred 🚨',
         };
 
@@ -290,7 +290,7 @@ Deno.test(
     });
 
     await t.step('should preserve stack trace correctly', () => {
-      function createError() {
+      function createError() { //NOSONAR
         const meta = { name: 'cache1', engine: 'memory' };
         return new CacherError('Stack trace test', meta);
       }
