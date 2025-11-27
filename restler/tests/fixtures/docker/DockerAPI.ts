@@ -164,9 +164,9 @@ export class DockerAPI extends RESTler {
   }
 }
 
-const dockerApi = new DockerAPI();
+// const dockerApi = new DockerAPI();
 
-// Make requests
-const containers = await dockerApi.listContainers(true);
-const images = await dockerApi.listImages();
-const info = await dockerApi.getSystemInfo();
+// // Make requests
+// const containers = await dockerApi.listContainers(true);
+// const images = await dockerApi.listImages();
+// const info = await dockerApi.getSystemInfo();

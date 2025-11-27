@@ -86,10 +86,8 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
   ) {
     super();
     super._setOptions(options, {
-      ...{
-        timeout: 10,
-        contentType: 'JSON',
-      },
+      timeout: 10,
+      contentType: 'JSON',
       ...defaults,
     } as Partial<O>);
     if (this.hasOption('tls')) {
@@ -260,7 +258,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       const value = lowercaseHeaders[name.toLowerCase()];
       if (value) {
         const numValue = Number(value);
-        if (!isNaN(numValue)) {
+        if (!Number.isNaN(numValue)) {
           return numValue;
         }
       }
@@ -369,10 +367,6 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       : this.getOption('contentType');
     if ('payload' in request && request.payload !== undefined) {
       switch (contentType) {
-        default: // Default to JSON
-        case 'JSON':
-          payload = JSON.stringify(request.payload);
-          break;
         case 'XML':
           payload = XMLStringify(request.payload as Record<string, unknown>);
           break;
@@ -388,6 +382,10 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           payload = (typeof request.payload === 'string')
             ? request.payload
             : JSON.stringify(request.payload);
+          break;
+        case 'JSON':
+        default: // Default to JSON
+          payload = JSON.stringify(request.payload);
           break;
       }
     }
@@ -438,11 +436,6 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       let body = '';
       // Handle different content types
       switch (contentType) {
-        default:
-        case 'JSON':
-          body = payload ? JSON.stringify(payload) : '';
-          request.headers['Content-Type'] = 'application/json';
-          break;
         case 'XML':
           body = payload
             ? XMLStringify(payload as Record<string, unknown>)
@@ -466,6 +459,11 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           request.headers['Content-Type'] = 'text/plain';
           break;
         }
+        case 'JSON':
+        default:
+          body = payload ? JSON.stringify(payload) : '';
+          request.headers['Content-Type'] = 'application/json';
+          break;
       }
 
       request.headers['Content-Length'] = body.length.toString();
@@ -506,7 +504,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         );
       }
 
-      const status = parseInt(statusMatch[1] || '0') as StatusCode;
+      const status = Number.parseInt(statusMatch[1] || '0') as StatusCode;
 
       const headers = headerLines.slice(1).reduce(
         (acc: Record<string, string>, currentLine) => {
@@ -581,7 +579,6 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       throw new RESTlerError('Socket communication error', {
         vendor: this.vendor,
       }, error as Error);
-      // throw new Error('Socket communication error: ' + error, { cause: error });
     }
   }
 

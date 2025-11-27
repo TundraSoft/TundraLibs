@@ -212,27 +212,32 @@ const cleanupMock = () => {
   Deno.connect = originalConnect;
 };
 
+const DOCKER_PATH = Deno.build.os === 'windows'
+  ? 'npipe:////./pipe/docker_engine'
+  : '/var/run/docker.sock';
 Deno.test('restler.examples.dockerAPI', async (h) => {
-  await h.step('DockerAPI', async (u) => {
-    await u.step('should initialize with default socket path', () => {
-      try {
-        setupMock();
-        const defaultApi = new DockerAPI();
-        asserts.assertEquals(defaultApi.vendor, 'Docker');
-      } finally {
-        cleanupMock();
-      }
-    });
+  if (Deno.build.os !== 'windows') {
+    await h.step('DockerAPI', async (u) => {
+      await u.step('should initialize with default socket path', () => {
+        try {
+          setupMock();
+          const defaultApi = new DockerAPI(DOCKER_PATH);
+          asserts.assertEquals(defaultApi.vendor, 'Docker');
+        } finally {
+          cleanupMock();
+        }
+      });
 
-    await u.step('should accept custom socket path', () => {
-      try {
-        setupMock();
-        const customApi = new DockerAPIMock('/var/run/notthere.socket');
-        // No direct way to verify the socket path, but we can verify it was constructed
-        asserts.assertNotEquals(customApi, null);
-      } finally {
-        cleanupMock();
-      }
+      await u.step('should accept custom socket path', () => {
+        try {
+          setupMock();
+          const customApi = new DockerAPIMock('/var/run/notthere.socket');
+          // No direct way to verify the socket path, but we can verify it was constructed
+          asserts.assertNotEquals(customApi, null);
+        } finally {
+          cleanupMock();
+        }
+      });
     });
-  });
+  }
 });
