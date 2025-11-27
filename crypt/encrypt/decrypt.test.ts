@@ -232,10 +232,10 @@ Deno.test('crypt.decrypt', async (t) => {
     );
 
     const publicKeyBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(publicKeyRaw)),
+      String.fromCodePoint(...new Uint8Array(publicKeyRaw)),
     );
     const privateKeyBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(privateKeyRaw)),
+      String.fromCodePoint(...new Uint8Array(privateKeyRaw)),
     );
 
     const publicKeyPEM = `-----BEGIN PUBLIC KEY-----\n${
@@ -287,10 +287,10 @@ Deno.test('crypt.decrypt', async (t) => {
       );
 
       const publicKeyBase64 = btoa(
-        String.fromCharCode(...new Uint8Array(publicKeyRaw)),
+        String.fromCodePoint(...new Uint8Array(publicKeyRaw)),
       );
       const privateKeyBase64 = btoa(
-        String.fromCharCode(...new Uint8Array(privateKeyRaw)),
+        String.fromCodePoint(...new Uint8Array(privateKeyRaw)),
       );
 
       const publicKeyPEM = `-----BEGIN PUBLIC KEY-----\n${
@@ -337,10 +337,10 @@ Deno.test('crypt.decrypt', async (t) => {
     );
 
     const publicKeyBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(publicKeyRaw)),
+      String.fromCodePoint(...new Uint8Array(publicKeyRaw)),
     );
     const privateKeyBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(privateKeyRaw)),
+      String.fromCodePoint(...new Uint8Array(privateKeyRaw)),
     );
 
     const publicKeyPEM = `-----BEGIN PUBLIC KEY-----\n${
@@ -385,7 +385,7 @@ Deno.test('crypt.decrypt', async (t) => {
       keyPair.privateKey,
     );
     const privateKeyBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(privateKeyRaw)),
+      String.fromCodePoint(...new Uint8Array(privateKeyRaw)),
     );
     const privateKeyPEM = `-----BEGIN PRIVATE KEY-----\n${
       privateKeyBase64.match(/.{1,64}/g)?.join('\n')

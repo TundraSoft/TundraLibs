@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertRejects } from 'jsr:@std/assert@1';
+import { assert, assertEquals, assertRejects } from '$asserts';
 import {
   BIP39_ENGLISH_WORDLIST,
   generate12WordSeed,

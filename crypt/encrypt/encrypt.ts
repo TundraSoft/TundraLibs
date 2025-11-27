@@ -61,9 +61,13 @@ export const encryptAES = async (
   data: string | Uint8Array,
 ): Promise<string> => {
   const [algorithm, lengthStr] = mode.split(':');
-  const length = parseInt(lengthStr || '0', 10);
+  const length = Number.parseInt(lengthStr || '0', 10);
 
-  if (!['AES-GCM', 'AES-CBC', 'AES-CTR'].includes(algorithm!)) {
+  if (!algorithm) {
+    throw new Error('Invalid AES encryption mode format');
+  }
+
+  if (!['AES-GCM', 'AES-CBC', 'AES-CTR'].includes(algorithm)) {
     throw new Error(
       'Invalid AES encryption mode. Must be AES-GCM, AES-CBC, or AES-CTR',
     );
@@ -82,7 +86,7 @@ export const encryptAES = async (
     'raw',
     keyBytes as BufferSource,
     {
-      name: algorithm!,
+      name: algorithm,
       length: length,
     },
     false,
@@ -97,7 +101,7 @@ export const encryptAES = async (
   if (algorithm === 'AES-CTR') {
     return await encryptAESCTR(key, dataToEncrypt);
   } else {
-    return await encryptAESGCMCBC(key, algorithm!, dataToEncrypt);
+    return await encryptAESGCMCBC(key, algorithm, dataToEncrypt);
   }
 };
 
@@ -147,7 +151,7 @@ export const encryptRSA = async (
     throw new Error('Invalid RSA encryption mode format');
   }
 
-  const keyLength = parseInt(lengthStr, 10);
+  const keyLength = Number.parseInt(lengthStr, 10);
 
   if (![2048, 3072, 4096].includes(keyLength)) {
     throw new Error('Invalid RSA key length. Must be 2048, 3072, or 4096');
@@ -166,12 +170,12 @@ export const encryptRSA = async (
     const pemContents = publicKey
       .replace(/-----BEGIN PUBLIC KEY-----/, '')
       .replace(/-----END PUBLIC KEY-----/, '')
-      .replace(/\s/g, '');
+      .replaceAll(/\s/g, '');
 
     let keyData: Uint8Array;
     try {
       keyData = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
-    } catch (_error) {
+    } catch {
       throw new Error('Invalid PEM public key format');
     }
 

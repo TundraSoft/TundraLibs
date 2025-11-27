@@ -13,12 +13,12 @@ const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
   const base64Key = pemKey
     .replace(/-----BEGIN [A-Z ]+-----/, '')
     .replace(/-----END [A-Z ]+-----/, '')
-    .replace(/\s/g, '');
+    .replaceAll(/\s/g, '');
 
   try {
     // Decode the base64 key data
     return Uint8Array.from(atob(base64Key), (c) => c.charCodeAt(0));
-  } catch (_error) {
+  } catch {
     throw new Error('Invalid PEM private key format');
   }
 };
@@ -94,7 +94,7 @@ export const decryptAES = async (
   returnBinary = false,
 ): Promise<string | Uint8Array> => {
   const [algorithm, lengthStr] = mode.split(':');
-  const length = parseInt(lengthStr || '0', 10);
+  const length = Number.parseInt(lengthStr || '0', 10);
 
   if (!['AES-GCM', 'AES-CBC', 'AES-CTR'].includes(algorithm!)) {
     throw new Error(

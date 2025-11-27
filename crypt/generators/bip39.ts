@@ -2227,7 +2227,7 @@ export const validateBIP39Mnemonic = async (
 
     // Check if all words are in wordlist
     const wordIndices = words.map((word) => wordlist.indexOf(word));
-    if (wordIndices.some((index) => index === -1)) {
+    if (wordIndices.includes(-1)) {
       return false;
     }
 
@@ -2298,7 +2298,7 @@ const entropyToMnemonic = (
     .join('');
 
   // Add checksum bits
-  const checksumByte = hash[0]!; // hash is guaranteed to have at least one byte
+  const checksumByte = hash[0]!; //NOSONAR hash is guaranteed to have at least one byte
   const checksum = (checksumByte >> (8 - checksumBits)).toString(2).padStart(
     checksumBits,
     '0',
@@ -2309,7 +2309,7 @@ const entropyToMnemonic = (
   const words: string[] = [];
   for (let i = 0; i < binaryString.length; i += 11) {
     const chunk = binaryString.slice(i, i + 11);
-    const index = parseInt(chunk, 2);
+    const index = Number.parseInt(chunk, 2);
     const word = wordlist[index];
     if (!word) {
       throw new Error(`Invalid word index: ${index}`);
@@ -2351,13 +2351,13 @@ const mnemonicToEntropy = async (
   const entropy = new Uint8Array(entropyBits / 8);
   for (let i = 0; i < entropy.length; i++) {
     const byte = entropyBinary.slice(i * 8, (i + 1) * 8);
-    entropy[i] = parseInt(byte, 2);
+    entropy[i] = Number.parseInt(byte, 2);
   }
 
   // Validate checksum
   const hash = await crypto.subtle.digest('SHA-256', entropy);
   const hashBytes = new Uint8Array(hash);
-  const expectedChecksum = (hashBytes[0]! >> (8 - checksumBits)).toString(2)
+  const expectedChecksum = (hashBytes[0]! >> (8 - checksumBits)).toString(2) //NOSONAR hash is guaranteed to have at least one byte
     .padStart(checksumBits, '0');
   const isValid = checksumBinary === expectedChecksum;
 

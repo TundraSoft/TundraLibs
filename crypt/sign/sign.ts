@@ -17,12 +17,12 @@ const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
   const base64Key = pemKey
     .replace(/-----BEGIN [A-Z ]+-----/, '')
     .replace(/-----END [A-Z ]+-----/, '')
-    .replace(/\s/g, '');
+    .replaceAll(/\s/g, '');
 
   try {
     // Decode the base64 key data
-    return Uint8Array.from(atob(base64Key), (c) => c.charCodeAt(0));
-  } catch (_error) {
+    return Uint8Array.from(atob(base64Key), (c) => c.codePointAt(0) ?? 0);
+  } catch {
     throw new Error('Invalid PEM private key format');
   }
 };
@@ -151,7 +151,7 @@ export const signRSA = async (
     );
   }
 
-  const keySize = parseInt(lengthStr, 10);
+  const keySize = Number.parseInt(lengthStr, 10);
   if (![2048, 3072, 4096].includes(keySize)) {
     throw new Error(
       'Invalid RSA key size. Must be 2048, 3072, or 4096',
@@ -187,9 +187,9 @@ export const signRSA = async (
   // Calculate salt length based on hash algorithm (typically hash length)
   const saltLength = hashAlgorithm === 'SHA-256'
     ? 32
-    : hashAlgorithm === 'SHA-384'
+    : hashAlgorithm === 'SHA-384' //NOSONAR
     ? 48
-    : hashAlgorithm === 'SHA-512'
+    : hashAlgorithm === 'SHA-512' //NOSONAR
     ? 64
     : 32;
 

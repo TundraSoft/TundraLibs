@@ -43,10 +43,10 @@
   "typescript.enablePromptUseWorkspaceTsdk": false,
   
   "editor.tabSize": 2,
-  "editor.formatOnSave": false,
+  "editor.formatOnSave": true,
   "editor.defaultFormatter": "denoland.vscode-deno",
   "sonarlint.connectedMode.project": {
-    "connectionId": "Sonar",
+    "connectionId": "tundrasoft",
     "projectKey": "TundraSoft_TundraLibs"
   },
   "sonarlint.analysisExcludesStandalone": "**/.vscode-test/**, **/.vscode/**, **/*.test.ts, **/tests/**, **/tests/**.test.ts, .github/**"

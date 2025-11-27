@@ -1,9 +1,4 @@
-import {
-  assert,
-  assertEquals,
-  assertRejects,
-  assertThrows,
-} from 'jsr:@std/assert@1';
+import { assert, assertEquals, assertRejects } from '$asserts';
 import {
   generateECDHKeys,
   generateECDSAKeys,
@@ -254,7 +249,6 @@ Deno.test('crypt.generators.key', async (t) => {
     });
 
     const duration = performance.now() - start;
-    console.log(`Generated 2 key pairs in ${duration.toFixed(2)}ms`);
 
     // Should complete in reasonable time (key generation can be slow)
     assert(duration < 10000, `Performance too slow: ${duration}ms`);

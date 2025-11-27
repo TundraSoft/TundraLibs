@@ -140,7 +140,7 @@ export const generateRSAKeyPair = async (
     },
     extractable,
     algorithm === 'RSA-OAEP' ? ['encrypt', 'decrypt'] : ['sign', 'verify'],
-  ) as CryptoKeyPair;
+  );
 
   const result: GeneratedKeyPair = {
     publicKey: keyPair.publicKey,
@@ -240,7 +240,7 @@ export const generateECKeyPair = async (
     },
     extractable,
     algorithm === 'ECDSA' ? ['sign', 'verify'] : ['deriveKey'],
-  ) as CryptoKeyPair;
+  );
 
   const result: GeneratedKeyPair = {
     publicKey: keyPair.publicKey,

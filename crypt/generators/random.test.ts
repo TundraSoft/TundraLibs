@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertThrows } from 'jsr:@std/assert@1';
+import { assert, assertEquals, assertThrows } from '$asserts';
 import { randomFloat, randomInt, randomNumber } from './random.ts';
 
 Deno.test('randomInt - basic functionality', () => {

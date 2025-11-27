@@ -230,7 +230,7 @@ Deno.test('crypt.sign', async (t) => {
       keyPair.privateKey,
     );
     const privateKeyBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(privateKeyRaw)),
+      String.fromCodePoint(...new Uint8Array(privateKeyRaw)),
     );
     const privateKeyPEM = `-----BEGIN PRIVATE KEY-----\n${
       privateKeyBase64.match(/.{1,64}/g)?.join('\n')
@@ -271,7 +271,7 @@ Deno.test('crypt.sign', async (t) => {
         keyPair.privateKey,
       );
       const privateKeyBase64 = btoa(
-        String.fromCharCode(...new Uint8Array(privateKeyRaw)),
+        String.fromCodePoint(...new Uint8Array(privateKeyRaw)),
       );
       const privateKeyPEM = `-----BEGIN PRIVATE KEY-----\n${
         privateKeyBase64.match(/.{1,64}/g)?.join('\n')
@@ -307,7 +307,7 @@ Deno.test('crypt.sign', async (t) => {
         keyPair.privateKey,
       );
       const privateKeyBase64 = btoa(
-        String.fromCharCode(...new Uint8Array(privateKeyRaw)),
+        String.fromCodePoint(...new Uint8Array(privateKeyRaw)),
       );
       const privateKeyPEM = `-----BEGIN PRIVATE KEY-----\n${
         privateKeyBase64.match(/.{1,64}/g)?.join('\n')
@@ -340,7 +340,7 @@ Deno.test('crypt.sign', async (t) => {
       keyPair.privateKey,
     );
     const privateKeyBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(privateKeyRaw)),
+      String.fromCodePoint(...new Uint8Array(privateKeyRaw)),
     );
     const privateKeyPEM = `-----BEGIN PRIVATE KEY-----\n${
       privateKeyBase64.match(/.{1,64}/g)?.join('\n')
@@ -374,7 +374,7 @@ Deno.test('crypt.sign', async (t) => {
       keyPair.privateKey,
     );
     const privateKeyBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(privateKeyRaw)),
+      String.fromCodePoint(...new Uint8Array(privateKeyRaw)),
     );
     const privateKeyPEM = `-----BEGIN PRIVATE KEY-----\n${
       privateKeyBase64.match(/.{1,64}/g)?.join('\n')
@@ -437,7 +437,7 @@ Deno.test('crypt.sign', async (t) => {
       keyPair.privateKey,
     );
     const privateKeyBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(privateKeyRaw)),
+      String.fromCodePoint(...new Uint8Array(privateKeyRaw)),
     );
     const privateKeyPEM = `-----BEGIN PRIVATE KEY-----\n${
       privateKeyBase64.match(/.{1,64}/g)?.join('\n')

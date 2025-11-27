@@ -6,10 +6,10 @@
     ".": "./mod.ts",
     "./digest": "./digest/mod.ts",
     "./encrypt": "./encrypt/mod.ts",
-    "./OTP": "./OTP/mod.ts",
     "./generators": "./generators/mod.ts",
-    "./sign": "./sign/mod.ts",
-    "./JWT": "./JWT/mod.ts"
+    "./JWT": "./JWT/mod.ts",
+    "./OTP": "./OTP/mod.ts",
+    "./sign": "./sign/mod.ts"
   },
   "imports": {
     "$encoding": "jsr:@std/encoding@1.0.8",
