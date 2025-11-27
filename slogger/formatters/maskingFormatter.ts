@@ -64,7 +64,7 @@ const DEFAULT_SENSITIVE_PATTERNS = [
   // Credit card numbers: 16 digits, may have spaces or dashes
   /\b(?:\d[ -]*?){13,16}\b/g,
   // API keys, tokens, etc. (common formats)
-  /(?:api[_\s-]?key|token|secret|password)[:=]\s*["']?([a-zA-Z0-9_.-]+)["']?/gi,
+  /(?:api[_\s-]?key|token|secret|password)[:=]\s*["']?([a-zA-Z0-9_.-]+)["']?/gi, //NOSONAR
   // Email addresses
   /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
   // SSN format (US)
@@ -199,7 +199,7 @@ export function maskingFormatter(
   // Return the formatter function
   return (log: SlogObject): string => {
     // Create a deep clone of the log object to avoid modifying the original
-    const clonedLog: SlogObject = JSON.parse(JSON.stringify(log));
+    const clonedLog: SlogObject = structuredClone(log);
 
     // Mask sensitive data in the message
     clonedLog.message = maskMessage(clonedLog.message, fullConfig);

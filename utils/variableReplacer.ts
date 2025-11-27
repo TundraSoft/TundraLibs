@@ -189,8 +189,8 @@ export const variableReplacer = (
   // Replace all placeholders in the message with their corresponding values
   // If a placeholder key is not found, leave the placeholder unchanged
   return message.replace(regex, (match, key) => {
-    return flattenedContext[key] !== undefined
-      ? String(flattenedContext[key])
-      : match;
+    return flattenedContext[key] === undefined
+      ? match
+      : String(flattenedContext[key]);
   });
 };

@@ -31,7 +31,7 @@ Deno.test('utils.templatize', async (t) => {
   await t.step('should replace missing values with an empty string', () => {
     const template = 'Hello, ${name}!';
     const result = templatize(template);
-    asserts.assertEquals(result(JSON.parse(JSON.stringify({}))), 'Hello, !');
+    asserts.assertEquals(result(JSON.parse(JSON.stringify({}))), 'Hello, !'); //NOSONAR
   });
 
   await t.step('should handle adjacent placeholders', () => {

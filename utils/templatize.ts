@@ -171,11 +171,7 @@ export const templatize = <T extends string>(
   // Matches patterns like ${variable}, ${user.name}, ${special-chars}, etc.
   const variables = template.match(/\${(.*?)}/g);
 
-  if (!variables) {
-    // Optimization: if no variables found, return a function that always returns the template
-    // This avoids unnecessary processing for static templates
-    return () => template;
-  } else {
+  if (variables) {
     // Return a parser function that replaces variables with provided values
     return (values: TemplateValues<T>): string =>
       variables.reduce((acc, variable) => {
@@ -185,5 +181,9 @@ export const templatize = <T extends string>(
         // Use empty string as fallback for missing values (nullish coalescing)
         return acc.replace(variable, values[key] ?? '');
       }, template);
+  } else {
+    // Optimization: if no variables found, return a function that always returns the template
+    // This avoids unnecessary processing for static templates
+    return () => template;
   }
 };

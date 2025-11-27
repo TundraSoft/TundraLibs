@@ -120,9 +120,12 @@ Deno.test('slogger.handlers.consoleHandler', async (t) => {
       // This should be logged (level 3 = ERROR, higher priority than WARNING)
       await handler.handle(makeLogObject(3, 'Error message'));
 
+      asserts.assert(consoleLogCalls);
+      asserts.assert(consoleLogCalls[0]);
+      asserts.assert(consoleLogCalls[1]);
       asserts.assertEquals(consoleLogCalls.length, 2);
-      asserts.assert(consoleLogCalls[0]!.includes('Warning message'));
-      asserts.assert(consoleLogCalls[1]!.includes('Error message'));
+      asserts.assert(consoleLogCalls[0].includes('Warning message'));
+      asserts.assert(consoleLogCalls[1].includes('Error message'));
       asserts.assert(
         !consoleLogCalls.some((msg) => msg.includes('Info message')),
       );

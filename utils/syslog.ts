@@ -213,9 +213,6 @@ function parseStructuredData(structAndMessage: string): {
   structuredData?: Record<StructuredDataKey, Record<string, string>>;
   message?: string;
 } {
-  if (!structAndMessage) {
-    return { message: undefined };
-  }
   const sd: Record<StructuredDataKey, Record<string, string>> = {};
   if (new RegExp(Patterns.STRUCT, 'g').test(structAndMessage)) {
     const structData = structAndMessage.matchAll(Patterns.STRUCT);
@@ -240,9 +237,6 @@ function parseStructuredData(structAndMessage: string): {
           keyValueMatch = keyValuePairs.match(Patterns.STRUCTKEYS);
         }
         sd[structIdLookup[1]!.trim() as StructuredDataKey] = s;
-      } else {
-        // For malformed structured data, just skip it gracefully instead of throwing
-        console.warn(`Malformed structured data received: ${struct[0]}`);
       }
     }
   }

@@ -31,7 +31,7 @@ Deno.test('utils.throttle', async (t) => {
     let counter = 0;
     const add = async (a: number, b: number): Promise<number> => {
       counter++;
-      await 1;
+      await Promise.resolve();
       return a + b;
     };
     const throttledAdd = throttle(add, 500);
@@ -81,7 +81,7 @@ Deno.test('utils.throttle', async (t) => {
       let counter = 0;
       const add = async (a: number, b: number): Promise<number> => {
         counter++;
-        await 1;
+        await Promise.resolve();
         return a + b;
       };
       const throttledAdd = throttle(add, 500, true);
@@ -131,7 +131,7 @@ Deno.test('utils.throttle', async (t) => {
       @Throttle(500)
       async multiply(a: number, b: number): Promise<number> {
         Calculator.counter++;
-        await 1;
+        await Promise.resolve();
         return a * b;
       }
     }
