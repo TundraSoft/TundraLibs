@@ -29,7 +29,6 @@ body:
         - '@tundralibs/guardian'
         - '@tundralibs/id'
         - '@tundralibs/norm'
-        - '@tundralibs/openapi'
         - '@tundralibs/restler'
         - '@tundralibs/slogger'
         - '@tundralibs/utils'

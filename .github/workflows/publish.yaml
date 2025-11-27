@@ -15,7 +15,6 @@ on:
           - guardian
           - id
           - norm
-          - openapi
           - restler
           - slogger
           - utils

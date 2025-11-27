@@ -99,6 +99,7 @@
     "./dam",
     "./guardian",
     "./id",
+    "./norm", 
     "./restler",
     "./slogger",
     "./utils"

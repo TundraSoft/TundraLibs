@@ -1,0 +1,1244 @@
+// Base model utilities for database interactions
+// Use type-only imports for pg types
+import {
+  type PoolClient,
+  type QueryResult,
+  type QueryResultRow,
+} from '$pg_types';
+import { z, ZodError, ZodType } from 'zod';
+import { DatabaseError } from './DatabaseManager.ts.ref';
+import { ApplicationError } from './mod.ts';
+import { zodErrorToRecord } from './zodErrorFormatter.ts';
+
+// Forward declare DatabaseManager to avoid circular imports
+export interface IDatabaseManager {
+  executeQuery<T extends QueryResultRow = QueryResultRow>(
+    query: string,
+    parameters: QueryParameter[],
+    client?: PoolClient,
+  ): Promise<QueryResult<T>>;
+  getConnection(): Promise<PoolClient>;
+}
+
+// Type for query parameters
+export type QueryParameter =
+  | string
+  | number
+  | boolean
+  | Date
+  | null
+  | undefined;
+
+// Column type definitions with JSON type support
+export type ColumnType<T, JT = unknown> = T extends 'string' ? string
+  : T extends 'bigint' ? bigint
+  : T extends 'number' ? number
+  : T extends 'boolean' ? boolean
+  : T extends 'date' ? Date
+  : T extends 'uuid' ? string
+  : T extends 'json' ? JT extends unknown ? Record<string, unknown> : JT
+  : never;
+
+// Foreign key reference configuration
+export interface ForeignKeyReference {
+  table: string;
+  columns: Record<string, string>; // local_column -> foreign_column mapping
+  selectColumns?: Record<string, string>; // alias -> column_name mapping for columns to fetch from foreign table
+}
+
+// Column definition interface
+export interface ColumnDefinition {
+  type: 'string' | 'number' | 'boolean' | 'date' | 'uuid' | 'json' | 'bigint';
+  nullable?: boolean;
+  primaryKey?: boolean;
+  foreignKey?: ForeignKeyReference;
+  jsonType?: unknown; // Optional: specify the JSON structure type
+}
+
+// Join configuration for additional joins
+export interface JoinConfig {
+  table: string;
+  alias: string;
+  type: 'INNER' | 'LEFT' | 'RIGHT';
+  on: Record<string, string>; // local_column -> foreign_column mapping
+  selectColumns?: Record<string, string>; // alias -> column_name mapping for columns to fetch with alias prefix
+}
+
+// Validator interface for table operations
+
+export interface TableValidators<TD extends TableDefinition> {
+  // Zod schema for full row validation OR a callable validator function (legacy Guardian style)
+  base?:
+    | ZodType<RowType<TD>>
+    | ZodType<unknown>;
+  // | ((data: unknown) => RowType<TD>);
+  // Zod schema for insert payloads (may be partial) OR a callable validator
+  insert?:
+    | ZodType<Partial<RowType<TD>>>
+    | ZodType<unknown>;
+  // | ((data: unknown) => Partial<RowType<TD>>);
+  // Zod schema for update payloads (partial) OR a callable validator
+  update?:
+    | ZodType<Partial<RowType<TD>>>
+    | ZodType<unknown>;
+  // | ((data: unknown) => Partial<RowType<TD>>);
+  preInsertCheck?: (
+    this: BaseModel<TD>,
+    data: Partial<RowType<TD>>[],
+  ) => Promise<void> | void;
+  preUpdateCheck?: (
+    this: BaseModel<TD>,
+    data: Partial<RowType<TD>>,
+    filter: QueryFilters<TD> | undefined,
+  ) => Promise<void> | void;
+  preDeleteCheck?: (
+    this: BaseModel<TD>,
+    filter: QueryFilters<TD> | undefined,
+  ) => Promise<void> | void;
+  postInsert?: (
+    this: BaseModel<TD>,
+    result: RowType<TD>[],
+  ) => Promise<RowType<TD>[]> | RowType<TD>[];
+  postSelect?: (
+    this: BaseModel<TD>,
+    result: BaseRowWithFK<TD>[],
+  ) => Promise<BaseRowWithFK<TD>[]> | BaseRowWithFK<TD>[];
+}
+
+// Table definition interface
+export interface TableDefinition {
+  schema?: string; // Optional schema name
+  name: string; // Table name
+  columns: Record<string, ColumnDefinition>;
+  isView?: boolean; // Optional flag to indicate if this is a view (read-only)
+  validators?: TableValidators<this>;
+}
+
+// Extract column names that are primary keys
+export type PrimaryKeyColumns<TD extends TableDefinition> = {
+  [K in keyof TD['columns']]: TD['columns'][K]['primaryKey'] extends true ? K
+    : never;
+}[keyof TD['columns']];
+
+// Extract primary key object type
+export type PrimaryKeyType<TD extends TableDefinition> = Pick<
+  {
+    [K in keyof TD['columns']]: ColumnType<
+      TD['columns'][K]['type'],
+      TD['columns'][K]['jsonType']
+    >;
+  },
+  PrimaryKeyColumns<TD>
+>;
+
+// Extract full row type
+export type RowType<TD extends TableDefinition> = (
+  & {
+    [
+      K in keyof TD['columns'] as TD['columns'][K]['nullable'] extends true
+        ? never
+        : K
+    ]: ColumnType<TD['columns'][K]['type'], TD['columns'][K]['jsonType']>;
+  }
+  & {
+    [
+      K in keyof TD['columns'] as TD['columns'][K]['nullable'] extends true ? K
+        : never
+    ]:
+      | ColumnType<TD['columns'][K]['type'], TD['columns'][K]['jsonType']>
+      | null;
+  }
+) extends infer R ? { [K in keyof R]: R[K] } : never;
+
+// Base type for rows with FK columns - can be extended by specific interfaces
+export type BaseRowWithFK<TD extends TableDefinition> =
+  & RowType<TD>
+  & Record<string, unknown>;
+
+// Filter operators for query conditions
+export type FilterOperators<CT> = CT | null | {
+  $eq?: CT;
+  $ne?: CT;
+  $gt?: CT;
+  $gte?: CT;
+  $lt?: CT;
+  $lte?: CT;
+  $in?: CT[];
+  $nin?: CT[];
+  $like?: string; // For string types only
+  $ilike?: string; // Case-insensitive like
+  $null?: boolean; // true for IS NULL, false for IS NOT NULL
+};
+
+// Query filters with logical operators
+export type QueryFilters<TD extends TableDefinition = TableDefinition> =
+  & {
+    [C in keyof TD['columns']]?: FilterOperators<
+      ColumnType<TD['columns'][C]['type'], TD['columns'][C]['jsonType']>
+    >;
+  }
+  & {
+    $and?: QueryFilters<TD>[];
+    $or?: QueryFilters<TD>[];
+  };
+
+// Extended options for query methods
+export interface FindOptions<TD extends TableDefinition> {
+  pageLimit?: number; // Number of records per page (default: 10)
+  page?: number; // Page number starting from 1 (default: 1)
+  orderBy?: {
+    field: keyof TD['columns'] | string;
+    direction?: 'ASC' | 'DESC';
+  }[];
+  includeFK?: boolean; // Whether to include automatic FK joins (default: true)
+  additionalJoins?: JoinConfig[]; // Additional custom joins
+}
+
+// Generic Base Model Class
+//
+// Standardized CRUD Methods:
+// - findMany(filters?, options?) -> T[]       : Find multiple records with pagination
+// - findOne(filters?, options?) -> T|null     : Find single record
+// - getByPK(primaryKey, includeFK?) -> T|null : Get record by primary key
+// - insert(data) -> T                         : Insert single record
+// - insertMany(data[]) -> T[]                 : Insert multiple records
+// - update(data, filters?) -> number          : Update records, returns count
+// - delete(filters?) -> number                : Delete records, returns count
+// - count(filters?) -> number                 : Count records matching filters
+// - exists(filters) -> boolean                : Check if records exist
+//
+// Pagination: Uses page-based pagination (page: 1-based, pageLimit: records per page)
+export class BaseModel<TD extends TableDefinition> {
+  protected schema: string | undefined;
+  protected tableName: string;
+  public tableDefinition: TD;
+  protected columnNames: string[];
+  protected primaryKeyColumns: string[];
+  private readonly dbManager: IDatabaseManager;
+  protected readonly _encryptionKey?: string;
+
+  // Returns a callable validator that parses via the Zod schema and returns the typed value.
+  public get baseValidator(): (data: unknown) => RowType<TD> {
+    const s = this.tableDefinition.validators?.base;
+    if (!s) {
+      // Instead of unsafe cast, validate basic structure
+      return (d: unknown) => {
+        if (typeof d !== 'object' || d === null) {
+          throw new ApplicationError('VALIDATION_ERROR', {
+            details: { error: 'Data must be an object' },
+          });
+        }
+        return d as RowType<TD>;
+      };
+    }
+    if (typeof s === 'function') {
+      return (d: unknown) => (s as (d: unknown) => RowType<TD>)(d);
+    }
+    return (d: unknown) => (s as ZodType<unknown>).parse(d) as RowType<TD>;
+  }
+
+  public get insertValidator(): (data: unknown) => Partial<RowType<TD>> {
+    const s = this.tableDefinition.validators?.insert;
+    if (!s) {
+      // Instead of unsafe cast, validate basic structure
+      return (d: unknown) => {
+        if (typeof d !== 'object' || d === null) {
+          throw new ApplicationError('VALIDATION_ERROR', {
+            details: { error: 'Data must be an object' },
+          });
+        }
+        return d as Partial<RowType<TD>>;
+      };
+    }
+    if (typeof s === 'function') {
+      return (d: unknown) => (s as (d: unknown) => Partial<RowType<TD>>)(d);
+    }
+    return (d: unknown) =>
+      (s as ZodType<unknown>).parse(d) as Partial<RowType<TD>>;
+  }
+
+  public get updateValidator(): (data: unknown) => Partial<RowType<TD>> {
+    const s = this.tableDefinition.validators?.update;
+    if (!s) {
+      // Instead of unsafe cast, validate basic structure
+      return (d: unknown) => {
+        if (typeof d !== 'object' || d === null) {
+          throw new ApplicationError('VALIDATION_ERROR', {
+            details: { error: 'Data must be an object' },
+          });
+        }
+        return d as Partial<RowType<TD>>;
+      };
+    }
+    if (typeof s === 'function') {
+      return (d: unknown) => (s as (d: unknown) => Partial<RowType<TD>>)(d);
+    }
+    return (d: unknown) =>
+      (s as ZodType<unknown>).parse(d) as Partial<RowType<TD>>;
+  }
+
+  public getTableName(): string {
+    if (this.schema && this.schema.trim() !== '') {
+      return `"${this.schema}"."${this.tableName}"`;
+    } else {
+      return `"${this.tableName}"`;
+    }
+  }
+  constructor(
+    tableDefinition: TD,
+    dbManager: IDatabaseManager,
+    encryptionKey?: string,
+  ) {
+    this._encryptionKey = encryptionKey;
+    this.tableDefinition = tableDefinition;
+    // Build full table name including schema if provided
+    this.schema = tableDefinition.schema;
+    this.tableName = tableDefinition.name;
+    this.columnNames = Object.keys(tableDefinition.columns);
+    this.primaryKeyColumns = Object.entries(tableDefinition.columns)
+      .filter(([, def]) => def.primaryKey)
+      .map(([name]) => name);
+    this.dbManager = dbManager;
+  }
+
+  // Helper method to handle common error patterns across all database operations
+  private async executeWithErrorHandling<T>(
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (error instanceof DatabaseError) {
+        throw error;
+      } else if (error instanceof ZodError) {
+        throw new ApplicationError('VALIDATION_ERROR', {
+          details: zodErrorToRecord(error, {
+            pathSeparator: '.',
+            arrayIndexFormat: { prefix: '(', suffix: ')' },
+          }),
+        });
+      } else {
+        throw new ApplicationError('SERVICE_UNAVAILABLE', {
+          debug: {
+            message: error instanceof Error ? error.message : String(error),
+          },
+        }, error instanceof Error ? error : undefined);
+      }
+    }
+  }
+
+  // Helper method to format table name with proper schema quoting
+  private formatTableName(tableName: string): string {
+    if (tableName.includes('.')) {
+      const [schema, table] = tableName.split('.');
+      return `"${schema}"."${table}"`;
+    } else {
+      return `"${tableName}"`;
+    }
+  }
+
+  // Helper method to get foreign key columns
+  private getForeignKeyColumns(): Array<
+    { column: string; fk: ForeignKeyReference }
+  > {
+    return Object.entries(this.tableDefinition.columns)
+      .filter(([, def]) => def.foreignKey)
+      .map(([column, def]) => ({ column, fk: def.foreignKey! }));
+  }
+
+  // Helper method to build JOIN clauses for foreign keys
+  private buildForeignKeyJoins(): {
+    joins: string[];
+    selectColumns: string[];
+    columnAliases: Record<string, string>;
+  } {
+    const fkColumns = this.getForeignKeyColumns();
+    const joins: string[] = [];
+    const selectColumns: string[] = [];
+    const columnAliases: Record<string, string> = {};
+
+    fkColumns.forEach(({ column: _column, fk }, index) => {
+      const alias = `fk${index}_${fk.table}`;
+
+      // Build JOIN conditions
+      const joinConditions = Object.entries(fk.columns)
+        .map(([localCol, foreignCol]) =>
+          `${this.getTableName()}."${localCol}" = "${alias}"."${foreignCol}"`
+        )
+        .join(' AND ');
+
+      joins.push(
+        `LEFT JOIN ${
+          this.formatTableName(fk.table)
+        } AS "${alias}" ON ${joinConditions}`,
+      );
+
+      // Determine which columns to select from foreign table
+      const columnsToSelect = fk.selectColumns || {}; // Default to empty object if not specified
+
+      Object.entries(columnsToSelect).forEach(([aliasName, foreignCol]) => {
+        const fullAliasColumn = `${alias}_${aliasName}`;
+        selectColumns.push(
+          `"${alias}"."${foreignCol}" AS "${fullAliasColumn}"`,
+        );
+
+        // Create friendly alias using the provided alias name
+        columnAliases[aliasName] = fullAliasColumn;
+      });
+
+      // If no selectColumns specified, fall back to some default columns with auto-generated aliases
+      if (Object.keys(columnsToSelect).length === 0) {
+        // You can define default columns here or leave empty
+        // For now, we'll not select any columns if not specified
+      }
+    });
+
+    return { joins, selectColumns, columnAliases };
+  }
+
+  // Helper method to build additional custom joins
+  private buildAdditionalJoins(
+    additionalJoins: JoinConfig[],
+  ): {
+    joins: string[];
+    selectColumns: string[];
+    columnAliases: Record<string, string>;
+  } {
+    const joins: string[] = [];
+    const selectColumns: string[] = [];
+    const columnAliases: Record<string, string> = {};
+
+    additionalJoins.forEach((joinConfig) => {
+      const { table, alias, type, on, selectColumns: joinSelectColumns } =
+        joinConfig;
+
+      // Build JOIN conditions
+      const joinConditions = Object.entries(on)
+        .map(([localCol, foreignCol]) =>
+          `${this.getTableName()}."${localCol}" = "${alias}"."${foreignCol}"`
+        )
+        .join(' AND ');
+
+      joins.push(
+        `${type} JOIN ${
+          this.formatTableName(table)
+        } AS "${alias}" ON ${joinConditions}`,
+      );
+
+      // Add select columns with aliases
+      const columnsToSelect = joinSelectColumns || {};
+      Object.entries(columnsToSelect).forEach(([aliasName, col]) => {
+        const fullAliasColumn = `${alias}_${aliasName}`;
+        selectColumns.push(`"${alias}"."${col}" AS "${fullAliasColumn}"`);
+        columnAliases[aliasName] = fullAliasColumn;
+      });
+    });
+
+    return { joins, selectColumns, columnAliases };
+  }
+
+  // Common method to build SELECT query with joins to reduce duplication
+  private buildSelectQuery(
+    includeFK: boolean = true,
+    additionalJoins?: JoinConfig[],
+  ): {
+    selectColumns: string[];
+    joinClauses: string[];
+    columnAliases: Record<string, string>;
+  } {
+    // Build base select columns
+    const baseSelectColumns = this.columnNames.map((col) =>
+      `${this.getTableName()}."${col}"`
+    );
+    const selectColumns = [...baseSelectColumns];
+    const joinClauses: string[] = [];
+    let allColumnAliases: Record<string, string> = {};
+
+    // Add automatic FK joins if enabled
+    if (includeFK) {
+      const fkJoins = this.buildForeignKeyJoins();
+      joinClauses.push(...fkJoins.joins);
+      selectColumns.push(...fkJoins.selectColumns);
+      allColumnAliases = { ...allColumnAliases, ...fkJoins.columnAliases };
+    }
+
+    // Add additional custom joins if specified
+    if (additionalJoins) {
+      const additionalJoinResults = this.buildAdditionalJoins(additionalJoins);
+      joinClauses.push(...additionalJoinResults.joins);
+      selectColumns.push(...additionalJoinResults.selectColumns);
+      allColumnAliases = {
+        ...allColumnAliases,
+        ...additionalJoinResults.columnAliases,
+      };
+    }
+
+    return { selectColumns, joinClauses, columnAliases: allColumnAliases };
+  }
+
+  // Helper method to get a client from database manager or use provided one
+  private async getClient(providedClient?: PoolClient): Promise<PoolClient> {
+    if (providedClient) {
+      return providedClient;
+    }
+    return await this.dbManager.getConnection();
+  }
+
+  // Helper method to release client back to pool if it came from pool
+  private async releaseClient(
+    client: PoolClient,
+    providedClient?: PoolClient,
+  ): Promise<void> {
+    if (!providedClient) {
+      await client.release(); // For @db/postgres pool, use release() to return connection to pool
+    }
+  }
+
+  // Public method to get a database connection for custom operations
+  async getConnection(): Promise<PoolClient> {
+    return await this.dbManager.getConnection();
+  }
+
+  // Get by primary key with type-safe FK casting method
+  getByPK<T = BaseRowWithFK<TD>>(
+    pk: PrimaryKeyType<TD>,
+    includeFK = true,
+    client?: PoolClient,
+  ): Promise<T | null> {
+    return this.executeWithErrorHandling(async () => {
+      const db = await this.getClient(client);
+      try {
+        const whereConditions: string[] = [];
+        const parameters: QueryParameter[] = [];
+        let paramIndex = 1;
+
+        // Add WHERE conditions for each primary key column
+        Object.entries(pk).forEach(([field, value]) => {
+          whereConditions.push(
+            `${this.getTableName()}."${field}" = $${paramIndex}`,
+          );
+          parameters.push(value as QueryParameter);
+          paramIndex++;
+        });
+
+        // Use common query builder
+        const { selectColumns, joinClauses, columnAliases } = this
+          .buildSelectQuery(includeFK);
+
+        let query = `SELECT ${
+          selectColumns.join(', ')
+        } FROM ${this.getTableName()}`;
+
+        // Add JOIN clauses
+        if (joinClauses.length > 0) {
+          query += ` ${joinClauses.join(' ')}`;
+        }
+
+        query += ` WHERE ${whereConditions.join(' AND ')} LIMIT 1`;
+
+        const result = await this.dbManager.executeQuery(query, parameters, db);
+
+        if (result.rows.length === 0) return null;
+
+        const row = result.rows[0]!;
+        const obj: Record<string, unknown> = {};
+
+        // Map base table columns
+        this.columnNames.forEach((colName) => {
+          obj[colName] = row[colName];
+        });
+
+        // Map joined columns with friendly aliases
+        Object.entries(columnAliases).forEach(
+          ([friendlyName, dbColumnName]) => {
+            obj[friendlyName] = row[dbColumnName];
+          },
+        );
+
+        const resultObj = obj as T;
+
+        // Run post-select hooks if present (convert single result to array format for consistency)
+        let finalResult = resultObj;
+        if (this.tableDefinition.validators?.postSelect) {
+          const postResult = await this.tableDefinition.validators.postSelect
+            .call(
+              this,
+              [resultObj as BaseRowWithFK<TD>],
+            );
+          // If post-hook returns modified data, use the first item
+          if (postResult !== undefined && postResult.length > 0) {
+            finalResult = postResult[0] as T;
+          }
+        }
+
+        return finalResult;
+      } finally {
+        await this.releaseClient(db, client);
+      }
+    });
+  }
+
+  // Find many records with filters and type-safe FK casting
+  async findMany<T = BaseRowWithFK<TD>>(
+    filters: QueryFilters<TD> = {},
+    options?: FindOptions<TD>,
+    client?: PoolClient,
+  ): Promise<T[]> {
+    options = options || {};
+    if (!options.page || options.page < 1) {
+      options.page = 1;
+    }
+    if (!options.pageLimit || options.pageLimit < 1) {
+      options.pageLimit = 10; // Default page limit
+    }
+    return await this.findAll(filters, options, client);
+  }
+
+  async findAll<T = BaseRowWithFK<TD>>(
+    filters: QueryFilters<TD> = {},
+    options?: FindOptions<TD>,
+    client?: PoolClient,
+  ): Promise<T[]> {
+    const db = await this.getClient(client);
+    try {
+      const whereConditions: string[] = [];
+      const parameters: QueryParameter[] = [];
+      const paramIndex = 1;
+
+      // Build WHERE conditions from filters
+      this.buildWhereConditions(
+        filters,
+        whereConditions,
+        parameters,
+        paramIndex,
+      );
+
+      // Build base select columns
+      const baseSelectColumns = this.columnNames.map((col) =>
+        `${this.getTableName()}."${col}"`
+      );
+      const selectColumns = [...baseSelectColumns];
+      const joinClauses: string[] = [];
+      let allColumnAliases: Record<string, string> = {};
+
+      // Add automatic FK joins if enabled (default: true)
+      const includeFK = options?.includeFK !== false;
+      if (includeFK) {
+        const fkJoins = this.buildForeignKeyJoins();
+        joinClauses.push(...fkJoins.joins);
+        selectColumns.push(...fkJoins.selectColumns);
+        allColumnAliases = { ...allColumnAliases, ...fkJoins.columnAliases };
+      }
+
+      // Add additional custom joins if specified
+      if (options?.additionalJoins) {
+        const additionalJoins = this.buildAdditionalJoins(
+          options.additionalJoins,
+        );
+        joinClauses.push(...additionalJoins.joins);
+        selectColumns.push(...additionalJoins.selectColumns);
+        allColumnAliases = {
+          ...allColumnAliases,
+          ...additionalJoins.columnAliases,
+        };
+      }
+
+      let query = `SELECT ${
+        selectColumns.join(', ')
+      } FROM ${this.getTableName()}`;
+
+      // Add JOIN clauses
+      if (joinClauses.length > 0) {
+        query += ` ${joinClauses.join(' ')}`;
+      }
+
+      if (whereConditions.length > 0) {
+        query += ` WHERE ${whereConditions.join(' AND ')}`;
+      }
+
+      // Apply ordering
+      if (options?.orderBy && options.orderBy.length > 0) {
+        const orderClauses = options.orderBy.map((
+          order: { field: keyof TD['columns']; direction?: 'ASC' | 'DESC' },
+        ) =>
+          `${this.getTableName()}."${order.field as string}" ${
+            order.direction || 'ASC'
+          }`
+        );
+        query += ` ORDER BY ${orderClauses.join(', ')}`;
+      }
+
+      // Apply page-based pagination
+      if (options?.pageLimit) {
+        const pageLimit = options?.pageLimit ?? 10;
+        const page = options?.page ?? 1;
+        const offset = (page - 1) * pageLimit;
+
+        query += ` LIMIT ${pageLimit}`;
+        if (offset > 0) {
+          query += ` OFFSET ${offset}`;
+        }
+      }
+
+      const result = await this.dbManager.executeQuery(query, parameters, db);
+
+      const rows = result.rows.map((row: Record<string, unknown>) => {
+        const obj: Record<string, unknown> = {};
+
+        // Map base table columns
+        this.columnNames.forEach((colName) => {
+          obj[colName] = row[colName];
+        });
+
+        // Map joined columns with friendly aliases
+        Object.entries(allColumnAliases).forEach(
+          ([friendlyName, dbColumnName]) => {
+            obj[friendlyName] = row[dbColumnName];
+          },
+        );
+
+        return obj as T;
+      });
+
+      // Run post-select hooks if present
+      let finalResult = rows;
+      if (this.tableDefinition.validators?.postSelect) {
+        const postResult = await this.tableDefinition.validators.postSelect
+          .call(
+            this,
+            finalResult as BaseRowWithFK<TD>[],
+          );
+        // If post-hook returns modified data, use it
+        if (postResult !== undefined) {
+          finalResult = postResult as T[];
+        }
+      }
+
+      return finalResult;
+    } catch (error) {
+      if (error instanceof DatabaseError) {
+        throw error;
+      } else if (error instanceof ZodError) {
+        throw new ApplicationError('VALIDATION_ERROR', {
+          details: zodErrorToRecord(error, {
+            pathSeparator: '.',
+            arrayIndexFormat: { prefix: '(', suffix: ')' },
+          }),
+        });
+      } else {
+        throw new ApplicationError('SERVICE_UNAVAILABLE', {
+          debug: {
+            message: error instanceof Error ? error.message : String(error),
+          },
+        }, error instanceof Error ? error : undefined);
+      }
+    } finally {
+      await this.releaseClient(db, client);
+    }
+  }
+
+  // Helper method to build WHERE conditions
+  private buildWhereConditions(
+    filters: QueryFilters<TD>,
+    whereConditions: string[],
+    parameters: QueryParameter[],
+    paramIndex: number,
+  ): number {
+    for (const [field, value] of Object.entries(filters)) {
+      if (field === '$and') {
+        // Handle $and operator - all conditions must be true
+        if (Array.isArray(value) && value.length > 0) {
+          const andConditions: string[] = [];
+          for (const andFilter of value) {
+            const subConditions: string[] = [];
+            paramIndex = this.buildWhereConditions(
+              andFilter,
+              subConditions,
+              parameters,
+              paramIndex,
+            );
+            if (subConditions.length > 0) {
+              andConditions.push(`(${subConditions.join(' AND ')})`);
+            }
+          }
+          if (andConditions.length > 0) {
+            whereConditions.push(`(${andConditions.join(' AND ')})`);
+          }
+        }
+        continue;
+      }
+
+      if (field === '$or') {
+        // Handle $or operator - at least one condition must be true
+        if (Array.isArray(value) && value.length > 0) {
+          const orConditions: string[] = [];
+          for (const orFilter of value) {
+            const subConditions: string[] = [];
+            paramIndex = this.buildWhereConditions(
+              orFilter,
+              subConditions,
+              parameters,
+              paramIndex,
+            );
+            if (subConditions.length > 0) {
+              orConditions.push(`(${subConditions.join(' AND ')})`);
+            }
+          }
+          if (orConditions.length > 0) {
+            whereConditions.push(`(${orConditions.join(' OR ')})`);
+          }
+        }
+        continue;
+      }
+
+      // Prefix column names with table name to avoid ambiguity in JOINs
+      const columnRef = `${this.getTableName()}."${field}"`;
+
+      if (
+        typeof value === 'object' && value !== null && !Array.isArray(value) &&
+        !(value instanceof Date)
+      ) {
+        // Handle operators
+        const operators = value as Record<string, unknown>;
+        for (const [op, opValue] of Object.entries(operators)) {
+          switch (op) {
+            case '$eq':
+              whereConditions.push(`${columnRef} = $${paramIndex}`);
+              parameters.push(opValue as QueryParameter);
+              paramIndex++;
+              break;
+            case '$ne':
+              whereConditions.push(`${columnRef} != $${paramIndex}`);
+              parameters.push(opValue as QueryParameter);
+              paramIndex++;
+              break;
+            case '$gt':
+              whereConditions.push(`${columnRef} > $${paramIndex}`);
+              parameters.push(opValue as QueryParameter);
+              paramIndex++;
+              break;
+            case '$gte':
+              whereConditions.push(`${columnRef} >= $${paramIndex}`);
+              parameters.push(opValue as QueryParameter);
+              paramIndex++;
+              break;
+            case '$lt':
+              whereConditions.push(`${columnRef} < $${paramIndex}`);
+              parameters.push(opValue as QueryParameter);
+              paramIndex++;
+              break;
+            case '$lte':
+              whereConditions.push(`${columnRef} <= $${paramIndex}`);
+              parameters.push(opValue as QueryParameter);
+              paramIndex++;
+              break;
+            case '$like':
+              whereConditions.push(`${columnRef} LIKE $${paramIndex}`);
+              parameters.push(`%${opValue}%`);
+              paramIndex++;
+              break;
+            case '$ilike':
+              whereConditions.push(`${columnRef} ILIKE $${paramIndex}`);
+              parameters.push(`%${opValue}%`);
+              paramIndex++;
+              break;
+            case '$in':
+              if (Array.isArray(opValue) && opValue.length > 0) {
+                const placeholders = opValue.map(() => `$${paramIndex++}`).join(
+                  ', ',
+                );
+                whereConditions.push(`${columnRef} IN (${placeholders})`);
+                parameters.push(...opValue as QueryParameter[]);
+              }
+              break;
+            case '$nin':
+              if (Array.isArray(opValue) && opValue.length > 0) {
+                const placeholders = opValue.map(() => `$${paramIndex++}`).join(
+                  ', ',
+                );
+                whereConditions.push(`${columnRef} NOT IN (${placeholders})`);
+                parameters.push(...opValue as QueryParameter[]);
+              }
+              break;
+            case '$null':
+              if (opValue) {
+                whereConditions.push(`${columnRef} IS NULL`);
+              } else {
+                whereConditions.push(`${columnRef} IS NOT NULL`);
+              }
+              break;
+          }
+        }
+      } else {
+        // Simple equality check - handle null values properly
+        if (value === null) {
+          whereConditions.push(`${columnRef} IS NULL`);
+        } else {
+          whereConditions.push(`${columnRef} = $${paramIndex}`);
+          parameters.push(value as QueryParameter);
+          paramIndex++;
+        }
+      }
+    }
+    return paramIndex;
+  }
+
+  // Find one record with type-safe FK casting
+  async findOne<T = BaseRowWithFK<TD>>(
+    filters: QueryFilters<TD> = {},
+    options?: FindOptions<TD>,
+    client?: PoolClient,
+  ): Promise<T | null> {
+    const results = await this.findMany<T>(
+      filters,
+      { ...options, pageLimit: 1 },
+      client,
+    );
+    return results.length > 0 ? results[0]! : null;
+  }
+
+  // Insert a single record
+  async insert(
+    data: Partial<RowType<TD>>,
+    client?: PoolClient,
+  ): Promise<RowType<TD>> {
+    const results = await this.insertMany([data], client);
+    return results[0]!;
+  }
+
+  // Insert multiple rows
+  async insertMany(
+    rows: Partial<RowType<TD>>[],
+    client?: PoolClient,
+  ): Promise<RowType<TD>[]> {
+    const db = await this.getClient(client);
+    try {
+      if (this.tableDefinition.isView) {
+        throw new Error(
+          `Cannot insert into view: ${this.tableDefinition.name}`,
+        );
+      }
+
+      if (rows.length === 0) return [];
+
+      // Validate data if insert guardian is present
+      if (this.tableDefinition.validators?.insert) {
+        let validatedRows: Partial<RowType<TD>>[] = [];
+        const validatorFn = this.insertValidator;
+        const schema = this.tableDefinition.validators.insert as
+          | ZodType<Partial<RowType<TD>>>
+          | ZodType<unknown>
+          | undefined;
+
+        if (rows.length === 1) {
+          // Use function validator for single row to avoid changing shapes
+          validatedRows.push(validatorFn(rows[0]));
+        } else {
+          // If we have the Zod schema available, validate the whole array via z.array(schema)
+          if (schema) {
+            // z.array expects a Zod schema; cast to ZodType<unknown> for TS compatibility
+            validatedRows = z.array(schema as ZodType<unknown>).parse(
+              rows,
+            ) as Partial<RowType<TD>>[];
+          } else {
+            // Fallback: validate each row using the function validator
+            validatedRows = rows.map((r) => validatorFn(r));
+          }
+        }
+
+        // Replace rows with validated data
+        rows = validatedRows;
+      }
+
+      // Run pre-insert checks if present - pass all validated rows at once
+      if (this.tableDefinition.validators?.preInsertCheck) {
+        await this.tableDefinition.validators.preInsertCheck.call(this, rows);
+      }
+
+      // Consolidate and get all column names from all rows (unique)
+      const insertColumns = Array.from(
+        new Set(rows.flatMap((row) => Object.keys(row))),
+      ) as (keyof TD['columns'])[];
+      const columnList = insertColumns.map((col) => `"${col as string}"`).join(
+        ', ',
+      );
+
+      const valueRows: string[] = [];
+      const parameters: QueryParameter[] = [];
+      let paramIndex = 1;
+
+      rows.forEach((row) => {
+        const rowValues: string[] = [];
+        insertColumns.forEach((col) => {
+          const value = (row as Record<string, unknown>)[col as string];
+          if (value === undefined || value === null) {
+            rowValues.push('NULL');
+            return;
+          }
+          rowValues.push(`$${paramIndex}`);
+          parameters.push(value as QueryParameter);
+          paramIndex++;
+        });
+        valueRows.push(`(${rowValues.join(', ')})`);
+      });
+
+      const query = `
+        INSERT INTO ${this.getTableName()} (${columnList})
+        VALUES ${valueRows.join(', ')}
+        RETURNING *
+      `;
+
+      const result = await this.dbManager.executeQuery(query, parameters, db);
+      const insertedRows = result.rows.map((row: Record<string, unknown>) => {
+        const obj: Record<string, unknown> = {};
+        this.columnNames.forEach((colName) => {
+          obj[colName] = row[colName];
+        });
+        return obj as RowType<TD>;
+      });
+
+      // Run post-insert hooks if present
+      let finalResult = insertedRows;
+      if (this.tableDefinition.validators?.postInsert) {
+        const postResult = await this.tableDefinition.validators.postInsert
+          .call(
+            this,
+            finalResult,
+          );
+        // If post-hook returns modified data, use it
+        if (postResult !== undefined) {
+          finalResult = postResult;
+        }
+      }
+      if (this.tableDefinition.validators?.postSelect) {
+        finalResult = await this.tableDefinition.validators.postSelect
+          .call(
+            this,
+            finalResult as BaseRowWithFK<TD>[],
+          ) as RowType<TD>[];
+      }
+
+      return finalResult;
+    } catch (error) {
+      if (error instanceof DatabaseError) {
+        throw error;
+      } else if (error instanceof ZodError) {
+        throw new ApplicationError('VALIDATION_ERROR', {
+          details: zodErrorToRecord(error, {
+            pathSeparator: '.',
+            arrayIndexFormat: { prefix: '(', suffix: ')' },
+          }),
+        });
+      } else {
+        throw new ApplicationError('SERVICE_UNAVAILABLE', {
+          debug: {
+            message: error instanceof Error ? error.message : String(error),
+          },
+        }, error instanceof Error ? error : undefined);
+      }
+    } finally {
+      await this.releaseClient(db, client);
+    }
+  }
+
+  // Update rows with optional filter
+  async update(
+    data: Partial<RowType<TD>>,
+    filter?: QueryFilters<TD>,
+    client?: PoolClient,
+  ): Promise<number> {
+    const db = await this.getClient(client);
+    try {
+      if (this.tableDefinition.isView) {
+        throw new Error(`Cannot update view: ${this.tableDefinition.name}`);
+      }
+
+      // Validate data if update guardian is present
+      if (this.tableDefinition.validators?.update) {
+        // Use the callable validator wrapper (works for Zod schemas and legacy callables)
+        const validatorFn = this.updateValidator;
+        data = validatorFn(data);
+      }
+
+      // Run pre-update checks if present
+      if (this.tableDefinition.validators?.preUpdateCheck) {
+        await this.tableDefinition.validators.preUpdateCheck.call(
+          this,
+          data,
+          filter,
+        );
+      }
+
+      const setColumns = Object.keys(data).filter((key) =>
+        data[key as keyof typeof data] !== undefined
+      );
+
+      if (setColumns.length === 0) return 0;
+
+      const setClause = setColumns.map((col, index) =>
+        `"${col}" = $${index + 1}`
+      );
+      const parameters: QueryParameter[] = setColumns.map((col) =>
+        data[col as keyof typeof data] as QueryParameter
+      );
+
+      let query = `UPDATE ${this.getTableName()} SET ${setClause.join(', ')}`;
+      const paramIndex = parameters.length + 1;
+
+      if (filter) {
+        const whereConditions: string[] = [];
+        this.buildWhereConditions(
+          filter,
+          whereConditions,
+          parameters,
+          paramIndex,
+        );
+
+        if (whereConditions.length > 0) {
+          query += ` WHERE ${whereConditions.join(' AND ')}`;
+        }
+      }
+
+      // query += " RETURNING *";
+
+      const result = await this.dbManager.executeQuery(query, parameters, db);
+      return result.rowCount ?? 0;
+    } catch (error) {
+      if (error instanceof DatabaseError) {
+        throw error;
+      } else if (error instanceof ZodError) {
+        throw new ApplicationError('VALIDATION_ERROR', {
+          details: zodErrorToRecord(error, {
+            pathSeparator: '.',
+            arrayIndexFormat: { prefix: '(', suffix: ')' },
+          }),
+        });
+      } else {
+        throw new ApplicationError('SERVICE_UNAVAILABLE', {
+          debug: {
+            message: error instanceof Error ? error.message : String(error),
+          },
+        }, error instanceof Error ? error : undefined);
+      }
+    } finally {
+      await this.releaseClient(db, client);
+    }
+  }
+
+  // Delete rows with optional filter
+  async delete(
+    filter?: QueryFilters<TD>,
+    client?: PoolClient,
+  ): Promise<number> {
+    const db = await this.getClient(client);
+    try {
+      if (this.tableDefinition.isView) {
+        throw new Error(
+          `Cannot delete from view: ${this.tableDefinition.name}`,
+        );
+      }
+
+      // Run pre-delete checks if present
+      if (this.tableDefinition.validators?.preDeleteCheck) {
+        await this.tableDefinition.validators.preDeleteCheck.call(this, filter);
+      }
+
+      let query = `DELETE FROM ${this.getTableName()}`;
+      const parameters: QueryParameter[] = [];
+      const paramIndex = 1;
+
+      if (filter) {
+        const whereConditions: string[] = [];
+        this.buildWhereConditions(
+          filter,
+          whereConditions,
+          parameters,
+          paramIndex,
+        );
+
+        if (whereConditions.length > 0) {
+          query += ` WHERE ${whereConditions.join(' AND ')}`;
+        }
+      }
+
+      const result = await this.dbManager.executeQuery(query, parameters, db);
+      const deletedCount = result.rowCount || 0;
+
+      return deletedCount;
+    } catch (error) {
+      if (error instanceof DatabaseError) {
+        throw error;
+      } else if (error instanceof ZodError) {
+        throw new ApplicationError('VALIDATION_ERROR', {
+          details: zodErrorToRecord(error, {
+            pathSeparator: '.',
+            arrayIndexFormat: { prefix: '(', suffix: ')' },
+          }),
+        });
+      } else {
+        throw new ApplicationError('SERVICE_UNAVAILABLE', {
+          debug: {
+            message: error instanceof Error ? error.message : String(error),
+          },
+        }, error instanceof Error ? error : undefined);
+      }
+    } finally {
+      await this.releaseClient(db, client);
+    }
+  }
+
+  // Count rows matching filter
+  async count(filter?: QueryFilters<TD>, client?: PoolClient): Promise<number> {
+    const db = await this.getClient(client);
+    try {
+      let query = `SELECT COUNT(*) as count FROM ${this.getTableName()}`;
+      const parameters: QueryParameter[] = [];
+      const paramIndex = 1;
+
+      if (filter) {
+        const whereConditions: string[] = [];
+        this.buildWhereConditions(
+          filter,
+          whereConditions,
+          parameters,
+          paramIndex,
+        );
+
+        if (whereConditions.length > 0) {
+          query += ` WHERE ${whereConditions.join(' AND ')}`;
+        }
+      }
+
+      const result = await this.dbManager.executeQuery(query, parameters, db);
+      return result.rows[0] ? parseInt(result.rows[0]['count'] as string) : 0;
+    } catch (error) {
+      if (error instanceof DatabaseError) {
+        throw error;
+      } else if (error instanceof ZodError) {
+        throw new ApplicationError('VALIDATION_ERROR', {
+          details: zodErrorToRecord(error, {
+            pathSeparator: '.',
+            arrayIndexFormat: { prefix: '(', suffix: ')' },
+          }),
+        });
+      } else {
+        throw new ApplicationError('SERVICE_UNAVAILABLE', {
+          debug: {
+            message: error instanceof Error ? error.message : String(error),
+          },
+        }, error instanceof Error ? error : undefined);
+      }
+    } finally {
+      await this.releaseClient(db, client);
+    }
+  }
+
+  // Check if rows exist matching filter
+  async exists(
+    filter: QueryFilters<TD>,
+    client?: PoolClient,
+  ): Promise<boolean> {
+    const count = await this.count(filter, client);
+    return count > 0;
+  }
+}

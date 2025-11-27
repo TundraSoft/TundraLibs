@@ -21,6 +21,9 @@ security:
       - any-glob-to-any-file: .trivy.yaml
       - any-glob-to-any-file: .trivyignore
       - any-glob-to-any-file: .github/SECURITY.md
+openapi:
+  - changed-files:
+      - any-glob-to-any-file: openapi/*
 cacher:
   - changed-files:
       - any-glob-to-any-file: cacher/*
@@ -39,9 +42,6 @@ id:
 norm:
   - changed-files:
       - any-glob-to-any-file: norm/*
-openapi:
-  - changed-files:
-      - any-glob-to-any-file: openapi/*
 restler:
   - changed-files:
       - any-glob-to-any-file: restler/*

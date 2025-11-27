@@ -1,0 +1,314 @@
+// deno-lint-ignore-file no-explicit-any
+import { BaseError, Singleton } from '$utils';
+import { Pool, type PoolConfig, types } from '$pg';
+import type { PoolClient, QueryResult, QueryResultRow } from '$pg_types';
+import {
+  BaseModel,
+  IDatabaseManager,
+  QueryParameter,
+  TableDefinition,
+} from './BaseModel.ts.ref';
+
+type DatabaseErrorMeta = {
+  query: string;
+  parameters: QueryParameter[];
+  details: {
+    table?: string;
+    columns?: string;
+    constraint?: string;
+  };
+  executionTimeMs: number;
+  poolStats: {
+    size: number;
+    available: number;
+    waiting: number;
+    max: number;
+    min: number;
+  };
+  inTransaction: boolean;
+};
+
+export class DatabaseError extends BaseError<DatabaseErrorMeta> {
+  constructor(meta: Omit<DatabaseErrorMeta, 'details'>, cause: Error) {
+    let message = `Database Error: ${cause.message}`;
+    const newMeta = { ...meta, details: {} } as DatabaseErrorMeta;
+    if (
+      cause instanceof Error && 'code' in cause &&
+      typeof cause.code === 'string'
+    ) {
+      switch (cause.code) {
+        case '23505':
+          // Unique violation
+          message = `Unique constraint violation`;
+          if ('constraint' in cause) {
+            newMeta.details.constraint = (cause as any).constraint;
+          }
+          if ('table' in cause) {
+            newMeta.details.table = (cause as any).table;
+          }
+          if ('columns' in cause) {
+            newMeta.details.columns = (cause as any).columns;
+          }
+          break;
+        case '23503':
+          // Foreign key violation
+          message = `Foreign key constraint violation`;
+          if ('constraint' in cause) {
+            newMeta.details.constraint = (cause as any).constraint;
+          }
+          if ('table' in cause) {
+            newMeta.details.table = (cause as any).table;
+          }
+          if ('columns' in cause) {
+            newMeta.details.columns = (cause as any).columns;
+          }
+          break;
+        case '23502':
+          // Not null violation
+          message = `Not-null constraint violation`;
+          if ('column' in cause) {
+            newMeta.details.columns = (cause as any).column;
+          }
+          if ('table' in cause) {
+            newMeta.details.table = (cause as any).table;
+          }
+          break;
+        case '22P02':
+          // Invalid text representation
+          message = `Invalid text representation`;
+          if ('table' in cause) {
+            newMeta.details.table = (cause as any).table;
+          }
+          break;
+        case '42703':
+          // Undefined column
+          message = `Undefined column`;
+          if ('column' in cause) {
+            newMeta.details.columns = (cause as any).column;
+          }
+          if ('table' in cause) {
+            newMeta.details.table = (cause as any).table;
+          }
+          break;
+        case '42P01':
+          // Undefined table
+          message = `Undefined table`;
+          if ('table' in cause) {
+            newMeta.details.table = (cause as any).table;
+          }
+          break;
+        case '42601':
+          // Syntax error
+          message = `SQL syntax error`;
+          break;
+        case '40P01':
+          // Deadlock detected
+          message = `Deadlock detected`;
+          break;
+        case '57014':
+          // Query canceled
+          message = `Query canceled`;
+          break;
+        case '53300':
+          // Too many connections
+          message = `Too many connections`;
+          break;
+        // Add more specific Postgres error codes as needed
+        default:
+          message = `Database error with code ${cause.code}`;
+          break;
+      }
+    }
+    // Detect what type of error we got
+    super(message, newMeta, cause);
+  }
+
+  get query(): string {
+    return this.context.query;
+  }
+
+  get table(): string | undefined {
+    return this.context.details?.table;
+  }
+}
+
+@Singleton
+export class DatabaseManager<
+  Registry extends Record<string, TableDefinition> = Record<
+    string,
+    TableDefinition
+  >,
+> implements IDatabaseManager {
+  private readonly pool: Pool;
+  private readonly registeredModels = new Map<
+    keyof Registry,
+    BaseModel<any>
+  >();
+
+  constructor(config: PoolConfig, registry: Registry) {
+    // Configure PostgreSQL to return numeric types as numbers instead of strings
+    types.setTypeParser(
+      types.builtins.NUMERIC,
+      (value: string) => parseFloat(value),
+    );
+    types.setTypeParser(
+      types.builtins.FLOAT4,
+      (value: string) => parseFloat(value),
+    );
+    types.setTypeParser(
+      types.builtins.FLOAT8,
+      (value: string) => parseFloat(value),
+    );
+    types.setTypeParser(
+      types.builtins.INT2,
+      (value: string) => parseInt(value, 10),
+    );
+    types.setTypeParser(
+      types.builtins.INT4,
+      (value: string) => parseInt(value, 10),
+    );
+    types.setTypeParser(
+      types.builtins.INT8,
+      (value: string) => parseInt(value, 10),
+    );
+
+    this.pool = new Pool(config);
+    // Register models from the ModelRegistry
+    for (const [name, definition] of Object.entries(registry)) {
+      this.registerModel(
+        name as keyof Registry,
+        definition as Registry[keyof Registry],
+      );
+    }
+  }
+
+  // Register a model during boot
+  registerModel<K extends keyof Registry>(
+    name: K,
+    definition: Registry[K],
+  ): void {
+    this.registeredModels.set(name, new BaseModel(definition, this));
+  }
+
+  // Access to registered models
+  get models() {
+    return {
+      get: <K extends keyof Registry>(
+        name: K,
+      ): BaseModel<Registry[K]> => {
+        const model = this.registeredModels.get(name);
+        if (!model) {
+          throw new Error(
+            `Model '${String(name)}' not registered. Available models: ${
+              Array.from(this.registeredModels.keys()).join(', ')
+            }`,
+          );
+        }
+        return model as BaseModel<Registry[K]>;
+      },
+    };
+  }
+
+  // Get a direct connection for custom operations
+  async getConnection(): Promise<PoolClient> {
+    return await this.pool.connect();
+  }
+
+  // Execute a query - central point for all database queries
+  async executeQuery<T extends QueryResultRow = QueryResultRow>(
+    query: string,
+    parameters: QueryParameter[] = [],
+    client?: PoolClient,
+  ): Promise<QueryResult<T>> {
+    const startTime = Date.now();
+    const db = client || await this.pool.connect();
+    const shouldRelease = !client; // Only release if we created the connection
+
+    try {
+      const result = await db.query<T>(query, parameters);
+      return result;
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+      const poolStats = this.getPoolStats();
+
+      // Sanitize parameters for logging (hide sensitive data)
+      const sanitizedParams = parameters.map((param) => {
+        if (typeof param === 'string' && param.length > 100) {
+          return `[String:${param.length}chars]`;
+        }
+        return param;
+      });
+
+      throw new DatabaseError(
+        {
+          query,
+          parameters: sanitizedParams,
+          executionTimeMs: executionTime,
+          poolStats,
+          inTransaction: !!client,
+        },
+        error as Error,
+      );
+    } finally {
+      if (shouldRelease) {
+        await db.release();
+      }
+    }
+  }
+
+  // Execute operations within a transaction
+  async transaction<T>(
+    callback: (client: PoolClient) => Promise<T>,
+  ): Promise<T> {
+    const startTime = Date.now();
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      const executionTime = Date.now() - startTime;
+      const poolStats = this.getPoolStats();
+
+      await client.query('ROLLBACK');
+
+      // Enhanced transaction error with context
+      throw new DatabaseError(
+        {
+          query: 'TRANSACTION',
+          parameters: [],
+          executionTimeMs: executionTime,
+          poolStats,
+          inTransaction: true,
+        },
+        error as Error,
+      );
+    } finally {
+      await client.release();
+    }
+  }
+
+  // Get pool statistics
+  getPoolStats(): {
+    size: number;
+    available: number;
+    waiting: number;
+    max: number;
+    min: number;
+  } {
+    return {
+      size: this.pool.totalCount ?? 0,
+      available: this.pool.idleCount ?? 0,
+      waiting: this.pool.waitingCount ?? 0,
+      max: this.pool.options.max ?? 0,
+      min: this.pool.options.min ?? 0,
+    };
+  }
+
+  // Graceful shutdown
+  async close(): Promise<void> {
+    await this.pool.end();
+  }
+}
