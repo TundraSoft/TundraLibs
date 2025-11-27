@@ -50,7 +50,7 @@ const DEFAULT_OPTIONS: Partial<SQLiteEngineOptions> = {
  * WAL mode optimization, and comprehensive error handling.
  */
 export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
-  public readonly Engine = 'sqlite';
+  public readonly Engine = 'SQLite';
 
   private _db: Database | null = null;
   private _activeTransactions = new Map<string, number>();

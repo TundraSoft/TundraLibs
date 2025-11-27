@@ -1,6 +1,10 @@
+// Export main DAM manager
+export { DAM } from './DAM.ts';
+
 // Export all engines
 export {
   MariaDBEngine,
+  MongoDBEngine,
   PostgreSQLEngine,
   SQLiteEngine,
 } from './engines/mod.ts';
@@ -8,6 +12,7 @@ export {
 // Export engine types
 export type {
   MariaDBEngineOptions,
+  MongoDBEngineOptions,
   PostgreSQLEngineOptions,
   SQLiteEngineOptions,
 } from './engines/mod.ts';

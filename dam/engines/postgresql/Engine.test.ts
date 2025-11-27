@@ -59,7 +59,7 @@ Deno.test('dam.engines.postgresql', async (t) => {
       });
 
       asserts.assertEquals(engine.name, 'test-pg');
-      asserts.assertEquals(engine.Engine, 'postgresql');
+      asserts.assertEquals(engine.Engine, 'PostgreSQL');
       asserts.assertEquals(engine.status, 'CLOSED');
       // PostgreSQL engine always uses pooling (via pg.Pool), so this should be true
       asserts.assertEquals(engine.poolEnabled, true);
@@ -182,7 +182,7 @@ Deno.test('dam.engines.postgresql', async (t) => {
       });
 
       asserts.assertEquals(sslEngine.name, 'test-ssl');
-      asserts.assertEquals(sslEngine.Engine, 'postgresql');
+      asserts.assertEquals(sslEngine.Engine, 'PostgreSQL');
     });
 
     await u.step('should handle advanced PostgreSQL options', () => {
@@ -253,7 +253,7 @@ Deno.test('dam.engines.postgresql', async (t) => {
       await asserts.assertRejects(
         () => invalidEngine.connect(),
         DAMEngineError,
-        'Failed to connect to postgresql',
+        'Failed to connect to PostgreSQL',
       );
 
       asserts.assertEquals(invalidEngine.status, 'CLOSED');
@@ -269,7 +269,7 @@ Deno.test('dam.engines.postgresql', async (t) => {
       await asserts.assertRejects(
         () => badCredsEngine.connect(),
         DAMEngineError,
-        'Failed to connect to postgresql',
+        'Failed to connect to PostgreSQL',
       );
     });
 
@@ -282,7 +282,7 @@ Deno.test('dam.engines.postgresql', async (t) => {
       await asserts.assertRejects(
         () => badDbEngine.connect(),
         DAMEngineError,
-        'Failed to connect to postgresql',
+        'Failed to connect to PostgreSQL',
       );
     });
 

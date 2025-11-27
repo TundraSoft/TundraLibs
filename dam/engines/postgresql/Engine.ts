@@ -77,7 +77,7 @@ const DEFAULT_OPTIONS: Partial<PostgreSQLEngineOptions> = {
  * transaction management, and comprehensive error handling.
  */
 export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
-  public readonly Engine = 'postgresql';
+  public readonly Engine = 'PostgreSQL';
 
   private _pool: Pool | null = null;
   private _activeTransactions = new Map<string, PoolClient>();

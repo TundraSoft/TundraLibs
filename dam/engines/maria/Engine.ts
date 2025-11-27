@@ -57,7 +57,7 @@ const DEFAULT_OPTIONS: Partial<MariaDBEngineOptions> = {
  * transaction management, and comprehensive error handling.
  */
 export class MariaDBEngine extends AbstractEngine<MariaDBEngineOptions> {
-  public readonly Engine = 'mariadb';
+  public readonly Engine = 'MariaDB';
 
   private _pool: Pool | null = null;
   private _activeTransactions = new Map<string, PoolConnection>();

@@ -1,4 +1,11 @@
-// MongoDB engine implementation placeholder
-// TODO: Implement MongoDB engine extending AbstractEngine
+/**
+ * MongoDB Engine for DAM
+ *
+ * Provides MongoDB database connectivity and operations for the DAM framework.
+ * Implements the AbstractEngine interface for NoSQL document operations.
+ *
+ * @module MongoDBEngine
+ */
 
-export {};
+export { MongoDBEngine } from './Engine.ts';
+export type { MongoDBEngineOptions } from './types/mod.ts';

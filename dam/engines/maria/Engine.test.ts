@@ -80,7 +80,7 @@ Deno.test(
         });
 
         asserts.assertEquals(engine.name, 'test-maria');
-        asserts.assertEquals(engine.Engine, 'mariadb');
+        asserts.assertEquals(engine.Engine, 'MariaDB');
         asserts.assertEquals(engine.status, 'CLOSED');
         // MariaDB engine uses pooling, so this should be true
         asserts.assertEquals(engine.poolEnabled, true);
@@ -102,7 +102,7 @@ Deno.test(
       await u.step('should create engine with custom instanceId', () => {
         const engine = new MariaDBEngine('maria::custom-id', TEST_CONFIG);
         asserts.assertEquals(engine.name, 'maria');
-        asserts.assertEquals(engine.instanceId, 'mariadb::maria::custom-id');
+        asserts.assertEquals(engine.instanceId, 'MariaDB::maria::custom-id');
       });
 
       await u.step('should throw on missing host', () => {
@@ -151,7 +151,7 @@ Deno.test(
           ...TEST_CONFIG,
           ssl: { rejectUnauthorized: false },
         });
-        asserts.assertEquals(engine.Engine, 'mariadb');
+        asserts.assertEquals(engine.Engine, 'MariaDB');
       });
 
       await u.step('should handle advanced MariaDB options', () => {
@@ -160,7 +160,7 @@ Deno.test(
           connectionTimeout: 30,
           queryTimeout: 60,
         });
-        asserts.assertEquals(engine.Engine, 'mariadb');
+        asserts.assertEquals(engine.Engine, 'MariaDB');
       });
     });
 

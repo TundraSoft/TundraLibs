@@ -46,7 +46,7 @@ Deno.test('dam.engines.sqlite', async (t) => {
       });
 
       asserts.assertEquals(engine.name, 'test-sqlite');
-      asserts.assertEquals(engine.Engine, 'sqlite');
+      asserts.assertEquals(engine.Engine, 'SQLite');
       asserts.assertEquals(engine.status, 'CLOSED');
       // SQLite engine doesn't use traditional pooling
       asserts.assertEquals(engine.poolEnabled, false);
@@ -58,13 +58,13 @@ Deno.test('dam.engines.sqlite', async (t) => {
         synchronous: 'OFF',
       });
 
-      asserts.assertEquals(engine.Engine, 'sqlite');
+      asserts.assertEquals(engine.Engine, 'SQLite');
     });
 
     await u.step('should create engine with custom instanceId', () => {
       const engine = new SQLiteEngine('sqlite::custom-id', TEST_CONFIG);
       asserts.assertEquals(engine.name, 'sqlite');
-      asserts.assertEquals(engine.instanceId, 'sqlite::sqlite::custom-id');
+      asserts.assertEquals(engine.instanceId, 'SQLite::sqlite::custom-id');
     });
 
     await u.step('should throw on missing database path', () => {
@@ -93,7 +93,7 @@ Deno.test('dam.engines.sqlite', async (t) => {
         synchronous: 'FULL',
         cacheSize: -128000,
       });
-      asserts.assertEquals(engine.Engine, 'sqlite');
+      asserts.assertEquals(engine.Engine, 'SQLite');
     });
 
     await u.step('should handle synchronous mode configuration', () => {
@@ -101,7 +101,7 @@ Deno.test('dam.engines.sqlite', async (t) => {
         ...TEST_CONFIG,
         synchronous: 'OFF',
       });
-      asserts.assertEquals(engine.Engine, 'sqlite');
+      asserts.assertEquals(engine.Engine, 'SQLite');
     });
   });
 
