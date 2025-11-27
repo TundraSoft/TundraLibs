@@ -156,54 +156,38 @@ const updateCodecov = async (
       return;
     }
     
-    // Get the individual components array
-    let individualComponents = (componentManagement.individual_components || []) as Array<Record<string, unknown>>;
-    
-    // Remove components in the delete list
-    if (deleteList && deleteList.length > 0) {
-      individualComponents = individualComponents.filter(
-        (component) => !deleteList.includes(component.component_id as string)
-      );
-      
-      // Also remove from flags section
-      const flags = codecovContent.flags as Record<string, unknown> || {};
-      for (const name of deleteList) {
-        delete flags[name];
-      }
-      codecovContent.flags = flags;
+    // Rebuild the individual components list based on current workspaces
+    const individualComponents = workspaces.map((name) => ({
+      component_id: name,
+      name: name,
+      paths: [
+        `${name}/**.ts`,
+        `!${name}/**.test.ts`
+      ],
+      statuses: [
+        {
+          type: 'project',
+          target: '75%'
+        }
+      ]
+    })) as Array<Record<string, unknown>>;
+
+    // Rebuild flags: keep default and set each workspace as a flag
+    const defaultFlags = (codecovContent.flags && typeof codecovContent.flags === 'object') ? (codecovContent.flags as Record<string, unknown>) : {};
+    const newFlags: Record<string, unknown> = {};
+    // Preserve default flag definition if present
+    if (defaultFlags.default) {
+      newFlags.default = defaultFlags.default;
     }
-    
-    // Add components from workspaces that don't exist yet
+    // Add a flag entry for each workspace
     for (const name of workspaces) {
-      // Skip if component already exists
-      if (individualComponents.some(component => component.component_id === name)) {
-        continue;
-      }
-      
-      // Add component
-      individualComponents.push({
-        component_id: name,
-        name: name,
-        paths: [
-          `${name}/**.ts`,
-          `!${name}/**.test.ts`
-        ],
-        statuses: [
-          {
-            type: "project",
-            target: "75%"
-          }
-        ]
-      });
-      
-      // Add to flags section
-      const flags = codecovContent.flags as Record<string, unknown> || {};
-      flags[name] = {
+      newFlags[name] = {
         paths: [`${name}/`],
         carryforward: true
       };
-      codecovContent.flags = flags;
     }
+    // Replace flags with the new flags object
+    codecovContent.flags = newFlags;
     
     // Update the component management section
     componentManagement.individual_components = individualComponents;
@@ -226,7 +210,25 @@ const updateWorkflows = async (
   await checkWorkspaces(workspaces);
   workspaces = workspaces.sort();
   
-  // Update codecov.yml
+  // If deleteList isn't provided, compute stale components from codecov.yml
+  if ((!deleteList || deleteList.length === 0) && await fs.exists(CODECOV_YML)) {
+    try {
+      const codecovContent = yaml.parse(await Deno.readTextFile(CODECOV_YML)) as Record<string, unknown>;
+      const componentManagement = codecovContent.component_management as Record<string, unknown> | undefined;
+      if (componentManagement && Array.isArray(componentManagement.individual_components)) {
+        const existingComponents = (componentManagement.individual_components as Array<Record<string, unknown>>) .map(c => c.component_id as string).filter(Boolean);
+        // Debug logs stripped to keep console output concise
+        const computedDeleteList = existingComponents.filter((comp) => !workspaces.includes(comp));
+        if (computedDeleteList.length > 0) {
+          deleteList = computedDeleteList;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to compute delete list from codecov.yml:', err);
+    }
+  }
+
+  // Update codecov.yml (pass deleteList if any components should be removed)
   await updateCodecov(workspaces, deleteList);
   
   // Ok great, we now sync with git
@@ -286,7 +288,7 @@ const updateWorkflows = async (
     
     // Use regex to replace only the scopes section, preserving YAML formatting
     const updatedContent = originalContent.replace(
-      /(scopes:\s*\|\-?\s*\n)([\s\S]*?)(\n\s*requireScope:)/,
+      /(scopes:\s*\|-?\s*\n)([\s\S]*?)(\n\s*requireScope:)/,
       `$1            ${scopesString}$3`
     );
     

@@ -37,7 +37,6 @@ jobs:
             guardian
             id
             norm
-            openapi
             release
             restler
             slogger

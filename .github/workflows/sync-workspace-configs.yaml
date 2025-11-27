@@ -1,0 +1,41 @@
+name: Sync Workspace Configs
+
+on:
+  push:
+    paths:
+      - deno.json
+      - '**/deno.json'
+  pull_request:
+    paths:
+      - deno.json
+      - '**/deno.json'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run workspace sync
+        run: |
+          deno task workspace:sync
+
+      - name: Commit and push changes
+        uses: EndBug/add-and-commit@v9
+        with:
+          message: 'chore: sync workspace configs via workspace.ts'
+          add: 'codecov.yml .github/labeler.yml .github/workflows/*.yaml .github/workflows/*.yml .github/ISSUE_TEMPLATE/*.yml'
+          author_name: 'github-actions[bot]'
+          author_email: 'github-actions[bot]@users.noreply.github.com'
+          push: true

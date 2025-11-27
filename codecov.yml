@@ -33,19 +33,11 @@ component_management:
         branches:
           - '!main'
   individual_components:
-    - component_id: utils
-      name: utils
+    - component_id: cacher
+      name: cacher
       paths:
-        - utils/**.ts
-        - '!utils/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
-    - component_id: id
-      name: id
-      paths:
-        - id/**.ts
-        - '!id/**.test.ts'
+        - cacher/**.ts
+        - '!cacher/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -57,11 +49,11 @@ component_management:
       statuses:
         - type: project
           target: 75%
-    - component_id: cacher
-      name: cacher
+    - component_id: dam
+      name: dam
       paths:
-        - cacher/**.ts
-        - '!cacher/**.test.ts'
+        - dam/**.ts
+        - '!dam/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -73,27 +65,11 @@ component_management:
       statuses:
         - type: project
           target: 75%
-    - component_id: slogger
-      name: slogger
+    - component_id: id
+      name: id
       paths:
-        - slogger/**.ts
-        - '!slogger/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
-    - component_id: restler
-      name: restler
-      paths:
-        - restler/**.ts
-        - '!restler/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
-    - component_id: pact
-      name: pact
-      paths:
-        - pact/**.ts
-        - '!pact/**.test.ts'
+        - id/**.ts
+        - '!id/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -105,19 +81,27 @@ component_management:
       statuses:
         - type: project
           target: 75%
-    - component_id: openapi
-      name: openapi
+    - component_id: restler
+      name: restler
       paths:
-        - openapi/**.ts
-        - '!openapi/**.test.ts'
+        - restler/**.ts
+        - '!restler/**.test.ts'
       statuses:
         - type: project
           target: 75%
-    - component_id: dam
-      name: dam
+    - component_id: slogger
+      name: slogger
       paths:
-        - dam/**.ts
-        - '!dam/**.test.ts'
+        - slogger/**.ts
+        - '!slogger/**.test.ts'
+      statuses:
+        - type: project
+          target: 75%
+    - component_id: utils
+      name: utils
+      paths:
+        - utils/**.ts
+        - '!utils/**.test.ts'
       statuses:
         - type: project
           target: 75%
@@ -126,47 +110,39 @@ flags:
     paths:
       - '**/*.ts'
     carryforward: true
-  utils:
+  cacher:
     paths:
-      - utils/
-    carryforward: true
-  id:
-    paths:
-      - id/
+      - cacher/
     carryforward: true
   crypt:
     paths:
       - crypt/
     carryforward: true
-  cacher:
+  dam:
     paths:
-      - cacher/
+      - dam/
     carryforward: true
   guardian:
     paths:
       - guardian/
     carryforward: true
-  slogger:
+  id:
     paths:
-      - slogger/
-    carryforward: true
-  restler:
-    paths:
-      - restler/
-    carryforward: true
-  pact:
-    paths:
-      - pact/
+      - id/
     carryforward: true
   norm:
     paths:
       - norm/
     carryforward: true
-  openapi:
+  restler:
     paths:
-      - openapi/
+      - restler/
     carryforward: true
-  dam:
+  slogger:
     paths:
-      - dam/
+      - slogger/
+    carryforward: true
+  utils:
+    paths:
+      - utils/
     carryforward: true
