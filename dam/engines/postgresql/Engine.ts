@@ -598,4 +598,51 @@ export class PostgreSQLEngine extends AbstractEngine<PostgreSQLEngineOptions> {
       client.release();
     }
   }
+
+  /**
+   * Get PostgreSQL server version information
+   */
+  protected async _getServerVersion(): Promise<string> {
+    if (!this._pool) {
+      throw new DAMEngineError('ENGINE_NOT_CONNECTED', {
+        instanceId: this.instanceId,
+        name: this.name,
+        engine: this.Engine,
+      });
+    }
+
+    const client = await this._pool.connect();
+    try {
+      const result = await client.query('SELECT version() as version');
+      return result.rows[0].version;
+    } catch (error) {
+      throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
+        instanceId: this.instanceId,
+        name: this.name,
+        engine: this.Engine,
+        query: 'SELECT version() as version',
+        originalError: error,
+        reason: `Failed to get PostgreSQL version: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      });
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * Get PostgreSQL connection pool statistics
+   */
+  protected _getPoolStats(): Record<string, number> | null {
+    if (!this._pool) {
+      return null;
+    }
+
+    return {
+      totalConnections: this._pool.totalCount,
+      idleConnections: this._pool.idleCount,
+      waitingRequests: this._pool.waitingCount,
+    };
+  }
 }

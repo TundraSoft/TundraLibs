@@ -898,7 +898,7 @@ Deno.test(
         try {
           await engine.connect();
 
-          const poolStats = engine.getPoolStats();
+          const poolStats = engine.poolStats;
           asserts.assert(poolStats !== null);
           asserts.assert(typeof poolStats.totalConnections === 'number');
           asserts.assert(typeof poolStats.activeConnections === 'number');

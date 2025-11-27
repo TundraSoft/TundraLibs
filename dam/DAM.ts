@@ -1,5 +1,5 @@
 import { Singleton } from '@tundralibs/utils';
-import type { EngineOptions } from './engine/types/mod.ts';
+import type { EngineEvents, EngineOptions } from './engine/types/mod.ts';
 import { AbstractEngine } from './engine/AbstractEngine.ts';
 import {
   MariaDBEngine,
@@ -76,6 +76,13 @@ class Manager {
    * @private
    */
   protected _instanceEngines: Map<string, string> = new Map();
+
+  /**
+   * Map of event listeners keyed by event type.
+   * @private
+   */
+  protected _eventListeners: Map<string, Set<(...args: unknown[]) => void>> =
+    new Map();
 
   constructor() {
     // Register built-in database engines
@@ -284,11 +291,12 @@ class Manager {
   ): void {
     const EngineClass = this._engines.get(engineType)!;
     try {
-      this._instances.set(
-        instanceId,
-        new EngineClass(instanceId, options),
-      );
+      const instance = new EngineClass(instanceId, options);
+      this._instances.set(instanceId, instance);
       this._instanceEngines.set(instanceId, engineType);
+
+      // Set up event proxy for the new instance
+      this._setupEventProxy(instance);
     } catch (error) {
       throw new DAMError(
         `Failed to create instance "${instanceId}": ${
@@ -476,6 +484,134 @@ class Manager {
 
     this._instances.clear();
     this._instanceEngines.clear();
+  }
+
+  /**
+   * Subscribe to events from all database engines.
+   * Provides a centralized way to listen for events across all instances.
+   *
+   * @param event - Event type to listen for ('connect', 'disconnect', 'query', 'error')
+   * @param listener - Function to call when event is emitted
+   * @returns Function to unsubscribe from the event
+   *
+   * @example
+   * ```typescript
+   * // Listen for all connection events
+   * const unsubscribe = DAM.on('connect', (instanceId) => {
+   *   console.log(`Database connected: ${instanceId}`);
+   * });
+   *
+   * // Listen for all query events
+   * DAM.on('query', (instanceId, result, error) => {
+   *   if (error) {
+   *     console.error(`Query failed on ${instanceId}:`, error);
+   *   } else {
+   *     console.log(`Query executed on ${instanceId}`, result);
+   *   }
+   * });
+   *
+   * // Unsubscribe when done
+   * unsubscribe();
+   * ```
+   */
+  on(
+    event: keyof EngineEvents,
+    listener: (...args: unknown[]) => void,
+  ): () => void {
+    if (!this._eventListeners.has(event)) {
+      this._eventListeners.set(event, new Set());
+    }
+
+    this._eventListeners.get(event)!.add(listener);
+
+    // Return unsubscribe function
+    return () => {
+      const listeners = this._eventListeners.get(event);
+      if (listeners) {
+        listeners.delete(listener);
+        if (listeners.size === 0) {
+          this._eventListeners.delete(event);
+        }
+      }
+    };
+  }
+
+  /**
+   * Remove event listener(s).
+   *
+   * @param event - Event type to remove listeners for
+   * @param listener - Specific listener to remove, or undefined to remove all
+   */
+  off(
+    event: keyof EngineEvents,
+    listener?: (...args: unknown[]) => void,
+  ): void {
+    const listeners = this._eventListeners.get(event);
+    if (!listeners) return;
+
+    if (listener) {
+      listeners.delete(listener);
+      if (listeners.size === 0) {
+        this._eventListeners.delete(event);
+      }
+    } else {
+      this._eventListeners.delete(event);
+    }
+  }
+
+  /**
+   * Get list of active event listeners for debugging.
+   * @returns Map of event types to listener counts
+   */
+  getEventListeners(): Record<string, number> {
+    const result: Record<string, number> = {};
+    for (const [event, listeners] of this._eventListeners) {
+      result[event] = listeners.size;
+    }
+    return result;
+  }
+
+  /**
+   * Set up event proxy for a database instance.
+   * @private
+   */
+  private _setupEventProxy(instance: AbstractEngine): void {
+    // Proxy all engine events to DAM listeners
+    instance.on('connect', (instanceId: string) => {
+      this._emitToListeners('connect', instanceId);
+    });
+
+    instance.on('disconnect', (instanceId: string) => {
+      this._emitToListeners('disconnect', instanceId);
+    });
+
+    instance.on(
+      'query',
+      (instanceId: string, result: unknown, error?: Error) => {
+        this._emitToListeners('query', instanceId, result, error);
+      },
+    );
+
+    instance.on('error', (instanceId: string, error: Error) => {
+      this._emitToListeners('error', instanceId, error);
+    });
+  }
+
+  /**
+   * Emit event to all registered listeners.
+   * @private
+   */
+  private _emitToListeners(event: string, ...args: unknown[]): void {
+    const listeners = this._eventListeners.get(event);
+    if (listeners) {
+      for (const listener of listeners) {
+        try {
+          listener(...args);
+        } catch (error) {
+          console.error(`Error in DAM event listener for '${event}':`, error);
+        }
+      }
+    }
   }
 
   /**

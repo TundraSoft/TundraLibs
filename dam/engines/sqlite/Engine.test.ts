@@ -186,11 +186,12 @@ Deno.test('dam.engines.sqlite', async (t) => {
 
         try {
           await engine.connect();
-          const stats = engine.getPoolStats();
-          asserts.assertEquals(stats.totalConnections, 1);
-          asserts.assertEquals(stats.activeConnections, 1);
-          asserts.assertEquals(stats.idleConnections, 0);
-          asserts.assertEquals(stats.waitingRequests, 0);
+          const stats = engine.getDetailedPoolStats();
+          asserts.assertNotEquals(stats, null);
+          asserts.assertEquals(stats!.totalConnections, 1);
+          asserts.assertEquals(stats!.activeConnections, 1);
+          asserts.assertEquals(stats!.idleConnections, 0);
+          asserts.assertEquals(stats!.waitingRequests, 0);
         } finally {
           await teardownSQLite();
         }

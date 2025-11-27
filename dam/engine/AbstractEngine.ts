@@ -139,6 +139,9 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
   protected _lastHealthCheck?: Date;
   protected _consecutiveErrors: number = 0;
 
+  // Server information
+  protected _serverVersion?: string;
+
   //#region Getters
   /** Engine instance name (without instanceId suffix) */
   get name(): string {
@@ -194,6 +197,37 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
       consecutiveErrors: this._consecutiveErrors,
       lastCheckTime: this._lastHealthCheck,
     };
+  }
+
+  /**
+   * Server/database version information
+   * Returns cached version or fetches it from the server if not cached
+   */
+  async getServerVersion(): Promise<string> {
+    if (!this._serverVersion) {
+      this._serverVersion = await this._getServerVersion();
+    }
+    return this._serverVersion;
+  }
+
+  /**
+   * Forces refresh of server version information
+   * @returns Updated server version string
+   */
+  async refreshServerVersion(): Promise<string> {
+    this._serverVersion = await this._getServerVersion();
+    return this._serverVersion;
+  }
+
+  /**
+   * Gets detailed connection pool statistics if supported by the engine.
+   * Returns null for engines that don't use connection pooling.
+   * This provides more detailed stats than the poolStats getter.
+   *
+   * @returns Detailed pool statistics object or null
+   */
+  getDetailedPoolStats(): Record<string, number> | null {
+    return this._getPoolStats();
   }
   //#endregion Getters
 
@@ -1122,5 +1156,32 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
    * ```
    */
   protected abstract _healthCheck(): void | Promise<void>;
+
+  /**
+   * Gets the server/database version information.
+   * Must be implemented by concrete engine classes.
+   * Should return a version string in a consistent format.
+   *
+   * @returns Server version string
+   * @throws Should throw appropriate errors when version cannot be retrieved
+   *
+   * @example PostgreSQL implementation
+   * ```typescript
+   * protected async _getServerVersion(): Promise<string> {
+   *   const result = await this.client.query('SELECT version()');
+   *   return result.rows[0].version;
+   * }
+   * ```
+   */
+  protected abstract _getServerVersion(): string | Promise<string>;
+
+  /**
+   * Gets connection pool statistics.
+   * Must be implemented by concrete engine classes.
+   * Should return null if pooling is not supported.
+   *
+   * @returns Pool statistics or null
+   */
+  protected abstract _getPoolStats(): Record<string, number> | null;
   //#endregion Abstract Methods
 }

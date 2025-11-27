@@ -549,4 +549,52 @@ export class MongoDBEngine extends AbstractEngine<MongoDBEngineOptions> {
       ),
     );
   }
+
+  /**
+   * Get MongoDB server version information
+   */
+  protected async _getServerVersion(): Promise<string> {
+    if (!this._db) {
+      throw new DAMEngineError('ENGINE_NOT_CONNECTED', {
+        instanceId: this.instanceId,
+        name: this.name,
+        engine: this.Engine,
+        reason: 'Database not connected',
+      });
+    }
+
+    try {
+      const buildInfo = await this._db.admin().buildInfo();
+      return `MongoDB ${buildInfo.version}`;
+    } catch (error) {
+      throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
+        instanceId: this.instanceId,
+        name: this.name,
+        engine: this.Engine,
+        query: 'db.admin().buildInfo()',
+        originalError: error,
+        reason: `Failed to get MongoDB version: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      });
+    }
+  }
+
+  /**
+   * Get MongoDB connection statistics
+   */
+  protected _getPoolStats(): Record<string, number> | null {
+    if (!this._client) {
+      return null;
+    }
+
+    // MongoDB driver doesn't expose detailed pool stats easily
+    // Return basic connection status
+    return {
+      totalConnections: 1, // Single client connection
+      activeConnections: this._client && this._db ? 1 : 0,
+      idleConnections: 0,
+      waitingRequests: 0,
+    };
+  }
 }

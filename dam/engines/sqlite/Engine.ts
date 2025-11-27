@@ -214,11 +214,15 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
         this._db = null;
       }
     } catch (error) {
-      throw new DAMEngineError('ENGINE_CLEANUP_FAILED', {
+      throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
         instanceId: this.instanceId,
         name: this.name,
         engine: this.Engine,
-        reason: error instanceof Error ? error.message : String(error),
+        query: 'SELECT sqlite_version() as version',
+        originalError: error,
+        reason: `Failed to get SQLite version: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       });
     }
   }
@@ -618,7 +622,7 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
    * SQLite doesn't use traditional connection pooling
    * Returns basic database state information instead
    */
-  public getPoolStats() {
+  protected _getPoolStats(): Record<string, number> | null {
     return {
       totalConnections: this._db ? 1 : 0,
       activeConnections: this._db ? 1 : 0,
@@ -628,7 +632,39 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
   }
 
   /**
+   * Get SQLite version information
+   */
+  protected _getServerVersion(): string {
+    if (!this._db) {
+      throw new DAMEngineError('ENGINE_NOT_CONNECTED', {
+        instanceId: this.instanceId,
+        name: this.name,
+        engine: this.Engine,
+        reason: 'Database not connected',
+      });
+    }
+
+    try {
+      const result = this._db.prepare('SELECT sqlite_version() as version')
+        .get() as { version: string };
+      return `SQLite ${result.version}`;
+    } catch (error) {
+      throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
+        instanceId: this.instanceId,
+        name: this.name,
+        engine: this.Engine,
+        query: 'SELECT sqlite_version() as version',
+        originalError: error,
+        reason: `Failed to get SQLite version: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      });
+    }
+  }
+
+  /**
    * Execute VACUUM command to optimize database
+   * This is SQLite-specific functionality for database optimization
    */
   public vacuum(): void {
     if (!this._db) {
@@ -647,7 +683,7 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
         instanceId: this.instanceId,
         name: this.name,
         engine: this.Engine,
-        sql: 'VACUUM;',
+        query: 'VACUUM;',
         originalError: error,
         reason: `VACUUM failed: ${
           error instanceof Error ? error.message : String(error)
@@ -658,6 +694,7 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
 
   /**
    * Execute ANALYZE command to update query planner statistics
+   * This is SQLite-specific functionality for query optimization
    */
   public analyze(): void {
     if (!this._db) {
@@ -676,7 +713,7 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
         instanceId: this.instanceId,
         name: this.name,
         engine: this.Engine,
-        sql: 'ANALYZE;',
+        query: 'ANALYZE;',
         originalError: error,
         reason: `ANALYZE failed: ${
           error instanceof Error ? error.message : String(error)

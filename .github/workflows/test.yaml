@@ -110,6 +110,18 @@ jobs:
           --health-interval 10s
           --health-timeout 10s
           --health-retries 5
+      mongo:
+        image: mongo:latest
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        env:
+          MONGO_INITDB_ROOT_USERNAME: mongo
+          MONGO_INITDB_ROOT_PASSWORD: mongopw
 
     steps:
       - name: "Checkout code"
@@ -146,6 +158,11 @@ jobs:
           MARIA_USER: maria
           MARIA_PASSWORD: mariapw
           MARIA_DB: mysql
+          MONGODB_HOST: localhost
+          MONGODB_PORT: 27017
+          MONGODB_USERNAME: mongo
+          MONGODB_PASSWORD: mongopw
+          MONGODB_DATABASE: mongo
 
       - name: "Upload coverage to Codecov"
         if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x' && (github.event.inputs.submit_reports == 'true' || github.event_name != 'workflow_dispatch')

@@ -612,7 +612,7 @@ export class MariaDBEngine extends AbstractEngine<MariaDBEngineOptions> {
   /**
    * Get current pool statistics
    */
-  public getPoolStats() {
+  protected _getPoolStats(): Record<string, number> | null {
     if (!this._pool) {
       return null;
     }
@@ -623,5 +623,37 @@ export class MariaDBEngine extends AbstractEngine<MariaDBEngineOptions> {
       activeConnections: this._pool.activeConnections(),
       taskQueueSize: this._pool.taskQueueSize(),
     };
+  }
+
+  /**
+   * Get MariaDB server version information
+   */
+  protected async _getServerVersion(): Promise<string> {
+    if (!this._pool) {
+      throw new DAMEngineError('ENGINE_NOT_CONNECTED', {
+        instanceId: this.instanceId,
+        name: this.name,
+        engine: this.Engine,
+      });
+    }
+
+    const connection = await this._pool.getConnection();
+    try {
+      const result = await connection.query('SELECT @@version as version');
+      return result[0].version;
+    } catch (error) {
+      throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
+        instanceId: this.instanceId,
+        name: this.name,
+        engine: this.Engine,
+        query: 'SELECT @@version as version',
+        originalError: error,
+        reason: `Failed to get MariaDB version: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      });
+    } finally {
+      connection.end();
+    }
   }
 }

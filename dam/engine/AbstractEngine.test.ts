@@ -11,6 +11,12 @@ import type {
  * Mock implementation of AbstractEngine for testing
  */
 class MockEngine extends AbstractEngine<EngineOptions> {
+  protected override _getServerVersion(): string | Promise<string> {
+    throw new Error('Method not implemented.');
+  }
+  protected override _getPoolStats(): Record<string, number> | null {
+    throw new Error('Method not implemented.');
+  }
   public readonly Engine = 'mock';
 
   public connectCalled = false;
