@@ -2,7 +2,6 @@
   "name": "@tundralibs/dam",
   "version": "0.1.0",
   "description": "TODO: Add description",
-  "unstable": ["ffi"],
   "exports": {
     ".": "./mod.ts"
   },

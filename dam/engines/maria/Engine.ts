@@ -60,8 +60,8 @@ export class MariaDBEngine extends AbstractEngine<MariaDBEngineOptions> {
   public readonly Engine = 'MariaDB';
 
   private _pool: Pool | null = null;
-  private _activeTransactions = new Map<string, PoolConnection>();
-  private _transactionTimeouts = new Map<string, number>();
+  private readonly _activeTransactions = new Map<string, PoolConnection>();
+  private readonly _transactionTimeouts = new Map<string, number>();
 
   constructor(
     id: string,
