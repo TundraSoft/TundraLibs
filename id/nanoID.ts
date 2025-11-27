@@ -125,7 +125,7 @@ export function nanoID(size = 21, base: string = WEB_SAFE): string {
 
   // Generate ID
   while (id.length < size) {
-    const index = bytes[i]! & mask;
+    const index = bytes[i]! & mask; //NOSONAR
     // Only add valid characters (when index is within base length)
     if (index < base.length) {
       id += base[index];

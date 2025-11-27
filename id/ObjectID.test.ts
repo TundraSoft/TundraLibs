@@ -17,8 +17,8 @@ Deno.test('id.objectId', async (t) => {
       res1 = id(),
       res2 = id();
     asserts.assertEquals(
-      parseInt(res2.substring(res2.length - 1)) -
-        parseInt(res1.substring(res1.length - 1)),
+      Number.parseInt(res2.substring(res2.length - 1)) -
+        Number.parseInt(res1.substring(res1.length - 1)),
       1,
     ); // Ensure the ID is in sequence
   });
@@ -40,7 +40,7 @@ Deno.test('id.objectId', async (t) => {
     const id = ObjectID();
     const result = id();
     const timestampHex = result.substring(0, 8);
-    const timestamp = parseInt(timestampHex, 16);
+    const timestamp = Number.parseInt(timestampHex, 16);
 
     // The timestamp should be close to the current time
     const currentTime = Math.floor(Date.now() / 1000);
@@ -91,9 +91,11 @@ Deno.test('id.objectId', async (t) => {
 
     // Test the sequence increments correctly starting from 999
     for (let i = 0; i < results.length - 1; i++) {
-      const counter1 = parseInt(results[i]!.substring(results[i]!.length - 4));
-      const counter2 = parseInt(
-        results[i + 1]!.substring(results[i + 1]!.length - 4),
+      const counter1 = Number.parseInt(
+        results[i]!.substring(results[i]!.length - 4), //NOSONAR
+      );
+      const counter2 = Number.parseInt(
+        results[i + 1]!.substring(results[i + 1]!.length - 4), //NOSONAR
       );
       asserts.assertEquals(counter2 - counter1, 1);
     }

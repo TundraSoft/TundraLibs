@@ -70,7 +70,7 @@ Deno.test('id.nanoId', async (t) => {
     asserts.assertEquals(defaultId.length, 21);
 
     // Test default base is WEB_SAFE
-    asserts.assertMatch(defaultId, /^[a-z0-9\_\-{0,}]+$/i);
+    asserts.assertMatch(defaultId, /^[a-z0-9\_\-{0,}]+$/i); //NOSONAR
 
     // Test uniqueness of default IDs
     const ids = new Set();
@@ -135,7 +135,7 @@ Deno.test('id.nanoId', async (t) => {
     );
 
     // Test with undefined base string - should use default
-    const undefinedId = nanoID(10, undefined);
+    const undefinedId = nanoID(10);
     asserts.assertEquals(undefinedId.length, 10);
     asserts.assertMatch(undefinedId, /^[a-z0-9_-]+$/i);
   });

@@ -23,7 +23,7 @@ Deno.test('id.sequenceId', async (t) => {
     const generatedIds = new Set<bigint>(); // Set to store the generated IDs
     const seq = sequenceID();
     // Run the parallel executions
-    const promises = Array(iterations).fill(null).map(() => {
+    const promises = new Array(iterations).fill(null).map(async () => {
       generatedIds.add(seq()); // Add the ID to the set
     });
 
