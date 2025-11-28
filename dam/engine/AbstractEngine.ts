@@ -1,60 +1,27 @@
-/**
- * @fileoverview Abstract base class for DAM (Database Access Manager) engines.
- *
- * This module provides the foundational AbstractEngine class that all concrete
- * database engines must extend. It implements common functionality including:
- *
- * - Connection lifecycle management (connect/close)
- * - Transaction support with nested savepoints
- * - Connection pooling abstraction
- * - Health monitoring with configurable thresholds
- * - Query execution with parameter validation
- * - Performance tracking and slow query detection
- * - Event-driven architecture for monitoring
- * - Comprehensive error handling with contextual error codes
- *
- * @example PostgreSQL Engine Implementation
- * ```typescript
- * import { AbstractEngine } from './AbstractEngine.ts';
- * import { Client } from 'npm:pg';
- *
- * class PostgreSQLEngine extends AbstractEngine<PostgreSQLOptions> {
- *   public readonly Engine = 'postgresql';
- *   private client?: Client;
- *
- *   protected async _connect(): Promise<void> {
- *     this.client = new Client(this.getConnectionConfig());
- *     await this.client.connect();
- *   }
- *
- *   protected async _executeQuery<R>(query: EngineQuery): Promise<{data: R[], count: number}> {
- *     const result = await this.client!.query(query.sql, Object.values(query.params || {}));
- *     return { data: result.rows, count: result.rowCount || 0 };
- *   }
- *
- *   // ... implement other abstract methods
- * }
- * ```
- *
- * @module DAM/Engine/AbstractEngine
- * @version 1.0.0
- * @author TundraLibs
- */
-
 import { type EventOptionKeys, Options } from '@tundralibs/utils';
 import { ulid } from '@tundralibs/id';
-import type {
+import {
+  EngineCapabilities,
   EngineEvents,
   EngineOptions,
   EnginePoolStats,
   EngineQuery,
   EngineQueryResult,
+  EngineQueryStats,
+  EngineStats,
   EngineStatus,
   EngineTransactionOptions,
+  EngineTransactionStatus,
 } from './types/mod.ts';
 import { DAMEngineError } from './errors/mod.ts';
 
-const defaultQueryId = (prefix?: string): string => {
+/**
+ * Default ID generator using ULID with optional prefix.
+ *
+ * @param prefix - Optional prefix to prepend to the generated ID
+ * @returns A unique identifier string
+ */
+const defaultIdGenerator = (prefix?: string): string => {
   if (prefix && prefix.length > 0) {
     return `${prefix.trim()}-${ulid()}`;
   }
@@ -62,872 +29,248 @@ const defaultQueryId = (prefix?: string): string => {
 };
 
 /**
- * Abstract base class for all DAM (Database Access Manager) engines.
+ * Abstract base class for all database engine implementations.
  *
- * Provides comprehensive functionality for database operations including:
- * - Connection management with automatic reconnection
- * - Transaction support with nested savepoints
- * - Connection pooling abstraction
- * - Health monitoring with configurable thresholds
- * - Query execution with performance tracking
- * - Event-driven architecture for monitoring
- * - Context-rich error handling with proper error codes
+ * Provides:
+ * - Connection management with status tracking
+ * - Query execution with timing and stats
+ * - Transaction support with idempotence and timeout handling
+ * - Parameter validation and standardization
+ * - Event emission for monitoring
+ * - Pool and query statistics
  *
- * @template O - Engine-specific options type extending {@link EngineOptions}
+ * Implementations must provide:
+ * - Engine name and capabilities
+ * - Connection/disconnection logic
+ * - Query execution logic
+ * - Transaction operations
+ * - Client mapping for transaction tracking
  *
- * @see {@link EngineOptions} - Base configuration options
- * @see {@link EngineEvents} - Available event types
- * @see {@link DAMEngineError} - Error class with comprehensive error codes
- * @see {@link DAMEngineErrorCodes} - All available error codes
- *
- * @example Basic engine implementation
- * ```typescript
- * class PostgreSQLEngine extends AbstractEngine<PostgreSQLOptions> {
- *   public readonly Engine = 'postgresql';
- *
- *   protected async _connect(): Promise<void> {
- *     // Implementation-specific connection logic
- *   }
- *
- *   protected async _executeQuery<R>(query: EngineQuery): Promise<{data: R[], count: number}> {
- *     // Implementation-specific query execution
- *   }
- * }
- * ```
- *
- * @example Engine usage with events
- * ```typescript
- * const engine = new MyEngine('db::instance1', {
- *   connectionTimeout: 30,
- *   slowQueryThreshold: 1.0,
- *   healthCheckInterval: 60
- * });
- *
- * engine.on('connect', (instanceId) => console.log(`Connected: ${instanceId}`));
- * engine.on('error', (instanceId, error) => console.error(`Error: ${error.message}`));
- *
- * await engine.connect();
- * const result = await engine.execute({ sql: 'SELECT * FROM users', params: {} });
- * ```
+ * @template O - Engine-specific options extending EngineOptions
+ * @extends Options<O, EngineEvents>
  */
 export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
   extends Options<O, EngineEvents> {
   /**
-   * Engine type identifier (e.g., 'postgresql', 'mongodb', 'sqlite').
-   * Must be implemented by concrete engine classes.
-   * Used in error messages and instance identification.
+   * Engine name (e.g., 'PostgreSQL', 'MySQL', 'MongoDB').
+   * Used for identification and logging.
    */
   public abstract readonly Engine: string;
-  protected _name: string;
-  protected _instanceId: string;
 
+  /**
+   * Engine capabilities defining supported features.
+   * Includes transaction support, parameter replacement format, etc.
+   */
+  public abstract readonly Capabilities: EngineCapabilities;
+
+  /**
+   * Connection name for this engine instance.
+   * Combined with Engine to form unique instanceId.
+   */
+  public readonly Name: string;
+
+  /**
+   * Function to generate unique IDs for queries, transactions, etc.
+   * Defaults to ULID-based generator.
+   */
+  protected _idGenerator: (prefix?: string) => string;
+
+  /**
+   * Unique instance identifier in format "Engine::name".
+   * Used throughout for logging and error reporting.
+   */
+  public get instanceId() {
+    return `${this.Engine}::${this.Name}`;
+  }
+
+  //#region Connection
+  /**
+   * Current connection status.
+   * States: CLOSED → CONNECTING → IDLE ⇄ BUSY → CLOSED
+   */
   protected _status: EngineStatus = 'CLOSED';
-  protected _inTransaction: boolean = false;
-  protected _generateQueryId: (prefix?: string) => string = defaultQueryId;
-
-  // Connection pool management
-  protected _poolEnabled: boolean = false;
-  protected _poolStats: EnginePoolStats = {
-    totalConnections: 0,
-    activeConnections: 0,
-    idleConnections: 0,
-    waitingRequests: 0,
-  };
-
-  // Health monitoring
-  protected _healthCheckInterval?: number;
-  protected _lastHealthCheck?: Date;
-  protected _consecutiveErrors: number = 0;
-
-  // Server information
-  protected _serverVersion?: string;
-
-  //#region Getters
-  /** Engine instance name (without instanceId suffix) */
-  get name(): string {
-    return this._name;
-  }
 
   /**
-   * Full instance identifier in format 'engine::name::instanceId'
-   * Used for logging, monitoring, and event identification
+   * Loaded CA certificate content (if ssl.ca path was provided).
+   * Loaded during construction via processOption.
    */
-  get instanceId(): string {
-    return `${this.Engine}::${this.name}::${this._instanceId}`;
-  }
+  protected _sslCaCertificate?: string;
 
   /**
-   * Current engine connection status
-   * @see {@link EngineStatus} for possible values
+   * Loaded client certificate content (if ssl.cert path was provided).
+   * Loaded during construction via processOption.
    */
-  get status(): EngineStatus {
+  protected _sslClientCertificate?: string;
+
+  /**
+   * Loaded client key content (if ssl.key path was provided).
+   * Loaded during construction via processOption.
+   */
+  protected _sslClientKey?: string;
+
+  /**
+   * Connection timeout handle (internal use).
+   */
+  protected _connectionTimeout: number | null = null;
+
+  /**
+   * Get the current connection status.
+   * Calls _updatePoolStatus() to sync status with pool state.
+   * @returns Current engine status
+   */
+  public get status(): EngineStatus {
+    this._updatePoolStatus();
     return this._status;
   }
 
-  /** Whether engine is currently in a transaction */
-  get inTransaction(): boolean {
-    return this._inTransaction;
-  }
-
-  /** Whether connection pooling is enabled for this engine */
-  get poolEnabled(): boolean {
-    return this._poolEnabled;
-  }
-
   /**
-   * Current connection pool statistics
-   * @see {@link EnginePoolStats} for available metrics
+   * Establish connection to the database.
+   * Idempotent - returns early if already connected.
+   * Updates status and emits connect/connectionFailed events.
+   *
+   * @throws {DAMEngineError} CONNECTION_FAILED if connection fails
+   * @emits connect - On successful connection
+   * @emits connectionFailed - On connection failure
    */
-  get poolStats(): EnginePoolStats {
-    return { ...this._poolStats };
-  } /**
-   * Engine health status information
-   * Includes health state, error count, and last check time
-   */
-
-  get healthStatus(): {
-    isHealthy: boolean;
-    consecutiveErrors: number;
-    lastCheckTime?: Date;
-  } {
-    const maxErrors = this.getOption('maxConsecutiveErrors');
-    const threshold = typeof maxErrors === 'number' ? maxErrors : 5;
-    return {
-      isHealthy: this._consecutiveErrors < threshold,
-      consecutiveErrors: this._consecutiveErrors,
-      lastCheckTime: this._lastHealthCheck,
-    };
-  }
-
-  /**
-   * Server/database version information
-   * Returns cached version or fetches it from the server if not cached
-   */
-  async getServerVersion(): Promise<string> {
-    if (!this._serverVersion) {
-      this._serverVersion = await this._getServerVersion();
-    }
-    return this._serverVersion;
-  }
-
-  /**
-   * Forces refresh of server version information
-   * @returns Updated server version string
-   */
-  async refreshServerVersion(): Promise<string> {
-    this._serverVersion = await this._getServerVersion();
-    return this._serverVersion;
-  }
-
-  /**
-   * Gets detailed connection pool statistics if supported by the engine.
-   * Returns null for engines that don't use connection pooling.
-   * This provides more detailed stats than the poolStats getter.
-   *
-   * @returns Detailed pool statistics object or null
-   */
-  getDetailedPoolStats(): Record<string, number> | null {
-    return this._getPoolStats();
-  }
-  //#endregion Getters
-
-  /**
-   * Creates a new AbstractEngine instance.
-   *
-   * @param id - Engine identifier in format 'name::instanceId' or just 'name'
-   * @param options - Engine configuration options and event handlers
-   * @param defaults - Default option values to merge with provided options
-   *
-   * @throws {@link DAMEngineError} CONFIG_INVALID - When configuration validation fails
-   *
-   * @example
-   * ```typescript
-   * const engine = new MyEngine('userdb::primary', {
-   *   connectionTimeout: 30,
-   *   on: {
-   *     connect: (id) => console.log(`Connected: ${id}`),
-   *     error: (id, error) => console.error(`Error: ${error.message}`)
-   *   }
-   * });
-   * ```
-   */
-  constructor(
-    id: string,
-    options: EventOptionKeys<O, EngineEvents>,
-    defaults?: Partial<O>,
-  ) {
-    super();
-    // Parse id - format: name::instanceId or just name
-    const [name, instanceId] = id.split('::');
-    this._name = (name ?? '').trim();
-    this._instanceId = instanceId ?? ulid();
-
-    // Set default options
-    super._setOptions(
-      options,
-      {
-        ...defaults,
-        slowQueryThreshold: 0.5, // 500ms
-        connectionTimeout: 30, // 30 seconds
-        queryTimeout: 30, // 30 seconds
-        maxConsecutiveErrors: 5,
-        healthCheckInterval: 60, // 60 seconds
-        transactionTimeout: 30, // 30 seconds
-        acquireTimeout: 10, // 10 seconds
-        idleTimeout: 300, // 5 minutes
-      } as Partial<O>,
-    );
-
-    // Set custom query ID generator if provided
-    if (this.hasOption('generateQueryId')) {
-      this._generateQueryId = this.getOption('generateQueryId')!;
-    }
-
-    // Initialize pool if pool options are provided
-    this._initializePool();
-  }
-
-  /**
-   * Establishes connection to the database.
-   *
-   * Automatically initializes connection pool if pool options are configured,
-   * starts health monitoring if enabled, and emits 'connect' event on success.
-   *
-   * @throws {@link DAMEngineError} ENGINE_ALREADY_CONNECTED - When already connected
-   * @throws {@link DAMEngineError} CONNECTION_FAILED - When connection establishment fails
-   *
-   * @fires connect - Emitted when connection is successfully established
-   * @fires error - Emitted when connection fails
-   *
-   * @example
-   * ```typescript
-   * try {
-   *   await engine.connect();
-   *   console.log('Database connected successfully');
-   * } catch (error) {
-   *   if (error.code === 'CONNECTION_FAILED') {
-   *     console.error('Failed to connect:', error.context.reason);
-   *   }
-   * }
-   * ```
-   */
-  async connect(): Promise<void> {
-    if (this._status === 'IDLE') {
-      throw new DAMEngineError('ENGINE_ALREADY_CONNECTED', {
-        instanceId: this.instanceId,
-        engine: this.Engine,
-        name: this.name,
-      });
-    }
-
-    try {
-      await this._connect();
-      this._status = 'IDLE';
-      this._consecutiveErrors = 0;
-
-      // Setup health monitoring after successful connection
-      this._setupHealthMonitoring();
-
-      this.emit('connect', this.instanceId);
-    } catch (error) {
-      this._status = 'CLOSED';
-      this._consecutiveErrors++;
-
-      // Cleanup health monitoring on connection failure
-      if (this._healthCheckInterval) {
-        clearInterval(this._healthCheckInterval);
-        this._healthCheckInterval = undefined;
-      }
-      const damError = error instanceof DAMEngineError
-        ? error
-        : new DAMEngineError(
-          'CONNECTION_FAILED',
-          {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            reason: error instanceof Error ? error.message : String(error),
-          },
-          error as Error,
-        );
-      this.emit('error', this.instanceId, damError);
-      throw damError;
-    }
-  }
-
-  /**
-   * Closes the database connection and cleans up resources.
-   *
-   * Automatically rolls back any active transactions, stops health monitoring,
-   * closes connection pools, and emits 'disconnect' event on success.
-   *
-   * @throws {@link DAMEngineError} ENGINE_CLEANUP_FAILED - When cleanup operations fail
-   *
-   * @fires disconnect - Emitted when disconnection is successful
-   * @fires error - Emitted when cleanup fails
-   *
-   * @example
-   * ```typescript
-   * await engine.close();
-   * console.log('Database connection closed');
-   * ```
-   */
-  async close(): Promise<void> {
-    // Always cleanup health monitoring interval regardless of connection state
-    if (this._healthCheckInterval) {
-      clearInterval(this._healthCheckInterval);
-      this._healthCheckInterval = undefined;
-    }
-
+  public async connect(): Promise<void> {
     if (this.status !== 'CLOSED') {
-      try {
-        // If in transaction, rollback all active transactions
-        if (this._inTransaction) {
-          await this._rollbackAllTransactions();
-        }
-
-        // Close engine-specific resources
-        await this._close();
-
-        this._status = 'CLOSED';
-        this.emit('disconnect', this.instanceId);
-      } catch (error) {
-        const damError = error instanceof DAMEngineError
-          ? error
-          : new DAMEngineError(
-            'ENGINE_CLEANUP_FAILED',
-            {
-              instanceId: this.instanceId,
-              engine: this.Engine,
-              name: this.name,
-              reason: error instanceof Error ? error.message : String(error),
-            },
-            error as Error,
-          );
-        this.emit('error', this.instanceId, damError);
-        throw damError;
-      }
+      return;
     }
-  }
-
-  /**
-   * Begins a new database transaction or creates a savepoint for nested transactions.
-   *
-   * Supports nested transactions through savepoints. Each nested begin() creates
-   * a new savepoint that can be independently committed or rolled back.
-   *
-   * @param options - Transaction configuration options
-   * @param options.timeout - Transaction timeout in seconds
-   * @param options.name - Optional transaction name/id for async-safe transactions
-   *
-   * @returns The transaction ID that should be used for commit, rollback, and query operations
-   *
-   * @throws {@link DAMEngineError} QUERY_EXECUTION_FAILED - When transaction start fails
-   * @throws {@link DAMEngineError} TRANSACTION_SAVEPOINT_FAILED - When savepoint creation fails
-   *
-   * @fires query - Emitted with BEGIN or SAVEPOINT query details
-   * @fires error - Emitted when transaction start fails
-   *
-   * @example Basic transaction
-   * ```typescript
-   * await engine.begin();
-   * try {
-   *   await engine.execute({ sql: 'INSERT INTO users ...', params: {} });
-   *   await engine.commit();
-   * } catch (error) {
-   *   await engine.rollback();
-   *   throw error;
-   * }
-   * ```
-   *
-   * @example Nested transactions
-   * ```typescript
-   * await engine.begin(); // Transaction level 1
-   * try {
-   *   await engine.execute({ sql: 'INSERT INTO users ...', params: {} });
-   *
-   *   await engine.begin(); // Savepoint level 2
-   *   try {
-   *     await engine.execute({ sql: 'INSERT INTO orders ...', params: {} });
-   *     await engine.commit(); // Release savepoint
-   *   } catch (error) {
-   *     await engine.rollback(); // Rollback to savepoint
-   *   }
-   *
-   *   await engine.commit(); // Commit main transaction
-   * } catch (error) {
-   *   await engine.rollback();
-   * }
-   * ```
-   */
-  async begin(options?: EngineTransactionOptions): Promise<string> {
-    if (this.status === 'CLOSED') {
-      await this.connect();
-    }
-
-    // Use provided name as transaction ID, or generate one if not provided
-    const transactionId = options?.name || this._generateQueryId('tx');
-
     try {
-      // Start new transaction - pass transactionId in options
-      await this._beginTransaction({ ...options, name: transactionId });
-      this._inTransaction = true;
-      this.emit('query', this.instanceId, {
-        id: transactionId,
-        query: { sql: 'BEGIN', params: {}, transactionId },
-        data: [],
-        count: 0,
-        time: 0,
-        isSlow: false,
-      });
-    } catch (error) {
-      const damError = error instanceof DAMEngineError
-        ? error
-        : new DAMEngineError(
-          'QUERY_EXECUTION_FAILED',
-          {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            operation: 'begin',
-            transactionId,
-            reason: error instanceof Error ? error.message : String(error),
-          },
-          error as Error,
-        );
-      this.emit('error', this.instanceId, damError);
-      throw damError;
-    }
-
-    return transactionId;
-  }
-
-  /**
-   * Commits the current transaction or releases a savepoint.
-   *
-   * For main transactions (level 1), commits all changes to the database.
-   * For nested transactions (level > 1), releases the current savepoint.
-   *
-   * @param transactionId - The transaction ID to commit (required for pooled engines)
-   * @throws {@link DAMEngineError} TRANSACTION_NOT_ACTIVE - When no transaction is active
-   * @throws {@link DAMEngineError} TRANSACTION_COMMIT_FAILED - When commit operation fails
-   *
-   * @fires query - Emitted with COMMIT or RELEASE SAVEPOINT query details
-   * @fires error - Emitted when commit fails
-   *
-   * @example
-   * ```typescript
-   * await engine.begin();
-   * await engine.execute({ sql: 'INSERT INTO users ...', params: {} });
-   * await engine.commit(); // Commits the transaction
-   * ```
-   */
-  async commit(transactionId?: string): Promise<void> {
-    if (!this._inTransaction) {
-      throw new DAMEngineError('TRANSACTION_NOT_ACTIVE', {
-        instanceId: this.instanceId,
-        engine: this.Engine,
-        name: this.name,
-        operation: 'commit',
-      });
-    }
-
-    try {
-      // Commit transaction
-      await this._commitTransaction(transactionId);
-      // Only set inTransaction to false if no active transactions remain
-      this._inTransaction = this._hasActiveTransactions();
-      this.emit('query', this.instanceId, {
-        id: transactionId || this._generateQueryId('tx'),
-        query: { sql: 'COMMIT', params: {}, transactionId },
-        data: [],
-        count: 0,
-        time: 0,
-        isSlow: false,
-      });
-    } catch (error) {
-      const damError = error instanceof DAMEngineError
-        ? error
-        : new DAMEngineError(
-          'TRANSACTION_COMMIT_FAILED',
-          {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            reason: error instanceof Error ? error.message : String(error),
-          },
-          error as Error,
-        );
-      this.emit('error', this.instanceId, damError);
-      throw damError;
-    }
-  }
-
-  /**
-   * Rolls back the current transaction or reverts to a savepoint.
-   *
-   * For main transactions (level 1), rolls back all changes since transaction start.
-   * For nested transactions (level > 1), rolls back to the previous savepoint.
-   * Safe to call even when no transaction is active (no-op).
-   *
-   * @throws {@link DAMEngineError} TRANSACTION_ROLLBACK_FAILED - When rollback operation fails
-   *
-   * @fires query - Emitted with ROLLBACK or ROLLBACK TO SAVEPOINT query details
-   * @fires error - Emitted when rollback fails
-   *
-   * @example
-   * ```typescript
-   * await engine.begin();
-   * try {
-   *   await engine.execute({ sql: 'INSERT INTO users ...', params: {} });
-   *   // Some error occurs
-   *   throw new Error('Business logic error');
-   * } catch (error) {
-   *   await engine.rollback(); // Safely rolls back changes
-   *   throw error;
-   * }
-   * ```
-   */
-  async rollback(transactionId?: string): Promise<void> {
-    if (!this._inTransaction) {
-      return; // Nothing to rollback
-    }
-
-    try {
-      // Rollback transaction
-      await this._rollbackTransaction(transactionId);
-      // Only set inTransaction to false if no active transactions remain
-      this._inTransaction = this._hasActiveTransactions();
-      this.emit('query', this.instanceId, {
-        id: transactionId || this._generateQueryId('tx'),
-        query: { sql: 'ROLLBACK', params: {}, transactionId },
-        data: [],
-        count: 0,
-        time: 0,
-        isSlow: false,
-      });
-    } catch (error) {
-      // Force reset transaction state on rollback error
-      this._inTransaction = this._hasActiveTransactions();
-      const damError = error instanceof DAMEngineError
-        ? error
-        : new DAMEngineError(
-          'TRANSACTION_ROLLBACK_FAILED',
-          {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            reason: error instanceof Error ? error.message : String(error),
-          },
-          error as Error,
-        );
-      this.emit('error', this.instanceId, damError);
-      throw damError;
-    }
-  }
-
-  /**
-   * Executes a database query and returns the results.
-   *
-   * Automatically connects if not already connected, validates query parameters,
-   * tracks execution time, and determines if query is slow based on threshold.
-   *
-   * @template R - Type of the result records, defaults to Record<string, unknown>
-   * @param query - Query object with SQL and parameters
-   * @param query.sql - SQL query string with :param: placeholders
-   * @param query.params - Parameters to bind to the query
-   *
-   * @returns Promise resolving to query results with metadata
-   *
-   * @throws {@link DAMEngineError} QUERY_MISSING_PARAMETERS - When required parameters are missing
-   * @throws {@link DAMEngineError} QUERY_EXECUTION_FAILED - When query execution fails
-   *
-   * @fires query - Emitted with query details and performance metrics
-   * @fires error - Emitted when query execution fails
-   *
-   * @example Basic query
-   * ```typescript
-   * const result = await engine.execute<User>({
-   *   sql: 'SELECT * FROM users WHERE id = :userId:',
-   *   params: { userId: 123 }
-   * });
-   *
-   * console.log(`Found ${result.count} users in ${result.time}s`);
-   * if (result.isSlow) {
-   *   console.warn('Query was slow!');
-   * }
-   * ```
-   *
-   * @example Parameterized query
-   * ```typescript
-   * interface OrderResult {
-   *   id: number;
-   *   total: number;
-   *   status: string;
-   * }
-   *
-   * const orders = await engine.execute<OrderResult>({
-   *   sql: 'SELECT * FROM orders WHERE user_id = :userId: AND status = :status:',
-   *   params: { userId: 123, status: 'pending' }
-   * });
-   * ```
-   */
-  async execute<R extends Record<string, unknown> = Record<string, unknown>>(
-    query: EngineQuery,
-  ): Promise<EngineQueryResult<R>> {
-    if (this.status === 'CLOSED') {
-      await this.connect();
-    }
-
-    query = this._processQuery(query);
-    const result: EngineQueryResult<R> = {
-      id: this._generateQueryId(this.instanceId),
-      query: query,
-      data: [],
-      count: 0,
-      time: 0,
-      isSlow: false,
-    };
-
-    const startTime = performance.now();
-    let error: DAMEngineError | undefined;
-
-    try {
-      this._status = 'RUNNING';
-      const executionResult = await this._executeQuery<R>(query);
-      result.data = executionResult.data;
-      result.count = executionResult.count;
-      this._status = 'IDLE';
+      this._status = 'CONNECTING';
+      await this._connect();
+      this._status = 'READY';
+      this.emit('connect', this.instanceId);
+      // init healthcheck etc
     } catch (e) {
-      this._status = 'IDLE';
-      error = e instanceof DAMEngineError
-        ? e
-        : new DAMEngineError('QUERY_EXECUTION_FAILED', {
+      this._status = 'CLOSED';
+      let error: DAMEngineError;
+      if (e instanceof DAMEngineError) {
+        error = e;
+      } else {
+        error = new DAMEngineError('CONNECTION_FAILED', {
           instanceId: this.instanceId,
-          engine: this.Engine,
-          name: this.name,
-          query: query.sql,
-          params: query.params,
-          reason: e instanceof Error ? e.message : String(e),
         }, e as Error);
-    }
-
-    const endTime = performance.now();
-    result.time = (endTime - startTime) / 1000; // Convert to seconds
-    const threshold = this.getOption('slowQueryThreshold');
-    result.isSlow =
-      result.time > (typeof threshold === 'number' ? threshold : 0.5);
-
-    this.emit('query', this.instanceId, result, error);
-
-    if (error) {
+      }
+      this.emit('connectionFailed', this.instanceId, error);
       throw error;
     }
-
-    return result;
-  }
-
-  //#region Protected Methods
-  protected override _processOption<
-    K extends keyof EngineOptions = keyof EngineOptions,
-  >(
-    key: K,
-    value: O[K],
-  ): O[K] {
-    switch (key) {
-      case 'generateQueryId':
-        if (typeof value !== 'function') {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            configKey: 'generateQueryId',
-            reason: 'Must be a function which returns a string',
-          });
-        }
-        break;
-      case 'slowQueryThreshold':
-        if (typeof value !== 'number' || value < 0) {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            configKey: 'slowQueryThreshold',
-            reason: 'Must be a non-negative number',
-          });
-        }
-        break;
-      case 'connectionTimeout':
-        if (value !== undefined && (typeof value !== 'number' || value <= 0)) {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            configKey: 'connectionTimeout',
-            reason: 'Must be a positive number',
-          });
-        }
-        break;
-      case 'queryTimeout':
-        if (value !== undefined && (typeof value !== 'number' || value <= 0)) {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            configKey: 'queryTimeout',
-            reason: 'Must be a positive number',
-          });
-        }
-        break;
-      case 'transactionTimeout':
-        if (value !== undefined && (typeof value !== 'number' || value <= 0)) {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            configKey: 'transactionTimeout',
-            reason: 'Must be a positive number',
-          });
-        }
-        break;
-      case 'healthCheckInterval':
-        if (value !== undefined && (typeof value !== 'number' || value <= 0)) {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            configKey: 'healthCheckInterval',
-            reason: 'Must be a positive number',
-          });
-        }
-        break;
-      case 'maxConsecutiveErrors':
-        if (
-          value !== undefined &&
-          (typeof value !== 'number' || value < 1 || !Number.isInteger(value))
-        ) {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            configKey: 'maxConsecutiveErrors',
-            reason: 'Must be a positive integer',
-          });
-        }
-        break;
-      case 'minConnections':
-        if (
-          value !== undefined &&
-          (typeof value !== 'number' || value < 0 || !Number.isInteger(value))
-        ) {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            configKey: 'minConnections',
-            reason: 'Must be a non-negative integer',
-          });
-        }
-        break;
-      case 'maxConnections':
-        if (
-          value !== undefined &&
-          (typeof value !== 'number' || value < 1 || !Number.isInteger(value))
-        ) {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            configKey: 'maxConnections',
-            reason: 'Must be a positive integer',
-          });
-        }
-        break;
-      case 'acquireTimeout':
-        if (value !== undefined && (typeof value !== 'number' || value <= 0)) {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            configKey: 'acquireTimeout',
-            reason: 'Must be a positive number',
-          });
-        }
-        break;
-      case 'idleTimeout':
-        if (value !== undefined && (typeof value !== 'number' || value <= 0)) {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            engine: this.Engine,
-            name: this.name,
-            configKey: 'idleTimeout',
-            reason: 'Must be a positive number',
-          });
-        }
-        break;
-    }
-    return super._processOption(key, value) as O[K];
   }
 
   /**
-   * Processes and validates a query before execution.
+   * Disconnect from the database.
+   * Idempotent - returns early if already closed.
+   * Emits warning if disconnecting while BUSY.
+   * Updates status and emits disconnect/error events.
    *
-   * First standardizes the query format (can be overridden by engines),
-   * then validates parameter bindings and ensures all required parameters
-   * are provided for :param: placeholders.
-   *
-   * @param query - Raw query object to process
-   * @returns Processed query with validated parameters
-   *
-   * @throws {@link DAMEngineError} QUERY_MISSING_PARAMETERS - When required parameters are missing
-   *
-   * @example
-   * ```typescript
-   * const processed = this._processQuery({
-   *   sql: 'SELECT * FROM users WHERE id = :userId:',
-   *   params: { userId: 123 }
-   * });
-   * // Result: { sql: 'SELECT * FROM users WHERE id = :userId:;', params: { userId: 123 } }
-   * ```
+   * @throws {DAMEngineError} DISCONNECTION_FAILED if disconnect fails
+   * @emits warn - If disconnecting while engine is BUSY
+   * @emits disconnect - On successful disconnection
+   * @emits error - On disconnection failure
    */
-  protected _processQuery(query: EngineQuery): EngineQuery {
-    // First standardize the query (can be overridden by engines)
-    const standardized = this._standardizeQuery(query);
-
-    // Then validate parameters using the original SQL format
-    this._validateQueryParameters(query);
-
-    return standardized;
+  public async disconnect(): Promise<void> {
+    if (this.status === 'CLOSED') {
+      return;
+    }
+    if (this.status === 'WAITING') {
+      this.emit(
+        'warn',
+        this.instanceId,
+        'Disconnect called while engine is BUSY',
+      );
+    }
+    try {
+      await this._disconnect();
+      this._status = 'CLOSED';
+      this.emit('disconnect', this.instanceId);
+    } catch (e) {
+      let error: DAMEngineError;
+      if (e instanceof DAMEngineError) {
+        error = e;
+      } else {
+        error = new DAMEngineError('DISCONNECTION_FAILED', {
+          instanceId: this.instanceId,
+        }, e as Error);
+      }
+      this.emit('error', this.instanceId, error);
+      throw error;
+    }
   }
+  //#region Abstract Methods
+  /**
+   * Abstract method - Connect to the database.
+   * Implementations should establish connection and initialize pools.
+   *
+   * @abstract
+   * @returns Promise that resolves when connection is established
+   * @throws {Error} Implementation-specific connection errors
+   */
+  protected abstract _connect(): Promise<void> | void;
 
   /**
-   * Standardizes query format for the specific database engine.
+   * Abstract method - Disconnect from the database.
+   * Implementations should close connections and clean up pools.
    *
-   * Base implementation normalizes SQL and keeps :param: format.
-   * Engines should override this to convert to their specific parameter format
-   * (e.g., PostgreSQL uses $1, $2; MySQL uses ?).
+   * @abstract
+   * @returns Promise that resolves when disconnection is complete
+   * @throws {Error} Implementation-specific disconnection errors
+   */
+  protected abstract _disconnect(): Promise<void> | void;
+
+  /**
+   * Abstract method - Update engine status based on pool state.
+   * Implementations must check pool availability and update _status accordingly.
+   * Should transition between READY and WAITING states based on pool exhaustion.
+   * May emit warn events when entering WAITING state.
    *
-   * @param query - Query to standardize
-   * @returns Query in engine-specific format
-   * @protected
+   * @abstract
+   * @returns void
+   */
+  protected abstract _updatePoolStatus(): void;
+  //#endregion Abstract Methods
+  //#endregion Connection
+
+  //#region Query Execution
+
+  /**
+   * Maps transaction/query IDs to database clients.
+   * Used for transaction isolation and client tracking.
+   * Implementations must define the concrete client type.
+   */
+  protected abstract _clientMap: Map<string, unknown>;
+
+  /**
+   * Tracks transaction state for idempotence.
+   * States: 'ACTIVE' | 'COMMITTED' | 'ROLLBACK' | 'TIMEOUT'
+   * Cleaned up (deleted) when transaction ends.
+   */
+  protected _transactionState: Map<
+    string,
+    EngineTransactionStatus
+  > = new Map();
+
+  /**
+   * Stores timeout handles for active transactions.
+   * Used to implement automatic rollback after timeout.
+   * Maps transactionId → setTimeout handle.
+   */
+  protected _transactionTimeoutMap: Map<string, number> = new Map();
+
+  /**
+   * Standardizes a query by:
+   * 1. Trimming whitespace and ensuring semicolon termination
+   * 2. Validating all required parameters are provided
+   * 3. Converting :param: placeholders to engine-specific format
+   *
+   * @param query - The query to standardize
+   * @returns The standardized query with engine-specific placeholder format
+   * @throws {DAMEngineError} MISSING_PARAMETERS if required parameters are missing
    */
   protected _standardizeQuery(query: EngineQuery): EngineQuery {
     const sql = query.sql.trim().replace(/;$/, '') + ';';
-    return { sql, params: query.params, transactionId: query.transactionId };
-  }
-
-  /**
-   * Validates that all required parameters are provided for :param: placeholders.
-   *
-   * @param query - Query to validate
-   * @throws {@link DAMEngineError} QUERY_MISSING_PARAMETERS - When required parameters are missing
-   * @private
-   */
-  private _validateQueryParameters(query: EngineQuery): void {
     const keys = Object.keys(query.params || {});
     const missing: string[] = [];
-    const matches = query.sql.match(/:(\w+):/g);
-
+    const matches = sql.match(/:(\w+):/g);
     if (matches !== null) {
       for (const match of matches) {
         const key = match.substring(1, match.length - 1);
@@ -936,252 +279,1192 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
         }
       }
     }
-
     if (missing.length > 0) {
-      throw new DAMEngineError('QUERY_MISSING_PARAMETERS', {
+      throw new DAMEngineError('MISSING_PARAMETERS', {
         instanceId: this.instanceId,
-        engine: this.Engine,
-        name: this.name,
-        query,
         missing: missing.join(', '),
+      });
+    }
+    // Replace :param: with actual param placeholder depending on engine
+    query.sql = sql.replaceAll(/:(\w+):/g, (_full, key) => {
+      if (this.Capabilities.parameterReplacement) {
+        return `${this.Capabilities.parameterReplacement.prefix}${key}${this.Capabilities.parameterReplacement.suffix}`;
+      }
+      return key;
+    });
+    return query;
+  }
+
+  /**
+   * Execute a single query with comprehensive tracking.
+   *
+   * Features:
+   * - Automatic connection establishment
+   * - Query standardization and validation
+   * - Timing measurement and slow query detection
+   * - Statistics tracking
+   * - Auto-rollback on failure (if in transaction and autoRollbackOnFailure enabled)
+   * - Event emission for monitoring
+   *
+   * @template R - The result row type (defaults to generic Record)
+   * @param query - The query to execute
+   * @returns Query result with data, count, timing, and metadata
+   * @throws {DAMEngineError} NO_CONNECTION if connection unavailable
+   * @throws {DAMEngineError} QUERY_EXECUTION_FAILED on execution error
+   * @emits query - Emitted for every query execution
+   * @emits slowQuery - Emitted if query exceeds slowQueryThreshold
+   */
+  public async execute<
+    R extends Record<string, unknown> = Record<string, unknown>,
+  >(
+    query: EngineQuery,
+  ): Promise<EngineQueryResult<R>> {
+    await this.connect();
+    if (this.status === 'CLOSED') {
+      throw new DAMEngineError('NO_CONNECTION', {
+        instanceId: this.instanceId,
+      });
+    }
+    query = this._standardizeQuery(query);
+
+    // Validate transaction exists if transactionId is provided
+    if (query.transactionId && !this._clientMap.has(query.transactionId)) {
+      throw new DAMEngineError('TRANSACTION_NOT_FOUND', {
+        instanceId: this.instanceId,
+        transactionId: query.transactionId,
+      });
+    }
+
+    let waiting: boolean = false;
+    if (this.status === 'WAITING') {
+      this._poolStats.waiting += 1;
+      waiting = true;
+      this.emit(
+        'warn',
+        this.instanceId,
+        'Executing query while engine is in WAITING state',
+      );
+    }
+    const startTime = performance.now();
+    const queryResult: EngineQueryResult<R> = {
+      id: this._idGenerator('query'),
+      count: 0,
+      data: [],
+      isSlow: false,
+      time: 0,
+      query: query,
+      transactionId: query.transactionId,
+    };
+    try {
+      const result = await this._execute<R>(query);
+      const endTime = performance.now();
+      queryResult.data = result.data;
+      queryResult.count = result.count;
+      queryResult.time = endTime - startTime;
+      queryResult.isSlow = queryResult.time / 1000 >
+        (this.getOption('slowQueryThreshold') || 0);
+      this._logQuery(queryResult);
+      this.emit('query', this.instanceId, queryResult);
+      if (queryResult.isSlow) {
+        this.emit('slowQuery', this.instanceId, queryResult);
+      }
+      this._updatePoolStatus();
+      return queryResult;
+    } catch (e) {
+      let error: DAMEngineError;
+      if (e instanceof DAMEngineError) {
+        error = e;
+      } else {
+        error = new DAMEngineError('QUERY_EXECUTION_FAILED', {
+          instanceId: this.instanceId,
+          query: query,
+        }, e as Error);
+      }
+      // If it is in transaction, rollback the transaction
+      if (
+        query.transactionId && this.getOption('autoRollbackOnFailure') === true
+      ) {
+        try {
+          await this.rollbackTransaction(query.transactionId);
+        } catch {
+          // Ignore rollback errors
+        }
+      }
+      this._logFailedQuery();
+      throw error;
+    } finally {
+      if (waiting) {
+        this._poolStats.waiting -= 1;
+      }
+    }
+  }
+
+  /**
+   * Execute multiple queries
+   *
+   * Behavior:
+   * - Executes queries sequentially
+   * - Halts on first error
+   * - Set transaction id to run in transaction and use commit/rollback post execution
+   *
+   * @param queries - Array of queries to execute sequentially
+   * @throws {DAMEngineError} NO_CONNECTION if connection unavailable
+   * @throws {DAMEngineError} QUERY_EXECUTION_FAILED if any query fails
+   * @emits query, slowQuery - Same emissions as execute() for each query
+   */
+  public async batchExecute(queries: EngineQuery[]): Promise<void> {
+    await this.connect();
+    if (this.status === 'CLOSED') {
+      throw new DAMEngineError('NO_CONNECTION', {
+        instanceId: this.instanceId,
+      });
+    }
+    for (const query of queries) {
+      try {
+        await this.execute(query);
+      } catch (e) {
+        if (e instanceof DAMEngineError) {
+          throw e;
+        } else {
+          throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
+            instanceId: this.instanceId,
+            query: query,
+          }, e as Error);
+        }
+      }
+    }
+  }
+
+  //#region Transactions
+
+  /**
+   * Begin a new transaction and return a unique transaction ID.
+   *
+   * Behavior:
+   * - Checks engine supports transactions
+   * - Establishes connection if needed
+   * - Delegates to implementation's _beginTransaction()
+   * - Sets transaction state to 'ACTIVE'
+   * - Sets up automatic timeout with rollback
+   * - Emits transactionBegin event
+   *
+   * @param options - Transaction options (timeout, isolation level, etc.)
+   * @returns Unique transaction identifier string
+   * @throws {DAMEngineError} UNSUPPORTED_OPERATION if engine doesn't support transactions
+   * @throws {DAMEngineError} NO_CONNECTION if connection unavailable
+   * @throws {DAMEngineError} TRANSACTION_OPERATION_ERROR on begin failure
+   * @emits transactionBegin - On successful transaction start
+   */
+  public async beginTransaction(
+    options?: EngineTransactionOptions,
+  ): Promise<string> {
+    if (this.Capabilities.transactions === false) {
+      throw new DAMEngineError('UNSUPPORTED_OPERATION', {
+        instanceId: this.instanceId,
+        operation: 'Transactions',
+      });
+    }
+    await this.connect();
+    if (this.status === 'CLOSED') {
+      throw new DAMEngineError('NO_CONNECTION', {
+        instanceId: this.instanceId,
+      });
+    }
+    try {
+      const transactionId = options?.name ?? this._idGenerator('tx');
+      await this._beginTransaction(transactionId);
+      this._transactionState.set(transactionId, 'ACTIVE');
+      this._setTransactionTimeout(transactionId, options?.timeout);
+      this.emit('transactionBegin', this.instanceId, transactionId);
+      this._updatePoolStatus();
+      return transactionId;
+    } catch (e) {
+      let error: DAMEngineError;
+      if (e instanceof DAMEngineError) {
+        error = e;
+      } else {
+        error = new DAMEngineError('TRANSACTION_OPERATION_ERROR', {
+          instanceId: this.instanceId,
+          operation: 'beginTransaction',
+        }, e as Error);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Commit a transaction with idempotence handled by AbstractEngine.
+   *
+   * Idempotence guarantees:
+   * - Returns silently if transaction already ended (COMMITTED/ROLLBACK/TIMEOUT)
+   * - Returns silently if transaction never existed
+   * - Safe to call multiple times
+   * - Safe to call after timeout
+   *
+   * Behavior:
+   * - Checks idempotence conditions first
+   * - Clears transaction timeout
+   * - Delegates to implementation's _commitTransaction()
+   * - Sets state to 'COMMITTED' then deletes state (cleanup)
+   * - Emits transactionCommit event
+   *
+   * Implementations only need to execute COMMIT and release client.
+   *
+   * @param transactionId - The transaction to commit
+   * @throws {DAMEngineError} UNSUPPORTED_OPERATION if engine doesn't support transactions
+   * @throws {DAMEngineError} NO_CONNECTION if connection unavailable
+   * @throws {DAMEngineError} TRANSACTION_OPERATION_ERROR on commit failure
+   * @emits transactionCommit - On successful commit
+   */
+  public async commitTransaction(transactionId: string): Promise<void> {
+    if (this.Capabilities.transactions === false) {
+      throw new DAMEngineError('UNSUPPORTED_OPERATION', {
+        instanceId: this.instanceId,
+        operation: 'Transactions',
+      });
+    }
+
+    // IDEMPOTENCE CHECK 1: Already ended?
+    const state = this._transactionState.get(transactionId);
+    if (state === 'ROLLBACK' || state === 'COMMITTED' || state === 'TIMEOUT') {
+      return; // Already ended - idempotent success
+    }
+
+    // IDEMPOTENCE CHECK 2: Transaction never existed?
+    if (!this._clientMap.has(transactionId)) {
+      return; // Never existed - idempotent success
+    }
+
+    await this.connect();
+    if (this.status === 'CLOSED') {
+      throw new DAMEngineError('NO_CONNECTION', {
+        instanceId: this.instanceId,
+      });
+    }
+
+    this._clearTransactionTimeout(transactionId);
+    try {
+      await this._commitTransaction(transactionId);
+      this._transactionState.set(transactionId, 'COMMITTED');
+      this.emit('transactionCommit', this.instanceId, transactionId);
+      this._updatePoolStatus();
+    } catch (e) {
+      let error: DAMEngineError;
+      if (e instanceof DAMEngineError) {
+        error = e;
+      } else {
+        error = new DAMEngineError('TRANSACTION_OPERATION_ERROR', {
+          instanceId: this.instanceId,
+          transactionId: transactionId,
+          operation: 'commitTransaction',
+        }, e as Error);
+      }
+      throw error;
+    } finally {
+      this._transactionState.delete(transactionId);
+    }
+  }
+
+  /**
+   * Rollback a transaction with idempotence handled by AbstractEngine.
+   *
+   * Idempotence guarantees:
+   * - Returns silently if transaction already ended (COMMITTED/ROLLBACK/TIMEOUT)
+   * - Returns silently if transaction never existed
+   * - Safe to call multiple times
+   * - Safe to call after timeout or commit
+   *
+   * Behavior:
+   * - Checks idempotence conditions first
+   * - Clears transaction timeout
+   * - Delegates to implementation's _rollbackTransaction()
+   * - Sets state to 'ROLLBACK' then deletes state (cleanup)
+   * - Emits transactionRollback event
+   *
+   * Implementations only need to execute ROLLBACK and release client.
+   *
+   * @param transactionId - The transaction to rollback
+   * @throws {DAMEngineError} UNSUPPORTED_OPERATION if engine doesn't support transactions
+   * @throws {DAMEngineError} NO_CONNECTION if connection unavailable
+   * @throws {DAMEngineError} TRANSACTION_OPERATION_ERROR on rollback failure
+   * @emits transactionRollback - On successful rollback
+   */
+  public async rollbackTransaction(transactionId: string): Promise<void> {
+    if (this.Capabilities.transactions === false) {
+      throw new DAMEngineError('UNSUPPORTED_OPERATION', {
+        instanceId: this.instanceId,
+        operation: 'Transactions',
+      });
+    }
+
+    // IDEMPOTENCE CHECK 1: Already ended?
+    const state = this._transactionState.get(transactionId);
+    if (state === 'ROLLBACK' || state === 'COMMITTED' || state === 'TIMEOUT') {
+      return; // Already ended - idempotent success
+    }
+
+    // IDEMPOTENCE CHECK 2: Transaction never existed?
+    if (!this._clientMap.has(transactionId)) {
+      return; // Never existed - idempotent success
+    }
+
+    await this.connect();
+    if (this.status === 'CLOSED') {
+      throw new DAMEngineError('NO_CONNECTION', {
+        instanceId: this.instanceId,
+      });
+    }
+
+    this._clearTransactionTimeout(transactionId);
+    try {
+      await this._rollbackTransaction(transactionId);
+      this._transactionState.set(transactionId, 'ROLLBACK');
+      this.emit('transactionRollback', this.instanceId, transactionId);
+      this._updatePoolStatus();
+    } catch (e) {
+      let error: DAMEngineError;
+      if (e instanceof DAMEngineError) {
+        error = e;
+      } else {
+        error = new DAMEngineError('TRANSACTION_OPERATION_ERROR', {
+          instanceId: this.instanceId,
+          transactionId: transactionId,
+          operation: 'rollbackTransaction',
+        }, e as Error);
+      }
+      throw error;
+    } finally {
+      this._transactionState.delete(transactionId);
+    }
+  }
+
+  /**
+   * Rollback all active transactions.
+   *
+   * Behavior:
+   * - Iterates through all active transactions in _clientMap
+   * - Calls rollbackTransaction() for each (idempotent)
+   * - Silently ignores any rollback errors
+   * - Useful for graceful shutdown or cleanup
+   *
+   * @returns Promise that resolves when all rollbacks attempted
+   */
+  public async rollbackAllTransactions(): Promise<void> {
+    const transactionIds = Array.from(this._clientMap.keys());
+    for (const transactionId of transactionIds) {
+      try {
+        await this.rollbackTransaction(transactionId);
+      } catch {
+        // Ignore rollback errors
+      }
+    }
+  }
+
+  /**
+   * Create a transaction helper object with convenient methods.
+   *
+   * Provides:
+   * - id: Transaction identifier
+   * - commit(): Commit the transaction
+   * - rollback(): Rollback the transaction
+   * - execute(query): Execute query within this transaction
+   *
+   * Simplifies transaction usage by eliminating need to manually track transaction ID.
+   *
+   * @returns Transaction helper object
+   * @throws {DAMEngineError} Same errors as beginTransaction()
+   * @example
+   * const tx = await engine.transaction();
+   * try {
+   *   await tx.execute({sql: "UPDATE users SET ...", params: {}});
+   *   await tx.commit();
+   * } catch (e) {
+   *   await tx.rollback();
+   *   throw e;
+   * }
+   */
+  public async transaction() {
+    const id = await this.beginTransaction();
+    return {
+      id: id,
+      commit: async () => {
+        await this.commitTransaction(id);
+      },
+      rollback: async () => {
+        await this.rollbackTransaction(id);
+      },
+      execute: <
+        R extends Record<string, unknown> = Record<string, unknown>,
+      >(
+        query: EngineQuery,
+      ): Promise<EngineQueryResult<R>> => {
+        query.transactionId = id;
+        return this.execute<R>(query);
+      },
+    };
+  }
+
+  /**
+   * Set up automatic transaction timeout with auto-rollback.
+   *
+   * Behavior:
+   * - Uses provided timeout or falls back to transactionTimeout option (default 120s)
+   * - Clears any existing timeout first
+   * - Creates setTimeout handler that:
+   *   1. Sets transaction state to 'TIMEOUT'
+   *   2. Calls rollbackTransaction() (idempotent, succeeds silently)
+   *   3. Emits 'transactionTimeout' event
+   * - Rollback errors are ignored (transaction may already be ended)
+   *
+   * @param transactionId - The transaction to set timeout for
+   * @param timeout - Timeout in seconds (optional, uses option default if not provided)
+   * @throws {DAMEngineError} TRANSACTION_NOT_FOUND if transaction not in _clientMap
+   * @emits transactionTimeout - When timeout triggers and rollback initiated
+   */
+  protected _setTransactionTimeout(
+    transactionId: string,
+    timeout?: number,
+  ): void {
+    if (this._clientMap.has(transactionId)) {
+      timeout = timeout ?? this.getOption('transactionTimeout') ?? 120;
+      this._clearTransactionTimeout(transactionId);
+      this._transactionTimeoutMap.set(
+        transactionId,
+        setTimeout(async () => {
+          try {
+            this._transactionState.set(transactionId, 'TIMEOUT');
+            await this.rollbackTransaction(transactionId);
+            this.emit(
+              'transactionTimeout',
+              this.instanceId,
+              transactionId,
+            );
+          } catch {
+            // Ignore rollback errors - idempotent success
+          }
+        }, timeout * 1000),
+      );
+    } else {
+      throw new DAMEngineError('TRANSACTION_NOT_FOUND', {
+        instanceId: this.instanceId,
+        transactionId: transactionId,
       });
     }
   }
 
   /**
-   * Initializes connection pool if pool-related options are configured.
+   * Clear any active timeout for a transaction.
+   * Called before commit/rollback to prevent timeout handler from firing after transaction ends.
    *
-   * Sets the _poolEnabled flag if any pool options are present:
-   * - minConnections
-   * - maxConnections
-   * - acquireTimeout
-   * - idleTimeout
+   * @param transactionId - The transaction to clear timeout for
    */
-  protected _initializePool(): void {
-    // Pool is enabled if any pool-related options are set
-    if (
-      this.hasOption('minConnections') ||
-      this.hasOption('maxConnections') ||
-      this.hasOption('acquireTimeout') ||
-      this.hasOption('idleTimeout')
-    ) {
-      this._poolEnabled = true;
-    }
-  }
-
-  /**
-   * Sets up periodic health check monitoring if configured.
-   *
-   * Creates an interval timer that calls _performHealthCheck() at the
-   * specified healthCheckInterval. Emits error events when health checks fail.
-   */
-  protected _setupHealthMonitoring(): void {
-    const intervalSeconds = this.getOption('healthCheckInterval');
-    if (
-      intervalSeconds && typeof intervalSeconds === 'number' &&
-      intervalSeconds > 0
-    ) {
-      this._healthCheckInterval = setInterval(() => {
-        this._performHealthCheck().catch((error) => {
-          this.emit(
-            'error',
-            this.instanceId,
-            error instanceof DAMEngineError ? error : new DAMEngineError(
-              'HEALTH_CHECK_FAILED',
-              {
-                instanceId: this.instanceId,
-                engine: this.Engine,
-                name: this.name,
-                reason: error instanceof Error ? error.message : String(error),
-              },
-              error as Error,
-            ),
-          );
-        });
-      }, intervalSeconds * 1000) as unknown as number;
-    }
-  }
-
-  /**
-   * Performs a health check and tracks consecutive errors.
-   *
-   * Calls the abstract _healthCheck() method and manages error counting.
-   * Throws ENGINE_UNHEALTHY error when consecutive errors exceed threshold.
-   *
-   * @throws {@link DAMEngineError} ENGINE_UNHEALTHY - When consecutive errors exceed maxConsecutiveErrors
-   * @throws {@link DAMEngineError} HEALTH_CHECK_FAILED - When health check implementation fails
-   */
-  protected async _performHealthCheck(): Promise<void> {
-    try {
-      await this._healthCheck();
-      this._consecutiveErrors = 0;
-      this._lastHealthCheck = new Date();
-    } catch (error) {
-      this._consecutiveErrors++;
-
-      // Check if engine is unhealthy after multiple failures
-      const maxErrors = this.getOption('maxConsecutiveErrors');
-      const unhealthyThreshold = typeof maxErrors === 'number' ? maxErrors : 5;
-      if (this._consecutiveErrors >= unhealthyThreshold) {
-        throw new DAMEngineError('ENGINE_UNHEALTHY', {
-          instanceId: this.instanceId,
-          engine: this.Engine,
-          name: this.name,
-          consecutiveErrors: this._consecutiveErrors,
-        }, error as Error);
-      }
-
-      throw error instanceof DAMEngineError ? error : new DAMEngineError(
-        'HEALTH_CHECK_FAILED',
-        {
-          instanceId: this.instanceId,
-          engine: this.Engine,
-          name: this.name,
-          reason: error instanceof Error ? error.message : String(error),
-        },
-        error as Error,
+  protected _clearTransactionTimeout(transactionId: string): void {
+    if (this._transactionTimeoutMap.has(transactionId)) {
+      clearTimeout(
+        this._transactionTimeoutMap.get(transactionId),
       );
+      this._transactionTimeoutMap.delete(transactionId);
     }
   }
-
-  /**
-   * Updates connection pool statistics.
-   *
-   * Merges provided statistics with current pool stats. Used by concrete
-   * implementations to report pool metrics for monitoring.
-   *
-   * @param stats - Partial pool statistics to update
-   */
-  protected _updatePoolStats(stats: Partial<EnginePoolStats>): void {
-    this._poolStats = { ...this._poolStats, ...stats };
-  }
-  //#endregion Protected Methods
 
   //#region Abstract Methods
   /**
-   * Establishes the actual database connection.
-   * Must be implemented by concrete engine classes.
+   * Abstract method - Begin a transaction.
    *
-   * @throws Should throw appropriate errors for connection failures
+   * Called by AbstractEngine.beginTransaction() after validation.
+   * Implementations should:
+   * - Reserve a client from the pool
+   * - Execute BEGIN/START TRANSACTION
+   * - Store client in _clientMap with generated transaction ID
+   *
+   * AbstractEngine handles state tracking and timeout setup.
+   *
+   * @abstract
+   * @param options - Transaction options (timeout, isolation level, etc.)
+   * @throws {Error} Implementation-specific transaction errors
    */
-  protected abstract _connect(): void | Promise<void>;
+  protected abstract _beginTransaction(
+    transactionId: string,
+  ): Promise<void> | void;
 
   /**
-   * Closes the database connection and cleanup resources.
-   * Must be implemented by concrete engine classes.
+   * Abstract method - Commit a transaction.
    *
-   * @throws Should throw appropriate errors for cleanup failures
+   * Called by AbstractEngine.commitTransaction() after idempotence checks.
+   * Implementations should:
+   * - Execute COMMIT
+   * - Release the client back to pool
+   * - Remove transaction ID from _clientMap
+   *
+   * AbstractEngine handles:
+   * - Idempotence (won't call if already ended)
+   * - State updates and cleanup
+   * - Timeout clearing
+   *
+   * @abstract
+   * @param transactionId - The transaction to commit
+   * @throws {Error} Implementation-specific commit errors
    */
-  protected abstract _close(): void | Promise<void>;
+  protected abstract _commitTransaction(
+    transactionId: string,
+  ): Promise<void> | void;
 
   /**
-   * Executes the actual database query.
-   * Must be implemented by concrete engine classes.
+   * Abstract method - Rollback a transaction.
    *
-   * @template R - Result record type
-   * @param query - Processed query with validated parameters
-   * @returns Promise with query results and count
+   * Called by AbstractEngine.rollbackTransaction() after idempotence checks.
+   * Implementations should:
+   * - Execute ROLLBACK
+   * - Release the client back to pool
+   * - Remove transaction ID from _clientMap
    *
-   * @throws Should throw appropriate errors for query execution failures
+   * AbstractEngine handles:
+   * - Idempotence (won't call if already ended)
+   * - State updates and cleanup
+   * - Timeout clearing
+   *
+   * @abstract
+   * @param transactionId - The transaction to rollback
+   * @throws {Error} Implementation-specific rollback errors
    */
-  protected abstract _executeQuery<
+  protected abstract _rollbackTransaction(
+    transactionId: string,
+  ): Promise<void> | void;
+  //#endregion Abstract Methods
+
+  //#endregion Transactions
+
+  /**
+   * Check if engine is connected and responsive.
+   * Performs lightweight connectivity check.
+   *
+   * @returns True if connected and responsive, false otherwise
+   */
+  public async ping(): Promise<boolean> {
+    await this.connect();
+    if (this.status === 'CLOSED') {
+      return false;
+    }
+    try {
+      return await this._ping();
+    } catch {
+      return false;
+    }
+  }
+
+  //#region Abstract Methods
+  /**
+   * Abstract method - Execute query against database.
+   *
+   * Called by AbstractEngine.execute() after connection, validation, and standardization.
+   * Implementations should:
+   * - Execute the query using appropriate client
+   * - Handle transactionId if present (use transaction-specific client)
+   * - Return results with data array and row count
+   *
+   * AbstractEngine handles:
+   * - Connection establishment
+   * - Query standardization
+   * - Timing measurement
+   * - Statistics tracking
+   * - Event emission
+   *
+   * @abstract
+   * @template R - The result row type
+   * @param query - The standardized query to execute
+   * @returns Query result with data array and count
+   * @throws {Error} Implementation-specific execution errors
+   */
+  protected abstract _execute<
     R extends Record<string, unknown> = Record<string, unknown>,
   >(
     query: EngineQuery,
-  ): { data: R[]; count: number } | Promise<{ data: R[]; count: number }>;
+  ): Promise<{ data: R[]; count: number }> | { data: R[]; count: number };
 
   /**
-   * Begins a new database transaction.
-   * Must be implemented by concrete engine classes.
+   * Abstract method - Check database connectivity.
    *
-   * @param options - Transaction options (timeout, isolation level, etc.)
-   * @param transactionId - The transaction ID to use for this transaction
-   * @throws Should throw appropriate errors for transaction start failures
+   * Implementations should perform lightweight health check:
+   * - Execute simple query (e.g., SELECT 1, PING, etc.)
+   * - Return true if responsive, false otherwise
+   * - Should NOT throw errors - return false instead
+   *
+   * Used for health monitoring and readiness checks.
+   *
+   * @abstract
+   * @returns True if database is responsive, false otherwise
    */
-  protected abstract _beginTransaction(
-    options?: EngineTransactionOptions,
-  ): void | Promise<void>;
+  protected abstract _ping(): Promise<boolean> | boolean;
 
-  /**
-   * Commits the current transaction.
-   * Must be implemented by concrete engine classes.
-   *
-   * @param transactionId - The transaction ID to commit (optional for non-pooled engines)
-   * @throws Should throw appropriate errors for commit failures
-   */
-  protected abstract _commitTransaction(
-    transactionId?: string,
-  ): void | Promise<void>;
-
-  /**
-   * Rolls back the current transaction.
-   * Must be implemented by concrete engine classes.
-   *
-   * @param transactionId - The transaction ID to rollback (optional for non-pooled engines)
-   * @throws Should throw appropriate errors for rollback failures
-   */
-  protected abstract _rollbackTransaction(
-    transactionId?: string,
-  ): void | Promise<void>;
-
-  /**
-   * Rolls back all active transactions.
-   * Must be implemented by concrete engine classes.
-   * Used when closing the engine to clean up any active transactions.
-   *
-   * @throws Should throw appropriate errors for rollback failures
-   */
-  protected abstract _rollbackAllTransactions(): void | Promise<void>;
-
-  /**
-   * Check if there are any active transactions.
-   * Must be implemented by concrete engine classes.
-   *
-   * @returns true if there are active transactions, false otherwise
-   */
-  protected abstract _hasActiveTransactions(): boolean;
-
-  /**
-   * Performs engine-specific health check.
-   * Must be implemented by concrete engine classes.
-   * Should test basic connectivity and functionality.
-   *
-   * @throws Should throw appropriate errors when health check fails
-   *
-   * @example Simple health check
-   * ```typescript
-   * protected async _healthCheck(): Promise<void> {
-   *   await this.client.query('SELECT 1');
-   * }
-   * ```
-   */
-  protected abstract _healthCheck(): void | Promise<void>;
-
-  /**
-   * Gets the server/database version information.
-   * Must be implemented by concrete engine classes.
-   * Should return a version string in a consistent format.
-   *
-   * @returns Server version string
-   * @throws Should throw appropriate errors when version cannot be retrieved
-   *
-   * @example PostgreSQL implementation
-   * ```typescript
-   * protected async _getServerVersion(): Promise<string> {
-   *   const result = await this.client.query('SELECT version()');
-   *   return result.rows[0].version;
-   * }
-   * ```
-   */
-  protected abstract _getServerVersion(): string | Promise<string>;
-
-  /**
-   * Gets connection pool statistics.
-   * Must be implemented by concrete engine classes.
-   * Should return null if pooling is not supported.
-   *
-   * @returns Pool statistics or null
-   */
-  protected abstract _getPoolStats(): Record<string, number> | null;
   //#endregion Abstract Methods
+
+  //#endregion Query Execution
+
+  //#region Stats
+  /**
+   * Query statistics tracking.
+   * Automatically updated by _logQuery() and _logFailedQuery().
+   */
+  protected _queryStats: EngineQueryStats = {
+    averageExecutionTimeMs: 0,
+    totalQueries: 0,
+    slowQueries: 0,
+    failedQueries: 0,
+    successfulQueries: 0,
+  };
+
+  /**
+   * Connection pool statistics.
+   * Should be updated by implementations when pool state changes.
+   */
+  protected _poolStats: EnginePoolStats = {
+    total: 0,
+    idle: 0,
+    active: 0,
+    waiting: 0,
+  };
+
+  /**
+   * Get a copy of current connection pool statistics.
+   * Returns snapshot to prevent external mutation.
+   *
+   * @returns Pool stats including total, idle, active connections and waiting requests
+   */
+  public get poolStats(): EnginePoolStats {
+    this._updatePoolStatus();
+    return { ...this._poolStats };
+  }
+
+  /**
+   * Get a copy of current query statistics.
+   * Returns snapshot to prevent external mutation.
+   *
+   * @returns Query stats including totals, averages, slow queries, and failures
+   */
+  public get queryStats(): EngineQueryStats {
+    return { ...this._queryStats };
+  }
+
+  /**
+   * Get combined pool and query statistics.
+   *
+   * @returns Object containing both pool and query stats
+   */
+  public get stats(): EngineStats {
+    return {
+      pool: this.poolStats,
+      query: this.queryStats,
+    };
+  }
+
+  /**
+   * Log successful query statistics.
+   *
+   * Updates:
+   * - totalQueries counter
+   * - successfulQueries counter
+   * - averageExecutionTimeMs (rolling average)
+   * - slowQueries counter (if query exceeded threshold)
+   *
+   * @param result - The successful query result with timing information
+   */
+  protected _logQuery(result: EngineQueryResult) {
+    const prevTotal = this._queryStats.totalQueries;
+    this._queryStats.totalQueries += 1;
+    this._queryStats.averageExecutionTimeMs =
+      (this._queryStats.averageExecutionTimeMs * prevTotal +
+        result.time) /
+      this._queryStats.totalQueries;
+    if (result.isSlow) {
+      this._queryStats.slowQueries += 1;
+    }
+    this._queryStats.successfulQueries += 1;
+  }
+
+  /**
+   * Log failed query statistics.
+   *
+   * Updates:
+   * - failedQueries counter
+   * - totalQueries counter
+   *
+   * Called when query execution throws an error.
+   */
+  protected _logFailedQuery() {
+    this._queryStats.failedQueries += 1;
+    this._queryStats.totalQueries += 1;
+  }
+  //#endregion Stats
+
+  /**
+   * Construct a new database engine instance.
+   *
+   * Sets up:
+   * - Connection name
+   * - Option defaults and overrides
+   * - ID generator function
+   * - Option validation
+   *
+   * Default options:
+   * - slowQueryThreshold: 0.5 seconds
+   * - idGenerator: ULID-based generator
+   * - transactionTimeout: 120 seconds
+   * - idleTimeoutSeconds: 180 seconds
+   *
+   * @param name - Connection name for this engine instance
+   * @param options - Engine-specific options and event handlers
+   * @param defaults - Default option values (merged with built-in defaults)
+   * @throws {DAMEngineError} INVALID_CONFIG_VALUE if option validation fails
+   */
+  constructor(
+    name: string,
+    options?: EventOptionKeys<O, EngineEvents>,
+    defaults?: Partial<O>,
+  ) {
+    super();
+    this.Name = name;
+    this._setOptions({
+      slowQueryThreshold: 0.5,
+      idGenerator: defaultIdGenerator,
+      transactionTimeout: 120,
+      idleTimeoutSeconds: 180,
+      autoRollbackOnFailure: true,
+      ...defaults,
+      ...options,
+    } as EventOptionKeys<O, EngineEvents>);
+    this._idGenerator = this.getOption('idGenerator')!;
+
+    // Process SSL certificate paths to load file contents
+    this._loadSslCertificates();
+  }
+
+  /**
+   * Load SSL certificate files into memory.
+   * Called automatically during construction if SSL options are provided.
+   *
+   * For SSL configuration:
+   * - If ssl.ca is a file path, loads the certificate content into _sslCaCertificate
+   * - If ssl.cert is a file path, loads the certificate content into _sslClientCertificate
+   * - If ssl.key is a file path, loads the key content into _sslClientKey
+   *
+   * @throws {DAMEngineError} FILE_READ_ERROR if certificate files cannot be read
+   * @protected
+   */
+  protected _loadSslCertificates(): void {
+    const ssl = this.getOption('ssl');
+    if (ssl && typeof ssl === 'object' && ssl !== null) {
+      // Load CA certificate if path provided
+      if (ssl.ca && typeof ssl.ca === 'string') {
+        try {
+          this._sslCaCertificate = Deno.readTextFileSync(ssl.ca);
+        } catch (e) {
+          if (e instanceof Deno.errors.NotFound) {
+            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+              instanceId: this.instanceId,
+              filePath: ssl.ca,
+              reason: 'Could not find CA certificate file',
+            }, e as Error);
+          } else if (
+            e instanceof Deno.errors.PermissionDenied ||
+            e instanceof Deno.errors.NotCapable
+          ) {
+            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+              instanceId: this.instanceId,
+              filePath: ssl.ca,
+              reason: 'Permission denied to read CA certificate file',
+            }, e as Error);
+          } else {
+            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+              instanceId: this.instanceId,
+              filePath: ssl.ca,
+              reason: e instanceof Error ? e.message : String(e),
+            }, e as Error);
+          }
+        }
+      }
+
+      // Load client certificate if path provided
+      if (ssl.cert && typeof ssl.cert === 'string') {
+        try {
+          this._sslClientCertificate = Deno.readTextFileSync(ssl.cert);
+        } catch (e) {
+          if (e instanceof Deno.errors.NotFound) {
+            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+              instanceId: this.instanceId,
+              filePath: ssl.cert,
+              reason: 'Could not find client certificate file',
+            }, e as Error);
+          } else if (
+            e instanceof Deno.errors.PermissionDenied ||
+            e instanceof Deno.errors.NotCapable
+          ) {
+            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+              instanceId: this.instanceId,
+              filePath: ssl.cert,
+              reason: 'Permission denied to read client certificate file',
+            }, e as Error);
+          } else {
+            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+              instanceId: this.instanceId,
+              filePath: ssl.cert,
+              reason: e instanceof Error ? e.message : String(e),
+            }, e as Error);
+          }
+        }
+      }
+
+      // Load client key if path provided
+      if (ssl.key && typeof ssl.key === 'string') {
+        try {
+          this._sslClientKey = Deno.readTextFileSync(ssl.key);
+        } catch (e) {
+          if (e instanceof Deno.errors.NotFound) {
+            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+              instanceId: this.instanceId,
+              filePath: ssl.key,
+              reason: 'Could not find certificate key',
+            }, e as Error);
+          } else if (
+            e instanceof Deno.errors.PermissionDenied ||
+            e instanceof Deno.errors.NotCapable
+          ) {
+            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+              instanceId: this.instanceId,
+              filePath: ssl.key,
+              reason: 'Permission denied to read certificate key',
+            }, e as Error);
+          } else {
+            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+              instanceId: this.instanceId,
+              filePath: ssl.key,
+              reason: e instanceof Error ? e.message : String(e),
+            }, e as Error);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Override to validate engine options during set/update.
+   *
+   * Validates:
+   * - idGenerator: Must be function returning string
+   * - slowQueryThreshold: 0-600 seconds
+   * - idleTimeoutSeconds: 0-1800 seconds
+   * - transactionTimeout: 0-120 seconds
+   * - autoRollbackOnFailure: Must be boolean
+   * - port: Must be positive integer
+   * - username/password/host/database: Must be non-empty strings
+   * - pool: Must have valid min/max with min ≤ max
+   * - ssl: Must be boolean or valid SSL config object
+   *
+   * @param key - The option key being validated
+   * @param value - The option value to validate
+   * @returns The validated value (unchanged)
+   * @throws {DAMEngineError} INVALID_CONFIG_VALUE if validation fails
+   */
+  protected override _processOption<K extends keyof EngineOptions>(
+    key: K,
+    value: O[K],
+  ): O[K] {
+    switch (key) {
+      case 'idGenerator':
+        if (!this._validateIdGenerator(value)) {
+          throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+            instanceId: this.instanceId,
+            option: key,
+            reason: 'must be a function that returns a string',
+          });
+        }
+        break;
+      case 'slowQueryThreshold':
+        if (!this._validateSlowQueryThreshold(value)) {
+          throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+            instanceId: this.instanceId,
+            option: key,
+            reason:
+              'must be a non-negative number less than or equal to 600 seconds',
+          });
+        }
+        break;
+      case 'idleTimeoutSeconds':
+        if (!this._validateIdleTimeoutSeconds(value)) {
+          throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+            instanceId: this.instanceId,
+            option: key,
+            reason:
+              'must be a non-negative number less than or equal to 1800 seconds',
+          });
+        }
+        break;
+      case 'transactionTimeout':
+        if (!this._validateTransactionTimeout(value)) {
+          throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+            instanceId: this.instanceId,
+            option: key,
+            reason:
+              'must be a non-negative number less than or equal to 120 seconds',
+          });
+        }
+        break;
+      case 'autoRollbackOnFailure':
+        if (typeof value !== 'boolean') {
+          throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+            instanceId: this.instanceId,
+            option: key,
+            reason: 'must be a boolean value',
+          });
+        }
+        break;
+      case 'port':
+        if (
+          typeof value !== 'number' || Number.isNaN(value) ||
+          value <= 0 || !Number.isInteger(value) || value > 65535
+        ) {
+          throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+            instanceId: this.instanceId,
+            option: key,
+            reason: 'must be a positive integer between 1 and 65535',
+          });
+        }
+        break;
+      case 'username':
+      case 'password':
+      case 'host':
+      case 'database':
+        if (typeof value !== 'string' || value.trim().length === 0) {
+          throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+            instanceId: this.instanceId,
+            option: key,
+            reason: 'must be a non-empty string',
+          });
+        }
+        break;
+      case 'pool':
+        if (!this._validatePoolOptions(value)) {
+          throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+            instanceId: this.instanceId,
+            option: key,
+            reason:
+              'must be an object with optional positive integer "max" and non-negative integer "min" greater than 1',
+          });
+        }
+        break;
+      case 'ssl':
+        if (!this._validateSecurityOptions(value)) {
+          throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+            instanceId: this.instanceId,
+            option: key,
+            reason:
+              'value must be a boolean or an object with optional string properties "ca", "cert", "key" and boolean "rejectUnauthorized"',
+          });
+        }
+        break;
+    }
+    return super._processOption(key, value) as O[K];
+  }
+
+  /**
+   * Type guard - Validate idGenerator option.
+   *
+   * Requirements:
+   * - Must be a function
+   * - Must return a string when called
+   *
+   * @param x - Value to validate
+   * @returns True if x is a valid idGenerator function
+   */
+  protected _validateIdGenerator(x: unknown): x is (prefix?: string) => string {
+    return typeof x === 'function' && typeof x() === 'string';
+  }
+
+  /**
+   * Type guard - Validate slowQueryThreshold option.
+   *
+   * Requirements:
+   * - Must be non-negative number
+   * - Must be ≤ 600 seconds (10 minutes)
+   *
+   * @param value - Value to validate
+   * @returns True if value is valid slowQueryThreshold
+   */
+  protected _validateSlowQueryThreshold(
+    value: unknown,
+  ): value is number {
+    if (this._validateTimeouts(value) !== true) {
+      return false;
+    }
+    // Cannot have value more than 10 minutes
+    if (value > 10 * 60) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Type guard - Validate idleTimeoutSeconds option.
+   *
+   * Requirements:
+   * - Must be non-negative number
+   * - Must be ≤ 1800 seconds (30 minutes)
+   *
+   * @param value - Value to validate
+   * @returns True if value is valid idleTimeoutSeconds
+   */
+  protected _validateIdleTimeoutSeconds(
+    value: unknown,
+  ): value is number {
+    if (this._validateTimeouts(value) !== true) {
+      return false;
+    }
+    // Cannot have value more than 30 minutes
+    if (value > 30 * 60) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Type guard - Validate transactionTimeout option.
+   *
+   * Requirements:
+   * - Must be non-negative number
+   * - Must be ≤ 120 seconds (2 minutes)
+   *
+   * @param value - Value to validate
+   * @returns True if value is valid transactionTimeout
+   */
+  protected _validateTransactionTimeout(
+    value: unknown,
+  ): value is number {
+    if (this._validateTimeouts(value) !== true) {
+      return false;
+    }
+    // Cannot have value more than 2 minutes
+    if (value > 2 * 60) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Type guard - Validate generic timeout value.
+   *
+   * Requirements:
+   * - Must be a number
+   * - Must not be NaN
+   * - Must be non-negative (≥ 0)
+   *
+   * @param value - Value to validate
+   * @returns True if value is a valid timeout
+   */
+  protected _validateTimeouts(
+    value: unknown,
+  ): value is number {
+    if (typeof value !== 'number' || Number.isNaN(value)) {
+      return false;
+    }
+    if (value < 0) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Type guard - Validate pool option.
+   *
+   * Requirements:
+   * - If provided, must be object (not null)
+   * - max: optional positive integer
+   * - min: optional positive integer ≥ 1
+   * - If both provided: min ≤ max
+   *
+   * @param value - Value to validate
+   * @returns True if value is valid pool option
+   */
+  protected _validatePoolOptions(
+    value: unknown,
+  ): value is EngineOptions['pool'] {
+    if (typeof value !== 'object' || value === null) {
+      return false;
+    }
+    const pool = value as EngineOptions['pool'];
+    if (pool === undefined) {
+      return true;
+    }
+    if (pool.max !== undefined) {
+      if (
+        typeof pool.max !== 'number' || Number.isNaN(pool.max) ||
+        pool.max <= 0 || !Number.isInteger(pool.max)
+      ) {
+        return false;
+      }
+    }
+    if (pool.min !== undefined) {
+      if (
+        typeof pool.min !== 'number' || Number.isNaN(pool.min) ||
+        pool.min < 1 || !Number.isInteger(pool.min)
+      ) {
+        return false;
+      }
+    }
+    // Ensure min <= max if both provided (BUG FIX)
+    if (
+      pool.min !== undefined && pool.max !== undefined && pool.min > pool.max
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Type guard - Validate ssl security option.
+   *
+   * Accepted formats:
+   * - boolean: true/false to enable/disable SSL
+   * - object with optional properties:
+   *   - ca: string (certificate authority cert path)
+   *   - cert: string (client certificate path)
+   *   - key: string (client key path)
+   *   - rejectUnauthorized: boolean (reject unauthorized certs)
+   * - null is rejected
+   * - undefined is accepted (no SSL config)
+   *
+   * @param value - Value to validate
+   * @returns True if value is valid ssl option
+   */
+  protected _validateSecurityOptions(
+    value: unknown,
+  ): value is EngineOptions['ssl'] {
+    if (typeof value !== 'boolean' && typeof value !== 'object') {
+      return false;
+    }
+    if (typeof value === 'boolean') {
+      return true;
+    }
+    if (value === null) {
+      return false; // BUG FIX: reject null objects
+    }
+    const ssl = value as Exclude<EngineOptions['ssl'], boolean>;
+    if (ssl === undefined) {
+      return true;
+    }
+    if (ssl.ca !== undefined && typeof ssl.ca !== 'string') {
+      return false;
+    }
+    if (ssl.cert !== undefined && typeof ssl.cert !== 'string') {
+      return false;
+    }
+    if (ssl.key !== undefined && typeof ssl.key !== 'string') {
+      return false;
+    }
+    if (
+      ssl.rejectUnauthorized !== undefined &&
+      typeof ssl.rejectUnauthorized !== 'boolean'
+    ) {
+      return false;
+    }
+    return true;
+  }
 }

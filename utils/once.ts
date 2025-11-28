@@ -180,7 +180,7 @@ export const once = <T extends (...args: any[]) => any>(fn: T): T => {
     if (!called) {
       called = true;
       try {
-        result = fn(...args) as ReturnType<T>;
+        result = fn(...args);
       } catch (e) {
         error = e;
         throw e;

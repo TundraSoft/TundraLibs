@@ -40,7 +40,7 @@ export class DateGuardian extends BaseGuardian<Date> {
           type: 'date',
         });
       }
-      if (isNaN(input.getTime())) {
+      if (Number.isNaN(input.getTime())) {
         throw new GuardianError('Date is invalid', {
           expected: 'valid Date',
           got: 'invalid Date',

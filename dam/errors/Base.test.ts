@@ -257,7 +257,7 @@ Deno.test(
           name: 'cache-with-special-chars!@#$%^&*()',
           engine: 'memory',
           path: '/path/to/cache/file.db',
-          regex: '\\w+\\d+',
+          regex: String.raw`\w+\d+`,
           unicode: '🚨 Error occurred 🚨',
         };
 

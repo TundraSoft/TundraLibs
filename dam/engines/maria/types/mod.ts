@@ -1,1 +1,1 @@
-export type { MariaDBEngineOptions } from './Options.ts';
+export type { MariaEngineOptions } from './Options.ts';

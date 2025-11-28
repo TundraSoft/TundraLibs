@@ -66,21 +66,18 @@ Deno.test({
 
     await t.step('error code coverage', async (u) => {
       const validCodes = [
-        'CONNECTION_FAILED',
-        'CONNECTION_TIMEOUT',
-        'QUERY_EXECUTION_FAILED',
-        'QUERY_TIMEOUT',
-        'QUERY_MISSING_PARAMETERS',
-        'TRANSACTION_COMMIT_FAILED',
-        'TRANSACTION_ROLLBACK_FAILED',
-        'TRANSACTION_NOT_ACTIVE',
-        'ENGINE_ALREADY_CONNECTED',
-        'ENGINE_NOT_CONNECTED',
-        'ENGINE_CLEANUP_FAILED',
-        'HEALTH_CHECK_FAILED',
-        'CONFIG_INVALID',
-        'POOL_CONNECTION_FAILED',
         'UNKNOWN_ERROR',
+        'UNSUPPORTED_OPERATION',
+        'INVALID_CONFIG_VALUE',
+        'MISSING_CONFIG_VALUE',
+        'CONNECTION_FAILED',
+        'DISCONNECTION_FAILED',
+        'NO_CONNECTION',
+        'MISSING_PARAMETERS',
+        'TRANSACTION_NOT_FOUND',
+        'DUPLICATE_TRANSACTION',
+        'TRANSACTION_OPERATION_ERROR',
+        'QUERY_EXECUTION_FAILED',
       ] as const;
 
       for (const code of validCodes) {
@@ -109,9 +106,10 @@ Deno.test({
 
       await u.step('should handle regular Error as cause', () => {
         const originalError = new TypeError('Invalid type');
-        const error = new DAMEngineError('CONFIG_INVALID', {
+        const error = new DAMEngineError('INVALID_CONFIG_VALUE', {
           ...mockMeta,
-          configKey: 'port',
+          key: 'port',
+          reason: 'Invalid type',
         }, originalError);
 
         asserts.assertEquals(error.cause, originalError);
@@ -126,7 +124,7 @@ Deno.test({
           level1,
         );
         const level3 = new DAMEngineError(
-          'ENGINE_NOT_CONNECTED',
+          'NO_CONNECTION',
           mockMeta,
           level2,
         );
@@ -147,7 +145,7 @@ Deno.test({
         const json = error.toJSON();
 
         asserts.assertEquals(json.name, 'DAMEngineError');
-        asserts.assertStringIncludes(json.message, 'Query execution failed');
+        asserts.assertStringIncludes(json.message, 'Failed to execute query');
         asserts.assertEquals((json.context as any).instanceId, 'test-instance');
         asserts.assertEquals(
           (json.context as any).query,
@@ -174,12 +172,11 @@ Deno.test({
       });
 
       await u.step('should serialize nested DAMEngineError causes', () => {
-        const innerError = new DAMEngineError('CONNECTION_TIMEOUT', {
+        const innerError = new DAMEngineError('CONNECTION_FAILED', {
           ...mockMeta,
-          timeout: 30,
         });
         const outerError = new DAMEngineError(
-          'ENGINE_NOT_CONNECTED',
+          'NO_CONNECTION',
           mockMeta,
           innerError,
         );
@@ -190,9 +187,8 @@ Deno.test({
         asserts.assertEquals((json.cause as any)?.name, 'DAMEngineError');
         asserts.assertStringIncludes(
           (json.cause as any)?.message,
-          'Connection to',
+          'Failed to connect',
         );
-        asserts.assertEquals((json.cause as any)?.context?.timeout, 30);
       });
     });
 
@@ -230,6 +226,8 @@ Deno.test({
         () => {
           const metaWithNulls = {
             ...mockMeta,
+            key: 'testKey',
+            reason: 'test reason',
             optionalField: undefined,
             nullField: null,
             emptyString: '',
@@ -237,7 +235,10 @@ Deno.test({
             falseBoolean: false,
           };
 
-          const error = new DAMEngineError('CONFIG_INVALID', metaWithNulls);
+          const error = new DAMEngineError(
+            'INVALID_CONFIG_VALUE',
+            metaWithNulls,
+          );
 
           asserts.assertEquals((error.context as any).optionalField, undefined);
           asserts.assertEquals((error.context as any).nullField, null);
@@ -302,12 +303,14 @@ Deno.test({
       await u.step('should handle special characters in metadata', () => {
         const specialMeta = {
           ...mockMeta,
+          key: 'testKey',
+          reason: 'test reason',
           specialChars: 'Special chars: éñ中文🚀\n\t\r"\'\\',
           unicodeField: '🔥💀👻🎉',
           escapeChars: '\n\r\t\b\f\v\0',
         };
 
-        const error = new DAMEngineError('CONFIG_INVALID', specialMeta);
+        const error = new DAMEngineError('INVALID_CONFIG_VALUE', specialMeta);
 
         asserts.assertEquals(
           (error.context as any).specialChars,
@@ -325,13 +328,15 @@ Deno.test({
         () => {
           const circularMeta: any = {
             ...mockMeta,
+            key: 'testKey',
+            reason: 'test reason',
             ref: null,
           };
           circularMeta.ref = circularMeta;
 
           // Circular references should be detected and throw an error
           asserts.assertThrows(
-            () => new DAMEngineError('CONFIG_INVALID', circularMeta),
+            () => new DAMEngineError('INVALID_CONFIG_VALUE', circularMeta),
             Error,
             'Circular reference detected',
           );
@@ -344,8 +349,7 @@ Deno.test({
         const error = new DAMEngineError('CONNECTION_FAILED', mockMeta);
         // Default template should produce a meaningful message
         asserts.assertStringIncludes(error.message, 'Failed to connect to');
-        asserts.assertStringIncludes(error.message, 'MockEngine');
-        asserts.assertStringIncludes(error.message, 'test-engine');
+        asserts.assertStringIncludes(error.message, 'test-instance');
       });
 
       await u.step('should handle all defined error codes', () => {
@@ -355,9 +359,9 @@ Deno.test({
         const testCodes = [
           'CONNECTION_FAILED',
           'QUERY_EXECUTION_FAILED',
-          'TRANSACTION_NOT_ACTIVE',
-          'ENGINE_ALREADY_CONNECTED',
-          'CONFIG_INVALID',
+          'TRANSACTION_NOT_FOUND',
+          'NO_CONNECTION',
+          'INVALID_CONFIG_VALUE',
           'UNKNOWN_ERROR',
         ];
 

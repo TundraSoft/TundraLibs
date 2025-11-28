@@ -100,9 +100,7 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
    * @returns New BaseGuardian<string> with string transformation
    */
   override toString(__description?: string): BaseGuardian<string> {
-    return this.process(
-      (value: T) => String(value),
-    );
+    return this.process(String);
   }
 
   /**

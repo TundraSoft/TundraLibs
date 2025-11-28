@@ -1,10 +1,10 @@
 import { Singleton } from '@tundralibs/utils';
-import type { EngineEvents, EngineOptions } from './engine/types/mod.ts';
-import { AbstractEngine } from './engine/AbstractEngine.ts';
+import { AbstractEngine, type EngineOptions } from './engine/mod.ts';
 import {
-  MariaDBEngine,
-  MongoDBEngine,
-  PostgreSQLEngine,
+  MariaEngine,
+  MongoEngine,
+  PostgresEngine,
+  PostgresEngine2,
   SQLiteEngine,
 } from './engines/mod.ts';
 import { DAMError } from './errors/mod.ts';
@@ -14,7 +14,7 @@ import { DAMError } from './errors/mod.ts';
  * Used for type-safe engine registration with flexible options.
  */
 type EngineConstructor = new (
-  id: string,
+  name: string,
   options: unknown,
 ) => AbstractEngine;
 
@@ -22,29 +22,18 @@ type EngineConstructor = new (
  * Database Access Manager (DAM) class that handles engine registration and instance creation.
  *
  * This singleton class provides a centralized way to:
- * - Register database engines (PostgreSQL, MariaDB, SQLite, MongoDB, etc.)
+ * - Register database engines (SQLite, MongoDB, PostgreSQL, MariaDB, etc.)
  * - Create and manage database connection instances
- * - Ensure proper lifecycle management of database connections
- * - Provide transaction and query execution capabilities
+ * - Ensure proper lifecycle management of database instances
  *
- * The DAM class uses {@link DAMError} for its own operation errors,
+ * The Manager class uses {@link DAMError} for its own operation errors,
  * while individual database engines use {@link DAMEngineError} for their errors.
  *
  * @example
  * ```typescript
  * // Basic usage
- * const db = DAM.create('POSTGRESQL', 'main-db', {
- *   host: 'localhost',
- *   port: 5432,
- *   database: 'myapp',
- *   username: 'user',
- *   password: 'pass'
- * });
- *
- * await db.connect();
- * const result = await db.execute({
- *   sql: 'SELECT * FROM users WHERE active = $1',
- *   params: { 0: true }
+ * const db = DAM.create('SQLITE', 'my-db', {
+ *   filename: './data.db'
  * });
  *
  * // Custom engine registration
@@ -66,7 +55,7 @@ class Manager {
   protected _engines: Map<string, EngineConstructor> = new Map();
 
   /**
-   * Map of created database instances keyed by instance ID.
+   * Map of created database instances keyed by instance name.
    * @private
    */
   protected _instances: Map<string, AbstractEngine> = new Map();
@@ -77,22 +66,15 @@ class Manager {
    */
   protected _instanceEngines: Map<string, string> = new Map();
 
-  /**
-   * Map of event listeners keyed by event type.
-   * @private
-   */
-  protected _eventListeners: Map<string, Set<(...args: unknown[]) => void>> =
-    new Map();
-
   constructor() {
     // Register built-in database engines
-    this._registerDefaultEngines();
+    this.__registerDefaultEngines();
   }
 
   /**
    * Add a new database engine to the registry.
    *
-   * @param name - Unique identifier for the engine (e.g., 'POSTGRESQL', 'MONGODB')
+   * @param name - Unique identifier for the engine (e.g., 'SQLITE', 'MONGODB', 'POSTGRES')
    * @param engine - Constructor function for the engine
    * @throws {DAMError} When an engine with the same name is already registered
    *
@@ -150,30 +132,33 @@ class Manager {
   /**
    * Create or retrieve a database instance.
    *
-   * @param engine - The engine type to use (e.g., 'POSTGRESQL', 'MONGODB', 'MARIADB', 'SQLITE')
-   * @param id - Unique identifier for the database instance (format: 'name' or 'name::instanceId')
+   * @param engine - The engine type to use (e.g., 'SQLITE', 'MONGODB', 'POSTGRES', 'POSTGRES2', 'MARIA')
+   * @param name - Unique name for the database instance
    * @param options - Configuration options for the database engine
-   * @returns Database engine instance
+   * @returns Database instance
    * @throws {DAMError} When engine is not registered or parameters are invalid
    *
    * @example
    * ```typescript
-   * // Create a PostgreSQL connection
-   * const pgDb = DAM.create('POSTGRESQL', 'main-db', {
-   *   host: 'localhost',
-   *   port: 5432,
-   *   database: 'myapp',
-   *   username: 'user',
-   *   password: 'pass'
+   * // Create a SQLite database
+   * const sqliteDb = DAM.create('SQLITE', 'app-db', {
+   *   filename: './data.db'
    * });
    *
    * // Create a MongoDB connection
-   * const mongoDb = DAM.create('MONGODB', 'docs-db', {
+   * const mongoDb = DAM.create('MONGODB', 'user-db', {
    *   host: 'localhost',
    *   port: 27017,
-   *   database: 'documents',
-   *   username: 'mongo',
-   *   password: 'secret'
+   *   database: 'users'
+   * });
+   *
+   * // Create a PostgreSQL connection
+   * const pgDb = DAM.create('POSTGRES', 'analytics-db', {
+   *   host: 'localhost',
+   *   port: 5432,
+   *   database: 'analytics',
+   *   username: 'user',
+   *   password: 'pass'
    * });
    * ```
    */
@@ -181,16 +166,16 @@ class Manager {
     T extends EngineOptions & Record<string, unknown> =
       & EngineOptions
       & Record<string, unknown>,
-  >(engine: string, id: string, options: T): AbstractEngine {
-    this._validateCreateParameters(engine, id, options);
+  >(engine: string, name: string, options: T): AbstractEngine {
+    this._validateCreateParameters(engine, name, options);
 
     const engineType = engine.trim().toUpperCase();
-    const instanceId = id.trim();
+    const instanceName = name.trim();
 
     this._validateEngineExists(engineType);
-    this._handleInstanceCreation(engineType, instanceId, options);
+    this._handleInstanceCreation(engineType, instanceName, options);
 
-    return this._instances.get(instanceId) as AbstractEngine;
+    return this._instances.get(instanceName)!; //NOSONAR
   }
 
   /**
@@ -199,7 +184,7 @@ class Manager {
    */
   private _validateCreateParameters(
     engine: unknown,
-    id: unknown,
+    name: unknown,
     options: unknown,
   ): void {
     if (!engine || typeof engine !== 'string') {
@@ -213,13 +198,13 @@ class Manager {
       );
     }
 
-    if (!id || typeof id !== 'string') {
+    if (!name || typeof name !== 'string') {
       throw new DAMError(
-        'Instance ID must be a non-empty string',
+        'Instance name must be a non-empty string',
         {
           operation: 'create',
           engineType: engine,
-          providedId: id,
+          providedName: name,
           context: 'Manager',
         },
       );
@@ -234,7 +219,7 @@ class Manager {
         {
           operation: 'create',
           engineType: engine,
-          instanceId: id,
+          instanceName: name,
           providedOptions: typeof options,
           isArray: Array.isArray(options),
           isNull: options === null,
@@ -270,13 +255,13 @@ class Manager {
     T extends EngineOptions & Record<string, unknown>,
   >(
     engineType: string,
-    instanceId: string,
+    instanceName: string,
     options: T,
   ): void {
-    if (!this._instances.has(instanceId)) {
-      this._createNewInstance(engineType, instanceId, options);
+    if (this._instances.has(instanceName)) {
+      this._validateExistingInstance(engineType, instanceName);
     } else {
-      this._validateExistingInstance(engineType, instanceId);
+      this._createNewInstance(engineType, instanceName, options);
     }
   }
 
@@ -286,26 +271,25 @@ class Manager {
    */
   private _createNewInstance<T extends EngineOptions & Record<string, unknown>>(
     engineType: string,
-    instanceId: string,
+    instanceName: string,
     options: T,
   ): void {
-    const EngineClass = this._engines.get(engineType)!;
+    const EngineClass = this._engines.get(engineType)!; //NOSONAR
     try {
-      const instance = new EngineClass(instanceId, options);
-      this._instances.set(instanceId, instance);
-      this._instanceEngines.set(instanceId, engineType);
-
-      // Set up event proxy for the new instance
-      this._setupEventProxy(instance);
+      this._instances.set(
+        instanceName,
+        new EngineClass(instanceName, options),
+      );
+      this._instanceEngines.set(instanceName, engineType);
     } catch (error) {
       throw new DAMError(
-        `Failed to create instance "${instanceId}": ${
+        `Failed to create instance "${instanceName}": ${
           error instanceof Error ? error.message : 'Unknown error'
         }`,
         {
           operation: 'create',
           engineType: engineType,
-          instanceId: instanceId,
+          instanceName: instanceName,
           options: options,
           context: 'Manager',
         },
@@ -320,17 +304,17 @@ class Manager {
    */
   private _validateExistingInstance(
     engineType: string,
-    instanceId: string,
+    instanceName: string,
   ): void {
-    const existingEngineType = this._instanceEngines.get(instanceId);
+    const existingEngineType = this._instanceEngines.get(instanceName);
 
     // If we have tracking data for this instance, validate engine type match
     if (existingEngineType !== undefined && existingEngineType !== engineType) {
       throw new DAMError(
-        `Instance "${instanceId}" already exists with engine type "${existingEngineType}", cannot create with "${engineType}"`,
+        `Instance "${instanceName}" already exists with engine type "${existingEngineType}", cannot create with "${engineType}"`,
         {
           operation: 'create',
-          instanceId: instanceId,
+          instanceName: instanceName,
           requestedEngine: engineType,
           existingEngine: existingEngineType,
           context: 'Manager',
@@ -340,84 +324,87 @@ class Manager {
 
     // If no tracking data exists but instance exists, update tracking
     // This handles cases where instances were created before tracking was implemented
-    if (existingEngineType === undefined && this._instances.has(instanceId)) {
-      this._instanceEngines.set(instanceId, engineType);
+    if (existingEngineType === undefined && this._instances.has(instanceName)) {
+      this._instanceEngines.set(instanceName, engineType);
     }
   }
 
   /**
-   * Get an existing database instance by ID.
+   * Get an existing database instance by name.
    *
-   * @param id - ID of the database instance
+   * @param name - Name of the database instance
    * @returns Database instance if found, undefined otherwise
    *
    * @example
    * ```typescript
-   * const db = DAM.getInstance('main-db');
+   * const db = DAM.getInstance('app-db');
    * if (db) {
-   *   // Use database connection
-   *   await db.execute({ sql: 'SELECT 1' });
+   *   // Use database
    * }
    * ```
    */
-  getInstance(id: string): AbstractEngine | undefined {
-    if (!id || typeof id !== 'string') {
+  getInstance(name: string): AbstractEngine | undefined {
+    if (!name || typeof name !== 'string') {
       return undefined;
     }
-    return this._instances.get(id.trim());
+    return this._instances.get(name.trim());
   }
 
   /**
    * Check if a database instance exists.
    *
-   * @param id - ID of the database instance
+   * @param name - Name of the database instance
    * @returns True if instance exists, false otherwise
    */
-  hasInstance(id: string): boolean {
-    if (!id || typeof id !== 'string') {
+  hasInstance(name: string): boolean {
+    if (!name || typeof name !== 'string') {
       return false;
     }
-    return this._instances.has(id.trim());
+    return this._instances.has(name.trim());
   }
 
   /**
    * Remove a database instance from the manager.
-   * This will close the connection and clean up resources.
+   * This will disconnect the instance if it has a disconnect method.
    *
-   * @param id - ID of the database instance to remove
+   * @param name - Name of the database instance to remove
    * @returns True if instance was removed, false if it didn't exist
    *
    * @example
    * ```typescript
-   * await DAM.removeInstance('main-db');
+   * await DAM.removeInstance('app-db');
    * ```
    */
-  async removeInstance(id: string): Promise<boolean> {
-    if (!id || typeof id !== 'string') {
+  async removeInstance(name: string): Promise<boolean> {
+    if (!name || typeof name !== 'string') {
       return false;
     }
 
-    const instanceId = id.trim();
-    const instance = this._instances.get(instanceId);
+    const instanceName = name.trim();
+    const instance = this._instances.get(instanceName);
 
     if (!instance) {
       return false;
     }
 
-    // Close the database connection
+    // Disconnect the instance if possible
     try {
-      await instance.close();
+      if (
+        'disconnect' in instance && typeof instance.disconnect === 'function'
+      ) {
+        await instance.disconnect();
+      }
     } catch (error) {
       // Log error but continue with removal
       console.warn(
-        `Warning: Failed to close instance "${instanceId}":`,
+        `Warning: Failed to disconnect instance "${instanceName}":`,
         error,
       );
     }
 
-    const deleted = this._instances.delete(instanceId);
+    const deleted = this._instances.delete(instanceName);
     if (deleted) {
-      this._instanceEngines.delete(instanceId);
+      this._instanceEngines.delete(instanceName);
     }
     return deleted;
   }
@@ -444,21 +431,23 @@ class Manager {
    * @returns Array of registered engine names
    */
   getRegisteredEngines(): string[] {
-    return Array.from(this._engines.keys()).sort();
+    return Array.from(this._engines.keys()).sort((a, b) => a.localeCompare(b));
   }
 
   /**
-   * Get list of active database instance IDs.
+   * Get list of active database instance names.
    *
-   * @returns Array of active instance IDs
+   * @returns Array of active instance names
    */
   getActiveInstances(): string[] {
-    return Array.from(this._instances.keys()).sort();
+    return Array.from(this._instances.keys()).sort((a, b) =>
+      a.localeCompare(b)
+    );
   }
 
   /**
    * Remove all database instances and clean up resources.
-   * This will close all connections and clean up all instances.
+   * This will disconnect all instances that support it.
    *
    * @example
    * ```typescript
@@ -468,14 +457,19 @@ class Manager {
   async clear(): Promise<void> {
     const instances = Array.from(this._instances.entries());
 
-    // Close all instances in parallel
+    // Disconnect all instances in parallel
     await Promise.allSettled(
-      instances.map(async ([id, instance]) => {
+      instances.map(async ([name, instance]) => {
         try {
-          await instance.close();
+          if (
+            'disconnect' in instance &&
+            typeof instance.disconnect === 'function'
+          ) {
+            await instance.disconnect();
+          }
         } catch (error) {
           console.warn(
-            `Warning: Failed to close instance "${id}":`,
+            `Warning: Failed to disconnect instance "${name}":`,
             error,
           );
         }
@@ -487,146 +481,30 @@ class Manager {
   }
 
   /**
-   * Subscribe to events from all database engines.
-   * Provides a centralized way to listen for events across all instances.
-   *
-   * @param event - Event type to listen for ('connect', 'disconnect', 'query', 'error')
-   * @param listener - Function to call when event is emitted
-   * @returns Function to unsubscribe from the event
-   *
-   * @example
-   * ```typescript
-   * // Listen for all connection events
-   * const unsubscribe = DAM.on('connect', (instanceId) => {
-   *   console.log(`Database connected: ${instanceId}`);
-   * });
-   *
-   * // Listen for all query events
-   * DAM.on('query', (instanceId, result, error) => {
-   *   if (error) {
-   *     console.error(`Query failed on ${instanceId}:`, error);
-   *   } else {
-   *     console.log(`Query executed on ${instanceId}`, result);
-   *   }
-   * });
-   *
-   * // Unsubscribe when done
-   * unsubscribe();
-   * ```
-   */
-  on(
-    event: keyof EngineEvents,
-    listener: (...args: unknown[]) => void,
-  ): () => void {
-    if (!this._eventListeners.has(event)) {
-      this._eventListeners.set(event, new Set());
-    }
-
-    this._eventListeners.get(event)!.add(listener);
-
-    // Return unsubscribe function
-    return () => {
-      const listeners = this._eventListeners.get(event);
-      if (listeners) {
-        listeners.delete(listener);
-        if (listeners.size === 0) {
-          this._eventListeners.delete(event);
-        }
-      }
-    };
-  }
-
-  /**
-   * Remove event listener(s).
-   *
-   * @param event - Event type to remove listeners for
-   * @param listener - Specific listener to remove, or undefined to remove all
-   */
-  off(
-    event: keyof EngineEvents,
-    listener?: (...args: unknown[]) => void,
-  ): void {
-    const listeners = this._eventListeners.get(event);
-    if (!listeners) return;
-
-    if (listener) {
-      listeners.delete(listener);
-      if (listeners.size === 0) {
-        this._eventListeners.delete(event);
-      }
-    } else {
-      this._eventListeners.delete(event);
-    }
-  }
-
-  /**
-   * Get list of active event listeners for debugging.
-   * @returns Map of event types to listener counts
-   */
-  getEventListeners(): Record<string, number> {
-    const result: Record<string, number> = {};
-    for (const [event, listeners] of this._eventListeners) {
-      result[event] = listeners.size;
-    }
-    return result;
-  }
-
-  /**
-   * Set up event proxy for a database instance.
+   * Register default database engines.
    * @private
    */
-  private _setupEventProxy(instance: AbstractEngine): void {
-    // Proxy all engine events to DAM listeners
-    instance.on('connect', (instanceId: string) => {
-      this._emitToListeners('connect', instanceId);
-    });
-
-    instance.on('disconnect', (instanceId: string) => {
-      this._emitToListeners('disconnect', instanceId);
-    });
-
-    instance.on(
-      'query',
-      (instanceId: string, result: unknown, error?: Error) => {
-        this._emitToListeners('query', instanceId, result, error);
-      },
-    );
-
-    instance.on('error', (instanceId: string, error: Error) => {
-      this._emitToListeners('error', instanceId, error);
-    });
-  }
-
-  /**
-   * Emit event to all registered listeners.
-   * @private
-   */
-  private _emitToListeners(event: string, ...args: unknown[]): void {
-    const listeners = this._eventListeners.get(event);
-    if (listeners) {
-      for (const listener of listeners) {
-        try {
-          listener(...args);
-        } catch (error) {
-          console.error(`Error in DAM event listener for '${event}':`, error);
-        }
-      }
-    }
-  }
-
-  /**
-   * Register the default database engines.
-   * @private
-   */
-  private _registerDefaultEngines(): void {
-    // Register built-in database engines with proper type casting
+  private __registerDefaultEngines(): void {
     this.addEngine(
-      'POSTGRESQL',
-      PostgreSQLEngine as unknown as EngineConstructor,
+      'SQLITE',
+      SQLiteEngine as unknown as EngineConstructor,
     );
-    this.addEngine('MARIADB', MariaDBEngine as unknown as EngineConstructor);
-    this.addEngine('SQLITE', SQLiteEngine as unknown as EngineConstructor);
-    this.addEngine('MONGODB', MongoDBEngine as unknown as EngineConstructor);
+    this.addEngine(
+      'MONGODB',
+      MongoEngine as unknown as EngineConstructor,
+    );
+    this.addEngine(
+      'POSTGRES',
+      PostgresEngine as unknown as EngineConstructor,
+    );
+    this.addEngine(
+      'POSTGRES2',
+      PostgresEngine2 as unknown as EngineConstructor,
+    );
+    this.addEngine(
+      'MARIA',
+      MariaEngine as unknown as EngineConstructor,
+    );
   }
 }
 

@@ -1,16 +1,14 @@
+export type { EngineCapabilities } from './Capabilities.ts';
 export type { EngineEvents } from './Events.ts';
-export type {
-  EngineAdvancedOptions,
-  EngineDatabaseOptions,
-  EngineOptions,
-  EnginePoolOptions,
-  EngineSecurityOptions,
-} from './Options.ts';
+export type { EngineOptions } from './Options.ts';
 export type {
   EngineQuery,
   EngineQueryResult,
-  EngineTransactionContext,
   EngineTransactionOptions,
 } from './Query.ts';
-export type { EnginePoolStats } from './Stats.ts';
-export type { EngineStatus } from './Status.ts';
+export type {
+  EnginePoolStats,
+  EngineQueryStats,
+  EngineStats,
+} from './Stats.ts';
+export type { EngineStatus, EngineTransactionStatus } from './Status.ts';

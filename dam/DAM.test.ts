@@ -1,322 +1,348 @@
-import * as asserts from '$asserts';
+import * as asserts from 'jsr:@std/assert@1';
 import { DAM } from './DAM.ts';
+import { AbstractEngine } from './engine/mod.ts';
 import { DAMError } from './errors/mod.ts';
+import type { EngineOptions } from './engine/mod.ts';
 
-Deno.test('dam.manager', async (t) => {
-  // Clear any existing instances before running tests
-  await DAM.clear();
+// Mock engine for testing
+class MockEngine extends AbstractEngine {
+  public readonly Engine = 'MOCK';
 
-  await t.step('Engine Registration', async (t) => {
-    await t.step('should have default engines registered', () => {
-      const engines = DAM.getRegisteredEngines();
-      asserts.assert(engines.includes('POSTGRESQL'));
-      asserts.assert(engines.includes('MARIADB'));
-      asserts.assert(engines.includes('SQLITE'));
-      asserts.assert(engines.includes('MONGODB'));
-      asserts.assertEquals(engines.length, 4);
-    });
+  public readonly Capabilities = {
+    transactions: false,
+    pooledConnections: false,
+    preparedStatements: false,
+  };
 
-    await t.step('should allow custom engine registration', () => {
-      // Create a mock engine class for testing
-      class MockEngine {
-        constructor(_id: string, _options: unknown) {}
-        async connect() {}
-        async close() {}
-        async execute() {
-          return { data: [], count: 0 };
-        }
-      }
+  // Required property for transaction client mapping
+  protected _clientMap: Map<string, unknown> = new Map();
 
-      DAM.addEngine('TEST', MockEngine as any);
-      const engines = DAM.getRegisteredEngines();
-      asserts.assert(engines.includes('TEST'));
-    });
+  constructor(name: string, options: EngineOptions) {
+    super(name, options);
+  }
 
-    await t.step('should reject duplicate engine registration', () => {
-      class AnotherMockEngine {
-        constructor(_id: string, _options: unknown) {}
-      }
+  protected async _connect(): Promise<void> {
+    // Mock connect
+  }
 
-      asserts.assertThrows(
-        () => DAM.addEngine('TEST', AnotherMockEngine as any),
-        DAMError,
-        'Engine "TEST" is already registered',
-      );
-    });
+  protected async _disconnect(): Promise<void> {
+    // Mock disconnect
+  }
 
-    await t.step('should reject invalid engine parameters', () => {
-      asserts.assertThrows(
-        () => DAM.addEngine('', null as any),
-        DAMError,
-        'Engine name must be a non-empty string',
-      );
+  protected async _execute<R = Record<string, unknown>>(
+    // deno-lint-ignore no-unused-vars
+    query: { sql: string; params?: Record<string, unknown> },
+  ): Promise<{ data: R[]; count: number }> {
+    return { data: [], count: 0 };
+  }
 
-      asserts.assertThrows(
-        () => DAM.addEngine('INVALID', null as any),
-        DAMError,
-        'Engine must be a constructor function',
-      );
-    });
+  // deno-lint-ignore no-unused-vars
+  protected _beginTransaction(transactionId: string): void | Promise<void> {
+    // Mock - no-op since transactions not supported
+  }
 
-    // Clean up test engine
-    DAM.removeEngine('TEST');
-  });
+  protected async _commitTransaction(
+    // deno-lint-ignore no-unused-vars
+    transactionId: string,
+  ): Promise<void> {
+    // Mock - no-op
+  }
 
-  await t.step('Instance Creation', async (t) => {
-    await t.step('should create SQLite instance', () => {
-      const db = DAM.create('SQLITE', 'test-db', {
-        database: ':memory:',
+  protected async _rollbackTransaction(
+    // deno-lint-ignore no-unused-vars
+    transactionId: string,
+  ): Promise<void> {
+    // Mock - no-op
+  }
+
+  protected async _ping(): Promise<boolean> {
+    return true;
+  }
+
+  // Mock implementation for required methods
+  protected _updatePoolStatus(): void {
+    // Mock - no-op
+  }
+}
+
+const DEFAULT_OPTIONS: EngineOptions & Record<string, unknown> = {
+  slowQueryThreshold: 300, // 300 seconds (5 minutes)
+  transactionTimeout: 30, // 30 seconds
+  autoRollbackOnFailure: false,
+};
+
+Deno.test({
+  name: 'dam.manager',
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async (t) => {
+    await t.step('engine registration', async (u) => {
+      await u.step('should have default engines registered', () => {
+        const engines = DAM.getRegisteredEngines();
+        asserts.assertEquals(engines.includes('SQLITE'), true);
+        asserts.assertEquals(engines.includes('MONGODB'), true);
+        asserts.assertEquals(engines.includes('POSTGRES'), true);
+        asserts.assertEquals(engines.includes('POSTGRES2'), true);
+        asserts.assertEquals(engines.includes('MARIA'), true);
+        asserts.assertEquals(engines.length, 5);
       });
 
-      asserts.assert(db);
-      asserts.assertEquals(db.name, 'test-db');
-      asserts.assertEquals(DAM.hasInstance('test-db'), true);
-    });
-
-    await t.step('should return existing instance on duplicate create', () => {
-      const db1 = DAM.getInstance('test-db');
-      const db2 = DAM.create('SQLITE', 'test-db', {
-        database: ':memory:',
+      await u.step('should add custom engine', () => {
+        DAM.addEngine('MOCK', MockEngine as never);
+        const engines = DAM.getRegisteredEngines();
+        asserts.assertEquals(engines.includes('MOCK'), true);
       });
 
-      asserts.assertEquals(db1, db2);
-    });
+      await u.step('should normalize engine name to uppercase', () => {
+        DAM.addEngine('custom', MockEngine as never);
+        const engines = DAM.getRegisteredEngines();
+        asserts.assertEquals(engines.includes('CUSTOM'), true);
+      });
 
-    await t.step('should reject invalid create parameters', () => {
-      asserts.assertThrows(
-        () => DAM.create('', 'test', {}),
-        DAMError,
-        'Engine type must be a non-empty string',
-      );
-
-      asserts.assertThrows(
-        () => DAM.create('SQLITE', '', {}),
-        DAMError,
-        'Instance ID must be a non-empty string',
-      );
-
-      asserts.assertThrows(
-        () => DAM.create('SQLITE', 'test', null as any),
-        DAMError,
-        'Options must be a valid object',
-      );
-    });
-
-    await t.step('should reject unknown engine type', () => {
-      asserts.assertThrows(
-        () => DAM.create('UNKNOWN', 'test', {}),
-        DAMError,
-        'Engine "UNKNOWN" is not registered',
-      );
-    });
-
-    await t.step(
-      'should reject mismatched engine type for existing instance',
-      () => {
+      await u.step('should throw error for duplicate engine', () => {
         asserts.assertThrows(
-          () =>
-            DAM.create('POSTGRESQL', 'test-db', {
-              host: 'localhost',
-              database: 'test',
-            }),
+          () => DAM.addEngine('MOCK', MockEngine as never),
           DAMError,
-          'Instance "test-db" already exists with engine type "SQLITE"',
+          'Engine "MOCK" is already registered',
         );
-      },
-    );
-  });
-
-  await t.step('Instance Management', async (t) => {
-    await t.step('should list active instances', () => {
-      const instances = DAM.getActiveInstances();
-      asserts.assert(instances.includes('test-db'));
-    });
-
-    await t.step('should get instance by ID', () => {
-      const db = DAM.getInstance('test-db');
-      asserts.assert(db);
-      asserts.assertEquals(db!.name, 'test-db');
-    });
-
-    await t.step('should return undefined for non-existent instance', () => {
-      const db = DAM.getInstance('non-existent');
-      asserts.assertEquals(db, undefined);
-    });
-
-    await t.step('should remove instance', async () => {
-      const removed = await DAM.removeInstance('test-db');
-      asserts.assertEquals(removed, true);
-      asserts.assertEquals(DAM.hasInstance('test-db'), false);
-    });
-
-    await t.step(
-      'should return false when removing non-existent instance',
-      async () => {
-        const removed = await DAM.removeInstance('non-existent');
-        asserts.assertEquals(removed, false);
-      },
-    );
-  });
-
-  await t.step('Clear All Instances', async (t) => {
-    await t.step('should create multiple instances', () => {
-      DAM.create('SQLITE', 'db1', { database: ':memory:' });
-      DAM.create('SQLITE', 'db2', { database: ':memory:' });
-
-      const instances = DAM.getActiveInstances();
-      asserts.assertEquals(instances.length, 2);
-    });
-
-    await t.step('should clear all instances', async () => {
-      await DAM.clear();
-      const instances = DAM.getActiveInstances();
-      asserts.assertEquals(instances.length, 0);
-    });
-  });
-
-  await t.step('Server Version and Events', async (t) => {
-    await t.step('Server Version Methods', async (t) => {
-      await t.step('should get SQLite server version', async () => {
-        const instanceId = 'test-sqlite-version';
-
-        try {
-          // Create SQLite instance
-          const instance = DAM.create('SQLITE', instanceId, {
-            database: ':memory:',
-          });
-
-          // Connect to ensure version can be retrieved
-          await instance.connect();
-
-          // Get server version
-          const version = await instance.getServerVersion();
-          asserts.assertEquals(typeof version, 'string');
-          asserts.assertEquals(version.startsWith('SQLite'), true);
-
-          // Test cached version (should be same)
-          const cachedVersion = await instance.getServerVersion();
-          asserts.assertEquals(version, cachedVersion);
-
-          // Refresh version (force new retrieval)
-          await instance.refreshServerVersion();
-          const refreshedVersion = await instance.getServerVersion();
-          asserts.assertEquals(typeof refreshedVersion, 'string');
-
-          // Test detailed pool stats
-          const poolStats = instance.getDetailedPoolStats();
-          asserts.assertEquals(typeof poolStats, 'object');
-          asserts.assertEquals(poolStats !== null, true);
-          if (poolStats) {
-            asserts.assertEquals(typeof poolStats.totalConnections, 'number');
-            asserts.assertEquals(typeof poolStats.activeConnections, 'number');
-          }
-
-          await instance.close();
-        } finally {
-          await DAM.removeInstance(instanceId);
-        }
       });
 
-      await t.step(
-        'should reject version request when not connected',
-        async () => {
-          const instanceId = 'test-sqlite-not-connected';
+      await u.step('should throw error for invalid engine name', () => {
+        asserts.assertThrows(
+          () => DAM.addEngine('', MockEngine as never),
+          DAMError,
+          'Engine name must be a non-empty string',
+        );
 
-          try {
-            // Create SQLite instance but don't connect
-            const instance = DAM.create('SQLITE', instanceId, {
-              database: ':memory:',
-            });
+        asserts.assertThrows(
+          () => DAM.addEngine(null as unknown as string, MockEngine as never),
+          DAMError,
+          'Engine name must be a non-empty string',
+        );
+      });
 
-            // Should reject when not connected
-            await asserts.assertRejects(
-              () => instance.getServerVersion(),
-              Error,
-              'not connected',
-            );
-          } finally {
-            await DAM.removeInstance(instanceId);
-          }
+      await u.step('should throw error for invalid engine constructor', () => {
+        asserts.assertThrows(
+          () => DAM.addEngine('INVALID', null as never),
+          DAMError,
+          'Engine must be a constructor function',
+        );
+
+        asserts.assertThrows(
+          () => DAM.addEngine('INVALID', 'not-a-function' as never),
+          DAMError,
+          'Engine must be a constructor function',
+        );
+      });
+
+      await u.step('should remove engine', () => {
+        const removed = DAM.removeEngine('CUSTOM');
+        asserts.assertEquals(removed, true);
+        const engines = DAM.getRegisteredEngines();
+        asserts.assertEquals(engines.includes('CUSTOM'), false);
+      });
+
+      await u.step(
+        'should return false for non-existent engine removal',
+        () => {
+          const removed = DAM.removeEngine('NONEXISTENT');
+          asserts.assertEquals(removed, false);
         },
       );
     });
 
-    await t.step('Engine Instance Version Methods', async (t) => {
-      await t.step('should retrieve server version via instance', async () => {
-        const instanceId = 'test-instance-version';
-
-        try {
-          // Create SQLite instance
-          const instance = DAM.create('SQLITE', instanceId, {
-            database: ':memory:',
-          });
-
-          // Connect and get version
-          await instance.connect();
-          const version = await instance.getServerVersion();
-
-          asserts.assertEquals(typeof version, 'string');
-          asserts.assertEquals(version.startsWith('SQLite'), true);
-
-          await instance.close();
-        } finally {
-          await DAM.removeInstance(instanceId);
-        }
+    await t.step('instance creation', async (u) => {
+      await u.step('should create new instance', () => {
+        const instance = DAM.create('MOCK', 'test-db', DEFAULT_OPTIONS);
+        asserts.assertExists(instance);
+        asserts.assertInstanceOf(instance, AbstractEngine);
+        asserts.assertEquals(instance.Name, 'test-db');
       });
 
-      await t.step('should cache server version between calls', async () => {
-        const instanceId = 'test-version-caching';
+      await u.step('should return existing instance with same name', () => {
+        const instance1 = DAM.create('MOCK', 'test-db', DEFAULT_OPTIONS);
+        const instance2 = DAM.create('MOCK', 'test-db', DEFAULT_OPTIONS);
+        asserts.assertEquals(instance1, instance2);
+      });
 
-        try {
-          // Create SQLite instance
-          const instance = DAM.create('SQLITE', instanceId, {
-            database: ':memory:',
-          });
+      await u.step(
+        'should throw error when creating instance with same name but different engine',
+        () => {
+          DAM.create('MOCK', 'conflict-db', DEFAULT_OPTIONS);
+          // Try to recreate with different engine - add another mock
+          DAM.addEngine('MOCK2', MockEngine as never);
+          asserts.assertThrows(
+            () => DAM.create('MOCK2', 'conflict-db', DEFAULT_OPTIONS),
+            DAMError,
+            'Instance "conflict-db" already exists with engine type "MOCK"',
+          );
+        },
+      );
 
-          await instance.connect();
+      await u.step('should normalize instance name', () => {
+        const instance1 = DAM.create('MOCK', ' spaced-name ', DEFAULT_OPTIONS);
+        const instance2 = DAM.create('MOCK', 'spaced-name', DEFAULT_OPTIONS);
+        asserts.assertEquals(instance1, instance2);
+      });
 
-          // Get version twice - should be same (cached)
-          const version1 = await instance.getServerVersion();
-          const version2 = await instance.getServerVersion();
+      await u.step('should throw error for unregistered engine', () => {
+        asserts.assertThrows(
+          () => DAM.create('UNREGISTERED', 'test', DEFAULT_OPTIONS),
+          DAMError,
+          'Engine "UNREGISTERED" is not registered',
+        );
+      });
 
-          asserts.assertEquals(version1, version2);
+      await u.step('should throw error for invalid parameters', () => {
+        asserts.assertThrows(
+          () => DAM.create('', 'test', DEFAULT_OPTIONS),
+          DAMError,
+          'Engine type must be a non-empty string',
+        );
 
-          // Force refresh and get again
-          await instance.refreshServerVersion();
-          const version3 = await instance.getServerVersion();
+        asserts.assertThrows(
+          () => DAM.create('MOCK', '', DEFAULT_OPTIONS),
+          DAMError,
+          'Instance name must be a non-empty string',
+        );
 
-          asserts.assertEquals(typeof version3, 'string');
-          asserts.assertEquals(version3.startsWith('SQLite'), true);
+        asserts.assertThrows(
+          () => DAM.create('MOCK', 'test', null as never),
+          DAMError,
+          'Options must be a valid object',
+        );
 
-          await instance.close();
-        } finally {
-          await DAM.removeInstance(instanceId);
-        }
+        asserts.assertThrows(
+          () => DAM.create('MOCK', 'test', [] as never),
+          DAMError,
+          'Options must be a valid object',
+        );
       });
     });
-  });
 
-  await t.step('Edge Cases', async (t) => {
-    await t.step('should handle invalid parameters gracefully', () => {
-      asserts.assertEquals(DAM.getInstance(''), undefined);
-      asserts.assertEquals(DAM.getInstance(null as any), undefined);
-      asserts.assertEquals(DAM.hasInstance(''), false);
-      asserts.assertEquals(DAM.hasInstance(null as any), false);
-    });
-
-    await t.step('should handle engine name case insensitivity', () => {
-      const db1 = DAM.create('sqlite', 'db-lowercase', {
-        database: ':memory:',
-      });
-      const db2 = DAM.create('SQLITE', 'db-uppercase', {
-        database: ':memory:',
+    await t.step('instance retrieval', async (u) => {
+      await u.step('should get existing instance', () => {
+        DAM.create('MOCK', 'retrieve-test', DEFAULT_OPTIONS);
+        const instance = DAM.getInstance('retrieve-test');
+        asserts.assertExists(instance);
+        asserts.assertEquals(instance?.Name, 'retrieve-test');
       });
 
-      asserts.assert(db1);
-      asserts.assert(db2);
+      await u.step('should return undefined for non-existent instance', () => {
+        const instance = DAM.getInstance('non-existent');
+        asserts.assertEquals(instance, undefined);
+      });
+
+      await u.step('should handle invalid name gracefully', () => {
+        const instance1 = DAM.getInstance('');
+        asserts.assertEquals(instance1, undefined);
+
+        const instance2 = DAM.getInstance(null as unknown as string);
+        asserts.assertEquals(instance2, undefined);
+      });
+
+      await u.step('should check if instance exists', () => {
+        DAM.create('MOCK', 'exists-test', DEFAULT_OPTIONS);
+        asserts.assertEquals(DAM.hasInstance('exists-test'), true);
+        asserts.assertEquals(DAM.hasInstance('non-existent'), false);
+        asserts.assertEquals(DAM.hasInstance(''), false);
+      });
     });
 
-    // Clean up
+    await t.step('instance management', async (u) => {
+      await u.step('should get list of active instances', () => {
+        // Clear first
+        const instances = DAM.getActiveInstances();
+        asserts.assert(instances.length > 0);
+        asserts.assert(instances.includes('test-db'));
+        asserts.assert(instances.includes('retrieve-test'));
+      });
+
+      await u.step('should remove instance', async () => {
+        DAM.create('MOCK', 'remove-test', DEFAULT_OPTIONS);
+        const removed = await DAM.removeInstance('remove-test');
+        asserts.assertEquals(removed, true);
+        asserts.assertEquals(DAM.hasInstance('remove-test'), false);
+      });
+
+      await u.step(
+        'should return false for non-existent instance removal',
+        async () => {
+          const removed = await DAM.removeInstance('non-existent');
+          asserts.assertEquals(removed, false);
+        },
+      );
+
+      await u.step(
+        'should handle invalid name gracefully on removal',
+        async () => {
+          const removed1 = await DAM.removeInstance('');
+          asserts.assertEquals(removed1, false);
+
+          const removed2 = await DAM.removeInstance(null as unknown as string);
+          asserts.assertEquals(removed2, false);
+        },
+      );
+
+      await u.step('should clear all instances', async () => {
+        DAM.create('MOCK', 'clear-test-1', DEFAULT_OPTIONS);
+        DAM.create('MOCK', 'clear-test-2', DEFAULT_OPTIONS);
+
+        await DAM.clear();
+
+        const instances = DAM.getActiveInstances();
+        asserts.assertEquals(instances.length, 0);
+      });
+    });
+
+    await t.step('integration tests', async (u) => {
+      await u.step('should create SQLite instance', () => {
+        const db = DAM.create('SQLITE', 'sqlite-test', {
+          database: 'test.db', // SQLite requires database field
+          filename: ':memory:',
+          slowQueryThreshold: 300,
+          transactionTimeout: 30,
+          autoRollbackOnFailure: false,
+        });
+        asserts.assertExists(db);
+        asserts.assertEquals(db.Engine, 'SQLITE');
+      });
+
+      await u.step('should handle multiple different instances', () => {
+        const sqlite = DAM.create('SQLITE', 'sqlite-multi', {
+          database: 'test2.db', // SQLite requires database field
+          filename: ':memory:',
+          slowQueryThreshold: 300,
+          transactionTimeout: 30,
+          autoRollbackOnFailure: false,
+        });
+        const mock = DAM.create('MOCK', 'mock-multi', DEFAULT_OPTIONS);
+
+        asserts.assertEquals(sqlite.Engine, 'SQLITE');
+        asserts.assertEquals(mock.Engine, 'MOCK');
+        asserts.assertNotEquals(sqlite, mock);
+      });
+
+      await u.step('should track instance engines correctly', () => {
+        const engines = DAM.getRegisteredEngines();
+        const instances = DAM.getActiveInstances();
+
+        asserts.assert(engines.length >= 6); // At least the default engines + MOCK
+        asserts.assert(instances.length >= 2); // At least the ones we just created
+      });
+
+      await u.step('should cleanup instances properly', async () => {
+        await DAM.removeInstance('sqlite-test');
+        await DAM.removeInstance('sqlite-multi');
+        await DAM.removeInstance('mock-multi');
+
+        asserts.assertEquals(DAM.hasInstance('sqlite-test'), false);
+        asserts.assertEquals(DAM.hasInstance('sqlite-multi'), false);
+        asserts.assertEquals(DAM.hasInstance('mock-multi'), false);
+      });
+    });
+
+    // Cleanup after all tests
     await DAM.clear();
-  });
+  },
 });

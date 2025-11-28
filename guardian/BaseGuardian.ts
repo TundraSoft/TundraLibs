@@ -52,10 +52,10 @@ export abstract class BaseGuardian<T> {
    * @param description - Human-readable description of what this guardian validates
    */
   set description(description: string) {
-    if (!this._metaData) {
-      this._metaData = { description };
-    } else {
+    if (this._metaData) {
       this._metaData.description = description;
+    } else {
+      this._metaData = { description };
     }
   }
 
@@ -65,10 +65,10 @@ export abstract class BaseGuardian<T> {
    * @param title - Short title for this guardian
    */
   set title(title: string) {
-    if (!this._metaData) {
-      this._metaData = { title };
-    } else {
+    if (this._metaData) {
       this._metaData.title = title;
+    } else {
+      this._metaData = { title };
     }
   }
 
@@ -78,10 +78,10 @@ export abstract class BaseGuardian<T> {
    * @param examples - Array of example values that would pass validation
    */
   set examples(examples: Array<unknown>) {
-    if (!this._metaData) {
-      this._metaData = { examples };
-    } else {
+    if (this._metaData) {
       this._metaData.examples = examples;
+    } else {
+      this._metaData = { examples };
     }
   }
 
@@ -91,10 +91,10 @@ export abstract class BaseGuardian<T> {
    * @param deprecated - Whether this guardian is deprecated
    */
   set deprecated(deprecated: boolean) {
-    if (!this._metaData) {
-      this._metaData = { deprecated };
-    } else {
+    if (this._metaData) {
       this._metaData.deprecated = deprecated;
+    } else {
+      this._metaData = { deprecated };
     }
   }
 
@@ -186,9 +186,9 @@ export abstract class BaseGuardian<T> {
     ) => {
       const intermediateResult = currentTransform(input);
       if (isPromiseLike(intermediateResult)) {
-        return intermediateResult.then((resolved) => fn(resolved as T));
+        return intermediateResult.then((resolved) => fn(resolved));
       }
-      return fn(intermediateResult as T);
+      return fn(intermediateResult);
     };
 
     let returnInstance: V | BaseGuardian<U>;
@@ -445,9 +445,9 @@ export abstract class BaseGuardian<T> {
           const result = (_defaultValue as () => D | Promise<D>)();
           // If the result is a promise, handle it properly
           if (result && typeof result === 'object' && 'then' in result) {
-            return (result as Promise<D>).then((resolvedValue) =>
+            return result.then((resolvedValue) =>
               currentTransform(resolvedValue)
-            ) as Promise<T>;
+            );
           }
           // If the default is a computed value, validate it through the transform
           return currentTransform(result) as T;
@@ -481,10 +481,10 @@ export abstract class BaseGuardian<T> {
       // Mutate in place for better performance
       (this as unknown as BaseGuardian<T | D | undefined | null>)
         ._composedTransform = optionalTransform;
-      if (!this._metaData) {
-        this._metaData = { isOptional: true };
-      } else {
+      if (this._metaData) {
         this._metaData.isOptional = true;
+      } else {
+        this._metaData = { isOptional: true };
       }
       returnInstance = this;
     }

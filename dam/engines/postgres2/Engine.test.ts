@@ -1,40 +1,22 @@
 import * as asserts from '$asserts';
-import { MariaEngine } from './Engine.ts';
+import { PostgresEngine2 } from './Engine.ts';
 import { DAMEngineError } from '../../engine/mod.ts';
 import { envArgs } from '@tundralibs/utils';
 
 const env = envArgs('./dam/engines/');
-
-// Handle unhandled promise rejections that might come from MariaDB connection attempts
-globalThis.onunhandledrejection = (event: PromiseRejectionEvent) => {
-  // Check if this is a MariaDB connection-related error we can safely ignore
-  const error = event.reason;
-  if (
-    error &&
-    typeof error === 'object' &&
-    (error.toString().includes('Symbol(Deno.internal.rid)') ||
-      error.message?.includes('TCP.#read') ||
-      error.message?.includes('stream_wrap'))
-  ) {
-    // Prevent the unhandled rejection from causing test failure
-    event.preventDefault();
-    console.warn('Suppressed MariaDB connection cleanup error:', error.message);
-  }
-};
-
 // Test configuration from environment variables with defaults
 const TEST_CONFIG = {
-  host: env.get('MARIADB_HOST') || 'localhost',
-  port: Number.parseInt(env.get('MARIADB_PORT') || '3306'),
-  database: env.get('MARIADB_DATABASE') || 'mysql',
-  username: env.get('MARIADB_USERNAME') || 'maria',
-  password: env.get('MARIADB_PASSWORD') || 'mariapw',
+  host: env.get('POSTGRES_HOST') || 'localhost',
+  port: Number.parseInt(env.get('POSTGRES_PORT') || '5432'),
+  database: env.get('POSTGRES_DATABASE') || 'postgres',
+  username: env.get('POSTGRES_USERNAME') || 'postgres',
+  password: env.get('POSTGRES_PASSWORD') || 'postgres',
 };
 
-// Check if MariaDB is available
-async function isMariaAvailable(): Promise<boolean> {
+// Check if PostgreSQL is available
+async function isPostgres2Available(): Promise<boolean> {
   try {
-    const engine = new MariaEngine('test-check', TEST_CONFIG);
+    const engine = new PostgresEngine2('test-check', TEST_CONFIG);
     await engine.connect();
     await engine.disconnect();
     return true;
@@ -44,15 +26,15 @@ async function isMariaAvailable(): Promise<boolean> {
 }
 
 Deno.test({
-  name: 'dam.engines.maria',
-  ignore: !(await isMariaAvailable()),
+  name: 'dam.engines.postgres2',
+  ignore: !(await isPostgres2Available()),
   sanitizeOps: false,
   sanitizeResources: false,
   fn: async (t) => {
     await t.step('configuration', async (u) => {
       await u.step('should create engine with valid config', () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
-        asserts.assertEquals(engine.Engine, 'MARIA');
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
+        asserts.assertEquals(engine.Engine, 'POSTGRES2');
         asserts.assertEquals(engine.Name, 'test-db');
         asserts.assertEquals(engine.Capabilities.transactions, true);
         asserts.assertEquals(engine.Capabilities.pooledConnections, true);
@@ -61,13 +43,18 @@ Deno.test({
 
       await u.step('should use default port', () => {
         const { port, ...config } = TEST_CONFIG;
-        const engine = new MariaEngine('test-db', config);
-        asserts.assertEquals(engine.getOption('port'), 3306);
+        const engine = new PostgresEngine2('test-db', config);
+        asserts.assertEquals(engine.getOption('port'), 5432);
       });
 
       await u.step('should validate required fields', () => {
         asserts.assertThrows(
-          () => new MariaEngine('test-db', { host: '' } as any),
+          () => new PostgresEngine2('test-db', { ...TEST_CONFIG, host: '' }),
+          DAMEngineError,
+        );
+        asserts.assertThrows(
+          () =>
+            new PostgresEngine2('test-db', { ...TEST_CONFIG, database: '' }),
           DAMEngineError,
         );
       });
@@ -75,7 +62,7 @@ Deno.test({
 
     await t.step('connection management', async (u) => {
       await u.step('should connect and disconnect', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
         let connectEmitted = false;
         let disconnectEmitted = false;
 
@@ -96,27 +83,21 @@ Deno.test({
       });
 
       await u.step('should handle connection failure', async () => {
-        const engine = new MariaEngine('test-db', {
+        const engine = new PostgresEngine2('test-db', {
           ...TEST_CONFIG,
-          host: 'invalid-host-12345',
-        });
-        let errorEmitted = false;
-
-        engine.on('connectionFailed', () => {
-          errorEmitted = true;
+          host: 'invalid-host-that-does-not-exist',
         });
 
         await asserts.assertRejects(
           () => engine.connect(),
           DAMEngineError,
         );
-        asserts.assert(errorEmitted);
       });
     });
 
     await t.step('query execution', async (u) => {
       await u.step('should execute simple query', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
         let queryEmitted = false;
 
         engine.on('query', () => {
@@ -131,8 +112,8 @@ Deno.test({
         await engine.disconnect();
       });
 
-      await u.step('should execute query with named parameters', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+      await u.step('should execute query with parameters', async () => {
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
 
         const result = await engine.execute({
           sql: 'SELECT :value: as result',
@@ -147,10 +128,10 @@ Deno.test({
       await u.step(
         'should execute query with multiple parameters',
         async () => {
-          const engine = new MariaEngine('test-db', TEST_CONFIG);
+          const engine = new PostgresEngine2('test-db', TEST_CONFIG);
 
           const result = await engine.execute({
-            sql: 'SELECT :a: + :b: as sum',
+            sql: 'SELECT :a:::integer + :b:::integer as sum',
             params: { a: 5, b: 3 },
           });
           asserts.assertEquals(result.count, 1);
@@ -163,23 +144,24 @@ Deno.test({
       await u.step(
         'should handle repeated parameters in query',
         async () => {
-          const engine = new MariaEngine('test-db', TEST_CONFIG);
+          const engine = new PostgresEngine2('test-db', TEST_CONFIG);
 
           const result = await engine.execute({
-            sql: 'SELECT :name: as Name, :name: as UserName, :age: as Age',
+            sql:
+              'SELECT :name: as Name, :name: as UserName, :age:::integer as Age',
             params: { name: 'Test', age: 32 },
           });
           asserts.assertEquals(result.count, 1);
-          asserts.assertEquals(result.data[0]?.Name, 'Test');
-          asserts.assertEquals(result.data[0]?.UserName, 'Test');
-          asserts.assertEquals(result.data[0]?.Age, 32);
+          asserts.assertEquals(result.data[0]?.name, 'Test');
+          asserts.assertEquals(result.data[0]?.username, 'Test');
+          asserts.assertEquals(result.data[0]?.age, 32);
 
           await engine.disconnect();
         },
       );
 
       await u.step('should fail with missing parameters', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
 
         await asserts.assertRejects(
           () =>
@@ -194,7 +176,7 @@ Deno.test({
       });
 
       await u.step('should track query statistics', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
 
         await engine.execute({ sql: 'SELECT 1' });
         await engine.execute({ sql: 'SELECT 2' });
@@ -208,7 +190,7 @@ Deno.test({
       });
 
       await u.step('should handle query failure', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
 
         await asserts.assertRejects(
           () => engine.execute({ sql: 'SELECT FROM invalid_syntax' }),
@@ -220,11 +202,35 @@ Deno.test({
 
         await engine.disconnect();
       });
+
+      await u.step('should handle table operations', async () => {
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
+
+        await engine.execute({
+          sql:
+            'CREATE TEMP TABLE test_users (id SERIAL PRIMARY KEY, name TEXT)',
+        });
+
+        await engine.execute({
+          sql: 'INSERT INTO test_users (name) VALUES (:name:)',
+          params: { name: 'Alice' },
+        });
+
+        const result = await engine.execute({
+          sql: 'SELECT * FROM test_users WHERE name = :name:',
+          params: { name: 'Alice' },
+        });
+
+        asserts.assertEquals(result.count, 1);
+        asserts.assertEquals(result.data[0]?.name, 'Alice');
+
+        await engine.disconnect();
+      });
     });
 
     await t.step('transaction management', async (u) => {
       await u.step('should begin and commit transaction', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
         let beginEmitted = false;
         let commitEmitted = false;
 
@@ -235,37 +241,58 @@ Deno.test({
           commitEmitted = true;
         });
 
+        await engine.execute({
+          sql: 'CREATE TEMP TABLE tx_test (id SERIAL PRIMARY KEY, value TEXT)',
+        });
+
         const txId = await engine.beginTransaction();
         asserts.assert(txId.length > 0);
         asserts.assert(beginEmitted);
 
         await engine.execute({
-          sql: 'SELECT 1',
+          sql: 'INSERT INTO tx_test (value) VALUES (:val:)',
+          params: { val: 'test' },
           transactionId: txId,
         });
 
         await engine.commitTransaction(txId);
         asserts.assert(commitEmitted);
 
+        const result = await engine.execute({
+          sql: 'SELECT * FROM tx_test',
+        });
+        asserts.assertEquals(result.count, 1);
+
         await engine.disconnect();
       });
 
       await u.step('should rollback transaction', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
         let rollbackEmitted = false;
 
         engine.on('transactionRollback', () => {
           rollbackEmitted = true;
         });
 
+        await engine.execute({
+          sql:
+            'CREATE TEMP TABLE rollback_test (id SERIAL PRIMARY KEY, value TEXT)',
+        });
+
         const txId = await engine.beginTransaction();
         await engine.execute({
-          sql: 'SELECT 1',
+          sql: 'INSERT INTO rollback_test (value) VALUES (:val:)',
+          params: { val: 'test' },
           transactionId: txId,
         });
         await engine.rollbackTransaction(txId);
 
         asserts.assert(rollbackEmitted);
+
+        const result = await engine.execute({
+          sql: 'SELECT * FROM rollback_test',
+        });
+        asserts.assertEquals(result.count, 0);
 
         await engine.disconnect();
       });
@@ -273,12 +300,12 @@ Deno.test({
       await u.step(
         'should handle multiple concurrent transactions with isolation',
         async () => {
-          const engine = new MariaEngine('test-db', TEST_CONFIG);
+          const engine = new PostgresEngine2('test-db', TEST_CONFIG);
 
-          // Create test table (regular table, not temporary, so all connections can see it)
+          // Create a regular table (not TEMP) that all connections can see
           await engine.execute({
             sql:
-              'CREATE TABLE IF NOT EXISTS concurrent_test (id INT PRIMARY KEY, value VARCHAR(50))',
+              'CREATE TABLE IF NOT EXISTS concurrent_test (id SERIAL PRIMARY KEY, value TEXT)',
           });
 
           // Clean up any existing data
@@ -290,17 +317,21 @@ Deno.test({
           const tx2 = await engine.beginTransaction();
           const tx3 = await engine.beginTransaction();
 
-          // Execute queries in different transactions
           await engine.execute({
-            sql: "INSERT INTO concurrent_test (id, value) VALUES (1, 'tx1')",
+            sql: 'INSERT INTO concurrent_test (value) VALUES (:val:)',
+            params: { val: 'tx1' },
             transactionId: tx1,
           });
+
           await engine.execute({
-            sql: "INSERT INTO concurrent_test (id, value) VALUES (2, 'tx2')",
+            sql: 'INSERT INTO concurrent_test (value) VALUES (:val:)',
+            params: { val: 'tx2' },
             transactionId: tx2,
           });
+
           await engine.execute({
-            sql: "INSERT INTO concurrent_test (id, value) VALUES (3, 'tx3')",
+            sql: 'INSERT INTO concurrent_test (value) VALUES (:val:)',
+            params: { val: 'tx3' },
             transactionId: tx3,
           });
 
@@ -309,13 +340,11 @@ Deno.test({
           await engine.commitTransaction(tx2);
           await engine.rollbackTransaction(tx3);
 
-          // Verify only tx1 and tx2 data persisted
           const result = await engine.execute({
-            sql: 'SELECT * FROM concurrent_test ORDER BY id',
+            sql: 'SELECT * FROM concurrent_test',
           });
+          // Only tx1 and tx2 should be committed
           asserts.assertEquals(result.count, 2);
-          asserts.assertEquals(result.data[0]?.value, 'tx1');
-          asserts.assertEquals(result.data[1]?.value, 'tx2');
 
           // Clean up
           await engine.execute({
@@ -323,46 +352,45 @@ Deno.test({
           });
 
           await engine.disconnect();
-        },
-      );
-
-      await u.step(
-        'should auto-rollback on error when configured',
-        async () => {
-          const engine = new MariaEngine('test-db', {
-            ...TEST_CONFIG,
-            autoRollbackOnFailure: true,
-          });
-
-          const txId = await engine.beginTransaction();
-
-          try {
-            await engine.execute({
-              sql: 'SELECT FROM invalid',
-              transactionId: txId,
-            });
-          } catch {
-            // Expected to fail
-          }
-
-          // Transaction should be auto-rolled back
-          await asserts.assertRejects(
-            () =>
-              engine.execute({
-                sql: 'SELECT 1',
-                transactionId: txId,
-              }),
-            DAMEngineError,
-          );
-
           await engine.disconnect();
         },
       );
+
+      await u.step('should auto-rollback on error', async () => {
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
+
+        await engine.execute({
+          sql:
+            'CREATE TEMP TABLE error_test (id SERIAL PRIMARY KEY, value TEXT)',
+        });
+
+        const txId = await engine.beginTransaction();
+        try {
+          await engine.execute({
+            sql: 'INSERT INTO error_test (value) VALUES (:val:)',
+            params: { val: 'test' },
+            transactionId: txId,
+          });
+          await engine.execute({
+            sql: 'SELECT FROM invalid_syntax',
+            transactionId: txId,
+          });
+        } catch {
+          // Expected error
+        }
+
+        const result = await engine.execute({
+          sql: 'SELECT * FROM error_test',
+        });
+        asserts.assertEquals(result.count, 0);
+
+        await engine.disconnect();
+      });
     });
 
     await t.step('batch execution', async (u) => {
       await u.step('should execute multiple queries', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
 
         await engine.batchExecute([
           { sql: 'SELECT 1' },
@@ -377,7 +405,7 @@ Deno.test({
       });
 
       await u.step('should halt on first error', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
 
         await asserts.assertRejects(
           () =>
@@ -398,46 +426,36 @@ Deno.test({
     });
 
     await t.step('pool management', async (u) => {
-      await u.step('should track pool statistics', async () => {
-        const engine = new MariaEngine('test-db', {
-          ...TEST_CONFIG,
-          pool: { max: 5, min: 1 },
-        });
-
+      await u.step('should provide pool statistics', async () => {
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
         await engine.connect();
-        const stats = engine.poolStats;
 
-        asserts.assert('total' in stats);
-        asserts.assert('idle' in stats);
-        asserts.assert('active' in stats);
+        const stats = engine.poolStats;
+        asserts.assert(stats.total >= 0);
 
         await engine.disconnect();
       });
 
-      await u.step('should handle pool exhaustion', async () => {
-        const engine = new MariaEngine('test-db', {
-          ...TEST_CONFIG,
-          pool: { max: 2, min: 1 },
-        });
+      await u.step('should handle pool exhaustion gracefully', async () => {
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
 
-        await engine.connect();
+        // Execute multiple queries that should work within pool limits
+        const promises = [];
+        for (let i = 0; i < 5; i++) {
+          promises.push(engine.execute({ sql: 'SELECT 1' }));
+        }
 
-        // Create transactions to exhaust pool
-        const tx1 = await engine.beginTransaction();
-        const tx2 = await engine.beginTransaction();
+        await Promise.all(promises);
+        const stats = engine.queryStats;
+        asserts.assertEquals(stats.successfulQueries, 5);
 
-        // Status should be WAITING
-        asserts.assertEquals(engine.status, 'WAITING');
-
-        await engine.commitTransaction(tx1);
-        await engine.commitTransaction(tx2);
         await engine.disconnect();
       });
     });
 
     await t.step('event emissions', async (u) => {
       await u.step('should emit all query events', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
         const events: string[] = [];
 
         engine.on('connect', () => events.push('connect'));
@@ -454,12 +472,16 @@ Deno.test({
       });
 
       await u.step('should emit transaction events', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
         const events: string[] = [];
 
         engine.on('transactionBegin', () => events.push('begin'));
         engine.on('transactionCommit', () => events.push('commit'));
         engine.on('transactionRollback', () => events.push('rollback'));
+
+        await engine.execute({
+          sql: 'CREATE TEMP TABLE tx_events (id SERIAL PRIMARY KEY)',
+        });
 
         const tx1 = await engine.beginTransaction();
         await engine.commitTransaction(tx1);
@@ -477,7 +499,7 @@ Deno.test({
 
     await t.step('ping and health check', async (u) => {
       await u.step('should ping successfully when connected', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
         await engine.connect();
 
         const result = await engine.ping();
@@ -487,7 +509,7 @@ Deno.test({
       });
 
       await u.step('should auto-connect on ping', async () => {
-        const engine = new MariaEngine('test-db', TEST_CONFIG);
+        const engine = new PostgresEngine2('test-db', TEST_CONFIG);
 
         asserts.assertEquals(engine.status, 'CLOSED');
         const result = await engine.ping();

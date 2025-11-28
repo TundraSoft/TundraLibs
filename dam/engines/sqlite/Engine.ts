@@ -1,724 +1,421 @@
-/**
- * SQLite Database Engine Implementation
- *
- * This module provides a concrete implementation of the AbstractEngine for SQLite databases.
- * It uses the jsr:@db/sqlite library with comprehensive error handling, transaction support,
- * and SQLite-specific optimizations like WAL mode and pragma configurations.
- *
- * @example
- * ```typescript
- * import { SQLiteEngine } from './Engine.ts';
- *
- * const engine = new SQLiteEngine('local-db', {
- *   database: './data/app.db',
- *   cacheSize: -128000,
- *   synchronous: 'NORMAL'
- * });
- *
- * await engine.connect();
- * const result = await engine.execute({
- *   sql: 'SELECT * FROM users WHERE status = :status:',
- *   params: { status: 'active' }
- * });
- * console.log(`Found ${result.count} active users`);
- * ```
- */
-
 import { Database } from '$sqlite';
-import { type EventOptionKeys } from '@tundralibs/utils';
-import { AbstractEngine } from '../../engine/AbstractEngine.ts';
-import { DAMEngineError } from '../../engine/errors/mod.ts';
-import type {
+import type { EventOptionKeys } from '@tundralibs/utils';
+import {
+  AbstractEngine,
+  DAMEngineError,
+  EngineCapabilities,
   EngineEvents,
   EngineQuery,
-  EngineTransactionOptions,
-} from '../../engine/types/mod.ts';
-import type { SQLiteEngineOptions } from './types/mod.ts';
+} from '../../engine/mod.ts';
+import { SQLiteEngineOptions } from './types/mod.ts';
 
 /**
- * Default options for SQLite engine
+ * Default configuration values for SQLite connections.
  */
-const DEFAULT_OPTIONS: Partial<SQLiteEngineOptions> = {
+const SQLITE_DEFAULTS: Partial<SQLiteEngineOptions> = {
+  cacheSize: -64000, // 64MB cache
   synchronous: 'NORMAL',
-  cacheSize: -64000, // 64MB
 };
 
 /**
- * SQLite Database Engine
+ * SQLite database engine implementation using jsr:@db/sqlite.
  *
- * Provides a robust SQLite database interface with transaction support,
- * WAL mode optimization, and comprehensive error handling.
+ * Features:
+ * - File-based or in-memory databases
+ * - Transaction support with isolated execution
+ * - Prepared statements with parameter binding
+ * - Automatic database file creation and validation
+ * - Configurable cache size and synchronous mode
+ * - No connection pooling (SQLite is single-connection)
+ *
+ * Driver: jsr:@db/sqlite@^0.12.0 (Deno-native, FFI-based)
+ *
+ * Note: SQLite is single-threaded and doesn't support connection pooling.
+ * All queries are executed sequentially on a single database connection.
+ *
+ * @example
+ * ```typescript
+ * const engine = new SQLiteEngine('mydb', {
+ *   database: './data/app.db',
+ *   cacheSize: -64000,
+ *   synchronous: 'NORMAL'
+ * });
+ * await engine.connect();
+ * const result = await engine.execute({
+ *   sql: 'SELECT * FROM users WHERE id = :id:',
+ *   params: { id: 1 }
+ * });
+ * ```
+ *
+ * @example In-memory database
+ * ```typescript
+ * const engine = new SQLiteEngine('temp', {
+ *   database: ':memory:'
+ * });
+ * ```
  */
 export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
-  public readonly Engine = 'SQLite';
+  /** Engine type identifier */
+  public readonly Engine = 'SQLITE';
 
-  private _db: Database | null = null;
-  private _activeTransactions = new Map<string, number>();
-  private _transactionTimeouts = new Map<string, number>();
+  /** Supported capabilities of this engine */
+  public readonly Capabilities: EngineCapabilities = {
+    transactions: true,
+    pooledConnections: false, // SQLite doesn't support connection pooling
+    preparedStatements: true,
+    parameterReplacement: {
+      prefix: ':',
+      suffix: '',
+    },
+  };
 
+  /**
+   * Map of transaction IDs to track active transactions.
+   * SQLite doesn't need separate connections per transaction since it's single-threaded.
+   * We just track if a transaction is active to prevent nested transactions.
+   */
+  protected _clientMap: Map<string, boolean> = new Map();
+
+  /**
+   * SQLite database instance from jsr:@db/sqlite.
+   */
+  private _client: Database | null = null;
+
+  /**
+   * Create a new SQLite engine instance.
+   *
+   * @param name - Unique name for this engine instance
+   * @param options - Connection and configuration options
+   * @throws {DAMEngineError} MISSING_CONFIG_VALUE if database path is missing
+   */
   constructor(
-    id: string,
+    name: string,
     options: EventOptionKeys<SQLiteEngineOptions, EngineEvents>,
   ) {
-    super(id, options, DEFAULT_OPTIONS);
-  }
+    super(name, options, SQLITE_DEFAULTS);
 
-  /**
-   * SQLite doesn't use connection pooling in the traditional sense
-   * It's a file-based database with built-in locking
-   */
-  override get poolEnabled(): boolean {
-    return false;
-  }
-
-  /**
-   * Override query standardization to convert :param: format to SQLite :param format
-   */
-  protected override _standardizeQuery(query: EngineQuery): EngineQuery {
-    const sql = query.sql.trim().replace(/;$/, '') + ';';
-
-    // Convert :param: format to SQLite :param format (remove trailing colon)
-    const sqliteSQL = sql.replace(/:(\w+):/g, ':$1');
-
-    // Return the SQL with converted params for SQLite
-    return {
-      sql: sqliteSQL,
-      params: query.params,
-      transactionId: query.transactionId,
-    } as EngineQuery;
-  }
-
-  /**
-   * Override option processing for SQLite-specific validation
-   */
-  protected override _processOption<K extends keyof SQLiteEngineOptions>(
-    key: K,
-    value: SQLiteEngineOptions[K],
-  ): SQLiteEngineOptions[K] {
-    switch (key) {
-      case 'database':
-        if (!value || (typeof value === 'string' && !value.trim())) {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            name: this.name,
-            engine: this.Engine,
-            configKey: 'database',
-            reason: 'Database path is required and cannot be empty',
-          });
-        }
-        break;
-
-      case 'cacheSize':
-        if (value !== undefined && typeof value !== 'number') {
-          throw new DAMEngineError('CONFIG_INVALID', {
-            instanceId: this.instanceId,
-            name: this.name,
-            engine: this.Engine,
-            configKey: 'cacheSize',
-            reason: `Cache size must be a number, got ${typeof value}`,
-          });
-        }
-        break;
-    }
-
-    return value;
-  }
-
-  /**
-   * Connect to SQLite database
-   * Opens the database file and configures SQLite pragmas
-   */
-  protected override async _connect(): Promise<void> {
-    try {
-      const dbPath = this.getOption('database');
-
-      // Open the database in readwrite mode with create option
-      this._db = new Database(dbPath, {
-        create: true,
-        readonly: false,
+    // Validate required configuration
+    if (this.hasOption('database') === false) {
+      throw new DAMEngineError('MISSING_CONFIG_VALUE', {
+        instanceId: this.instanceId,
+        key: 'database',
       });
+    }
+  }
 
-      // Configure SQLite pragmas for optimal performance and behavior
-      await this._configurePragmas();
+  /**
+   * Establish connection to SQLite database.
+   *
+   * Opens or creates the SQLite database file. If the file doesn't exist,
+   * it will be created automatically. Validates file permissions if it exists.
+   *
+   * Database Configuration:
+   * - database: File path or ':memory:' for in-memory database
+   * - cacheSize: Cache size in KB (negative value) or pages (positive)
+   * - synchronous: Sync mode (OFF, NORMAL, FULL)
+   *
+   * File Validation:
+   * - Checks if file exists and is readable/writable
+   * - Creates parent directories if they don't exist
+   * - Creates database file if it doesn't exist
+   *
+   * Performance Settings:
+   * - Sets cache_size pragma for memory allocation
+   * - Sets synchronous pragma for fsync behavior
+   * - Sets journal_mode to WAL for better concurrency (if not in-memory)
+   *
+   * @throws {DAMEngineError} CONNECTION_FAILED if unable to connect
+   * @throws {DAMEngineError} FILE_READ_ERROR if file permissions are invalid
+   * @protected
+   */
+  protected async _connect(): Promise<void> {
+    try {
+      const database = this.getOption('database') as string;
 
-      // Test the connection
-      const result = this._db.prepare('SELECT 1 as test').get();
-      if (!result || (result as { test: number }).test !== 1) {
-        throw new Error('Connection test failed');
-      }
-    } catch (error) {
-      // Clean up on failure
-      if (this._db) {
+      // Check if in-memory database
+      if (database !== ':memory:') {
+        // Validate file path and create if needed
         try {
-          this._db.close();
-        } catch {
-          // Ignore close errors
-        } finally {
-          this._db = null;
+          // Check if file exists
+          const fileInfo = await Deno.stat(database);
+
+          if (!fileInfo.isFile) {
+            throw new DAMEngineError('CONNECTION_FAILED', {
+              instanceId: this.instanceId,
+              reason: `Path '${database}' exists but is not a file`,
+            });
+          }
+
+          // File exists - validate permissions by trying to open in read/write mode
+          // We'll let the Database constructor handle this
+        } catch (error) {
+          if (error instanceof Deno.errors.NotFound) {
+            // File doesn't exist - create parent directories
+            const dir = database.substring(0, database.lastIndexOf('/'));
+            if (dir && dir !== '') {
+              await Deno.mkdir(dir, { recursive: true });
+            }
+            // Database constructor will create the file
+          } else if (error instanceof DAMEngineError) {
+            throw error;
+          } else {
+            throw new DAMEngineError('CONNECTION_FAILED', {
+              instanceId: this.instanceId,
+              reason: `Failed to access database file '${database}': ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            }, error as Error);
+          }
         }
       }
 
+      // Open SQLite database
+      this._client = new Database(database);
+
+      // Configure performance settings
+      const cacheSize = this.getOption('cacheSize') as number | undefined;
+      if (cacheSize !== undefined) {
+        this._client.exec(`PRAGMA cache_size = ${cacheSize}`);
+      }
+
+      const synchronous = this.getOption('synchronous') as
+        | 'OFF'
+        | 'NORMAL'
+        | 'FULL'
+        | undefined;
+      if (synchronous !== undefined) {
+        this._client.exec(`PRAGMA synchronous = ${synchronous}`);
+      }
+
+      // Enable WAL mode for better concurrency (not for in-memory databases)
+      if (database !== ':memory:') {
+        this._client.exec('PRAGMA journal_mode = WAL');
+      }
+
+      // Validate connection by executing a simple query
+      const stmt = this._client.prepare('SELECT 1');
+      stmt.finalize();
+    } catch (error) {
+      this._client = null;
+      if (error instanceof DAMEngineError) {
+        throw error;
+      }
       throw new DAMEngineError('CONNECTION_FAILED', {
         instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        originalError: error,
-        reason: `Failed to connect to SQLite database: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      });
+        reason: error instanceof Error ? error.message : String(error),
+      }, error as Error);
     }
   }
 
   /**
-   * Configure SQLite pragmas for optimal performance and behavior
+   * Close SQLite database connection and cleanup resources.
+   *
+   * Safe to call multiple times (idempotent).
+   *
+   * @protected
    */
-  private _configurePragmas(): void {
-    if (!this._db) return;
-
-    const pragmas: Array<[string, string | number]> = [];
-
-    // Synchronous mode
-    const synchronous = this.getOption('synchronous') || 'NORMAL';
-    pragmas.push(['synchronous', synchronous]);
-
-    // Cache size
-    const cacheSize = this.getOption('cacheSize') || -64000;
-    pragmas.push(['cache_size', cacheSize]);
-
-    // Use queryTimeout from base options for busy timeout
-    const queryTimeout = this.getOption('queryTimeout') || 30;
-    pragmas.push(['busy_timeout', queryTimeout * 1000]); // Convert seconds to milliseconds
-
-    // Apply all pragmas
-    for (const [pragma, value] of pragmas) {
-      try {
-        this._db.exec(`PRAGMA ${pragma} = ${value};`);
-      } catch (error) {
-        // Log but don't fail on pragma errors (some may be read-only)
-        console.warn(`SQLite pragma warning: ${pragma} = ${value} - ${error}`);
-      }
+  protected _disconnect(): void {
+    if (this._client) {
+      this._client.close();
+      this._client = null;
     }
   }
 
   /**
-   * Close SQLite database connection
+   * Execute a query against the SQLite database.
+   *
+   * Handles both SELECT and DML (INSERT/UPDATE/DELETE) queries.
+   * Uses prepared statements for parameter binding and protection against SQL injection.
+   *
+   * Parameter Binding:
+   * - SQLite driver uses :name: syntax for named parameters
+   * - AbstractEngine standardizes :param: to :param: (no change needed)
+   * - Parameters are bound as object: { name: value }
+   *
+   * Transaction Handling:
+   * - If transactionId is present, validates transaction is active
+   * - All queries execute on the same single connection
+   *
+   * Note: AbstractEngine validates transaction existence before calling this method.
+   *
+   * @template R - The expected row structure
+   * @param query - The query to execute with SQL and optional parameters
+   * @returns Object containing result rows and row count
+   * @throws {DAMEngineError} QUERY_EXECUTION_FAILED on execution error
+   * @protected
    */
-  protected override _close(): void {
-    try {
-      // Rollback any active transactions
-      this._rollbackAllTransactions();
-
-      if (this._db) {
-        this._db.close();
-        this._db = null;
-      }
-    } catch (error) {
-      throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        query: 'SELECT sqlite_version() as version',
-        originalError: error,
-        reason: `Failed to get SQLite version: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      });
-    }
-  }
-
-  /**
-   * Execute a single query
-   */
-  protected override _executeQuery<
+  protected _execute<
     R extends Record<string, unknown> = Record<string, unknown>,
-  >(query: EngineQuery): { data: R[]; count: number } {
-    if (!this._db) {
-      throw new DAMEngineError('ENGINE_NOT_CONNECTED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        reason: 'Database not connected',
-      });
-    }
-
+  >(
+    query: EngineQuery,
+  ): { data: R[]; count: number } {
     try {
-      const stmt = this._db.prepare(query.sql);
+      // Prepare statement
+      const stmt = this._client!.prepare(query.sql);
 
-      // Determine if this is a SELECT query or a modification query
-      const isSelect = query.sql.trim().toUpperCase().startsWith('SELECT');
-      const isInsert = query.sql.trim().toUpperCase().startsWith('INSERT');
-
-      let data: R[] = [];
-      let count = 0;
-
-      if (isSelect) {
-        // For SELECT queries, get all rows
-        if (query.params && Object.keys(query.params).length > 0) {
-          // @ts-ignore SQLite parameter binding
-          data = stmt.all(query.params) as R[];
-        } else {
-          data = stmt.all() as R[];
-        }
-        count = data.length;
-      } else {
-        // For INSERT/UPDATE/DELETE, execute and get changes
-        let result: unknown;
-        if (query.params && Object.keys(query.params).length > 0) {
-          // @ts-ignore SQLite parameter binding
-          result = stmt.run(query.params);
-        } else {
-          result = stmt.run();
-        }
-
-        // SQLite run() can return changes in different formats
-        if (
-          typeof result === 'object' && result !== null && 'changes' in result
-        ) {
-          count = (result as { changes: number }).changes;
-        } else if (typeof result === 'number') {
-          count = result;
-        } else {
-          // Fallback: get the total changes from the database
-          count = this._db.changes;
-        }
-
-        // For INSERT statements, get the last insert row ID
-        if (isInsert && this._db) {
-          const lastInsertRowid = this._db.lastInsertRowId;
-          data = [{ lastInsertRowid } as unknown as R];
-        }
-      }
-
-      return { data, count };
-    } catch (error) {
-      throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        sql: query.sql,
-        params: query.params,
-        transactionId: query.transactionId,
-        originalError: error,
-        reason: `Query failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      });
-    }
-  }
-
-  /**
-   * Begin a database transaction
-   */
-  protected override _beginTransaction(
-    options?: EngineTransactionOptions,
-  ): void {
-    if (!this._db) {
-      throw new DAMEngineError('ENGINE_NOT_CONNECTED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        reason: 'Database not connected',
-      });
-    }
-
-    // Get transaction ID from options (should be set by AbstractEngine.begin())
-    const transactionId = options?.name;
-    if (!transactionId) {
-      throw new DAMEngineError('TRANSACTION_NOT_FOUND', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        reason: 'Transaction ID is required',
-      });
-    }
-
-    // Check if transaction with this ID already exists
-    if (this._activeTransactions.has(transactionId)) {
-      throw new DAMEngineError('TRANSACTION_ALREADY_STARTED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        transactionId,
-        reason: 'Transaction with this ID already exists',
-      });
-    }
-
-    // Check if there's already an active transaction (SQLite limitation)
-    if (this._activeTransactions.size > 0) {
-      throw new DAMEngineError('TRANSACTION_ALREADY_STARTED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        transactionId: Array.from(this._activeTransactions.keys())[0] ||
-          'unknown',
-        reason: 'SQLite does not support concurrent transactions',
-      });
-    }
-
-    try {
-      // Start a new transaction
-      this._db.exec('BEGIN TRANSACTION;');
-
-      // Store active transaction
-      this._activeTransactions.set(transactionId, 1);
-
-      // Set up transaction timeout if specified
-      if (options?.timeout && options.timeout > 0) {
-        const timeoutMs = options.timeout * 1000;
-        const timeoutId = setTimeout(() => {
-          // Auto-rollback transaction on timeout
-          try {
-            this._rollbackTransaction(transactionId);
-          } catch {
-            // Ignore rollback errors during timeout
-          }
-        }, timeoutMs);
-
-        this._transactionTimeouts.set(transactionId, timeoutId);
-      }
-    } catch (error) {
-      throw new DAMEngineError('TRANSACTION_NOT_ACTIVE', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        transactionId,
-        originalError: error,
-        reason: `Failed to begin transaction: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      });
-    }
-  }
-
-  /**
-   * Commit a database transaction
-   */
-  protected override _commitTransaction(
-    transactionId?: string,
-  ): void {
-    if (!transactionId) {
-      throw new DAMEngineError('TRANSACTION_NOT_FOUND', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        reason: 'Transaction ID is required',
-      });
-    }
-
-    const transactionLevel = this._activeTransactions.get(transactionId);
-    if (transactionLevel === undefined) {
-      throw new DAMEngineError('TRANSACTION_NOT_FOUND', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        transactionId,
-        reason: `Transaction ${transactionId} not found`,
-      });
-    }
-
-    if (!this._db) {
-      throw new DAMEngineError('ENGINE_NOT_CONNECTED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        reason: 'Database not connected',
-      });
-    }
-
-    try {
-      // Clear transaction timeout if it exists
-      const timeoutId = this._transactionTimeouts.get(transactionId);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        this._transactionTimeouts.delete(transactionId);
-      }
-
-      // Commit the transaction
-      this._db.exec('COMMIT;');
-      this._activeTransactions.delete(transactionId);
-    } catch (error) {
-      throw new DAMEngineError('TRANSACTION_COMMIT_FAILED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        transactionId,
-        originalError: error,
-        reason: `Failed to commit transaction: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      });
-    }
-  }
-
-  /**
-   * Rollback a database transaction
-   */
-  protected override _rollbackTransaction(
-    transactionId?: string,
-  ): void {
-    if (!transactionId) {
-      throw new DAMEngineError('TRANSACTION_NOT_FOUND', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        reason: 'Transaction ID is required',
-      });
-    }
-
-    const transactionLevel = this._activeTransactions.get(transactionId);
-    if (transactionLevel === undefined) {
-      throw new DAMEngineError('TRANSACTION_NOT_FOUND', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        transactionId,
-        reason: `Transaction ${transactionId} not found`,
-      });
-    }
-
-    if (!this._db) {
-      throw new DAMEngineError('ENGINE_NOT_CONNECTED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        reason: 'Database not connected',
-      });
-    }
-
-    try {
-      // Clear transaction timeout if it exists
-      const timeoutId = this._transactionTimeouts.get(transactionId);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        this._transactionTimeouts.delete(transactionId);
-      }
-
-      // Rollback the transaction
-      this._db.exec('ROLLBACK;');
-      this._activeTransactions.delete(transactionId);
-    } catch (error) {
-      // Even if rollback fails, clean up our state
-      this._activeTransactions.delete(transactionId);
-
-      throw new DAMEngineError('TRANSACTION_ROLLBACK_FAILED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        transactionId,
-        originalError: error,
-        reason: `Failed to rollback transaction: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      });
-    }
-  }
-
-  /**
-   * Rollback all active transactions
-   */
-  protected override _rollbackAllTransactions(): void {
-    // Clear all transaction timeouts
-    for (const timeoutId of this._transactionTimeouts.values()) {
-      clearTimeout(timeoutId);
-    }
-    this._transactionTimeouts.clear();
-
-    if (this._db && this._activeTransactions.size > 0) {
       try {
-        this._db.exec('ROLLBACK;');
-      } catch {
-        // Ignore rollback errors during cleanup
+        // Check if it's a SELECT query (readonly statement)
+        if (stmt.readonly) {
+          // SELECT query - fetch all rows
+          const rows = query.params
+            // deno-lint-ignore no-explicit-any
+            ? stmt.all<R>(query.params as any)
+            : stmt.all<R>();
+          return {
+            data: rows,
+            count: rows.length,
+          };
+        } else {
+          // DML query (INSERT/UPDATE/DELETE) - execute and get affected rows
+          if (query.params) {
+            // deno-lint-ignore no-explicit-any
+            stmt.run(query.params as any);
+          } else {
+            stmt.run();
+          }
+
+          // Get number of changed rows
+          const changes = this._client!.changes;
+
+          return {
+            data: [],
+            count: changes,
+          };
+        }
+      } finally {
+        // Always finalize statement to free resources
+        stmt.finalize();
       }
-    }
-
-    this._activeTransactions.clear();
-  }
-
-  /**
-   * Check if there are active transactions
-   */
-  protected override _hasActiveTransactions(): boolean {
-    return this._activeTransactions.size > 0;
-  }
-
-  /**
-   * Perform health check
-   */
-  protected override _healthCheck(): void {
-    if (!this._db) {
-      throw new DAMEngineError('ENGINE_NOT_CONNECTED', {
-        instanceId: this.instanceId,
-        name: this.name,
+    } catch (e) {
+      throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
         engine: this.Engine,
-        reason: 'Database not connected',
-      });
-    }
-
-    try {
-      const result = this._db.prepare('SELECT 1 as health_check').get();
-      if (!result || (result as { health_check: number }).health_check !== 1) {
-        throw new Error('Health check query returned unexpected result');
-      }
-    } catch (error) {
-      throw new DAMEngineError('HEALTH_CHECK_FAILED', {
         instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        originalError: error,
-        reason: `Health check failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      });
+        query: query,
+      }, e as Error);
     }
   }
 
   /**
-   * Get SQLite-specific information and statistics
+   * Begin a new database transaction.
+   *
+   * SQLite doesn't support nested transactions, so we track active
+   * transactions to prevent conflicts.
+   *
+   * Note: SQLite uses BEGIN for transactions (not BEGIN TRANSACTION).
+   *
+   * @param transactionId - Unique identifier for this transaction
+   * @throws Error if BEGIN fails
+   * @protected
    */
-  public getDatabaseInfo() {
-    if (!this._db) {
-      return null;
-    }
+  protected _beginTransaction(transactionId: string): void {
+    this._client!.exec('BEGIN');
+    // Mark transaction as active
+    this._clientMap.set(transactionId, true);
+  }
 
+  /**
+   * Commit a database transaction.
+   *
+   * Commits all changes made within the transaction.
+   *
+   * Cleanup Guarantee:
+   * - Transaction ID is always removed from _clientMap
+   *
+   * Note: AbstractEngine validates transaction existence before calling this.
+   *
+   * @param transactionId - Transaction identifier
+   * @protected
+   */
+  protected _commitTransaction(transactionId: string): void {
     try {
-      const info = {
-        // Database file information
-        databasePath: this.getOption('database'),
+      this._client!.exec('COMMIT');
+    } finally {
+      // Always cleanup
+      this._clientMap.delete(transactionId);
+    }
+  }
 
-        // SQLite version and compile options
-        version: this._db.prepare('SELECT sqlite_version() as version')
-          .get() as { version: string },
+  /**
+   * Rollback a database transaction.
+   *
+   * Discards all changes made within the transaction.
+   *
+   * Cleanup Guarantee:
+   * - Transaction ID is always removed from _clientMap
+   *
+   * Note: AbstractEngine validates transaction existence before calling this.
+   *
+   * @param transactionId - Transaction identifier
+   * @protected
+   */
+  protected _rollbackTransaction(transactionId: string): void {
+    try {
+      this._client!.exec('ROLLBACK');
+    } finally {
+      // Always cleanup
+      this._clientMap.delete(transactionId);
+    }
+  }
 
-        // Database settings
-        pragmas: {
-          synchronous: this._db.prepare('PRAGMA synchronous').get() as {
-            synchronous: number;
-          },
-          cacheSize: this._db.prepare('PRAGMA cache_size').get() as {
-            cache_size: number;
-          },
-        },
-
-        // Database statistics
-        pageCount: this._db.prepare('PRAGMA page_count').get() as {
-          page_count: number;
-        },
-        freelistCount: this._db.prepare('PRAGMA freelist_count').get() as {
-          freelist_count: number;
-        },
-
-        // Transaction state
-        activeTransactions: this._activeTransactions.size,
-      };
-
-      return info;
+  /**
+   * Check if the SQLite database connection is alive.
+   *
+   * Executes a simple query to verify database is accessible.
+   * Used by AbstractEngine for health checks and reconnection logic.
+   *
+   * @returns true if connection is alive, false otherwise
+   * @protected
+   */
+  protected _ping(): boolean {
+    try {
+      if (!this._client) return false;
+      const stmt = this._client.prepare('SELECT 1');
+      stmt.finalize();
+      return true;
     } catch {
-      return null;
+      return false;
     }
   }
 
   /**
-   * SQLite doesn't use traditional connection pooling
-   * Returns basic database state information instead
+   * Update engine status based on connection state.
+   *
+   * SQLite Connection States:
+   * - READY: Database is open and accessible
+   * - CLOSED: Database is not open
+   *
+   * SQLite doesn't have connection pooling, so status is simple:
+   * - If client exists and is open, status is READY
+   * - Otherwise, status is CLOSED
+   *
+   * Pool Statistics:
+   * - total: Always 1 (single connection)
+   * - idle: 0 when executing, 1 when ready
+   * - active: 1 when executing, 0 when ready
+   * - waiting: Always 0 (no queuing in SQLite)
+   *
+   * Called automatically by AbstractEngine after each operation.
+   *
+   * @protected
    */
-  protected _getPoolStats(): Record<string, number> | null {
-    return {
-      totalConnections: this._db ? 1 : 0,
-      activeConnections: this._db ? 1 : 0,
-      idleConnections: 0,
-      waitingRequests: 0,
-    };
-  }
-
-  /**
-   * Get SQLite version information
-   */
-  protected _getServerVersion(): string {
-    if (!this._db) {
-      throw new DAMEngineError('ENGINE_NOT_CONNECTED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        reason: 'Database not connected',
-      });
+  protected override _updatePoolStatus(): void {
+    // Skip if client not initialized or in transitional state
+    if (
+      !this._client || this._status === 'CLOSED' ||
+      this._status === 'CONNECTING'
+    ) {
+      return;
     }
 
-    try {
-      const result = this._db.prepare('SELECT sqlite_version() as version')
-        .get() as { version: string };
-      return `SQLite ${result.version}`;
-    } catch (error) {
-      throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        query: 'SELECT sqlite_version() as version',
-        originalError: error,
-        reason: `Failed to get SQLite version: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      });
-    }
-  }
+    // SQLite has single connection - no pool statistics to track
+    this._poolStats.total = 1;
+    this._poolStats.idle = this._client.open ? 1 : 0;
+    this._poolStats.active = 0;
+    this._poolStats.waiting = 0;
 
-  /**
-   * Execute VACUUM command to optimize database
-   * This is SQLite-specific functionality for database optimization
-   */
-  public vacuum(): void {
-    if (!this._db) {
-      throw new DAMEngineError('ENGINE_NOT_CONNECTED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        reason: 'Database not connected',
-      });
-    }
-
-    try {
-      this._db.exec('VACUUM;');
-    } catch (error) {
-      throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        query: 'VACUUM;',
-        originalError: error,
-        reason: `VACUUM failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      });
-    }
-  }
-
-  /**
-   * Execute ANALYZE command to update query planner statistics
-   * This is SQLite-specific functionality for query optimization
-   */
-  public analyze(): void {
-    if (!this._db) {
-      throw new DAMEngineError('ENGINE_NOT_CONNECTED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        reason: 'Database not connected',
-      });
-    }
-
-    try {
-      this._db.exec('ANALYZE;');
-    } catch (error) {
-      throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
-        instanceId: this.instanceId,
-        name: this.name,
-        engine: this.Engine,
-        query: 'ANALYZE;',
-        originalError: error,
-        reason: `ANALYZE failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      });
+    // Status is always READY if client is open
+    if (this._client.open) {
+      this._status = 'READY';
     }
   }
 }

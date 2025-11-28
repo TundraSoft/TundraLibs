@@ -173,10 +173,13 @@ export const throttle = <T extends (...args: any[]) => any>(
       { lastCall: 0, returnValue: null, isRunning: false };
     const currentTime = getCurrentTime();
     // Lets re-write without setTimeout
-    if (callLog.isRunning === true) {
-      return callLog.returnValue as ReturnType<T>;
-    } else if (callLog.lastCall > 0 && currentTime - callLog.lastCall < delay) {
-      return callLog.returnValue as ReturnType<T>;
+    // If currently running or still within throttle window, return cached result when present.
+    if (
+      callLog.isRunning === true ||
+      (callLog.lastCall > 0 && currentTime - callLog.lastCall < delay)
+    ) {
+      const cached = callLog.returnValue;
+      if (cached !== null) return cached;
     } else if (
       callLog.lastCall > 0 && currentTime - callLog.lastCall >= delay
     ) {
@@ -185,10 +188,11 @@ export const throttle = <T extends (...args: any[]) => any>(
       callLog.returnValue = null;
     }
     callLog.lastCall = currentTime;
-    callLog.returnValue = fn(...args);
-    if ((callLog.returnValue as any) instanceof Promise) {
+    const result = fn(...args) as ReturnType<T>;
+    callLog.returnValue = result;
+    if ((result as any) instanceof Promise) {
       callLog.isRunning = true;
-      (callLog.returnValue as Promise<unknown>).finally(() => {
+      (result as Promise<unknown>).finally(() => {
         callLog.isRunning = false;
         // Update time so that delay is in effect from here
         callLog.lastCall = getCurrentTime();
@@ -197,7 +201,7 @@ export const throttle = <T extends (...args: any[]) => any>(
       });
     }
     update(argMap, callLog);
-    return callLog.returnValue as ReturnType<T>;
+    return result;
   };
 
   return throttled as T;

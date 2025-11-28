@@ -1,2 +1,2 @@
 import { EngineOptions } from '../../../engine/mod.ts';
-export type MariaEngineOptions = EngineOptions;
+export type PostgresEngineOptions = EngineOptions;

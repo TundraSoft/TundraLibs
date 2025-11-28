@@ -42,7 +42,7 @@ export class NumberGuardian extends BaseGuardian<number> {
           type: 'number',
         });
       }
-      if (isNaN(input)) {
+      if (Number.isNaN(input)) {
         throw new GuardianError('Number cannot be NaN', {
           expected: 'valid number',
           got: 'NaN',

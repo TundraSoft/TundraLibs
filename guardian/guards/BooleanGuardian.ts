@@ -38,7 +38,7 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
           type: 'boolean',
         });
       }
-      return input as boolean;
+      return input;
     };
 
     super(initialTransform || defaultTransform, metaData);

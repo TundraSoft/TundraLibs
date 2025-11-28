@@ -491,15 +491,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
     if (num < 1n) return false;
     if (num === 1n) return true;
 
-    if (base !== undefined) {
-      if (base <= 1n) return false;
-
-      let power = base;
-      while (power < num) {
-        power *= base;
-      }
-      return power === num;
-    } else {
+    if (base === undefined) {
       // Check if num is a perfect power of any base >= 2
       for (
         let candidateBase = 2n;
@@ -513,6 +505,13 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
         if (power === num) return true;
       }
       return false;
+    } else {
+      if (base <= 1n) return false;
+      let power = base;
+      while (power < num) {
+        power *= base;
+      }
+      return power === num;
     }
   }
 

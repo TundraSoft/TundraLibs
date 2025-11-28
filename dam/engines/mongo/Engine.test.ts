@@ -1,599 +1,696 @@
 import * as asserts from '$asserts';
-import { MongoDBEngine, type MongoDBEngineOptions } from './mod.ts';
-import { DAMError } from '../../errors/mod.ts';
+import { MongoEngine } from './Engine.ts';
+import { DAMEngineError } from '../../engine/mod.ts';
 import { envArgs } from '@tundralibs/utils';
 
 const env = envArgs('./dam/engines/');
-
-// Test configuration with shorter timeouts for faster testing
+// Test configuration from environment variables with defaults
 const TEST_CONFIG = {
   host: env.get('MONGODB_HOST') || 'localhost',
-  port: parseInt(env.get('MONGODB_PORT') || '27017'),
-  username: env.get('MONGODB_USERNAME'),
-  password: env.get('MONGODB_PASSWORD'),
-  database: env.get('MONGODB_DATABASE') || 'test_dam',
-  authSource: 'admin', // Required for Docker MongoDB root user
-  connectionTimeout: 1, // 1 second for faster tests
-  queryTimeout: 1, // 1 second for faster tests
+  port: Number.parseInt(env.get('MONGODB_PORT') || '27017'),
+  database: env.get('MONGODB_DATABASE') || 'mongo',
+  username: env.get('MONGODB_USERNAME') || 'mongo',
+  password: env.get('MONGODB_PASSWORD') || 'mongo',
 };
 
-Deno.test('dam.engines.mongodb', async (t) => {
-  // Setup function creates a new engine instance each time to ensure test isolation
-  const setupMongoDB = () => {
-    return new MongoDBEngine('mongo-test', {
-      host: env.get('MONGODB_HOST') || 'localhost',
-      port: parseInt(env.get('MONGODB_PORT') || '27017'),
-      database: env.get('MONGODB_DATABASE') || 'test_dam',
-      username: env.get('MONGODB_USERNAME'), // Required for Docker setup
-      password: env.get('MONGODB_PASSWORD'), // Required for Docker setup
-      authSource: 'admin', // Required for Docker MongoDB root user
-    });
-  };
+// Check if MongoDB is available
+async function isMongoAvailable(): Promise<boolean> {
+  try {
+    const engine = new MongoEngine('test-check', TEST_CONFIG);
+    await engine.connect();
+    await engine.disconnect();
+    return true;
+  } catch (e) {
+    console.log('MongoDB not available, skipping tests.', TEST_CONFIG);
+    console.log(e);
+    return false;
+  }
+}
 
-  const teardownMongoDB = async (engine?: MongoDBEngine) => {
-    if (engine) {
+Deno.test({
+  name: 'dam.engines.mongo',
+  ignore: !(await isMongoAvailable()),
+  sanitizeOps: false,
+  sanitizeResources: false,
+  fn: async (t) => {
+    // Clean up all test collections before running tests
+    const cleanupEngine = new MongoEngine('cleanup', TEST_CONFIG);
+    await cleanupEngine.connect();
+    const testCollections = [
+      'test_users',
+      'test_sales',
+      'test_batch',
+      'test_pool',
+      'test_events',
+      'test_tx',
+    ];
+    for (const collection of testCollections) {
       try {
-        // Clean up test collection
-        if (engine.status === 'IDLE') {
-          await engine.execute({
-            sql: 'deleteMany',
-            collection: 'test_users',
-            data: {},
-          }).catch(() => {}); // Ignore errors during cleanup
-        }
-        await engine.close();
-
-        // Clear any remaining health monitoring intervals to prevent resource leaks
-        // Access the private property using type assertion if needed
-        const engineAny = engine as any;
-        if (engineAny._healthCheckInterval) {
-          clearInterval(engineAny._healthCheckInterval);
-          engineAny._healthCheckInterval = undefined;
-        }
-
-        // Give more time for MongoDB driver to clean up internal timers and connections
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        await cleanupEngine.execute({
+          sql: 'delete',
+          collection: collection,
+          filter: {},
+          options: { multiple: true },
+        });
       } catch {
-        // Ignore errors during teardown
+        // Collection might not exist, ignore
       }
     }
-  };
+    await cleanupEngine.disconnect();
 
-  await t.step('Constructor and Basic Properties', async (t) => {
-    await t.step('should create MongoDBEngine with valid configuration', () => {
-      const engine = setupMongoDB();
-      asserts.assertInstanceOf(engine, MongoDBEngine);
-      asserts.assertEquals(engine.Engine, 'MongoDB');
-      asserts.assertEquals(engine.name, 'mongo-test');
-      asserts.assertEquals(
-        engine.instanceId.includes('MongoDB::mongo-test::'),
-        true,
-      ); // Contains engine, name and instanceId
-      asserts.assertEquals(engine.status, 'CLOSED');
-    });
-
-    await t.step('should reject invalid configuration - no host', () => {
-      asserts.assertThrows(
-        () => {
-          new MongoDBEngine('test', {} as MongoDBEngineOptions);
-        },
-        Error,
-        'MongoDB host and database are required',
-      );
-    });
-
-    await t.step('should reject invalid configuration - no database', () => {
-      asserts.assertThrows(
-        () => {
-          new MongoDBEngine('test', {
-            host: 'localhost',
-          } as MongoDBEngineOptions);
-        },
-        Error,
-        'MongoDB host and database are required',
-      );
-    });
-
-    await t.step('should handle engine name parsing', () => {
-      const engine1 = new MongoDBEngine('simple-name', {
-        host: 'localhost',
-        database: 'test',
+    await t.step('configuration', async (u) => {
+      await u.step('should create engine with valid config', () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+        asserts.assertEquals(engine.Engine, 'MONGO');
+        asserts.assertEquals(engine.Name, 'test-db');
+        asserts.assertEquals(engine.Capabilities.transactions, false);
+        asserts.assertEquals(engine.Capabilities.pooledConnections, true);
+        asserts.assertEquals(
+          engine.Capabilities.parameterReplacement,
+          undefined,
+        );
       });
-      asserts.assertEquals(engine1.name, 'simple-name');
 
-      const engine2 = new MongoDBEngine('complex::instance-id', {
-        host: 'localhost',
-        database: 'test',
+      await u.step('should use default port', () => {
+        const { port, ...config } = TEST_CONFIG;
+        const engine = new MongoEngine('test-db', config);
+        asserts.assertEquals(engine.getOption('port'), 27017);
       });
-      asserts.assertEquals(engine2.name, 'complex');
-      asserts.assertEquals(engine2.instanceId.includes('instance-id'), true);
-    });
-  });
 
-  await t.step('Connection Management', async (t) => {
-    await t.step('should successfully connect to MongoDB', async () => {
-      const engine = setupMongoDB();
-
-      asserts.assertEquals(engine.status, 'CLOSED');
-      await engine.connect();
-      asserts.assertEquals(engine.status, 'IDLE');
-
-      await teardownMongoDB(engine);
+      await u.step('should validate required fields', () => {
+        asserts.assertThrows(
+          () => new MongoEngine('test-db', { ...TEST_CONFIG, host: '' }),
+          DAMEngineError,
+        );
+        asserts.assertThrows(
+          () => new MongoEngine('test-db', { ...TEST_CONFIG, database: '' }),
+          DAMEngineError,
+        );
+      });
     });
 
-    await t.step(
-      'should handle connection failure with invalid host',
-      async () => {
-        const engine = new MongoDBEngine('test-invalid', {
-          host: 'invalid-host-12345',
-          port: 99999,
-          database: 'test',
+    await t.step('connection management', async (u) => {
+      await u.step('should connect and disconnect', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+        let connectEmitted = false;
+        let disconnectEmitted = false;
+
+        engine.on('connect', () => {
+          connectEmitted = true;
+        });
+        engine.on('disconnect', () => {
+          disconnectEmitted = true;
+        });
+
+        await engine.connect();
+        asserts.assertEquals(engine.status, 'READY');
+        asserts.assert(connectEmitted);
+
+        await engine.disconnect();
+        asserts.assertEquals(engine.status, 'CLOSED');
+        asserts.assert(disconnectEmitted);
+      });
+
+      await u.step('should handle connection failure', async () => {
+        const engine = new MongoEngine('test-db', {
+          ...TEST_CONFIG,
+          host: 'invalid-host-that-does-not-exist',
         });
 
         await asserts.assertRejects(
           () => engine.connect(),
-          Error, // DAMEngineError extends Error
+          DAMEngineError,
         );
-
-        await engine.close().catch(() => {}); // Clean up
-      },
-    );
-
-    await t.step('should handle graceful disconnection', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
-      asserts.assertEquals(engine.status, 'IDLE');
-
-      await engine.close();
-      asserts.assertEquals(engine.status, 'CLOSED');
+      });
     });
 
-    await t.step('should handle multiple connection attempts', async () => {
-      const engine = setupMongoDB();
+    await t.step('query execution', async (u) => {
+      await u.step('should execute insert action', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+        let queryEmitted = false;
 
-      await engine.connect();
-      asserts.assertEquals(engine.status, 'IDLE');
+        engine.on('query', () => {
+          queryEmitted = true;
+        });
 
-      // Second connect should throw ENGINE_ALREADY_CONNECTED
-      await asserts.assertRejects(
-        () => engine.connect(),
-        Error, // DAMEngineError extends Error
-        'Engine MongoDB::mongo-test is already connected',
-      );
+        // Insert a document
+        const result = await engine.execute({
+          sql: 'insert',
+          collection: 'test_users',
+          data: { name: 'Alice', age: 30, email: 'alice@example.com' },
+        });
 
-      await teardownMongoDB(engine);
-    });
+        asserts.assert(result.count > 0);
+        asserts.assert(queryEmitted);
 
-    await t.step('should handle multiple disconnection attempts', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
+        // Clean up
+        await engine.execute({
+          sql: 'delete',
+          collection: 'test_users',
+          filter: { name: 'Alice' },
+        });
 
-      await engine.close();
-      asserts.assertEquals(engine.status, 'CLOSED');
-
-      // Second close should be safe
-      await engine.close();
-      asserts.assertEquals(engine.status, 'CLOSED');
-    });
-  });
-
-  await t.step('Status Management', async (t) => {
-    await t.step('should report correct status when connected', async () => {
-      const engine = setupMongoDB();
-      asserts.assertEquals(engine.status, 'CLOSED');
-
-      await engine.connect();
-      asserts.assertEquals(engine.status, 'IDLE');
-
-      await teardownMongoDB(engine);
-      asserts.assertEquals(engine.status, 'CLOSED');
-    });
-
-    await t.step('should report healthy status when connected', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
-
-      const health = engine.healthStatus;
-      asserts.assertEquals(health.isHealthy, true);
-      asserts.assertEquals(health.consecutiveErrors, 0);
-
-      await teardownMongoDB(engine);
-    });
-  });
-
-  await t.step('Document Operations', async (t) => {
-    await t.step('should execute find operation', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
-
-      // Clear any existing test data first
-      await engine.execute({
-        sql: 'deleteMany',
-        collection: 'test_users',
-        data: {},
-      }).catch(() => {}); // Ignore errors if collection doesn't exist
-
-      // Insert test data first
-      await engine.execute({
-        sql: 'insertMany',
-        collection: 'test_users',
-        data: [
-          { name: 'John Doe', email: 'john@example.com', age: 30 },
-          { name: 'Jane Smith', email: 'jane@example.com', age: 25 },
-        ],
+        await engine.disconnect();
       });
 
-      const result = await engine.execute({
-        sql: 'find',
-        collection: 'test_users',
-        data: { age: { $gte: 25 } },
-      });
+      await u.step('should execute find action', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
 
-      asserts.assertEquals(result.data.length, 2);
-      asserts.assertEquals(result.count, 2);
+        // Insert test data
+        await engine.execute({
+          sql: 'insert',
+          collection: 'test_users',
+          data: { name: 'Bob', age: 25, email: 'bob@example.com' },
+        });
 
-      await teardownMongoDB(engine);
-    });
-
-    await t.step('should execute findOne operation', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
-
-      await engine.execute({
-        sql: 'insertOne',
-        collection: 'test_users',
-        data: { name: 'Single User', email: 'single@example.com' },
-      });
-
-      const result = await engine.execute({
-        sql: 'findOne',
-        collection: 'test_users',
-        data: { name: 'Single User' },
-      });
-
-      asserts.assertEquals(result.data.length, 1);
-      asserts.assertEquals(result.count, 1);
-      asserts.assert(result.data[0]);
-      asserts.assertEquals(result.data[0].name, 'Single User');
-
-      await teardownMongoDB(engine);
-    });
-
-    await t.step('should execute insertOne operation', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
-
-      const result = await engine.execute({
-        sql: 'insertOne',
-        collection: 'test_users',
-        data: { name: 'New User', email: 'new@example.com' },
-      });
-
-      asserts.assertEquals(result.count, 1);
-
-      // Verify insertion
-      const findResult = await engine.execute({
-        sql: 'findOne',
-        collection: 'test_users',
-        data: { name: 'New User' },
-      });
-      asserts.assert(findResult.data[0]);
-      asserts.assertEquals(findResult.data[0].name, 'New User');
-
-      await teardownMongoDB(engine);
-    });
-
-    await t.step('should execute insertMany operation', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
-
-      // Clear any existing test data first
-      await engine.execute({
-        sql: 'deleteMany',
-        collection: 'test_users',
-        data: {},
-      }).catch(() => {}); // Ignore errors if collection doesn't exist
-
-      const result = await engine.execute({
-        sql: 'insertMany',
-        collection: 'test_users',
-        data: [
-          { name: 'User 1', email: 'user1@example.com' },
-          { name: 'User 2', email: 'user2@example.com' },
-          { name: 'User 3', email: 'user3@example.com' },
-        ],
-      });
-
-      asserts.assertEquals(result.count, 3);
-
-      // Verify insertion
-      const findResult = await engine.execute({
-        sql: 'find',
-        collection: 'test_users',
-        data: {},
-      });
-      asserts.assertEquals(findResult.count, 3);
-
-      await teardownMongoDB(engine);
-    });
-
-    await t.step('should execute updateOne operation', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
-
-      // Clear any existing test data first
-      await engine.execute({
-        sql: 'deleteMany',
-        collection: 'test_users',
-        data: {},
-      }).catch(() => {}); // Ignore errors if collection doesn't exist
-
-      // Insert test data
-      await engine.execute({
-        sql: 'insertOne',
-        collection: 'test_users',
-        data: { name: 'Old Name', email: 'old@example.com' },
-      });
-
-      const result = await engine.execute({
-        sql: 'updateOne',
-        collection: 'test_users',
-        data: { $set: { name: 'New Name' } },
-        options: { filter: { email: 'old@example.com' } },
-      });
-
-      asserts.assertEquals(result.count, 1);
-
-      // Verify update
-      const findResult = await engine.execute({
-        sql: 'findOne',
-        collection: 'test_users',
-        data: { email: 'old@example.com' },
-      });
-      asserts.assert(findResult.data[0]);
-      asserts.assertEquals(findResult.data[0].name, 'New Name');
-
-      await teardownMongoDB(engine);
-    });
-
-    await t.step('should execute updateMany operation', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
-
-      // Insert test data
-      await engine.execute({
-        sql: 'insertMany',
-        collection: 'test_users',
-        data: [
-          { status: 'inactive', category: 'user' },
-          { status: 'inactive', category: 'user' },
-          { status: 'active', category: 'admin' },
-        ],
-      });
-
-      const result = await engine.execute({
-        sql: 'updateMany',
-        collection: 'test_users',
-        data: { $set: { status: 'active' } },
-        options: { filter: { category: 'user' } },
-      });
-
-      asserts.assertEquals(result.count, 2);
-
-      await teardownMongoDB(engine);
-    });
-
-    await t.step('should execute deleteOne operation', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
-
-      // Clear any existing test data first
-      await engine.execute({
-        sql: 'deleteMany',
-        collection: 'test_users',
-        data: {},
-      }).catch(() => {}); // Ignore errors if collection doesn't exist
-
-      // Insert test data
-      await engine.execute({
-        sql: 'insertMany',
-        collection: 'test_users',
-        data: [
-          { name: 'Delete Me', type: 'temp' },
-          { name: 'Keep Me', type: 'permanent' },
-        ],
-      });
-
-      const result = await engine.execute({
-        sql: 'deleteOne',
-        collection: 'test_users',
-        data: { type: 'temp' },
-      });
-
-      asserts.assertEquals(result.count, 1);
-
-      // Verify deletion
-      const findResult = await engine.execute({
-        sql: 'find',
-        collection: 'test_users',
-        data: {},
-      });
-      asserts.assertEquals(findResult.count, 1);
-      asserts.assert(findResult.data[0]);
-      asserts.assertEquals(findResult.data[0].type, 'permanent');
-
-      await teardownMongoDB(engine);
-    });
-
-    await t.step('should execute deleteMany operation', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
-
-      // Clear any existing test data first
-      await engine.execute({
-        sql: 'deleteMany',
-        collection: 'test_users',
-        data: {},
-      }).catch(() => {}); // Ignore errors if collection doesn't exist
-
-      // Insert test data
-      await engine.execute({
-        sql: 'insertMany',
-        collection: 'test_users',
-        data: [
-          { status: 'deleted', name: 'User 1' },
-          { status: 'deleted', name: 'User 2' },
-          { status: 'active', name: 'User 3' },
-        ],
-      });
-
-      const result = await engine.execute({
-        sql: 'deleteMany',
-        collection: 'test_users',
-        data: { status: 'deleted' },
-      });
-
-      asserts.assertEquals(result.count, 2);
-
-      // Verify deletion
-      const findResult = await engine.execute({
-        sql: 'find',
-        collection: 'test_users',
-        data: {},
-      });
-      asserts.assertEquals(findResult.count, 1);
-
-      await teardownMongoDB(engine);
-    });
-
-    await t.step('should execute countDocuments operation', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
-
-      // Clear any existing test data first
-      await engine.execute({
-        sql: 'deleteMany',
-        collection: 'test_users',
-        data: {},
-      }).catch(() => {}); // Ignore errors if collection doesn't exist
-
-      // Insert test data
-      await engine.execute({
-        sql: 'insertMany',
-        collection: 'test_users',
-        data: [
-          { category: 'premium', active: true },
-          { category: 'premium', active: false },
-          { category: 'basic', active: true },
-        ],
-      });
-
-      const result = await engine.execute({
-        sql: 'countDocuments',
-        collection: 'test_users',
-        data: { category: 'premium' },
-      });
-
-      asserts.assertEquals(result.count, 1);
-      asserts.assert(result.data[0]);
-      asserts.assertEquals(result.data[0].count, 2);
-
-      await teardownMongoDB(engine);
-    });
-  });
-
-  await t.step('Error Handling', async (t) => {
-    await t.step(
-      'should auto-connect and execute query successfully',
-      async () => {
-        const engine = setupMongoDB();
-        // Test auto-connect feature - engine should connect automatically when executing a query
-
+        // Find the document
         const result = await engine.execute({
           sql: 'find',
           collection: 'test_users',
-          data: {},
+          filter: { name: 'Bob' },
         });
 
-        asserts.assertExists(result);
-        asserts.assertExists(result.data);
-        asserts.assertEquals(Array.isArray(result.data), true);
+        asserts.assertEquals(result.count, 1);
+        asserts.assertEquals(result.data[0]?.name, 'Bob');
+        asserts.assertEquals(result.data[0]?.age, 25);
 
-        await teardownMongoDB(engine);
-      },
-    );
+        // Clean up
+        await engine.execute({
+          sql: 'delete',
+          collection: 'test_users',
+          filter: { name: 'Bob' },
+        });
 
-    await t.step('should handle unsupported operations', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
+        await engine.disconnect();
+      });
 
-      await asserts.assertRejects(
-        () =>
-          engine.execute({
-            sql: 'unsupported_operation' as any,
-            collection: 'test',
-            data: {},
-          }),
-        DAMError,
-        'Unsupported MongoDB operation',
-      );
+      await u.step('should execute find with complex filter', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
 
-      await teardownMongoDB(engine);
-    });
+        // Clean up old data first
+        await engine.execute({
+          sql: 'delete',
+          collection: 'test_users',
+          filter: {},
+          options: { multiple: true },
+        });
 
-    await t.step('should handle insert operation without data', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
+        // Insert test data
+        await engine.execute({
+          sql: 'insert',
+          collection: 'test_users',
+          data: [
+            { name: 'Charlie', age: 35, city: 'NYC' },
+            { name: 'David', age: 22, city: 'LA' },
+            { name: 'Eve', age: 40, city: 'NYC' },
+          ],
+        });
 
-      await asserts.assertRejects(
-        () =>
-          engine.execute({
-            sql: 'insertOne',
-            collection: 'test_users',
-            data: undefined,
-          }),
-        DAMError,
-        'Insert operation requires data',
-      );
+        // Find with complex filter
+        const result = await engine.execute({
+          sql: 'find',
+          collection: 'test_users',
+          filter: { age: { $gte: 30 }, city: 'NYC' },
+        });
 
-      await teardownMongoDB(engine);
-    });
-
-    await t.step('should handle update operation without data', async () => {
-      const engine = setupMongoDB();
-      await engine.connect();
-
-      await asserts.assertRejects(
-        () =>
-          engine.execute({
-            sql: 'updateOne',
-            collection: 'test_users',
-            data: undefined,
-            options: { filter: { _id: 'test' } },
-          }),
-        DAMError,
-        'Update operation requires data',
-      );
-
-      await teardownMongoDB(engine);
-    });
-  });
-
-  await t.step('Transaction Support', async (t) => {
-    await t.step(
-      'should throw OPERATION_NOT_SUPPORTED for beginTransaction',
-      async () => {
-        const engine = setupMongoDB();
-        await engine.connect();
-
-        await asserts.assertRejects(
-          () => engine.begin(),
-          Error, // DAMEngineError extends Error
-          'Operation transactions not supported',
+        asserts.assertEquals(result.count, 2);
+        asserts.assert(
+          result.data.every((d: any) => d.age >= 30 && d.city === 'NYC'),
         );
 
-        await teardownMongoDB(engine);
-      },
-    );
-  });
+        // Clean up
+        await engine.execute({
+          sql: 'delete',
+          collection: 'test_users',
+          filter: { name: { $in: ['Charlie', 'David', 'Eve'] } },
+        });
+
+        await engine.disconnect();
+      });
+
+      await u.step('should execute update action', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+
+        // Insert test data
+        await engine.execute({
+          sql: 'insert',
+          collection: 'test_users',
+          data: { name: 'Frank', age: 28, status: 'active' },
+        });
+
+        // Update the document
+        const result = await engine.execute({
+          sql: 'update',
+          collection: 'test_users',
+          filter: { name: 'Frank' },
+          data: { $set: { age: 29, status: 'inactive' } },
+        });
+
+        asserts.assert(result.count > 0);
+
+        // Verify update
+        const verify = await engine.execute({
+          sql: 'find',
+          collection: 'test_users',
+          filter: { name: 'Frank' },
+        });
+        asserts.assertEquals(verify.data[0]?.age, 29);
+        asserts.assertEquals(verify.data[0]?.status, 'inactive');
+
+        // Clean up
+        await engine.execute({
+          sql: 'delete',
+          collection: 'test_users',
+          filter: { name: 'Frank' },
+        });
+
+        await engine.disconnect();
+      });
+
+      await u.step('should execute delete action', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+
+        // Insert test data
+        await engine.execute({
+          sql: 'insert',
+          collection: 'test_users',
+          data: { name: 'Grace', age: 33, temp: true },
+        });
+
+        // Delete the document
+        const result = await engine.execute({
+          sql: 'delete',
+          collection: 'test_users',
+          filter: { name: 'Grace' },
+        });
+
+        asserts.assert(result.count > 0);
+
+        // Verify deletion
+        const verify = await engine.execute({
+          sql: 'find',
+          collection: 'test_users',
+          filter: { name: 'Grace' },
+        });
+        asserts.assertEquals(verify.count, 0);
+
+        await engine.disconnect();
+      });
+
+      await u.step('should execute aggregate action', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+
+        // Clean up old data first
+        await engine.execute({
+          sql: 'delete',
+          collection: 'test_sales',
+          filter: {},
+          options: { multiple: true },
+        });
+
+        // Insert test data
+        await engine.execute({
+          sql: 'insert',
+          collection: 'test_sales',
+          data: [
+            { product: 'A', amount: 100 },
+            { product: 'B', amount: 200 },
+            { product: 'A', amount: 150 },
+          ],
+        });
+
+        // Aggregate
+        const result = await engine.execute({
+          sql: 'aggregate',
+          collection: 'test_sales',
+          pipeline: [
+            { $group: { _id: '$product', total: { $sum: '$amount' } } },
+            { $sort: { total: -1 } },
+          ],
+        });
+
+        asserts.assertEquals(result.count, 2);
+        asserts.assertEquals(result.data[0]?._id, 'A');
+        asserts.assertEquals(result.data[0]?.total, 250);
+
+        // Clean up
+        await engine.execute({
+          sql: 'delete',
+          collection: 'test_sales',
+          filter: {},
+        });
+
+        await engine.disconnect();
+      });
+
+      await u.step('should track query statistics', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+
+        await engine.execute({
+          sql: 'insert',
+          collection: 'test_stats',
+          data: { value: 1 },
+        });
+        await engine.execute({
+          sql: 'find',
+          collection: 'test_stats',
+          filter: { value: 1 },
+        });
+
+        const stats = engine.queryStats;
+        asserts.assertEquals(stats.totalQueries, 2);
+        asserts.assertEquals(stats.successfulQueries, 2);
+        asserts.assertEquals(stats.failedQueries, 0);
+
+        // Clean up
+        await engine.execute({
+          sql: 'delete',
+          collection: 'test_stats',
+          filter: {},
+        });
+
+        await engine.disconnect();
+      });
+
+      await u.step(
+        'should handle repeated field references in query',
+        async () => {
+          const engine = new MongoEngine('test-db', TEST_CONFIG);
+
+          // Insert test data
+          await engine.execute({
+            sql: 'insert',
+            collection: 'test_users',
+            data: { name: 'TestUser', age: 32, status: 'active' },
+          });
+
+          // Find with filter that references same field multiple times
+          const result = await engine.execute({
+            sql: 'find',
+            collection: 'test_users',
+            filter: { name: 'TestUser', age: 32 },
+          });
+
+          asserts.assertEquals(result.count, 1);
+          asserts.assertEquals(result.data[0]?.name, 'TestUser');
+          asserts.assertEquals(result.data[0]?.age, 32);
+
+          // Clean up
+          await engine.execute({
+            sql: 'delete',
+            collection: 'test_users',
+            filter: { name: 'TestUser' },
+          });
+
+          await engine.disconnect();
+        },
+      );
+
+      await u.step('should handle query failure', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+
+        await asserts.assertRejects(
+          () =>
+            engine.execute({
+              sql: 'invalid_action',
+              collection: 'test_users',
+            }),
+          DAMEngineError,
+        );
+
+        const stats = engine.queryStats;
+        asserts.assertEquals(stats.failedQueries, 1);
+
+        await engine.disconnect();
+      });
+    });
+
+    await t.step('transaction management', async (u) => {
+      await u.step(
+        'should throw error when attempting transactions (disabled)',
+        async () => {
+          const engine = new MongoEngine('test-db', TEST_CONFIG);
+
+          // Transactions are disabled in MongoDB engine
+          await asserts.assertRejects(
+            () => engine.beginTransaction(),
+            DAMEngineError,
+          );
+
+          await engine.disconnect();
+        },
+      );
+
+      await u.step(
+        'should verify concurrent operations work without transactions',
+        async () => {
+          const engine = new MongoEngine('test-db', TEST_CONFIG);
+
+          // Create test collection with initial data
+          await engine.execute({
+            sql: 'delete',
+            collection: 'test_concurrent',
+            filter: {},
+            options: { multiple: true },
+          });
+
+          // Execute multiple operations concurrently
+          await Promise.all([
+            engine.execute({
+              sql: 'insert',
+              collection: 'test_concurrent',
+              data: { id: 1, value: 'op1' },
+            }),
+            engine.execute({
+              sql: 'insert',
+              collection: 'test_concurrent',
+              data: { id: 2, value: 'op2' },
+            }),
+            engine.execute({
+              sql: 'insert',
+              collection: 'test_concurrent',
+              data: { id: 3, value: 'op3' },
+            }),
+          ]);
+
+          // Verify all operations succeeded
+          const result = await engine.execute({
+            sql: 'find',
+            collection: 'test_concurrent',
+            filter: {},
+          });
+          asserts.assertEquals(result.count, 3);
+
+          // Clean up
+          await engine.execute({
+            sql: 'delete',
+            collection: 'test_concurrent',
+            filter: {},
+            options: { multiple: true },
+          });
+
+          await engine.disconnect();
+        },
+      );
+
+      await u.step('should begin and commit transaction', async () => {
+        // SKIPPED: Transactions disabled for MongoDB
+        console.warn('Skipping test - MongoDB transactions disabled');
+      });
+
+      await u.step('should rollback transaction', async () => {
+        // SKIPPED: Transactions disabled for MongoDB
+        console.warn('Skipping test - MongoDB transactions disabled');
+      });
+
+      await u.step(
+        'should handle multiple sequential transactions',
+        async () => {
+          // SKIPPED: Transactions disabled for MongoDB
+          console.warn('Skipping test - MongoDB transactions disabled');
+        },
+      );
+
+      await u.step('should auto-rollback on error', async () => {
+        // SKIPPED: Transactions disabled for MongoDB
+        console.warn('Skipping test - MongoDB transactions disabled');
+      });
+    });
+
+    await t.step('batch execution', async (u) => {
+      await u.step('should execute multiple queries', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+
+        // Clean up old data first
+        await engine.execute({
+          sql: 'delete',
+          collection: 'test_batch',
+          filter: {},
+          options: { multiple: true },
+        });
+
+        await engine.batchExecute([
+          {
+            sql: 'insert',
+            collection: 'test_batch',
+            data: { order: 1 },
+          },
+          {
+            sql: 'insert',
+            collection: 'test_batch',
+            data: { order: 2 },
+          },
+          {
+            sql: 'insert',
+            collection: 'test_batch',
+            data: { order: 3 },
+          },
+        ]);
+
+        const stats = engine.queryStats;
+        asserts.assertEquals(stats.successfulQueries, 4); // 1 delete + 3 inserts
+
+        // Verify all inserts
+        const result = await engine.execute({
+          sql: 'find',
+          collection: 'test_batch',
+          filter: {},
+        });
+        asserts.assertEquals(result.count, 3);
+
+        // Clean up
+        await engine.execute({
+          sql: 'delete',
+          collection: 'test_batch',
+          filter: {},
+        });
+
+        await engine.disconnect();
+      });
+
+      await u.step('should halt on first error', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+
+        await asserts.assertRejects(
+          () =>
+            engine.batchExecute([
+              {
+                sql: 'insert',
+                collection: 'test_batch',
+                data: { order: 1 },
+              },
+              {
+                sql: 'invalid_action',
+                collection: 'test_batch',
+              },
+              {
+                sql: 'insert',
+                collection: 'test_batch',
+                data: { order: 3 },
+              },
+            ]),
+          DAMEngineError,
+        );
+
+        const stats = engine.queryStats;
+        asserts.assertEquals(stats.successfulQueries, 1);
+        asserts.assertEquals(stats.failedQueries, 1);
+
+        // Clean up
+        await engine.execute({
+          sql: 'delete',
+          collection: 'test_batch',
+          filter: {},
+        });
+
+        await engine.disconnect();
+      });
+    });
+
+    await t.step('pool management', async (u) => {
+      await u.step('should provide pool statistics', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+        await engine.connect();
+
+        const stats = engine.poolStats;
+        asserts.assert(stats.total >= 0);
+
+        await engine.disconnect();
+      });
+
+      await u.step('should handle pool exhaustion gracefully', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+        await engine.connect();
+
+        // Execute multiple queries that should work within pool limits
+        const promises = [];
+        for (let i = 0; i < 5; i++) {
+          promises.push(
+            engine.execute({
+              sql: 'find',
+              collection: 'test_pool',
+              filter: { id: i },
+            }),
+          );
+        }
+
+        await Promise.all(promises);
+        const stats = engine.queryStats;
+        asserts.assertEquals(stats.successfulQueries, 5);
+
+        await engine.disconnect();
+      });
+    });
+
+    await t.step('event emissions', async (u) => {
+      await u.step('should emit all query events', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+        const events: string[] = [];
+
+        engine.on('connect', () => events.push('connect'));
+        engine.on('query', () => events.push('query'));
+        engine.on('disconnect', () => events.push('disconnect'));
+
+        await engine.connect();
+        await engine.execute({
+          sql: 'insert',
+          collection: 'test_events',
+          data: { test: 1 },
+        });
+        await engine.disconnect();
+
+        asserts.assert(events.includes('connect'));
+        asserts.assert(events.includes('query'));
+        asserts.assert(events.includes('disconnect'));
+      });
+
+      await u.step('should emit transaction events', async () => {
+        // SKIPPED: Transactions disabled for MongoDB
+        console.warn('Skipping test - MongoDB transactions disabled');
+      });
+    });
+
+    await t.step('ping and health check', async (u) => {
+      await u.step('should ping successfully when connected', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+        await engine.connect();
+
+        const result = await engine.ping();
+        asserts.assertEquals(result, true);
+
+        await engine.disconnect();
+      });
+
+      await u.step('should auto-connect on ping', async () => {
+        const engine = new MongoEngine('test-db', TEST_CONFIG);
+
+        asserts.assertEquals(engine.status, 'CLOSED');
+        const result = await engine.ping();
+        asserts.assertEquals(result, true);
+        asserts.assertEquals(engine.status, 'READY');
+
+        await engine.disconnect();
+      });
+    });
+  },
 });

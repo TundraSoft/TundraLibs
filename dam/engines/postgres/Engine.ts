@@ -1,5 +1,4 @@
-/// <reference types="npm:@types/node" />
-import { createPool, type Pool, type PoolConnection } from '$maria';
+import { type ClientOptions, Pool, PoolClient } from '$postgres';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import {
   AbstractEngine,
@@ -8,49 +7,43 @@ import {
   EngineEvents,
   EngineQuery,
 } from '../../engine/mod.ts';
-import { MariaEngineOptions } from './types/mod.ts';
+import { PostgresEngineOptions } from './types/mod.ts';
 
 /**
- * Default configuration values for MariaDB connections.
+ * Default configuration values for PostgreSQL connections.
  */
-const MARIA_DEFAULTS: Partial<MariaEngineOptions> = {
-  port: 3306,
+const POSTGRES_DEFAULTS: Partial<PostgresEngineOptions> = {
+  port: 5432,
 };
 
 /**
- * MariaDB database engine implementation using npm's mariadb driver.
+ * PostgreSQL database engine implementation using Deno's native @db/postgres driver.
  *
  * Features:
- * - Connection pooling with configurable pool size and idle timeout
+ * - Connection pooling with configurable pool size
  * - Transaction support with isolated clients
- * - Named placeholder support (:name:)
- * - Proper type casting for BIGINT, DECIMAL, and other numeric types
+ * - Prepared statement support
  * - Real-time pool status tracking (READY/WAITING states)
  * - Automatic connection validation
- * - Zero-configuration SSL support
  *
- * Driver: npm:mariadb@^3.4.0 (high-performance, TypeScript-ready)
+ * Driver: jsr:@db/postgres@^0.19.5 (Deno-native, optimized performance)
  *
  * @example
  * ```typescript
- * const engine = new MariaEngine('mydb', {
+ * const engine = new PostgresEngine('mydb', {
  *   host: 'localhost',
- *   port: 3306,
+ *   port: 5432,
  *   database: 'myapp',
  *   username: 'user',
- *   password: 'pass',
- *   pool: { max: 20, min: 2 }
+ *   password: 'pass'
  * });
  * await engine.connect();
- * const result = await engine.execute({
- *   sql: 'SELECT * FROM users WHERE id = :id:',
- *   params: { id: 1 }
- * });
+ * const result = await engine.execute({ sql: 'SELECT * FROM users' });
  * ```
  */
-export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
+export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
   /** Engine type identifier */
-  public readonly Engine = 'MARIA';
+  public readonly Engine = 'POSTGRES';
 
   /** Supported capabilities of this engine */
   public readonly Capabilities: EngineCapabilities = {
@@ -58,25 +51,25 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
     pooledConnections: true,
     preparedStatements: true,
     parameterReplacement: {
-      prefix: ':',
+      prefix: '$',
       suffix: '',
     },
   };
 
   /**
-   * Map of transaction IDs to their dedicated pool connections.
-   * Each transaction gets an isolated connection that persists until commit/rollback.
+   * Map of transaction IDs to their dedicated pool clients.
+   * Each transaction gets an isolated client that persists until commit/rollback.
    */
-  protected _clientMap: Map<string, PoolConnection> = new Map();
+  protected _clientMap: Map<string, PoolClient> = new Map();
 
   /**
-   * MariaDB connection pool instance from npm mariadb driver.
+   * PostgreSQL connection pool instance.
    * Manages a pool of reusable database connections.
    */
   private _client: Pool | null = null;
 
   /**
-   * Create a new MariaDB engine instance.
+   * Create a new PostgreSQL engine instance.
    *
    * @param name - Unique name for this engine instance
    * @param options - Connection and configuration options
@@ -84,9 +77,9 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
    */
   constructor(
     name: string,
-    options: EventOptionKeys<MariaEngineOptions, EngineEvents>,
+    options: EventOptionKeys<PostgresEngineOptions, EngineEvents>,
   ) {
-    super(name, options, MARIA_DEFAULTS);
+    super(name, options, POSTGRES_DEFAULTS);
 
     // Validate required configuration
     if (this.hasOption('database') === false) {
@@ -104,74 +97,67 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
   }
 
   /**
-   * Establish connection pool to MariaDB database.
+   * Establish connection pool to PostgreSQL database.
    *
    * Creates a connection pool with the configured options and validates
    * connectivity by executing a test query.
    *
    * Pool Configuration:
-   * - connectionLimit: Maximum pool size (default: 10)
-   * - minDelayValidation: Minimum delay before revalidating idle connections (default: 500ms)
-   * - connectionTimeout: Connection timeout (default: 10 seconds)
-   * - idleTimeout: Idle timeout based on idleTimeoutSeconds option
+   * - Size: 10 connections (fixed)
+   * - Lazy: true (connections created on demand)
+   * - Single connection attempt (no retries)
    *
-   * SSL/TLS Support (npm mariadb):
-   * - ssl: boolean true enables SSL with default verification
-   * - ssl: object allows custom CA, client cert/key, and rejectUnauthorized control
-   * - Loaded certificate contents from file paths are used
-   *
-   * Named Placeholders:
-   * - Enabled by default to support :name: syntax
-   *
-   * Type Casting:
-   * - supportBigInt: true (returns BigInt for BIGINT columns with values > 2^53)
-   * - decimalAsNumber: false (returns DECIMAL as string for precision)
+   * TLS/SSL Support:
+   * - enabled: true if ssl option is provided (boolean true or object)
+   * - enforce: true if ssl is boolean true or ssl.rejectUnauthorized is not false
+   * - caCertificates: Loaded from ssl.ca file path
    *
    * @throws {DAMEngineError} CONNECTION_FAILED if unable to connect
    * @protected
    */
   protected async _connect(): Promise<void> {
     try {
-      // Build base connection configuration
-      const config: Record<string, unknown> = {
-        host: this.getOption('host'),
-        port: this.getOption('port') || 3306,
+      // Build connection configuration
+      const config: ClientOptions = {
+        hostname: this.getOption('host'),
+        port: this.getOption('port') || 5432,
         database: this.getOption('database'),
         user: this.getOption('username'),
         password: this.getOption('password'),
-        connectionLimit: this.getOption('pool')?.max || 10,
-        minDelayValidation: 500, // Validate idle connections after 500ms
-        connectionTimeout: 10 * 1000,
-        idleTimeout: ((this.getOption('idleTimeoutSeconds') as number) || 30) *
-          1000,
-        namedPlaceholders: true, // Enable :name: syntax
-        supportBigInt: true, // Return BigInt for large integers
-        decimalAsNumber: true, // Keep decimals as strings for precision
+        applicationName: this.Name,
+        connection: {
+          attempts: 1, // Single attempt, fail fast
+        },
       };
 
-      // Configure SSL/TLS if enabled
+      // Configure TLS/SSL if enabled
       const ssl = this.getOption('ssl');
       if (ssl) {
         if (typeof ssl === 'boolean' && ssl === true) {
-          // Simple SSL mode - enable with default verification
-          config.ssl = true;
+          // Simple SSL mode - enforce TLS
+          config.tls = {
+            enabled: true,
+            enforce: true,
+          };
         } else if (typeof ssl === 'object') {
-          // Advanced SSL configuration with loaded certificates
-          config.ssl = {
-            rejectUnauthorized: ssl.rejectUnauthorized !== false, // Default to true
-            ca: this._sslCaCertificate,
-            cert: this._sslClientCertificate,
-            key: this._sslClientKey,
+          // Advanced SSL configuration
+          config.tls = {
+            enabled: true,
+            enforce: ssl.rejectUnauthorized !== false, // Default to true unless explicitly false
+            caCertificates: this._sslCaCertificate
+              ? [this._sslCaCertificate]
+              : undefined,
           };
         }
       }
 
-      // Create connection pool
-      this._client = createPool(config as Parameters<typeof createPool>[0]);
+      // Create connection pool with configurable size
+      const poolSize = this.getOption('pool')?.max || 10;
+      this._client = new Pool(config, poolSize, true);
 
       // Validate pool by acquiring and testing a connection
-      const testClient = await this._client.getConnection();
-      await testClient.query('SELECT 1');
+      const testClient = await this._client.connect();
+      await testClient.queryArray('SELECT 1');
       testClient.release();
     } catch (error) {
       this._client = null;
@@ -198,15 +184,11 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
   }
 
   /**
-   * Execute a query against the MariaDB database.
+   * Execute a query against the PostgreSQL database.
    *
    * Handles both transactional and non-transactional queries:
-   * - Transactional: Uses the dedicated connection from _clientMap
-   * - Non-transactional: Acquires a connection from pool, then releases it
-   *
-   * Named Placeholders:
-   * - MariaDB driver natively supports :name: syntax when namedPlaceholders is enabled
-   * - Parameters are passed as an object matching placeholder names
+   * - Transactional: Uses the dedicated client from _clientMap
+   * - Non-transactional: Acquires a client from pool, then releases it
    *
    * Note: AbstractEngine validates transaction existence before calling this method.
    *
@@ -222,42 +204,28 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
     query: EngineQuery,
   ): Promise<{ data: R[]; count: number }> {
     try {
-      let conn: PoolConnection;
+      let client: PoolClient;
 
       if (query.transactionId) {
-        // Use the dedicated transaction connection (validated by AbstractEngine)
-        conn = this._clientMap.get(query.transactionId)!;
+        // Use the dedicated transaction client (validated by AbstractEngine)
+        client = this._clientMap.get(query.transactionId)!;
       } else {
-        // Acquire a new connection from the pool for this query
-        conn = await this._client!.getConnection();
+        // Acquire a new client from the pool for this query
+        client = await this._client!.connect();
       }
 
-      // Execute the query with named placeholders
-      // MariaDB driver expects parameters as object when namedPlaceholders is enabled
-      const result = await conn.query<R[]>({
-        namedPlaceholders: true,
-        sql: query.sql,
-      }, query.params || {});
+      // Execute the query and return structured results
+      const result = await client.queryObject<R>(query.sql, query.params);
 
-      // Release connection back to pool (only for non-transaction queries)
+      // Release client back to pool (only for non-transaction queries)
       if (!query.transactionId) {
-        conn.release();
+        client.release();
       }
 
-      // Handle different result types
-      if (Array.isArray(result)) {
-        // SELECT query - returns array of rows
-        return {
-          data: result,
-          count: result.length,
-        };
-      } else {
-        // INSERT/UPDATE/DELETE - returns result object
-        return {
-          data: [],
-          count: (result as { affectedRows?: number }).affectedRows || 0,
-        };
-      }
+      return {
+        data: result.rows,
+        count: result.rowCount || result.rows.length || 0,
+      };
     } catch (e) {
       throw new DAMEngineError('QUERY_EXECUTION_FAILED', {
         engine: this.Engine,
@@ -270,12 +238,12 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
   /**
    * Begin a new database transaction.
    *
-   * Acquires a dedicated connection from the pool and starts a transaction.
-   * The connection is stored in _clientMap and will be reused for all queries
+   * Acquires a dedicated client from the pool and starts a transaction.
+   * The client is stored in _clientMap and will be reused for all queries
    * within this transaction until commit or rollback.
    *
    * Error Handling:
-   * - If BEGIN fails, the connection is released back to the pool
+   * - If BEGIN fails, the client is released back to the pool
    * - Exception is re-thrown for AbstractEngine to handle
    *
    * @param transactionId - Unique identifier for this transaction
@@ -283,14 +251,14 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
    * @protected
    */
   protected async _beginTransaction(transactionId: string): Promise<void> {
-    const conn = await this._client!.getConnection();
+    const client = await this._client!.connect();
     try {
-      await conn.beginTransaction();
-      // Store connection for subsequent transaction queries
-      this._clientMap.set(transactionId, conn);
+      await client.queryArray('BEGIN TRANSACTION;');
+      // Store client for subsequent transaction queries
+      this._clientMap.set(transactionId, client);
     } catch (e) {
-      // Release connection if BEGIN fails (no transaction started)
-      conn.release();
+      // Release client if BEGIN fails (no transaction started)
+      client.release();
       throw e;
     }
   }
@@ -299,10 +267,10 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
    * Commit a database transaction.
    *
    * Commits all changes made within the transaction and releases
-   * the dedicated connection back to the pool.
+   * the dedicated client back to the pool.
    *
    * Cleanup Guarantee:
-   * - Connection is always released (even if COMMIT fails)
+   * - Client is always released (even if COMMIT fails)
    * - Transaction ID is always removed from _clientMap
    *
    * Note: AbstractEngine validates transaction existence before calling this.
@@ -311,14 +279,14 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
    * @protected
    */
   protected async _commitTransaction(transactionId: string): Promise<void> {
-    // Get the dedicated transaction connection (validated by AbstractEngine)
-    const conn = this._clientMap.get(transactionId)!;
+    // Get the dedicated transaction client (validated by AbstractEngine)
+    const client = this._clientMap.get(transactionId)!;
 
     try {
-      await conn.commit();
+      await client.queryArray('COMMIT;');
     } finally {
       // Always cleanup, even if COMMIT fails
-      conn.release();
+      client.release();
       this._clientMap.delete(transactionId);
     }
   }
@@ -327,10 +295,10 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
    * Rollback a database transaction.
    *
    * Discards all changes made within the transaction and releases
-   * the dedicated connection back to the pool.
+   * the dedicated client back to the pool.
    *
    * Cleanup Guarantee:
-   * - Connection is always released (even if ROLLBACK fails)
+   * - Client is always released (even if ROLLBACK fails)
    * - Transaction ID is always removed from _clientMap
    *
    * Note: AbstractEngine validates transaction existence before calling this.
@@ -339,14 +307,14 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
    * @protected
    */
   protected async _rollbackTransaction(transactionId: string): Promise<void> {
-    // Get the dedicated transaction connection (validated by AbstractEngine)
-    const conn = this._clientMap.get(transactionId)!;
+    // Get the dedicated transaction client (validated by AbstractEngine)
+    const client = this._clientMap.get(transactionId)!;
 
     try {
-      await conn.rollback();
+      await client.queryArray('ROLLBACK;');
     } finally {
       // Always cleanup, even if ROLLBACK fails
-      conn.release();
+      client.release();
       this._clientMap.delete(transactionId);
     }
   }
@@ -373,14 +341,13 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
    * Update engine status and pool statistics based on real-time pool availability.
    *
    * Status Transitions:
-   * - READY → WAITING: When pool is exhausted (idleConnections === 0) and status is READY
-   * - WAITING → READY: When pool has capacity (idleConnections > 0)
+   * - READY → WAITING: When pool is exhausted (idle === 0) and status is READY
+   * - WAITING → READY: When pool has capacity (idle > 0)
    *
    * Pool Statistics Updated:
-   * - total: Maximum pool size (totalConnections from mariadb)
-   * - idle: Available connections (idleConnections from mariadb)
-   * - active: Currently in-use connections (activeConnections from mariadb)
-   * - waiting: Queries waiting for connections (taskQueueSize from mariadb)
+   * - total: Maximum pool size
+   * - idle: Available connections
+   * - active: Currently in-use connections (calculated)
    *
    * Guard Conditions:
    * - Skips update if pool is not initialized
@@ -399,10 +366,10 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
       return;
     }
 
-    // Update pool statistics from mariadb driver
-    this._poolStats.total = this._client.totalConnections();
-    this._poolStats.idle = this._client.idleConnections();
-    this._poolStats.active = this._client.activeConnections();
+    // Update pool statistics from driver
+    this._poolStats.total = this._client.size;
+    this._poolStats.idle = this._client.available;
+    this._poolStats.active = this._poolStats.total - this._poolStats.idle;
 
     // Update status based on pool availability
     if (this._poolStats.idle === 0 && this._status === 'READY') {

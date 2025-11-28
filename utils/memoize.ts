@@ -60,7 +60,7 @@ const createCacheKey = <T extends Array<unknown>>(args: T): string => {
     const hasNonSerializable = args.some((arg) =>
       typeof arg === 'function' ||
       typeof arg === 'symbol' ||
-      typeof arg === 'undefined'
+      arg === undefined
     );
 
     if (hasNonSerializable) {
@@ -71,13 +71,13 @@ const createCacheKey = <T extends Array<unknown>>(args: T): string => {
     const stringified = JSON.stringify(args);
 
     // Check if JSON.stringify converted something to null that shouldn't be
-    if (stringified.includes('null') && !args.some((arg) => arg === null)) {
+    if (stringified.includes('null') && !args.includes(null)) {
       // JSON.stringify converted non-null values to null, use fallback
       return `non_serializable_${Date.now()}_${Math.random()}`;
     }
 
     return stringified;
-  } catch (_error) {
+  } catch {
     // If arguments can't be stringified (circular refs, etc.),
     // use a fallback approach with timestamp and random component
     // This ensures we don't cache non-serializable arguments incorrectly
@@ -144,7 +144,10 @@ export const memoize = <T extends (...args: any[]) => any>(
 
     // For async functions, check if there's already a pending promise
     if (pendingPromises.has(key)) {
-      return pendingPromises.get(key) as ReturnType<T>;
+      const pending = pendingPromises.get(key);
+      if (pending !== undefined) {
+        return pending as ReturnType<T>;
+      }
     }
 
     try {
@@ -177,10 +180,10 @@ export const memoize = <T extends (...args: any[]) => any>(
 
       // For synchronous functions, cache immediately
       cache.set(key, {
-        data: result as ReturnType<T>,
+        data: result,
         expire: now + cacheTimeout,
       });
-      return result as ReturnType<T>;
+      return result;
     } catch (error) {
       // Don't cache errors
       throw error;
