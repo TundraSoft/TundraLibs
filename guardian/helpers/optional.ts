@@ -35,9 +35,9 @@ export const optional = <
     const result = guardian(value);
 
     if (isPromiseLike(result)) {
-      return result as Promise<T>;
+      return result;
     }
 
-    return result as T;
+    return result;
   };
 };

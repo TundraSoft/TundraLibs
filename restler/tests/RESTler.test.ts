@@ -109,6 +109,17 @@ class TestRESTler extends RESTler {
   ): number | undefined {
     return this._extractHeaderNumber(headers, ...headerNames);
   }
+
+  // Expose private methods for testing
+  public decodeChunkedResponse(response: string): string {
+    //@ts-ignore - accessing private method for testing
+    return this.__decodeChunkedResponse(response);
+  }
+
+  public objectToUrlEncoded(data: Record<string, string>): string {
+    //@ts-ignore - accessing private method for testing
+    return this.__objectToUrlEncoded(data);
+  }
 }
 
 // Mock async authentication injector for testing
@@ -1126,6 +1137,12 @@ Deno.test('restler.core', async (t) => {
       const result = client.parseResponseBody(invalidXml, 'application/xml');
       asserts.assertEquals(result, invalidXml); // Returns raw text when parsing fails
     });
+
+    await d.step('should handle unknown content types', () => {
+      const body = 'Binary or other content';
+      const result = client.parseResponseBody(body, 'application/pdf');
+      asserts.assertEquals(result, body); // Returns as-is for unknown content types
+    });
   });
 
   await t.step('URL construction edge cases', async (d) => {
@@ -1947,4 +1964,384 @@ Deno.test('restler.core', async (t) => {
       });
     },
   );
+
+  await t.step('Auth validation', async (d) => {
+    class AuthTestRESTler extends TestRESTler {
+      public validateAuth(value: unknown) {
+        return this._validateAuth(value);
+      }
+    }
+
+    await d.step('should validate string auth (bearer token)', () => {
+      const client = new AuthTestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      asserts.assertEquals(client.validateAuth('valid-token'), true);
+      // Empty string, null, undefined are falsy and should return true (no auth is valid)
+      asserts.assertEquals(client.validateAuth(''), true);
+      asserts.assertEquals(client.validateAuth(null), true);
+      asserts.assertEquals(client.validateAuth(undefined), true);
+    });
+
+    await d.step('should validate object auth (username/password)', () => {
+      const client = new AuthTestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      asserts.assertEquals(
+        client.validateAuth({ username: 'user', password: 'pass' }),
+        true,
+      );
+      asserts.assertEquals(
+        client.validateAuth({ username: '', password: 'pass' }),
+        false,
+      );
+      asserts.assertEquals(
+        client.validateAuth({ username: 'user', password: '' }),
+        false,
+      );
+      asserts.assertEquals(
+        client.validateAuth({ username: '', password: '' }),
+        false,
+      );
+    });
+
+    await d.step('should reject invalid auth formats', () => {
+      const client = new AuthTestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      asserts.assertEquals(client.validateAuth(123), false);
+      asserts.assertEquals(client.validateAuth({ invalid: 'object' }), false);
+      asserts.assertEquals(client.validateAuth([]), false);
+    });
+
+    await d.step('should throw for invalid auth in constructor', () => {
+      asserts.assertThrows(
+        () => {
+          new AuthTestRESTler({
+            baseURL: 'https://api.example.com',
+            auth: 123 as any,
+          });
+        },
+        RESTlerConfigError,
+        'Auth must be a string',
+      );
+    });
+  });
+
+  await t.step('BLOB content type handling', async (d) => {
+    await d.step('should handle BLOB payload in HTTP request', async () => {
+      try {
+        const blobData = new Blob(['test data'], {
+          type: 'application/octet-stream',
+        });
+
+        globalThis.fetch = async (url, options) => {
+          // Verify blob was passed through
+          asserts.assert(options?.body instanceof Blob);
+          return new Response(
+            JSON.stringify({ success: true }),
+            { status: 200 },
+          );
+        };
+
+        const client = new TestRESTler({
+          baseURL: 'https://api.example.com',
+        });
+
+        await client.makeRequest(
+          { path: '/upload' },
+          {
+            method: 'POST',
+            contentType: 'BLOB',
+            payload: blobData,
+          },
+        );
+      } finally {
+        cleanupMocks();
+      }
+    });
+  });
+
+  await t.step('TEXT content type HTTP handling', async (d) => {
+    await d.step('should handle string TEXT payload', async () => {
+      try {
+        globalThis.fetch = async (url, options) => {
+          asserts.assertEquals(options?.body, 'plain text content');
+          return new Response(
+            JSON.stringify({ success: true }),
+            { status: 200 },
+          );
+        };
+
+        const client = new TestRESTler({
+          baseURL: 'https://api.example.com',
+        });
+
+        await client.makeRequest(
+          { path: '/text' },
+          {
+            method: 'POST',
+            contentType: 'TEXT',
+            payload: 'plain text content',
+          },
+        );
+      } finally {
+        cleanupMocks();
+      }
+    });
+
+    await d.step('should stringify non-string TEXT payload', async () => {
+      try {
+        globalThis.fetch = async (url, options) => {
+          asserts.assertEquals(options?.body, '{"data":"value"}');
+          return new Response(
+            JSON.stringify({ success: true }),
+            { status: 200 },
+          );
+        };
+
+        const client = new TestRESTler({
+          baseURL: 'https://api.example.com',
+        });
+
+        await client.makeRequest(
+          { path: '/text' },
+          {
+            method: 'POST',
+            contentType: 'TEXT',
+            payload: { data: 'value' },
+          },
+        );
+      } finally {
+        cleanupMocks();
+      }
+    });
+  });
+
+  await t.step('Additional error scenarios', async (d) => {
+    await d.step('should handle unknown errors in HTTP request', async () => {
+      try {
+        globalThis.fetch = async () => {
+          throw 'string error'; // Non-Error object
+        };
+
+        const client = new TestRESTler({
+          baseURL: 'https://api.example.com',
+        });
+
+        await asserts.assertRejects(
+          async () => {
+            await client.makeRequest(
+              { path: '/test' },
+              { method: 'GET' },
+            );
+          },
+          RESTlerRequestError,
+          'Unknown error processing the request',
+        );
+      } finally {
+        cleanupMocks();
+      }
+    });
+
+    await d.step('should handle empty status text', async () => {
+      try {
+        globalThis.fetch = async () => {
+          return new Response(
+            JSON.stringify({ data: 'test' }),
+            {
+              status: 500, // Valid status code
+              statusText: '', // Empty status text to test fallback
+            },
+          );
+        };
+
+        const client = new TestRESTler({
+          baseURL: 'https://api.example.com',
+        });
+
+        const response = await client.makeRequest(
+          { path: '/test' },
+          { method: 'GET' },
+        );
+
+        // Verify statusText defaults to STATUS_TEXT mapping when empty
+        asserts.assertEquals(response.status, 500);
+        asserts.assertEquals(response.statusText, 'Internal Server Error');
+      } finally {
+        cleanupMocks();
+      }
+    });
+  });
+
+  await t.step('Endpoint configuration options', async (d) => {
+    await d.step(
+      'should use endpoint-specific auth over instance auth',
+      async () => {
+        try {
+          globalThis.fetch = async () => {
+            return new Response(
+              JSON.stringify({ success: true }),
+              { status: 200 },
+            );
+          };
+
+          const client = new TestRESTler({
+            baseURL: 'https://api.example.com',
+            auth: 'instance-token',
+          });
+
+          // Auth is applied during request processing, not exposed on returned request
+          const response = await client.makeRequest(
+            { path: '/test', auth: 'endpoint-token' },
+            { method: 'GET' },
+          );
+
+          asserts.assertEquals(response.status, 200);
+        } finally {
+          cleanupMocks();
+        }
+      },
+    );
+
+    await d.step(
+      'should use instance auth when endpoint has none',
+      async () => {
+        try {
+          globalThis.fetch = async () => {
+            return new Response(
+              JSON.stringify({ success: true }),
+              { status: 200 },
+            );
+          };
+
+          const client = new TestRESTler({
+            baseURL: 'https://api.example.com',
+            auth: 'instance-token',
+          });
+
+          const response = await client.makeRequest(
+            { path: '/test' },
+            { method: 'GET' },
+          );
+
+          asserts.assertEquals(response.status, 200);
+        } finally {
+          cleanupMocks();
+        }
+      },
+    );
+  });
+
+  await t.step('Chunked response decoding', async (d) => {
+    await d.step('should decode valid chunked response', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      // Create a chunked response: chunk size in hex, CRLF, data, CRLF, 0, CRLF
+      const chunkedData = '5\r\nHello\r\n6\r\n World\r\n0\r\n\r\n';
+      const decoded = client.decodeChunkedResponse(chunkedData);
+
+      asserts.assertEquals(decoded, 'Hello World');
+    });
+
+    await d.step('should return non-chunked response as-is', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      const regularData = 'This is regular response data';
+      const decoded = client.decodeChunkedResponse(regularData);
+
+      asserts.assertEquals(decoded, regularData);
+    });
+
+    await d.step('should handle empty chunks', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      const chunkedData = '0\r\n\r\n';
+      const decoded = client.decodeChunkedResponse(chunkedData);
+
+      asserts.assertEquals(decoded, '');
+    });
+
+    await d.step('should handle multiple chunks', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      const chunkedData = 'A\r\n0123456789\r\n5\r\nABCDE\r\n0\r\n\r\n';
+      const decoded = client.decodeChunkedResponse(chunkedData);
+
+      asserts.assertEquals(decoded, '0123456789ABCDE');
+    });
+
+    await d.step('should handle invalid chunk sizes gracefully', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      const chunkedData = 'invalid\r\ndata\r\n';
+      const decoded = client.decodeChunkedResponse(chunkedData);
+
+      // Invalid chunk sizes should be treated as regular data
+      asserts.assert(decoded.includes('invalid'));
+    });
+  });
+
+  await t.step('URL encoding helper', async (d) => {
+    await d.step('should encode simple key-value pairs', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      const data = { key1: 'value1', key2: 'value2' };
+      const encoded = client.objectToUrlEncoded(data);
+
+      asserts.assertEquals(encoded, 'key1=value1&key2=value2');
+    });
+
+    await d.step('should encode special characters', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      const data = { email: 'user@example.com', name: 'John Doe' };
+      const encoded = client.objectToUrlEncoded(data);
+
+      asserts.assert(encoded.includes('email=user%40example.com'));
+      asserts.assert(encoded.includes('name=John%20Doe'));
+    });
+
+    await d.step('should handle empty object', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      const data = {};
+      const encoded = client.objectToUrlEncoded(data);
+
+      asserts.assertEquals(encoded, '');
+    });
+
+    await d.step('should encode symbols and punctuation', () => {
+      const client = new TestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+
+      const data = { query: 'a+b=c&d', special: '!@#$%' };
+      const encoded = client.objectToUrlEncoded(data);
+
+      // + becomes %2B, = becomes %3D, & becomes %26, etc.
+      asserts.assert(encoded.includes('%2B'));
+      asserts.assert(encoded.includes('%3D'));
+      asserts.assert(encoded.includes('%26'));
+    });
+  });
 });

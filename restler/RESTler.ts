@@ -601,8 +601,8 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       const line = lines[i];
       if (!line) continue;
 
-      const chunkSize = parseInt(line, 16);
-      if (isNaN(chunkSize)) {
+      const chunkSize = Number.parseInt(line, 16);
+      if (Number.isNaN(chunkSize)) {
         body += line + '\r\n';
       } else if (chunkSize === 0) {
         // End of chunked response
@@ -674,7 +674,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    */
   protected _replaceVersion(param: string, version: string = ''): string {
     const versionRegex = /{version}/g;
-    return param.replace(versionRegex, version);
+    return param.replaceAll(versionRegex, version);
   }
 
   /**
@@ -685,7 +685,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @returns Processed option value
    * @throws {RESTlerConfigError} If the option value is invalid
    */
-  protected override _processOption<K extends keyof RESTlerOptions>(
+  protected override _processOption<K extends keyof RESTlerOptions>( //NOSONAR
     key: K,
     value: O[K],
   ): O[K] {

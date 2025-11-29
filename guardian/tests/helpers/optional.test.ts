@@ -338,4 +338,77 @@ Deno.test('guardian.helpers.optional', async (t) => {
       asserts.assertEquals(optionalValidator('test'), 'processed: test');
     });
   });
+
+  await t.step('Default value handling', async (u) => {
+    await u.step('should use default value when undefined', () => {
+      const validator = optional(
+        (value: unknown) => (value as number) * 2,
+        42,
+      );
+
+      asserts.assertEquals(validator(undefined), 42);
+      asserts.assertEquals(validator(10), 20);
+    });
+
+    await u.step('should use default function when undefined', () => {
+      let callCount = 0;
+      const defaultFn = () => {
+        callCount++;
+        return 'default-value';
+      };
+
+      const validator = optional(
+        (value: unknown) => `processed: ${value}`,
+        defaultFn,
+      );
+
+      asserts.assertEquals(validator(undefined), 'default-value');
+      asserts.assertEquals(callCount, 1);
+
+      asserts.assertEquals(validator('test'), 'processed: test');
+      asserts.assertEquals(callCount, 1); // Should not call again
+
+      asserts.assertEquals(validator(undefined), 'default-value');
+      asserts.assertEquals(callCount, 2); // Should call again for second undefined
+    });
+
+    await u.step('should handle different default types', () => {
+      const stringValidator = optional(
+        (value: unknown) => (value as string).toUpperCase(),
+        'DEFAULT',
+      );
+
+      const numberValidator = optional(
+        (value: unknown) => (value as number) * 2,
+        0,
+      );
+
+      const objectValidator = optional(
+        (value: unknown) => value,
+        { default: true },
+      );
+
+      asserts.assertEquals(stringValidator(undefined), 'DEFAULT');
+      asserts.assertEquals(numberValidator(undefined), 0);
+      asserts.assertEquals(objectValidator(undefined), { default: true });
+    });
+
+    await u.step(
+      'should handle default function returning complex types',
+      () => {
+        const validator = optional(
+          (value: unknown) => value,
+          () => ({ timestamp: Date.now(), id: Math.random() }),
+        );
+
+        const result1 = validator(undefined);
+        const result2 = validator(undefined);
+
+        // Each call to default function should return a new object
+        asserts.assertNotStrictEquals(result1, result2);
+        asserts.assert(typeof result1 === 'object' && result1 !== null);
+        asserts.assert('timestamp' in result1 && 'id' in result1);
+      },
+    );
+  });
 });

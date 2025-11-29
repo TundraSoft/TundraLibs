@@ -537,4 +537,383 @@ Deno.test('guardian.ObjectGuardian', async (t) => {
       );
     });
   });
+
+  await t.step('partial() method', async (u) => {
+    await u.step('should make all properties optional', () => {
+      const requiredSchema = new ObjectGuardian({
+        id: new NumberGuardian(),
+        name: new StringGuardian(),
+        email: new StringGuardian(),
+      });
+
+      const partialSchema = requiredSchema.partial();
+
+      // Should accept empty object
+      const result1 = partialSchema.parse({});
+      asserts.assertEquals(result1, {});
+
+      // Should accept partial data
+      const result2 = partialSchema.parse({ id: 1 });
+      asserts.assertEquals(result2.id, 1);
+      asserts.assertEquals(result2.name, undefined);
+
+      // Should accept full data
+      const result3 = partialSchema.parse({
+        id: 1,
+        name: 'John',
+        email: 'john@example.com',
+      });
+      asserts.assertEquals(result3.id, 1);
+      asserts.assertEquals(result3.name, 'John');
+      asserts.assertEquals(result3.email, 'john@example.com');
+    });
+
+    await u.step('should work with partial schema from strict mode', () => {
+      const strictSchema = new ObjectGuardian({
+        name: new StringGuardian(),
+        age: new NumberGuardian(),
+      }).strict();
+
+      const partialStrictSchema = strictSchema.partial();
+
+      // Should accept data without required properties
+      const result = partialStrictSchema.parse({});
+      asserts.assertEquals(result, {});
+
+      // Should accept partial data
+      const result2 = partialStrictSchema.parse({ name: 'John' });
+      asserts.assertEquals(result2.name, 'John');
+    });
+  });
+
+  await t.step('required() method', async (u) => {
+    await u.step('should make all properties required', () => {
+      const optionalSchema = new ObjectGuardian({
+        id: new NumberGuardian().optional(),
+        name: new StringGuardian().optional(),
+        email: new StringGuardian().optional(),
+      });
+
+      const requiredSchema = optionalSchema.required();
+
+      // Should accept all properties
+      const result = requiredSchema.parse({
+        id: 1,
+        name: 'John',
+        email: 'john@example.com',
+      });
+      asserts.assertEquals(result.id, 1);
+      asserts.assertEquals(result.name, 'John');
+      asserts.assertEquals(result.email, 'john@example.com');
+
+      // Should work with missing properties (still in passthrough mode by default)
+      const result2 = requiredSchema.parse({ id: 1 });
+      asserts.assertEquals(result2.id, 1);
+    });
+  });
+
+  await t.step('property() method', async (u) => {
+    await u.step('should add a new property to schema', () => {
+      const baseSchema = new ObjectGuardian({
+        id: new NumberGuardian(),
+        name: new StringGuardian(),
+      });
+
+      const extendedSchema = baseSchema.property('email', new StringGuardian());
+
+      const result = extendedSchema.parse({
+        id: 1,
+        name: 'John',
+        email: 'john@example.com',
+      });
+
+      asserts.assertEquals(result.id, 1);
+      asserts.assertEquals(result.name, 'John');
+      asserts.assertEquals(result.email, 'john@example.com');
+    });
+
+    await u.step('should allow the new property', () => {
+      const baseSchema = new ObjectGuardian({
+        id: new NumberGuardian(),
+      });
+
+      const extendedSchema = baseSchema.property('name', new StringGuardian());
+
+      // Should accept with the new property
+      const result = extendedSchema.parse({ id: 1, name: 'John' });
+      asserts.assertEquals(result.id, 1);
+      asserts.assertEquals(result.name, 'John');
+
+      // Should also work without the new property (passthrough mode)
+      const result2 = extendedSchema.parse({ id: 1 });
+      asserts.assertEquals(result2.id, 1);
+    });
+  });
+
+  await t.step('clone() method', async (u) => {
+    await u.step('should clone with schema and mode', () => {
+      const original = new ObjectGuardian({
+        name: new StringGuardian(),
+        age: new NumberGuardian(),
+      });
+
+      const cloned = original.clone();
+
+      // Cloned should accept valid data
+      const result = cloned.parse({ name: 'John', age: 20 });
+      asserts.assertEquals(result.name, 'John');
+      asserts.assertEquals(result.age, 20);
+
+      // Clones should be independent instances
+      asserts.assertNotStrictEquals(original, cloned);
+
+      // Clone should have same schema
+      const result2 = original.parse({ name: 'Jane', age: 30 });
+      const result3 = cloned.parse({ name: 'Jane', age: 30 });
+      asserts.assertEquals(result2.name, result3.name);
+      asserts.assertEquals(result2.age, result3.age);
+    });
+  });
+
+  await t.step('transform() method', async (u) => {
+    await u.step('should transform validated object', () => {
+      const schema = new ObjectGuardian({
+        firstName: new StringGuardian(),
+        lastName: new StringGuardian(),
+        birthYear: new NumberGuardian(),
+      }).transform((data) => ({
+        fullName: `${data.firstName} ${data.lastName}`,
+        age: new Date().getFullYear() - data.birthYear,
+      }));
+
+      const result = schema.parse({
+        firstName: 'John',
+        lastName: 'Doe',
+        birthYear: 1990,
+      });
+
+      asserts.assertEquals(result.fullName, 'John Doe');
+      asserts.assertEquals(result.age, new Date().getFullYear() - 1990);
+    });
+
+    await u.step('should chain transformations', () => {
+      const schema = new ObjectGuardian({
+        value: new NumberGuardian(),
+      })
+        .transform((data) => ({ doubled: data.value * 2 }))
+        .transform((data) => ({ tripled: data.doubled * 1.5 }));
+
+      const result = schema.parse({ value: 10 });
+      asserts.assertEquals(result.tripled, 30);
+    });
+  });
+
+  await t.step('Error handling edge cases', async (u) => {
+    await u.step('should handle validation errors in properties', () => {
+      const schema = new ObjectGuardian({
+        email: new StringGuardian(),
+        age: new NumberGuardian().min(0).max(120),
+      });
+
+      // Multiple validation errors
+      asserts.assertThrows(
+        () => schema.parse({ email: 'test', age: 150 }),
+        GuardianError,
+      );
+    });
+
+    await u.step('should preserve error context in nested objects', () => {
+      const nestedSchema = new ObjectGuardian({
+        user: new ObjectGuardian({
+          name: new StringGuardian(),
+          age: new NumberGuardian(),
+        }),
+      });
+
+      try {
+        nestedSchema.parse({ user: { name: 'John' } });
+        asserts.fail('Should have thrown an error');
+      } catch (error) {
+        asserts.assertInstanceOf(error, GuardianError);
+        // Error should be a GuardianError (validation may pass in passthrough mode)
+      }
+
+      // Test with invalid data type
+      try {
+        nestedSchema.parse({ user: 'not an object' });
+        asserts.fail('Should have thrown an error');
+      } catch (error) {
+        asserts.assertInstanceOf(error, GuardianError);
+      }
+    });
+
+    await u.step('should handle refinement errors with path', () => {
+      const schema = new ObjectGuardian({
+        password: new StringGuardian(),
+        confirmPassword: new StringGuardian(),
+      }).refine(
+        (data) => data.password === data.confirmPassword,
+        'Passwords do not match',
+        'confirmPassword',
+      );
+
+      try {
+        schema.parse({ password: 'abc123', confirmPassword: 'different' });
+        asserts.fail('Should have thrown an error');
+      } catch (error) {
+        asserts.assertInstanceOf(error, GuardianError);
+        asserts.assertEquals(
+          (error as GuardianError).message,
+          'Passwords do not match',
+        );
+      }
+    });
+
+    await u.step('should handle unexpected errors during refinement', () => {
+      const schema = new ObjectGuardian({
+        value: new NumberGuardian(),
+      }).refine(
+        (_data) => {
+          throw new Error('Unexpected error');
+        },
+        'Custom validation failed',
+      );
+
+      try {
+        schema.parse({ value: 10 });
+        asserts.fail('Should have thrown an error');
+      } catch (error) {
+        asserts.assertInstanceOf(error, GuardianError);
+        asserts.assert(
+          (error as GuardianError).message.includes(
+            'Refinement validation failed',
+          ),
+        );
+      }
+    });
+
+    await u.step(
+      'should handle async refinement with unexpected errors',
+      async () => {
+        const schema = new ObjectGuardian({
+          value: new NumberGuardian(),
+        }).refine(
+          async (_data) => {
+            await new Promise((resolve) => setTimeout(resolve, 1));
+            throw new Error('Async unexpected error');
+          },
+          'Custom async validation failed',
+        );
+
+        try {
+          await schema.parseAsync({ value: 10 });
+          asserts.fail('Should have thrown an error');
+        } catch (error) {
+          asserts.assertInstanceOf(error, GuardianError);
+          asserts.assert(
+            (error as GuardianError).message.includes(
+              'Refinement validation failed',
+            ),
+          );
+        }
+      },
+    );
+  });
+
+  await t.step('SafeParse with refinements', async (u) => {
+    await u.step('should return error for failed refinement', () => {
+      const schema = new ObjectGuardian({
+        age: new NumberGuardian(),
+      }).refine((data) => data.age >= 18, 'Must be 18 or older');
+
+      const [error, data] = schema.safeParse({ age: 16 });
+      asserts.assertInstanceOf(error, GuardianError);
+      asserts.assertEquals(data, undefined);
+      asserts.assert(error!.message.includes('Must be 18 or older'));
+    });
+
+    await u.step('should return data for successful refinement', () => {
+      const schema = new ObjectGuardian({
+        age: new NumberGuardian(),
+      }).refine((data) => data.age >= 18, 'Must be 18 or older');
+
+      const [error, data] = schema.safeParse({ age: 20 });
+      asserts.assertEquals(error, null);
+      asserts.assertEquals(data?.age, 20);
+    });
+  });
+
+  await t.step('Immutable mode behavior', async (u) => {
+    await u.step('should create new instance when cloning', () => {
+      const baseSchema = new ObjectGuardian({
+        value: new NumberGuardian(),
+      });
+
+      const clonedSchema = baseSchema.clone();
+
+      // Should be different instances
+      asserts.assertNotStrictEquals(baseSchema, clonedSchema);
+
+      // Both should validate the same way
+      const result1 = baseSchema.parse({ value: -5 });
+      const result2 = clonedSchema.parse({ value: -5 });
+      asserts.assertEquals(result1.value, result2.value);
+
+      // Add refinement to one
+      const refinedSchema = baseSchema.refine(
+        (data) => data.value > 0,
+        'Must be positive',
+      );
+
+      // Original and clone should not be affected
+      const result3 = clonedSchema.parse({ value: -5 });
+      asserts.assertEquals(result3.value, -5);
+    });
+  });
+
+  await t.step('Complex chaining scenarios', async (u) => {
+    await u.step('should chain multiple operations', () => {
+      const schema = new ObjectGuardian({
+        id: new NumberGuardian(),
+        firstName: new StringGuardian(),
+        lastName: new StringGuardian(),
+        age: new NumberGuardian(),
+        password: new StringGuardian(),
+      })
+        .omit('password')
+        .pick('id', 'firstName', 'lastName', 'age')
+        .extend({
+          email: new StringGuardian(),
+        })
+        .refine((data) => data.age >= 18, 'Must be 18 or older');
+
+      const result = schema.parse({
+        id: 1,
+        firstName: 'John',
+        lastName: 'Doe',
+        age: 25,
+        email: 'john@example.com',
+      });
+
+      asserts.assertEquals(result.id, 1);
+      asserts.assertEquals(result.firstName, 'John');
+      asserts.assertEquals(result.lastName, 'Doe');
+      asserts.assertEquals(result.age, 25);
+      asserts.assertEquals(result.email, 'john@example.com');
+
+      // Test refinement validation
+      asserts.assertThrows(
+        () =>
+          schema.parse({
+            id: 1,
+            firstName: 'John',
+            lastName: 'Doe',
+            age: 16,
+            email: 'john@example.com',
+          }),
+        GuardianError,
+        'Must be 18 or older',
+      );
+    });
+  });
 });

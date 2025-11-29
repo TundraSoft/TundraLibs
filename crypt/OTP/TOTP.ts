@@ -90,7 +90,7 @@ export const verifyTOTP = async (
     throw new Error('Window must be a non-negative integer');
   }
 
-  if (!otp || otp.length !== length || !/^\d+$/.test(otp)) {
+  if (!otp?.length || otp.length !== length || !/^\d+$/.test(otp)) {
     return false;
   }
 

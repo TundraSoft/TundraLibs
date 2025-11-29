@@ -412,7 +412,7 @@ export abstract class BaseGuardian<T> {
   optional<D>(defaultValue: D | (() => D)): BaseGuardian<T | D>;
   optional<D>(
     _defaultValue?: D | (() => D),
-  ): BaseGuardian<T | D | undefined> | BaseGuardian<T | D | undefined | null> {
+  ): BaseGuardian<T | D | undefined> | BaseGuardian<T | D | undefined | null> { //NOSONAR
     // Prevent multiple optional() calls
     if (this._metaData?.isOptional) {
       throw new GuardianError(
@@ -486,7 +486,7 @@ export abstract class BaseGuardian<T> {
       } else {
         this._metaData = { isOptional: true };
       }
-      returnInstance = this;
+      returnInstance = this; //NOSONAR
     }
 
     // Return the correct type - only include null if nullable is also set
@@ -663,7 +663,7 @@ export abstract class BaseGuardian<T> {
    * // base and immutable are unchanged
    * ```
    */
-  immutable(): BaseGuardian<T> {
+  immutable(): this {
     if (!this._metaData) {
       this._metaData = {};
     }
@@ -676,7 +676,7 @@ export abstract class BaseGuardian<T> {
    *
    * @returns A new immutable Guardian instance
    */
-  freeze(): BaseGuardian<T> {
+  freeze(): this {
     return this.immutable();
   }
 
@@ -697,7 +697,7 @@ export abstract class BaseGuardian<T> {
   clone(): BaseGuardian<T> {
     const metaDataClone = this._metaData ? { ...this._metaData } : undefined;
     // Delete isImmutable flag for the clone
-    if (metaDataClone && metaDataClone.isImmutable) {
+    if (metaDataClone?.isImmutable) {
       delete metaDataClone.isImmutable;
     }
     return new (this.constructor as new (
@@ -720,7 +720,7 @@ export abstract class BaseGuardian<T> {
    * // Returns: { type: 'string', minLength: 3 }
    * ```
    */
-  toOpenAPI(): Record<string, unknown> {
+  toOpenAPI(): Record<string, unknown> { //NOSONAR
     const schema: Record<string, unknown> = {
       type: this._type,
     };

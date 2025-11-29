@@ -105,7 +105,7 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
 
         // For objects and arrays, use JSON.stringify
         return JSON.stringify(value);
-      } catch (_error) {
+      } catch {
         throw new GuardianError(
           _message || 'Failed to convert value to string',
           {
@@ -136,7 +136,7 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
     return this.process((value: T) => {
       try {
         return JSON.stringify(value);
-      } catch (_error) {
+      } catch {
         throw new GuardianError(
           _message || 'Failed to serialize value to JSON',
           {
@@ -184,7 +184,7 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
         );
       }
       return value as U;
-    }) as BaseGuardian<U>;
+    });
   }
 
   /**

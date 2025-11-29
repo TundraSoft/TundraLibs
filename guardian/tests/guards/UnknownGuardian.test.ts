@@ -60,7 +60,7 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
       asserts.assertEquals(unknownGuard.parse(-0), -0);
       asserts.assertEquals(unknownGuard.parse(Infinity), Infinity);
       asserts.assertEquals(unknownGuard.parse(-Infinity), -Infinity);
-      asserts.assertEquals(unknownGuard.parse(NaN), NaN);
+      asserts.assertEquals(unknownGuard.parse(Number.NaN), Number.NaN);
       asserts.assertEquals(unknownGuard.parse(BigInt(123)), BigInt(123));
 
       // Symbol test - can't use assertEquals for symbols, check type instead
@@ -86,6 +86,36 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
         '{"name":"John"}',
       );
     });
+
+    await u.step('should handle toStringValue with special values', () => {
+      const stringGuard = new UnknownGuardian().toStringValue();
+
+      // Test with symbol and function which go through special toString handling
+      const sym = Symbol('test');
+      asserts.assert(stringGuard.parse(sym).includes('Symbol(test)'));
+
+      const fn = function testFunc() {
+        return 42;
+      };
+      asserts.assert(stringGuard.parse(fn).includes('testFunc'));
+    });
+
+    await u.step(
+      'should handle toStringValue errors with circular references',
+      () => {
+        const stringGuard = new UnknownGuardian().toStringValue();
+
+        // Create a circular reference
+        const obj: Record<string, unknown> = { name: 'test' };
+        obj.self = obj;
+
+        asserts.assertThrows(
+          () => stringGuard.parse(obj),
+          GuardianError,
+          'Failed to convert value to string',
+        );
+      },
+    );
 
     await u.step('should pass null through when nullable', () => {
       const nullableStringGuard = new UnknownGuardian().process((
@@ -250,6 +280,39 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
         GuardianError,
       );
     });
+
+    await u.step(
+      'should use nullish() to validate only null or undefined',
+      () => {
+        const nullishGuard = new UnknownGuardian().nullish();
+
+        // Should accept null and undefined
+        asserts.assertEquals(nullishGuard.parse(null), null);
+        asserts.assertEquals(nullishGuard.parse(undefined), undefined);
+
+        // Should reject other values
+        asserts.assertThrows(
+          () => nullishGuard.parse('hello'),
+          GuardianError,
+          'Expected null or undefined',
+        );
+        asserts.assertThrows(
+          () => nullishGuard.parse(42),
+          GuardianError,
+          'Expected null or undefined',
+        );
+        asserts.assertThrows(
+          () => nullishGuard.parse(false),
+          GuardianError,
+          'Expected null or undefined',
+        );
+        asserts.assertThrows(
+          () => nullishGuard.parse({ foo: 'bar' }),
+          GuardianError,
+          'Expected null or undefined',
+        );
+      },
+    );
   });
 
   await t.step('type assertions', async (u) => {

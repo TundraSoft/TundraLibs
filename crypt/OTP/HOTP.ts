@@ -36,7 +36,7 @@ export const verifyHOTP = async (
   length: number = 6,
   algo: DigestAlgorithms = 'SHA-256',
 ): Promise<boolean> => {
-  if (!otp || otp.length !== length || !/^\d+$/.test(otp)) {
+  if (!otp || otp?.length !== length || !/^\d+$/.test(otp)) {
     return false;
   }
 
