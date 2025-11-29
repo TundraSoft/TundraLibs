@@ -24,10 +24,10 @@ export type HTTPHandlerOptions = HandlerOptions & {
  */
 export class HTTPHandler extends AbstractHandler {
   public readonly mode = 'http';
-  private _url: string;
-  private _method: 'POST' | 'PUT' | 'PATCH';
-  private _batchSize: number;
-  private _headers: Record<string, string>;
+  private readonly _url: string;
+  private readonly _method: 'POST' | 'PUT' | 'PATCH';
+  private readonly _batchSize: number;
+  private readonly _headers: Record<string, string>;
 
   protected _logs: Array<string> = [];
 
@@ -48,7 +48,7 @@ export class HTTPHandler extends AbstractHandler {
     }
     try {
       new URL(options.url); // Will throw if URL is invalid
-    } catch (_e) {
+    } catch {
       throw new Error(`Invalid URL provided to HTTPHandler: ${options.url}`);
     }
     this._url = options.url;
