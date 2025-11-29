@@ -186,9 +186,9 @@ export const secretGenerator = (
         .map((byte) => {
           // Map each byte to alphanumeric range (62 possibilities)
           const mod = byte % 62;
-          if (mod < 10) return String.fromCharCode(48 + mod); // 0-9
-          if (mod < 36) return String.fromCharCode(65 + mod - 10); // A-Z
-          return String.fromCharCode(97 + mod - 36); // a-z
+          if (mod < 10) return String.fromCodePoint(48 + mod); // 0-9
+          if (mod < 36) return String.fromCodePoint(65 + mod - 10); // A-Z
+          return String.fromCodePoint(97 + mod - 36); // a-z
         })
         .join('');
       break;
@@ -211,7 +211,8 @@ export const secretGenerator = (
   // Add hyphens if needed (but only to the core secret, not the prefix)
   if (finalHyphenInterval > 0) {
     const regex = new RegExp(`.{1,${finalHyphenInterval}}`, 'g');
-    formattedResult = result.match(regex)!.join('-');
+    const matches = result.match(regex);
+    formattedResult = matches ? matches.join('-') : result;
   }
 
   // Add prefix

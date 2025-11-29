@@ -35,23 +35,21 @@ export class StringGuardian extends BaseGuardian<string> {
     numeric: /^[0-9.]+$/,
     uuid:
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    uuidv1:
-      /^[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    uuidv4:
-      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    phone: /^(\+?1-?)?(\([0-9]{3}\)|[0-9]{3})[-\.\s]?[0-9]{3}[-\.\s]?[0-9]{4}$/,
+    uuidv1: /^[\da-f]{8}-[\da-f]{4}-1[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i,
+    uuidv4: /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i,
+    phone: /^(\+?1-?)?(\(\d{3}\)|\d{3})[-.\s]?\d{3}[-.\s]?\d{4}$/,
     ipv4:
-      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
-    ipv6: /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/,
-    macAddress: /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
-    creditCardVisa: /^4[0-9]{12}(?:[0-9]{3})?$/,
-    creditCardMastercard: /^5[1-5][0-9]{14}$/,
-    creditCardAmex: /^3[47][0-9]{13}$/,
-    creditCard: /^(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|3[47][0-9]{13})$/,
-    slug: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
-    hexColor: /^#(?:[0-9a-fA-F]{3}){1,2}$/,
+      /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/,
+    ipv6: /^(?:[\da-fA-F]{1,4}:){7}[\da-fA-F]{1,4}$/,
+    macAddress: /^([\dA-Fa-f]{2}[:-]){5}([\dA-Fa-f]{2})$/,
+    creditCardVisa: /^4\d{12}(?:\d{3})?$/,
+    creditCardMastercard: /^5[1-5]\d{14}$/,
+    creditCardAmex: /^3[47]\d{13}$/,
+    creditCard: /^(?:4\d{12}(?:\d{3})?|5[1-5]\d{14}|3[47]\d{13})$/,
+    slug: /^[a-z\d]+(?:-[a-z\d]+)*$/,
+    hexColor: /^#(?:[\da-fA-F]{3}){1,2}$/,
     domain:
-      /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/,
+      /^[a-zA-Z\d]([a-zA-Z\d-]{0,61}[a-zA-Z\d])?(?:\.[a-zA-Z\d]([a-zA-Z\d-]{0,61}[a-zA-Z\d])?)*$/,
     ascii: /^[ -~]*$/,
     noWhitespace: /^\S*$/,
   };
@@ -310,7 +308,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   alpha(errorMessage?: string): StringGuardian {
     const result = this.pattern(
-      StringGuardian.patterns.alpha as RegExp,
+      StringGuardian.patterns.alpha!,
       errorMessage || 'String must contain only alphabetic characters',
     );
 
@@ -330,7 +328,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   alphanumeric(errorMessage?: string): StringGuardian {
     const result = this.pattern(
-      StringGuardian.patterns.alphanumeric as RegExp,
+      StringGuardian.patterns.alphanumeric!,
       errorMessage || 'String must contain only alphanumeric characters',
     );
 
@@ -350,7 +348,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   uuid(errorMessage?: string): StringGuardian {
     const result = this.pattern(
-      StringGuardian.patterns.uuid as RegExp,
+      StringGuardian.patterns.uuid!,
       errorMessage || 'String must be a valid UUID',
     );
 
@@ -370,8 +368,8 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   uuidv1(errorMessage?: string): StringGuardian {
     const result = this.pattern(
-      StringGuardian.patterns.uuidv1 as RegExp,
-      errorMessage || 'String must be a valid UUID v1',
+      StringGuardian.patterns.uuidv1!,
+      errorMessage || 'String must be a valid UUIDv1',
     );
 
     // Override pattern constraint with format for OpenAPI
@@ -733,12 +731,12 @@ export class StringGuardian extends BaseGuardian<string> {
       }
 
       // Basic Luhn algorithm check for additional validation
-      const digits = value.replace(/\D/g, '');
+      const digits = value.replaceAll(/\D/g, '');
       let sum = 0;
       let alternate = false;
 
       for (let i = digits.length - 1; i >= 0; i--) {
-        let digit = parseInt(digits[i]!);
+        let digit = Number.parseInt(digits[i]!, 10);
         if (alternate) {
           digit *= 2;
           if (digit > 9) digit -= 9;
@@ -812,7 +810,7 @@ export class StringGuardian extends BaseGuardian<string> {
   noWhitespace(errorMessage?: string): StringGuardian {
     return this.pattern(
       StringGuardian.patterns.noWhitespace!,
-      errorMessage || 'String must not contain whitespace characters',
+      errorMessage || 'String must not contain whitespace',
     );
   }
 
@@ -840,8 +838,8 @@ export class StringGuardian extends BaseGuardian<string> {
       const sqlPatterns = [
         /('|(\x27)|(\x2D)|(-)|(%27)|(%2D))/i, // Single quotes and dashes
         /(union|select|insert|delete|update|drop|create|alter|exec|execute)/i, // SQL keywords
-        /(or|and)\\s+['\"]?\\d+['\"]=\\s*['\"]?\\d+/i, // OR/AND injection patterns
-        /['\"]\\s*(or|and)\\s*['\"]?\\d+/i, // Quote-based OR/AND patterns
+        /(or|and)\s+"?\d+"?=\s*"?\d+/i, // OR/AND injection patterns
+        /"\s*(or|and)\s*"?\d+/i, // Quote-based OR/AND patterns
         /;\s*(drop|delete|truncate|update)/i, // Semicolon-based injections
       ];
 
@@ -873,7 +871,7 @@ export class StringGuardian extends BaseGuardian<string> {
       const xssPatterns = [
         /<script[^>]*>.*?<\/script>/gi, // Script tags
         /<iframe[^>]*>.*?<\/iframe>/gi, // Iframe tags
-        /on\w+\s*=\s*[\"'][^\"']*[\"']/gi, // Event handlers
+        /on\w+\s*=\s*["'][^"']*["']/gi, // Event handlers
         /javascript:/gi, // JavaScript protocol
         /<(img|svg)[^>]*on\w+/gi, // Image/SVG with events
         /expression\s*\(/gi, // CSS expressions
@@ -958,7 +956,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   stripSpaces(): StringGuardian {
     return this.process((value: string) => {
-      return value.replace(/\s+/g, '');
+      return value.replaceAll(/\s+/g, '');
     }) as StringGuardian;
   }
 
@@ -1024,7 +1022,8 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   capitalize(): StringGuardian {
     return this.process(
-      (value: string) => value.replace(/\b\w/g, (char) => char.toUpperCase()),
+      (value: string) =>
+        value.replaceAll(/\b\w/g, (char) => char.toUpperCase()),
     ) as StringGuardian;
   }
 
@@ -1038,7 +1037,7 @@ export class StringGuardian extends BaseGuardian<string> {
       (value: string) =>
         value
           .toLowerCase()
-          .replace(/[^a-zA-Z0-9]+(.)/g, (_, char) => char.toUpperCase()),
+          .replaceAll(/[^a-zA-Z0-9]+(.)/g, (_, char) => char.toUpperCase()),
     ) as StringGuardian;
   }
 
@@ -1051,12 +1050,12 @@ export class StringGuardian extends BaseGuardian<string> {
     return this.process(
       (value: string) =>
         value
-          .replace(/([A-Z])/g, '_$1')
+          .replaceAll(/([A-Z])/g, '_$1')
           .toLowerCase()
           .replace(/^_/, '')
-          .replace(/[^a-zA-Z0-9]+/g, '_')
-          .replace(/_+/g, '_')
-          .replace(/^_|_$/g, ''),
+          .replaceAll(/[^a-zA-Z0-9]+/g, '_')
+          .replaceAll(/_+/g, '_')
+          .replaceAll(/(?:^_|_$)/g, ''),
     ) as StringGuardian;
   }
 
@@ -1069,12 +1068,12 @@ export class StringGuardian extends BaseGuardian<string> {
     return this.process(
       (value: string) =>
         value
-          .replace(/([A-Z])/g, '-$1')
+          .replaceAll(/([A-Z])/g, '-$1')
           .toLowerCase()
           .replace(/^-/, '')
-          .replace(/[^a-zA-Z0-9]+/g, '-')
-          .replace(/-+/g, '-')
-          .replace(/^-|-$/g, ''),
+          .replaceAll(/[^a-zA-Z0-9]+/g, '-')
+          .replaceAll(/-+/g, '-')
+          .replaceAll(/(?:^-|-$)/g, ''),
     ) as StringGuardian;
   }
 
@@ -1088,7 +1087,7 @@ export class StringGuardian extends BaseGuardian<string> {
       (value: string) =>
         value
           .toLowerCase()
-          .replace(/(?:^|[^a-zA-Z0-9])([a-zA-Z0-9])/g, (_, char) =>
+          .replaceAll(/(?:^|[^a-zA-Z0-9])([a-zA-Z0-9])/g, (_, char) =>
             char.toUpperCase()),
     ) as StringGuardian;
   }
@@ -1140,19 +1139,19 @@ export class StringGuardian extends BaseGuardian<string> {
       (value: string) =>
         value
           // Remove script tags and their content
-          .replace(/<script[^>]*>.*?<\/script>/gi, '')
+          .replaceAll(/<script[^>]*>.*?<\/script>/gi, '')
           // Remove iframe tags and their content
-          .replace(/<iframe[^>]*>.*?<\/iframe>/gi, '')
+          .replaceAll(/<iframe[^>]*>.*?<\/iframe>/gi, '')
           // Remove event handlers
-          .replace(/on\w+\s*=\s*[\"'][^\"']*[\"']/gi, '')
+          .replaceAll(/on\w+\s*=\s*["'][^"']*["']/gi, '')
           // Remove javascript: protocol
-          .replace(/javascript:/gi, '')
+          .replaceAll(/javascript:/gi, '')
           // Escape HTML entities
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/\"/g, '&quot;')
-          .replace(/'/g, '&#x27;'),
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#x27;'),
     ) as StringGuardian;
   }
 
@@ -1163,7 +1162,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   normalizeSpace(): StringGuardian {
     return this.process(
-      (value: string) => value.replace(/\s+/g, ' ').trim(),
+      (value: string) => value.replaceAll(/\s+/g, ' ').trim(),
     ) as StringGuardian;
   }
 
@@ -1188,7 +1187,7 @@ export class StringGuardian extends BaseGuardian<string> {
     return this.process(
       (value: string) => {
         const num = Number(value);
-        if (isNaN(num)) {
+        if (Number.isNaN(num)) {
           throw new GuardianError(
             errorMessage || 'Cannot convert string to number',
             {
@@ -1214,8 +1213,8 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   toInt(radix = 10, errorMessage?: string): NumberGuardian {
     return this.process((value: string) => {
-      const num = parseInt(value, radix);
-      if (isNaN(num)) {
+      const num = Number.parseInt(value, radix);
+      if (Number.isNaN(num)) {
         throw new GuardianError(
           errorMessage || 'Cannot convert string to integer',
           {
@@ -1239,7 +1238,7 @@ export class StringGuardian extends BaseGuardian<string> {
   toDate(errorMessage?: string): DateGuardian {
     return this.process((value: string) => {
       const date = new Date(value);
-      if (isNaN(date.getTime())) {
+      if (Number.isNaN(date.getTime())) {
         throw new GuardianError(
           errorMessage || 'Cannot convert string to date',
           {

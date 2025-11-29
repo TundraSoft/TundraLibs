@@ -49,7 +49,7 @@ export type RandomNumberOptions = {
 export function randomInt(min: number, max: number): number {
   // Validate inputs
   if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max)) {
-    throw new Error('Min and max must be safe integers');
+    throw new TypeError('Min and max must be safe integers');
   }
 
   if (min > max) {
@@ -168,7 +168,7 @@ function randomIntLargeRange(min: number, _max: number, range: number): number {
     // Convert bytes to number
     randomValue = 0;
     for (let i = 0; i < bytesNeeded; i++) {
-      randomValue = (randomValue << 8) + randomBytes[i]!;
+      randomValue = (randomValue << 8) + (randomBytes[i] ?? 0);
     }
   } while (randomValue > maxValid);
 
@@ -190,7 +190,7 @@ function generateSecureRandomFraction(precision: number): number {
 
   for (let i = 0; i < bytesNeeded; i++) {
     divisor *= 256;
-    fraction = fraction * 256 + randomBytes[i]!;
+    fraction = fraction * 256 + (randomBytes[i] ?? 0);
   }
 
   return fraction / divisor;

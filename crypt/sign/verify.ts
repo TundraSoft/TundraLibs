@@ -21,7 +21,7 @@ const parsePEMPublicKey = (pemKey: string): Uint8Array => {
 
   try {
     // Decode the base64 key data
-    return Uint8Array.from(atob(base64Key), (c) => c.charCodeAt(0));
+    return Uint8Array.from(atob(base64Key), (c) => c.codePointAt(0) ?? 0);
   } catch (error) {
     throw new Error(`Invalid PEM public key format: ${error}`);
   }
@@ -194,7 +194,10 @@ export const verifyRSA = async (
   // Decode the base64 signature
   let signatureBytes: Uint8Array;
   try {
-    signatureBytes = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
+    signatureBytes = Uint8Array.from(
+      atob(signature),
+      (c) => c.codePointAt(0) ?? 0,
+    );
   } catch (error) {
     throw new Error(
       `Invalid signature format. Must be a base64 string: ${error}`,

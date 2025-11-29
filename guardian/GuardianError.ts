@@ -109,8 +109,12 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
       return 'null';
     } else if (typeof value === 'boolean') {
       return value === true ? 'TRUE' : 'FALSE';
-    } else {
+    } else if (
+      typeof value === 'object' && value !== null && 'toString' in value
+    ) {
       return value.toString();
+    } else {
+      return String(value);
     }
   }
 

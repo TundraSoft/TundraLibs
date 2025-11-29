@@ -204,7 +204,7 @@ export const signRSA = async (
   );
 
   // Return the signature as base64
-  return btoa(String.fromCharCode(...new Uint8Array(signature)));
+  return btoa(String.fromCodePoint(...new Uint8Array(signature)));
 };
 
 /**

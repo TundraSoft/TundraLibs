@@ -29,7 +29,7 @@ import { StringGuardian } from './StringGuardian.ts';
  */
 export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
   protected override readonly _type = 'array';
-  private _elementGuardian?: BaseGuardian<T>;
+  private readonly _elementGuardian?: BaseGuardian<T>;
 
   /**
    * Creates a new ArrayGuardian instance.

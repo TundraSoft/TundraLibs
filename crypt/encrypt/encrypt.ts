@@ -174,7 +174,10 @@ export const encryptRSA = async (
 
     let keyData: Uint8Array;
     try {
-      keyData = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0));
+      keyData = Uint8Array.from(
+        atob(pemContents),
+        (c) => c.codePointAt(0) ?? 0,
+      );
     } catch {
       throw new Error('Invalid PEM public key format');
     }
@@ -198,16 +201,19 @@ export const encryptRSA = async (
     : data;
 
   // Check data size limit (RSA can only encrypt data smaller than key size minus padding)
-  const maxDataSize = Math.floor(keyLength / 8) -
-    2 *
-      (hashAlgorithm === 'SHA-1'
-        ? 20
-        : hashAlgorithm === 'SHA-256'
-        ? 32
-        : hashAlgorithm === 'SHA-384'
-        ? 48
-        : 64) -
-    2;
+  // Determine hash output size based on algorithm
+  let hashOutputSize: number;
+  if (hashAlgorithm === 'SHA-1') {
+    hashOutputSize = 20;
+  } else if (hashAlgorithm === 'SHA-256') {
+    hashOutputSize = 32;
+  } else if (hashAlgorithm === 'SHA-384') {
+    hashOutputSize = 48;
+  } else {
+    hashOutputSize = 64; // SHA-512
+  }
+
+  const maxDataSize = Math.floor(keyLength / 8) - 2 * hashOutputSize - 2;
 
   if (dataToEncrypt.length > maxDataSize) {
     throw new Error(
@@ -224,7 +230,7 @@ export const encryptRSA = async (
   );
 
   // Return as base64 for RSA (standard format)
-  return btoa(String.fromCharCode(...new Uint8Array(encrypted)));
+  return btoa(String.fromCodePoint(...new Uint8Array(encrypted)));
 };
 
 /**

@@ -17,7 +17,7 @@ const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
 
   try {
     // Decode the base64 key data
-    return Uint8Array.from(atob(base64Key), (c) => c.charCodeAt(0));
+    return Uint8Array.from(atob(base64Key), (c) => c.codePointAt(0) ?? 0);
   } catch {
     throw new Error('Invalid PEM private key format');
   }
@@ -127,7 +127,7 @@ export const decryptAES = async (
     'raw',
     keyBytes as BufferSource,
     {
-      name: algorithm!,
+      name: algorithm as 'AES-GCM' | 'AES-CBC' | 'AES-CTR',
       length: keyLength * 8, // Convert back to bits
     },
     false,
@@ -145,7 +145,7 @@ export const decryptAES = async (
   } else {
     // AES-GCM or AES-CBC
     decryptConfig = {
-      name: algorithm!,
+      name: algorithm as 'AES-GCM' | 'AES-CBC',
       iv: ivOrCounter,
     } as AesGcmParams | AesCbcParams;
   }
@@ -153,7 +153,7 @@ export const decryptAES = async (
   const decrypted = await crypto.subtle.decrypt(
     decryptConfig,
     key,
-    encrypted!,
+    encrypted as BufferSource,
   );
 
   return returnBinary
@@ -250,7 +250,7 @@ export const decryptRSA = async (
   // Decode the base64 encrypted data
   let encryptedData: Uint8Array;
   try {
-    encryptedData = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+    encryptedData = Uint8Array.from(atob(data), (c) => c.codePointAt(0) ?? 0);
   } catch (error) {
     throw new Error(`Invalid base64 encrypted data: ${error}`);
   }

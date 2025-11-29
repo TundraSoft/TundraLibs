@@ -931,7 +931,7 @@ export class ObjectGuardian<
     }
 
     const refinementError = new GuardianError(
-      `Refinement validation failed: ${error}`,
+      `Refinement validation failed: ${String(error)}`,
       {
         expected: 'refinement validation to complete',
         got: data,
