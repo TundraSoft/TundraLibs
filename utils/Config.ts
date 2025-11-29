@@ -460,14 +460,19 @@ export const loadConfig = async (
     } else if ((e as Error).message.toLowerCase().includes('parse')) {
       throw e;
     } else if (e instanceof Deno.errors.NotFound) {
-      throw new Error(`Config path not found: ${options.path}`);
+      // Re-throw Deno error with additional context
+      throw new Deno.errors.NotFound(`Config path not found: ${options.path}`);
     } else if (
       e instanceof Deno.errors.PermissionDenied ||
       e instanceof Deno.errors.NotCapable
     ) {
-      throw new Error(`Permission denied: ${options.path}`);
+      // Re-throw Deno error with additional context
+      throw new Deno.errors.PermissionDenied(
+        `Permission denied: ${options.path}`,
+      );
     } else {
-      throw new Error(`Error loading config: ${(e as Error).message}`);
+      // Re-throw original error to preserve stack trace and type
+      throw e;
     }
   }
 };

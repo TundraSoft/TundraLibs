@@ -214,15 +214,15 @@ export const envArgs = function (
           const [, key, value] = match;
           // Make sure key is defined before using it
           if (key) {
-            if (!value) {
-              env[key] = '';
-            } else {
+            if (value) {
               let finalValue = value.trim();
               const quoteMatch = finalValue.match(isQuoted);
               if (quoteMatch) {
                 finalValue = quoteMatch[2] ?? '';
               }
               env[key] = finalValue;
+            } else {
+              env[key] = '';
             }
           }
         }

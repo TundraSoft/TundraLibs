@@ -219,7 +219,7 @@ export const decryptRSA = async (
     );
   }
 
-  const keySize = parseInt(lengthStr, 10);
+  const keySize = Number.parseInt(lengthStr, 10);
   if (![2048, 3072, 4096].includes(keySize)) {
     throw new Error(
       'Invalid RSA key size. Must be 2048, 3072, or 4096',
@@ -251,8 +251,8 @@ export const decryptRSA = async (
   let encryptedData: Uint8Array;
   try {
     encryptedData = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-  } catch (_error) {
-    throw new Error('Invalid base64 encrypted data');
+  } catch (error) {
+    throw new Error(`Invalid base64 encrypted data: ${error}`);
   }
 
   // Decrypt the data

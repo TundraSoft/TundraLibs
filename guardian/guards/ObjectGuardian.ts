@@ -107,7 +107,7 @@ export class ObjectGuardian<
   TOutput extends Record<string, unknown> = TInput,
 > extends BaseGuardian<TOutput> {
   protected override readonly _type = 'object';
-  private _schema: ObjectSchema<TInput>;
+  private readonly _schema: ObjectSchema<TInput>;
   private _mode: ObjectValidationMode = 'passthrough';
   private _refinements: Array<ObjectRefinement<TOutput>> = [];
 
@@ -173,7 +173,7 @@ export class ObjectGuardian<
    */
   strict(): ObjectGuardian<TInput, TOutput> {
     if (this.isImmutable) {
-      const cloned = this.clone() as ObjectGuardian<TInput, TOutput>;
+      const cloned = this.clone();
       cloned._mode = 'strict';
       return cloned;
     } else {
@@ -201,7 +201,7 @@ export class ObjectGuardian<
    */
   strip(): ObjectGuardian<TInput, TOutput> {
     if (this.isImmutable) {
-      const cloned = this.clone() as ObjectGuardian<TInput, TOutput>;
+      const cloned = this.clone();
       cloned._mode = 'strip';
       return cloned;
     } else {
@@ -691,7 +691,7 @@ export class ObjectGuardian<
     path?: string,
   ): ObjectGuardian<TInput, TOutput> {
     if (this.isImmutable) {
-      const cloned = this.clone() as ObjectGuardian<TInput, TOutput>;
+      const cloned = this.clone();
       cloned._refinements = [
         ...this._refinements,
         { validator, message, path },
@@ -754,14 +754,14 @@ export class ObjectGuardian<
    * Core object validation logic without refinements.
    * This is used by the base transform and handles only schema validation.
    */
-  private _validateObjectWithoutRefinements(
-    input: unknown,
-  ): TInput | (TInput & Record<string, unknown>) {
-    // Type validation
+  private _validateObjectType(input: unknown): Record<string, unknown> {
     if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-      const got = typeof input === 'object'
-        ? (input === null ? 'null' : 'array')
-        : typeof input;
+      let got: string;
+      if (typeof input === 'object') {
+        got = input === null ? 'null' : 'array';
+      } else {
+        got = typeof input;
+      }
       throw new GuardianError(`Expected object but got ${got}`, {
         expected: 'object',
         got,
@@ -769,36 +769,39 @@ export class ObjectGuardian<
         type: 'object',
       });
     }
+    return input as Record<string, unknown>;
+  }
 
-    const inputObj = input as Record<string, unknown>;
-    const schemaKeys = new Set(Object.keys(this._schema));
+  private _validateStrictMode(
+    inputObj: Record<string, unknown>,
+    schemaKeys: Set<string>,
+  ): void {
+    if (this._mode !== 'strict') return;
 
-    // Strict mode validation - check for extra properties
-    if (this._mode === 'strict') {
-      const extraKeys = Object.keys(inputObj).filter((key) =>
-        !schemaKeys.has(key)
+    const extraKeys = Object.keys(inputObj).filter((key) =>
+      !schemaKeys.has(key)
+    );
+    if (extraKeys.length > 0) {
+      throw new GuardianError(
+        `Unknown ${extraKeys.length === 1 ? 'property' : 'properties'} '${
+          extraKeys.join(', ')
+        }' ${extraKeys.length === 1 ? 'is' : 'are'} not allowed in strict mode`,
+        {
+          expected: 'no extra properties',
+          got: extraKeys,
+          comparison: 'strict_validation',
+          type: 'unknown_property',
+        },
       );
-      if (extraKeys.length > 0) {
-        throw new GuardianError(
-          `Unknown ${extraKeys.length === 1 ? 'property' : 'properties'} '${
-            extraKeys.join(', ')
-          }' ${
-            extraKeys.length === 1 ? 'is' : 'are'
-          } not allowed in strict mode`,
-          {
-            expected: 'no extra properties',
-            got: extraKeys,
-            comparison: 'strict_validation',
-            type: 'unknown_property',
-          },
-        );
-      }
     }
+  }
 
+  private _validateSchemaProperties(
+    inputObj: Record<string, unknown>,
+  ): [Record<string, unknown>, Record<string, GuardianError>] {
     const result: Record<string, unknown> = {};
     const errors: Record<string, GuardianError> = {};
 
-    // Validate schema properties
     for (const [key, guard] of Object.entries(this._schema)) {
       try {
         const value = inputObj[key];
@@ -809,7 +812,6 @@ export class ObjectGuardian<
           !(key in inputObj)
         ) {
           // Skip optional fields that are completely missing from input
-          // This matches Zod behavior of omitting missing optional fields
           continue;
         }
 
@@ -831,36 +833,68 @@ export class ObjectGuardian<
       }
     }
 
-    // Handle passthrough properties
-    if (this._mode === 'passthrough') {
-      for (const [key, value] of Object.entries(inputObj)) {
-        if (!schemaKeys.has(key)) {
-          result[key] = value;
-        }
+    return [result, errors];
+  }
+
+  private _addPassthroughProperties(
+    result: Record<string, unknown>,
+    inputObj: Record<string, unknown>,
+    schemaKeys: Set<string>,
+  ): void {
+    if (this._mode !== 'passthrough') return;
+
+    for (const [key, value] of Object.entries(inputObj)) {
+      if (!schemaKeys.has(key)) {
+        result[key] = value;
       }
     }
+  }
+
+  private _throwIfErrors(
+    errors: Record<string, GuardianError>,
+    input: unknown,
+  ): void {
+    if (Object.keys(errors).length === 0) return;
+
+    const errorCount = Object.keys(errors).length;
+    const mainError = new GuardianError(
+      `Object validation failed with ${errorCount} error(s)`,
+      {
+        expected: 'valid object',
+        got: input,
+        comparison: 'object_validation',
+        type: 'object',
+        cause: errors,
+      },
+    );
+
+    // Add individual property errors as causes
+    for (const [key, error] of Object.entries(errors)) {
+      mainError.addCause(key, error);
+    }
+
+    throw mainError;
+  }
+
+  private _validateObjectWithoutRefinements(
+    input: unknown,
+  ): TInput | (TInput & Record<string, unknown>) {
+    // Type validation
+    const inputObj = this._validateObjectType(input);
+
+    const schemaKeys = new Set(Object.keys(this._schema));
+
+    // Strict mode validation
+    this._validateStrictMode(inputObj, schemaKeys);
+
+    // Validate schema properties
+    const [result, errors] = this._validateSchemaProperties(inputObj);
+
+    // Handle passthrough properties
+    this._addPassthroughProperties(result, inputObj, schemaKeys);
 
     // Throw validation errors if any
-    if (Object.keys(errors).length > 0) {
-      const errorCount = Object.keys(errors).length;
-      const mainError = new GuardianError(
-        `Object validation failed with ${errorCount} error(s)`,
-        {
-          expected: 'valid object',
-          got: input,
-          comparison: 'object_validation',
-          type: 'object',
-          cause: errors,
-        },
-      );
-
-      // Add individual property errors as causes
-      for (const [key, error] of Object.entries(errors)) {
-        mainError.addCause(key, error);
-      }
-
-      throw mainError;
-    }
+    this._throwIfErrors(errors, input);
 
     return result as TInput | (TInput & Record<string, unknown>);
   }
@@ -868,6 +902,51 @@ export class ObjectGuardian<
   /**
    * Apply refinements to already validated/transformed data.
    */
+  private _createRefinementError(
+    message: string,
+    data: TOutput,
+    path?: string,
+  ): GuardianError {
+    const error = new GuardianError(message, {
+      expected: 'refinement validation to pass',
+      got: data,
+      comparison: 'refinement_validation',
+      type: 'refinement_failure',
+    });
+
+    if (path) {
+      error.addCause(path, error);
+    }
+
+    return error;
+  }
+
+  private _handleRefinementError(
+    error: unknown,
+    refinement: ObjectRefinement<TOutput>,
+    data: TOutput,
+  ): never {
+    if (error instanceof GuardianError) {
+      throw error;
+    }
+
+    const refinementError = new GuardianError(
+      `Refinement validation failed: ${error}`,
+      {
+        expected: 'refinement validation to complete',
+        got: data,
+        comparison: 'refinement_validation',
+        type: 'refinement_error',
+      },
+    );
+
+    if (refinement.path) {
+      refinementError.addCause(refinement.path, refinementError);
+    }
+
+    throw refinementError;
+  }
+
   private _applyRefinements(data: TOutput): TOutput {
     for (const refinement of this._refinements) {
       try {
@@ -887,42 +966,14 @@ export class ObjectGuardian<
         }
 
         if (!isValid) {
-          const refinementError = new GuardianError(refinement.message, {
-            expected: 'refinement validation to pass',
-            got: data,
-            comparison: 'refinement_validation',
-            type: 'refinement_failure',
-          });
-
-          // Add path information if provided
-          if (refinement.path) {
-            refinementError.addCause(refinement.path, refinementError);
-          }
-
-          throw refinementError;
+          throw this._createRefinementError(
+            refinement.message,
+            data,
+            refinement.path,
+          );
         }
       } catch (error) {
-        if (error instanceof GuardianError) {
-          throw error;
-        }
-
-        // Handle unexpected errors during refinement
-        const refinementError = new GuardianError(
-          `Refinement validation failed: ${error}`,
-          {
-            expected: 'refinement validation to complete',
-            got: data,
-            comparison: 'refinement_validation',
-            type: 'refinement_error',
-          },
-        );
-
-        // Add path information if provided
-        if (refinement.path) {
-          refinementError.addCause(refinement.path, refinementError);
-        }
-
-        throw refinementError;
+        this._handleRefinementError(error, refinement, data);
       }
     }
 

@@ -512,7 +512,7 @@ export class NumberGuardian extends BaseGuardian<number> {
 
       // Test if it creates a valid date
       const date = new Date(num);
-      if (isNaN(date.getTime())) {
+      if (Number.isNaN(date.getTime())) {
         throw new GuardianError(
           errorMessage || 'Number must be a valid timestamp',
           {
@@ -526,6 +526,70 @@ export class NumberGuardian extends BaseGuardian<number> {
 
       return num;
     }) as NumberGuardian;
+  }
+
+  private _checkSpecificBasePower(
+    num: number,
+    base: number,
+    errorMessage?: string,
+  ): void {
+    if (base <= 1) {
+      throw new GuardianError('Base must be greater than 1', {
+        expected: 'base > 1',
+        got: base,
+        comparison: 'base',
+        type: 'validation',
+      });
+    }
+
+    const logResult = Math.log(num) / Math.log(base);
+    if (!Number.isInteger(logResult)) {
+      throw new GuardianError(
+        errorMessage || `Number must be a perfect power of ${base}`,
+        {
+          expected: `perfect power of ${base}`,
+          got: num,
+          comparison: 'power',
+          type: 'validation',
+        },
+      );
+    }
+  }
+
+  private _checkAnyBasePower(num: number, errorMessage?: string): void {
+    // 1 is a special case - it's 1^n for any n
+    if (num === 1) {
+      return;
+    }
+
+    let isPerfectPower = false;
+    for (
+      let candidateBase = 2;
+      candidateBase <= Math.sqrt(num);
+      candidateBase++
+    ) {
+      const logResult = Math.log(num) / Math.log(candidateBase);
+      // Use small epsilon for floating point comparison
+      const roundedResult = Math.round(logResult);
+      if (
+        Math.abs(logResult - roundedResult) < 1e-10 && roundedResult > 1
+      ) {
+        isPerfectPower = true;
+        break;
+      }
+    }
+
+    if (!isPerfectPower) {
+      throw new GuardianError(
+        errorMessage || 'Number must be a perfect power',
+        {
+          expected: 'perfect power',
+          got: num,
+          comparison: 'power',
+          type: 'validation',
+        },
+      );
+    }
   }
 
   /**
@@ -550,63 +614,10 @@ export class NumberGuardian extends BaseGuardian<number> {
         );
       }
 
-      if (base !== undefined) {
-        // Check if num is a perfect power of specific base
-        if (base <= 1) {
-          throw new GuardianError('Base must be greater than 1', {
-            expected: 'base > 1',
-            got: base,
-            comparison: 'base',
-            type: 'validation',
-          });
-        }
-        const logResult = Math.log(num) / Math.log(base);
-        if (!Number.isInteger(logResult)) {
-          throw new GuardianError(
-            errorMessage || `Number must be a perfect power of ${base}`,
-            {
-              expected: `perfect power of ${base}`,
-              got: num,
-              comparison: 'power',
-              type: 'validation',
-            },
-          );
-        }
+      if (base === undefined) {
+        this._checkAnyBasePower(num, errorMessage);
       } else {
-        // Check if num is a perfect power of any base >= 2
-        // 1 is a special case - it's 1^n for any n, so it's considered a perfect power
-        if (num === 1) {
-          return num;
-        }
-
-        let isPerfectPower = false;
-        for (
-          let candidateBase = 2;
-          candidateBase <= Math.sqrt(num);
-          candidateBase++
-        ) {
-          const logResult = Math.log(num) / Math.log(candidateBase);
-          // Use small epsilon for floating point comparison
-          const roundedResult = Math.round(logResult);
-          if (
-            Math.abs(logResult - roundedResult) < 1e-10 && roundedResult > 1
-          ) {
-            isPerfectPower = true;
-            break;
-          }
-        }
-
-        if (!isPerfectPower) {
-          throw new GuardianError(
-            errorMessage || 'Number must be a perfect power',
-            {
-              expected: 'perfect power',
-              got: num,
-              comparison: 'power',
-              type: 'validation',
-            },
-          );
-        }
+        this._checkSpecificBasePower(num, base, errorMessage);
       }
 
       return num;
@@ -814,7 +825,7 @@ export class NumberGuardian extends BaseGuardian<number> {
    */
   toFixed(digits: number): NumberGuardian {
     return this.process(
-      (num: number) => parseFloat(num.toFixed(digits)),
+      (num: number) => Number.parseFloat(num.toFixed(digits)),
     ) as NumberGuardian;
   }
 
@@ -847,7 +858,7 @@ export class NumberGuardian extends BaseGuardian<number> {
    */
   formatPercentage(decimals = 2): NumberGuardian {
     return this.process(
-      (num: number) => parseFloat((num * 100).toFixed(decimals)),
+      (num: number) => Number.parseFloat((num * 100).toFixed(decimals)),
     ) as NumberGuardian;
   }
 
@@ -861,7 +872,7 @@ export class NumberGuardian extends BaseGuardian<number> {
       (num: number) => {
         // Convert to string with commas, then back to number (removes commas but preserves value)
         const formatted = num.toLocaleString('en-US');
-        return parseFloat(formatted.replace(/,/g, ''));
+        return Number.parseFloat(formatted.replaceAll(',', ''));
       },
     ) as NumberGuardian;
   }
@@ -877,7 +888,7 @@ export class NumberGuardian extends BaseGuardian<number> {
       (num: number) => {
         const str = Math.abs(num).toString();
         const padded = str.padStart(length, '0');
-        return parseFloat(num < 0 ? '-' + padded : padded);
+        return Number.parseFloat(num < 0 ? '-' + padded : padded);
       },
     ) as NumberGuardian;
   }
@@ -949,7 +960,7 @@ export class NumberGuardian extends BaseGuardian<number> {
   toDate(errorMessage?: string): DateGuardian {
     return this.process((num: number) => {
       const date = new Date(num);
-      if (isNaN(date.getTime())) {
+      if (Number.isNaN(date.getTime())) {
         throw new GuardianError(
           errorMessage || 'Cannot convert number to date',
           {

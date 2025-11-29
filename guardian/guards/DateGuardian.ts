@@ -4,6 +4,23 @@ import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
 import { format } from '$datetime';
 
 /**
+ * Type representing a unit of time for date operations.
+ */
+type DateUnit =
+  | 'milliseconds'
+  | 'seconds'
+  | 'minutes'
+  | 'hours'
+  | 'days'
+  | 'months'
+  | 'years';
+
+/**
+ * Type representing a unit of time for duration operations (excluding months and years).
+ */
+type DurationUnit = 'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days';
+
+/**
  * Guardian for Date validation and transformation.
  * Provides fluent API for building Date validation pipelines.
  *
@@ -761,14 +778,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    */
   within(
     amount: number,
-    unit:
-      | 'milliseconds'
-      | 'seconds'
-      | 'minutes'
-      | 'hours'
-      | 'days'
-      | 'months'
-      | 'years',
+    unit: DateUnit,
     errorMessage?: string,
   ): DateGuardian {
     return this.process((date: Date) => {
@@ -811,14 +821,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    */
   recent(
     amount: number,
-    unit:
-      | 'milliseconds'
-      | 'seconds'
-      | 'minutes'
-      | 'hours'
-      | 'days'
-      | 'months'
-      | 'years',
+    unit: DateUnit,
     errorMessage?: string,
   ): DateGuardian {
     return this.within(
@@ -976,8 +979,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns New NumberGuardian with duration
    */
   duration(
-    unit: 'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days' =
-      'milliseconds',
+    unit: DurationUnit = 'milliseconds',
   ): BaseGuardian<number> {
     return this.process((date: Date) => {
       const now = new Date();
@@ -1034,8 +1036,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    */
   diff(
     otherDate: Date,
-    unit: 'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days' =
-      'milliseconds',
+    unit: DurationUnit = 'milliseconds',
   ): BaseGuardian<number> {
     return this.process((date: Date) => {
       const diff = date.getTime() - otherDate.getTime();

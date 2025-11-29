@@ -150,44 +150,39 @@ export const memoize = <T extends (...args: any[]) => any>(
       }
     }
 
-    try {
-      // Call the original function
-      const result = fn(...args);
+    // Call the original function
+    const result = fn(...args);
 
-      // Handle promises specially
-      if (result instanceof Promise) {
-        // Save the promise in the pendingPromises map
-        pendingPromises.set(key, result);
+    // Handle promises specially
+    if (result instanceof Promise) {
+      // Save the promise in the pendingPromises map
+      pendingPromises.set(key, result);
 
-        // For async functions, return a new promise
-        return Promise.resolve(result)
-          .then((resolvedValue) => {
-            // Only cache successful promises
-            cache.set(key, {
-              data: resolvedValue as ReturnType<T>,
-              expire: now + cacheTimeout,
-            });
-            // Remove from pending promises
-            pendingPromises.delete(key);
-            return resolvedValue;
-          })
-          .catch((error) => {
-            // Don't cache errors and remove from pending
-            pendingPromises.delete(key);
-            throw error;
-          }) as ReturnType<T>;
-      }
-
-      // For synchronous functions, cache immediately
-      cache.set(key, {
-        data: result,
-        expire: now + cacheTimeout,
-      });
-      return result;
-    } catch (error) {
-      // Don't cache errors
-      throw error;
+      // For async functions, return a new promise
+      return Promise.resolve(result)
+        .then((resolvedValue) => {
+          // Only cache successful promises
+          cache.set(key, {
+            data: resolvedValue as ReturnType<T>,
+            expire: now + cacheTimeout,
+          });
+          // Remove from pending promises
+          pendingPromises.delete(key);
+          return resolvedValue;
+        })
+        .catch((error) => {
+          // Don't cache errors and remove from pending
+          pendingPromises.delete(key);
+          throw error;
+        }) as ReturnType<T>;
     }
+
+    // For synchronous functions, cache immediately
+    cache.set(key, {
+      data: result,
+      expire: now + cacheTimeout,
+    });
+    return result;
   }) as T;
 
   return memoizedFn;

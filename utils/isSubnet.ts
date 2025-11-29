@@ -43,11 +43,11 @@ export const isSubnet = (ip: string): boolean => {
 
   // Check if it's IPv6
   if (addressPart.includes(':')) {
-    return isIPv6Subnet(addressPart, parseInt(subnetPart, 10));
+    return isIPv6Subnet(addressPart, Number.parseInt(subnetPart, 10));
   }
 
   // Otherwise treat as IPv4
-  return isIPv4Subnet(addressPart, parseInt(subnetPart, 10));
+  return isIPv4Subnet(addressPart, Number.parseInt(subnetPart, 10));
 };
 
 /**
@@ -58,7 +58,7 @@ export const isSubnet = (ip: string): boolean => {
  */
 const isIPv4Subnet = (ip: string, subnet: number): boolean => {
   // Validate subnet range for IPv4
-  if (isNaN(subnet) || subnet < 0 || subnet > IPV4_MAX_SUBNET) {
+  if (Number.isNaN(subnet) || subnet < 0 || subnet > IPV4_MAX_SUBNET) {
     return false;
   }
 
@@ -80,7 +80,7 @@ const isIPv4Subnet = (ip: string, subnet: number): boolean => {
  */
 const isIPv6Subnet = (ip: string, subnet: number): boolean => {
   // Validate subnet range for IPv6
-  if (isNaN(subnet) || subnet < 0 || subnet > IPV6_MAX_SUBNET) {
+  if (Number.isNaN(subnet) || subnet < 0 || subnet > IPV6_MAX_SUBNET) {
     return false;
   }
 

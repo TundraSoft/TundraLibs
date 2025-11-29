@@ -17,13 +17,13 @@ const parsePEMPublicKey = (pemKey: string): Uint8Array => {
   const base64Key = pemKey
     .replace(/-----BEGIN [A-Z ]+-----/, '')
     .replace(/-----END [A-Z ]+-----/, '')
-    .replace(/\s/g, '');
+    .replaceAll(/\s/g, '');
 
   try {
     // Decode the base64 key data
     return Uint8Array.from(atob(base64Key), (c) => c.charCodeAt(0));
-  } catch (_error) {
-    throw new Error('Invalid PEM public key format');
+  } catch (error) {
+    throw new Error(`Invalid PEM public key format: ${error}`);
   }
 };
 
@@ -154,7 +154,7 @@ export const verifyRSA = async (
     );
   }
 
-  const keySize = parseInt(lengthStr, 10);
+  const keySize = Number.parseInt(lengthStr, 10);
   if (![2048, 3072, 4096].includes(keySize)) {
     throw new Error(
       'Invalid RSA key size. Must be 2048, 3072, or 4096',
@@ -195,18 +195,23 @@ export const verifyRSA = async (
   let signatureBytes: Uint8Array;
   try {
     signatureBytes = Uint8Array.from(atob(signature), (c) => c.charCodeAt(0));
-  } catch (_error) {
-    throw new Error('Invalid signature format. Must be a base64 string');
+  } catch (error) {
+    throw new Error(
+      `Invalid signature format. Must be a base64 string: ${error}`,
+    );
   }
 
   // Calculate salt length based on hash algorithm (typically hash length)
-  const saltLength = hashAlgorithm === 'SHA-256'
-    ? 32
-    : hashAlgorithm === 'SHA-384'
-    ? 48
-    : hashAlgorithm === 'SHA-512'
-    ? 64
-    : 32;
+  let saltLength: number;
+  if (hashAlgorithm === 'SHA-256') {
+    saltLength = 32;
+  } else if (hashAlgorithm === 'SHA-384') {
+    saltLength = 48;
+  } else if (hashAlgorithm === 'SHA-512') {
+    saltLength = 64;
+  } else {
+    saltLength = 32;
+  }
 
   // Verify the signature
   return crypto.subtle.verify(

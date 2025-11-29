@@ -129,9 +129,9 @@ Deno.test('guardian.UnknownGuardian', async (t) => {
     });
 
     await u.step('should convert undefined to string when optional', () => {
-      const optionalStringGuard = new UnknownGuardian().process((
-        value: unknown,
-      ) => String(value)).optional('undefined');
+      const optionalStringGuard = new UnknownGuardian().process(
+        String,
+      ).optional('undefined');
 
       asserts.assertEquals(optionalStringGuard.parse(undefined), 'undefined');
     });
