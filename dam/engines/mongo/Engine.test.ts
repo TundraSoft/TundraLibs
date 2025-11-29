@@ -87,6 +87,131 @@ Deno.test({
           DAMEngineError,
         );
       });
+
+      await u.step('should reject invalid port', () => {
+        asserts.assertThrows(
+          () =>
+            new MongoEngine('test-db', {
+              ...TEST_CONFIG,
+              port: 'invalid' as any,
+            }),
+          DAMEngineError,
+          'must be a positive integer',
+        );
+        asserts.assertThrows(
+          () => new MongoEngine('test-db', { ...TEST_CONFIG, port: -1 }),
+          DAMEngineError,
+          'must be a positive integer',
+        );
+        asserts.assertThrows(
+          () => new MongoEngine('test-db', { ...TEST_CONFIG, port: 99999 }),
+          DAMEngineError,
+          'must be a positive integer',
+        );
+      });
+
+      await u.step('should reject empty host', () => {
+        asserts.assertThrows(
+          () =>
+            new MongoEngine('test-db', {
+              ...TEST_CONFIG,
+              host: '',
+            }),
+          DAMEngineError,
+          'must be a non-empty string',
+        );
+        asserts.assertThrows(
+          () =>
+            new MongoEngine('test-db', {
+              ...TEST_CONFIG,
+              host: '   ',
+            }),
+          DAMEngineError,
+          'must be a non-empty string',
+        );
+      });
+
+      await u.step('should reject empty database', () => {
+        asserts.assertThrows(
+          () =>
+            new MongoEngine('test-db', {
+              ...TEST_CONFIG,
+              database: '',
+            }),
+          DAMEngineError,
+          'must be a non-empty string',
+        );
+      });
+
+      await u.step('should reject empty username when provided', () => {
+        asserts.assertThrows(
+          () =>
+            new MongoEngine('test-db', {
+              ...TEST_CONFIG,
+              username: '',
+            }),
+          DAMEngineError,
+          'must be a non-empty string',
+        );
+      });
+
+      await u.step('should reject invalid pool options', () => {
+        asserts.assertThrows(
+          () =>
+            new MongoEngine('test-db', {
+              ...TEST_CONFIG,
+              pool: { max: -1 },
+            }),
+          DAMEngineError,
+          'must be an object',
+        );
+        asserts.assertThrows(
+          () =>
+            new MongoEngine('test-db', {
+              ...TEST_CONFIG,
+              pool: { min: 0 },
+            }),
+          DAMEngineError,
+          'must be an object',
+        );
+      });
+
+      await u.step('should accept ssl as boolean', () => {
+        const engine = new MongoEngine('test-db', {
+          ...TEST_CONFIG,
+          ssl: true,
+        });
+        asserts.assertEquals(engine.getOption('ssl'), true);
+      });
+
+      await u.step('should accept ssl as object', () => {
+        const engine = new MongoEngine('test-db', {
+          ...TEST_CONFIG,
+          ssl: { rejectUnauthorized: false },
+        });
+        const sslOption = engine.getOption('ssl');
+        asserts.assertEquals(typeof sslOption, 'object');
+      });
+
+      await u.step('should reject invalid ssl options', () => {
+        asserts.assertThrows(
+          () =>
+            new MongoEngine('test-db', {
+              ...TEST_CONFIG,
+              ssl: 'invalid' as any,
+            }),
+          DAMEngineError,
+          'must be a boolean or an object',
+        );
+      });
+
+      await u.step('should accept valid authSource', () => {
+        const engine = new MongoEngine('test-db', {
+          ...TEST_CONFIG,
+          authSource: 'admin',
+        });
+        asserts.assertEquals(engine.getOption('authSource'), 'admin');
+      });
     });
 
     await t.step('connection management', async (u) => {
@@ -690,6 +815,262 @@ Deno.test({
         asserts.assertEquals(engine.status, 'READY');
 
         await engine.disconnect();
+      });
+    });
+
+    // Additional internal branch coverage using mocked engine to avoid real DB dependency
+    await t.step('internal branch coverage (mocked engine)', async (u) => {
+      // Subclass to bypass real connection
+      class BranchMongoEngine extends MongoEngine {
+        protected override async _connect(): Promise<void> {
+          // @ts-ignore access private
+          this._db = mockDb as any;
+          // @ts-ignore access private
+          this._client = {} as any;
+        }
+      }
+      // Minimal mock DB replicating behaviors needed for _execute routing
+      class MockCollection<R> {
+        constructor(private readonly docs: R[] = []) {}
+        async insertOne(_doc: any) {
+          return { insertedId: 'one', acknowledged: true };
+        }
+        async insertMany(arr: any[]) {
+          return { insertedIds: { 0: 'a', 1: 'b' }, insertedCount: arr.length };
+        }
+        async findOne(_f: any) {
+          return this.docs[0] ?? null;
+        }
+        find(filter: any) {
+          return {
+            async toArray() {
+              return [...filter.__docs ?? []];
+            },
+          };
+        }
+        async updateOne() {
+          return { modifiedCount: 1 };
+        }
+        async updateMany() {
+          return { modifiedCount: 2 };
+        }
+        async deleteOne() {
+          return { deletedCount: 1 };
+        }
+        async deleteMany() {
+          return { deletedCount: 3 };
+        }
+        aggregate(_p: any) {
+          return {
+            async toArray() {
+              return [{ agg: true }] as any;
+            },
+          };
+        }
+        async countDocuments() {
+          return 42;
+        }
+        async distinct(field: string) {
+          return field === 'value' ? ['x', 'y'] : [];
+        }
+      }
+      const mockDb = {
+        collection: <R>(_name: string) =>
+          new MockCollection<R>([{ name: 'doc' } as any]) as any,
+        admin() {
+          return {
+            async ping() {
+              return { ok: 1 };
+            },
+          };
+        },
+      };
+
+      const engine = new BranchMongoEngine('branch-test', { database: 'x' });
+
+      await u.step('insert one vs many', async () => {
+        const one = await engine.execute({
+          sql: 'insert',
+          collection: 'c',
+          data: { a: 1 },
+        });
+        asserts.assertEquals(one.count, 1);
+        const many = await engine.execute({
+          sql: 'insert',
+          collection: 'c',
+          data: [{ a: 1 }, { b: 2 }],
+        });
+        asserts.assertEquals(many.count, 2);
+      });
+      await u.step('find one vs many', async () => {
+        const f1 = await engine.execute({
+          sql: 'find',
+          collection: 'c',
+          filter: {},
+          options: { findOne: true },
+        });
+        asserts.assertEquals(f1.count, 1);
+        const fm = await engine.execute({
+          sql: 'find',
+          collection: 'c',
+          filter: {},
+          options: {},
+        });
+        asserts.assertEquals(typeof fm.count, 'number');
+      });
+      await u.step('update one vs many (multiple & multi flags)', async () => {
+        const u1 = await engine.execute({
+          sql: 'update',
+          collection: 'c',
+          filter: {},
+          data: { $set: { a: 2 } },
+        });
+        asserts.assertEquals(u1.count, 1);
+        const um = await engine.execute({
+          sql: 'update',
+          collection: 'c',
+          filter: {},
+          data: { $set: { a: 3 } },
+          options: { multiple: true },
+        });
+        asserts.assertEquals(um.count, 2);
+        const um2 = await engine.execute({
+          sql: 'update',
+          collection: 'c',
+          filter: {},
+          data: { $set: { a: 4 } },
+          options: { multi: true },
+        });
+        asserts.assertEquals(um2.count, 2);
+      });
+      await u.step('delete one vs many (multiple & multi flags)', async () => {
+        const d1 = await engine.execute({
+          sql: 'delete',
+          collection: 'c',
+          filter: {},
+        });
+        asserts.assertEquals(d1.count, 1);
+        const dm = await engine.execute({
+          sql: 'delete',
+          collection: 'c',
+          filter: {},
+          options: { multiple: true },
+        });
+        asserts.assertEquals(dm.count, 3);
+        const dm2 = await engine.execute({
+          sql: 'delete',
+          collection: 'c',
+          filter: {},
+          options: { multi: true },
+        });
+        asserts.assertEquals(dm2.count, 3);
+      });
+      await u.step('aggregate success and error', async () => {
+        const ag = await engine.execute({
+          sql: 'aggregate',
+          collection: 'c',
+          pipeline: [{ $match: {} }],
+        });
+        asserts.assertEquals(ag.count, 1);
+        await asserts.assertRejects(
+          () => engine.execute({ sql: 'aggregate', collection: 'c' }),
+          DAMEngineError,
+        );
+      });
+      await u.step('count & distinct success and errors', async () => {
+        const cnt = await engine.execute({
+          sql: 'count',
+          collection: 'c',
+          filter: {},
+        });
+        asserts.assertEquals(cnt.count, 42);
+        const distinct = await engine.execute({
+          sql: 'distinct',
+          collection: 'c',
+          field: 'value',
+          filter: {},
+        });
+        asserts.assertEquals(distinct.count, 2);
+        const distinctEmpty = await engine.execute({
+          sql: 'distinct',
+          collection: 'c',
+          field: 'other',
+          filter: {},
+        });
+        asserts.assertEquals(distinctEmpty.count, 0);
+        await asserts.assertRejects(
+          () => engine.execute({ sql: 'distinct', collection: 'c' }),
+          DAMEngineError,
+        );
+      });
+      await u.step('missing collection', async () => {
+        await asserts.assertRejects(
+          () => engine.execute({ sql: 'find' }),
+          DAMEngineError,
+        );
+      });
+      await u.step('unsupported action', async () => {
+        await asserts.assertRejects(
+          () => engine.execute({ sql: 'unsupported', collection: 'c' }),
+          DAMEngineError,
+        );
+      });
+      await u.step('transactions unsupported', () => {
+        asserts.assertThrows(
+          () => (engine as any)._beginTransaction('x'),
+          DAMEngineError,
+        );
+        asserts.assertThrows(
+          () => (engine as any)._commitTransaction('x'),
+          DAMEngineError,
+        );
+        asserts.assertThrows(
+          () => (engine as any)._rollbackTransaction('x'),
+          DAMEngineError,
+        );
+      });
+      await u.step('ping false and true branches', async () => {
+        // @ts-ignore bypass private for test
+        (engine as any)._db = null;
+        asserts.assertEquals(await (engine as any)._ping(), false);
+        // @ts-ignore restore
+        (engine as any)._db = mockDb as any;
+        asserts.assertEquals(await (engine as any)._ping(), true);
+      });
+      await u.step('_updatePoolStatus branches', () => {
+        // @ts-ignore
+        engine._status = 'CLOSED';
+        (engine as any)._updatePoolStatus();
+        asserts.assertEquals(engine.status, 'CLOSED');
+        // @ts-ignore
+        engine._status = 'CONNECTING';
+        (engine as any)._updatePoolStatus();
+        asserts.assertEquals(engine.status, 'CONNECTING');
+        // @ts-ignore
+        engine._client = {} as any;
+        // @ts-ignore
+        engine._status = 'OPEN';
+        (engine as any)._updatePoolStatus();
+        asserts.assertEquals(engine.status, 'READY');
+      });
+      await u.step('error propagation wraps underlying error', async () => {
+        // @ts-ignore force failing collection with simple shape (no deep nesting)
+        const failingCollection = {
+          insertOne: () => {
+            throw new Error('boom');
+          },
+        } as any;
+        // @ts-ignore override _db
+        const adminObj = { ping: async () => ({ ok: 1 }) } as any;
+        (engine as any)._db = {
+          collection: () => failingCollection,
+          admin: () => adminObj,
+        } as any;
+        await asserts.assertRejects(
+          () =>
+            engine.execute({ sql: 'insert', collection: 'x', data: { a: 1 } }),
+          DAMEngineError,
+        );
       });
     });
   },

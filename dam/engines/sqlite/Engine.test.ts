@@ -52,6 +52,79 @@ Deno.test({
           DAMEngineError,
         );
       });
+
+      await u.step('should reject null database', () => {
+        asserts.assertThrows(
+          // deno-lint-ignore no-explicit-any
+          () => new SQLiteEngine('test-db', { database: null as any }),
+          DAMEngineError,
+        );
+      });
+
+      await u.step('should reject non-string database', () => {
+        asserts.assertThrows(
+          // deno-lint-ignore no-explicit-any
+          () => new SQLiteEngine('test-db', { database: 123 as any }),
+          DAMEngineError,
+        );
+      });
+
+      await u.step('should reject invalid cacheSize', () => {
+        asserts.assertThrows(
+          () =>
+            new SQLiteEngine('test-db', {
+              database: TEST_DB_PATH,
+              // deno-lint-ignore no-explicit-any
+              cacheSize: 'invalid' as any,
+            }),
+          DAMEngineError,
+        );
+      });
+
+      await u.step('should reject NaN cacheSize', () => {
+        asserts.assertThrows(
+          () =>
+            new SQLiteEngine('test-db', {
+              database: TEST_DB_PATH,
+              cacheSize: Number.NaN,
+            }),
+          DAMEngineError,
+        );
+      });
+
+      await u.step('should reject invalid synchronous mode', () => {
+        asserts.assertThrows(
+          () =>
+            new SQLiteEngine('test-db', {
+              database: TEST_DB_PATH,
+              // deno-lint-ignore no-explicit-any
+              synchronous: 'INVALID' as any,
+            }),
+          DAMEngineError,
+        );
+      });
+
+      await u.step('should accept valid synchronous modes', () => {
+        const modes: Array<'OFF' | 'NORMAL' | 'FULL'> = [
+          'OFF',
+          'NORMAL',
+          'FULL',
+        ];
+        for (const mode of modes) {
+          const engine = new SQLiteEngine('test-db', {
+            database: TEST_DB_PATH,
+            synchronous: mode,
+          });
+          asserts.assertEquals(engine.getOption('synchronous'), mode);
+        }
+      });
+
+      await u.step('should trim database path', () => {
+        const engine = new SQLiteEngine('test-db', {
+          database: '  ' + TEST_DB_PATH + '  ',
+        });
+        asserts.assertEquals(engine.getOption('database'), TEST_DB_PATH);
+      });
     });
 
     await t.step('connection management', async (u) => {
@@ -88,6 +161,12 @@ Deno.test({
         const stat = await Deno.stat(TEST_DB_PATH);
         asserts.assert(stat.isFile);
         await engine.disconnect();
+      });
+      await u.step('should fail when path is a directory', async () => {
+        const dirPath = `${tempDir}/not_a_file`; // create directory with same name
+        await Deno.mkdir(dirPath);
+        const engine = new SQLiteEngine('bad-db', { database: dirPath });
+        await asserts.assertRejects(() => engine.connect(), DAMEngineError);
       });
     });
 
@@ -547,6 +626,90 @@ Deno.test({
         asserts.assertEquals(result, true);
         asserts.assertEquals(engine.status, 'READY');
 
+        await engine.disconnect();
+      });
+      await u.step('should return false on ping failure', async () => {
+        class FailingPingSQLite extends SQLiteEngine {
+          protected override async _connect(): Promise<void> {
+            // Force READY without client so _ping returns false
+            // @ts-ignore
+            this._status = 'READY';
+            // @ts-ignore
+            this._client = null;
+          }
+          protected override _ping(): boolean {
+            return false;
+          }
+        }
+        const engine = new FailingPingSQLite(
+          'fail-ping',
+          { database: ':memory:' } as any,
+        );
+        const ok = await engine.ping();
+        asserts.assertEquals(ok, false);
+      });
+    });
+
+    await t.step('error branches', async (u) => {
+      await u.step(
+        'should not register transaction on begin failure',
+        async () => {
+          class FailingBeginSQLite extends SQLiteEngine {
+            protected override _beginTransaction(): void {
+              throw new Error('boom');
+            }
+          }
+          const engine = new FailingBeginSQLite('fail-begin', {
+            database: ':memory:',
+          });
+          await engine.connect();
+          await asserts.assertRejects(() => engine.beginTransaction());
+          asserts.assertEquals((engine as any)._clientMap.size, 0);
+          await engine.disconnect();
+        },
+      );
+
+      await u.step('should handle commit failure', async () => {
+        class FailingCommitSQLite extends SQLiteEngine {
+          protected override _commitTransaction(): void {
+            throw new Error('commit boom');
+          }
+        }
+        const engine = new FailingCommitSQLite('fail-commit', {
+          database: ':memory:',
+        });
+        await engine.connect();
+        const txId = await engine.beginTransaction();
+        await asserts.assertRejects(() => engine.commitTransaction(txId));
+        await engine.disconnect();
+      });
+
+      await u.step('should handle rollback failure', async () => {
+        class FailingRollbackSQLite extends SQLiteEngine {
+          protected override _rollbackTransaction(): void {
+            throw new Error('rollback boom');
+          }
+        }
+        const engine = new FailingRollbackSQLite('fail-rollback', {
+          database: ':memory:',
+        });
+        await engine.connect();
+        const txId = await engine.beginTransaction();
+        await asserts.assertRejects(() => engine.rollbackTransaction(txId));
+        await engine.disconnect();
+      });
+
+      await u.step('should handle execute failure', async () => {
+        class FailingExecuteSQLite extends SQLiteEngine {
+          protected override _execute(): { data: any[]; count: number } {
+            throw new Error('execute boom');
+          }
+        }
+        const engine = new FailingExecuteSQLite('fail-execute', {
+          database: ':memory:',
+        });
+        await engine.connect();
+        await asserts.assertRejects(() => engine.execute({ sql: 'SELECT 1' }));
         await engine.disconnect();
       });
     });

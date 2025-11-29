@@ -226,4 +226,29 @@ Deno.test('id.ulid', async (t) => {
     const lowerTime = getTimestamp(lowerCaseId);
     asserts.assertEquals(originalTime, lowerTime);
   });
+
+  await t.step('Monotonic large sample ordering & reset', () => {
+    const sampleTime = Date.now();
+    const count = 1024;
+    const list: string[] = [];
+    for (let i = 0; i < count; i++) {
+      list.push(monotonicUlid(sampleTime));
+    }
+    // uniqueness
+    asserts.assertEquals(new Set(list).size, count);
+    // ordering
+    for (let i = 1; i < list.length; i++) {
+      asserts.assert(list[i - 1]! < list[i]!);
+    }
+    // timestamp extraction all equal
+    for (const id of list) {
+      asserts.assertEquals(getTimestamp(id), sampleTime);
+    }
+    // Reset behavior with new timestamp
+    const laterTime = sampleTime + 1;
+    const firstLater = monotonicUlid(laterTime);
+    asserts.assert(getTimestamp(firstLater) === laterTime);
+    // new timestamp should produce lexicographically greater ULIDs than previous batch
+    asserts.assert(list[list.length - 1]! < firstLater);
+  });
 });

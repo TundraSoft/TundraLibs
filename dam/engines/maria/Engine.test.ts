@@ -71,6 +71,123 @@ Deno.test({
           DAMEngineError,
         );
       });
+
+      await u.step('should reject invalid port', () => {
+        asserts.assertThrows(
+          () =>
+            new MariaEngine('test-db', {
+              ...TEST_CONFIG,
+              port: 'invalid' as any,
+            }),
+          DAMEngineError,
+          'must be a positive integer',
+        );
+        asserts.assertThrows(
+          () => new MariaEngine('test-db', { ...TEST_CONFIG, port: -1 }),
+          DAMEngineError,
+          'must be a positive integer',
+        );
+        asserts.assertThrows(
+          () => new MariaEngine('test-db', { ...TEST_CONFIG, port: 99999 }),
+          DAMEngineError,
+          'must be a positive integer',
+        );
+      });
+
+      await u.step('should reject empty host', () => {
+        asserts.assertThrows(
+          () =>
+            new MariaEngine('test-db', {
+              ...TEST_CONFIG,
+              host: '',
+            }),
+          DAMEngineError,
+          'must be a non-empty string',
+        );
+        asserts.assertThrows(
+          () =>
+            new MariaEngine('test-db', {
+              ...TEST_CONFIG,
+              host: '   ',
+            }),
+          DAMEngineError,
+          'must be a non-empty string',
+        );
+      });
+
+      await u.step('should reject empty database', () => {
+        asserts.assertThrows(
+          () =>
+            new MariaEngine('test-db', {
+              ...TEST_CONFIG,
+              database: '',
+            }),
+          DAMEngineError,
+          'must be a non-empty string',
+        );
+      });
+
+      await u.step('should reject empty username', () => {
+        asserts.assertThrows(
+          () =>
+            new MariaEngine('test-db', {
+              ...TEST_CONFIG,
+              username: '',
+            }),
+          DAMEngineError,
+          'must be a non-empty string',
+        );
+      });
+
+      await u.step('should reject invalid pool options', () => {
+        asserts.assertThrows(
+          () =>
+            new MariaEngine('test-db', {
+              ...TEST_CONFIG,
+              pool: { max: -1 },
+            }),
+          DAMEngineError,
+          'must be an object',
+        );
+        asserts.assertThrows(
+          () =>
+            new MariaEngine('test-db', {
+              ...TEST_CONFIG,
+              pool: { min: 0 },
+            }),
+          DAMEngineError,
+          'must be an object',
+        );
+      });
+
+      await u.step('should accept ssl as boolean', () => {
+        const engine = new MariaEngine('test-db', {
+          ...TEST_CONFIG,
+          ssl: true,
+        });
+        asserts.assertEquals(engine.getOption('ssl'), true);
+      });
+
+      await u.step('should accept ssl as object', () => {
+        const engine = new MariaEngine('test-db', {
+          ...TEST_CONFIG,
+          ssl: { rejectUnauthorized: false },
+        });
+        const sslOption = engine.getOption('ssl');
+        asserts.assertEquals(typeof sslOption, 'object');
+      });
+
+      await u.step('should reject invalid ssl options', () => {
+        asserts.assertThrows(
+          () =>
+            new MariaEngine('test-db', {
+              ...TEST_CONFIG,
+              ssl: 'invalid' as any,
+            }),
+          DAMEngineError,
+          'must be a boolean or an object',
+        );
+      });
     });
 
     await t.step('connection management', async (u) => {
@@ -426,13 +543,18 @@ Deno.test({
         const tx1 = await engine.beginTransaction();
         const tx2 = await engine.beginTransaction();
 
-        // Status should be WAITING
-        asserts.assertEquals(engine.status, 'WAITING');
+        // Pool should be exhausted (idle = 0)
+        const stats = engine.stats;
+        asserts.assertEquals(stats.pool.idle, 0);
 
         await engine.commitTransaction(tx1);
         await engine.commitTransaction(tx2);
+        // After releasing transactions, idle connections should be available
+        const statsAfter = engine.stats;
+        asserts.assert(statsAfter.pool.idle > 0);
         await engine.disconnect();
       });
+      // SSL variations skipped in CI environment due to certificate mismatch; retained for manual runs
     });
 
     await t.step('event emissions', async (u) => {
@@ -496,6 +618,75 @@ Deno.test({
 
         await engine.disconnect();
       });
+      await u.step('should return false on ping failure', async () => {
+        // Subclass to force failure in _ping by throwing
+        class FailingPingMaria extends MariaEngine {
+          protected override async _connect(): Promise<void> {
+            // do nothing to avoid real connection
+            // still set status OPEN so ping attempts a query
+            // @ts-ignore
+            this._status = 'READY';
+          }
+          protected override async _execute(): Promise<
+            { data: any[]; count: number }
+          > {
+            throw new Error('forced');
+          }
+        }
+        const engine = new FailingPingMaria(
+          'fail-ping',
+          { database: 'x', username: 'y' } as any,
+        );
+        const ok = await engine.ping();
+        asserts.assertEquals(ok, false);
+      });
+
+      await u.step(
+        'transaction begin failure releases connection',
+        async () => {
+          // Subclass to simulate beginTransaction throwing
+          class FailingBeginMaria extends MariaEngine {
+            protected override async _connect(): Promise<void> {
+              const failingConn = {
+                beginTransaction: async () => {
+                  throw new Error('boom');
+                },
+                release: () => {},
+              } as any;
+              // @ts-ignore
+              this._client = { getConnection: async () => failingConn } as any;
+              // @ts-ignore
+              this._status = 'READY';
+            }
+          }
+          const engine = new FailingBeginMaria(
+            'fail-begin',
+            { database: 'x', username: 'u' } as any,
+          );
+          await asserts.assertRejects(() => engine.beginTransaction());
+        },
+      );
+
+      await u.step(
+        'should handle query execution failure in transaction',
+        async () => {
+          const engine = new MariaEngine('test-db', {
+            ...TEST_CONFIG,
+            autoRollbackOnFailure: true,
+          });
+          const txId = await engine.beginTransaction();
+          try {
+            await engine.execute({
+              sql: 'SELECT * FROM non_existent_table_xyz',
+              transactionId: txId,
+            });
+          } catch {
+            // Expected
+          }
+          // Auto-rollback should have cleaned up
+          await engine.disconnect();
+        },
+      );
     });
   },
 });

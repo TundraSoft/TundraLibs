@@ -320,11 +320,6 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
     query: EngineQuery,
   ): Promise<EngineQueryResult<R>> {
     await this.connect();
-    if (this.status === 'CLOSED') {
-      throw new DAMEngineError('NO_CONNECTION', {
-        instanceId: this.instanceId,
-      });
-    }
     query = this._standardizeQuery(query);
 
     // Validate transaction exists if transactionId is provided
@@ -414,11 +409,6 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
    */
   public async batchExecute(queries: EngineQuery[]): Promise<void> {
     await this.connect();
-    if (this.status === 'CLOSED') {
-      throw new DAMEngineError('NO_CONNECTION', {
-        instanceId: this.instanceId,
-      });
-    }
     for (const query of queries) {
       try {
         await this.execute(query);
@@ -465,11 +455,6 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
       });
     }
     await this.connect();
-    if (this.status === 'CLOSED') {
-      throw new DAMEngineError('NO_CONNECTION', {
-        instanceId: this.instanceId,
-      });
-    }
     try {
       const transactionId = options?.name ?? this._idGenerator('tx');
       await this._beginTransaction(transactionId);
@@ -536,11 +521,6 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
     }
 
     await this.connect();
-    if (this.status === 'CLOSED') {
-      throw new DAMEngineError('NO_CONNECTION', {
-        instanceId: this.instanceId,
-      });
-    }
 
     this._clearTransactionTimeout(transactionId);
     try {
@@ -609,11 +589,6 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
     }
 
     await this.connect();
-    if (this.status === 'CLOSED') {
-      throw new DAMEngineError('NO_CONNECTION', {
-        instanceId: this.instanceId,
-      });
-    }
 
     this._clearTransactionTimeout(transactionId);
     try {
@@ -842,9 +817,6 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
    */
   public async ping(): Promise<boolean> {
     await this.connect();
-    if (this.status === 'CLOSED') {
-      return false;
-    }
     try {
       return await this._ping();
     } catch {

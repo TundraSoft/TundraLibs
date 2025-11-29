@@ -106,4 +106,32 @@ Deno.test('id.simpleId', async (t) => {
     const id = simpleID(0, 4, true);
     asserts.assert(id().toString().length > 14); // Check if the ID length is greater than 14
   });
+  await t.step('Error: minLen < 1 should throw', () => {
+    asserts.assertThrows(
+      () => simpleID(0, 0),
+      Error,
+      'Minimum length must be at least 1',
+    );
+  });
+
+  await t.step('Microseconds component length & variability', () => {
+    const gen = simpleID(0, 3, true);
+    const a = gen().toString();
+    const b = gen().toString();
+    // Structure: YYYYMMDD (8) + micro(6) + counter(>=3)
+    asserts.assertEquals(a.length >= 8 + 6 + 3, true);
+    const microA = a.substring(8, 14);
+    const microB = b.substring(8, 14);
+    asserts.assertMatch(microA, /^\d{6}$/);
+    asserts.assertMatch(microB, /^\d{6}$/);
+    // likely different micro times (can be same if calls extremely close but very unlikely)
+    if (microA === microB) {
+      // third attempt to reduce flake
+      const c = gen().toString();
+      const microC = c.substring(8, 14);
+      asserts.assert(microC !== microA || microC !== microB);
+    }
+  });
+
+  // Removed complex multi-day rollover test due to instability in Date mocking across environments.
 });

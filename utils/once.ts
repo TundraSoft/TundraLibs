@@ -172,7 +172,7 @@
  * ```
  */
 export const once = <T extends (...args: any[]) => any>(fn: T): T => {
-  let result: ReturnType<T> | undefined;
+  let result: ReturnType<T>;
   let called = false;
   let error: unknown;
 
@@ -188,7 +188,7 @@ export const once = <T extends (...args: any[]) => any>(fn: T): T => {
     } else if (error) {
       throw error;
     }
-    return result as ReturnType<T>;
+    return result;
   }) as T;
 
   return onceFn;
@@ -261,8 +261,48 @@ export function Once(
   _propertyKey: string | symbol,
   descriptor: PropertyDescriptor,
 ): PropertyDescriptor {
-  if (typeof descriptor.value === 'function') {
-    descriptor.value = once(descriptor.value);
-  }
+  if (typeof descriptor.value !== 'function') return descriptor;
+
+  const original = descriptor.value;
+  descriptor.value = function (this: any, ...args: unknown[]) { // deno-lint-ignore no-explicit-any
+    const stateKey = `__once_state_${String(_propertyKey)}`;
+    let state = this[stateKey];
+    if (!state) {
+      state = { called: false, result: undefined, error: undefined };
+      Object.defineProperty(this, stateKey, {
+        value: state,
+        configurable: false,
+        enumerable: false,
+        writable: true,
+      });
+    }
+    if (!state.called) {
+      state.called = true;
+      try {
+        const r = original.apply(this, args);
+        // Handle promise case to preserve same promise and error/result semantics
+        if (r instanceof Promise) {
+          state.result = r.then(
+            (val: unknown) => {
+              state.result = val; // cache resolved value
+              return val;
+            },
+            (err: unknown) => {
+              state.error = err;
+              throw err;
+            },
+          );
+          return state.result;
+        }
+        state.result = r;
+        return r;
+      } catch (e) {
+        state.error = e;
+        throw e;
+      }
+    }
+    if (state.error) throw state.error;
+    return state.result;
+  };
   return descriptor;
 }

@@ -53,6 +53,123 @@ Deno.test({
           DAMEngineError,
         );
       });
+
+      await u.step('should reject invalid port', () => {
+        asserts.assertThrows(
+          () =>
+            new PostgresEngine('test-db', {
+              ...TEST_CONFIG,
+              port: 'invalid' as any,
+            }),
+          DAMEngineError,
+          'must be a positive integer',
+        );
+        asserts.assertThrows(
+          () => new PostgresEngine('test-db', { ...TEST_CONFIG, port: -1 }),
+          DAMEngineError,
+          'must be a positive integer',
+        );
+        asserts.assertThrows(
+          () => new PostgresEngine('test-db', { ...TEST_CONFIG, port: 99999 }),
+          DAMEngineError,
+          'must be a positive integer',
+        );
+      });
+
+      await u.step('should reject empty host', () => {
+        asserts.assertThrows(
+          () =>
+            new PostgresEngine('test-db', {
+              ...TEST_CONFIG,
+              host: '',
+            }),
+          DAMEngineError,
+          'must be a non-empty string',
+        );
+        asserts.assertThrows(
+          () =>
+            new PostgresEngine('test-db', {
+              ...TEST_CONFIG,
+              host: '   ',
+            }),
+          DAMEngineError,
+          'must be a non-empty string',
+        );
+      });
+
+      await u.step('should reject empty database', () => {
+        asserts.assertThrows(
+          () =>
+            new PostgresEngine('test-db', {
+              ...TEST_CONFIG,
+              database: '',
+            }),
+          DAMEngineError,
+          'must be a non-empty string',
+        );
+      });
+
+      await u.step('should reject empty username', () => {
+        asserts.assertThrows(
+          () =>
+            new PostgresEngine('test-db', {
+              ...TEST_CONFIG,
+              username: '',
+            }),
+          DAMEngineError,
+          'must be a non-empty string',
+        );
+      });
+
+      await u.step('should reject invalid pool options', () => {
+        asserts.assertThrows(
+          () =>
+            new PostgresEngine('test-db', {
+              ...TEST_CONFIG,
+              pool: { max: -1 },
+            }),
+          DAMEngineError,
+          'must be an object',
+        );
+        asserts.assertThrows(
+          () =>
+            new PostgresEngine('test-db', {
+              ...TEST_CONFIG,
+              pool: { min: 0 },
+            }),
+          DAMEngineError,
+          'must be an object',
+        );
+      });
+
+      await u.step('should accept ssl as boolean', () => {
+        const engine = new PostgresEngine('test-db', {
+          ...TEST_CONFIG,
+          ssl: true,
+        });
+        asserts.assertEquals(engine.getOption('ssl'), true);
+      });
+
+      await u.step('should accept ssl as object', () => {
+        const engine = new PostgresEngine('test-db', {
+          ...TEST_CONFIG,
+          ssl: { rejectUnauthorized: false },
+        });
+        const sslOption = engine.getOption('ssl');
+        asserts.assertEquals(typeof sslOption, 'object');
+      });
+
+      await u.step('should reject invalid ssl options', () => {
+        asserts.assertThrows(
+          () =>
+            new PostgresEngine('test-db', {
+              ...TEST_CONFIG,
+              ssl: 'invalid' as any,
+            }),
+          DAMEngineError,
+          'must be a boolean or an object',
+        );
+      });
     });
 
     await t.step('connection management', async (u) => {
@@ -493,6 +610,113 @@ Deno.test({
         asserts.assertEquals(engine.status, 'READY');
 
         await engine.disconnect();
+      });
+
+      await u.step('should return false on ping failure', async () => {
+        class FailingPingPostgres extends PostgresEngine {
+          protected override async _connect(): Promise<void> {
+            // Force READY so ping attempts an execute
+            // @ts-ignore
+            this._status = 'READY';
+          }
+          protected override async _execute(): Promise<
+            { data: any[]; count: number }
+          > {
+            throw new Error('forced');
+          }
+        }
+        const engine = new FailingPingPostgres(
+          'fail-ping',
+          { database: 'x', username: 'u' } as any,
+        );
+        const ok = await engine.ping();
+        asserts.assertEquals(ok, false);
+      });
+    });
+
+    await t.step('error branches', async (u) => {
+      await u.step('should release client on begin failure', async () => {
+        const engine = new PostgresEngine(
+          'fail-begin',
+          { database: 'x', username: 'u' } as any,
+        );
+        // Inject mock pool with failing BEGIN
+        // Force READY so beginTransaction uses existing mock pool
+        // @ts-ignore
+        (engine as any)._status = 'READY';
+        (engine as any)._client = {
+          connect: async () => ({
+            queryArray: async () => {
+              throw new Error('boom');
+            },
+            release: () => {},
+          }),
+        };
+        await asserts.assertRejects(() => engine.beginTransaction());
+        // Transaction map should remain empty
+        asserts.assertEquals((engine as any)._clientMap.size, 0);
+      });
+
+      await u.step('should handle commit failure', async () => {
+        const engine = new PostgresEngine(
+          'fail-commit',
+          { database: 'x', username: 'u' } as any,
+        );
+        // @ts-ignore
+        (engine as any)._status = 'READY';
+        const mockClient = {
+          queryArray: async () => ({ rows: [] }),
+          release: () => {},
+        };
+        (engine as any)._client = {
+          connect: async () => mockClient,
+        };
+        const txId = await engine.beginTransaction();
+        // Make commit fail
+        mockClient.queryArray = async () => {
+          throw new Error('commit boom');
+        };
+        await asserts.assertRejects(() => engine.commitTransaction(txId));
+      });
+
+      await u.step('should handle rollback failure', async () => {
+        const engine = new PostgresEngine(
+          'fail-rollback',
+          { database: 'x', username: 'u' } as any,
+        );
+        // @ts-ignore
+        (engine as any)._status = 'READY';
+        const mockClient = {
+          queryArray: async () => ({ rows: [] }),
+          release: () => {},
+        };
+        (engine as any)._client = {
+          connect: async () => mockClient,
+        };
+        const txId = await engine.beginTransaction();
+        // Make rollback fail
+        mockClient.queryArray = async () => {
+          throw new Error('rollback boom');
+        };
+        await asserts.assertRejects(() => engine.rollbackTransaction(txId));
+      });
+
+      await u.step('should handle execute failure', async () => {
+        const engine = new PostgresEngine(
+          'fail-execute',
+          { database: 'x', username: 'u' } as any,
+        );
+        // @ts-ignore
+        (engine as any)._status = 'READY';
+        (engine as any)._client = {
+          connect: async () => ({
+            queryArray: async () => {
+              throw new Error('execute boom');
+            },
+            release: () => {},
+          }),
+        };
+        await asserts.assertRejects(() => engine.execute({ sql: 'SELECT 1' }));
       });
     });
   },

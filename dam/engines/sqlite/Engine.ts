@@ -418,4 +418,89 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
       this._status = 'READY';
     }
   }
+
+  /**
+   * Process and validate SQLite-specific options.
+   *
+   * Validates:
+   * - database: Must be a non-empty string (file path or ':memory:')
+   * - cacheSize: Must be a number (positive = pages, negative = KB)
+   * - synchronous: Must be 'OFF', 'NORMAL', or 'FULL'
+   *
+   * @param key - The option key
+   * @param value - The option value
+   * @returns The processed option value
+   * @throws {DAMEngineError} MISSING_CONFIG_VALUE if required option is missing
+   * @throws {DAMEngineError} INVALID_CONFIG_VALUE if option value is invalid
+   * @protected
+   * @override
+   */
+  // @ts-expect-error - TypeScript variance issue with generics. Signature is compatible at runtime.
+  protected override _processOption( //NOSONAR
+    key: keyof SQLiteEngineOptions,
+    value: SQLiteEngineOptions[typeof key],
+  ): SQLiteEngineOptions[typeof key] {
+    // Handle SQLite-specific options
+    if (key === 'database') {
+      // Database is required and must be non-empty string
+      if (value === undefined || value === null) {
+        throw new DAMEngineError('MISSING_CONFIG_VALUE', {
+          instanceId: this.instanceId,
+          key: 'database',
+        });
+      }
+      if (typeof value !== 'string') {
+        throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+          instanceId: this.instanceId,
+          key: 'database',
+          reason: 'must be a string',
+        });
+      }
+      if (value.trim().length === 0) {
+        throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+          instanceId: this.instanceId,
+          key: 'database',
+          reason: 'must be a non-empty string',
+        });
+      }
+      // Trim whitespace and return
+      return value.trim();
+    }
+
+    // Handle cache size
+    if (key === 'cacheSize') {
+      if (value !== undefined && value !== null) {
+        if (typeof value !== 'number' || Number.isNaN(value)) {
+          throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+            instanceId: this.instanceId,
+            key: 'cacheSize',
+            reason: 'must be a number (positive for pages, negative for KB)',
+          });
+        }
+      }
+      return value;
+    }
+
+    // Handle synchronous mode
+    if (key === 'synchronous') {
+      if (value !== undefined && value !== null) {
+        const validValues = ['OFF', 'NORMAL', 'FULL'];
+        if (
+          typeof value !== 'string' ||
+          !validValues.includes(value)
+        ) {
+          throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+            instanceId: this.instanceId,
+            key: 'synchronous',
+            reason: `must be one of: ${validValues.join(', ')}`,
+          });
+        }
+      }
+      return value;
+    }
+
+    // Call parent processing for common options (port, ssl, pool, etc.)
+    // deno-lint-ignore no-explicit-any
+    return super._processOption(key as any, value);
+  }
 }

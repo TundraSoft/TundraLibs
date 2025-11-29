@@ -419,4 +419,79 @@ Deno.test('utils.ipUtils', async (i) => {
       }
     });
   });
+
+  // Additional edge and error case coverage for remaining utility functions
+  await i.step('additional edge cases', async (u) => {
+    await u.step('ipv4ToHexSegments should throw on invalid IPv4', () => {
+      asserts.assertThrows(
+        () => ipv4ToHexSegments('256.0.0.1'),
+        Error,
+        'Invalid IPv4 address: 256.0.0.1',
+      );
+      asserts.assertThrows(
+        () => ipv4ToHexSegments('1.2.3'),
+        Error,
+        'Invalid IPv4 address: 1.2.3',
+      );
+    });
+
+    await u.step('isValidIPv4 should allow leading zeros', () => {
+      asserts.assertEquals(isValidIPv4('001.002.003.004'), true);
+      asserts.assertEquals(isValidIPv4('000.000.000.000'), true);
+    });
+
+    await u.step('isValidIPv6Structure negative cases not yet covered', () => {
+      // Missing colon entirely
+      asserts.assertEquals(isValidIPv6Structure('abcdef0123456789'), false);
+      // Excessive length (>45 chars)
+      const longIPv6 = '1'.repeat(46) + '::';
+      asserts.assertEquals(isValidIPv6Structure(longIPv6), false);
+    });
+
+    await u.step(
+      'ipv4ToBinary and ipv4ToLong should throw on invalid input',
+      () => {
+        asserts.assertThrows(
+          () => ipv4ToBinary('300.1.1.1'),
+          Error,
+          'Invalid IPv4 address: 300.1.1.1',
+        );
+        asserts.assertThrows(
+          () => ipv4ToLong('300.1.1.1'),
+          Error,
+          'Invalid IPv4 address: 300.1.1.1',
+        );
+      },
+    );
+
+    await u.step('isIPv4InRange error conditions', () => {
+      asserts.assertThrows(
+        () => isIPv4InRange('256.0.0.1', '192.168.0.0', 24),
+        Error,
+        'Invalid IPv4 address: 256.0.0.1',
+      );
+      asserts.assertThrows(
+        () => isIPv4InRange('192.168.0.1', '300.0.0.0', 24),
+        Error,
+        'Invalid IPv4 range start: 300.0.0.0',
+      );
+      asserts.assertThrows(
+        () => isIPv4InRange('192.168.0.1', '192.168.0.0', -1),
+        Error,
+        'Invalid CIDR prefix: -1',
+      );
+      asserts.assertThrows(
+        () => isIPv4InRange('192.168.0.1', '192.168.0.0', 33),
+        Error,
+        'Invalid CIDR prefix: 33',
+      );
+    });
+
+    await u.step('ipv6ToBinary additional mapped forms', () => {
+      const mapped = ipv6ToBinary('::ffff:10.0.0.1');
+      asserts.assertEquals(mapped.length, 128);
+      const compatible = ipv6ToBinary('::10.0.0.1');
+      asserts.assertEquals(compatible.length, 128);
+    });
+  });
 });

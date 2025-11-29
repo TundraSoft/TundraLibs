@@ -495,7 +495,7 @@ export class MongoEngine extends AbstractEngine<MongoEngineOptions> {
   protected _beginTransaction(_transactionId: string): void {
     throw new DAMEngineError('UNSUPPORTED_OPERATION', {
       instanceId: this.instanceId,
-      operation: 'transaction',
+      operation: 'BEGIN',
     });
   }
 
@@ -509,7 +509,7 @@ export class MongoEngine extends AbstractEngine<MongoEngineOptions> {
   protected _commitTransaction(_transactionId: string): void {
     throw new DAMEngineError('UNSUPPORTED_OPERATION', {
       instanceId: this.instanceId,
-      operation: 'transaction',
+      operation: 'COMMIT',
     });
   }
 
@@ -523,7 +523,7 @@ export class MongoEngine extends AbstractEngine<MongoEngineOptions> {
   protected _rollbackTransaction(_transactionId: string): void {
     throw new DAMEngineError('UNSUPPORTED_OPERATION', {
       instanceId: this.instanceId,
-      operation: 'transaction',
+      operation: 'ROLLBACK',
     });
   }
 

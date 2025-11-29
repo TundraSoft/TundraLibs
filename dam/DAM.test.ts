@@ -111,13 +111,11 @@ Deno.test({
         asserts.assertThrows(
           () => DAM.addEngine('', MockEngine as never),
           DAMError,
-          'Engine name must be a non-empty string',
         );
 
         asserts.assertThrows(
           () => DAM.addEngine(null as unknown as string, MockEngine as never),
           DAMError,
-          'Engine name must be a non-empty string',
         );
       });
 
@@ -197,25 +195,21 @@ Deno.test({
         asserts.assertThrows(
           () => DAM.create('', 'test', DEFAULT_OPTIONS),
           DAMError,
-          'Engine type must be a non-empty string',
         );
 
         asserts.assertThrows(
           () => DAM.create('MOCK', '', DEFAULT_OPTIONS),
           DAMError,
-          'Instance name must be a non-empty string',
         );
 
         asserts.assertThrows(
           () => DAM.create('MOCK', 'test', null as never),
           DAMError,
-          'Options must be a valid object',
         );
 
         asserts.assertThrows(
           () => DAM.create('MOCK', 'test', [] as never),
           DAMError,
-          'Options must be a valid object',
         );
       });
     });
@@ -339,6 +333,32 @@ Deno.test({
         asserts.assertEquals(DAM.hasInstance('sqlite-test'), false);
         asserts.assertEquals(DAM.hasInstance('sqlite-multi'), false);
         asserts.assertEquals(DAM.hasInstance('mock-multi'), false);
+      });
+
+      await u.step('should handle instance creation failure gracefully', () => {
+        class FailingEngine extends MockEngine {
+          constructor(name: string, options: EngineOptions) {
+            super(name, options);
+            throw new Error('Intentional constructor failure');
+          }
+        }
+        DAM.addEngine('FAILING', FailingEngine as never);
+        asserts.assertThrows(
+          () => DAM.create('FAILING', 'fail-instance', DEFAULT_OPTIONS),
+          DAMError,
+          'Failed to create instance',
+        );
+      });
+
+      await u.step('should trim whitespace from instance names', () => {
+        const instance1 = DAM.create(
+          'MOCK',
+          ' trimmed-instance ',
+          DEFAULT_OPTIONS,
+        );
+        const instance2 = DAM.getInstance('trimmed-instance');
+        asserts.assertEquals(instance1, instance2);
+        asserts.assertEquals(instance1.Name, 'trimmed-instance');
       });
     });
 

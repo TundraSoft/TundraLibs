@@ -187,13 +187,8 @@ export const isInSubnet = (ip: string, subnet: string): boolean => {
 
     // IP versions don't match or unsupported format
     return false;
-  } catch (error) {
+  } catch {
     // Safely handle any unexpected errors
-    console.debug(
-      `Error in isInSubnet: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
     return false;
   }
 };

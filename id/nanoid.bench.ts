@@ -125,3 +125,21 @@ Deno.bench({
 }, () => {
   nanoID(32, WEB_SAFE);
 });
+
+// Comparative benchmarks (non-nanoid algorithms for context)
+
+Deno.bench({
+  name: `id.Compare crypto.randomUUID() generation speed`,
+}, () => {
+  // Generate a UUID (36 chars) using built-in crypto
+  crypto.randomUUID();
+});
+
+Deno.bench({
+  name: `id.Compare randomUUID() sliced to 21 chars`,
+}, () => {
+  // Slice to approximate default nanoID size for rough comparison
+  const id = crypto.randomUUID().replaceAll('-', '').slice(0, 21);
+  // Consume the value to satisfy lints
+  if (id.length !== 21) throw new Error('unexpected');
+});
