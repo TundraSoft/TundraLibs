@@ -128,69 +128,86 @@ export class SQLiteEngine extends AbstractEngine<SQLiteEngineOptions> {
    * @throws {DAMEngineError} FILE_READ_ERROR if file permissions are invalid
    * @protected
    */
+  /**
+   * Validate and prepare SQLite database file path.
+   * Creates parent directories if needed.
+   *
+   * @param database - Database file path
+   * @throws {DAMEngineError} If path validation fails
+   * @private
+   */
+  private async _validateDatabasePath(database: string): Promise<void> {
+    try {
+      const fileInfo = await Deno.stat(database);
+      if (!fileInfo.isFile) {
+        throw new DAMEngineError('CONNECTION_FAILED', {
+          instanceId: this.instanceId,
+          reason: `Path '${database}' exists but is not a file`,
+        });
+      }
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) {
+        // File doesn't exist - create parent directories
+        const dir = database.substring(0, database.lastIndexOf('/'));
+        if (dir && dir !== '') {
+          await Deno.mkdir(dir, { recursive: true });
+        }
+      } else if (error instanceof DAMEngineError) {
+        throw error;
+      } else {
+        throw new DAMEngineError('CONNECTION_FAILED', {
+          instanceId: this.instanceId,
+          reason: `Failed to access database file '${database}': ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        }, error as Error);
+      }
+    }
+  }
+
+  /**
+   * Apply SQLite performance settings (PRAGMAs).
+   *
+   * @param database - Database file path (to detect in-memory)
+   * @private
+   */
+  private _applyPragmas(database: string): void {
+    if (!this._client) return;
+
+    const cacheSize = this.getOption('cacheSize') as number | undefined;
+    if (cacheSize !== undefined) {
+      this._client.exec(`PRAGMA cache_size = ${cacheSize}`);
+    }
+
+    const synchronous = this.getOption('synchronous') as
+      | 'OFF'
+      | 'NORMAL'
+      | 'FULL'
+      | undefined;
+    if (synchronous !== undefined) {
+      this._client.exec(`PRAGMA synchronous = ${synchronous}`);
+    }
+
+    // Enable WAL mode for better concurrency (not for in-memory databases)
+    if (database !== ':memory:') {
+      this._client.exec('PRAGMA journal_mode = WAL');
+    }
+  }
+
   protected async _connect(): Promise<void> {
     try {
       const database = this.getOption('database') as string;
 
-      // Check if in-memory database
+      // Validate file path and create if needed (skip for in-memory)
       if (database !== ':memory:') {
-        // Validate file path and create if needed
-        try {
-          // Check if file exists
-          const fileInfo = await Deno.stat(database);
-
-          if (!fileInfo.isFile) {
-            throw new DAMEngineError('CONNECTION_FAILED', {
-              instanceId: this.instanceId,
-              reason: `Path '${database}' exists but is not a file`,
-            });
-          }
-
-          // File exists - validate permissions by trying to open in read/write mode
-          // We'll let the Database constructor handle this
-        } catch (error) {
-          if (error instanceof Deno.errors.NotFound) {
-            // File doesn't exist - create parent directories
-            const dir = database.substring(0, database.lastIndexOf('/'));
-            if (dir && dir !== '') {
-              await Deno.mkdir(dir, { recursive: true });
-            }
-            // Database constructor will create the file
-          } else if (error instanceof DAMEngineError) {
-            throw error;
-          } else {
-            throw new DAMEngineError('CONNECTION_FAILED', {
-              instanceId: this.instanceId,
-              reason: `Failed to access database file '${database}': ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-            }, error as Error);
-          }
-        }
+        await this._validateDatabasePath(database);
       }
 
       // Open SQLite database
       this._client = new Database(database);
 
       // Configure performance settings
-      const cacheSize = this.getOption('cacheSize') as number | undefined;
-      if (cacheSize !== undefined) {
-        this._client.exec(`PRAGMA cache_size = ${cacheSize}`);
-      }
-
-      const synchronous = this.getOption('synchronous') as
-        | 'OFF'
-        | 'NORMAL'
-        | 'FULL'
-        | undefined;
-      if (synchronous !== undefined) {
-        this._client.exec(`PRAGMA synchronous = ${synchronous}`);
-      }
-
-      // Enable WAL mode for better concurrency (not for in-memory databases)
-      if (database !== ':memory:') {
-        this._client.exec('PRAGMA journal_mode = WAL');
-      }
+      this._applyPragmas(database);
 
       // Validate connection by executing a simple query
       const stmt = this._client.prepare('SELECT 1');

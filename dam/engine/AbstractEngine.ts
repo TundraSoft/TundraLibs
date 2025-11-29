@@ -1022,97 +1022,69 @@ export abstract class AbstractEngine<O extends EngineOptions = EngineOptions>
    * @throws {DAMEngineError} FILE_READ_ERROR if certificate files cannot be read
    * @protected
    */
+  /**
+   * Load a single SSL certificate file with error handling.
+   *
+   * @param filePath - Path to the certificate file
+   * @param fileType - Description of the file type for error messages
+   * @returns The certificate content
+   * @throws {DAMEngineError} If file cannot be read
+   * @private
+   */
+  private _loadCertificateFile(filePath: string, fileType: string): string {
+    try {
+      return Deno.readTextFileSync(filePath);
+    } catch (e) {
+      if (e instanceof Deno.errors.NotFound) {
+        throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+          instanceId: this.instanceId,
+          filePath,
+          reason: `Could not find ${fileType}`,
+        }, e as Error);
+      } else if (
+        e instanceof Deno.errors.PermissionDenied ||
+        e instanceof Deno.errors.NotCapable
+      ) {
+        throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+          instanceId: this.instanceId,
+          filePath,
+          reason: `Permission denied to read ${fileType}`,
+        }, e as Error);
+      } else {
+        throw new DAMEngineError('INVALID_CONFIG_VALUE', {
+          instanceId: this.instanceId,
+          filePath,
+          reason: e instanceof Error ? e.message : String(e),
+        }, e as Error);
+      }
+    }
+  }
+
   protected _loadSslCertificates(): void {
     const ssl = this.getOption('ssl');
     if (ssl && typeof ssl === 'object' && ssl !== null) {
       // Load CA certificate if path provided
       if (ssl.ca && typeof ssl.ca === 'string') {
-        try {
-          this._sslCaCertificate = Deno.readTextFileSync(ssl.ca);
-        } catch (e) {
-          if (e instanceof Deno.errors.NotFound) {
-            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
-              instanceId: this.instanceId,
-              filePath: ssl.ca,
-              reason: 'Could not find CA certificate file',
-            }, e as Error);
-          } else if (
-            e instanceof Deno.errors.PermissionDenied ||
-            e instanceof Deno.errors.NotCapable
-          ) {
-            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
-              instanceId: this.instanceId,
-              filePath: ssl.ca,
-              reason: 'Permission denied to read CA certificate file',
-            }, e as Error);
-          } else {
-            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
-              instanceId: this.instanceId,
-              filePath: ssl.ca,
-              reason: e instanceof Error ? e.message : String(e),
-            }, e as Error);
-          }
-        }
+        this._sslCaCertificate = this._loadCertificateFile(
+          ssl.ca,
+          'CA certificate file',
+        );
       }
 
       // Load client certificate if path provided
       if (ssl.cert && typeof ssl.cert === 'string') {
-        try {
-          this._sslClientCertificate = Deno.readTextFileSync(ssl.cert);
-        } catch (e) {
-          if (e instanceof Deno.errors.NotFound) {
-            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
-              instanceId: this.instanceId,
-              filePath: ssl.cert,
-              reason: 'Could not find client certificate file',
-            }, e as Error);
-          } else if (
-            e instanceof Deno.errors.PermissionDenied ||
-            e instanceof Deno.errors.NotCapable
-          ) {
-            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
-              instanceId: this.instanceId,
-              filePath: ssl.cert,
-              reason: 'Permission denied to read client certificate file',
-            }, e as Error);
-          } else {
-            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
-              instanceId: this.instanceId,
-              filePath: ssl.cert,
-              reason: e instanceof Error ? e.message : String(e),
-            }, e as Error);
-          }
-        }
+        this._sslClientCertificate = this._loadCertificateFile(
+          ssl.cert,
+          'client certificate file',
+        );
       }
 
       // Load client key if path provided
       if (ssl.key && typeof ssl.key === 'string') {
-        try {
-          this._sslClientKey = Deno.readTextFileSync(ssl.key);
-        } catch (e) {
-          if (e instanceof Deno.errors.NotFound) {
-            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
-              instanceId: this.instanceId,
-              filePath: ssl.key,
-              reason: 'Could not find certificate key',
-            }, e as Error);
-          } else if (
-            e instanceof Deno.errors.PermissionDenied ||
-            e instanceof Deno.errors.NotCapable
-          ) {
-            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
-              instanceId: this.instanceId,
-              filePath: ssl.key,
-              reason: 'Permission denied to read certificate key',
-            }, e as Error);
-          } else {
-            throw new DAMEngineError('INVALID_CONFIG_VALUE', {
-              instanceId: this.instanceId,
-              filePath: ssl.key,
-              reason: e instanceof Error ? e.message : String(e),
-            }, e as Error);
-          }
-        }
+        this._sslClientKey = this._loadCertificateFile(
+          ssl.key,
+          'certificate key',
+        );
       }
     }
   }
