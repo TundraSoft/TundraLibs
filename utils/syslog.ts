@@ -279,8 +279,8 @@ export const parse = (log: string): SyslogObject => {
     logObj.facilityName = facilityName;
     logObj.severityName = severityName;
     logObj.timestamp = new Date(Date.parse(RFCMatch[2]!.trim()));
-    logObj.hostname = (RFCMatch[3] !== NIL_VALUE) ? RFCMatch[3] : undefined;
-    logObj.appName = (RFCMatch[4] !== NIL_VALUE) ? RFCMatch[4] : undefined;
+    logObj.hostname = (RFCMatch[3] === NIL_VALUE) ? undefined : RFCMatch[3];
+    logObj.appName = (RFCMatch[4] === NIL_VALUE) ? undefined : RFCMatch[4];
     if (RFCMatch[5] && RFCMatch[5] !== NIL_VALUE) {
       const procId = Number.parseInt(RFCMatch[5], 10);
       if (!Number.isNaN(procId)) {
@@ -288,7 +288,7 @@ export const parse = (log: string): SyslogObject => {
       }
     }
 
-    logObj.messageId = (RFCMatch[6] !== NIL_VALUE) ? RFCMatch[6] : undefined;
+    logObj.messageId = (RFCMatch[6] === NIL_VALUE) ? undefined : RFCMatch[6];
     const { structuredData, message } = parseStructuredData(
       log.substring(RFCMatch[0].length),
     );
@@ -315,7 +315,7 @@ export const parse = (log: string): SyslogObject => {
     if (BSDMatch[3]) {
       let year = new Date().getFullYear();
       if (BSDMatch[6]) {
-        year = Number.parseInt(BSDMatch[6]!);
+        year = Number.parseInt(BSDMatch[6]);
       }
       logObj.timestamp = new Date(
         `${BSDMatch[4]} ${BSDMatch[5]} ${year} ${BSDMatch[7]}`,

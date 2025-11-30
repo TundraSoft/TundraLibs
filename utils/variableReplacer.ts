@@ -170,7 +170,7 @@ export const variableReplacer = (
     const result: Record<string, unknown> = {};
 
     for (const key in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      if (Object.hasOwn(obj, key)) {
         const value = obj[key];
         const newKey = parentKey ? `${parentKey}.${key}` : key;
 
@@ -189,8 +189,13 @@ export const variableReplacer = (
   // Replace all placeholders in the message with their corresponding values
   // If a placeholder key is not found, leave the placeholder unchanged
   return message.replace(regex, (match, key) => {
-    return flattenedContext[key] === undefined
-      ? match
-      : String(flattenedContext[key]);
+    const value = flattenedContext[key];
+    if (value === undefined) {
+      return match;
+    }
+    if (typeof value === 'object' && value !== null) {
+      return JSON.stringify(value);
+    }
+    return String(value);
   });
 };

@@ -4,8 +4,6 @@ import { DAMEngineError } from '../../engine/mod.ts';
 
 Deno.test({
   name: 'dam.engines.sqlite',
-  sanitizeOps: false,
-  sanitizeResources: false,
   fn: async (t) => {
     // Create temporary directory for test databases
     const tempDir = await Deno.makeTempDir({ prefix: 'dam_sqlite_test_' });

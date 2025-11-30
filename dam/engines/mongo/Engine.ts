@@ -218,6 +218,14 @@ export class MongoEngine extends AbstractEngine<MongoEngineOptions> {
       // Validate connection by pinging
       await this._db.admin().ping();
     } catch (error) {
+      // Clean up client if connection failed
+      if (this._client) {
+        try {
+          await this._client.close(true);
+        } catch {
+          // Ignore errors during cleanup
+        }
+      }
       this._client = null;
       this._db = null;
       throw new DAMEngineError('CONNECTION_FAILED', {
@@ -237,7 +245,7 @@ export class MongoEngine extends AbstractEngine<MongoEngineOptions> {
    */
   protected async _disconnect(): Promise<void> {
     if (this._client) {
-      await this._client.close();
+      await this._client.close(true); // Force immediate close
       this._client = null;
       this._db = null;
     }

@@ -211,8 +211,12 @@ export const secretGenerator = (
   // Add hyphens if needed (but only to the core secret, not the prefix)
   if (finalHyphenInterval > 0) {
     const regex = new RegExp(`.{1,${finalHyphenInterval}}`, 'g');
-    const matches = result.match(regex);
-    formattedResult = matches ? matches.join('-') : result;
+    const matches = [];
+    let match;
+    while ((match = regex.exec(result)) !== null) {
+      matches.push(match[0]);
+    }
+    formattedResult = matches.length > 0 ? matches.join('-') : result;
   }
 
   // Add prefix

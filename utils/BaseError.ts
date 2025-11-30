@@ -324,9 +324,15 @@ export class BaseError<
     let causeValue: BaseErrorJson | string | undefined = undefined;
 
     if (this.cause) {
-      causeValue = this.cause instanceof BaseError
-        ? this.cause.toJSON()
-        : String(this.cause);
+      if (this.cause instanceof BaseError) {
+        causeValue = this.cause.toJSON();
+      } else if (this.cause instanceof Error) {
+        causeValue = `${this.cause.name}: ${this.cause.message}`;
+      } else if (typeof this.cause === 'object') {
+        causeValue = JSON.stringify(this.cause);
+      } else {
+        causeValue = String(this.cause);
+      }
     }
 
     return {

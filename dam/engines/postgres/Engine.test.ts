@@ -28,8 +28,6 @@ async function isPostgresAvailable(): Promise<boolean> {
 Deno.test({
   name: 'dam.engines.postgres',
   ignore: !(await isPostgresAvailable()),
-  sanitizeOps: false,
-  sanitizeResources: false,
   fn: async (t) => {
     await t.step('configuration', async (u) => {
       await u.step('should create engine with valid config', () => {
@@ -479,21 +477,23 @@ Deno.test({
       await u.step('should halt on first error', async () => {
         const engine = new PostgresEngine('test-db', TEST_CONFIG);
 
-        await asserts.assertRejects(
-          () =>
-            engine.batchExecute([
-              { sql: 'SELECT 1' },
-              { sql: 'SELECT FROM invalid' },
-              { sql: 'SELECT 3' },
-            ]),
-          DAMEngineError,
-        );
+        try {
+          await asserts.assertRejects(
+            () =>
+              engine.batchExecute([
+                { sql: 'SELECT 1' },
+                { sql: 'SELECT FROM invalid' },
+                { sql: 'SELECT 3' },
+              ]),
+            DAMEngineError,
+          );
 
-        const stats = engine.queryStats;
-        asserts.assertEquals(stats.successfulQueries, 1);
-        asserts.assertEquals(stats.failedQueries, 1);
-
-        await engine.disconnect();
+          const stats = engine.queryStats;
+          asserts.assertEquals(stats.successfulQueries, 1);
+          asserts.assertEquals(stats.failedQueries, 1);
+        } finally {
+          await engine.disconnect();
+        }
       });
     });
 
@@ -544,8 +544,6 @@ Deno.test({
         await engine.commitTransaction(tx1);
         await engine.commitTransaction(tx2);
 
-        await engine.disconnect();
-        await engine.commitTransaction(tx2);
         await engine.disconnect();
       });
     });
@@ -624,6 +622,9 @@ Deno.test({
           > {
             throw new Error('forced');
           }
+          protected override async _disconnect(): Promise<void> {
+            // No actual connection to close
+          }
         }
         const engine = new FailingPingPostgres(
           'fail-ping',
@@ -631,6 +632,7 @@ Deno.test({
         );
         const ok = await engine.ping();
         asserts.assertEquals(ok, false);
+        await engine.disconnect();
       });
     });
 
@@ -651,10 +653,12 @@ Deno.test({
             },
             release: () => {},
           }),
+          end: async () => {},
         };
         await asserts.assertRejects(() => engine.beginTransaction());
         // Transaction map should remain empty
         asserts.assertEquals((engine as any)._clientMap.size, 0);
+        await engine.disconnect();
       });
 
       await u.step('should handle commit failure', async () => {
@@ -670,6 +674,7 @@ Deno.test({
         };
         (engine as any)._client = {
           connect: async () => mockClient,
+          end: async () => {},
         };
         const txId = await engine.beginTransaction();
         // Make commit fail
@@ -677,6 +682,7 @@ Deno.test({
           throw new Error('commit boom');
         };
         await asserts.assertRejects(() => engine.commitTransaction(txId));
+        await engine.disconnect();
       });
 
       await u.step('should handle rollback failure', async () => {
@@ -692,6 +698,7 @@ Deno.test({
         };
         (engine as any)._client = {
           connect: async () => mockClient,
+          end: async () => {},
         };
         const txId = await engine.beginTransaction();
         // Make rollback fail
@@ -699,6 +706,7 @@ Deno.test({
           throw new Error('rollback boom');
         };
         await asserts.assertRejects(() => engine.rollbackTransaction(txId));
+        await engine.disconnect();
       });
 
       await u.step('should handle execute failure', async () => {
@@ -715,8 +723,10 @@ Deno.test({
             },
             release: () => {},
           }),
+          end: async () => {},
         };
         await asserts.assertRejects(() => engine.execute({ sql: 'SELECT 1' }));
+        await engine.disconnect();
       });
     });
   },

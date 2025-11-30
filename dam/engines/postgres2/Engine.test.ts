@@ -28,8 +28,6 @@ async function isPostgres2Available(): Promise<boolean> {
 Deno.test({
   name: 'dam.engines.postgres2',
   ignore: !(await isPostgres2Available()),
-  sanitizeOps: false,
-  sanitizeResources: false,
   fn: async (t) => {
     await t.step('configuration', async (u) => {
       await u.step('should create engine with valid config', () => {

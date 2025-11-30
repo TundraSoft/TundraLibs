@@ -121,7 +121,7 @@ export class FileHandler extends AbstractHandler {
           e instanceof Deno.errors.PermissionDenied ||
           e instanceof Deno.errors.NotCapable
         ) {
-          throw new Error(
+          throw new TypeError(
             `Permission denied to create log directory ${expandedStorePath}`,
           );
         }

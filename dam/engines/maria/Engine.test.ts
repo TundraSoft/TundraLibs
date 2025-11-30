@@ -46,8 +46,6 @@ async function isMariaAvailable(): Promise<boolean> {
 Deno.test({
   name: 'dam.engines.maria',
   ignore: !(await isMariaAvailable()),
-  sanitizeOps: false,
-  sanitizeResources: false,
   fn: async (t) => {
     await t.step('configuration', async (u) => {
       await u.step('should create engine with valid config', () => {

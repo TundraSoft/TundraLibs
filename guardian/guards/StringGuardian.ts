@@ -27,7 +27,7 @@ export class StringGuardian extends BaseGuardian<string> {
    * Collection of commonly used regular expression patterns for string validation.
    * These patterns can be used with validation methods or accessed directly for custom validation.
    */
-  public static readonly patterns: Record<string, RegExp> = {
+  public static readonly patterns = {
     email: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
     url: /^https?:\/\/[^\s/$.?#].[^\s]*$/i,
     alpha: /^[a-zA-Z]+$/,
@@ -39,7 +39,7 @@ export class StringGuardian extends BaseGuardian<string> {
     uuidv4: /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i,
     phone: /^(\+?1-?)?(\(\d{3}\)|\d{3})[-.\s]?\d{3}[-.\s]?\d{4}$/,
     ipv4:
-      /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/,
+      /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/, //NOSONAR
     ipv6: /^(?:[\da-fA-F]{1,4}:){7}[\da-fA-F]{1,4}$/,
     macAddress: /^([\dA-Fa-f]{2}[:-]){5}([\dA-Fa-f]{2})$/,
     creditCardVisa: /^4\d{12}(?:\d{3})?$/,
@@ -308,7 +308,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   alpha(errorMessage?: string): StringGuardian {
     const result = this.pattern(
-      StringGuardian.patterns.alpha!,
+      StringGuardian.patterns.alpha,
       errorMessage || 'String must contain only alphabetic characters',
     );
 
@@ -328,7 +328,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   alphanumeric(errorMessage?: string): StringGuardian {
     const result = this.pattern(
-      StringGuardian.patterns.alphanumeric!,
+      StringGuardian.patterns.alphanumeric,
       errorMessage || 'String must contain only alphanumeric characters',
     );
 
@@ -348,7 +348,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   uuid(errorMessage?: string): StringGuardian {
     const result = this.pattern(
-      StringGuardian.patterns.uuid!,
+      StringGuardian.patterns.uuid,
       errorMessage || 'String must be a valid UUID',
     );
 
@@ -368,7 +368,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   uuidv1(errorMessage?: string): StringGuardian {
     const result = this.pattern(
-      StringGuardian.patterns.uuidv1!,
+      StringGuardian.patterns.uuidv1,
       errorMessage || 'String must be a valid UUIDv1',
     );
 
@@ -388,7 +388,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   uuidv4(errorMessage?: string): StringGuardian {
     const result = this.pattern(
-      StringGuardian.patterns.uuidv4 as RegExp,
+      StringGuardian.patterns.uuidv4,
       errorMessage || 'String must be a valid UUID v4',
     );
 
@@ -552,7 +552,7 @@ export class StringGuardian extends BaseGuardian<string> {
    * @returns This StringGuardian (mutated) or new instance if immutable
    */
   phone(
-    pattern: RegExp = StringGuardian.patterns.phone!,
+    pattern: RegExp = StringGuardian.patterns.phone,
     errorMessage?: string,
   ): StringGuardian {
     return this.process((value: string) => {
@@ -579,8 +579,8 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   ipAddress(errorMessage?: string): StringGuardian {
     return this.process((value: string) => {
-      const isIpv4 = StringGuardian.patterns.ipv4!.test(value);
-      const isIpv6 = StringGuardian.patterns.ipv6!.test(value);
+      const isIpv4 = StringGuardian.patterns.ipv4.test(value);
+      const isIpv6 = StringGuardian.patterns.ipv6.test(value);
 
       if (!isIpv4 && !isIpv6) {
         throw new GuardianError(
@@ -605,7 +605,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   ipv4(errorMessage?: string): StringGuardian {
     return this.pattern(
-      StringGuardian.patterns.ipv4!,
+      StringGuardian.patterns.ipv4,
       errorMessage || 'String must be a valid IPv4 address',
     );
   }
@@ -618,7 +618,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   ipv6(errorMessage?: string): StringGuardian {
     return this.pattern(
-      StringGuardian.patterns.ipv6!,
+      StringGuardian.patterns.ipv6,
       errorMessage || 'String must be a valid IPv6 address',
     );
   }
@@ -632,7 +632,7 @@ export class StringGuardian extends BaseGuardian<string> {
   internalIp(errorMessage?: string): StringGuardian {
     return this.process((value: string) => {
       // Check if it's a valid IPv4 first
-      if (!StringGuardian.patterns.ipv4!.test(value)) {
+      if (!StringGuardian.patterns.ipv4.test(value)) {
         throw new GuardianError(
           errorMessage || 'String must be a valid internal IPv4 address',
           {
@@ -679,7 +679,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   macAddress(errorMessage?: string): StringGuardian {
     return this.pattern(
-      StringGuardian.patterns.macAddress!,
+      StringGuardian.patterns.macAddress,
       errorMessage || 'String must be a valid MAC address',
     );
   }
@@ -701,19 +701,19 @@ export class StringGuardian extends BaseGuardian<string> {
 
       switch (type) {
         case 'visa':
-          pattern = StringGuardian.patterns.creditCardVisa!;
+          pattern = StringGuardian.patterns.creditCardVisa;
           typeName = 'Visa';
           break;
         case 'mastercard':
-          pattern = StringGuardian.patterns.creditCardMastercard!;
+          pattern = StringGuardian.patterns.creditCardMastercard;
           typeName = 'Mastercard';
           break;
         case 'amex':
-          pattern = StringGuardian.patterns.creditCardAmex!;
+          pattern = StringGuardian.patterns.creditCardAmex;
           typeName = 'American Express';
           break;
         default:
-          pattern = StringGuardian.patterns.creditCard!;
+          pattern = StringGuardian.patterns.creditCard;
           typeName = 'credit card';
           break;
       }
@@ -769,7 +769,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   slug(errorMessage?: string): StringGuardian {
     return this.pattern(
-      StringGuardian.patterns.slug!,
+      StringGuardian.patterns.slug,
       errorMessage ||
         'String must be a valid slug (lowercase letters, numbers, hyphens only)',
     );
@@ -783,7 +783,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   hexColor(errorMessage?: string): StringGuardian {
     return this.pattern(
-      StringGuardian.patterns.hexColor!,
+      StringGuardian.patterns.hexColor,
       errorMessage || 'String must be a valid hex color code (#RGB or #RRGGBB)',
     );
   }
@@ -796,7 +796,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   domain(errorMessage?: string): StringGuardian {
     return this.pattern(
-      StringGuardian.patterns.domain!,
+      StringGuardian.patterns.domain,
       errorMessage || 'String must be a valid domain name',
     );
   }
@@ -809,7 +809,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   noWhitespace(errorMessage?: string): StringGuardian {
     return this.pattern(
-      StringGuardian.patterns.noWhitespace!,
+      StringGuardian.patterns.noWhitespace,
       errorMessage || 'String must not contain whitespace',
     );
   }
@@ -822,7 +822,7 @@ export class StringGuardian extends BaseGuardian<string> {
    */
   ascii(errorMessage?: string): StringGuardian {
     return this.pattern(
-      StringGuardian.patterns.ascii!,
+      StringGuardian.patterns.ascii,
       errorMessage || 'String must contain only ASCII characters',
     );
   }
@@ -1037,7 +1037,8 @@ export class StringGuardian extends BaseGuardian<string> {
       (value: string) =>
         value
           .toLowerCase()
-          .replaceAll(/[^a-zA-Z0-9]+(.)/g, (_, char) => char.toUpperCase()),
+          .replaceAll(/[^a-zA-Z0-9]+([a-zA-Z0-9])/g, (_, char) =>
+            char.toUpperCase()),
     ) as StringGuardian;
   }
 

@@ -48,7 +48,7 @@ export abstract class AbstractHandler {
   public abstract readonly mode: string;
 
   /** Sampling rate (0.0-1.0) - default 1.0 means no sampling */
-  protected _sampleRate: number = 1.0;
+  protected _sampleRate: number = 1;
 
   /** Levels at or above this will bypass sampling - default is ERROR */
   protected _bypassSamplingLevel: number = SyslogSeverities.ERROR;
@@ -79,7 +79,7 @@ export abstract class AbstractHandler {
       if (typeof options.formatter === 'function') {
         this.formatter = options.formatter;
       } else {
-        throw new Error('Formatter must be a function');
+        throw new TypeError('Formatter must be a function');
       }
     } else {
       this.formatter = standardFormat;
@@ -126,7 +126,7 @@ export abstract class AbstractHandler {
         message: 'test',
       });
       if (typeof test !== 'string') {
-        throw new Error('Formatter must return a string');
+        throw new TypeError('Formatter must return a string');
       }
     } catch (e) {
       throw new Error('Error running formatter: ' + e);
@@ -153,7 +153,7 @@ export abstract class AbstractHandler {
   public async handle(log: SlogObject): Promise<void> {
     if (log.level <= this.level) {
       // Apply sampling logic if sample rate is less than 100%
-      if (this._sampleRate < 1.0) {
+      if (this._sampleRate < 1) {
         // High severity logs bypass sampling
         if (log.level > this._bypassSamplingLevel) {
           // Apply sampling rate - if random value is higher than sample rate, skip the log

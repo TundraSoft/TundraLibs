@@ -89,8 +89,10 @@ export class Slogger {
             throw new Error('Handler requires a valid name string');
           }
 
-          if (!type || typeof type !== 'string') {
-            throw new Error(`Handler '${name}' requires a valid type string`);
+          if (typeof type !== 'string' || !type) {
+            throw new TypeError(
+              `Handler '${name}' requires a valid type string`,
+            );
           }
 
           if (typeof options.level !== 'number') {
@@ -106,7 +108,7 @@ export class Slogger {
               }
               options.formatter = formatter;
             } else if (typeof options.formatter !== 'function') {
-              throw new Error(
+              throw new TypeError(
                 `Formatter for handler '${name}' must be a string or function`,
               );
             }
@@ -143,7 +145,7 @@ export class Slogger {
    */
   public registerHandler(handler: AbstractHandler): void {
     if (!(handler instanceof AbstractHandler)) {
-      throw new Error('Handler must be an instance of AbstractHandler');
+      throw new TypeError('Handler must be an instance of AbstractHandler');
     }
     this._handlers.push(handler);
   }
@@ -182,7 +184,7 @@ export class Slogger {
       message: processedMessage,
       date: new Date(),
       isoDate: new Date().toISOString(),
-      timestamp: new Date().getTime(),
+      timestamp: Date.now(),
     };
 
     for (const handler of this._handlers) {

@@ -203,10 +203,11 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
   >(
     query: EngineQuery,
   ): Promise<{ data: R[]; count: number }> {
-    try {
-      let client: PoolClient;
+    let client: PoolClient | null = null;
+    const isTransactional = !!query.transactionId;
 
-      if (query.transactionId) {
+    try {
+      if (isTransactional && query.transactionId) {
         // Use the dedicated transaction client (validated by AbstractEngine)
         client = this._clientMap.get(query.transactionId)!;
       } else {
@@ -216,11 +217,6 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
 
       // Execute the query and return structured results
       const result = await client.queryObject<R>(query.sql, query.params);
-
-      // Release client back to pool (only for non-transaction queries)
-      if (!query.transactionId) {
-        client.release();
-      }
 
       return {
         data: result.rows,
@@ -232,6 +228,11 @@ export class PostgresEngine extends AbstractEngine<PostgresEngineOptions> {
         instanceId: this.instanceId,
         query: query,
       }, e as Error);
+    } finally {
+      // Release client back to pool (only for non-transaction queries)
+      if (client && !isTransactional) {
+        client.release();
+      }
     }
   }
 

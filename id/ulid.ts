@@ -97,7 +97,7 @@ let lastRandom: Uint8Array | null = null;
  * - No predictable patterns in random component
  */
 export function ulid(timestamp?: number, monotonic = false): string {
-  const time = timestamp === undefined ? Date.now() : timestamp;
+  const time = timestamp ?? Date.now();
 
   // Generate randomness (80 bits = 10 bytes)
   let random: Uint8Array;

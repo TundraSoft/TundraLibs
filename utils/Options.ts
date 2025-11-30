@@ -209,7 +209,7 @@ export abstract class Options<
     // Apply non-undefined values from options (excluding event handlers)
     for (const key in options) {
       // Skip undefined values
-      if (Object.prototype.hasOwnProperty.call(options, key)) {
+      if (Object.hasOwn(options, key)) {
         (finalOptions as Record<string, unknown>)[key] = options[key];
       }
     }

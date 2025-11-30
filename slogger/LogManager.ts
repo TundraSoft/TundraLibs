@@ -104,7 +104,9 @@ class Manager {
 
     // Validate constructor
     if (typeof handlerConstructor !== 'function') {
-      throw new Error('Handler constructor must be a valid class constructor');
+      throw new TypeError(
+        'Handler constructor must be a valid class constructor',
+      );
     }
 
     // Register the handler
@@ -137,7 +139,7 @@ class Manager {
 
     // Validate formatter
     if (typeof formatter !== 'function') {
-      throw new Error('Formatter must be a valid function');
+      throw new TypeError('Formatter must be a valid function');
     }
 
     // Validate formatter output with a test log
@@ -157,7 +159,7 @@ class Manager {
 
       const result = formatter(testLog);
       if (typeof result !== 'string') {
-        throw new Error('Formatter must return a string');
+        throw new TypeError('Formatter must return a string');
       }
     } catch (e) {
       throw new Error(
@@ -256,17 +258,18 @@ class Manager {
 
   public createSlogger(config: SloggerOptions): Slogger {
     const name = config.appName;
-    if (this._loggers.has(name)) {
-      return this._loggers.get(name) as Slogger;
+    let log = this._loggers.get(name);
+    if (!log) {
+      log = new Slogger(config);
+      this._loggers.set(name, log);
     }
-    const logger = new Slogger(config);
-    this._loggers.set(name, logger);
-    return logger;
+    return log;
   }
 
   public getLogger(name: string): Slogger {
-    if (this._loggers.has(name)) {
-      return this._loggers.get(name) as Slogger;
+    const log = this._loggers.get(name);
+    if (log) {
+      return log;
     } else {
       throw new Error(`Logger '${name}' not found`);
     }

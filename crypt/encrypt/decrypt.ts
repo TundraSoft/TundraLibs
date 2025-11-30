@@ -96,7 +96,7 @@ export const decryptAES = async (
   const [algorithm, lengthStr] = mode.split(':');
   const length = Number.parseInt(lengthStr || '0', 10);
 
-  if (!['AES-GCM', 'AES-CBC', 'AES-CTR'].includes(algorithm!)) {
+  if (!['AES-GCM', 'AES-CBC', 'AES-CTR'].includes(algorithm || '')) {
     throw new Error(
       'Invalid AES encryption mode. Must be AES-GCM, AES-CBC, or AES-CTR',
     );
