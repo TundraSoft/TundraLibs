@@ -221,28 +221,22 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
   >(
     query: EngineQuery,
   ): Promise<{ data: R[]; count: number }> {
+    let conn: PoolConnection;
+
+    if (query.transactionId) {
+      // Use the dedicated transaction connection (validated by AbstractEngine)
+      conn = this._clientMap.get(query.transactionId)!;
+    } else {
+      // Acquire a new connection from the pool for this query
+      conn = await this._client!.getConnection();
+    }
     try {
-      let conn: PoolConnection;
-
-      if (query.transactionId) {
-        // Use the dedicated transaction connection (validated by AbstractEngine)
-        conn = this._clientMap.get(query.transactionId)!;
-      } else {
-        // Acquire a new connection from the pool for this query
-        conn = await this._client!.getConnection();
-      }
-
       // Execute the query with named placeholders
       // MariaDB driver expects parameters as object when namedPlaceholders is enabled
       const result = await conn.query<R[]>({
         namedPlaceholders: true,
         sql: query.sql,
       }, query.params || {});
-
-      // Release connection back to pool (only for non-transaction queries)
-      if (!query.transactionId) {
-        conn.release();
-      }
 
       // Handle different result types
       if (Array.isArray(result)) {
@@ -264,6 +258,11 @@ export class MariaEngine extends AbstractEngine<MariaEngineOptions> {
         instanceId: this.instanceId,
         query: query,
       }, e as Error);
+    } finally {
+      if (conn && !query.transactionId) {
+        // Ensure non-transaction connections are released on error
+        conn.release();
+      }
     }
   }
 
