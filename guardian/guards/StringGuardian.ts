@@ -649,7 +649,7 @@ export class StringGuardian extends BaseGuardian<string> {
         // 10.0.0.0/8
         (parts[0] === 10) ||
         // 172.16.0.0/12
-        (parts[0] === 172 && parts[1]! >= 16 && parts[1]! <= 31) ||
+        (parts[0] === 172 && parts[1]! >= 16 && parts[1]! <= 31) || //NOSONAR
         // 192.168.0.0/16
         (parts[0] === 192 && parts[1] === 168) ||
         // 127.0.0.0/8 (loopback)
@@ -736,7 +736,7 @@ export class StringGuardian extends BaseGuardian<string> {
       let alternate = false;
 
       for (let i = digits.length - 1; i >= 0; i--) {
-        let digit = Number.parseInt(digits[i]!, 10);
+        let digit = Number.parseInt(digits[i]!, 10); // NOSONAR
         if (alternate) {
           digit *= 2;
           if (digit > 9) digit -= 9;

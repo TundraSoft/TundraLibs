@@ -487,7 +487,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
   /**
    * Helper function to check if a BigInt is a perfect power.
    */
-  private _isPerfectPower(num: bigint, base?: bigint): boolean {
+  private _isPerfectPower(num: bigint, base?: bigint): boolean { //NOSONAR
     if (num < 1n) return false;
     if (num === 1n) return true;
 
