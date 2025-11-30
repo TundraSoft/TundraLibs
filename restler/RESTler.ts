@@ -666,7 +666,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
   }
 
   /**
-   * Replaces {version} placeholder in a string with the provided version.
+   * Replaces version placeholders in strings with actual version.
    *
    * @param param - The string containing potential version placeholders
    * @param version - Version string to insert (defaults to empty string)
@@ -685,7 +685,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @returns Processed option value
    * @throws {RESTlerConfigError} If the option value is invalid
    */
-  protected override _processOption<K extends keyof RESTlerOptions>( //NOSONAR
+  protected override _processOption<K extends keyof RESTlerOptions>(
     key: K,
     value: O[K],
   ): O[K] {
