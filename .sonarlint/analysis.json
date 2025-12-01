@@ -1,0 +1,10 @@
+{
+  "excludedPaths": [
+    "**/*.test.ts",
+    "**/*.bench.ts",
+    "**/tests/**",
+    "**/fixtures/**",
+    ".github/**",
+    "coverage/**"
+  ]
+}

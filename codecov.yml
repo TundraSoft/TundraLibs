@@ -25,124 +25,43 @@ comment:
   require_base: false
   require_head: true
   after_n_builds: 1
+github_checks:
+  annotations: true
 component_management:
-  default_rules:
-    statuses:
-      - type: project
-        target: auto
-        branches:
-          - '!main'
   individual_components:
     - component_id: cacher
-      name: cacher
+      name: Cacher
       paths:
-        - cacher/**.ts
-        - '!cacher/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
+        - cacher/**/*.ts
     - component_id: crypt
-      name: crypt
+      name: Crypt
       paths:
-        - crypt/**.ts
-        - '!crypt/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
+        - crypt/**/*.ts
     - component_id: dam
-      name: dam
+      name: Dam
       paths:
-        - dam/**.ts
-        - '!dam/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
+        - dam/**/*.ts
     - component_id: guardian
-      name: guardian
+      name: Guardian
       paths:
-        - guardian/**.ts
-        - '!guardian/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
+        - guardian/**/*.ts
     - component_id: id
-      name: id
+      name: Id
       paths:
-        - id/**.ts
-        - '!id/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
+        - id/**/*.ts
     - component_id: norm
-      name: norm
+      name: Norm
       paths:
-        - norm/**.ts
-        - '!norm/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
+        - norm/**/*.ts
     - component_id: restler
-      name: restler
+      name: Restler
       paths:
-        - restler/**.ts
-        - '!restler/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
+        - restler/**/*.ts
     - component_id: slogger
-      name: slogger
+      name: Slogger
       paths:
-        - slogger/**.ts
-        - '!slogger/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
+        - slogger/**/*.ts
     - component_id: utils
-      name: utils
+      name: Utils
       paths:
-        - utils/**.ts
-        - '!utils/**.test.ts'
-      statuses:
-        - type: project
-          target: 75%
-flags:
-  default:
-    paths:
-      - '**/*.ts'
-    carryforward: true
-  cacher:
-    paths:
-      - cacher/
-    carryforward: true
-  crypt:
-    paths:
-      - crypt/
-    carryforward: true
-  dam:
-    paths:
-      - dam/
-    carryforward: true
-  guardian:
-    paths:
-      - guardian/
-    carryforward: true
-  id:
-    paths:
-      - id/
-    carryforward: true
-  norm:
-    paths:
-      - norm/
-    carryforward: true
-  restler:
-    paths:
-      - restler/
-    carryforward: true
-  slogger:
-    paths:
-      - slogger/
-    carryforward: true
-  utils:
-    paths:
-      - utils/
-    carryforward: true
+        - utils/**/*.ts

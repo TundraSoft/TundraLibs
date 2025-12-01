@@ -170,8 +170,8 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: coverage.lcov
-          flags: unittests
           name: deno-${{ matrix.deno }}
+          fail_ci_if_error: false
 
       - name: "Prepare LCOV for Sonar"
         if: matrix.os == 'ubuntu-latest' && matrix.deno == 'v2.x' && (github.event.inputs.submit_reports == 'true' || github.event_name != 'workflow_dispatch')

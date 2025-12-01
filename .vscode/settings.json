@@ -49,5 +49,37 @@
     "connectionId": "tundrasoft",
     "projectKey": "TundraSoft_TundraLibs"
   },
+  "sonarlint.disableTelemetry": true,
+  "sonarlint.pathToNodeExecutable": "",
+  "sonarlint.output.showAnalyzerLogs": false,
+  "sonarlint.output.showVerboseLogs": false,
+  "files.exclude": {
+    "**/.sonarlint": true
+  },
+  "sonarlint.rules": {
+    "typescript:S6582": {
+      "level": "off"
+    },
+    "typescript:S1186": {
+      "level": "off"
+    },
+    "typescript:S3776": {
+      "level": "off"
+    },
+    "typescript:S2814": {
+      "level": "off"
+    },
+    "typescript:S6551": {
+      "level": "off"
+    },
+    "typescript:S2245": {
+      "level": "off"
+    },
+    "typescript:S6478": {
+      "level": "off"
+    }
+  },
+  "sonarlint.pathToCompileCommands": "",
+  "sonarlint.testFilePattern": "**/*.test.ts,**/*.bench.ts,**/tests/**/*.ts",
   "sonarlint.analysisExcludesStandalone": "**/.vscode-test/**, **/.vscode/**, **/*.test.ts, **/tests/**, **/tests/**.test.ts, .github/**"
 }

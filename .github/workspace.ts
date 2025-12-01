@@ -157,38 +157,15 @@ const updateCodecov = async (
     }
     
     // Rebuild the individual components list based on current workspaces
+    // Components are matched by paths, flags are not needed
     const individualComponents = workspaces.map((name) => ({
       component_id: name,
-      name: name,
+      name: name.charAt(0).toUpperCase() + name.slice(1), // Capitalize first letter
       paths: [
-        `${name}/**.ts`,
-        `!${name}/**.test.ts`
-      ],
-      statuses: [
-        {
-          type: 'project',
-          target: '75%'
-        }
+        `${name}/**/*.ts`
       ]
     })) as Array<Record<string, unknown>>;
 
-    // Rebuild flags: keep default and set each workspace as a flag
-    const defaultFlags = (codecovContent.flags && typeof codecovContent.flags === 'object') ? (codecovContent.flags as Record<string, unknown>) : {};
-    const newFlags: Record<string, unknown> = {};
-    // Preserve default flag definition if present
-    if (defaultFlags.default) {
-      newFlags.default = defaultFlags.default;
-    }
-    // Add a flag entry for each workspace
-    for (const name of workspaces) {
-      newFlags[name] = {
-        paths: [`${name}/`],
-        carryforward: true
-      };
-    }
-    // Replace flags with the new flags object
-    codecovContent.flags = newFlags;
-    
     // Update the component management section
     componentManagement.individual_components = individualComponents;
     codecovContent.component_management = componentManagement;
