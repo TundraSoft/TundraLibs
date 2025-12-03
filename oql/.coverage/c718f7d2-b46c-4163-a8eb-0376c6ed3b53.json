@@ -1,0 +1,124 @@
+{
+  "scriptId": "376",
+  "url": "file:///D:/Tundrasoft/TundraLibs/oql/asserts/Expression/assertArithmeticExpression.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 0,
+          "endOffset": 3616,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "assertArithmeticExpression",
+      "ranges": [
+        {
+          "startOffset": 812,
+          "endOffset": 3615,
+          "count": 6
+        },
+        {
+          "startOffset": 923,
+          "endOffset": 1023,
+          "count": 0
+        },
+        {
+          "startOffset": 1200,
+          "endOffset": 1326,
+          "count": 0
+        },
+        {
+          "startOffset": 1525,
+          "endOffset": 1702,
+          "count": 0
+        },
+        {
+          "startOffset": 1749,
+          "endOffset": 1864,
+          "count": 0
+        },
+        {
+          "startOffset": 1916,
+          "endOffset": 2031,
+          "count": 0
+        },
+        {
+          "startOffset": 2091,
+          "endOffset": 2195,
+          "count": 0
+        },
+        {
+          "startOffset": 2251,
+          "endOffset": 2387,
+          "count": 0
+        },
+        {
+          "startOffset": 2501,
+          "endOffset": 2525,
+          "count": 0
+        },
+        {
+          "startOffset": 2527,
+          "endOffset": 2639,
+          "count": 0
+        },
+        {
+          "startOffset": 2710,
+          "endOffset": 3613,
+          "count": 13
+        },
+        {
+          "startOffset": 2784,
+          "endOffset": 2909,
+          "count": 0
+        },
+        {
+          "startOffset": 3052,
+          "endOffset": 3075,
+          "count": 8
+        },
+        {
+          "startOffset": 3076,
+          "endOffset": 3099,
+          "count": 8
+        },
+        {
+          "startOffset": 3100,
+          "endOffset": 3123,
+          "count": 0
+        },
+        {
+          "startOffset": 3125,
+          "endOffset": 3287,
+          "count": 0
+        },
+        {
+          "startOffset": 3369,
+          "endOffset": 3609,
+          "count": 8
+        },
+        {
+          "startOffset": 3428,
+          "endOffset": 3603,
+          "count": 0
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 1459,
+          "endOffset": 1491,
+          "count": 12
+        }
+      ],
+      "isBlockCoverage": true
+    }
+  ]
+}

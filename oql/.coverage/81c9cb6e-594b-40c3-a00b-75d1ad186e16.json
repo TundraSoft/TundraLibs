@@ -1,0 +1,174 @@
+{
+  "scriptId": "338",
+  "url": "file:///D:/Tundrasoft/TundraLibs/oql/asserts/Aggregate/assertStringAgg.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 0,
+          "endOffset": 3373,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "assertStringAgg",
+      "ranges": [
+        {
+          "startOffset": 1047,
+          "endOffset": 3372,
+          "count": 27
+        },
+        {
+          "startOffset": 1128,
+          "endOffset": 1145,
+          "count": 26
+        },
+        {
+          "startOffset": 1147,
+          "endOffset": 1246,
+          "count": 2
+        },
+        {
+          "startOffset": 1246,
+          "endOffset": 1320,
+          "count": 25
+        },
+        {
+          "startOffset": 1320,
+          "endOffset": 1426,
+          "count": 1
+        },
+        {
+          "startOffset": 1426,
+          "endOffset": 1660,
+          "count": 24
+        },
+        {
+          "startOffset": 1660,
+          "endOffset": 1835,
+          "count": 1
+        },
+        {
+          "startOffset": 1835,
+          "endOffset": 1886,
+          "count": 23
+        },
+        {
+          "startOffset": 1886,
+          "endOffset": 2001,
+          "count": 2
+        },
+        {
+          "startOffset": 1926,
+          "endOffset": 1995,
+          "count": 1
+        },
+        {
+          "startOffset": 2001,
+          "endOffset": 2028,
+          "count": 21
+        },
+        {
+          "startOffset": 2028,
+          "endOffset": 2055,
+          "count": 20
+        },
+        {
+          "startOffset": 2057,
+          "endOffset": 2172,
+          "count": 2
+        },
+        {
+          "startOffset": 2172,
+          "endOffset": 2272,
+          "count": 19
+        },
+        {
+          "startOffset": 2272,
+          "endOffset": 2492,
+          "count": 14
+        },
+        {
+          "startOffset": 2332,
+          "endOffset": 2488,
+          "count": 1
+        },
+        {
+          "startOffset": 2463,
+          "endOffset": 2478,
+          "count": 0
+        },
+        {
+          "startOffset": 2492,
+          "endOffset": 2944,
+          "count": 5
+        },
+        {
+          "startOffset": 2534,
+          "endOffset": 2678,
+          "count": 2
+        },
+        {
+          "startOffset": 2678,
+          "endOffset": 2944,
+          "count": 3
+        },
+        {
+          "startOffset": 2775,
+          "endOffset": 2940,
+          "count": 1
+        },
+        {
+          "startOffset": 2915,
+          "endOffset": 2930,
+          "count": 0
+        },
+        {
+          "startOffset": 2944,
+          "endOffset": 3006,
+          "count": 15
+        },
+        {
+          "startOffset": 3006,
+          "endOffset": 3166,
+          "count": 9
+        },
+        {
+          "startOffset": 3051,
+          "endOffset": 3162,
+          "count": 3
+        },
+        {
+          "startOffset": 3166,
+          "endOffset": 3225,
+          "count": 12
+        },
+        {
+          "startOffset": 3225,
+          "endOffset": 3261,
+          "count": 3
+        },
+        {
+          "startOffset": 3263,
+          "endOffset": 3370,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 1594,
+          "endOffset": 1626,
+          "count": 59
+        }
+      ],
+      "isBlockCoverage": true
+    }
+  ]
+}

@@ -53,6 +53,10 @@ component_management:
       name: Norm
       paths:
         - norm/**/*.ts
+    - component_id: oql
+      name: Oql
+      paths:
+        - oql/**/*.ts
     - component_id: restler
       name: Restler
       paths:

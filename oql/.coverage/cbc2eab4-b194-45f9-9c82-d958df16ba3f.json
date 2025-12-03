@@ -1,0 +1,17 @@
+{
+  "scriptId": "369",
+  "url": "file:///D:/Tundrasoft/TundraLibs/oql/asserts/Expression/mod.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 0,
+          "endOffset": 797,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    }
+  ]
+}

@@ -1,0 +1,164 @@
+{
+  "scriptId": "336",
+  "url": "file:///D:/Tundrasoft/TundraLibs/oql/asserts/Aggregate/assertCount.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 0,
+          "endOffset": 3169,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "assertCount",
+      "ranges": [
+        {
+          "startOffset": 939,
+          "endOffset": 3168,
+          "count": 28
+        },
+        {
+          "startOffset": 1016,
+          "endOffset": 1033,
+          "count": 26
+        },
+        {
+          "startOffset": 1035,
+          "endOffset": 1129,
+          "count": 3
+        },
+        {
+          "startOffset": 1129,
+          "endOffset": 1198,
+          "count": 25
+        },
+        {
+          "startOffset": 1198,
+          "endOffset": 1294,
+          "count": 1
+        },
+        {
+          "startOffset": 1294,
+          "endOffset": 1511,
+          "count": 24
+        },
+        {
+          "startOffset": 1511,
+          "endOffset": 1681,
+          "count": 2
+        },
+        {
+          "startOffset": 1681,
+          "endOffset": 1745,
+          "count": 22
+        },
+        {
+          "startOffset": 1745,
+          "endOffset": 2949,
+          "count": 19
+        },
+        {
+          "startOffset": 1775,
+          "endOffset": 1802,
+          "count": 18
+        },
+        {
+          "startOffset": 1804,
+          "endOffset": 1918,
+          "count": 2
+        },
+        {
+          "startOffset": 1918,
+          "endOffset": 2022,
+          "count": 17
+        },
+        {
+          "startOffset": 2022,
+          "endOffset": 2249,
+          "count": 11
+        },
+        {
+          "startOffset": 2088,
+          "endOffset": 2243,
+          "count": 3
+        },
+        {
+          "startOffset": 2146,
+          "endOffset": 2233,
+          "count": 2
+        },
+        {
+          "startOffset": 2216,
+          "endOffset": 2231,
+          "count": 0
+        },
+        {
+          "startOffset": 2249,
+          "endOffset": 2709,
+          "count": 6
+        },
+        {
+          "startOffset": 2291,
+          "endOffset": 2434,
+          "count": 2
+        },
+        {
+          "startOffset": 2434,
+          "endOffset": 2709,
+          "count": 4
+        },
+        {
+          "startOffset": 2539,
+          "endOffset": 2703,
+          "count": 1
+        },
+        {
+          "startOffset": 2676,
+          "endOffset": 2691,
+          "count": 0
+        },
+        {
+          "startOffset": 2709,
+          "endOffset": 2801,
+          "count": 11
+        },
+        {
+          "startOffset": 2801,
+          "endOffset": 2837,
+          "count": 4
+        },
+        {
+          "startOffset": 2839,
+          "endOffset": 2945,
+          "count": 2
+        },
+        {
+          "startOffset": 2949,
+          "endOffset": 3166,
+          "count": 3
+        },
+        {
+          "startOffset": 3042,
+          "endOffset": 3162,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 1445,
+          "endOffset": 1477,
+          "count": 51
+        }
+      ],
+      "isBlockCoverage": true
+    }
+  ]
+}

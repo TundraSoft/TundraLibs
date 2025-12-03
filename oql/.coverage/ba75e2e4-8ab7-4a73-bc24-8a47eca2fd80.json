@@ -1,0 +1,74 @@
+{
+  "scriptId": "341",
+  "url": "file:///D:/Tundrasoft/TundraLibs/oql/asserts/Expression/assertNoArgsExpression.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 0,
+          "endOffset": 1105,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "assertNoArgsExpression",
+      "ranges": [
+        {
+          "startOffset": 207,
+          "endOffset": 1104,
+          "count": 18
+        },
+        {
+          "startOffset": 295,
+          "endOffset": 312,
+          "count": 17
+        },
+        {
+          "startOffset": 314,
+          "endOffset": 403,
+          "count": 2
+        },
+        {
+          "startOffset": 403,
+          "endOffset": 605,
+          "count": 16
+        },
+        {
+          "startOffset": 605,
+          "endOffset": 720,
+          "count": 1
+        },
+        {
+          "startOffset": 720,
+          "endOffset": 933,
+          "count": 15
+        },
+        {
+          "startOffset": 933,
+          "endOffset": 1102,
+          "count": 3
+        },
+        {
+          "startOffset": 973,
+          "endOffset": 1096,
+          "count": 2
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 867,
+          "endOffset": 899,
+          "count": 18
+        }
+      ],
+      "isBlockCoverage": true
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "scriptId": "335",
+  "url": "file:///D:/Tundrasoft/TundraLibs/oql/asserts/ColumnIdentifier.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 0,
+          "endOffset": 2637,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "assertColumnIdentifier",
+      "ranges": [
+        {
+          "startOffset": 1269,
+          "endOffset": 2636,
+          "count": 32
+        },
+        {
+          "startOffset": 1355,
+          "endOffset": 1463,
+          "count": 3
+        },
+        {
+          "startOffset": 1395,
+          "endOffset": 1457,
+          "count": 2
+        },
+        {
+          "startOffset": 1463,
+          "endOffset": 1579,
+          "count": 29
+        },
+        {
+          "startOffset": 1579,
+          "endOffset": 2634,
+          "count": 61
+        },
+        {
+          "startOffset": 1599,
+          "endOffset": 1711,
+          "count": 1
+        },
+        {
+          "startOffset": 1711,
+          "endOffset": 1784,
+          "count": 60
+        },
+        {
+          "startOffset": 1784,
+          "endOffset": 1922,
+          "count": 4
+        },
+        {
+          "startOffset": 1826,
+          "endOffset": 1914,
+          "count": 3
+        },
+        {
+          "startOffset": 1922,
+          "endOffset": 2029,
+          "count": 56
+        },
+        {
+          "startOffset": 2029,
+          "endOffset": 2178,
+          "count": 3
+        },
+        {
+          "startOffset": 2178,
+          "endOffset": 2377,
+          "count": 53
+        },
+        {
+          "startOffset": 2377,
+          "endOffset": 2630,
+          "count": 5
+        },
+        {
+          "startOffset": 2634,
+          "endOffset": 2635,
+          "count": 16
+        }
+      ],
+      "isBlockCoverage": true
+    }
+  ]
+}

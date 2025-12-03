@@ -15,6 +15,7 @@ on:
           - guardian
           - id
           - norm
+          - oql
           - restler
           - slogger
           - utils

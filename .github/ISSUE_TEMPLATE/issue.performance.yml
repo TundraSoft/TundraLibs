@@ -30,6 +30,7 @@ body:
         - '@tundralibs/guardian'
         - '@tundralibs/id'
         - '@tundralibs/norm'
+        - '@tundralibs/oql'
         - '@tundralibs/restler'
         - '@tundralibs/slogger'
         - '@tundralibs/utils'

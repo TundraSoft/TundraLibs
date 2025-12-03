@@ -1,0 +1,198 @@
+{
+  "scriptId": "375",
+  "url": "file:///D:/Tundrasoft/TundraLibs/oql/asserts/Expression/assertExpression.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 0,
+          "endOffset": 4875,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "assertExpression",
+      "ranges": [
+        {
+          "startOffset": 1392,
+          "endOffset": 4874,
+          "count": 18
+        },
+        {
+          "startOffset": 1493,
+          "endOffset": 1582,
+          "count": 0
+        },
+        {
+          "startOffset": 1654,
+          "endOffset": 1757,
+          "count": 0
+        },
+        {
+          "startOffset": 1794,
+          "endOffset": 1888,
+          "count": 0
+        },
+        {
+          "startOffset": 2115,
+          "endOffset": 2192,
+          "count": 6
+        },
+        {
+          "startOffset": 2192,
+          "endOffset": 2339,
+          "count": 12
+        },
+        {
+          "startOffset": 2339,
+          "endOffset": 2415,
+          "count": 0
+        },
+        {
+          "startOffset": 2415,
+          "endOffset": 2466,
+          "count": 12
+        },
+        {
+          "startOffset": 2466,
+          "endOffset": 2538,
+          "count": 0
+        },
+        {
+          "startOffset": 2538,
+          "endOffset": 2711,
+          "count": 12
+        },
+        {
+          "startOffset": 2711,
+          "endOffset": 2792,
+          "count": 7
+        },
+        {
+          "startOffset": 2792,
+          "endOffset": 2854,
+          "count": 5
+        },
+        {
+          "startOffset": 2854,
+          "endOffset": 2927,
+          "count": 0
+        },
+        {
+          "startOffset": 2927,
+          "endOffset": 2956,
+          "count": 5
+        },
+        {
+          "startOffset": 2956,
+          "endOffset": 3030,
+          "count": 0
+        },
+        {
+          "startOffset": 3030,
+          "endOffset": 3073,
+          "count": 5
+        },
+        {
+          "startOffset": 3075,
+          "endOffset": 3145,
+          "count": 0
+        },
+        {
+          "startOffset": 3145,
+          "endOffset": 3331,
+          "count": 5
+        },
+        {
+          "startOffset": 3331,
+          "endOffset": 3404,
+          "count": 0
+        },
+        {
+          "startOffset": 3404,
+          "endOffset": 3458,
+          "count": 5
+        },
+        {
+          "startOffset": 3458,
+          "endOffset": 3532,
+          "count": 0
+        },
+        {
+          "startOffset": 3532,
+          "endOffset": 3563,
+          "count": 5
+        },
+        {
+          "startOffset": 3563,
+          "endOffset": 3638,
+          "count": 0
+        },
+        {
+          "startOffset": 3638,
+          "endOffset": 3695,
+          "count": 5
+        },
+        {
+          "startOffset": 3695,
+          "endOffset": 3770,
+          "count": 0
+        },
+        {
+          "startOffset": 3770,
+          "endOffset": 3798,
+          "count": 5
+        },
+        {
+          "startOffset": 3798,
+          "endOffset": 3871,
+          "count": 0
+        },
+        {
+          "startOffset": 3871,
+          "endOffset": 3897,
+          "count": 5
+        },
+        {
+          "startOffset": 3897,
+          "endOffset": 3968,
+          "count": 0
+        },
+        {
+          "startOffset": 3968,
+          "endOffset": 4074,
+          "count": 5
+        },
+        {
+          "startOffset": 4074,
+          "endOffset": 4147,
+          "count": 0
+        },
+        {
+          "startOffset": 4147,
+          "endOffset": 4581,
+          "count": 5
+        },
+        {
+          "startOffset": 4588,
+          "endOffset": 4872,
+          "count": 5
+        },
+        {
+          "startOffset": 4707,
+          "endOffset": 4736,
+          "count": 0
+        },
+        {
+          "startOffset": 4738,
+          "endOffset": 4851,
+          "count": 0
+        }
+      ],
+      "isBlockCoverage": true
+    }
+  ]
+}

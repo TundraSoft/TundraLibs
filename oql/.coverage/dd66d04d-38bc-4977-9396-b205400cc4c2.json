@@ -1,0 +1,194 @@
+{
+  "scriptId": "340",
+  "url": "file:///D:/Tundrasoft/TundraLibs/oql/asserts/Aggregate/assertJsonRow.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 0,
+          "endOffset": 3744,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "assertJsonRow",
+      "ranges": [
+        {
+          "startOffset": 1001,
+          "endOffset": 3743,
+          "count": 25
+        },
+        {
+          "startOffset": 1080,
+          "endOffset": 1097,
+          "count": 24
+        },
+        {
+          "startOffset": 1099,
+          "endOffset": 1196,
+          "count": 2
+        },
+        {
+          "startOffset": 1196,
+          "endOffset": 1268,
+          "count": 23
+        },
+        {
+          "startOffset": 1268,
+          "endOffset": 1370,
+          "count": 1
+        },
+        {
+          "startOffset": 1370,
+          "endOffset": 1572,
+          "count": 22
+        },
+        {
+          "startOffset": 1572,
+          "endOffset": 1745,
+          "count": 1
+        },
+        {
+          "startOffset": 1745,
+          "endOffset": 1798,
+          "count": 21
+        },
+        {
+          "startOffset": 1798,
+          "endOffset": 1912,
+          "count": 2
+        },
+        {
+          "startOffset": 1838,
+          "endOffset": 1906,
+          "count": 1
+        },
+        {
+          "startOffset": 1912,
+          "endOffset": 1940,
+          "count": 19
+        },
+        {
+          "startOffset": 1940,
+          "endOffset": 1968,
+          "count": 18
+        },
+        {
+          "startOffset": 1970,
+          "endOffset": 2084,
+          "count": 2
+        },
+        {
+          "startOffset": 2084,
+          "endOffset": 2154,
+          "count": 17
+        },
+        {
+          "startOffset": 2154,
+          "endOffset": 2183,
+          "count": 16
+        },
+        {
+          "startOffset": 2185,
+          "endOffset": 2342,
+          "count": 2
+        },
+        {
+          "startOffset": 2342,
+          "endOffset": 2465,
+          "count": 15
+        },
+        {
+          "startOffset": 2465,
+          "endOffset": 2608,
+          "count": 1
+        },
+        {
+          "startOffset": 2608,
+          "endOffset": 2702,
+          "count": 14
+        },
+        {
+          "startOffset": 2702,
+          "endOffset": 3741,
+          "count": 22
+        },
+        {
+          "startOffset": 2733,
+          "endOffset": 2761,
+          "count": 21
+        },
+        {
+          "startOffset": 2763,
+          "endOffset": 2891,
+          "count": 2
+        },
+        {
+          "startOffset": 2891,
+          "endOffset": 2996,
+          "count": 20
+        },
+        {
+          "startOffset": 2996,
+          "endOffset": 3247,
+          "count": 14
+        },
+        {
+          "startOffset": 3063,
+          "endOffset": 3241,
+          "count": 2
+        },
+        {
+          "startOffset": 3214,
+          "endOffset": 3229,
+          "count": 0
+        },
+        {
+          "startOffset": 3247,
+          "endOffset": 3737,
+          "count": 6
+        },
+        {
+          "startOffset": 3290,
+          "endOffset": 3447,
+          "count": 2
+        },
+        {
+          "startOffset": 3447,
+          "endOffset": 3737,
+          "count": 4
+        },
+        {
+          "startOffset": 3553,
+          "endOffset": 3731,
+          "count": 1
+        },
+        {
+          "startOffset": 3704,
+          "endOffset": 3719,
+          "count": 0
+        },
+        {
+          "startOffset": 3741,
+          "endOffset": 3742,
+          "count": 7
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 1506,
+          "endOffset": 1538,
+          "count": 43
+        }
+      ],
+      "isBlockCoverage": true
+    }
+  ]
+}

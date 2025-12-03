@@ -1,0 +1,78 @@
+{
+  "scriptId": "368",
+  "url": "file:///D:/Tundrasoft/TundraLibs/oql/asserts/ColumnIdentifier.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 0,
+          "endOffset": 2637,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "assertColumnIdentifier",
+      "ranges": [
+        {
+          "startOffset": 1269,
+          "endOffset": 2636,
+          "count": 81
+        },
+        {
+          "startOffset": 1355,
+          "endOffset": 1463,
+          "count": 7
+        },
+        {
+          "startOffset": 1463,
+          "endOffset": 1579,
+          "count": 74
+        },
+        {
+          "startOffset": 1579,
+          "endOffset": 2634,
+          "count": 80
+        },
+        {
+          "startOffset": 1599,
+          "endOffset": 1711,
+          "count": 0
+        },
+        {
+          "startOffset": 1784,
+          "endOffset": 1922,
+          "count": 1
+        },
+        {
+          "startOffset": 1922,
+          "endOffset": 2029,
+          "count": 79
+        },
+        {
+          "startOffset": 2029,
+          "endOffset": 2178,
+          "count": 0
+        },
+        {
+          "startOffset": 2178,
+          "endOffset": 2377,
+          "count": 79
+        },
+        {
+          "startOffset": 2377,
+          "endOffset": 2630,
+          "count": 0
+        },
+        {
+          "startOffset": 2634,
+          "endOffset": 2635,
+          "count": 73
+        }
+      ],
+      "isBlockCoverage": true
+    }
+  ]
+}

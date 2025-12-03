@@ -1,0 +1,179 @@
+{
+  "scriptId": "339",
+  "url": "file:///D:/Tundrasoft/TundraLibs/oql/asserts/Expression/assertVariadicStringExpression.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 0,
+          "endOffset": 3183,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "assertVariadicStringExpression",
+      "ranges": [
+        {
+          "startOffset": 429,
+          "endOffset": 3182,
+          "count": 36
+        },
+        {
+          "startOffset": 525,
+          "endOffset": 542,
+          "count": 35
+        },
+        {
+          "startOffset": 544,
+          "endOffset": 640,
+          "count": 2
+        },
+        {
+          "startOffset": 640,
+          "endOffset": 819,
+          "count": 34
+        },
+        {
+          "startOffset": 819,
+          "endOffset": 941,
+          "count": 1
+        },
+        {
+          "startOffset": 941,
+          "endOffset": 1106,
+          "count": 33
+        },
+        {
+          "startOffset": 1106,
+          "endOffset": 1283,
+          "count": 1
+        },
+        {
+          "startOffset": 1283,
+          "endOffset": 1308,
+          "count": 32
+        },
+        {
+          "startOffset": 1308,
+          "endOffset": 1423,
+          "count": 2
+        },
+        {
+          "startOffset": 1348,
+          "endOffset": 1417,
+          "count": 1
+        },
+        {
+          "startOffset": 1423,
+          "endOffset": 1473,
+          "count": 30
+        },
+        {
+          "startOffset": 1475,
+          "endOffset": 1590,
+          "count": 0
+        },
+        {
+          "startOffset": 1590,
+          "endOffset": 1623,
+          "count": 30
+        },
+        {
+          "startOffset": 1623,
+          "endOffset": 1727,
+          "count": 1
+        },
+        {
+          "startOffset": 1727,
+          "endOffset": 1757,
+          "count": 29
+        },
+        {
+          "startOffset": 1757,
+          "endOffset": 1893,
+          "count": 2
+        },
+        {
+          "startOffset": 1893,
+          "endOffset": 2134,
+          "count": 27
+        },
+        {
+          "startOffset": 2134,
+          "endOffset": 2158,
+          "count": 21
+        },
+        {
+          "startOffset": 2160,
+          "endOffset": 2271,
+          "count": 2
+        },
+        {
+          "startOffset": 2271,
+          "endOffset": 2314,
+          "count": 25
+        },
+        {
+          "startOffset": 2314,
+          "endOffset": 3180,
+          "count": 31
+        },
+        {
+          "startOffset": 2388,
+          "endOffset": 2513,
+          "count": 0
+        },
+        {
+          "startOffset": 2575,
+          "endOffset": 2598,
+          "count": 2
+        },
+        {
+          "startOffset": 2600,
+          "endOffset": 2754,
+          "count": 2
+        },
+        {
+          "startOffset": 2754,
+          "endOffset": 3176,
+          "count": 29
+        },
+        {
+          "startOffset": 2880,
+          "endOffset": 3132,
+          "count": 9
+        },
+        {
+          "startOffset": 2945,
+          "endOffset": 3124,
+          "count": 1
+        },
+        {
+          "startOffset": 3095,
+          "endOffset": 3110,
+          "count": 0
+        },
+        {
+          "startOffset": 3180,
+          "endOffset": 3181,
+          "count": 22
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 1040,
+          "endOffset": 1072,
+          "count": 65
+        }
+      ],
+      "isBlockCoverage": true
+    }
+  ]
+}

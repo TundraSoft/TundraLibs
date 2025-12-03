@@ -37,6 +37,7 @@ jobs:
             guardian
             id
             norm
+            oql
             release
             restler
             slogger

@@ -39,6 +39,9 @@ id:
 norm:
   - changed-files:
       - any-glob-to-any-file: norm/*
+oql:
+  - changed-files:
+      - any-glob-to-any-file: oql/*
 restler:
   - changed-files:
       - any-glob-to-any-file: restler/*

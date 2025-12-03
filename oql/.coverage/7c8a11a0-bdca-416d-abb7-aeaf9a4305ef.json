@@ -1,0 +1,28 @@
+{
+  "scriptId": "377",
+  "url": "file:///D:/Tundrasoft/TundraLibs/oql/asserts/Expression/assertUnaryMathExpression.ts",
+  "functions": [
+    {
+      "functionName": "",
+      "ranges": [
+        {
+          "startOffset": 0,
+          "endOffset": 3231,
+          "count": 1
+        }
+      ],
+      "isBlockCoverage": true
+    },
+    {
+      "functionName": "assertUnaryMathExpression",
+      "ranges": [
+        {
+          "startOffset": 814,
+          "endOffset": 3230,
+          "count": 0
+        }
+      ],
+      "isBlockCoverage": false
+    }
+  ]
+}
