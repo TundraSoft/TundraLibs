@@ -1,4 +1,4 @@
-import type { Expressions } from '../../types/mod.ts';
+import type { Expressions, TimeUnit } from '../../types/mod.ts';
 
 export const assertBaseExpression: (
   x: unknown,
@@ -38,36 +38,24 @@ export const isBaseExpression = (
 
 export const validateTimeUnits: (
   x: unknown,
-) => asserts x is
-  | 'DAYS'
-  | 'MONTHS'
-  | 'YEARS'
-  | 'HOURS'
-  | 'MINUTES'
-  | 'SECONDS' = (
-    x: unknown,
-  ): asserts x is
-    | 'DAYS'
-    | 'MONTHS'
-    | 'YEARS'
-    | 'HOURS'
-    | 'MINUTES'
-    | 'SECONDS' => {
-    const validUnits = [
-      'DAYS',
-      'MONTHS',
-      'YEARS',
-      'HOURS',
-      'MINUTES',
-      'SECONDS',
-    ];
-    if (typeof x !== 'string' || !validUnits.includes(x)) {
-      throw new TypeError(
-        `Invalid time unit: Expected one of ${
-          validUnits.join(
-            ', ',
-          )
-        }, got ${typeof x === 'string' ? `'${x}'` : typeof x}`,
-      );
-    }
-  };
+) => asserts x is TimeUnit = (
+  x: unknown,
+): asserts x is TimeUnit => {
+  const validUnits = [
+    'DAYS',
+    'MONTHS',
+    'YEARS',
+    'HOURS',
+    'MINUTES',
+    'SECONDS',
+  ];
+  if (typeof x !== 'string' || !validUnits.includes(x)) {
+    throw new TypeError(
+      `Invalid time unit: Expected one of ${
+        validUnits.join(
+          ', ',
+        )
+      }, got ${typeof x === 'string' ? `'${x}'` : typeof x}`,
+    );
+  }
+};

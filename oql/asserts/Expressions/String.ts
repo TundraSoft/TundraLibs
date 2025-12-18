@@ -21,27 +21,8 @@
  */
 
 import { assertColumnIdentifier } from '../ColumnIdentifier.ts';
-import type { Expressions } from '../../types/mod.ts';
+import type { Expressions, StringExpressions } from '../../types/mod.ts';
 import { assertBaseExpression } from './Base.ts';
-
-/**
- * Union type of all string-related expression type literals.
- * Used for type narrowing and validation.
- */
-type StringExpressions =
-  | 'UUID'
-  | 'CONCAT'
-  | 'LOWER'
-  | 'UPPER'
-  | 'TRIM'
-  | 'LTRIM'
-  | 'RTRIM'
-  | 'SUBSTR'
-  | 'REPLACE'
-  | 'LPAD'
-  | 'RPAD'
-  | 'ENCRYPT'
-  | 'DECRYPT';
 
 /**
  * Helper function to validate a single string argument expression.
@@ -1499,6 +1480,123 @@ export const isDecryptExpression: (
 };
 
 /**
+ * Asserts that a value is a valid HASH expression.
+ *
+ * HASH creates a cryptographic hash of the provided data.
+ * Database support varies - PostgreSQL supports digest() function,
+ * MariaDB supports SHA2(), while SQLite and MongoDB have limited support.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the expression structure is invalid
+ * @throws {TypeError} If required properties are missing
+ * @throws {TypeError} If the args property is not valid
+ *
+ * @example
+ * ```ts
+ * // Hash a literal string
+ * const expr1 = {
+ *   type: 'HASH',
+ *   args: 'sensitive-data'
+ * };
+ * assertHashExpression(expr1); // ✓ Valid
+ *
+ * // Hash a column value
+ * const expr2 = {
+ *   type: 'HASH',
+ *   args: '@password'
+ * };
+ * // SELECT HASH(password) AS password_hash
+ * assertHashExpression(expr2, ['password']); // ✓ Valid
+ *
+ * // Hash in WHERE clause for authentication
+ * const expr3 = {
+ *   type: 'HASH',
+ *   args: '@user_input'
+ * };
+ * // WHERE password_hash = HASH(user_input)
+ * assertHashExpression(expr3, ['user_input']); // ✓ Valid
+ *
+ * // Hash numeric data
+ * const expr4 = {
+ *   type: 'HASH',
+ *   args: '@user_id'
+ * };
+ * assertHashExpression(expr4, ['user_id']); // ✓ Valid
+ * ```
+ */
+export const assertHashExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'HASH' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'HASH' }> => {
+  assertBaseExpression(x, 'HASH');
+  if (!('args' in x)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'args' property for HASH expression`,
+    );
+  }
+  // args can be string, number, bigint, Date, boolean, or column identifier
+  if (typeof x.args === 'string' && x.args.startsWith('@')) {
+    try {
+      assertColumnIdentifier(x.args, columnList);
+    } catch {
+      throw new TypeError(
+        `Invalid Expression definition: Invalid column identifier ${x.args} in HASH expression`,
+      );
+    }
+  } else if (
+    typeof x.args !== 'string' &&
+    typeof x.args !== 'number' &&
+    typeof x.args !== 'bigint' &&
+    typeof x.args !== 'boolean' &&
+    !(x.args instanceof Date)
+  ) {
+    throw new TypeError(
+      `Invalid Expression definition: args must be a string, number, bigint, Date, boolean, or column identifier in HASH expression, got ${typeof x
+        .args}`,
+    );
+  }
+};
+
+/**
+ * Type guard to check if a value is a valid HASH expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid HASH expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = {
+ *   type: 'HASH',
+ *   args: '@email'
+ * };
+ *
+ * if (isHashExpression(expr, ['email'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'HASH' }>
+ *   console.log('Will hash the email value');
+ * }
+ * ```
+ */
+export const isHashExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'HASH' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'HASH' }> => {
+  try {
+    assertHashExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Asserts that a value is a valid string-related expression.
  *
  * This is a comprehensive validator that checks if a value matches any of the
@@ -1519,6 +1617,7 @@ export const isDecryptExpression: (
  * - RPAD: Right pad string
  * - ENCRYPT: Symmetric encryption
  * - DECRYPT: Symmetric decryption
+ * - HASH: Cryptographic hashing
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix) for validation
@@ -1585,6 +1684,8 @@ export const assertStringExpression: (
     assertEncryptExpression(x, columnList);
   } else if (x.type === 'DECRYPT') {
     assertDecryptExpression(x, columnList);
+  } else if (x.type === 'HASH') {
+    assertHashExpression(x, columnList);
   } else {
     throw new TypeError(
       `Invalid Expression type: Expected a String expression type, got '${x.type}'`,
@@ -1637,6 +1738,9 @@ export const assertStringExpression: (
  *     case 'ENCRYPT':
  *     case 'DECRYPT':
  *       console.log('Encryption/Decryption');
+ *       break;
+ *     case 'HASH':
+ *       console.log('Cryptographic hashing');
  *       break;
  *   }
  * }

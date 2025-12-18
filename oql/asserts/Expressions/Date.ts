@@ -14,20 +14,8 @@
  */
 
 import { assertColumnIdentifier } from '../ColumnIdentifier.ts';
-import type { Expressions } from '../../types/mod.ts';
+import type { DateExpressions, Expressions } from '../../types/mod.ts';
 import { assertBaseExpression, validateTimeUnits } from './Base.ts';
-
-/**
- * Union type of all date-related expression type literals.
- * Used for type narrowing and validation.
- */
-type DateExpressions =
-  | 'NOW'
-  | 'CURRENT_DATE'
-  | 'CURRENT_TIME'
-  | 'CURRENT_TIMESTAMP'
-  | 'CURRENT_TIMESTAMPTZ'
-  | 'DATE_ADD';
 
 /**
  * Asserts that a value is a valid NOW expression.
