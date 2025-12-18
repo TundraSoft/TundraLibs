@@ -1,7 +1,7 @@
 import type { Joins, QueryFilter } from './Filter.ts';
 import type { ColumnIdentifier, TableType } from './Common.ts';
 import type { FlattenEntity } from '@tundralibs/utils';
-import { Expression, GetExpressionByType } from './Expressions.ts';
+import { Expressions, GetExpressionByType } from './Expressions.ts';
 import { Aggregates } from './Aggregates.ts';
 
 /**
@@ -24,7 +24,7 @@ type DataWithExpressions<T extends TableType> = {
   [K in keyof T]:
     | T[K]
     | Extract<
-      Expression<T, FlattenEntity<T, '', '@'>>,
+      Expressions<T, FlattenEntity<T, '', '@'>>,
       { type: GetExpressionByType<T[K]> }
     >;
 };
@@ -38,7 +38,7 @@ type PartialDataWithExpressions<T extends TableType> = {
   [K in keyof T]?:
     | T[K]
     | Extract<
-      Expression<T, FlattenEntity<T, '', '@'>>,
+      Expressions<T, FlattenEntity<T, '', '@'>>,
       { type: GetExpressionByType<T[K]> }
     >;
 };
@@ -319,7 +319,7 @@ export type Query<
                   string,
                   | keyof FlattenEntity<PT, '', '@'>
                   | Aggregates<PT & LT>
-                  | Expression<PT & LT>
+                  | Expressions<PT & LT>
                 >;
                 /**
                  * Optional join definitions for linking related tables.

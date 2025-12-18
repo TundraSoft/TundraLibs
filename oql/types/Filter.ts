@@ -1,6 +1,6 @@
 import { FlattenEntity } from '@tundralibs/utils';
 import { ColumnTypes, TableType } from './Common.ts';
-import type { Expression, GetExpressionByType } from './Expressions.ts';
+import type { Expressions, GetExpressionByType } from './Expressions.ts';
 
 export type Operators<T extends ColumnTypes = ColumnTypes> =
   | null
@@ -38,7 +38,7 @@ export type FilterOperator<
 > = {
   [K in keyof FT]?: FT[K] extends ColumnTypes ? (
       | Operators<FT[K]>
-      | Extract<Expression<T, FT>, { type: GetExpressionByType<FT[K]> }>
+      | Extract<Expressions<T, FT>, { type: GetExpressionByType<FT[K]> }>
     )
     : never;
 };
@@ -92,7 +92,7 @@ export type JoinFilter<
   [K in keyof FLT]?:
     | null
     | FLT[K]
-    | Expression<PT, FPT>
+    | Expressions<PT, FPT>
     | {
       [P in keyof FPT]: FPT[P] extends FLT[K] ? P & string : never;
     }[keyof FPT]
