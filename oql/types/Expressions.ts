@@ -48,7 +48,10 @@ export type StringExpressions =
   | 'REPLACE'
   | 'LPAD'
   | 'RPAD'
-  | 'UUID';
+  | 'UUID'
+  | 'ENCRYPT'
+  | 'DECRYPT'
+  | 'HASH';
 
 export type DateExpressions =
   | 'NOW'
