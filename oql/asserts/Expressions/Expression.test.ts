@@ -1,5 +1,5 @@
 import * as asserts from '$asserts';
-import { assertExpression, isExpression } from './mod.ts';
+import { assertExpression, isExpression } from './Expression.ts';
 
 Deno.test('oql.asserts.Expressions.mod', async (t) => {
   //#region assertExpression - Date Expressions
