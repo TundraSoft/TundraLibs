@@ -1,0 +1,1670 @@
+/**
+ * String Expression Validators
+ *
+ * This module provides validation functions for string manipulation expressions in OQL.
+ * It includes assertion and type guard functions for various string operations:
+ * - UUID: Generate UUID v4
+ * - CONCAT: Concatenate multiple strings
+ * - LOWER: Convert to lowercase
+ * - UPPER: Convert to uppercase
+ * - TRIM: Remove leading and trailing whitespace
+ * - LTRIM: Remove leading whitespace only
+ * - RTRIM: Remove trailing whitespace only
+ * - SUBSTR: Extract substring
+ * - REPLACE: Replace string occurrences
+ * - LPAD: Left pad string to specified length
+ * - RPAD: Right pad string to specified length
+ * - ENCRYPT: Symmetric encryption (database-specific)
+ * - DECRYPT: Symmetric decryption (database-specific)
+ *
+ * @module asserts/Expressions/String
+ */
+
+import { assertColumnIdentifier } from '../ColumnIdentifier.ts';
+import type { Expressions } from '../../types/mod.ts';
+import { assertBaseExpression } from './Base.ts';
+
+/**
+ * Union type of all string-related expression type literals.
+ * Used for type narrowing and validation.
+ */
+type StringExpressions =
+  | 'UUID'
+  | 'CONCAT'
+  | 'LOWER'
+  | 'UPPER'
+  | 'TRIM'
+  | 'LTRIM'
+  | 'RTRIM'
+  | 'SUBSTR'
+  | 'REPLACE'
+  | 'LPAD'
+  | 'RPAD'
+  | 'ENCRYPT'
+  | 'DECRYPT';
+
+/**
+ * Helper function to validate a single string argument expression.
+ * Used by LOWER, UPPER, TRIM, LTRIM, RTRIM which all have the same structure.
+ *
+ * @param x - The expression to validate
+ * @param type - The expression type name
+ * @param columnList - Optional list of valid column names (without '@' prefix)
+ * @throws {TypeError} If the expression structure is invalid
+ * @internal
+ */
+const assertSingleArgStringExpression = (
+  x: unknown,
+  type: string,
+  columnList?: string[],
+): void => {
+  assertBaseExpression(x, type);
+  if (!('args' in x)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'args' property for ${type} expression`,
+    );
+  }
+  if (typeof x.args === 'string') {
+    if (x.args.startsWith('@')) {
+      try {
+        assertColumnIdentifier(x.args, columnList);
+      } catch {
+        throw new TypeError(
+          `Invalid Expression definition: Invalid column identifier ${x.args} in ${type} expression`,
+        );
+      }
+    }
+  } else {
+    throw new TypeError(
+      `Invalid Expression definition: Invalid 'args' property in ${type} expression`,
+    );
+  }
+};
+
+/**
+ * Helper function to validate a string value or column identifier.
+ * Accepts literal strings or column identifiers (starting with '@').
+ *
+ * @param arg - The argument to validate
+ * @param argName - Name of the argument (for error messages)
+ * @param expressionType - The expression type (for error messages)
+ * @param columnList - Optional list of valid column names (without '@' prefix)
+ * @throws {TypeError} If the argument is not a valid string or column identifier
+ * @internal
+ */
+const validateStringArg = (
+  arg: unknown,
+  argName: string,
+  expressionType: string,
+  columnList?: string[],
+): void => {
+  if (typeof arg === 'string') {
+    if (arg.startsWith('@')) {
+      try {
+        assertColumnIdentifier(arg, columnList);
+      } catch {
+        throw new TypeError(
+          `Invalid Expression definition: Invalid column identifier ${arg} for ${argName} in ${expressionType} expression`,
+        );
+      }
+    }
+  } else {
+    throw new TypeError(
+      `Invalid Expression definition: ${argName} must be a string or column identifier in ${expressionType} expression, got ${typeof arg}`,
+    );
+  }
+};
+
+/**
+ * Helper function to validate a number value or column identifier.
+ * Accepts numeric literals or column identifiers (starting with '@').
+ *
+ * @param arg - The argument to validate
+ * @param argName - Name of the argument (for error messages)
+ * @param expressionType - The expression type (for error messages)
+ * @param columnList - Optional list of valid column names (without '@' prefix)
+ * @throws {TypeError} If the argument is not a valid number or column identifier
+ * @internal
+ */
+const validateNumberArg = (
+  arg: unknown,
+  argName: string,
+  expressionType: string,
+  columnList?: string[],
+): void => {
+  if (typeof arg === 'string') {
+    if (arg.startsWith('@')) {
+      try {
+        assertColumnIdentifier(arg, columnList);
+      } catch {
+        throw new TypeError(
+          `Invalid Expression definition: Invalid column identifier ${arg} for ${argName} in ${expressionType} expression`,
+        );
+      }
+    } else {
+      throw new TypeError(
+        `Invalid Expression definition: ${argName} must be a number or column identifier in ${expressionType} expression, got string literal`,
+      );
+    }
+  } else if (typeof arg !== 'number') {
+    throw new TypeError(
+      `Invalid Expression definition: ${argName} must be a number or column identifier in ${expressionType} expression, got ${typeof arg}`,
+    );
+  }
+};
+
+/**
+ * Asserts that a value is a valid UUID expression.
+ *
+ * The UUID expression generates a UUID v4. For databases that don't support
+ * native UUID generation (SQLite, MongoDB), the UUID is generated by DAM before
+ * query execution.
+ *
+ * @param x - The value to validate
+ * @throws {TypeError} If the value is not a valid UUID expression
+ *
+ * @example
+ * ```ts
+ * // Basic UUID expression
+ * const expr = { type: 'UUID' };
+ * assertUUIDExpression(expr); // ✓ Valid
+ *
+ * // Use as default value for ID column
+ * const idDefault = { type: 'UUID' };
+ * // INSERT INTO users (id, name) VALUES (UUID(), 'John')
+ * assertUUIDExpression(idDefault); // ✓ Valid
+ *
+ * // Generate unique identifiers for records
+ * const uniqueId = { type: 'UUID' };
+ * assertUUIDExpression(uniqueId); // ✓ Valid
+ * ```
+ */
+export const assertUUIDExpression: (
+  x: unknown,
+) => asserts x is Extract<Expressions, { type: 'UUID' }> = (
+  x: unknown,
+): asserts x is Extract<Expressions, { type: 'UUID' }> => {
+  assertBaseExpression(x, 'UUID');
+};
+
+/**
+ * Type guard to check if a value is a valid UUID expression.
+ *
+ * @param x - The value to check
+ * @returns `true` if the value is a valid UUID expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = { type: 'UUID' };
+ * if (isUUIDExpression(expr)) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'UUID' }>
+ *   console.log('Will generate a UUID v4');
+ * }
+ *
+ * // Validate user input
+ * const userExpr: unknown = getExpression();
+ * if (isUUIDExpression(userExpr)) {
+ *   console.log('Valid UUID generator expression');
+ * }
+ * ```
+ */
+export const isUUIDExpression = (
+  x: unknown,
+): x is Extract<Expressions, { type: 'UUID' }> => {
+  try {
+    assertUUIDExpression(x);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid CONCAT expression.
+ *
+ * The CONCAT expression joins multiple strings together. It accepts an array
+ * of string literals and/or column identifiers.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid CONCAT expression
+ * @throws {TypeError} If args is not a non-empty array
+ * @throws {TypeError} If any argument is not a string or valid column identifier
+ *
+ * @example
+ * ```ts
+ * // Concatenate literal strings
+ * const expr1 = {
+ *   type: 'CONCAT',
+ *   args: ['Hello', ' ', 'World']
+ * };
+ * assertConcatExpression(expr1); // ✓ Valid
+ *
+ * // Concatenate column values
+ * const expr2 = {
+ *   type: 'CONCAT',
+ *   args: ['@first_name', ' ', '@last_name']
+ * };
+ * assertConcatExpression(expr2, ['first_name', 'last_name']); // ✓ Valid
+ *
+ * // Mix literals and columns
+ * const expr3 = {
+ *   type: 'CONCAT',
+ *   args: ['User: ', '@username', ' (', '@email', ')']
+ * };
+ * assertConcatExpression(expr3, ['username', 'email']); // ✓ Valid
+ *
+ * // Build full address
+ * const address = {
+ *   type: 'CONCAT',
+ *   args: ['@street', ', ', '@city', ', ', '@state', ' ', '@zip']
+ * };
+ * assertConcatExpression(address, ['street', 'city', 'state', 'zip']); // ✓ Valid
+ * ```
+ */
+export const assertConcatExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'CONCAT' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'CONCAT' }> => {
+  assertBaseExpression(x, 'CONCAT');
+  if (!('args' in x) || !Array.isArray(x.args) || x.args.length === 0) {
+    throw new TypeError(
+      `Invalid Expression definition: 'args' must be a non-empty array for CONCAT expression`,
+    );
+  }
+  for (const arg of x.args) {
+    if (typeof arg === 'string') {
+      if (arg.startsWith('@')) {
+        try {
+          assertColumnIdentifier(arg, columnList);
+        } catch {
+          throw new TypeError(
+            `Invalid Expression definition: Invalid column identifier ${arg} in CONCAT expression`,
+          );
+        }
+      }
+    } else {
+      throw new TypeError(
+        `Invalid Expression definition: Invalid argument ${arg} in CONCAT expression`,
+      );
+    }
+  }
+};
+
+/**
+ * Type guard to check if a value is a valid CONCAT expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid CONCAT expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = {
+ *   type: 'CONCAT',
+ *   args: ['@first_name', ' ', '@last_name']
+ * };
+ *
+ * if (isConcatExpression(expr, ['first_name', 'last_name'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'CONCAT' }>
+ *   console.log(`Concatenating ${expr.args.length} parts`);
+ * }
+ * ```
+ */
+export const isConcatExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'CONCAT' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'CONCAT' }> => {
+  try {
+    assertConcatExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid LOWER expression.
+ *
+ * The LOWER expression converts a string to lowercase. Accepts a string literal
+ * or column identifier.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid LOWER expression
+ *
+ * @example
+ * ```ts
+ * // Convert literal string to lowercase
+ * const expr1 = { type: 'LOWER', args: 'HELLO' };
+ * assertLowerExpression(expr1); // ✓ Valid
+ *
+ * // Convert column value to lowercase
+ * const expr2 = { type: 'LOWER', args: '@email' };
+ * assertLowerExpression(expr2, ['email']); // ✓ Valid
+ *
+ * // Case-insensitive search
+ * const searchExpr = { type: 'LOWER', args: '@username' };
+ * // WHERE LOWER(username) = LOWER('John')
+ * assertLowerExpression(searchExpr, ['username']); // ✓ Valid
+ * ```
+ */
+export const assertLowerExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'LOWER' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'LOWER' }> => {
+  assertSingleArgStringExpression(x, 'LOWER', columnList);
+};
+
+/**
+ * Type guard to check if a value is a valid LOWER expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid LOWER expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = { type: 'LOWER', args: '@email' };
+ * if (isLowerExpression(expr, ['email'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'LOWER' }>
+ *   console.log('Will convert to lowercase');
+ * }
+ * ```
+ */
+export const isLowerExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'LOWER' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'LOWER' }> => {
+  try {
+    assertLowerExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid UPPER expression.
+ *
+ * The UPPER expression converts a string to uppercase. Accepts a string literal
+ * or column identifier.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid UPPER expression
+ *
+ * @example
+ * ```ts
+ * // Convert literal string to uppercase
+ * const expr1 = { type: 'UPPER', args: 'hello' };
+ * assertUpperExpression(expr1); // ✓ Valid
+ *
+ * // Convert column value to uppercase
+ * const expr2 = { type: 'UPPER', args: '@country_code' };
+ * assertUpperExpression(expr2, ['country_code']); // ✓ Valid
+ *
+ * // Normalize codes to uppercase
+ * const codeExpr = { type: 'UPPER', args: '@product_sku' };
+ * // UPDATE products SET sku = UPPER(product_sku)
+ * assertUpperExpression(codeExpr, ['product_sku']); // ✓ Valid
+ * ```
+ */
+export const assertUpperExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'UPPER' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'UPPER' }> => {
+  assertSingleArgStringExpression(x, 'UPPER', columnList);
+};
+
+/**
+ * Type guard to check if a value is a valid UPPER expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid UPPER expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = { type: 'UPPER', args: '@country_code' };
+ * if (isUpperExpression(expr, ['country_code'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'UPPER' }>
+ *   console.log('Will convert to uppercase');
+ * }
+ * ```
+ */
+export const isUpperExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'UPPER' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'UPPER' }> => {
+  try {
+    assertUpperExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid TRIM expression.
+ *
+ * The TRIM expression removes leading and trailing whitespace from a string.
+ * Accepts a string literal or column identifier.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid TRIM expression
+ *
+ * @example
+ * ```ts
+ * // Trim literal string
+ * const expr1 = { type: 'TRIM', args: '  hello  ' };
+ * assertTrimExpression(expr1); // ✓ Valid (results in 'hello')
+ *
+ * // Trim column value
+ * const expr2 = { type: 'TRIM', args: '@user_input' };
+ * assertTrimExpression(expr2, ['user_input']); // ✓ Valid
+ *
+ * // Clean user input
+ * const cleanExpr = { type: 'TRIM', args: '@comment' };
+ * // UPDATE posts SET comment = TRIM(comment)
+ * assertTrimExpression(cleanExpr, ['comment']); // ✓ Valid
+ * ```
+ */
+export const assertTrimExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'TRIM' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'TRIM' }> => {
+  assertSingleArgStringExpression(x, 'TRIM', columnList);
+};
+
+/**
+ * Type guard to check if a value is a valid TRIM expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid TRIM expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = { type: 'TRIM', args: '@user_input' };
+ * if (isTrimExpression(expr, ['user_input'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'TRIM' }>
+ *   console.log('Will remove leading and trailing whitespace');
+ * }
+ * ```
+ */
+export const isTrimExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'TRIM' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'TRIM' }> => {
+  try {
+    assertTrimExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid LTRIM expression.
+ *
+ * The LTRIM expression removes leading (left-side) whitespace only from a string.
+ * Trailing whitespace is preserved. Accepts a string literal or column identifier.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid LTRIM expression
+ *
+ * @example
+ * ```ts
+ * // Trim leading whitespace from literal
+ * const expr1 = { type: 'LTRIM', args: '  hello  ' };
+ * assertLTrimExpression(expr1); // ✓ Valid (results in 'hello  ')
+ *
+ * // Trim leading whitespace from column
+ * const expr2 = { type: 'LTRIM', args: '@description' };
+ * assertLTrimExpression(expr2, ['description']); // ✓ Valid
+ *
+ * // Clean indented text
+ * const cleanExpr = { type: 'LTRIM', args: '@code_snippet' };
+ * assertLTrimExpression(cleanExpr, ['code_snippet']); // ✓ Valid
+ * ```
+ */
+export const assertLTrimExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'LTRIM' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'LTRIM' }> => {
+  assertSingleArgStringExpression(x, 'LTRIM', columnList);
+};
+
+/**
+ * Type guard to check if a value is a valid LTRIM expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid LTRIM expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = { type: 'LTRIM', args: '@description' };
+ * if (isLTrimExpression(expr, ['description'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'LTRIM' }>
+ *   console.log('Will remove leading whitespace only');
+ * }
+ * ```
+ */
+export const isLTrimExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'LTRIM' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'LTRIM' }> => {
+  try {
+    assertLTrimExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid RTRIM expression.
+ *
+ * The RTRIM expression removes trailing (right-side) whitespace only from a string.
+ * Leading whitespace is preserved. Accepts a string literal or column identifier.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid RTRIM expression
+ *
+ * @example
+ * ```ts
+ * // Trim trailing whitespace from literal
+ * const expr1 = { type: 'RTRIM', args: '  hello  ' };
+ * assertRTrimExpression(expr1); // ✓ Valid (results in '  hello')
+ *
+ * // Trim trailing whitespace from column
+ * const expr2 = { type: 'RTRIM', args: '@notes' };
+ * assertRTrimExpression(expr2, ['notes']); // ✓ Valid
+ *
+ * // Clean text with trailing spaces
+ * const cleanExpr = { type: 'RTRIM', args: '@line_text' };
+ * assertRTrimExpression(cleanExpr, ['line_text']); // ✓ Valid
+ * ```
+ */
+export const assertRTrimExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'RTRIM' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'RTRIM' }> => {
+  assertSingleArgStringExpression(x, 'RTRIM', columnList);
+};
+
+/**
+ * Type guard to check if a value is a valid RTRIM expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid RTRIM expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = { type: 'RTRIM', args: '@notes' };
+ * if (isRTrimExpression(expr, ['notes'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'RTRIM' }>
+ *   console.log('Will remove trailing whitespace only');
+ * }
+ * ```
+ */
+export const isRTrimExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'RTRIM' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'RTRIM' }> => {
+  try {
+    assertRTrimExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid SUBSTR expression.
+ *
+ * The SUBSTR expression extracts a portion of a string starting at a specified
+ * position. The start position is 0-based. The length parameter is optional;
+ * if omitted, extracts to the end of the string.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid SUBSTR expression
+ * @throws {TypeError} If required properties are missing
+ * @throws {TypeError} If arguments are not valid strings, numbers, or column identifiers
+ *
+ * @example
+ * ```ts
+ * // Extract from literal string
+ * const expr1 = {
+ *   type: 'SUBSTR',
+ *   args: {
+ *     string: 'Hello World',
+ *     start: 0,
+ *     length: 5
+ *   }
+ * };
+ * assertSubstrExpression(expr1); // ✓ Valid (results in 'Hello')
+ *
+ * // Extract from column
+ * const expr2 = {
+ *   type: 'SUBSTR',
+ *   args: {
+ *     string: '@description',
+ *     start: 0,
+ *     length: 100
+ *   }
+ * };
+ * assertSubstrExpression(expr2, ['description']); // ✓ Valid
+ *
+ * // Extract to end (no length specified)
+ * const expr3 = {
+ *   type: 'SUBSTR',
+ *   args: {
+ *     string: '@full_text',
+ *     start: 10
+ *   }
+ * };
+ * assertSubstrExpression(expr3, ['full_text']); // ✓ Valid
+ *
+ * // Extract domain from email
+ * const domain = {
+ *   type: 'SUBSTR',
+ *   args: {
+ *     string: '@email',
+ *     start: '@at_position',
+ *     length: 50
+ *   }
+ * };
+ * assertSubstrExpression(domain, ['email', 'at_position']); // ✓ Valid
+ * ```
+ */
+export const assertSubstrExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'SUBSTR' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'SUBSTR' }> => {
+  assertBaseExpression(x, 'SUBSTR');
+  if (!('args' in x)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'args' property for SUBSTR expression`,
+    );
+  }
+  if (typeof x.args !== 'object' || x.args === null) {
+    throw new TypeError(
+      `Invalid Expression definition: 'args' must be an object for SUBSTR expression`,
+    );
+  }
+  if (!('string' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'string' property in args for SUBSTR expression`,
+    );
+  }
+  validateStringArg(x.args.string, 'string', 'SUBSTR', columnList);
+
+  if (!('start' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'start' property in args for SUBSTR expression`,
+    );
+  }
+  validateNumberArg(x.args.start, 'start', 'SUBSTR', columnList);
+
+  if ('length' in x.args && x.args.length !== undefined) {
+    validateNumberArg(x.args.length, 'length', 'SUBSTR', columnList);
+  }
+};
+
+/**
+ * Type guard to check if a value is a valid SUBSTR expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid SUBSTR expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = {
+ *   type: 'SUBSTR',
+ *   args: { string: '@description', start: 0, length: 100 }
+ * };
+ *
+ * if (isSubstrExpression(expr, ['description'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'SUBSTR' }>
+ *   const { string, start, length } = expr.args;
+ *   console.log(`Extracting from ${string} at position ${start}`);
+ * }
+ * ```
+ */
+export const isSubstrExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'SUBSTR' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'SUBSTR' }> => {
+  try {
+    assertSubstrExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid REPLACE expression.
+ *
+ * The REPLACE expression finds all occurrences of a search string and replaces
+ * them with a replacement string. All three arguments (string, search, replace)
+ * can be literals or column identifiers.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid REPLACE expression
+ * @throws {TypeError} If required properties are missing
+ * @throws {TypeError} If arguments are not valid strings or column identifiers
+ *
+ * @example
+ * ```ts
+ * // Replace in literal string
+ * const expr1 = {
+ *   type: 'REPLACE',
+ *   args: {
+ *     string: 'Hello World',
+ *     search: 'World',
+ *     replace: 'There'
+ *   }
+ * };
+ * assertReplaceExpression(expr1); // ✓ Valid (results in 'Hello There')
+ *
+ * // Replace in column value
+ * const expr2 = {
+ *   type: 'REPLACE',
+ *   args: {
+ *     string: '@description',
+ *     search: 'old_term',
+ *     replace: 'new_term'
+ *   }
+ * };
+ * assertReplaceExpression(expr2, ['description']); // ✓ Valid
+ *
+ * // Remove unwanted characters (replace with empty string)
+ * const cleanExpr = {
+ *   type: 'REPLACE',
+ *   args: {
+ *     string: '@phone',
+ *     search: '-',
+ *     replace: ''
+ *   }
+ * };
+ * assertReplaceExpression(cleanExpr, ['phone']); // ✓ Valid
+ *
+ * // Replace with column value
+ * const dynamicReplace = {
+ *   type: 'REPLACE',
+ *   args: {
+ *     string: '@template',
+ *     search: '{{name}}',
+ *     replace: '@user_name'
+ *   }
+ * };
+ * assertReplaceExpression(dynamicReplace, ['template', 'user_name']); // ✓ Valid
+ * ```
+ */
+export const assertReplaceExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'REPLACE' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'REPLACE' }> => {
+  assertBaseExpression(x, 'REPLACE');
+  if (!('args' in x)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'args' property for REPLACE expression`,
+    );
+  }
+  if (typeof x.args !== 'object' || x.args === null) {
+    throw new TypeError(
+      `Invalid Expression definition: 'args' must be an object for REPLACE expression`,
+    );
+  }
+  if (!('string' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'string' property in args for REPLACE expression`,
+    );
+  }
+  validateStringArg(x.args.string, 'string', 'REPLACE', columnList);
+
+  if (!('search' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'search' property in args for REPLACE expression`,
+    );
+  }
+  validateStringArg(x.args.search, 'search', 'REPLACE', columnList);
+
+  if (!('replace' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'replace' property in args for REPLACE expression`,
+    );
+  }
+  validateStringArg(x.args.replace, 'replace', 'REPLACE', columnList);
+};
+
+/**
+ * Type guard to check if a value is a valid REPLACE expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid REPLACE expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = {
+ *   type: 'REPLACE',
+ *   args: { string: '@text', search: 'old', replace: 'new' }
+ * };
+ *
+ * if (isReplaceExpression(expr, ['text'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'REPLACE' }>
+ *   console.log('Will replace all occurrences');
+ * }
+ * ```
+ */
+export const isReplaceExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'REPLACE' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'REPLACE' }> => {
+  try {
+    assertReplaceExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid LPAD expression.
+ *
+ * The LPAD expression pads a string on the left side to reach a specified length.
+ * The fill character defaults to space if not provided. If the string is already
+ * longer than the specified length, it remains unchanged.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid LPAD expression
+ * @throws {TypeError} If required properties are missing
+ * @throws {TypeError} If arguments are not valid strings, numbers, or column identifiers
+ *
+ * @example
+ * ```ts
+ * // Pad with spaces (default)
+ * const expr1 = {
+ *   type: 'LPAD',
+ *   args: {
+ *     string: '42',
+ *     length: 5
+ *   }
+ * };
+ * assertLPadExpression(expr1); // ✓ Valid (results in '   42')
+ *
+ * // Pad with custom character
+ * const expr2 = {
+ *   type: 'LPAD',
+ *   args: {
+ *     string: '42',
+ *     length: 5,
+ *     fill: '0'
+ *   }
+ * };
+ * assertLPadExpression(expr2); // ✓ Valid (results in '00042')
+ *
+ * // Pad column value
+ * const expr3 = {
+ *   type: 'LPAD',
+ *   args: {
+ *     string: '@order_number',
+ *     length: 10,
+ *     fill: '0'
+ *   }
+ * };
+ * assertLPadExpression(expr3, ['order_number']); // ✓ Valid
+ *
+ * // Zero-pad IDs for display
+ * const padId = {
+ *   type: 'LPAD',
+ *   args: {
+ *     string: '@id',
+ *     length: 8,
+ *     fill: '0'
+ *   }
+ * };
+ * assertLPadExpression(padId, ['id']); // ✓ Valid
+ * ```
+ */
+export const assertLPadExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'LPAD' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'LPAD' }> => {
+  assertBaseExpression(x, 'LPAD');
+  if (!('args' in x)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'args' property for LPAD expression`,
+    );
+  }
+  if (typeof x.args !== 'object' || x.args === null) {
+    throw new TypeError(
+      `Invalid Expression definition: 'args' must be an object for LPAD expression`,
+    );
+  }
+  if (!('string' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'string' property in args for LPAD expression`,
+    );
+  }
+  validateStringArg(x.args.string, 'string', 'LPAD', columnList);
+
+  if (!('length' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'length' property in args for LPAD expression`,
+    );
+  }
+  validateNumberArg(x.args.length, 'length', 'LPAD', columnList);
+
+  if ('fill' in x.args && x.args.fill !== undefined) {
+    validateStringArg(x.args.fill, 'fill', 'LPAD', columnList);
+  }
+};
+
+/**
+ * Type guard to check if a value is a valid LPAD expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid LPAD expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = {
+ *   type: 'LPAD',
+ *   args: { string: '@id', length: 8, fill: '0' }
+ * };
+ *
+ * if (isLPadExpression(expr, ['id'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'LPAD' }>
+ *   console.log('Will pad on the left side');
+ * }
+ * ```
+ */
+export const isLPadExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'LPAD' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'LPAD' }> => {
+  try {
+    assertLPadExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid RPAD expression.
+ *
+ * The RPAD expression pads a string on the right side to reach a specified length.
+ * The fill character defaults to space if not provided. If the string is already
+ * longer than the specified length, it remains unchanged.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid RPAD expression
+ * @throws {TypeError} If required properties are missing
+ * @throws {TypeError} If arguments are not valid strings, numbers, or column identifiers
+ *
+ * @example
+ * ```ts
+ * // Pad with spaces (default)
+ * const expr1 = {
+ *   type: 'RPAD',
+ *   args: {
+ *     string: '42',
+ *     length: 5
+ *   }
+ * };
+ * assertRPadExpression(expr1); // ✓ Valid (results in '42   ')
+ *
+ * // Pad with custom character
+ * const expr2 = {
+ *   type: 'RPAD',
+ *   args: {
+ *     string: 'LOG',
+ *     length: 10,
+ *     fill: '.'
+ *   }
+ * };
+ * assertRPadExpression(expr2); // ✓ Valid (results in 'LOG.......')
+ *
+ * // Pad column value
+ * const expr3 = {
+ *   type: 'RPAD',
+ *   args: {
+ *     string: '@status',
+ *     length: 15,
+ *     fill: ' '
+ *   }
+ * };
+ * assertRPadExpression(expr3, ['status']); // ✓ Valid
+ *
+ * // Create fixed-width columns for reports
+ * const fixedWidth = {
+ *   type: 'RPAD',
+ *   args: {
+ *     string: '@product_name',
+ *     length: 30,
+ *     fill: ' '
+ *   }
+ * };
+ * assertRPadExpression(fixedWidth, ['product_name']); // ✓ Valid
+ * ```
+ */
+export const assertRPadExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'RPAD' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'RPAD' }> => {
+  assertBaseExpression(x, 'RPAD');
+  if (!('args' in x)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'args' property for RPAD expression`,
+    );
+  }
+  if (typeof x.args !== 'object' || x.args === null) {
+    throw new TypeError(
+      `Invalid Expression definition: 'args' must be an object for RPAD expression`,
+    );
+  }
+  if (!('string' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'string' property in args for RPAD expression`,
+    );
+  }
+  validateStringArg(x.args.string, 'string', 'RPAD', columnList);
+
+  if (!('length' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'length' property in args for RPAD expression`,
+    );
+  }
+  validateNumberArg(x.args.length, 'length', 'RPAD', columnList);
+
+  if ('fill' in x.args && x.args.fill !== undefined) {
+    validateStringArg(x.args.fill, 'fill', 'RPAD', columnList);
+  }
+};
+
+/**
+ * Type guard to check if a value is a valid RPAD expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid RPAD expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = {
+ *   type: 'RPAD',
+ *   args: { string: '@product_name', length: 30, fill: ' ' }
+ * };
+ *
+ * if (isRPadExpression(expr, ['product_name'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'RPAD' }>
+ *   console.log('Will pad on the right side');
+ * }
+ * ```
+ */
+export const isRPadExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'RPAD' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'RPAD' }> => {
+  try {
+    assertRPadExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid ENCRYPT expression.
+ *
+ * The ENCRYPT expression performs symmetric encryption on data using a secret key.
+ * Database support varies:
+ * - PostgreSQL: Requires pgcrypto extension, uses AES encryption
+ * - MariaDB: Native AES_ENCRYPT function
+ * - SQLite: No built-in support, stores as-is without encryption
+ * - MongoDB: No built-in support, stores as-is without encryption
+ *
+ * Note: For SQLite and MongoDB, implement application-level encryption before
+ * passing data to DAM if encryption is required.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid ENCRYPT expression
+ * @throws {TypeError} If required properties are missing
+ * @throws {TypeError} If secret or data arguments are invalid
+ *
+ * @example
+ * ```ts
+ * // Encrypt literal data with literal secret
+ * const expr1 = {
+ *   type: 'ENCRYPT',
+ *   args: {
+ *     secret: 'my-secret-key',
+ *     data: 'sensitive information'
+ *   }
+ * };
+ * assertEncryptExpression(expr1); // ✓ Valid
+ *
+ * // Encrypt column value
+ * const expr2 = {
+ *   type: 'ENCRYPT',
+ *   args: {
+ *     secret: 'encryption-key',
+ *     data: '@ssn'
+ *   }
+ * };
+ * assertEncryptExpression(expr2, ['ssn']); // ✓ Valid
+ *
+ * // Use column as secret key
+ * const expr3 = {
+ *   type: 'ENCRYPT',
+ *   args: {
+ *     secret: '@user_encryption_key',
+ *     data: '@credit_card'
+ *   }
+ * };
+ * assertEncryptExpression(expr3, ['user_encryption_key', 'credit_card']); // ✓ Valid
+ *
+ * // Encrypt various data types
+ * const encryptDate = {
+ *   type: 'ENCRYPT',
+ *   args: {
+ *     secret: 'date-key',
+ *     data: '@birth_date'
+ *   }
+ * };
+ * assertEncryptExpression(encryptDate, ['birth_date']); // ✓ Valid
+ * ```
+ */
+export const assertEncryptExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'ENCRYPT' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'ENCRYPT' }> => {
+  assertBaseExpression(x, 'ENCRYPT');
+  if (!('args' in x)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'args' property for ENCRYPT expression`,
+    );
+  }
+  if (typeof x.args !== 'object' || x.args === null) {
+    throw new TypeError(
+      `Invalid Expression definition: 'args' must be an object for ENCRYPT expression`,
+    );
+  }
+  if (!('secret' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'secret' property in args for ENCRYPT expression`,
+    );
+  }
+  if (typeof x.args.secret === 'string') {
+    if (x.args.secret.startsWith('@')) {
+      try {
+        assertColumnIdentifier(x.args.secret, columnList);
+      } catch {
+        throw new TypeError(
+          `Invalid Expression definition: Invalid column identifier ${x.args.secret} for secret in ENCRYPT expression`,
+        );
+      }
+    }
+  } else {
+    throw new TypeError(
+      `Invalid Expression definition: secret must be a string or column identifier in ENCRYPT expression`,
+    );
+  }
+
+  if (!('data' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'data' property in args for ENCRYPT expression`,
+    );
+  }
+  // data can be string, number, bigint, Date, boolean, or column identifier
+  if (typeof x.args.data === 'string' && x.args.data.startsWith('@')) {
+    try {
+      assertColumnIdentifier(x.args.data, columnList);
+    } catch {
+      throw new TypeError(
+        `Invalid Expression definition: Invalid column identifier ${x.args.data} for data in ENCRYPT expression`,
+      );
+    }
+  }
+};
+
+/**
+ * Type guard to check if a value is a valid ENCRYPT expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid ENCRYPT expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = {
+ *   type: 'ENCRYPT',
+ *   args: { secret: 'key', data: '@ssn' }
+ * };
+ *
+ * if (isEncryptExpression(expr, ['ssn'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'ENCRYPT' }>
+ *   console.log('Will encrypt data using symmetric encryption');
+ * }
+ * ```
+ */
+export const isEncryptExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'ENCRYPT' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'ENCRYPT' }> => {
+  try {
+    assertEncryptExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid DECRYPT expression.
+ *
+ * The DECRYPT expression performs symmetric decryption on encrypted data using
+ * a secret key. Database support varies:
+ * - PostgreSQL: Requires pgcrypto extension, uses AES decryption
+ * - MariaDB: Native AES_DECRYPT function
+ * - SQLite: No built-in support, returns value as-is
+ * - MongoDB: No built-in support, returns value as-is
+ *
+ * Note: Only works on data encrypted by the corresponding database. Must use
+ * the same secret key that was used for encryption.
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid DECRYPT expression
+ * @throws {TypeError} If required properties are missing
+ * @throws {TypeError} If secret or data arguments are invalid
+ *
+ * @example
+ * ```ts
+ * // Decrypt literal data with literal secret
+ * const expr1 = {
+ *   type: 'DECRYPT',
+ *   args: {
+ *     secret: 'my-secret-key',
+ *     data: '<encrypted-data>'
+ *   }
+ * };
+ * assertDecryptExpression(expr1); // ✓ Valid
+ *
+ * // Decrypt column value
+ * const expr2 = {
+ *   type: 'DECRYPT',
+ *   args: {
+ *     secret: 'encryption-key',
+ *     data: '@encrypted_ssn'
+ *   }
+ * };
+ * assertDecryptExpression(expr2, ['encrypted_ssn']); // ✓ Valid
+ *
+ * // Use column as secret key
+ * const expr3 = {
+ *   type: 'DECRYPT',
+ *   args: {
+ *     secret: '@user_decryption_key',
+ *     data: '@encrypted_data'
+ *   }
+ * };
+ * assertDecryptExpression(expr3, ['user_decryption_key', 'encrypted_data']); // ✓ Valid
+ *
+ * // Decrypt for search
+ * const searchExpr = {
+ *   type: 'DECRYPT',
+ *   args: {
+ *     secret: 'search-key',
+ *     data: '@encrypted_email'
+ *   }
+ * };
+ * // WHERE DECRYPT(encrypted_email, 'search-key') = 'user@example.com'
+ * assertDecryptExpression(searchExpr, ['encrypted_email']); // ✓ Valid
+ * ```
+ */
+export const assertDecryptExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: 'DECRYPT' }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: 'DECRYPT' }> => {
+  assertBaseExpression(x, 'DECRYPT');
+  if (!('args' in x)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'args' property for DECRYPT expression`,
+    );
+  }
+  if (typeof x.args !== 'object' || x.args === null) {
+    throw new TypeError(
+      `Invalid Expression definition: 'args' must be an object for DECRYPT expression`,
+    );
+  }
+  if (!('secret' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'secret' property in args for DECRYPT expression`,
+    );
+  }
+  if (typeof x.args.secret === 'string') {
+    if (x.args.secret.startsWith('@')) {
+      try {
+        assertColumnIdentifier(x.args.secret, columnList);
+      } catch {
+        throw new TypeError(
+          `Invalid Expression definition: Invalid column identifier ${x.args.secret} for secret in DECRYPT expression`,
+        );
+      }
+    }
+  } else {
+    throw new TypeError(
+      `Invalid Expression definition: secret must be a string or column identifier in DECRYPT expression`,
+    );
+  }
+
+  if (!('data' in x.args)) {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'data' property in args for DECRYPT expression`,
+    );
+  }
+  // data can be string, number, bigint, Date, boolean, or column identifier
+  if (typeof x.args.data === 'string' && x.args.data.startsWith('@')) {
+    try {
+      assertColumnIdentifier(x.args.data, columnList);
+    } catch {
+      throw new TypeError(
+        `Invalid Expression definition: Invalid column identifier ${x.args.data} for data in DECRYPT expression`,
+      );
+    }
+  }
+};
+
+/**
+ * Type guard to check if a value is a valid DECRYPT expression.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid DECRYPT expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr = {
+ *   type: 'DECRYPT',
+ *   args: { secret: 'key', data: '@encrypted_ssn' }
+ * };
+ *
+ * if (isDecryptExpression(expr, ['encrypted_ssn'])) {
+ *   // expr is narrowed to Extract<Expressions, { type: 'DECRYPT' }>
+ *   console.log('Will decrypt data using symmetric decryption');
+ * }
+ * ```
+ */
+export const isDecryptExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: 'DECRYPT' }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: 'DECRYPT' }> => {
+  try {
+    assertDecryptExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Asserts that a value is a valid string-related expression.
+ *
+ * This is a comprehensive validator that checks if a value matches any of the
+ * supported string expression types. It automatically delegates to the appropriate
+ * specific validator based on the expression type.
+ *
+ * Supported string expression types:
+ * - UUID: Generate UUID v4
+ * - CONCAT: Concatenate multiple strings
+ * - LOWER: Convert to lowercase
+ * - UPPER: Convert to uppercase
+ * - TRIM: Remove leading and trailing whitespace
+ * - LTRIM: Remove leading whitespace only
+ * - RTRIM: Remove trailing whitespace only
+ * - SUBSTR: Extract substring
+ * - REPLACE: Replace string occurrences
+ * - LPAD: Left pad string
+ * - RPAD: Right pad string
+ * - ENCRYPT: Symmetric encryption
+ * - DECRYPT: Symmetric decryption
+ *
+ * @param x - The value to validate
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @throws {TypeError} If the value is not a valid string expression
+ * @throws {TypeError} If the expression type is not a recognized string type
+ *
+ * @example
+ * ```ts
+ * // Validate any string expression type
+ * const expr1 = { type: 'UUID' };
+ * assertStringExpression(expr1); // ✓ Delegates to assertUUIDExpression
+ *
+ * const expr2 = {
+ *   type: 'CONCAT',
+ *   args: ['Hello', ' ', 'World']
+ * };
+ * assertStringExpression(expr2); // ✓ Delegates to assertConcatExpression
+ *
+ * const expr3 = { type: 'LOWER', args: '@email' };
+ * assertStringExpression(expr3, ['email']); // ✓ Delegates to assertLowerExpression
+ *
+ * // Validate with column list
+ * const expr4 = {
+ *   type: 'SUBSTR',
+ *   args: { string: '@description', start: 0, length: 100 }
+ * };
+ * assertStringExpression(expr4, ['description']); // ✓ Valid
+ *
+ * // Invalid expression type
+ * assertStringExpression({ type: 'SUM' }); // ✗ Throws TypeError
+ * ```
+ */
+export const assertStringExpression: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is Extract<Expressions, { type: StringExpressions }> = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is Extract<Expressions, { type: StringExpressions }> => {
+  assertBaseExpression(x);
+  if (x.type === 'UUID') {
+    assertUUIDExpression(x);
+  } else if (x.type === 'CONCAT') {
+    assertConcatExpression(x, columnList);
+  } else if (x.type === 'LOWER') {
+    assertLowerExpression(x, columnList);
+  } else if (x.type === 'UPPER') {
+    assertUpperExpression(x, columnList);
+  } else if (x.type === 'TRIM') {
+    assertTrimExpression(x, columnList);
+  } else if (x.type === 'LTRIM') {
+    assertLTrimExpression(x, columnList);
+  } else if (x.type === 'RTRIM') {
+    assertRTrimExpression(x, columnList);
+  } else if (x.type === 'SUBSTR') {
+    assertSubstrExpression(x, columnList);
+  } else if (x.type === 'REPLACE') {
+    assertReplaceExpression(x, columnList);
+  } else if (x.type === 'LPAD') {
+    assertLPadExpression(x, columnList);
+  } else if (x.type === 'RPAD') {
+    assertRPadExpression(x, columnList);
+  } else if (x.type === 'ENCRYPT') {
+    assertEncryptExpression(x, columnList);
+  } else if (x.type === 'DECRYPT') {
+    assertDecryptExpression(x, columnList);
+  } else {
+    throw new TypeError(
+      `Invalid Expression type: Expected a String expression type, got '${x.type}'`,
+    );
+  }
+};
+
+/**
+ * Type guard to check if a value is a valid string-related expression.
+ *
+ * This is a comprehensive type guard that checks if a value matches any of the
+ * supported string expression types. It narrows the type to a union of all string expressions.
+ *
+ * @param x - The value to check
+ * @param columnList - Optional list of valid column names (without '@' prefix) for validation
+ * @returns `true` if the value is a valid string expression, `false` otherwise
+ *
+ * @example
+ * ```ts
+ * const expr: unknown = getExpression();
+ *
+ * if (isStringExpression(expr)) {
+ *   // expr is narrowed to Extract<Expressions, { type: StringExpressions }>
+ *   switch (expr.type) {
+ *     case 'UUID':
+ *       console.log('UUID generation');
+ *       break;
+ *     case 'CONCAT':
+ *       console.log('Concatenating:', expr.args);
+ *       break;
+ *     case 'LOWER':
+ *     case 'UPPER':
+ *       console.log('Case conversion');
+ *       break;
+ *     case 'TRIM':
+ *     case 'LTRIM':
+ *     case 'RTRIM':
+ *       console.log('Whitespace trimming');
+ *       break;
+ *     case 'SUBSTR':
+ *       console.log('Substring extraction');
+ *       break;
+ *     case 'REPLACE':
+ *       console.log('String replacement');
+ *       break;
+ *     case 'LPAD':
+ *     case 'RPAD':
+ *       console.log('String padding');
+ *       break;
+ *     case 'ENCRYPT':
+ *     case 'DECRYPT':
+ *       console.log('Encryption/Decryption');
+ *       break;
+ *   }
+ * }
+ *
+ * // Filter expressions by category
+ * const expressions: unknown[] = getAllExpressions();
+ * const stringExpressions = expressions.filter(isStringExpression);
+ * console.log(`Found ${stringExpressions.length} string expressions`);
+ *
+ * // Validate query expressions with column validation
+ * const queryExpr: unknown = buildQuery();
+ * if (isStringExpression(queryExpr, ['name', 'email', 'description'])) {
+ *   // All string references are validated against column list
+ *   executeQuery(queryExpr);
+ * }
+ * ```
+ */
+export const isStringExpression: (
+  x: unknown,
+  columnList?: string[],
+) => x is Extract<Expressions, { type: StringExpressions }> = (
+  x: unknown,
+  columnList?: string[],
+): x is Extract<Expressions, { type: StringExpressions }> => {
+  try {
+    assertStringExpression(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};

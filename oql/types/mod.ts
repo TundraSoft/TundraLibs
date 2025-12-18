@@ -22,7 +22,7 @@ export type { AggregateFunction, Aggregates } from './Aggregates.ts';
 // Expression types
 export type {
   DateExpressions,
-  Expression,
+  Expressions,
   GetExpressionByType,
   NumericExpressions,
   StringExpressions,

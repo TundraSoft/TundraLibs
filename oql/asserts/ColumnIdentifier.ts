@@ -1,84 +1,60 @@
 import type { ColumnIdentifier } from '../types/mod.ts';
 
-/**
- * Asserts that a value is a valid ColumnIdentifier.
- * Throws an error if validation fails.
- *
- * Supported formats:
- * - `@columnName` - Direct column reference
- * - `@table.@column` - Table-qualified column reference
- * - `@table.@column.@jsonKey` - JSON path reference
- * - `@table.@column.@jsonKey.@subKey` - Nested JSON path reference
- * - And so on...
- *
- * Rules:
- * - Must start with `@`
- * - Each segment after a dot must start with `@`
- * - Segments must be valid identifiers (letters, numbers, underscores, not starting with a number)
- *
- * @param value - The string to assert
- * @param customMessage - Optional custom error message
- * @throws {TypeError} If value is not a valid ColumnIdentifier
- *
- * @example
- * ```typescript
- * assertColumnIdentifier('@id');                          // OK
- * assertColumnIdentifier('@users.@id');                   // OK
- * assertColumnIdentifier('@users.@profile.@email');       // OK
- * assertColumnIdentifier('@data.@settings.@theme.@dark'); // OK
- * assertColumnIdentifier('id');                           // Throws
- * assertColumnIdentifier('@table.id');                    // Throws - missing @ on segment
- * assertColumnIdentifier('@table.@');                     // Throws - empty segment
- * ```
- */
-export function assertColumnIdentifier(
-  value: string,
-  customMessage?: string,
-): asserts value is ColumnIdentifier {
-  if (!value.startsWith('@')) {
+export const assertColumnIdentifier: (
+  x: unknown,
+  columnList?: string[],
+) => asserts x is ColumnIdentifier = (
+  x: unknown,
+  columnList?: string[],
+): asserts x is ColumnIdentifier => {
+  if (typeof x !== 'string') {
     throw new TypeError(
-      customMessage ??
-        `Invalid ColumnIdentifier: "${value}". Must start with '@'`,
+      `Invalid ColumnIdentifier: Expected string, got ${typeof x}`,
     );
   }
 
-  // Split by dots and validate each segment
-  const segments = value.split('.');
-
-  for (const segment of segments) {
-    if (!segment) {
+  const parts = x.split('.');
+  for (const part of parts) {
+    // Should start with @
+    if (!part.startsWith('@')) {
       throw new TypeError(
-        customMessage ??
-          `Invalid ColumnIdentifier: "${value}". Empty segment found`,
+        `Invalid ColumnIdentifier: Segment "${part}" must start with '@'`,
       );
     }
 
-    // Each segment must start with @
-    if (!segment.startsWith('@')) {
+    const identifier = part.slice(1); // Remove '@'
+
+    if (identifier.trim().length === 0) {
       throw new TypeError(
-        customMessage ?? `Invalid ColumnIdentifier: "${value}". ` +
-            `Segment "${segment}" must start with '@'`,
+        `Invalid ColumnIdentifier: Segment "${part}" has empty identifier after '@'`,
       );
     }
-
-    // Remove @ and validate the identifier
-    const identifier = segment.slice(1);
-
-    if (!identifier) {
-      throw new TypeError(
-        customMessage ?? `Invalid ColumnIdentifier: "${value}". ` +
-            `Segment "${segment}" has empty identifier after '@'`,
-      );
-    }
-
-    // Validate identifier: must start with letter or underscore, followed by alphanumeric or underscore
+    // Match identifier pattern which is basically alphanumeric and underscores, starting with a letter or underscore
     const identifierPattern = /^[a-zA-Z_]\w*$/;
     if (!identifierPattern.test(identifier)) {
       throw new TypeError(
-        customMessage ?? `Invalid ColumnIdentifier: "${value}". ` +
-            `Segment "${segment}" contains invalid identifier "${identifier}". ` +
-            `Must start with a letter or underscore, followed by letters, numbers, or underscores`,
+        `Invalid ColumnIdentifier: Segment "${part}" has invalid identifier "${identifier}"`,
       );
     }
   }
-}
+  if (columnList && columnList.length > 0) {
+    const cleanColumn = parts.map((p) => p.slice(1)).join('.');
+    if (!columnList.includes(cleanColumn)) {
+      throw new TypeError(
+        `ColumnIdentifier "${x}" is not in the provided column list`,
+      );
+    }
+  }
+};
+
+export const isColumnIdentifier = (
+  x: unknown,
+  columnList?: string[],
+): x is ColumnIdentifier => {
+  try {
+    assertColumnIdentifier(x, columnList);
+    return true;
+  } catch {
+    return false;
+  }
+};

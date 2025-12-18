@@ -1,6 +1,6 @@
 import { FlattenEntity } from '@tundralibs/utils';
 import { GetColumnByType, TableType } from './Common.ts';
-import type { Expression, NumericExpressions } from './Expressions.ts';
+import type { Expressions, NumericExpressions } from './Expressions.ts';
 
 /**
  * Aggregate function types supported across Postgres, MariaDB, SQLite, and MongoDB.
@@ -103,14 +103,17 @@ export type Aggregates<
 } | {
   /** COUNT(column) or COUNT(DISTINCT column) - Count column values or expressions */
   type: 'COUNT';
-  column: keyof FT | Expression<T, FT>;
+  column: keyof FT | Expressions<T, FT>;
   distinct?: boolean;
 } | {
   /** Numeric aggregates: SUM, MIN, MAX, AVG - Supports columns or numeric expressions */
-  type: Exclude<AggregateFunction, 'COUNT' | 'JSON_ROW'>;
+  type: Exclude<
+    AggregateFunction,
+    'COUNT' | 'JSON_ROW' | 'STRING_AGG' | 'ARRAY_AGG'
+  >;
   column:
     | GetColumnByType<FT, number | bigint | Date>
-    | Extract<Expression<T, FT>, { type: NumericExpressions }>;
+    | Extract<Expressions<T, FT>, { type: NumericExpressions }>;
   /** Apply DISTINCT to the column before aggregating */
   distinct?: boolean;
 } | {
@@ -127,7 +130,7 @@ export type Aggregates<
    * - MongoDB: `$reduce` with `$concat` (MongoDB 4.4+) or `$push` to array then join in application
    */
   type: 'STRING_AGG';
-  column: keyof FT | Expression<T, FT>;
+  column: keyof FT | Expressions<T, FT>;
   /** Delimiter to use between values (default: ',') */
   separator?: string;
   /** Apply DISTINCT to remove duplicate values before aggregating */
@@ -146,7 +149,7 @@ export type Aggregates<
    * - MongoDB: `$push` operator
    */
   type: 'ARRAY_AGG';
-  column: keyof FT | Expression<T, FT>;
+  column: keyof FT | Expressions<T, FT>;
   /** Apply DISTINCT to remove duplicate values before aggregating */
   distinct?: boolean;
 } | {
@@ -163,6 +166,6 @@ export type Aggregates<
    * - MongoDB: `$project` with field mapping
    */
   type: 'JSON_ROW';
-  columns: Record<string, keyof FT | Expression<T, FT>>;
+  columns: Record<string, keyof FT | Expressions<T, FT>>;
   distinct?: never;
 };
