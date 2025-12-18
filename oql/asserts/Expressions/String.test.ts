@@ -122,6 +122,21 @@ Deno.test('oql.asserts.Expressions.String', async (t) => {
     );
   });
 
+  await t.step(
+    'assertConcatExpression - invalid: number with column list',
+    () => {
+      asserts.assertThrows(
+        () =>
+          assertConcatExpression(
+            { type: 'CONCAT', args: ['@col', 123] },
+            ['col'],
+          ),
+        TypeError,
+        'Invalid argument 123 in CONCAT expression',
+      );
+    },
+  );
+
   await t.step('isConcatExpression - valid and invalid', () => {
     asserts.assertEquals(
       isConcatExpression({ type: 'CONCAT', args: ['a', 'b'] }),
@@ -451,6 +466,45 @@ Deno.test('oql.asserts.Expressions.String', async (t) => {
     );
   });
 
+  await t.step(
+    'assertSubstrExpression - invalid: invalid string column',
+    () => {
+      asserts.assertThrows(
+        () =>
+          assertSubstrExpression({
+            type: 'SUBSTR',
+            args: { string: '@invalid', start: 0 },
+          }, ['valid']),
+        TypeError,
+        'Invalid column identifier @invalid for string',
+      );
+    },
+  );
+
+  await t.step('assertSubstrExpression - invalid: invalid start column', () => {
+    asserts.assertThrows(
+      () =>
+        assertSubstrExpression({
+          type: 'SUBSTR',
+          args: { string: 'test', start: '@invalid' },
+        }, ['valid']),
+      TypeError,
+      'Invalid column identifier @invalid for start',
+    );
+  });
+
+  await t.step('assertSubstrExpression - invalid: start is boolean', () => {
+    asserts.assertThrows(
+      () =>
+        assertSubstrExpression({
+          type: 'SUBSTR',
+          args: { string: 'test', start: true },
+        } as any),
+      TypeError,
+      'start must be a number or column identifier',
+    );
+  });
+
   await t.step('isSubstrExpression - valid and invalid', () => {
     asserts.assertEquals(
       isSubstrExpression({
@@ -548,6 +602,75 @@ Deno.test('oql.asserts.Expressions.String', async (t) => {
     );
   });
 
+  await t.step('assertReplaceExpression - invalid: args is null', () => {
+    asserts.assertThrows(
+      () =>
+        assertReplaceExpression({
+          type: 'REPLACE',
+          args: null,
+        } as any),
+      TypeError,
+      "'args' must be an object",
+    );
+  });
+
+  await t.step('assertReplaceExpression - invalid: string not string', () => {
+    asserts.assertThrows(
+      () =>
+        assertReplaceExpression({
+          type: 'REPLACE',
+          args: { string: 123, search: 'old', replace: 'new' },
+        } as any),
+      TypeError,
+      'string must be a string or column identifier',
+    );
+  });
+
+  await t.step(
+    'assertReplaceExpression - invalid: invalid string column',
+    () => {
+      asserts.assertThrows(
+        () =>
+          assertReplaceExpression({
+            type: 'REPLACE',
+            args: { string: '@invalid', search: 'old', replace: 'new' },
+          }, ['valid']),
+        TypeError,
+        'Invalid column identifier @invalid for string',
+      );
+    },
+  );
+
+  await t.step(
+    'assertReplaceExpression - invalid: invalid search column',
+    () => {
+      asserts.assertThrows(
+        () =>
+          assertReplaceExpression({
+            type: 'REPLACE',
+            args: { string: 'test', search: '@invalid', replace: 'new' },
+          }, ['valid']),
+        TypeError,
+        'Invalid column identifier @invalid for search',
+      );
+    },
+  );
+
+  await t.step(
+    'assertReplaceExpression - invalid: invalid replace column',
+    () => {
+      asserts.assertThrows(
+        () =>
+          assertReplaceExpression({
+            type: 'REPLACE',
+            args: { string: 'test', search: 'old', replace: '@invalid' },
+          }, ['valid']),
+        TypeError,
+        'Invalid column identifier @invalid for replace',
+      );
+    },
+  );
+
   await t.step('isReplaceExpression - valid and invalid', () => {
     asserts.assertEquals(
       isReplaceExpression({
@@ -609,6 +732,14 @@ Deno.test('oql.asserts.Expressions.String', async (t) => {
     );
   });
 
+  await t.step('assertLPadExpression - invalid: args is null', () => {
+    asserts.assertThrows(
+      () => assertLPadExpression({ type: 'LPAD', args: null } as any),
+      TypeError,
+      "'args' must be an object",
+    );
+  });
+
   await t.step('assertLPadExpression - invalid: missing string', () => {
     asserts.assertThrows(
       () =>
@@ -642,6 +773,54 @@ Deno.test('oql.asserts.Expressions.String', async (t) => {
         } as any),
       TypeError,
       'length must be a number or column identifier',
+    );
+  });
+
+  await t.step('assertLPadExpression - invalid: string not string', () => {
+    asserts.assertThrows(
+      () =>
+        assertLPadExpression({
+          type: 'LPAD',
+          args: { string: 789, length: 5 },
+        } as any),
+      TypeError,
+      'string must be a string or column identifier',
+    );
+  });
+
+  await t.step('assertLPadExpression - invalid: invalid string column', () => {
+    asserts.assertThrows(
+      () =>
+        assertLPadExpression({
+          type: 'LPAD',
+          args: { string: '@invalid', length: 5 },
+        }, ['valid']),
+      TypeError,
+      'Invalid column identifier @invalid for string',
+    );
+  });
+
+  await t.step('assertLPadExpression - invalid: invalid length column', () => {
+    asserts.assertThrows(
+      () =>
+        assertLPadExpression({
+          type: 'LPAD',
+          args: { string: 'test', length: '@invalid' },
+        }, ['valid']),
+      TypeError,
+      'Invalid column identifier @invalid for length',
+    );
+  });
+
+  await t.step('assertLPadExpression - invalid: invalid fill column', () => {
+    asserts.assertThrows(
+      () =>
+        assertLPadExpression({
+          type: 'LPAD',
+          args: { string: 'test', length: 5, fill: '@invalid' },
+        }, ['valid']),
+      TypeError,
+      'Invalid column identifier @invalid for fill',
     );
   });
 
@@ -706,6 +885,26 @@ Deno.test('oql.asserts.Expressions.String', async (t) => {
     );
   });
 
+  await t.step('assertRPadExpression - invalid: args is null', () => {
+    asserts.assertThrows(
+      () => assertRPadExpression({ type: 'RPAD', args: null } as any),
+      TypeError,
+      "'args' must be an object",
+    );
+  });
+
+  await t.step('assertRPadExpression - invalid: missing string', () => {
+    asserts.assertThrows(
+      () =>
+        assertRPadExpression({
+          type: 'RPAD',
+          args: { length: 5 },
+        } as any),
+      TypeError,
+      "Missing 'string' property",
+    );
+  });
+
   await t.step('assertRPadExpression - invalid: missing length', () => {
     asserts.assertThrows(
       () =>
@@ -715,6 +914,66 @@ Deno.test('oql.asserts.Expressions.String', async (t) => {
         } as any),
       TypeError,
       "Missing 'length' property",
+    );
+  });
+
+  await t.step('assertRPadExpression - invalid: string not string', () => {
+    asserts.assertThrows(
+      () =>
+        assertRPadExpression({
+          type: 'RPAD',
+          args: { string: 456, length: 5 },
+        } as any),
+      TypeError,
+      'string must be a string or column identifier',
+    );
+  });
+
+  await t.step('assertRPadExpression - invalid: length not number', () => {
+    asserts.assertThrows(
+      () =>
+        assertRPadExpression({
+          type: 'RPAD',
+          args: { string: 'test', length: 'ten' },
+        } as any),
+      TypeError,
+      'length must be a number or column identifier',
+    );
+  });
+
+  await t.step('assertRPadExpression - invalid: invalid string column', () => {
+    asserts.assertThrows(
+      () =>
+        assertRPadExpression({
+          type: 'RPAD',
+          args: { string: '@invalid', length: 5 },
+        }, ['valid']),
+      TypeError,
+      'Invalid column identifier @invalid for string',
+    );
+  });
+
+  await t.step('assertRPadExpression - invalid: invalid length column', () => {
+    asserts.assertThrows(
+      () =>
+        assertRPadExpression({
+          type: 'RPAD',
+          args: { string: 'test', length: '@invalid' },
+        }, ['valid']),
+      TypeError,
+      'Invalid column identifier @invalid for length',
+    );
+  });
+
+  await t.step('assertRPadExpression - invalid: invalid fill column', () => {
+    asserts.assertThrows(
+      () =>
+        assertRPadExpression({
+          type: 'RPAD',
+          args: { string: 'test', length: 5, fill: '@invalid' },
+        }, ['valid']),
+      TypeError,
+      'Invalid column identifier @invalid for fill',
     );
   });
 
@@ -786,6 +1045,14 @@ Deno.test('oql.asserts.Expressions.String', async (t) => {
     );
   });
 
+  await t.step('assertEncryptExpression - invalid: args is null', () => {
+    asserts.assertThrows(
+      () => assertEncryptExpression({ type: 'ENCRYPT', args: null } as any),
+      TypeError,
+      "'args' must be an object",
+    );
+  });
+
   await t.step('assertEncryptExpression - invalid: missing secret', () => {
     asserts.assertThrows(
       () =>
@@ -819,6 +1086,33 @@ Deno.test('oql.asserts.Expressions.String', async (t) => {
         } as any),
       TypeError,
       'secret must be a string or column identifier',
+    );
+  });
+
+  await t.step(
+    'assertEncryptExpression - invalid: invalid secret column',
+    () => {
+      asserts.assertThrows(
+        () =>
+          assertEncryptExpression({
+            type: 'ENCRYPT',
+            args: { secret: '@invalid', data: 'test' },
+          }, ['valid']),
+        TypeError,
+        'Invalid column identifier @invalid for secret',
+      );
+    },
+  );
+
+  await t.step('assertEncryptExpression - invalid: invalid data column', () => {
+    asserts.assertThrows(
+      () =>
+        assertEncryptExpression({
+          type: 'ENCRYPT',
+          args: { secret: 'key', data: '@invalid' },
+        }, ['valid']),
+      TypeError,
+      'Invalid column identifier @invalid for data',
     );
   });
 
@@ -886,6 +1180,14 @@ Deno.test('oql.asserts.Expressions.String', async (t) => {
     );
   });
 
+  await t.step('assertDecryptExpression - invalid: args is null', () => {
+    asserts.assertThrows(
+      () => assertDecryptExpression({ type: 'DECRYPT', args: null } as any),
+      TypeError,
+      "'args' must be an object",
+    );
+  });
+
   await t.step('assertDecryptExpression - invalid: missing secret', () => {
     asserts.assertThrows(
       () =>
@@ -907,6 +1209,45 @@ Deno.test('oql.asserts.Expressions.String', async (t) => {
         } as any),
       TypeError,
       "Missing 'data' property",
+    );
+  });
+
+  await t.step('assertDecryptExpression - invalid: secret not string', () => {
+    asserts.assertThrows(
+      () =>
+        assertDecryptExpression({
+          type: 'DECRYPT',
+          args: { secret: 456, data: 'test' },
+        } as any),
+      TypeError,
+      'secret must be a string or column identifier',
+    );
+  });
+
+  await t.step(
+    'assertDecryptExpression - invalid: invalid secret column',
+    () => {
+      asserts.assertThrows(
+        () =>
+          assertDecryptExpression({
+            type: 'DECRYPT',
+            args: { secret: '@invalid', data: 'test' },
+          }, ['valid']),
+        TypeError,
+        'Invalid column identifier @invalid for secret',
+      );
+    },
+  );
+
+  await t.step('assertDecryptExpression - invalid: invalid data column', () => {
+    asserts.assertThrows(
+      () =>
+        assertDecryptExpression({
+          type: 'DECRYPT',
+          args: { secret: 'key', data: '@invalid' },
+        }, ['valid']),
+      TypeError,
+      'Invalid column identifier @invalid for data',
     );
   });
 

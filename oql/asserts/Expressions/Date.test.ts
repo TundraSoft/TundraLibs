@@ -285,6 +285,18 @@ Deno.test('oql.asserts.Expressions.Date', async (t) => {
     );
   });
 
+  await t.step('assertDateAddExpression - invalid: amount is boolean', () => {
+    asserts.assertThrows(
+      () =>
+        assertDateAddExpression({
+          type: 'DATE_ADD',
+          args: { date: new Date(), amount: true, unit: 'DAYS' },
+        } as any),
+      TypeError,
+      'amount must be a number or ColumnIdentifier',
+    );
+  });
+
   await t.step(
     'assertDateAddExpression - invalid: column not in list',
     () => {

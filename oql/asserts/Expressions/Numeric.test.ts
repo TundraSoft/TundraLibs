@@ -212,7 +212,29 @@ Deno.test('oql.asserts.Expressions.Numeric', async (t) => {
       TypeError,
     );
   });
+  await t.step('assertAbsExpression - invalid: string literal arg', () => {
+    asserts.assertThrows(
+      () => assertAbsExpression({ type: 'ABS', args: ['noAtSign'] } as any),
+      TypeError,
+      'must be a number or column identifier',
+    );
+  });
 
+  await t.step('assertAbsExpression - invalid: boolean arg', () => {
+    asserts.assertThrows(
+      () => assertAbsExpression({ type: 'ABS', args: [true] } as any),
+      TypeError,
+      'must be a number, bigint, or column identifier',
+    );
+  });
+
+  await t.step('assertAbsExpression - invalid: invalid column in list', () => {
+    asserts.assertThrows(
+      () => assertAbsExpression({ type: 'ABS', args: ['@invalid'] }, ['valid']),
+      TypeError,
+      'Invalid column identifier',
+    );
+  });
   await t.step('isAbsExpression - valid and invalid', () => {
     asserts.assert(isAbsExpression({ type: 'ABS', args: [-42] }));
     asserts.assert(!isAbsExpression({ type: 'CEIL', args: [3.14] }));
@@ -369,6 +391,15 @@ Deno.test('oql.asserts.Expressions.Numeric', async (t) => {
     );
   });
 
+  await t.step('assertLengthExpression - invalid: invalid column', () => {
+    asserts.assertThrows(
+      () =>
+        assertLengthExpression({ type: 'LENGTH', args: '@invalid' }, ['valid']),
+      TypeError,
+      'Invalid column identifier',
+    );
+  });
+
   await t.step('isLengthExpression - valid and invalid', () => {
     asserts.assert(isLengthExpression({ type: 'LENGTH', args: 'hello' }));
     asserts.assert(!isLengthExpression({ type: 'LOWER', args: 'hello' }));
@@ -479,6 +510,48 @@ Deno.test('oql.asserts.Expressions.Numeric', async (t) => {
       'Expected one of',
     );
   });
+
+  await t.step(
+    'assertDateDiffExpression - invalid: from is string literal',
+    () => {
+      asserts.assertThrows(
+        () =>
+          assertDateDiffExpression({
+            type: 'DATE_DIFF',
+            args: { from: 'notColumn', to: date2, unit: 'DAYS' },
+          } as any),
+        TypeError,
+        'must be a Date or column identifier',
+      );
+    },
+  );
+
+  await t.step('assertDateDiffExpression - invalid: from is number', () => {
+    asserts.assertThrows(
+      () =>
+        assertDateDiffExpression({
+          type: 'DATE_DIFF',
+          args: { from: 123, to: date2, unit: 'DAYS' },
+        } as any),
+      TypeError,
+      'must be a Date or column identifier',
+    );
+  });
+
+  await t.step(
+    'assertDateDiffExpression - invalid: from column not in list',
+    () => {
+      asserts.assertThrows(
+        () =>
+          assertDateDiffExpression({
+            type: 'DATE_DIFF',
+            args: { from: '@invalid', to: date2, unit: 'DAYS' },
+          }, ['valid']),
+        TypeError,
+        'Invalid column identifier',
+      );
+    },
+  );
 
   await t.step('isDateDiffExpression - valid and invalid', () => {
     asserts.assert(
