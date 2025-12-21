@@ -79,19 +79,33 @@ crypt/
 
 ```typescript
 import {
+  generateAlphanumericSecret,
+  generateBase32Secret,
+  generateBase64Secret,
   generateHexSecret,
-  generatePassword,
-  generateToken,
+  secretGenerator,
 } from './generators/mod.ts';
 
-// Generate hex-encoded secret
+// Generate hex-encoded secret (default)
 const hexSecret = generateHexSecret(32); // 64-character hex string
 
-// Generate URL-safe token
-const token = generateToken(32); // Base64URL token
+// Generate base32-encoded secret (ideal for TOTP/OTP)
+const totpSecret = generateBase32Secret(20); // Base32-encoded string
 
-// Generate alphanumeric password
-const password = generatePassword(16); // 16-character password
+// Generate base64-encoded secret (compact)
+const base64Secret = generateBase64Secret(24); // Base64-encoded string
+
+// Generate alphanumeric secret (human-friendly)
+const alphaSecret = generateAlphanumericSecret(16); // 16-character alphanumeric
+
+// Using secretGenerator directly with encoding
+const secret = secretGenerator(32, 'HEX'); // Same as generateHexSecret(32)
+
+// Or with options object
+const customSecret = secretGenerator({
+  byteLength: 32,
+  encoding: 'BASE32',
+});
 ```
 
 #### Key Pair Generation
@@ -172,6 +186,101 @@ const hash256 = await sha256(data);
 const hash512 = await sha512(data);
 const hash1 = await sha1(data);
 ```
+
+### One-Time Passwords (OTP)
+
+```typescript
+import {
+  generateHOTP,
+  generateOTPAuthURL,
+  generateTOTP,
+  verifyHOTP,
+  verifyTOTP,
+} from './OTP/mod.ts';
+
+// Generate Time-based OTP (TOTP) - default 6 digits, SHA-256
+const totp = await generateTOTP('mySecretKey123456');
+
+// Generate TOTP with custom options
+const customTotp = await generateTOTP('mySecretKey123456', {
+  period: 60, // 60-second validity window
+  length: 8, // 8-digit code
+  algo: 'SHA-512',
+});
+
+// Verify TOTP with default settings (1-step window)
+const isValid = await verifyTOTP('123456', 'mySecretKey123456');
+
+// Verify with custom window (allows ±2 time steps)
+const isValidCustom = await verifyTOTP('123456', 'mySecretKey123456', {
+  window: 2,
+  period: 60,
+  algo: 'SHA-512',
+});
+
+// Generate Counter-based OTP (HOTP)
+const hotp = await generateHOTP('mySecretKey123456', 0); // counter = 0
+
+// Generate HOTP with custom options
+const customHotp = await generateHOTP('mySecretKey123456', 5, {
+  length: 8,
+  algo: 'SHA-1',
+});
+
+// Verify HOTP
+const isValidHotp = await verifyHOTP('123456', 'mySecretKey123456', 0);
+
+// Generate OTP Auth URL for QR code (Google Authenticator compatible)
+const totpUrl = generateOTPAuthURL({
+  type: 'totp',
+  secret: 'JBSWY3DPEHPK3PXP', // Base32-encoded secret
+  accountName: 'user@example.com',
+  issuer: 'MyApp',
+  algorithm: 'SHA-1',
+  digits: 6,
+  period: 30,
+});
+// Output: otpauth://totp/MyApp:user%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=MyApp&algorithm=SHA1&digits=6&period=30
+
+// Generate HOTP Auth URL
+const hotpUrl = generateOTPAuthURL({
+  type: 'hotp',
+  secret: 'JBSWY3DPEHPK3PXP',
+  accountName: 'user@example.com',
+  issuer: 'MyApp',
+  counter: 0,
+});
+```
+
+**OTP API Reference:**
+
+- `generateTOTP(key, options?)`: Generate Time-based OTP
+  - `key`: Secret key (string, minimum 16 characters)
+  - `options.epoch`: Time in milliseconds (default: `Date.now()`)
+  - `options.period`: Time period in seconds (default: `30`)
+  - `options.length`: OTP length (default: `6`)
+  - `options.algo`: Hash algorithm (default: `'SHA-256'`)
+- `verifyTOTP(otp, key, options?)`: Verify Time-based OTP
+  - `otp`: The OTP code to verify
+  - `key`: Secret key (string)
+  - `options.window`: Time steps to check before/after (default: `1`)
+  - `options.epoch`: Time in milliseconds (default: `Date.now()`)
+  - `options.period`: Time period in seconds (default: `30`)
+  - `options.length`: OTP length (default: `6`)
+  - `options.algo`: Hash algorithm (default: `'SHA-256'`)
+- `generateHOTP(key, counter, options?)`: Generate Counter-based OTP
+  - `key`: Secret key (string, minimum 16 characters)
+  - `counter`: Counter value (non-negative integer)
+  - `options.length`: OTP length (default: `6`)
+  - `options.algo`: Hash algorithm (default: `'SHA-256'`)
+- `verifyHOTP(otp, key, counter, options?)`: Verify Counter-based OTP
+  - `otp`: The OTP code to verify
+  - `key`: Secret key (string)
+  - `counter`: Counter value
+  - `options.length`: OTP length (default: `6`)
+  - `options.algo`: Hash algorithm (default: `'SHA-256'`)
+- `generateOTPAuthURL(options)`: Generate otpauth:// URL for QR codes
+  - Compatible with Google Authenticator, Authy, and other authenticator apps
 
 ### JWT
 

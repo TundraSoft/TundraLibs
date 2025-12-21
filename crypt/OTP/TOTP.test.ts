@@ -5,7 +5,11 @@ Deno.test('crypt.TOTP', async (t) => {
   await t.step('TOTP - Check if the length is as specified', async () => {
     for (let i = 6; i <= 40; i++) {
       asserts.assertEquals(
-        (await generateTOTP('12345678901234567890', Date.now(), 30, i)).length,
+        (await generateTOTP('12345678901234567890', {
+          epoch: Date.now(),
+          period: 30,
+          length: i,
+        })).length,
         i,
       );
     }
@@ -71,10 +75,12 @@ Deno.test('crypt.TOTP', async (t) => {
           asserts.assertEquals(
             await generateTOTP(
               key,
-              parseInt(k),
-              30,
-              length,
-              algo as DigestAlgorithms,
+              {
+                epoch: parseInt(k),
+                period: 30,
+                length,
+                algo: algo as DigestAlgorithms,
+              },
             ),
             v,
           );
@@ -85,19 +91,19 @@ Deno.test('crypt.TOTP', async (t) => {
 
   await t.step('TOTP - Error Handling', async () => {
     await asserts.assertRejects(
-      () => generateTOTP('dfdfsd', Date.now(), 30, 6, 'SHA-1'),
+      () => generateTOTP('dfdfsd'),
       Error,
       'Secret key should be at least 16 characters long',
     );
 
     asserts.assertThrows(
-      () => generateTOTP('12345678901234567890', Date.now(), 0, 6, 'SHA-1'),
+      () => generateTOTP('12345678901234567890', { period: 0 }),
       Error,
       'Time period must be at least 1 second',
     );
 
     await asserts.assertRejects(
-      () => generateTOTP('12345678901234567890', Date.now(), 30, 0, 'SHA-1'),
+      () => generateTOTP('12345678901234567890', { length: 0 }),
       Error,
       'OTP length must be a non-negative integer',
     );
@@ -107,8 +113,8 @@ Deno.test('crypt.TOTP', async (t) => {
     const key = '12345678901234567890';
     const epoch = Date.now();
 
-    const totp30 = await generateTOTP(key, epoch, 30, 6);
-    const totp60 = await generateTOTP(key, epoch, 60, 6);
+    const totp30 = await generateTOTP(key, { epoch, period: 30 });
+    const totp60 = await generateTOTP(key, { epoch, period: 60 });
 
     // Different periods should generally produce different OTPs
     // (unless we're at a time boundary)
@@ -127,44 +133,18 @@ Deno.test('crypt.TOTP', async (t) => {
     ];
 
     for (const key of keys) {
-      const totp = await generateTOTP(key, epoch, 30, 6);
+      const totp = await generateTOTP(key, { epoch, period: 30 });
       asserts.assertEquals(typeof totp, 'string');
       asserts.assertEquals(totp.length, 6);
     }
-  });
-
-  await t.step('TOTP - Binary Key Support', async () => {
-    const binaryKey = new Uint8Array([
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      8,
-      9,
-      10,
-      11,
-      12,
-      13,
-      14,
-      15,
-      16,
-    ]);
-    const epoch = Date.now();
-
-    const totp = await generateTOTP(binaryKey, epoch, 30, 6);
-    asserts.assertEquals(typeof totp, 'string');
-    asserts.assertEquals(totp.length, 6);
   });
 
   await t.step('TOTP - Consistency', async () => {
     const key = '12345678901234567890';
     const epoch = Date.now();
 
-    const totp1 = await generateTOTP(key, epoch, 30, 6);
-    const totp2 = await generateTOTP(key, epoch, 30, 6);
+    const totp1 = await generateTOTP(key, { epoch, period: 30 });
+    const totp2 = await generateTOTP(key, { epoch, period: 30 });
 
     asserts.assertEquals(totp1, totp2);
   });
@@ -181,8 +161,12 @@ Deno.test('crypt.TOTP', async (t) => {
     const key = '12345678901234567890';
     const epoch = Date.now();
 
-    const totp = await generateTOTP(key, epoch, 30, 6);
-    const isValid = await verifyTOTP(totp, key, 1, epoch, 30, 6);
+    const totp = await generateTOTP(key, { epoch, period: 30 });
+    const isValid = await verifyTOTP(totp, key, {
+      window: 1,
+      epoch,
+      period: 30,
+    });
 
     asserts.assertEquals(isValid, true);
   });
@@ -191,7 +175,11 @@ Deno.test('crypt.TOTP', async (t) => {
     const key = '12345678901234567890';
     const epoch = Date.now();
 
-    const isValid = await verifyTOTP('000000', key, 1, epoch, 30, 6);
+    const isValid = await verifyTOTP('000000', key, {
+      window: 1,
+      epoch,
+      period: 30,
+    });
     asserts.assertEquals(isValid, false);
   });
 
@@ -199,14 +187,22 @@ Deno.test('crypt.TOTP', async (t) => {
     const key = '12345678901234567890';
     const epoch = Date.now();
 
-    const totp = await generateTOTP(key, epoch, 30, 6);
+    const totp = await generateTOTP(key, { epoch, period: 30 });
 
     // Should be valid within window
-    const isValidNow = await verifyTOTP(totp, key, 1, epoch, 30, 6);
+    const isValidNow = await verifyTOTP(totp, key, {
+      window: 1,
+      epoch,
+      period: 30,
+    });
     asserts.assertEquals(isValidNow, true);
 
     // Should be valid in previous time step (within window)
-    const isValidPrev = await verifyTOTP(totp, key, 1, epoch - 30000, 30, 6);
+    const isValidPrev = await verifyTOTP(totp, key, {
+      window: 1,
+      epoch: epoch - 30000,
+      period: 30,
+    });
     asserts.assertEquals(isValidPrev, true);
   });
 
@@ -214,23 +210,34 @@ Deno.test('crypt.TOTP', async (t) => {
     const key = '12345678901234567890';
 
     await asserts.assertRejects(
-      () => verifyTOTP('123456', key, 1, Date.now(), 0, 6),
+      () => verifyTOTP('123456', key, { epoch: Date.now(), period: 0 }),
       Error,
       'Time period must be at least 1 second',
     );
 
     await asserts.assertRejects(
-      () => verifyTOTP('123456', key, -1, Date.now(), 30, 6),
+      () =>
+        verifyTOTP('123456', key, {
+          window: -1,
+          epoch: Date.now(),
+          period: 30,
+        }),
       Error,
       'Window must be a non-negative integer',
     );
 
     // Invalid OTP format
-    const isValid1 = await verifyTOTP('12a456', key, 1, Date.now(), 30, 6);
+    const isValid1 = await verifyTOTP('12a456', key, {
+      epoch: Date.now(),
+      period: 30,
+    });
     asserts.assertEquals(isValid1, false);
 
     // Wrong length
-    const isValid2 = await verifyTOTP('12345', key, 1, Date.now(), 30, 6);
+    const isValid2 = await verifyTOTP('12345', key, {
+      epoch: Date.now(),
+      period: 30,
+    });
     asserts.assertEquals(isValid2, false);
   });
 
@@ -245,8 +252,13 @@ Deno.test('crypt.TOTP', async (t) => {
     const epoch = Date.now();
 
     for (const algo of algorithms) {
-      const totp = await generateTOTP(key, epoch, 30, 6, algo);
-      const isValid = await verifyTOTP(totp, key, 1, epoch, 30, 6, algo);
+      const totp = await generateTOTP(key, { epoch, period: 30, algo });
+      const isValid = await verifyTOTP(totp, key, {
+        window: 1,
+        epoch,
+        period: 30,
+        algo,
+      });
       asserts.assertEquals(isValid, true);
     }
   });

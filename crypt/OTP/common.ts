@@ -2,6 +2,87 @@ import type { DigestAlgorithms } from '../digest/mod.ts';
 import { sprintf } from '$fmt/printf';
 
 /**
+ * Options for HOTP generation
+ */
+export type HOTPOptions = {
+  /**
+   * The length of the OTP
+   * @default 6
+   */
+  length?: number;
+
+  /**
+   * The hash algorithm to use
+   * @default 'SHA-256'
+   */
+  algo?: DigestAlgorithms;
+};
+
+/**
+ * Options for TOTP generation
+ */
+export type TOTPOptions = {
+  /**
+   * The epoch time in milliseconds
+   * @default Date.now()
+   */
+  epoch?: number;
+
+  /**
+   * The time period in seconds
+   * @default 30
+   */
+  period?: number;
+
+  /**
+   * The length of the OTP
+   * @default 6
+   */
+  length?: number;
+
+  /**
+   * The hash algorithm to use
+   * @default 'SHA-256'
+   */
+  algo?: DigestAlgorithms;
+};
+
+/**
+ * Options for TOTP verification
+ */
+export type TOTPVerifyOptions = {
+  /**
+   * The number of time steps to check before and after the current one
+   * @default 1
+   */
+  window?: number;
+
+  /**
+   * The epoch time in milliseconds
+   * @default Date.now()
+   */
+  epoch?: number;
+
+  /**
+   * The time period in seconds
+   * @default 30
+   */
+  period?: number;
+
+  /**
+   * The length of the OTP
+   * @default 6
+   */
+  length?: number;
+
+  /**
+   * The hash algorithm to use
+   * @default 'SHA-256'
+   */
+  algo?: DigestAlgorithms;
+};
+
+/**
  * Converts a number to an 8-byte array (Uint8Array).
  *
  * @param {number} data - The number to convert.
@@ -22,25 +103,21 @@ export const numberToBytes = (data: number): Uint8Array => {
 /**
  * Validates input parameters for OTP generation
  *
- * @param {string | Uint8Array} key - The secret key for HMAC
+ * @param {string} key - The secret key for HMAC
  * @param {number} counter - The counter value
  * @param {number} length - The length of the OTP
  * @param {DigestAlgorithms} algo - The hash algorithm to use
  * @throws {Error} If any input is invalid
  */
 export const validateInputs = (
-  key: string | Uint8Array,
+  key: string,
   counter: number,
   length: number,
   algo: DigestAlgorithms,
 ): void => {
   // Validate key
-  if (typeof key === 'string') {
-    if (!key || key.length < 16) {
-      throw new Error('Secret key should be at least 16 characters long');
-    }
-  } else if (key.byteLength < 16) {
-    throw new Error('Secret key should be at least 16 bytes long');
+  if (!key || key.length < 16) {
+    throw new Error('Secret key should be at least 16 characters long');
   }
 
   // Validate counter
@@ -66,13 +143,13 @@ export const validateInputs = (
  * Uses dynamic truncation to extract a numeric code from the HMAC digest.
  * This is an internal function used by both {@link HOTP} and {@link TOTP}.
  *
- * @param {string | Uint8Array} key - The secret key for HMAC (minimum 16 characters/bytes)
+ * @param {string} key - The secret key for HMAC (minimum 16 characters)
  * @param {number} counter - The counter value (non-negative integer)
  * @param {number} [length=6] - The length of the OTP (positive integer)
  * @param {DigestAlgorithms} [algo='SHA-256'] - The hash algorithm to use ({@link DigestAlgorithms})
  * @returns {Promise<string>} A promise that resolves to the generated OTP (zero-padded)
  *
- * @throws {Error} When the secret key is shorter than 16 characters/bytes
+ * @throws {Error} When the secret key is shorter than 16 characters
  * @throws {Error} When the counter is not a non-negative integer
  * @throws {Error} When the OTP length is not a positive integer
  * @throws {Error} When the algorithm is not supported
@@ -90,7 +167,7 @@ export const validateInputs = (
  * @see {@link DigestAlgorithms} for supported algorithms
  */
 export const generate = async (
-  key: string | Uint8Array,
+  key: string,
   counter: number,
   length: number = 6,
   algo: DigestAlgorithms = 'SHA-256',
@@ -99,7 +176,7 @@ export const generate = async (
   validateInputs(key, counter, length, algo);
 
   // Prepare key for HMAC
-  const keyData = typeof key === 'string' ? new TextEncoder().encode(key) : key;
+  const keyData = new TextEncoder().encode(key);
 
   // Import key for HMAC
   const cryptoKey = await crypto.subtle.importKey(
@@ -127,4 +204,184 @@ export const generate = async (
   // Generate code modulo 10^length and pad with leading zeros if needed
   const op = (code % 10 ** length).toString();
   return sprintf('%0' + length + 's', op);
+};
+
+/**
+ * OTP type for otpauth URL generation
+ */
+export type OTPType = 'totp' | 'hotp';
+
+/**
+ * Options for generating an otpauth URL
+ */
+export type OTPAuthURLOptions = {
+  /**
+   * The type of OTP (TOTP or HOTP)
+   */
+  type: OTPType;
+
+  /**
+   * The secret key (will be base32 encoded if it's a string)
+   * If already base32 encoded, pass as string
+   */
+  secret: string;
+
+  /**
+   * The account name (usually email or username)
+   */
+  accountName: string;
+
+  /**
+   * The issuer/app name (e.g., "MyApp", "GitHub")
+   */
+  issuer: string;
+
+  /**
+   * Hash algorithm to use
+   * @default 'SHA-1'
+   */
+  algorithm?: 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512';
+
+  /**
+   * Number of digits in the OTP
+   * @default 6
+   */
+  digits?: number;
+
+  /**
+   * Time period in seconds (TOTP only)
+   * @default 30
+   */
+  period?: number;
+
+  /**
+   * Initial counter value (HOTP only)
+   * @default 0
+   */
+  counter?: number;
+};
+
+/**
+ * Generates an otpauth:// URL for use with authenticator apps.
+ *
+ * Creates URLs compatible with Google Authenticator, Authy, and other
+ * TOTP/HOTP authenticator applications. The URL can be encoded as a QR code
+ * for easy scanning.
+ *
+ * @param {OTPAuthURLOptions} options - Configuration options for the URL
+ * @returns {string} The otpauth:// URL
+ *
+ * @throws {Error} When required parameters are missing
+ * @throws {Error} When algorithm is not supported
+ * @throws {Error} When digits is not between 6 and 8
+ * @throws {Error} When period is less than 1 (for TOTP)
+ * @throws {Error} When counter is negative (for HOTP)
+ *
+ * @example
+ * ```typescript
+ * // Generate a TOTP URL
+ * const url = generateOTPAuthURL({
+ *   type: 'totp',
+ *   secret: 'JBSWY3DPEHPK3PXP',
+ *   accountName: 'user@example.com',
+ *   issuer: 'MyApp',
+ *   algorithm: 'SHA-1',
+ *   digits: 6,
+ *   period: 30
+ * });
+ * console.log(url);
+ * // "otpauth://totp/MyApp:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=MyApp&algorithm=SHA1&digits=6&period=30"
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Generate an HOTP URL
+ * const url = generateOTPAuthURL({
+ *   type: 'hotp',
+ *   secret: 'JBSWY3DPEHPK3PXP',
+ *   accountName: 'user@example.com',
+ *   issuer: 'MyApp',
+ *   counter: 0
+ * });
+ * ```
+ *
+ * @see {@link https://github.com/google/google-authenticator/wiki/Key-Uri-Format} Key URI Format
+ */
+export const generateOTPAuthURL = (options: OTPAuthURLOptions): string => {
+  const {
+    type,
+    secret,
+    accountName,
+    issuer,
+    algorithm = 'SHA-1',
+    digits = 6,
+    period = 30,
+    counter = 0,
+  } = options;
+
+  // Validate required parameters
+  if (!type || !['totp', 'hotp'].includes(type)) {
+    throw new Error('Type must be either "totp" or "hotp"');
+  }
+
+  if (!secret || secret.length === 0) {
+    throw new Error('Secret is required and cannot be empty');
+  }
+
+  if (!accountName || accountName.length === 0) {
+    throw new Error('Account name is required and cannot be empty');
+  }
+
+  if (!issuer || issuer.length === 0) {
+    throw new Error('Issuer is required and cannot be empty');
+  }
+
+  // Validate algorithm
+  if (!['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'].includes(algorithm)) {
+    throw new Error(
+      'Algorithm must be one of: SHA-1, SHA-256, SHA-384, SHA-512',
+    );
+  }
+
+  // Validate digits
+  if (!Number.isInteger(digits) || digits < 6 || digits > 8) {
+    throw new Error('Digits must be an integer between 6 and 8');
+  }
+
+  // Validate type-specific parameters
+  if (type === 'totp') {
+    if (!Number.isInteger(period) || period < 1) {
+      throw new Error('Period must be a positive integer (at least 1)');
+    }
+  } else {
+    if (!Number.isInteger(counter) || counter < 0) {
+      throw new Error('Counter must be a non-negative integer');
+    }
+  }
+
+  // Build the label (issuer:accountName)
+  const label = `${encodeURIComponent(issuer)}:${
+    encodeURIComponent(accountName)
+  }`;
+
+  // Convert algorithm name to the format expected in URLs (remove hyphen)
+  const algoParam = algorithm.replace('-', '');
+
+  // Build query parameters
+  const params = new URLSearchParams({
+    secret: secret.toUpperCase().replace(/\s/g, ''), // Remove spaces and uppercase
+    issuer: issuer,
+    algorithm: algoParam,
+    digits: digits.toString(),
+  });
+
+  // Add type-specific parameters
+  if (type === 'totp') {
+    params.append('period', period.toString());
+  } else {
+    params.append('counter', counter.toString());
+  }
+
+  // Build the final URL
+  return `otpauth://${type}/${label}?${params.toString()}`;
 };

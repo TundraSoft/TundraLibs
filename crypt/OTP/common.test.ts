@@ -63,13 +63,6 @@ Deno.test('crypt.OTP.common', async (t) => {
     asserts.assert(true);
   });
 
-  await t.step('validateInputs - Valid Uint8Array key', () => {
-    const key = new Uint8Array(20); // 20 bytes
-    validateInputs(key, 0, 6, 'SHA-256');
-    // If we reach here, it means no error was thrown
-    asserts.assert(true);
-  });
-
   await t.step('validateInputs - Invalid string key', () => {
     // Empty string
     asserts.assertThrows(
@@ -90,24 +83,6 @@ Deno.test('crypt.OTP.common', async (t) => {
       () => validateInputs('fifteen-chars!!', 0, 6, 'SHA-256'),
       Error,
       'Secret key should be at least 16 characters long',
-    );
-  });
-
-  await t.step('validateInputs - Invalid Uint8Array key', () => {
-    // Too short byte array
-    const shortKey = new Uint8Array(10);
-    asserts.assertThrows(
-      () => validateInputs(shortKey, 0, 6, 'SHA-256'),
-      Error,
-      'Secret key should be at least 16 bytes long',
-    );
-
-    // Empty byte array
-    const emptyKey = new Uint8Array(0);
-    asserts.assertThrows(
-      () => validateInputs(emptyKey, 0, 6, 'SHA-256'),
-      Error,
-      'Secret key should be at least 16 bytes long',
     );
   });
 
@@ -243,17 +218,6 @@ Deno.test('crypt.OTP.common', async (t) => {
 
     // Different keys should produce different outputs
     asserts.assertNotEquals(otp1, otp2);
-  });
-
-  await t.step('generate - Uint8Array key', async () => {
-    const keyString = 'my-secret-key-16-chars';
-    const keyBytes = new TextEncoder().encode(keyString);
-
-    const otp1 = await generate(keyString, 0, 6, 'SHA-256');
-    const otp2 = await generate(keyBytes, 0, 6, 'SHA-256');
-
-    // Same key content should produce same output
-    asserts.assertEquals(otp1, otp2);
   });
 
   await t.step('generate - Leading zeros padding', async () => {

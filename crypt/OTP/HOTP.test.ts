@@ -5,7 +5,7 @@ Deno.test('crypt.HOTP', async (t) => {
   await t.step('HOTP - Check if the length is as specified', async () => {
     for (let i = 6; i <= 40; i++) {
       asserts.assertEquals(
-        (await generateHOTP('12345678901234567890', 1, i)).length,
+        (await generateHOTP('12345678901234567890', 1, { length: i })).length,
         i,
       );
     }
@@ -30,7 +30,10 @@ Deno.test('crypt.HOTP', async (t) => {
       };
 
       for (const [k, v] of Object.entries(results)) {
-        const result = await generateHOTP(key, parseInt(k), 6, 'SHA-1');
+        const result = await generateHOTP(key, parseInt(k), {
+          length: 6,
+          algo: 'SHA-1',
+        });
         asserts.assertEquals(result, v);
       }
     },
@@ -47,7 +50,7 @@ Deno.test('crypt.HOTP', async (t) => {
     ];
 
     for (const algo of algorithms) {
-      const hotp = await generateHOTP(key, counter, 8, algo);
+      const hotp = await generateHOTP(key, counter, { length: 8, algo });
       asserts.assertEquals(typeof hotp, 'string');
       asserts.assertEquals(hotp.length, 8);
       asserts.assert(/^\d+$/.test(hotp), 'Should contain only digits');
@@ -56,19 +59,19 @@ Deno.test('crypt.HOTP', async (t) => {
 
   await t.step('HOTP - Error Handling', async () => {
     await asserts.assertRejects(
-      () => generateHOTP('short', 1, 6),
+      () => generateHOTP('short', 1),
       Error,
       'Secret key should be at least 16 characters long',
     );
 
     await asserts.assertRejects(
-      () => generateHOTP('12345678901234567890', -1, 6),
+      () => generateHOTP('12345678901234567890', -1),
       Error,
       'Counter must be a non-negative integer',
     );
 
     await asserts.assertRejects(
-      () => generateHOTP('12345678901234567890', 1, 0),
+      () => generateHOTP('12345678901234567890', 1, { length: 0 }),
       Error,
       'OTP length must be a non-negative integer',
     );
@@ -79,7 +82,7 @@ Deno.test('crypt.HOTP', async (t) => {
     const hotps: string[] = [];
 
     for (let i = 0; i < 5; i++) {
-      const hotp = await generateHOTP(key, i, 6);
+      const hotp = await generateHOTP(key, i);
       asserts.assertEquals(typeof hotp, 'string');
       asserts.assertEquals(hotp.length, 6);
       hotps.push(hotp);
@@ -90,38 +93,12 @@ Deno.test('crypt.HOTP', async (t) => {
     asserts.assertEquals(uniqueHotps.size, hotps.length);
   });
 
-  await t.step('HOTP - Binary Key Support', async () => {
-    const binaryKey = new Uint8Array([
-      1,
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      8,
-      9,
-      10,
-      11,
-      12,
-      13,
-      14,
-      15,
-      16,
-    ]);
-    const counter = 1;
-
-    const hotp = await generateHOTP(binaryKey, counter, 6);
-    asserts.assertEquals(typeof hotp, 'string');
-    asserts.assertEquals(hotp.length, 6);
-  });
-
   await t.step('HOTP - Consistency', async () => {
     const key = '12345678901234567890';
     const counter = 42;
 
-    const hotp1 = await generateHOTP(key, counter, 6);
-    const hotp2 = await generateHOTP(key, counter, 6);
+    const hotp1 = await generateHOTP(key, counter);
+    const hotp2 = await generateHOTP(key, counter);
 
     asserts.assertEquals(hotp1, hotp2);
   });
@@ -139,7 +116,7 @@ Deno.test('crypt.HOTP', async (t) => {
     const key = '12345678901234567890';
     const largeCounter = 999999999;
 
-    const hotp = await generateHOTP(key, largeCounter, 6);
+    const hotp = await generateHOTP(key, largeCounter);
     asserts.assertEquals(typeof hotp, 'string');
     asserts.assertEquals(hotp.length, 6);
   });
@@ -148,8 +125,8 @@ Deno.test('crypt.HOTP', async (t) => {
     const key = '12345678901234567890';
     const counter = 1;
 
-    const hotp = await generateHOTP(key, counter, 6);
-    const isValid = await verifyHOTP(hotp, key, counter, 6);
+    const hotp = await generateHOTP(key, counter);
+    const isValid = await verifyHOTP(hotp, key, counter);
 
     asserts.assertEquals(isValid, true);
   });
@@ -158,7 +135,7 @@ Deno.test('crypt.HOTP', async (t) => {
     const key = '12345678901234567890';
     const counter = 1;
 
-    const isValid = await verifyHOTP('000000', key, counter, 6);
+    const isValid = await verifyHOTP('000000', key, counter);
     asserts.assertEquals(isValid, false);
   });
 
@@ -166,8 +143,8 @@ Deno.test('crypt.HOTP', async (t) => {
     const key = '12345678901234567890';
     const counter = 1;
 
-    const hotp = await generateHOTP(key, counter, 6);
-    const isValid = await verifyHOTP(hotp, key, counter + 1, 6);
+    const hotp = await generateHOTP(key, counter);
+    const isValid = await verifyHOTP(hotp, key, counter + 1);
 
     asserts.assertEquals(isValid, false);
   });
@@ -176,23 +153,23 @@ Deno.test('crypt.HOTP', async (t) => {
     const key = '12345678901234567890';
 
     await asserts.assertRejects(
-      () => verifyHOTP('123456', 'short', 1, 6),
+      () => verifyHOTP('123456', 'short', 1),
       Error,
       'Secret key should be at least 16 characters long',
     );
 
     await asserts.assertRejects(
-      () => verifyHOTP('123456', key, -1, 6),
+      () => verifyHOTP('123456', key, -1),
       Error,
       'Counter must be a non-negative integer',
     );
 
     // Invalid OTP format
-    const isValid1 = await verifyHOTP('12a456', key, 1, 6);
+    const isValid1 = await verifyHOTP('12a456', key, 1);
     asserts.assertEquals(isValid1, false);
 
     // Wrong length
-    const isValid2 = await verifyHOTP('12345', key, 1, 6);
+    const isValid2 = await verifyHOTP('12345', key, 1);
     asserts.assertEquals(isValid2, false);
   });
 
@@ -207,8 +184,8 @@ Deno.test('crypt.HOTP', async (t) => {
     const counter = 1;
 
     for (const algo of algorithms) {
-      const hotp = await generateHOTP(key, counter, 6, algo);
-      const isValid = await verifyHOTP(hotp, key, counter, 6, algo);
+      const hotp = await generateHOTP(key, counter, { algo });
+      const isValid = await verifyHOTP(hotp, key, counter, { algo });
       asserts.assertEquals(isValid, true);
     }
   });
@@ -219,8 +196,8 @@ Deno.test('crypt.HOTP', async (t) => {
     const lengths = [6, 7, 8, 9, 10];
 
     for (const length of lengths) {
-      const hotp = await generateHOTP(key, counter, length);
-      const isValid = await verifyHOTP(hotp, key, counter, length);
+      const hotp = await generateHOTP(key, counter, { length });
+      const isValid = await verifyHOTP(hotp, key, counter, { length });
       asserts.assertEquals(isValid, true);
     }
   });

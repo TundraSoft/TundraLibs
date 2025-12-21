@@ -8,6 +8,7 @@
 // Export secret generators
 export {
   generateAlphanumericSecret,
+  generateBase32Secret,
   generateBase64Secret,
   generateHexSecret,
   generatePassword,

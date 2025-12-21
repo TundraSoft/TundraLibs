@@ -30,7 +30,13 @@ Deno.bench({
   },
 });
 
-// New benchmark for alphanumeric encoding
+Deno.bench({
+  name: 'crypt.generators.secret 32-byte secret (base32)',
+  fn: () => {
+    secretGenerator(32, 'BASE32');
+  },
+});
+
 Deno.bench({
   name: 'crypt.generators.secret 32-byte secret (alphanumeric)',
   fn: () => {
@@ -38,44 +44,13 @@ Deno.bench({
   },
 });
 
-// Benchmark with prefix
+// Benchmark with options object
 Deno.bench({
-  name: 'crypt.generators.secret 32-byte secret with prefix',
-  fn: () => {
-    secretGenerator(32, 'HEX', 'prefix:');
-  },
-});
-
-// Benchmark with hyphen interval
-Deno.bench({
-  name: 'crypt.generators.secret 32-byte secret with hyphen interval',
-  fn: () => {
-    secretGenerator(32, 'HEX', '', 4);
-  },
-});
-
-// Benchmark with lowercase option
-Deno.bench({
-  name: 'crypt.generators.secret 32-byte secret with lowercase option',
+  name: 'crypt.generators.secret 32-byte secret with options object',
   fn: () => {
     secretGenerator({
       byteLength: 32,
       encoding: 'HEX',
-      lowercase: true,
-    });
-  },
-});
-
-// Benchmark with combined options
-Deno.bench({
-  name: 'crypt.generators.secret 32-byte secret with all formatting options',
-  fn: () => {
-    secretGenerator({
-      byteLength: 32,
-      encoding: 'ALPHANUMERIC',
-      prefix: 'key-',
-      hyphenInterval: 4,
-      lowercase: true,
     });
   },
 });
