@@ -1653,9 +1653,13 @@ export const isHashExpression: (
 export const assertStringExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => asserts x is Extract<Expressions, { type: StringExpressions }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): asserts x is Extract<Expressions, { type: StringExpressions }> => {
   assertBaseExpression(x);
   if (x.type === 'UUID') {
@@ -1761,12 +1765,16 @@ export const assertStringExpression: (
 export const isStringExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => x is Extract<Expressions, { type: StringExpressions }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): x is Extract<Expressions, { type: StringExpressions }> => {
   try {
-    assertStringExpression(x, columnList);
+    assertStringExpression(x, columnList, depth, maxDepth);
     return true;
   } catch {
     return false;

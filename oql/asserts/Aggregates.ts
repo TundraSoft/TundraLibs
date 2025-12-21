@@ -103,6 +103,7 @@ const validateColumnOrExpression = (
   aggregateType: string,
   columnList?: string[],
   requireNumeric?: boolean,
+  depth = 0,
 ): void => {
   if (typeof column === 'string') {
     if (column.startsWith('@')) {
@@ -119,12 +120,12 @@ const validateColumnOrExpression = (
       );
     }
   } else if (typeof column === 'object' && column !== null) {
-    // Validate as expression
+    // Validate as expression with depth tracking
     try {
       if (requireNumeric) {
-        assertNumericExpression(column, columnList);
+        assertNumericExpression(column, columnList, depth);
       } else {
-        assertExpression(column, columnList);
+        assertExpression(column, columnList, depth);
       }
     } catch (error) {
       throw new TypeError(

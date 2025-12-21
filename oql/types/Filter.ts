@@ -32,13 +32,75 @@ export type Operators<T extends ColumnTypes = ColumnTypes> =
         : never
     );
 
+type ExpressionOperators<
+  T extends TableType = TableType,
+  FT extends FlattenEntity<T, '', '@'> = FlattenEntity<T, '', '@'>,
+  C extends keyof FT = keyof FT,
+> =
+  & {
+    // Equality operators - available for all types
+    $eq?: Extract<Expressions<T, FT>, { type: GetExpressionByType<FT[C]> }>;
+    $ne?: Extract<Expressions<T, FT>, { type: GetExpressionByType<FT[C]> }>;
+  }
+  & (
+    // Comparison operators for numeric and date types
+    FT[C] extends number | Date | bigint ? {
+        $gt?: Extract<Expressions<T, FT>, { type: GetExpressionByType<FT[C]> }>;
+        $gte?: Extract<
+          Expressions<T, FT>,
+          { type: GetExpressionByType<FT[C]> }
+        >;
+        $lt?: Extract<Expressions<T, FT>, { type: GetExpressionByType<FT[C]> }>;
+        $lte?: Extract<
+          Expressions<T, FT>,
+          { type: GetExpressionByType<FT[C]> }
+        >;
+      }
+      : Record<PropertyKey, never>
+  )
+  & (
+    // String operators for string types
+    FT[C] extends string ? {
+        $like?: Extract<
+          Expressions<T, FT>,
+          { type: GetExpressionByType<FT[C]> }
+        >;
+        $nlike?: Extract<
+          Expressions<T, FT>,
+          { type: GetExpressionByType<FT[C]> }
+        >;
+        $ilike?: Extract<
+          Expressions<T, FT>,
+          { type: GetExpressionByType<FT[C]> }
+        >;
+        $nilike?: Extract<
+          Expressions<T, FT>,
+          { type: GetExpressionByType<FT[C]> }
+        >;
+        $startsWith?: Extract<
+          Expressions<T, FT>,
+          { type: GetExpressionByType<FT[C]> }
+        >;
+        $endsWith?: Extract<
+          Expressions<T, FT>,
+          { type: GetExpressionByType<FT[C]> }
+        >;
+        $contains?: Extract<
+          Expressions<T, FT>,
+          { type: GetExpressionByType<FT[C]> }
+        >;
+      }
+      : Record<PropertyKey, never>
+  );
+
 export type FilterOperator<
   T extends TableType = TableType,
   FT extends FlattenEntity<T, '', '@'> = FlattenEntity<T, '', '@'>,
 > = {
   [K in keyof FT]?: FT[K] extends ColumnTypes ? (
       | Operators<FT[K]>
-      | Extract<Expressions<T, FT>, { type: GetExpressionByType<FT[K]> }>
+      | ExpressionOperators<T, FT, K>
+      //| Extract<Expressions<T, FT>, { type: GetExpressionByType<FT[K]> }>
     )
     : never;
 };

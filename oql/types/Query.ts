@@ -211,14 +211,59 @@ export type QueryTypes = DMLQueries | DDLQueries;
  * - **HAVING**: Post-aggregation filtering (after implicit GROUP BY)
  * - **Implicit GROUP BY**: Any column not in an aggregate function is automatically grouped
  *
- * ### Column References:
+ * ### Column References - The @ Prefix Pattern:
  *
- * All column references use `ColumnIdentifier` pattern:
- * - Simple: `@columnName`
- * - Qualified: `@tableName.@columnName`
- * - Nested: `@table.@column.@jsonKey.@subKey`
+ * **IMPORTANT**: The `@` prefix is used ONLY where ambiguity exists between
+ * column references and literal values. This keeps the API clean and intuitive.
  *
- * This ensures consistency across projections, filters, joins, and ordering.
+ * **When to use @ prefix**:
+ * - ✅ In filters (WHERE/HAVING): `where: { '@status': 'active' }`
+ * - ✅ In joins: `on: { '@Profile.@userId': '@id' }`
+ * - ✅ In expressions: `{ type: 'ADD', args: ['@price', '@tax'] }`
+ * - ✅ In aggregates: `{ type: 'SUM', column: '@amount' }`
+ * - ✅ In projections: `projection: { userId: '@id' }`
+ * - ✅ In orderBy: `orderBy: { '@createdAt': 'DESC' }`
+ *
+ * **When NOT to use @ prefix**:
+ * - ❌ In `columns` property: `columns: ['id', 'name']` (schema definition)
+ * - ❌ In `data` keys: `data: { name: 'John' }` (plain object keys)
+ * - ❌ In `conflictKeys`: `conflictKeys: ['id']` (plain keys)
+ * - ❌ In `primaryKey`: `primaryKey: ['id']` (plain keys)
+ *
+ * **ColumnIdentifier Patterns**:
+ * - Simple: `@columnName` - References a column in the primary table
+ * - Qualified: `@tableName.@columnName` - References a column in a joined table
+ * - Nested (JSON): `@table.@column.@jsonKey.@subKey` - References nested JSON properties
+ *
+ * This pattern ensures type safety and clarity:
+ * - Schema definitions use plain keys (what columns exist)
+ * - Value references use @ prefix (distinguishing from literal strings)
+ *
+ * @example
+ * ```typescript
+ * const query: Query<'SELECT', User> = {
+ *   type: 'SELECT',
+ *   table: 'users',
+ *   columns: ['id', 'name', 'email'],  // ✅ Plain keys (schema)
+ *   projection: {                       // ✅ @ prefix (references)
+ *     userId: '@id',
+ *     userName: '@name'
+ *   },
+ *   where: { '@status': 'active' },    // ✅ @ prefix (references)
+ *   orderBy: { '@createdAt': 'DESC' }  // ✅ @ prefix (references)
+ * };
+ *
+ * const insertQuery: Query<'INSERT', User> = {
+ *   type: 'INSERT',
+ *   table: 'users',
+ *   columns: ['id', 'name', 'email'],  // ✅ Plain keys (schema)
+ *   data: {                             // ✅ Plain keys (data)
+ *     id: 1,
+ *     name: 'John',
+ *     email: 'john@example.com'
+ *   }
+ * };
+ * ```
  *
  * @example
  * ```typescript
@@ -263,15 +308,42 @@ export type Query<
           /** Optional schema/namespace for the table */
           schema?: string;
           /**
-           * Column identifiers for the operation.
+           * Available columns schema definition (plain keys, no @ prefix).
            *
-           * - **SELECT**: Columns to project in the result. If omitted in practice, all columns are selected (SELECT *)
-           * - **INSERT/UPSERT**: Columns that will be inserted (must match data keys)
-           * - **UPDATE**: Columns that can be updated (constrains data keys)
-           * - **DELETE**: Columns available for filtering in WHERE clause
-           * - **COUNT**: Columns available for filtering and grouping
+           * **Purpose**: Defines which columns exist in the source table for validation.
+           * This schema is used across ALL query types to validate column references
+           * in filters, joins, expressions, aggregates, and data operations.
            *
-           * Uses ColumnIdentifier pattern: `@column` or `@table.@column`.
+           * **Consistent Role Across All Query Types**:
+           * - Validates `@column` references in WHERE/HAVING clauses
+           * - Validates `@column` references in JOIN conditions
+           * - Validates `@column` references inside Expressions/Aggregates
+           * - Validates `data` keys (INSERT/UPDATE/UPSERT)
+           * - Validates projection references (SELECT)
+           *
+           * **Query-Specific Notes**:
+           * - **SELECT**: Source schema for validation; actual output defined by `projection`
+           * - **INSERT/UPSERT**: Inserted columns must match these keys
+           * - **UPDATE**: Updated columns must be subset of these keys
+           * - **DELETE/COUNT**: Used purely for validation (no data modification)
+           *
+           * **Important**: Always uses plain keys `['id', 'name', 'email']`.
+           * The `@` prefix is ONLY used in column references (filters, joins, expressions)
+           * to differentiate column identifiers from literal string values.
+           *
+           * @example
+           * ```typescript
+           * // ✅ Correct - Plain keys for schema definition
+           * columns: ['id', 'name', 'email', 'createdAt', 'updatedAt']
+           *
+           * // Then use @ prefix when referencing these columns:
+           * where: { '@status': 'active' }           // ✅ Filter reference
+           * projection: { userId: '@id' }            // ✅ Projection reference
+           * data: { name: 'John' }                   // ✅ Data keys (no @)
+           *
+           * // ❌ Wrong - Don't use @ prefix in columns
+           * columns: ['@id', '@name']  // Will cause type errors
+           * ```
            */
           columns: Array<keyof PT>;
         }
@@ -279,26 +351,168 @@ export type Query<
           QT extends 'INSERT' ? {
               /**
                * Row(s) to insert - single object or array of objects.
-               * Values can be direct values or expressions that return the matching type.
+               *
+               * **Keys**: Plain column names (must match `columns` definition)
+               * **Values**: Can be:
+               * - Direct literal values: `name: 'John'`, `age: 30`
+               * - Expressions: `createdAt: { type: 'NOW' }`
+               * - Computed expressions: `total: { type: 'ADD', args: ['@price', '@tax'] }`
+               *
+               * **Important**: Keys are plain strings (no @ prefix).
+               * The `@` prefix is used INSIDE expressions to reference other columns.
+               *
+               * @example
+               * ```typescript
+               * // Single row with literals
+               * data: {
+               *   id: 1,
+               *   name: 'John',
+               *   email: 'john@example.com'
+               * }
+               *
+               * // With expressions
+               * data: {
+               *   id: 1,
+               *   name: 'John',
+               *   createdAt: { type: 'NOW' },
+               *   fullName: { type: 'CONCAT', args: ['John', ' ', 'Doe'] }
+               * }
+               *
+               * // Multiple rows
+               * data: [
+               *   { id: 1, name: 'John' },
+               *   { id: 2, name: 'Jane' }
+               * ]
+               * ```
                */
               data: DataWithExpressions<PT> | Array<DataWithExpressions<PT>>;
             }
             : QT extends 'UPSERT' ? {
                 /**
                  * Row(s) to insert or update - single object or array of objects.
-                 * Values can be direct values or expressions that return the matching type.
+                 *
+                 * **Keys**: Plain column names (must match `columns` definition)
+                 * **Values**: Can be:
+                 * - Direct literal values: `name: 'John'`, `age: 30`
+                 * - Expressions: `createdAt: { type: 'NOW' }`
+                 * - Computed expressions: `total: { type: 'ADD', args: ['@price', '@tax'] }`
+                 *
+                 * **On INSERT**: All fields from `data` are inserted.
+                 * **On UPDATE (conflict)**: By default, all fields except `conflictKeys` are updated.
+                 * Override this behavior with `updateOnConflict` for partial updates.
+                 *
+                 * @example
+                 * ```typescript
+                 * // Full data for insert, all fields updated on conflict (except id)
+                 * data: {
+                 *   id: 1,
+                 *   name: 'John',
+                 *   email: 'john@example.com',
+                 *   createdAt: { type: 'NOW' }
+                 * }
+                 *
+                 * // Multiple rows
+                 * data: [
+                 *   { id: 1, name: 'John', email: 'john@example.com' },
+                 *   { id: 2, name: 'Jane', email: 'jane@example.com' }
+                 * ]
+                 * ```
                  */
                 data: DataWithExpressions<PT> | Array<DataWithExpressions<PT>>;
                 /**
                  * Column(s) to check for conflicts.
-                 * If a row with these key values exists, UPDATE is performed instead of INSERT.
+                 *
+                 * When a row with matching values for these columns already exists,
+                 * an UPDATE is performed instead of INSERT.
+                 *
+                 * **Important**: Plain column names (no @ prefix).
+                 *
+                 * @example
+                 * ```typescript
+                 * // Single key conflict (most common)
+                 * conflictKeys: ['id']
+                 *
+                 * // Composite key conflict
+                 * conflictKeys: ['userId', 'productId']
+                 *
+                 * // Unique constraint conflict
+                 * conflictKeys: ['email']
+                 * ```
                  */
                 conflictKeys: Array<keyof PT>;
+                /**
+                 * Optional: Specify which fields to update when conflict occurs.
+                 *
+                 * **When omitted**: All fields from `data` (except `conflictKeys`) are updated.
+                 * **When provided**: Only specified fields are updated on conflict.
+                 *
+                 * **Use Cases**:
+                 * - Preserve original timestamps: Don't update `createdAt`
+                 * - Increment counters: Update `viewCount` but not other fields
+                 * - Set different values on update vs insert
+                 *
+                 * **Keys**: Plain column names (subset of `columns` definition)
+                 * **Values**: Same as `data` - literals or expressions
+                 *
+                 * @example
+                 * ```typescript
+                 * // Insert full data, but only update name and updatedAt on conflict
+                 * {
+                 *   data: {
+                 *     id: 1,
+                 *     name: 'John',
+                 *     email: 'john@example.com',
+                 *     createdAt: { type: 'NOW' }
+                 *   },
+                 *   conflictKeys: ['id'],
+                 *   updateOnConflict: {
+                 *     name: 'John',
+                 *     updatedAt: { type: 'NOW' }
+                 *     // email and createdAt NOT updated - keeps original values
+                 *   }
+                 * }
+                 *
+                 * // Increment counter on conflict
+                 * {
+                 *   data: { userId: 1, productId: 5, viewCount: 1 },
+                 *   conflictKeys: ['userId', 'productId'],
+                 *   updateOnConflict: {
+                 *     viewCount: { type: 'ADD', args: ['@viewCount', 1] }
+                 *   }
+                 * }
+                 * ```
+                 */
+                updateOnConflict?: PartialDataWithExpressions<PT>;
               }
             : QT extends 'UPDATE' ? {
                 /**
                  * Partial row data with columns to update.
-                 * Values can be direct values or expressions that return the matching type.
+                 *
+                 * **Keys**: Plain column names (subset of `columns` definition)
+                 * **Values**: Can be:
+                 * - Direct literal values: `name: 'Jane'`, `age: 31`
+                 * - Expressions: `updatedAt: { type: 'NOW' }`
+                 * - Computed expressions: `total: { type: 'ADD', args: ['@price', '@tax'] }`
+                 *
+                 * **Important**: Only specify columns you want to update (partial update).
+                 * Keys are plain strings (no @ prefix). The `@` prefix is used INSIDE
+                 * expressions to reference columns.
+                 *
+                 * @example
+                 * ```typescript
+                 * // Update with literals
+                 * data: {
+                 *   name: 'Jane',
+                 *   age: 31
+                 * }
+                 *
+                 * // Update with expressions
+                 * data: {
+                 *   name: 'Jane',
+                 *   updatedAt: { type: 'NOW' },
+                 *   viewCount: { type: 'ADD', args: ['@viewCount', 1] }  // Increment
+                 * }
+                 * ```
                  */
                 data: PartialDataWithExpressions<PT>;
                 /**
@@ -315,7 +529,46 @@ export type Query<
                 where?: QueryFilter<PT>;
               }
             : QT extends 'SELECT' ? {
-                projection?: Record<
+                /**
+                 * Output projection - REQUIRED for SELECT queries.
+                 *
+                 * Defines what to actually select and how to compute/transform the output.
+                 * Keys are output field names, values can be:
+                 * - Simple column references: `'@columnName'` or `'@Table.@column'`
+                 * - Aggregate functions: `{ type: 'COUNT', column: '@id' }`
+                 * - Expressions: `{ type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] }`
+                 *
+                 * **Why mandatory?**: Forces explicit selection, enables type-safe output,
+                 * and allows computed fields/aggregates alongside regular columns.
+                 *
+                 * **Column References**: Use `@` prefix to reference columns (distinguishes
+                 * from literal strings). Available columns come from the `columns` property.
+                 *
+                 * @example
+                 * ```typescript
+                 * // Simple column selection
+                 * projection: {
+                 *   userId: '@id',
+                 *   userName: '@name'
+                 * }
+                 *
+                 * // With computed fields and aggregates
+                 * projection: {
+                 *   id: '@id',
+                 *   fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] },
+                 *   orderCount: { type: 'COUNT', column: '@Order.@id' },
+                 *   total: { type: 'SUM', column: '@Order.@amount' }
+                 * }
+                 *
+                 * // With joined table columns
+                 * projection: {
+                 *   userName: '@name',
+                 *   profileBio: '@Profile.@bio',
+                 *   profileEmail: '@Profile.@email'
+                 * }
+                 * ```
+                 */
+                projection: Record<
                   string,
                   | keyof FlattenEntity<PT, '', '@'>
                   | Aggregates<PT & LT>
@@ -328,8 +581,30 @@ export type Query<
                 joins?: Joins<PT, LT>;
                 /**
                  * Optional filter condition for rows (pre-aggregation).
+                 *
+                 * Filters are applied BEFORE any aggregation occurs.
+                 * Column references use `@` prefix to differentiate from literal values.
                  * Supports filtering on both primary table and joined table columns.
-                 * Uses ColumnIdentifier pattern with flattened linked tables.
+                 *
+                 * @example
+                 * ```typescript
+                 * // Simple filter
+                 * where: { '@status': 'active', '@age': { $gte: 18 } }
+                 *
+                 * // With joined tables
+                 * where: {
+                 *   '@status': 'active',
+                 *   '@Profile.@verified': true
+                 * }
+                 *
+                 * // Complex filters with logical operators
+                 * where: {
+                 *   $or: [
+                 *     { '@role': 'admin' },
+                 *     { '@role': 'moderator' }
+                 *   ]
+                 * }
+                 * ```
                  */
                 where?: QueryFilter<PT & FlattenEntity<LT, '', '@'>>;
                 /** Maximum number of rows to return */
@@ -355,16 +630,51 @@ export type Query<
                 /**
                  * Optional join definitions for linking related tables.
                  * Allows counting rows with join conditions.
+                 *
+                 * @example
+                 * ```typescript
+                 * joins: {
+                 *   Profile: {
+                 *     table: 'profiles',
+                 *     type: 'LEFT',
+                 *     on: { '@Profile.@userId': '@id' }
+                 *   }
+                 * }
+                 * ```
                  */
                 joins?: Joins<PT, LT>;
                 /**
                  * Optional filter condition for rows (pre-aggregation).
+                 *
                  * Determines which rows to include in the count.
+                 * Column references use `@` prefix (validated against `columns` schema).
+                 *
+                 * @example
+                 * ```typescript
+                 * // Count active users
+                 * where: { '@status': 'active' }
+                 *
+                 * // Count with joined table filter
+                 * where: {
+                 *   '@status': 'active',
+                 *   '@Profile.@verified': true
+                 * }
+                 * ```
                  */
                 where?: QueryFilter<PT & FlattenEntity<LT, '', '@'>>;
                 /**
                  * Optional post-aggregation filter (after implicit GROUP BY).
-                 * Used when counting grouped results.
+                 *
+                 * Used when counting grouped results. Applied AFTER grouping.
+                 * Column references use `@` prefix (validated against `columns` schema).
+                 *
+                 * @example
+                 * ```typescript
+                 * // Count users per department with more than 10 members
+                 * having: {
+                 *   '@count': { $gt: 10 }
+                 * }
+                 * ```
                  */
                 having?: QueryFilter<PT & FlattenEntity<LT, '', '@'>>;
               }

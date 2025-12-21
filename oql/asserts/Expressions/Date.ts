@@ -549,9 +549,13 @@ export const isDateAddExpression = (
 export const assertDateExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => asserts x is Extract<Expressions, { type: DateExpressions }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): asserts x is Extract<Expressions, { type: DateExpressions }> => {
   assertBaseExpression(x);
   if (x.type === 'NOW') {
@@ -625,12 +629,16 @@ export const assertDateExpression: (
 export const isDateExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => x is Extract<Expressions, { type: DateExpressions }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): x is Extract<Expressions, { type: DateExpressions }> => {
   try {
-    assertDateExpression(x, columnList);
+    assertDateExpression(x, columnList, depth, maxDepth);
     return true;
   } catch {
     return false;

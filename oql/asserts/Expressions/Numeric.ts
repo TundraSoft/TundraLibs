@@ -1339,9 +1339,13 @@ export const isDateDiffExpression: (
 export const assertNumericExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => asserts x is Extract<Expressions, { type: NumericExpressions }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): asserts x is Extract<Expressions, { type: NumericExpressions }> => {
   assertBaseExpression(x);
   if (x.type === 'ADD') {
@@ -1442,12 +1446,16 @@ export const assertNumericExpression: (
 export const isNumericExpression: (
   x: unknown,
   columnList?: string[],
+  depth?: number,
+  maxDepth?: number,
 ) => x is Extract<Expressions, { type: NumericExpressions }> = (
   x: unknown,
   columnList?: string[],
+  depth = 0,
+  maxDepth = 10,
 ): x is Extract<Expressions, { type: NumericExpressions }> => {
   try {
-    assertNumericExpression(x, columnList);
+    assertNumericExpression(x, columnList, depth, maxDepth);
     return true;
   } catch {
     return false;

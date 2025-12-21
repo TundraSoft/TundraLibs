@@ -145,9 +145,9 @@ export type GetExpressionByType<V> = V extends number | bigint
  *
  * ### Utility Functions
  * - `UUID`: Generate UUID v4
- * - `COALESCE`: Return first non-null value
- * - `NULLIF`: Return null if values are equal
- * - `CAST`: Convert between types
+ * - `COALESCE`: Return first non-null value (TODO: Complex to implement, commented out for now)
+ * - `NULLIF`: Return null if values are equal (TODO: Complex to implement, commented out for now)
+ * - `CAST`: Convert between types (TODO: Complex to implement, commented out for now)
  *
  * ## Usage Examples
  *
@@ -171,11 +171,11 @@ export type GetExpressionByType<V> = V extends number | bigint
  *   args: { date: '@createdAt', amount: 30 }
  * };
  *
- * // Conditional
- * const displayName: Expression = {
- *   type: 'COALESCE',
- *   args: ['@nickname', '@firstName', 'Guest']
- * };
+ * // Conditional (TODO: COALESCE temporarily commented out)
+ * // const displayName: Expression = {
+ * //   type: 'COALESCE',
+ * //   args: ['@nickname', '@firstName', 'Guest']
+ * // };
  * ```
  *
  * ## Database Compatibility
@@ -405,31 +405,33 @@ export type Expressions<
    */
   type: 'HASH';
   args: keyof FT | string | number | bigint | Date | boolean;
-} | {
-  /**
-   * Coalesce: returns the first non-null value from the list of arguments.
-   * Useful for providing default values.
-   */
-  type: 'COALESCE';
-  args: Array<keyof FT | string | number | bigint | Date | boolean | null>;
-} | {
-  /**
-   * Null if: returns null if both arguments are equal, otherwise returns first argument.
-   * Useful for converting specific values to null.
-   */
-  type: 'NULLIF';
-  args: [
-    keyof FT | string | number | bigint | Date | boolean,
-    keyof FT | string | number | bigint | Date | boolean,
-  ];
-} | {
-  /**
-   * Cast: converts a value to a different type.
-   * Supported target types: STRING, NUMBER, BIGINT, DATE, BOOLEAN
-   */
-  type: 'CAST';
-  args: {
-    value: keyof FT | string | number | bigint | Date | boolean;
-    targetType: 'STRING' | 'NUMBER' | 'BIGINT' | 'DATE' | 'BOOLEAN';
-  };
 };
+// TODO: Complex to implement - commented out for now
+// | {
+//   /**
+//    * Coalesce: returns the first non-null value from the list of arguments.
+//    * Useful for providing default values.
+//    */
+//   type: 'COALESCE';
+//   args: Array<keyof FT | string | number | bigint | Date | boolean | null>;
+// } | {
+//   /**
+//    * Null if: returns null if both arguments are equal, otherwise returns first argument.
+//    * Useful for converting specific values to null.
+//    */
+//   type: 'NULLIF';
+//   args: [
+//     keyof FT | string | number | bigint | Date | boolean,
+//     keyof FT | string | number | bigint | Date | boolean,
+//   ];
+// } | {
+//   /**
+//    * Cast: converts a value to a different type.
+//    * Supported target types: STRING, NUMBER, BIGINT, DATE, BOOLEAN
+//    */
+//   type: 'CAST';
+//   args: {
+//     value: keyof FT | string | number | bigint | Date | boolean;
+//     targetType: 'STRING' | 'NUMBER' | 'BIGINT' | 'DATE' | 'BOOLEAN';
+//   };
+// };
