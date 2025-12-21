@@ -380,7 +380,7 @@ const derToPem = (der: ArrayBuffer, type: string): string => {
 export const generateRSAEncryptionKeys = (
   keySize: RSAKeySize = 2048,
   format?: KeyFormat,
-) =>
+): Promise<GeneratedKeyPair> =>
   generateRSAKeyPair({
     algorithm: 'RSA-OAEP',
     keySize,
@@ -391,7 +391,7 @@ export const generateRSAEncryptionKeys = (
 export const generateRSASigningKeys = (
   keySize: RSAKeySize = 2048,
   format?: KeyFormat,
-) =>
+): Promise<GeneratedKeyPair> =>
   generateRSAKeyPair({
     algorithm: 'RSA-PSS',
     keySize,
@@ -402,7 +402,7 @@ export const generateRSASigningKeys = (
 export const generateECDSAKeys = (
   curve: EllipticCurve = 'P-256',
   format?: KeyFormat,
-) =>
+): Promise<GeneratedKeyPair> =>
   generateECKeyPair({
     algorithm: 'ECDSA',
     curve,
@@ -412,7 +412,7 @@ export const generateECDSAKeys = (
 export const generateECDHKeys = (
   curve: EllipticCurve = 'P-256',
   format?: KeyFormat,
-) =>
+): Promise<GeneratedKeyPair> =>
   generateECKeyPair({
     algorithm: 'ECDH',
     curve,

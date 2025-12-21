@@ -2368,12 +2368,25 @@ const mnemonicToEntropy = async (
 export const generateSeedPhrase = (
   wordCount: BIP39WordCount = 12,
   passphrase?: string,
-) => generateBIP39Mnemonic({ wordCount, passphrase });
+): Promise<{
+  words: string[];
+  phrase: string;
+  entropy: Uint8Array;
+  seed: Uint8Array;
+}> => generateBIP39Mnemonic({ wordCount, passphrase });
 
-export const generate12WordSeed = (passphrase?: string) =>
-  generateBIP39Mnemonic({ wordCount: 12, passphrase });
+export const generate12WordSeed = (passphrase?: string): Promise<{
+  words: string[];
+  phrase: string;
+  entropy: Uint8Array;
+  seed: Uint8Array;
+}> => generateBIP39Mnemonic({ wordCount: 12, passphrase });
 
-export const generate24WordSeed = (passphrase?: string) =>
-  generateBIP39Mnemonic({ wordCount: 24, passphrase });
+export const generate24WordSeed = (passphrase?: string): Promise<{
+  words: string[];
+  phrase: string;
+  entropy: Uint8Array;
+  seed: Uint8Array;
+}> => generateBIP39Mnemonic({ wordCount: 24, passphrase });
 
 export const validateSeedPhrase = validateBIP39Mnemonic;
