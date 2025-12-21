@@ -1,8 +1,11 @@
 # Crypt Module
 
-A comprehensive, zero-dependency cryptographic library for Deno/TypeScript that provides secure encryption, hashing, JWT handling, one-time passwords, and cryptographic key/secret generation using the native Web Crypto API.
+A comprehensive, zero-dependency cryptographic library for Deno/TypeScript that
+provides secure encryption, hashing, JWT handling, one-time passwords, and
+cryptographic key/secret generation using the native Web Crypto API.
 
 **Features:**
+
 - 🔐 AES encryption with multiple modes (GCM, CBC, CTR)
 - 🏗️ SHA-1, SHA-2 family digest functions
 - 🔑 RSA, ECDSA, and ECDH key pair generation
@@ -37,22 +40,22 @@ import * as crypt from './mod.ts';
 
 // Or import specific functions
 import {
-  // Digest
-  sha256,
-  sha512,
+  decryptAES,
   // Encryption
   encryptAES,
-  decryptAES,
+  generateBIP39Mnemonic,
   // Generators
   generateHexSecret,
   generateRSAKeyPair,
-  generateBIP39Mnemonic,
-  // JWT
-  issueJWT,
-  verifyJWT,
-  refreshJWT,
   // OTP
   generateTOTP,
+  // JWT
+  issueJWT,
+  refreshJWT,
+  // Digest
+  sha256,
+  sha512,
+  verifyJWT,
   verifyTOTP,
 } from './mod.ts';
 
@@ -110,7 +113,8 @@ console.log(hash); // Hex-encoded SHA-256 hash
 
 #### `sha1(data: string | ArrayBuffer | Uint8Array): Promise<string>`
 
-Compute SHA-1 digest (160-bit). **Not recommended for security-critical applications.**
+Compute SHA-1 digest (160-bit). **Not recommended for security-critical
+applications.**
 
 #### `sha256(data: string | ArrayBuffer | Uint8Array): Promise<string>`
 
@@ -146,9 +150,11 @@ if (checksum === newChecksum) {
 
 ### Caveats
 
-- **SHA-1** is cryptographically broken and should only be used for non-security purposes (e.g., Git commits)
+- **SHA-1** is cryptographically broken and should only be used for non-security
+  purposes (e.g., Git commits)
 - All functions return **hex-encoded** strings, not raw bytes
-- For password hashing, use specialized algorithms like bcrypt or Argon2, not raw SHA functions
+- For password hashing, use specialized algorithms like bcrypt or Argon2, not
+  raw SHA functions
 
 ---
 
@@ -159,7 +165,7 @@ AES encryption for confidential data protection.
 ### Quickstart
 
 ```typescript
-import { encryptAES, decryptAES } from './crypt/mod.ts';
+import { decryptAES, encryptAES } from './crypt/mod.ts';
 
 // Generate key
 const key = await crypto.subtle.generateKey(
@@ -234,7 +240,7 @@ Generate cryptographically secure random secrets.
 #### Quickstart
 
 ```typescript
-import { generateHexSecret, generateBase32Secret } from './generators/mod.ts';
+import { generateBase32Secret, generateHexSecret } from './generators/mod.ts';
 
 const apiKey = generateHexSecret(32); // 64-char hex string
 const totpSecret = generateBase32Secret(20); // Base32 for OTP apps
@@ -252,7 +258,8 @@ Generate base64-encoded secret. Compact representation.
 
 ##### `generateBase32Secret(byteLength: number): string`
 
-Generate base32-encoded secret. Ideal for TOTP/HOTP (Google Authenticator compatible).
+Generate base32-encoded secret. Ideal for TOTP/HOTP (Google Authenticator
+compatible).
 
 ##### `generateAlphanumericSecret(length: number): string`
 
@@ -303,7 +310,7 @@ Generate RSA, ECDSA, and ECDH key pairs.
 #### Quickstart
 
 ```typescript
-import { generateRSAKeyPair, generateECKeyPair } from './generators/mod.ts';
+import { generateECKeyPair, generateRSAKeyPair } from './generators/mod.ts';
 
 // RSA keys for signatures/encryption
 const rsa = await generateRSAKeyPair({ format: 'PEM' });
@@ -319,6 +326,7 @@ const ec = await generateECKeyPair({ namedCurve: 'P-256', format: 'JWK' });
 Generate RSA key pair.
 
 **Options:**
+
 - `modulusLength`: 1024, 2048, 3072, 4096 (default: 2048)
 - `format`: 'PEM' | 'JWK' | 'raw' (default: 'JWK')
 - `publicExponent`: Uint8Array (default: 65537)
@@ -328,6 +336,7 @@ Generate RSA key pair.
 Generate Elliptic Curve key pair (ECDSA or ECDH).
 
 **Options:**
+
 - `namedCurve`: 'P-256' | 'P-384' | 'P-521' (default: 'P-256')
 - `format`: 'PEM' | 'JWK' | 'raw' (default: 'JWK')
 - `algorithm`: 'ECDSA' | 'ECDH' (default: 'ECDSA')
@@ -374,8 +383,8 @@ Generate and validate BIP39 mnemonic seed phrases.
 
 ```typescript
 import {
-  generateBIP39Mnemonic,
   generate12WordSeed,
+  generateBIP39Mnemonic,
   validateBIP39Mnemonic,
 } from './generators/mod.ts';
 
@@ -396,6 +405,7 @@ const isValid = await validateBIP39Mnemonic(
 Generate BIP39 mnemonic with custom options.
 
 **Options:**
+
 - `wordCount`: 12, 15, 18, 21, 24 (default: 12)
 - `passphrase`: Optional additional passphrase (default: '')
 - `wordlist`: Optional custom 2048-word array
@@ -441,7 +451,8 @@ async function validateRecoveryPhrase(userInput: string) {
 - **12 words** = 128-bit entropy; **24 words** = 256-bit entropy
 - Passphrases add security but if forgotten, seed is unrecoverable
 - BIP39 uses checksums - validation catches typos
-- Standard English wordlist is included; custom wordlists must be exactly 2048 words
+- Standard English wordlist is included; custom wordlists must be exactly 2048
+  words
 - Seed bytes (512-bit) are derived using PBKDF2-HMAC-SHA512
 
 ---
@@ -477,6 +488,7 @@ if (result.valid) {
 Create signed JWT token.
 
 **Parameters:**
+
 - `payload`: Object with claims (avoid sensitive data)
 - `key`: String (HMAC) or CryptoKey (RSA private key)
 - `options`:
@@ -493,6 +505,7 @@ Create signed JWT token.
 Verify and decode JWT token.
 
 **Parameters:**
+
 - `token`: JWT string to verify
 - `key`: String (HMAC) or CryptoKey (RSA public key)
 - `options`:
@@ -508,6 +521,7 @@ Verify and decode JWT token.
 Refresh token with updated timestamps.
 
 **Parameters:**
+
 - `token`: Existing valid JWT
 - `key`: String (HMAC) or `RefreshKeyConfig` (RSA: `{ verifyKey, signKey }`)
 - `expiresIn`: Optional new expiration (uses original if omitted)
@@ -568,8 +582,8 @@ const customRefresh = await refreshJWT(token, 'my-secret-key', '2h');
 // Refresh RSA token (requires both keys)
 import type { RefreshKeyConfig } from './JWT/mod.ts';
 const rsaConfig: RefreshKeyConfig = {
-  verifyKey: keyPair.publicKey,  // Verify old token
-  signKey: keyPair.privateKey,   // Sign new token
+  verifyKey: keyPair.publicKey, // Verify old token
+  signKey: keyPair.privateKey, // Sign new token
 };
 const refreshedRSA = await refreshJWT(rsaToken, rsaConfig, '24h');
 
@@ -583,15 +597,16 @@ console.log('Expires:', new Date(decoded.payload.exp * 1000));
 
 Based on benchmarks with 2048-bit RSA keys:
 
-| Operation | HMAC (HS256) | RSA (RS256) |
-|-----------|--------------|-------------|
-| Issue | ~51 µs | ~1.5 ms |
-| Verify | ~48 µs | ~270 µs |
-| Decode | ~7 µs | ~7 µs |
-| Refresh | ~113 µs | ~1.8 ms |
-| Round-trip | ~99 µs | ~1.7 ms |
+| Operation  | HMAC (HS256) | RSA (RS256) |
+| ---------- | ------------ | ----------- |
+| Issue      | ~51 µs       | ~1.5 ms     |
+| Verify     | ~48 µs       | ~270 µs     |
+| Decode     | ~7 µs        | ~7 µs       |
+| Refresh    | ~113 µs      | ~1.8 ms     |
+| Round-trip | ~99 µs       | ~1.7 ms     |
 
-**Recommendation:** HMAC for internal services; RSA when public key distribution is needed.
+**Recommendation:** HMAC for internal services; RSA when public key distribution
+is needed.
 
 ### Caveats
 
@@ -599,7 +614,8 @@ Based on benchmarks with 2048-bit RSA keys:
 - **RSA** requires proper key pair management - never expose private key
 - Token size: HMAC ~150 bytes, RSA ~350 bytes (larger signatures)
 - `refreshJWT` preserves all original claims except exp, iat, nbf
-- For RSA refresh, must provide `RefreshKeyConfig` with separate verify/sign keys
+- For RSA refresh, must provide `RefreshKeyConfig` with separate verify/sign
+  keys
 - `decodeJWT` does **not** verify signatures - only use for inspection
 - Always validate critical claims (iss, aud, sub) in production
 - Use clock tolerance for distributed systems with time skew
@@ -630,6 +646,7 @@ const isValid = await verifyTOTP(code, secret);
 Generate Time-based OTP.
 
 **Parameters:**
+
 - `key`: Secret key (minimum 16 characters)
 - `options`:
   - `epoch`: Time in milliseconds (default: `Date.now()`)
@@ -642,6 +659,7 @@ Generate Time-based OTP.
 Verify Time-based OTP with time window.
 
 **Parameters:**
+
 - `otp`: OTP code to verify
 - `key`: Secret key
 - `options`:
@@ -653,6 +671,7 @@ Verify Time-based OTP with time window.
 Generate Counter-based OTP.
 
 **Parameters:**
+
 - `key`: Secret key (minimum 16 characters)
 - `counter`: Counter value (non-negative integer)
 - `options`:
@@ -668,6 +687,7 @@ Verify Counter-based OTP.
 Generate `otpauth://` URL for QR codes (Google Authenticator compatible).
 
 **Options:**
+
 - `type`: 'totp' | 'hotp'
 - `secret`: Base32-encoded secret
 - `accountName`: User account identifier
@@ -739,7 +759,8 @@ async function generateRecoveryCode() {
 - **HOTP counter** must be synchronized between client and server
 - **Secret length**: Minimum 16 characters (128-bit security)
 - **Base32 encoding**: Required for authenticator apps (Google Authenticator)
-- **SHA-1** is default for authenticator compatibility; use SHA-256 for new systems
+- **SHA-1** is default for authenticator compatibility; use SHA-256 for new
+  systems
 - OTP codes are **not** padded with leading zeros - ensure string comparison
 - Time sync is critical for TOTP - use NTP in production
 
@@ -775,15 +796,15 @@ deno bench JWT/JWT.bench.ts --allow-all
 
 Current test coverage (as of latest run):
 
-| Module | Branch | Line |
-|--------|--------|------|
-| **Overall** | 93.3% | 74.7% |
-| JWT/Error.ts | 100% | 100% |
-| JWT/helpers.ts | 100% | 100% |
-| JWT/issue.ts | 84.6% | 72.7% |
-| JWT/verify.ts | 85.7% | 86.4% |
-| OTP/HOTP.ts | 100% | 100% |
-| OTP/TOTP.ts | 100% | 100% |
+| Module         | Branch | Line  |
+| -------------- | ------ | ----- |
+| **Overall**    | 93.3%  | 74.7% |
+| JWT/Error.ts   | 100%   | 100%  |
+| JWT/helpers.ts | 100%   | 100%  |
+| JWT/issue.ts   | 84.6%  | 72.7% |
+| JWT/verify.ts  | 85.7%  | 86.4% |
+| OTP/HOTP.ts    | 100%   | 100%  |
+| OTP/TOTP.ts    | 100%   | 100%  |
 
 All critical paths and error conditions are tested.
 
@@ -827,8 +848,10 @@ MIT License - See the main project LICENSE file for details.
 
 ## Built with ❤️
 
-Built with care for the Deno community. Contributions, issues, and feedback are welcome!
+Built with care for the Deno community. Contributions, issues, and feedback are
+welcome!
 
-**Repository:** [TundraSoft/TundraLibs](https://github.com/TundraSoft/TundraLibs)  
-**Module:** `crypt`  
-**Maintainer:** TundraSoft  
+**Repository:**
+[TundraSoft/TundraLibs](https://github.com/TundraSoft/TundraLibs)\
+**Module:** `crypt`\
+**Maintainer:** TundraSoft

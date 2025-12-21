@@ -9,4 +9,3 @@ export type {
 export { verifyJWT } from './verify.ts';
 export { decodeJWT, refreshJWT } from './helpers.ts';
 export type { RefreshKeyConfig } from './helpers.ts';
-
