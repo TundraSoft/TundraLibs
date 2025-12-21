@@ -1,5 +1,5 @@
 import { encodeBase64, encodeHex } from '$encoding';
-import type { DigestAlgorithms, DigestOptions } from './types.ts';
+import type { DigestOptions } from './types.ts';
 
 /**
  * Generates a cryptographic hash of the given data using the specified algorithm.
@@ -80,7 +80,7 @@ export async function digest(
  * console.log(hash); // SHA-256 hash in hex
  * ```
  */
-export async function sha256(
+export function sha256(
   data: string | Uint8Array,
   encoding: 'hex' | 'base64' = 'hex',
 ): Promise<string> {
@@ -102,7 +102,7 @@ export async function sha256(
  * console.log(hash); // SHA-512 hash in hex
  * ```
  */
-export async function sha512(
+export function sha512(
   data: string | Uint8Array,
   encoding: 'hex' | 'base64' = 'hex',
 ): Promise<string> {
@@ -124,7 +124,7 @@ export async function sha512(
  * console.log(hash); // SHA-384 hash in hex
  * ```
  */
-export async function sha384(
+export function sha384(
   data: string | Uint8Array,
   encoding: 'hex' | 'base64' = 'hex',
 ): Promise<string> {
@@ -147,7 +147,7 @@ export async function sha384(
  * console.log(hash); // SHA-1 hash in hex
  * ```
  */
-export async function sha1(
+export function sha1(
   data: string | Uint8Array,
   encoding: 'hex' | 'base64' = 'hex',
 ): Promise<string> {

@@ -1,5 +1,4 @@
 import {
-  type DigestAlgorithms,
   validateDigestAlgorithm,
 } from '../digest/mod.ts';
 import { decodeHex } from '$encoding';

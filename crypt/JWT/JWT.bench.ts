@@ -223,7 +223,7 @@ Deno.bench({
   name: 'crypt.JWT - Verify with audience validation',
   fn: async () => {
     await verifyJWT(smallTokenHS256, BENCH_SECRET, {
-      audience: 'api.example.com',
+      aud: 'api.example.com',
     });
   },
 });
@@ -232,7 +232,7 @@ Deno.bench({
   name: 'crypt.JWT - Verify with issuer validation',
   fn: async () => {
     await verifyJWT(smallTokenHS256, BENCH_SECRET, {
-      issuer: 'auth.example.com',
+      iss: 'auth.example.com',
     });
   },
 });
@@ -241,8 +241,8 @@ Deno.bench({
   name: 'crypt.JWT - Verify with full validation',
   fn: async () => {
     await verifyJWT(smallTokenHS256, BENCH_SECRET, {
-      audience: 'api.example.com',
-      issuer: 'auth.example.com',
+      aud: 'api.example.com',
+      iss: 'auth.example.com',
       maxAge: 3600,
       clockTolerance: 30,
     });

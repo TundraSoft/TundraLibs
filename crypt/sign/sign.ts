@@ -1,5 +1,4 @@
 import {
-  type DigestAlgorithms,
   validateDigestAlgorithm,
 } from '../digest/mod.ts';
 import type { HMACOptions, RSAOptions, SigningModes } from './types.ts';
