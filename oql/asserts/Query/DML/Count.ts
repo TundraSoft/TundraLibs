@@ -146,13 +146,4 @@ export const assertCountQuery: <PT extends TableType = TableType>(
   if (query.where !== undefined) {
     assertFilterOperator(query.where, columnList);
   }
-
-  // Validate distinct (optional)
-  if (query.distinct !== undefined) {
-    if (typeof query.distinct !== 'boolean') {
-      throw new TypeError(
-        `Invalid COUNT query: 'distinct' must be a boolean if provided`,
-      );
-    }
-  }
 };

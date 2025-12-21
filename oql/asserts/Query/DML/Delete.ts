@@ -15,7 +15,7 @@ import { assertFilterOperator } from '../../Filters/mod.ts';
  *
  * Validates all DELETE-specific properties including:
  * - Required: type, table, columns
- * - Optional: schema, where, returnColumns
+ * - Optional: schema, where
  *
  * **Validation Rules**:
  * - `type` must be 'DELETE'

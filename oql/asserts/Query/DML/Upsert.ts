@@ -16,7 +16,7 @@ import { assertExpression } from '../../Expressions/mod.ts';
  *
  * Validates all UPSERT-specific properties including:
  * - Required: type, table, columns, data, conflictKeys
- * - Optional: schema, updateOnConflict, returnColumns
+ * - Optional: schema, updateOnConflict
  *
  * **Validation Rules**:
  * - `type` must be 'UPSERT'
@@ -304,23 +304,6 @@ export const assertUpsertQuery: <PT extends TableType = TableType>(
       if (conflictKeySet.has(key)) {
         throw new TypeError(
           `Invalid UPSERT query: updateOnConflict should not include conflictKey '${key}' (conflict keys are never updated)`,
-        );
-      }
-    }
-  }
-
-  // Validate returnColumns (optional)
-  if (query.returnColumns !== undefined) {
-    if (!Array.isArray(query.returnColumns)) {
-      throw new TypeError(
-        `Invalid UPSERT query: 'returnColumns' must be an array if provided`,
-      );
-    }
-
-    for (const col of query.returnColumns) {
-      if (typeof col !== 'string' || col.trim().length === 0) {
-        throw new TypeError(
-          `Invalid UPSERT query: Each column in 'returnColumns' must be a non-empty string`,
         );
       }
     }

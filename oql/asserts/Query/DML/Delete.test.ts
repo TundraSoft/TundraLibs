@@ -52,16 +52,6 @@ Deno.test('DELETE - valid without WHERE (delete all)', () => {
   assertDeleteQuery(query);
 });
 
-Deno.test('DELETE - valid with returnColumns', () => {
-  const query = {
-    type: 'DELETE',
-    table: 'tasks',
-    columns: ['id', 'status'],
-    where: { '@status': 'completed' },
-    returnColumns: ['id', 'status'],
-  };
-  assertDeleteQuery(query);
-});
 
 Deno.test('DELETE - valid with date comparison', () => {
   const query = {
@@ -240,47 +230,5 @@ Deno.test('DELETE - throws on non-array columns', () => {
   );
 });
 
-Deno.test('DELETE - throws on invalid returnColumns type', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
-        type: 'DELETE',
-        table: 'users',
-        columns: ['id', 'status'],
-        where: { '@status': 'inactive' },
-        returnColumns: 'id',
-      }),
-    TypeError,
-    'array',
-  );
-});
 
-Deno.test('DELETE - throws on empty returnColumns element', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
-        type: 'DELETE',
-        table: 'users',
-        columns: ['id', 'status'],
-        where: { '@status': 'inactive' },
-        returnColumns: ['id', ''],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});
 
-Deno.test('DELETE - throws on non-string returnColumns element', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
-        type: 'DELETE',
-        table: 'users',
-        columns: ['id', 'status'],
-        where: { '@status': 'inactive' },
-        returnColumns: ['id', 123],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});

@@ -137,17 +137,6 @@ Deno.test('UPSERT - valid with expressions', () => {
   assertUpsertQuery(query);
 });
 
-Deno.test('UPSERT - valid with returnColumns', () => {
-  const query = {
-    type: 'UPSERT',
-    table: 'users',
-    columns: ['id', 'name', 'email'],
-    data: { id: 1, name: 'John', email: 'john@example.com' },
-    conflictKeys: ['id'],
-    returnColumns: ['id', 'email'],
-  };
-  assertUpsertQuery(query);
-});
 
 Deno.test('UPSERT - valid with null values', () => {
   const query = {
@@ -533,21 +522,6 @@ Deno.test('UPSERT - throws on bulk with non-object item', () => {
   );
 });
 
-Deno.test('UPSERT - throws on invalid returnColumns type', () => {
-  assertThrows(
-    () =>
-      assertUpsertQuery({
-        type: 'UPSERT',
-        table: 'users',
-        columns: ['id', 'name'],
-        data: { id: 1, name: 'John' },
-        conflictKeys: ['id'],
-        returnColumns: 'id',
-      }),
-    TypeError,
-    'array',
-  );
-});
 
 Deno.test('UPSERT - throws on non-string column element', () => {
   assertThrows(
@@ -609,37 +583,7 @@ Deno.test('UPSERT - throws on empty conflictKey element', () => {
   );
 });
 
-Deno.test('UPSERT - throws on empty returnColumns element', () => {
-  assertThrows(
-    () =>
-      assertUpsertQuery({
-        type: 'UPSERT',
-        table: 'users',
-        columns: ['id', 'name'],
-        data: { id: 1, name: 'John' },
-        conflictKeys: ['id'],
-        returnColumns: ['id', ''],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});
 
-Deno.test('UPSERT - throws on non-string returnColumns element', () => {
-  assertThrows(
-    () =>
-      assertUpsertQuery({
-        type: 'UPSERT',
-        table: 'users',
-        columns: ['id', 'name'],
-        data: { id: 1, name: 'John' },
-        conflictKeys: ['id'],
-        returnColumns: ['id', 123],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});
 
 Deno.test('UPSERT - throws on empty updateOnConflict object', () => {
   assertThrows(

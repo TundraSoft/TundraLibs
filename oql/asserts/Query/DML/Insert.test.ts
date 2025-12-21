@@ -115,21 +115,6 @@ Deno.test('INSERT - valid bulk with expressions', () => {
   assertInsertQuery(query);
 });
 
-Deno.test('INSERT - valid with returnColumns', () => {
-  const query = {
-    type: 'INSERT',
-    table: 'users',
-    columns: ['id', 'name', 'email', 'createdAt'],
-    data: {
-      id: 1,
-      name: 'John',
-      email: 'john@example.com',
-      createdAt: { type: 'NOW' },
-    },
-    returnColumns: ['id', 'createdAt'],
-  };
-  assertInsertQuery(query);
-});
 
 Deno.test('INSERT - valid with all data types', () => {
   const query = {
@@ -391,35 +376,7 @@ Deno.test('INSERT - throws on invalid expression', () => {
   );
 });
 
-Deno.test('INSERT - throws on invalid returnColumns type', () => {
-  assertThrows(
-    () =>
-      assertInsertQuery({
-        type: 'INSERT',
-        table: 'users',
-        columns: ['id', 'name'],
-        data: { id: 1, name: 'John' },
-        returnColumns: 'id',
-      }),
-    TypeError,
-    'array',
-  );
-});
 
-Deno.test('INSERT - throws on empty returnColumns element', () => {
-  assertThrows(
-    () =>
-      assertInsertQuery({
-        type: 'INSERT',
-        table: 'users',
-        columns: ['id', 'name'],
-        data: { id: 1, name: 'John' },
-        returnColumns: ['id', ''],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});
 
 Deno.test('INSERT - throws on bulk insert with invalid item', () => {
   assertThrows(
@@ -465,17 +422,3 @@ Deno.test('INSERT - throws on empty column element', () => {
   );
 });
 
-Deno.test('INSERT - throws on non-string returnColumns element', () => {
-  assertThrows(
-    () =>
-      assertInsertQuery({
-        type: 'INSERT',
-        table: 'users',
-        columns: ['id', 'name'],
-        data: { id: 1, name: 'John' },
-        returnColumns: ['id', 123],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});

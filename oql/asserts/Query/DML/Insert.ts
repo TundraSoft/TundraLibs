@@ -16,7 +16,7 @@ import { assertExpression } from '../../Expressions/mod.ts';
  *
  * Validates all INSERT-specific properties including:
  * - Required: type, table, columns, data
- * - Optional: schema, returnColumns
+ * - Optional: schema
  *
  * **Validation Rules**:
  * - `type` must be 'INSERT'
@@ -207,23 +207,6 @@ export const assertInsertQuery: <PT extends TableType = TableType>(
       ) {
         throw new TypeError(
           `Invalid INSERT query: data[${i}].${key} must be a primitive value, Date, or Expression`,
-        );
-      }
-    }
-  }
-
-  // Validate returnColumns (optional)
-  if (query.returnColumns !== undefined) {
-    if (!Array.isArray(query.returnColumns)) {
-      throw new TypeError(
-        `Invalid INSERT query: 'returnColumns' must be an array if provided`,
-      );
-    }
-
-    for (const col of query.returnColumns) {
-      if (typeof col !== 'string' || col.trim().length === 0) {
-        throw new TypeError(
-          `Invalid INSERT query: Each column in 'returnColumns' must be a non-empty string`,
         );
       }
     }

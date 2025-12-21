@@ -242,27 +242,7 @@ Deno.test('SELECT - valid with limit and offset', () => {
   assertSelectQuery(query);
 });
 
-Deno.test('SELECT - valid with distinct', () => {
-  const query = {
-    type: 'SELECT',
-    table: 'users',
-    columns: ['id', 'name'],
-    projection: { id: '@id' },
-    distinct: true,
-  };
-  assertSelectQuery(query);
-});
 
-Deno.test('SELECT - valid with returnColumns', () => {
-  const query = {
-    type: 'SELECT',
-    table: 'users',
-    columns: ['id', 'name', 'email'],
-    projection: { id: '@id', name: '@name' },
-    returnColumns: ['id', 'name'],
-  };
-  assertSelectQuery(query);
-});
 
 Deno.test('SELECT - valid with all options', () => {
   const query = {
@@ -526,20 +506,6 @@ Deno.test('SELECT - throws on fractional offset', () => {
   );
 });
 
-Deno.test('SELECT - throws on non-boolean distinct', () => {
-  assertThrows(
-    () =>
-      assertSelectQuery({
-        type: 'SELECT',
-        table: 'users',
-        columns: ['id'],
-        projection: { id: '@id' },
-        distinct: 'yes',
-      }),
-    TypeError,
-    'boolean',
-  );
-});
 
 Deno.test('SELECT - throws on invalid join type', () => {
   assertThrows(
@@ -599,20 +565,6 @@ Deno.test('SELECT - throws on empty groupBy array', () => {
   );
 });
 
-Deno.test('SELECT - throws on invalid returnColumns', () => {
-  assertThrows(
-    () =>
-      assertSelectQuery({
-        type: 'SELECT',
-        table: 'users',
-        columns: ['id'],
-        projection: { id: '@id' },
-        returnColumns: 'id',
-      }),
-    TypeError,
-    'array',
-  );
-});
 Deno.test('SELECT - throws on non-string column element', () => {
   assertThrows(
     () =>
@@ -824,32 +776,4 @@ Deno.test('SELECT - throws on null orderBy', () => {
   );
 });
 
-Deno.test('SELECT - throws on empty returnColumns element', () => {
-  assertThrows(
-    () =>
-      assertSelectQuery({
-        type: 'SELECT',
-        table: 'users',
-        columns: ['id', 'name'],
-        projection: { id: '@id' },
-        returnColumns: ['id', ''],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});
 
-Deno.test('SELECT - throws on non-string returnColumns element', () => {
-  assertThrows(
-    () =>
-      assertSelectQuery({
-        type: 'SELECT',
-        table: 'users',
-        columns: ['id', 'name'],
-        projection: { id: '@id' },
-        returnColumns: ['id', 123],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});

@@ -339,30 +339,4 @@ export const assertSelectQuery: <
       );
     }
   }
-
-  // Validate distinct (optional)
-  if (query.distinct !== undefined) {
-    if (typeof query.distinct !== 'boolean') {
-      throw new TypeError(
-        `Invalid SELECT query: 'distinct' must be a boolean if provided`,
-      );
-    }
-  }
-
-  // Validate returnColumns (optional)
-  if (query.returnColumns !== undefined) {
-    if (!Array.isArray(query.returnColumns)) {
-      throw new TypeError(
-        `Invalid SELECT query: 'returnColumns' must be an array if provided`,
-      );
-    }
-
-    for (const col of query.returnColumns) {
-      if (typeof col !== 'string' || col.trim().length === 0) {
-        throw new TypeError(
-          `Invalid SELECT query: Each column in 'returnColumns' must be a non-empty string`,
-        );
-      }
-    }
-  }
 };

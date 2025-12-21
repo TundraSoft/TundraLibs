@@ -17,7 +17,7 @@ import { assertExpression } from '../../Expressions/mod.ts';
  *
  * Validates all UPDATE-specific properties including:
  * - Required: type, table, columns, data
- * - Optional: schema, where, returnColumns
+ * - Optional: schema, where
  *
  * **Validation Rules**:
  * - `type` must be 'UPDATE'
@@ -198,22 +198,5 @@ export const assertUpdateQuery: <PT extends TableType = TableType>(
   // Validate where (optional but recommended)
   if (query.where !== undefined) {
     assertFilterOperator(query.where, columnList);
-  }
-
-  // Validate returnColumns (optional)
-  if (query.returnColumns !== undefined) {
-    if (!Array.isArray(query.returnColumns)) {
-      throw new TypeError(
-        `Invalid UPDATE query: 'returnColumns' must be an array if provided`,
-      );
-    }
-
-    for (const col of query.returnColumns) {
-      if (typeof col !== 'string' || col.trim().length === 0) {
-        throw new TypeError(
-          `Invalid UPDATE query: Each column in 'returnColumns' must be a non-empty string`,
-        );
-      }
-    }
   }
 };

@@ -84,20 +84,6 @@ Deno.test('UPDATE - valid with complex WHERE', () => {
   assertUpdateQuery(query);
 });
 
-Deno.test('UPDATE - valid with returnColumns', () => {
-  const query = {
-    type: 'UPDATE',
-    table: 'products',
-    columns: ['id', 'price', 'discount', 'updatedAt'],
-    data: {
-      price: { type: 'MULTIPLY', args: ['@price', 0.9] },
-      updatedAt: { type: 'NOW' },
-    },
-    where: { '@discount': true },
-    returnColumns: ['id', 'price'],
-  };
-  assertUpdateQuery(query);
-});
 
 Deno.test('UPDATE - valid with null value', () => {
   const query = {
@@ -347,37 +333,7 @@ Deno.test('UPDATE - throws on invalid expression', () => {
   );
 });
 
-Deno.test('UPDATE - throws on invalid returnColumns type', () => {
-  assertThrows(
-    () =>
-      assertUpdateQuery({
-        type: 'UPDATE',
-        table: 'users',
-        columns: ['id', 'name'],
-        data: { name: 'John' },
-        where: { '@id': 1 },
-        returnColumns: 'id',
-      }),
-    TypeError,
-    'array',
-  );
-});
 
-Deno.test('UPDATE - throws on empty returnColumns element', () => {
-  assertThrows(
-    () =>
-      assertUpdateQuery({
-        type: 'UPDATE',
-        table: 'users',
-        columns: ['id', 'name'],
-        data: { name: 'John' },
-        where: { '@id': 1 },
-        returnColumns: ['id', ''],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});
 Deno.test('UPDATE - throws on non-string column element', () => {
   assertThrows(
     () =>
@@ -406,17 +362,3 @@ Deno.test('UPDATE - throws on empty column element', () => {
   );
 });
 
-Deno.test('UPDATE - throws on non-string returnColumns element', () => {
-  assertThrows(
-    () =>
-      assertUpdateQuery({
-        type: 'UPDATE',
-        table: 'users',
-        columns: ['id', 'name'],
-        data: { name: 'Jane' },
-        returnColumns: ['id', 123],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});

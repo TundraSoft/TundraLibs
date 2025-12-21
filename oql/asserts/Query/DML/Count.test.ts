@@ -51,26 +51,7 @@ Deno.test('COUNT - valid with complex WHERE', () => {
   assertCountQuery(query);
 });
 
-Deno.test('COUNT - valid with DISTINCT', () => {
-  const query = {
-    type: 'COUNT',
-    table: 'orders',
-    columns: ['id', 'userId', 'status'],
-    where: { '@status': 'completed' },
-    distinct: true,
-  };
-  assertCountQuery(query);
-});
 
-Deno.test('COUNT - valid with DISTINCT false', () => {
-  const query = {
-    type: 'COUNT',
-    table: 'orders',
-    columns: ['id', 'userId'],
-    distinct: false,
-  };
-  assertCountQuery(query);
-});
 
 Deno.test('COUNT - valid with IN operator', () => {
   const query = {
@@ -255,33 +236,7 @@ Deno.test('COUNT - throws on non-array columns', () => {
   );
 });
 
-Deno.test('COUNT - throws on invalid distinct type (string)', () => {
-  assertThrows(
-    () =>
-      assertCountQuery({
-        type: 'COUNT',
-        table: 'users',
-        columns: ['id'],
-        distinct: 'yes',
-      }),
-    TypeError,
-    'boolean',
-  );
-});
 
-Deno.test('COUNT - throws on invalid distinct type (number)', () => {
-  assertThrows(
-    () =>
-      assertCountQuery({
-        type: 'COUNT',
-        table: 'users',
-        columns: ['id'],
-        distinct: 1,
-      }),
-    TypeError,
-    'boolean',
-  );
-});
 
 Deno.test('COUNT - throws on invalid WHERE structure', () => {
   assertThrows(
