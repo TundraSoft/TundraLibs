@@ -5,9 +5,11 @@ Deno.test('crypt.encrypt', async (t) => {
   await t.step('encryptAES - Basic Encryption', async () => {
     const data = 'my data';
     const secret = 'abcdefghijklmnopqrstuvwx'; // 24 bytes (192 bits)
-    const mode: EncryptionModes = 'AES-GCM:256';
 
-    const encrypted = await encryptAES(mode, secret, data);
+    const encrypted = await encryptAES(data, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
 
     // Check that the encrypted data is a non-empty string
     asserts.assertEquals(typeof encrypted, 'string');
@@ -29,9 +31,11 @@ Deno.test('crypt.encrypt', async (t) => {
   await t.step('encryptAES - Empty Input', async () => {
     const data = '';
     const secret = 'abcdefghijklmnopqrstuvwx';
-    const mode: EncryptionModes = 'AES-GCM:256';
 
-    const encrypted = await encryptAES(mode, secret, data);
+    const encrypted = await encryptAES(data, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
 
     // Should still produce valid encrypted format
     asserts.assertEquals(typeof encrypted, 'string');
@@ -44,9 +48,11 @@ Deno.test('crypt.encrypt', async (t) => {
   await t.step('encryptAES - Binary Input', async () => {
     const data = new Uint8Array([1, 2, 3, 4, 5]);
     const secret = 'abcdefghijklmnopqrstuvwx';
-    const mode: EncryptionModes = 'AES-GCM:256';
 
-    const encrypted = await encryptAES(mode, secret, data);
+    const encrypted = await encryptAES(data, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
 
     // Check that the encrypted data is a non-empty string
     asserts.assertEquals(typeof encrypted, 'string');
@@ -63,9 +69,18 @@ Deno.test('crypt.encrypt', async (t) => {
     const secret192 = 'abcdefghijklmnopqrstuvwx'; // 24 bytes (192 bits)
     const secret256 = 'abcdefghijklmnopqrstuvwxyz123456'; // 32 bytes (256 bits)
 
-    const encrypted128 = await encryptAES('AES-GCM:128', secret128, data);
-    const encrypted192 = await encryptAES('AES-GCM:192', secret192, data);
-    const encrypted256 = await encryptAES('AES-GCM:256', secret256, data);
+    const encrypted128 = await encryptAES(data, secret128, {
+      mode: 'GCM',
+      keyLength: 128,
+    });
+    const encrypted192 = await encryptAES(data, secret192, {
+      mode: 'GCM',
+      keyLength: 192,
+    });
+    const encrypted256 = await encryptAES(data, secret256, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
 
     // All should produce valid encrypted data
     asserts.assertEquals(typeof encrypted128, 'string');
@@ -82,9 +97,18 @@ Deno.test('crypt.encrypt', async (t) => {
     const data = 'test data';
     const secret = 'abcdefghijklmnopqrstuvwx';
 
-    const encryptedGCM = await encryptAES('AES-GCM:256', secret, data);
-    const encryptedCBC = await encryptAES('AES-CBC:256', secret, data);
-    const encryptedCTR = await encryptAES('AES-CTR:256', secret, data);
+    const encryptedGCM = await encryptAES(data, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
+    const encryptedCBC = await encryptAES(data, secret, {
+      mode: 'CBC',
+      keyLength: 256,
+    });
+    const encryptedCTR = await encryptAES(data, secret, {
+      mode: 'CTR',
+      keyLength: 256,
+    });
 
     // All should produce valid encrypted data
     asserts.assertEquals(typeof encryptedGCM, 'string');
@@ -100,11 +124,16 @@ Deno.test('crypt.encrypt', async (t) => {
   await t.step('encryptAES - Consistency', async () => {
     const data = 'test consistency';
     const secret = 'abcdefghijklmnopqrstuvwx';
-    const mode: EncryptionModes = 'AES-GCM:256';
 
     // Multiple encryptions should produce different results (due to random IV)
-    const encrypted1 = await encryptAES(mode, secret, data);
-    const encrypted2 = await encryptAES(mode, secret, data);
+    const encrypted1 = await encryptAES(data, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
+    const encrypted2 = await encryptAES(data, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
 
     asserts.assertNotEquals(encrypted1, encrypted2);
 
@@ -116,9 +145,11 @@ Deno.test('crypt.encrypt', async (t) => {
   await t.step('encryptAES - Long Data', async () => {
     const data = 'a'.repeat(10000); // 10KB of data
     const secret = 'abcdefghijklmnopqrstuvwx';
-    const mode: EncryptionModes = 'AES-GCM:256';
 
-    const encrypted = await encryptAES(mode, secret, data);
+    const encrypted = await encryptAES(data, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
 
     asserts.assertEquals(typeof encrypted, 'string');
     asserts.assertEquals(encrypted.length > 0, true);
@@ -128,9 +159,11 @@ Deno.test('crypt.encrypt', async (t) => {
   await t.step('encryptAES - Unicode Data', async () => {
     const data = '🔐 Unicode test with émojis and spëcial chars 中文';
     const secret = 'abcdefghijklmnopqrstuvwx';
-    const mode: EncryptionModes = 'AES-GCM:256';
 
-    const encrypted = await encryptAES(mode, secret, data);
+    const encrypted = await encryptAES(data, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
 
     asserts.assertEquals(typeof encrypted, 'string');
     asserts.assertEquals(encrypted.length > 0, true);
@@ -144,28 +177,19 @@ Deno.test('crypt.encrypt', async (t) => {
     // Invalid encryption mode
     await asserts.assertRejects(
       async () => {
-        await encryptAES('INVALID-MODE:256' as EncryptionModes, secret, data);
+        await encryptAES(data, secret, { mode: 'INVALID-MODE' as any });
       },
       Error,
-      'Invalid AES encryption mode. Must be AES-GCM, AES-CBC, or AES-CTR',
+      'Invalid AES encryption mode',
     );
 
     // Invalid key length
     await asserts.assertRejects(
       async () => {
-        await encryptAES('AES-GCM:999' as EncryptionModes, secret, data);
+        await encryptAES(data, secret, { keyLength: 999 as any });
       },
       Error,
-      'Invalid AES key length. Must be 128, 192, or 256',
-    );
-
-    // Missing key length
-    await asserts.assertRejects(
-      async () => {
-        await encryptAES('AES-GCM' as EncryptionModes, secret, data);
-      },
-      Error,
-      'Invalid AES key length. Must be 128, 192, or 256',
+      'Invalid AES key length',
     );
   });
 
@@ -175,24 +199,28 @@ Deno.test('crypt.encrypt', async (t) => {
     const secret192 = 'abcdefghijklmnopqrstuvwx';
     const secret256 = 'abcdefghijklmnopqrstuvwxyz123456';
 
-    const modes: EncryptionModes[] = [
-      'AES-GCM:128',
-      'AES-GCM:192',
-      'AES-GCM:256',
-      'AES-CBC:128',
-      'AES-CBC:192',
-      'AES-CBC:256',
-      'AES-CTR:128',
-      'AES-CTR:192',
-      'AES-CTR:256',
+    const modes: Array<
+      { mode: 'GCM' | 'CBC' | 'CTR'; keyLength: 128 | 192 | 256 }
+    > = [
+      { mode: 'GCM', keyLength: 128 },
+      { mode: 'GCM', keyLength: 192 },
+      { mode: 'GCM', keyLength: 256 },
+      { mode: 'CBC', keyLength: 128 },
+      { mode: 'CBC', keyLength: 192 },
+      { mode: 'CBC', keyLength: 256 },
+      { mode: 'CTR', keyLength: 128 },
+      { mode: 'CTR', keyLength: 192 },
+      { mode: 'CTR', keyLength: 256 },
     ];
 
-    for (const mode of modes) {
-      const secret = mode.includes('128') ? secret128 : mode.includes('192') //NOSONAR
+    for (const options of modes) {
+      const secret = options.keyLength === 128
+        ? secret128
+        : options.keyLength === 192 //NOSONAR
         ? secret192
         : secret256;
 
-      const encrypted = await encryptAES(mode, secret, data);
+      const encrypted = await encryptAES(data, secret, options);
       asserts.assertEquals(typeof encrypted, 'string');
       asserts.assertEquals(encrypted.length > 0, true);
       asserts.assertEquals(encrypted.split(':').length, 2);
@@ -227,9 +255,8 @@ Deno.test('crypt.encrypt', async (t) => {
 
     const data = 'Hello, RSA World!';
     const encrypted = await encryptRSA(
-      'RSA-OAEP:2048:SHA-256',
-      publicKeyPEM,
       data,
+      publicKeyPEM,
     );
 
     // Check that the encrypted data is a base64 string
@@ -244,7 +271,7 @@ Deno.test('crypt.encrypt', async (t) => {
     const data = 'Test data';
 
     // Test different key sizes
-    for (const keySize of [2048, 3072, 4096]) {
+    for (const keySize of [2048, 3072, 4096] as const) {
       const keyPair = await crypto.subtle.generateKey(
         {
           name: 'RSA-OAEP',
@@ -268,9 +295,9 @@ Deno.test('crypt.encrypt', async (t) => {
       }\n-----END PUBLIC KEY-----`;
 
       const encrypted = await encryptRSA(
-        `RSA-OAEP:${keySize}:SHA-256` as EncryptionModes,
-        publicKeyPEM,
         data,
+        publicKeyPEM,
+        { keySize },
       );
       asserts.assertEquals(typeof encrypted, 'string');
       asserts.assertEquals(encrypted.length > 0, true);
@@ -305,9 +332,9 @@ Deno.test('crypt.encrypt', async (t) => {
       }\n-----END PUBLIC KEY-----`;
 
       const encrypted = await encryptRSA(
-        `RSA-OAEP:2048:${hash}` as EncryptionModes,
-        publicKeyPEM,
         data,
+        publicKeyPEM,
+        { hashAlgorithm: hash as any },
       );
       asserts.assertEquals(typeof encrypted, 'string');
       asserts.assertEquals(encrypted.length > 0, true);
@@ -341,9 +368,8 @@ Deno.test('crypt.encrypt', async (t) => {
     const maxSize = 256 - 2 * 32 - 2; // 2048-bit key with SHA-256: 256 - 2*32 - 2 = 190 bytes
     const maxData = 'a'.repeat(maxSize);
     const encrypted = await encryptRSA(
-      'RSA-OAEP:2048:SHA-256',
-      publicKeyPEM,
       maxData,
+      publicKeyPEM,
     );
     asserts.assertEquals(typeof encrypted, 'string');
 
@@ -351,7 +377,7 @@ Deno.test('crypt.encrypt', async (t) => {
     const oversizedData = 'a'.repeat(maxSize + 1);
     await asserts.assertRejects(
       async () => {
-        await encryptRSA('RSA-OAEP:2048:SHA-256', publicKeyPEM, oversizedData);
+        await encryptRSA(oversizedData, publicKeyPEM);
       },
       Error,
       'Data too large for RSA key',
@@ -383,28 +409,19 @@ Deno.test('crypt.encrypt', async (t) => {
 
     const data = 'test data';
 
-    // Invalid mode format
-    await asserts.assertRejects(
-      async () => {
-        await encryptRSA('INVALID-MODE' as any, publicKeyPEM, data);
-      },
-      Error,
-      'Invalid RSA encryption mode',
-    );
-
     // Invalid key size
     await asserts.assertRejects(
       async () => {
-        await encryptRSA('RSA-OAEP:1024:SHA-256' as any, publicKeyPEM, data);
+        await encryptRSA(data, publicKeyPEM, { keySize: 1024 as any });
       },
       Error,
-      'Invalid RSA key length',
+      'Invalid RSA key size',
     );
 
     // Invalid hash algorithm
     await asserts.assertRejects(
       async () => {
-        await encryptRSA('RSA-OAEP:2048:MD5' as any, publicKeyPEM, data);
+        await encryptRSA(data, publicKeyPEM, { hashAlgorithm: 'MD5' as any });
       },
       Error,
       'Invalid hash algorithm',
@@ -413,7 +430,7 @@ Deno.test('crypt.encrypt', async (t) => {
     // Invalid PEM key
     await asserts.assertRejects(
       async () => {
-        await encryptRSA('RSA-OAEP:2048:SHA-256', 'invalid-pem-key', data);
+        await encryptRSA(data, 'invalid-pem-key');
       },
       Error,
       'Invalid PEM public key format',
@@ -445,9 +462,8 @@ Deno.test('crypt.encrypt', async (t) => {
 
     const binaryData = new Uint8Array([1, 2, 3, 4, 5, 255, 0, 127]);
     const encrypted = await encryptRSA(
-      'RSA-OAEP:2048:SHA-256',
-      publicKeyPEM,
       binaryData,
+      publicKeyPEM,
     );
 
     asserts.assertEquals(typeof encrypted, 'string');

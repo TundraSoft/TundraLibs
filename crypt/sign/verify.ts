@@ -3,7 +3,7 @@ import {
   validateDigestAlgorithm,
 } from '../digest/mod.ts';
 import { decodeHex } from '$encoding';
-import type { SigningModes } from './types.ts';
+import type { HMACOptions, RSAOptions, SigningModes } from './types.ts';
 
 /**
  * Parses a PEM-formatted public key string to extract the raw key data.
@@ -38,24 +38,25 @@ const parsePEMPublicKey = (pemKey: string): Uint8Array => {
  *
  * @example
  * ```ts
- * const isValid = await verifyHMAC('SHA-256', 'mysecret', 'mydata', 'signature');
+ * const isValid = await verifyHMAC('mydata', 'signature', 'mysecret');
  * console.log(isValid); // Logs true if the signature is valid, false otherwise
  * ```
  *
  * @example
  * ```ts
  * const binaryData = new Uint8Array([1, 2, 3, 4]);
- * const isValid = await verifyHMAC('SHA-256', 'mysecret', binaryData, 'signature');
+ * const isValid = await verifyHMAC(binaryData, 'signature', 'mysecret', { hashAlgorithm: 'SHA-512' });
  * console.log(isValid); // Logs true if the signature is valid, false otherwise
  * ```
  */
 export const verifyHMAC = async (
-  digest: DigestAlgorithms,
-  secret: string,
   data: string | Uint8Array,
   signature: string,
+  secret: string,
+  options?: HMACOptions,
 ): Promise<boolean> => {
-  validateDigestAlgorithm(digest);
+  const hashAlgorithm = options?.hashAlgorithm ?? 'SHA-256';
+  validateDigestAlgorithm(hashAlgorithm);
 
   if (!signature || typeof signature !== 'string') {
     throw new Error('Signature must be a non-empty string');
@@ -66,7 +67,7 @@ export const verifyHMAC = async (
     new TextEncoder().encode(secret),
     {
       name: 'HMAC',
-      hash: digest,
+      hash: hashAlgorithm,
     },
     false,
     ['verify'],
@@ -86,7 +87,7 @@ export const verifyHMAC = async (
   return crypto.subtle.verify(
     {
       name: 'HMAC',
-      hash: digest,
+      hash: hashAlgorithm,
     },
     key,
     signatureBytes as BufferSource,
@@ -119,42 +120,31 @@ export const verifyHMAC = async (
  * MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
  * -----END PUBLIC KEY-----`;
  *
- * const isValid = await verifyRSA(
- *   'RSA-PSS:2048:SHA-256',
- *   publicKey,
- *   'important document',
- *   'base64EncodedSignature=='
- * );
+ * // Verify with defaults (RSA-2048, SHA-256)
+ * const isValid = await verifyRSA('important document', 'base64Signature==', publicKey);
  * console.log(isValid); // true if signature is valid
+ *
+ * // Verify with specific options
+ * const isValid4096 = await verifyRSA('document', 'signature', publicKey, {
+ *   keySize: 4096,
+ *   hashAlgorithm: 'SHA-512'
+ * });
  * ```
  *
  * @see {@link signRSA} for RSA-PSS signing
- * @see {@link verify} for the wrapper function
- * @see {@link SigningModes} for supported modes
+ * @see {@link verify} for the deprecated wrapper function
+ * @see {@link RSAOptions} for available options
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/verify} Web Crypto API verify
  */
 export const verifyRSA = async (
-  mode: SigningModes,
-  publicKey: string,
   data: string | Uint8Array,
   signature: string,
+  publicKey: string,
+  options?: RSAOptions,
 ): Promise<boolean> => {
-  const parts = mode.split(':');
-  if (parts.length !== 3 || parts[0] !== 'RSA-PSS') {
-    throw new Error(
-      'Invalid RSA mode format. Expected "RSA-PSS:keySize:hashAlgorithm"',
-    );
-  }
+  const keySize = options?.keySize ?? 2048;
+  const hashAlgorithm = options?.hashAlgorithm ?? 'SHA-256';
 
-  const [, lengthStr, hashAlgorithm] = parts;
-
-  if (!lengthStr || !hashAlgorithm) {
-    throw new Error(
-      'Invalid RSA mode format. Expected "RSA-PSS:keySize:hashAlgorithm"',
-    );
-  }
-
-  const keySize = Number.parseInt(lengthStr, 10);
   if (![2048, 3072, 4096].includes(keySize)) {
     throw new Error(
       'Invalid RSA key size. Must be 2048, 3072, or 4096',
@@ -231,6 +221,9 @@ export const verifyRSA = async (
 /**
  * Verifies a signature using the specified signing mode.
  *
+ * @deprecated Use {@link verifyHMAC} or {@link verifyRSA} directly with options instead.
+ * This function maintains backward compatibility with the old string-based API.
+ *
  * Supports both HMAC and RSA-PSS signature verification. For HMAC modes, uses the secret as a symmetric key.
  * For RSA modes, the secret parameter should be the public key in PEM format.
  *
@@ -266,8 +259,16 @@ export const verify = (
   signature: string,
 ): Promise<boolean> => {
   if (mode.startsWith('RSA-')) {
-    return verifyRSA(mode, secret, data, signature);
+    // Parse RSA mode: RSA-PSS:keySize:hashAlgorithm
+    const parts = mode.split(':');
+    if (parts.length !== 3) {
+      throw new Error('Invalid signing mode. Must be HMAC or RSA-PSS');
+    }
+    const keySize = Number.parseInt(parts[1]!, 10) as 2048 | 3072 | 4096;
+    const hashAlgorithm = parts[2] as 'SHA-256' | 'SHA-384' | 'SHA-512';
+    return verifyRSA(data, signature, secret, { keySize, hashAlgorithm });
   } else {
+    // Parse HMAC mode: HMAC:hashAlgorithm
     const [algorithm, hash] = mode.split(':');
     if (algorithm !== 'HMAC') {
       throw new Error('Invalid signing mode. Must be HMAC or RSA-PSS');
@@ -279,6 +280,8 @@ export const verify = (
       );
     }
 
-    return verifyHMAC(hash as DigestAlgorithms, secret, data, signature);
+    return verifyHMAC(data, signature, secret, {
+      hashAlgorithm: hash as 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512',
+    });
   }
 };

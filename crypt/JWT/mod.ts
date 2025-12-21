@@ -7,3 +7,6 @@ export type {
   JWTVerifyOptions,
 } from './types.ts';
 export { verifyJWT } from './verify.ts';
+export { decodeJWT, refreshJWT } from './helpers.ts';
+export type { RefreshKeyConfig } from './helpers.ts';
+

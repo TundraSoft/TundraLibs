@@ -239,6 +239,25 @@ Deno.test('crypt.TOTP', async (t) => {
       period: 30,
     });
     asserts.assertEquals(isValid2, false);
+
+    // Empty OTP
+    const isValid3 = await verifyTOTP('', key, {
+      epoch: Date.now(),
+      period: 30,
+    });
+    asserts.assertEquals(isValid3, false);
+
+    // Non-integer window (fractional)
+    await asserts.assertRejects(
+      () =>
+        verifyTOTP('123456', key, {
+          window: 1.5,
+          epoch: Date.now(),
+          period: 30,
+        }),
+      Error,
+      'Window must be a non-negative integer',
+    );
   });
 
   await t.step('verifyTOTP - All Algorithms', async () => {
@@ -261,5 +280,44 @@ Deno.test('crypt.TOTP', async (t) => {
       });
       asserts.assertEquals(isValid, true);
     }
+  });
+
+  await t.step('verifyTOTP - Counter edge cases', async () => {
+    const key = '12345678901234567890';
+    const epoch = 0; // Very early epoch
+
+    // Generate OTP at epoch 0
+    const otp = await generateTOTP(key, { epoch, period: 30 });
+
+    // Should verify at the same time
+    const isValid = await verifyTOTP(otp, key, {
+      epoch,
+      period: 30,
+      window: 1,
+    });
+    asserts.assertEquals(isValid, true);
+
+    // Test with large window that would result in negative counter
+    // Counter = floor(epoch / (period * 1000)) = floor(0 / 30000) = 0
+    // With window = 2, we check counters: -2, -1, 0, 1, 2
+    // The code should skip negative counters (counter < 0)
+    const isValid2 = await verifyTOTP(otp, key, {
+      epoch: 0,
+      period: 30,
+      window: 2,
+    });
+    asserts.assertEquals(isValid2, true);
+  });
+
+  await t.step('verifyTOTP - Null/undefined OTP', async () => {
+    const key = '12345678901234567890';
+
+    // Null OTP
+    const isValid1 = await verifyTOTP(null as any, key);
+    asserts.assertEquals(isValid1, false);
+
+    // Undefined OTP
+    const isValid2 = await verifyTOTP(undefined as any, key);
+    asserts.assertEquals(isValid2, false);
   });
 });

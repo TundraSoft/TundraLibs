@@ -25,3 +25,46 @@ export type SigningModes =
   | 'RSA-PSS:4096:SHA-256'
   | 'RSA-PSS:4096:SHA-384'
   | 'RSA-PSS:4096:SHA-512';
+
+/**
+ * Supported hash algorithms for HMAC signing.
+ */
+export type HMACHashAlgorithm = 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512';
+
+/**
+ * Supported hash algorithms for RSA-PSS signing.
+ */
+export type RSAHashAlgorithm = 'SHA-256' | 'SHA-384' | 'SHA-512';
+
+/**
+ * Supported RSA key sizes for signing.
+ */
+export type RSAKeySize = 2048 | 3072 | 4096;
+
+/**
+ * Options for HMAC signing and verification.
+ */
+export type HMACOptions = {
+  /**
+   * Hash algorithm to use.
+   * @default 'SHA-256'
+   */
+  hashAlgorithm?: HMACHashAlgorithm;
+};
+
+/**
+ * Options for RSA-PSS signing and verification.
+ */
+export type RSAOptions = {
+  /**
+   * RSA key size in bits.
+   * @default 2048
+   */
+  keySize?: RSAKeySize;
+
+  /**
+   * Hash algorithm to use.
+   * @default 'SHA-256'
+   */
+  hashAlgorithm?: RSAHashAlgorithm;
+};

@@ -250,25 +250,211 @@ export const generateAlphanumericSecret = (byteLength: number): string =>
 export const generateToken = (): string => secretGenerator(32, 'HEX');
 
 /**
- * Generates a random alphanumeric password.
+ * Configuration options for password generation.
+ */
+export type PasswordOptions = {
+  /**
+   * Include uppercase letters (A-Z).
+   * @default true
+   */
+  uppercase?: boolean;
+
+  /**
+   * Include lowercase letters (a-z).
+   * @default true
+   */
+  lowercase?: boolean;
+
+  /**
+   * Include numbers (0-9).
+   * @default true
+   */
+  numbers?: boolean;
+
+  /**
+   * Include symbols.
+   * @default true
+   */
+  symbols?: boolean;
+
+  /**
+   * Custom set of symbols to use.
+   * @default '!@#$%^&*'
+   */
+  symbolSet?: string;
+
+  /**
+   * Minimum number of uppercase letters required.
+   * @default 1
+   */
+  minUppercase?: number;
+
+  /**
+   * Minimum number of lowercase letters required.
+   * @default 1
+   */
+  minLowercase?: number;
+
+  /**
+   * Minimum number of numbers required.
+   * @default 1
+   */
+  minNumbers?: number;
+
+  /**
+   * Minimum number of symbols required.
+   * @default 1
+   */
+  minSymbols?: number;
+};
+
+/**
+ * Generates a cryptographically secure random password with complexity requirements.
  *
- * Uses ALPHANUMERIC encoding for readability.
- * Contains mixed case letters (A-Z, a-z) and numbers (0-9).
+ * Creates passwords that meet specified complexity requirements including minimum
+ * counts for different character types. Uses Fisher-Yates shuffle for random
+ * distribution and crypto.getRandomValues() for cryptographic strength.
  *
- * @param {number} [length=16] - The length of the password in characters
- * @returns {string} A random alphanumeric password
+ * @param {number} [length=16] - The total length of the password in characters
+ * @param {PasswordOptions} [options] - Configuration options for password generation
+ * @returns {string} A cryptographically secure random password
+ *
+ * @throws {Error} When password length is too short for minimum requirements
+ * @throws {Error} When no character sets are enabled
  *
  * @example
  * ```typescript
+ * // Generate default password: 16 chars with all character types
  * const password = generatePassword();
- * console.log(password); // "aBc123XyZ789MnOp" (16 chars)
+ * // Example: "aB3!xY7@mN2$pQ9&"
  * ```
  *
  * @example
  * ```typescript
- * // Generate a 24-character password
- * const strongPassword = generatePassword(24);
+ * // Generate password without symbols
+ * const password = generatePassword(16, { symbols: false });
+ * // Example: "aBc123XyZ789MnOp"
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Generate password with custom symbol set
+ * const password = generatePassword(20, { symbolSet: '!@#$%^&*()_+-=' });
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Generate password with higher complexity requirements
+ * const password = generatePassword(24, {
+ *   minUppercase: 3,
+ *   minLowercase: 3,
+ *   minNumbers: 3,
+ *   minSymbols: 2
+ * });
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Generate alphanumeric only password
+ * const password = generatePassword(12, {
+ *   uppercase: true,
+ *   lowercase: true,
+ *   numbers: true,
+ *   symbols: false
+ * });
  * ```
  */
-export const generatePassword = (length = 16): string =>
-  secretGenerator(length, 'ALPHANUMERIC');
+export function generatePassword(
+  length = 16,
+  options?: PasswordOptions,
+): string {
+  // Default options
+  const {
+    uppercase = true,
+    lowercase = true,
+    numbers = true,
+    symbols = true,
+    symbolSet = '!@#$%^&*',
+    minUppercase = uppercase ? 1 : 0,
+    minLowercase = lowercase ? 1 : 0,
+    minNumbers = numbers ? 1 : 0,
+    minSymbols = symbols ? 1 : 0,
+  } = options ?? {};
+
+  // Character sets
+  const UPPERCASE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const LOWERCASE = 'abcdefghijklmnopqrstuvwxyz';
+  const NUMBERS = '0123456789';
+  const SYMBOLS = symbolSet;
+
+  // Validate inputs
+  const minRequired = minUppercase + minLowercase + minNumbers + minSymbols;
+  if (minRequired > length) {
+    throw new Error(
+      `Password length (${length}) is too short for minimum requirements (${minRequired} characters needed)`,
+    );
+  }
+
+  // Build character pool
+  let charPool = '';
+  if (uppercase) charPool += UPPERCASE;
+  if (lowercase) charPool += LOWERCASE;
+  if (numbers) charPool += NUMBERS;
+  if (symbols) charPool += SYMBOLS;
+
+  if (charPool.length === 0) {
+    throw new Error('At least one character set must be enabled');
+  }
+
+  // Start building the password array
+  const passwordChars: string[] = [];
+
+  // Helper to get random character from a set
+  const getRandomChar = (charset: string): string => {
+    const randomValues = crypto.getRandomValues(new Uint8Array(1));
+    const randomIndex = randomValues[0]! % charset.length;
+    return charset[randomIndex]!;
+  };
+
+  // Add minimum required characters from each enabled set
+  if (uppercase && minUppercase > 0) {
+    for (let i = 0; i < minUppercase; i++) {
+      passwordChars.push(getRandomChar(UPPERCASE));
+    }
+  }
+
+  if (lowercase && minLowercase > 0) {
+    for (let i = 0; i < minLowercase; i++) {
+      passwordChars.push(getRandomChar(LOWERCASE));
+    }
+  }
+
+  if (numbers && minNumbers > 0) {
+    for (let i = 0; i < minNumbers; i++) {
+      passwordChars.push(getRandomChar(NUMBERS));
+    }
+  }
+
+  if (symbols && minSymbols > 0) {
+    for (let i = 0; i < minSymbols; i++) {
+      passwordChars.push(getRandomChar(SYMBOLS));
+    }
+  }
+
+  // Fill remaining length with random characters from the full pool
+  const remaining = length - passwordChars.length;
+  for (let i = 0; i < remaining; i++) {
+    passwordChars.push(getRandomChar(charPool));
+  }
+
+  // Fisher-Yates shuffle for random distribution
+  for (let i = passwordChars.length - 1; i > 0; i--) {
+    const randomValues = crypto.getRandomValues(new Uint8Array(1));
+    const j = randomValues[0]! % (i + 1);
+    const temp = passwordChars[i]!;
+    passwordChars[i] = passwordChars[j]!;
+    passwordChars[j] = temp;
+  }
+
+  return passwordChars.join('');
+}

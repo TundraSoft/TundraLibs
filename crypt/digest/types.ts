@@ -4,3 +4,20 @@
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/digest} Web Crypto API digest algorithms
  */
 export type DigestAlgorithms = 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512';
+
+/**
+ * Options for digest operations.
+ */
+export type DigestOptions = {
+  /**
+   * The hash algorithm to use.
+   * @default 'SHA-256'
+   */
+  algorithm?: DigestAlgorithms;
+
+  /**
+   * The output encoding format.
+   * @default 'hex'
+   */
+  encoding?: 'hex' | 'base64';
+};

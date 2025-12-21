@@ -2,7 +2,7 @@ import {
   type DigestAlgorithms,
   validateDigestAlgorithm,
 } from '../digest/mod.ts';
-import type { SigningModes } from './types.ts';
+import type { HMACOptions, RSAOptions, SigningModes } from './types.ts';
 import { encodeHex } from '$encoding';
 
 /**
@@ -43,37 +43,41 @@ const parsePEMPrivateKey = (pemKey: string): Uint8Array => {
  *
  * @example
  * ```typescript
- * // Sign a string with SHA-256
- * const signature = await signHMAC('SHA-256', 'mySecretKey', 'important data');
+ * // Sign a string with SHA-256 (default)
+ * const signature = await signHMAC('important data', 'mySecretKey');
  * console.log(signature); // "5a45d6d13019b54096f18218194c22cc7fb126c800d4c5c6f4c8bebd16dc32e5"
+ *
+ * // Sign with specific hash algorithm
+ * const signature512 = await signHMAC('important data', 'mySecretKey', { hashAlgorithm: 'SHA-512' });
  * ```
  *
  * @example
  * ```typescript
- * // Sign binary data with SHA-512
+ * // Sign binary data with SHA-384
  * const binaryData = new Uint8Array([1, 2, 3, 4]);
- * const signature = await signHMAC('SHA-512', 'mySecretKey', binaryData);
- * console.log(signature); // HMAC-SHA-512 signature of the binary data
+ * const signature = await signHMAC(binaryData, 'mySecretKey', { hashAlgorithm: 'SHA-384' });
+ * console.log(signature); // HMAC-SHA-384 signature of the binary data
  * ```
  *
  * @see {@link verifyHMAC} for signature verification
- * @see {@link sign} for the wrapper function
- * @see {@link DigestAlgorithms} for supported algorithms
+ * @see {@link sign} for the deprecated wrapper function
+ * @see {@link HMACOptions} for available options
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign} Web Crypto API sign
  */
 export const signHMAC = async (
-  digest: DigestAlgorithms,
-  secret: string,
   data: string | Uint8Array,
+  secret: string,
+  options?: HMACOptions,
 ): Promise<string> => {
-  validateDigestAlgorithm(digest);
+  const hashAlgorithm = options?.hashAlgorithm ?? 'SHA-256';
+  validateDigestAlgorithm(hashAlgorithm);
 
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(secret),
     {
       name: 'HMAC',
-      hash: digest,
+      hash: hashAlgorithm,
     },
     false,
     ['sign'],
@@ -86,7 +90,7 @@ export const signHMAC = async (
   const signature = await crypto.subtle.sign(
     {
       name: 'HMAC',
-      hash: digest,
+      hash: hashAlgorithm,
     },
     key,
     dataToSign as BufferSource,
@@ -118,40 +122,30 @@ export const signHMAC = async (
  * MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...
  * -----END PRIVATE KEY-----`;
  *
- * const signature = await signRSA(
- *   'RSA-PSS:2048:SHA-256',
- *   privateKey,
- *   'important document'
- * );
+ * // Sign with defaults (RSA-2048, SHA-256)
+ * const signature = await signRSA('important document', privateKey);
  * console.log(signature); // Base64-encoded RSA-PSS signature
+ *
+ * // Sign with specific options
+ * const signature4096 = await signRSA('document', privateKey, {
+ *   keySize: 4096,
+ *   hashAlgorithm: 'SHA-512'
+ * });
  * ```
  *
  * @see {@link verifyRSA} for signature verification
- * @see {@link sign} for the wrapper function
- * @see {@link SigningModes} for supported modes
+ * @see {@link sign} for the deprecated wrapper function
+ * @see {@link RSAOptions} for available options
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/sign} Web Crypto API sign
  */
 export const signRSA = async (
-  mode: SigningModes,
-  privateKey: string,
   data: string | Uint8Array,
+  privateKey: string,
+  options?: RSAOptions,
 ): Promise<string> => {
-  const parts = mode.split(':');
-  if (parts.length !== 3 || parts[0] !== 'RSA-PSS') {
-    throw new Error(
-      'Invalid RSA mode format. Expected "RSA-PSS:keySize:hashAlgorithm"',
-    );
-  }
+  const keySize = options?.keySize ?? 2048;
+  const hashAlgorithm = options?.hashAlgorithm ?? 'SHA-256';
 
-  const [, lengthStr, hashAlgorithm] = parts;
-
-  if (!lengthStr || !hashAlgorithm) {
-    throw new Error(
-      'Invalid RSA mode format. Expected "RSA-PSS:keySize:hashAlgorithm"',
-    );
-  }
-
-  const keySize = Number.parseInt(lengthStr, 10);
   if (![2048, 3072, 4096].includes(keySize)) {
     throw new Error(
       'Invalid RSA key size. Must be 2048, 3072, or 4096',
@@ -210,6 +204,9 @@ export const signRSA = async (
 /**
  * Signs data using the specified signing mode.
  *
+ * @deprecated Use {@link signHMAC} or {@link signRSA} directly with options instead.
+ * This function maintains backward compatibility with the old string-based API.
+ *
  * Supports both HMAC and RSA-PSS signing modes. For HMAC modes, uses the secret as a symmetric key.
  * For RSA modes, the secret parameter should be the private key in PEM format.
  *
@@ -243,8 +240,16 @@ export const sign = (
   data: string | Uint8Array,
 ): Promise<string> => {
   if (mode.startsWith('RSA-')) {
-    return signRSA(mode, secret, data);
+    // Parse RSA mode: RSA-PSS:keySize:hashAlgorithm
+    const parts = mode.split(':');
+    if (parts.length !== 3) {
+      throw new Error('Invalid signing mode. Must be HMAC or RSA-PSS');
+    }
+    const keySize = Number.parseInt(parts[1]!, 10) as 2048 | 3072 | 4096;
+    const hashAlgorithm = parts[2] as 'SHA-256' | 'SHA-384' | 'SHA-512';
+    return signRSA(data, secret, { keySize, hashAlgorithm });
   } else {
+    // Parse HMAC mode: HMAC:hashAlgorithm
     const [algorithm, hash] = mode.split(':');
     if (algorithm !== 'HMAC') {
       throw new Error('Invalid signing mode. Must be HMAC or RSA-PSS');
@@ -256,6 +261,8 @@ export const sign = (
       );
     }
 
-    return signHMAC(hash as DigestAlgorithms, secret, data);
+    return signHMAC(data, secret, {
+      hashAlgorithm: hash as 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512',
+    });
   }
 };

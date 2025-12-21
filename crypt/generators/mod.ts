@@ -13,6 +13,7 @@ export {
   generateHexSecret,
   generatePassword,
   generateToken,
+  type PasswordOptions,
   type SecretEncoding,
   secretGenerator,
   type SecretGeneratorOptions,

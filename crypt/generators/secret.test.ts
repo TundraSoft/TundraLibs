@@ -153,14 +153,130 @@ Deno.test('crypt.generators.secret - Convenience Functions', async (t) => {
     const password = generatePassword();
     assertEquals(typeof password, 'string');
     assertEquals(password.length, 16);
-    assertMatch(password, /^[0-9a-zA-Z]{16}$/);
+
+    // Should contain at least one of each type by default
+    assertMatch(password, /[A-Z]/); // uppercase
+    assertMatch(password, /[a-z]/); // lowercase
+    assertMatch(password, /[0-9]/); // numbers
+    assertMatch(password, /[!@#$%^&*]/); // symbols
   });
 
   await t.step('generatePassword - custom length', () => {
     const password = generatePassword(24);
     assertEquals(typeof password, 'string');
     assertEquals(password.length, 24);
-    assertMatch(password, /^[0-9a-zA-Z]{24}$/);
+  });
+
+  await t.step('generatePassword - no symbols', () => {
+    const password = generatePassword(16, { symbols: false });
+    assertEquals(password.length, 16);
+
+    // Should contain uppercase, lowercase, numbers but no symbols
+    assertMatch(password, /[A-Z]/);
+    assertMatch(password, /[a-z]/);
+    assertMatch(password, /[0-9]/);
+    assertMatch(password, /^[A-Za-z0-9]+$/); // Only alphanumeric
+  });
+
+  await t.step('generatePassword - alphanumeric only', () => {
+    const password = generatePassword(12, {
+      uppercase: true,
+      lowercase: true,
+      numbers: true,
+      symbols: false,
+    });
+    assertEquals(password.length, 12);
+    assertMatch(password, /^[A-Za-z0-9]+$/);
+  });
+
+  await t.step('generatePassword - custom symbol set', () => {
+    const password = generatePassword(20, {
+      symbolSet: '!@#$%^&*()_+-=',
+    });
+    assertEquals(password.length, 20);
+
+    // Should contain custom symbols
+    assertMatch(password, /[!@#$%^&*()_+\-=]/);
+  });
+
+  await t.step('generatePassword - minimum requirements', () => {
+    const password = generatePassword(20, {
+      minUppercase: 3,
+      minLowercase: 3,
+      minNumbers: 3,
+      minSymbols: 2,
+    });
+    assertEquals(password.length, 20);
+
+    // Count each character type
+    const uppercaseCount = (password.match(/[A-Z]/g) || []).length;
+    const lowercaseCount = (password.match(/[a-z]/g) || []).length;
+    const numbersCount = (password.match(/[0-9]/g) || []).length;
+    const symbolsCount = (password.match(/[!@#$%^&*]/g) || []).length;
+
+    assertEquals(uppercaseCount >= 3, true, 'Should have at least 3 uppercase');
+    assertEquals(lowercaseCount >= 3, true, 'Should have at least 3 lowercase');
+    assertEquals(numbersCount >= 3, true, 'Should have at least 3 numbers');
+    assertEquals(symbolsCount >= 2, true, 'Should have at least 2 symbols');
+  });
+
+  await t.step('generatePassword - only uppercase', () => {
+    const password = generatePassword(10, {
+      uppercase: true,
+      lowercase: false,
+      numbers: false,
+      symbols: false,
+    });
+    assertEquals(password.length, 10);
+    assertMatch(password, /^[A-Z]+$/);
+  });
+
+  await t.step('generatePassword - only lowercase', () => {
+    const password = generatePassword(10, {
+      uppercase: false,
+      lowercase: true,
+      numbers: false,
+      symbols: false,
+    });
+    assertEquals(password.length, 10);
+    assertMatch(password, /^[a-z]+$/);
+  });
+
+  await t.step('generatePassword - error on length too short', () => {
+    assertThrows(
+      () =>
+        generatePassword(5, {
+          minUppercase: 2,
+          minLowercase: 2,
+          minNumbers: 2,
+          minSymbols: 2,
+        }),
+      Error,
+      'Password length (5) is too short for minimum requirements (8 characters needed)',
+    );
+  });
+
+  await t.step('generatePassword - error on no character sets', () => {
+    assertThrows(
+      () =>
+        generatePassword(16, {
+          uppercase: false,
+          lowercase: false,
+          numbers: false,
+          symbols: false,
+        }),
+      Error,
+      'At least one character set must be enabled',
+    );
+  });
+
+  await t.step('generatePassword - uniqueness', () => {
+    const passwords = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      passwords.add(generatePassword(16));
+    }
+    // All 100 passwords should be unique
+    assertEquals(passwords.size, 100);
   });
 
   await t.step('All convenience functions generate unique outputs', () => {

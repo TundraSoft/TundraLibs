@@ -1,16 +1,63 @@
 /**
+ * AES encryption mode
+ * - GCM: Galois/Counter Mode (recommended - authenticated encryption)
+ * - CBC: Cipher Block Chaining
+ * - CTR: Counter Mode
+ */
+export type AESMode = 'GCM' | 'CBC' | 'CTR';
+
+/**
+ * AES key length in bits
+ */
+export type AESKeyLength = 128 | 192 | 256;
+
+/**
+ * RSA key size in bits
+ */
+export type RSAKeySize = 2048 | 3072 | 4096;
+
+/**
+ * Hash algorithm for RSA operations
+ */
+export type RSAHashAlgorithm = 'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512';
+
+/**
+ * Options for AES encryption/decryption
+ */
+export type AESOptions = {
+  /**
+   * Encryption mode
+   * @default 'GCM'
+   */
+  mode?: AESMode;
+
+  /**
+   * Key length in bits
+   * @default 256
+   */
+  keyLength?: AESKeyLength;
+};
+
+/**
+ * Options for RSA encryption/decryption
+ */
+export type RSAOptions = {
+  /**
+   * RSA key size in bits
+   * @default 2048
+   */
+  keySize?: RSAKeySize;
+
+  /**
+   * Hash algorithm for OAEP padding
+   * @default 'SHA-256'
+   */
+  hashAlgorithm?: RSAHashAlgorithm;
+};
+
+/**
+ * @deprecated Use AESOptions and RSAOptions instead
  * Supported encryption modes combining algorithm, key lengths, and hash functions.
- *
- * AES Format: `{Algorithm}:{KeyLength}` where:
- * - Algorithm: AES-GCM (Galois/Counter Mode), AES-CBC (Cipher Block Chaining), or AES-CTR (Counter Mode)
- * - KeyLength: 128, 192, or 256 bits (standard AES key sizes)
- *
- * RSA Format: `{Algorithm}:{KeyLength}:{HashAlgorithm}` where:
- * - Algorithm: RSA-OAEP (Optimal Asymmetric Encryption Padding)
- * - KeyLength: 2048, 3072, or 4096 bits (secure RSA key sizes)
- * - HashAlgorithm: SHA-1, SHA-256, SHA-384, or SHA-512
- *
- * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt} Web Crypto API encryption
  */
 export type EncryptionModes =
   | 'AES-GCM:128'

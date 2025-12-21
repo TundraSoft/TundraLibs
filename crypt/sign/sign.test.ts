@@ -6,7 +6,7 @@ Deno.test('crypt.sign', async (t) => {
   const data = 'my data';
 
   await t.step('signHMAC - SHA-1', async () => {
-    const signature = await signHMAC('SHA-1', secret, data);
+    const signature = await signHMAC(data, secret, { hashAlgorithm: 'SHA-1' });
     asserts.assertEquals(typeof signature, 'string');
     asserts.assertEquals(signature.length, 40); // SHA-1 produces 160 bits = 20 bytes = 40 hex chars
     // Verify against a known test vector
@@ -17,7 +17,7 @@ Deno.test('crypt.sign', async (t) => {
   });
 
   await t.step('signHMAC - SHA-256', async () => {
-    const signature = await signHMAC('SHA-256', secret, data);
+    const signature = await signHMAC(data, secret);
     asserts.assertEquals(typeof signature, 'string');
     asserts.assertEquals(signature.length, 64); // SHA-256 produces 256 bits = 32 bytes = 64 hex chars
     // Verify against a known test vector
@@ -28,7 +28,9 @@ Deno.test('crypt.sign', async (t) => {
   });
 
   await t.step('signHMAC - SHA-384', async () => {
-    const signature = await signHMAC('SHA-384', secret, data);
+    const signature = await signHMAC(data, secret, {
+      hashAlgorithm: 'SHA-384',
+    });
     asserts.assertEquals(typeof signature, 'string');
     asserts.assertEquals(signature.length, 96); // SHA-384 produces 384 bits = 48 bytes = 96 hex chars
     asserts.assert(
@@ -38,7 +40,9 @@ Deno.test('crypt.sign', async (t) => {
   });
 
   await t.step('signHMAC - SHA-512', async () => {
-    const signature = await signHMAC('SHA-512', secret, data);
+    const signature = await signHMAC(data, secret, {
+      hashAlgorithm: 'SHA-512',
+    });
     asserts.assertEquals(typeof signature, 'string');
     asserts.assertEquals(signature.length, 128); // SHA-512 produces 512 bits = 64 bytes = 128 hex chars
     asserts.assert(
@@ -49,28 +53,28 @@ Deno.test('crypt.sign', async (t) => {
 
   await t.step('signHMAC - Binary Data', async () => {
     const binaryData = new Uint8Array([1, 2, 3, 4, 5]);
-    const signature = await signHMAC('SHA-256', secret, binaryData);
+    const signature = await signHMAC(binaryData, secret);
     asserts.assertEquals(typeof signature, 'string');
     asserts.assertEquals(signature.length, 64);
   });
 
   await t.step('signHMAC - Empty Data', async () => {
     const emptyData = '';
-    const signature = await signHMAC('SHA-256', secret, emptyData);
+    const signature = await signHMAC(emptyData, secret);
     asserts.assertEquals(typeof signature, 'string');
     asserts.assertEquals(signature.length, 64);
   });
 
   await t.step('signHMAC - Long Data', async () => {
     const longData = 'a'.repeat(10000);
-    const signature = await signHMAC('SHA-256', secret, longData);
+    const signature = await signHMAC(longData, secret);
     asserts.assertEquals(typeof signature, 'string');
     asserts.assertEquals(signature.length, 64);
   });
 
   await t.step('signHMAC - Unicode Data', async () => {
     const unicodeData = '🔐 Hello 世界 🌍';
-    const signature = await signHMAC('SHA-256', secret, unicodeData);
+    const signature = await signHMAC(unicodeData, secret);
     asserts.assertEquals(typeof signature, 'string');
     asserts.assertEquals(signature.length, 64);
   });
@@ -79,22 +83,22 @@ Deno.test('crypt.sign', async (t) => {
     const secret1 = 'secret1';
     const secret2 = 'secret2';
 
-    const signature1 = await signHMAC('SHA-256', secret1, data);
-    const signature2 = await signHMAC('SHA-256', secret2, data);
+    const signature1 = await signHMAC(data, secret1);
+    const signature2 = await signHMAC(data, secret2);
 
     asserts.assertNotEquals(signature1, signature2);
   });
 
   await t.step('signHMAC - Consistency', async () => {
     // Same input should produce same output
-    const signature1 = await signHMAC('SHA-256', secret, data);
-    const signature2 = await signHMAC('SHA-256', secret, data);
+    const signature1 = await signHMAC(data, secret);
+    const signature2 = await signHMAC(data, secret);
 
     asserts.assertEquals(signature1, signature2);
   });
 
   await t.step('signHMAC - All Algorithms', async () => {
-    const algorithms: DigestAlgorithms[] = [
+    const algorithms: Array<'SHA-1' | 'SHA-256' | 'SHA-384' | 'SHA-512'> = [
       'SHA-1',
       'SHA-256',
       'SHA-384',
@@ -102,7 +106,7 @@ Deno.test('crypt.sign', async (t) => {
     ];
 
     for (const algo of algorithms) {
-      const signature = await signHMAC(algo, secret, data);
+      const signature = await signHMAC(data, secret, { hashAlgorithm: algo });
       asserts.assertEquals(typeof signature, 'string');
       asserts.assertEquals(signature.length > 0, true);
       asserts.assert(/^[0-9a-f]+$/.test(signature), 'Should be hex string');
@@ -112,16 +116,16 @@ Deno.test('crypt.sign', async (t) => {
   await t.step('signHMAC - Error Handling', async () => {
     await asserts.assertRejects(
       async () => {
-        await signHMAC('INVALID' as DigestAlgorithms, secret, data);
+        await signHMAC(data, secret, { hashAlgorithm: 'INVALID' as any });
       },
       Error,
-      'Invalid HMAC hash. Must be SHA-1, SHA-256, SHA-384 or SHA-512',
+      'Invalid HMAC hash',
     );
   });
 
   await t.step('sign - Basic functionality with HMAC', async () => {
     const signature = await sign('HMAC:SHA-256', secret, data);
-    const expectedSignature = await signHMAC('SHA-256', secret, data);
+    const expectedSignature = await signHMAC(data, secret);
 
     asserts.assertEquals(signature, expectedSignature);
     asserts.assertEquals(typeof signature, 'string');
@@ -143,9 +147,9 @@ Deno.test('crypt.sign', async (t) => {
         data,
       );
       const expectedSignature = await signHMAC(
-        algo as DigestAlgorithms,
-        secret,
         data,
+        secret,
+        { hashAlgorithm: algo },
       );
 
       asserts.assertEquals(signature, expectedSignature);
@@ -157,7 +161,7 @@ Deno.test('crypt.sign', async (t) => {
   await t.step('sign - Binary data support', async () => {
     const binaryData = new Uint8Array([1, 2, 3, 4, 5]);
     const signature = await sign('HMAC:SHA-256', secret, binaryData);
-    const expectedSignature = await signHMAC('SHA-256', secret, binaryData);
+    const expectedSignature = await signHMAC(binaryData, secret);
 
     asserts.assertEquals(signature, expectedSignature);
     asserts.assertEquals(typeof signature, 'string');
@@ -238,9 +242,8 @@ Deno.test('crypt.sign', async (t) => {
 
     const testData = 'Document to be signed';
     const signature = await signRSA(
-      'RSA-PSS:2048:SHA-256',
-      privateKeyPEM,
       testData,
+      privateKeyPEM,
     );
 
     // Check that the signature is a base64 string
@@ -254,7 +257,7 @@ Deno.test('crypt.sign', async (t) => {
   await t.step('signRSA - Different Key Sizes', async () => {
     const testData = 'Test signing with different key sizes';
 
-    for (const keySize of [2048, 3072, 4096]) {
+    for (const keySize of [2048, 3072, 4096] as const) {
       const keyPair = await crypto.subtle.generateKey(
         {
           name: 'RSA-PSS',
@@ -278,9 +281,9 @@ Deno.test('crypt.sign', async (t) => {
       }\n-----END PRIVATE KEY-----`;
 
       const signature = await signRSA(
-        `RSA-PSS:${keySize}:SHA-256` as any,
-        privateKeyPEM,
         testData,
+        privateKeyPEM,
+        { keySize },
       );
       asserts.assertEquals(typeof signature, 'string');
       asserts.assertEquals(signature.length > 0, true);
@@ -314,9 +317,9 @@ Deno.test('crypt.sign', async (t) => {
       }\n-----END PRIVATE KEY-----`;
 
       const signature = await signRSA(
-        `RSA-PSS:2048:${hash}` as any,
-        privateKeyPEM,
         testData,
+        privateKeyPEM,
+        { hashAlgorithm: hash as any },
       );
       asserts.assertEquals(typeof signature, 'string');
       asserts.assertEquals(signature.length > 0, true);
@@ -348,9 +351,8 @@ Deno.test('crypt.sign', async (t) => {
 
     const binaryData = new Uint8Array([1, 2, 3, 4, 5, 255, 0, 127]);
     const signature = await signRSA(
-      'RSA-PSS:2048:SHA-256',
-      privateKeyPEM,
       binaryData,
+      privateKeyPEM,
     );
 
     asserts.assertEquals(typeof signature, 'string');
@@ -382,19 +384,10 @@ Deno.test('crypt.sign', async (t) => {
 
     const testData = 'test data';
 
-    // Invalid mode format
-    await asserts.assertRejects(
-      async () => {
-        await signRSA('INVALID-MODE' as any, privateKeyPEM, testData);
-      },
-      Error,
-      'Invalid RSA mode format',
-    );
-
     // Invalid key size
     await asserts.assertRejects(
       async () => {
-        await signRSA('RSA-PSS:1024:SHA-256' as any, privateKeyPEM, testData);
+        await signRSA(testData, privateKeyPEM, { keySize: 1024 as any });
       },
       Error,
       'Invalid RSA key size',
@@ -403,7 +396,7 @@ Deno.test('crypt.sign', async (t) => {
     // Invalid hash algorithm
     await asserts.assertRejects(
       async () => {
-        await signRSA('RSA-PSS:2048:MD5' as any, privateKeyPEM, testData);
+        await signRSA(testData, privateKeyPEM, { hashAlgorithm: 'MD5' as any });
       },
       Error,
       'Invalid hash algorithm',
@@ -412,7 +405,7 @@ Deno.test('crypt.sign', async (t) => {
     // Invalid PEM key
     await asserts.assertRejects(
       async () => {
-        await signRSA('RSA-PSS:2048:SHA-256', 'invalid-pem-key', testData);
+        await signRSA(testData, 'invalid-pem-key');
       },
       Error,
       'Invalid PEM private key format',

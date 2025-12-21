@@ -1,5 +1,5 @@
 import { decodeHex } from '$encoding';
-import type { EncryptionModes } from './types.ts';
+import type { AESOptions, EncryptionModes, RSAOptions } from './types.ts';
 
 /**
  * Parses a PEM-formatted private key string to extract the raw key data.
@@ -48,61 +48,92 @@ const deriveKey = (secret: string, requiredBytes: number): Uint8Array => {
  * Uses the Web Crypto API for secure decryption. Expects input in the format
  * `{encryptedData}:{iv}` where both components are hex-encoded strings.
  *
- * @param {EncryptionModes} mode - The encryption mode and key length ({@link EncryptionModes})
- * @param {string} secret - The secret key for decryption (must match the key used for encryption)
  * @param {string} data - The encrypted data and IV/counter, separated by a colon (hex-encoded)
- * @param {boolean} [returnBinary=false] - Whether to return the decrypted data as binary (Uint8Array)
- * @returns {Promise<string | Uint8Array>} A promise that resolves to the decrypted data
+ * @param {string} secret - The secret key for decryption (must match the key used for encryption)
+ * @param {AESOptions} [options] - Optional decryption settings (mode, keyLength, returnBinary)
+ * @returns {Promise<string>} A promise that resolves to the decrypted data as a string
  *
- * @throws {Error} When the encryption mode is invalid (must be AES-GCM, AES-CBC, or AES-CTR)
- * @throws {Error} When the key length is not supported (must be 128, 192, 256, 384, or 512)
+ * @throws {Error} When the encryption mode is invalid (must be GCM, CBC, or CTR)
+ * @throws {Error} When the key length is not supported (must be 128, 192, or 256)
  * @throws {Error} When the encrypted data format is invalid (must be "data:iv")
  * @throws {Error} When the initialization vector (IV) is undefined or empty
  * @throws {Error} When decryption operation fails
  *
  * @example
  * ```typescript
- * // Decrypt data to string
+ * // Decrypt data to string (default)
  * const decrypted = await decryptAES(
- *   'AES-GCM:256',
- *   'mySecretKey12345',
- *   'a2639836a7b2838889a5e45f4f9fbdb85ca618c8393ae0:c1d2c736adaea88b3d3dd101'
+ *   'a2639836a7b2838889a5e45f4f9fbdb85ca618c8393ae0:c1d2c736adaea88b3d3dd101',
+ *   'mySecretKey12345'
  * );
  * console.log(decrypted); // "my sensitive data"
  * ```
  *
  * @example
  * ```typescript
- * // Decrypt AES-CTR data to binary
- * const decryptedBinary = await decryptAES(
- *   'AES-CTR:192',
- *   'secret123456789',
+ * // Decrypt with custom options
+ * const decrypted = await decryptAES(
  *   'encrypted:counter',
- *   true
+ *   'secret123456789',
+ *   { mode: 'CTR', keyLength: 192 }
  * );
- * console.log(decryptedBinary); // Uint8Array([1, 2, 3, 4, 5])
  * ```
  *
  * @see {@link encryptAES} for encryption
- * @see {@link EncryptionModes} for supported modes
+ * @see {@link AESOptions} for available options
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/decrypt} Web Crypto API decrypt
  */
-export const decryptAES = async (
-  mode: EncryptionModes,
-  secret: string,
+export async function decryptAES(
   data: string,
-  returnBinary = false,
-): Promise<string | Uint8Array> => {
-  const [algorithm, lengthStr] = mode.split(':');
-  const length = Number.parseInt(lengthStr || '0', 10);
+  secret: string,
+  options?: AESOptions,
+): Promise<string>;
 
-  if (!['AES-GCM', 'AES-CBC', 'AES-CTR'].includes(algorithm || '')) {
+/**
+ * Decrypts data using AES encryption and returns binary data.
+ *
+ * @param {string} data - The encrypted data and IV/counter, separated by a colon (hex-encoded)
+ * @param {string} secret - The secret key for decryption
+ * @param {AESOptions & { returnBinary: true }} options - Options with returnBinary set to true
+ * @returns {Promise<Uint8Array>} A promise that resolves to the decrypted data as Uint8Array
+ *
+ * @example
+ * ```typescript
+ * // Decrypt to binary
+ * const decryptedBinary = await decryptAES(
+ *   'encrypted:counter',
+ *   'secret123456789',
+ *   { returnBinary: true }
+ * );
+ * console.log(decryptedBinary); // Uint8Array([1, 2, 3, 4, 5])
+ * ```
+ */
+export async function decryptAES(
+  data: string,
+  secret: string,
+  options: AESOptions & { returnBinary: true },
+): Promise<Uint8Array>;
+
+/**
+ * Implementation of decryptAES
+ */
+export async function decryptAES(
+  data: string,
+  secret: string,
+  options?: AESOptions & { returnBinary?: boolean },
+): Promise<string | Uint8Array> {
+  // Apply defaults
+  const mode = options?.mode ?? 'GCM';
+  const keyLength = options?.keyLength ?? 256;
+  const returnBinary = options?.returnBinary ?? false;
+
+  if (!['GCM', 'CBC', 'CTR'].includes(mode)) {
     throw new Error(
-      'Invalid AES encryption mode. Must be AES-GCM, AES-CBC, or AES-CTR',
+      'Invalid AES encryption mode. Must be GCM, CBC, or CTR',
     );
   }
 
-  if (![128, 192, 256].includes(length)) {
+  if (![128, 192, 256].includes(keyLength)) {
     throw new Error(
       'Invalid AES key length. Must be 128, 192, or 256',
     );
@@ -120,15 +151,16 @@ export const decryptAES = async (
   }
 
   // Calculate key size in bytes
-  const keyLength = Math.min(32, Math.ceil(length / 8)); // Max 32 bytes (256 bits) for AES
-  const keyBytes = deriveKey(secret, keyLength);
+  const keySizeBytes = Math.min(32, Math.ceil(keyLength / 8)); // Max 32 bytes (256 bits) for AES
+  const keyBytes = deriveKey(secret, keySizeBytes);
 
+  const algorithm = `AES-${mode}`;
   const key = await crypto.subtle.importKey(
     'raw',
     keyBytes as BufferSource,
     {
       name: algorithm as 'AES-GCM' | 'AES-CBC' | 'AES-CTR',
-      length: keyLength * 8, // Convert back to bits
+      length: keySizeBytes * 8, // Convert back to bits
     },
     false,
     ['decrypt'],
@@ -136,7 +168,7 @@ export const decryptAES = async (
 
   let decryptConfig: AesGcmParams | AesCbcParams | AesCtrParams;
 
-  if (algorithm === 'AES-CTR') {
+  if (mode === 'CTR') {
     decryptConfig = {
       name: 'AES-CTR',
       counter: ivOrCounter,
@@ -159,7 +191,7 @@ export const decryptAES = async (
   return returnBinary
     ? new Uint8Array(decrypted)
     : new TextDecoder().decode(decrypted);
-};
+}
 
 /**
  * Decrypts data using RSA-OAEP encryption with the specified key size and hash algorithm.
@@ -167,13 +199,11 @@ export const decryptAES = async (
  * Uses the Web Crypto API for secure RSA decryption. Expects a PEM-formatted private key
  * and base64-encoded encrypted data.
  *
- * @param {EncryptionModes} mode - The RSA encryption mode (e.g., 'RSA-OAEP:2048:SHA-256')
- * @param {string} privateKey - The RSA private key in PEM format
  * @param {string} data - The encrypted data as a base64-encoded string
- * @param {boolean} [returnBinary=false] - Whether to return the decrypted data as binary (Uint8Array)
- * @returns {Promise<string | Uint8Array>} A promise that resolves to the decrypted data
+ * @param {string} privateKey - The RSA private key in PEM format
+ * @param {RSAOptions} [options] - Optional decryption settings (keySize, hash)
+ * @returns {Promise<string>} A promise that resolves to the decrypted data as a string
  *
- * @throws {Error} When the RSA mode format is invalid (must be 'RSA-OAEP:keySize:hashAlgorithm')
  * @throws {Error} When the key size is not supported (must be 2048, 3072, or 4096)
  * @throws {Error} When the hash algorithm is not supported (must be SHA-1, SHA-256, SHA-384, or SHA-512)
  * @throws {Error} When the private key is in invalid PEM format
@@ -186,40 +216,53 @@ export const decryptAES = async (
  * MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...
  * -----END PRIVATE KEY-----`;
  *
- * const decrypted = await decryptRSA(
- *   'RSA-OAEP:2048:SHA-256',
- *   privateKey,
- *   'base64EncryptedData=='
- * );
+ * // Decrypt with defaults (RSA-OAEP-2048-SHA-256)
+ * const decrypted = await decryptRSA('base64EncryptedData==', privateKey);
  * console.log(decrypted); // "my sensitive data"
  * ```
  *
  * @see {@link encryptRSA} for RSA encryption
- * @see {@link EncryptionModes} for supported modes
+ * @see {@link RSAOptions} for available options
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/decrypt} Web Crypto API decrypt
  */
-export const decryptRSA = async (
-  mode: EncryptionModes,
-  privateKey: string,
+export async function decryptRSA(
   data: string,
-  returnBinary = false,
-): Promise<string | Uint8Array> => {
-  const parts = mode.split(':');
-  if (parts.length !== 3 || parts[0] !== 'RSA-OAEP') {
-    throw new Error(
-      'Invalid RSA mode format. Expected "RSA-OAEP:keySize:hashAlgorithm"',
-    );
-  }
+  privateKey: string,
+  options?: RSAOptions,
+): Promise<string>;
 
-  const [, lengthStr, hashAlgorithm] = parts;
+/**
+ * Decrypts data using RSA-OAEP encryption and returns binary data.
+ *
+ * @param {string} data - The encrypted data as a base64-encoded string
+ * @param {string} privateKey - The RSA private key in PEM format
+ * @param {RSAOptions & { returnBinary: true }} options - Options with returnBinary set to true
+ * @returns {Promise<Uint8Array>} A promise that resolves to the decrypted data as Uint8Array
+ *
+ * @example
+ * ```typescript
+ * const binary = await decryptRSA('base64EncryptedData==', privateKey, { returnBinary: true });
+ * ```
+ */
+export async function decryptRSA(
+  data: string,
+  privateKey: string,
+  options: RSAOptions & { returnBinary: true },
+): Promise<Uint8Array>;
 
-  if (!lengthStr || !hashAlgorithm) {
-    throw new Error(
-      'Invalid RSA mode format. Expected "RSA-OAEP:keySize:hashAlgorithm"',
-    );
-  }
+/**
+ * Implementation of decryptRSA
+ */
+export async function decryptRSA(
+  data: string,
+  privateKey: string,
+  options?: RSAOptions & { returnBinary?: boolean },
+): Promise<string | Uint8Array> {
+  // Apply defaults
+  const keySize = options?.keySize ?? 2048;
+  const hashAlgorithm = options?.hashAlgorithm ?? 'SHA-256';
+  const returnBinary = options?.returnBinary ?? false;
 
-  const keySize = Number.parseInt(lengthStr, 10);
   if (![2048, 3072, 4096].includes(keySize)) {
     throw new Error(
       'Invalid RSA key size. Must be 2048, 3072, or 4096',
@@ -241,7 +284,7 @@ export const decryptRSA = async (
     keyData as BufferSource,
     {
       name: 'RSA-OAEP',
-      hash: 'SHA-256',
+      hash: hashAlgorithm,
     },
     false,
     ['decrypt'],
@@ -265,10 +308,12 @@ export const decryptRSA = async (
   return returnBinary
     ? new Uint8Array(decryptedData)
     : new TextDecoder().decode(decryptedData);
-};
+}
 
 /**
  * Decrypts data using the specified encryption mode.
+ *
+ * @deprecated Use {@link decryptAES} or {@link decryptRSA} with options objects instead
  *
  * Supports both AES and RSA decryption modes. For AES modes, uses the secret as a symmetric key.
  * For RSA modes, the secret parameter should be the private key in PEM format.
@@ -283,20 +328,15 @@ export const decryptRSA = async (
  *
  * @example
  * ```typescript
- * // AES decryption
+ * // AES decryption (deprecated - use decryptAES instead)
  * const decrypted = await decrypt('AES-GCM:256', 'mySecretKey', 'encrypted:iv');
- * console.log(decrypted); // Decrypted data
  *
- * // RSA decryption
- * const privateKey = '-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----';
- * const rsaDecrypted = await decrypt('RSA-OAEP:2048:SHA-256', privateKey, 'base64EncryptedData');
- * console.log(rsaDecrypted); // RSA decrypted data
+ * // Preferred:
+ * const decrypted = await decryptAES('encrypted:iv', 'mySecretKey');
  * ```
  *
  * @see {@link decryptAES} for AES decryption
  * @see {@link decryptRSA} for RSA decryption
- * @see {@link encrypt} for encryption
- * @see {@link EncryptionModes} for supported modes
  */
 export const decrypt = (
   mode: EncryptionModes,
@@ -304,9 +344,36 @@ export const decrypt = (
   data: string,
   returnBinary = false,
 ): Promise<string | Uint8Array> => {
-  if (mode.startsWith('RSA-')) {
-    return decryptRSA(mode, secret, data, returnBinary);
+  // Parse mode string and convert to new API
+  if (mode.startsWith('RSA-OAEP:')) {
+    const parts = mode.split(':');
+    const keySize = Number.parseInt(parts[1] || '2048', 10) as
+      | 2048
+      | 3072
+      | 4096;
+    const hashAlgorithm = (parts[2] || 'SHA-256') as
+      | 'SHA-1'
+      | 'SHA-256'
+      | 'SHA-384'
+      | 'SHA-512';
+    return returnBinary
+      ? decryptRSA(data, secret, { keySize, hashAlgorithm, returnBinary: true })
+      : decryptRSA(data, secret, { keySize, hashAlgorithm });
+  } else if (mode.startsWith('AES-')) {
+    const [algorithm, lengthStr] = mode.split(':');
+    const modeType = algorithm?.replace('AES-', '') as 'GCM' | 'CBC' | 'CTR';
+    const keyLength = Number.parseInt(lengthStr || '256', 10) as
+      | 128
+      | 192
+      | 256;
+    return returnBinary
+      ? decryptAES(data, secret, {
+        mode: modeType,
+        keyLength,
+        returnBinary: true,
+      })
+      : decryptAES(data, secret, { mode: modeType, keyLength });
   } else {
-    return decryptAES(mode, secret, data, returnBinary);
+    throw new Error('Invalid encryption mode');
   }
 };

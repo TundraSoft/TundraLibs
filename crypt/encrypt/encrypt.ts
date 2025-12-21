@@ -1,5 +1,5 @@
 import { encodeHex } from '$encoding';
-import type { EncryptionModes } from './types.ts';
+import type { AESOptions, EncryptionModes, RSAOptions } from './types.ts';
 
 /**
  * Derives a key of the exact required length from a secret string.
@@ -27,67 +27,65 @@ const deriveKey = (secret: string, requiredBytes: number): Uint8Array => {
  * for each encryption operation. The output format is `{encryptedData}:{iv}` where both
  * components are hex-encoded.
  *
- * @param {EncryptionModes} mode - The encryption mode and key length ({@link EncryptionModes})
- * @param {string} secret - The secret key for encryption (will be derived to match key length)
  * @param {string | Uint8Array} data - The data to encrypt, either as a string or binary data
+ * @param {string} secret - The secret key for encryption (will be derived to match key length)
+ * @param {AESOptions} [options] - Optional encryption settings (mode and keyLength)
  * @returns {Promise<string>} A promise that resolves to the encrypted data and IV, separated by a colon
  *
- * @throws {Error} When the encryption mode is invalid (must be AES-GCM, AES-CBC, or AES-CTR)
- * @throws {Error} When the key length is not supported (must be 128, 192, 256, 384, or 512)
+ * @throws {Error} When the encryption mode is invalid (must be GCM, CBC, or CTR)
+ * @throws {Error} When the key length is not supported (must be 128, 192, or 256)
  * @throws {Error} When encryption operation fails
  *
  * @example
  * ```typescript
- * // Encrypt a string with AES-GCM-256
- * const encrypted = await encryptAES('AES-GCM:256', 'mySecretKey12345', 'my sensitive data');
+ * // Encrypt a string with AES-GCM-256 (default)
+ * const encrypted = await encryptAES('my sensitive data', 'mySecretKey12345');
  * console.log(encrypted); // "a2639836a7b2838889a5e45f4f9fbdb85ca618c8393ae0:c1d2c736adaea88b3d3dd101"
  * ```
  *
  * @example
  * ```typescript
- * // Encrypt binary data with AES-CTR-192
+ * // Encrypt binary data with custom options
  * const binaryData = new Uint8Array([1, 2, 3, 4, 5]);
- * const encrypted = await encryptAES('AES-CTR:192', 'secret123456789', binaryData);
+ * const encrypted = await encryptAES(binaryData, 'secret123456789', { mode: 'CTR', keyLength: 192 });
  * console.log(encrypted); // Encrypted data with counter
  * ```
  *
  * @see {@link decryptAES} for decryption
- * @see {@link EncryptionModes} for supported modes
+ * @see {@link AESOptions} for available options
  * @see {@link https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto/encrypt} Web Crypto API encrypt
  */
 export const encryptAES = async (
-  mode: EncryptionModes,
-  secret: string,
   data: string | Uint8Array,
+  secret: string,
+  options?: AESOptions,
 ): Promise<string> => {
-  const [algorithm, lengthStr] = mode.split(':');
-  const length = Number.parseInt(lengthStr || '0', 10);
+  // Apply defaults
+  const mode = options?.mode ?? 'GCM';
+  const keyLength = options?.keyLength ?? 256;
 
-  if (!algorithm) {
-    throw new Error('Invalid AES encryption mode format');
-  }
-
-  if (!['AES-GCM', 'AES-CBC', 'AES-CTR'].includes(algorithm)) {
+  if (!['GCM', 'CBC', 'CTR'].includes(mode)) {
     throw new Error(
-      'Invalid AES encryption mode. Must be AES-GCM, AES-CBC, or AES-CTR',
+      'Invalid AES encryption mode. Must be GCM, CBC, or CTR',
     );
   }
 
-  if (![128, 192, 256].includes(length)) {
+  if (![128, 192, 256].includes(keyLength)) {
     throw new Error(
       'Invalid AES key length. Must be 128, 192, or 256',
     );
   }
 
   // Derive key of correct length
-  const keyBytes = deriveKey(secret, length / 8);
+  const keyBytes = deriveKey(secret, keyLength / 8);
 
+  const algorithm = `AES-${mode}`;
   const key = await crypto.subtle.importKey(
     'raw',
     keyBytes as BufferSource,
     {
       name: algorithm,
-      length: length,
+      length: keyLength,
     },
     false,
     ['encrypt'],
@@ -98,7 +96,7 @@ export const encryptAES = async (
     : data;
 
   // Handle different encryption modes
-  if (algorithm === 'AES-CTR') {
+  if (mode === 'CTR') {
     return await encryptAESCTR(key, dataToEncrypt);
   } else {
     return await encryptAESGCMCBC(key, algorithm, dataToEncrypt);
@@ -108,17 +106,15 @@ export const encryptAES = async (
 /**
  * Encrypts data using RSA-OAEP encryption.
  *
- * Uses the Web Crypto API for secure RSA encryption. The input can be either a PEM-formatted
- * public key string or a CryptoKey object. For maximum compatibility and security, provide
- * the public key as a PEM string.
+ * Uses the Web Crypto API for secure RSA encryption. The input must be a PEM-formatted
+ * public key string.
  *
- * @param {EncryptionModes} mode - The RSA encryption mode, key length, and hash algorithm
- * @param {string | CryptoKey} publicKey - The RSA public key in PEM format or as a CryptoKey
  * @param {string | Uint8Array} data - The data to encrypt (limited by RSA key size)
- * @returns {Promise<string>} A promise that resolves to the hex-encoded encrypted data
+ * @param {string} publicKey - The RSA public key in PEM format
+ * @param {RSAOptions} [options] - Optional encryption settings (keySize and hash algorithm)
+ * @returns {Promise<string>} A promise that resolves to the base64-encoded encrypted data
  *
- * @throws {Error} When the encryption mode is invalid
- * @throws {Error} When the key length or hash algorithm is not supported
+ * @throws {Error} When the key size or hash algorithm is not supported
  * @throws {Error} When the public key format is invalid
  * @throws {Error} When the data is too large for the RSA key size
  * @throws {Error} When encryption operation fails
@@ -129,32 +125,28 @@ export const encryptAES = async (
  * MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
  * -----END PUBLIC KEY-----`;
  *
- * const encrypted = await encryptRSA('RSA-OAEP:2048:SHA-256', publicKeyPEM, 'secret data');
- * console.log(encrypted); // Hex-encoded encrypted data
+ * // Encrypt with defaults (RSA-OAEP-2048-SHA-256)
+ * const encrypted = await encryptRSA('secret data', publicKeyPEM);
+ * console.log(encrypted); // Base64-encoded encrypted data
+ *
+ * // Encrypt with custom options
+ * const encrypted2 = await encryptRSA('secret data', publicKeyPEM, { keySize: 4096, hash: 'SHA-512' });
  * ```
+ *
+ * @see {@link decryptRSA} for decryption
+ * @see {@link RSAOptions} for available options
  */
 export const encryptRSA = async (
-  mode: EncryptionModes,
-  publicKey: string | CryptoKey,
   data: string | Uint8Array,
+  publicKey: string,
+  options?: RSAOptions,
 ): Promise<string> => {
-  const parts = mode.split(':');
-  if (parts.length !== 3 || parts[0] !== 'RSA-OAEP') {
-    throw new Error(
-      'Invalid RSA encryption mode. Must be RSA-OAEP:keySize:hashAlgorithm',
-    );
-  }
+  // Apply defaults
+  const keySize = options?.keySize ?? 2048;
+  const hashAlgorithm = options?.hashAlgorithm ?? 'SHA-256';
 
-  const [, lengthStr, hashAlgorithm] = parts;
-
-  if (!lengthStr || !hashAlgorithm) {
-    throw new Error('Invalid RSA encryption mode format');
-  }
-
-  const keyLength = Number.parseInt(lengthStr, 10);
-
-  if (![2048, 3072, 4096].includes(keyLength)) {
-    throw new Error('Invalid RSA key length. Must be 2048, 3072, or 4096');
+  if (![2048, 3072, 4096].includes(keySize)) {
+    throw new Error('Invalid RSA key size. Must be 2048, 3072, or 4096');
   }
 
   if (!['SHA-1', 'SHA-256', 'SHA-384', 'SHA-512'].includes(hashAlgorithm)) {
@@ -163,38 +155,32 @@ export const encryptRSA = async (
     );
   }
 
-  // Import the public key if it's a string
-  let cryptoKey: CryptoKey;
-  if (typeof publicKey === 'string') {
-    // Remove PEM headers and decode base64
-    const pemContents = publicKey
-      .replace(/-----BEGIN PUBLIC KEY-----/, '')
-      .replace(/-----END PUBLIC KEY-----/, '')
-      .replaceAll(/\s/g, '');
+  // Remove PEM headers and decode base64
+  const pemContents = publicKey
+    .replace(/-----BEGIN PUBLIC KEY-----/, '')
+    .replace(/-----END PUBLIC KEY-----/, '')
+    .replaceAll(/\s/g, '');
 
-    let keyData: Uint8Array;
-    try {
-      keyData = Uint8Array.from(
-        atob(pemContents),
-        (c) => c.codePointAt(0) ?? 0,
-      );
-    } catch {
-      throw new Error('Invalid PEM public key format');
-    }
-
-    cryptoKey = await crypto.subtle.importKey(
-      'spki',
-      keyData as BufferSource,
-      {
-        name: 'RSA-OAEP',
-        hash: 'SHA-256',
-      },
-      false,
-      ['encrypt'],
+  let keyData: Uint8Array;
+  try {
+    keyData = Uint8Array.from(
+      atob(pemContents),
+      (c) => c.codePointAt(0) ?? 0,
     );
-  } else {
-    cryptoKey = publicKey;
+  } catch {
+    throw new Error('Invalid PEM public key format');
   }
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'spki',
+    keyData as BufferSource,
+    {
+      name: 'RSA-OAEP',
+      hash: hashAlgorithm,
+    },
+    false,
+    ['encrypt'],
+  );
 
   const dataToEncrypt = typeof data === 'string'
     ? new TextEncoder().encode(data)
@@ -213,7 +199,7 @@ export const encryptRSA = async (
     hashOutputSize = 64; // SHA-512
   }
 
-  const maxDataSize = Math.floor(keyLength / 8) - 2 * hashOutputSize - 2;
+  const maxDataSize = Math.floor(keySize / 8) - 2 * hashOutputSize - 2;
 
   if (dataToEncrypt.length > maxDataSize) {
     throw new Error(
@@ -293,6 +279,8 @@ const encryptAESGCMCBC = async (
 /**
  * Encrypts data using the specified encryption mode.
  *
+ * @deprecated Use {@link encryptAES} or {@link encryptRSA} with options objects instead
+ *
  * Supports both AES and RSA encryption modes. For AES modes, uses the secret as a symmetric key.
  * For RSA modes, the secret parameter should be the public key in PEM format.
  *
@@ -305,29 +293,43 @@ const encryptAESGCMCBC = async (
  *
  * @example
  * ```typescript
- * // AES encryption
+ * // AES encryption (deprecated - use encryptAES instead)
  * const encrypted = await encrypt('AES-GCM:256', 'mySecretKey', 'my data');
- * console.log(encrypted); // Encrypted data with IV
  *
- * // RSA encryption
- * const publicKey = '-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----';
- * const rsaEncrypted = await encrypt('RSA-OAEP:2048:SHA-256', publicKey, 'my data');
- * console.log(rsaEncrypted); // RSA encrypted data
+ * // Preferred:
+ * const encrypted = await encryptAES('my data', 'mySecretKey', { mode: 'GCM', keyLength: 256 });
  * ```
  *
  * @see {@link encryptAES} for AES encryption
  * @see {@link encryptRSA} for RSA encryption
- * @see {@link decrypt} for decryption
- * @see {@link EncryptionModes} for supported modes
  */
 export const encrypt = (
   mode: EncryptionModes,
   secret: string,
   data: string | Uint8Array,
 ): Promise<string> => {
-  if (mode.startsWith('RSA-')) {
-    return encryptRSA(mode, secret, data);
+  // Parse mode string and convert to new API
+  if (mode.startsWith('RSA-OAEP:')) {
+    const parts = mode.split(':');
+    const keySize = Number.parseInt(parts[1] || '2048', 10) as
+      | 2048
+      | 3072
+      | 4096;
+    const hashAlgorithm = (parts[2] || 'SHA-256') as
+      | 'SHA-1'
+      | 'SHA-256'
+      | 'SHA-384'
+      | 'SHA-512';
+    return encryptRSA(data, secret, { keySize, hashAlgorithm });
+  } else if (mode.startsWith('AES-')) {
+    const [algorithm, lengthStr] = mode.split(':');
+    const modeType = algorithm?.replace('AES-', '') as 'GCM' | 'CBC' | 'CTR';
+    const keyLength = Number.parseInt(lengthStr || '256', 10) as
+      | 128
+      | 192
+      | 256;
+    return encryptAES(data, secret, { mode: modeType, keyLength });
   } else {
-    return encryptAES(mode, secret, data);
+    throw new Error('Invalid encryption mode');
   }
 };

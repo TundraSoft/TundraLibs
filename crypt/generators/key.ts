@@ -46,7 +46,7 @@ export type KeyFormat = 'PEM' | 'DER' | 'JWK' | 'RAW';
 /**
  * Configuration options for RSA key generation.
  */
-export interface RSAKeyOptions {
+export type RSAKeyOptions = {
   /** Algorithm type */
   algorithm: 'RSA-OAEP' | 'RSA-PSS';
   /** Key size in bits */
@@ -57,12 +57,12 @@ export interface RSAKeyOptions {
   format?: KeyFormat;
   /** Whether keys should be extractable */
   extractable?: boolean;
-}
+};
 
 /**
  * Configuration options for ECDSA/ECDH key generation.
  */
-export interface ECKeyOptions {
+export type ECKeyOptions = {
   /** Algorithm type */
   algorithm: 'ECDSA' | 'ECDH';
   /** Elliptic curve to use */
@@ -71,12 +71,12 @@ export interface ECKeyOptions {
   format?: KeyFormat;
   /** Whether keys should be extractable */
   extractable?: boolean;
-}
+};
 
 /**
  * A generated key pair containing both public and private keys.
  */
-export interface GeneratedKeyPair {
+export type GeneratedKeyPair = {
   /** The public key */
   publicKey: CryptoKey;
   /** The private key */
@@ -85,7 +85,7 @@ export interface GeneratedKeyPair {
   publicKeyExported?: string | JsonWebKey | ArrayBuffer;
   /** Private key in exported format (if format specified) */
   privateKeyExported?: string | JsonWebKey | ArrayBuffer;
-}
+};
 
 /**
  * Generates an RSA key pair for encryption/decryption or signing/verification.

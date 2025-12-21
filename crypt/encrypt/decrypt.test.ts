@@ -11,10 +11,15 @@ Deno.test('crypt.decrypt', async (t) => {
   await t.step('decryptAES - Basic Decryption', async () => {
     const data = 'my data';
     const secret = 'abcdefghijklmnopqrstuvwx'; // 24 bytes (192 bits)
-    const mode: EncryptionModes = 'AES-GCM:256';
 
-    const encrypted = await encryptAES(mode, secret, data);
-    const decrypted = await decryptAES(mode, secret, encrypted);
+    const encrypted = await encryptAES(data, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
+    const decrypted = await decryptAES(encrypted, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
 
     asserts.assertEquals(decrypted, data);
   });
@@ -22,10 +27,16 @@ Deno.test('crypt.decrypt', async (t) => {
   await t.step('decryptAES - returnBinary parameter', async () => {
     const data = new Uint8Array([1, 2, 3, 4, 5]);
     const secret = 'abcdefghijklmnopqrstuvwx';
-    const mode: EncryptionModes = 'AES-GCM:256';
 
-    const encrypted = await encryptAES(mode, secret, data);
-    const decrypted = await decryptAES(mode, secret, encrypted, true);
+    const encrypted = await encryptAES(data, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
+    const decrypted = await decryptAES(encrypted, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+      returnBinary: true,
+    });
 
     asserts.assertEquals(decrypted instanceof Uint8Array, true);
     asserts.assertEquals(decrypted, data);
@@ -34,10 +45,15 @@ Deno.test('crypt.decrypt', async (t) => {
   await t.step('decryptAES - String Return by Default', async () => {
     const data = 'test string data';
     const secret = 'abcdefghijklmnopqrstuvwx';
-    const mode: EncryptionModes = 'AES-GCM:256';
 
-    const encrypted = await encryptAES(mode, secret, data);
-    const decrypted = await decryptAES(mode, secret, encrypted, false);
+    const encrypted = await encryptAES(data, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
+    const decrypted = await decryptAES(encrypted, secret, {
+      mode: 'GCM',
+      keyLength: 256,
+    });
 
     asserts.assertEquals(typeof decrypted, 'string');
     asserts.assertEquals(decrypted, data);
@@ -46,10 +62,9 @@ Deno.test('crypt.decrypt', async (t) => {
   await t.step('decryptAES - Empty Input', async () => {
     const data = '';
     const secret = 'abcdefghijklmnopqrstuvwx';
-    const mode: EncryptionModes = 'AES-GCM:256';
 
-    const encrypted = await encryptAES(mode, secret, data);
-    const decrypted = await decryptAES(mode, secret, encrypted);
+    const encrypted = await encryptAES(data, secret);
+    const decrypted = await decryptAES(encrypted, secret);
 
     asserts.assertEquals(decrypted, data);
   });
@@ -57,15 +72,17 @@ Deno.test('crypt.decrypt', async (t) => {
   await t.step('decryptAES - Different Key Lengths', async () => {
     const data = 'test data';
     const secret = 'abcdefghijklmnopqrstuvwxyz';
-    const modes: EncryptionModes[] = [
-      'AES-GCM:128',
-      'AES-GCM:192',
-      'AES-GCM:256',
-    ];
+    const keyLengths: Array<128 | 192 | 256> = [128, 192, 256];
 
-    for (const mode of modes) {
-      const encrypted = await encryptAES(mode, secret, data);
-      const decrypted = await decryptAES(mode, secret, encrypted);
+    for (const keyLength of keyLengths) {
+      const encrypted = await encryptAES(data, secret, {
+        mode: 'GCM',
+        keyLength,
+      });
+      const decrypted = await decryptAES(encrypted, secret, {
+        mode: 'GCM',
+        keyLength,
+      });
       asserts.assertEquals(decrypted, data);
     }
   });
@@ -73,15 +90,17 @@ Deno.test('crypt.decrypt', async (t) => {
   await t.step('decryptAES - Different Algorithms', async () => {
     const data = 'test data';
     const secret = 'abcdefghijklmnopqrstuvwxyz';
-    const modes: EncryptionModes[] = [
-      'AES-GCM:256',
-      'AES-CBC:256',
-      'AES-CTR:256',
-    ];
+    const modes: Array<'GCM' | 'CBC' | 'CTR'> = ['GCM', 'CBC', 'CTR'];
 
     for (const mode of modes) {
-      const encrypted = await encryptAES(mode, secret, data);
-      const decrypted = await decryptAES(mode, secret, encrypted);
+      const encrypted = await encryptAES(data, secret, {
+        mode,
+        keyLength: 256,
+      });
+      const decrypted = await decryptAES(encrypted, secret, {
+        mode,
+        keyLength: 256,
+      });
       asserts.assertEquals(decrypted, data);
     }
   });
@@ -93,7 +112,7 @@ Deno.test('crypt.decrypt', async (t) => {
     // Test invalid data format
     await asserts.assertRejects(
       async () => {
-        await decryptAES('AES-GCM:256', secret, 'invalidformat');
+        await decryptAES('invalidformat', secret);
       },
       Error,
       'Invalid encrypted data format. Expected "data:iv"',
@@ -102,7 +121,7 @@ Deno.test('crypt.decrypt', async (t) => {
     // Test missing IV with valid hex format
     await asserts.assertRejects(
       async () => {
-        await decryptAES('AES-GCM:256', secret, 'abcdef:');
+        await decryptAES('abcdef:', secret);
       },
       Error,
       'Initialization vector (IV) or counter is undefined',
@@ -111,16 +130,18 @@ Deno.test('crypt.decrypt', async (t) => {
     // Test invalid mode
     await asserts.assertRejects(
       async () => {
-        await decryptAES('INVALID-MODE:256' as EncryptionModes, secret, data);
+        const encrypted = await encryptAES('test', secret);
+        await decryptAES(encrypted, secret, { mode: 'INVALID' as any });
       },
       Error,
-      'Invalid AES encryption mode. Must be AES-GCM, AES-CBC, or AES-CTR',
+      'Invalid AES encryption mode. Must be GCM, CBC, or CTR',
     );
 
     // Test invalid key length
     await asserts.assertRejects(
       async () => {
-        await decryptAES('AES-GCM:999' as EncryptionModes, secret, data);
+        const encrypted = await encryptAES('test', secret);
+        await decryptAES(encrypted, secret, { keyLength: 999 as any });
       },
       Error,
       'Invalid AES key length. Must be 128, 192, or 256',
@@ -128,7 +149,8 @@ Deno.test('crypt.decrypt', async (t) => {
 
     await asserts.assertRejects(
       async () => {
-        await decryptAES('AES-GCM' as EncryptionModes, secret, data);
+        const encrypted = await encryptAES('test', secret);
+        await decryptAES(encrypted, secret, { keyLength: 0 as any });
       },
       Error,
       'Invalid AES key length. Must be 128, 192, or 256',
@@ -137,12 +159,11 @@ Deno.test('crypt.decrypt', async (t) => {
 
   await t.step('decryptAES - Invalid Encrypted Data', async () => {
     const secret = 'abcdefghijklmnopqrstuvwx';
-    const mode: EncryptionModes = 'AES-GCM:256';
 
     // Test with corrupted encrypted data
     await asserts.assertRejects(
       async () => {
-        await decryptAES(mode, secret, 'invalidhex:anotherhex');
+        await decryptAES('invalidhex:anotherhex', secret);
       },
       Error,
     );
@@ -152,14 +173,13 @@ Deno.test('crypt.decrypt', async (t) => {
     const data = 'secret message';
     const secret1 = 'correctsecret123456789012345';
     const secret2 = 'wrongsecret123456789012345';
-    const mode: EncryptionModes = 'AES-GCM:256';
 
-    const encrypted = await encryptAES(mode, secret1, data);
+    const encrypted = await encryptAES(data, secret1);
 
     // Should fail with wrong secret
     await asserts.assertRejects(
       async () => {
-        await decryptAES(mode, secret2, encrypted);
+        await decryptAES(encrypted, secret2);
       },
       Error,
     );
@@ -168,21 +188,23 @@ Deno.test('crypt.decrypt', async (t) => {
   await t.step('decryptAES - All Valid Modes', async () => {
     const data = 'test data';
     const secret = 'testsecretwith32characterslong!';
-    const modes: EncryptionModes[] = [
-      'AES-GCM:128',
-      'AES-GCM:192',
-      'AES-GCM:256',
-      'AES-CBC:128',
-      'AES-CBC:192',
-      'AES-CBC:256',
-      'AES-CTR:128',
-      'AES-CTR:192',
-      'AES-CTR:256',
+    const configs: Array<
+      { mode: 'GCM' | 'CBC' | 'CTR'; keyLength: 128 | 192 | 256 }
+    > = [
+      { mode: 'GCM', keyLength: 128 },
+      { mode: 'GCM', keyLength: 192 },
+      { mode: 'GCM', keyLength: 256 },
+      { mode: 'CBC', keyLength: 128 },
+      { mode: 'CBC', keyLength: 192 },
+      { mode: 'CBC', keyLength: 256 },
+      { mode: 'CTR', keyLength: 128 },
+      { mode: 'CTR', keyLength: 192 },
+      { mode: 'CTR', keyLength: 256 },
     ];
 
-    for (const mode of modes) {
-      const encrypted = await encryptAES(mode, secret, data);
-      const decrypted = await decryptAES(mode, secret, encrypted);
+    for (const config of configs) {
+      const encrypted = await encryptAES(data, secret, config);
+      const decrypted = await decryptAES(encrypted, secret, config);
       asserts.assertEquals(decrypted, data);
     }
   });
@@ -190,20 +212,18 @@ Deno.test('crypt.decrypt', async (t) => {
   await t.step('decryptAES - Long Data', async () => {
     const data = 'a'.repeat(10000);
     const secret = 'testsecretwith32characterslong!';
-    const mode: EncryptionModes = 'AES-GCM:256';
 
-    const encrypted = await encryptAES(mode, secret, data);
-    const decrypted = await decryptAES(mode, secret, encrypted);
+    const encrypted = await encryptAES(data, secret);
+    const decrypted = await decryptAES(encrypted, secret);
     asserts.assertEquals(decrypted, data);
   });
 
   await t.step('decryptAES - Unicode Data', async () => {
     const data = '🔐 Hello 世界 🌍';
     const secret = 'testsecretwith32characterslong!';
-    const mode: EncryptionModes = 'AES-GCM:256';
 
-    const encrypted = await encryptAES(mode, secret, data);
-    const decrypted = await decryptAES(mode, secret, encrypted);
+    const encrypted = await encryptAES(data, secret);
+    const decrypted = await decryptAES(encrypted, secret);
     asserts.assertEquals(decrypted, data);
   });
 
@@ -249,14 +269,12 @@ Deno.test('crypt.decrypt', async (t) => {
 
     // Test encryption followed by decryption
     const encrypted = await encryptRSA(
-      'RSA-OAEP:2048:SHA-256',
-      publicKeyPEM,
       data,
+      publicKeyPEM,
     );
     const decrypted = await decryptRSA(
-      'RSA-OAEP:2048:SHA-256',
-      privateKeyPEM,
       encrypted,
+      privateKeyPEM,
     );
 
     asserts.assertEquals(decrypted, data);
@@ -301,14 +319,14 @@ Deno.test('crypt.decrypt', async (t) => {
       }\n-----END PRIVATE KEY-----`;
 
       const encrypted = await encryptRSA(
-        `RSA-OAEP:${keySize}:SHA-256` as EncryptionModes,
-        publicKeyPEM,
         data,
+        publicKeyPEM,
+        { keySize: keySize as 2048 | 3072 | 4096 },
       );
       const decrypted = await decryptRSA(
-        `RSA-OAEP:${keySize}:SHA-256` as EncryptionModes,
-        privateKeyPEM,
         encrypted,
+        privateKeyPEM,
+        { keySize: keySize as 2048 | 3072 | 4096 },
       );
 
       asserts.assertEquals(decrypted, data);
@@ -353,15 +371,13 @@ Deno.test('crypt.decrypt', async (t) => {
     const binaryData = new Uint8Array([1, 2, 3, 4, 5, 255, 0, 127]);
 
     const encrypted = await encryptRSA(
-      'RSA-OAEP:2048:SHA-256',
-      publicKeyPEM,
       binaryData,
+      publicKeyPEM,
     );
     const decrypted = await decryptRSA(
-      'RSA-OAEP:2048:SHA-256',
-      privateKeyPEM,
       encrypted,
-      true,
+      privateKeyPEM,
+      { returnBinary: true },
     );
 
     asserts.assertEquals(decrypted instanceof Uint8Array, true);
@@ -391,22 +407,21 @@ Deno.test('crypt.decrypt', async (t) => {
       privateKeyBase64.match(/.{1,64}/g)?.join('\n')
     }\n-----END PRIVATE KEY-----`;
 
-    // Invalid mode format
+    // Invalid key size
     await asserts.assertRejects(
       async () => {
-        await decryptRSA('INVALID-MODE' as any, privateKeyPEM, 'base64data');
+        await decryptRSA('base64data', privateKeyPEM, { keySize: 1024 as any });
       },
       Error,
-      'Invalid RSA mode format',
+      'Invalid RSA key size',
     );
 
     // Invalid encrypted data
     await asserts.assertRejects(
       async () => {
         await decryptRSA(
-          'RSA-OAEP:2048:SHA-256',
-          privateKeyPEM,
           'invalid-base64!@#',
+          privateKeyPEM,
         );
       },
       Error,
@@ -417,9 +432,8 @@ Deno.test('crypt.decrypt', async (t) => {
     await asserts.assertRejects(
       async () => {
         await decryptRSA(
-          'RSA-OAEP:2048:SHA-256',
-          'invalid-pem',
           'dmFsaWRiYXNlNjQ=',
+          'invalid-pem',
         );
       },
       Error,
