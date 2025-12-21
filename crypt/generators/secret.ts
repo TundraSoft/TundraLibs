@@ -60,7 +60,7 @@ export type SecretGeneratorOptions = {
  * ```typescript
  * // Generate a 20-byte base32 secret for TOTP
  * const totpSecret = secretGenerator(20, 'BASE32');
- * console.log(totpSecret); // "JBSWY3DPEBLW64TMMQQQ===="
+ * console.log(totpSecret); // "JBSWY3DPEBLW64TMMQQQ" (no padding)
  * ```
  *
  * @example
@@ -110,7 +110,8 @@ export const secretGenerator = (
       return encodeBase64(bytes);
 
     case 'BASE32':
-      return encodeBase32(bytes);
+      // Strip padding for better compatibility with authenticator apps and URLs
+      return encodeBase32(bytes).replace(/=+$/, '');
 
     case 'ALPHANUMERIC':
       // Map each byte to alphanumeric range (62 possibilities: 0-9, A-Z, a-z)
@@ -190,7 +191,7 @@ export const generateBase64Secret = (byteLength: number): string =>
  * @example
  * ```typescript
  * const b32Secret = generateBase32Secret(16);
- * console.log(b32Secret); // "JBSWY3DPEBLW64TMMQQQ===="
+ * console.log(b32Secret); // "JBSWY3DPEBLW64TMMQQQ" (no padding)
  * ```
  *
  * @example

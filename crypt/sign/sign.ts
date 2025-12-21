@@ -1,6 +1,4 @@
-import {
-  validateDigestAlgorithm,
-} from '../digest/mod.ts';
+import { validateDigestAlgorithm } from '../digest/mod.ts';
 import type { HMACOptions, RSAOptions, SigningModes } from './types.ts';
 import { encodeHex } from '$encoding';
 
