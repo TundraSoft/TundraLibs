@@ -522,34 +522,36 @@ export type Query<
                  * When a row with matching values for these columns already exists,
                  * an UPDATE is performed instead of INSERT.
                  *
-                 * **Important**: Plain column names (no @ prefix).
+                 * **Important**: Use column identifiers with @ prefix.
                  *
                  * @example
                  * ```typescript
                  * // Single key conflict (most common)
-                 * conflictKeys: ['id']
+                 * conflictKeys: ['@id']
                  *
                  * // Composite key conflict
-                 * conflictKeys: ['userId', 'productId']
+                 * conflictKeys: ['@userId', '@productId']
                  *
                  * // Unique constraint conflict
-                 * conflictKeys: ['email']
+                 * conflictKeys: ['@email']
                  * ```
                  */
-                conflictKeys: Array<keyof PT>;
+                conflictKeys: ColumnIdentifier[];
                 /**
-                 * Optional: Specify which fields to update when conflict occurs.
+                 * Optional: Specify which fields from data to update when conflict occurs.
                  *
                  * **When omitted**: All fields from `data` (except `conflictKeys`) are updated.
-                 * **When provided**: Only specified fields are updated on conflict.
+                 * **When provided**: Only specified fields are updated on conflict. Values come from `data`.
                  *
                  * **Use Cases**:
                  * - Preserve original timestamps: Don't update `createdAt`
-                 * - Increment counters: Update `viewCount` but not other fields
-                 * - Set different values on update vs insert
+                 * - Selective updates: Update only specific columns on conflict
+                 * - Keep original values: Exclude columns from update
                  *
-                 * **Keys**: Plain column names (subset of `columns` definition)
-                 * **Values**: Same as `data` - literals or expressions
+                 * **Important**:
+                 * - Use column identifiers with @ prefix
+                 * - Values are taken from the `data` object
+                 * - All specified columns must exist in `data`
                  *
                  * @example
                  * ```typescript
@@ -559,27 +561,23 @@ export type Query<
                  *     id: 1,
                  *     name: 'John',
                  *     email: 'john@example.com',
-                 *     createdAt: { type: 'NOW' }
-                 *   },
-                 *   conflictKeys: ['id'],
-                 *   updateOnConflict: {
-                 *     name: 'John',
+                 *     createdAt: { type: 'NOW' },
                  *     updatedAt: { type: 'NOW' }
-                 *     // email and createdAt NOT updated - keeps original values
-                 *   }
+                 *   },
+                 *   conflictKeys: ['@id'],
+                 *   updateOnConflict: ['@name', '@updatedAt']
+                 *   // email and createdAt NOT updated - keeps original values
                  * }
                  *
-                 * // Increment counter on conflict
+                 * // Update only quantity on conflict
                  * {
-                 *   data: { userId: 1, productId: 5, viewCount: 1 },
-                 *   conflictKeys: ['userId', 'productId'],
-                 *   updateOnConflict: {
-                 *     viewCount: { type: 'ADD', args: ['@viewCount', 1] }
-                 *   }
+                 *   data: { userId: 1, productId: 5, quantity: 10, lastViewed: { type: 'NOW' } },
+                 *   conflictKeys: ['@userId', '@productId'],
+                 *   updateOnConflict: ['@quantity', '@lastViewed']
                  * }
                  * ```
                  */
-                updateOnConflict?: PartialDataWithExpressions<PT>;
+                updateOnConflict?: ColumnIdentifier[];
               }
             : QT extends 'UPDATE' ? {
                 /**

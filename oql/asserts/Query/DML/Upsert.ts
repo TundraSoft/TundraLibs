@@ -10,6 +10,7 @@
 
 import type { Query, TableType } from '../../../types/mod.ts';
 import { assertExpression } from '../../Expressions/mod.ts';
+import { assertColumnIdentifier } from '../../ColumnIdentifier.ts';
 
 /**
  * Asserts that a value is a valid UPSERT query.
@@ -25,11 +26,10 @@ import { assertExpression } from '../../Expressions/mod.ts';
  * - `data` must be single object or array of objects
  * - `data` keys must match columns (plain strings, no @ prefix)
  * - `data` values can be primitives or Expression objects
- * - `conflictKeys` must be non-empty array of column names
- * - `conflictKeys` must be subset of columns
- * - `updateOnConflict` (optional) must be object with subset of columns
- * - `updateOnConflict` values can be primitives or Expression objects
- * - `returnColumns` must be array of strings if present
+ * - `conflictKeys` must be non-empty array of column identifiers (with @ prefix)
+ * - `conflictKeys` must reference existing columns
+ * - `updateOnConflict` (optional) must be array of column identifiers (with @ prefix)
+ * - `updateOnConflict` columns must exist in data
  *
  * @param x - The value to validate
  * @throws {TypeError} If the value is not a valid UPSERT query
@@ -47,7 +47,7 @@ import { assertExpression } from '../../Expressions/mod.ts';
  *     email: 'john@example.com',
  *     createdAt: { type: 'NOW' }
  *   },
- *   conflictKeys: ['id']
+ *   conflictKeys: ['@id']
  * };
  * assertUpsertQuery(query); // ✓
  *
@@ -63,12 +63,9 @@ import { assertExpression } from '../../Expressions/mod.ts';
  *     createdAt: { type: 'NOW' },
  *     updatedAt: { type: 'NOW' }
  *   },
- *   conflictKeys: ['id'],
- *   updateOnConflict: {
- *     name: 'John',
- *     updatedAt: { type: 'NOW' }
- *     // email and createdAt not updated on conflict
- *   }
+ *   conflictKeys: ['@id'],
+ *   updateOnConflict: ['@name', '@updatedAt']
+ *   // email and createdAt not updated on conflict
  * };
  * assertUpsertQuery(partial); // ✓
  *
@@ -83,11 +80,8 @@ import { assertExpression } from '../../Expressions/mod.ts';
  *     quantity: 1,
  *     lastViewed: { type: 'NOW' }
  *   },
- *   conflictKeys: ['userId', 'productId'],
- *   updateOnConflict: {
- *     quantity: { type: 'ADD', args: ['@quantity', 1] },
- *     lastViewed: { type: 'NOW' }
- *   }
+ *   conflictKeys: ['@userId', '@productId'],
+ *   updateOnConflict: ['@quantity', '@lastViewed']
  * };
  * assertUpsertQuery(composite); // ✓
  *
@@ -96,6 +90,7 @@ import { assertExpression } from '../../Expressions/mod.ts';
  *   type: 'UPSERT',
  *   table: 'settings',
  *   columns: ['key', 'value'],
+ *   conflictKeys: ['@key'],
  *   data: [
  *     { key: 'theme', value: 'dark' },
  *     { key: 'lang', value: 'en' }
@@ -251,7 +246,7 @@ export const assertUpsertQuery: <PT extends TableType = TableType>(
     validateDataObject(dataArray[i], i, 'data');
   }
 
-  // Validate conflictKeys (required)
+  // Validate conflictKeys (required) - must be column identifiers
   if (!Array.isArray(query.conflictKeys) || query.conflictKeys.length === 0) {
     throw new TypeError(
       `Invalid UPSERT query: 'conflictKeys' must be a non-empty array`,
@@ -259,51 +254,52 @@ export const assertUpsertQuery: <PT extends TableType = TableType>(
   }
 
   for (const key of query.conflictKeys) {
-    if (typeof key !== 'string' || key.trim().length === 0) {
+    try {
+      assertColumnIdentifier(key, columnList);
+    } catch (error) {
       throw new TypeError(
-        `Invalid UPSERT query: Each conflictKey must be a non-empty string`,
-      );
-    }
-
-    // Conflict keys should NOT have @ prefix
-    if ((key as string).startsWith('@')) {
-      throw new TypeError(
-        `Invalid UPSERT query: conflictKeys should be plain strings without '@' prefix. Got '${key}'`,
-      );
-    }
-
-    // Conflict key must be in columns list
-    if (!columnList.includes(key as string)) {
-      throw new TypeError(
-        `Invalid UPSERT query: conflictKey '${key}' is not in columns list`,
+        `Invalid UPSERT query: conflictKeys - ${(error as Error).message}`,
       );
     }
   }
 
-  // Validate updateOnConflict (optional)
+  // Validate updateOnConflict (optional) - must be array of column identifiers
   if (query.updateOnConflict !== undefined) {
-    if (
-      typeof query.updateOnConflict !== 'object' ||
-      query.updateOnConflict === null ||
-      Array.isArray(query.updateOnConflict)
-    ) {
+    if (!Array.isArray(query.updateOnConflict)) {
       throw new TypeError(
-        `Invalid UPSERT query: 'updateOnConflict' must be a non-null object (not an array) if provided`,
+        `Invalid UPSERT query: 'updateOnConflict' must be an array if provided`,
       );
     }
 
-    validateDataObject(query.updateOnConflict, 'conflict', 'updateOnConflict');
+    if (query.updateOnConflict.length === 0) {
+      throw new TypeError(
+        `Invalid UPSERT query: 'updateOnConflict' cannot be an empty array`,
+      );
+    }
 
-    // Additional check: updateOnConflict keys should not include conflictKeys
-    const updateKeys = Object.keys(
-      query.updateOnConflict as Record<string, unknown>,
-    );
-    const conflictKeySet = new Set(query.conflictKeys as string[]);
+    // Get first data object to check which columns are available
+    const firstData = Array.isArray(query.data) ? query.data[0] : query.data;
+    const dataKeys = typeof firstData === 'object' && firstData !== null
+      ? Object.keys(firstData as Record<string, unknown>)
+      : [];
 
-    for (const key of updateKeys) {
-      if (conflictKeySet.has(key)) {
+    for (const identifier of query.updateOnConflict) {
+      // Validate column identifier format
+      try {
+        assertColumnIdentifier(identifier, columnList);
+      } catch (error) {
         throw new TypeError(
-          `Invalid UPSERT query: updateOnConflict should not include conflictKey '${key}' (conflict keys are never updated)`,
+          `Invalid UPSERT query: updateOnConflict - ${
+            (error as Error).message
+          }`,
+        );
+      }
+
+      // Verify the column exists in data
+      const columnName = (identifier as string).slice(1); // Remove @ prefix
+      if (!dataKeys.includes(columnName)) {
+        throw new TypeError(
+          `Invalid UPSERT query: updateOnConflict column '${identifier}' (${columnName}) must exist in data`,
         );
       }
     }
@@ -318,7 +314,7 @@ export const assertUpsertQuery: <PT extends TableType = TableType>(
  *
  * @example
  * ```ts
- * const query = { type: 'UPSERT', table: 'users', data: { id: 1, name: 'John' }, conflictKeys: ['id'] };
+ * const query = { type: 'UPSERT', table: 'users', data: { id: 1, name: 'John' }, conflictKeys: ['@id'] };
  * if (isUpsert(query)) {
  *   // query is now typed as Query<'UPSERT', ...>
  *   console.log(query.table);

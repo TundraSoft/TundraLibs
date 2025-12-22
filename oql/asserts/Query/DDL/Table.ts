@@ -589,7 +589,9 @@ export const assertAlterTable = <T extends Query<'ALTER_TABLE', TableType>>(
       validateIdentifierName(colName, 'column', 'ALTER_TABLE query');
       validateColumnDefinition(
         colName,
-        x.alterColumns[colName] as ColumnDefinition,
+        (x.alterColumns as Record<string, ColumnDefinition>)[
+          colName
+        ] as ColumnDefinition,
         'ALTER_TABLE query (alterColumns)',
       );
     }
