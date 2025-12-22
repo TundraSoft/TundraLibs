@@ -6,5 +6,19 @@
  * @module asserts/Query/DDL
  */
 
-export { assertCreateSchema } from './CreateSchema.ts';
-export { assertDropSchema } from './DropSchema.ts';
+export {
+  assertCreateSchema,
+  assertDropSchema,
+  isCreateSchema,
+  isDropSchema,
+} from './Schema.ts';
+export {
+  assertAlterView,
+  assertCreateView,
+  assertDropView,
+  assertRefreshMaterializedView,
+  isAlterView,
+  isCreateView,
+  isDropView,
+  isRefreshMaterializedView,
+} from './View.ts';

@@ -76,6 +76,7 @@ type DMLQueries =
  * - `CREATE_VIEW`: Create a virtual table from a query
  * - `DROP_VIEW`: Remove an existing view
  * - `ALTER_VIEW`: Modify view definition
+ * - `REFRESH_MATERIALIZED_VIEW`: Refresh a materialized view's cached data
  *
  * @internal
  */
@@ -87,7 +88,8 @@ type DDLQueries =
   | 'ALTER_TABLE'
   | 'CREATE_VIEW'
   | 'DROP_VIEW'
-  | 'ALTER_VIEW';
+  | 'ALTER_VIEW'
+  | 'REFRESH_MATERIALIZED_VIEW';
 
 /**
  * All supported query types (DML + DDL).
@@ -1022,6 +1024,11 @@ export type Query<
             materialized?: boolean;
             /** If true, don't error if view already exists */
             ifNotExists?: boolean;
+            /**
+             * If true, replace the view if it already exists.
+             * Cannot be used with ifNotExists.
+             */
+            orReplace?: boolean;
           }
         : QT extends 'DROP_VIEW' ? {
             /** Name of the view to drop */
@@ -1048,6 +1055,18 @@ export type Query<
              * Changes what data the view returns.
              */
             query?: Query<'SELECT', PT, LT>;
+          }
+        : QT extends 'REFRESH_MATERIALIZED_VIEW' ? {
+            /** Name of the materialized view to refresh */
+            view: string;
+            /** Optional schema/namespace for the view */
+            schema?: string;
+            /**
+             * If true, refresh concurrently (allows reads during refresh).
+             * Requires a unique index on the view.
+             * If false, exclusive lock is taken during refresh.
+             */
+            concurrently?: boolean;
           }
         : never
       : never

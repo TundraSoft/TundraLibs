@@ -208,3 +208,29 @@ export const assertCountQuery: <PT extends TableType = TableType>(
     assertQueryFilter(query.where, availableKeys);
   }
 };
+
+/**
+ * Type guard for COUNT queries.
+ *
+ * @param x - The value to check
+ * @returns True if the value is a valid COUNT query, false otherwise
+ *
+ * @example
+ * ```ts
+ * const query = { type: 'COUNT', table: 'users', where: { '@active': true } };
+ * if (isCount(query)) {
+ *   // query is now typed as Query<'COUNT', ...>
+ *   console.log(query.table);
+ * }
+ * ```
+ */
+export const isCountQuery = <T extends Query<'COUNT', any>>(
+  x: unknown,
+): x is T => {
+  try {
+    assertCountQuery(x as T);
+    return true;
+  } catch {
+    return false;
+  }
+};

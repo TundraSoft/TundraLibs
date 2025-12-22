@@ -309,3 +309,29 @@ export const assertUpsertQuery: <PT extends TableType = TableType>(
     }
   }
 };
+
+/**
+ * Type guard for UPSERT queries.
+ *
+ * @param x - The value to check
+ * @returns True if the value is a valid UPSERT query, false otherwise
+ *
+ * @example
+ * ```ts
+ * const query = { type: 'UPSERT', table: 'users', data: { id: 1, name: 'John' }, conflictKeys: ['id'] };
+ * if (isUpsert(query)) {
+ *   // query is now typed as Query<'UPSERT', ...>
+ *   console.log(query.table);
+ * }
+ * ```
+ */
+export const isUpsertQuery = <T extends Query<'UPSERT', any>>(
+  x: unknown,
+): x is T => {
+  try {
+    assertUpsertQuery(x as T);
+    return true;
+  } catch {
+    return false;
+  }
+};

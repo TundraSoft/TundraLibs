@@ -256,3 +256,29 @@ export const assertUpdateQuery: <PT extends TableType = TableType>(
     assertQueryFilter(query.where, availableKeys);
   }
 };
+
+/**
+ * Type guard for UPDATE queries.
+ *
+ * @param x - The value to check
+ * @returns True if the value is a valid UPDATE query, false otherwise
+ *
+ * @example
+ * ```ts
+ * const query = { type: 'UPDATE', table: 'users', data: { name: 'John' } };
+ * if (isUpdate(query)) {
+ *   // query is now typed as Query<'UPDATE', ...>
+ *   console.log(query.table);
+ * }
+ * ```
+ */
+export const isUpdateQuery = <T extends Query<'UPDATE', any>>(
+  x: unknown,
+): x is T => {
+  try {
+    assertUpdateQuery(x as T);
+    return true;
+  } catch {
+    return false;
+  }
+};

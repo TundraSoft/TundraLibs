@@ -246,3 +246,29 @@ export const assertInsertQuery: <PT extends TableType = TableType>(
     }
   }
 };
+
+/**
+ * Type guard for INSERT queries.
+ *
+ * @param x - The value to check
+ * @returns True if the value is a valid INSERT query, false otherwise
+ *
+ * @example
+ * ```ts
+ * const query = { type: 'INSERT', table: 'users', data: { name: 'John' } };
+ * if (isInsert(query)) {
+ *   // query is now typed as Query<'INSERT', ...>
+ *   console.log(query.table);
+ * }
+ * ```
+ */
+export const isInsertQuery = <T extends Query<'INSERT', any>>(
+  x: unknown,
+): x is T => {
+  try {
+    assertInsertQuery(x as T);
+    return true;
+  } catch {
+    return false;
+  }
+};

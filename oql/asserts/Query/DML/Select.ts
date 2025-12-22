@@ -467,3 +467,29 @@ export const assertSelectQuery: <
     }
   }
 };
+
+/**
+ * Type guard for SELECT queries.
+ *
+ * @param x - The value to check
+ * @returns True if the value is a valid SELECT query, false otherwise
+ *
+ * @example
+ * ```ts
+ * const query = { type: 'SELECT', table: 'users', where: { '@active': true } };
+ * if (isSelect(query)) {
+ *   // query is now typed as Query<'SELECT', ...>
+ *   console.log(query.table);
+ * }
+ * ```
+ */
+export const isSelectQuery = <T extends Query<'SELECT', any, any>>(
+  x: unknown,
+): x is T => {
+  try {
+    assertSelectQuery(x as T);
+    return true;
+  } catch {
+    return false;
+  }
+};

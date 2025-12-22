@@ -190,3 +190,29 @@ export const assertDeleteQuery: <PT extends TableType = TableType>(
     assertQueryFilter(query.where, availableKeys);
   }
 };
+
+/**
+ * Type guard for DELETE queries.
+ *
+ * @param x - The value to check
+ * @returns True if the value is a valid DELETE query, false otherwise
+ *
+ * @example
+ * ```ts
+ * const query = { type: 'DELETE', table: 'users', where: { '@id': 1 } };
+ * if (isDelete(query)) {
+ *   // query is now typed as Query<'DELETE', ...>
+ *   console.log(query.table);
+ * }
+ * ```
+ */
+export const isDeleteQuery = <T extends Query<'DELETE', any>>(
+  x: unknown,
+): x is T => {
+  try {
+    assertDeleteQuery(x as T);
+    return true;
+  } catch {
+    return false;
+  }
+};
