@@ -423,11 +423,7 @@ export const assertDateAddExpression: (
       `Invalid Expression definition: args key must be an object with date, amount and unit properties`,
     );
   }
-  if (!('date' in x.args)) {
-    throw new TypeError(
-      `Invalid Expression definition: Missing 'date' property in args`,
-    );
-  } else {
+  if ('date' in x.args) {
     if (typeof x.args.date === 'string') {
       assertColumnIdentifier(x.args.date, columnList);
     } else if (!(x.args.date instanceof Date)) {
@@ -436,12 +432,12 @@ export const assertDateAddExpression: (
           .args.date}`,
       );
     }
-  }
-  if (!('amount' in x.args)) {
-    throw new TypeError(
-      `Invalid Expression definition: Missing 'amount' property in args`,
-    );
   } else {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'date' property in args`,
+    );
+  }
+  if ('amount' in x.args) {
     if (typeof x.args.amount === 'string') {
       assertColumnIdentifier(x.args.amount, columnList);
     } else if (typeof x.args.amount !== 'number') {
@@ -450,13 +446,17 @@ export const assertDateAddExpression: (
           .args.amount}`,
       );
     }
+  } else {
+    throw new TypeError(
+      `Invalid Expression definition: Missing 'amount' property in args`,
+    );
   }
-  if (!('unit' in x.args)) {
+  if ('unit' in x.args) {
+    validateTimeUnits(x.args.unit);
+  } else {
     throw new TypeError(
       `Invalid Expression definition: Missing 'unit' property in args`,
     );
-  } else {
-    validateTimeUnits(x.args.unit);
   }
 };
 
