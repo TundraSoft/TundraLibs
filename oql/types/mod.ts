@@ -3,6 +3,8 @@ export type {
   ColumnIdentifier,
   ColumnTypes,
   GetColumnByType,
+  SQLDataType,
+  SQLTypes,
   TableType,
 } from './Common.ts';
 
@@ -30,4 +32,4 @@ export type {
 } from './Expressions.ts';
 
 // Query types
-export type { Query, QueryTypes } from './Query.ts';
+export type { ColumnDefinition, Query, QueryTypes } from './Query.ts';

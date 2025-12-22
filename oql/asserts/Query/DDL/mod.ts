@@ -1,7 +1,7 @@
 /**
  * DDL (Data Definition Language) Query Validators
  *
- * This module exports all DDL query validators for schema and table operations.
+ * This module exports all DDL query validators for schema, table, and view operations.
  *
  * @module asserts/Query/DDL
  */
@@ -12,6 +12,14 @@ export {
   isCreateSchema,
   isDropSchema,
 } from './Schema.ts';
+export {
+  assertAlterTable,
+  assertCreateTable,
+  assertDropTable,
+  isAlterTable,
+  isCreateTable,
+  isDropTable,
+} from './Table.ts';
 export {
   assertAlterView,
   assertCreateView,

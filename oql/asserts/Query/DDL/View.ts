@@ -10,7 +10,7 @@
  * @module asserts/Query/DDL/View
  */
 
-import type { Query } from '../../../types/mod.ts';
+import type { Query, TableType } from '../../../types/mod.ts';
 import { assertSelectQuery } from '../DML/Select.ts';
 
 /**
@@ -53,7 +53,9 @@ import { assertSelectQuery } from '../DML/Select.ts';
  * assertCreateView(matView); // ✓ Valid
  * ```
  */
-export const assertCreateView = <T extends Query<'CREATE_VIEW', any, any>>(
+export const assertCreateView = <
+  T extends Query<'CREATE_VIEW', TableType, Record<string, TableType>>,
+>(
   x: T,
 ): void => {
   // Validate type
@@ -205,7 +207,9 @@ export const assertCreateView = <T extends Query<'CREATE_VIEW', any, any>>(
  * @param x - The value to check
  * @returns True if the value is a valid CREATE_VIEW query, false otherwise
  */
-export const isCreateView = <T extends Query<'CREATE_VIEW', any, any>>(
+export const isCreateView = <
+  T extends Query<'CREATE_VIEW', TableType, Record<string, TableType>>,
+>(
   x: unknown,
 ): x is T => {
   try {
@@ -409,7 +413,9 @@ export const isDropView = <T extends Query<'DROP_VIEW'>>(
  * assertAlterView(redefineQuery); // ✓ Valid
  * ```
  */
-export const assertAlterView = <T extends Query<'ALTER_VIEW', any, any>>(
+export const assertAlterView = <
+  T extends Query<'ALTER_VIEW', TableType, Record<string, TableType>>,
+>(
   x: T,
 ): void => {
   // Validate type
@@ -544,7 +550,9 @@ export const assertAlterView = <T extends Query<'ALTER_VIEW', any, any>>(
  * @param x - The value to check
  * @returns True if the value is a valid ALTER_VIEW query, false otherwise
  */
-export const isAlterView = <T extends Query<'ALTER_VIEW', any, any>>(
+export const isAlterView = <
+  T extends Query<'ALTER_VIEW', TableType, Record<string, TableType>>,
+>(
   x: unknown,
 ): x is T => {
   try {

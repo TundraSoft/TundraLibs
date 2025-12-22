@@ -1,8 +1,103 @@
 import type { Joins, QueryFilter } from './Filter.ts';
-import type { ColumnIdentifier, TableType } from './Common.ts';
+import type { ColumnIdentifier, SQLDataType, TableType } from './Common.ts';
 import type { FlattenEntity } from '@tundralibs/utils';
 import { Expressions, GetExpressionByType } from './Expressions.ts';
 import { Aggregates } from './Aggregates.ts';
+
+/**
+ * Base properties common to all column definitions.
+ */
+type BaseColumnDefinition = {
+  /** If true, column can contain NULL values. Defaults to true. */
+  nullable?: boolean;
+  /** Optional description/comment for the column */
+  comment?: string;
+};
+
+/**
+ * Column definition for CREATE_TABLE and ALTER_TABLE operations.
+ *
+ * Uses discriminated union to ensure only valid properties are specified
+ * for each SQL data type:
+ * - String types (CHAR, VARCHAR, TEXT, CLOB): allow length
+ * - Binary types (BINARY, VARBINARY, BLOB): allow length
+ * - Decimal types (DECIMAL, NUMERIC): allow precision and scale
+ * - Other types: only base properties (nullable, comment)
+ *
+ * @template T - The TypeScript type this column represents (string, number, Date, etc.)
+ *
+ * @example
+ * ```typescript
+ * // String column with length
+ * const name: ColumnDefinition<string> = {
+ *   type: 'VARCHAR',
+ *   length: 255,
+ *   nullable: false
+ * };
+ *
+ * // Decimal column with precision and scale
+ * const price: ColumnDefinition<number> = {
+ *   type: 'DECIMAL',
+ *   precision: 10,
+ *   scale: 2
+ * };
+ *
+ * // Date column - cannot have length, precision, or scale
+ * const createdAt: ColumnDefinition<Date> = {
+ *   type: 'TIMESTAMP',
+ *   nullable: false,
+ *   comment: 'Record creation timestamp'
+ * };
+ * ```
+ */
+export type ColumnDefinition<T extends TableType[string] = TableType[string]> =
+  | ({
+    /** String SQL data type */
+    type: 'CHAR' | 'VARCHAR' | 'TEXT' | 'CLOB';
+    /**
+     * Maximum length in characters.
+     * Required for CHAR and VARCHAR in most databases.
+     */
+    length?: number;
+  } & BaseColumnDefinition)
+  | ({
+    /** Binary SQL data type */
+    type: 'BINARY' | 'VARBINARY' | 'BLOB';
+    /**
+     * Maximum length in bytes.
+     * Required for BINARY and VARBINARY in most databases.
+     */
+    length?: number;
+  } & BaseColumnDefinition)
+  | ({
+    /** Decimal SQL data type */
+    type: 'DECIMAL' | 'NUMERIC';
+    /**
+     * Total number of digits (both integer and fractional parts).
+     * Required for DECIMAL/NUMERIC types.
+     */
+    precision?: number;
+    /**
+     * Number of digits after decimal point.
+     * Must be less than or equal to precision.
+     */
+    scale?: number;
+  } & BaseColumnDefinition)
+  | ({
+    /** Other SQL data types that don't require length or precision/scale */
+    type: Exclude<
+      SQLDataType,
+      | 'CHAR'
+      | 'VARCHAR'
+      | 'TEXT'
+      | 'CLOB'
+      | 'BINARY'
+      | 'VARBINARY'
+      | 'BLOB'
+      | 'DECIMAL'
+      | 'NUMERIC'
+    >;
+  } & BaseColumnDefinition);
 
 /**
  * Helper type that allows each property to be either its original type
