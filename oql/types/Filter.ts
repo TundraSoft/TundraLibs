@@ -1,7 +1,17 @@
 import { FlattenEntity } from '@tundralibs/utils';
 import { ColumnTypes, TableType } from './Common.ts';
-import type { Expressions, GetExpressionByType } from './Expressions.ts';
+import type { Expressions } from './Expressions.ts';
 
+/**
+ * Operators for filtering column values.
+ *
+ * Supports:
+ * - Direct value comparison: `value` or `null`
+ * - Array comparison: `[value1, value2]` (implicit $in)
+ * - Object operators: `{ $eq, $ne, $in, $nin, $null }`
+ * - String operators: `{ $like, $ilike, $startsWith, $endsWith, $contains }`
+ * - Comparison operators: `{ $gt, $gte, $lt, $lte }` (for numbers, dates)
+ */
 export type Operators<T extends ColumnTypes = ColumnTypes> =
   | null
   | T
@@ -32,77 +42,17 @@ export type Operators<T extends ColumnTypes = ColumnTypes> =
         : never
     );
 
-type ExpressionOperators<
-  T extends TableType = TableType,
-  FT extends FlattenEntity<T, '', '@'> = FlattenEntity<T, '', '@'>,
-  C extends keyof FT = keyof FT,
-> =
-  & {
-    // Equality operators - available for all types
-    $eq?: Extract<Expressions<T, FT>, { type: GetExpressionByType<FT[C]> }>;
-    $ne?: Extract<Expressions<T, FT>, { type: GetExpressionByType<FT[C]> }>;
-  }
-  & (
-    // Comparison operators for numeric and date types
-    FT[C] extends number | Date | bigint ? {
-        $gt?: Extract<Expressions<T, FT>, { type: GetExpressionByType<FT[C]> }>;
-        $gte?: Extract<
-          Expressions<T, FT>,
-          { type: GetExpressionByType<FT[C]> }
-        >;
-        $lt?: Extract<Expressions<T, FT>, { type: GetExpressionByType<FT[C]> }>;
-        $lte?: Extract<
-          Expressions<T, FT>,
-          { type: GetExpressionByType<FT[C]> }
-        >;
-      }
-      : Record<PropertyKey, never>
-  )
-  & (
-    // String operators for string types
-    FT[C] extends string ? {
-        $like?: Extract<
-          Expressions<T, FT>,
-          { type: GetExpressionByType<FT[C]> }
-        >;
-        $nlike?: Extract<
-          Expressions<T, FT>,
-          { type: GetExpressionByType<FT[C]> }
-        >;
-        $ilike?: Extract<
-          Expressions<T, FT>,
-          { type: GetExpressionByType<FT[C]> }
-        >;
-        $nilike?: Extract<
-          Expressions<T, FT>,
-          { type: GetExpressionByType<FT[C]> }
-        >;
-        $startsWith?: Extract<
-          Expressions<T, FT>,
-          { type: GetExpressionByType<FT[C]> }
-        >;
-        $endsWith?: Extract<
-          Expressions<T, FT>,
-          { type: GetExpressionByType<FT[C]> }
-        >;
-        $contains?: Extract<
-          Expressions<T, FT>,
-          { type: GetExpressionByType<FT[C]> }
-        >;
-      }
-      : Record<PropertyKey, never>
-  );
-
+/**
+ * Filter operator for table columns.
+ *
+ * Maps each column to its allowed operators based on column type.
+ * Expressions and aggregates are referenced by name (validated at runtime).
+ */
 export type FilterOperator<
   T extends TableType = TableType,
   FT extends FlattenEntity<T, '', '@'> = FlattenEntity<T, '', '@'>,
 > = {
-  [K in keyof FT]?: FT[K] extends ColumnTypes ? (
-      | Operators<FT[K]>
-      | ExpressionOperators<T, FT, K>
-      //| Extract<Expressions<T, FT>, { type: GetExpressionByType<FT[K]> }>
-    )
-    : never;
+  [K in keyof FT]?: FT[K] extends ColumnTypes ? Operators<FT[K]> : never;
 };
 
 export type QueryFilter<
@@ -169,9 +119,25 @@ export type JoinDetails<
     string,
     TableType
   >,
+  JT extends TableType = TableType,
 > = {
   table: keyof LT;
   schema?: string;
+  /**
+   * List of columns available from the joined table.
+   * Required for validation in WHERE, HAVING, expressions, and aggregates.
+   * Must explicitly list all columns that will be referenced.
+   *
+   * @example
+   * ```typescript
+   * Profile: {
+   *   table: 'profiles',
+   *   columns: ['userId', 'bio', 'email'],  // userId must be listed for join condition
+   *   on: { '@Profile.@userId': '@id' }     // References userId from columns array
+   * }
+   * ```
+   */
+  columns: Array<keyof JT>;
   on: JoinFilter<PT, LT>;
   type?: 'INNER' | 'LEFT' | 'RIGHT' | 'FULL';
 };
@@ -183,5 +149,5 @@ export type Joins<
     TableType
   >,
 > = {
-  [k in keyof LT]?: JoinDetails<PT, LT>;
+  [K in keyof LT]?: JoinDetails<PT, LT, LT[K]>;
 };

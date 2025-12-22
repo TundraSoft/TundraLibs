@@ -224,7 +224,7 @@ Deno.test('oql.asserts.Expressions.Numeric', async (t) => {
     asserts.assertThrows(
       () => assertAbsExpression({ type: 'ABS', args: [true] } as any),
       TypeError,
-      'must be a number, bigint, or column identifier',
+      'must be a number, bigint, column identifier, or nested expression',
     );
   });
 

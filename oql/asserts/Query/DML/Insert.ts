@@ -12,6 +12,30 @@ import type { Query, TableType } from '../../../types/mod.ts';
 import { assertExpression } from '../../Expressions/mod.ts';
 
 /**
+ * Recursively checks if an expression contains any column references.
+ * Column references are strings starting with '@'.
+ *
+ * @param expr - The expression object to check
+ * @returns true if any column references are found, false otherwise
+ * @internal
+ */
+const checkForColumnReferences = (expr: unknown): boolean => {
+  if (typeof expr === 'string') {
+    return expr.startsWith('@');
+  }
+  
+  if (Array.isArray(expr)) {
+    return expr.some((item) => checkForColumnReferences(item));
+  }
+  
+  if (typeof expr === 'object' && expr !== null) {
+    return Object.values(expr).some((value) => checkForColumnReferences(value));
+  }
+  
+  return false;
+};
+
+/**
  * Asserts that a value is a valid INSERT query.
  *
  * Validates all INSERT-specific properties including:
@@ -189,9 +213,19 @@ export const assertInsertQuery: <PT extends TableType = TableType>(
       }
 
       if (typeof value === 'object') {
-        // Must be an Expression
+        // Must be an Expression (no column references allowed in INSERT)
         try {
-          assertExpression(value, columnList);
+          // Pass undefined to skip column validation during expression parsing
+          // Then check if the expression contains any column references
+          assertExpression(value);
+          
+          // Validate that the expression doesn't reference any columns
+          const hasColumnReferences = checkForColumnReferences(value);
+          if (hasColumnReferences) {
+            throw new TypeError(
+              'Column references (e.g., @columnName) are not allowed in INSERT expressions',
+            );
+          }
         } catch (error) {
           throw new TypeError(
             `Invalid INSERT query: data[${i}].${key} has invalid expression: ${

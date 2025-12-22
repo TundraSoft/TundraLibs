@@ -320,4 +320,53 @@ Deno.test('crypt.TOTP', async (t) => {
     const isValid2 = await verifyTOTP(undefined as any, key);
     asserts.assertEquals(isValid2, false);
   });
+
+  await t.step('TOTP - Base32 Secret Support', async () => {
+    // Test with a Base32 encoded secret (as used by Google Authenticator)
+    // Base32: JBSWY3DPEHPK3PXP decodes to "Hello!" in ASCII
+    const base32Secret = 'JBSWY3DPEHPK3PXP';
+    const rawSecret = 'Hello!0123456789'; // Regular UTF-8 string (16 chars minimum)
+
+    // Both should generate valid OTPs
+    const otp1 = await generateTOTP(base32Secret, {
+      epoch: 59000,
+      period: 30,
+      algo: 'SHA-1',
+      length: 6,
+    });
+    asserts.assertEquals(otp1.length, 6);
+    asserts.assert(/^\d{6}$/.test(otp1));
+
+    // Verify the OTP works
+    const isValid = await verifyTOTP(otp1, base32Secret, {
+      epoch: 59000,
+      period: 30,
+      algo: 'SHA-1',
+      length: 6,
+    });
+    asserts.assertEquals(isValid, true);
+
+    // Test with SHA-256 (common in modern implementations)
+    const otp2 = await generateTOTP(
+      'YL3J3FQSI6D2L4WSRQZKQ5TUWFY244KJSUO6KZWG7UA3XVAB5YFA',
+      {
+        epoch: Date.now(),
+        period: 30,
+        algo: 'SHA-256',
+        length: 6,
+      },
+    );
+    asserts.assertEquals(otp2.length, 6);
+    asserts.assert(/^\d{6}$/.test(otp2));
+
+    // Regular string (backwards compatibility)
+    const otp3 = await generateTOTP(rawSecret, {
+      epoch: 59000,
+      period: 30,
+      algo: 'SHA-1',
+      length: 6,
+    });
+    asserts.assertEquals(otp3.length, 6);
+    asserts.assert(/^\d{6}$/.test(otp3));
+  });
 });

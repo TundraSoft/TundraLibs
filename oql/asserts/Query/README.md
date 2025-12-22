@@ -30,17 +30,19 @@ asserts/Query/
 
 Validates SELECT queries with full support for:
 - ✅ Required: `type`, `table`, `columns`, `projection`
-- ✅ Optional: `schema`, `where`, `joins`, `orderBy`, `groupBy`, `having`, `limit`, `offset`, `distinct`, `returnColumns`
-- ✅ Column identifier validation
-- ✅ Join validation (including join column references)
-- ✅ Aggregate function validation
-- ✅ Expression validation
+- ✅ Optional: `schema`, `aggregates`, `expressions`, `joins`, `where`, `orderBy`, `having`, `limit`, `offset`
+- ✅ **New Design**: Pre-declared aggregates and expressions with `@` key projection
+- ✅ Projection keys use `@` prefix, values are `boolean | string` (alias)
+- ✅ Automatic GROUP BY when aggregates are present
+- ✅ Join validation with required `columns` array
+- ✅ Expression references in WHERE clause
+- ✅ Aggregate references in HAVING clause
 
 #### `assertInsertQuery<PT>(x: unknown)`
 
 Validates INSERT queries with:
 - ✅ Required: `type`, `table`, `columns`, `data`
-- ✅ Optional: `schema`, `returnColumns`
+- ✅ Optional: `schema`
 - ✅ Single object or array of objects
 - ✅ Expression support in data values
 - ✅ Column name validation
@@ -49,16 +51,17 @@ Validates INSERT queries with:
 
 Validates UPDATE queries with:
 - ✅ Required: `type`, `table`, `columns`, `data`
-- ✅ Optional: `schema`, `where`, `returnColumns`
+- ✅ Optional: `schema`, `expressions`, `where`
+- ✅ **New**: Expression definitions for complex WHERE filtering
 - ✅ Partial data updates
-- ✅ Expression support
-- ✅ WHERE clause validation
+- ✅ Expression support in data values
+- ✅ Expression references in WHERE clause
 
 #### `assertUpsertQuery<PT>(x: unknown)`
 
 Validates UPSERT queries with:
 - ✅ Required: `type`, `table`, `columns`, `data`, `conflictKeys`
-- ✅ Optional: `schema`, `updateOnConflict`, `returnColumns`
+- ✅ Optional: `schema`, `updateOnConflict`
 - ✅ Single or bulk upsert
 - ✅ Partial update on conflict
 - ✅ Conflict key validation
@@ -68,17 +71,20 @@ Validates UPSERT queries with:
 
 Validates DELETE queries with:
 - ✅ Required: `type`, `table`, `columns`
-- ✅ Optional: `schema`, `where`, `returnColumns`
-- ✅ WHERE clause validation
+- ✅ Optional: `schema`, `expressions`, `where`
+- ✅ **New**: Expression definitions for complex WHERE filtering
+- ✅ Expression references in WHERE clause
 - ✅ Safety checks (allows DELETE without WHERE but validates structure)
 
 #### `assertCountQuery<PT>(x: unknown)`
 
 Validates COUNT queries with:
 - ✅ Required: `type`, `table`, `columns`
-- ✅ Optional: `schema`, `where`, `distinct`
-- ✅ WHERE clause validation
-- ✅ DISTINCT support
+- ✅ Optional: `schema`, `expressions`, `joins`, `where`, `having`
+- ✅ **New**: Expression definitions for complex filtering
+- ✅ Join support with required `columns` array
+- ✅ Expression references in WHERE clause
+- ✅ HAVING clause support
 
 ## Validation Features
 
@@ -142,16 +148,41 @@ import {
   assertCountQuery,
 } from '@tundralibs/oql/asserts/Query/DML/mod.ts';
 
-// Validate a SELECT query
+// Validate a SELECT query with new structure
 const selectQuery = {
   type: 'SELECT',
   table: 'users',
-  columns: ['id', 'name', 'email'],
-  projection: { id: '@id', name: '@name' },
-  where: { '@status': 'active' },
+  columns: ['id', 'firstName', 'lastName', 'amount'],
+  expressions: {
+    fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] }
+  },
+  aggregates: {
+    totalSales: { type: 'SUM', column: '@amount' }
+  },
+  projection: {
+    '@id': 'userId',           // Column with alias
+    '@fullName': true,         // Expression same name
+    '@totalSales': 'total'     // Aggregate with alias
+  },
+  where: { '@fullName': { $like: 'John%' } },  // Reference expression
+  having: { '@totalSales': { $gte: 100 } }     // Reference aggregate
 };
 
 assertSelectQuery(selectQuery); // ✓ Valid, throws on invalid
+
+// Validate an UPDATE query with expressions
+const updateQuery = {
+  type: 'UPDATE',
+  table: 'users',
+  columns: ['id', 'name', 'age', 'updatedAt'],
+  expressions: {
+    fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] }
+  },
+  data: { age: 31, updatedAt: { type: 'NOW' } },
+  where: { '@fullName': 'John Doe' }  // Reference expression
+};
+
+assertUpdateQuery(updateQuery); // ✓ Valid
 
 // Validate an INSERT query
 const insertQuery = {
@@ -189,21 +220,30 @@ import { assertSelectQuery } from '@tundralibs/oql/asserts/Query/DML/mod.ts';
 
 type User = {
   id: number;
-  name: string;
-  email: string;
+  firstName: string;
+  lastName: string;
+  amount: number;
   status: string;
 };
 
-// Type-safe query definition
+// Type-safe query definition with new structure
 const query: Query<'SELECT', User> = {
   type: 'SELECT',
   table: 'users',
-  columns: ['id', 'name', 'email', 'status'],
+  columns: ['id', 'firstName', 'lastName', 'amount', 'status'],
+  expressions: {
+    fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] }
+  },
+  aggregates: {
+    totalAmount: { type: 'SUM', column: '@amount' }
+  },
   projection: {
-    userId: '@id',
-    userName: '@name',
+    '@id': 'userId',
+    '@fullName': 'name',
+    '@totalAmount': true
   },
   where: { '@status': 'active' },
+  having: { '@totalAmount': { $gte: 100 } }
 };
 
 // Runtime validation

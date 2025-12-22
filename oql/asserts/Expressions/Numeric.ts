@@ -53,9 +53,23 @@ const validateNumericArg = (
         `Invalid Expression definition: ${argName} must be a number or column identifier in ${expressionType} expression, got string literal`,
       );
     }
-  } else if (typeof arg !== 'number' && typeof arg !== 'bigint') {
+  } else if (typeof arg === 'number' || typeof arg === 'bigint') {
+    // Valid numeric literal
+    return;
+  } else if (typeof arg === 'object' && arg !== null && 'type' in arg) {
+    // Nested expression - must be numeric for numeric operations
+    try {
+      assertNumericExpression(arg, columnList);
+    } catch (error) {
+      throw new TypeError(
+        `Invalid Expression definition: ${argName} contains invalid nested expression in ${expressionType} - ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  } else {
     throw new TypeError(
-      `Invalid Expression definition: ${argName} must be a number, bigint, or column identifier in ${expressionType} expression, got ${typeof arg}`,
+      `Invalid Expression definition: ${argName} must be a number, bigint, column identifier, or nested expression in ${expressionType} expression, got ${typeof arg}`,
     );
   }
 };

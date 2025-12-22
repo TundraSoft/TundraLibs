@@ -1,5 +1,6 @@
 import type { DigestAlgorithms } from '../digest/mod.ts';
 import { sprintf } from '$fmt/printf';
+import { decodeBase32 } from '$encoding';
 
 /**
  * Options for HOTP generation
@@ -103,7 +104,7 @@ export const numberToBytes = (data: number): Uint8Array => {
 /**
  * Validates input parameters for OTP generation
  *
- * @param {string} key - The secret key for HMAC
+ * @param {string} key - The secret key (Base32 string or UTF-8 string)
  * @param {number} counter - The counter value
  * @param {number} length - The length of the OTP
  * @param {DigestAlgorithms} algo - The hash algorithm to use
@@ -143,7 +144,7 @@ export const validateInputs = (
  * Uses dynamic truncation to extract a numeric code from the HMAC digest.
  * This is an internal function used by both {@link HOTP} and {@link TOTP}.
  *
- * @param {string} key - The secret key for HMAC (minimum 16 characters)
+ * @param {string} key - The secret key (Base32 string or UTF-8 string, minimum 16 characters)
  * @param {number} counter - The counter value (non-negative integer)
  * @param {number} [length=6] - The length of the OTP (positive integer)
  * @param {DigestAlgorithms} [algo='SHA-256'] - The hash algorithm to use ({@link DigestAlgorithms})
@@ -157,8 +158,8 @@ export const validateInputs = (
  *
  * @example
  * ```typescript
- * // Generate a 6-digit HOTP
- * const otp = await generate('mySecretKey123456', 0, 6, 'SHA-1');
+ * // Generate a 6-digit HOTP with Base32 secret
+ * const otp = await generate('JBSWY3DPEHPK3PXP', 0, 6, 'SHA-1');
  * console.log(otp); // "755224"
  * ```
  *
@@ -176,7 +177,19 @@ export const generate = async (
   validateInputs(key, counter, length, algo);
 
   // Prepare key for HMAC
-  const keyData = new TextEncoder().encode(key);
+  let keyData: Uint8Array;
+
+  // Check if it looks like a Base32 string (only uppercase letters A-Z and digits 2-7)
+  const isBase32 = /^[A-Z2-7]+=*$/.test(key);
+
+  if (isBase32) {
+    // Base32 decode (add padding if needed)
+    const paddedKey = key + '='.repeat((8 - (key.length % 8)) % 8);
+    keyData = decodeBase32(paddedKey);
+  } else {
+    // Treat as UTF-8 string (backwards compatibility)
+    keyData = new TextEncoder().encode(key);
+  }
 
   // Import key for HMAC
   const cryptoKey = await crypto.subtle.importKey(

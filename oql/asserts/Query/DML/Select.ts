@@ -3,14 +3,16 @@
  *
  * This module provides validation for SELECT queries in OQL.
  * SELECT queries retrieve data from one or more tables with optional
- * filtering, joining, grouping, ordering, and pagination.
+ * filtering, joining, aggregation, ordering, and pagination.
+ *
+ * **New Structure**: Pre-declared aggregates and expressions with
+ * projection using @ prefix keys.
  *
  * @module asserts/Query/DML/Select
  */
 
 import type { Query, TableType } from '../../../types/mod.ts';
-import { assertColumnIdentifier } from '../../ColumnIdentifier.ts';
-import { assertFilterOperator } from '../../Filters/mod.ts';
+import { assertQueryFilter, assertJoins } from '../../Filters/mod.ts';
 import { assertExpression } from '../../Expressions/mod.ts';
 import { assertAggregate } from '../../Aggregates.ts';
 
@@ -19,21 +21,21 @@ import { assertAggregate } from '../../Aggregates.ts';
  *
  * Validates all SELECT-specific properties including:
  * - Required: type, table, columns, projection
- * - Optional: schema, where, joins, orderBy, groupBy, having, limit, offset, distinct, returnColumns
+ * - Optional: schema, aggregates, expressions, joins, where, having, orderBy, limit, offset
  *
  * **Validation Rules**:
  * - `type` must be 'SELECT'
  * - `table` must be a non-empty string
- * - `columns` must be non-empty array of strings (schema definition)
- * - `projection` is MANDATORY and must define output shape
- * - `where` must be valid QueryFilter if present
- * - `joins` must be valid Joins object if present
- * - `orderBy` must be valid sort specification if present
- * - `groupBy` array must reference valid columns
- * - `having` must be valid QueryFilter if present (post-aggregation)
+ * - `columns` must be non-empty array of plain strings (no @ prefix)
+ * - `aggregates` (optional) must be Record<string, Aggregates>
+ * - `expressions` (optional) must be Record<string, Expressions>
+ * - `joins` (optional) must have required `columns` array
+ * - `projection` is MANDATORY with @ prefix keys and boolean|string values
+ * - `projection` keys must exist in: columns, expressions, aggregates, or joined columns
+ * - `where` can reference columns, expressions, joined columns (NOT aggregates)
+ * - `having` can reference aggregates only
+ * - `orderBy` can reference projection keys or joined columns
  * - `limit` and `offset` must be positive integers
- * - `distinct` must be boolean if present
- * - `returnColumns` must be array of strings if present
  *
  * @param x - The value to validate
  * @throws {TypeError} If the value is not a valid SELECT query
@@ -44,40 +46,32 @@ import { assertAggregate } from '../../Aggregates.ts';
  * const query = {
  *   type: 'SELECT',
  *   table: 'users',
- *   columns: ['id', 'name', 'email'],
- *   projection: { userId: '@id', userName: '@name' }
+ *   columns: ['id', 'name'],
+ *   projection: {
+ *     '@id': 'userId',
+ *     '@name': true
+ *   }
  * };
  * assertSelectQuery(query); // ✓
  *
- * // With WHERE clause
- * const filtered = {
- *   type: 'SELECT',
- *   table: 'users',
- *   columns: ['id', 'name', 'status'],
- *   projection: { id: '@id', name: '@name' },
- *   where: { '@status': 'active' }
- * };
- * assertSelectQuery(filtered); // ✓
- *
- * // With joins and aggregates
+ * // With aggregates and expressions
  * const complex = {
  *   type: 'SELECT',
- *   table: 'orders',
- *   columns: ['id', 'userId', 'total'],
+ *   table: 'users',
+ *   columns: ['id', 'firstName', 'lastName', 'amount'],
+ *   expressions: {
+ *     fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] }
+ *   },
+ *   aggregates: {
+ *     totalSales: { type: 'SUM', column: '@amount' }
+ *   },
  *   projection: {
- *     userId: '@userId',
- *     totalSpent: { type: 'SUM', column: '@total' }
+ *     '@id': 'userId',
+ *     '@fullName': true,
+ *     '@totalSales': 'total'
  *   },
- *   joins: {
- *     User: {
- *       table: 'users',
- *       type: 'INNER',
- *       on: { '@User.@id': '@userId' }
- *     }
- *   },
- *   groupBy: ['@userId'],
- *   orderBy: { '@totalSpent': 'DESC' },
- *   limit: 10
+ *   where: { '@fullName': { $like: 'John%' } },
+ *   having: { '@totalSales': { $gte: 100 } }
  * };
  * assertSelectQuery(complex); // ✓
  * ```
@@ -133,26 +127,170 @@ export const assertSelectQuery: <
     );
   }
 
-  for (const col of query.columns) {
+  for (const [index, col] of query.columns.entries()) {
     if (typeof col !== 'string' || col.trim().length === 0) {
       throw new TypeError(
-        `Invalid SELECT query: Each column in 'columns' must be a non-empty string`,
+        `Invalid SELECT query: columns[${index}] must be a non-empty string`,
       );
     }
     // Columns should NOT have @ prefix (they are schema definitions)
     if (col.startsWith('@')) {
       throw new TypeError(
-        `Invalid SELECT query: Columns should be plain strings without '@' prefix. Got '${col}'`,
+        `Invalid SELECT query: columns[${index}] should be plain string without '@' prefix. Got '${col}'`,
       );
     }
   }
 
   const columnList = query.columns as string[];
+  const availableKeys: string[] = [...columnList.map((c) => `@${c}`)];
+
+  // Validate aggregates (optional)
+  const aggregateKeys: string[] = [];
+  if (query.aggregates !== undefined) {
+    if (
+      typeof query.aggregates !== 'object' || query.aggregates === null ||
+      Array.isArray(query.aggregates)
+    ) {
+      throw new TypeError(
+        `Invalid SELECT query: 'aggregates' must be an object if provided`,
+      );
+    }
+
+    const aggregates = query.aggregates as Record<string, unknown>;
+    const aggKeys = Object.keys(aggregates);
+
+    if (aggKeys.length === 0) {
+      throw new TypeError(
+        `Invalid SELECT query: 'aggregates' cannot be an empty object`,
+      );
+    }
+
+    for (const [key, value] of Object.entries(aggregates)) {
+      if (typeof key !== 'string' || key.trim().length === 0) {
+        throw new TypeError(
+          `Invalid SELECT query: aggregate keys must be non-empty strings`,
+        );
+      }
+
+      // Aggregate keys must NOT start with @ (plain string, referenced with @ in projection/HAVING)
+      if (key.startsWith('@')) {
+        throw new TypeError(
+          `Invalid SELECT query: aggregate key '${key}' must not start with '@'`,
+        );
+      }
+
+      try {
+        assertAggregate(value, columnList);
+      } catch (error) {
+        throw new TypeError(
+          `Invalid SELECT query: aggregates['${key}'] is invalid - ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+
+      aggregateKeys.push(`@${key}`);
+      availableKeys.push(`@${key}`);
+    }
+  }
+
+  // Validate expressions (optional)
+  const expressionKeys: string[] = [];
+  if (query.expressions !== undefined) {
+    if (
+      typeof query.expressions !== 'object' || query.expressions === null ||
+      Array.isArray(query.expressions)
+    ) {
+      throw new TypeError(
+        `Invalid SELECT query: 'expressions' must be an object if provided`,
+      );
+    }
+
+    const expressions = query.expressions as Record<string, unknown>;
+    const exprKeys = Object.keys(expressions);
+
+    if (exprKeys.length === 0) {
+      throw new TypeError(
+        `Invalid SELECT query: 'expressions' cannot be an empty object`,
+      );
+    }
+
+    for (const [key, value] of Object.entries(expressions)) {
+      if (typeof key !== 'string' || key.trim().length === 0) {
+        throw new TypeError(
+          `Invalid SELECT query: expression keys must be non-empty strings`,
+        );
+      }
+
+      // Expression keys must NOT start with @ (plain string, referenced with @ in projection/WHERE)
+      if (key.startsWith('@')) {
+        throw new TypeError(
+          `Invalid SELECT query: expression key '${key}' must not start with '@'`,
+        );
+      }
+
+      try {
+        assertExpression(value, columnList);
+      } catch (error) {
+        throw new TypeError(
+          `Invalid SELECT query: expressions['${key}'] is invalid - ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+
+      expressionKeys.push(`@${key}`);
+      availableKeys.push(`@${key}`);
+    }
+  }
+
+  // Validate joins (optional)
+  const joinedColumns: string[] = [];
+  if (query.joins !== undefined) {
+    // First, collect all joined columns for the combined column list
+    const joins = query.joins as Record<string, Record<string, unknown>>;
+    for (const [alias, joinDef] of Object.entries(joins)) {
+      if (Array.isArray(joinDef.columns)) {
+        for (const col of joinDef.columns) {
+          const joinedCol = `${alias}.${col}`;
+          joinedColumns.push(joinedCol);
+        }
+      }
+    }
+
+    // Now validate joins with complete column list (base + joined)
+    const completeColumnList = [...columnList, ...joinedColumns];
+    try {
+      assertJoins(query.joins, completeColumnList);
+    } catch (error) {
+      throw new TypeError(
+        `Invalid SELECT query: 'joins' is invalid - ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+
+    // Add joined columns with @ prefix to availableKeys for projection/WHERE
+    for (const [alias, joinDef] of Object.entries(joins)) {
+      if (Array.isArray(joinDef.columns)) {
+        for (const col of joinDef.columns) {
+          const joinedCol = `@${alias}.@${col}`;
+          availableKeys.push(joinedCol);
+        }
+      }
+    }
+  }
 
   // Validate projection (MANDATORY for SELECT)
   if (!query.projection || typeof query.projection !== 'object') {
     throw new TypeError(
       `Invalid SELECT query: 'projection' is required and must be an object`,
+    );
+  }
+
+  if (Array.isArray(query.projection)) {
+    throw new TypeError(
+      `Invalid SELECT query: 'projection' must be an object, not an array`,
     );
   }
 
@@ -165,155 +303,134 @@ export const assertSelectQuery: <
     );
   }
 
-  // Validate each projection value (can be ColumnIdentifier, Expression, or Aggregate)
+  // Validate each projection entry
   for (const [key, value] of Object.entries(projection)) {
     if (typeof key !== 'string' || key.trim().length === 0) {
       throw new TypeError(
-        `Invalid SELECT query: Projection keys must be non-empty strings`,
+        `Invalid SELECT query: projection keys must be non-empty strings`,
       );
     }
 
-    // Value can be:
-    // 1. ColumnIdentifier (string starting with @)
-    // 2. Expression object
-    // 3. Aggregate object
-    if (typeof value === 'string') {
-      assertColumnIdentifier(value, columnList);
-    } else if (typeof value === 'object' && value !== null) {
-      const obj = value as Record<string, unknown>;
-      // Check if it's an aggregate (has 'column' property) or expression (has 'type' and 'args')
-      if ('column' in obj) {
-        assertAggregate(value, columnList);
-      } else if ('type' in obj) {
-        assertExpression(value, columnList);
-      } else {
-        throw new TypeError(
-          `Invalid SELECT query: Projection value for '${key}' must be a ColumnIdentifier, Expression, or Aggregate`,
-        );
-      }
-    } else {
+    // Key must start with @
+    if (!key.startsWith('@')) {
       throw new TypeError(
-        `Invalid SELECT query: Projection value for '${key}' must be a ColumnIdentifier, Expression, or Aggregate`,
+        `Invalid SELECT query: projection key '${key}' must start with '@' prefix`,
+      );
+    }
+
+    // Key must exist in available keys (columns, expressions, aggregates, joined columns)
+    if (!availableKeys.includes(key)) {
+      throw new TypeError(
+        `Invalid SELECT query: projection key '${key}' does not exist in columns, expressions, aggregates, or joined columns. Available: ${
+          availableKeys.join(', ')
+        }`,
+      );
+    }
+
+    // Value must be boolean (same name) or string (alias)
+    if (typeof value !== 'boolean' && typeof value !== 'string') {
+      throw new TypeError(
+        `Invalid SELECT query: projection['${key}'] must be boolean or string, got ${typeof value}`,
+      );
+    }
+
+    if (typeof value === 'string' && value.trim().length === 0) {
+      throw new TypeError(
+        `Invalid SELECT query: projection['${key}'] alias cannot be empty string`,
       );
     }
   }
 
   // Validate where (optional)
+  // WHERE can reference: columns, expressions, joined columns (NOT aggregates)
   if (query.where !== undefined) {
-    assertFilterOperator(query.where, columnList);
-  }
+    const whereAllowedKeys = columnList.concat(
+      expressionKeys.map((k) => k.substring(1)), // Strip @ from expressions
+      joinedColumns, // Already in format 'Alias.column'
+    );
 
-  // Validate joins (optional)
-  if (query.joins !== undefined) {
-    if (typeof query.joins !== 'object' || query.joins === null) {
+    try {
+      assertQueryFilter(query.where, whereAllowedKeys);
+    } catch (error) {
       throw new TypeError(
-        `Invalid SELECT query: 'joins' must be an object if provided`,
+        `Invalid SELECT query: 'where' is invalid - ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
     }
 
-    const joins = query.joins as Record<string, unknown>;
-    for (const [joinAlias, joinDef] of Object.entries(joins)) {
-      if (typeof joinAlias !== 'string' || joinAlias.trim().length === 0) {
+    // Additional check: WHERE cannot reference aggregates
+    const whereObj = query.where as Record<string, unknown>;
+    for (const key of Object.keys(whereObj)) {
+      if (key.startsWith('@') && aggregateKeys.includes(key)) {
         throw new TypeError(
-          `Invalid SELECT query: Join alias must be a non-empty string`,
+          `Invalid SELECT query: 'where' cannot reference aggregate '${key}'. Use 'having' for aggregate filters`,
         );
       }
+    }
+  }
 
-      if (typeof joinDef !== 'object' || joinDef === null) {
-        throw new TypeError(
-          `Invalid SELECT query: Join definition for '${joinAlias}' must be an object`,
-        );
-      }
+  // Validate having (optional)
+  // HAVING can only reference aggregates
+  if (query.having !== undefined) {
+    if (aggregateKeys.length === 0) {
+      throw new TypeError(
+        `Invalid SELECT query: 'having' clause requires 'aggregates' to be defined`,
+      );
+    }
 
-      const join = joinDef as Record<string, unknown>;
+    const havingAllowedKeys = aggregateKeys.map((k) => k.substring(1));
 
-      // Validate table
-      if (typeof join.table !== 'string' || join.table.trim().length === 0) {
-        throw new TypeError(
-          `Invalid SELECT query: Join '${joinAlias}' must have a non-empty 'table' property`,
-        );
-      }
-
-      // Validate type
-      const validJoinTypes = ['INNER', 'LEFT', 'RIGHT', 'FULL', 'CROSS'];
-      if (!validJoinTypes.includes(join.type as string)) {
-        throw new TypeError(
-          `Invalid SELECT query: Join '${joinAlias}' must have a valid 'type' (${
-            validJoinTypes.join(', ')
-          })`,
-        );
-      }
-
-      // Validate on (optional for CROSS join)
-      if (join.type !== 'CROSS') {
-        if (!join.on || typeof join.on !== 'object') {
-          throw new TypeError(
-            `Invalid SELECT query: Join '${joinAlias}' must have an 'on' property for ${join.type} join`,
-          );
-        }
-        // Build extended column list including join columns with alias prefix
-        const joinColumnList = [...columnList];
-        if (join.columns && Array.isArray(join.columns)) {
-          for (const col of join.columns) {
-            joinColumnList.push(`${joinAlias}.${col}`);
-          }
-        }
-        assertFilterOperator(join.on, joinColumnList);
-      }
-
-      // Validate columns (optional)
-      if (join.columns !== undefined) {
-        if (!Array.isArray(join.columns) || join.columns.length === 0) {
-          throw new TypeError(
-            `Invalid SELECT query: Join '${joinAlias}' columns must be a non-empty array if provided`,
-          );
-        }
-        for (const col of join.columns) {
-          if (typeof col !== 'string' || col.trim().length === 0) {
-            throw new TypeError(
-              `Invalid SELECT query: Each column in join '${joinAlias}' must be a non-empty string`,
-            );
-          }
-        }
-      }
+    try {
+      assertQueryFilter(query.having, havingAllowedKeys);
+    } catch (error) {
+      throw new TypeError(
+        `Invalid SELECT query: 'having' is invalid - ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
 
   // Validate orderBy (optional)
+  // ORDER BY can reference projection keys or joined columns
   if (query.orderBy !== undefined) {
-    if (typeof query.orderBy !== 'object' || query.orderBy === null) {
+    if (
+      typeof query.orderBy !== 'object' || query.orderBy === null ||
+      Array.isArray(query.orderBy)
+    ) {
       throw new TypeError(
         `Invalid SELECT query: 'orderBy' must be an object if provided`,
       );
     }
 
     const orderBy = query.orderBy as Record<string, unknown>;
+    const orderByKeys = Object.keys(orderBy);
+
+    if (orderByKeys.length === 0) {
+      throw new TypeError(
+        `Invalid SELECT query: 'orderBy' cannot be an empty object`,
+      );
+    }
+
+    const orderByAllowedKeys = [...projectionKeys, ...joinedColumns];
+
     for (const [col, direction] of Object.entries(orderBy)) {
-      assertColumnIdentifier(col, columnList);
+      // Column must exist in projection or joined columns
+      if (!orderByAllowedKeys.includes(col)) {
+        throw new TypeError(
+          `Invalid SELECT query: orderBy key '${col}' must exist in projection or joined columns. Available: ${
+            orderByAllowedKeys.join(', ')
+          }`,
+        );
+      }
+
       if (direction !== 'ASC' && direction !== 'DESC') {
         throw new TypeError(
           `Invalid SELECT query: orderBy direction must be 'ASC' or 'DESC', got '${direction}'`,
         );
       }
     }
-  }
-
-  // Validate groupBy (optional)
-  if (query.groupBy !== undefined) {
-    if (!Array.isArray(query.groupBy) || query.groupBy.length === 0) {
-      throw new TypeError(
-        `Invalid SELECT query: 'groupBy' must be a non-empty array if provided`,
-      );
-    }
-
-    for (const col of query.groupBy) {
-      assertColumnIdentifier(col, columnList);
-    }
-  }
-
-  // Validate having (optional, requires groupBy)
-  if (query.having !== undefined) {
-    assertFilterOperator(query.having, columnList);
   }
 
   // Validate limit (optional)
@@ -336,6 +453,16 @@ export const assertSelectQuery: <
     ) {
       throw new TypeError(
         `Invalid SELECT query: 'offset' must be a non-negative integer if provided`,
+      );
+    }
+  }
+
+  // Validate no old properties exist
+  const deprecatedProps = ['groupBy', 'distinct', 'returnColumns'];
+  for (const prop of deprecatedProps) {
+    if (prop in query) {
+      throw new TypeError(
+        `Invalid SELECT query: '${prop}' is no longer supported. See migration guide.`,
       );
     }
   }

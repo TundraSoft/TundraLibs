@@ -9,7 +9,10 @@
  */
 
 import type { Query, TableType } from '../../../types/mod.ts';
-import { assertFilterOperator } from '../../Filters/mod.ts';
+import {
+  assertFilterOperator,
+  assertQueryFilter,
+} from '../../Filters/mod.ts';
 import { assertExpression } from '../../Expressions/mod.ts';
 
 /**
@@ -17,17 +20,17 @@ import { assertExpression } from '../../Expressions/mod.ts';
  *
  * Validates all UPDATE-specific properties including:
  * - Required: type, table, columns, data
- * - Optional: schema, where
+ * - Optional: schema, expressions, where
  *
  * **Validation Rules**:
  * - `type` must be 'UPDATE'
  * - `table` must be a non-empty string
  * - `columns` must be non-empty array of strings (schema definition)
+ * - `expressions` must be Record<string, Expression> if present (pre-declared expressions)
  * - `data` must be an object with at least one property (partial update)
  * - `data` keys must be subset of columns (plain strings, no @ prefix)
  * - `data` values can be primitives or Expression objects
- * - `where` must be valid QueryFilter if present (recommended for safety)
- * - `returnColumns` must be array of strings if present
+ * - `where` can reference columns and expressions (if defined)
  *
  * @param x - The value to validate
  * @throws {TypeError} If the value is not a valid UPDATE query
@@ -47,15 +50,18 @@ import { assertExpression } from '../../Expressions/mod.ts';
  * };
  * assertUpdateQuery(query); // ✓
  *
- * // UPDATE with expression
+ * // UPDATE with pre-declared expression in WHERE
  * const withExpr = {
  *   type: 'UPDATE',
  *   table: 'products',
- *   columns: ['id', 'price', 'discount'],
+ *   columns: ['id', 'price', 'discount', 'tax'],
+ *   expressions: {
+ *     totalPrice: { type: 'ADD', args: ['@price', '@tax'] }
+ *   },
  *   data: {
  *     price: { type: 'MULTIPLY', args: ['@price', 0.9] }
  *   },
- *   where: { '@discount': true }
+ *   where: { '@totalPrice': { $gt: 100 } }
  * };
  * assertUpdateQuery(withExpr); // ✓
  *
@@ -132,6 +138,58 @@ export const assertUpdateQuery: <PT extends TableType = TableType>(
 
   const columnList = query.columns as string[];
 
+  // Validate expressions (optional)
+  if (query.expressions !== undefined) {
+    if (
+      typeof query.expressions !== 'object' ||
+      query.expressions === null ||
+      Array.isArray(query.expressions)
+    ) {
+      throw new TypeError(
+        `Invalid UPDATE query: 'expressions' must be a non-null object`,
+      );
+    }
+
+    const expressions = query.expressions as Record<string, unknown>;
+    const expressionKeys = Object.keys(expressions);
+
+    if (expressionKeys.length === 0) {
+      throw new TypeError(
+        `Invalid UPDATE query: 'expressions' cannot be empty if provided`,
+      );
+    }
+
+    // Validate each expression
+    for (const [key, expr] of Object.entries(expressions)) {
+      // Key must NOT start with @ (plain string, referenced with @ in WHERE)
+      if (key.startsWith('@')) {
+        throw new TypeError(
+          `Invalid UPDATE query: expression key '${key}' must not start with '@'`,
+        );
+      }
+
+      // Validate expression value
+      try {
+        assertExpression(expr, columnList);
+      } catch (error) {
+        throw new TypeError(
+          `Invalid UPDATE query: expression '${key}' is invalid: ${
+            (error as Error).message
+          }`,
+        );
+      }
+    }
+  }
+
+  // Collect available keys for WHERE clause: columns + expressions
+  // Note: assertFilterOperator expects column names WITHOUT @ prefix
+  const availableKeys = [...columnList];
+  if (query.expressions !== undefined) {
+    const expressions = query.expressions as Record<string, unknown>;
+    // Expression keys are plain strings (e.g., 'fullName'), add directly
+    availableKeys.push(...Object.keys(expressions));
+  }
+
   // Validate data (must be object with at least one property)
   if (
     !query.data || typeof query.data !== 'object' || Array.isArray(query.data)
@@ -196,7 +254,8 @@ export const assertUpdateQuery: <PT extends TableType = TableType>(
   }
 
   // Validate where (optional but recommended)
+  // WHERE can reference columns and expressions
   if (query.where !== undefined) {
-    assertFilterOperator(query.where, columnList);
+    assertQueryFilter(query.where, availableKeys);
   }
 };

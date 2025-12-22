@@ -2,7 +2,10 @@
  * FilterOperator and QueryFilter Validators
  *
  * This module provides validation functions for FilterOperator and QueryFilter types.
- * These handle the complete filter syntax including operators, expressions, and logical operators.
+ * These handle the complete filter syntax including operators and logical operators.
+ *
+ * Expressions are now pre-declared in queries and referenced by name in filters,
+ * so this validator only handles column value operators.
  *
  * @module asserts/Filters/FilterOperator
  */
@@ -14,14 +17,12 @@ import type {
 } from '../../types/mod.ts';
 import { assertColumnIdentifier } from '../ColumnIdentifier.ts';
 import { isOperators } from './Operators.ts';
-import { isExpressionOperators } from './ExpressionOperators.ts';
 
 /**
  * Asserts that a value is a valid FilterOperator.
  *
- * FilterOperator maps column identifiers to their filter values, which can be:
- * - Operators (direct values or operator objects)
- * - ExpressionOperators (operators wrapping expressions)
+ * FilterOperator maps column identifiers to their filter values using Operators.
+ * Expressions are pre-declared in the query and referenced by `@expressionName`.
  *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix)
@@ -35,10 +36,8 @@ import { isExpressionOperators } from './ExpressionOperators.ts';
  * // Operator object
  * assertFilterOperator({ '@price': { $gt: 100 } }, ['price']);
  *
- * // Expression operator
- * assertFilterOperator({
- *   '@total': { $eq: { type: 'ADD', args: ['@price', '@tax'] } }
- * }, ['price', 'tax', 'total']);
+ * // Expression reference (validated at query level)
+ * assertFilterOperator({ '@fullName': { $like: 'John%' } }, ['fullName']);
  * ```
  */
 export const assertFilterOperator: <T extends TableType = TableType>(
@@ -73,23 +72,12 @@ export const assertFilterOperator: <T extends TableType = TableType>(
       );
     }
 
-    // Value can be:
-    // 1. Direct Operators (null, value, array, or operator object)
-    // 2. ExpressionOperators (operators wrapping expressions)
-
-    // Try as ExpressionOperators first (operators with expression values)
-    if (isExpressionOperators(value, columnList)) {
-      continue;
+    // Value must be valid Operators
+    if (!isOperators(value)) {
+      throw new TypeError(
+        `Invalid FilterOperator: Value for '${key}' must be valid Operators (direct value, array, or operator object)`,
+      );
     }
-
-    // Try as regular Operators
-    if (isOperators(value)) {
-      continue;
-    }
-
-    throw new TypeError(
-      `Invalid FilterOperator: Value for '${key}' must be either Operators or ExpressionOperators`,
-    );
   }
 };
 

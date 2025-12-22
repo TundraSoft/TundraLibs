@@ -84,6 +84,59 @@ Deno.test('DELETE - valid with NULL operator', () => {
   assertDeleteQuery(query);
 });
 
+Deno.test('DELETE - valid with pre-declared expression', () => {
+  const query = {
+    type: 'DELETE',
+    table: 'logs',
+    columns: ['id', 'createdAt', 'level', 'size'],
+    expressions: {
+      'doubleSize': { type: 'MULTIPLY', args: ['@size', 2] },
+    },
+    where: {
+      $and: [
+        { '@level': 'debug' },
+        { '@doubleSize': { $gte: 1000 } },
+      ],
+    },
+  };
+  assertDeleteQuery(query);
+});
+
+Deno.test('DELETE - valid with multiple expressions', () => {
+  const query = {
+    type: 'DELETE',
+    table: 'temp_data',
+    columns: ['id', 'createdAt', 'accessCount', 'size'],
+    expressions: {
+      'totalSize': { type: 'ADD', args: ['@size', '@accessCount'] },
+      'doubleAccess': { type: 'MULTIPLY', args: ['@accessCount', 2] },
+    },
+    where: {
+      '@totalSize': { $gte: 1000 },
+      '@accessCount': { $eq: 0 },
+    },
+  };
+  assertDeleteQuery(query);
+});
+
+Deno.test('DELETE - valid with expression in complex WHERE', () => {
+  const query = {
+    type: 'DELETE',
+    table: 'products',
+    columns: ['id', 'price', 'tax', 'inStock'],
+    expressions: {
+      'totalCost': { type: 'ADD', args: ['@price', '@tax'] },
+    },
+    where: {
+      $and: [
+        { '@totalCost': { $lte: 10 } },
+        { '@inStock': false },
+      ],
+    },
+  };
+  assertDeleteQuery(query);
+});
+
 // Invalid query tests
 
 Deno.test('DELETE - throws on null', () => {
@@ -229,6 +282,10 @@ Deno.test('DELETE - throws on non-array columns', () => {
     'non-empty array',
   );
 });
+
+
+
+
 
 
 

@@ -107,43 +107,15 @@ Deno.test('oql.asserts.Filters.FilterOperator', async (t) => {
           '@age': { $invalid: 18 } as any,
         }),
       TypeError,
-      'must be either Operators or ExpressionOperators',
+      'must be valid Operators',
     );
   });
 
   //#endregion FilterOperator - Operators
 
-  //#region FilterOperator - Expression Operators
+  //#region FilterOperator - Validation
 
-  await t.step(
-    'assertFilterOperator - valid: with expression operators',
-    () => {
-      assertFilterOperator<{ total: number }>({
-        '@total': { $gt: { type: 'ADD', args: ['@price', 10] } },
-      }, ['total', 'price']);
-    },
-  );
-
-  await t.step(
-    'assertFilterOperator - valid: mixed operators and expressions',
-    () => {
-      assertFilterOperator<{ age: number; name: string }>({
-        '@age': { $gte: 18 },
-        '@name': { $eq: { type: 'LOWER', args: '@username' } },
-      }, ['age', 'name', 'username']);
-    },
-  );
-
-  await t.step('assertFilterOperator - invalid: invalid expression', () => {
-    asserts.assertThrows(
-      () =>
-        assertFilterOperator<{ total: number }>({
-          '@total': { $gt: { type: 'BAD_EXPR' } as any },
-        }),
-      TypeError,
-      'must be either Operators or ExpressionOperators',
-    );
-  });
+  //#region FilterOperator - Validation
 
   await t.step(
     'assertFilterOperator - invalid: malformed column identifier',
@@ -287,15 +259,6 @@ Deno.test('oql.asserts.Filters.FilterOperator', async (t) => {
         '@age': { $gte: 18 },
         '@name': { $like: '%test%' },
       });
-    },
-  );
-
-  await t.step(
-    'assertQueryFilter - valid: FilterOperator with expressions',
-    () => {
-      assertQueryFilter<{ total: number }>({
-        '@total': { $gt: { type: 'ADD', args: ['@price', 10] } },
-      }, ['total', 'price']);
     },
   );
 

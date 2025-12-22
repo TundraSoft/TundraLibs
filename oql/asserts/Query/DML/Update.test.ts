@@ -84,6 +84,52 @@ Deno.test('UPDATE - valid with complex WHERE', () => {
   assertUpdateQuery(query);
 });
 
+Deno.test('UPDATE - valid with pre-declared expression', () => {
+  const query = {
+    type: 'UPDATE',
+    table: 'products',
+    columns: ['id', 'price', 'tax', 'discount'],
+    expressions: {
+      'totalPrice': { type: 'ADD', args: ['@price', '@tax'] },
+    },
+    data: { discount: 10 },
+    where: { '@totalPrice': { $gt: 100 } },
+  };
+  assertUpdateQuery(query);
+});
+
+Deno.test('UPDATE - valid with multiple expressions', () => {
+  const query = {
+    type: 'UPDATE',
+    table: 'orders',
+    columns: ['id', 'subtotal', 'tax', 'discount', 'status'],
+    expressions: {
+      'total': { type: 'ADD', args: ['@subtotal', '@tax'] },
+      'final': { type: 'SUBTRACT', args: ['@subtotal', '@discount'] },
+    },
+    data: { status: 'processed' },
+    where: {
+      '@total': { $gte: 50 },
+      '@final': { $lte: 200 },
+    },
+  };
+  assertUpdateQuery(query);
+});
+
+Deno.test('UPDATE - valid with expression in WHERE only', () => {
+  const query = {
+    type: 'UPDATE',
+    table: 'users',
+    columns: ['firstName', 'lastName', 'status'],
+    expressions: {
+      'fullName': { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] },
+    },
+    data: { status: 'verified' },
+    where: { '@fullName': { $like: 'John%' } },
+  };
+  assertUpdateQuery(query);
+});
+
 
 Deno.test('UPDATE - valid with null value', () => {
   const query = {
@@ -361,4 +407,8 @@ Deno.test('UPDATE - throws on empty column element', () => {
     'non-empty string',
   );
 });
+
+
+
+
 

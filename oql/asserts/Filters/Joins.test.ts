@@ -243,6 +243,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
   await t.step('assertJoinDetails - valid: minimal join', () => {
     assertJoinDetails({
       table: 'users',
+      columns: ['id', 'name'],
       on: {
         '@left.@id': '@right.@userId',
       },
@@ -253,6 +254,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     assertJoinDetails({
       table: 'profiles',
       schema: 'public',
+      columns: ['userId', 'bio'],
       on: {
         '@left.@id': '@right.@userId',
       },
@@ -267,10 +269,23 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     );
   });
 
+  await t.step('assertJoinDetails - invalid: missing columns', () => {
+    asserts.assertThrows(
+      () =>
+        assertJoinDetails({
+          table: 'users',
+          on: { '@left.@id': '@right.@userId' },
+        } as any),
+      TypeError,
+      "Missing required 'columns' property",
+    );
+  });
+
   await t.step('assertJoinDetails - invalid: missing table', () => {
     asserts.assertThrows(
       () =>
         assertJoinDetails({
+          columns: ['userId'],
           on: { '@left.@id': '@right.@id' },
         } as any),
       TypeError,
@@ -283,6 +298,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
       () =>
         assertJoinDetails({
           table: 123,
+          columns: ['userId'],
           on: { '@left.@id': '@right.@id' },
         } as any),
       TypeError,
@@ -290,19 +306,12 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     );
   });
 
-  await t.step('assertJoinDetails - valid: table empty string', () => {
-    // Note: Empty string validation is not strictly enforced at runtime
-    assertJoinDetails({
-      table: '',
-      on: { '@left.@id': '@right.@id' },
-    } as any);
-  });
-
   await t.step('assertJoinDetails - invalid: missing on', () => {
     asserts.assertThrows(
       () =>
         assertJoinDetails({
           table: 'users',
+          columns: ['id', 'name'],
         } as any),
       TypeError,
       "Missing required 'on' property",
@@ -314,6 +323,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
       () =>
         assertJoinDetails({
           table: 'users',
+          columns: ['id'],
           on: {} as any,
         }),
       TypeError,
@@ -328,6 +338,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
         () =>
           assertJoinDetails({
             table: 'users',
+            columns: ['id'],
             on: {
               '@left.@id': { type: 'INVALID' } as any,
             },
@@ -346,6 +357,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     assertJoinDetails({
       table: 'profiles',
       type: 'INNER',
+      columns: ['userId', 'bio'],
       on: { '@left.@id': '@right.@userId' },
     });
   });
@@ -354,6 +366,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     assertJoinDetails({
       table: 'orders',
       type: 'LEFT',
+      columns: ['customerId', 'total'],
       on: { '@left.@id': '@right.@customerId' },
     });
   });
@@ -362,6 +375,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     assertJoinDetails({
       table: 'products',
       type: 'RIGHT',
+      columns: ['id', 'name', 'price'],
       on: { '@left.@productId': '@right.@id' },
     });
   });
@@ -370,6 +384,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     assertJoinDetails({
       table: 'logs',
       type: 'FULL',
+      columns: ['id', 'userId', 'action'],
       on: { '@left.@logId': '@right.@id' },
     });
   });
@@ -380,6 +395,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
         assertJoinDetails({
           table: 'users',
           type: 123 as any,
+          columns: ['id'],
           on: { '@left.@id': '@right.@id' },
         }),
       TypeError,
@@ -393,6 +409,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
         assertJoinDetails({
           table: 'users',
           type: 'INVALID' as any,
+          columns: ['id'],
           on: { '@left.@id': '@right.@id' },
         }),
       TypeError,
@@ -406,6 +423,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
         assertJoinDetails({
           table: 'users',
           schema: 123 as any,
+          columns: ['id'],
           on: { '@left.@id': '@right.@id' },
         }),
       TypeError,
@@ -418,11 +436,113 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     assertJoinDetails({
       table: 'users',
       schema: '',
+      columns: ['id'],
       on: { '@left.@id': '@right.@id' },
     });
   });
 
   //#endregion JoinDetails - Optional Properties
+
+  //#region JoinDetails - columns Property
+
+  await t.step('assertJoinDetails - valid: with columns array', () => {
+    assertJoinDetails({
+      table: 'profiles',
+      columns: ['userId', 'bio', 'email'],
+      on: { '@left.@id': '@right.@userId' },
+    });
+  });
+
+  await t.step('assertJoinDetails - valid: with single column', () => {
+    assertJoinDetails({
+      table: 'users',
+      columns: ['id'],
+      on: { '@left.@profileId': '@right.@id' },
+    });
+  });
+
+  await t.step('assertJoinDetails - valid: with multiple columns', () => {
+    assertJoinDetails({
+      table: 'orders',
+      columns: ['id', 'userId', 'total', 'status', 'createdAt'],
+      on: { '@left.@userId': '@right.@userId' },
+    });
+  });
+
+  await t.step('assertJoinDetails - invalid: missing columns', () => {
+    asserts.assertThrows(
+      () =>
+        assertJoinDetails({
+          table: 'users',
+          on: { '@left.@id': '@right.@userId' },
+        } as any),
+      TypeError,
+      "Missing required 'columns' property",
+    );
+  });
+
+  await t.step('assertJoinDetails - invalid: columns not array', () => {
+    asserts.assertThrows(
+      () =>
+        assertJoinDetails({
+          table: 'users',
+          columns: 'userId',
+          on: { '@left.@id': '@right.@userId' },
+        } as any),
+      TypeError,
+      "'columns' must be an array",
+    );
+  });
+
+  await t.step('assertJoinDetails - invalid: columns empty array', () => {
+    asserts.assertThrows(
+      () =>
+        assertJoinDetails({
+          table: 'users',
+          columns: [],
+          on: { '@left.@id': '@right.@userId' },
+        }),
+      TypeError,
+      "'columns' array cannot be empty",
+    );
+  });
+
+  await t.step('assertJoinDetails - invalid: columns with non-string element', () => {
+    asserts.assertThrows(
+      () =>
+        assertJoinDetails({
+          table: 'users',
+          columns: ['userId', 123, 'email'],
+          on: { '@left.@id': '@right.@userId' },
+        } as any),
+      TypeError,
+      "'columns[1]' must be a string or symbol",
+    );
+  });
+
+  await t.step('assertJoinDetails - invalid: columns with @ prefix', () => {
+    asserts.assertThrows(
+      () =>
+        assertJoinDetails({
+          table: 'users',
+          columns: ['@userId', 'bio'],
+          on: { '@left.@id': '@right.@userId' },
+        } as any),
+      TypeError,
+      "'columns[0]' should not have '@' prefix",
+    );
+  });
+
+  await t.step('assertJoinDetails - valid: columns with symbol', () => {
+    const userIdSymbol = Symbol('userId');
+    assertJoinDetails({
+      table: 'users',
+      columns: [userIdSymbol, 'name'],
+      on: { '@left.@id': '@right.@userId' },
+    });
+  });
+
+  //#endregion JoinDetails - columns Property
 
   //#region JoinDetails Type Guard
 
@@ -430,6 +550,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     asserts.assertEquals(
       isJoinDetails({
         table: 'users',
+        columns: ['id', 'name'],
         on: { '@left.@id': '@right.@userId' },
       }),
       true,
@@ -439,6 +560,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
         table: 'profiles',
         schema: 'public',
         type: 'LEFT',
+        columns: ['userId', 'bio'],
         on: { '@left.@id': '@right.@userId' },
       }),
       true,
@@ -465,6 +587,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     assertJoins({
       profiles: {
         table: 'profiles',
+        columns: ['userId', 'bio'],
         on: { '@left.@id': '@right.@userId' },
       },
     });
@@ -474,16 +597,19 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     assertJoins({
       profiles: {
         table: 'profiles',
+        columns: ['userId', 'bio'],
         on: { '@left.@id': '@right.@userId' },
       },
       orders: {
         table: 'orders',
         type: 'LEFT',
+        columns: ['customerId', 'total'],
         on: { '@left.@id': '@right.@customerId' },
       },
       products: {
         table: 'products',
         schema: 'inventory',
+        columns: ['id', 'name'],
         on: { '@left.@productId': '@right.@id' },
       },
     });
@@ -493,6 +619,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     assertJoins({
       profiles: {
         table: 'profiles',
+        columns: ['userId', 'bio'],
         on: { '@left.@id': '@right.@userId' },
       },
     }, ['left.id', 'right.userId']);
@@ -514,29 +641,13 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
     );
   });
 
-  await t.step(
-    'assertJoins - valid: element with empty table (not strictly enforced)',
-    () => {
-      // Note: Empty string validation is not strictly enforced at runtime
-      assertJoins({
-        users: {
-          table: 'users',
-          on: { '@left.@id': '@right.@id' },
-        },
-        invalid: {
-          table: '',
-          on: { '@left.@id': '@right.@id' },
-        },
-      });
-    },
-  );
-
   await t.step('assertJoins - invalid: element with invalid JoinFilter', () => {
     asserts.assertThrows(
       () =>
         assertJoins({
           profiles: {
             table: 'profiles',
+            columns: ['userId', 'bio'],
             on: {} as any,
           },
         }),
@@ -551,6 +662,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
         assertJoins({
           profiles: {
             table: 'profiles',
+            columns: ['userId', 'bio'],
             on: {
               '@@invalid': '@right.@id',
             },
@@ -570,6 +682,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
       isJoins({
         users: {
           table: 'users',
+          columns: ['id', 'name'],
           on: { '@left.@id': '@right.@userId' },
         },
       }),
@@ -580,11 +693,13 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
         profiles: {
           table: 'profiles',
           type: 'LEFT',
+          columns: ['userId', 'bio'],
           on: { '@left.@id': '@right.@userId' },
         },
         orders: {
           table: 'orders',
           schema: 'sales',
+          columns: ['customerId', 'total'],
           on: { '@left.@id': '@right.@customerId' },
         },
       }),
@@ -616,6 +731,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
         table: 'user_profiles',
         schema: 'public',
         type: 'LEFT',
+        columns: ['userId', 'organizationId', 'bio'],
         on: {
           '@users.@id': '@user_profiles.@userId',
           '@users.@orgId': '@user_profiles.@organizationId',
@@ -625,6 +741,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
         table: 'orders',
         schema: 'sales',
         type: 'INNER',
+        columns: ['customerId', 'status', 'productId'],
         on: {
           '@users.@id': '@orders.@customerId',
           '@orders.@status': 'active',
@@ -633,6 +750,7 @@ Deno.test('oql.asserts.Filters.Joins', async (t) => {
       products: {
         table: 'products',
         type: 'LEFT',
+        columns: ['id', 'available', 'name'],
         on: {
           '@orders.@productId': '@products.@id',
           '@products.@available': true,

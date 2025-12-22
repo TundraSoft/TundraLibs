@@ -9,21 +9,25 @@
  */
 
 import type { Query, TableType } from '../../../types/mod.ts';
-import { assertFilterOperator } from '../../Filters/mod.ts';
+import {
+  assertFilterOperator,
+  assertQueryFilter,
+} from '../../Filters/mod.ts';
+import { assertExpression } from '../../Expressions/mod.ts';
 
 /**
  * Asserts that a value is a valid COUNT query.
  *
  * Validates all COUNT-specific properties including:
  * - Required: type, table, columns
- * - Optional: schema, where, distinct
+ * - Optional: schema, expressions, where
  *
  * **Validation Rules**:
  * - `type` must be 'COUNT'
  * - `table` must be a non-empty string
  * - `columns` must be non-empty array of strings (schema definition for validation)
- * - `where` must be valid QueryFilter if present
- * - `distinct` must be boolean if present (count unique rows only)
+ * - `expressions` must be Record<string, Expression> if present (pre-declared expressions)
+ * - `where` can reference columns and expressions
  *
  * **Note**: The `columns` property is used for validation of column references
  * in the WHERE clause. COUNT returns a number, not row data.
@@ -55,15 +59,22 @@ import { assertFilterOperator } from '../../Filters/mod.ts';
  * };
  * assertCountQuery(filtered); // ✓
  *
- * // COUNT DISTINCT
- * const distinct = {
+ * // COUNT with pre-declared expression
+ * const withExpr = {
  *   type: 'COUNT',
  *   table: 'orders',
- *   columns: ['id', 'userId', 'status'],
- *   where: { '@status': 'completed' },
- *   distinct: true
+ *   columns: ['id', 'userId', 'status', 'total', 'discount'],
+ *   expressions: {
+ *     finalPrice: { type: 'SUBTRACT', args: ['@total', '@discount'] }
+ *   },
+ *   where: {
+ *     $and: [
+ *       { '@status': 'completed' },
+ *       { '@finalPrice': { $gte: 100 } }
+ *     ]
+ *   }
  * };
- * assertCountQuery(distinct); // ✓
+ * assertCountQuery(withExpr); // ✓
  *
  * // COUNT with complex filter
  * const complex = {
@@ -142,8 +153,61 @@ export const assertCountQuery: <PT extends TableType = TableType>(
 
   const columnList = query.columns as string[];
 
+  // Validate expressions (optional)
+  if (query.expressions !== undefined) {
+    if (
+      typeof query.expressions !== 'object' ||
+      query.expressions === null ||
+      Array.isArray(query.expressions)
+    ) {
+      throw new TypeError(
+        `Invalid COUNT query: 'expressions' must be a non-null object`,
+      );
+    }
+
+    const expressions = query.expressions as Record<string, unknown>;
+    const expressionKeys = Object.keys(expressions);
+
+    if (expressionKeys.length === 0) {
+      throw new TypeError(
+        `Invalid COUNT query: 'expressions' cannot be empty if provided`,
+      );
+    }
+
+    // Validate each expression
+    for (const [key, expr] of Object.entries(expressions)) {
+      // Key must NOT start with @ (plain string, referenced with @ in WHERE)
+      if (key.startsWith('@')) {
+        throw new TypeError(
+          `Invalid COUNT query: expression key '${key}' must not start with '@'`,
+        );
+      }
+
+      // Validate expression value
+      try {
+        assertExpression(expr, columnList);
+      } catch (error) {
+        throw new TypeError(
+          `Invalid COUNT query: expression '${key}' is invalid: ${
+            (error as Error).message
+          }`,
+        );
+      }
+    }
+  }
+
+  // Collect available keys for WHERE clause: columns + expressions
+  // Note: assertFilterOperator expects column names WITHOUT @ prefix
+  const availableKeys = [...columnList];
+  if (query.expressions !== undefined) {
+    const expressions = query.expressions as Record<string, unknown>;
+    // Expression keys are plain strings (e.g., 'finalPrice'), add directly
+    availableKeys.push(...Object.keys(expressions));
+  }
+
   // Validate where (optional)
+  // WHERE can reference columns and expressions
   if (query.where !== undefined) {
-    assertFilterOperator(query.where, columnList);
+    assertQueryFilter(query.where, availableKeys);
   }
 };

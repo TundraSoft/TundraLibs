@@ -358,6 +358,24 @@ Deno.test('INSERT - throws on invalid data value type', () => {
   );
 });
 
+Deno.test('INSERT - throws on expression with column reference', () => {
+  assertThrows(
+    () =>
+      assertInsertQuery({
+        type: 'INSERT',
+        table: 'users',
+        columns: ['firstName', 'lastName', 'fullName'],
+        data: {
+          firstName: 'John',
+          lastName: 'Doe',
+          fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] },
+        },
+      }),
+    TypeError,
+    'Column references',
+  );
+});
+
 Deno.test('INSERT - throws on invalid expression', () => {
   assertThrows(
     () =>

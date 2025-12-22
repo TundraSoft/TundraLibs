@@ -182,6 +182,7 @@ export const isJoinFilter: <
  * JoinDetails contains the complete specification for a table join:
  * - table: The table name to join
  * - schema: Optional schema name
+ * - columns: Required array of column names available from the joined table
  * - on: The JoinFilter (ON clause)
  * - type: Join type (INNER, LEFT, RIGHT, FULL)
  *
@@ -194,6 +195,7 @@ export const isJoinFilter: <
  * // Simple INNER JOIN
  * assertJoinDetails({
  *   table: 'Profile',
+ *   columns: ['userId', 'bio', 'email'],
  *   on: { '@Profile.@userId': '@User.@id' }
  * }, ['User.id', 'Profile.userId']);
  *
@@ -201,19 +203,10 @@ export const isJoinFilter: <
  * assertJoinDetails({
  *   table: 'Orders',
  *   schema: 'sales',
+ *   columns: ['customerId', 'amount', 'createdAt'],
  *   type: 'LEFT',
  *   on: { '@Orders.@customerId': '@Customer.@id' }
  * }, ['Customer.id', 'Orders.customerId']);
- *
- * // JOIN with expression
- * assertJoinDetails({
- *   table: 'Inventory',
- *   type: 'INNER',
- *   on: {
- *     '@Inventory.@productId': '@Product.@id',
- *     '@Inventory.@quantity': { $gt: 0 }
- *   }
- * });
  * ```
  */
 export const assertJoinDetails: <
@@ -257,6 +250,41 @@ export const assertJoinDetails: <
       throw new TypeError(
         `Invalid JoinDetails: 'schema' must be a string, got ${typeof obj
           .schema}`,
+      );
+    }
+  }
+
+  // Validate required 'columns' property
+  if (!('columns' in obj)) {
+    throw new TypeError(
+      "Invalid JoinDetails: Missing required 'columns' property",
+    );
+  }
+
+  if (!Array.isArray(obj.columns)) {
+    throw new TypeError(
+      `Invalid JoinDetails: 'columns' must be an array, got ${typeof obj
+        .columns}`,
+    );
+  }
+
+  if (obj.columns.length === 0) {
+    throw new TypeError(
+      "Invalid JoinDetails: 'columns' array cannot be empty",
+    );
+  }
+
+  for (const [index, col] of obj.columns.entries()) {
+    if (typeof col !== 'string' && typeof col !== 'symbol') {
+      throw new TypeError(
+        `Invalid JoinDetails: 'columns[${index}]' must be a string or symbol, got ${typeof col}`,
+      );
+    }
+
+    const colStr = String(col);
+    if (colStr.startsWith('@')) {
+      throw new TypeError(
+        `Invalid JoinDetails: 'columns[${index}]' should not have '@' prefix. Got '${colStr}'`,
       );
     }
   }

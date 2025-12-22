@@ -486,6 +486,28 @@ export type Query<
               }
             : QT extends 'UPDATE' ? {
                 /**
+                 * Optional expression definitions for computed columns.
+                 *
+                 * Pre-declare expressions to use in WHERE clause.
+                 * Keys become available as `@keyName` in filters.
+                 *
+                 * **Expression Chaining**: Expressions CANNOT reference other expressions.
+                 * Nested expressions must be defined inline.
+                 *
+                 * @example
+                 * ```typescript
+                 * expressions: {
+                 *   fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] },
+                 *   ageInMonths: { type: 'MULTIPLY', args: ['@age', 12] }
+                 * },
+                 * where: {
+                 *   '@fullName': { $like: 'John%' },
+                 *   '@ageInMonths': { $gte: 240 }
+                 * }
+                 * ```
+                 */
+                expressions?: Record<string, Expressions<PT>>;
+                /**
                  * Partial row data with columns to update.
                  *
                  * **Keys**: Plain column names (subset of `columns` definition)
@@ -517,84 +539,242 @@ export type Query<
                 data: PartialDataWithExpressions<PT>;
                 /**
                  * Optional filter to select which rows to update.
+                 *
+                 * Can reference:
+                 * - Base table columns: `@columnName`
+                 * - Expressions: `@expressionName` (from `expressions` property)
+                 *
                  * If omitted, all rows are updated (use with caution!).
+                 *
+                 * @example
+                 * ```typescript
+                 * // Filter by column
+                 * where: { '@status': 'active', '@age': { $gte: 18 } }
+                 *
+                 * // Filter by expression
+                 * expressions: {
+                 *   fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] }
+                 * },
+                 * where: {
+                 *   '@fullName': { $like: 'John%' }
+                 * }
+                 * ```
                  */
                 where?: QueryFilter<PT>;
               }
             : QT extends 'DELETE' ? {
                 /**
+                 * Optional expression definitions for computed columns.
+                 *
+                 * Pre-declare expressions to use in WHERE clause.
+                 * Keys become available as `@keyName` in filters.
+                 *
+                 * **Expression Chaining**: Expressions CANNOT reference other expressions.
+                 * Nested expressions must be defined inline.
+                 *
+                 * @example
+                 * ```typescript
+                 * expressions: {
+                 *   fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] },
+                 *   accountAge: { type: 'SUBTRACT', args: [{ type: 'NOW' }, '@createdAt'] }
+                 * },
+                 * where: {
+                 *   '@fullName': 'Deleted User',
+                 *   '@accountAge': { $gte: 365 }  // Older than 1 year
+                 * }
+                 * ```
+                 */
+                expressions?: Record<string, Expressions<PT>>;
+                /**
                  * Optional filter to select which rows to delete.
+                 *
+                 * Can reference:
+                 * - Base table columns: `@columnName`
+                 * - Expressions: `@expressionName` (from `expressions` property)
+                 *
                  * If omitted, all rows are deleted (use with caution!).
+                 *
+                 * @example
+                 * ```typescript
+                 * // Filter by column
+                 * where: { '@status': 'inactive', '@deletedAt': { $null: false } }
+                 *
+                 * // Filter by expression
+                 * expressions: {
+                 *   accountAge: { type: 'SUBTRACT', args: [{ type: 'NOW' }, '@createdAt'] }
+                 * },
+                 * where: {
+                 *   '@accountAge': { $gte: 730 }  // Delete accounts older than 2 years
+                 * }
+                 * ```
                  */
                 where?: QueryFilter<PT>;
               }
             : QT extends 'SELECT' ? {
                 /**
+                 * Optional aggregate function definitions.
+                 *
+                 * Pre-declare aggregates to use in projection, having, and orderBy.
+                 * Keys become available as `@keyName` in projection and filters.
+                 *
+                 * **Automatic GROUP BY**: When aggregates are defined, non-aggregated
+                 * columns in projection are automatically grouped (SQL standard behavior).
+                 *
+                 * @example
+                 * ```typescript
+                 * aggregates: {
+                 *   totalSales: { type: 'SUM', column: '@amount' },
+                 *   orderCount: { type: 'COUNT', column: '@id' },
+                 *   avgPrice: { type: 'AVG', column: '@price' }
+                 * }
+                 * ```
+                 */
+                aggregates?: Record<string, Aggregates<PT & LT>>;
+                /**
+                 * Optional expression definitions for computed columns.
+                 *
+                 * Pre-declare expressions to use in projection, where, and orderBy.
+                 * Keys become available as `@keyName` in projection and filters.
+                 *
+                 * **Expression Chaining**: Expressions CANNOT reference other expressions.
+                 * Nested expressions must be defined inline.
+                 *
+                 * @example
+                 * ```typescript
+                 * expressions: {
+                 *   fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] },
+                 *   upperEmail: { type: 'UPPER', args: ['@email'] },
+                 *   // ❌ Cannot reference fullName expression
+                 *   // upperFullName: { type: 'UPPER', args: ['@fullName'] }
+                 *   // ✅ Must nest the expression
+                 *   upperFullName: {
+                 *     type: 'UPPER',
+                 *     args: [{ type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] }]
+                 *   }
+                 * }
+                 * ```
+                 */
+                expressions?: Record<string, Expressions<PT & LT>>;
+                /**
+                 * Optional join definitions for linking related tables.
+                 *
+                 * Each key is a table alias. Joined table columns must be explicitly listed
+                 * in the `columns` array to be available in projection, filters, and expressions.
+                 *
+                 * @example
+                 * ```typescript
+                 * joins: {
+                 *   Profile: {
+                 *     table: 'profiles',
+                 *     columns: ['bio', 'email', 'verified'],  // Must list all used columns
+                 *     type: 'LEFT',
+                 *     on: { '@Profile.@userId': '@id' }
+                 *   }
+                 * }
+                 * ```
+                 */
+                joins?: Joins<PT, LT>;
+                /**
                  * Output projection - REQUIRED for SELECT queries.
                  *
-                 * Defines what to actually select and how to compute/transform the output.
-                 * Keys are output field names, values can be:
-                 * - Simple column references: `'@columnName'` or `'@Table.@column'`
-                 * - Aggregate functions: `{ type: 'COUNT', column: '@id' }`
-                 * - Expressions: `{ type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] }`
+                 * Selects which columns, expressions, aggregates, and joined columns to include
+                 * in the result. All keys use `@` prefix for consistency.
                  *
-                 * **Why mandatory?**: Forces explicit selection, enables type-safe output,
-                 * and allows computed fields/aggregates alongside regular columns.
+                 * **Key Format**: `@columnName`, `@expressionName`, `@aggregateName`, or `@JoinAlias.@column`
                  *
-                 * **Column References**: Use `@` prefix to reference columns (distinguishes
-                 * from literal strings). Available columns come from the `columns` property.
+                 * **Value Options**:
+                 * - `true`: Include with same name (without @ prefix)
+                 * - `'aliasName'`: Include with custom alias
+                 *
+                 * **Available Keys**:
+                 * - Base table columns: `@columnName` (from `columns` property)
+                 * - Expressions: `@expressionName` (from `expressions` property)
+                 * - Aggregates: `@aggregateName` (from `aggregates` property)
+                 * - Joined columns: `@JoinAlias.@columnName` (from join's `columns` array)
+                 *
+                 * **Automatic GROUP BY**: When `aggregates` is defined, all non-aggregate
+                 * columns in projection are automatically grouped.
                  *
                  * @example
                  * ```typescript
                  * // Simple column selection
                  * projection: {
-                 *   userId: '@id',
-                 *   userName: '@name'
+                 *   '@id': 'userId',           // Column with alias
+                 *   '@name': true,             // Column with same name
+                 *   '@email': true
+                 * }
+                 * // Generated SQL: SELECT id as userId, name, email FROM ...
+                 *
+                 * // With expressions
+                 * expressions: {
+                 *   fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] }
+                 * },
+                 * projection: {
+                 *   '@id': true,
+                 *   '@fullName': 'name'        // Expression with alias
                  * }
                  *
-                 * // With computed fields and aggregates
+                 * // With aggregates (automatic grouping)
+                 * aggregates: {
+                 *   totalSales: { type: 'SUM', column: '@amount' },
+                 *   orderCount: { type: 'COUNT', column: '@id' }
+                 * },
                  * projection: {
-                 *   id: '@id',
-                 *   fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] },
-                 *   orderCount: { type: 'COUNT', column: '@Order.@id' },
-                 *   total: { type: 'SUM', column: '@Order.@amount' }
+                 *   '@userId': true,           // Automatically grouped
+                 *   '@department': true,       // Automatically grouped
+                 *   '@totalSales': 'total',    // Aggregated
+                 *   '@orderCount': true        // Aggregated
                  * }
+                 * // Generated SQL: SELECT userId, department, SUM(amount) as total,
+                 * //                COUNT(id) as orderCount FROM ... GROUP BY userId, department
                  *
-                 * // With joined table columns
+                 * // With joined columns
+                 * joins: {
+                 *   Profile: {
+                 *     table: 'profiles',
+                 *     columns: ['bio', 'email'],
+                 *     on: { '@Profile.@userId': '@id' }
+                 *   }
+                 * },
                  * projection: {
-                 *   userName: '@name',
-                 *   profileBio: '@Profile.@bio',
-                 *   profileEmail: '@Profile.@email'
+                 *   '@id': true,
+                 *   '@name': true,
+                 *   '@Profile.@email': 'userEmail',  // Joined column with alias
+                 *   '@Profile.@bio': true             // Joined column same name
                  * }
                  * ```
                  */
-                projection: Record<
-                  string,
-                  | keyof FlattenEntity<PT, '', '@'>
-                  | Aggregates<PT & LT>
-                  | Expressions<PT & LT>
-                >;
-                /**
-                 * Optional join definitions for linking related tables.
-                 * Each key is a table alias referencing a table in LT.
-                 */
-                joins?: Joins<PT, LT>;
+                projection: Record<string, boolean | string>;
                 /**
                  * Optional filter condition for rows (pre-aggregation).
                  *
                  * Filters are applied BEFORE any aggregation occurs.
                  * Column references use `@` prefix to differentiate from literal values.
-                 * Supports filtering on both primary table and joined table columns.
+                 *
+                 * **Available References**:
+                 * - Base table columns: `@columnName`
+                 * - Joined table columns: `@JoinAlias.@columnName`
+                 * - Expressions: `@expressionName` (from `expressions` property)
+                 *
+                 * **NOT Available**: Aggregates (use `having` for aggregate filtering)
                  *
                  * @example
                  * ```typescript
-                 * // Simple filter
+                 * // Simple column filter
                  * where: { '@status': 'active', '@age': { $gte: 18 } }
                  *
                  * // With joined tables
                  * where: {
                  *   '@status': 'active',
                  *   '@Profile.@verified': true
+                 * }
+                 *
+                 * // With expressions
+                 * expressions: {
+                 *   fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] }
+                 * },
+                 * where: {
+                 *   '@fullName': { $ne: 'John Doe' }  // Filter by expression
                  * }
                  *
                  * // Complex filters with logical operators
@@ -612,21 +792,87 @@ export type Query<
                 /** Number of rows to skip (for pagination) */
                 offset?: number;
                 /**
-                 * Optional sort order using column identifiers.
-                 * Keys are ColumnIdentifier patterns, values are 'ASC' or 'DESC'.
+                 * Optional sort order.
+                 *
+                 * Can reference:
+                 * - Any key from `projection` (including columns, expressions, aggregates)
+                 * - Any joined table column (from join's `columns` array)
+                 *
+                 * Keys use `@` prefix, values are 'ASC' or 'DESC'.
                  *
                  * @example
-                 * { '@createdAt': 'DESC', '@name': 'ASC', '@Profile.@bio': 'ASC' }
+                 * ```typescript
+                 * // Order by projection keys
+                 * orderBy: {
+                 *   '@totalSales': 'DESC',     // Aggregate from projection
+                 *   '@fullName': 'ASC'         // Expression from projection
+                 * }
+                 *
+                 * // Order by joined column (must be in join's columns array)
+                 * orderBy: {
+                 *   '@Profile.@createdAt': 'DESC'
+                 * }
+                 * ```
                  */
                 orderBy?: Record<ColumnIdentifier, 'ASC' | 'DESC'>;
                 /**
-                 * Optional post-aggregation filter (after implicit GROUP BY).
-                 * Used to filter results after grouping on non-aggregate columns.
-                 * Any column not in an aggregate function is automatically grouped.
+                 * Optional post-aggregation filter (equivalent to SQL's HAVING clause).
+                 *
+                 * Applied AFTER implicit grouping occurs. Use this to filter aggregated results.
+                 * Only evaluated when `aggregates` is defined.
+                 *
+                 * **Available References**: Aggregate names (from `aggregates` property) using `@` prefix
+                 *
+                 * **When to use**:
+                 * - Filter based on aggregate values (e.g., COUNT > 10, SUM < 1000)
+                 * - Filter groups, not individual rows
+                 *
+                 * **Difference from `where`**:
+                 * - `where`: Filters individual rows BEFORE aggregation (columns, expressions, joins)
+                 * - `having`: Filters grouped results AFTER aggregation (aggregates only)
+                 *
+                 * @example
+                 * ```typescript
+                 * // Filter by aggregate value
+                 * aggregates: {
+                 *   employeeCount: { type: 'COUNT', column: '@id' }
+                 * },
+                 * having: {
+                 *   '@employeeCount': { $gt: 5 }  // Only groups with >5 employees
+                 * }
+                 *
+                 * // Multiple aggregate filters
+                 * aggregates: {
+                 *   totalSpent: { type: 'SUM', column: '@amount' },
+                 *   orderCount: { type: 'COUNT', column: '@id' }
+                 * },
+                 * having: {
+                 *   '@totalSpent': { $gte: 1000 },
+                 *   '@orderCount': { $gt: 5 }
+                 * }
+                 * ```
                  */
                 having?: QueryFilter<PT & FlattenEntity<LT, '', '@'>>;
               }
             : QT extends 'COUNT' ? {
+                /**
+                 * Optional expression definitions for computed columns.
+                 *
+                 * Pre-declare expressions to use in WHERE clause.
+                 * Keys become available as `@keyName` in filters.
+                 *
+                 * **Expression Chaining**: Expressions CANNOT reference other expressions.
+                 * Nested expressions must be defined inline.
+                 *
+                 * @example
+                 * ```typescript
+                 * expressions: {
+                 *   fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] },
+                 *   age: { type: 'SUBTRACT', args: [{ type: 'YEAR', args: [{ type: 'NOW' }] }, { type: 'YEAR', args: ['@birthDate'] }] }
+                 * }
+                 * ```
+                 */
+                expressions?: Record<string, Expressions<PT & LT>>;
                 /**
                  * Optional join definitions for linking related tables.
                  * Allows counting rows with join conditions.
@@ -636,6 +882,7 @@ export type Query<
                  * joins: {
                  *   Profile: {
                  *     table: 'profiles',
+                 *     columns: ['userId', 'verified'],
                  *     type: 'LEFT',
                  *     on: { '@Profile.@userId': '@id' }
                  *   }
@@ -647,7 +894,11 @@ export type Query<
                  * Optional filter condition for rows (pre-aggregation).
                  *
                  * Determines which rows to include in the count.
-                 * Column references use `@` prefix (validated against `columns` schema).
+                 *
+                 * **Available References**:
+                 * - Base table columns: `@columnName`
+                 * - Joined table columns: `@JoinAlias.@columnName`
+                 * - Expressions: `@expressionName` (from `expressions` property)
                  *
                  * @example
                  * ```typescript
@@ -659,6 +910,14 @@ export type Query<
                  *   '@status': 'active',
                  *   '@Profile.@verified': true
                  * }
+                 *
+                 * // Count with expression filter
+                 * expressions: {
+                 *   fullName: { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] }
+                 * },
+                 * where: {
+                 *   '@fullName': { $like: 'John%' }
+                 * }
                  * ```
                  */
                 where?: QueryFilter<PT & FlattenEntity<LT, '', '@'>>;
@@ -666,7 +925,9 @@ export type Query<
                  * Optional post-aggregation filter (after implicit GROUP BY).
                  *
                  * Used when counting grouped results. Applied AFTER grouping.
-                 * Column references use `@` prefix (validated against `columns` schema).
+                 *
+                 * **Note**: This is rarely used in COUNT queries. Most filtering
+                 * should be done in `where` clause before counting.
                  *
                  * @example
                  * ```typescript

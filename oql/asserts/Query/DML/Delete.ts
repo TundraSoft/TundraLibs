@@ -8,21 +8,25 @@
  */
 
 import type { Query, TableType } from '../../../types/mod.ts';
-import { assertFilterOperator } from '../../Filters/mod.ts';
+import {
+  assertFilterOperator,
+  assertQueryFilter,
+} from '../../Filters/mod.ts';
+import { assertExpression } from '../../Expressions/mod.ts';
 
 /**
  * Asserts that a value is a valid DELETE query.
  *
  * Validates all DELETE-specific properties including:
  * - Required: type, table, columns
- * - Optional: schema, where
+ * - Optional: schema, expressions, where
  *
  * **Validation Rules**:
  * - `type` must be 'DELETE'
  * - `table` must be a non-empty string
  * - `columns` must be non-empty array of strings (schema definition for validation)
- * - `where` must be valid QueryFilter if present (strongly recommended for safety)
- * - `returnColumns` must be array of strings if present
+ * - `expressions` must be Record<string, Expression> if present (pre-declared expressions)
+ * - `where` can reference columns and expressions (strongly recommended for safety)
  *
  * **Safety Note**: DELETE without WHERE clause will remove ALL rows from the table.
  * While this is syntactically valid, it's potentially dangerous in production.
@@ -41,29 +45,25 @@ import { assertFilterOperator } from '../../Filters/mod.ts';
  * };
  * assertDeleteQuery(query); // ✓
  *
- * // DELETE with complex filter
+ * // DELETE with pre-declared expression
  * const complex = {
  *   type: 'DELETE',
  *   table: 'logs',
- *   columns: ['id', 'createdAt', 'level'],
+ *   columns: ['id', 'createdAt', 'level', 'size'],
+ *   expressions: {
+ *     isOld: {
+ *       type: 'LT',
+ *       args: ['@createdAt', new Date('2024-01-01')]
+ *     }
+ *   },
  *   where: {
  *     $and: [
  *       { '@level': 'debug' },
- *       { '@createdAt': { $lt: new Date('2024-01-01') } }
+ *       { '@isOld': true }
  *     ]
  *   }
  * };
  * assertDeleteQuery(complex); // ✓
- *
- * // DELETE with returnColumns
- * const withReturn = {
- *   type: 'DELETE',
- *   table: 'tasks',
- *   columns: ['id', 'status'],
- *   where: { '@status': 'completed' },
- *   returnColumns: ['id', 'status']
- * };
- * assertDeleteQuery(withReturn); // ✓
  *
  * // DELETE all rows (no WHERE - risky but valid)
  * const deleteAll = {
@@ -135,25 +135,61 @@ export const assertDeleteQuery: <PT extends TableType = TableType>(
 
   const columnList = query.columns as string[];
 
-  // Validate where (optional but strongly recommended)
-  if (query.where !== undefined) {
-    assertFilterOperator(query.where, columnList);
-  }
-
-  // Validate returnColumns (optional)
-  if (query.returnColumns !== undefined) {
-    if (!Array.isArray(query.returnColumns)) {
+  // Validate expressions (optional)
+  if (query.expressions !== undefined) {
+    if (
+      typeof query.expressions !== 'object' ||
+      query.expressions === null ||
+      Array.isArray(query.expressions)
+    ) {
       throw new TypeError(
-        `Invalid DELETE query: 'returnColumns' must be an array if provided`,
+        `Invalid DELETE query: 'expressions' must be a non-null object`,
       );
     }
 
-    for (const col of query.returnColumns) {
-      if (typeof col !== 'string' || col.trim().length === 0) {
+    const expressions = query.expressions as Record<string, unknown>;
+    const expressionKeys = Object.keys(expressions);
+
+    if (expressionKeys.length === 0) {
+      throw new TypeError(
+        `Invalid DELETE query: 'expressions' cannot be empty if provided`,
+      );
+    }
+
+    // Validate each expression
+    for (const [key, expr] of Object.entries(expressions)) {
+      // Key must NOT start with @ (plain string, referenced with @ in WHERE)
+      if (key.startsWith('@')) {
         throw new TypeError(
-          `Invalid DELETE query: Each column in 'returnColumns' must be a non-empty string`,
+          `Invalid DELETE query: expression key '${key}' must not start with '@'`,
+        );
+      }
+
+      // Validate expression value
+      try {
+        assertExpression(expr, columnList);
+      } catch (error) {
+        throw new TypeError(
+          `Invalid DELETE query: expression '${key}' is invalid: ${
+            (error as Error).message
+          }`,
         );
       }
     }
+  }
+
+  // Collect available keys for WHERE clause: columns + expressions
+  // Note: assertFilterOperator expects column names WITHOUT @ prefix
+  const availableKeys = [...columnList];
+  if (query.expressions !== undefined) {
+    const expressions = query.expressions as Record<string, unknown>;
+    // Expression keys are plain strings (e.g., 'isOld'), add directly
+    availableKeys.push(...Object.keys(expressions));
+  }
+
+  // Validate where (optional but strongly recommended)
+  // WHERE can reference columns and expressions
+  if (query.where !== undefined) {
+    assertQueryFilter(query.where, availableKeys);
   }
 };

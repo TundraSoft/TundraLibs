@@ -9,11 +9,6 @@
 export { assertOperators, isOperators } from './Operators.ts';
 
 export {
-  assertExpressionOperators,
-  isExpressionOperators,
-} from './ExpressionOperators.ts';
-
-export {
   assertFilterOperator,
   assertQueryFilter,
   isFilterOperator,

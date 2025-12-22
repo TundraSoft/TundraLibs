@@ -7,7 +7,7 @@ import {
 /**
  * Generates a Time-based One-Time Password (TOTP) as defined in RFC 6238.
  *
- * @param {string} key - The secret key for HMAC (minimum 16 characters)
+ * @param {string} key - The secret key (Base32 string or UTF-8 string, minimum 16 characters)
  * @param {TOTPOptions} [options] - Optional parameters for OTP generation
  * @param {number} [options.epoch=Date.now()] - The epoch time in milliseconds
  * @param {number} [options.period=30] - The time period in seconds (must be at least 1)
@@ -20,10 +20,10 @@ import {
  * @example
  * ```typescript
  * // Simple usage with defaults (current time, 30s period, 6 digits)
- * const otp = await generateTOTP('mySecretKey123456');
+ * const otp = await generateTOTP('JBSWY3DPEHPK3PXP');
  *
- * // Custom options
- * const otp2 = await generateTOTP('mySecretKey123456', {
+ * // Custom options with Base32 secret
+ * const otp2 = await generateTOTP('JBSWY3DPEHPK3PXP', {
  *   period: 60,
  *   length: 8,
  *   algo: 'SHA-512'
@@ -58,7 +58,7 @@ export const generateTOTP = (
  * before and after the current time.
  *
  * @param {string} otp - The OTP to verify (must be numeric and match expected length)
- * @param {string} key - The secret key for HMAC (minimum 16 characters)
+ * @param {string} key - The secret key (Base32 string or UTF-8 string, minimum 16 characters)
  * @param {TOTPVerifyOptions} [options] - Optional parameters for OTP verification
  * @param {number} [options.window=1] - The number of time steps to check before and after the current one
  * @param {number} [options.epoch=Date.now()] - The epoch time in milliseconds
@@ -74,10 +74,10 @@ export const generateTOTP = (
  * @example
  * ```typescript
  * // Verify a TOTP with default settings
- * const isValid = await verifyTOTP('123456', 'mySecretKey123456');
+ * const isValid = await verifyTOTP('123456', 'JBSWY3DPEHPK3PXP');
  *
  * // Verify with custom options
- * const isValid2 = await verifyTOTP('987654', 'mySecretKey123456', {
+ * const isValid2 = await verifyTOTP('987654', 'JBSWY3DPEHPK3PXP', {
  *   window: 2,
  *   period: 60,
  *   length: 8,

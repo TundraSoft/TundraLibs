@@ -89,6 +89,61 @@ Deno.test('COUNT - valid with NULL check', () => {
   assertCountQuery(query);
 });
 
+Deno.test('COUNT - valid with pre-declared expression', () => {
+  const query = {
+    type: 'COUNT',
+    table: 'orders',
+    columns: ['id', 'userId', 'status', 'total', 'discount'],
+    expressions: {
+      'finalPrice': { type: 'SUBTRACT', args: ['@total', '@discount'] },
+    },
+    where: {
+      $and: [
+        { '@status': 'completed' },
+        { '@finalPrice': { $gte: 100 } },
+      ],
+    },
+  };
+  assertCountQuery(query);
+});
+
+Deno.test('COUNT - valid with multiple expressions', () => {
+  const query = {
+    type: 'COUNT',
+    table: 'users',
+    columns: ['firstName', 'lastName', 'age', 'status'],
+    expressions: {
+      'fullName': { type: 'CONCAT', args: ['@firstName', ' ', '@lastName'] },
+      'ageText': { type: 'CONCAT', args: ['Age: ', '@age'] },
+    },
+    where: {
+      '@fullName': { $like: 'John%' },
+      '@age': { $gte: 18 },
+      '@status': 'active',
+    },
+  };
+  assertCountQuery(query);
+});
+
+Deno.test('COUNT - valid with nested expression', () => {
+  const query = {
+    type: 'COUNT',
+    table: 'products',
+    columns: ['id', 'price', 'tax', 'discount'],
+    expressions: {
+      'finalPrice': {
+        type: 'SUBTRACT',
+        args: [
+          { type: 'ADD', args: ['@price', '@tax'] },
+          '@discount',
+        ],
+      },
+    },
+    where: { '@finalPrice': { $gte: 50 } },
+  };
+  assertCountQuery(query);
+});
+
 // Invalid query tests
 
 Deno.test('COUNT - throws on null', () => {
@@ -250,3 +305,7 @@ Deno.test('COUNT - throws on invalid WHERE structure', () => {
     TypeError,
   );
 });
+
+
+
+

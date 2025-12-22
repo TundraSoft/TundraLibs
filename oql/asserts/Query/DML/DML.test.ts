@@ -39,7 +39,7 @@ Deno.test('assertSelectQuery - valid queries', () => {
     type: 'SELECT',
     table: 'users',
     columns: ['id', 'name', 'email'],
-    projection: { userId: '@id', userName: '@name' },
+    projection: { '@id': 'userId', '@name': 'userName' },
   };
   assertSelectQuery(simple); // Should not throw
 
@@ -48,7 +48,7 @@ Deno.test('assertSelectQuery - valid queries', () => {
     type: 'SELECT',
     table: 'users',
     columns: ['id', 'name', 'status'],
-    projection: { id: '@id', name: '@name' },
+    projection: { '@id': 'id', '@name': 'name' },
     where: { '@status': 'active' },
   };
   assertSelectQuery(withWhere);
@@ -58,7 +58,7 @@ Deno.test('assertSelectQuery - valid queries', () => {
     type: 'SELECT',
     table: 'users',
     columns: ['id', 'name', 'Profile.bio'], // Include joined columns
-    projection: { id: '@id', name: '@name', bio: '@Profile.@bio' },
+    projection: { '@id': 'id', '@name': 'name', '@Profile.@bio': 'bio' },
     joins: {
       Profile: {
         table: 'profiles',
@@ -75,13 +75,16 @@ Deno.test('assertSelectQuery - valid queries', () => {
     type: 'SELECT',
     table: 'orders',
     columns: ['userId', 'total'],
-    projection: {
-      userId: '@userId',
-      totalSpent: { type: 'SUM', column: '@total' },
-      orderCount: { type: 'COUNT', column: '@userId' },
+    aggregates: {
+      'totalSpent': { type: 'SUM', column: '@total' },
+      'orderCount': { type: 'COUNT', column: '@userId' },
     },
-    groupBy: ['@userId'],
-    orderBy: { '@userId': 'ASC' }, // Order by source column, not alias
+    projection: {
+      '@userId': 'userId',
+      '@totalSpent': 'totalSpent',
+      '@orderCount': 'orderCount',
+    },
+    orderBy: { '@userId': 'ASC' },
     limit: 10,
   };
   assertSelectQuery(withAggregates);
@@ -92,13 +95,11 @@ Deno.test('assertSelectQuery - valid queries', () => {
     table: 'users',
     schema: 'public',
     columns: ['id', 'name', 'email', 'status', 'createdAt'],
-    projection: { id: '@id', name: '@name', email: '@email' },
+    projection: { '@id': 'id', '@name': 'name', '@email': 'email', '@createdAt': 'createdAt' },
     where: { '@status': 'active' }, // Simple filter instead of $and
     orderBy: { '@createdAt': 'DESC', '@name': 'ASC' },
     limit: 100,
     offset: 0,
-    distinct: true,
-    returnColumns: ['id', 'name'],
   };
   assertSelectQuery(complete);
 });
@@ -136,7 +137,7 @@ Deno.test('assertSelectQuery - invalid queries', () => {
         type: 'SELECT',
         table: 'users',
         columns: ['@id', '@name'],
-        projection: { id: '@id' },
+        projection: { '@id': 'id' },
       }),
     TypeError,
     "without '@' prefix",
@@ -149,7 +150,7 @@ Deno.test('assertSelectQuery - invalid queries', () => {
         type: 'SELECT',
         table: 'users',
         columns: ['id', 'name'],
-        projection: { id: '@id' },
+        projection: { '@id': 'id' },
         orderBy: { '@id': 'ASCENDING' },
       }),
     TypeError,
@@ -163,7 +164,7 @@ Deno.test('assertSelectQuery - invalid queries', () => {
         type: 'SELECT',
         table: 'users',
         columns: ['id'],
-        projection: { id: '@id' },
+        projection: { '@id': 'id' },
         limit: -10,
       }),
     TypeError,
@@ -643,19 +644,6 @@ Deno.test('assertCountQuery - invalid queries', () => {
       }),
     TypeError,
     'non-empty array',
-  );
-
-  // Invalid distinct type
-  assertThrows(
-    () =>
-      assertCountQuery({
-        type: 'COUNT',
-        table: 'users',
-        columns: ['id'],
-        distinct: 'yes',
-      }),
-    TypeError,
-    'boolean',
   );
 
   // Columns with @ prefix
