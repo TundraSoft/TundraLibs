@@ -23,15 +23,15 @@ const checkForColumnReferences = (expr: unknown): boolean => {
   if (typeof expr === 'string') {
     return expr.startsWith('@');
   }
-  
+
   if (Array.isArray(expr)) {
     return expr.some((item) => checkForColumnReferences(item));
   }
-  
+
   if (typeof expr === 'object' && expr !== null) {
     return Object.values(expr).some((value) => checkForColumnReferences(value));
   }
-  
+
   return false;
 };
 
@@ -218,7 +218,7 @@ export const assertInsertQuery: <PT extends TableType = TableType>(
           // Pass undefined to skip column validation during expression parsing
           // Then check if the expression contains any column references
           assertExpression(value);
-          
+
           // Validate that the expression doesn't reference any columns
           const hasColumnReferences = checkForColumnReferences(value);
           if (hasColumnReferences) {

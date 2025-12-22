@@ -6,286 +6,286 @@
  * @module asserts/Query/DML/Delete
  */
 
-import { assertThrows } from 'jsr:@std/assert@1';
+import * as asserts from '$asserts';
 import { assertDeleteQuery } from './Delete.ts';
 
-Deno.test('DELETE - valid simple query', () => {
-  const query = {
-    type: 'DELETE',
-    table: 'users',
-    columns: ['id', 'status'],
-    where: { '@status': 'inactive' },
-  };
-  assertDeleteQuery(query);
-});
-
-Deno.test('DELETE - valid with schema', () => {
-  const query = {
-    type: 'DELETE',
-    table: 'users',
-    schema: 'public',
-    columns: ['id', 'status'],
-    where: { '@status': 'inactive' },
-  };
-  assertDeleteQuery(query);
-});
-
-Deno.test('DELETE - valid with complex WHERE', () => {
-  const query = {
-    type: 'DELETE',
-    table: 'logs',
-    columns: ['id', 'createdAt', 'level'],
-    where: {
-      '@level': 'debug',
-      '@createdAt': { $lt: new Date('2023-01-01') },
-    },
-  };
-  assertDeleteQuery(query);
-});
-
-Deno.test('DELETE - valid without WHERE (delete all)', () => {
-  const query = {
-    type: 'DELETE',
-    table: 'temp_data',
-    columns: ['id', 'data'],
-  };
-  assertDeleteQuery(query);
-});
-
-
-Deno.test('DELETE - valid with date comparison', () => {
-  const query = {
-    type: 'DELETE',
-    table: 'users',
-    schema: 'archive',
-    columns: ['id', 'deletedAt'],
-    where: { '@deletedAt': { $lt: new Date('2023-01-01') } },
-  };
-  assertDeleteQuery(query);
-});
-
-Deno.test('DELETE - valid with IN operator', () => {
-  const query = {
-    type: 'DELETE',
-    table: 'users',
-    columns: ['id', 'status'],
-    where: { '@status': { $in: ['deleted', 'banned'] } },
-  };
-  assertDeleteQuery(query);
-});
-
-Deno.test('DELETE - valid with NULL operator', () => {
-  const query = {
-    type: 'DELETE',
-    table: 'users',
-    columns: ['id', 'lastLogin'],
-    where: { '@lastLogin': { $null: true } },
-  };
-  assertDeleteQuery(query);
-});
-
-Deno.test('DELETE - valid with pre-declared expression', () => {
-  const query = {
-    type: 'DELETE',
-    table: 'logs',
-    columns: ['id', 'createdAt', 'level', 'size'],
-    expressions: {
-      'doubleSize': { type: 'MULTIPLY', args: ['@size', 2] },
-    },
-    where: {
-      $and: [
-        { '@level': 'debug' },
-        { '@doubleSize': { $gte: 1000 } },
-      ],
-    },
-  };
-  assertDeleteQuery(query);
-});
-
-Deno.test('DELETE - valid with multiple expressions', () => {
-  const query = {
-    type: 'DELETE',
-    table: 'temp_data',
-    columns: ['id', 'createdAt', 'accessCount', 'size'],
-    expressions: {
-      'totalSize': { type: 'ADD', args: ['@size', '@accessCount'] },
-      'doubleAccess': { type: 'MULTIPLY', args: ['@accessCount', 2] },
-    },
-    where: {
-      '@totalSize': { $gte: 1000 },
-      '@accessCount': { $eq: 0 },
-    },
-  };
-  assertDeleteQuery(query);
-});
-
-Deno.test('DELETE - valid with expression in complex WHERE', () => {
-  const query = {
-    type: 'DELETE',
-    table: 'products',
-    columns: ['id', 'price', 'tax', 'inStock'],
-    expressions: {
-      'totalCost': { type: 'ADD', args: ['@price', '@tax'] },
-    },
-    where: {
-      $and: [
-        { '@totalCost': { $lte: 10 } },
-        { '@inStock': false },
-      ],
-    },
-  };
-  assertDeleteQuery(query);
-});
-
-// Invalid query tests
-
-Deno.test('DELETE - throws on null', () => {
-  assertThrows(
-    () => assertDeleteQuery(null),
-    TypeError,
-    'Expected object',
-  );
-});
-
-Deno.test('DELETE - throws on undefined', () => {
-  assertThrows(
-    () => assertDeleteQuery(undefined),
-    TypeError,
-    'Expected object',
-  );
-});
-
-Deno.test('DELETE - throws on wrong type', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
-        type: 'SELECT',
-        table: 'users',
-        columns: ['id'],
-      }),
-    TypeError,
-    "Expected type 'DELETE'",
-  );
-});
-
-Deno.test('DELETE - throws on missing type', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
-        table: 'users',
-        columns: ['id'],
-      }),
-    TypeError,
-    'DELETE',
-  );
-});
-
-Deno.test('DELETE - throws on missing table', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
-        type: 'DELETE',
-        columns: ['id'],
-      }),
-    TypeError,
-    'table',
-  );
-});
-
-Deno.test('DELETE - throws on empty table', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
-        type: 'DELETE',
-        table: '',
-        columns: ['id'],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});
-
-Deno.test('DELETE - throws on empty schema', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
+Deno.test('oql.asserts.Query.DML.Delete', async (t) => {
+  await t.step('valid queries', async (u) => {
+    await u.step('simple query', () => {
+      const query = {
         type: 'DELETE',
         table: 'users',
-        schema: '',
-        columns: ['id'],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});
+        columns: ['id', 'status'],
+        where: { '@status': 'inactive' },
+      };
+      assertDeleteQuery(query);
+    });
 
-Deno.test('DELETE - throws on missing columns', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
+    await u.step('with schema', () => {
+      const query = {
         type: 'DELETE',
         table: 'users',
-      }),
-    TypeError,
-    'columns',
-  );
-});
+        schema: 'public',
+        columns: ['id', 'status'],
+        where: { '@status': 'inactive' },
+      };
+      assertDeleteQuery(query);
+    });
 
-Deno.test('DELETE - throws on empty columns', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
+    await u.step('with complex WHERE', () => {
+      const query = {
+        type: 'DELETE',
+        table: 'logs',
+        columns: ['id', 'createdAt', 'level'],
+        where: {
+          '@level': 'debug',
+          '@createdAt': { $lt: new Date('2023-01-01') },
+        },
+      };
+      assertDeleteQuery(query);
+    });
+
+    await u.step('without WHERE (delete all)', () => {
+      const query = {
+        type: 'DELETE',
+        table: 'temp_data',
+        columns: ['id', 'data'],
+      };
+      assertDeleteQuery(query);
+    });
+
+    await u.step('with date comparison', () => {
+      const query = {
         type: 'DELETE',
         table: 'users',
-        columns: [],
-      }),
-    TypeError,
-    'non-empty array',
-  );
-});
+        schema: 'archive',
+        columns: ['id', 'deletedAt'],
+        where: { '@deletedAt': { $lt: new Date('2023-01-01') } },
+      };
+      assertDeleteQuery(query);
+    });
 
-Deno.test('DELETE - throws on column with @ prefix', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
+    await u.step('with IN operator', () => {
+      const query = {
         type: 'DELETE',
         table: 'users',
-        columns: ['@id', 'status'],
-      }),
-    TypeError,
-    "without '@' prefix",
-  );
-});
+        columns: ['id', 'status'],
+        where: { '@status': { $in: ['deleted', 'banned'] } },
+      };
+      assertDeleteQuery(query);
+    });
 
-Deno.test('DELETE - throws on empty column string', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
+    await u.step('with NULL operator', () => {
+      const query = {
         type: 'DELETE',
         table: 'users',
-        columns: ['id', ''],
-      }),
-    TypeError,
-    'non-empty string',
-  );
-});
+        columns: ['id', 'lastLogin'],
+        where: { '@lastLogin': { $null: true } },
+      };
+      assertDeleteQuery(query);
+    });
 
-Deno.test('DELETE - throws on non-array columns', () => {
-  assertThrows(
-    () =>
-      assertDeleteQuery({
+    await u.step('with pre-declared expression', () => {
+      const query = {
         type: 'DELETE',
-        table: 'users',
-        columns: 'id',
-      }),
-    TypeError,
-    'non-empty array',
-  );
+        table: 'logs',
+        columns: ['id', 'createdAt', 'level', 'size'],
+        expressions: {
+          'doubleSize': { type: 'MULTIPLY', args: ['@size', 2] },
+        },
+        where: {
+          $and: [
+            { '@level': 'debug' },
+            { '@doubleSize': { $gte: 1000 } },
+          ],
+        },
+      };
+      assertDeleteQuery(query);
+    });
+
+    await u.step('with multiple expressions', () => {
+      const query = {
+        type: 'DELETE',
+        table: 'temp_data',
+        columns: ['id', 'createdAt', 'accessCount', 'size'],
+        expressions: {
+          'totalSize': { type: 'ADD', args: ['@size', '@accessCount'] },
+          'doubleAccess': { type: 'MULTIPLY', args: ['@accessCount', 2] },
+        },
+        where: {
+          '@totalSize': { $gte: 1000 },
+          '@accessCount': { $eq: 0 },
+        },
+      };
+      assertDeleteQuery(query);
+    });
+
+    await u.step('with expression in complex WHERE', () => {
+      const query = {
+        type: 'DELETE',
+        table: 'products',
+        columns: ['id', 'price', 'tax', 'inStock'],
+        expressions: {
+          'totalCost': { type: 'ADD', args: ['@price', '@tax'] },
+        },
+        where: {
+          $and: [
+            { '@totalCost': { $lte: 10 } },
+            { '@inStock': false },
+          ],
+        },
+      };
+      assertDeleteQuery(query);
+    });
+  });
+
+  await t.step('invalid type', async (u) => {
+    await u.step('null', () => {
+      asserts.assertThrows(
+        () => assertDeleteQuery(null),
+        TypeError,
+        'Expected object',
+      );
+    });
+
+    await u.step('undefined', () => {
+      asserts.assertThrows(
+        () => assertDeleteQuery(undefined),
+        TypeError,
+        'Expected object',
+      );
+    });
+
+    await u.step('wrong type', () => {
+      asserts.assertThrows(
+        () =>
+          assertDeleteQuery({
+            type: 'SELECT',
+            table: 'users',
+            columns: ['id'],
+          }),
+        TypeError,
+        "Expected type 'DELETE'",
+      );
+    });
+
+    await u.step('missing type', () => {
+      asserts.assertThrows(
+        () =>
+          assertDeleteQuery({
+            table: 'users',
+            columns: ['id'],
+          }),
+        TypeError,
+        'DELETE',
+      );
+    });
+  });
+
+  await t.step('invalid table', async (u) => {
+    await u.step('missing table', () => {
+      asserts.assertThrows(
+        () =>
+          assertDeleteQuery({
+            type: 'DELETE',
+            columns: ['id'],
+          }),
+        TypeError,
+        'table',
+      );
+    });
+
+    await u.step('empty table', () => {
+      asserts.assertThrows(
+        () =>
+          assertDeleteQuery({
+            type: 'DELETE',
+            table: '',
+            columns: ['id'],
+          }),
+        TypeError,
+        'non-empty string',
+      );
+    });
+
+    await u.step('empty schema', () => {
+      asserts.assertThrows(
+        () =>
+          assertDeleteQuery({
+            type: 'DELETE',
+            table: 'users',
+            schema: '',
+            columns: ['id'],
+          }),
+        TypeError,
+        'non-empty string',
+      );
+    });
+  });
+
+  await t.step('invalid columns', async (u) => {
+    await u.step('missing columns', () => {
+      asserts.assertThrows(
+        () =>
+          assertDeleteQuery({
+            type: 'DELETE',
+            table: 'users',
+          }),
+        TypeError,
+        'columns',
+      );
+    });
+
+    await u.step('empty columns', () => {
+      asserts.assertThrows(
+        () =>
+          assertDeleteQuery({
+            type: 'DELETE',
+            table: 'users',
+            columns: [],
+          }),
+        TypeError,
+        'non-empty array',
+      );
+    });
+
+    await u.step('column with @ prefix', () => {
+      asserts.assertThrows(
+        () =>
+          assertDeleteQuery({
+            type: 'DELETE',
+            table: 'users',
+            columns: ['@id', 'status'],
+          }),
+        TypeError,
+        "without '@' prefix",
+      );
+    });
+
+    await u.step('empty column string', () => {
+      asserts.assertThrows(
+        () =>
+          assertDeleteQuery({
+            type: 'DELETE',
+            table: 'users',
+            columns: ['id', ''],
+          }),
+        TypeError,
+        'non-empty string',
+      );
+    });
+
+    await u.step('non-array columns', () => {
+      asserts.assertThrows(
+        () =>
+          assertDeleteQuery({
+            type: 'DELETE',
+            table: 'users',
+            columns: 'id',
+          }),
+        TypeError,
+        'non-empty array',
+      );
+    });
+  });
 });
-
-
-
-
-
-
-

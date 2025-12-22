@@ -12,7 +12,7 @@
  */
 
 import type { Query, TableType } from '../../../types/mod.ts';
-import { assertQueryFilter, assertJoins } from '../../Filters/mod.ts';
+import { assertJoins, assertQueryFilter } from '../../Filters/mod.ts';
 import { assertExpression } from '../../Expressions/mod.ts';
 import { assertAggregate } from '../../Aggregates.ts';
 

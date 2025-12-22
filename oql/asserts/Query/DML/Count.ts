@@ -9,10 +9,7 @@
  */
 
 import type { Query, TableType } from '../../../types/mod.ts';
-import {
-  assertFilterOperator,
-  assertQueryFilter,
-} from '../../Filters/mod.ts';
+import { assertFilterOperator, assertQueryFilter } from '../../Filters/mod.ts';
 import { assertExpression } from '../../Expressions/mod.ts';
 
 /**

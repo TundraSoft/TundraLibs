@@ -61,7 +61,8 @@ export const assertCreateSchema = <T extends Query<'CREATE_SCHEMA'>>(
   // Validate schema is a string
   if (typeof x.schema !== 'string') {
     throw new TypeError(
-      `Invalid CREATE_SCHEMA query: schema must be a string, got ${typeof x.schema}`,
+      `Invalid CREATE_SCHEMA query: schema must be a string, got ${typeof x
+        .schema}`,
     );
   }
 
@@ -92,7 +93,9 @@ export const assertCreateSchema = <T extends Query<'CREATE_SCHEMA'>>(
   const extraProps = Object.keys(x).filter((key) => !validProps.includes(key));
   if (extraProps.length > 0) {
     throw new TypeError(
-      `Invalid CREATE_SCHEMA query: unexpected properties: ${extraProps.join(', ')}`,
+      `Invalid CREATE_SCHEMA query: unexpected properties: ${
+        extraProps.join(', ')
+      }`,
     );
   }
 };

@@ -71,7 +71,8 @@ export const assertDropSchema = <T extends Query<'DROP_SCHEMA'>>(
   // Validate schema is a string
   if (typeof x.schema !== 'string') {
     throw new TypeError(
-      `Invalid DROP_SCHEMA query: schema must be a string, got ${typeof x.schema}`,
+      `Invalid DROP_SCHEMA query: schema must be a string, got ${typeof x
+        .schema}`,
     );
   }
 
@@ -101,7 +102,8 @@ export const assertDropSchema = <T extends Query<'DROP_SCHEMA'>>(
   if ('cascade' in x) {
     if (typeof x.cascade !== 'boolean') {
       throw new TypeError(
-        `Invalid DROP_SCHEMA query: cascade must be a boolean, got ${typeof x.cascade}`,
+        `Invalid DROP_SCHEMA query: cascade must be a boolean, got ${typeof x
+          .cascade}`,
       );
     }
   }
@@ -111,7 +113,9 @@ export const assertDropSchema = <T extends Query<'DROP_SCHEMA'>>(
   const extraProps = Object.keys(x).filter((key) => !validProps.includes(key));
   if (extraProps.length > 0) {
     throw new TypeError(
-      `Invalid DROP_SCHEMA query: unexpected properties: ${extraProps.join(', ')}`,
+      `Invalid DROP_SCHEMA query: unexpected properties: ${
+        extraProps.join(', ')
+      }`,
     );
   }
 };
