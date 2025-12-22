@@ -13,8 +13,14 @@
 
 import type { Query, TableType } from '../../../types/mod.ts';
 import { assertJoins, assertQueryFilter } from '../../Filters/mod.ts';
-import { assertExpression } from '../../Expressions/mod.ts';
 import { assertAggregate } from '../../Aggregates.ts';
+import {
+  assertColumns,
+  assertQueryType,
+  assertSchemaName,
+  assertTableName,
+} from '../Common.ts';
+import { assertExpressions } from './Common.ts';
 
 /**
  * Asserts that a value is a valid SELECT query.
@@ -95,54 +101,12 @@ export const assertSelectQuery: <
 
   const query = x as Record<string, unknown>;
 
-  // Validate type
-  if (query.type !== 'SELECT') {
-    throw new TypeError(
-      `Invalid SELECT query: Expected type 'SELECT', got '${query.type}'`,
-    );
-  }
-
-  // Validate table
-  if (typeof query.table !== 'string' || query.table.trim().length === 0) {
-    throw new TypeError(
-      `Invalid SELECT query: 'table' must be a non-empty string`,
-    );
-  }
-
-  // Validate schema (optional)
-  if (query.schema !== undefined) {
-    if (
-      typeof query.schema !== 'string' || query.schema.trim().length === 0
-    ) {
-      throw new TypeError(
-        `Invalid SELECT query: 'schema' must be a non-empty string if provided`,
-      );
-    }
-  }
-
-  // Validate columns
-  if (!Array.isArray(query.columns) || query.columns.length === 0) {
-    throw new TypeError(
-      `Invalid SELECT query: 'columns' must be a non-empty array`,
-    );
-  }
-
-  for (const [index, col] of query.columns.entries()) {
-    if (typeof col !== 'string' || col.trim().length === 0) {
-      throw new TypeError(
-        `Invalid SELECT query: columns[${index}] must be a non-empty string`,
-      );
-    }
-    // Columns should NOT have @ prefix (they are schema definitions)
-    if (col.startsWith('@')) {
-      throw new TypeError(
-        `Invalid SELECT query: columns[${index}] should be plain string without '@' prefix. Got '${col}'`,
-      );
-    }
-  }
-
-  const columnList = query.columns as string[];
-  const availableKeys: string[] = [...columnList.map((c) => `@${c}`)];
+  // Validate basic properties using common functions
+  assertQueryType(query, 'SELECT', 'SELECT');
+  assertTableName(query, 'SELECT');
+  assertSchemaName(query, 'SELECT');
+  const columnList = assertColumns(query, 'SELECT');
+  const availableKeys: string[] = columnList.map((c) => `@${c}`);
 
   // Validate aggregates (optional)
   const aggregateKeys: string[] = [];
@@ -196,52 +160,10 @@ export const assertSelectQuery: <
 
   // Validate expressions (optional)
   const expressionKeys: string[] = [];
-  if (query.expressions !== undefined) {
-    if (
-      typeof query.expressions !== 'object' || query.expressions === null ||
-      Array.isArray(query.expressions)
-    ) {
-      throw new TypeError(
-        `Invalid SELECT query: 'expressions' must be an object if provided`,
-      );
-    }
-
-    const expressions = query.expressions as Record<string, unknown>;
-    const exprKeys = Object.keys(expressions);
-
-    if (exprKeys.length === 0) {
-      throw new TypeError(
-        `Invalid SELECT query: 'expressions' cannot be an empty object`,
-      );
-    }
-
-    for (const [key, value] of Object.entries(expressions)) {
-      if (typeof key !== 'string' || key.trim().length === 0) {
-        throw new TypeError(
-          `Invalid SELECT query: expression keys must be non-empty strings`,
-        );
-      }
-
-      // Expression keys must NOT start with @ (plain string, referenced with @ in projection/WHERE)
-      if (key.startsWith('@')) {
-        throw new TypeError(
-          `Invalid SELECT query: expression key '${key}' must not start with '@'`,
-        );
-      }
-
-      try {
-        assertExpression(value, columnList);
-      } catch (error) {
-        throw new TypeError(
-          `Invalid SELECT query: expressions['${key}'] is invalid - ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-      }
-
-      expressionKeys.push(`@${key}`);
-      availableKeys.push(`@${key}`);
-    }
+  const exprKeys = assertExpressions(query, columnList, 'SELECT');
+  for (const key of exprKeys) {
+    expressionKeys.push(`@${key}`);
+    availableKeys.push(`@${key}`);
   }
 
   // Validate joins (optional)
@@ -483,11 +405,14 @@ export const assertSelectQuery: <
  * }
  * ```
  */
-export const isSelectQuery = <T extends Query<'SELECT', any, any>>(
+export const isSelectQuery = <
+  PT extends TableType = TableType,
+  LT extends Record<string, TableType> = Record<string, TableType>,
+>(
   x: unknown,
-): x is T => {
+): x is Query<'SELECT', PT, LT> => {
   try {
-    assertSelectQuery(x as T);
+    assertSelectQuery(x);
     return true;
   } catch {
     return false;

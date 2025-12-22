@@ -9,31 +9,13 @@
  */
 
 import type { Query, TableType } from '../../../types/mod.ts';
-import { assertExpression } from '../../Expressions/mod.ts';
-
-/**
- * Recursively checks if an expression contains any column references.
- * Column references are strings starting with '@'.
- *
- * @param expr - The expression object to check
- * @returns true if any column references are found, false otherwise
- * @internal
- */
-const checkForColumnReferences = (expr: unknown): boolean => {
-  if (typeof expr === 'string') {
-    return expr.startsWith('@');
-  }
-
-  if (Array.isArray(expr)) {
-    return expr.some((item) => checkForColumnReferences(item));
-  }
-
-  if (typeof expr === 'object' && expr !== null) {
-    return Object.values(expr).some((value) => checkForColumnReferences(value));
-  }
-
-  return false;
-};
+import {
+  assertColumns,
+  assertQueryType,
+  assertSchemaName,
+  assertTableName,
+} from '../Common.ts';
+import { assertDataEntry } from './Common.ts';
 
 /**
  * Asserts that a value is a valid INSERT query.
@@ -108,53 +90,11 @@ export const assertInsertQuery: <PT extends TableType = TableType>(
 
   const query = x as Record<string, unknown>;
 
-  // Validate type
-  if (query.type !== 'INSERT') {
-    throw new TypeError(
-      `Invalid INSERT query: Expected type 'INSERT', got '${query.type}'`,
-    );
-  }
-
-  // Validate table
-  if (typeof query.table !== 'string' || query.table.trim().length === 0) {
-    throw new TypeError(
-      `Invalid INSERT query: 'table' must be a non-empty string`,
-    );
-  }
-
-  // Validate schema (optional)
-  if (query.schema !== undefined) {
-    if (
-      typeof query.schema !== 'string' || query.schema.trim().length === 0
-    ) {
-      throw new TypeError(
-        `Invalid INSERT query: 'schema' must be a non-empty string if provided`,
-      );
-    }
-  }
-
-  // Validate columns
-  if (!Array.isArray(query.columns) || query.columns.length === 0) {
-    throw new TypeError(
-      `Invalid INSERT query: 'columns' must be a non-empty array`,
-    );
-  }
-
-  for (const col of query.columns) {
-    if (typeof col !== 'string' || col.trim().length === 0) {
-      throw new TypeError(
-        `Invalid INSERT query: Each column in 'columns' must be a non-empty string`,
-      );
-    }
-    // Columns should NOT have @ prefix
-    if (col.startsWith('@')) {
-      throw new TypeError(
-        `Invalid INSERT query: Columns should be plain strings without '@' prefix. Got '${col}'`,
-      );
-    }
-  }
-
-  const columnList = query.columns as string[];
+  // Validate basic properties using common functions
+  assertQueryType(query, 'INSERT', 'INSERT');
+  assertTableName(query, 'INSERT');
+  assertSchemaName(query, 'INSERT');
+  const columnList = assertColumns(query, 'INSERT');
 
   // Validate data (single object or array)
   if (query.data === undefined || query.data === null) {
@@ -192,57 +132,13 @@ export const assertInsertQuery: <PT extends TableType = TableType>(
 
     // Validate each key/value pair
     for (const [key, value] of Object.entries(data)) {
-      // Key must be a plain string (no @ prefix)
-      if (key.startsWith('@')) {
-        throw new TypeError(
-          `Invalid INSERT query: data[${i}] key '${key}' should not have '@' prefix`,
-        );
-      }
-
-      // Key must be in columns list
-      if (!columnList.includes(key)) {
-        throw new TypeError(
-          `Invalid INSERT query: data[${i}] key '${key}' is not in columns list`,
-        );
-      }
-
-      // Value can be primitive or Expression
-      if (value === null || value === undefined) {
-        // null/undefined are valid values
-        continue;
-      }
-
-      if (typeof value === 'object') {
-        // Must be an Expression (no column references allowed in INSERT)
-        try {
-          // Pass undefined to skip column validation during expression parsing
-          // Then check if the expression contains any column references
-          assertExpression(value);
-
-          // Validate that the expression doesn't reference any columns
-          const hasColumnReferences = checkForColumnReferences(value);
-          if (hasColumnReferences) {
-            throw new TypeError(
-              'Column references (e.g., @columnName) are not allowed in INSERT expressions',
-            );
-          }
-        } catch (error) {
-          throw new TypeError(
-            `Invalid INSERT query: data[${i}].${key} has invalid expression: ${
-              (error as Error).message
-            }`,
-          );
-        }
-      } else if (
-        typeof value !== 'string' &&
-        typeof value !== 'number' &&
-        typeof value !== 'boolean' &&
-        !(value instanceof Date)
-      ) {
-        throw new TypeError(
-          `Invalid INSERT query: data[${i}].${key} must be a primitive value, Date, or Expression`,
-        );
-      }
+      assertDataEntry(
+        key,
+        value,
+        columnList,
+        `INSERT query: data[${i}]`,
+        { allowColumnReferences: false },
+      );
     }
   }
 };
@@ -262,11 +158,11 @@ export const assertInsertQuery: <PT extends TableType = TableType>(
  * }
  * ```
  */
-export const isInsertQuery = <T extends Query<'INSERT', any>>(
+export const isInsertQuery = <PT extends TableType = TableType>(
   x: unknown,
-): x is T => {
+): x is Query<'INSERT', PT> => {
   try {
-    assertInsertQuery(x as T);
+    assertInsertQuery(x);
     return true;
   } catch {
     return false;

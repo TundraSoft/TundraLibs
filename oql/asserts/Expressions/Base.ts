@@ -50,12 +50,13 @@ export const validateTimeUnits: (
     'SECONDS',
   ];
   if (typeof x !== 'string' || !validUnits.includes(x)) {
+    const gotValue = typeof x === 'string' ? `'${x}'` : typeof x;
     throw new TypeError(
       `Invalid time unit: Expected one of ${
         validUnits.join(
           ', ',
         )
-      }, got ${typeof x === 'string' ? `'${x}'` : typeof x}`,
+      }, got ${gotValue}`,
     );
   }
 };

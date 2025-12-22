@@ -8,8 +8,14 @@
  */
 
 import type { Query, TableType } from '../../../types/mod.ts';
-import { assertFilterOperator, assertQueryFilter } from '../../Filters/mod.ts';
-import { assertExpression } from '../../Expressions/mod.ts';
+import { assertQueryFilter } from '../../Filters/mod.ts';
+import {
+  assertColumns,
+  assertQueryType,
+  assertSchemaName,
+  assertTableName,
+} from '../Common.ts';
+import { assertExpressions } from './Common.ts';
 
 /**
  * Asserts that a value is a valid DELETE query.
@@ -84,105 +90,18 @@ export const assertDeleteQuery: <PT extends TableType = TableType>(
 
   const query = x as Record<string, unknown>;
 
-  // Validate type
-  if (query.type !== 'DELETE') {
-    throw new TypeError(
-      `Invalid DELETE query: Expected type 'DELETE', got '${query.type}'`,
-    );
-  }
+  // Validate basic properties using common functions
+  assertQueryType(query, 'DELETE', 'DELETE');
+  assertTableName(query, 'DELETE');
+  assertSchemaName(query, 'DELETE');
+  const columnList = assertColumns(query, 'DELETE');
 
-  // Validate table
-  if (typeof query.table !== 'string' || query.table.trim().length === 0) {
-    throw new TypeError(
-      `Invalid DELETE query: 'table' must be a non-empty string`,
-    );
-  }
-
-  // Validate schema (optional)
-  if (query.schema !== undefined) {
-    if (
-      typeof query.schema !== 'string' || query.schema.trim().length === 0
-    ) {
-      throw new TypeError(
-        `Invalid DELETE query: 'schema' must be a non-empty string if provided`,
-      );
-    }
-  }
-
-  // Validate columns
-  if (!Array.isArray(query.columns) || query.columns.length === 0) {
-    throw new TypeError(
-      `Invalid DELETE query: 'columns' must be a non-empty array`,
-    );
-  }
-
-  for (const col of query.columns) {
-    if (typeof col !== 'string' || col.trim().length === 0) {
-      throw new TypeError(
-        `Invalid DELETE query: Each column in 'columns' must be a non-empty string`,
-      );
-    }
-    // Columns should NOT have @ prefix
-    if (col.startsWith('@')) {
-      throw new TypeError(
-        `Invalid DELETE query: Columns should be plain strings without '@' prefix. Got '${col}'`,
-      );
-    }
-  }
-
-  const columnList = query.columns as string[];
-
-  // Validate expressions (optional)
-  if (query.expressions !== undefined) {
-    if (
-      typeof query.expressions !== 'object' ||
-      query.expressions === null ||
-      Array.isArray(query.expressions)
-    ) {
-      throw new TypeError(
-        `Invalid DELETE query: 'expressions' must be a non-null object`,
-      );
-    }
-
-    const expressions = query.expressions as Record<string, unknown>;
-    const expressionKeys = Object.keys(expressions);
-
-    if (expressionKeys.length === 0) {
-      throw new TypeError(
-        `Invalid DELETE query: 'expressions' cannot be empty if provided`,
-      );
-    }
-
-    // Validate each expression
-    for (const [key, expr] of Object.entries(expressions)) {
-      // Key must NOT start with @ (plain string, referenced with @ in WHERE)
-      if (key.startsWith('@')) {
-        throw new TypeError(
-          `Invalid DELETE query: expression key '${key}' must not start with '@'`,
-        );
-      }
-
-      // Validate expression value
-      try {
-        assertExpression(expr, columnList);
-      } catch (error) {
-        throw new TypeError(
-          `Invalid DELETE query: expression '${key}' is invalid: ${
-            (error as Error).message
-          }`,
-        );
-      }
-    }
-  }
+  // Validate expressions (optional) and collect expression keys
+  const expressionKeys = assertExpressions(query, columnList, 'DELETE');
 
   // Collect available keys for WHERE clause: columns + expressions
   // Note: assertFilterOperator expects column names WITHOUT @ prefix
-  const availableKeys = [...columnList];
-  if (query.expressions !== undefined) {
-    const expressions = query.expressions as Record<string, unknown>;
-    // Expression keys are plain strings (e.g., 'isOld'), add directly
-    availableKeys.push(...Object.keys(expressions));
-  }
+  const availableKeys = [...columnList, ...expressionKeys];
 
   // Validate where (optional but strongly recommended)
   // WHERE can reference columns and expressions
@@ -206,11 +125,11 @@ export const assertDeleteQuery: <PT extends TableType = TableType>(
  * }
  * ```
  */
-export const isDeleteQuery = <T extends Query<'DELETE', any>>(
+export const isDeleteQuery = <PT extends TableType = TableType>(
   x: unknown,
-): x is T => {
+): x is Query<'DELETE', PT> => {
   try {
-    assertDeleteQuery(x as T);
+    assertDeleteQuery(x);
     return true;
   } catch {
     return false;

@@ -17,7 +17,7 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
         table: 'users',
         columns: ['id', 'name', 'email'],
         data: { id: 1, name: 'John', email: 'john@example.com' },
-        conflictKeys: ['id'],
+        conflictKeys: ['@id'],
       };
       assertUpsertQuery(query);
     });
@@ -29,7 +29,7 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
         schema: 'public',
         columns: ['id', 'name'],
         data: { id: 1, name: 'John' },
-        conflictKeys: ['id'],
+        conflictKeys: ['@id'],
       };
       assertUpsertQuery(query);
     });
@@ -46,11 +46,8 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
           createdAt: { type: 'NOW' },
           updatedAt: { type: 'NOW' },
         },
-        conflictKeys: ['id'],
-        updateOnConflict: {
-          name: 'John',
-          updatedAt: { type: 'NOW' },
-        },
+        conflictKeys: ['@id'],
+        updateOnConflict: ['@name', '@updatedAt'],
       };
       assertUpsertQuery(query);
     });
@@ -66,7 +63,7 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
           quantity: 1,
           lastViewed: { type: 'NOW' },
         },
-        conflictKeys: ['userId', 'productId'],
+        conflictKeys: ['@userId', '@productId'],
       };
       assertUpsertQuery(query);
     });
@@ -82,11 +79,8 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
           quantity: 1,
           lastViewed: { type: 'NOW' },
         },
-        conflictKeys: ['userId', 'productId'],
-        updateOnConflict: {
-          quantity: { type: 'ADD', args: ['@quantity', 1] },
-          lastViewed: { type: 'NOW' },
-        },
+        conflictKeys: ['@userId', '@productId'],
+        updateOnConflict: ['@quantity', '@lastViewed'],
       };
       assertUpsertQuery(query);
     });
@@ -100,7 +94,7 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
           { key: 'theme', value: 'dark' },
           { key: 'lang', value: 'en' },
         ],
-        conflictKeys: ['key'],
+        conflictKeys: ['@key'],
       };
       assertUpsertQuery(query);
     });
@@ -114,11 +108,8 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
           { key: 'theme', value: 'dark', updatedAt: { type: 'NOW' } },
           { key: 'lang', value: 'en', updatedAt: { type: 'NOW' } },
         ],
-        conflictKeys: ['key'],
-        updateOnConflict: {
-          value: 'updated',
-          updatedAt: { type: 'NOW' },
-        },
+        conflictKeys: ['@key'],
+        updateOnConflict: ['@value', '@updatedAt'],
       };
       assertUpsertQuery(query);
     });
@@ -134,7 +125,7 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
           createdAt: { type: 'NOW' },
           updatedAt: { type: 'NOW' },
         },
-        conflictKeys: ['id'],
+        conflictKeys: ['@id'],
       };
       assertUpsertQuery(query);
     });
@@ -145,7 +136,7 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
         table: 'users',
         columns: ['id', 'name', 'bio'],
         data: { id: 1, name: 'John', bio: null },
-        conflictKeys: ['id'],
+        conflictKeys: ['@id'],
       };
       assertUpsertQuery(query);
     });
@@ -396,7 +387,7 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
             conflictKeys: ['id'],
           }),
         TypeError,
-        "should not have '@' prefix",
+        'is not in columns list',
       );
     });
 
@@ -473,14 +464,14 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
             table: 'users',
             columns: ['id', 'name'],
             data: { id: 1, name: 'John' },
-            conflictKeys: ['email'],
+            conflictKeys: ['@email'],
           }),
         TypeError,
-        'not in columns list',
+        'is not in the provided column list',
       );
     });
 
-    await u.step('conflictKey with @ prefix', () => {
+    await u.step('conflictKey without @ prefix', () => {
       asserts.assertThrows(
         () =>
           assertUpsertQuery({
@@ -488,10 +479,10 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
             table: 'users',
             columns: ['id', 'name'],
             data: { id: 1, name: 'John' },
-            conflictKeys: ['@id'],
+            conflictKeys: ['id'],
           }),
         TypeError,
-        "without '@' prefix",
+        "must start with '@'",
       );
     });
 
@@ -503,10 +494,10 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
             table: 'users',
             columns: ['id', 'name'],
             data: { id: 1, name: 'John' },
-            conflictKeys: ['id', 123],
+            conflictKeys: ['@id', 123],
           }),
         TypeError,
-        'non-empty string',
+        'Expected string',
       );
     });
 
@@ -518,10 +509,10 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
             table: 'users',
             columns: ['id', 'name'],
             data: { id: 1, name: 'John' },
-            conflictKeys: ['id', ''],
+            conflictKeys: ['@id', ''],
           }),
         TypeError,
-        'non-empty string',
+        'Segment "" must start',
       );
     });
   });
@@ -535,15 +526,15 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
             table: 'users',
             columns: ['id', 'name', 'email'],
             data: { id: 1, name: 'John', email: 'john@example.com' },
-            conflictKeys: ['id'],
-            updateOnConflict: { id: 2, name: 'Jane' },
+            conflictKeys: ['@id'],
+            updateOnConflict: ['@id', '@name'],
           }),
         TypeError,
         'should not include conflictKey',
       );
     });
 
-    await u.step('updateOnConflict as array', () => {
+    await u.step('updateOnConflict not an array', () => {
       asserts.assertThrows(
         () =>
           assertUpsertQuery({
@@ -551,11 +542,11 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
             table: 'users',
             columns: ['id', 'name'],
             data: { id: 1, name: 'John' },
-            conflictKeys: ['id'],
-            updateOnConflict: [{ name: 'Jane' }],
+            conflictKeys: ['@id'],
+            updateOnConflict: { name: 'Jane' },
           }),
         TypeError,
-        'not an array',
+        'must be an array',
       );
     });
 
@@ -567,33 +558,31 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
             table: 'users',
             columns: ['id', 'name'],
             data: { id: 1, name: 'John' },
-            conflictKeys: ['id'],
-            updateOnConflict: { age: 30 },
+            conflictKeys: ['@id'],
+            updateOnConflict: ['@age'],
           }),
         TypeError,
-        'not in columns list',
+        'is not in the provided column list',
       );
     });
 
-    await u.step('invalid expression in updateOnConflict', () => {
+    await u.step('updateOnConflict column not in data', () => {
       asserts.assertThrows(
         () =>
           assertUpsertQuery({
             type: 'UPSERT',
             table: 'users',
             columns: ['id', 'name', 'updatedAt'],
-            data: { id: 1, name: 'John', updatedAt: { type: 'NOW' } },
-            conflictKeys: ['id'],
-            updateOnConflict: {
-              updatedAt: { type: 'INVALID_TYPE' },
-            },
+            data: { id: 1, name: 'John' },
+            conflictKeys: ['@id'],
+            updateOnConflict: ['@updatedAt'],
           }),
         TypeError,
-        'invalid expression',
+        'must exist in data',
       );
     });
 
-    await u.step('empty updateOnConflict object', () => {
+    await u.step('empty updateOnConflict array', () => {
       asserts.assertThrows(
         () =>
           assertUpsertQuery({
@@ -601,15 +590,15 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
             table: 'users',
             columns: ['id', 'name'],
             data: { id: 1, name: 'John' },
-            conflictKeys: ['id'],
-            updateOnConflict: {},
+            conflictKeys: ['@id'],
+            updateOnConflict: [],
           }),
         TypeError,
-        'cannot be empty',
+        'cannot be an empty array',
       );
     });
 
-    await u.step('updateOnConflict key with @ prefix', () => {
+    await u.step('updateOnConflict key without @ prefix', () => {
       asserts.assertThrows(
         () =>
           assertUpsertQuery({
@@ -617,11 +606,11 @@ Deno.test('oql.asserts.Query.DML.Upsert', async (t) => {
             table: 'users',
             columns: ['id', 'name'],
             data: { id: 1, name: 'John' },
-            conflictKeys: ['id'],
-            updateOnConflict: { '@name': 'Jane' },
+            conflictKeys: ['@id'],
+            updateOnConflict: ['name'],
           }),
         TypeError,
-        "should not have '@' prefix",
+        "must start with '@'",
       );
     });
   });

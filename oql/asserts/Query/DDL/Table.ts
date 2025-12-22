@@ -15,6 +15,11 @@ import type {
   SQLDataType,
   TableType,
 } from '../../../types/mod.ts';
+import {
+  assertQueryType,
+  assertSchemaName,
+  assertTableName,
+} from '../Common.ts';
 
 /**
  * Helper to validate table/column name format.
@@ -22,7 +27,7 @@ import type {
  */
 const validateIdentifierName = (
   name: string,
-  type: 'table' | 'column' | 'constraint',
+  type: 'table' | 'column' | 'constraint' | 'schema',
   context: string,
 ): void => {
   if (name.trim().length === 0) {
@@ -259,39 +264,17 @@ const validateColumnDefinition = (
 export const assertCreateTable = <T extends Query<'CREATE_TABLE', TableType>>(
   x: T,
 ): void => {
-  // Validate type
-  if (x.type !== 'CREATE_TABLE') {
-    throw new TypeError(
-      `Invalid CREATE_TABLE query: type must be 'CREATE_TABLE', got '${x.type}'`,
-    );
-  }
+  // Validate type and table/schema using common functions
+  assertQueryType(x, 'CREATE_TABLE', 'CREATE_TABLE');
+  assertTableName(x, 'CREATE_TABLE');
 
-  // Validate table name exists
-  if (!('table' in x) || x.table === null || x.table === undefined) {
-    throw new TypeError(
-      'Invalid CREATE_TABLE query: table name is required',
-    );
-  }
-
-  // Validate table is a string
-  if (typeof x.table !== 'string') {
-    throw new TypeError(
-      `Invalid CREATE_TABLE query: table must be a string, got ${typeof x
-        .table}`,
-    );
-  }
-
-  validateIdentifierName(x.table, 'table', 'CREATE_TABLE query');
+  // Additional identifier validation for DDL
+  validateIdentifierName(x.table as string, 'table', 'CREATE_TABLE query');
 
   // Validate schema if present
-  if ('schema' in x && x.schema !== undefined) {
-    if (typeof x.schema !== 'string') {
-      throw new TypeError(
-        `Invalid CREATE_TABLE query: schema must be a string, got ${typeof x
-          .schema}`,
-      );
-    }
-    validateIdentifierName(x.schema, 'table', 'CREATE_TABLE query');
+  assertSchemaName(x, 'CREATE_TABLE');
+  if (x.schema !== undefined) {
+    validateIdentifierName(x.schema as string, 'schema', 'CREATE_TABLE query');
   }
 
   // Validate columns exist
@@ -489,39 +472,17 @@ export const isCreateTable = <T extends Query<'CREATE_TABLE', TableType>>(
 export const assertAlterTable = <T extends Query<'ALTER_TABLE', TableType>>(
   x: T,
 ): void => {
-  // Validate type
-  if (x.type !== 'ALTER_TABLE') {
-    throw new TypeError(
-      `Invalid ALTER_TABLE query: type must be 'ALTER_TABLE', got '${x.type}'`,
-    );
-  }
+  // Validate type and table/schema using common functions
+  assertQueryType(x, 'ALTER_TABLE', 'ALTER_TABLE');
+  assertTableName(x, 'ALTER_TABLE');
 
-  // Validate table name exists
-  if (!('table' in x) || x.table === null || x.table === undefined) {
-    throw new TypeError(
-      'Invalid ALTER_TABLE query: table name is required',
-    );
-  }
-
-  // Validate table is a string
-  if (typeof x.table !== 'string') {
-    throw new TypeError(
-      `Invalid ALTER_TABLE query: table must be a string, got ${typeof x
-        .table}`,
-    );
-  }
-
-  validateIdentifierName(x.table, 'table', 'ALTER_TABLE query');
+  // Additional identifier validation for DDL
+  validateIdentifierName(x.table as string, 'table', 'ALTER_TABLE query');
 
   // Validate schema if present
-  if ('schema' in x && x.schema !== undefined) {
-    if (typeof x.schema !== 'string') {
-      throw new TypeError(
-        `Invalid ALTER_TABLE query: schema must be a string, got ${typeof x
-          .schema}`,
-      );
-    }
-    validateIdentifierName(x.schema, 'table', 'ALTER_TABLE query');
+  assertSchemaName(x, 'ALTER_TABLE');
+  if (x.schema !== undefined) {
+    validateIdentifierName(x.schema as string, 'schema', 'ALTER_TABLE query');
   }
 
   // Check that at least one modification is present
@@ -743,38 +704,17 @@ export const isAlterTable = <T extends Query<'ALTER_TABLE', TableType>>(
 export const assertDropTable = <T extends Query<'DROP_TABLE', TableType>>(
   x: T,
 ): void => {
-  // Validate type
-  if (x.type !== 'DROP_TABLE') {
-    throw new TypeError(
-      `Invalid DROP_TABLE query: type must be 'DROP_TABLE', got '${x.type}'`,
-    );
-  }
+  // Validate type and table/schema using common functions
+  assertQueryType(x, 'DROP_TABLE', 'DROP_TABLE');
+  assertTableName(x, 'DROP_TABLE');
 
-  // Validate table name exists
-  if (!('table' in x) || x.table === null || x.table === undefined) {
-    throw new TypeError(
-      'Invalid DROP_TABLE query: table name is required',
-    );
-  }
-
-  // Validate table is a string
-  if (typeof x.table !== 'string') {
-    throw new TypeError(
-      `Invalid DROP_TABLE query: table must be a string, got ${typeof x.table}`,
-    );
-  }
-
-  validateIdentifierName(x.table, 'table', 'DROP_TABLE query');
+  // Additional identifier validation for DDL
+  validateIdentifierName(x.table as string, 'table', 'DROP_TABLE query');
 
   // Validate schema if present
-  if ('schema' in x && x.schema !== undefined) {
-    if (typeof x.schema !== 'string') {
-      throw new TypeError(
-        `Invalid DROP_TABLE query: schema must be a string, got ${typeof x
-          .schema}`,
-      );
-    }
-    validateIdentifierName(x.schema, 'table', 'DROP_TABLE query');
+  assertSchemaName(x, 'DROP_TABLE');
+  if (x.schema !== undefined) {
+    validateIdentifierName(x.schema as string, 'schema', 'DROP_TABLE query');
   }
 
   // Validate ifExists if present

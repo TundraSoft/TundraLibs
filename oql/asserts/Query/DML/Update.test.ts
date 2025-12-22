@@ -380,7 +380,7 @@ Deno.test('oql.asserts.Query.DML.Update', async (t) => {
             where: { '@id': 1 },
           }),
         TypeError,
-        "should not have '@' prefix",
+        'is not in columns list',
       );
     });
 

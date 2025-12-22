@@ -377,7 +377,7 @@ Deno.test('oql.asserts.Query.DML.Insert', async (t) => {
             data: { '@id': 1, name: 'John' },
           }),
         TypeError,
-        "should not have '@' prefix",
+        'is not in columns list',
       );
     });
 
