@@ -1,4 +1,4 @@
-import { encodeBase64Url } from '$encoding';
+import { encodeBase64Url } from 'jsr:@std/encoding@1.0.8';
 import { JWTError } from './Error.ts';
 import { type JWTAlgorithm, type JWTHeader, type JWTPayload } from './types.ts';
 import { signHMAC, signRSA } from '../sign/mod.ts';

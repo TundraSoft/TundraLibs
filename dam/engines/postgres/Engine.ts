@@ -1,4 +1,4 @@
-import { type ClientOptions, Pool, PoolClient } from '$postgres';
+import { type ClientOptions, Pool, PoolClient } from 'jsr:@db/postgres@^0.19.5';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import {
   AbstractEngine,

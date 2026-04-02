@@ -1,5 +1,5 @@
-import { Pool, types as PostgresTypes } from '$pg';
-import type { PoolClient } from '$pg_types';
+import { Pool, types as PostgresTypes } from 'npm:pg@^8.16.3';
+import type { PoolClient } from 'npm:@types/pg@^8.6.6';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import {
   AbstractEngine,

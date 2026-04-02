@@ -2,7 +2,7 @@ import {
   connect as redisConnect,
   type Redis,
   type RedisConnectOptions,
-} from '$redis';
+} from 'jsr:@db/redis@^0.38.0';
 import { AbstractEngine } from '../../AbstractEngine.ts';
 import type { CacheValue } from '../../types/mod.ts';
 import { CacherEngineError } from '../../errors/mod.ts';

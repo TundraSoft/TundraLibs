@@ -1,4 +1,4 @@
-import { Database } from '$sqlite';
+import { Database } from 'jsr:@db/sqlite@^0.12.0';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import {
   AbstractEngine,

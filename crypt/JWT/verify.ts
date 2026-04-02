@@ -1,6 +1,6 @@
 import { JWTError } from './Error.ts';
 import type { JWTHeader, JWTPayload, JWTVerifyOptions } from './types.ts';
-import { decodeBase64Url } from '$encoding';
+import { decodeBase64Url } from 'jsr:@std/encoding@1.0.8';
 import { verifyHMAC, verifyRSA } from '../sign/mod.ts';
 import { JWT_ALGORITHM_MAP, validateClaims } from './helpers.ts';
 

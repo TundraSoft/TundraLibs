@@ -4,7 +4,7 @@ import {
   type Document,
   MongoClient,
   type MongoClientOptions,
-} from '$mongo';
+} from 'npm:mongodb';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import {
   AbstractEngine,

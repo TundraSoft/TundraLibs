@@ -1,4 +1,4 @@
-import type { StatusCode } from '$http';
+import type { StatusCode } from 'jsr:@std/http@^1.0.13';
 import { RESTlerError } from '../errors/mod.ts';
 
 /**

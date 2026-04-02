@@ -22,7 +22,7 @@
  * ```
  */
 
-import { format } from '$datetime';
+import { format } from 'jsr:@std/datetime@^0.225.5';
 
 /**
  * Creates a date-based sequential ID generator.

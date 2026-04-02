@@ -5,7 +5,7 @@ import type {
   JWTVerifyOptions,
 } from './types.ts';
 import { JWTError } from './Error.ts';
-import { decodeBase64Url } from '$encoding';
+import { decodeBase64Url } from 'jsr:@std/encoding@1.0.8';
 
 /**
  * Maps JWT algorithms to their corresponding hash algorithms.

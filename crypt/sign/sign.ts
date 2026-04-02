@@ -1,6 +1,6 @@
 import { validateDigestAlgorithm } from '../digest/mod.ts';
 import type { HMACOptions, RSAOptions, SigningModes } from './types.ts';
-import { encodeHex } from '$encoding';
+import { encodeHex } from 'jsr:@std/encoding@1.0.8';
 
 /**
  * Parses a PEM-formatted private key string to extract the raw key data.

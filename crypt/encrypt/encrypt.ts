@@ -1,4 +1,4 @@
-import { encodeHex } from '$encoding';
+import { encodeHex } from 'jsr:@std/encoding@1.0.8';
 import type { AESOptions, EncryptionModes, RSAOptions } from './types.ts';
 
 /**

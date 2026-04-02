@@ -1,6 +1,13 @@
-import { STATUS_CODE, STATUS_TEXT, type StatusCode } from '$http/status';
-import { parse as XMLParse, stringify as XMLStringify } from '$xml';
-import * as path from '$path';
+import {
+  STATUS_CODE,
+  STATUS_TEXT,
+  type StatusCode,
+} from 'jsr:@std/http@^1.0.13/status';
+import {
+  parse as XMLParse,
+  stringify as XMLStringify,
+} from 'jsr:@libs/xml@^6.0.4';
+import * as path from 'jsr:@std/path@^1.0.0';
 import { type EventOptionKeys, Options } from '@tundralibs/utils';
 import type {
   RESTlerEndpoint,

@@ -1,4 +1,4 @@
-import { Memcached } from '$memcached';
+import { Memcached } from 'jsr:@avroit/memcached@^0.0.4';
 import { AbstractEngine } from '../../AbstractEngine.ts';
 import type { CacheValue } from '../../types/mod.ts';
 import { CacherEngineError } from '../../errors/mod.ts';

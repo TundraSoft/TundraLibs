@@ -1,5 +1,5 @@
 import { validateDigestAlgorithm } from '../digest/mod.ts';
-import { decodeHex } from '$encoding';
+import { decodeHex } from 'jsr:@std/encoding@1.0.8';
 import type { HMACOptions, RSAOptions, SigningModes } from './types.ts';
 
 /**

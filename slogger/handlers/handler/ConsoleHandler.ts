@@ -1,6 +1,12 @@
 import type { SlogObject } from '../../types/Object.ts';
 import { AbstractHandler, type HandlerOptions } from '../AbstractHandler.ts';
-import { blue, bold, brightYellow, red, yellow } from '$fmt/colors';
+import {
+  blue,
+  bold,
+  brightYellow,
+  red,
+  yellow,
+} from 'jsr:@std/fmt@^1.0.7/colors';
 
 /**
  * Configuration options for Console handler

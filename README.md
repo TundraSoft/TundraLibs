@@ -34,11 +34,74 @@ deno add @tundralibs/utils@1.5.0-edge.125.ghi9012
 deno add @tundralibs/crypt @tundralibs/id @tundralibs/utils
 ```
 
+### Direct GitHub Import (Alternative)
+
+You can also import directly from GitHub without using JSR:
+
+```typescript
+// Import the entire TundraLibs package from GitHub
+import {
+  Guardian,
+  nanoID,
+  sha256,
+  StringGuardian,
+} from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/main/mod.ts';
+
+// Or import individual modules
+import * as Cacher from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/main/cacher/mod.ts';
+import * as Crypt from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/main/crypt/mod.ts';
+import * as Guardian from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/main/guardian/mod.ts';
+import * as ID from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/main/id/mod.ts';
+import * as Utils from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/main/utils/mod.ts';
+
+// Import from specific branches or commits
+import { sha256 } from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/dev1.0.0/crypt/mod.ts';
+import { nanoID } from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/a1b2c3d/id/mod.ts';
+```
+
+### Local Development with Import Map
+
+For local development and testing, you can use the provided import map:
+
+```bash
+# Clone and use with import map
+git clone https://github.com/TundraSoft/TundraLibs.git
+cd TundraLibs
+
+# Run with import map for better performance and caching
+deno run --import-map=import_map.json --allow-all your-script.ts
+
+# Or run tests with import map
+deno test --import-map=import_map.json --allow-all
+```
+
+The `import_map.json` file contains all external dependencies and allows for:
+
+- ⚡ **Faster local development** - Cached dependency resolution
+- 🔧 **Easy version management** - Update versions in one place
+- 🧪 **Consistent testing environment** - Same versions across all runs
+
+**Benefits of GitHub Raw URLs:**
+
+- 🚀 **No package manager required** - Direct HTTP imports
+- 🔒 **Pin to specific commits** - Guaranteed reproducibility
+- 🌿 **Access development branches** - Test latest features
+- 📦 **Smaller imports** - Import only what you need
+
+> **📋 Note**: When using GitHub raw URLs, make sure to pin to a specific branch
+> or commit hash for production use to ensure stability.
+
+> **⚠️ Important**: After making changes that fix import map dependencies,
+> commit and push to GitHub before using raw URLs from remote branches.
+
+````
 > **🚀 Edge Versions**: Every PR automatically publishes edge versions (e.g.,
 > `@1.2.0-edge.123.abc1234`) for testing new features before they're released.
 > Perfect for early adopters and contributors!
 
 ### Usage Examples
+
+#### JSR Package Approach
 
 ```typescript
 // Cryptographic operations
@@ -57,7 +120,7 @@ const key = await crypto.subtle.generateKey(
 );
 const encrypted = await encrypt('Hello World', key);
 const decrypted = await decrypt(encrypted, key);
-```
+````
 
 ```typescript
 // ID generation
@@ -88,6 +151,63 @@ const events = new Events<{ userLogin: { userId: string } }>();
 events.on('userLogin', ({ userId }) => {
   console.log(`User ${userId} logged in`);
 });
+```
+
+#### GitHub Raw URL Approach
+
+```typescript
+// Import everything from the unified package
+import {
+  encrypt,
+  Events,
+  Guardian,
+  memoize,
+  nanoID,
+  RedisCacher,
+  sha256,
+  StringGuardian,
+  throttle,
+  ulid,
+} from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/main/mod.ts';
+
+// Use cryptographic functions
+const hash = await sha256('Hello World');
+const id = nanoID();
+
+// Type validation
+const guard = StringGuardian.create().minLength(3).maxLength(50);
+const result = guard('example');
+
+// Utility functions
+const throttledFn = throttle(() => {
+  console.log('Throttled execution');
+}, 1000);
+```
+
+```typescript
+// Import namespace modules directly
+import * as Crypt from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/main/crypt/mod.ts';
+import * as ID from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/main/id/mod.ts';
+
+// Use with namespace
+const hash = await Crypt.sha256('data');
+const id = ID.nanoID();
+const ulid = ID.ulid();
+```
+
+```typescript
+// Import namespace modules from main entry point (avoids naming conflicts)
+import {
+  CacherNS,
+  DAMNS,
+  RESTlerNS,
+  SloggerNS,
+} from 'https://raw.githubusercontent.com/TundraSoft/TundraLibs/main/mod.ts';
+
+// Use with renamed namespaces
+const cache = new CacherNS.RedisCacher(options);
+const logger = new SloggerNS.Slogger(config);
+const client = new RESTlerNS.RESTler(restOptions);
 ```
 
 ## 🛠️ Development

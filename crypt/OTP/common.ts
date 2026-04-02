@@ -1,6 +1,6 @@
 import type { DigestAlgorithms } from '../digest/mod.ts';
-import { sprintf } from '$fmt/printf';
-import { decodeBase32 } from '$encoding';
+import { sprintf } from 'jsr:@std/fmt@^1.0.0/printf';
+import { decodeBase32 } from 'jsr:@std/encoding@1.0.8';
 
 /**
  * Options for HOTP generation

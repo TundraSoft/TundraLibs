@@ -47,11 +47,11 @@
  */
 
 // deno-lint-ignore-file no-explicit-any
-import * as fs from '$fs';
-import * as path from '$path';
-import { parse as jsonParse } from '$jsonc';
-import { parse as tomlParse } from '$toml';
-import { parse as yamlParse } from '$yaml';
+import * as fs from 'jsr:@std/fs@^1.0.0';
+import * as path from 'jsr:@std/path@^1.0.0';
+import { parse as jsonParse } from 'jsr:@std/jsonc@^1.0.1';
+import { parse as tomlParse } from 'jsr:@std/toml@^1.0.1';
+import { parse as yamlParse } from 'jsr:@std/yaml@^1.0.5';
 import { envArgs } from './envArgs.ts';
 import { variableReplacer } from './variableReplacer.ts';
 

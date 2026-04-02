@@ -53,7 +53,7 @@
  * ```
  */
 
-import * as path from '$path';
+import * as path from 'jsr:@std/path@^1.0.0';
 import { type PrivateObject, privateObject } from './privateObject.ts';
 
 /**

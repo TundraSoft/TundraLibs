@@ -3,10 +3,7 @@ import type { FunctionType, GuardianProxy } from '../types/mod.ts';
 import { NumberGuardian } from './Number.ts';
 import { DateGuardian } from './Date.ts';
 import { GuardianError } from '../GuardianError.ts';
-import {
-  isValidIPv4,
-  isValidIPv6Structure,
-} from 'jsr:@tundralibs/utils@^1.0.0-dev3';
+import { isValidIPv4, isValidIPv6Structure } from '../../utils/mod.ts';
 import { getType } from '../helpers/getType.ts';
 
 /**

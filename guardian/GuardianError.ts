@@ -2,7 +2,7 @@ import {
   BaseError,
   type BaseErrorJson,
   variableReplacer,
-} from 'jsr:@tundralibs/utils@^1.0.0-dev3';
+} from '../utils/mod.ts';
 
 export type GuardianErrorMeta = {
   // Value got

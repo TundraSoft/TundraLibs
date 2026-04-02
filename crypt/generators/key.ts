@@ -1,4 +1,4 @@
-import { encodeBase64 } from '$encoding';
+import { encodeBase64 } from 'jsr:@std/encoding@1.0.8';
 
 /**
  * Supported asymmetric key algorithms for key pair generation.

@@ -1,4 +1,4 @@
-import { encodeBase32, encodeBase64, encodeHex } from '$encoding';
+import { encodeBase32, encodeBase64, encodeHex } from 'jsr:@std/encoding@1.0.8';
 
 /**
  * Output encoding options for the secret generator.

@@ -1,4 +1,4 @@
-import { encodeBase64, encodeHex } from '$encoding';
+import { encodeBase64, encodeHex } from 'jsr:@std/encoding@1.0.8';
 import type { DigestOptions } from './types.ts';
 
 /**
