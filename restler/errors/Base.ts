@@ -1,5 +1,4 @@
-// import { BaseError } from '@tundralibs/utils';
-import { BaseError } from '../../utils/mod.ts';
+import { BaseError } from '@tundralibs/utils';
 
 /**
  * Metadata for RESTler errors.

@@ -1,8 +1,7 @@
 import { STATUS_CODE, STATUS_TEXT, type StatusCode } from '$http/status';
 import { parse as XMLParse, stringify as XMLStringify } from '$xml';
 import * as path from '$path';
-// import { type EventOptionKeys, Options } from '@tundralibs/utils';
-import { type EventOptionKeys, Options } from '../utils/mod.ts';
+import { type EventOptionKeys, Options } from '@tundralibs/utils';
 import type {
   RESTlerEndpoint,
   RESTlerEvents,
