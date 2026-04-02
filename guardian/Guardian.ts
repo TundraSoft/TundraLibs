@@ -8,6 +8,7 @@ import {
   NumberGuardian,
   ObjectGuardian,
   StringGuardian,
+  UnknownGuardian,
 } from './guards/mod.ts';
 import type { GuardianProxy } from './types/mod.ts';
 import type { GuardianType } from './types/GuardianType.ts';
@@ -193,6 +194,29 @@ export class Guardian {
    */
   static date(error?: string): GuardianProxy<DateGuardian> {
     return DateGuardian.create(error);
+  }
+
+  /**
+   * Creates an unknown guardian that accepts any value without validation
+   *
+   * @returns An unknown guardian instance
+   *
+   * @example
+   * ```ts
+   * const anyValue = Guardian.unknown();
+   * anyValue("hello"); // Returns: "hello"
+   * anyValue(42); // Returns: 42
+   * anyValue({ foo: "bar" }); // Returns: { foo: "bar" }
+   * anyValue(null); // Returns: null
+   *
+   * // Can still chain validations
+   * const notNullValue = Guardian.unknown().notNull();
+   * notNullValue("hello"); // Returns: "hello"
+   * notNullValue(null); // Throws: "Expected value to not be null"
+   * ```
+   */
+  static unknown(): GuardianProxy<UnknownGuardian> {
+    return UnknownGuardian.create();
   }
 
   /**

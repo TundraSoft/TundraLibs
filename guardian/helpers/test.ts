@@ -1,6 +1,6 @@
-import type { FunctionType } from '../types/mod.ts';
-import { GuardianError } from '../GuardianError.ts';
-import { isPromiseLike } from './isPromiseLike.ts';
+import type { FunctionType } from "../types/mod.ts";
+import { GuardianError } from "../GuardianError.ts";
+import { isPromiseLike } from "./isPromiseLike.ts";
 
 /**
  * Creates a function that tests a value against a predicate function
@@ -23,7 +23,7 @@ export const test = <T>(
         if (!testResult) {
           throw new GuardianError({
             got: value,
-            comparison: 'test',
+            comparison: "test",
             expected,
           }, error);
         }
@@ -34,7 +34,7 @@ export const test = <T>(
     if (!result) {
       throw new GuardianError({
         got: value,
-        comparison: 'test',
+        comparison: "test",
         expected,
       }, error);
     }

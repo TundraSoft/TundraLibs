@@ -1,10 +1,10 @@
-import { BaseGuardian } from '../BaseGuardian.ts';
-import type { FunctionType, GuardianProxy } from '../types/mod.ts';
-import { BigIntGuardian } from './BigInt.ts';
-import { StringGuardian } from './String.ts';
-import { DateGuardian } from './Date.ts';
-import { GuardianError } from '../GuardianError.ts';
-import { getType } from '../helpers/mod.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import type { FunctionType, GuardianProxy } from "../types/mod.ts";
+import { BigIntGuardian } from "./BigInt.ts";
+import { StringGuardian } from "./String.ts";
+import { DateGuardian } from "./Date.ts";
+import { GuardianError } from "../GuardianError.ts";
+import { getType } from "../helpers/mod.ts";
 
 /**
  * NumberGuardian provides validation and transformation utilities for number values.
@@ -38,12 +38,12 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   static create(error?: string): GuardianProxy<NumberGuardian> {
     return new NumberGuardian((value: unknown): number => {
       // Already a number
-      if (typeof value === 'number' && !Number.isNaN(value)) {
+      if (typeof value === "number" && !Number.isNaN(value)) {
         return value;
       }
 
       // Try to parse string as number
-      if (typeof value === 'string') {
+      if (typeof value === "string") {
         const parsedValue = Number(value.trim());
         if (!Number.isNaN(parsedValue)) {
           return parsedValue;
@@ -53,11 +53,11 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
       throw new GuardianError(
         {
           got: getType(value),
-          expected: 'number',
-          comparison: 'type',
+          expected: "number",
+          comparison: "type",
           type: getType(value),
         },
-        error || 'Expected value to be a number, got ${type}',
+        error || "Expected value to be a number, got ${type}",
       );
     }).proxy();
   }
@@ -213,7 +213,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
     return this.test(
       (value) => value >= min,
       error ||
-        'Expected value (${got}) to be greater than or equal to ${expected}',
+        "Expected value (${got}) to be greater than or equal to ${expected}",
       min,
     );
   }
@@ -234,7 +234,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
     return this.test(
       (value) => value <= max,
       error ||
-        'Expected value (${got}) to be less than or equal to ${expected}',
+        "Expected value (${got}) to be less than or equal to ${expected}",
       max,
     );
   }
@@ -256,7 +256,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
     return this.test(
       (value) => value >= min && value <= max,
       error ||
-        'Expected value (${got}) to be between ${expected}',
+        "Expected value (${got}) to be between ${expected}",
       [min, max],
     );
   }
@@ -275,7 +275,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public integer(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => Number.isInteger(value),
-      error || 'Expected integer, got ${got}',
+      error || "Expected integer, got ${got}",
     );
   }
 
@@ -293,7 +293,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public positive(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value > 0,
-      error || 'Expected positive number, got ${got}',
+      error || "Expected positive number, got ${got}",
     );
   }
 
@@ -311,7 +311,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public negative(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value < 0,
-      error || 'Expected negative number, got ${got}',
+      error || "Expected negative number, got ${got}",
     );
   }
 
@@ -330,7 +330,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public multipleOf(base: number, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value % base === 0,
-      error || 'Expected value (${got}) to be multiple of ${expected}',
+      error || "Expected value (${got}) to be multiple of ${expected}",
       base,
     );
   }
@@ -349,7 +349,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public odd(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value % 2 !== 0,
-      error || 'Expected odd number, got ${got}',
+      error || "Expected odd number, got ${got}",
     );
   }
 
@@ -367,7 +367,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public even(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value % 2 === 0,
-      error || 'Expected even number, got ${got}',
+      error || "Expected even number, got ${got}",
     );
   }
 
@@ -394,7 +394,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
         }
         return true;
       },
-      error || 'Expected prime number, got ${got}',
+      error || "Expected prime number, got ${got}",
     );
   }
 
@@ -412,7 +412,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public finite(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => Number.isFinite(value),
-      error || 'Expected finite number, got ${got}',
+      error || "Expected finite number, got ${got}",
     );
   }
 
@@ -430,7 +430,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public safe(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => Number.isSafeInteger(value),
-      error || 'Expected safe integer, got ${got}',
+      error || "Expected safe integer, got ${got}",
     );
   }
 
@@ -448,7 +448,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public nonZero(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value !== 0,
-      error || 'Expected non-zero number',
+      error || "Expected non-zero number",
     );
   }
 
@@ -467,7 +467,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public divisibleBy(divisor: number, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value % divisor === 0,
-      error || 'Expected value (${got}) to be divisible by ${expected}',
+      error || "Expected value (${got}) to be divisible by ${expected}",
       divisor,
     );
   }
@@ -486,7 +486,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public port(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => Number.isInteger(value) && value >= 0 && value <= 65535,
-      error || 'Expected valid port number (0-65535), got ${got}',
+      error || "Expected valid port number (0-65535), got ${got}",
     );
   }
 
@@ -504,7 +504,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public percentage(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value >= 0 && value <= 100,
-      error || 'Expected value to be percentage (0-100), got ${got}',
+      error || "Expected value to be percentage (0-100), got ${got}",
     );
   }
 
@@ -522,7 +522,7 @@ export class NumberGuardian extends BaseGuardian<FunctionType<number>> {
   public isTimestamp(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => new Date(value).getTime() === value,
-      error || 'Expected value to be a timestamp, got ${got}',
+      error || "Expected value to be a timestamp, got ${got}",
     );
   }
   //#endregion Validations

@@ -96,7 +96,14 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     }
     const causes: Record<string, string> = {};
     for (const [key, error] of Object.entries(this.context.cause)) {
-      causes[key] = error.message;
+      const subCauses = error.listCauses();
+      if (Object.keys(subCauses).length === 0) {
+        causes[key] = error.message;
+      } else {
+        for (const [subKey, subError] of Object.entries(subCauses)) {
+          causes[`${key}.${subKey}`] = subError;
+        }
+      }
     }
     return causes;
   }

@@ -1,5 +1,5 @@
-import type { FunctionParameters, FunctionType } from '../types/mod.ts';
-import { GuardianError } from '../GuardianError.ts';
+import type { FunctionParameters, FunctionType } from "../types/mod.ts";
+import { GuardianError } from "../GuardianError.ts";
 
 /**
  * Creates a guardian that validates a value is in a specified array
@@ -30,10 +30,10 @@ export const isIn = <T, P extends FunctionParameters = [T]>(
         {
           got: value,
           expected: expected,
-          comparison: 'in',
+          comparison: "in",
         },
         error ||
-          `Expected value to be in (${expected.join(', ')}), got \${got}`,
+          `Expected value to be in (${expected.join(", ")}), got \${got}`,
       );
     }
     return value;

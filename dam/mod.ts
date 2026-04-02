@@ -1,36 +1,42 @@
+// Base exports
+export { BaseGuardian } from "./BaseGuardian.ts";
+export { GuardianError } from "./GuardianError.ts";
+
+// Main entry point
+export { Guardian } from "./Guardian.ts";
+
+// Individual guardians
 export {
-  AbstractEngine,
-  DAMEngineError,
-  type DAMEngineErrorCode,
-  DAMEngineErrorCodes,
-  type DAMEngineErrorMeta,
-  type EngineCapabilities,
-  type EngineEvents,
-  type EngineOptions,
-  type EnginePoolStats,
-  type EngineQuery,
-  type EngineQueryResult,
-  type EngineQueryStats,
-  type EngineStats,
-  type EngineStatus,
-  type EngineTransactionOptions,
-  type EngineTransactionStatus,
-} from './engine/mod.ts';
+  ArrayGuardian,
+  BigIntGuardian,
+  BooleanGuardian,
+  DateGuardian,
+  FunctionGuardian,
+  NumberGuardian,
+  ObjectGuardian,
+  type ObjectSchema,
+  StringGuardian,
+} from "./guards/mod.ts";
 
-// Export engine classes for custom implementations
+// Types
+export type {
+  FunctionParameters,
+  FunctionType,
+  GuardianProxy,
+  GuardianType,
+  MaybeAsync,
+  MergeParameters,
+  ResolvedValue,
+} from "./types/mod.ts";
+
+// Helper functions
 export {
-  MariaEngine,
-  type MariaEngineOptions,
-  MongoEngine,
-  type MongoEngineOptions,
-  type Postgres2EngineOptions,
-  PostgresEngine,
-  PostgresEngine2,
-  type PostgresEngineOptions,
-  SQLiteEngine,
-  type SQLiteEngineOptions,
-} from './engines/mod.ts';
-
-export { DAM } from './DAM.ts';
-
-export { DAMError } from './errors/mod.ts';
+  equals,
+  getType,
+  isIn,
+  isNotIn,
+  isPromiseLike,
+  notEquals,
+  optional,
+  test,
+} from "./helpers/mod.ts";

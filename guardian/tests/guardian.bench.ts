@@ -1,34 +1,34 @@
-import { Guardian } from '../Guardian.ts';
+import { Guardian } from "../Guardian.ts";
 
 // Sample data for testing
-const validString = 'hello world';
-const validObject = { name: 'John', age: 30, email: 'john@example.com' };
+const validString = "hello world";
+const validObject = { name: "John", age: 30, email: "john@example.com" };
 const validArray = [1, 2, 3, 4, 5];
 
 // Simple validation benchmarks
-Deno.bench('guardian.String validation - Direct check', () => {
-  if (typeof validString !== 'string' || validString.length < 3) {
-    throw new Error('Invalid string');
+Deno.bench("guardian.String validation - Direct check", () => {
+  if (typeof validString !== "string" || validString.length < 3) {
+    throw new Error("Invalid string");
   }
 });
 
-Deno.bench('guardian.String validation - Guardian', () => {
+Deno.bench("guardian.String validation - Guardian", () => {
   Guardian.string().minLength(3)(validString);
 });
 
 // Object validation benchmarks
-Deno.bench('guardian.Object validation - Direct check', () => {
+Deno.bench("guardian.Object validation - Direct check", () => {
   if (
-    typeof validObject !== 'object' || validObject === null ||
-    typeof validObject.name !== 'string' || validObject.name.length < 2 ||
-    typeof validObject.age !== 'number' || validObject.age < 18 ||
-    (validObject.email !== undefined && typeof validObject.email !== 'string')
+    typeof validObject !== "object" || validObject === null ||
+    typeof validObject.name !== "string" || validObject.name.length < 2 ||
+    typeof validObject.age !== "number" || validObject.age < 18 ||
+    (validObject.email !== undefined && typeof validObject.email !== "string")
   ) {
-    throw new Error('Invalid object');
+    throw new Error("Invalid object");
   }
 });
 
-Deno.bench('guardian.Object validation - Guardian', () => {
+Deno.bench("guardian.Object validation - Guardian", () => {
   Guardian.object().schema({
     name: Guardian.string().minLength(2),
     age: Guardian.number().min(18),
@@ -37,44 +37,44 @@ Deno.bench('guardian.Object validation - Guardian', () => {
 });
 
 // Array validation benchmarks
-Deno.bench('guardian.Array validation - Direct check', () => {
+Deno.bench("guardian.Array validation - Direct check", () => {
   if (!Array.isArray(validArray)) {
-    throw new Error('Not an array');
+    throw new Error("Not an array");
   }
 
   for (const item of validArray) {
-    if (typeof item !== 'number' || item < 0) {
-      throw new Error('Invalid array item');
+    if (typeof item !== "number" || item < 0) {
+      throw new Error("Invalid array item");
     }
   }
 });
 
-Deno.bench('guardian.Array validation - Guardian', () => {
+Deno.bench("guardian.Array validation - Guardian", () => {
   Guardian.array().of(Guardian.number().min(0))(validArray);
 });
 
 // Complex validation chains
-Deno.bench('guardian.Complex validation - Direct check', () => {
+Deno.bench("guardian.Complex validation - Direct check", () => {
   if (
-    typeof validObject !== 'object' ||
+    typeof validObject !== "object" ||
     validObject === null ||
-    !('name' in validObject) ||
-    !('age' in validObject) ||
-    typeof validObject.name !== 'string' ||
+    !("name" in validObject) ||
+    !("age" in validObject) ||
+    typeof validObject.name !== "string" ||
     validObject.name.length < 2 ||
-    typeof validObject.age !== 'number' ||
+    typeof validObject.age !== "number" ||
     validObject.age < 18 ||
     (validObject.email !== undefined &&
-      typeof validObject.email !== 'string') ||
+      typeof validObject.email !== "string") ||
     Object.keys(validObject).some((key) =>
-      !['name', 'age', 'email'].includes(key)
+      !["name", "age", "email"].includes(key)
     )
   ) {
-    throw new Error('Invalid object');
+    throw new Error("Invalid object");
   }
 });
 
-Deno.bench('guardian.Complex validation - Guardian', () => {
+Deno.bench("guardian.Complex validation - Guardian", () => {
   Guardian.object()
     .schema({
       name: Guardian.string().minLength(2),
@@ -84,47 +84,47 @@ Deno.bench('guardian.Complex validation - Guardian', () => {
 });
 
 // Union type validation
-Deno.bench('guardian.Union type validation - Direct check', () => {
-  const id: unknown = '123';
+Deno.bench("guardian.Union type validation - Direct check", () => {
+  const id: unknown = "123";
   if (
-    (typeof id !== 'string' && typeof id !== 'number') ||
-    (typeof id === 'string' && !/^\d+$/.test(id)) ||
-    (typeof id === 'number' && (id < 0 || !Number.isInteger(id)))
+    (typeof id !== "string" && typeof id !== "number") ||
+    (typeof id === "string" && !/^\d+$/.test(id)) ||
+    (typeof id === "number" && (id < 0 || !Number.isInteger(id)))
   ) {
-    throw new Error('Invalid ID');
+    throw new Error("Invalid ID");
   }
 });
 
-Deno.bench('guardian.Union type validation - Guardian', () => {
+Deno.bench("guardian.Union type validation - Guardian", () => {
   const idGuard = Guardian.oneOf([
     Guardian.string().pattern(/^\d+$/),
     Guardian.number().integer().min(0),
   ]);
-  idGuard('123');
+  idGuard("123");
 });
 
 // Nested object validation
 const nestedObject = {
   user: {
     profile: {
-      name: 'John',
+      name: "John",
       contact: {
-        email: 'john@example.com',
-        phone: '1234567890',
+        email: "john@example.com",
+        phone: "1234567890",
       },
     },
     settings: {
-      theme: 'dark',
+      theme: "dark",
       notifications: true,
     },
   },
   posts: [
-    { id: 1, title: 'Hello World', tags: ['tech', 'news'] },
-    { id: 2, title: 'Guardian Library', tags: ['tech', 'typescript'] },
+    { id: 1, title: "Hello World", tags: ["tech", "news"] },
+    { id: 2, title: "Guardian Library", tags: ["tech", "typescript"] },
   ],
 };
 
-Deno.bench('guardian.Nested object validation - Guardian', () => {
+Deno.bench("guardian.Nested object validation - Guardian", () => {
   const postGuard = Guardian.object().schema({
     id: Guardian.number().positive(),
     title: Guardian.string().minLength(1),
@@ -141,7 +141,7 @@ Deno.bench('guardian.Nested object validation - Guardian', () => {
         }),
       }),
       settings: Guardian.object().schema({
-        theme: Guardian.string().in(['light', 'dark']),
+        theme: Guardian.string().in(["light", "dark"]),
         notifications: Guardian.boolean(),
       }),
     }),
@@ -150,32 +150,32 @@ Deno.bench('guardian.Nested object validation - Guardian', () => {
 });
 
 // Optional fields test
-Deno.bench('guardian.Optional fields - Direct check', () => {
-  const obj = { name: 'John', age: 30 };
+Deno.bench("guardian.Optional fields - Direct check", () => {
+  const obj = { name: "John", age: 30 };
 
   if (
-    typeof obj !== 'object' || obj === null ||
-    typeof obj.name !== 'string' ||
-    typeof obj.age !== 'number' ||
-    ('email' in obj && typeof obj.email !== 'string')
+    typeof obj !== "object" || obj === null ||
+    typeof obj.name !== "string" ||
+    typeof obj.age !== "number" ||
+    ("email" in obj && typeof obj.email !== "string")
   ) {
-    throw new Error('Invalid object');
+    throw new Error("Invalid object");
   }
 });
 
-Deno.bench('guardian.Optional fields - Guardian', () => {
+Deno.bench("guardian.Optional fields - Guardian", () => {
   Guardian.object().schema({
     name: Guardian.string(),
     age: Guardian.number(),
     email: Guardian.string().optional(),
-  })({ name: 'John', age: 30 });
+  })({ name: "John", age: 30 });
 });
 
 // Error case benchmarks
-Deno.bench('guardian.Error handling - Direct check', () => {
+Deno.bench("guardian.Error handling - Direct check", () => {
   try {
-    const value = 'not a number';
-    if (typeof value !== 'number') {
+    const value = "not a number";
+    if (typeof value !== "number") {
       throw new Error(`Expected number, got ${typeof value}`);
     }
   } catch {
@@ -183,9 +183,9 @@ Deno.bench('guardian.Error handling - Direct check', () => {
   }
 });
 
-Deno.bench('guardian.Error handling - Guardian', () => {
+Deno.bench("guardian.Error handling - Guardian", () => {
   try {
-    Guardian.number()('not a number');
+    Guardian.number()("not a number");
   } catch {
     // Silently catch the error
   }

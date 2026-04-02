@@ -1,23 +1,23 @@
-import { assertEquals, assertThrows } from 'jsr:@std/assert@^1.0.0';
-import { equals } from '../../helpers/mod.ts';
+import { assertEquals, assertThrows } from "jsr:@std/assert@^1.0.0";
+import { equals } from "../../helpers/mod.ts";
 
-Deno.test('guardian.helpers.equals', async (t) => {
-  await t.step('passes value when it equals expected value', () => {
+Deno.test("guardian.helpers.equals", async (t) => {
+  await t.step("passes value when it equals expected value", () => {
     const equalsTest = equals(5);
     assertEquals(equalsTest(5), 5);
   });
 
-  await t.step('throws error when value does not equal expected value', () => {
+  await t.step("throws error when value does not equal expected value", () => {
     const equalsTest = equals(5);
 
     assertThrows(
       () => equalsTest(10),
       Error,
-      'Expected value to be 5, but got 10',
+      "Expected value to be 5, but got 10",
     );
   });
 
-  await t.step('compares null and undefined correctly', () => {
+  await t.step("compares null and undefined correctly", () => {
     const nullTest = equals(null);
     assertEquals(nullTest(null), null);
 
@@ -35,8 +35,8 @@ Deno.test('guardian.helpers.equals', async (t) => {
     );
   });
 
-  await t.step('supports custom error messages', () => {
-    const customMessage = 'Value must be 5';
+  await t.step("supports custom error messages", () => {
+    const customMessage = "Value must be 5";
     const equalsTest = equals(5, customMessage);
 
     assertThrows(
@@ -46,29 +46,29 @@ Deno.test('guardian.helpers.equals', async (t) => {
     );
   });
 
-  await t.step('works with strings', () => {
-    const equalsTest = equals('hello');
-    assertEquals(equalsTest('hello'), 'hello');
+  await t.step("works with strings", () => {
+    const equalsTest = equals("hello");
+    assertEquals(equalsTest("hello"), "hello");
 
     assertThrows(
-      () => equalsTest('world'),
+      () => equalsTest("world"),
       Error,
-      'Expected value to be hello, but got world',
+      "Expected value to be hello, but got world",
     );
   });
 
-  await t.step('works with boolean values', () => {
+  await t.step("works with boolean values", () => {
     const trueTest = equals(true);
     assertEquals(trueTest(true), true);
 
     assertThrows(
       () => trueTest(false),
       Error,
-      'Expected value to be true',
+      "Expected value to be true",
     );
   });
 
-  await t.step('works with objects', () => {
+  await t.step("works with objects", () => {
     // Note: For objects, this will check reference equality, not deep equality
     const obj = { test: 1 };
     const objTest = equals(obj);

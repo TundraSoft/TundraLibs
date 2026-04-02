@@ -1,34 +1,34 @@
-import { format as dateFormat } from 'jsr:/@std/datetime@^0.225.3/format';
-import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError } from '../GuardianError.ts';
-import type { FunctionType, GuardianProxy } from '../types/mod.ts';
-import { NumberGuardian } from './Number.ts';
-import { StringGuardian } from './String.ts';
-import { getType } from '../helpers/mod.ts';
+import { format as dateFormat } from "jsr:/@std/datetime@^0.225.3/format";
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { GuardianError } from "../GuardianError.ts";
+import type { FunctionType, GuardianProxy } from "../types/mod.ts";
+import { NumberGuardian } from "./Number.ts";
+import { StringGuardian } from "./String.ts";
+import { getType } from "../helpers/mod.ts";
 /**
  * Predefined date format patterns for common use cases.
  */
 export enum DateFormats {
-  ISO = 'yyyy-MM-ddTHH:mm:ss.sssZ',
-  US = 'MM/dd/yyyy',
-  EU = 'dd/MM/yyyy',
-  SQL = 'yyyy-MM-dd',
-  SQL_TIME = 'HH:mm:ss',
-  SQL_DATETIME = 'yyyy-MM-dd HH:mm:ss',
-  SQL_DATETIME_MS = 'yyyy-MM-dd HH:mm:ss.sss',
+  ISO = "yyyy-MM-ddTHH:mm:ss.sssZ",
+  US = "MM/dd/yyyy",
+  EU = "dd/MM/yyyy",
+  SQL = "yyyy-MM-dd",
+  SQL_TIME = "HH:mm:ss",
+  SQL_DATETIME = "yyyy-MM-dd HH:mm:ss",
+  SQL_DATETIME_MS = "yyyy-MM-dd HH:mm:ss.sss",
 }
 
 /**
  * Time unit types that can be used for date operations.
  */
 export type DateUnit =
-  | 'years'
-  | 'months'
-  | 'days'
-  | 'hours'
-  | 'minutes'
-  | 'seconds'
-  | 'milliseconds';
+  | "years"
+  | "months"
+  | "days"
+  | "hours"
+  | "minutes"
+  | "seconds"
+  | "milliseconds";
 
 /**
  * DateGuardian provides validation and transformation utilities for Date objects.
@@ -65,8 +65,8 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
     return new DateGuardian((value: unknown): Date => {
       if (value === null || value === undefined) {
         throw new GuardianError(
-          { got: value, expected: 'Date', comparison: 'type' },
-          error || 'Expected value to be a date, got ${got}',
+          { got: value, expected: "Date", comparison: "type" },
+          error || "Expected value to be a date, got ${got}",
         );
       }
       if (value instanceof Date) return value;
@@ -75,11 +75,11 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
         throw new GuardianError(
           {
             got: value,
-            expected: 'Date',
-            comparison: 'type',
+            expected: "Date",
+            comparison: "type",
             type: getType(value),
           },
-          error || 'Expected value to be a date, got ${type}',
+          error || "Expected value to be a date, got ${type}",
         );
       }
       return date;
@@ -269,25 +269,25 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
     return this.transform((value) => {
       const date = new Date(value);
       switch (unit) {
-        case 'years':
+        case "years":
           date.setFullYear(date.getFullYear() + amount);
           break;
-        case 'months':
+        case "months":
           date.setMonth(date.getMonth() + amount);
           break;
-        case 'days':
+        case "days":
           date.setDate(date.getDate() + amount);
           break;
-        case 'hours':
+        case "hours":
           date.setHours(date.getHours() + amount);
           break;
-        case 'minutes':
+        case "minutes":
           date.setMinutes(date.getMinutes() + amount);
           break;
-        case 'seconds':
+        case "seconds":
           date.setSeconds(date.getSeconds() + amount);
           break;
-        case 'milliseconds':
+        case "milliseconds":
           date.setMilliseconds(date.getMilliseconds() + amount);
           break;
       }
@@ -387,7 +387,7 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
   public min(min: Date, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value >= min,
-      error || 'Expected date (${got}) to be after or equal to ${expected}',
+      error || "Expected date (${got}) to be after or equal to ${expected}",
       min,
     );
   }
@@ -409,7 +409,7 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
   public max(max: Date, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value <= max,
-      error || 'Expected date (${got}) to be before or equal to ${expected}',
+      error || "Expected date (${got}) to be before or equal to ${expected}",
       max,
     );
   }
@@ -434,7 +434,7 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
     return this.test(
       (value) => value >= min && value <= max,
       error ||
-        'Expected date (${got}) to be between ${expected[0]} and ${expected[1]}',
+        "Expected date (${got}) to be between ${expected[0]} and ${expected[1]}",
       [min, max],
     );
   }
@@ -455,7 +455,7 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
   public future(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value > new Date(),
-      error || 'Expected future date, got ${got}',
+      error || "Expected future date, got ${got}",
     );
   }
 
@@ -475,7 +475,7 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
   public past(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value < new Date(),
-      error || 'Expected past date, got ${got}',
+      error || "Expected past date, got ${got}",
     );
   }
 
@@ -498,7 +498,7 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
         const day = value.getDay();
         return day > 0 && day < 6; // 0 is Sunday, 6 is Saturday
       },
-      error || 'Expected weekday (Monday-Friday), got ${got}',
+      error || "Expected weekday (Monday-Friday), got ${got}",
     );
   }
 
@@ -521,7 +521,7 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
         const day = value.getDay();
         return day === 0 || day === 6; // 0 is Sunday, 6 is Saturday
       },
-      error || 'Expected weekend (Saturday-Sunday), got ${got}',
+      error || "Expected weekend (Saturday-Sunday), got ${got}",
     );
   }
 
@@ -546,7 +546,7 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
           value.getMonth() === date.getMonth() &&
           value.getFullYear() === date.getFullYear();
       },
-      error || 'Expected date (${got}) to be on the same day as ${expected}',
+      error || "Expected date (${got}) to be on the same day as ${expected}",
       date,
     );
   }
@@ -571,7 +571,7 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
         return value.getMonth() === date.getMonth() &&
           value.getFullYear() === date.getFullYear();
       },
-      error || 'Expected date (${got}) to be in the same month as ${expected}',
+      error || "Expected date (${got}) to be in the same month as ${expected}",
       date,
     );
   }
@@ -593,7 +593,7 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
   public sameYear(date: Date, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value.getFullYear() === date.getFullYear(),
-      error || 'Expected date (${got}) to be in the same year as ${expected}',
+      error || "Expected date (${got}) to be in the same year as ${expected}",
       date,
     );
   }
@@ -615,7 +615,7 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
   public isBefore(date: Date, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value < date,
-      error || 'Expected date (${got}) to be before ${expected}',
+      error || "Expected date (${got}) to be before ${expected}",
       date,
     );
   }
@@ -637,7 +637,7 @@ export class DateGuardian extends BaseGuardian<FunctionType<Date>> {
   public isAfter(date: Date, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value > date,
-      error || 'Expected date (${got}) to be after ${expected}',
+      error || "Expected date (${got}) to be after ${expected}",
       date,
     );
   }

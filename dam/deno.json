@@ -1,19 +1,13 @@
 {
-  "name": "@tundralibs/dam",
-  "version": "0.1.0",
-  "description": "TODO: Add description",
+  "name": "@tundralibs/guardian",
+  "version": "1.0.0-dev4.3",
+  "description": "Validate all things! Guardian is a validation library",
   "exports": {
     ".": "./mod.ts",
-    "./engines": "./engines/mod.ts",
-    "./engine": "./engine/mod.ts"
+    "./guards": "./guards/mod.ts",
+    "./types": "./types/mod.ts"
   },
   "imports": {
-    "$pg": "npm:pg@^8.16.3",
-    "$pg_types": "npm:@types/pg@^8.6.6",
-    "$maria": "npm:mariadb@^3.4.5",
-    "$sqlite": "jsr:@db/sqlite@^0.12.0",
-    "$mongo": "npm:mongodb",
-    "$mongo2": "jsr:@db/mongo@^0.33.0",
-    "$postgres": "jsr:@db/postgres@^0.19.5"
+    "$datetime": "jsr:@std/datetime@^0.225.3"
   }
 }

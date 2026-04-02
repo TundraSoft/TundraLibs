@@ -1,7 +1,7 @@
-import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError } from '../GuardianError.ts';
-import type { FunctionType, GuardianProxy } from '../types/mod.ts';
-import { getType } from '../helpers/mod.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { GuardianError } from "../GuardianError.ts";
+import type { FunctionType, GuardianProxy } from "../types/mod.ts";
+import { getType } from "../helpers/mod.ts";
 
 /**
  * ArrayGuardian provides validation utilities for array values.
@@ -40,11 +40,11 @@ export class ArrayGuardian<T = unknown>
         throw new GuardianError(
           {
             got: value,
-            expected: 'array',
-            comparison: 'type',
+            expected: "array",
+            comparison: "type",
             type: getType(value),
           },
-          error || 'Expected array, got ${type}',
+          error || "Expected array, got ${type}",
         );
       }
       return value as T[];
@@ -73,16 +73,16 @@ export class ArrayGuardian<T = unknown>
         {
           got: array,
           expected: `array of ${elementGuardian.name}`,
-          comparison: 'type',
+          comparison: "type",
         },
-        message ?? 'Validation failed for array elements',
+        message ?? "Validation failed for array elements",
       );
       return array.map((element, index) => {
         try {
           return elementGuardian(element);
         } catch (error) {
           if (error instanceof GuardianError) {
-            errors.addCause('' + index, error);
+            errors.addCause("" + index, error);
           }
         }
         if (errors.causeSize() > 0) {
@@ -132,7 +132,7 @@ export class ArrayGuardian<T = unknown>
       (array) => array.length >= length,
       error ||
         `Expected array to have at least ${length} element${
-          length === 1 ? '' : 's'
+          length === 1 ? "" : "s"
         }`,
     );
   }
@@ -156,7 +156,7 @@ export class ArrayGuardian<T = unknown>
       (array) => array.length <= length,
       error ||
         `Expected array to have at most ${length} element${
-          length === 1 ? '' : 's'
+          length === 1 ? "" : "s"
         }`,
     );
   }
@@ -198,7 +198,7 @@ export class ArrayGuardian<T = unknown>
   public notEmpty(error?: string): GuardianProxy<this> {
     return this.test(
       (array) => array.length > 0,
-      error || 'Expected non-empty array',
+      error || "Expected non-empty array",
     );
   }
 
@@ -218,7 +218,7 @@ export class ArrayGuardian<T = unknown>
   public unique(error?: string): GuardianProxy<this> {
     return this.test(
       (array) => new Set(array).size === array.length,
-      error || 'Expected array with unique elements',
+      error || "Expected array with unique elements",
     );
   }
 

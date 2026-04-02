@@ -1,7 +1,7 @@
-import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError } from '../GuardianError.ts';
-import type { FunctionType, GuardianProxy } from '../types/mod.ts';
-import { getType } from '../helpers/mod.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { GuardianError } from "../GuardianError.ts";
+import type { FunctionType, GuardianProxy } from "../types/mod.ts";
+import { getType } from "../helpers/mod.ts";
 /**
  * BigIntGuardian provides validation and transformation utilities for bigint values.
  * It extends BaseGuardian to provide a chainable API for bigint processing.
@@ -35,18 +35,18 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
    */
   static create(error?: string): GuardianProxy<BigIntGuardian> {
     return new BigIntGuardian((value: unknown): bigint => {
-      if (typeof value === 'bigint') return value;
+      if (typeof value === "bigint") return value;
 
       // Support conversion from number if it's an integer
       if (
-        typeof value === 'number' && Number.isInteger(value) &&
+        typeof value === "number" && Number.isInteger(value) &&
         Number.isFinite(value)
       ) {
         return BigInt(value);
       }
 
       // Support conversion from string if it's a valid bigint string
-      if (typeof value === 'string' && /^[-+]?\d+$/.test(value)) {
+      if (typeof value === "string" && /^[-+]?\d+$/.test(value)) {
         try {
           return BigInt(value);
         } catch {
@@ -57,11 +57,11 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
       throw new GuardianError(
         {
           got: value,
-          expected: 'bigint',
-          comparison: 'type',
+          expected: "bigint",
+          comparison: "type",
           type: getType(value),
         },
-        error || 'Expected value to be bigint, got ${type}',
+        error || "Expected value to be bigint, got ${type}",
       );
     }).proxy();
   }
@@ -218,7 +218,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
    */
   public pow(exponent: bigint): GuardianProxy<this> {
     if (exponent < 0n) {
-      throw new Error('Negative exponents not supported for BigInt');
+      throw new Error("Negative exponents not supported for BigInt");
     }
     return this.transform((value) => {
       return value ** exponent;
@@ -243,7 +243,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
     return this.test(
       (value) => value >= min,
       error ||
-        'Expected value (${got}) to be greater than or equal to ${expected}',
+        "Expected value (${got}) to be greater than or equal to ${expected}",
       min,
     );
   }
@@ -264,7 +264,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
     return this.test(
       (value) => value <= max,
       error ||
-        'Expected value (${got}) to be less than or equal to ${expected}',
+        "Expected value (${got}) to be less than or equal to ${expected}",
       max,
     );
   }
@@ -286,7 +286,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
     return this.test(
       (value) => value >= min && value <= max,
       error ||
-        'Expected value (${got}) to be between ${expected}',
+        "Expected value (${got}) to be between ${expected}",
       [min, max],
     );
   }
@@ -305,7 +305,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
   public positive(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value > 0n,
-      error || 'Expected positive BigInt, got ${got}',
+      error || "Expected positive BigInt, got ${got}",
     );
   }
 
@@ -323,7 +323,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
   public negative(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value < 0n,
-      error || 'Expected negative BigInt, got ${got}',
+      error || "Expected negative BigInt, got ${got}",
     );
   }
 
@@ -341,7 +341,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
   public nonZero(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value !== 0n,
-      error || 'Expected non-zero BigInt',
+      error || "Expected non-zero BigInt",
     );
   }
 
@@ -359,7 +359,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
   public even(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value % 2n === 0n,
-      error || 'Expected even BigInt, got ${got}',
+      error || "Expected even BigInt, got ${got}",
     );
   }
 
@@ -377,7 +377,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
   public odd(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value % 2n === 1n || value % 2n === -1n,
-      error || 'Expected odd BigInt, got ${got}',
+      error || "Expected odd BigInt, got ${got}",
     );
   }
 
@@ -406,7 +406,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
         }
         return true;
       },
-      error || 'Expected prime BigInt, got ${got}',
+      error || "Expected prime BigInt, got ${got}",
     );
   }
 
@@ -425,7 +425,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
   public multipleOf(base: bigint, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value % base === 0n,
-      error || 'Expected value (${got}) to be multiple of ${expected}',
+      error || "Expected value (${got}) to be multiple of ${expected}",
       base,
     );
   }
@@ -445,7 +445,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
   public divisibleBy(divisor: bigint, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value % divisor === 0n,
-      error || 'Expected value (${got}) to be divisible by ${expected}',
+      error || "Expected value (${got}) to be divisible by ${expected}",
       divisor,
     );
   }
@@ -468,7 +468,7 @@ export class BigIntGuardian extends BaseGuardian<FunctionType<bigint>> {
         const absValue = value < 0n ? -value : value;
         return absValue < (1n << BigInt(bits));
       },
-      error || 'Expected value (${got}) to fit within ${expected} bits',
+      error || "Expected value (${got}) to fit within ${expected} bits",
       bits,
     );
   }

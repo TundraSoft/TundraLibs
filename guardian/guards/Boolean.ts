@@ -2,10 +2,10 @@
  * Boolean value validation and transformation guardian.
  * Provides functionality to validate, coerce and test boolean values.
  */
-import { BaseGuardian } from '../BaseGuardian.ts';
-import type { FunctionType, GuardianProxy } from '../types/mod.ts';
-import { GuardianError } from '../GuardianError.ts';
-import { getType } from '../helpers/mod.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import type { FunctionType, GuardianProxy } from "../types/mod.ts";
+import { GuardianError } from "../GuardianError.ts";
+import { getType } from "../helpers/mod.ts";
 
 /**
  * BooleanGuardian provides validation and transformation utilities for boolean values.
@@ -47,16 +47,16 @@ export class BooleanGuardian extends BaseGuardian<FunctionType<boolean>> {
    */
   static create(error?: string): GuardianProxy<BooleanGuardian> {
     return new BooleanGuardian((value: unknown): boolean => {
-      if (typeof value === 'boolean') return value;
+      if (typeof value === "boolean") return value;
       if (
-        value === 'true' || value === 'TRUE' || value === '1' || value === 1
+        value === "true" || value === "TRUE" || value === "1" || value === 1
       ) return true;
       if (
-        value === 'false' || value === 'FALSE' || value === '0' || value === 0
+        value === "false" || value === "FALSE" || value === "0" || value === 0
       ) return false;
       throw new GuardianError(
-        { got: getType(value), expected: 'boolean', comparison: 'type' },
-        error || 'Expected value to be boolean, got ${got}',
+        { got: getType(value), expected: "boolean", comparison: "type" },
+        error || "Expected value to be boolean, got ${got}",
       );
     }).proxy();
   }
@@ -76,7 +76,7 @@ export class BooleanGuardian extends BaseGuardian<FunctionType<boolean>> {
   public true(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value === true,
-      error || 'Expected value to be TRUE, got ${got}',
+      error || "Expected value to be TRUE, got ${got}",
     );
   }
 
@@ -95,7 +95,7 @@ export class BooleanGuardian extends BaseGuardian<FunctionType<boolean>> {
   public false(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value === false,
-      error || 'Expected value to be FALSE, got ${got}',
+      error || "Expected value to be FALSE, got ${got}",
     );
   }
 }

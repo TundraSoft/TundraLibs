@@ -1,5 +1,5 @@
-import type { FunctionType } from '../types/mod.ts';
-import { GuardianError } from '../GuardianError.ts';
+import type { FunctionType } from "../types/mod.ts";
+import { GuardianError } from "../GuardianError.ts";
 
 /**
  * Creates a function that checks if a value does not equal an expected value
@@ -19,10 +19,10 @@ export const notEquals = <T>(
         {
           got: value,
           expected: expected,
-          comparison: 'notEquals',
+          comparison: "notEquals",
         },
         error ||
-          'Expected value to not be ${expected}, but got ${got}',
+          "Expected value to not be ${expected}, but got ${got}",
       );
     }
     return value;

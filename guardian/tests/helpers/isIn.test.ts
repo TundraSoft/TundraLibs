@@ -1,25 +1,25 @@
-import { assertEquals, assertThrows } from 'jsr:@std/assert@^1.0.0';
-import { isIn } from '../../helpers/mod.ts';
+import { assertEquals, assertThrows } from "jsr:@std/assert@^1.0.0";
+import { isIn } from "../../helpers/mod.ts";
 
-Deno.test('guardian.helpers.isIn', async (t) => {
-  await t.step('passes value when it is one of allowed values', () => {
+Deno.test("guardian.helpers.isIn", async (t) => {
+  await t.step("passes value when it is one of allowed values", () => {
     const oneOfTest = isIn([1, 2, 3]);
     assertEquals(oneOfTest(1), 1);
     assertEquals(oneOfTest(2), 2);
     assertEquals(oneOfTest(3), 3);
   });
 
-  await t.step('throws error when value is not one of allowed values', () => {
+  await t.step("throws error when value is not one of allowed values", () => {
     const oneOfTest = isIn([1, 2, 3]);
 
     assertThrows(
       () => oneOfTest(4),
       Error,
-      'Expected value to be in (1, 2, 3), got 4',
+      "Expected value to be in (1, 2, 3), got 4",
     );
   });
 
-  await t.step('should not work with empty array', () => {
+  await t.step("should not work with empty array", () => {
     assertThrows(
       () => isIn([]),
       Error,
@@ -27,53 +27,53 @@ Deno.test('guardian.helpers.isIn', async (t) => {
     );
   });
 
-  await t.step('works with strings', () => {
-    const oneOfTest = isIn(['red', 'green', 'blue']);
-    assertEquals(oneOfTest('red'), 'red');
-    assertEquals(oneOfTest('green'), 'green');
-    assertEquals(oneOfTest('blue'), 'blue');
+  await t.step("works with strings", () => {
+    const oneOfTest = isIn(["red", "green", "blue"]);
+    assertEquals(oneOfTest("red"), "red");
+    assertEquals(oneOfTest("green"), "green");
+    assertEquals(oneOfTest("blue"), "blue");
 
     assertThrows(
-      () => oneOfTest('yellow'),
+      () => oneOfTest("yellow"),
       Error,
-      'Expected value to be in (red, green, blue), got yellow',
+      "Expected value to be in (red, green, blue), got yellow",
     );
   });
 
-  await t.step('supports custom error message', () => {
-    const customMessage = 'Invalid color choice';
-    const oneOfTest = isIn(['red', 'green', 'blue'], customMessage);
+  await t.step("supports custom error message", () => {
+    const customMessage = "Invalid color choice";
+    const oneOfTest = isIn(["red", "green", "blue"], customMessage);
 
     assertThrows(
-      () => oneOfTest('yellow'),
+      () => oneOfTest("yellow"),
       Error,
       customMessage,
     );
   });
 
-  await t.step('works with mixed types in array', () => {
-    const oneOfTest = isIn([1, 'two', true]);
+  await t.step("works with mixed types in array", () => {
+    const oneOfTest = isIn([1, "two", true]);
     assertEquals(oneOfTest(1), 1);
-    assertEquals(oneOfTest('two'), 'two');
+    assertEquals(oneOfTest("two"), "two");
     assertEquals(oneOfTest(true), true);
 
     assertThrows(
       () => oneOfTest(false),
       Error,
-      'Expected value to be in (1, two, true)',
+      "Expected value to be in (1, two, true)",
     );
   });
 
-  await t.step('handles null and undefined values in allowed list', () => {
+  await t.step("handles null and undefined values in allowed list", () => {
     const oneOfTest = isIn([1, null, undefined]);
     assertEquals(oneOfTest(1), 1);
     assertEquals(oneOfTest(null), null);
     assertEquals(oneOfTest(undefined), undefined);
 
     assertThrows(
-      () => oneOfTest('string' as unknown as number),
+      () => oneOfTest("string" as unknown as number),
       Error,
-      'Expected value to be in (1, , ), got string',
+      "Expected value to be in (1, , ), got string",
     );
   });
 });

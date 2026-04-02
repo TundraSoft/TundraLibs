@@ -1,8 +1,8 @@
 // deno-lint-ignore-file no-explicit-any
-import { BaseGuardian } from '../BaseGuardian.ts';
-import { GuardianError } from '../GuardianError.ts';
-import type { FunctionType, GuardianProxy } from '../types/mod.ts';
-import { getType } from '../helpers/mod.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import { GuardianError } from "../GuardianError.ts";
+import type { FunctionType, GuardianProxy } from "../types/mod.ts";
+import { getType } from "../helpers/mod.ts";
 
 /**
  * FunctionGuardian provides validation utilities for function values.
@@ -40,15 +40,15 @@ export class FunctionGuardian<
     error?: string,
   ): GuardianProxy<FunctionGuardian<T>> {
     return new FunctionGuardian<T>((value: unknown): T => {
-      if (typeof value !== 'function') {
+      if (typeof value !== "function") {
         throw new GuardianError(
           {
             got: value,
-            expected: 'function',
-            comparison: 'type',
+            expected: "function",
+            comparison: "type",
             type: getType(value),
           },
-          error || 'Expected function, got ${type}',
+          error || "Expected function, got ${type}",
         );
       }
       return value as T;
@@ -119,7 +119,7 @@ export class FunctionGuardian<
       (fn) => fn.length <= count,
       error ||
         `Expected function to have at most ${count} parameter${
-          count === 1 ? '' : 's'
+          count === 1 ? "" : "s"
         }`,
     );
   }
@@ -143,9 +143,9 @@ export class FunctionGuardian<
       (fn) => {
         const result = fn();
         return result instanceof Promise ||
-          (result && typeof result.then === 'function');
+          (result && typeof result.then === "function");
       },
-      error || 'Expected function to be async',
+      error || "Expected function to be async",
     );
   }
 
@@ -168,9 +168,9 @@ export class FunctionGuardian<
       (fn) => {
         const result = fn();
         return !(result instanceof Promise ||
-          (result && typeof result.then === 'function'));
+          (result && typeof result.then === "function"));
       },
-      error || 'Expected function to be synchronous',
+      error || "Expected function to be synchronous",
     );
   }
   //#endregion Validations

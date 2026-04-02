@@ -2,70 +2,70 @@ import {
   assertArrayIncludes,
   assertEquals,
   assertThrows,
-} from 'jsr:@std/assert@^1.0.0';
-import { GuardianError } from '../../GuardianError.ts';
+} from "jsr:@std/assert@^1.0.0";
+import { GuardianError } from "../../GuardianError.ts";
 import {
   ArrayGuardian,
   NumberGuardian,
   StringGuardian,
-} from '../../guards/mod.ts';
+} from "../../guards/mod.ts";
 
-Deno.test('guardian.array', async (t) => {
-  await t.step('create', async (t) => {
-    await t.step('passes through array values', () => {
+Deno.test("guardian.array", async (t) => {
+  await t.step("create", async (t) => {
+    await t.step("passes through array values", () => {
       const guard = ArrayGuardian.create();
       const array = [1, 2, 3];
       assertEquals(guard(array), array);
       assertEquals(guard([]), []);
-      assertEquals(guard(['hello', 'world']), ['hello', 'world']);
+      assertEquals(guard(["hello", "world"]), ["hello", "world"]);
     });
 
-    await t.step('throws for non-array values', () => {
+    await t.step("throws for non-array values", () => {
       const guard = ArrayGuardian.create();
       assertThrows(
-        () => guard('not an array'),
+        () => guard("not an array"),
         GuardianError,
-        'Expected array, got string',
+        "Expected array, got string",
       );
       assertThrows(
         () => guard(42),
         GuardianError,
-        'Expected array, got number',
+        "Expected array, got number",
       );
       assertThrows(
         () => guard({}),
         GuardianError,
-        'Expected array, got object',
+        "Expected array, got object",
       );
       assertThrows(
         () => guard(null),
         GuardianError,
-        'Expected array, got null',
+        "Expected array, got null",
       );
       assertThrows(
         () => guard(undefined),
         GuardianError,
-        'Expected array, got undefined',
+        "Expected array, got undefined",
       );
     });
 
-    await t.step('uses custom error message when provided', () => {
-      const guard = ArrayGuardian.create('Custom error message');
+    await t.step("uses custom error message when provided", () => {
+      const guard = ArrayGuardian.create("Custom error message");
       assertThrows(
         () => guard(42),
         GuardianError,
-        'Custom error message',
+        "Custom error message",
       );
     });
   });
 
-  await t.step('of', async (t) => {
-    await t.step('validates array element type using provided guardian', () => {
+  await t.step("of", async (t) => {
+    await t.step("validates array element type using provided guardian", () => {
       const stringGuard = StringGuardian.create();
       const stringArrayGuard = ArrayGuardian.create().of(stringGuard);
 
       // Should pass for string arrays
-      assertEquals(stringArrayGuard(['a', 'b', 'c']), ['a', 'b', 'c']);
+      assertEquals(stringArrayGuard(["a", "b", "c"]), ["a", "b", "c"]);
 
       // Should fail for non-string elements
       assertThrows(
@@ -75,28 +75,28 @@ Deno.test('guardian.array', async (t) => {
 
       // Should fail for mixed arrays
       assertThrows(
-        () => stringArrayGuard(['a', 1, 'b']),
+        () => stringArrayGuard(["a", 1, "b"]),
         GuardianError,
       );
     });
 
-    await t.step('includes array index in error path', () => {
+    await t.step("includes array index in error path", () => {
       const stringGuard = StringGuardian.create();
       const stringArrayGuard = ArrayGuardian.create().of(stringGuard);
 
       try {
-        stringArrayGuard(['a', 1, 'b']);
-        throw new Error('Should have thrown');
+        stringArrayGuard(["a", 1, "b"]);
+        throw new Error("Should have thrown");
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
         assertEquals(
-          (error as GuardianError).listCauses()['1'],
-          'Expected value to be a string, got number',
+          (error as GuardianError).listCauses()["1"],
+          "Expected value to be a string, got number",
         );
       }
     });
 
-    await t.step('supports chaining multiple guardians', () => {
+    await t.step("supports chaining multiple guardians", () => {
       const numberGuard = NumberGuardian.create().min(0).max(100);
       const positiveNumberArrayGuard = ArrayGuardian.create().of(numberGuard);
 
@@ -109,147 +109,147 @@ Deno.test('guardian.array', async (t) => {
     });
   });
 
-  await t.step('length', async (t) => {
-    await t.step('passes when array has exact length', () => {
+  await t.step("length", async (t) => {
+    await t.step("passes when array has exact length", () => {
       const guard = ArrayGuardian.create().length(3);
       assertEquals(guard([1, 2, 3]), [1, 2, 3]);
     });
 
-    await t.step('throws when array has incorrect length', () => {
+    await t.step("throws when array has incorrect length", () => {
       const guard = ArrayGuardian.create().length(3);
       assertThrows(
         () => guard([1, 2]),
         GuardianError,
-        'Expected array to have length 3',
+        "Expected array to have length 3",
       );
       assertThrows(
         () => guard([1, 2, 3, 4]),
         GuardianError,
-        'Expected array to have length 3',
+        "Expected array to have length 3",
       );
     });
 
-    await t.step('uses custom error message when provided', () => {
+    await t.step("uses custom error message when provided", () => {
       const guard = ArrayGuardian.create().length(
         3,
-        'Array must have exactly 3 elements',
+        "Array must have exactly 3 elements",
       );
       assertThrows(
         () => guard([1, 2]),
         GuardianError,
-        'Array must have exactly 3 elements',
+        "Array must have exactly 3 elements",
       );
     });
   });
 
-  await t.step('minLength', async (t) => {
-    await t.step('passes when array meets minimum length', () => {
+  await t.step("minLength", async (t) => {
+    await t.step("passes when array meets minimum length", () => {
       const guard = ArrayGuardian.create().minLength(2);
       assertEquals(guard([1, 2]), [1, 2]);
       assertEquals(guard([1, 2, 3]), [1, 2, 3]);
     });
 
-    await t.step('throws when array is too short', () => {
+    await t.step("throws when array is too short", () => {
       const guard = ArrayGuardian.create().minLength(2);
       assertThrows(
         () => guard([1]),
         GuardianError,
-        'Expected array to have at least 2 elements',
+        "Expected array to have at least 2 elements",
       );
       assertThrows(
         () => guard([]),
         GuardianError,
-        'Expected array to have at least 2 elements',
+        "Expected array to have at least 2 elements",
       );
     });
   });
 
-  await t.step('maxLength', async (t) => {
-    await t.step('passes when array meets maximum length', () => {
+  await t.step("maxLength", async (t) => {
+    await t.step("passes when array meets maximum length", () => {
       const guard = ArrayGuardian.create().maxLength(2);
       assertEquals(guard([1, 2]), [1, 2]);
       assertEquals(guard([1]), [1]);
       assertEquals(guard([]), []);
     });
 
-    await t.step('throws when array is too long', () => {
+    await t.step("throws when array is too long", () => {
       const guard = ArrayGuardian.create().maxLength(2);
       assertThrows(
         () => guard([1, 2, 3]),
         GuardianError,
-        'Expected array to have at most 2 elements',
+        "Expected array to have at most 2 elements",
       );
     });
   });
 
-  await t.step('empty', async (t) => {
-    await t.step('passes when array is empty', () => {
+  await t.step("empty", async (t) => {
+    await t.step("passes when array is empty", () => {
       const guard = ArrayGuardian.create().empty();
       assertEquals(guard([]), []);
     });
 
-    await t.step('throws when array is not empty', () => {
+    await t.step("throws when array is not empty", () => {
       const guard = ArrayGuardian.create().empty();
       assertThrows(
         () => guard([1]),
         GuardianError,
-        'Expected empty array',
+        "Expected empty array",
       );
     });
   });
 
-  await t.step('notEmpty', async (t) => {
-    await t.step('passes when array is not empty', () => {
+  await t.step("notEmpty", async (t) => {
+    await t.step("passes when array is not empty", () => {
       const guard = ArrayGuardian.create().notEmpty();
       assertEquals(guard([1]), [1]);
       assertEquals(guard([1, 2, 3]), [1, 2, 3]);
     });
 
-    await t.step('throws when array is empty', () => {
+    await t.step("throws when array is empty", () => {
       const guard = ArrayGuardian.create().notEmpty();
       assertThrows(
         () => guard([]),
         GuardianError,
-        'Expected non-empty array',
+        "Expected non-empty array",
       );
     });
   });
 
-  await t.step('unique', async (t) => {
-    await t.step('passes when array has unique elements', () => {
+  await t.step("unique", async (t) => {
+    await t.step("passes when array has unique elements", () => {
       const guard = ArrayGuardian.create().unique();
       assertEquals(guard([1, 2, 3]), [1, 2, 3]);
-      assertEquals(guard(['a', 'b', 'c']), ['a', 'b', 'c']);
+      assertEquals(guard(["a", "b", "c"]), ["a", "b", "c"]);
     });
 
-    await t.step('throws when array has duplicate elements', () => {
+    await t.step("throws when array has duplicate elements", () => {
       const guard = ArrayGuardian.create().unique();
       assertThrows(
         () => guard([1, 2, 1]),
         GuardianError,
-        'Expected array with unique elements',
+        "Expected array with unique elements",
       );
     });
   });
 
-  await t.step('includes', async (t) => {
-    await t.step('passes when array includes specified value', () => {
+  await t.step("includes", async (t) => {
+    await t.step("passes when array includes specified value", () => {
       const guard = ArrayGuardian.create().includes(2);
       assertEquals(guard([1, 2, 3]), [1, 2, 3]);
     });
 
-    await t.step('throws when array does not include specified value', () => {
+    await t.step("throws when array does not include specified value", () => {
       const guard = ArrayGuardian.create().includes(4);
       assertThrows(
         () => guard([1, 2, 3]),
         GuardianError,
-        'Expected array to include 4',
+        "Expected array to include 4",
       );
     });
   });
 
-  await t.step('chaining validations', async (t) => {
-    await t.step('can combine multiple validations', () => {
+  await t.step("chaining validations", async (t) => {
+    await t.step("can combine multiple validations", () => {
       const stringGuard = StringGuardian.create();
       const guard = ArrayGuardian.create()
         .of(stringGuard)
@@ -258,41 +258,41 @@ Deno.test('guardian.array', async (t) => {
         .notEmpty()
         .unique();
 
-      assertEquals(guard(['a', 'b', 'c']), ['a', 'b', 'c']);
+      assertEquals(guard(["a", "b", "c"]), ["a", "b", "c"]);
 
-      assertThrows(() => guard(['a']), GuardianError); // Too short
-      assertThrows(() => guard(['a', 'b', 'c', 'd', 'e']), GuardianError); // Too long
-      assertThrows(() => guard(['a', 'a', 'b']), GuardianError); // Not unique
+      assertThrows(() => guard(["a"]), GuardianError); // Too short
+      assertThrows(() => guard(["a", "b", "c", "d", "e"]), GuardianError); // Too long
+      assertThrows(() => guard(["a", "a", "b"]), GuardianError); // Not unique
       assertThrows(() => guard([1, 2, 3]), GuardianError); // Wrong type
     });
   });
 
-  await t.step('array with specific element count at index', async (t) => {
-    await t.step('passes with correct element at index', () => {
+  await t.step("array with specific element count at index", async (t) => {
+    await t.step("passes with correct element at index", () => {
       const guard = ArrayGuardian.create().of(
         NumberGuardian.create().in([1, 2, 3]),
       );
       assertEquals(guard([1, 2, 3]), [1, 2, 3]);
     });
 
-    await t.step('properly reports index in error path', () => {
+    await t.step("properly reports index in error path", () => {
       const guard = ArrayGuardian.create().of(
         NumberGuardian.create().max(5),
       );
 
       try {
         guard([1, 2, 10, 4]);
-        throw new Error('Should have thrown');
+        throw new Error("Should have thrown");
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
         assertEquals(
-          (error as GuardianError).listCauses()['2'],
-          'Expected value (10) to be less than or equal to 5',
+          (error as GuardianError).listCauses()["2"],
+          "Expected value (10) to be less than or equal to 5",
         );
       }
     });
 
-    await t.step('works with nested array validation', () => {
+    await t.step("works with nested array validation", () => {
       const nestedArrayGuard = ArrayGuardian.create().of(
         ArrayGuardian.create().of(NumberGuardian.create().positive()),
       );
@@ -301,20 +301,20 @@ Deno.test('guardian.array', async (t) => {
 
       try {
         nestedArrayGuard([[1, 2], [3, -4]]);
-        throw new Error('Should have thrown');
+        throw new Error("Should have thrown");
       } catch (error) {
         assertEquals(error instanceof GuardianError, true);
-        // Should include both array indices in path
+        // Should include both array indices in path (1.1 = second array, second element)
         assertEquals(
-          (error as GuardianError).listCauses()['1'],
-          'Validation failed for array elements',
+          (error as GuardianError).listCauses()["1.1"],
+          "Expected positive number, got -4",
         );
       }
     });
   });
 
-  await t.step('combined validations', async (t) => {
-    await t.step('combines array and element validations correctly', () => {
+  await t.step("combined validations", async (t) => {
+    await t.step("combines array and element validations correctly", () => {
       // Array must be length 3 and contain only positive numbers
       const guard = ArrayGuardian.create()
         .length(3)
@@ -326,7 +326,7 @@ Deno.test('guardian.array', async (t) => {
     });
 
     await t.step(
-      'validation ordered correctly (array validation first)',
+      "validation ordered correctly (array validation first)",
       () => {
         // Testing that array validation happens before element validation
         let elementValidationCalled = false;
@@ -334,10 +334,10 @@ Deno.test('guardian.array', async (t) => {
         // Create a test guardian for elements that tracks if it was called
         const testElementGuard = (value: unknown): number => {
           elementValidationCalled = true;
-          if (typeof value !== 'number') {
+          if (typeof value !== "number") {
             throw new GuardianError({
               got: value,
-              expected: 'number',
+              expected: "number",
             });
           }
           return value;
@@ -350,32 +350,32 @@ Deno.test('guardian.array', async (t) => {
 
         try {
           guard([1]);
-          throw new Error('Should have thrown');
+          throw new Error("Should have thrown");
         } catch (error) {
           // Should fail on array length, not element validation
           assertEquals(elementValidationCalled, false);
           assertEquals(
             (error as GuardianError).message,
-            'Expected array to have at least 3 elements',
+            "Expected array to have at least 3 elements",
           );
         }
       },
     );
   });
 
-  await t.step('array destructuring', async (t) => {
-    await t.step('validates arrays as tuples correctly', () => {
+  await t.step("array destructuring", async (t) => {
+    await t.step("validates arrays as tuples correctly", () => {
       const tupleGuard = ArrayGuardian.create().length(2).transform((arr) => {
         const [first, second] = arr;
         return { first, second };
       });
 
-      assertEquals(tupleGuard([1, 'test']), { first: 1, second: 'test' });
+      assertEquals(tupleGuard([1, "test"]), { first: 1, second: "test" });
       assertThrows(() => tupleGuard([1]), GuardianError); // Wrong length
     });
   });
 
-  await t.step('handles empty arrays correctly', () => {
+  await t.step("handles empty arrays correctly", () => {
     const emptyArrayGuard = ArrayGuardian.create().empty();
     assertEquals(emptyArrayGuard([]), []);
 
@@ -384,7 +384,7 @@ Deno.test('guardian.array', async (t) => {
 
     // Element validation shouldn't be called on empty arrays with .of()
     const emptyOfGuard = ArrayGuardian.create().empty().of((v) => {
-      throw new Error('Should not be called');
+      throw new Error("Should not be called");
     });
     assertEquals(emptyOfGuard([]), []);
   });

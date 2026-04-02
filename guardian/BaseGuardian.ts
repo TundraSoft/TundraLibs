@@ -11,6 +11,7 @@ import {
   isNotIn,
   isPromiseLike,
   notEquals,
+  nullable,
   optional,
   test,
 } from './helpers/mod.ts';
@@ -193,7 +194,27 @@ export abstract class BaseGuardian<F extends FunctionType> {
     // deno-lint-ignore no-explicit-any
     const Class = (this as any).constructor;
     const { guardian } = this;
-    return new Class(optional<F, R>(guardian, defaultValue)).proxy();
+    return new Class(optional<F, R>(guardian, defaultValue))
+      .proxy();
+  }
+
+  /**
+   * Allows null values to be set for the type.
+   *
+   * @returns A new Guardian instance with the null behavior applied
+   */
+  public nullable(): GuardianProxy<
+    this,
+    FunctionType<
+      MaybeAsync<ReturnType<F>, ReturnType<F> | null>,
+      MergeParameters<Parameters<F> | [null?]>
+    >
+  > {
+    // deno-lint-ignore no-explicit-any
+    const Class = (this as any).constructor;
+    const { guardian } = this;
+
+    return new Class(nullable(guardian)).proxy();
   }
 
   public validate(

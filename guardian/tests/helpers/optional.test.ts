@@ -1,15 +1,15 @@
-import { assertEquals, assertRejects } from 'jsr:@std/assert@^1.0.0';
-import { optional } from '../../helpers/mod.ts';
-import { GuardianError } from '../../GuardianError.ts';
+import { assertEquals, assertRejects } from "jsr:@std/assert@^1.0.0";
+import { optional } from "../../helpers/mod.ts";
+import { GuardianError } from "../../GuardianError.ts";
 
-Deno.test('guardian.helpers.optional', async (t) => {
+Deno.test("guardian.helpers.optional", async (t) => {
   await t.step(
-    'passes through undefined value without calling guardian',
+    "passes through undefined value without calling guardian",
     () => {
       // Mock guardian that would throw an error if called
       const mockGuardian = (value: string): string => {
-        if (typeof value !== 'string') {
-          throw new Error('Expected string');
+        if (typeof value !== "string") {
+          throw new Error("Expected string");
         }
         return value.toUpperCase();
       };
@@ -19,32 +19,32 @@ Deno.test('guardian.helpers.optional', async (t) => {
     },
   );
 
-  await t.step('calls guardian function with non-undefined values', () => {
+  await t.step("calls guardian function with non-undefined values", () => {
     const guardian = (value: string): string => value.toUpperCase();
     const optionalGuardian = optional(guardian);
 
-    assertEquals(optionalGuardian('hello'), 'HELLO');
+    assertEquals(optionalGuardian("hello"), "HELLO");
     assertEquals(optionalGuardian(undefined), undefined);
   });
 
-  await t.step('supports default value when undefined', () => {
+  await t.step("supports default value when undefined", () => {
     const guardian = (value: string): string => value.toUpperCase();
-    const optionalGuardian = optional(guardian, 'default');
+    const optionalGuardian = optional(guardian, "default");
 
-    assertEquals(optionalGuardian(undefined), 'DEFAULT');
-    assertEquals(optionalGuardian('hello'), 'HELLO');
+    assertEquals(optionalGuardian(undefined), "DEFAULT");
+    assertEquals(optionalGuardian("hello"), "HELLO");
   });
 
-  await t.step('supports default value as function', () => {
+  await t.step("supports default value as function", () => {
     const guardian = (value: string): string => value.toUpperCase();
-    const defaultFn = () => 'computed default';
+    const defaultFn = () => "computed default";
     const optionalGuardian = optional(guardian, defaultFn);
 
-    assertEquals(optionalGuardian(undefined), 'COMPUTED DEFAULT');
-    assertEquals(optionalGuardian('hello'), 'HELLO');
+    assertEquals(optionalGuardian(undefined), "COMPUTED DEFAULT");
+    assertEquals(optionalGuardian("hello"), "HELLO");
   });
 
-  await t.step('works with async guardians', async () => {
+  await t.step("works with async guardians", async () => {
     const asyncGuardian = async (value: string): Promise<string> => {
       await new Promise((resolve) => setTimeout(resolve, 10));
       return value.toUpperCase();
@@ -53,24 +53,24 @@ Deno.test('guardian.helpers.optional', async (t) => {
     const optionalAsyncGuardian = optional(asyncGuardian);
 
     assertEquals(await optionalAsyncGuardian(undefined), undefined);
-    assertEquals(await optionalAsyncGuardian('hello'), 'HELLO');
+    assertEquals(await optionalAsyncGuardian("hello"), "HELLO");
   });
 
-  await t.step('async guardian with default value', async () => {
+  await t.step("async guardian with default value", async () => {
     const asyncGuardian = async (value: string): Promise<string> => {
       await new Promise((resolve) => setTimeout(resolve, 10));
       return value.toUpperCase();
     };
 
-    const optionalAsyncGuardian = optional(asyncGuardian, 'default');
+    const optionalAsyncGuardian = optional(asyncGuardian, "default");
 
-    assertEquals(await optionalAsyncGuardian(undefined), 'DEFAULT');
-    assertEquals(await optionalAsyncGuardian('hello'), 'HELLO');
+    assertEquals(await optionalAsyncGuardian(undefined), "DEFAULT");
+    assertEquals(await optionalAsyncGuardian("hello"), "HELLO");
   });
 
-  await t.step('handles null differently than undefined', () => {
+  await t.step("handles null differently than undefined", () => {
     const guardian = (value: string | null): string => {
-      if (value === null) return 'NULL';
+      if (value === null) return "NULL";
       return value.toUpperCase();
     };
 
@@ -78,54 +78,54 @@ Deno.test('guardian.helpers.optional', async (t) => {
 
     // null is NOT the same as undefined for optional handling
     // null should be passed to the guardian function
-    // assertEquals(optionalGuardian(null as any), 'NULL');
+    assertEquals(optionalGuardian(null), "NULL");
     assertEquals(optionalGuardian(undefined), undefined);
-    assertEquals(optionalGuardian('hello'), 'HELLO');
+    assertEquals(optionalGuardian("hello"), "HELLO");
   });
 
   await t.step(
-    'propagates errors from guardian for non-undefined values',
+    "propagates errors from guardian for non-undefined values",
     async () => {
       const errorGuardian = (value: string): string => {
-        if (value.length < 3) throw new Error('String too short');
+        if (value.length < 3) throw new Error("String too short");
         return value;
       };
 
       const optionalGuardian = optional(errorGuardian);
 
       assertEquals(optionalGuardian(undefined), undefined);
-      assertEquals(optionalGuardian('valid'), 'valid');
+      assertEquals(optionalGuardian("valid"), "valid");
 
       await assertRejects(
-        async () => await optionalGuardian('ab'),
+        async () => await optionalGuardian("ab"),
         Error,
-        'Error while validating optional value - ab',
+        "Error while validating optional value - ab",
       );
     },
   );
 
   await t.step(
-    'default generator throws error',
+    "default generator throws error",
     async () => {
       const errorGuardian = (value: string): string => {
-        if (value.length < 3) throw new Error('String too short');
+        if (value.length < 3) throw new Error("String too short");
         return value;
       };
 
       const optionalGuardian = optional(errorGuardian, async () => {
         await new Promise((resolve) => setTimeout(resolve, 10));
-        throw new Error('Default error');
+        throw new Error("Default error");
       });
 
       await assertRejects(
         async () => await optionalGuardian(),
         Error,
-        'Error generating default value: Default error',
+        "Error generating default value: Default error",
       );
     },
   );
 
-  await t.step('handles async default value generator', async () => {
+  await t.step("handles async default value generator", async () => {
     const guardian = (value: number): number => value * 2;
     const asyncDefaultGen = async () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -137,24 +137,24 @@ Deno.test('guardian.helpers.optional', async (t) => {
     assertEquals(optionalGuardian(10), 20); // normal value works synchronously
   });
 
-  await t.step('correctly handles null with default value', () => {
+  await t.step("correctly handles null with default value", () => {
     const guardian = (value: string | null): string => {
-      if (value === null) return 'NULL_RESULT';
+      if (value === null) return "NULL_RESULT";
       return value.toUpperCase();
     };
 
-    const optionalGuardian = optional(guardian, 'default');
-    assertEquals(optionalGuardian(null), 'DEFAULT');
-    assertEquals(optionalGuardian(undefined), 'DEFAULT');
+    const optionalGuardian = optional(guardian, "default");
+    assertEquals(optionalGuardian(null), "NULL_RESULT"); // null passes through to guardian
+    assertEquals(optionalGuardian(undefined), "DEFAULT"); // undefined uses default
   });
 
-  await t.step('preserves error context from guardian', async () => {
+  await t.step("preserves error context from guardian", async () => {
     const errorWithContext = (value: number): number => {
       if (value < 0) {
         const error = new GuardianError({
           got: value,
-          expected: 'positive number',
-          comparison: 'min',
+          expected: "positive number",
+          comparison: "min",
         });
         throw error;
       }
@@ -165,10 +165,74 @@ Deno.test('guardian.helpers.optional', async (t) => {
 
     try {
       optionalGuardian(-10);
-      throw new Error('Should have thrown');
+      throw new Error("Should have thrown");
     } catch (error) {
       assertEquals(error instanceof GuardianError, true);
-      assertEquals((error as GuardianError).context.comparison, 'min');
+      assertEquals((error as GuardianError).context.comparison, "min");
     }
   });
+
+  await t.step("null vs undefined behavior", () => {
+    const guardian = (value: string | null | undefined): string => {
+      if (value === null) return "NULL_RESULT";
+      if (value === undefined) return "UNDEFINED_RESULT";
+      return value.toUpperCase();
+    };
+
+    const optionalGuardian = optional(guardian, "DEFAULT");
+
+    // Only undefined triggers the default value behavior
+    assertEquals(optionalGuardian(undefined), "DEFAULT");
+
+    // null passes through to the guardian
+    assertEquals(optionalGuardian(null), "NULL_RESULT");
+
+    // regular values work normally
+    assertEquals(optionalGuardian("hello"), "HELLO");
+  });
+
+  await t.step("null vs undefined behavior without default value", () => {
+    const guardian = (value: string | null | undefined): string => {
+      if (value === null) return "NULL_RESULT";
+      if (value === undefined) return "UNDEFINED_RESULT";
+      return value.toUpperCase();
+    };
+
+    const optionalGuardian = optional(guardian);
+
+    // undefined short-circuits and returns undefined
+    assertEquals(optionalGuardian(undefined), undefined);
+
+    // null passes through to guardian
+    assertEquals(optionalGuardian(null), "NULL_RESULT");
+
+    // regular values work normally
+    assertEquals(optionalGuardian("hello"), "HELLO");
+  });
+
+  await t.step(
+    "works with async default generators and null handling",
+    async () => {
+      const guardian = (value: number | null): number => {
+        if (value === null) return -1;
+        return value * 2;
+      };
+
+      const asyncDefaultGen = async (): Promise<number> => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return 42;
+      };
+
+      const optionalGuardian = optional(guardian, asyncDefaultGen);
+
+      // undefined should use async default
+      assertEquals(await optionalGuardian(undefined), 84); // undefined -> default 42 -> guardian transforms to 84
+
+      // null should pass through to guardian
+      assertEquals(optionalGuardian(null), -1); // null passes through, gets transformed by guardian
+
+      // regular values work normally
+      assertEquals(optionalGuardian(10), 20);
+    },
+  );
 });

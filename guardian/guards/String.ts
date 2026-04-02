@@ -1,10 +1,13 @@
-import { BaseGuardian } from '../BaseGuardian.ts';
-import type { FunctionType, GuardianProxy } from '../types/mod.ts';
-import { NumberGuardian } from './Number.ts';
-import { DateGuardian } from './Date.ts';
-import { GuardianError } from '../GuardianError.ts';
-import { isValidIPv4, isValidIPv6Structure } from '../../utils/mod.ts';
-import { getType } from '../helpers/getType.ts';
+import { BaseGuardian } from "../BaseGuardian.ts";
+import type { FunctionType, GuardianProxy } from "../types/mod.ts";
+import { NumberGuardian } from "./Number.ts";
+import { DateGuardian } from "./Date.ts";
+import { GuardianError } from "../GuardianError.ts";
+import {
+  isValidIPv4,
+  isValidIPv6Structure,
+} from "jsr:@tundralibs/utils@^1.0.0-dev4";
+import { getType } from "../helpers/getType.ts";
 
 /**
  * StringGuardian provides validation and transformation utilities for string values.
@@ -51,15 +54,15 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
    */
   static create(error?: string): GuardianProxy<StringGuardian> {
     return new StringGuardian((value: unknown): string => {
-      if (typeof value === 'string') return value;
+      if (typeof value === "string") return value;
       throw new GuardianError(
         {
           got: value,
-          comparison: 'type',
-          expected: 'string',
+          comparison: "type",
+          expected: "string",
           type: getType(value),
         },
-        error || 'Expected value to be a string, got ${type}',
+        error || "Expected value to be a string, got ${type}",
       );
     }).proxy();
   }
@@ -118,7 +121,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
    * ```
    */
   public stripSpaces(): GuardianProxy<this> {
-    return this.transform((value) => value.replace(/\s+/g, ''));
+    return this.transform((value) => value.replace(/\s+/g, ""));
   }
 
   /**
@@ -235,7 +238,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public minLength(length: number, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value.length >= length,
-      error || 'Expected value must be at least ${expected} characters long',
+      error || "Expected value must be at least ${expected} characters long",
       length,
     );
   }
@@ -256,7 +259,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public maxLength(length: number, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value.length <= length,
-      error || 'Expected value must be at most ${expected} characters long',
+      error || "Expected value must be at most ${expected} characters long",
       length,
     );
   }
@@ -280,7 +283,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   ): GuardianProxy<this> {
     return this.test(
       (value) => pattern.test(value),
-      error || 'Expected value to match pattern ${expected}',
+      error || "Expected value to match pattern ${expected}",
       pattern,
     );
   }
@@ -300,7 +303,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public email(error?: string): GuardianProxy<this> {
     return this.pattern(
       StringGuardian.patterns.email as RegExp,
-      error || 'Expected value (${got}) to be a valid email',
+      error || "Expected value (${got}) to be a valid email",
     );
   }
 
@@ -319,7 +322,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public notEmpty(error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value.trim().length > 0,
-      error || 'Expected value to not be empty',
+      error || "Expected value to not be empty",
     );
   }
 
@@ -338,7 +341,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public url(error?: string): GuardianProxy<this> {
     return this.pattern(
       StringGuardian.patterns.url as RegExp,
-      error || 'Expected value (${got}) to be a valid URL',
+      error || "Expected value (${got}) to be a valid URL",
     );
   }
 
@@ -357,7 +360,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public alpha(error?: string): GuardianProxy<this> {
     return this.pattern(
       StringGuardian.patterns.alpha as RegExp,
-      error || 'Expected value (${got}) to contain only alphabets',
+      error || "Expected value (${got}) to contain only alphabets",
     );
   }
 
@@ -377,7 +380,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
     return this.pattern(
       StringGuardian.patterns.alphanumeric as RegExp,
       error ||
-        'Expected value (${got}) to contain only alphanumeric characters',
+        "Expected value (${got}) to contain only alphanumeric characters",
     );
   }
 
@@ -396,7 +399,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public numeric(error?: string): GuardianProxy<this> {
     return this.pattern(
       StringGuardian.patterns.numeric as RegExp,
-      error || 'Expected value (${got}) to contain only numbers',
+      error || "Expected value (${got}) to contain only numbers",
     );
   }
 
@@ -415,7 +418,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public uuid(error?: string): GuardianProxy<this> {
     return this.pattern(
       StringGuardian.patterns.uuid as RegExp,
-      error || 'Expected value (${got}) to be a valid UUID',
+      error || "Expected value (${got}) to be a valid UUID",
     );
   }
 
@@ -434,7 +437,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public ipv4(error?: string): GuardianProxy<this> {
     return this.test(
       isValidIPv4,
-      error || 'Expected value (${got}) to be an IPv4 address',
+      error || "Expected value (${got}) to be an IPv4 address",
     );
   }
 
@@ -453,7 +456,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public ipv6(error?: string): GuardianProxy<this> {
     return this.test(
       isValidIPv6Structure,
-      error || 'Expected value (${got}) to be an IPv6 address',
+      error || "Expected value (${got}) to be an IPv6 address",
     );
   }
 
@@ -473,7 +476,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public contains(substring: string, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value.includes(substring),
-      error || 'Expected value (${got}) to contain ${expected}',
+      error || "Expected value (${got}) to contain ${expected}",
       substring,
     );
   }
@@ -494,7 +497,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public notContains(substring: string, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value.includes(substring),
-      error || 'Expected value (${got}) to not contain ${expected}',
+      error || "Expected value (${got}) to not contain ${expected}",
       substring,
     );
   }
@@ -515,7 +518,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public startsWith(prefix: string, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value.startsWith(prefix),
-      error || 'Expected value (${got}) to start with ${expected}',
+      error || "Expected value (${got}) to start with ${expected}",
       prefix,
     );
   }
@@ -536,7 +539,7 @@ export class StringGuardian extends BaseGuardian<FunctionType<string>> {
   public endsWith(suffix: string, error?: string): GuardianProxy<this> {
     return this.test(
       (value) => value.endsWith(suffix),
-      error || 'Expected value (${got}) to end with ${expected}',
+      error || "Expected value (${got}) to end with ${expected}",
       suffix,
     );
   }
