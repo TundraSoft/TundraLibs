@@ -1,141 +1,83 @@
-import * as asserts from '$asserts';
+import { assertEquals, assertThrows } from 'jsr:@std/assert@^1.0.0';
 import { equals } from '../../helpers/mod.ts';
-import { GuardianError } from '../../GuardianError.ts';
 
-/**
- * Comprehensive test suite for equals helper function.
- * Tests equality validation functionality.
- */
 Deno.test('guardian.helpers.equals', async (t) => {
-  await t.step('Basic equality validation', async (u) => {
-    await u.step('should pass when values are equal', () => {
-      const validator = equals('hello');
-      asserts.assertEquals(validator('hello'), 'hello');
-
-      const numberValidator = equals(42);
-      asserts.assertEquals(numberValidator(42), 42);
-
-      const booleanValidator = equals(true);
-      asserts.assertEquals(booleanValidator(true), true);
-    });
-
-    await u.step('should fail when values are not equal', () => {
-      const validator = equals('hello');
-      asserts.assertThrows(
-        () => validator('world'),
-        GuardianError,
-      );
-
-      const numberValidator = equals(42);
-      asserts.assertThrows(
-        () => numberValidator(43),
-        GuardianError,
-      );
-    });
+  await t.step('passes value when it equals expected value', () => {
+    const equalsTest = equals(5);
+    assertEquals(equalsTest(5), 5);
   });
 
-  await t.step('Custom error messages', async (u) => {
-    await u.step('should use custom error message when provided', () => {
-      const validator = equals('expected', 'Custom error message');
-      asserts.assertThrows(
-        () => validator('actual'),
-        GuardianError,
-        'Custom error message',
-      );
-    });
+  await t.step('throws error when value does not equal expected value', () => {
+    const equalsTest = equals(5);
 
-    await u.step('should use default error message when not provided', () => {
-      const validator = equals('expected');
-      asserts.assertThrows(
-        () => validator('actual'),
-        GuardianError,
-      );
-    });
+    assertThrows(
+      () => equalsTest(10),
+      Error,
+      'Expected value to be 5, but got 10',
+    );
   });
 
-  await t.step('Type safety and special values', async (u) => {
-    await u.step('should handle null values', () => {
-      const validator = equals(null);
-      asserts.assertEquals(validator(null), null);
+  await t.step('compares null and undefined correctly', () => {
+    const nullTest = equals(null);
+    assertEquals(nullTest(null), null);
 
-      asserts.assertThrows(
-        () => validator('not-null' as any),
-        GuardianError,
-      );
-    });
+    const undefinedTest = equals(undefined);
+    assertEquals(undefinedTest(undefined), undefined);
 
-    await u.step('should handle undefined values', () => {
-      const validator = equals(undefined);
-      asserts.assertEquals(validator(undefined), undefined);
+    assertThrows(
+      () => nullTest(undefined!),
+      Error,
+    );
 
-      asserts.assertThrows(
-        () => validator('not-undefined' as any),
-        GuardianError,
-      );
-    });
-
-    await u.step('should handle zero and false', () => {
-      const zeroValidator = equals(0);
-      asserts.assertEquals(zeroValidator(0), 0);
-      asserts.assertThrows(() => zeroValidator('false' as any), GuardianError);
-
-      const falseValidator = equals(false);
-      asserts.assertEquals(falseValidator(false), false);
-      asserts.assertThrows(() => falseValidator('0' as any), GuardianError);
-    });
-
-    await u.step('should handle NaN correctly', () => {
-      const nanValidator = equals(NaN);
-      // NaN !== NaN, so this should throw
-      asserts.assertThrows(() => nanValidator(NaN), GuardianError);
-    });
+    assertThrows(
+      () => undefinedTest(null!),
+      Error,
+    );
   });
 
-  await t.step('Object and array equality', async (u) => {
-    await u.step('should use reference equality for objects', () => {
-      const obj = { a: 1 };
-      const validator = equals(obj);
+  await t.step('supports custom error messages', () => {
+    const customMessage = 'Value must be 5';
+    const equalsTest = equals(5, customMessage);
 
-      asserts.assertEquals(validator(obj), obj);
-
-      // Different object with same content should fail
-      asserts.assertThrows(
-        () => validator({ a: 1 }),
-        GuardianError,
-      );
-    });
-
-    await u.step('should use reference equality for arrays', () => {
-      const arr = [1, 2, 3];
-      const validator = equals(arr);
-
-      asserts.assertEquals(validator(arr), arr);
-
-      // Different array with same content should fail
-      asserts.assertThrows(
-        () => validator([1, 2, 3]),
-        GuardianError,
-      );
-    });
+    assertThrows(
+      () => equalsTest(10),
+      Error,
+      customMessage,
+    );
   });
 
-  await t.step('Error metadata', async (u) => {
-    await u.step('should include correct metadata in error', () => {
-      const validator = equals('expected');
+  await t.step('works with strings', () => {
+    const equalsTest = equals('hello');
+    assertEquals(equalsTest('hello'), 'hello');
 
-      try {
-        validator('actual');
-        asserts.fail('Should have thrown an error');
-      } catch (error) {
-        if (error instanceof GuardianError) {
-          asserts.assertEquals(error.context.expected, 'expected');
-          asserts.assertEquals(error.context.got, 'actual');
-          asserts.assertEquals(error.context.comparison, 'equals');
-          asserts.assertEquals(error.context.type, 'validation');
-        } else {
-          asserts.fail('Should have thrown a GuardianError');
-        }
-      }
-    });
+    assertThrows(
+      () => equalsTest('world'),
+      Error,
+      'Expected value to be hello, but got world',
+    );
+  });
+
+  await t.step('works with boolean values', () => {
+    const trueTest = equals(true);
+    assertEquals(trueTest(true), true);
+
+    assertThrows(
+      () => trueTest(false),
+      Error,
+      'Expected value to be true',
+    );
+  });
+
+  await t.step('works with objects', () => {
+    // Note: For objects, this will check reference equality, not deep equality
+    const obj = { test: 1 };
+    const objTest = equals(obj);
+    assertEquals(objTest(obj), obj);
+
+    assertThrows(
+      () => objTest({ test: 1 }),
+      Error,
+      'Expected value to be {"test":1}, but got {"test":1}',
+    );
   });
 });

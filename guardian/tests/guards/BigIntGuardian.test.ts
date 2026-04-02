@@ -1,514 +1,399 @@
-import * as asserts from '$asserts';
-import { BigIntGuardian, GuardianError } from '../../mod.ts';
+// NOSONAR
+import { assertEquals, assertThrows } from 'jsr:@std/assert@^1.0.0';
+import { GuardianError } from '../../GuardianError.ts';
+import { BigIntGuardian } from '../../guards/mod.ts';
 
-Deno.test('guardian.BigIntGuardian', async (t) => {
-  await t.step('basic functionality', async (u) => {
-    await u.step('should validate bigint type', () => {
-      const guardian = new BigIntGuardian();
+Deno.test('guardian.bigInt', async (t) => {
+  await t.step('create', async (t) => {
+    await t.step('passes through bigint values', () => {
+      const guard = BigIntGuardian.create();
+      assertEquals(guard(123n), 123n);
+      assertEquals(guard(0n), 0n);
+      assertEquals(guard(-10n), -10n);
+    });
 
-      asserts.assertEquals(guardian.parse(42n), 42n);
-      asserts.assertEquals(guardian.parse(0n), 0n);
-      asserts.assertEquals(guardian.parse(-123n), -123n);
-      asserts.assertEquals(
-        guardian.parse(BigInt(Number.MAX_SAFE_INTEGER)),
-        BigInt(Number.MAX_SAFE_INTEGER),
+    await t.step('coerces valid number values to bigint', () => {
+      const guard = BigIntGuardian.create();
+      assertEquals(guard(123), 123n);
+      assertEquals(guard(0), 0n);
+      assertEquals(guard(-10), -10n);
+    });
+
+    await t.step('coerces valid string values to bigint', () => {
+      const guard = BigIntGuardian.create();
+      assertEquals(guard('123'), 123n);
+      assertEquals(guard('0'), 0n);
+      assertEquals(guard('-10'), -10n);
+    });
+
+    await t.step('throws for invalid values', () => {
+      const guard = BigIntGuardian.create();
+      assertThrows(
+        () => guard(3.14),
+        Error,
+        'Expected value to be bigint, got number',
       );
-
-      asserts.assertThrows(() => guardian.parse(42), GuardianError);
-      asserts.assertThrows(() => guardian.parse('42'), GuardianError);
-      asserts.assertThrows(() => guardian.parse(null), GuardianError);
-      asserts.assertThrows(() => guardian.parse(undefined), GuardianError);
-    });
-
-    await u.step('should preserve bigint values', () => {
-      const guardian = new BigIntGuardian();
-
-      asserts.assertEquals(guardian.parse(123n), 123n);
-      asserts.assertEquals(guardian.parse(-456n), -456n);
-    });
-  });
-
-  await t.step('range validations', async (u) => {
-    await u.step('should validate minimum value', () => {
-      const guardian = new BigIntGuardian().min(10n);
-
-      asserts.assertEquals(guardian.parse(10n), 10n);
-      asserts.assertEquals(guardian.parse(15n), 15n);
-      asserts.assertEquals(guardian.parse(100n), 100n);
-
-      asserts.assertThrows(() => guardian.parse(9n), GuardianError);
-      asserts.assertThrows(() => guardian.parse(-5n), GuardianError);
-    });
-
-    await u.step('should validate maximum value', () => {
-      const guardian = new BigIntGuardian().max(100n);
-
-      asserts.assertEquals(guardian.parse(100n), 100n);
-      asserts.assertEquals(guardian.parse(50n), 50n);
-      asserts.assertEquals(guardian.parse(-10n), -10n);
-
-      asserts.assertThrows(() => guardian.parse(101n), GuardianError);
-      asserts.assertThrows(() => guardian.parse(200n), GuardianError);
-    });
-
-    await u.step('should combine min and max', () => {
-      const guardian = new BigIntGuardian().min(10n).max(100n);
-
-      asserts.assertEquals(guardian.parse(10n), 10n);
-      asserts.assertEquals(guardian.parse(50n), 50n);
-      asserts.assertEquals(guardian.parse(100n), 100n);
-
-      asserts.assertThrows(() => guardian.parse(9n), GuardianError);
-      asserts.assertThrows(() => guardian.parse(101n), GuardianError);
-    });
-  });
-
-  await t.step('sign validations', async (u) => {
-    await u.step('should validate positive bigints', () => {
-      const guardian = new BigIntGuardian().positive();
-
-      asserts.assertEquals(guardian.parse(1n), 1n);
-      asserts.assertEquals(guardian.parse(100n), 100n);
-
-      asserts.assertThrows(() => guardian.parse(0n), GuardianError);
-      asserts.assertThrows(() => guardian.parse(-1n), GuardianError);
-    });
-
-    await u.step('should validate negative bigints', () => {
-      const guardian = new BigIntGuardian().negative();
-
-      asserts.assertEquals(guardian.parse(-1n), -1n);
-      asserts.assertEquals(guardian.parse(-100n), -100n);
-
-      asserts.assertThrows(() => guardian.parse(0n), GuardianError);
-      asserts.assertThrows(() => guardian.parse(1n), GuardianError);
-    });
-
-    await u.step('should validate non-negative bigints', () => {
-      const guardian = new BigIntGuardian().nonNegative();
-
-      asserts.assertEquals(guardian.parse(0n), 0n);
-      asserts.assertEquals(guardian.parse(1n), 1n);
-      asserts.assertEquals(guardian.parse(100n), 100n);
-
-      asserts.assertThrows(() => guardian.parse(-1n), GuardianError);
-      asserts.assertThrows(() => guardian.parse(-100n), GuardianError);
-    });
-  });
-
-  await t.step('mathematical transformations', async (u) => {
-    await u.step('should get absolute value', () => {
-      const guardian = new BigIntGuardian().abs();
-
-      asserts.assertEquals(guardian.parse(42n), 42n);
-      asserts.assertEquals(guardian.parse(-42n), 42n);
-      asserts.assertEquals(guardian.parse(0n), 0n);
-    });
-  });
-
-  await t.step('type transformations', async (u) => {
-    await u.step('should convert bigint to string', () => {
-      const guardian = new BigIntGuardian().toString();
-
-      asserts.assertEquals(guardian.parse(123n), '123');
-      asserts.assertEquals(guardian.parse(-456n), '-456');
-      asserts.assertEquals(guardian.parse(0n), '0');
-    });
-
-    await u.step('should convert bigint to string with radix', () => {
-      const guardian = new BigIntGuardian().toString(16);
-
-      asserts.assertEquals(guardian.parse(255n), 'ff');
-      asserts.assertEquals(guardian.parse(16n), '10');
-    });
-
-    await u.step('should convert bigint to number safely', () => {
-      const guardian = new BigIntGuardian().toNumber();
-
-      asserts.assertEquals(guardian.parse(42n), 42);
-      asserts.assertEquals(guardian.parse(-123n), -123);
-      asserts.assertEquals(guardian.parse(0n), 0);
-    });
-
-    await u.step('should reject unsafe bigint to number conversion', () => {
-      const guardian = new BigIntGuardian().toNumber();
-      const hugeBigInt = BigInt(Number.MAX_SAFE_INTEGER) + 1n;
-
-      asserts.assertThrows(() => guardian.parse(hugeBigInt), GuardianError);
-      asserts.assertThrows(
-        () => guardian.parse(BigInt(Number.MIN_SAFE_INTEGER) - 1n),
+      assertThrows(
+        () => guard('3.14'),
         GuardianError,
+        'Expected value to be bigint',
       );
+      assertThrows(
+        () => guard('abc'),
+        GuardianError,
+        'Expected value to be bigint',
+      );
+      assertThrows(
+        () => guard(true),
+        GuardianError,
+        'Expected value to be bigint',
+      );
+      assertThrows(
+        () => guard({}),
+        GuardianError,
+        'Expected value to be bigint',
+      );
+      assertThrows(
+        () => guard([]),
+        GuardianError,
+        'Expected value to be bigint',
+      );
+      assertThrows(
+        () => guard(null),
+        GuardianError,
+        'Expected value to be bigint',
+      );
+      assertThrows(
+        () => guard(undefined),
+        GuardianError,
+        'Expected value to be bigint',
+      );
+    });
+
+    await t.step('uses custom error message when provided', () => {
+      const guard = BigIntGuardian.create('Custom error');
+      assertThrows(() => guard(3.14), Error, 'Custom error');
     });
   });
 
-  await t.step('chained validations', async (u) => {
-    await u.step('should chain multiple validations', () => {
-      const guardian = new BigIntGuardian()
-        .positive()
-        .min(10n)
-        .max(1000n);
-
-      asserts.assertEquals(guardian.parse(42n), 42n);
-      asserts.assertEquals(guardian.parse(500n), 500n);
-
-      asserts.assertThrows(() => guardian.parse(-5n), GuardianError);
-      asserts.assertThrows(() => guardian.parse(5n), GuardianError);
-      asserts.assertThrows(() => guardian.parse(1001n), GuardianError);
+  // Transformation tests
+  await t.step('transformations', async (t) => {
+    await t.step('abs', () => {
+      const guard = BigIntGuardian.create().abs();
+      assertEquals(guard(123n), 123n);
+      assertEquals(guard(-123n), 123n);
+      assertEquals(guard(0n), 0n);
     });
 
-    await u.step('should chain transformations', () => {
-      const guardian = new BigIntGuardian()
-        .positive()
+    await t.step('negate', () => {
+      const guard = BigIntGuardian.create().negate();
+      assertEquals(guard(123n), -123n);
+      assertEquals(guard(-123n), 123n);
+      assertEquals(guard(0n), 0n);
+    });
+
+    await t.step('bitwiseAnd', () => {
+      const guard = BigIntGuardian.create().bitwiseAnd(6n); // 110 in binary
+      assertEquals(guard(3n), 2n); // 011 & 110 = 010 = 2
+      assertEquals(guard(7n), 6n); // 111 & 110 = 110 = 6
+    });
+
+    await t.step('bitwiseOr', () => {
+      const guard = BigIntGuardian.create().bitwiseOr(6n); // 110 in binary
+      assertEquals(guard(3n), 7n); // 011 | 110 = 111 = 7
+      assertEquals(guard(8n), 14n); // 1000 | 0110 = 1110 = 14
+    });
+
+    await t.step('bitwiseXor', () => {
+      const guard = BigIntGuardian.create().bitwiseXor(6n); // 110 in binary
+      assertEquals(guard(3n), 5n); // 011 ^ 110 = 101 = 5
+      assertEquals(guard(5n), 3n); // 101 ^ 110 = 011 = 3
+    });
+
+    await t.step('bitwiseNot', () => {
+      const guard = BigIntGuardian.create().bitwiseNot();
+      assertEquals(guard(0n), -1n);
+      assertEquals(guard(-1n), 0n);
+      assertEquals(guard(5n), -6n); // ~0101 = ...1010 = -6
+    });
+
+    await t.step('leftShift', () => {
+      const guard = BigIntGuardian.create().leftShift(2);
+      assertEquals(guard(1n), 4n); // 1 << 2 = 4
+      assertEquals(guard(5n), 20n); // 5 << 2 = 20
+    });
+
+    await t.step('rightShift', () => {
+      const guard = BigIntGuardian.create().rightShift(2);
+      assertEquals(guard(20n), 5n); // 20 >> 2 = 5
+      assertEquals(guard(4n), 1n); // 4 >> 2 = 1
+    });
+
+    await t.step('mod', () => {
+      const guard = BigIntGuardian.create().mod(5n);
+      assertEquals(guard(7n), 2n); // 7 % 5 = 2
+      assertEquals(guard(-7n), 3n); // -7 % 5 = 3 (positive result)
+    });
+
+    await t.step('pow', () => {
+      const guard = BigIntGuardian.create().pow(2n);
+      assertEquals(guard(3n), 9n); // 3^2 = 9
+      assertEquals(guard(4n), 16n); // 4^2 = 16
+
+      assertThrows(
+        () => BigIntGuardian.create().pow(-1n),
+        Error,
+        'Negative exponents not supported for BigInt',
+      );
+    });
+
+    await t.step('chaining transformations', () => {
+      const guard = BigIntGuardian.create()
         .abs()
-        .toString();
-
-      asserts.assertEquals(guardian.parse(42n), '42');
-
-      // Note: abs() won't help negative numbers pass positive() validation
-      asserts.assertThrows(() => guardian.parse(-42n), GuardianError);
+        .pow(2n)
+        .mod(10n);
+      assertEquals(guard(-3n), 9n); // |-3|^2 % 10 = 9
+      assertEquals(guard(4n), 6n); // |4|^2 % 10 = 16 % 10 = 6
     });
   });
 
-  await t.step('safe parsing', async (u) => {
-    await u.step('should return success result for valid input', () => {
-      const guardian = new BigIntGuardian();
-      const [error, result] = guardian.safeParse(42n);
+  // Validation tests
+  await t.step('validations', async (t) => {
+    await t.step('min', async (t) => {
+      await t.step('passes when value meets minimum', () => {
+        const guard = BigIntGuardian.create().min(5n);
+        assertEquals(guard(5n), 5n);
+        assertEquals(guard(10n), 10n);
+      });
 
-      asserts.assertEquals(error, null);
-      asserts.assertEquals(result, 42n);
-    });
-
-    await u.step('should return error result for invalid input', () => {
-      const guardian = new BigIntGuardian();
-      const [error, result] = guardian.safeParse(42);
-
-      asserts.assertEquals(error instanceof GuardianError, true);
-      asserts.assertEquals(result, undefined);
-    });
-  });
-
-  await t.step('error handling', async (u) => {
-    await u.step('should provide detailed error messages', () => {
-      const guardian = new BigIntGuardian();
-
-      asserts.assertThrows(
-        () => guardian.parse(42),
-        GuardianError,
-        'Expected bigint but got number',
-      );
-      asserts.assertThrows(
-        () => guardian.parse('42'),
-        GuardianError,
-        'Expected bigint but got string',
-      );
-    });
-
-    await u.step('should support custom error messages', () => {
-      const guardian = new BigIntGuardian().positive(
-        'Must be a positive big number',
-      );
-
-      asserts.assertThrows(
-        () => guardian.parse(-42n),
-        GuardianError,
-        'Must be a positive big number',
-      );
-    });
-  });
-
-  await t.step('large number handling', async (u) => {
-    await u.step('should handle very large numbers', () => {
-      const guardian = new BigIntGuardian().positive();
-      const veryLarge = BigInt('123456789012345678901234567890');
-
-      asserts.assertEquals(guardian.parse(veryLarge), veryLarge);
-    });
-
-    await u.step(
-      'should handle mathematical operations on large numbers',
-      () => {
-        const guardian = new BigIntGuardian().abs().toString();
-        const veryLarge = -BigInt('123456789012345678901234567890');
-
-        asserts.assertEquals(
-          guardian.parse(veryLarge),
-          '123456789012345678901234567890',
+      await t.step('throws when value is below minimum', () => {
+        const guard = BigIntGuardian.create().min(5n);
+        assertThrows(
+          () => guard(4n),
+          Error,
+          'Expected value (4) to be greater than or equal to 5',
         );
-      },
-    );
-  });
+      });
 
-  await t.step('new validation methods', async (u) => {
-    await u.step('range validation', () => {
-      const guardian = new BigIntGuardian().range(10n, 100n);
-
-      asserts.assertEquals(guardian.parse(50n), 50n);
-      asserts.assertEquals(guardian.parse(10n), 10n);
-      asserts.assertEquals(guardian.parse(100n), 100n);
-
-      asserts.assertThrows(() => guardian.parse(9n), GuardianError);
-      asserts.assertThrows(() => guardian.parse(101n), GuardianError);
+      await t.step('uses custom error message when provided', () => {
+        const guard = BigIntGuardian.create().min(5n, 'Value too small');
+        assertThrows(() => guard(4n), Error, 'Value too small');
+      });
     });
 
-    await u.step('between validation', () => {
-      const guardian = new BigIntGuardian().between(5n, 15n);
+    await t.step('max', async (t) => {
+      await t.step('passes when value meets maximum', () => {
+        const guard = BigIntGuardian.create().max(10n);
+        assertEquals(guard(10n), 10n);
+        assertEquals(guard(5n), 5n);
+      });
 
-      asserts.assertEquals(guardian.parse(10n), 10n);
-      asserts.assertEquals(guardian.parse(5n), 5n);
-      asserts.assertEquals(guardian.parse(15n), 15n);
+      await t.step('throws when value exceeds maximum', () => {
+        const guard = BigIntGuardian.create().max(10n);
+        assertThrows(
+          () => guard(11n),
+          Error,
+          'Expected value (11) to be less than or equal to 10',
+        );
+      });
 
-      asserts.assertThrows(() => guardian.parse(4n), GuardianError);
-      asserts.assertThrows(() => guardian.parse(16n), GuardianError);
+      await t.step('uses custom error message when provided', () => {
+        const guard = BigIntGuardian.create().max(10n, 'Value too large');
+        assertThrows(() => guard(11n), Error, 'Value too large');
+      });
     });
 
-    await u.step('comparison validations', () => {
-      const gtGuardian = new BigIntGuardian().greaterThan(10n);
-      asserts.assertEquals(gtGuardian.parse(11n), 11n);
-      asserts.assertThrows(() => gtGuardian.parse(10n), GuardianError);
+    await t.step('range', async (t) => {
+      await t.step('passes when value is within range', () => {
+        const guard = BigIntGuardian.create().range(5n, 10n);
+        assertEquals(guard(5n), 5n);
+        assertEquals(guard(7n), 7n);
+        assertEquals(guard(10n), 10n);
+      });
 
-      const ltGuardian = new BigIntGuardian().lessThan(10n);
-      asserts.assertEquals(ltGuardian.parse(9n), 9n);
-      asserts.assertThrows(() => ltGuardian.parse(10n), GuardianError);
+      await t.step('throws when value is outside range', () => {
+        const guard = BigIntGuardian.create().range(5n, 10n);
+        assertThrows(
+          () => guard(4n),
+          Error,
+          'Expected value (4) to be between (5, 10)',
+        );
+        assertThrows(
+          () => guard(11n),
+          Error,
+          'Expected value (11) to be between (5, 10)',
+        );
+      });
 
-      const gteGuardian = new BigIntGuardian().greaterThanOrEqual(10n);
-      asserts.assertEquals(gteGuardian.parse(10n), 10n);
-      asserts.assertEquals(gteGuardian.parse(11n), 11n);
-      asserts.assertThrows(() => gteGuardian.parse(9n), GuardianError);
-
-      const lteGuardian = new BigIntGuardian().lessThanOrEqual(10n);
-      asserts.assertEquals(lteGuardian.parse(10n), 10n);
-      asserts.assertEquals(lteGuardian.parse(9n), 9n);
-      asserts.assertThrows(() => lteGuardian.parse(11n), GuardianError);
+      await t.step('uses custom error message when provided', () => {
+        const guard = BigIntGuardian.create().range(
+          5n,
+          10n,
+          'Value out of range',
+        );
+        assertThrows(() => guard(4n), Error, 'Value out of range');
+      });
     });
 
-    await u.step('even/odd validation', () => {
-      const evenGuardian = new BigIntGuardian().even();
-      asserts.assertEquals(evenGuardian.parse(2n), 2n);
-      asserts.assertEquals(evenGuardian.parse(0n), 0n);
-      asserts.assertEquals(evenGuardian.parse(-4n), -4n);
-      asserts.assertThrows(() => evenGuardian.parse(3n), GuardianError);
+    await t.step('positive', async (t) => {
+      await t.step('passes for positive values', () => {
+        const guard = BigIntGuardian.create().positive();
+        assertEquals(guard(42n), 42n);
+        assertEquals(guard(1n), 1n);
+      });
 
-      const oddGuardian = new BigIntGuardian().odd();
-      asserts.assertEquals(oddGuardian.parse(3n), 3n);
-      asserts.assertEquals(oddGuardian.parse(1n), 1n);
-      asserts.assertEquals(oddGuardian.parse(-5n), -5n);
-      asserts.assertThrows(() => oddGuardian.parse(2n), GuardianError);
+      await t.step('throws for zero or negative values', () => {
+        const guard = BigIntGuardian.create().positive();
+        assertThrows(() => guard(0n), Error, 'Expected positive BigInt, got 0');
+        assertThrows(
+          () => guard(-5n),
+          Error,
+          'Expected positive BigInt, got -5',
+        );
+      });
     });
 
-    await u.step('multiple of validation', () => {
-      const guardian = new BigIntGuardian().multipleOf(5n);
+    await t.step('negative', async (t) => {
+      await t.step('passes for negative values', () => {
+        const guard = BigIntGuardian.create().negative();
+        assertEquals(guard(-42n), -42n);
+        assertEquals(guard(-1n), -1n);
+      });
 
-      asserts.assertEquals(guardian.parse(10n), 10n);
-      asserts.assertEquals(guardian.parse(15n), 15n);
-      asserts.assertEquals(guardian.parse(0n), 0n);
-      asserts.assertEquals(guardian.parse(-5n), -5n);
-
-      asserts.assertThrows(() => guardian.parse(7n), GuardianError);
-      asserts.assertThrows(() => guardian.parse(12n), GuardianError);
+      await t.step('throws for zero or positive values', () => {
+        const guard = BigIntGuardian.create().negative();
+        assertThrows(() => guard(0n), Error, 'Expected negative BigInt, got 0');
+        assertThrows(() => guard(5n), Error, 'Expected negative BigInt, got 5');
+      });
     });
 
-    await u.step('prime validation', () => {
-      const primeGuardian = new BigIntGuardian().prime();
+    await t.step('nonZero', async (t) => {
+      await t.step('passes for non-zero values', () => {
+        const guard = BigIntGuardian.create().nonZero();
+        assertEquals(guard(1n), 1n);
+        assertEquals(guard(-1n), -1n);
+      });
 
-      asserts.assertEquals(primeGuardian.parse(2n), 2n);
-      asserts.assertEquals(primeGuardian.parse(3n), 3n);
-      asserts.assertEquals(primeGuardian.parse(5n), 5n);
-      asserts.assertEquals(primeGuardian.parse(7n), 7n);
-      asserts.assertEquals(primeGuardian.parse(11n), 11n);
-      asserts.assertEquals(primeGuardian.parse(13n), 13n);
-
-      asserts.assertThrows(() => primeGuardian.parse(1n), GuardianError);
-      asserts.assertThrows(() => primeGuardian.parse(4n), GuardianError);
-      asserts.assertThrows(() => primeGuardian.parse(9n), GuardianError);
-      asserts.assertThrows(() => primeGuardian.parse(15n), GuardianError);
-
-      const notPrimeGuardian = new BigIntGuardian().notPrime();
-      asserts.assertEquals(notPrimeGuardian.parse(4n), 4n);
-      asserts.assertEquals(notPrimeGuardian.parse(9n), 9n);
-      asserts.assertThrows(() => notPrimeGuardian.parse(2n), GuardianError);
-      asserts.assertThrows(() => notPrimeGuardian.parse(3n), GuardianError);
+      await t.step('throws for zero', () => {
+        const guard = BigIntGuardian.create().nonZero();
+        assertThrows(() => guard(0n), Error, 'Expected non-zero BigInt');
+      });
     });
 
-    await u.step('power validation', () => {
-      const powerGuardian = new BigIntGuardian().power();
+    await t.step('even', async (t) => {
+      await t.step('passes for even numbers', () => {
+        const guard = BigIntGuardian.create().even();
+        assertEquals(guard(2n), 2n);
+        assertEquals(guard(0n), 0n);
+        assertEquals(guard(-4n), -4n);
+      });
 
-      asserts.assertEquals(powerGuardian.parse(1n), 1n); // Any number^0 = 1
-      asserts.assertEquals(powerGuardian.parse(4n), 4n); // 2^2
-      asserts.assertEquals(powerGuardian.parse(8n), 8n); // 2^3
-      asserts.assertEquals(powerGuardian.parse(9n), 9n); // 3^2
-      asserts.assertEquals(powerGuardian.parse(16n), 16n); // 2^4 or 4^2
-
-      asserts.assertThrows(() => powerGuardian.parse(3n), GuardianError);
-      asserts.assertThrows(() => powerGuardian.parse(5n), GuardianError);
-
-      // Test specific base
-      const powerOf2Guardian = new BigIntGuardian().power(2n);
-      asserts.assertEquals(powerOf2Guardian.parse(4n), 4n); // 2^2
-      asserts.assertEquals(powerOf2Guardian.parse(8n), 8n); // 2^3
-      asserts.assertThrows(() => powerOf2Guardian.parse(9n), GuardianError); // Not a power of 2
+      await t.step('throws for odd numbers', () => {
+        const guard = BigIntGuardian.create().even();
+        assertThrows(() => guard(1n), Error, 'Expected even BigInt, got 1');
+        assertThrows(() => guard(-3n), Error, 'Expected even BigInt, got -3');
+      });
     });
 
-    await u.step('non-zero validation', () => {
-      const guardian = new BigIntGuardian().nonZero();
+    await t.step('odd', async (t) => {
+      await t.step('passes for odd numbers', () => {
+        const guard = BigIntGuardian.create().odd();
+        assertEquals(guard(1n), 1n);
+        assertEquals(guard(3n), 3n);
+        assertEquals(guard(-5n), -5n);
+      });
 
-      asserts.assertEquals(guardian.parse(1n), 1n);
-      asserts.assertEquals(guardian.parse(-1n), -1n);
-      asserts.assertEquals(guardian.parse(100n), 100n);
-
-      asserts.assertThrows(() => guardian.parse(0n), GuardianError);
+      await t.step('throws for even numbers', () => {
+        const guard = BigIntGuardian.create().odd();
+        assertThrows(() => guard(2n), Error, 'Expected odd BigInt, got 2');
+        assertThrows(() => guard(0n), Error, 'Expected odd BigInt, got 0');
+      });
     });
 
-    await u.step('bit length validation', () => {
-      const guardian = new BigIntGuardian().bitLength(4);
+    await t.step('prime', async (t) => {
+      await t.step('passes for prime numbers', () => {
+        const guard = BigIntGuardian.create().prime();
+        assertEquals(guard(2n), 2n);
+        assertEquals(guard(3n), 3n);
+        assertEquals(guard(5n), 5n);
+        assertEquals(guard(7n), 7n);
+        assertEquals(guard(11n), 11n);
+      });
 
-      asserts.assertEquals(guardian.parse(8n), 8n); // 1000 in binary = 4 bits
-      asserts.assertEquals(guardian.parse(15n), 15n); // 1111 in binary = 4 bits
-
-      asserts.assertThrows(() => guardian.parse(7n), GuardianError); // 111 in binary = 3 bits
-      asserts.assertThrows(() => guardian.parse(16n), GuardianError); // 10000 in binary = 5 bits
-
-      // Test without expected length (should just validate)
-      const noLengthGuardian = new BigIntGuardian().bitLength();
-      asserts.assertEquals(noLengthGuardian.parse(123n), 123n);
-    });
-  });
-
-  await t.step('mathematical operations', async (u) => {
-    await u.step('addition', () => {
-      const guardian = new BigIntGuardian().add(10n);
-
-      asserts.assertEquals(guardian.parse(5n), 15n);
-      asserts.assertEquals(guardian.parse(-3n), 7n);
-      asserts.assertEquals(guardian.parse(0n), 10n);
+      await t.step('throws for non-prime numbers', () => {
+        const guard = BigIntGuardian.create().prime();
+        assertThrows(() => guard(1n), Error, 'Expected prime BigInt, got 1');
+        assertThrows(() => guard(4n), Error, 'Expected prime BigInt, got 4');
+        assertThrows(() => guard(6n), Error, 'Expected prime BigInt, got 6');
+      });
     });
 
-    await u.step('subtraction', () => {
-      const guardian = new BigIntGuardian().subtract(10n);
+    await t.step('multipleOf', async (t) => {
+      await t.step('passes when value is multiple of base', () => {
+        const guard = BigIntGuardian.create().multipleOf(3n);
+        assertEquals(guard(0n), 0n);
+        assertEquals(guard(3n), 3n);
+        assertEquals(guard(6n), 6n);
+        assertEquals(guard(-3n), -3n);
+      });
 
-      asserts.assertEquals(guardian.parse(15n), 5n);
-      asserts.assertEquals(guardian.parse(3n), -7n);
-      asserts.assertEquals(guardian.parse(10n), 0n);
+      await t.step('throws when value is not multiple of base', () => {
+        const guard = BigIntGuardian.create().multipleOf(3n);
+        assertThrows(
+          () => guard(4n),
+          Error,
+          'Expected value (4) to be multiple of 3',
+        );
+      });
     });
 
-    await u.step('multiplication', () => {
-      const guardian = new BigIntGuardian().multiply(3n);
+    await t.step('divisibleBy', async (t) => {
+      await t.step('passes when value is divisible by divisor', () => {
+        const guard = BigIntGuardian.create().divisibleBy(3n);
+        assertEquals(guard(0n), 0n);
+        assertEquals(guard(3n), 3n);
+        assertEquals(guard(6n), 6n);
+        assertEquals(guard(-3n), -3n);
+      });
 
-      asserts.assertEquals(guardian.parse(5n), 15n);
-      asserts.assertEquals(guardian.parse(-2n), -6n);
-      asserts.assertEquals(guardian.parse(0n), 0n);
+      await t.step('throws when value is not divisible by divisor', () => {
+        const guard = BigIntGuardian.create().divisibleBy(3n);
+        assertThrows(
+          () => guard(4n),
+          Error,
+          'Expected value (4) to be divisible by 3',
+        );
+      });
     });
 
-    await u.step('division', () => {
-      const guardian = new BigIntGuardian().divide(2n);
+    await t.step('bitLength', async (t) => {
+      await t.step('passes when value fits within bit length', () => {
+        const guard = BigIntGuardian.create().bitLength(8);
+        assertEquals(guard(0n), 0n);
+        assertEquals(guard(255n), 255n); // 2^8 - 1
+        assertEquals(guard(-255n), -255n);
+      });
 
-      asserts.assertEquals(guardian.parse(10n), 5n);
-      asserts.assertEquals(guardian.parse(-6n), -3n);
-      asserts.assertEquals(guardian.parse(0n), 0n);
-
-      const zeroGuardian = new BigIntGuardian().divide(0n);
-      asserts.assertThrows(() => zeroGuardian.parse(10n), GuardianError);
+      await t.step('throws when value exceeds bit length', () => {
+        const guard = BigIntGuardian.create().bitLength(8);
+        assertThrows(
+          () => guard(256n),
+          Error,
+          'Expected value (256) to fit within 8 bits',
+        );
+      });
     });
 
-    await u.step('modulo', () => {
-      const guardian = new BigIntGuardian().mod(3n);
+    await t.step('chaining validations', () => {
+      const guard = BigIntGuardian.create()
+        .positive()
+        .even()
+        .max(100n);
 
-      asserts.assertEquals(guardian.parse(10n), 1n);
-      asserts.assertEquals(guardian.parse(9n), 0n);
-      asserts.assertEquals(guardian.parse(8n), 2n);
-
-      const zeroGuardian = new BigIntGuardian().mod(0n);
-      asserts.assertThrows(() => zeroGuardian.parse(10n), GuardianError);
-    });
-
-    await u.step('square root', () => {
-      const guardian = new BigIntGuardian().squareRoot();
-
-      asserts.assertEquals(guardian.parse(9n), 3n);
-      asserts.assertEquals(guardian.parse(16n), 4n);
-      asserts.assertEquals(guardian.parse(25n), 5n);
-      asserts.assertEquals(guardian.parse(0n), 0n);
-
-      asserts.assertThrows(() => guardian.parse(-4n), GuardianError);
-    });
-
-    await u.step('clamp', () => {
-      const guardian = new BigIntGuardian().clamp(5n, 15n);
-
-      asserts.assertEquals(guardian.parse(10n), 10n); // Within range
-      asserts.assertEquals(guardian.parse(3n), 5n); // Below min, clamped to min
-      asserts.assertEquals(guardian.parse(20n), 15n); // Above max, clamped to max
-      asserts.assertEquals(guardian.parse(5n), 5n); // At min
-      asserts.assertEquals(guardian.parse(15n), 15n); // At max
-    });
-  });
-
-  await t.step('format conversions', async (u) => {
-    await u.step('to hex', () => {
-      const guardian = new BigIntGuardian().toHex();
-
-      asserts.assertEquals(guardian.parse(255n), 'ff');
-      asserts.assertEquals(guardian.parse(16n), '10');
-      asserts.assertEquals(guardian.parse(0n), '0');
-    });
-
-    await u.step('to binary', () => {
-      const guardian = new BigIntGuardian().toBinary();
-
-      asserts.assertEquals(guardian.parse(8n), '1000');
-      asserts.assertEquals(guardian.parse(7n), '111');
-      asserts.assertEquals(guardian.parse(0n), '0');
-    });
-
-    await u.step('to octal', () => {
-      const guardian = new BigIntGuardian().toOctal();
-
-      asserts.assertEquals(guardian.parse(64n), '100');
-      asserts.assertEquals(guardian.parse(8n), '10');
-      asserts.assertEquals(guardian.parse(0n), '0');
-    });
-
-    await u.step('to string with radix', () => {
-      asserts.assertEquals(new BigIntGuardian().toString(16).parse(255n), 'ff');
-      asserts.assertEquals(new BigIntGuardian().toString(2).parse(8n), '1000');
-      asserts.assertEquals(new BigIntGuardian().toString(8).parse(64n), '100');
-
-      // Test invalid radix
-      const invalidRadixGuardian = new BigIntGuardian().toString(37);
-      asserts.assertThrows(
-        () => invalidRadixGuardian.parse(10n),
-        GuardianError,
-      );
-    });
-  });
-
-  await t.step('nullable and optional', async (u) => {
-    await u.step('should handle nullable bigints', () => {
-      const schema = new BigIntGuardian().positive().nullable();
-      asserts.assertEquals(schema.parse(5n), 5n);
-      asserts.assertEquals(schema.parse(null), null);
-      asserts.assertThrows(() => schema.parse(-1n), GuardianError);
-    });
-
-    await u.step('should handle optional bigints', () => {
-      const schema = new BigIntGuardian().positive().optional(100n);
-      asserts.assertEquals(schema.parse(5n), 5n);
-      asserts.assertEquals(schema.parse(undefined), 100n);
-      asserts.assertThrows(() => schema.parse(-1n), GuardianError);
-    });
-
-    await u.step('should handle nullable().optional() chaining', () => {
-      const schema = new BigIntGuardian().positive().nullable().optional(100n);
-      asserts.assertEquals(schema.parse(5n), 5n);
-      asserts.assertEquals(schema.parse(null), null);
-      asserts.assertEquals(schema.parse(undefined), 100n);
-    });
-
-    await u.step('should handle optional().nullable() chaining', () => {
-      const schema = new BigIntGuardian().positive().optional(100n).nullable();
-      asserts.assertEquals(schema.parse(5n), 5n);
-      asserts.assertEquals(schema.parse(null), null);
-      asserts.assertEquals(schema.parse(undefined), 100n);
+      assertEquals(guard(42n), 42n);
+      assertThrows(() => guard(-4n), Error);
+      assertThrows(() => guard(3n), Error);
+      assertThrows(() => guard(102n), Error);
     });
   });
 });

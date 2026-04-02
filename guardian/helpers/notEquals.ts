@@ -1,28 +1,28 @@
-import type { GuardianTransform } from '../types/mod.ts';
+import type { FunctionType } from '../types/mod.ts';
 import { GuardianError } from '../GuardianError.ts';
 
 /**
  * Creates a function that checks if a value does not equal an expected value
  *
- * @param expected - The value that should not be matched
- * @param error - Custom error message to throw when validation fails
+ * @param expected The value to compare against
+ * @param error Custom error message to throw when validation fails
  * @returns A function that validates inequality
- * @throws {@link GuardianError} if the value equals the expected value
+ * @throws Error {@link GuardianError} if the value is not equal to the expected value
  */
 export const notEquals = <T>(
   expected: T,
   error?: string,
-): GuardianTransform<T, T> => {
+): FunctionType<T, [T]> => {
   return (value: T): T => {
     if (value === expected) {
       throw new GuardianError(
-        error || `Expected value to not be ${expected}, but got ${value}`,
         {
-          expected: `not ${expected}`,
           got: value,
+          expected: expected,
           comparison: 'notEquals',
-          type: 'validation',
         },
+        error ||
+          'Expected value to not be ${expected}, but got ${got}',
       );
     }
     return value;

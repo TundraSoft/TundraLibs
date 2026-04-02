@@ -1,241 +1,79 @@
-import * as asserts from '$asserts';
+import { assertEquals, assertThrows } from 'jsr:@std/assert@^1.0.0';
 import { isIn } from '../../helpers/mod.ts';
-import { GuardianError } from '../../GuardianError.ts';
 
-/**
- * Comprehensive test suite for isIn helper function.
- * Tests value inclusion validation functionality.
- */
 Deno.test('guardian.helpers.isIn', async (t) => {
-  await t.step('basic functionality', async (u) => {
-    await u.step('should pass when value is in array', () => {
-      const validator = isIn([1, 2, 3]);
-      asserts.assertEquals(validator(1), 1);
-      asserts.assertEquals(validator(2), 2);
-      asserts.assertEquals(validator(3), 3);
-    });
-
-    await u.step('should fail when value is not in array', () => {
-      const validator = isIn([1, 2, 3]);
-
-      asserts.assertThrows(
-        () => validator(4 as any),
-        GuardianError,
-        'Expected value to be in (1, 2, 3), got 4',
-      );
-
-      asserts.assertThrows(
-        () => validator(0 as any),
-        GuardianError,
-        'Expected value to be in (1, 2, 3), got 0',
-      );
-    });
-
-    await u.step('should work with string arrays', () => {
-      const validator = isIn(['apple', 'banana', 'cherry']);
-
-      asserts.assertEquals(validator('apple'), 'apple');
-      asserts.assertEquals(validator('banana'), 'banana');
-
-      asserts.assertThrows(
-        () => validator('orange' as any),
-        GuardianError,
-        'Expected value to be in (apple, banana, cherry), got orange',
-      );
-    });
+  await t.step('passes value when it is one of allowed values', () => {
+    const oneOfTest = isIn([1, 2, 3]);
+    assertEquals(oneOfTest(1), 1);
+    assertEquals(oneOfTest(2), 2);
+    assertEquals(oneOfTest(3), 3);
   });
 
-  await t.step('array validation', async (u) => {
-    await u.step('should throw error for empty array', () => {
-      asserts.assertThrows(
-        () => isIn([]),
-        Error,
-        'Argument "expected" must be a non-empty array',
-      );
-    });
+  await t.step('throws error when value is not one of allowed values', () => {
+    const oneOfTest = isIn([1, 2, 3]);
 
-    await u.step('should throw error for non-array input', () => {
-      asserts.assertThrows(
-        () => isIn('not-array' as any),
-        Error,
-        'Argument "expected" must be a non-empty array',
-      );
-
-      asserts.assertThrows(
-        () => isIn(123 as any),
-        Error,
-        'Argument "expected" must be a non-empty array',
-      );
-
-      asserts.assertThrows(
-        () => isIn(null as any),
-        Error,
-        'Argument "expected" must be a non-empty array',
-      );
-    });
-
-    await u.step('should handle arrays with duplicates', () => {
-      const validator = isIn([1, 2, 2, 3, 3, 3]);
-      asserts.assertEquals(validator(1), 1);
-      asserts.assertEquals(validator(2), 2);
-      asserts.assertEquals(validator(3), 3);
-
-      asserts.assertThrows(
-        () => validator(4 as any),
-        GuardianError,
-        'Expected value to be in (1, 2, 3), got 4',
-      );
-    });
+    assertThrows(
+      () => oneOfTest(4),
+      Error,
+      'Expected value to be in (1, 2, 3), got 4',
+    );
   });
 
-  await t.step('type handling', async (u) => {
-    await u.step('should work with mixed types', () => {
-      const validator = isIn([1, 'two', true, null]);
-
-      asserts.assertEquals(validator(1), 1);
-      asserts.assertEquals(validator('two'), 'two');
-      asserts.assertEquals(validator(true), true);
-      asserts.assertEquals(validator(null), null);
-
-      asserts.assertThrows(
-        () => validator('one' as any),
-        GuardianError,
-        'Expected value to be in (1, two, true, ), got one',
-      );
-    });
-
-    await u.step('should handle reference equality for objects', () => {
-      const obj1 = { id: 1 };
-      const obj2 = { id: 2 };
-      const validator = isIn([obj1, obj2]);
-
-      asserts.assertEquals(validator(obj1), obj1);
-      asserts.assertEquals(validator(obj2), obj2);
-
-      // Different object with same content should not match
-      asserts.assertThrows(
-        () => validator({ id: 1 } as any),
-        GuardianError,
-      );
-    });
+  await t.step('should not work with empty array', () => {
+    assertThrows(
+      () => isIn([]),
+      Error,
+      'Argument "expected" must be a non-empty array',
+    );
   });
 
-  await t.step('custom error messages', async (u) => {
-    await u.step('should use custom error message when provided', () => {
-      const validator = isIn([1, 2, 3], 'Must be a valid option');
+  await t.step('works with strings', () => {
+    const oneOfTest = isIn(['red', 'green', 'blue']);
+    assertEquals(oneOfTest('red'), 'red');
+    assertEquals(oneOfTest('green'), 'green');
+    assertEquals(oneOfTest('blue'), 'blue');
 
-      asserts.assertThrows(
-        () => validator(4 as any),
-        GuardianError,
-        'Must be a valid option',
-      );
-    });
-
-    await u.step('should use default error message when not provided', () => {
-      const validator = isIn([1, 2, 3]);
-
-      asserts.assertThrows(
-        () => validator(4 as any),
-        GuardianError,
-        'Expected value to be in (1, 2, 3), got 4',
-      );
-    });
+    assertThrows(
+      () => oneOfTest('yellow'),
+      Error,
+      'Expected value to be in (red, green, blue), got yellow',
+    );
   });
 
-  await t.step('error context', async (u) => {
-    await u.step('should provide correct error context', () => {
-      const validator = isIn([1, 2, 3]);
+  await t.step('supports custom error message', () => {
+    const customMessage = 'Invalid color choice';
+    const oneOfTest = isIn(['red', 'green', 'blue'], customMessage);
 
-      try {
-        validator(4 as any);
-        asserts.fail('Should have thrown an error');
-      } catch (error) {
-        asserts.assertInstanceOf(error, GuardianError);
-        asserts.assertEquals((error as GuardianError).context.got, 4);
-        asserts.assertEquals((error as GuardianError).context.expected, [
-          1,
-          2,
-          3,
-        ]);
-      }
-    });
+    assertThrows(
+      () => oneOfTest('yellow'),
+      Error,
+      customMessage,
+    );
   });
 
-  await t.step('edge cases', async (u) => {
-    await u.step('should handle special values', () => {
-      const validator = isIn([0, '', false, null, undefined]);
+  await t.step('works with mixed types in array', () => {
+    const oneOfTest = isIn([1, 'two', true]);
+    assertEquals(oneOfTest(1), 1);
+    assertEquals(oneOfTest('two'), 'two');
+    assertEquals(oneOfTest(true), true);
 
-      asserts.assertEquals(validator(0), 0);
-      asserts.assertEquals(validator(''), '');
-      asserts.assertEquals(validator(false), false);
-      asserts.assertEquals(validator(null), null);
-      asserts.assertEquals(validator(undefined), undefined);
-
-      asserts.assertThrows(
-        () => validator(1 as any),
-        GuardianError,
-        'Expected value to be in (0, , false, , ), got 1',
-      );
-    });
-
-    await u.step('should handle zero and negative numbers', () => {
-      const validator = isIn([-1, 0, 1]);
-
-      asserts.assertEquals(validator(-1), -1);
-      asserts.assertEquals(validator(0), 0);
-      asserts.assertEquals(validator(1), 1);
-
-      asserts.assertThrows(
-        () => validator(2 as any),
-        GuardianError,
-        'Expected value to be in (-1, 0, 1), got 2',
-      );
-    });
-
-    await u.step('should handle empty strings and whitespace', () => {
-      const validator = isIn(['', ' ', '  ', '\n', '\t']);
-
-      asserts.assertEquals(validator(''), '');
-      asserts.assertEquals(validator(' '), ' ');
-      asserts.assertEquals(validator('  '), '  ');
-      asserts.assertEquals(validator('\n'), '\n');
-      asserts.assertEquals(validator('\t'), '\t');
-
-      asserts.assertThrows(
-        () => validator('text' as any),
-        GuardianError,
-        'Expected value to be in (,  ,   , \n, \t), got text',
-      );
-    });
+    assertThrows(
+      () => oneOfTest(false),
+      Error,
+      'Expected value to be in (1, two, true)',
+    );
   });
 
-  await t.step('performance considerations', async (u) => {
-    await u.step('should handle large arrays efficiently', () => {
-      const largeArray = Array.from({ length: 1000 }, (_, i) => i);
-      const validator = isIn(largeArray);
+  await t.step('handles null and undefined values in allowed list', () => {
+    const oneOfTest = isIn([1, null, undefined]);
+    assertEquals(oneOfTest(1), 1);
+    assertEquals(oneOfTest(null), null);
+    assertEquals(oneOfTest(undefined), undefined);
 
-      // Should work for values in the array
-      asserts.assertEquals(validator(500), 500);
-      asserts.assertEquals(validator(999), 999);
-
-      // Should fail for values not in the array
-      asserts.assertThrows(
-        () => validator(1000 as any),
-        GuardianError,
-      );
-    });
-
-    await u.step('should deduplicate array values', () => {
-      const validator = isIn([1, 1, 2, 2, 3, 3]);
-
-      try {
-        validator(4 as any);
-        asserts.fail('Should have thrown an error');
-      } catch (error) {
-        asserts.assertInstanceOf(error, GuardianError);
-        // Should show deduplicated values in error
-        asserts.assert((error as GuardianError).message.includes('(1, 2, 3)'));
-      }
-    });
+    assertThrows(
+      () => oneOfTest('string' as unknown as number),
+      Error,
+      'Expected value to be in (1, , ), got string',
+    );
   });
 });

@@ -1,345 +1,192 @@
-import * as asserts from '$asserts';
+import {
+  assertEquals,
+  assertRejects,
+  assertThrows,
+} from 'jsr:@std/assert@^1.0.0';
 import { test } from '../../helpers/mod.ts';
-import { GuardianError } from '../../GuardianError.ts';
+
+// Delay for a given number of milliseconds
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 Deno.test('guardian.helpers.test', async (t) => {
-  await t.step('basic functionality', async (u) => {
-    await u.step('should pass when predicate returns true', () => {
-      const validator = test((value: unknown): value is string =>
-        typeof value === 'string'
-      );
-      asserts.assertEquals(validator('hello'), 'hello');
-      asserts.assertEquals(validator(''), '');
-      asserts.assertEquals(validator('test'), 'test');
-    });
-
-    await u.step('should fail when predicate returns false', () => {
-      const validator = test((value: unknown): value is string =>
-        typeof value === 'string'
-      );
-
-      asserts.assertThrows(
-        () => validator(123 as unknown as string),
-        GuardianError,
-        'Test validation failed',
-      );
-
-      asserts.assertThrows(
-        () => validator(null as unknown as string),
-        GuardianError,
-        'Test validation failed',
-      );
-
-      asserts.assertThrows(
-        () => validator(true as unknown as string),
-        GuardianError,
-        'Test validation failed',
-      );
-    });
-
-    await u.step('should work with different predicates', () => {
-      const isNumber = test((value: unknown): value is number =>
-        typeof value === 'number' && !isNaN(value)
-      );
-
-      asserts.assertEquals(isNumber(123 as unknown as number), 123);
-      asserts.assertEquals(isNumber(0 as unknown as number), 0);
-      asserts.assertEquals(isNumber(-1 as unknown as number), -1);
-
-      const isBoolean = test((value: unknown): value is boolean =>
-        typeof value === 'boolean'
-      );
-
-      asserts.assertEquals(isBoolean(true as unknown as boolean), true);
-      asserts.assertEquals(isBoolean(false as unknown as boolean), false);
-    });
+  // Basic functionality
+  await t.step('passes value when test function returns true', () => {
+    const testFn = test((value: number) => value > 5);
+    assertEquals(testFn(10), 10);
   });
 
-  await t.step('predicate validation', async (u) => {
-    await u.step('should handle complex predicates', () => {
-      const isPositiveNumber = test((value: unknown): value is number =>
-        typeof value === 'number' && value > 0
-      );
-
-      asserts.assertEquals(isPositiveNumber(5 as unknown as number), 5);
-      asserts.assertEquals(isPositiveNumber(0.1 as unknown as number), 0.1);
-
-      asserts.assertThrows(
-        () => isPositiveNumber(0 as unknown as number),
-        GuardianError,
-        'Test validation failed',
-      );
-
-      asserts.assertThrows(
-        () => isPositiveNumber(-1 as unknown as number),
-        GuardianError,
-        'Test validation failed',
-      );
-    });
-
-    await u.step('should handle object predicates', () => {
-      interface User {
-        name: string;
-        age: number;
-      }
-
-      const isUser = test((value: unknown): value is User =>
-        typeof value === 'object' &&
-        value !== null &&
-        'name' in value &&
-        'age' in value &&
-        typeof (value as any).name === 'string' &&
-        typeof (value as any).age === 'number'
-      );
-
-      const validUser = { name: 'John', age: 30 };
-      asserts.assertEquals(isUser(validUser as unknown as User), validUser);
-
-      asserts.assertThrows(
-        () => isUser({ name: 'John' } as unknown as User),
-        GuardianError,
-        'Test validation failed',
-      );
-
-      asserts.assertThrows(
-        () => isUser({ age: 30 } as unknown as User),
-        GuardianError,
-        'Test validation failed',
-      );
-    });
+  await t.step('throws error when test function returns false', () => {
+    const testFn = test((value: number) => value > 5);
+    assertThrows(
+      () => testFn(3),
+      Error,
+      'Unexpected value: 3',
+    );
   });
 
-  await t.step('type handling', async (u) => {
-    await u.step('should handle array predicates', () => {
-      const isStringArray = test((value: unknown): value is string[] =>
-        Array.isArray(value) && value.every((item) => typeof item === 'string')
-      );
-
-      asserts.assertEquals(
-        isStringArray(['a', 'b', 'c'] as unknown as string[]),
-        ['a', 'b', 'c'],
-      );
-      asserts.assertEquals(isStringArray([] as unknown as string[]), []);
-
-      asserts.assertThrows(
-        () => isStringArray(['a', 'b', 123] as unknown as string[]),
-        GuardianError,
-        'Test validation failed',
-      );
-
-      asserts.assertThrows(
-        () => isStringArray('not array' as unknown as string[]),
-        GuardianError,
-        'Test validation failed',
-      );
-    });
-
-    await u.step('should handle union type predicates', () => {
-      const isStringOrNumber = test((
-        value: unknown,
-      ): value is string | number =>
-        typeof value === 'string' || typeof value === 'number'
-      );
-
-      asserts.assertEquals(
-        isStringOrNumber('hello' as unknown as string | number),
-        'hello',
-      );
-      asserts.assertEquals(
-        isStringOrNumber(123 as unknown as string | number),
-        123,
-      );
-
-      asserts.assertThrows(
-        () => isStringOrNumber(true as unknown as string | number),
-        GuardianError,
-        'Test validation failed',
-      );
-
-      asserts.assertThrows(
-        () => isStringOrNumber(null as unknown as string | number),
-        GuardianError,
-        'Test validation failed',
-      );
-    });
+  // Different data types
+  await t.step('works with string values', () => {
+    const testFn = test((value: string) => value.length > 3);
+    assertEquals(testFn('hello'), 'hello');
+    assertThrows(() => testFn('hi'), Error);
   });
 
-  await t.step('custom error messages', async (u) => {
-    await u.step('should use custom error message when provided', () => {
-      const validator = test(
-        (value: unknown): value is string => typeof value === 'string',
-        'Value must be a string',
-      );
-
-      asserts.assertThrows(
-        () => validator(123 as unknown as string),
-        GuardianError,
-        'Value must be a string',
-      );
-    });
-
-    await u.step('should use default error message when not provided', () => {
-      const validator = test((value: unknown): value is string =>
-        typeof value === 'string'
-      );
-
-      asserts.assertThrows(
-        () => validator(123 as unknown as string),
-        GuardianError,
-        'Test validation failed',
-      );
-    });
+  await t.step('works with boolean values', () => {
+    const testFn = test((value: boolean) => value === true);
+    assertEquals(testFn(true), true);
+    assertThrows(() => testFn(false), Error);
   });
 
-  await t.step('error context', async (u) => {
-    await u.step('should provide correct error context', () => {
-      const validator = test((value: unknown): value is string =>
-        typeof value === 'string'
-      );
-
-      try {
-        validator(123 as unknown as string);
-        asserts.fail('Should have thrown an error');
-      } catch (error) {
-        asserts.assertInstanceOf(error, GuardianError);
-        asserts.assertEquals((error as GuardianError).context.got, 123);
-        asserts.assertEquals(
-          (error as GuardianError).context.expected,
-          undefined,
-        );
-      }
-    });
+  await t.step('works with object values', () => {
+    const testFn = test((value: Record<string, unknown>) => 'name' in value);
+    assertEquals(testFn({ name: 'test' }), { name: 'test' });
+    assertThrows(() => testFn({}), Error);
   });
 
-  await t.step('edge cases', async (u) => {
-    await u.step('should handle null and undefined', () => {
-      const allowsNull = test((value: unknown): value is null =>
-        value === null
-      );
-      const allowsUndefined = test((value: unknown): value is undefined =>
-        value === undefined
-      );
+  await t.step('works with array values', () => {
+    const testFn = test((value: unknown[]) => value.length > 0);
+    assertEquals(testFn([1, 2, 3]), [1, 2, 3]);
+    assertThrows(() => testFn([]), Error);
+  });
 
-      asserts.assertEquals(allowsNull(null as unknown as null), null);
-      asserts.assertEquals(
-        allowsUndefined(undefined as unknown as undefined),
-        undefined,
-      );
+  // Edge cases
+  await t.step('handles null and undefined correctly', () => {
+    const notNullTest = test((value: unknown) => value !== null);
+    assertEquals(notNullTest(undefined), undefined);
+    assertEquals(notNullTest('value'), 'value');
+    assertThrows(() => notNullTest(null), Error);
 
-      asserts.assertThrows(
-        () => allowsNull(undefined as unknown as null),
-        GuardianError,
-        'Test validation failed',
-      );
+    const notUndefinedTest = test((value: unknown) => value !== undefined);
+    assertEquals(notUndefinedTest(null), null);
+    assertEquals(notUndefinedTest('value'), 'value');
+    assertThrows(() => notUndefinedTest(undefined), Error);
+  });
 
-      asserts.assertThrows(
-        () => allowsUndefined(null as unknown as undefined),
-        GuardianError,
-        'Test validation failed',
-      );
+  // Complex predicates
+  await t.step('works with complex predicate functions', () => {
+    const complexTest = test(
+      (value: { age: number; name: string }) =>
+        value.age >= 18 && value.name.length > 2,
+    );
+
+    assertEquals(complexTest({ age: 25, name: 'John' }), {
+      age: 25,
+      name: 'John',
     });
+    assertThrows(() => complexTest({ age: 17, name: 'John' }), Error);
+    assertThrows(() => complexTest({ age: 25, name: 'Jo' }), Error);
+  });
 
-    await u.step('should handle complex nested structures', () => {
-      interface NestedData {
-        user: {
-          profile: {
-            name: string;
-            settings: {
-              theme: 'light' | 'dark';
-            };
-          };
-        };
-      }
+  // Custom error messages
+  await t.step('supports custom error messages', () => {
+    const customMessage = 'Custom validation error';
+    const testFn = test((value: number) => value > 5, customMessage);
 
-      const isNestedData = test((value: unknown): value is NestedData => {
-        return typeof value === 'object' &&
-          value !== null &&
-          'user' in value &&
-          typeof (value as any).user === 'object' &&
-          (value as any).user !== null &&
-          'profile' in (value as any).user &&
-          typeof (value as any).user.profile === 'object' &&
-          (value as any).user.profile !== null &&
-          'name' in (value as any).user.profile &&
-          typeof (value as any).user.profile.name === 'string' &&
-          'settings' in (value as any).user.profile &&
-          typeof (value as any).user.profile.settings === 'object' &&
-          (value as any).user.profile.settings !== null &&
-          'theme' in (value as any).user.profile.settings &&
-          ((value as any).user.profile.settings.theme === 'light' ||
-            (value as any).user.profile.settings.theme === 'dark');
+    assertThrows(
+      () => testFn(3),
+      Error,
+      customMessage,
+    );
+  });
+
+  // Async functionality
+  await t.step('supports async test functions', async () => {
+    const asyncTestFn = test(
+      async (value: number) => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return value > 5;
+      },
+      'Value must be greater than 5',
+    );
+
+    assertEquals(await asyncTestFn(10), 10);
+
+    await assertRejects(
+      async () => await asyncTestFn(3),
+      Error,
+      'Value must be greater than 5',
+    );
+  });
+
+  await t.step('works with async predicate that rejects', async () => {
+    const asyncTestFn = test(
+      async (value: number) => {
+        await delay(10);
+        if (value < 0) {
+          throw new Error('Negative value not allowed');
+        }
+        return value > 5;
+      },
+    );
+
+    assertEquals(await asyncTestFn(10), 10);
+
+    await assertRejects(
+      async () => await asyncTestFn(-5),
+      Error,
+      'Negative value not allowed',
+    );
+
+    await assertRejects(
+      async () => await asyncTestFn(3),
+      Error,
+    );
+  });
+
+  // Multiple calls
+  await t.step('can be called multiple times with same validator', () => {
+    const testFn = test((value: number) => value % 2 === 0, 'Must be even');
+
+    assertEquals(testFn(2), 2);
+    assertEquals(testFn(4), 4);
+    assertThrows(() => testFn(3), Error, 'Must be even');
+  });
+
+  // Add these additional test cases
+  await t.step('handles edge cases with empty values properly', () => {
+    const emptyStringTest = test((v: string) => v.length > 0);
+    assertThrows(() => emptyStringTest(''), Error, 'Validation failed');
+
+    const emptyArrayTest = test((v: unknown[]) =>
+      v.some((item) => item !== undefined)
+    );
+    assertThrows(() => emptyArrayTest([]), Error);
+    assertEquals(emptyArrayTest([1]), [1]);
+  });
+
+  await t.step('handles complex error contexts correctly', () => {
+    const withContextTest = test(
+      (v: number) => v > 10,
+      'Value ${got} must be greater than ${expected}',
+      10,
+    );
+
+    assertThrows(
+      () => withContextTest(5),
+      Error,
+      'Value 5 must be greater than 10',
+    );
+  });
+
+  await t.step('properly passes through non-primitive values', () => {
+    const dateTest = test((date: Date) => date.getFullYear() > 2020);
+    const validDate = new Date('2022-01-01');
+    const invalidDate = new Date('2019-01-01');
+
+    assertEquals(dateTest(validDate), validDate);
+    assertThrows(() => dateTest(invalidDate), Error);
+  });
+
+  await t.step(
+    'correctly handles async predicate with delayed resolution',
+    async () => {
+      const delayedAsyncTest = test(async (v: number) => {
+        await delay(20); // Longer delay
+        return v % 2 === 0;
       });
 
-      const validData = {
-        user: {
-          profile: {
-            name: 'John',
-            settings: {
-              theme: 'dark' as const,
-            },
-          },
-        },
-      };
-
-      asserts.assertEquals(
-        isNestedData(validData as unknown as NestedData),
-        validData,
-      );
-
-      asserts.assertThrows(
-        () =>
-          isNestedData(
-            { user: { profile: { name: 'John' } } } as unknown as NestedData,
-          ),
-        GuardianError,
-        'Test validation failed',
-      );
-    });
-  });
-
-  await t.step('performance considerations', async (u) => {
-    await u.step('should handle predicates efficiently', () => {
-      const validator = test((value: unknown): value is number =>
-        typeof value === 'number'
-      );
-
-      // Test with many values to ensure efficiency
-      for (let i = 0; i < 1000; i++) {
-        asserts.assertEquals(validator(i as unknown as number), i);
-      }
-    });
-
-    await u.step('should handle complex predicate logic', () => {
-      const complexValidator = test((value: unknown): value is string => {
-        if (typeof value !== 'string') return false;
-        if (value.length < 2) return false;
-        if (!/^[a-zA-Z]/.test(value)) return false;
-        return value.split('').every((char) => /[a-zA-Z0-9]/.test(char));
-      });
-
-      asserts.assertEquals(
-        complexValidator('test123' as unknown as string),
-        'test123',
-      );
-      asserts.assertEquals(complexValidator('ABC' as unknown as string), 'ABC');
-
-      asserts.assertThrows(
-        () => complexValidator('1test' as unknown as string),
-        GuardianError,
-        'Test validation failed',
-      );
-
-      asserts.assertThrows(
-        () => complexValidator('a' as unknown as string),
-        GuardianError,
-        'Test validation failed',
-      );
-
-      asserts.assertThrows(
-        () => complexValidator('test-123' as unknown as string),
-        GuardianError,
-        'Test validation failed',
-      );
-    });
-  });
+      assertEquals(await delayedAsyncTest(4), 4);
+      await assertRejects(async () => await delayedAsyncTest(3), Error);
+    },
+  );
 });

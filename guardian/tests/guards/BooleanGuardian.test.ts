@@ -1,165 +1,157 @@
-import * as asserts from '$asserts';
-import { BooleanGuardian, GuardianError } from '../../mod.ts';
+import { assertEquals, assertThrows } from 'jsr:@std/assert@^1.0.0';
+import { GuardianError } from '../../GuardianError.ts';
+import { BooleanGuardian } from '../../guards/mod.ts';
 
-Deno.test('guardian.BooleanGuardian', async (t) => {
-  await t.step('basic functionality', async (u) => {
-    await u.step('should validate boolean type', () => {
-      const guardian = new BooleanGuardian();
-
-      asserts.assertEquals(guardian.parse(true), true);
-      asserts.assertEquals(guardian.parse(false), false);
-
-      asserts.assertThrows(() => guardian.parse('true'), GuardianError);
-      asserts.assertThrows(() => guardian.parse(1), GuardianError);
-      asserts.assertThrows(() => guardian.parse(0), GuardianError);
-      asserts.assertThrows(() => guardian.parse(null), GuardianError);
-      asserts.assertThrows(() => guardian.parse(undefined), GuardianError);
+Deno.test('guardian.boolean', async (t) => {
+  await t.step('create', async (t) => {
+    await t.step('passes through boolean values', () => {
+      const guard = BooleanGuardian.create();
+      assertEquals(guard(true), true);
+      assertEquals(guard(false), false);
     });
 
-    await u.step('should preserve boolean values', () => {
-      const guardian = new BooleanGuardian();
-
-      asserts.assertEquals(guardian.parse(true), true);
-      asserts.assertEquals(guardian.parse(false), false);
+    await t.step('coerces string values to boolean', () => {
+      const guard = BooleanGuardian.create();
+      assertEquals(guard('true'), true);
+      assertEquals(guard('TRUE'), true);
+      assertEquals(guard('false'), false);
+      assertEquals(guard('FALSE'), false);
     });
-  });
 
-  await t.step('specific value validations', async (u) => {
-    await u.step('should validate true values', () => {
-      const guardian = new BooleanGuardian().true();
+    await t.step('coerces number values to boolean', () => {
+      const guard = BooleanGuardian.create();
+      assertEquals(guard(1), true);
+      assertEquals(guard(0), false);
+    });
 
-      asserts.assertEquals(guardian.parse(true), true);
+    await t.step('coerces string number values to boolean', () => {
+      const guard = BooleanGuardian.create();
+      assertEquals(guard('1'), true);
+      assertEquals(guard('0'), false);
+    });
 
-      asserts.assertThrows(
-        () => guardian.parse(false),
+    await t.step('throws for invalid values', () => {
+      const guard = BooleanGuardian.create();
+      assertThrows(
+        () => guard('invalid'),
         GuardianError,
-        'Expected true but got false',
+        'Expected value to be boolean, got string',
+      );
+      assertThrows(
+        () => guard({}),
+        GuardianError,
+        'Expected value to be boolean, got object',
+      );
+      assertThrows(
+        () => guard([]),
+        GuardianError,
+        'Expected value to be boolean, got array',
+      );
+      assertThrows(
+        () => guard(null),
+        GuardianError,
+        'Expected value to be boolean, got null',
+      );
+      assertThrows(
+        () => guard(undefined),
+        GuardianError,
+        'Expected value to be boolean, got undefined',
       );
     });
 
-    await u.step('should validate false values', () => {
-      const guardian = new BooleanGuardian().false();
-
-      asserts.assertEquals(guardian.parse(false), false);
-
-      asserts.assertThrows(
-        () => guardian.parse(true),
-        GuardianError,
-        'Expected false but got true',
-      );
-    });
-
-    await u.step('should support custom error messages', () => {
-      const guardian = new BooleanGuardian().true('Must be enabled');
-
-      asserts.assertThrows(
-        () => guardian.parse(false),
-        GuardianError,
-        'Must be enabled',
-      );
+    await t.step('uses custom error message when provided', () => {
+      const guard = BooleanGuardian.create('Custom error');
+      assertThrows(() => guard('invalid'), Error, 'Custom error');
     });
   });
 
-  await t.step('transformations', async (u) => {
-    await u.step('should transform to string', () => {
-      const guardian = new BooleanGuardian().toString();
-
-      asserts.assertEquals(guardian.parse(true), 'true');
-      asserts.assertEquals(guardian.parse(false), 'false');
+  await t.step('true', async (t) => {
+    await t.step('passes when value is true', () => {
+      const guard = BooleanGuardian.create().true();
+      assertEquals(guard(true), true);
     });
 
-    await u.step('should transform to number', () => {
-      const guardian = new BooleanGuardian().toNumber();
-
-      asserts.assertEquals(guardian.parse(true), 1);
-      asserts.assertEquals(guardian.parse(false), 0);
-    });
-  });
-
-  await t.step('chained validations', async (u) => {
-    await u.step('should chain validations', () => {
-      const guardian = new BooleanGuardian().true().toString();
-
-      asserts.assertEquals(guardian.parse(true), 'true');
-
-      asserts.assertThrows(() => guardian.parse(false), GuardianError);
-    });
-  });
-
-  await t.step('safe parsing', async (u) => {
-    await u.step('should return success result for valid input', () => {
-      const guardian = new BooleanGuardian();
-      const [error, result] = guardian.safeParse(true);
-
-      asserts.assertEquals(error, null);
-      asserts.assertEquals(result, true);
-    });
-
-    await u.step('should return error result for invalid input', () => {
-      const guardian = new BooleanGuardian();
-      const [error, result] = guardian.safeParse('true');
-
-      asserts.assertEquals(error instanceof GuardianError, true);
-      asserts.assertEquals(result, undefined);
-    });
-  });
-
-  await t.step('error handling', async (u) => {
-    await u.step('should provide detailed error messages', () => {
-      const guardian = new BooleanGuardian();
-
-      asserts.assertThrows(
-        () => guardian.parse('true'),
-        GuardianError,
-        'Expected boolean but got string',
-      );
-      asserts.assertThrows(
-        () => guardian.parse(1),
-        GuardianError,
-        'Expected boolean but got number',
+    await t.step('throws when value is false', () => {
+      const guard = BooleanGuardian.create().true();
+      assertThrows(
+        () => guard(false),
+        Error,
+        'Expected value to be TRUE, got false',
       );
     });
 
-    await u.step('should support custom error messages', () => {
-      const guardian = new BooleanGuardian().true('Custom error message');
-
-      asserts.assertThrows(
-        () => guardian.parse(false),
-        GuardianError,
-        'Custom error message',
+    await t.step('throws with coerced values that become false', () => {
+      const guard = BooleanGuardian.create().true();
+      assertThrows(
+        () => guard('false'),
+        Error,
+        'Expected value to be TRUE, got false',
       );
+      assertThrows(
+        () => guard('FALSE'),
+        Error,
+        'Expected value to be TRUE, got false',
+      );
+      assertThrows(
+        () => guard('0'),
+        Error,
+        'Expected value to be TRUE, got false',
+      );
+      assertThrows(
+        () => guard(0),
+        Error,
+        'Expected value to be TRUE, got false',
+      );
+    });
+
+    await t.step('uses custom error message when provided', () => {
+      const guard = BooleanGuardian.create().true('Must be true');
+      assertThrows(() => guard(false), Error, 'Must be true');
     });
   });
 
-  await t.step('nullable and optional', async (u) => {
-    await u.step('should handle nullable booleans', () => {
-      const schema = new BooleanGuardian().nullable();
-      asserts.assertEquals(schema.parse(true), true);
-      asserts.assertEquals(schema.parse(false), false);
-      asserts.assertEquals(schema.parse(null), null);
-      asserts.assertThrows(() => schema.parse('not boolean'), GuardianError);
+  await t.step('false', async (t) => {
+    await t.step('passes when value is false', () => {
+      const guard = BooleanGuardian.create().false();
+      assertEquals(guard(false), false);
     });
 
-    await u.step('should handle optional booleans', () => {
-      const schema = new BooleanGuardian().optional(true);
-      asserts.assertEquals(schema.parse(true), true);
-      asserts.assertEquals(schema.parse(false), false);
-      asserts.assertEquals(schema.parse(undefined), true);
-      asserts.assertThrows(() => schema.parse('not boolean'), GuardianError);
+    await t.step('throws when value is true', () => {
+      const guard = BooleanGuardian.create().false();
+      assertThrows(
+        () => guard(true),
+        Error,
+        'Expected value to be FALSE, got true',
+      );
     });
 
-    await u.step('should handle nullable().optional() chaining', () => {
-      const schema = new BooleanGuardian().nullable().optional(true);
-      asserts.assertEquals(schema.parse(true), true);
-      asserts.assertEquals(schema.parse(null), null);
-      asserts.assertEquals(schema.parse(undefined), true);
+    await t.step('throws with coerced values that become true', () => {
+      const guard = BooleanGuardian.create().false();
+      assertThrows(
+        () => guard('true'),
+        Error,
+        'Expected value to be FALSE, got true',
+      );
+      assertThrows(
+        () => guard('TRUE'),
+        Error,
+        'Expected value to be FALSE, got true',
+      );
+      assertThrows(
+        () => guard('1'),
+        Error,
+        'Expected value to be FALSE, got true',
+      );
+      assertThrows(
+        () => guard(1),
+        Error,
+        'Expected value to be FALSE, got true',
+      );
     });
 
-    await u.step('should handle optional().nullable() chaining', () => {
-      const schema = new BooleanGuardian().optional(true).nullable();
-      asserts.assertEquals(schema.parse(true), true);
-      asserts.assertEquals(schema.parse(null), null);
-      asserts.assertEquals(schema.parse(undefined), true);
+    await t.step('uses custom error message when provided', () => {
+      const guard = BooleanGuardian.create().false('Must be false');
+      assertThrows(() => guard(true), Error, 'Must be false');
     });
   });
 });

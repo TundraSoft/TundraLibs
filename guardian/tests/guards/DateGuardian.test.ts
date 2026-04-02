@@ -1,736 +1,412 @@
-import * as asserts from '$asserts';
-import { DateGuardian, GuardianError } from '../../mod.ts';
+import { assertEquals, assertThrows } from 'jsr:@std/assert@^1.0.0';
+import { GuardianError } from '../../GuardianError.ts';
+import { DateGuardian } from '../../guards/mod.ts';
 
-Deno.test('guardian.DateGuardian', async (t) => {
-  await t.step('basic functionality', async (u) => {
-    await u.step('should validate date type', () => {
-      const guardian = new DateGuardian();
-      const date = new Date('2023-06-15');
-
-      asserts.assertEquals(guardian.parse(date), date);
-
-      asserts.assertThrows(() => guardian.parse('2023-06-15'), GuardianError);
-      asserts.assertThrows(() => guardian.parse(1687000000000), GuardianError);
-      asserts.assertThrows(() => guardian.parse(null), GuardianError);
-      asserts.assertThrows(() => guardian.parse(undefined), GuardianError);
+Deno.test('guardian.date', async (t) => {
+  await t.step('create', async (t) => {
+    await t.step('passes through Date objects', () => {
+      const guard = DateGuardian.create();
+      const date = new Date('2023-01-01');
+      assertEquals(guard(date).getTime(), date.getTime());
     });
 
-    await u.step('should reject invalid dates', () => {
-      const guardian = new DateGuardian();
-      const invalidDate = new Date('invalid');
-
-      asserts.assertThrows(() => guardian.parse(invalidDate), GuardianError);
+    await t.step('coerces valid date strings', () => {
+      const guard = DateGuardian.create();
+      const dateStr = '2023-01-01';
+      const date = new Date(dateStr);
+      assertEquals(guard(dateStr).getTime(), date.getTime());
     });
 
-    await u.step('should preserve valid dates', () => {
-      const guardian = new DateGuardian();
-      const date = new Date('2023-06-15T14:30:00');
-
-      asserts.assertEquals(guardian.parse(date), date);
-    });
-  });
-
-  await t.step('range validations', async (u) => {
-    await u.step('should validate minimum date', () => {
-      const minDate = new Date('2020-01-01');
-      const guardian = new DateGuardian().min(minDate);
-
-      asserts.assertEquals(
-        guardian.parse(new Date('2020-01-01')),
-        new Date('2020-01-01'),
-      );
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-06-15')),
-        new Date('2023-06-15'),
-      );
-
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2019-12-31')),
-        GuardianError,
-      );
+    await t.step('coerces valid timestamps', () => {
+      const guard = DateGuardian.create();
+      const timestamp = 1672531200000; // 2023-01-01
+      const date = new Date(timestamp);
+      assertEquals(guard(timestamp).getTime(), date.getTime());
     });
 
-    await u.step('should validate maximum date', () => {
-      const maxDate = new Date('2030-12-31');
-      const guardian = new DateGuardian().max(maxDate);
-
-      asserts.assertEquals(
-        guardian.parse(new Date('2030-12-31')),
-        new Date('2030-12-31'),
-      );
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-06-15')),
-        new Date('2023-06-15'),
-      );
-
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2031-01-01')),
-        GuardianError,
-      );
+    await t.step('throws for invalid date values', () => {
+      const guard = DateGuardian.create();
+      assertThrows(() => guard('not a date'), GuardianError);
+      assertThrows(() => guard('2023-13-01'), GuardianError); // Invalid month
+      assertThrows(() => guard({}), GuardianError);
+      assertThrows(() => guard([]), GuardianError);
+      assertThrows(() => guard(null), GuardianError);
+      assertThrows(() => guard(undefined), GuardianError);
     });
 
-    await u.step('should combine min and max dates', () => {
-      const guardian = new DateGuardian()
-        .min(new Date('2020-01-01'))
-        .max(new Date('2030-12-31'));
-
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-06-15')),
-        new Date('2023-06-15'),
-      );
-
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2019-12-31')),
-        GuardianError,
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2031-01-01')),
-        GuardianError,
-      );
-    });
-
-    await u.step('should validate past dates', () => {
-      const guardian = new DateGuardian().past();
-      const pastDate = new Date('2020-01-01');
-
-      asserts.assertEquals(guardian.parse(pastDate), pastDate);
-
-      // Future date should fail
-      const futureDate = new Date(Date.now() + 86400000); // tomorrow
-      asserts.assertThrows(() => guardian.parse(futureDate), GuardianError);
-    });
-
-    await u.step('should validate future dates', () => {
-      const guardian = new DateGuardian().future();
-      const futureDate = new Date(Date.now() + 86400000); // tomorrow
-
-      asserts.assertEquals(guardian.parse(futureDate), futureDate);
-
-      // Past date should fail
-      const pastDate = new Date('2020-01-01');
-      asserts.assertThrows(() => guardian.parse(pastDate), GuardianError);
+    await t.step('uses custom error message when provided', () => {
+      const guard = DateGuardian.create('Custom error');
+      assertThrows(() => guard('not a date'), GuardianError, 'Custom error');
     });
   });
 
-  await t.step('date-specific validations', async (u) => {
-    await u.step('should validate weekday', () => {
-      const monday = new Date('2023-06-12'); // Monday
-      const tuesday = new Date('2023-06-13'); // Tuesday
-
-      const mondayGuardian = new DateGuardian().weekday(1); // Monday
-
-      asserts.assertEquals(mondayGuardian.parse(monday), monday);
-      asserts.assertThrows(() => mondayGuardian.parse(tuesday), GuardianError);
+  // Transformation tests
+  await t.step('transformations', async (t) => {
+    await t.step('format', () => {
+      const guard = DateGuardian.create().format('yyyy-MM-dd');
+      assertEquals(guard(new Date('2023-01-01')), '2023-01-01');
     });
 
-    await u.step('should validate business hours', () => {
-      const businessHour = new Date('2023-06-15T14:00:00'); // 2 PM
-      const afterHours = new Date('2023-06-15T20:00:00'); // 8 PM
-
-      const guardian = new DateGuardian().businessHours();
-
-      asserts.assertEquals(guardian.parse(businessHour), businessHour);
-      asserts.assertThrows(() => guardian.parse(afterHours), GuardianError);
-    });
-  });
-
-  await t.step('transformations', async (u) => {
-    await u.step('should format dates', () => {
-      const guardian = new DateGuardian().format('yyyy-MM-dd');
-      const date = new Date('2023-06-15T14:30:00');
-
-      asserts.assertEquals(guardian.parse(date), '2023-06-15');
+    await t.step('iso', () => {
+      const guard = DateGuardian.create().iso();
+      const result = guard(new Date('2023-01-01'));
+      assertEquals(result.includes('2023-01-01T'), true);
     });
 
-    await u.step('should format time', () => {
-      const guardian = new DateGuardian().format('HH:mm:ss');
-      const date = new Date('2023-06-15T14:30:45');
-
-      asserts.assertEquals(guardian.parse(date), '14:30:45');
+    await t.step('UTC', () => {
+      const guard = DateGuardian.create().UTC();
+      const result = guard(new Date('2023-01-01'));
+      assertEquals(result.includes('Sun, 01 Jan 2023'), true);
     });
 
-    await u.step('should format full datetime', () => {
-      const guardian = new DateGuardian().format('yyyy-MM-dd HH:mm:ss');
-      const date = new Date('2023-06-15T14:30:45');
-
-      asserts.assertEquals(guardian.parse(date), '2023-06-15 14:30:45');
+    await t.step('startOfDay', () => {
+      const guard = DateGuardian.create().startOfDay();
+      const result = guard(new Date('2023-01-01T12:30:45'));
+      assertEquals(result.getHours(), 0);
+      assertEquals(result.getMinutes(), 0);
+      assertEquals(result.getSeconds(), 0);
+      assertEquals(result.getMilliseconds(), 0);
     });
 
-    await u.step('should convert to ISO string', () => {
-      const guardian = new DateGuardian().toISOString();
-      const date = new Date('2023-06-15T14:30:00Z');
-
-      asserts.assertEquals(guardian.parse(date), '2023-06-15T14:30:00.000Z');
+    await t.step('endOfDay', () => {
+      const guard = DateGuardian.create().endOfDay();
+      const result = guard(new Date('2023-01-01T12:30:45'));
+      assertEquals(result.getHours(), 23);
+      assertEquals(result.getMinutes(), 59);
+      assertEquals(result.getSeconds(), 59);
+      assertEquals(result.getMilliseconds(), 999);
     });
 
-    await u.step('should convert to timestamp', () => {
-      const guardian = new DateGuardian().toTimestamp();
-      const date = new Date('2023-06-15T14:30:00Z');
-
-      asserts.assertEquals(guardian.parse(date), date.getTime());
+    await t.step('startOfMonth', () => {
+      const guard = DateGuardian.create().startOfMonth();
+      const result = guard(new Date('2023-01-15T12:30:45'));
+      assertEquals(result.getFullYear(), 2023);
+      assertEquals(result.getMonth(), 0); // January is 0
+      assertEquals(result.getDate(), 1);
+      assertEquals(result.getHours(), 0);
+      assertEquals(result.getMinutes(), 0);
+      assertEquals(result.getSeconds(), 0);
+      assertEquals(result.getMilliseconds(), 0);
     });
 
-    await u.step('should convert to unix timestamp', () => {
-      const guardian = new DateGuardian().toUnixTimestamp();
-      const date = new Date('2023-06-15T14:30:00Z');
+    await t.step('endOfMonth', () => {
+      const guard = DateGuardian.create().endOfMonth();
+      const result = guard(new Date('2023-01-15T12:30:45'));
+      assertEquals(result.getFullYear(), 2023);
+      assertEquals(result.getMonth(), 0); // January is 0
+      assertEquals(result.getDate(), 31); // January has 31 days
+      assertEquals(result.getHours(), 23);
+      assertEquals(result.getMinutes(), 59);
+      assertEquals(result.getSeconds(), 59);
+      assertEquals(result.getMilliseconds(), 999);
+    });
 
-      asserts.assertEquals(
-        guardian.parse(date),
-        Math.floor(date.getTime() / 1000),
+    await t.step('startOfYear', () => {
+      const guard = DateGuardian.create().startOfYear();
+      const result = guard(new Date('2023-06-15T12:30:45'));
+      assertEquals(result.getFullYear(), 2023);
+      assertEquals(result.getMonth(), 0); // January is 0
+      assertEquals(result.getDate(), 1);
+      assertEquals(result.getHours(), 0);
+      assertEquals(result.getMinutes(), 0);
+      assertEquals(result.getSeconds(), 0);
+      assertEquals(result.getMilliseconds(), 0);
+    });
+
+    await t.step('endOfYear', () => {
+      const guard = DateGuardian.create().endOfYear();
+      const result = guard(new Date('2023-06-15T12:30:45'));
+      assertEquals(result.getFullYear(), 2023);
+      assertEquals(result.getMonth(), 11); // December is 11
+      assertEquals(result.getDate(), 31);
+      assertEquals(result.getHours(), 23);
+      assertEquals(result.getMinutes(), 59);
+      assertEquals(result.getSeconds(), 59);
+      assertEquals(result.getMilliseconds(), 999);
+    });
+
+    await t.step('add', () => {
+      const date = new Date(Date.UTC(2023, 0, 1, 0, 0, 0));
+      assertEquals(
+        DateGuardian.create().add(1, 'years')(date).getFullYear(),
+        2024,
       );
-    });
-
-    await u.step('should extract date components', () => {
-      const date = new Date('2023-06-15T14:30:45');
-
-      const yearGuardian = new DateGuardian().component('year');
-      asserts.assertEquals(yearGuardian.parse(date), 2023);
-
-      const monthGuardian = new DateGuardian().component('month');
-      asserts.assertEquals(monthGuardian.parse(date), 6); // 1-based month
-
-      const dayGuardian = new DateGuardian().component('day');
-      asserts.assertEquals(dayGuardian.parse(date), 15);
-
-      const hourGuardian = new DateGuardian().component('hour');
-      asserts.assertEquals(hourGuardian.parse(date), 14);
-
-      const minuteGuardian = new DateGuardian().component('minute');
-      asserts.assertEquals(minuteGuardian.parse(date), 30);
-
-      const secondGuardian = new DateGuardian().component('second');
-      asserts.assertEquals(secondGuardian.parse(date), 45);
-    });
-  });
-
-  await t.step('chained validations', async (u) => {
-    await u.step('should chain date validations', () => {
-      const guardian = new DateGuardian()
-        .min(new Date('2020-01-01'))
-        .max(new Date('2030-12-31'))
-        .past();
-
-      const validDate = new Date('2022-06-15');
-      asserts.assertEquals(guardian.parse(validDate), validDate);
-
-      // Too early
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2019-01-01')),
-        GuardianError,
+      assertEquals(
+        DateGuardian.create().add(1, 'months')(date).getMonth(),
+        1, // February is 1
       );
-
-      // Too late
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2031-01-01')),
-        GuardianError,
+      assertEquals(
+        DateGuardian.create().add(1, 'days')(date).getDate(),
+        2,
       );
-    });
-
-    await u.step('should chain validations and transformations', () => {
-      const guardian = new DateGuardian()
-        .past()
-        .format('yyyy-MM-dd');
-
-      const pastDate = new Date('2020-06-15');
-      asserts.assertEquals(guardian.parse(pastDate), '2020-06-15');
-    });
-  });
-
-  await t.step('safe parsing', async (u) => {
-    await u.step('should return success result for valid input', () => {
-      const guardian = new DateGuardian();
-      const date = new Date('2023-06-15');
-      const [error, result] = guardian.safeParse(date);
-
-      asserts.assertEquals(error, null);
-      asserts.assertEquals(result, date);
-    });
-
-    await u.step('should return error result for invalid input', () => {
-      const guardian = new DateGuardian();
-      const [error, result] = guardian.safeParse('2023-06-15');
-
-      asserts.assertEquals(error instanceof GuardianError, true);
-      asserts.assertEquals(result, undefined);
-    });
-  });
-
-  await t.step('error handling', async (u) => {
-    await u.step('should provide detailed error messages', () => {
-      const guardian = new DateGuardian();
-
-      asserts.assertThrows(
-        () => guardian.parse('2023-06-15'),
-        GuardianError,
-        'Expected Date but got string',
+      assertEquals(
+        DateGuardian.create().add(1, 'hours')(date).getUTCHours(),
+        1,
       );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('invalid')),
-        GuardianError,
-        'Date is invalid',
+      assertEquals(
+        DateGuardian.create().add(1, 'minutes')(date).getUTCMinutes(),
+        1,
+      );
+      assertEquals(
+        DateGuardian.create().add(1, 'seconds')(date).getSeconds(),
+        1,
+      );
+      assertEquals(
+        DateGuardian.create().add(1, 'milliseconds')(date).getMilliseconds(),
+        1,
       );
     });
 
-    await u.step('should support custom error messages', () => {
-      const guardian = new DateGuardian().past('Date must be in the past');
-      const futureDate = new Date(Date.now() + 86400000);
-
-      asserts.assertThrows(
-        () => guardian.parse(futureDate),
-        GuardianError,
-        'Date must be in the past',
-      );
-    });
-  });
-
-  await t.step('real world usage', async (u) => {
-    await u.step('should validate birth date', () => {
-      const guardian = new DateGuardian()
-        .min(new Date('1900-01-01'))
-        .max(new Date('2010-12-31'))
-        .past();
-
-      const validBirthDate = new Date('1990-05-15');
-      asserts.assertEquals(guardian.parse(validBirthDate), validBirthDate);
-
-      // Too old
-      asserts.assertThrows(
-        () => guardian.parse(new Date('1899-12-31')),
-        GuardianError,
-      );
-
-      // Too recent
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2011-01-01')),
-        GuardianError,
-      );
-    });
-
-    await u.step('should validate appointment scheduling', () => {
-      const guardian = new DateGuardian()
-        .future()
-        .weekday(1) // Monday only
-        .businessHours();
-
-      // Create a future Monday at 2 PM
-      const futureMonday = new Date();
-      futureMonday.setDate(
-        futureMonday.getDate() + (1 + 7 - futureMonday.getDay()) % 7,
-      ); // Next Monday
-      futureMonday.setHours(14, 0, 0, 0); // 2 PM
-
-      asserts.assertEquals(guardian.parse(futureMonday), futureMonday);
-    });
-  });
-
-  await t.step('new validation methods', async (u) => {
-    await u.step('between validation', () => {
-      const start = new Date('2020-01-01');
-      const end = new Date('2025-12-31');
-      const guardian = new DateGuardian().between(start, end);
-
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-06-15')),
-        new Date('2023-06-15'),
-      );
-      asserts.assertEquals(guardian.parse(start), start);
-      asserts.assertEquals(guardian.parse(end), end);
-
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2019-12-31')),
-        GuardianError,
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2026-01-01')),
-        GuardianError,
-      );
-    });
-
-    await u.step('age validation', () => {
-      const today = new Date();
-      const birthDate = new Date(
-        today.getFullYear() - 25,
-        today.getMonth(),
-        today.getDate(),
-      );
-      const guardian = new DateGuardian().age(25);
-
-      asserts.assertEquals(guardian.parse(birthDate), birthDate);
-
-      const wrongAge = new Date(
-        today.getFullYear() - 30,
-        today.getMonth(),
-        today.getDate(),
-      );
-      asserts.assertThrows(() => guardian.parse(wrongAge), GuardianError);
-    });
-
-    await u.step('age range validation', () => {
-      const today = new Date();
-      const validAge = new Date(
-        today.getFullYear() - 30,
-        today.getMonth(),
-        today.getDate(),
-      );
-      const guardian = new DateGuardian().ageRange(18, 65);
-
-      asserts.assertEquals(guardian.parse(validAge), validAge);
-
-      const tooYoung = new Date(
-        today.getFullYear() - 16,
-        today.getMonth(),
-        today.getDate(),
-      );
-      const tooOld = new Date(
-        today.getFullYear() - 70,
-        today.getMonth(),
-        today.getDate(),
-      );
-
-      asserts.assertThrows(() => guardian.parse(tooYoung), GuardianError);
-      asserts.assertThrows(() => guardian.parse(tooOld), GuardianError);
-    });
-
-    await u.step('year range validation', () => {
-      const guardian = new DateGuardian().yearRange(2020, 2025);
-
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-06-15')),
-        new Date('2023-06-15'),
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2019-12-31')),
-        GuardianError,
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2026-01-01')),
-        GuardianError,
-      );
-    });
-
-    await u.step('month range validation', () => {
-      const guardian = new DateGuardian().monthRange(6, 8); // June to August
-
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-07-15')),
-        new Date('2023-07-15'),
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2023-05-15')),
-        GuardianError,
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2023-09-15')),
-        GuardianError,
-      );
-    });
-
-    await u.step('day range validation', () => {
-      const guardian = new DateGuardian().dayRange(15, 25);
-
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-06-20')),
-        new Date('2023-06-20'),
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2023-06-10')),
-        GuardianError,
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2023-06-30')),
-        GuardianError,
-      );
-    });
-
-    await u.step('quarter validation', () => {
-      const guardian = new DateGuardian().quarter(2); // Q2: April-June
-
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-05-15')),
-        new Date('2023-05-15'),
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2023-03-15')),
-        GuardianError,
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2023-07-15')),
-        GuardianError,
-      );
-    });
-
-    await u.step('leap year validation', () => {
-      const guardian = new DateGuardian().leapYear();
-
-      asserts.assertEquals(
-        guardian.parse(new Date('2020-02-29')),
-        new Date('2020-02-29'),
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2021-06-15')),
-        GuardianError,
-      );
-    });
-
-    await u.step('non-leap year validation', () => {
-      const guardian = new DateGuardian().nonLeapYear();
-
-      asserts.assertEquals(
-        guardian.parse(new Date('2021-06-15')),
-        new Date('2021-06-15'),
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2020-02-29')),
-        GuardianError,
-      );
-    });
-
-    await u.step('weekdays validation', () => {
-      const guardian = new DateGuardian().weekdays();
-
-      // Monday (June 12, 2023)
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-06-12')),
-        new Date('2023-06-12'),
-      );
-
-      // Sunday (June 11, 2023)
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2023-06-11')),
-        GuardianError,
-      );
-      // Saturday (June 10, 2023)
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2023-06-10')),
-        GuardianError,
-      );
-    });
-
-    await u.step('weekends validation', () => {
-      const guardian = new DateGuardian().weekends();
-
-      // Sunday (June 11, 2023)
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-06-11')),
-        new Date('2023-06-11'),
-      );
-      // Saturday (June 10, 2023)
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-06-10')),
-        new Date('2023-06-10'),
-      );
-
-      // Monday (June 12, 2023)
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2023-06-12')),
-        GuardianError,
-      );
-    });
-
-    await u.step('holiday validation', () => {
-      const holidays = [new Date('2023-07-04'), new Date('2023-12-25')];
-      const guardian = new DateGuardian().holiday(holidays);
-
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-07-04')),
-        new Date('2023-07-04'),
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2023-06-15')),
-        GuardianError,
-      );
-    });
-
-    await u.step('not holiday validation', () => {
-      const holidays = [new Date('2023-07-04'), new Date('2023-12-25')];
-      const guardian = new DateGuardian().notHoliday(holidays);
-
-      asserts.assertEquals(
-        guardian.parse(new Date('2023-06-15')),
-        new Date('2023-06-15'),
-      );
-      asserts.assertThrows(
-        () => guardian.parse(new Date('2023-07-04')),
-        GuardianError,
-      );
-    });
-
-    await u.step('within validation', () => {
-      const guardian = new DateGuardian().within(1, 'days');
-      const now = new Date();
-
-      // Should pass for current time
-      asserts.assertEquals(guardian.parse(now), now);
-
-      // Should fail for date more than 1 day away
-      const twoDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-      asserts.assertThrows(() => guardian.parse(twoDaysAgo), GuardianError);
-    });
-
-    await u.step('recent validation', () => {
-      const guardian = new DateGuardian().recent(1, 'hours');
-      const now = new Date();
-
-      asserts.assertEquals(guardian.parse(now), now);
-
-      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-      asserts.assertThrows(() => guardian.parse(twoHoursAgo), GuardianError);
-    });
-
-    await u.step('soon validation', () => {
-      const guardian = new DateGuardian().soon(1, 'hours');
-      const now = new Date();
-
-      asserts.assertEquals(guardian.parse(now), now);
-
-      const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-      asserts.assertThrows(
-        () => guardian.parse(twoHoursFromNow),
-        GuardianError,
-      );
-    });
-  });
-
-  await t.step('transformation methods', async (u) => {
-    await u.step('add time', () => {
-      const date = new Date('2023-06-15T10:30:00');
-
-      const addedDays = new DateGuardian().add(5, 'days').parse(date);
-      asserts.assertEquals(addedDays.getDate(), 20);
-
-      const addedMonths = new DateGuardian().add(2, 'months').parse(date);
-      asserts.assertEquals(addedMonths.getMonth(), 7); // August (0-indexed)
-
-      const addedYears = new DateGuardian().add(1, 'years').parse(date);
-      asserts.assertEquals(addedYears.getFullYear(), 2024);
-    });
-
-    await u.step('add specific units', () => {
-      const date = new Date('2023-06-15T10:30:00');
-
-      const addedDays = new DateGuardian().addDays(10).parse(date);
-      asserts.assertEquals(addedDays.getDate(), 25);
-
-      const addedMonths = new DateGuardian().addMonths(3).parse(date);
-      asserts.assertEquals(addedMonths.getMonth(), 8); // September (0-indexed)
-
-      const addedYears = new DateGuardian().addYears(2).parse(date);
-      asserts.assertEquals(addedYears.getFullYear(), 2025);
-    });
-
-    await u.step('to timezone', () => {
-      const date = new Date('2023-06-15T10:30:00');
-
-      // Convert to different timezone (offset in minutes)
-      const converted = new DateGuardian().toTimezone(-300).parse(date); // UTC-5
-      asserts.assertInstanceOf(converted, Date);
-    });
-
-    await u.step('to UTC', () => {
-      const date = new Date('2023-06-15T10:30:00');
-
-      const utcDate = new DateGuardian().toUTC().parse(date);
-      asserts.assertInstanceOf(utcDate, Date);
-    });
-
-    await u.step('format relative', () => {
-      const now = new Date();
-
-      // Test with a date 2 hours ago
-      const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000);
-      const relative = new DateGuardian().formatRelative().parse(twoHoursAgo);
-      asserts.assertStringIncludes(relative, 'ago');
-    });
-
-    await u.step('duration', () => {
-      const now = new Date();
-
-      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-      const duration = new DateGuardian().duration('hours').parse(oneHourAgo);
-      asserts.assertEquals(duration, 1);
-    });
-
-    await u.step('week number', () => {
-      const date = new Date('2023-06-15');
-
-      const weekNum = new DateGuardian().weekNumber().parse(date);
-      asserts.assertEquals(typeof weekNum, 'number');
-      asserts.assert(weekNum >= 1 && weekNum <= 53);
-    });
-
-    await u.step('day of year', () => {
+    await t.step('subtract', () => {
       const date = new Date('2023-01-01');
 
-      const dayOfYear = new DateGuardian().dayOfYear().parse(date);
-      asserts.assertEquals(dayOfYear, 1);
-
-      const midYear = new Date('2023-07-01');
-      const midDayOfYear = new DateGuardian().dayOfYear().parse(midYear);
-      asserts.assert(midDayOfYear > 180);
+      assertEquals(
+        DateGuardian.create().subtract(1, 'years')(date).getFullYear(),
+        2022,
+      );
+      assertEquals(
+        DateGuardian.create().subtract(1, 'months')(date).getMonth(),
+        11, // December is 11
+      );
     });
 
-    await u.step('diff', () => {
-      const date1 = new Date('2023-06-15T10:00:00');
-      const date2 = new Date('2023-06-15T12:00:00');
+    await t.step('toTimestamp', () => {
+      const date = new Date('2023-01-01');
+      const timestamp = date.getTime();
+      const result = DateGuardian.create().toTimestamp()(date);
+      assertEquals(result, timestamp);
+    });
 
-      const diffHours = new DateGuardian().diff(date1, 'hours').parse(date2);
-      asserts.assertEquals(diffHours, 2);
+    await t.step('toISODate', () => {
+      const result = DateGuardian.create().toISODate()(
+        new Date('2023-01-01T12:30:45'),
+      );
+      assertEquals(result, '2023-01-01');
+    });
 
-      const diffDays = new DateGuardian().diff(new Date('2023-06-15'), 'days')
-        .parse(new Date('2023-06-20'));
-      asserts.assertEquals(diffDays, 5);
+    await t.step('age', () => {
+      // This test is time-dependent, so may need adjustment
+      const birthDate = new Date();
+      birthDate.setFullYear(birthDate.getFullYear() - 25); // 25 years ago
+
+      const result = DateGuardian.create().age()(birthDate);
+      assertEquals(result, 25);
+    });
+
+    await t.step('chaining transformations', () => {
+      const guard = DateGuardian.create()
+        .startOfMonth()
+        .add(2, 'days')
+        .format('yyyy-MM-dd');
+
+      assertEquals(guard(new Date('2023-01-15')), '2023-01-03');
     });
   });
 
-  await t.step('nullable and optional chaining', async (u) => {
-    await u.step(
-      'nullable().optional() allows null, undefined, and valid date',
-      () => {
-        const guard = new DateGuardian().nullable().optional();
+  // Validation tests
+  await t.step('validations', async (t) => {
+    await t.step('min', async (t) => {
+      const minDate = new Date('2023-01-01');
 
-        asserts.assertEquals(guard.parse(null), null);
-        asserts.assertEquals(guard.parse(undefined), undefined);
+      await t.step('passes when date is at or after min date', () => {
+        const guard = DateGuardian.create().min(minDate);
+        assertEquals(
+          guard(new Date('2023-01-01')).getTime(),
+          minDate.getTime(),
+        );
+        assertEquals(
+          guard(new Date('2023-01-02')).getTime(),
+          new Date('2023-01-02').getTime(),
+        );
+      });
 
-        const testDate = new Date('2023-06-15');
-        asserts.assertEquals(guard.parse(testDate), testDate);
-
-        const anotherDate = new Date('2024-01-01');
-        asserts.assertEquals(guard.parse(anotherDate), anotherDate);
-      },
-    );
-
-    await u.step(
-      'optional().nullable() allows undefined, null, and valid date',
-      () => {
-        const guard = new DateGuardian().optional().nullable();
-
-        asserts.assertEquals(guard.parse(undefined), undefined);
-        asserts.assertEquals(guard.parse(null), null);
-
-        const testDate = new Date('2023-06-15');
-        asserts.assertEquals(guard.parse(testDate), testDate);
-
-        const anotherDate = new Date('2024-01-01');
-        asserts.assertEquals(guard.parse(anotherDate), anotherDate);
-      },
-    );
-
-    await u.step('nullable().optional() rejects invalid dates', () => {
-      const guard = new DateGuardian().nullable().optional();
-
-      asserts.assertThrows(() => guard.parse('invalid-date'));
-      asserts.assertThrows(() => guard.parse(123));
-      asserts.assertThrows(() => guard.parse({}));
-      asserts.assertThrows(() => guard.parse(new Date('invalid')));
+      await t.step('throws when date is before min date', () => {
+        const guard = DateGuardian.create().min(minDate);
+        assertThrows(() => guard(new Date('2022-12-31')), Error);
+      });
     });
 
-    await u.step('optional().nullable() rejects invalid dates', () => {
-      const guard = new DateGuardian().optional().nullable();
+    await t.step('max', async (t) => {
+      const maxDate = new Date('2023-01-31');
 
-      asserts.assertThrows(() => guard.parse('invalid-date'));
-      asserts.assertThrows(() => guard.parse(123));
-      asserts.assertThrows(() => guard.parse({}));
-      asserts.assertThrows(() => guard.parse(new Date('invalid')));
+      await t.step('passes when date is at or before max date', () => {
+        const guard = DateGuardian.create().max(maxDate);
+        assertEquals(
+          guard(new Date('2023-01-31')).getTime(),
+          maxDate.getTime(),
+        );
+        assertEquals(
+          guard(new Date('2023-01-30')).getTime(),
+          new Date('2023-01-30').getTime(),
+        );
+      });
+
+      await t.step('throws when date is after max date', () => {
+        const guard = DateGuardian.create().max(maxDate);
+        assertThrows(() => guard(new Date('2023-02-01')), Error);
+      });
+    });
+
+    await t.step('range', async (t) => {
+      const minDate = new Date('2023-01-01');
+      const maxDate = new Date('2023-01-31');
+
+      await t.step('passes when date is within range', () => {
+        const guard = DateGuardian.create().range(minDate, maxDate);
+        assertEquals(
+          guard(new Date('2023-01-01')).getTime(),
+          minDate.getTime(),
+        );
+        assertEquals(
+          guard(new Date('2023-01-15')).getTime(),
+          new Date('2023-01-15').getTime(),
+        );
+        assertEquals(
+          guard(new Date('2023-01-31')).getTime(),
+          maxDate.getTime(),
+        );
+      });
+
+      await t.step('throws when date is outside range', () => {
+        const guard = DateGuardian.create().range(minDate, maxDate);
+        assertThrows(() => guard(new Date('2022-12-31')), Error);
+        assertThrows(() => guard(new Date('2023-02-01')), Error);
+      });
+    });
+
+    await t.step('future', async (t) => {
+      await t.step('passes when date is in the future', () => {
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + 1); // Tomorrow
+
+        const guard = DateGuardian.create().future();
+        assertEquals(guard(futureDate).getTime(), futureDate.getTime());
+      });
+
+      await t.step('throws when date is not in the future', () => {
+        const pastDate = new Date();
+        pastDate.setDate(pastDate.getDate() - 1); // Yesterday
+
+        const guard = DateGuardian.create().future();
+        assertThrows(() => guard(pastDate), Error);
+      });
+    });
+
+    await t.step('past', async (t) => {
+      await t.step('passes when date is in the past', () => {
+        const pastDate = new Date();
+        pastDate.setDate(pastDate.getDate() - 1); // Yesterday
+
+        const guard = DateGuardian.create().past();
+        assertEquals(guard(pastDate).getTime(), pastDate.getTime());
+      });
+
+      await t.step('throws when date is not in the past', () => {
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + 1); // Tomorrow
+
+        const guard = DateGuardian.create().past();
+        assertThrows(() => guard(futureDate), Error);
+      });
+    });
+
+    await t.step('weekday and weekend', async (t) => {
+      // These tests assume we have specific dates we know are weekdays/weekends
+      const weekdayDate = new Date('2023-01-02'); // Monday
+      const weekendDate = new Date('2023-01-01'); // Sunday
+
+      await t.step('weekday passes for weekday dates', () => {
+        const guard = DateGuardian.create().weekday();
+        assertEquals(guard(weekdayDate).getTime(), weekdayDate.getTime());
+      });
+
+      await t.step('weekday throws for weekend dates', () => {
+        const guard = DateGuardian.create().weekday();
+        assertThrows(() => guard(weekendDate), Error);
+      });
+
+      await t.step('weekend passes for weekend dates', () => {
+        const guard = DateGuardian.create().weekend();
+        assertEquals(guard(weekendDate).getTime(), weekendDate.getTime());
+      });
+
+      await t.step('weekend throws for weekday dates', () => {
+        const guard = DateGuardian.create().weekend();
+        assertThrows(() => guard(weekdayDate), Error);
+      });
+    });
+
+    await t.step('sameDay, sameMonth, sameYear', async (t) => {
+      const referenceDate = new Date('2023-01-15');
+
+      await t.step('sameDay tests', () => {
+        const sameDay = new Date('2023-01-15T12:30:45');
+        const differentDay = new Date('2023-01-16');
+
+        const guard = DateGuardian.create().sameDay(referenceDate);
+        assertEquals(guard(sameDay).getTime(), sameDay.getTime());
+        assertThrows(() => guard(differentDay), Error);
+      });
+
+      await t.step('sameMonth tests', () => {
+        const sameMonth = new Date('2023-01-20');
+        const differentMonth = new Date('2023-02-15');
+
+        const guard = DateGuardian.create().sameMonth(referenceDate);
+        assertEquals(guard(sameMonth).getTime(), sameMonth.getTime());
+        assertThrows(() => guard(differentMonth), Error);
+      });
+
+      await t.step('sameYear tests', () => {
+        const sameYear = new Date('2023-06-15');
+        const differentYear = new Date('2022-01-15');
+
+        const guard = DateGuardian.create().sameYear(referenceDate);
+        assertEquals(guard(sameYear).getTime(), sameYear.getTime());
+        assertThrows(() => guard(differentYear), Error);
+      });
+    });
+
+    await t.step('isBefore and isAfter', async (t) => {
+      const referenceDate = new Date('2023-01-15');
+
+      await t.step('isBefore tests', () => {
+        const beforeDate = new Date('2023-01-14');
+        const afterDate = new Date('2023-01-16');
+        const sameDate = new Date('2023-01-15');
+
+        const guard = DateGuardian.create().isBefore(referenceDate);
+        assertEquals(guard(beforeDate).getTime(), beforeDate.getTime());
+        assertThrows(() => guard(afterDate), Error);
+        assertThrows(() => guard(sameDate), Error);
+      });
+
+      await t.step('isAfter tests', () => {
+        const afterDate = new Date('2023-01-16');
+        const beforeDate = new Date('2023-01-14');
+        const sameDate = new Date('2023-01-15');
+
+        const guard = DateGuardian.create().isAfter(referenceDate);
+        assertEquals(guard(afterDate).getTime(), afterDate.getTime());
+        assertThrows(() => guard(beforeDate), Error);
+        assertThrows(() => guard(sameDate), Error);
+      });
+    });
+
+    await t.step('chaining validations', () => {
+      const start = new Date('2023-01-01');
+      const end = new Date('2023-01-31');
+
+      const guard = DateGuardian.create()
+        .range(start, end)
+        .weekday();
+
+      assertEquals(
+        guard(new Date('2023-01-02')).getTime(),
+        new Date('2023-01-02').getTime(),
+      ); // Monday
+      assertThrows(() => guard(new Date('2022-12-15')), Error); // Outside range
+      assertThrows(() => guard(new Date('2023-01-07')), Error); // Saturday
     });
   });
 });

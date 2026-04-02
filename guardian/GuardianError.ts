@@ -2,15 +2,17 @@ import {
   BaseError,
   type BaseErrorJson,
   variableReplacer,
-} from '@tundralibs/utils';
+} from 'jsr:@tundralibs/utils@^1.0.0-dev3';
 
 export type GuardianErrorMeta = {
-  cause?: Record<string, GuardianError>; // Nested validation errors
-  // meta info about this error
-  type?: string; // string, number, boolean, array, object, etc.
-  got: unknown; // Actual value received
-  expected?: unknown; // Expected value/type
-  comparison: string; // Type of validation (e.g., 'type', 'min', 'max')
+  // Value got
+  got?: unknown;
+  // Expected value
+  expected?: unknown;
+  // Comparison type
+  comparison?: string;
+  // Used by array and object guardians to store the source of the error
+  cause?: Record<string, GuardianError>;
 };
 
 export class GuardianError extends BaseError<GuardianErrorMeta> {
@@ -19,11 +21,46 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
   }
 
   constructor(
-    message: string,
-    meta: GuardianErrorMeta,
+    meta:
+      & GuardianErrorMeta
+      & { cause?: [GuardianError] }
+      & Record<string, unknown>,
+    message?: string,
   ) {
-    // Message must be passed
-    super(message, meta);
+    if (message === undefined) {
+      if (meta.got !== undefined && meta.expected !== undefined) {
+        message = `Expected value ${
+          meta.comparison && meta.comparison.startsWith('not') ? 'not ' : ''
+        }to be ${GuardianError.__formatValue(meta.expected)}, but got ${
+          GuardianError.__formatValue(meta.got)
+        }`;
+      } else if (meta.expected !== undefined) {
+        message = `Expected value to ${
+          meta.comparison && meta.comparison.startsWith('not') ? 'not ' : ''
+        }be ${
+          GuardianError.__formatValue(
+            meta.expected,
+          )
+        }`;
+      } else if (meta.got) {
+        message = `Unexpected value: ${GuardianError.__formatValue(meta.got)}`;
+      } else {
+        message = 'Validation failed';
+      }
+    }
+    super(message!, meta);
+  }
+
+  get got(): string | undefined {
+    return this.context.got
+      ? GuardianError.__formatValue(this.context.got)
+      : undefined;
+  }
+
+  get expected(): string | undefined {
+    return this.context.expected
+      ? GuardianError.__formatValue(this.context.expected)
+      : undefined;
   }
 
   public override toJSON(): BaseErrorJson {
@@ -46,7 +83,6 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
       causes: causeValue,
     };
   }
-
   public addCause(key: string, error: GuardianError): void {
     if (this.context.cause === undefined) {
       this.context.cause = {};
@@ -55,38 +91,13 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
   }
 
   public listCauses(): Record<string, string> {
-    return this._listCausesWithVisited(new Set());
-  }
-
-  private _listCausesWithVisited(
-    visited: Set<GuardianError>,
-  ): Record<string, string> {
-    if (!this.context.cause || visited.has(this)) {
+    if (!this.context.cause) {
       return {};
     }
-
-    // Add this error to visited set to prevent infinite recursion
-    visited.add(this);
-
     const causes: Record<string, string> = {};
     for (const [key, error] of Object.entries(this.context.cause)) {
-      if (visited.has(error)) {
-        // Circular reference detected - just use the error message
-        causes[key] = `${error.message} [circular]`;
-      } else {
-        const subCauses = error._listCausesWithVisited(visited);
-        if (Object.keys(subCauses).length === 0) {
-          causes[key] = error.message;
-        } else {
-          for (const [subKey, subError] of Object.entries(subCauses)) {
-            causes[`${key}.${subKey}`] = subError;
-          }
-        }
-      }
+      causes[key] = error.message;
     }
-
-    // Remove this error from visited set when done (backtrack)
-    visited.delete(this);
     return causes;
   }
 
@@ -108,9 +119,9 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     } else if (value === null) {
       return 'null';
     } else if (typeof value === 'boolean') {
-      return value === true ? 'TRUE' : 'FALSE';
+      return value ? 'TRUE' : 'FALSE';
     } else {
-      return String(value);
+      return value.toString();
     }
   }
 

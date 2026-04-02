@@ -1,535 +1,306 @@
-import * as asserts from '$asserts';
+import {
+  assertEquals,
+  assertRejects,
+  assertThrows,
+} from 'jsr:@std/assert@^1.0.0';
 import { BaseGuardian } from '../BaseGuardian.ts';
-import { StringGuardian } from '../guards/StringGuardian.ts';
-import { NumberGuardian } from '../guards/NumberGuardian.ts';
 import { GuardianError } from '../GuardianError.ts';
 
-Deno.test('guardian.BaseGuardian', async (t) => {
-  await t.step('metadata properties', async (u) => {
-    await u.step('should set and get description', () => {
-      const guard = new StringGuardian();
-      guard.description = 'Test description';
-      asserts.assertEquals(guard.metaData?.description, 'Test description');
-    });
+class TestGuardian extends BaseGuardian<(value: unknown) => number> {
+  static create() {
+    return new TestGuardian((value: unknown): number => {
+      if (typeof value !== 'number') {
+        throw new GuardianError({
+          got: value,
+          expected: 'number',
+          comparison: 'type',
+        });
+      }
+      return value;
+    }).proxy();
+  }
+}
 
-    await u.step('should set and get title', () => {
-      const guard = new StringGuardian();
-      guard.title = 'Test Title';
-      asserts.assertEquals(guard.metaData?.title, 'Test Title');
-    });
+class ThrowingGuardian extends BaseGuardian<(value: unknown) => number> {
+  static createThrowing() {
+    return new ThrowingGuardian((value: unknown): number => {
+      if (typeof value !== 'number') {
+        throw new Error('Custom error message');
+      }
+      return value;
+    }).proxy();
+  }
+}
 
-    await u.step('should set and get examples', () => {
-      const guard = new StringGuardian();
-      const examples = ['example1', 'example2'];
-      guard.examples = examples;
-      asserts.assertEquals(guard.metaData?.examples, examples);
-    });
-
-    await u.step('should set and get deprecated flag', () => {
-      const guard = new StringGuardian();
-      guard.deprecated = true;
-      asserts.assertEquals(guard.metaData?.deprecated, true);
-    });
-
-    await u.step(
-      'should initialize metadata object when setting properties',
-      () => {
-        const guard = new StringGuardian();
-        asserts.assertEquals(guard.metaData, undefined);
-        guard.description = 'Test';
-        asserts.assertNotEquals(guard.metaData, undefined);
+class AsyncGuardian extends BaseGuardian<(v: unknown) => Promise<number>> {
+  static createAsync() {
+    return new AsyncGuardian(
+      async (value: unknown): Promise<number> => {
+        if (typeof value !== 'number') {
+          throw new GuardianError({
+            got: value,
+            expected: 'number',
+          });
+        }
+        return value;
       },
+    ).proxy();
+  }
+}
+
+Deno.test('guardian.baseGuardian', async (t) => {
+  await t.step('proxy method allows function calls', () => {
+    const guardian = TestGuardian.create();
+    assertEquals(guardian(42), 42);
+    assertThrows(() => guardian('not a number'), GuardianError);
+  });
+
+  await t.step('transform method', async (t) => {
+    await t.step('transforms sync values correctly', () => {
+      const guardian = TestGuardian.create();
+      const doubled = guardian.transform((n) => n * 2);
+
+      assertEquals(doubled(5), 10);
+      assertThrows(() => doubled('not a number'), GuardianError);
+    });
+
+    await t.step('preserves async behavior with promises', async () => {
+      // Create an AsyncTestGuardian class to handle async validation
+      class AsyncTestGuardian
+        extends BaseGuardian<(v: unknown) => Promise<number>> {
+        static create() {
+          return new AsyncTestGuardian(
+            async (value: unknown): Promise<number> => {
+              await new Promise((resolve) => setTimeout(resolve, 10));
+              if (typeof value !== 'number') {
+                throw new GuardianError({
+                  got: value,
+                  expected: 'number',
+                });
+              }
+              return value;
+            },
+          ).proxy();
+        }
+      }
+
+      // Create an async guardian
+      const asyncGuardian = AsyncTestGuardian.create();
+
+      const transformed = asyncGuardian.transform(async (n) => {
+        await Promise.resolve(); // Simulate async operation
+        return n * 2;
+      });
+
+      assertEquals(await transformed(5), 10);
+      await assertRejects(() => transformed('not a number'), GuardianError);
+    });
+  });
+
+  await t.step('test method', () => {
+    const guardian = TestGuardian.create();
+    const positive = guardian.test((n) => n > 0, 'Number must be positive');
+
+    assertEquals(positive(5), 5);
+    assertThrows(() => positive(-5), GuardianError, 'Number must be positive');
+  });
+
+  await t.step('equals method', () => {
+    const guardian = TestGuardian.create();
+    const equalsFive = guardian.equals(5, 'Must be 5');
+
+    assertEquals(equalsFive(5), 5);
+    assertThrows(() => equalsFive(10), GuardianError, 'Must be 5');
+  });
+
+  await t.step('notEquals method', () => {
+    const guardian = TestGuardian.create();
+    const notFive = guardian.notEquals(5, 'Must not be 5');
+
+    assertEquals(notFive(10), 10);
+    assertThrows(() => notFive(5), GuardianError, 'Must not be 5');
+  });
+
+  await t.step('in method', () => {
+    const guardian = TestGuardian.create();
+    const validValues = guardian.in([1, 2, 3], 'Must be 1, 2, or 3');
+
+    assertEquals(validValues(2), 2);
+    assertThrows(() => validValues(4), GuardianError, 'Must be 1, 2, or 3');
+  });
+
+  await t.step('notIn method', () => {
+    const guardian = TestGuardian.create();
+    const invalidValues = guardian.notIn([1, 2, 3], 'Must not be 1, 2, or 3');
+
+    assertEquals(invalidValues(4), 4);
+    assertThrows(
+      () => invalidValues(2),
+      GuardianError,
+      'Must not be 1, 2, or 3',
     );
   });
 
-  await t.step('immutable functionality', async (u) => {
-    await u.step('should initially be mutable', () => {
-      const guard = new StringGuardian();
-      asserts.assertEquals(guard.isImmutable, false);
-    });
+  await t.step('optional method', () => {
+    const guardian = TestGuardian.create();
+    const optional = guardian.optional(42);
 
-    await u.step('should become immutable after calling immutable()', () => {
-      const guard = new StringGuardian();
-      const immutableGuard = guard.immutable();
-      asserts.assertEquals(immutableGuard.isImmutable, true);
-      asserts.assertStrictEquals(guard, immutableGuard); // Same instance
-    });
-
-    await u.step('freeze() should be alias for immutable()', () => {
-      const guard = new StringGuardian();
-      const frozen = guard.freeze();
-      asserts.assertEquals(frozen.isImmutable, true);
-      asserts.assertStrictEquals(guard, frozen);
-    });
-
-    await u.step(
-      'immutable guard should return new instances on process',
-      () => {
-        const guard = new StringGuardian().immutable();
-        const processed = guard.process((val) => val.toUpperCase());
-        asserts.assertNotStrictEquals(guard, processed);
-      },
-    );
+    assertEquals(optional(undefined), 42);
+    assertEquals(optional(10), 10);
   });
 
-  await t.step('clone functionality', async (u) => {
-    await u.step('should create a mutable copy', () => {
-      const guard = new StringGuardian().immutable();
-      guard.title = 'Original';
+  await t.step('complex chaining works correctly', () => {
+    const guardian = TestGuardian.create()
+      .transform((n) => n + 1)
+      .test((n) => n < 100, 'Too large')
+      .in([2, 3, 4, 5, 6], 'Invalid value')
+      .notEquals(6, 'Cannot be 6');
 
-      const cloned = guard.clone();
-      asserts.assertNotStrictEquals(guard, cloned);
-      asserts.assertEquals(cloned.isImmutable, false);
-      asserts.assertEquals(cloned.metaData?.title, 'Original');
-    });
+    assertEquals(guardian(1), 2); // 1 + 1 = 2
+    assertEquals(guardian(4), 5); // 4 + 1 = 5
 
-    await u.step('should clone metadata without isImmutable flag', () => {
-      const guard = new StringGuardian().immutable();
-      guard.description = 'Test description';
-
-      const cloned = guard.clone();
-      asserts.assertEquals(cloned.metaData?.description, 'Test description');
-      asserts.assertEquals(cloned.isImmutable, false);
-    });
+    assertThrows(() => guardian(5), GuardianError, 'Cannot be 6'); // 5 + 1 = 6
+    assertThrows(() => guardian(10), GuardianError, 'Invalid value'); // 10 + 1 = 11
+    assertThrows(() => guardian(999), GuardianError, 'Too large'); // 999 + 1 = 1000
+    assertThrows(() => guardian('string'), GuardianError); // Initial type check fails
   });
 
-  await t.step('process method', async (u) => {
-    await u.step('should transform values', () => {
-      const guard = new StringGuardian();
-      const result = guard.process((val) => val.toUpperCase()).parse('hello');
-      asserts.assertEquals(result, 'HELLO');
+  await t.step('validate method', async (t) => {
+    await t.step('returns success tuple for valid input', () => {
+      const guardian = TestGuardian.create();
+      const [error, result] = guardian.validate(42);
+
+      assertEquals(error, null);
+      assertEquals(result, 42);
     });
 
-    await u.step('should handle async transformations', async () => {
-      const guard = new StringGuardian();
-      const asyncGuard = guard.process(async (val) => val.toUpperCase());
-      const result = await asyncGuard.parseAsync('hello');
-      asserts.assertEquals(result, 'HELLO');
+    await t.step('returns error tuple for invalid input', () => {
+      const guardian = TestGuardian.create();
+      const [error, result] = guardian.validate('not a number');
+
+      assertEquals(result, undefined);
+      assertEquals(error instanceof GuardianError, true);
+      assertEquals(error?.got, 'not a number');
+      assertEquals(error?.expected, 'number');
     });
 
-    await u.step('should throw error when called after nullable()', () => {
-      const guard = new StringGuardian().nullable();
-      asserts.assertThrows(
-        () => guard.process((val) => val ? val.toUpperCase() : ''),
-        GuardianError,
-        'Cannot call process() after nullable()',
+    await t.step('handles chained validations in validate', () => {
+      const guardian = TestGuardian.create()
+        .test((n) => n > 0, 'Must be positive')
+        .test((n) => n < 100, 'Must be less than 100');
+
+      // Valid case
+      const [error1, result1] = guardian.validate(50);
+      assertEquals(error1, null);
+      assertEquals(result1, 50);
+
+      // Invalid case - negative number
+      const [error2, result2] = guardian.validate(-5);
+      assertEquals(result2, undefined);
+      assertEquals(error2 instanceof GuardianError, true);
+      assertEquals(error2?.message.includes('Must be positive'), true);
+
+      // Invalid case - too large
+      const [error3, result3] = guardian.validate(150);
+      assertEquals(result3, undefined);
+      assertEquals(error3 instanceof GuardianError, true);
+      assertEquals(error3?.message.includes('Must be less than 100'), true);
+    });
+
+    await t.step('handles transformation in validate', () => {
+      const guardian = TestGuardian.create()
+        .transform((n) => n * 2)
+        .test((n) => n > 10, 'Doubled value must be > 10');
+
+      // Valid case
+      const [error1, result1] = guardian.validate(10);
+      assertEquals(error1, null);
+      assertEquals(result1, 20); // 10 * 2
+
+      // Invalid case - transformation makes it fail the test
+      const [error2, result2] = guardian.validate(3);
+      assertEquals(result2, undefined);
+      assertEquals(error2 instanceof GuardianError, true);
+      assertEquals(
+        error2?.message.includes('Doubled value must be > 10'),
+        true,
       );
     });
 
-    await u.step('should throw error when called after optional()', () => {
-      const guard = new StringGuardian().optional();
-      asserts.assertThrows(
-        () => guard.process((val) => val ? val.toUpperCase() : ''),
-        GuardianError,
-        'Cannot call process() after optional()',
+    await t.step('wraps non-GuardianError exceptions', () => {
+      const guardian = ThrowingGuardian.createThrowing();
+      const [error, result] = guardian.validate('not a number');
+
+      assertEquals(result, undefined);
+      assertEquals(error instanceof GuardianError, true);
+      assertEquals(error?.message, 'Custom error message');
+      assertEquals(error?.context.got, 'not a number');
+      assertEquals(error?.context.comparison, 'validate');
+    });
+
+    await t.step('handles async guardians correctly', () => {
+      const asyncGuardian = AsyncGuardian.createAsync();
+
+      const [error, result] = asyncGuardian.validate(42);
+
+      assertEquals(result, undefined);
+      assertEquals(error instanceof GuardianError, true);
+      assertEquals(
+        error?.message,
+        'Guardian validation cannot return a Promise',
       );
     });
 
-    await u.step('should use provided constructor', () => {
-      const stringGuard = new StringGuardian();
-      const numberGuard = stringGuard.process(
-        (val) => parseInt(val, 10),
-        NumberGuardian,
-      );
-      asserts.assertInstanceOf(numberGuard, NumberGuardian);
-    });
-  });
+    await t.step('preserves GuardianError properties', () => {
+      const guardian = TestGuardian.create()
+        .in([1, 2, 3], 'Must be 1, 2, or 3');
 
-  await t.step('test method', async (u) => {
-    await u.step('should validate using test function', () => {
-      const guard = new StringGuardian().test(
-        (val) => val.length >= 5,
-        'String must be at least 5 characters',
-      );
+      const [error, result] = guardian.validate(5);
 
-      asserts.assertEquals(guard.parse('hello'), 'hello');
-      asserts.assertThrows(() => guard.parse('hi'), GuardianError);
+      assertEquals(result, undefined);
+      assertEquals(error instanceof GuardianError, true);
+      assertEquals(error?.context.got, 5);
+      assertEquals(error?.message.includes('Must be 1, 2, or 3'), true);
     });
 
-    await u.step('should throw error when called after nullable()', () => {
-      const guard = new StringGuardian().nullable();
-      asserts.assertThrows(
-        () => guard.test((val) => val ? val.length > 0 : false),
-        GuardianError,
-        'Cannot call test() after nullable()',
-      );
+    await t.step('handles optional guardians', () => {
+      const guardian = TestGuardian.create().optional(999);
+
+      // Valid defined value
+      const [error1, result1] = guardian.validate(42);
+      assertEquals(error1, null);
+      assertEquals(result1, 42);
+
+      // Undefined value uses default
+      const [error2, result2] = guardian.validate(undefined);
+      assertEquals(error2, null);
+      assertEquals(result2, 999);
     });
 
-    await u.step('should throw error when called after optional()', () => {
-      const guard = new StringGuardian().optional();
-      asserts.assertThrows(
-        () => guard.test((val) => val ? val.length > 0 : false),
-        GuardianError,
-        'Cannot call test() after optional()',
-      );
-    });
-  });
-
-  await t.step('equals method', async (u) => {
-    await u.step('should validate equality', () => {
-      const guard = new StringGuardian().equals('expected');
-
-      asserts.assertEquals(guard.parse('expected'), 'expected');
-      asserts.assertThrows(() => guard.parse('different'), GuardianError);
-    });
-
-    await u.step('should use custom error message', () => {
-      const guard = new StringGuardian().equals('expected', 'Must be expected');
-
-      try {
-        guard.parse('different');
-        asserts.fail('Should have thrown');
-      } catch (error) {
-        asserts.assertInstanceOf(error, GuardianError);
-        asserts.assertEquals(error.message, 'Must be expected');
-      }
-    });
-  });
-
-  await t.step('notEquals method', async (u) => {
-    await u.step('should validate inequality', () => {
-      const guard = new StringGuardian().notEquals('forbidden');
-
-      asserts.assertEquals(guard.parse('allowed'), 'allowed');
-      asserts.assertThrows(() => guard.parse('forbidden'), GuardianError);
-    });
-
-    await u.step('should use custom error message', () => {
-      const guard = new StringGuardian().notEquals(
-        'forbidden',
-        'Cannot be forbidden',
-      );
-
-      try {
-        guard.parse('forbidden');
-        asserts.fail('Should have thrown');
-      } catch (error) {
-        asserts.assertInstanceOf(error, GuardianError);
-        asserts.assertEquals(error.message, 'Cannot be forbidden');
-      }
-    });
-  });
-
-  await t.step('isIn method', async (u) => {
-    await u.step('should validate value is in allowed list', () => {
-      const guard = new StringGuardian().isIn(['a', 'b', 'c']);
-
-      asserts.assertEquals(guard.parse('a'), 'a');
-      asserts.assertEquals(guard.parse('b'), 'b');
-      asserts.assertThrows(() => guard.parse('d'), GuardianError);
-    });
-
-    await u.step('should use custom error message', () => {
-      const guard = new StringGuardian().isIn(['a', 'b'], 'Must be a or b');
-
-      try {
-        guard.parse('c');
-        asserts.fail('Should have thrown');
-      } catch (error) {
-        asserts.assertInstanceOf(error, GuardianError);
-        asserts.assertEquals(error.message, 'Must be a or b');
-      }
-    });
-  });
-
-  await t.step('isNotIn method', async (u) => {
-    await u.step('should validate value is not in forbidden list', () => {
-      const guard = new StringGuardian().isNotIn(['x', 'y', 'z']);
-
-      asserts.assertEquals(guard.parse('a'), 'a');
-      asserts.assertThrows(() => guard.parse('x'), GuardianError);
-    });
-
-    await u.step('should use custom error message', () => {
-      const guard = new StringGuardian().isNotIn(
-        ['x', 'y'],
-        'Cannot be x or y',
-      );
-
-      try {
-        guard.parse('x');
-        asserts.fail('Should have thrown');
-      } catch (error) {
-        asserts.assertInstanceOf(error, GuardianError);
-        asserts.assertEquals(error.message, 'Cannot be x or y');
-      }
-    });
-  });
-
-  await t.step('nullable method', async (u) => {
-    await u.step('should handle null values', () => {
-      const guard = new StringGuardian().nullable();
-
-      asserts.assertEquals(guard.parse('hello'), 'hello');
-      asserts.assertEquals(guard.parse(null), null);
-      // For StringGuardian, undefined behavior depends on implementation
-      // Let's just test that null works
-    });
-
-    await u.step('should throw error on multiple nullable() calls', () => {
-      const guard = new StringGuardian().nullable();
-      asserts.assertThrows(
-        () => guard.nullable(),
-        GuardianError,
-        'nullable() has already been called',
-      );
-    });
-
-    await u.step('should return new instance when immutable', () => {
-      const guard = new StringGuardian().immutable();
-      const nullable = guard.nullable();
-      asserts.assertNotStrictEquals(guard, nullable);
-    });
-  });
-
-  await t.step('optional method', async (u) => {
-    await u.step('should handle undefined values without default', () => {
-      const guard = new StringGuardian().optional();
-
-      asserts.assertEquals(guard.parse('hello'), 'hello');
-      asserts.assertEquals(guard.parse(undefined), undefined);
-    });
-
-    await u.step('should handle undefined values with default value', () => {
-      const guard = new StringGuardian().optional('default');
-
-      asserts.assertEquals(guard.parse('hello'), 'hello');
-      asserts.assertEquals(guard.parse(undefined), 'default');
-    });
-
-    await u.step('should handle undefined values with default function', () => {
-      const guard = new StringGuardian().optional(() => 'computed');
-
-      asserts.assertEquals(guard.parse('hello'), 'hello');
-      asserts.assertEquals(guard.parse(undefined), 'computed');
-    });
-
-    await u.step('should handle async default function', async () => {
-      const guard = new StringGuardian().optional(async () => 'async-default');
-
-      const result = await guard.parseAsync(undefined);
-      asserts.assertEquals(result, 'async-default');
-    });
-
-    await u.step('should throw error on multiple optional() calls', () => {
-      const guard = new StringGuardian().optional();
-      asserts.assertThrows(
-        () => guard.optional(),
-        GuardianError,
-        'optional() has already been called',
-      );
-    });
-
-    await u.step('should return new instance when immutable', () => {
-      const guard = new StringGuardian().immutable();
-      const optional = guard.optional();
-      asserts.assertNotStrictEquals(guard, optional);
-    });
-  });
-
-  await t.step('parse method', async (u) => {
-    await u.step('should throw error for async guardian', () => {
-      const guard = new StringGuardian();
-      // Manually set async flag to test error handling
-      guard['_metaData'] = { isAsync: true };
-
-      asserts.assertThrows(
-        () => guard.parse('test'),
-        GuardianError,
-        'Cannot use parse() with async validation steps. Use parseAsync() instead.',
-      );
-    });
-
-    await u.step('should wrap non-GuardianError exceptions', () => {
-      const guard = new StringGuardian().process(() => {
-        throw new Error('Custom error');
-      });
-
-      try {
-        guard.parse('test');
-        asserts.fail('Should have thrown');
-      } catch (error) {
-        asserts.assertInstanceOf(error, GuardianError);
-        asserts.assertEquals(error.message, 'Validation failed');
-      }
-    });
-  });
-
-  await t.step('parseAsync method', async (u) => {
-    await u.step('should handle sync transformations', async () => {
-      const guard = new StringGuardian();
-      const result = await guard.parseAsync('hello');
-      asserts.assertEquals(result, 'hello');
-    });
-
-    await u.step('should handle async transformations', async () => {
-      const guard = new StringGuardian().process(async (val) =>
-        val.toUpperCase()
-      );
-      const result = await guard.parseAsync('hello');
-      asserts.assertEquals(result, 'HELLO');
-    });
-
-    await u.step('should wrap non-GuardianError exceptions', async () => {
-      const guard = new StringGuardian().process(async () => {
-        throw new Error('Custom error');
-      });
-
-      try {
-        await guard.parseAsync('test');
-        asserts.fail('Should have thrown');
-      } catch (error) {
-        asserts.assertInstanceOf(error, GuardianError);
-        asserts.assertEquals(error.message, 'Validation failed');
-      }
-    });
-  });
-
-  await t.step('safeParse method', async (u) => {
-    await u.step('should return success result for valid input', () => {
-      const guard = new StringGuardian();
-      const [error, data] = guard.safeParse('hello');
-
-      asserts.assertEquals(error, null);
-      asserts.assertEquals(data, 'hello');
-    });
-
-    await u.step('should return error result for invalid input', () => {
-      const guard = new StringGuardian();
-      const [error, data] = guard.safeParse(123);
-
-      asserts.assertInstanceOf(error, GuardianError);
-      asserts.assertEquals(data, undefined);
-    });
-
-    await u.step('should handle non-GuardianError exceptions', () => {
-      const guard = new StringGuardian().process(() => {
-        throw new Error('Custom error');
-      });
-
-      const [error, data] = guard.safeParse('test');
-      asserts.assertInstanceOf(error, GuardianError);
-      // The actual error message is "Validation failed" based on the implementation
-      asserts.assertEquals(error.message, 'Validation failed');
-      asserts.assertEquals(data, undefined);
-    });
-  });
-
-  await t.step('safeParseAsync method', async (u) => {
-    await u.step('should return success result for valid input', async () => {
-      const guard = new StringGuardian();
-      const [error, data] = await guard.safeParseAsync('hello');
-
-      asserts.assertEquals(error, null);
-      asserts.assertEquals(data, 'hello');
-    });
-
-    await u.step('should return error result for invalid input', async () => {
-      const guard = new StringGuardian();
-      const [error, data] = await guard.safeParseAsync(123);
-
-      asserts.assertInstanceOf(error, GuardianError);
-      asserts.assertEquals(data, undefined);
-    });
-
-    await u.step('should handle non-GuardianError exceptions', async () => {
-      const guard = new StringGuardian().process(async () => {
-        throw new Error('Custom error');
-      });
-
-      const [error, data] = await guard.safeParseAsync('test');
-      asserts.assertInstanceOf(error, GuardianError);
-      // The actual error message is "Validation failed" based on the implementation
-      asserts.assertEquals(error.message, 'Validation failed');
-      asserts.assertEquals(data, undefined);
-    });
-  });
-
-  await t.step('documentation methods', async (u) => {
-    await u.step('toOpenAPI should generate schema', () => {
-      const guard = new StringGuardian();
-      guard.title = 'Test String';
-      guard.description = 'A test string field';
-      guard.examples = ['example1', 'example2'];
-      guard.deprecated = true;
-
-      const schema = guard.toOpenAPI();
-
-      asserts.assertEquals(schema.type, 'string');
-      asserts.assertEquals(schema.title, 'Test String');
-      asserts.assertEquals(schema.description, 'A test string field');
-      asserts.assertEquals(schema.examples, ['example1', 'example2']);
-      asserts.assertEquals(schema.deprecated, true);
-    });
-
-    await u.step('toOpenAPI should include nullable flag', () => {
-      const guard = new StringGuardian().nullable();
-      const schema = guard.toOpenAPI();
-
-      asserts.assertEquals(schema.nullable, true);
-    });
-
-    await u.step('toMarkdown should generate documentation', () => {
-      const guard = new StringGuardian();
-      guard.title = 'Test String';
-      guard.description = 'A test string field';
-      guard.examples = ['example1', 'example2'];
-
-      const markdown = guard.toMarkdown();
-
-      asserts.assert(markdown.includes('### Test String'));
-      asserts.assert(markdown.includes('A test string field'));
-      asserts.assert(markdown.includes('**Type:** string'));
-      asserts.assert(markdown.includes('**Examples:**'));
-      asserts.assert(markdown.includes('`"example1"`'));
-    });
-
-    await u.step(
-      'toMarkdown should include nullable and optional flags',
-      () => {
-        const guard = new StringGuardian().nullable().optional();
-        guard.title = 'Optional Field';
-
-        const markdown = guard.toMarkdown();
-
-        asserts.assert(markdown.includes('nullable'));
-        asserts.assert(markdown.includes('optional'));
-      },
-    );
-
-    await u.step('toMarkdown should include deprecation warning', () => {
-      const guard = new StringGuardian();
-      guard.deprecated = true;
-
-      const markdown = guard.toMarkdown();
-
-      asserts.assert(markdown.includes('⚠️ **Deprecated**'));
-    });
-  });
-
-  await t.step('chaining nullable and optional', async (u) => {
-    await u.step('nullable().optional() should work correctly', () => {
-      const guard = new StringGuardian().nullable().optional();
-
-      asserts.assertEquals(guard.parse('hello'), 'hello');
-      asserts.assertEquals(guard.parse(null), null);
-      asserts.assertEquals(guard.parse(undefined), undefined);
-    });
-
-    await u.step('optional().nullable() should work correctly', () => {
-      const guard = new StringGuardian().optional().nullable();
-
-      asserts.assertEquals(guard.parse('hello'), 'hello');
-      asserts.assertEquals(guard.parse(undefined), undefined);
-      asserts.assertEquals(guard.parse(null), null);
-    });
-
-    await u.step('optional with default should work with nullable', () => {
-      const guard = new StringGuardian().optional('default').nullable();
-
-      asserts.assertEquals(guard.parse('hello'), 'hello');
-      asserts.assertEquals(guard.parse(undefined), 'default');
-      asserts.assertEquals(guard.parse(null), null);
+    await t.step('complex chained validation with validate', () => {
+      const guardian = TestGuardian.create()
+        .transform((n) => n + 10)
+        .test((n) => n % 2 === 0, 'Result must be even')
+        .in([12, 14, 16, 18, 20], 'Must be in allowed range');
+
+      // Valid case: 2 + 10 = 12 (even and in range)
+      const [error1, result1] = guardian.validate(2);
+      assertEquals(error1, null);
+      assertEquals(result1, 12);
+
+      // Invalid case: 3 + 10 = 13 (odd)
+      const [error2, result2] = guardian.validate(3);
+      assertEquals(result2, undefined);
+      assertEquals(error2 instanceof GuardianError, true);
+      assertEquals(error2?.message.includes('Result must be even'), true);
+
+      // Invalid case: 6 + 10 = 16 (even but let's test range) - this would pass
+      // Let's use 4 + 10 = 14 (even and in range) - this would pass
+      // Let's use 12 + 10 = 22 (even but not in range)
+      const [error3, result3] = guardian.validate(12);
+      assertEquals(result3, undefined);
+      assertEquals(error3 instanceof GuardianError, true);
+      assertEquals(error3?.message.includes('Must be in allowed range'), true);
     });
   });
 });
