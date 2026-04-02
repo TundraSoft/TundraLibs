@@ -36,4 +36,4 @@ export {
 export { LogManager } from './LogManager.ts';
 
 // Re-export SyslogSeverities from utils for convenience
-export { SyslogSeverities, type SyslogSeverity } from '@tundralibs/utils';
+export { SyslogSeverities, type SyslogSeverity } from '../utils/mod.ts';

@@ -80,7 +80,7 @@
  */
 
 import type { UnionToIntersection } from './UnionToIntersection.ts';
-import type { UnArray } from '@tundralibs/utils';
+import type { UnArray } from './UnArray.ts';
 
 /**
  * Recursively flattens an entity type, preserving the nested structure as dot-separated keys.

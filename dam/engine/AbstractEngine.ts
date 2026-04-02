@@ -1,5 +1,5 @@
-import { type EventOptionKeys, Options } from '@tundralibs/utils';
-import { ulid } from '@tundralibs/id';
+import { type EventOptionKeys, Options } from '../../utils/mod.ts';
+import { ulid } from '../../id/mod.ts';
 import {
   EngineCapabilities,
   EngineEvents,

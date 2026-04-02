@@ -1,4 +1,4 @@
-import { FlattenEntity } from '@tundralibs/utils';
+import { FlattenEntity } from '../../utils/mod.ts';
 import { GetColumnByType, TableType } from './Common.ts';
 
 /**

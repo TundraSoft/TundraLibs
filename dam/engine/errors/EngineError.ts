@@ -1,4 +1,4 @@
-import { variableReplacer } from '@tundralibs/utils';
+import { variableReplacer } from '../../../utils/mod.ts';
 import { DAMError } from '../../errors/mod.ts';
 import {
   type DAMEngineErrorCode,

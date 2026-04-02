@@ -1,4 +1,4 @@
-import { Singleton } from '@tundralibs/utils';
+import { Singleton } from '../utils/mod.ts';
 import type { CacherOptions } from './types/mod.ts';
 import { AbstractEngine } from './AbstractEngine.ts';
 import { MemCacher, MemoryCacher, RedisCacher } from './engines/mod.ts';

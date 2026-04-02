@@ -1,4 +1,4 @@
-import { Singleton } from '@tundralibs/utils';
+import { Singleton } from '../utils/mod.ts';
 import {
   AbstractHandler,
   type HandlerOptions,

@@ -1,5 +1,5 @@
 import { type ClientOptions, Pool, PoolClient } from 'jsr:@db/postgres@^0.19.5';
-import type { EventOptionKeys } from '@tundralibs/utils';
+import type { EventOptionKeys } from '../../../utils/mod.ts';
 import {
   AbstractEngine,
   DAMEngineError,

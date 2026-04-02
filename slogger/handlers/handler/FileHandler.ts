@@ -3,7 +3,7 @@ import { AbstractHandler, type HandlerOptions } from '../AbstractHandler.ts';
 import * as path from 'jsr:@std/path@^1.0.0';
 import { ensureDirSync } from 'jsr:@std/fs@^1.0.0';
 import { format } from 'jsr:@std/datetime@^0.225.4';
-import { SyslogSeverities, variableReplacer } from '@tundralibs/utils';
+import { SyslogSeverities, variableReplacer } from '../../../utils/mod.ts';
 
 /**
  * Configuration options for the File handler

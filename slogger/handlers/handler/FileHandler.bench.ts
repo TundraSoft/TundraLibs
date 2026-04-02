@@ -1,5 +1,5 @@
 import { FileHandler } from './FileHandler.ts';
-import { SyslogSeverities } from '@tundralibs/utils';
+import { SyslogSeverities } from '../../../utils/mod.ts';
 import { SlogObject } from '../../types/mod.ts';
 import { jsonFormatter, simpleFormatter } from '../../formatters/mod.ts';
 

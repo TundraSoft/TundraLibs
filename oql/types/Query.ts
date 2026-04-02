@@ -1,6 +1,6 @@
 import type { Joins, QueryFilter } from './Filter.ts';
 import type { ColumnIdentifier, SQLDataType, TableType } from './Common.ts';
-import type { FlattenEntity } from '@tundralibs/utils';
+import type { FlattenEntity } from '../../utils/mod.ts';
 import { Expressions, GetExpressionByType } from './Expressions.ts';
 import { Aggregates } from './Aggregates.ts';
 

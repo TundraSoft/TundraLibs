@@ -1,4 +1,4 @@
-import { type PrivateObject, privateObject } from '@tundralibs/utils';
+import { type PrivateObject, privateObject } from '../../../utils/mod.ts';
 import { AbstractEngine } from '../../AbstractEngine.ts';
 import type { CacheValue } from '../../types/mod.ts';
 import type { MemoryCacherOptions } from './types/mod.ts';

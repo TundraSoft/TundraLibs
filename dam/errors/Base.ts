@@ -1,4 +1,4 @@
-import { BaseError } from '@tundralibs/utils';
+import { BaseError } from '../../utils/mod.ts';
 /**
  * Base error class for DAM.
  * Extends BaseError from @tundralibs/utils with Cacher-specific metadata.

@@ -2,8 +2,8 @@ import {
   SyslogSeverities,
   SyslogSeverity,
   variableReplacer,
-} from '@tundralibs/utils';
-import { ulid } from '@tundralibs/id';
+} from '../utils/mod.ts';
+import { ulid } from '../id/mod.ts';
 import { AbstractHandler, type HandlerOptions } from './handlers/mod.ts';
 import type { SloggerFormatter, SlogObject } from './types/mod.ts';
 import { LogManager } from './LogManager.ts';

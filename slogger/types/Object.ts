@@ -1,4 +1,4 @@
-import { SyslogSeverities, SyslogSeverity } from '@tundralibs/utils';
+import { SyslogSeverities, SyslogSeverity } from '../utils/mod.ts';
 
 export type SlogObject = {
   id: string;

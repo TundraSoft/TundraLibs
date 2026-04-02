@@ -5,7 +5,7 @@ import {
   MongoClient,
   type MongoClientOptions,
 } from 'npm:mongodb';
-import type { EventOptionKeys } from '@tundralibs/utils';
+import type { EventOptionKeys } from '../../../utils/mod.ts';
 import {
   AbstractEngine,
   DAMEngineError,

@@ -5,7 +5,7 @@
  * with variable replacements. This allows for customizable log formats.
  */
 import type { SloggerFormatter, SlogObject } from '../types/mod.ts';
-import { variableReplacer } from '@tundralibs/utils';
+import { variableReplacer } from '../../utils/mod.ts';
 
 /**
  * Creates a formatter function that uses a template string to format log objects

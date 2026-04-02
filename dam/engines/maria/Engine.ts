@@ -1,6 +1,6 @@
 /// <reference types="npm:@types/node" />
 import { createPool, type Pool, type PoolConnection } from 'npm:mariadb@^3.4.5';
-import type { EventOptionKeys } from '@tundralibs/utils';
+import type { EventOptionKeys } from '../../../utils/mod.ts';
 import {
   AbstractEngine,
   DAMEngineError,

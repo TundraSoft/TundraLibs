@@ -1,4 +1,4 @@
-import { SyslogSeverities } from '@tundralibs/utils';
+import { SyslogSeverities } from '../../utils/mod.ts';
 import { SlogObject } from '../types/mod.ts';
 import {
   compactFormat,

@@ -1,4 +1,4 @@
-import { BaseError } from '@tundralibs/utils';
+import { BaseError } from '../../utils/mod.ts';
 
 import type { JWTHeader, JWTPayload } from './types.ts';
 

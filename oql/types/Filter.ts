@@ -1,4 +1,4 @@
-import { FlattenEntity } from '@tundralibs/utils';
+import { FlattenEntity } from '../../utils/mod.ts';
 import { ColumnTypes, TableType } from './Common.ts';
 import type { Expressions } from './Expressions.ts';
 

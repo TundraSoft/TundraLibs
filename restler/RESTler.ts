@@ -8,7 +8,7 @@ import {
   stringify as XMLStringify,
 } from 'jsr:@libs/xml@^6.0.4';
 import * as path from 'jsr:@std/path@^1.0.0';
-import { type EventOptionKeys, Options } from '@tundralibs/utils';
+import { type EventOptionKeys, Options } from '../utils/mod.ts';
 import type {
   RESTlerEndpoint,
   RESTlerEvents,
