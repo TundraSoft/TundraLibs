@@ -1,0 +1,253 @@
+name: CI
+
+# Runs on every branch push. The pull_request trigger exists for FORK
+# PRs only (their push events fire in the fork, so check runs would
+# never attach to the upstream PR); same-repo PRs are satisfied by the
+# push run on the head commit, and the per-job `if` skips the duplicate
+# pull_request run (skipped checks still satisfy branch protection).
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Format, lint, type-check
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+
+      - name: Format check
+        run: deno fmt --check
+
+      - name: Lint
+        run: deno lint
+
+      - name: Type check
+        run: deno task check
+
+      - name: Edge-safety (drivers)
+        # The edge/HTTP drivers must stay bundleable for edge/serverless
+        # runtimes: each engine's runtime import graph may not reach
+        # node:net/tls/dgram/dns/http/https, compat net/udp/webserver/websocket,
+        # a native SQLite binding, or a DB TCP wire protocol. Fails if a barrel
+        # re-introduces one of those. (Engines covered are enumerated in the
+        # check-edge-safety.ts script.)
+        run: deno task --cwd packages/drivers check:edge-safety
+
+      - name: Generated config drift check
+        # release-please config/manifest, labeler.yml, workspace meta and
+        # issue templates are generated from the packages/ directory —
+        # never hand-maintained. Fails if a package was added/removed
+        # without running `deno task workspace:sync`.
+        run: deno task workspace:sync:check
+
+  audit:
+    name: Dependency audit (high+)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+
+      - name: Audit dependencies
+        # Fails only on high/critical; the weekly health run reports all
+        # severities and files an issue.
+        run: deno audit --level=high
+
+  publish-dry-run:
+    name: JSR publish dry-run
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+
+      - name: Dry-run publish (slow-types / metadata gate)
+        run: deno publish --dry-run
+
+  test:
+    name: Test (${{ matrix.name }})
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    # Live-DB fixtures (NORM + drivers) read these via envArgs, which merges
+    # OS env. Services below are per-JOB, so each matrix runtime gets its own
+    # isolated containers — cross-runtime overlap is impossible. DB_SCHEMA
+    # namespaces NORM vs drivers WITHIN a job (they run together under
+    # `deno test --parallel`): each package targets `${DB_SCHEMA}_<pkg>`.
+    env:
+      DB_SCHEMA: ci
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: '5432'
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      MARIA_HOST: localhost
+      MARIA_PORT: '3306'
+      MARIA_USER: root
+      MARIA_PASSWORD: mariadb
+      MONGO_HOST: localhost
+      MONGO_PORT: '27017'
+      MONGO_USER: mongo
+      MONGO_PASSWORD: mongo
+      MONGO_AUTHSOURCE: admin
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      # cacher uses logical DB 1; the drivers redis suite uses the default DB 0.
+      REDIS_DB: '1'
+      MEMCACHED_HOST: localhost
+      # cacher uses the primary instance; drivers gets a dedicated one because
+      # both suites call the global memcached flush() (no logical DBs to isolate).
+      MEMCACHED_PORT: '11211'
+      MEMCACHED_PORT2: '11212'
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: mariadb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      mongo:
+        image: mongo:8
+        env:
+          MONGO_INITDB_ROOT_USERNAME: mongo
+          MONGO_INITDB_ROOT_PASSWORD: mongo
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      memcached:
+        image: memcached:1
+        ports:
+          - 11211:11211
+      # Dedicated instance for the drivers memcached suite (see MEMCACHED_PORT2).
+      memcached-drivers:
+        image: memcached:1
+        ports:
+          - 11212:11211
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: deno
+            runtime: deno
+          - name: bun
+            runtime: bun
+          - name: node-22
+            runtime: node
+            node-version: 22.x
+          - name: node-24
+            runtime: node
+            node-version: 24.x
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Deno
+        if: matrix.runtime == 'deno'
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+
+      # Bun installs node_modules for the bun and node runs.
+      - name: Setup Bun
+        if: matrix.runtime != 'deno'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node
+        if: matrix.runtime == 'node'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies (bun)
+        if: matrix.runtime != 'deno'
+        run: bun install
+
+      # Postgres/MariaDB need the two per-package databases created up front
+      # (the service `env` only seeds one). Mongo auto-creates on first write.
+      # Also block until memcached accepts connections — its image ships no
+      # health-check client, so `services:` can't gate on it.
+      - name: Prepare databases
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client mariadb-client
+          for db in ${DB_SCHEMA}_norm ${DB_SCHEMA}_drivers; do
+            PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE ${db};"
+            mariadb -h 127.0.0.1 -uroot -pmariadb -e "CREATE DATABASE IF NOT EXISTS ${db};"
+          done
+          for port in 11211 11212; do
+            for _ in $(seq 1 30); do
+              (echo > /dev/tcp/localhost/${port}) >/dev/null 2>&1 && break
+              sleep 1
+            done
+          done
+
+      # `@db/sqlite` downloads libsqlite3.so on first import, into a shared
+      # cache. Under `--parallel` two workers race that download and mmap a
+      # half-written file, killing the whole run with SIGBUS/SIGSEGV (exit
+      # 135/139) — no failing assertion, so it reads like a mystery crash.
+      # Import it once, single-threaded, so the parallel run finds it cached.
+      - name: Warm sqlite3 native library
+        if: matrix.runtime == 'deno'
+        run: deno eval "await import('jsr:@db/sqlite@^0.13.0');"
+
+      - name: Run tests (deno)
+        if: matrix.runtime == 'deno'
+        run: deno test --allow-all --parallel packages/
+
+      - name: Run tests (bun)
+        if: matrix.runtime == 'bun'
+        run: bun test packages/
+
+      - name: Run tests (node)
+        if: matrix.runtime == 'node'
+        run: node --import tsx --test 'packages/**/*.test.ts'

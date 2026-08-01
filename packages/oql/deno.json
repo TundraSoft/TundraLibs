@@ -1,0 +1,16 @@
+{
+  "name": "@tundralibs/oql",
+  "version": "1.0.0",
+  "description": "Object Query Language - Type-safe, database-agnostic query definitions",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./types": "./types/mod.ts",
+    "./asserts": "./asserts/mod.ts",
+    "./translator": "./translator/mod.ts",
+    "./errors": "./errors/mod.ts"
+  },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.19"
+  }
+}

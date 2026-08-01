@@ -1,0 +1,75 @@
+name: PR Checks
+
+# labeled/unlabeled are included so adding/removing the `multi-package`
+# label re-evaluates the package guard without needing a new push.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title-lint:
+    name: Conventional PR title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Squash-merge makes the PR title the commit on main, which
+          # release-please parses — so the title must be conventional.
+          regex='^(feat|fix|docs|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9,-]+\))?!?: .+'
+          if printf '%s' "$TITLE" | grep -qE "$regex"; then
+            echo "PR title OK: $TITLE"
+          else
+            echo "::error::PR title is not conventional-commit formatted."
+            echo "Expected: type(scope): description"
+            echo "  types:  feat fix docs refactor perf test build ci chore revert"
+            echo "  scope:  package dir name (restler, compat, ...) or global"
+            echo "  got:    $TITLE"
+            exit 1
+          fi
+
+  package-guard:
+    name: Single-package guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Check packages touched
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HAS_MULTI_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'multi-package') }}
+        run: |
+          # One package per PR keeps changelogs and releases untangled
+          # (release-please attributes commits by path). The
+          # `multi-package` label is the deliberate opt-out for atomic
+          # cross-package changes.
+          # Three-dot = diff from the merge base (what the PR actually
+          # changes), matching GitHub's "Files changed" — a two-dot diff
+          # against the base.sha snapshot picks up unrelated files once
+          # main moves ahead.
+          packages=$(git diff --name-only "$BASE_SHA...$HEAD_SHA" \
+            | grep -E '^packages/[^/]+/' \
+            | cut -d/ -f2 | sort -u)
+          count=$(printf '%s' "$packages" | grep -c . || true)
+          echo "Packages touched ($count):"
+          printf '%s\n' "$packages"
+          if [ "$count" -le 1 ]; then
+            echo "OK: at most one package touched."
+          elif [ "$HAS_MULTI_LABEL" = "true" ]; then
+            echo "OK: multiple packages, but 'multi-package' label is set."
+          else
+            echo "::error::PR touches $count packages. Split it into one PR per package, or add the 'multi-package' label if the change is genuinely atomic."
+            exit 1
+          fi

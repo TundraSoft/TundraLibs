@@ -1,0 +1,21 @@
+{
+  "_comment": "Managed by .github/scripts/workspace.ts — display/wiki name per package dir. The name passed to `workspace:add` is preserved here; its lowercase form is the dir and package name. Hand-edit a display name only if the casing is wrong, then run `deno task workspace:sync`.",
+  "packages": {
+    "cacher": "Cacher",
+    "compat": "compat",
+    "crypt": "crypt",
+    "doctor": "Doctor",
+    "drivers": "drivers",
+    "guardian": "Guardian",
+    "id": "ID",
+    "metro-man": "MetroMan",
+    "norm": "NORM",
+    "oql": "OQL",
+    "pact": "Pact",
+    "radrouter": "RadRouter",
+    "restler": "RESTler",
+    "rpc": "RPC",
+    "slogger": "Slogger",
+    "utils": "utils"
+  }
+}

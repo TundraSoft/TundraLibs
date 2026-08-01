@@ -1,0 +1,26 @@
+{
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "bun run test:bun && bun run test:deno && bun run test:node",
+    "test:bun": "bun test packages/",
+    "test:deno": "deno test --allow-all --parallel",
+    "test:node": "node --import tsx --test 'packages/**/*.test.ts'",
+    "fmt": "deno fmt",
+    "lint": "deno lint"
+  },
+  "dependencies": {
+    "@std/asserts": "npm:@jsr/std__assert@^1.0.0",
+    "@std/testing": "npm:@jsr/std__testing@^1.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  },
+  "license": "MIT"
+}

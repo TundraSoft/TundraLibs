@@ -1,0 +1,17 @@
+{
+  "packages/cacher": "1.0.0-dev11",
+  "packages/compat": "1.0.0-dev10",
+  "packages/crypt": "1.0.0-dev12",
+  "packages/doctor": "1.0.0-dev6",
+  "packages/drivers": "1.0.0-dev11",
+  "packages/guardian": "1.0.0-dev11",
+  "packages/id": "1.0.0-dev12",
+  "packages/metro-man": "1.0.0-dev7",
+  "packages/norm": "1.0.0-dev0.7",
+  "packages/oql": "1.0.0-dev6.7",
+  "packages/radrouter": "1.0.0-dev5",
+  "packages/restler": "1.0.0-dev7",
+  "packages/rpc": "1.0.0-dev6",
+  "packages/slogger": "1.0.0-dev12",
+  "packages/utils": "1.0.0-dev11"
+}

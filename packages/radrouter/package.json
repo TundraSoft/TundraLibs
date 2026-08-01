@@ -1,0 +1,18 @@
+{
+  "name": "@tundralibs/radrouter",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Compressed radix-tree HTTP router — typed parameters, greedy patterns, versioned endpoints, generic middleware",
+  "exports": {
+    ".": "./mod.ts",
+    "./types": "./types/mod.ts",
+    "./errors": "./errors/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@tundralibs/compat": "workspace:*",
+    "@tundralibs/utils": "workspace:*"
+  }
+}

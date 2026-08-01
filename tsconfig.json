@@ -1,0 +1,61 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "useUnknownInCatchVariables": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "allowUnreachableCode": false,
+    "noErrorTruncation": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ESNext",
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "paths": {
+      "@tundralibs/slogger": [
+        "./packages/slogger/mod.ts"
+      ],
+      "@tundralibs/compat": [
+        "./packages/compat/mod.ts"
+      ],
+      "@tundralibs/crypt": [
+        "./packages/crypt/mod.ts"
+      ],
+      "@tundralibs/utils": [
+        "./packages/utils/mod.ts"
+      ],
+      "@tundralibs/restler": [
+        "./packages/restler/mod.ts"
+      ],
+      "@tundralibs/norm": [
+        "./packages/norm/mod.ts"
+      ],
+      "@tundralibs/id": [
+        "./packages/id/mod.ts"
+      ],
+      "@tundralibs/oql": [
+        "./packages/oql/mod.ts"
+      ],
+      "@tundralibs/guardian": [
+        "./packages/guardian/mod.ts"
+      ],
+      "@tundralibs/cacher": [
+        "./packages/cacher/mod.ts"
+      ]
+    }
+  },
+  "exclude": [
+    "node_modules",
+    ".git"
+  ]
+}

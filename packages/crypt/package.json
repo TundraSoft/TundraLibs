@@ -1,0 +1,25 @@
+{
+  "name": "@tundralibs/crypt",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A cryptography library with support for various algorithms and utilities",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./digest": "./digest/mod.ts",
+    "./encrypt": "./encrypt/mod.ts",
+    "./generators": "./generators/mod.ts",
+    "./JWT": "./JWT/mod.ts",
+    "./OTP": "./OTP/mod.ts",
+    "./sign": "./sign/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@std/encoding": "npm:@jsr/std__encoding@1.0.8",
+    "@std/fmt": "npm:@jsr/std__fmt@^1.0.8",
+    "@tundralibs/compat": "workspace:*",
+    "@tundralibs/utils": "workspace:*"
+  }
+}

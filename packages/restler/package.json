@@ -1,0 +1,23 @@
+{
+  "name": "@tundralibs/restler",
+  "version": "1.0.0",
+  "description": "Cross-runtime REST API client base class for building typed per-vendor SDKs on Deno, Bun, and Node.js",
+  "type": "module",
+  "main": "mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./types": "./types/mod.ts",
+    "./errors": "./errors/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "$xml": "npm:@jsr/libs__xml@^8.0.0",
+    "@tundralibs/compat": "workspace:*",
+    "@tundralibs/utils": "workspace:*"
+  }
+}

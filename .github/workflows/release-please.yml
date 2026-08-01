@@ -1,0 +1,62 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    name: Maintain release PRs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      paths_released: ${{ steps.release.outputs.paths_released }}
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        with:
+          # RELEASE_PLEASE_TOKEN is a fine-grained PAT (see
+          # .github/REPO-SETTINGS.md). PRs created with the default
+          # GITHUB_TOKEN do not trigger CI, so release PRs would sit
+          # without required checks. Falls back to GITHUB_TOKEN so the
+          # workflow still functions before the PAT is configured.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    name: Publish ${{ matrix.path }} to JSR
+    needs: release-please
+    # Publishes ONLY from the real repository — the internal staging repo
+    # can merge release PRs to validate the pipeline without shipping.
+    if: |
+      github.repository == 'TundraSoft/TundraLibs' &&
+      needs.release-please.outputs.paths_released != '' &&
+      needs.release-please.outputs.paths_released != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # JSR tokenless OIDC publish
+    strategy:
+      fail-fast: false
+      matrix:
+        path: ${{ fromJson(needs.release-please.outputs.paths_released) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+
+      - name: Publish package
+        working-directory: ${{ matrix.path }}
+        run: deno publish

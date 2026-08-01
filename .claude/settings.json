@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run *)",
+      "Bash(deno test *)",
+      "Bash(node --import tsx --test --test-name-pattern=\"appointment scheduling\" packages/guardian/tests/guards/DateGuardian.test.ts)",
+      "Bash(bun test *)",
+      "Bash(node --import tsx --test packages/utils/getFreePort.test.ts)"
+    ]
+  }
+}

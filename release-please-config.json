@@ -1,0 +1,224 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "separate-pull-requests": true,
+  "include-component-in-tag": true,
+  "changelog-sections": [
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Bug Fixes"
+    },
+    {
+      "type": "perf",
+      "section": "Performance"
+    },
+    {
+      "type": "refactor",
+      "section": "Refactoring"
+    },
+    {
+      "type": "docs",
+      "section": "Documentation"
+    },
+    {
+      "type": "chore",
+      "section": "Miscellaneous",
+      "hidden": true
+    },
+    {
+      "type": "test",
+      "section": "Tests",
+      "hidden": true
+    },
+    {
+      "type": "ci",
+      "section": "CI",
+      "hidden": true
+    }
+  ],
+  "packages": {
+    "packages/cacher": {
+      "release-type": "node",
+      "component": "cacher",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/compat": {
+      "release-type": "node",
+      "component": "compat",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/crypt": {
+      "release-type": "node",
+      "component": "crypt",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/doctor": {
+      "release-type": "node",
+      "component": "doctor",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/drivers": {
+      "release-type": "node",
+      "component": "drivers",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/guardian": {
+      "release-type": "node",
+      "component": "guardian",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/id": {
+      "release-type": "node",
+      "component": "id",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/metro-man": {
+      "release-type": "node",
+      "component": "metro-man",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/norm": {
+      "release-type": "node",
+      "component": "norm",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/oql": {
+      "release-type": "node",
+      "component": "oql",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/radrouter": {
+      "release-type": "node",
+      "component": "radrouter",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/restler": {
+      "release-type": "node",
+      "component": "restler",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/rpc": {
+      "release-type": "node",
+      "component": "rpc",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/slogger": {
+      "release-type": "node",
+      "component": "slogger",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    },
+    "packages/utils": {
+      "release-type": "node",
+      "component": "utils",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ],
+      "release-as": "1.0.0"
+    }
+  }
+}

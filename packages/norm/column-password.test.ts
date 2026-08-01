@@ -1,0 +1,77 @@
+/**
+ * @fileoverview `Column.password('PBKDF2')` — salted, verify-based password
+ * storage — vs the deterministic `Column.password('SHA-256')` digest, over
+ * live SQLite.
+ * @module
+ */
+
+import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
+import { makeTempDir, removeDir } from '@tundralibs/compat/file';
+import * as asserts from '@std/asserts';
+import { SQLiteEngine } from '@tundralibs/drivers';
+import { Column, Entity, Norm, pbkdf2Verify, Schema } from './mod.ts';
+import { Migrator } from './migrations/mod.ts';
+
+const Users = Entity('users', {
+  id: Column.int(),
+  // Deterministic digest — filter by plaintext works.
+  pin: Column.password('SHA-256'),
+  // Salted KDF — non-filterable, verify against the stored hash.
+  secret: Column.password('PBKDF2'),
+}, { pk: ['id'] });
+
+let dir = '';
+let migDir = '';
+function open() {
+  return new Norm({ engine: new SQLiteEngine('pw', { path: dir }) })
+    .use(Schema('App', { Users }));
+}
+
+describe('norm.Column.password — PBKDF2 (salted) vs SHA-256 (deterministic)', () => {
+  beforeAll(async () => {
+    dir = await makeTempDir({ prefix: 'norm-pw-db-' });
+    migDir = await makeTempDir({ prefix: 'norm-pw-mig-' });
+    const db = open();
+    await new Migrator(db, { dir: migDir }).snapshot();
+    await new Migrator(db, { dir: migDir }).apply();
+    await db.repo('Users').insert({ id: 1, pin: '1234', secret: 'hunter2' });
+  });
+  afterAll(async () => {
+    await removeDir(dir, { recursive: true });
+    await removeDir(migDir, { recursive: true });
+  });
+
+  it('PBKDF2 stores a salted self-describing hash, never the plaintext', async () => {
+    const res = await open().repo('Users').find({ '@id': 1 });
+    const secret = res.data[0]!.secret as string;
+    asserts.assertEquals(secret.startsWith('pbkdf2-sha256$'), true);
+    asserts.assertEquals(secret.includes('hunter2'), false);
+  });
+
+  it('verifies a candidate against the stored PBKDF2 hash', async () => {
+    const row = (await open().repo('Users').find({ '@id': 1 })).data[0]!;
+    asserts.assertEquals(
+      await pbkdf2Verify('hunter2', row.secret as string),
+      true,
+    );
+    asserts.assertEquals(
+      await pbkdf2Verify('wrong', row.secret as string),
+      false,
+    );
+  });
+
+  it('a PBKDF2 column is NOT filterable by plaintext (verify, not look up)', async () => {
+    await asserts.assertRejects(
+      () => open().repo('Users').find({ '@secret': 'hunter2' }),
+      Error,
+    );
+  });
+
+  it('a deterministic SHA-256 password IS filterable by plaintext', async () => {
+    const hit = await open().repo('Users').find({ '@pin': '1234' });
+    asserts.assertEquals(hit.data.length, 1);
+    asserts.assertEquals(hit.data[0]!.id, 1);
+    // stored as a fixed 64-hex digest, not the plaintext
+    asserts.assertEquals((hit.data[0]!.pin as string).length, 64);
+  });
+});

@@ -1,0 +1,25 @@
+{
+  "name": "@tundralibs/utils",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Collection of utility functions and helpers",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./BaseError": "./BaseError.ts",
+    "./Options": "./Options.ts",
+    "./variableReplacer": "./variableReplacer.ts",
+    "./memoize": "./memoize.ts",
+    "./once": "./once.ts",
+    "./throttle": "./throttle.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@std/toml": "npm:@jsr/std__toml@^1.0.1",
+    "@std/yaml": "npm:@jsr/std__yaml@^1.0.5",
+    "@std/jsonc": "npm:@jsr/std__jsonc@^1.0.1",
+    "@tundralibs/compat": "workspace:*"
+  }
+}

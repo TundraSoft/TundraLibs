@@ -1,0 +1,14 @@
+{
+  "name": "@tundralibs/restler",
+  "version": "1.0.0",
+  "description": "Cross-runtime REST API client base class for building typed per-vendor SDKs on Deno, Bun, and Node.js",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./types": "./types/mod.ts",
+    "./errors": "./errors/mod.ts"
+  },
+  "imports": {
+    "$xml": "jsr:@libs/xml@^8.0.0"
+  }
+}

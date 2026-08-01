@@ -1,0 +1,218 @@
+name: Weekly Health
+
+# Drift detection: nothing in the repo changed, but the world did —
+# new runtime releases, newly published CVEs. Runs a broader matrix
+# than PR CI and files/updates a tracking issue on failure.
+on:
+  schedule:
+    - cron: '17 5 * * 1' # Mondays 05:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    name: Runtime drift (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    # DB services mirror ci.yml so the cron exercises the live-DB paths too
+    # (drift can come from a driver's npm dep, not just the runtime). Keep in
+    # sync with .github/workflows/ci.yml.
+    env:
+      DB_SCHEMA: ci
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: '5432'
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      MARIA_HOST: localhost
+      MARIA_PORT: '3306'
+      MARIA_USER: root
+      MARIA_PASSWORD: mariadb
+      MONGO_HOST: localhost
+      MONGO_PORT: '27017'
+      MONGO_USER: mongo
+      MONGO_PASSWORD: mongo
+      MONGO_AUTHSOURCE: admin
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      REDIS_DB: '1'
+      MEMCACHED_HOST: localhost
+      MEMCACHED_PORT: '11211'
+      MEMCACHED_PORT2: '11212'
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: mariadb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      mongo:
+        image: mongo:8
+        env:
+          MONGO_INITDB_ROOT_USERNAME: mongo
+          MONGO_INITDB_ROOT_PASSWORD: mongo
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 })'"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      memcached:
+        image: memcached:1
+        ports:
+          - 11211:11211
+      memcached-drivers:
+        image: memcached:1
+        ports:
+          - 11212:11211
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: deno-stable
+            runtime: deno
+            version: v2.x
+          - name: deno-canary
+            runtime: deno
+            version: canary
+          - name: bun-latest
+            runtime: bun
+            version: latest
+          - name: node-22
+            runtime: node
+            version: 22.x
+          - name: node-24
+            runtime: node
+            version: 24.x
+          - name: node-current
+            runtime: node
+            version: current
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Deno
+        if: matrix.runtime == 'deno'
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: ${{ matrix.version }}
+
+      - name: Setup Bun
+        if: matrix.runtime != 'deno'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: ${{ matrix.runtime == 'bun' && matrix.version || 'latest' }}
+
+      - name: Setup Node
+        if: matrix.runtime == 'node'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: ${{ matrix.version }}
+
+      - name: Install dependencies (bun)
+        if: matrix.runtime != 'deno'
+        run: bun install
+
+      # Create the two per-package databases (see ci.yml) and wait for the
+      # health-check-less memcached instances.
+      - name: Prepare databases
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client mariadb-client
+          for db in ${DB_SCHEMA}_norm ${DB_SCHEMA}_drivers; do
+            PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE ${db};"
+            mariadb -h 127.0.0.1 -uroot -pmariadb -e "CREATE DATABASE IF NOT EXISTS ${db};"
+          done
+          for port in 11211 11212; do
+            for _ in $(seq 1 30); do
+              (echo > /dev/tcp/localhost/${port}) >/dev/null 2>&1 && break
+              sleep 1
+            done
+          done
+
+      # `@db/sqlite` downloads libsqlite3.so on first import, into a shared
+      # cache. Under `--parallel` two workers race that download and mmap a
+      # half-written file, killing the whole run with SIGBUS/SIGSEGV (exit
+      # 135/139) — no failing assertion, so it reads like a mystery crash.
+      # Import it once, single-threaded, so the parallel run finds it cached.
+      # (Same fix as ci.yml; the weekly drift matrix needs it too — deno-canary
+      # lost this race in run 29727450800.)
+      - name: Warm sqlite3 native library
+        if: matrix.runtime == 'deno'
+        run: deno eval "await import('jsr:@db/sqlite@^0.13.0');"
+
+      - name: Run tests (deno)
+        if: matrix.runtime == 'deno'
+        run: deno test --allow-all --parallel packages/
+
+      - name: Run tests (bun)
+        if: matrix.runtime == 'bun'
+        run: bun test packages/
+
+      - name: Run tests (node)
+        if: matrix.runtime == 'node'
+        run: node --import tsx --test 'packages/**/*.test.ts'
+
+  audit:
+    name: Full dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+
+      - name: Audit (all severities)
+        run: deno audit
+
+  report:
+    name: File issue on failure
+    needs: [drift, audit]
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Create or update health issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Weekly health check failed"
+          body="The scheduled health run failed (runtime drift and/or dependency audit).
+
+          Run: $RUN_URL
+
+          Check the failing jobs — either a runtime update broke compatibility or a new vulnerability was published for a dependency."
+          existing=$(gh issue list --label ci-health --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Still failing: $RUN_URL"
+            echo "Updated issue #$existing"
+          else
+            gh issue create --title "$title" --body "$body" --label ci-health
+            echo "Created new health issue"
+          fi

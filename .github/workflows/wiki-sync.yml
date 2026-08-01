@@ -1,0 +1,66 @@
+name: Sync Docs to Wiki
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/**/*.md'
+      - 'README.md'
+      - '.github/scripts/wiki-sync.ts'
+
+jobs:
+  sync-wiki:
+    # The wiki lives on the public repo; the private staging repo has no
+    # wiki, so skip there instead of failing on every docs push.
+    if: github.repository == 'TundraSoft/TundraLibs'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Checkout Wiki
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository }}.wiki
+          path: wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # Package main docs are README.md (rendered natively by GitHub/JSR/npm).
+      # The script renames them to their wiki page names ({Package}.md),
+      # rewrites relative links for the flat wiki namespace, deep-links
+      # non-wiki files to GitHub, generates the sidebar, and FAILS on dead
+      # links so doc rot is caught here instead of shipping to the wiki.
+      - name: Generate Wiki Pages
+        run: |
+          deno run --allow-read --allow-write --allow-env \
+            .github/scripts/wiki-sync.ts \
+            --out=wiki \
+            --repo=${{ github.repository }} \
+            --ref=${{ github.ref_name }}
+
+      - name: Commit and Push Wiki
+        working-directory: wiki
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -m "Sync documentation from main repository"
+            git push
+            echo "Wiki updated successfully"
+          else
+            echo "No changes to sync"
+          fi

@@ -1,0 +1,29 @@
+{
+  "name": "@tundralibs/drivers",
+  "version": "1.0.0",
+  "description": "Cross-runtime connection drivers for SQL (PostgreSQL, MariaDB/MySQL, SQLite), MongoDB, Redis, and Memcached",
+  "license": "MIT",
+  "tasks": {
+    "check:edge-safety": "deno run -A scripts/check-edge-safety.ts"
+  },
+  "exports": {
+    ".": "./mod.ts",
+    "./errors": "./errors/mod.ts",
+    "./engines": "./engines/mod.ts",
+    "./d1": "./engines/d1/mod.ts",
+    "./maria": "./engines/maria/mod.ts",
+    "./memcached": "./engines/memcached/mod.ts",
+    "./mongo": "./engines/mongo/mod.ts",
+    "./neon": "./engines/neon/mod.ts",
+    "./postgres": "./engines/postgres/mod.ts",
+    "./redis": "./engines/redis/mod.ts",
+    "./sqlite": "./engines/sqlite/mod.ts",
+    "./turso": "./engines/turso/mod.ts",
+    "./types": "./types/mod.ts"
+  },
+  "imports": {
+    "$maria": "npm:mariadb@^3.5.3",
+    "$mongo": "npm:mongodb@^6.21.0",
+    "$sqlite_deno": "jsr:@db/sqlite@^0.13.0"
+  }
+}

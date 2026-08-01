@@ -1,0 +1,22 @@
+{
+  "name": "@tundralibs/doctor",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Decorator-driven dependency injection with Singleton, Scoped, and Transient vial lifecycles. The Doctor prescribes vials, dispenses doses, and treats patients.",
+  "exports": {
+    ".": "./mod.ts",
+    "./decorators": "./decorators/mod.ts",
+    "./errors": "./errors/mod.ts",
+    "./types": "./types/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@tundralibs/utils": "workspace:*",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@tundralibs/compat": "workspace:*"
+  }
+}

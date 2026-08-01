@@ -1,0 +1,35 @@
+{
+  "name": "@tundralibs/compat",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./cli": "./cli/mod.ts",
+    "./common": "./common.ts",
+    "./fetch": "./fetch.ts",
+    "./file": "./file.ts",
+    "./http": "./http.ts",
+    "./net": "./net.ts",
+    "./udp": "./udp.ts",
+    "./path": "./path.ts",
+    "./permissions": "./permissions.ts",
+    "./runtime": "./runtime.ts",
+    "./test": "./test.ts",
+    "./watch": "./watch.ts",
+    "./webserver": "./webserver/mod.ts",
+    "./websocket": "./websocket/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@std/path": "npm:@jsr/std__path@^1.0.0",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/bun": "latest",
+    "@types/deno": "latest",
+    "@types/ws": "^8.5.0"
+  }
+}

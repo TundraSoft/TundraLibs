@@ -1,0 +1,20 @@
+{
+  "name": "@tundralibs/cacher",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A flexible caching library with support for Memory, Redis, and Memcached engines",
+  "exports": {
+    ".": "./mod.ts",
+    "./errors": "./errors/mod.ts",
+    "./engines": "./engines/mod.ts",
+    "./types": "./types/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@tundralibs/compat": "workspace:*",
+    "@tundralibs/drivers": "workspace:*",
+    "@tundralibs/utils": "workspace:*"
+  }
+}
