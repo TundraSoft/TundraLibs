@@ -13,5 +13,5 @@
   "packages/restler": "1.0.0-dev7",
   "packages/rpc": "1.0.0-dev6",
   "packages/slogger": "1.0.0-dev12",
-  "packages/utils": "1.0.0-dev11"
+  "packages/utils": "1.0.0"
 }
