@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.0.0-dev6...doctor-v1.0.0) (2026-08-01)
+
+
+### Features
+
+* TundraLibs 1.0.0 monorepo baseline (supersedes 0.8.x flat libraries) ([3512d64](https://github.com/TundraSoft/TundraLibs/commit/3512d646020b62dbae5442c921bfb086161d0402))
+
 ## [1.0.0-dev6](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/doctor-v1.0.0-dev5...doctor-v1.0.0-dev6) (2026-07-28)
 
 
