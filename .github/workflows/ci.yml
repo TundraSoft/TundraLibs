@@ -268,8 +268,13 @@ jobs:
           # files instead of importing 0% coverage.
           sed -i "s|SF:${GITHUB_WORKSPACE}/|SF:|g" coverage/report.lcov
 
+      # Coverage/analysis are reporting side-channels — their results surface
+      # as their own status checks (codecov/*, the SonarQube quality gate), so
+      # an upload/scan failure (e.g. a token/project not yet provisioned, or a
+      # transient service error) must never fail the test job or block a merge.
       - name: Upload coverage to Codecov
         if: matrix.runtime == 'deno' && github.event_name == 'push' && env.CODECOV_TOKEN != ''
+        continue-on-error: true
         uses: codecov/codecov-action@e53489f4d376d79066609109e7a95a29eb3740b1 # v7.0.0
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -280,6 +285,7 @@ jobs:
         # Per-package components come from sonar-project.properties; coverage
         # from the LCOV above. Reads SONAR_TOKEN / SONAR_HOST_URL from job env.
         if: matrix.runtime == 'deno' && github.event_name == 'push' && env.SONAR_TOKEN != ''
+        continue-on-error: true
         uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
 
       - name: Run tests (bun)
