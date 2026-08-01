@@ -1,6 +1,6 @@
 {
   "packages/cacher": "1.0.0-dev11",
-  "packages/compat": "1.0.0-dev10",
+  "packages/compat": "1.0.0",
   "packages/crypt": "1.0.0-dev12",
   "packages/doctor": "1.0.0-dev6",
   "packages/drivers": "1.0.0-dev11",
