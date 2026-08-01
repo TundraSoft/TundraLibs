@@ -166,7 +166,9 @@ const main = () => {
       const stem = sub.slice(0, -3);
       const segments = stem.split('-');
       const indent = '  '.repeat(segments.length - 1);
-      sidebar.push(`${indent}- [[${stem}|${segments[segments.length - 1]}]]`);
+      // GitHub wiki links are [[Link Text|Page Name]] (text first, page second),
+      // reversed from MediaWiki. Short last segment = label, full stem = page.
+      sidebar.push(`${indent}- [[${segments[segments.length - 1]}|${stem}]]`);
     }
   }
   Deno.writeTextFileSync(path.join(out, '_Sidebar.md'), sidebar.join('\n') + '\n');
