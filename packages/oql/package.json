@@ -1,0 +1,20 @@
+{
+  "name": "@tundralibs/oql",
+  "version": "1.0.0",
+  "description": "Object Query Language - Type-safe, database-agnostic query definitions",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./types": "./types/mod.ts",
+    "./asserts": "./asserts/mod.ts",
+    "./translator": "./translator/mod.ts",
+    "./errors": "./errors/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@tundralibs/compat": "workspace:*",
+    "@tundralibs/utils": "workspace:*"
+  }
+}

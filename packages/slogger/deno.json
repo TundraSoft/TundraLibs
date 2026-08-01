@@ -1,0 +1,17 @@
+{
+  "name": "@tundralibs/slogger",
+  "version": "1.0.0",
+  "description": "Cross-runtime structured logging that fans one record out to many formats in-process — console, JSON, syslog, file, HTTP, TCP",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./errors": "./errors/mod.ts",
+    "./handlers": "./handlers/mod.ts",
+    "./formatters": "./formatters/mod.ts",
+    "./types": "./types/mod.ts"
+  },
+  "imports": {
+    "@std/fmt": "jsr:@std/fmt@^1.0.10",
+    "@std/datetime": "jsr:@std/datetime@^0.225.7"
+  }
+}

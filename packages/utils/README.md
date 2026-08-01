@@ -1,0 +1,125 @@
+# Utils
+
+Essential utility functions and patterns for TypeScript/JavaScript development.
+
+![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
+![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
+![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+
+## Overview
+
+The Utils package provides a comprehensive collection of utility functions, decorators, and design patterns that address common development needs. From configuration management to performance optimization, these utilities are designed to enhance productivity and code quality.
+
+## Installation
+
+**Deno:**
+
+```bash
+deno add @tundralibs/utils
+```
+
+**Bun:**
+
+```bash
+bunx jsr add @tundralibs/utils
+```
+
+**Node.js:**
+
+```bash
+npx jsr add @tundralibs/utils
+```
+
+## Utilities
+
+| Utility                                            | Description                                                           | Documentation                          |
+| -------------------------------------------------- | --------------------------------------------------------------------- | -------------------------------------- |
+| [BaseError](docs/Utils-BaseError.md)               | Enhanced error class with context, chaining, and code snippets        | [Docs](docs/Utils-BaseError.md)        |
+| [Config](docs/Utils-Config.md)                     | Multi-format configuration loader with environment variable support   | [Docs](docs/Utils-Config.md)           |
+| [envArgs](docs/Utils-EnvArgs.md)                   | Environment variable and .env file loader with Docker secrets support | [Docs](docs/Utils-EnvArgs.md)          |
+| [Events](docs/Utils-Events.md)                     | Type-safe event system with async support                             | [Docs](docs/Utils-Events.md)           |
+| [getFreePort](docs/Utils-GetFreePort.md)           | Find available TCP ports with configurable range and exclusions       | [Docs](docs/Utils-GetFreePort.md)      |
+| [ipUtils](docs/Utils-IpUtils.md)                   | IPv4/IPv6 validation, conversion, and range checking utilities        | [Docs](docs/Utils-IpUtils.md)          |
+| [isInSubnet](docs/Utils-IsInSubnet.md)             | Check if IP address is within a CIDR subnet range                     | [Docs](docs/Utils-IsInSubnet.md)       |
+| [isPublicIP](docs/Utils-IsPublicIP.md)             | Detect if IP address is publicly routable                             | [Docs](docs/Utils-IsPublicIP.md)       |
+| [isSubnet](docs/Utils-IsSubnet.md)                 | Validate CIDR subnet notation format                                  | [Docs](docs/Utils-IsSubnet.md)         |
+| [memoize](docs/Utils-Memoize.md)                   | Function and method memoization with TTL and async support            | [Docs](docs/Utils-Memoize.md)          |
+| [once](docs/Utils-Once.md)                         | Function execution control for single-call enforcement                | [Docs](docs/Utils-Once.md)             |
+| [Options](docs/Utils-Options.md)                   | Abstract base class for options and event handling                    | [Docs](docs/Utils-Options.md)          |
+| [privateObject](docs/Utils-PrivateObject.md)       | Private data encapsulation utility                                    | [Docs](docs/Utils-PrivateObject.md)    |
+| [Singleton](docs/Utils-Singleton.md)               | Singleton pattern decorator                                           | [Docs](docs/Utils-Singleton.md)        |
+| [syslog](docs/Utils-Syslog.md)                     | RFC 3164 and RFC 5424 syslog parser and generator                     | [Docs](docs/Utils-Syslog.md)           |
+| [templatize](docs/Utils-Templatize.md)             | Type-safe template string parser                                      | [Docs](docs/Utils-Templatize.md)       |
+| [throttle](docs/Utils-Throttle.md)                 | Function throttling for rate-limiting execution                       | [Docs](docs/Utils-Throttle.md)         |
+| [Types](types/Types.md)                            | Advanced TypeScript utility types for type manipulation               | [Docs](types/Types.md)                 |
+| [variableReplacer](docs/Utils-VariableReplacer.md) | Template placeholder replacement with dot notation support            | [Docs](docs/Utils-VariableReplacer.md) |
+
+## Quick Examples
+
+### Network Utilities
+
+```typescript
+import { getFreePort, isInSubnet, isPublicIP } from '@tundralibs/utils';
+
+// Find available port for dev server
+const port = await getFreePort({ min: 3000, max: 4000 });
+
+// Check if IP is in subnet
+if (isInSubnet('192.168.1.10', '192.168.0.0/16')) {
+  console.log('IP is in private network');
+}
+
+// Detect public vs private IP
+if (isPublicIP('8.8.8.8')) {
+  console.log('Public IP detected');
+}
+```
+
+### Configuration Management
+
+```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+const dbHost = config.get<string>('database.host');
+```
+
+### Error Handling
+
+```typescript
+import { BaseError } from '@tundralibs/utils';
+
+class ValidationError extends BaseError<{ field: string }> {
+  // Enhanced error with context
+}
+
+throw new ValidationError('Invalid ${field}', { field: 'email' });
+```
+
+### Performance Optimization
+
+```typescript
+import { memoize, throttle } from '@tundralibs/utils';
+
+const expensiveCalc = memoize((n: number) => factorial(n), 5000);
+const handleScroll = throttle(() => updateUI(), 100);
+```
+
+### Design Patterns
+
+```typescript
+import { once, Singleton } from '@tundralibs/utils';
+
+@Singleton
+class DatabaseConnection {
+  // Ensures single instance
+}
+
+const initialize = once(() => {
+  // Runs only once
+});
+```
+
+## License
+
+MIT © TundraLibs

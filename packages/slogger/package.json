@@ -1,0 +1,23 @@
+{
+  "name": "@tundralibs/slogger",
+  "version": "1.0.0",
+  "description": "Cross-runtime structured logging library — one log call fans out to console, JSON, syslog, file, HTTP, TCP, or any custom handler",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./errors": "./errors/mod.ts",
+    "./handlers": "./handlers/mod.ts",
+    "./formatters": "./formatters/mod.ts",
+    "./types": "./types/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@std/fmt": "npm:@jsr/std__fmt@^1.0.7",
+    "@std/datetime": "npm:@jsr/std__datetime@^0.225.4",
+    "@tundralibs/utils": "workspace:*",
+    "@tundralibs/compat": "workspace:*",
+    "@tundralibs/id": "workspace:*"
+  }
+}

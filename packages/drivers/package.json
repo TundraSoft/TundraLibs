@@ -1,0 +1,36 @@
+{
+  "name": "@tundralibs/drivers",
+  "version": "1.0.0",
+  "description": "Cross-runtime connection drivers for databases and key-value stores",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./errors": "./errors/mod.ts",
+    "./engines": "./engines/mod.ts",
+    "./d1": "./engines/d1/mod.ts",
+    "./maria": "./engines/maria/mod.ts",
+    "./memcached": "./engines/memcached/mod.ts",
+    "./mongo": "./engines/mongo/mod.ts",
+    "./neon": "./engines/neon/mod.ts",
+    "./postgres": "./engines/postgres/mod.ts",
+    "./redis": "./engines/redis/mod.ts",
+    "./sqlite": "./engines/sqlite/mod.ts",
+    "./turso": "./engines/turso/mod.ts",
+    "./types": "./types/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@tundralibs/compat": "workspace:*",
+    "@tundralibs/oql": "workspace:*",
+    "@tundralibs/restler": "workspace:*",
+    "@tundralibs/utils": "workspace:*",
+    "@tundralibs/id": "workspace:*",
+    "$maria": "npm:mariadb@^3.4.5",
+    "$mongo": "npm:mongodb@^6.10.0"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^11.0.0"
+  }
+}

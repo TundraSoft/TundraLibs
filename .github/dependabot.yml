@@ -1,7 +1,35 @@
 version: 2
 updates:
-  # Maintain dependencies for GitHub Actions
-  - package-ecosystem: 'github-actions'
+  # Deno dependencies (deno.json import maps — JSR and npm specifiers)
+  # across the workspace root and every package.
+  - package-ecosystem: deno
+    directories:
+      - '/'
+      - '/packages/*'
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+    groups:
+      deno-minor-patch:
+        update-types:
+          - minor
+          - patch
+    # mongodb 7 crashes on Bun (node:v8 isBuildingSnapshot is unimplemented)
+    # and package.json shares the version with Bun, so every runtime stays on
+    # mongodb 6. Ignore 7+ until Bun implements it. See engines/mongo/Engine.ts.
+    ignore:
+      - dependency-name: mongodb
+        versions:
+          - '>=7'
+
+  # Keep GitHub Actions pinned-SHA references current.
+  - package-ecosystem: github-actions
     directory: '/'
     schedule:
-      interval: 'daily'
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - infra

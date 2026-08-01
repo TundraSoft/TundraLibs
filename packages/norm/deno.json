@@ -1,0 +1,14 @@
+{
+  "name": "@tundralibs/norm",
+  "version": "1.0.0",
+  "description": "Typed, cross-runtime ORM over OQL and drivers — one schema drives types, validation, relations, migrations, and at-rest column encryption",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./errors": "./errors/mod.ts",
+    "./definition": "./definition/mod.ts",
+    "./migrations": "./migrations/mod.ts",
+    "./asserts": "./asserts/mod.ts"
+  },
+  "imports": {}
+}

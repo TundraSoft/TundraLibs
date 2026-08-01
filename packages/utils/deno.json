@@ -1,0 +1,20 @@
+{
+  "name": "@tundralibs/utils",
+  "version": "1.0.0",
+  "description": "Core TypeScript building blocks — the typed Options + Events base class, BaseError, and shared helpers (config/env, memoize, IP/subnet, free-port)",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./BaseError": "./BaseError.ts",
+    "./Options": "./Options.ts",
+    "./variableReplacer": "./variableReplacer.ts",
+    "./memoize": "./memoize.ts",
+    "./once": "./once.ts",
+    "./throttle": "./throttle.ts"
+  },
+  "imports": {
+    "@std/toml": "jsr:@std/toml@^1.0.11",
+    "@std/yaml": "jsr:@std/yaml@^1.1.2",
+    "@std/jsonc": "jsr:@std/jsonc@^1.0.2"
+  }
+}

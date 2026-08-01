@@ -1,0 +1,24 @@
+{
+  "name": "@tundralibs/norm",
+  "version": "1.0.0",
+  "description": "Typed cross-runtime ORM over @tundralibs/drivers and OQL — models, relations, column encryption, migrations. Under active development; not yet published.",
+  "type": "module",
+  "exports": {
+    ".": "./mod.ts",
+    "./errors": "./errors/mod.ts",
+    "./definition": "./definition/mod.ts",
+    "./migrations": "./migrations/mod.ts",
+    "./asserts": "./asserts/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@tundralibs/compat": "workspace:*",
+    "@tundralibs/crypt": "workspace:*",
+    "@tundralibs/drivers": "workspace:*",
+    "@tundralibs/guardian": "workspace:*",
+    "@tundralibs/oql": "workspace:*",
+    "@tundralibs/utils": "workspace:*"
+  }
+}

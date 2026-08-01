@@ -1,0 +1,29 @@
+name: PR Labeler
+
+# pull_request_target so the token has write access for FORK PRs too
+# (plain pull_request grants forks a read-only token and the labeler
+# fails). Safe in isolation: this workflow never checks out or executes
+# PR code — actions/labeler reads .github/labeler.yml from the BASE
+# branch via the API. Do not add code-executing steps here.
+on:
+  pull_request_target:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-labeler-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    name: Apply package labels
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Label by touched paths
+        uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7.0.0
+        with:
+          sync-labels: true

@@ -1,0 +1,6 @@
+# Bun install config. The `@jsr` scope resolves from JSR's npm-compat
+# registry — required because packages depend on `npm:@jsr/*` aliases and
+# the committed lock file was dropped. Keeps CI (and contributors) working
+# without a local `.npmrc` (which is gitignored to avoid committing tokens).
+[install.scopes]
+"@jsr" = "https://npm.jsr.io"

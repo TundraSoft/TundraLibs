@@ -1,54 +1,91 @@
 {
+  "tasks": {
+    "check": "deno check packages/*/mod.ts",
+    "test": "deno test --allow-all --parallel",
+    "test:watch": "deno test --allow-all --watch",
+    "bench": "deno bench --allow-all",
+    "fmt": "deno fmt",
+    "lint": "deno lint",
+    "publish": "deno publish",
+    "publish:dry": "deno publish --dry-run",
+    "workspace:add": "deno run --allow-read --allow-write .github/scripts/workspace.ts add",
+    "workspace:remove": "deno run --allow-read --allow-write .github/scripts/workspace.ts remove",
+    "workspace:sync": "deno run --allow-read --allow-write .github/scripts/workspace.ts sync",
+    "workspace:sync:check": "deno run --allow-read .github/scripts/workspace.ts sync --check"
+  },
+  "unstable": [
+    "net"
+  ],
   "compilerOptions": {
-    "allowJs": false,
     "lib": [
-      "deno.window"
+      "deno.window",
+      "deno.ns",
+      "deno.unstable"
     ],
-    "strict": true
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  "workspace": [
+    "./packages/*"
+  ],
+  "nodeModulesDir": "auto",
+  "imports": {
+    "@std/asserts": "jsr:@std/assert@^1.0.19",
+    "@std/testing": "jsr:@std/testing@^1.0.19"
+  },
+  "fmt": {
+    "indentWidth": 2,
+    "lineWidth": 80,
+    "useTabs": false,
+    "singleQuote": true,
+    "semiColons": true,
+    "proseWrap": "preserve",
+    "exclude": [
+      "./.vscode",
+      "./.git",
+      "./.github",
+      "./.sonarlint",
+      "./.devcontainer",
+      "**/fixtures/**",
+      "./backup",
+      "**/CHANGELOG.md",
+      "./.claude"
+    ]
   },
   "lint": {
-    "files": {
-      "include": [
-        "./"
-      ],
-      "exclude": [
-        "*/testdata/*"
-      ]
-    },
+    "report": "pretty",
     "rules": {
       "tags": [
         "recommended"
-      ],
-      "include": [
-        "ban-untagged-todo"
-      ],
-      "exclude": [
-        "no-unused-vars"
       ]
-    }
-  },
-  "fmt": {
-    "include": ["./"],
-    "exclude": ["*/testdata/"],
-    "semiColons": true,
-    "lineWidth": 80,
-    "indentWidth": 2,
-    "singleQuote": true,
-    "proseWrap": "preserve"
-  },
-  "tasks": {
-    "build": "deno fmt && deno lint && deno cache --reload ./dependencies.ts",
-    "test": "deno task build && deno cache --reload ./dev.dependencies.ts && deno test -A"
+    },
+    "exclude": [
+      "./.vscode",
+      "./.git",
+      "./.github",
+      "./.sonarlint",
+      "./.devcontainer",
+      "**/fixtures/**",
+      "**/tests/**",
+      "**/*.test.ts",
+      "./backup"
+    ]
   },
   "test": {
-    "files": {
-      "include": [
-        "./"
-      ],
-      "exclude": [
-        "*/testdata/"
-      ]
-    }
+    "exclude": [
+      "./.vscode",
+      "./.git",
+      "./.github",
+      "./.devcontainer",
+      "coverage",
+      "docs",
+      "**/fixtures/**",
+      "./backup"
+    ]
   },
-  "lock": false
+  "exclude": [
+    "node_modules",
+    ".git",
+    "backup"
+  ]
 }

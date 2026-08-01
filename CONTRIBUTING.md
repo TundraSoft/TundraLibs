@@ -1,105 +1,96 @@
-# TunrdaLibs Contributing guide
+# Contributing to TundraLibs
 
-Find a feature which would be usefull? A bug you can fix? Maybe a better or
-smarter way to do things which leads to better reliability and performance? Fork
-and branch away and make a PR! We are always excited to see your contribution.
+Thanks for contributing! This is a cross-runtime TypeScript monorepo —
+everything must work on **Deno, Bun, and Node.js**. This guide covers
+the workflow; the pipelines enforce most of it automatically.
 
-However, we do have a few "Guidelines", please ensure to follow them so as to
-keep the usage of the libraries seamless throughout the ecosystem :)
+## Prerequisites
 
-## Directory Structure
+- [Deno](https://deno.com) 2.x (primary toolchain: fmt, lint, check, publish)
+- [Bun](https://bun.sh) 1.x (npm-side installs + test runner)
+- [Node.js](https://nodejs.org) 22+
 
-```
-tundralibs
-│   README.md
-│   dependencies.ts
-|   dev_dependencies.ts
-│
-└───module1
-│   │   types.ts
-│   │   module.ts
-|   |   mod.ts
-|   |   README.md
-│   
-└───module2
-    │   types.ts
-    │   module2.ts
+## Setup
+
+```bash
+git clone <repo>
+cd TundraLibs
+bun install          # node_modules for the Bun/Node test runs
+deno task test       # runs the Deno test suite
 ```
 
-Above is a representation of the directory structure. The root contains 3
-important files:
+Run the full cross-runtime suite the way CI does:
 
-- README.md - The main readme file. This links to the README file for each
-  module
-- dependencies.ts - All dependencies of all libraries present here. Do check if
-  the library is already present here. If it is and the version is different,
-  you can change but run a through testing before raising a PR
-- dev_dependencies.ts - The dependencies required for testing and other
-  development activities.
+```bash
+deno task test                                    # Deno
+bun test packages/                                # Bun
+node --import tsx --test 'packages/**/*.test.ts'  # Node.js
+```
 
-In each module, typically 4 core files are present:
+## Workflow
 
-- README.md - A detailed readme file detailing the functionality of the module
-- mod.ts - The centralized export file. This is the file which will be
-  referenced for all imports
-- Module file - The actual module logic. _Avoid writing the module logic in
-  mod.ts directly_
-- Test files - Deno test files for your module.
+1. **Branch** off `main`, do your work.
+2. **One package per PR.** A PR touching multiple `packages/*` dirs
+   fails the `Single-package guard` check. If the change is genuinely
+   atomic (e.g. a breaking change plus its downstream fixes), add the
+   `multi-package` label.
+3. **PR title must be a conventional commit** — it becomes the squash
+   commit on `main` and drives changelogs and version bumps:
 
-## Issue Creation
+   ```
+   type(scope): description
 
-Create a new issue or look for an issue you would like to fix. Please do not
-start work before this crucial step as it provides not just visibility but also
-prevents users from working on same issue/feature.
+   type:  feat | fix | docs | refactor | perf | test | build | ci | chore | revert
+   scope: the package dir (restler, compat, ...) or global
+   feat!: / BREAKING CHANGE: footer for breaking changes
+   ```
 
-Few key notes on issues & Branches:
+4. **CI must be green**: format, lint, type-check, dependency audit,
+   JSR publish dry-run, and the test matrix across all three runtimes.
+5. **Squash-merge.** Branch commits can be messy; the title is what
+   lands.
 
-- Ensure your issue explains the problem you intend to solve. If the issue was
-  opened by someone else, then ensure to add comments/details on how the fix is
-  being built or worked on.
-- Name your branch appropriately. Avoid using random names like "test123" etc.
-  Rather use the issue name
-- Each branch to work on a single issue! Avoid multiple issues in a single
-  branch. This makes reviewing easy and also provides capability to exclude
-  specific changes.
-- Always create your branch from main branch! Avoid creation from child branches
-  to write new modules/features. Branching from a branch should only be done to
-  fix issues in that branch before PR. Once branch has been merged branch from
-  main only.
+## Ground Rules
 
-## Coding
+- **Cross-runtime always** — no `Deno.*`/`Bun.*` globals in package
+  source; use `@tundralibs/compat` for runtime-specific capabilities.
+- **Hermetic tests** — no network calls to external services. Stub
+  transports (e.g. the `_fetch` seam) or run a local server in the
+  suite.
+- **Never `--no-check`.**
+- **Format and lint before pushing**: `deno task fmt && deno task lint`.
+- **JSDoc and docs** follow
+  [.github/instructions/documentation.instructions.md](.github/instructions/documentation.instructions.md)
+  — each package's main doc is its `README.md`; sub-docs are
+  `{Package}-{Topic}.md`.
+- **Tests** follow
+  [.github/instructions/testing.instructions.md](.github/instructions/testing.instructions.md)
+  — `describe`/`it` from `@tundralibs/compat/test` so suites run on all
+  three runtimes.
 
-We try to restrict the number of "rules" to code, but we do have few
-suggestions. We strongly recommend sticking to it so as to keep consisteny.
+## Adding or Removing a Package
 
-- Variable Name - We follow descriptive camlecased variable naming. As with
-  Typescript, do ensure they are strongly typed and if possible avoid "any" as a
-  type. Additionally, protected variables are to be prefixed by `_` and private
-  variables are to be prefixed with `__`.
-  - _variableName: string -- This is a protected variable
-  - __variableName: number -- This is a private variable
-- Besides doc blocks, do add comments in your code flow to explain what is being
-  done. This helps beginners understand your thought process
-- Async First - Promise away when possible!
-- Write as many test cases as possible
-- fmt & lint - run Deno.fmt and Deno.lint before you check in!
-- Do not store sensitive information! Example secret keys or database
-  username/password for testing etc.
+Use the workspace tool — it scaffolds the package and regenerates every
+config that enumerates packages (release config, labels, issue
+templates, wiki mapping):
 
-## Merging & CI Pipelines
+```bash
+deno task workspace:add MyPkg      # casing of 'MyPkg' = display/wiki name
+deno task workspace:remove mypkg
+deno task workspace:sync           # re-sync after manual changes
+```
 
-Raise PR once you have tested your code locally. Link the PR to the relevant
-issues. If documentation is pending due to urgency/criticality of bug fix, do
-checkin the documentation at a later date.
+CI fails with instructions if the generated files drift.
 
-If new secrets are to be added as part of CI process, reach out to the admins
-specifying the requirement.
+## Releases (maintainers)
 
-Post review of the PR, and successful execution of the CI pipeline, the code
-will be merged.
+Versioning is automated — **do not bump versions or edit changelogs by
+hand**. release-please reads the conventional commits on `main`,
+maintains one release PR per package, and merging a release PR tags and
+publishes that package to JSR. Your only job as a contributor is a
+correct PR title.
 
-Admins may decide not to perform the merge if there are:
+## Security
 
-- Issues in implementation, such as improper/missing error handling
-- Does not pass the CI pipeline
-- Another functionality which is in direct conflict or covers this feature
+Do not report vulnerabilities in public issues — see
+[SECURITY.md](SECURITY.md).

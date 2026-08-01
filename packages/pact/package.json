@@ -1,0 +1,25 @@
+{
+  "name": "@tundralibs/pact",
+  "version": "0.3.3",
+  "description": "Bitmask-based authentication & authorization engine with pluggable data-fetch hooks",
+  "license": "MIT",
+  "type": "module",
+  "main": "mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./types": "./types/mod.ts",
+    "./errors": "./errors/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@tundralibs/compat": "workspace:*",
+    "@tundralibs/crypt": "workspace:*",
+    "@tundralibs/id": "workspace:*",
+    "@tundralibs/utils": "workspace:*"
+  }
+}
