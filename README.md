@@ -8,6 +8,9 @@ published to [JSR](https://jsr.io) under the `@tundralibs` scope.
 ![Bun 1.0+](https://img.shields.io/badge/Bun-1.0+-f9f1e1?logo=bun)
 ![Node.js 22+](https://img.shields.io/badge/Node.js-22+-339933?logo=node.js&logoColor=white)
 
+[![codecov](https://codecov.io/gh/TundraSoft/TundraLibs/graph/badge.svg)](https://codecov.io/gh/TundraSoft/TundraLibs)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=TundraSoft_TundraLibs&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=TundraSoft_TundraLibs)
+
 ## Packages
 
 <!-- workspace:packages:start -->

@@ -125,6 +125,13 @@ jobs:
       # both suites call the global memcached flush() (no logical DBs to isolate).
       MEMCACHED_PORT: '11211'
       MEMCACHED_PORT2: '11212'
+      # Coverage/analysis upload credentials. Job-level so the token-presence
+      # guards (`env.*_TOKEN != ''`) on the upload steps can read them — the
+      # steps self-disable until the secrets are configured, and on fork PRs
+      # (which never receive secrets). SonarQube Cloud host is fixed.
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: https://sonarcloud.io
     services:
       postgres:
         image: postgres:17
@@ -188,6 +195,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          # Full history so SonarQube can attribute new/changed code and
+          # blame accurately (shallow clones degrade new-code detection).
+          fetch-depth: 0
 
       - name: Setup Deno
         if: matrix.runtime == 'deno'
@@ -242,7 +253,40 @@ jobs:
 
       - name: Run tests (deno)
         if: matrix.runtime == 'deno'
-        run: deno test --allow-all --parallel packages/
+        run: deno test --allow-all --parallel --coverage=./coverage packages/
+
+      # Coverage/analysis run only on the deno leg (native coverage) and only
+      # on push events — same-repo PRs are covered by their branch push run,
+      # and fork PRs lack the secrets these steps need.
+      - name: Generate LCOV report
+        if: matrix.runtime == 'deno'
+        run: |
+          deno coverage ./coverage --lcov --output=coverage/report.lcov
+          # Deno emits absolute SF: paths; relativize to the repo root so
+          # Codecov maps them onto the per-package components and the Sonar
+          # scanner (which mounts the repo at a different path) resolves the
+          # files instead of importing 0% coverage.
+          sed -i "s|SF:${GITHUB_WORKSPACE}/|SF:|g" coverage/report.lcov
+
+      # Coverage/analysis are reporting side-channels — their results surface
+      # as their own status checks (codecov/*, the SonarQube quality gate), so
+      # an upload/scan failure (e.g. a token/project not yet provisioned, or a
+      # transient service error) must never fail the test job or block a merge.
+      - name: Upload coverage to Codecov
+        if: matrix.runtime == 'deno' && github.event_name == 'push' && env.CODECOV_TOKEN != ''
+        continue-on-error: true
+        uses: codecov/codecov-action@e53489f4d376d79066609109e7a95a29eb3740b1 # v7.0.0
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/report.lcov
+          fail_ci_if_error: false
+
+      - name: SonarQube Cloud scan
+        # Per-package components come from sonar-project.properties; coverage
+        # from the LCOV above. Reads SONAR_TOKEN / SONAR_HOST_URL from job env.
+        if: matrix.runtime == 'deno' && github.event_name == 'push' && env.SONAR_TOKEN != ''
+        continue-on-error: true
+        uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
 
       - name: Run tests (bun)
         if: matrix.runtime == 'bun'
