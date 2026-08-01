@@ -1,6 +1,7 @@
 {
   "_comment": "Managed by .github/scripts/workspace.ts — display/wiki name per package dir. The name passed to `workspace:add` is preserved here; its lowercase form is the dir and package name. Hand-edit a display name only if the casing is wrong, then run `deno task workspace:sync`.",
   "packages": {
+    "ambient": "Ambient",
     "cacher": "Cacher",
     "compat": "compat",
     "crypt": "crypt",

@@ -9,6 +9,7 @@ body:
       label: Package
       description: Which package is affected?
       options:
+        - ambient
         - cacher
         - compat
         - crypt

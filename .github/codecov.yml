@@ -31,6 +31,13 @@ component_management:
         branches:
           - '!main'
   individual_components:
+    - component_id: ambient
+      name: ambient
+      paths:
+        - packages/ambient/**
+      statuses:
+        - type: project
+          target: auto
     - component_id: cacher
       name: cacher
       paths:
