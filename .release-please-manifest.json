@@ -10,7 +10,7 @@
   "packages/norm": "1.0.0-dev0.7",
   "packages/oql": "1.0.0-dev6.7",
   "packages/radrouter": "1.0.0-dev5",
-  "packages/restler": "1.0.0-dev7",
+  "packages/restler": "1.0.0",
   "packages/rpc": "1.0.0-dev6",
   "packages/slogger": "1.0.0-dev12",
   "packages/utils": "1.0.0-dev11"
