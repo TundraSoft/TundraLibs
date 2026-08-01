@@ -49,8 +49,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/compat": {
       "release-type": "node",
@@ -61,8 +60,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/crypt": {
       "release-type": "node",
@@ -73,8 +71,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/doctor": {
       "release-type": "node",
@@ -85,8 +82,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/drivers": {
       "release-type": "node",
@@ -97,8 +93,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/guardian": {
       "release-type": "node",
@@ -109,8 +104,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/id": {
       "release-type": "node",
@@ -121,8 +115,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/metro-man": {
       "release-type": "node",
@@ -133,8 +126,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/norm": {
       "release-type": "node",
@@ -145,8 +137,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/oql": {
       "release-type": "node",
@@ -157,8 +148,18 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
+    },
+    "packages/pact": {
+      "release-type": "node",
+      "component": "pact",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ]
     },
     "packages/radrouter": {
       "release-type": "node",
@@ -169,8 +170,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/restler": {
       "release-type": "node",
@@ -181,8 +181,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/rpc": {
       "release-type": "node",
@@ -193,8 +192,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/slogger": {
       "release-type": "node",
@@ -205,8 +203,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     },
     "packages/utils": {
       "release-type": "node",
@@ -217,8 +214,7 @@
           "path": "deno.json",
           "jsonpath": "$.version"
         }
-      ],
-      "release-as": "1.0.0"
+      ]
     }
   }
 }
