@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.0.0-dev10...compat-v1.0.0) (2026-08-01)
+
+
+### Features
+
+* TundraLibs 1.0.0 monorepo baseline (supersedes 0.8.x flat libraries) ([3512d64](https://github.com/TundraSoft/TundraLibs/commit/3512d646020b62dbae5442c921bfb086161d0402))
+
 ## [1.0.0-dev10](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/compat-v1.0.0-dev9...compat-v1.0.0-dev10) (2026-07-28)
 
 
