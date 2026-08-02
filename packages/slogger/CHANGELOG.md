@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.0.0...slogger-v1.1.0) (2026-08-02)
+
+
+### Features
+
+* **slogger:** add contextProvider for automatic context correlation ([47f4e6b](https://github.com/TundraSoft/TundraLibs/commit/47f4e6bede46de0c074c16108419eacc2b69123e))
+* **slogger:** add contextProvider hook for request-context correlation ([6a8cfd1](https://github.com/TundraSoft/TundraLibs/commit/6a8cfd1ffee38e9301aed31bf7aace2ba4d23b52))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.0.0-dev12...slogger-v1.0.0) (2026-08-01)
 
 
