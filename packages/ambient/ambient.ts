@@ -42,7 +42,9 @@ export const ambient: Ambient = {
   },
 
   child<R>(patch: RequestContext, fn: () => R): R {
-    return store.run({ ...(store.get() ?? {}), ...patch }, fn);
+    // `store.get()` may be `undefined` (called outside a scope); spreading
+    // `undefined` contributes nothing, so no explicit fallback is needed.
+    return store.run({ ...store.get(), ...patch }, fn);
   },
 
   get(): RequestContext | undefined {

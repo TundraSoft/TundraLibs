@@ -38,14 +38,14 @@ import type { Context } from './types/mod.ts';
  *
  * @internal
  * @param candidate - The constructor to validate; defaults to the runtime's.
- * @throws {Error} When `candidate` is not a constructor — i.e. the runtime
+ * @throws {TypeError} When `candidate` is not a constructor — i.e. the runtime
  *   provides no `AsyncLocalStorage`.
  */
 export function assertAsyncLocalStorage(
   candidate: unknown = AsyncLocalStorage,
 ): void {
   if (typeof candidate !== 'function') {
-    throw new Error(
+    throw new TypeError(
       "@tundralibs/ambient requires 'AsyncLocalStorage' (node:async_hooks), " +
         'which this runtime does not provide. Supported runtimes: Deno, Bun, ' +
         'and Node.js >= 22.',
@@ -63,7 +63,7 @@ export function assertAsyncLocalStorage(
  *
  * @typeParam T - The shape of the value the store carries.
  * @returns A {@link Context} handle over a fresh store.
- * @throws {Error} When the runtime provides no `AsyncLocalStorage`
+ * @throws {TypeError} When the runtime provides no `AsyncLocalStorage`
  *   (`node:async_hooks`) — an exotic environment outside the supported
  *   Deno / Bun / Node >= 22 targets.
  */
@@ -74,8 +74,11 @@ export function createContext<T>(): Context<T> {
     run: <R>(value: T, fn: () => R): R => store.run(value, fn),
     get: (): T | undefined => store.getStore(),
     getOr: (fallback: T): T => {
+      // Deliberately checking `undefined` (not nullish `??`): a store may hold
+      // a legitimate `null` value, which must be returned, not the fallback.
       const current = store.getStore();
-      return current === undefined ? fallback : current;
+      if (current === undefined) return fallback;
+      return current;
     },
     active: (): boolean => store.getStore() !== undefined,
   };
