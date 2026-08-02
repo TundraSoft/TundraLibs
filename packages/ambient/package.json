@@ -15,5 +15,8 @@
   "scripts": {
     "test": "bun test"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {
+    "@tundralibs/compat": "workspace:*"
+  }
 }
