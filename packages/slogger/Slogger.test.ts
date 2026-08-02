@@ -1058,3 +1058,102 @@ describe('slogger.core', () => {
     });
   });
 });
+
+describe('slogger.contextProvider', () => {
+  it('merges the provider UNDER the call context on every line', () => {
+    const logger = new Slogger({
+      appName: 'CtxProviderApp',
+      level: SyslogSeverities.DEBUG,
+      contextProvider: () => ({ correlationId: 'c1', source: 'provider' }),
+      handlers: [
+        { name: 'h', type: 'TestHandler', level: SyslogSeverities.DEBUG },
+      ],
+    });
+    // @ts-expect-error inspecting protected handlers for the test
+    const handler = logger._handlers[0] as TestHandler;
+
+    logger.info('no call context');
+    asserts.assertEquals(handler.messages[0]!.context, {
+      correlationId: 'c1',
+      source: 'provider',
+    });
+
+    logger.info('with call context', { orderId: 'o1', source: 'call' });
+    asserts.assertEquals(handler.messages[1]!.context, {
+      correlationId: 'c1',
+      orderId: 'o1',
+      source: 'call', // per-call wins the collision
+    });
+  });
+
+  it('applies precedence provider < scope < per-call', () => {
+    const logger = new Slogger({
+      appName: 'CtxPrecApp',
+      level: SyslogSeverities.DEBUG,
+      contextProvider: () => ({ layer: 'provider', a: 1 }),
+      handlers: [
+        { name: 'h', type: 'TestHandler', level: SyslogSeverities.DEBUG },
+      ],
+    });
+    // @ts-expect-error inspecting protected handlers for the test
+    const handler = logger._handlers[0] as TestHandler;
+
+    logger.scope({ layer: 'scope', b: 2 }).info('msg', { layer: 'call', c: 3 });
+
+    asserts.assertEquals(handler.messages[0]!.context, {
+      a: 1, // from provider
+      b: 2, // from scope
+      c: 3, // from per-call
+      layer: 'call', // per-call wins over scope wins over provider
+    });
+  });
+
+  it('invokes the provider lazily — never for filtered-out records', () => {
+    let calls = 0;
+    const logger = new Slogger({
+      appName: 'CtxLazyApp',
+      level: SyslogSeverities.WARNING,
+      contextProvider: () => {
+        calls++;
+        return { x: 1 };
+      },
+      handlers: [
+        { name: 'h', type: 'TestHandler', level: SyslogSeverities.WARNING },
+      ],
+    });
+
+    logger.info('below level — muted');
+    asserts.assertEquals(calls, 0);
+
+    logger.warning('emitted');
+    asserts.assertEquals(calls, 1);
+  });
+
+  it('is compared by reference identity for LogManager caching', () => {
+    const provider = () => ({ r: 1 });
+    const first = LogManager.createSlogger({
+      appName: 'CtxCacheApp',
+      level: SyslogSeverities.INFO,
+      handlers: [],
+      contextProvider: provider,
+    });
+    const second = LogManager.createSlogger({
+      appName: 'CtxCacheApp',
+      level: SyslogSeverities.INFO,
+      handlers: [],
+      contextProvider: provider, // same hoisted reference → cache hit
+    });
+    asserts.assertStrictEquals(first, second);
+
+    asserts.assertThrows(
+      () =>
+        LogManager.createSlogger({
+          appName: 'CtxCacheApp',
+          level: SyslogSeverities.INFO,
+          handlers: [],
+          contextProvider: () => ({ r: 2 }), // fresh arrow → different config
+        }),
+      SloggerConfigError,
+    );
+  });
+});
