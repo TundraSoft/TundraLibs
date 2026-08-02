@@ -9,6 +9,7 @@ body:
       label: Package
       description: Which package should this land in? (pick the closest)
       options:
+        - ambient
         - cacher
         - compat
         - crypt

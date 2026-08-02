@@ -40,6 +40,17 @@
     }
   ],
   "packages": {
+    "packages/ambient": {
+      "release-type": "node",
+      "component": "ambient",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    },
     "packages/cacher": {
       "release-type": "node",
       "component": "cacher",

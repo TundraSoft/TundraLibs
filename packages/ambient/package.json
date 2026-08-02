@@ -1,0 +1,22 @@
+{
+  "name": "@tundralibs/ambient",
+  "version": "0.1.0",
+  "description": "Cross-runtime request-scoped context over AsyncLocalStorage — correlation/trace ids and custom fields that survive await, no threading",
+  "license": "MIT",
+  "type": "module",
+  "main": "mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./types": "./types/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@tundralibs/compat": "workspace:*"
+  }
+}

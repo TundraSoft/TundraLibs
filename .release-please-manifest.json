@@ -1,4 +1,5 @@
 {
+  "packages/ambient": "0.1.0",
   "packages/cacher": "1.0.0",
   "packages/compat": "1.0.0",
   "packages/crypt": "1.0.0",
