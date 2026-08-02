@@ -79,6 +79,27 @@ export type SloggerOptions = {
    * of this flag.
    */
   interpolateMessage?: boolean;
+
+  /**
+   * A logger-level context provider, invoked on every emitted record and
+   * merged **under** the call/scope context (explicit fields always win). Use
+   * it to fold request-scoped context in automatically — e.g. from
+   * `@tundralibs/ambient`:
+   *
+   * ```ts
+   * const log = LogManager.createSlogger({
+   *   appName: 'orders',
+   *   contextProvider: () => ambient.get() ?? {},
+   * });
+   * log.info('charging'); // every line carries the ambient context, no thunk
+   * ```
+   *
+   * Called lazily — only for records that pass the level/handler filters, so
+   * muted lines never invoke it. Like formatters, the provider is compared by
+   * **reference identity** for {@link LogManager} caching: hoist it to a
+   * stable `const`, don't pass a fresh arrow on each `createSlogger` call.
+   */
+  contextProvider?: () => LogContext;
 };
 
 /** */
@@ -95,6 +116,11 @@ export class Slogger {
    * for the security rationale.
    */
   private readonly __interpolateMessage: boolean;
+  /**
+   * Optional logger-level context provider merged under every record's
+   * call/scope context. See {@link SloggerOptions.contextProvider}.
+   */
+  private readonly __contextProvider?: () => LogContext;
 
   /**
    * @param options - Logger configuration. See {@link SloggerOptions}.
@@ -134,6 +160,7 @@ export class Slogger {
     // an attacker-controlled message against the context is a
     // log-injection / data-exfiltration vector. See SloggerOptions.
     this.__interpolateMessage = options.interpolateMessage === true;
+    this.__contextProvider = options.contextProvider;
 
     // Initialize handlers if provided
     if (options.handlers) {
@@ -383,7 +410,16 @@ export class Slogger {
     if (!hasActiveHandlers) return;
 
     // Lazy context resolution — only call the thunk if we'll actually use it.
-    const resolvedContext = typeof context === 'function' ? context() : context;
+    const callContext = typeof context === 'function' ? context() : context;
+
+    // Fold in the logger-level context provider (e.g. an ambient request
+    // context) UNDER the call/scope context — explicit fields always win.
+    // Also lazy: the provider only runs for records that reach here (past the
+    // level/handler early-exits above).
+    const providerContext = this.__contextProvider?.();
+    const resolvedContext = providerContext === undefined
+      ? callContext
+      : { ...providerContext, ...callContext };
 
     // Message interpolation is opt-in (see SloggerOptions.interpolateMessage).
     // When disabled (the default), the message is emitted verbatim — a

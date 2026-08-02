@@ -261,6 +261,40 @@ logger.info('hello ${user.name}', { user: { name: 'alice' } });
 > interpolation off and pass already-formatted strings (e.g. template
 > literals) instead.
 
+### Automatic context (`contextProvider`)
+
+A logger-level `contextProvider` is invoked on every emitted record and merged
+**under** the call/scope context (explicit fields always win). It's the seam for
+folding request-scoped context in automatically — pair it with
+`@tundralibs/ambient` so every line carries the request's correlation id with no
+per-call argument:
+
+```typescript
+import { ambient } from '@tundralibs/ambient';
+
+const log = LogManager.createSlogger({
+  appName: 'orders',
+  level: SyslogSeverities.INFO,
+  contextProvider: () => ambient.get() ?? {}, // the seam
+});
+
+ambient.run({ correlationId: crypto.randomUUID() }, () => {
+  log.info('charging'); // context includes { correlationId }
+});
+```
+
+Precedence is **provider < scope < per-call**:
+
+```typescript
+log.scope({ svc: 'auth' }).info('done', { attempt: 2 });
+// context: { ...provider(), svc: 'auth', attempt: 2 }
+```
+
+The provider is called **lazily** — only for records that pass the level/handler
+filters, so muted lines never invoke it. Like formatters, it is compared by
+**reference identity** for `LogManager` caching: hoist it to a stable `const`
+rather than passing a fresh arrow to each `createSlogger` call.
+
 ## Core API
 
 ### Slogger Class
