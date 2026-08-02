@@ -50,6 +50,14 @@ describe('ambient', () => {
     });
   });
 
+  it('child() outside a scope behaves like run over the patch alone', () => {
+    ambient.child({ spanId: 's-solo' }, () => {
+      asserts.assertEquals(ambient.get()?.spanId, 's-solo');
+      asserts.assertEquals(ambient.get()?.correlationId, undefined);
+    });
+    asserts.assertEquals(ambient.get(), undefined);
+  });
+
   it('isolates concurrent requests', async () => {
     const seen: Array<string | undefined> = [];
     const req = (id: string, delay: number) =>

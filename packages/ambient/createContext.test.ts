@@ -1,8 +1,24 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { createContext } from './mod.ts';
+import { assertAsyncLocalStorage } from './createContext.ts';
 
 describe('ambient.createContext', () => {
+  it('assertAsyncLocalStorage passes when a constructor is available', () => {
+    assertAsyncLocalStorage(); // the runtime's real ALS
+    assertAsyncLocalStorage(class {}); // any constructor
+  });
+
+  it('assertAsyncLocalStorage throws an actionable error when ALS is missing', () => {
+    // Pass a non-function that is NOT `undefined` (which would trigger the
+    // default parameter and defeat the test) to simulate a runtime lacking it.
+    asserts.assertThrows(
+      () => assertAsyncLocalStorage(null),
+      Error,
+      'AsyncLocalStorage',
+    );
+  });
+
   it('returns undefined / fallback / false outside any run scope', () => {
     const ctx = createContext<number>();
     asserts.assertEquals(ctx.get(), undefined);

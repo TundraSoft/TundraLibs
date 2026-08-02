@@ -27,14 +27,31 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Context } from './types/mod.ts';
 
 /**
- * Whether this runtime provides a usable `AsyncLocalStorage` constructor.
- * `node:async_hooks` is a built-in on every supported runtime (Deno, Bun,
- * Node >= 22), so this is `true` in practice — the guard exists only to fail
- * loudly, with an actionable message, on an exotic runtime that strips it. The
- * dependency is a runtime built-in, not an npm package: it is declared via
- * `engines.node` in package.json and enforced here, never in `dependencies`.
+ * Assert that the runtime provides `AsyncLocalStorage` (`node:async_hooks`),
+ * throwing an actionable error otherwise. It is a built-in on every supported
+ * runtime (Deno, Bun, Node >= 22), so the throw path is unreachable in
+ * practice — the requirement is a runtime built-in, declared via `engines.node`
+ * and enforced here, never as a package dependency.
+ *
+ * Exported (but not re-exported from the package root, so not public API) only
+ * so the otherwise-unreachable guard is unit-testable via the `candidate` seam.
+ *
+ * @internal
+ * @param candidate - The constructor to validate; defaults to the runtime's.
+ * @throws {Error} When `candidate` is not a constructor — i.e. the runtime
+ *   provides no `AsyncLocalStorage`.
  */
-const HAS_ASYNC_LOCAL_STORAGE = typeof AsyncLocalStorage === 'function';
+export function assertAsyncLocalStorage(
+  candidate: unknown = AsyncLocalStorage,
+): void {
+  if (typeof candidate !== 'function') {
+    throw new Error(
+      "@tundralibs/ambient requires 'AsyncLocalStorage' (node:async_hooks), " +
+        'which this runtime does not provide. Supported runtimes: Deno, Bun, ' +
+        'and Node.js >= 22.',
+    );
+  }
+}
 
 /**
  * Create an independent, typed {@link Context} store. Each call returns its own
@@ -51,13 +68,7 @@ const HAS_ASYNC_LOCAL_STORAGE = typeof AsyncLocalStorage === 'function';
  *   Deno / Bun / Node >= 22 targets.
  */
 export function createContext<T>(): Context<T> {
-  if (!HAS_ASYNC_LOCAL_STORAGE) {
-    throw new Error(
-      "@tundralibs/ambient requires 'AsyncLocalStorage' (node:async_hooks), " +
-        'which this runtime does not provide. Supported runtimes: Deno, Bun, ' +
-        'and Node.js >= 22.',
-    );
-  }
+  assertAsyncLocalStorage();
   const store = new AsyncLocalStorage<T>();
   return {
     run: <R>(value: T, fn: () => R): R => store.run(value, fn),
