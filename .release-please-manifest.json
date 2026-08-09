@@ -15,6 +15,6 @@
   "packages/restler": "1.0.1",
   "packages/rpc": "1.0.1",
   "packages/slogger": "1.1.2",
-  "packages/tracer": "0.4.1",
+  "packages/tracer": "0.5.0",
   "packages/utils": "1.0.1"
 }
