@@ -337,23 +337,35 @@ describe({
           const key = 'test-window-mode';
           const value = 'window-mode-value';
 
-          // Set with 3 second expiry and window mode enabled
-          await memcached.set(key, value, { expiry: 3, window: true });
+          // TIMING: memcached expiry has WHOLE-SECOND granularity — an item
+          // set at wall time S with TTL n gets `exptime = floor(S) + n`, so
+          // it is only guaranteed alive while age < n-1, and guaranteed dead
+          // once age >= n. The margins below are chosen against those two
+          // bounds, NOT against the nominal TTL (this test used TTL 3 with a
+          // read at age 2.0s — a zero-margin race that flaked on loaded CI
+          // runners). Total runtime must also stay under bun's 5s default
+          // per-test timeout, which rules out simply using a bigger TTL.
+          await memcached.set(key, value, { expiry: 4, window: true });
 
           // Verify it exists immediately
           let result = await memcached.get(key);
           asserts.assertEquals(result, value);
 
-          // Wait 2 seconds (less than expiry)
+          // Read at age ~2.0s: guaranteed alive until age 3.0 → ~1s margin.
+          // This get re-arms the sliding window (touch back to TTL 4).
           await new Promise((resolve) => setTimeout(resolve, 2000));
-
-          // Get it again - this should extend the expiry
           result = await memcached.get(key);
           asserts.assertEquals(result, value);
 
-          // Wait 2 more seconds - it should still exist because expiry was extended
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-
+          // Read at age ~4.3s. Two things must hold:
+          // - the ORIGINAL item is guaranteed dead by age 4.0, so surviving
+          //   here proves the window extension did it (setTimeout never
+          //   fires early, so age >= 4.3 always);
+          // - the EXTENDED item (re-armed at age >= 2.0) is guaranteed alive
+          //   until at least age 5.0 → >= 0.7s margin, and a late first read
+          //   pushes that bound later by the same amount, so sleep overshoot
+          //   cannot flip this.
+          await new Promise((resolve) => setTimeout(resolve, 2300));
           result = await memcached.get(key);
           asserts.assertEquals(result, value);
         },
