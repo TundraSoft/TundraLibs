@@ -175,6 +175,35 @@ a time — `await` each in turn. Firing overlapping statements on the same scope
 Likewise, the `tx` scope is only valid for the duration of its callback; using
 it after the callback returns throws `TRANSACTION_NOT_FOUND`.
 
+## Observability
+
+Every engine is an `Options`/`Events` subclass and emits its lifecycle as
+events — which makes the events the **integration seam** for tracing and
+metrics, with no dependency on any observability package:
+
+| Event                                                            | Payload                                                                  | Fires                              |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------- |
+| `query` / `slowQuery`                                            | `(instanceId, EngineQueryResult)` — carries `{ id, query, count, time }` | per query, with duration           |
+| `transactionBegin` / `transactionCommit` / `transactionRollback` | `(instanceId, transactionId)`                                            | per transaction step               |
+| `connect` / `disconnect` / `connectionFailed`                    | `(instanceId[, error])`                                                  | pool lifecycle                     |
+| `error` / `warn` / `notice`                                      | `(instanceId, …)`                                                        | failures, warnings, server notices |
+
+Attach once per engine at wire-up:
+
+```typescript
+engine.on('query', (_id, result) => {
+  metrics.histogram('db_query_ms').observe(result.time);
+});
+```
+
+For distributed tracing, `@tundralibs/tracer` documents a ready-made recipe
+that turns these events into correctly-parented `CLIENT` spans — one handler,
+zero coupling in either direction: see
+[Tracing drivers without wrapping every call](../tracer/docs/Tracer-Recipes.md#tracing-drivers-without-wrapping-every-call).
+
+> `EngineQueryResult.query` contains the **statement**. Forwarding it to a log
+> or trace backend can leak user data — sanitise first, or leave it off.
+
 ## Architecture
 
 ```
