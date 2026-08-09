@@ -20,12 +20,15 @@ export type {
   RESTlerContentTypePayload,
   RESTlerEndpoint,
   RESTlerEvents,
+  RESTlerHeaderProvider,
   RESTlerMethod,
   RESTlerMethodPayload,
   RESTlerOptions,
   RESTlerRequest,
   RESTlerResponse,
   RESTlerResponseHandler,
+  Witness,
+  WitnessInfo,
 } from './types/mod.ts';
 export {
   RESTlerConfigError,
