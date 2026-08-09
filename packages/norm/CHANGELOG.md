@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.0.1...norm-v1.1.0) (2026-08-09)
+
+
+### Features
+
+* **norm:** add the witness observability hook ([30643d0](https://github.com/TundraSoft/TundraLibs/commit/30643d07e0d9cbb71bb68cf6d9ed08c88ca0bd62))
+* **norm:** add the witness observability hook ([93affba](https://github.com/TundraSoft/TundraLibs/commit/93affba080aeed2d354dd93d5cd5779b1c10859b))
+
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.0.0...norm-v1.0.1) (2026-08-09)
 
 
