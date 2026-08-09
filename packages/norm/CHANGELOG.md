@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.0.0...norm-v1.0.1) (2026-08-09)
+
+
+### Bug Fixes
+
+* **norm:** remove polynomial-ReDoS backtracking from Migrator dir trim ([262c987](https://github.com/TundraSoft/TundraLibs/commit/262c9875e1ba84a7b05e879b9af03ca9ed93dc80))
+* **norm:** remove polynomial-ReDoS backtracking from Migrator dir trim ([585b44a](https://github.com/TundraSoft/TundraLibs/commit/585b44a4a7c657b3f50f50934c02a44da359c7c8))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.0.0-dev0.7...norm-v1.0.0) (2026-08-01)
 
 
