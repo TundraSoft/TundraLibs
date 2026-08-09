@@ -90,9 +90,11 @@ const _stringify = (
  * - Pass `regex` to use non-standard delimiters. The regex MUST be
  *   global (`/g` flag) and have **exactly one capture group** around
  *   the variable name. Common patterns:
- *   - Handlebars `{{name}}` → `/\{\{([^}]+)\}\}/g`
+ *   Note each class below excludes the **opening** delimiter as well as
+ *   the closing one — see the ReDoS warning on `regex` for why.
+ *   - Handlebars `{{name}}` → `/\{\{([^{}]+)\}\}/g`
  *   - Shell-style `$NAME` → `/\$([A-Z_][A-Z0-9_]*)/g`
- *   - Angular-style `[[name]]` → `/\[\[([^\]]+)\]\]/g`
+ *   - Angular-style `[[name]]` → `/\[\[([^\[\]]+)\]\]/g`
  *
  * Nested values are reachable via dot paths (`${user.name}`), arrays
  * render as `(a, b, c)`, unknown keys keep their placeholder, and
