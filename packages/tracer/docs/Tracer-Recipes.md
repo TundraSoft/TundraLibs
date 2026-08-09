@@ -41,6 +41,7 @@ import {
 - [RadRouter / RPC](#radrouter--rpc)
 - [Outbound: propagating the trace](#outbound-propagating-the-trace)
 - [Tracing drivers without wrapping every call](#tracing-drivers-without-wrapping-every-call)
+- [Tracing norm: flat spans free, nested spans with a witness](#tracing-norm-flat-spans-free-nested-spans-with-a-witness)
 - [Serverless: flush before the runtime freezes](#serverless-flush-before-the-runtime-freezes)
 - [Testing traces](#testing-traces)
 
@@ -451,8 +452,74 @@ whole transaction can be one span), `connectionFailed`, and `notice`.
 > `result.query` on the span puts the **statement** in your trace backend —
 > treat it exactly like `db.query.text` above: sanitise, or leave it off.
 
-`@tundralibs/norm` emits no events today, so it stays the
-wrap-at-the-call-site case until it grows hooks.
+For `@tundralibs/norm`, see the next section — it forwards these driver
+events AND adds an operation layer on top.
+
+## Tracing norm: flat spans free, nested spans with a witness
+
+norm gives you two layers. **Layer 1 is events** — norm re-emits the driver's
+`query`/`slowQuery` (metadata only: no SQL text or params ever cross norm's
+bus) and adds its own operation-level `call` event. Both yield retrospective
+spans that parent to whatever request span is active:
+
+```typescript
+// Per-query spans — same idea as the drivers recipe, via norm's bus.
+// Signature: (engineId, queryId, timeMs, isSlow, transactionId)
+norm.on('query', (_engine, _qid, timeMs, _slow, txId) => {
+  const end = new Date();
+  const span = tracer.startSpan('db.query', {
+    kind: SpanKind.CLIENT,
+    startTime: new Date(end.getTime() - timeMs),
+  });
+  if (txId) span.setAttribute('db.transaction_id', txId);
+  span.end(end);
+});
+
+// Per-OPERATION spans — norm's own layer. `id` is the same ULID returned in
+// the operation's NormResult envelope, so spans correlate with results.
+// Signature: (entity, op, timeMs, isSlow, id)
+norm.on('call', (entity, op, timeMs, _slow, id) => {
+  const end = new Date();
+  tracer.startSpan(`norm.${entity}.${op}`, {
+    kind: SpanKind.INTERNAL,
+    startTime: new Date(end.getTime() - timeMs),
+    attributes: { 'norm.entity': entity, 'norm.result_id': id },
+  }).end(end);
+});
+```
+
+> Attach per-query tracing at **one** level — norm's bus _or_ the engine, not
+> both, or every query gets two spans. norm's forwarded events are the
+> privacy-safe choice (no statement text); the engine's carry the SQL.
+
+**Layer 2 is the `witness`** — event spans are flat: nothing links a `call`
+span to the queries it caused, because a span created in an event handler is
+never _active_ while the operation runs. The witness closes exactly that gap:
+
+```typescript
+const norm = new Norm({
+  engine,
+  witness: (info, fn) =>
+    tracer.startActiveSpan(
+      info.name, // 'norm.Users.find', 'norm.raw', …
+      { kind: SpanKind.INTERNAL, attributes: info.attributes },
+      fn,
+    ),
+});
+```
+
+```text
+GET /orders                      ← request span (middleware)
+└─ norm.Orders.find              ← witness: ACTIVE while the operation runs
+   ├─ db.query                   ← event span parents here automatically
+   └─ db.query   (relation load)
+```
+
+With the witness on, drop the `call` handler (the witness span replaces it —
+keeping both double-reports every operation) and keep the `query` handler for
+the children. The gap between an operation span and its child query spans is
+norm's own overhead — validation, hooks, and per-cell crypto on encrypted
+columns — surfaced per operation, for free.
 
 ## Serverless: flush before the runtime freezes
 
