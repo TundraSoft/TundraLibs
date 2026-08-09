@@ -43,6 +43,7 @@
     "packages/ambient": {
       "release-type": "node",
       "component": "ambient",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -54,6 +55,7 @@
     "packages/cacher": {
       "release-type": "node",
       "component": "cacher",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -65,6 +67,7 @@
     "packages/compat": {
       "release-type": "node",
       "component": "compat",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -76,6 +79,7 @@
     "packages/crypt": {
       "release-type": "node",
       "component": "crypt",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -87,6 +91,7 @@
     "packages/doctor": {
       "release-type": "node",
       "component": "doctor",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -98,6 +103,7 @@
     "packages/drivers": {
       "release-type": "node",
       "component": "drivers",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -109,6 +115,7 @@
     "packages/guardian": {
       "release-type": "node",
       "component": "guardian",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -120,6 +127,7 @@
     "packages/id": {
       "release-type": "node",
       "component": "id",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -131,6 +139,7 @@
     "packages/metro-man": {
       "release-type": "node",
       "component": "metro-man",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -142,6 +151,7 @@
     "packages/norm": {
       "release-type": "node",
       "component": "norm",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -153,6 +163,7 @@
     "packages/oql": {
       "release-type": "node",
       "component": "oql",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -164,6 +175,7 @@
     "packages/pact": {
       "release-type": "node",
       "component": "pact",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -175,6 +187,7 @@
     "packages/radrouter": {
       "release-type": "node",
       "component": "radrouter",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -186,6 +199,7 @@
     "packages/restler": {
       "release-type": "node",
       "component": "restler",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -197,6 +211,7 @@
     "packages/rpc": {
       "release-type": "node",
       "component": "rpc",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -208,6 +223,7 @@
     "packages/slogger": {
       "release-type": "node",
       "component": "slogger",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -219,6 +235,7 @@
     "packages/tracer": {
       "release-type": "node",
       "component": "tracer",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",
@@ -230,6 +247,7 @@
     "packages/utils": {
       "release-type": "node",
       "component": "utils",
+      "bump-minor-pre-major": true,
       "extra-files": [
         {
           "type": "json",

@@ -132,6 +132,12 @@ const renderReleasePleaseConfig = (pkgs: Pkg[]): string =>
       packages: Object.fromEntries(pkgs.map((p) => [`${PACKAGES_DIR}/${p.dir}`, {
         'release-type': 'node',
         'component': p.dir,
+        // A breaking (`!`) commit on a 0.x package bumps MINOR, not major —
+        // without this, release-please graduates a pre-1.0 package to 1.0.0
+        // off any breaking commit. tracer nearly shipped as an accidental
+        // 1.0.0 exactly this way (the otlp subpath rename), and pact is
+        // deliberately held pre-1.0. Inert once a package reaches 1.0.0.
+        'bump-minor-pre-major': true,
         // Prerelease bump strategy only while the package version carries
         // a prerelease suffix (1.0.0-devN -> devN+1). Stable versions use
         // normal semver bumps — self-adapts on graduation to 1.0.0.
