@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.3.1...tracer-v0.4.0) (2026-08-09)
+
+
+### Features
+
+* **tracer:** ship the composition-root adapters — wrap and logContext ([35214b9](https://github.com/TundraSoft/TundraLibs/commit/35214b91cc1f30a56813ce7b2c4701ed39a48147))
+* **tracer:** ship the composition-root adapters — wrap and logContext ([bc212e9](https://github.com/TundraSoft/TundraLibs/commit/bc212e9df56893008593d6b57c8cfc3f61946d00))
+
 ## [0.3.1](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.3.0...tracer-v0.3.1) (2026-08-09)
 
 
