@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.0.0...crypt-v1.0.1) (2026-08-09)
+
+
+### Bug Fixes
+
+* **crypt:** bound the label length in PEM_ARMOUR too ([3e94ad9](https://github.com/TundraSoft/TundraLibs/commit/3e94ad9d0b595bf7ffd74730d866d44718b42e30))
+* **crypt:** remove polynomial-ReDoS backtracking from PEM parsing ([541a405](https://github.com/TundraSoft/TundraLibs/commit/541a405e5bf70b7318015ec9d4497b0ab0099105))
+* **crypt:** remove polynomial-ReDoS backtracking from PEM parsing ([7b38afc](https://github.com/TundraSoft/TundraLibs/commit/7b38afc30ec4fe3d676c223012c07a087615e36d))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.0.0-dev12...crypt-v1.0.0) (2026-08-01)
 
 
