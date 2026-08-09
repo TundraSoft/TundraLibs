@@ -19,6 +19,11 @@
 
 export { Tracer } from './Tracer.ts';
 export { Span, type SpanInit } from './Span.ts';
+export {
+  BatchSpanProcessor,
+  type BatchSpanProcessorOptions,
+} from './BatchSpanProcessor.ts';
+export { SemConv, type SemConvKey } from './semconv.ts';
 export { activeSpan } from './activeSpan.ts';
 export {
   createRandomIdGenerator,

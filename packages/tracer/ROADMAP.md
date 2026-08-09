@@ -1,54 +1,62 @@
 # Tracer — Roadmap
 
 What is deliberately not built yet, and the reasoning behind the choices that
-shaped the package. The kernel ships first; export and framework glue follow.
+shaped the package.
 
-## OTLP exporter (next)
+## Shipped
 
-The only exporters in-tree are `ConsoleExporter` and `MemoryExporter` — enough
-for development and tests, but not for a real backend. Next is
-`@tundralibs/tracer/otlp`: **OTLP over HTTP with a JSON payload**, POSTed to
-`<endpoint>/v1/traces`, built as a `RESTler` subclass so it inherits URL
-validation, timeouts and retries.
+- **Kernel** — `Tracer`/`Span`, W3C `traceparent` propagation, head-based
+  parent-inherited sampling, pluggable `IdGenerator`, Console/Memory exporters.
+- **`@tundralibs/tracer/exporters/otlp`** — OTLP over HTTP with a JSON payload, POSTed to
+  `<baseURL>/v1/traces`, built as a `RESTler` subclass so URL validation,
+  timeouts and headers are inherited. JSON only — gRPC and protobuf-over-HTTP
+  stay out of scope, because a collector accepts JSON on the front door and
+  re-exports in whatever the backend wants.
+- **`BatchSpanProcessor`** — bounded queue, size/timer flush, oldest-first drop
+  on overflow. It _is_ a `SpanExporter` wrapping another one, so it needed no
+  support from `Tracer` at all.
+- **`SemConv`** — the attribute keys a service actually reaches for.
 
-Decided: **write the encoder in-house rather than depend on
-`@opentelemetry/otlp-*`** — that keeps the suite dependency-light and
-cross-runtime, and conformance here is verifiable rather than a matter of
-judgement. It is pinned to a named `opentelemetry-proto` version, and verified
-two ways: fixture tests, plus a real `otel/opentelemetry-collector` service
-container in CI asserting our payload is actually accepted (the repo already
-runs live service containers, so this is house style).
+### Encoder: Guardian, decided by measurement
 
-The encoder will be built as a **Guardian schema with `.transform()`** rather
-than a hand-written mapper, so shape, conversion, defaults and validation live
-in one declaration and `GuardianInfer` derives the output type — no separately
-maintained `types/otlp.ts` to drift. **Open question to settle with a benchmark,
-not a guess:** guardian's per-value cost on a batch flush (~512 spans × ~10
-attributes) versus a hand-rolled encoder. If it is badly slower, fall back to
-guardian-as-test-schema with a hand-rolled fast path. The repo has `.bench.ts`
-conventions and a `bench` task for exactly this.
+The encoder is a Guardian schema with `.transform()` rather than a hand-written
+mapper, so the wire shape, the conversions and the validation are one
+declaration and the output type is derived from it — there is no second
+`types/otlp.ts` to drift.
 
-Spec gotchas to encode carefully (each silently breaks ingest): trace/span ids
-are **lowercase hex, not base64** (an OTLP-specific override of protobuf-JSON);
-`startTimeUnixNano`/`endTimeUnixNano` are **decimal strings**, not numbers;
-attributes use the typed `{ key, value: { stringValue | intValue | … } }`
-wrapper; `kind` and `status.code` are numeric enums.
+The open question was its cost, and it was settled with
+[encode.bench.ts](exporters/otlp/encode.bench.ts) rather than a guess: on a default
+512-span batch, Guardian runs ~1.1ms against a hand-rolled baseline's ~408µs —
+about **2.6x**, but under a millisecond more per flush, on a background timer,
+off the request path. Immaterial next to a single source of truth. Re-run the
+bench if that trade ever looks different.
 
-**Out of scope:** OTLP over gRPC, and protobuf-over-HTTP. Anyone needing those
-runs the OTel Collector, which accepts JSON on the front door and re-exports in
-any format.
+The conversions that silently break collector ingest are covered by explicit
+tests: ids as lowercase **hex, not base64** (an OTLP-specific override of
+protobuf-JSON), `*TimeUnixNano` as **decimal strings**, attributes in the typed
+`{ key, value: { stringValue | intValue | … } }` wrapper, and `kind` /
+`status.code` as numeric enums.
 
-## Batch span processor
+### Verified against a real collector
 
-Spans are currently exported one at a time, as each ends. That is fine for
-console/memory, and wrong for a network exporter — the OTLP work will add a
-batching processor (queue, size/time flush thresholds, drop policy on overflow)
-and route exports through it.
+`collector.test.ts` runs against an `otel/opentelemetry-collector` service
+container in CI, so the claim is that a _real_ collector accepts the payload —
+not merely that it matches our own fixtures. It probes and **skips** when no
+collector is reachable, so a contributor without one still gets a green suite.
+
+It carries two **negative controls** (base64 ids and bare attribute values must
+both be rejected with 400). Without them a green suite would be ambiguous
+between "our encoding is right" and "this collector accepts anything".
+
+One limit worth knowing: the collector accepts int64 as a JSON **number or**
+string, so it cannot catch a numeric `*TimeUnixNano` even though emitting one
+loses precision past 2^53. That assertion lives in `encode.test.ts`. The
+collector check complements the fixtures; it does not replace them.
 
 ## Framework middleware
 
 Deliberately **not** shipped in-tree beyond what
-[RECIPES.md](RECIPES.md) documents. RadRouter and RPC are both generic over
+[Tracer-Recipes](docs/Tracer-Recipes.md) documents. RadRouter and RPC are both generic over
 their middleware type and never read `ctx` themselves, so there is no canonical
 context to write an adapter against; and a generic adapter cannot _write_ to a
 context it does not know (`ctx.span = span`), which is exactly what an
@@ -61,10 +69,11 @@ recipes prove repetitive in practice.
 
 ## Semantic conventions
 
-Attribute names follow OpenTelemetry semantic conventions by hand
-(`http.method`, `db.system`, `exception.type`). Typed helpers/constants for the
-common groups may follow; shipping the whole spec is not planned — it is large,
-churns, and most of it is irrelevant to any one service.
+`SemConv` covers the groups a service actually reaches for — service/resource,
+HTTP, database, RPC/messaging, exception. Shipping the whole specification is
+**not** planned: it is large, it churns, and almost all of it is irrelevant to
+any one service. Attributes are plain strings, so anything missing can be passed
+inline.
 
 ## Not planned
 
@@ -74,7 +83,7 @@ churns, and most of it is irrelevant to any one service.
   sampling belongs in the OTel Collector.
 - **Auto-instrumentation** (monkey-patching `fetch`, DB drivers) — implicit
   global patching is at odds with the suite's explicit-composition style. Manual
-  wrappers are documented in RECIPES instead.
+  wrappers are documented in the recipes instead.
 - **Metrics/logs over OTLP** — `metro-man` and `slogger` own those. Tracer
   exports spans only.
 
@@ -94,3 +103,19 @@ churns, and most of it is irrelevant to any one service.
 - **Sampling is head-based and parent-inherited.** Child spans never re-sample;
   a partially-sampled trace renders as a waterfall with holes. `ratioSampler`
   derives its verdict from the trace id so independent services agree.
+- **Outbound tracing (restler, drivers) stays a recipe, not code.** A
+  first-class `tracer/restler` or driver hook would make outbound calls and
+  queries traced by default rather than by discipline, and unlike Express these
+  are our own APIs — so the usual "we can't track their churn" argument does not
+  apply. It was still declined: it would couple tracer to those packages (or
+  those packages to tracer) for something a ~10-line wrapper already does, and
+  the wrappers are documented in
+  [Tracer-Recipes](docs/Tracer-Recipes.md#outbound-propagating-the-trace).
+
+  `drivers` settles it further: its engines already emit `query`, `slowQuery`,
+  `transactionBegin/Commit/Rollback` and `error` with timing, so a tracer can be
+  attached **once per engine** with no dependency in either direction — see
+  [Tracing drivers without wrapping every call](docs/Tracer-Recipes.md#tracing-drivers-without-wrapping-every-call).
+  Shipping a `tracer/drivers` wrapper would duplicate a hook that already
+  exists. Revisit only if that handler turns out to be repeated verbatim across
+  real services.

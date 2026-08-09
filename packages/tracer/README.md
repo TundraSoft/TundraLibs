@@ -155,8 +155,54 @@ async function tracing(ctx, next) {
 }
 ```
 
-See [RECIPES.md](RECIPES.md) for ready-made adapters (Express, Koa, Oak,
-Fetch-standard servers).
+See [Recipes](docs/Tracer-Recipes.md) for ready-made adapters — Hono, Express,
+Fastify, Koa, NestJS, Oak, h3, SvelteKit, Next.js, Lambda and Workers.
+
+### 6. Ship spans to a collector (OTLP)
+
+The OTLP exporter lives behind its own subpath, so importing the tracer never
+pulls an HTTP client into a CLI or worker that only creates spans. Wrap it in
+`BatchSpanProcessor` — otherwise every ending span costs one HTTP round-trip:
+
+```typescript
+import { BatchSpanProcessor, Tracer } from '@tundralibs/tracer';
+import { OTLPExporter } from '@tundralibs/tracer/exporters/otlp';
+
+const tracer = new Tracer({
+  serviceName: 'orders',
+  exporter: new BatchSpanProcessor(
+    new OTLPExporter({
+      baseURL: 'http://localhost:4318', // collector root, not the signal path
+      headers: { 'x-api-key': Deno.env.get('OTLP_KEY') ?? '' },
+      // Export failures are silent by design — this is how you see them.
+      onExportError: (err) => console.error('otlp export failed', err),
+    }),
+    { maxExportBatchSize: 512, scheduledDelayMs: 5000 },
+  ),
+});
+
+// Before exit, so buffered spans are not lost.
+await tracer.shutdown();
+```
+
+OTLP over **HTTP with a JSON payload** only. gRPC and protobuf are out of
+scope — run the OTel Collector, which accepts JSON and re-exports in whatever
+your backend wants.
+
+### 7. Use the semantic-convention keys
+
+Backends key their UI off these exact strings, so `SemConv` keeps them a
+compile-time concern rather than a typo:
+
+```typescript
+import { SemConv } from '@tundralibs/tracer';
+
+span.setAttributes({
+  [SemConv.HTTP_REQUEST_METHOD]: 'GET',
+  [SemConv.HTTP_RESPONSE_STATUS_CODE]: 200,
+  [SemConv.URL_PATH]: '/orders/42',
+});
+```
 
 ## Custom id generation
 
@@ -178,6 +224,22 @@ new Tracer({ serviceName: 'orders', idGenerator: myGenerator });
   mistake is cheap to surface.
 - **Core is dependency-light**: `ambient` + `utils`. The OTLP exporter lives
   behind its own subpath so an HTTP client is never pulled into the core graph.
+
+## Documentation
+
+- [Concepts](docs/Tracer-Concepts.md) - Spans, the lifecycle, and why nesting is
+  automatic
+- [Propagation](docs/Tracer-Propagation.md) - W3C Trace Context across service
+  boundaries
+- [Sampling](docs/Tracer-Sampling.md) - Head-based sampling and why children
+  never re-sample
+- [Exporters](docs/Tracer-Exporters.md) - The exporter contract, batching, and
+  writing your own
+- [OTLP](docs/Tracer-OTLP.md) - Shipping to a real backend, and the encodings
+  that decide whether spans arrive
+- [Recipes](docs/Tracer-Recipes.md) - Framework adapters for 12 runtimes and
+  frameworks
+- [Roadmap](ROADMAP.md) - What is deliberately not built yet
 
 ## License
 

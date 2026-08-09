@@ -1,7 +1,7 @@
 {
   "name": "@tundralibs/tracer",
   "version": "0.2.0",
-  "description": "Cross-runtime distributed tracing — W3C Trace Context propagation, automatic span nesting via ambient async context, pluggable samplers and exporters",
+  "description": "Cross-runtime distributed tracing \u2014 W3C Trace Context propagation, automatic span nesting via ambient async context, pluggable samplers and exporters",
   "license": "MIT",
   "type": "module",
   "main": "mod.ts",
@@ -9,6 +9,7 @@
     ".": "./mod.ts",
     "./errors": "./errors/mod.ts",
     "./exporters": "./exporters/mod.ts",
+    "./exporters/otlp": "./exporters/otlp/mod.ts",
     "./types": "./types/mod.ts"
   },
   "engines": {
@@ -19,6 +20,8 @@
   },
   "dependencies": {
     "@tundralibs/ambient": "workspace:*",
+    "@tundralibs/guardian": "workspace:*",
+    "@tundralibs/restler": "workspace:*",
     "@tundralibs/utils": "workspace:*"
   },
   "devDependencies": {
