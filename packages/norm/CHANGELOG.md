@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.1.0...norm-v1.1.1) (2026-08-09)
+
+
+### Documentation
+
+* **norm:** adopt tracer.wrap in the witness example ([6cc6ced](https://github.com/TundraSoft/TundraLibs/commit/6cc6ced985bdacb6046dae6ea5144bff307b25cb))
+* **norm:** adopt tracer.wrap in the witness example ([a5cf376](https://github.com/TundraSoft/TundraLibs/commit/a5cf376d870ec65e660aa1f4f1cebe17562657ee))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.0.1...norm-v1.1.0) (2026-08-09)
 
 
