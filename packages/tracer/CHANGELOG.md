@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.4.0...tracer-v0.4.1) (2026-08-09)
+
+
+### Documentation
+
+* **tracer:** fix trace_id key name in sampling guide ([1b94144](https://github.com/TundraSoft/TundraLibs/commit/1b9414418659e707701d4613bceeb8277057a4b7))
+
 ## [0.4.0](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.3.1...tracer-v0.4.0) (2026-08-09)
 
 
