@@ -98,20 +98,18 @@ root:
 ```typescript
 const log = LogManager.createSlogger({
   appName: 'orders',
-  contextProvider: () => {
-    const span = tracer.active(); // tracer's own store
-    return {
-      ...ambient.get(), // the request bag
-      ...(span
-        ? { trace_id: span.context.traceId, span_id: span.context.spanId }
-        : {}),
-    };
-  },
+  contextProvider: () => ({
+    ...ambient.get(), // the request bag
+    ...tracer.logContext(), // live trace identity, tracer's own store
+  }),
 });
 ```
 
 One provider, three sources joined: request context, plus live trace identity
 when a span is open. Neither slogger nor tracer learned about the other.
+`tracer.logContext` (tracer ≥ 0.4) returns `{ traceId, spanId }` while a span
+is open and `{}` otherwise — camelCase, the exact keys slogger's
+`otelLogFormatter` hoists into first-class OTel fields.
 
 ## Correlation ids
 
