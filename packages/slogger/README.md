@@ -295,9 +295,10 @@ filters, so muted lines never invoke it. Like formatters, it is compared by
 **reference identity** for `LogManager` caching: hoist it to a stable `const`
 rather than passing a fresh arrow to each `createSlogger` call.
 
-For the full correlation story — adding trace ids from `tracer`, and getting
-`otelLogFormatter` to hoist them into first-class OTel fields — see
-[Slogger-Correlation](docs/Slogger-Correlation.md).
+For trace ids, `tracer` (>= 0.4) ships the bound adapter for this seam —
+`contextProvider: tracer.logContext` — emitting the canonical keys
+`otelLogFormatter` hoists into first-class OTel fields. The full correlation
+story is in [Slogger-Correlation](docs/Slogger-Correlation.md).
 
 ## Core API
 
