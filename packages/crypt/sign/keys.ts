@@ -84,8 +84,13 @@ export type KeyRequirement = {
   scheme?: 'PSS' | 'PKCS1';
 };
 
-/** PEM armour, matching the detection the package has always used. */
-const PEM_ARMOUR = /-----BEGIN [A-Z ]+-----/;
+/**
+ * PEM armour, matching the detection the package has always used. The label
+ * length is bounded for the same reason as {@link PEM_BLOCK}: unbounded, the
+ * greedy class re-scans from every `-----BEGIN` candidate, so armour-like input
+ * that never closes costs O(n^2).
+ */
+const PEM_ARMOUR = /-----BEGIN [A-Z ]{1,64}-----/;
 
 /**
  * Captures a PEM block's label and body.
