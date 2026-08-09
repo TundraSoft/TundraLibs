@@ -269,7 +269,7 @@ export class Tracer extends Options<TracerOptions> {
    * are not lost.
    */
   public async shutdown(): Promise<void> {
-    await Promise.allSettled([...this.__pending]);
+    await Promise.allSettled(this.__pending);
     const exporter = this.getOption('exporter') as SpanExporter | undefined;
     await exporter?.shutdown?.();
   }
@@ -303,13 +303,17 @@ export class Tracer extends Options<TracerOptions> {
     if (exporter === undefined) return;
     let promise: Promise<void>;
     try {
-      promise = exporter.export([data]);
+      // The attached `.catch()` — rather than an `await` — is what stops a
+      // rejected export from surfacing as an unhandled rejection, while
+      // keeping the call synchronous. The surrounding try/catch covers only a
+      // *synchronous* throw from a misbehaving exporter.
+      promise = exporter.export([data]).catch(() => {
+        /* observability must not break the application */
+      });
     } catch {
-      return; // synchronous throw from a misbehaving exporter
+      return;
     }
     this.__pending.add(promise);
-    void promise
-      .catch(() => {/* observability must not break the application */})
-      .finally(() => this.__pending.delete(promise));
+    void promise.finally(() => this.__pending.delete(promise));
   }
 }

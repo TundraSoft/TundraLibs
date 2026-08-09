@@ -28,7 +28,7 @@ export const alwaysOnSampler: Sampler = () => true;
 export const alwaysOffSampler: Sampler = () => false;
 
 /** Number of distinct values in the 32-bit window read from the trace id. */
-const ID_WINDOW = 0x1_0000_0000;
+const ID_WINDOW = 2 ** 32;
 
 /**
  * Sample a deterministic fraction of traces.
@@ -43,8 +43,10 @@ const ID_WINDOW = 0x1_0000_0000;
  * @returns A deterministic {@link Sampler}.
  */
 export function ratioSampler(ratio: number): Sampler {
-  if (!(ratio > 0)) return alwaysOffSampler; // also catches NaN
+  // NaN is checked explicitly: `NaN <= 0` is false, so a comparison alone would
+  // let it through and produce a sampler that never fires predictably.
+  if (Number.isNaN(ratio) || ratio <= 0) return alwaysOffSampler;
   if (ratio >= 1) return alwaysOnSampler;
   const threshold = Math.floor(ratio * ID_WINDOW);
-  return ({ traceId }) => parseInt(traceId.slice(-8), 16) < threshold;
+  return ({ traceId }) => Number.parseInt(traceId.slice(-8), 16) < threshold;
 }

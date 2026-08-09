@@ -51,13 +51,17 @@ export class ConsoleExporter implements SpanExporter {
     return Promise.resolve();
   }
 
+  /** Render a span's outcome, appending the message when there is one. */
+  private __status(span: SpanData): string {
+    if (span.status.code !== SpanStatusCode.ERROR) return 'OK';
+    if (span.status.message === undefined) return 'ERROR';
+    return `ERROR (${span.status.message})`;
+  }
+
   /** One-line human-readable summary of a span. */
   private __format(span: SpanData): string {
     const ms = span.endTime.getTime() - span.startTime.getTime();
-    const status = span.status.code === SpanStatusCode.ERROR
-      ? `ERROR${span.status.message ? ` (${span.status.message})` : ''}`
-      : 'OK';
     const trace = span.context.traceId.slice(0, 8);
-    return `[trace ${trace}…] ${span.name}  ${ms}ms  ${status}`;
+    return `[trace ${trace}…] ${span.name}  ${ms}ms  ${this.__status(span)}`;
   }
 }

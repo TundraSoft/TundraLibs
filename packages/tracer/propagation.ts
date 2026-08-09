@@ -91,7 +91,7 @@ export function extract(headers: HeadersLike): SpanContext | undefined {
   return {
     traceId,
     spanId,
-    traceFlags: parseInt(flags, 16),
+    traceFlags: Number.parseInt(flags, 16),
     remote: true,
   };
 }
