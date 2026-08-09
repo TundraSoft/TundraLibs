@@ -169,24 +169,37 @@ const MAX_PRI_VALUE = 191;
 const MIN_PRI_VALUE = 0;
 
 // `parse()` runs these against untrusted input (syslog arrives over the
-// network), so both must match in linear time. Two rewrites keep them free of
-// the ambiguity that makes a pattern backtrack super-linearly, without changing
-// the language matched or the capture-group numbering:
+// network), so both must match in linear time. Three rewrites remove the
+// ambiguity that made them backtrack super-linearly, without changing the
+// language matched in practice or the capture-group numbering:
 //
-//   `\s*X?\s*`  ->  `\s*(?:X\s*)?`   a run of whitespace can otherwise be split
-//                                    between the two `\s*` in O(n) ways, and
-//                                    the pattern has several such runs.
+//   `\s*X?\s*`  ->  `\s*(?:X\s*)?`   a run of whitespace could otherwise be
+//                                    split between the two `\s*` in O(n) ways,
+//                                    and the pattern has several such runs.
 //   `\s*` between two adjacent `[^\s]+` fields  ->  `\s+`
-//                                    an empty separator lets one unbroken run
-//                                    of non-space be divided between the two
+//                                    an empty separator let one unbroken run of
+//                                    non-space be divided between the two
 //                                    groups in O(n) ways. RFC 5424 mandates a
 //                                    SP between fields, so requiring one is
 //                                    also the more faithful reading.
+//   unbounded `+` on every field  ->  an explicit `{1,n}` ceiling
+//                                    HOSTNAME and TAG sit next to each other
+//                                    with only an optional separator, so a run
+//                                    of non-space could still be divided
+//                                    between them in O(n) ways even after the
+//                                    two rewrites above (measured: 684ms on
+//                                    8k of "!"). A ceiling caps the number of
+//                                    divisions at a constant, which is what
+//                                    makes the whole match linear. Every bound
+//                                    is at or above the RFC's own limit —
+//                                    HOSTNAME 255 (RFC 1035), TAG 32 (RFC 3164,
+//                                    given 64 here) — so no real message is
+//                                    rejected that was previously accepted.
 const Patterns = {
   'RFC3164':
-    /^(<(\d+)>)((?:(\d{4})\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*(\d{1,2})\s*(?:(\d{4})\s*)?(\d{1,2}:\d{1,2}:\d{1,2}))?\s*(?:([^\s\:]+)\s*)?(([^\s\:\[]+)?(\[(\d+|)\])?)?:(.+)/i, //NOSONAR - Allow empty process ID brackets and year-first timestamps
+    /^(<(\d{1,10})>)((?:(\d{4})\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*(\d{1,2})\s*(?:(\d{4})\s*)?(\d{1,2}:\d{1,2}:\d{1,2}))?\s*(?:([^\s\:]{1,255})\s*)?(([^\s\:\[]{1,64})?(\[(\d{1,10}|)\])?)?:(.+)/i, //NOSONAR - Allow empty process ID brackets and year-first timestamps
   'RFC5424':
-    /^<(\d+)?>\d (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\S+)\s+([^\s]+)\s+([^\s]+)\s+([^\s]+)\s+([^\s]+)\s*/i, //NOSONAR
+    /^<(\d{1,10})?>\d (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\S{1,64})\s+([^\s]{1,255})\s+([^\s]{1,255})\s+([^\s]{1,255})\s+([^\s]{1,255})\s*/i, //NOSONAR
   'STRUCTID': /\[(([a-zA-Z0-9._-]+)@(\d+(?:\.\d+)*))\s*/, // Allow dots and hyphens in element names
   'STRUCTKEYS': /([\w.-]+)\s*=\s*(["'])((?:(?=(\\?))\3.)*?)\2/,
 };
