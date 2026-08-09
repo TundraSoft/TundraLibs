@@ -50,6 +50,8 @@ export {
   type ReverseMap,
   type ReverseRelation,
   type Runtime,
+  type Witness,
+  type WitnessInfo,
 } from './compile.ts';
 export {
   buildCellGuardian,

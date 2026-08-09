@@ -338,6 +338,45 @@ plus the engine's own events proxied from the driver — `connect`,
 and `slowQuery`. All subscribe inline via `_on<event>` keys (or
 `norm.on(event, fn)`).
 
+## Tracing (`witness`)
+
+Events give you _flat_ observability — per-operation `call` and per-query
+`query` records. For **nested** spans (an operation as the parent of the
+queries it caused), configure a `witness`: every repo operation and `raw()`
+runs through it, so a tracer's active span is open while the driver events
+fire, and their spans parent to it automatically via
+[ambient](../ambient/README.md).
+
+```typescript
+import { SpanKind, Tracer } from '@tundralibs/tracer';
+
+const norm = new Norm({
+  engine,
+  secret,
+  witness: (info, fn) =>
+    tracer.startActiveSpan(
+      info.name, // e.g. 'norm.Users.find', 'norm.raw'
+      { kind: SpanKind.INTERNAL, attributes: info.attributes },
+      fn,
+    ),
+});
+```
+
+```text
+GET /orders                      ← request span (middleware)
+└─ norm.Orders.find              ← the witness
+   ├─ db.query                   ← driver event, parents automatically
+   └─ db.query   (relation load)
+```
+
+The `witness` is a generic wrap hook, not a tracer dependency — norm never
+imports tracer; you wire them at the composition root, exactly like
+slogger's `contextProvider`. **A witness observes and must not interfere:**
+it must call `fn` exactly once, return its result unchanged, and re-throw
+its errors. The operation-span-minus-query-spans gap also surfaces norm's
+own overhead (validation, hooks, and per-cell crypto on encrypted columns)
+per operation, for free.
+
 ## Supported databases
 
 | Feature                       | PostgreSQL | MariaDB/MySQL | SQLite | MongoDB |

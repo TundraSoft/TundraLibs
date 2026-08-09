@@ -53,6 +53,35 @@ import { NormCryptoError, NormDefinitionError } from './errors/mod.ts';
 import type { DefinitionIssue } from './errors/mod.ts';
 
 /** Metadata-only event surface. NEVER row data, plaintext, or secrets. */
+/** The operation descriptor a {@link Witness} receives. */
+export type WitnessInfo = {
+  /** Span-style operation name, e.g. `norm.Users.find` or `norm.raw`. */
+  name: string;
+  /** Structured detail — `norm.entity`, `norm.operation`. */
+  attributes?: Record<string, unknown>;
+};
+
+/**
+ * The suite-wide observability wrap hook: run `fn` on behalf of the caller,
+ * observing it without interfering. Norm routes every repo operation (and
+ * `raw()`) through the configured witness, so a tracer wired as
+ * `witness: (info, fn) => tracer.startActiveSpan(info.name, fn)` makes each
+ * operation an ACTIVE span — and the driver `query` events that fire during
+ * `fn` then parent to it automatically via ambient. Events alone cannot
+ * provide that nesting: a span created in an event handler is never active
+ * across the operation's continuation.
+ *
+ * CONTRACT (the name is the rule): a witness observes and must not
+ * interfere — it must invoke `fn` exactly once, return its result
+ * unchanged, and re-throw its errors. Norm does not defend against a
+ * misbehaving witness; it is composition-root plumbing, trusted like an
+ * exporter or a log handler.
+ */
+export type Witness = <T>(
+  info: WitnessInfo,
+  fn: () => Promise<T>,
+) => Promise<T>;
+
 export type NormEvents = {
   /** A repo/query operation executed. `id` is the SAME ULID returned
    * in the operation's NormResult envelope — correlate logs with it. */
@@ -277,6 +306,8 @@ export type Runtime = {
    * (`@`-less FK aliases with `project: true` + hasOne reverse names
    * with `reverseProject: true`). Empty map entries are omitted. */
   readonly eager: ReadonlyMap<string, ReadonlyArray<string>>;
+  /** Observability wrapper from `NormConfig.witness`; see {@link Witness}. */
+  readonly witness?: Witness;
 };
 
 /** Where a hashed filter's digest lands. */
@@ -383,6 +414,7 @@ export function compileRuntime(
   cfg: CompileConfig,
   executor: Executor,
   emit: NormEmit,
+  witness?: Witness,
 ): Runtime {
   const algorithm = cfg.algorithm ?? DEFAULT_ENCRYPT_ALGORITHM;
 
@@ -470,6 +502,7 @@ export function compileRuntime(
   return {
     registry,
     reverseMap,
+    witness,
     encryptedFqn,
     nonFilterableFqn,
     hashedFqn,

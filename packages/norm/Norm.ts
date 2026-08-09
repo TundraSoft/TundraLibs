@@ -53,6 +53,7 @@ import {
   type DecryptFailurePolicy,
   type NormEvents,
   type Runtime,
+  type Witness,
 } from './compile.ts';
 import {
   type CryptoOverrides,
@@ -109,6 +110,21 @@ export type NormConfig = {
    * `'null'` (default) degrades the cell to `null` and emits a
    * `decryptError` event; `'throw'` raises a `NormCryptoError`. */
   onDecryptFailure?: DecryptFailurePolicy;
+  /**
+   * Observability wrap hook ({@link Witness}) — every repo operation and
+   * `raw()` runs through it, so a tracer wired at the composition root makes
+   * each operation an active span and driver query events nest under it:
+   *
+   * ```ts
+   * new Norm({ engine, witness: (info, fn) =>
+   *   tracer.startActiveSpan(info.name, fn) });
+   * ```
+   *
+   * Held out of the options bag (reference-critical, like the crypto
+   * callbacks); a witness must observe without interfering — see
+   * {@link Witness} for the contract.
+   */
+  witness?: Witness;
 };
 
 /** `_on<event>` handler keys accepted inline in the constructor. */
@@ -134,6 +150,8 @@ type NormEventHandlers = {
  */
 export class Norm extends Options<NormConfig, NormEvents> {
   private readonly __executor: Executor;
+  /** See {@link NormConfig.witness}; threaded into every runtime. */
+  private readonly __witness?: Witness;
   private readonly __compileCfg: {
     secret: string | undefined;
     algorithm: EncryptAlgorithm | undefined;
@@ -157,10 +175,12 @@ export class Norm extends Options<NormConfig, NormEvents> {
       database: _database,
       crypto: _crypto,
       secret: _secret,
+      witness: _witness,
       ...storable
     } = cfg;
     this._setOptions(storable as EventOptionKeys<NormConfig, NormEvents>);
     const resolved = resolveEngine(cfg);
+    this.__witness = cfg.witness;
     this.__executor = resolved.executor;
     this.__forwardEngineEvents(resolved.engine);
     this.__compileCfg = {
@@ -239,6 +259,7 @@ export class Norm extends Options<NormConfig, NormEvents> {
       this.__compileCfg,
       this.__executor,
       (event, ...args) => void this.emit(event, ...args),
+      this.__witness,
     );
     // NOT intersected with Record<string, AnyDefinition> — that would
     // collapse `keyof R` to string and repo() would accept any typo.
@@ -417,6 +438,13 @@ export class NormDb<R, Scope extends string = never> {
         );
         break;
     }
+    // Observability boundary: with a witness configured, the accessor's
+    // operation methods are wrapped ONCE here (and cached wrapped), so every
+    // call site gets witnessed without Repo/ReadRepo/QueryAccessor knowing.
+    const witness = this.__runtime.witness;
+    if (witness !== undefined) {
+      accessor = witnessAccessor(accessor as object, key, witness);
+    }
     this.__repoCache.set(key, accessor);
     return accessor as RepoFor<R, K, Scope>;
   }
@@ -536,7 +564,12 @@ export class NormDb<R, Scope extends string = never> {
       'db.raw() executed hand-written SQL — no decrypt / validation / ' +
         'scope applied.',
     );
-    const res = await this.__executor.raw<Res>(sql, params, this.__txId);
+    const witness = this.__runtime.witness;
+    const run = () => this.__executor.raw<Res>(sql, params, this.__txId);
+    const res = witness === undefined ? await run() : await witness(
+      { name: 'norm.raw', attributes: { 'norm.operation': 'RAW' } },
+      run,
+    );
     this.__runtime.emit('call', '<raw>', 'RAW', res.time, res.isSlow, id);
     return makeResult<Res[]>({
       id,
@@ -751,4 +784,80 @@ function resolveEngine(cfg: NormConfig): ResolvedEngine {
       );
     }
   }
+}
+
+// ---------------------------------------------------------------------
+// Witness wiring (see NormConfig.witness / Witness in compile.ts)
+// ---------------------------------------------------------------------
+
+/**
+ * The accessor methods that count as operations. Everything else —
+ * getters, internal helpers — passes through the proxy untouched.
+ * Covers Repo (all nine), ReadRepo (find/findOne/count) and
+ * QueryAccessor (find); a name missing from a given accessor kind is
+ * simply never hit.
+ */
+const WITNESSED_OPS = new Set([
+  'find',
+  'findOne',
+  'count',
+  'getByPK',
+  'insert',
+  'upsert',
+  'update',
+  'delete',
+  'truncate',
+]);
+
+/**
+ * Wrap an accessor so its operation methods run through `witness`.
+ *
+ * A Proxy at the accessor boundary instead of edits inside nine method
+ * bodies: one implementation point covers Repo, ReadRepo and
+ * QueryAccessor alike, and internal calls (an operation invoking a
+ * sibling on `this`) run against the RAW target — so an operation is
+ * witnessed exactly once, at the boundary the application called.
+ *
+ * `Reflect.get(target, prop, target)` and `apply(target, …)` keep
+ * `this` bound to the raw accessor, so field access inside methods is
+ * unaffected by the proxy. Wrapped methods are cached per accessor for
+ * stable function identity across property reads.
+ *
+ * @param accessor - The raw Repo / ReadRepo / QueryAccessor.
+ * @param entity - Registry key, used in the span-style name.
+ * @param witness - See {@link Witness}.
+ * @returns The proxied accessor, cached by `repo()` in place of the raw one.
+ */
+function witnessAccessor<T extends object>(
+  accessor: T,
+  entity: string,
+  witness: Witness,
+): T {
+  const wrapped = new Map<PropertyKey, unknown>();
+  return new Proxy(accessor, {
+    get(target, prop) {
+      const value = Reflect.get(target, prop, target);
+      if (typeof value !== 'function' || !WITNESSED_OPS.has(prop as string)) {
+        return value;
+      }
+      let fn = wrapped.get(prop);
+      if (fn === undefined) {
+        const op = String(prop);
+        fn = (...args: unknown[]) =>
+          witness(
+            {
+              name: `norm.${entity}.${op}`,
+              attributes: { 'norm.entity': entity, 'norm.operation': op },
+            },
+            () =>
+              (value as (...a: unknown[]) => Promise<unknown>).apply(
+                target,
+                args,
+              ),
+          );
+        wrapped.set(prop, fn);
+      }
+      return fn;
+    },
+  }) as T;
 }
