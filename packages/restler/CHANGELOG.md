@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.0.0...restler-v1.0.1) (2026-08-09)
+
+
+### Documentation
+
+* **restler:** add Observability section ([a5b4325](https://github.com/TundraSoft/TundraLibs/commit/a5b43251f05ad617167547420627d2cb6c1551e9))
+* **restler:** add Observability section ([69e42e3](https://github.com/TundraSoft/TundraLibs/commit/69e42e392e77a3ecdb2e6017760d9f27283d99ab))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.0.0-dev7...restler-v1.0.0) (2026-08-01)
 
 

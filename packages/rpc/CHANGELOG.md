@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.0.0...rpc-v1.0.1) (2026-08-09)
+
+
+### Documentation
+
+* **rpc:** link the tracer middleware recipe ([1e4db7c](https://github.com/TundraSoft/TundraLibs/commit/1e4db7c88e0a26ad9b2196315bd8505019102ca0))
+* **rpc:** link the tracer middleware recipe ([01fef1b](https://github.com/TundraSoft/TundraLibs/commit/01fef1b3551c08ab645f4f257f39a28bf4547d8a))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.0.0-dev6...rpc-v1.0.0) (2026-08-01)
 
 
