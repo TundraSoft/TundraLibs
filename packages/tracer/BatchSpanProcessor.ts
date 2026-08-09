@@ -77,7 +77,7 @@ export class BatchSpanProcessor implements SpanExporter {
   private readonly __delayMs: number;
   private readonly __onDrop?: (dropped: number) => void;
 
-  private __queue: SpanData[] = [];
+  private readonly __queue: SpanData[] = [];
   private __timer: ReturnType<typeof setTimeout> | undefined;
   /** In-flight flushes, awaited by {@link BatchSpanProcessor.shutdown}. */
   private readonly __inFlight: Set<Promise<void>> = new Set();
@@ -178,10 +178,16 @@ export class BatchSpanProcessor implements SpanExporter {
     if (this.__queue.length === 0) this.__clearTimer();
 
     let promise: Promise<void>;
-    try {
+    // Same shape as Tracer.__export, same reasoning: `.catch()` absorbs a
+    // REJECTED export, while the try absorbs a SYNCHRONOUS throw from a
+    // misbehaving exporter — which happens before a promise exists and so can
+    // never reach `.catch()`. BatchSpanProcessor.test.ts covers that path
+    // ("survives an exporter that throws synchronously"). S4822 reads the
+    // `.catch()` and concludes the try is redundant; it is not.
+    try { //NOSONAR - guards a sync throw, which .catch() cannot see
       promise = this.__exporter.export(batch).catch(() => {});
     } catch {
-      return; // synchronous throw from a misbehaving exporter
+      return;
     }
     this.__inFlight.add(promise);
     void promise.finally(() => this.__inFlight.delete(promise));
