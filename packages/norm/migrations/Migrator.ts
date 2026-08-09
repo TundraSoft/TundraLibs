@@ -192,7 +192,13 @@ export class Migrator {
   /** @param db The handle returned by `norm.use(...)`. */
   constructor(db: object, options: MigratorOptions) {
     this.#runtime = runtimeOf(db);
-    this.#dir = options.dir.replace(/\/+$/, '');
+    // Trailing slashes are trimmed by scanning back from the end rather than
+    // with `/\/+$/`: that pattern re-tries from every position and re-scans the
+    // run each time, so a path of many slashes costs O(n^2). This is O(n) with
+    // a single allocation.
+    let dirEnd = options.dir.length;
+    while (dirEnd > 0 && options.dir[dirEnd - 1] === '/') dirEnd--;
+    this.#dir = options.dir.slice(0, dirEnd);
     // A non-positive chunk is nonsense for the rebuild pager: `limit: 0`
     // means UNBOUNDED downstream and `offset += 0` never advances, so the
     // copy loop would re-read the same page forever. Floor at one row.
