@@ -225,6 +225,21 @@ new Tracer({ serviceName: 'orders', idGenerator: myGenerator });
 - **Core is dependency-light**: `ambient` + `utils`. The OTLP exporter lives
   behind its own subpath so an HTTP client is never pulled into the core graph.
 
+## Documentation
+
+- [Concepts](docs/Tracer-Concepts.md) - Spans, the lifecycle, and why nesting is
+  automatic
+- [Propagation](docs/Tracer-Propagation.md) - W3C Trace Context across service
+  boundaries
+- [Sampling](docs/Tracer-Sampling.md) - Head-based sampling and why children
+  never re-sample
+- [Exporters](docs/Tracer-Exporters.md) - The exporter contract, batching, and
+  writing your own
+- [OTLP](docs/Tracer-OTLP.md) - Shipping to a real backend, and the encodings
+  that decide whether spans arrive
+- [Recipes](RECIPES.md) - Framework adapters (Express, Koa, Oak, Fetch-standard)
+- [Roadmap](ROADMAP.md) - What is deliberately not built yet
+
 ## License
 
 MIT
