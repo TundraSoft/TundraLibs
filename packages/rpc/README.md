@@ -673,6 +673,9 @@ that primitive supports. Today that means:
   conformance test harness
 - [Extending](docs/Rpc-Extending.md) — the override surface,
   pattern subscribe via subclass, custom frame inspection
+- [Tracing middleware](../tracer/docs/Tracer-Recipes.md#radrouter--rpc) —
+  ready-made `@tundralibs/tracer` middleware for RPC's generic chain
+  (a span per message, parented from inbound `traceparent`)
 - [Examples](examples/) — runnable demos
 - [`@tundralibs/compat/websocket`](../compat/websocket/Compat-WebSocket.md) —
   the underlying middleware-aware WebSocket primitive this package is built on
