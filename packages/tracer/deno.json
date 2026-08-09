@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/tracer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Cross-runtime distributed tracing — W3C Trace Context propagation, automatic span nesting via ambient async context, pluggable samplers and exporters",
   "license": "MIT",
   "exports": {
