@@ -387,6 +387,8 @@ the collected failures as a single `SloggerFinalizeError`.
 - [Security](docs/Slogger-Security.md) - Security and data masking
 - [Examples](docs/Slogger-Examples.md) - Common usage patterns
 - [Migration](docs/Slogger-Migration.md) - Migration from other loggers
+- [Recipes](docs/Slogger-Recipes.md) - Custom handlers to build per-vendor
+  (webhooks, queues, DB sinks)
 
 ## License
 
