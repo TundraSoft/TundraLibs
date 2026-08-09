@@ -302,11 +302,18 @@ export class Tracer extends Options<TracerOptions> {
     const exporter = this.getOption('exporter') as SpanExporter | undefined;
     if (exporter === undefined) return;
     let promise: Promise<void>;
-    try {
-      // The attached `.catch()` — rather than an `await` — is what stops a
-      // rejected export from surfacing as an unhandled rejection, while
-      // keeping the call synchronous. The surrounding try/catch covers only a
-      // *synchronous* throw from a misbehaving exporter.
+    // The two failure modes need two different guards, and both are load-bearing:
+    //   - `.catch()` absorbs a REJECTED export, without an `await` that would
+    //     make ending a span asynchronous.
+    //   - the try/catch absorbs a SYNCHRONOUS throw from a misbehaving
+    //     exporter, which happens before a promise exists and so can never
+    //     reach `.catch()`. `Tracer.test.ts` covers this path.
+    // S4822 reads the `.catch()` and concludes the try is redundant; removing
+    // it would let a synchronous throw escape into the caller's `span.end()`,
+    // which is exactly what this method exists to prevent. Wrapping the call in
+    // `Promise.resolve().then(...)` would satisfy the rule but defer the export
+    // to a microtask, breaking synchronous-export semantics.
+    try { //NOSONAR - see above: guards a sync throw, which .catch() cannot
       promise = exporter.export([data]).catch(() => {
         /* observability must not break the application */
       });
