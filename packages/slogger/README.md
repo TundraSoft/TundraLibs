@@ -295,6 +295,10 @@ filters, so muted lines never invoke it. Like formatters, it is compared by
 **reference identity** for `LogManager` caching: hoist it to a stable `const`
 rather than passing a fresh arrow to each `createSlogger` call.
 
+For the full correlation story — adding trace ids from `tracer`, and getting
+`otelLogFormatter` to hoist them into first-class OTel fields — see
+[Slogger-Correlation](docs/Slogger-Correlation.md).
+
 ## Core API
 
 ### Slogger Class
@@ -389,6 +393,8 @@ the collected failures as a single `SloggerFinalizeError`.
 - [Migration](docs/Slogger-Migration.md) - Migration from other loggers
 - [Recipes](docs/Slogger-Recipes.md) - Custom handlers to build per-vendor
   (webhooks, queues, DB sinks)
+- [Correlation](docs/Slogger-Correlation.md) - Logs that know their request and
+  their trace: contextProvider + ambient + tracer + the OTel formatter
 
 ## License
 
