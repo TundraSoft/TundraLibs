@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.0...drivers-v1.0.1) (2026-08-09)
+
+
+### Documentation
+
+* **drivers:** document the event seam for tracing and metrics ([15016dd](https://github.com/TundraSoft/TundraLibs/commit/15016dd4752510634c6b2a289288cabf8f43ac8c))
+* **drivers:** document the event seam for tracing and metrics ([23e601e](https://github.com/TundraSoft/TundraLibs/commit/23e601ea3a32fe2989ec3135b69363f67cdc8838))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.0-dev11...drivers-v1.0.0) (2026-08-01)
 
 
