@@ -147,6 +147,14 @@ Ambient is **in-process only**. Propagating context across a network boundary
 request is the web/rpc middleware's job. Ambient just owns "the context that
 survives `await`."
 
+## Documentation
+
+- [Concepts](docs/Ambient-Concepts.md) - AsyncLocalStorage, scopes, the mutable
+  bag, and your own stores via `createContext`
+- [Integration](docs/Ambient-Integration.md) - Wiring slogger, tracer, and
+  request boundaries without coupling them
+- [Roadmap](ROADMAP.md) - Decisions and deferred items
+
 ## License
 
 MIT
