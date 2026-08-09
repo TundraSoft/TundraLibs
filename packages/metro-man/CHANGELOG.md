@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.0...metro-man-v1.0.1) (2026-08-09)
+
+
+### Documentation
+
+* **metro-man:** cross-link the sibling observability pillars ([2ded4b1](https://github.com/TundraSoft/TundraLibs/commit/2ded4b1148c221ef33b199e0e462dfff3785a5fd))
+* **metro-man:** cross-link the sibling observability pillars ([9099fe1](https://github.com/TundraSoft/TundraLibs/commit/9099fe1797e27c25cce021654b15cdcdaee83196))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.0-dev7...metro-man-v1.0.0) (2026-08-01)
 
 
