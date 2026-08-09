@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.4.1...pact-v0.4.2) (2026-08-09)
+
+
+### Documentation
+
+* **pact:** remove stale unpublished-status banner ([#161](https://github.com/TundraSoft/TundraLibs/issues/161)) ([4b963d0](https://github.com/TundraSoft/TundraLibs/commit/4b963d09a3f81d571561e070a44b501168c8f929))
+
 ## [0.4.1](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.4.0...pact-v0.4.1) (2026-08-09)
 
 
