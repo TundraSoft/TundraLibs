@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.0...slogger-v1.1.1) (2026-08-09)
+
+
+### Documentation
+
+* **slogger:** add the correlation guide ([6fb941d](https://github.com/TundraSoft/TundraLibs/commit/6fb941d0a6dbf1075a94878d0cbf680b4b9ce6d0))
+* **slogger:** make the recipes wiki-visible and link them from the README ([4142313](https://github.com/TundraSoft/TundraLibs/commit/414231368a953c86a3b0fb01aac9652a2f126b76))
+* **slogger:** wiki-visible recipes + the correlation guide ([3d13a85](https://github.com/TundraSoft/TundraLibs/commit/3d13a85f2d31ed4c2cf487d5361ca01b4b903d48))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.0.0...slogger-v1.1.0) (2026-08-09)
 
 

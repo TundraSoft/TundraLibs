@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/slogger",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Cross-runtime structured logging library — one log call fans out to console, JSON, syslog, file, HTTP, TCP, or any custom handler",
   "type": "module",
   "exports": {
