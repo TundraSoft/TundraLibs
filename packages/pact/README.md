@@ -148,6 +148,25 @@ await pact.verifyAPIKey(presented, stored.secretHash); // boolean
   turn and surfaces their rejections to its caller.
   See [Errors & Events](docs/Pact-Errors.md).
 
+## Observability
+
+Every decision fires an event, and PACT imports no logging or tracing
+package — the `_on<Event>` hooks are the integration seam, wired at your
+composition root. Two one-liners make the audit trail _correlated_ in
+request-scoped apps:
+
+- After a successful `verify`/`login`, put the principal on the request
+  bag — `ambient.set('userId', principal)` — and every subsequent log line
+  in that request carries it ([ambient](../ambient/README.md)).
+- Give slogger a `contextProvider` so ids arrive on every record
+  automatically — the request bag plus live trace identity via
+  `tracer.logContext`. See
+  [Slogger-Correlation](../slogger/docs/Slogger-Correlation.md).
+
+With both in place, a `denied` event logged from an audit hook already
+carries `correlationId`, `userId`, and the active trace — no argument
+threading through your auth code.
+
 ## Planned hardening (not yet shipped)
 
 Two OIDC/token security-posture items are designed but deliberately deferred —
