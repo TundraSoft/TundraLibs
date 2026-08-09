@@ -107,13 +107,18 @@ const log = LogManager.createSlogger({
   appName: 'orders',
   contextProvider: () => {
     const span = tracer.active();
+    // Keys are camelCase ON PURPOSE: slogger's otelLogFormatter hoists
+    // context.traceId / context.spanId into the OTel log record's first-class
+    // TraceId/SpanId fields (its `traceFields` defaults) — so logs arrive in
+    // an OTel backend already linked to their traces. Different keys work,
+    // but then the formatter needs a matching `traceFields` override.
     return span
-      ? { trace_id: span.context.traceId, span_id: span.context.spanId }
+      ? { traceId: span.context.traceId, spanId: span.context.spanId }
       : {};
   },
 });
 
-log.info('charging'); // → { trace_id: '4bf92f…', span_id: '00f067…' }
+log.info('charging'); // → { traceId: '4bf92f…', spanId: '00f067…' }
 ```
 
 ### 4. Sample a fraction of traces
