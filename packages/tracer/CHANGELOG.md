@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.3.0...tracer-v0.3.1) (2026-08-09)
+
+
+### Documentation
+
+* **tracer:** norm recipes — event spans (Layer 1) and witness nesting (Layer 2) ([a1686d6](https://github.com/TundraSoft/TundraLibs/commit/a1686d64896579b4c6b0ba7734197795edf8cab0))
+* **tracer:** norm recipes — event spans and witness nesting ([24165dc](https://github.com/TundraSoft/TundraLibs/commit/24165dca3112c1b4b9d8c2d06e027537998ee3f2))
+
 ## [0.3.0](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.2.0...tracer-v0.3.0) (2026-08-09)
 
 
