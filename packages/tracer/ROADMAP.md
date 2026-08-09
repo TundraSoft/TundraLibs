@@ -22,6 +22,12 @@ shaped the package.
   keys that `otelLogFormatter` hoists — the names that once shipped wrong in
   our own docs now live in code). Both bound arrows, both structural, no new
   dependencies in either direction.
+- **Outbound propagation adapters** — `tracer.wrapClient` (the Witness
+  adapter at `SpanKind.CLIENT`, for restler's `witness` hook) and
+  `tracer.propagation` (restler's `headerProvider`: the active span as a
+  W3C `traceparent` header, `{}` outside a span, sampled flag clear on
+  unsampled spans). Completes the seam rule: leaf = events, container =
+  witness, propagator = pre-send headers.
 
 ### Encoder: Guardian, decided by measurement
 
