@@ -1,7 +1,7 @@
 {
   "packages/ambient": "0.2.2",
   "packages/cacher": "1.0.0",
-  "packages/compat": "1.0.0",
+  "packages/compat": "1.1.0",
   "packages/crypt": "1.0.1",
   "packages/doctor": "1.0.0",
   "packages/drivers": "1.0.1",
