@@ -17,6 +17,7 @@
     "restler": "RESTler",
     "rpc": "RPC",
     "slogger": "Slogger",
+    "tracer": "Tracer",
     "utils": "utils"
   }
 }

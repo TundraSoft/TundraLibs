@@ -143,6 +143,13 @@ component_management:
       statuses:
         - type: project
           target: auto
+    - component_id: tracer
+      name: tracer
+      paths:
+        - packages/tracer/**
+      statuses:
+        - type: project
+          target: auto
     - component_id: utils
       name: utils
       paths:

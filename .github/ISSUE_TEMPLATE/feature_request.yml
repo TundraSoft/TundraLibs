@@ -25,6 +25,7 @@ body:
         - restler
         - rpc
         - slogger
+        - tracer
         - utils
         - new package
     validations:
