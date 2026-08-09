@@ -32,7 +32,11 @@ import type { WebSocketHandler } from './WebSocketHandler.ts';
 export type ServerOptions<M extends ServerMode = ServerMode, T = unknown> = (
   & (M extends 'TCP' ? {
       mode: 'TCP';
-      /** 0–65535. `0` picks a random free port. @default 8008 */
+      /**
+       * 0–65535. `0` picks a random free port — read the ACTUAL one from
+       * the server's `port` / `address` getters after `start()`.
+       * @default 8008
+       */
       port?: number;
       /** `'0.0.0.0'` for all IPv4, `'::'` for all IPv6. @default 'localhost' */
       hostname?: string;

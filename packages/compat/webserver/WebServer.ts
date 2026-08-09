@@ -419,11 +419,28 @@ export class WebServer<T = unknown> {
 
     if (this.mode === 'TCP') {
       const tcpOptions = this.options as ServerOptions<'TCP'>;
-      return `${tcpOptions.hostname}:${tcpOptions.port}`;
+      return `${tcpOptions.hostname}:${this.__boundPort ?? tcpOptions.port}`;
     } else {
       const unixOptions = this.options as ServerOptions<'UNIX'>;
       return unixOptions.unixSocketPath;
     }
+  }
+
+  /**
+   * The ACTUAL bound TCP port, or `null` when the server is not running
+   * or listens on a unix socket. With `port: 0` this is how you learn
+   * which port the OS picked:
+   *
+   * ```typescript
+   * const server = new WebServer('t', { mode: 'TCP', port: 0, handler });
+   * await server.start();
+   * await fetch(`http://localhost:${server.port}/`);
+   * ```
+   */
+  public get port(): number | null {
+    if (this._state !== 'RUNNING' || this.mode !== 'TCP') return null;
+    return this.__boundPort ??
+      (this.options as ServerOptions<'TCP'>).port ?? null;
   }
 
   /**
@@ -442,6 +459,18 @@ export class WebServer<T = unknown> {
     | InstanceType<typeof nodeHttp.Server>
     | InstanceType<typeof nodeHttps.Server>
     | null = null;
+
+  /**
+   * The ACTUAL bound TCP port, captured at listen time. This is what
+   * makes `port: 0` usable: the runtime picks a free port, and
+   * {@link address} / {@link port} report the real one instead of the
+   * configured `0`. The HOSTNAME stays the configured one — runtimes
+   * report resolved loopback literals (`::1`) where users configured
+   * `localhost`, and the display contract predates this field.
+   * `null` while stopped and in UNIX mode.
+   * @private
+   */
+  private __boundPort: number | null = null;
 
   /**
    * Registry of event listeners keyed by event name.
@@ -887,6 +916,7 @@ export class WebServer<T = unknown> {
           );
         }
         this._state = 'STOPPED';
+        this.__boundPort = null;
         this._emit('onClose', this.name, this.mode);
       }).catch((error) => {
         this._state = 'RUNNING';
@@ -1433,6 +1463,14 @@ export class WebServer<T = unknown> {
     this._client = Bun.serve(
       options as unknown as Parameters<typeof Bun.serve>[0],
     );
+    if (this.mode === 'TCP') {
+      // Bun's handle exposes the ACTUAL bound port (the minimal handle
+      // type omits it to keep `typeof Bun` out of public types).
+      const bound = this._client as unknown as { port?: number };
+      if (typeof bound.port === 'number') {
+        this.__boundPort = bound.port;
+      }
+    }
     // Bun.serve is synchronously listening by the time it returns; no
     // microtask-bind race like Deno or Node, so resolve immediately.
     return Promise.resolve();
@@ -1635,7 +1673,14 @@ export class WebServer<T = unknown> {
     // ECONNREFUSED. We register an `onListen` callback that resolves a
     // promise once the listener is actually accepting connections.
     const ready = new Promise<void>((resolve) => {
-      options.onListen = () => resolve();
+      options.onListen = (localAddr: unknown) => {
+        // TCP gives a NetAddr ({ hostname, port }); unix gives a path.
+        const addr = localAddr as { port?: number };
+        if (typeof addr?.port === 'number') {
+          this.__boundPort = addr.port;
+        }
+        resolve();
+      };
     });
     this._client = Deno.serve(options, denoProcessor);
     return ready;
@@ -1872,7 +1917,14 @@ export class WebServer<T = unknown> {
           tcpOptions.port,
           tcpOptions.hostname,
           tcpOptions.backlog,
-          () => resolve(),
+          () => {
+            // `address()` is an AddressInfo object once listening on TCP.
+            const bound = server.address();
+            if (bound !== null && typeof bound === 'object') {
+              this.__boundPort = bound.port;
+            }
+            resolve();
+          },
         );
       } else {
         const unixOptions = this.options as ServerOptions<'UNIX'>;

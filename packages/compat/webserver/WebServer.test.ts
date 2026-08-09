@@ -2799,6 +2799,10 @@ h87g/qBXJrxZ7o+w+KxL/Q==
           throw new Error('Address should be null before starting');
         }
 
+        if (activeServer.port !== null) {
+          throw new Error('port should be null before starting');
+        }
+
         await activeServer.start();
         await delay(100);
 
@@ -2808,11 +2812,65 @@ h87g/qBXJrxZ7o+w+KxL/Q==
         if (!address) {
           throw new Error('Address should be set after starting');
         }
-        // Should contain localhost and some port number
-        if (!address.startsWith('localhost:')) {
+        // The ACTUAL bound port, not the configured 0.
+        const boundPort = activeServer.port;
+        if (boundPort === null || boundPort === 0) {
           throw new Error(
-            `Address should start with 'localhost:', got '${address}'`,
+            `port should report the OS-assigned port, got ${boundPort}`,
           );
+        }
+        if (address !== `localhost:${boundPort}`) {
+          throw new Error(
+            `Address should report the bound port, got '${address}'`,
+          );
+        }
+
+        // And the reported port must actually be reachable.
+        const response = await fetch(`http://localhost:${boundPort}/`);
+        if (await response.text() !== 'OK') {
+          throw new Error('Reported port did not serve the handler');
+        }
+
+        // Stopping clears the bound values.
+        await activeServer.stop(false);
+        await delay(100);
+        if (activeServer.port !== null) {
+          throw new Error('port should reset to null after stop');
+        }
+      });
+
+      it('should report the CONFIGURED port unchanged when explicit', async () => {
+        const port = getNextPort();
+        activeServer = new WebServer('Test', {
+          mode: 'TCP',
+          port,
+          hostname: 'localhost',
+          handler: () => new Response('OK'),
+        });
+        await activeServer.start();
+        await delay(100);
+        if (activeServer.port !== port) {
+          throw new Error(
+            `Expected port ${port}, got ${activeServer.port}`,
+          );
+        }
+        if (activeServer.address !== `localhost:${port}`) {
+          throw new Error(`Unexpected address '${activeServer.address}'`);
+        }
+      });
+
+      it('should return null port in UNIX mode', async () => {
+        if (RUNTIME === 'NODE') return; // unix sockets unsupported on node
+        const socketPath = `/tmp/test-port-getter-${Date.now()}.sock`;
+        activeServer = new WebServer('Test', {
+          mode: 'UNIX',
+          unixSocketPath: socketPath,
+          handler: () => new Response('OK'),
+        });
+        await activeServer.start();
+        await delay(100);
+        if (activeServer.port !== null) {
+          throw new Error('port must be null in UNIX mode');
         }
       });
     });
