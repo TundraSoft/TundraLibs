@@ -47,7 +47,7 @@ this is house style. The encode tests pin the shape meanwhile.
 ## Framework middleware
 
 Deliberately **not** shipped in-tree beyond what
-[RECIPES.md](RECIPES.md) documents. RadRouter and RPC are both generic over
+[RECIPES.md](docs/Tracer-Recipes.md) documents. RadRouter and RPC are both generic over
 their middleware type and never read `ctx` themselves, so there is no canonical
 context to write an adapter against; and a generic adapter cannot _write_ to a
 context it does not know (`ctx.span = span`), which is exactly what an

@@ -155,8 +155,8 @@ async function tracing(ctx, next) {
 }
 ```
 
-See [RECIPES.md](RECIPES.md) for ready-made adapters (Express, Koa, Oak,
-Fetch-standard servers).
+See [Recipes](docs/Tracer-Recipes.md) for ready-made adapters — Hono, Express,
+Fastify, Koa, NestJS, Oak, h3, SvelteKit, Next.js, Lambda and Workers.
 
 ### 6. Ship spans to a collector (OTLP)
 
@@ -237,7 +237,8 @@ new Tracer({ serviceName: 'orders', idGenerator: myGenerator });
   writing your own
 - [OTLP](docs/Tracer-OTLP.md) - Shipping to a real backend, and the encodings
   that decide whether spans arrive
-- [Recipes](RECIPES.md) - Framework adapters (Express, Koa, Oak, Fetch-standard)
+- [Recipes](docs/Tracer-Recipes.md) - Framework adapters for 12 runtimes and
+  frameworks
 - [Roadmap](ROADMAP.md) - What is deliberately not built yet
 
 ## License

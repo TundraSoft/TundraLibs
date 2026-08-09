@@ -103,7 +103,7 @@ request bag is the application's.
 Reach for `startActiveSpan` by default. `startSpan` is for the case where a
 span's lifetime genuinely does not match a function call — a span you open in
 one callback and close in another (see the Express recipe in
-[RECIPES.md](../RECIPES.md), where the response event ends the span).
+[RECIPES.md](Tracer-Recipes.md), where the response event ends the span).
 
 `startActiveSpan` handles async callbacks correctly: it keeps the span open
 until the returned promise settles, so the duration covers the real work rather
