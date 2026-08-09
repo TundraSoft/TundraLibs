@@ -32,7 +32,18 @@
 const SCOPE = '@tundralibs';
 const PACKAGES_DIR = 'packages';
 const META_PATH = '.github/workspace-meta.json';
-const NEW_PACKAGE_VERSION = '0.1.0';
+/**
+ * Version a freshly scaffolded package carries until its first release.
+ *
+ * `0.0.0`, NOT `0.1.0`: this value flows into the package manifests and from
+ * there into `.release-please-manifest.json`, which release-please reads as
+ * "already released". Seeding `0.1.0` made it treat that version as shipped,
+ * so a new package's first `feat:` bumped the minor and its FIRST published
+ * release was `0.2.0` — `0.1.0` never existed on JSR (this is exactly what
+ * happened to ambient and tracer). From `0.0.0`, the first `feat:` produces
+ * `0.1.0` as intended.
+ */
+const NEW_PACKAGE_VERSION = '0.0.0';
 
 // ---------------------------------------------------------------------
 // Workspace state
@@ -197,6 +208,10 @@ const renderCodecov = (pkgs: Pkg[]): string => {
     '    statuses:',
     '      - type: project',
     '        target: auto',
+    // Same tolerance as the project-level status. Without it a component
+    // fails on ANY dip — including refactors that delete covered branches in
+    // packages the PR never touched.
+    '        threshold: 1%',
     '        branches:',
     "          - '!main'",
     '  individual_components:',
@@ -210,6 +225,7 @@ const renderCodecov = (pkgs: Pkg[]): string => {
       '      statuses:',
       '        - type: project',
       '          target: auto',
+      '          threshold: 1%',
     );
   }
   return lines.join('\n') + '\n';

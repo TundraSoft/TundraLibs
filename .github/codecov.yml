@@ -28,6 +28,7 @@ component_management:
     statuses:
       - type: project
         target: auto
+        threshold: 1%
         branches:
           - '!main'
   individual_components:
@@ -38,6 +39,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: cacher
       name: cacher
       paths:
@@ -45,6 +47,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: compat
       name: compat
       paths:
@@ -52,6 +55,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: crypt
       name: crypt
       paths:
@@ -59,6 +63,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: doctor
       name: doctor
       paths:
@@ -66,6 +71,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: drivers
       name: drivers
       paths:
@@ -73,6 +79,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: guardian
       name: guardian
       paths:
@@ -80,6 +87,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: id
       name: id
       paths:
@@ -87,6 +95,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: metro-man
       name: metro-man
       paths:
@@ -94,6 +103,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: norm
       name: norm
       paths:
@@ -101,6 +111,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: oql
       name: oql
       paths:
@@ -108,6 +119,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: pact
       name: pact
       paths:
@@ -115,6 +127,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: radrouter
       name: radrouter
       paths:
@@ -122,6 +135,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: restler
       name: restler
       paths:
@@ -129,6 +143,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: rpc
       name: rpc
       paths:
@@ -136,6 +151,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: slogger
       name: slogger
       paths:
@@ -143,6 +159,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: tracer
       name: tracer
       paths:
@@ -150,6 +167,7 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
     - component_id: utils
       name: utils
       paths:
@@ -157,3 +175,4 @@ component_management:
       statuses:
         - type: project
           target: auto
+          threshold: 1%
