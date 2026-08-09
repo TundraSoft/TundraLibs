@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.3.3...pact-v0.4.0) (2026-08-09)
+
+
+### Features
+
+* TundraLibs 1.0.0 monorepo baseline (supersedes 0.8.x flat libraries) ([3512d64](https://github.com/TundraSoft/TundraLibs/commit/3512d646020b62dbae5442c921bfb086161d0402))
+
 ## [0.3.3](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/pact-v0.3.2...pact-v0.3.3) (2026-07-28)
 
 
