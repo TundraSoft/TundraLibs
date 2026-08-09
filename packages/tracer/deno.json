@@ -7,6 +7,7 @@
     ".": "./mod.ts",
     "./errors": "./errors/mod.ts",
     "./exporters": "./exporters/mod.ts",
+    "./otlp": "./otlp/mod.ts",
     "./types": "./types/mod.ts"
   },
   "imports": {}

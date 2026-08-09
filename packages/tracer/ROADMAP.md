@@ -1,49 +1,48 @@
 # Tracer — Roadmap
 
 What is deliberately not built yet, and the reasoning behind the choices that
-shaped the package. The kernel ships first; export and framework glue follow.
+shaped the package.
 
-## OTLP exporter (next)
+## Shipped
 
-The only exporters in-tree are `ConsoleExporter` and `MemoryExporter` — enough
-for development and tests, but not for a real backend. Next is
-`@tundralibs/tracer/otlp`: **OTLP over HTTP with a JSON payload**, POSTed to
-`<endpoint>/v1/traces`, built as a `RESTler` subclass so it inherits URL
-validation, timeouts and retries.
+- **Kernel** — `Tracer`/`Span`, W3C `traceparent` propagation, head-based
+  parent-inherited sampling, pluggable `IdGenerator`, Console/Memory exporters.
+- **`@tundralibs/tracer/otlp`** — OTLP over HTTP with a JSON payload, POSTed to
+  `<baseURL>/v1/traces`, built as a `RESTler` subclass so URL validation,
+  timeouts and headers are inherited. JSON only — gRPC and protobuf-over-HTTP
+  stay out of scope, because a collector accepts JSON on the front door and
+  re-exports in whatever the backend wants.
+- **`BatchSpanProcessor`** — bounded queue, size/timer flush, oldest-first drop
+  on overflow. It _is_ a `SpanExporter` wrapping another one, so it needed no
+  support from `Tracer` at all.
+- **`SemConv`** — the attribute keys a service actually reaches for.
 
-Decided: **write the encoder in-house rather than depend on
-`@opentelemetry/otlp-*`** — that keeps the suite dependency-light and
-cross-runtime, and conformance here is verifiable rather than a matter of
-judgement. It is pinned to a named `opentelemetry-proto` version, and verified
-two ways: fixture tests, plus a real `otel/opentelemetry-collector` service
-container in CI asserting our payload is actually accepted (the repo already
-runs live service containers, so this is house style).
+### Encoder: Guardian, decided by measurement
 
-The encoder will be built as a **Guardian schema with `.transform()`** rather
-than a hand-written mapper, so shape, conversion, defaults and validation live
-in one declaration and `GuardianInfer` derives the output type — no separately
-maintained `types/otlp.ts` to drift. **Open question to settle with a benchmark,
-not a guess:** guardian's per-value cost on a batch flush (~512 spans × ~10
-attributes) versus a hand-rolled encoder. If it is badly slower, fall back to
-guardian-as-test-schema with a hand-rolled fast path. The repo has `.bench.ts`
-conventions and a `bench` task for exactly this.
+The encoder is a Guardian schema with `.transform()` rather than a hand-written
+mapper, so the wire shape, the conversions and the validation are one
+declaration and the output type is derived from it — there is no second
+`types/otlp.ts` to drift.
 
-Spec gotchas to encode carefully (each silently breaks ingest): trace/span ids
-are **lowercase hex, not base64** (an OTLP-specific override of protobuf-JSON);
-`startTimeUnixNano`/`endTimeUnixNano` are **decimal strings**, not numbers;
-attributes use the typed `{ key, value: { stringValue | intValue | … } }`
-wrapper; `kind` and `status.code` are numeric enums.
+The open question was its cost, and it was settled with
+[encode.bench.ts](otlp/encode.bench.ts) rather than a guess: on a default
+512-span batch, Guardian runs ~1.1ms against a hand-rolled baseline's ~408µs —
+about **2.6x**, but under a millisecond more per flush, on a background timer,
+off the request path. Immaterial next to a single source of truth. Re-run the
+bench if that trade ever looks different.
 
-**Out of scope:** OTLP over gRPC, and protobuf-over-HTTP. Anyone needing those
-runs the OTel Collector, which accepts JSON on the front door and re-exports in
-any format.
+The conversions that silently break collector ingest are covered by explicit
+tests: ids as lowercase **hex, not base64** (an OTLP-specific override of
+protobuf-JSON), `*TimeUnixNano` as **decimal strings**, attributes in the typed
+`{ key, value: { stringValue | intValue | … } }` wrapper, and `kind` /
+`status.code` as numeric enums.
 
-## Batch span processor
+## Verification against a real collector
 
-Spans are currently exported one at a time, as each ends. That is fine for
-console/memory, and wrong for a network exporter — the OTLP work will add a
-batching processor (queue, size/time flush thresholds, drop policy on overflow)
-and route exports through it.
+Still worth doing: an `otel/opentelemetry-collector` service container in CI,
+asserting a real collector _accepts_ the payload rather than only that it
+matches our own fixtures. The repo already runs live service containers, so
+this is house style. The encode tests pin the shape meanwhile.
 
 ## Framework middleware
 
@@ -61,10 +60,11 @@ recipes prove repetitive in practice.
 
 ## Semantic conventions
 
-Attribute names follow OpenTelemetry semantic conventions by hand
-(`http.method`, `db.system`, `exception.type`). Typed helpers/constants for the
-common groups may follow; shipping the whole spec is not planned — it is large,
-churns, and most of it is irrelevant to any one service.
+`SemConv` covers the groups a service actually reaches for — service/resource,
+HTTP, database, RPC/messaging, exception. Shipping the whole specification is
+**not** planned: it is large, it churns, and almost all of it is irrelevant to
+any one service. Attributes are plain strings, so anything missing can be passed
+inline.
 
 ## Not planned
 
