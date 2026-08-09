@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.0...ambient-v0.2.1) (2026-08-09)
+
+
+### Documentation
+
+* **ambient:** add how-it-works guides and refresh the roadmap ([371eb6d](https://github.com/TundraSoft/TundraLibs/commit/371eb6d803903cd7d56c12cae9800033325fe6c4))
+* **ambient:** add the how-it-works guides and refresh the roadmap ([c13a432](https://github.com/TundraSoft/TundraLibs/commit/c13a43229c3d7a2057ac3249ba3c0e2b7aa5df62))
+
 ## [0.2.0](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.1.0...ambient-v0.2.0) (2026-08-09)
 
 
