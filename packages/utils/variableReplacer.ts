@@ -103,6 +103,14 @@ const _stringify = (
  * @param regex - Optional custom placeholder pattern. Must be global
  *   and have one capture group around the variable name. Defaults to
  *   the `${...}` form handled by {@link templatize}.
+ *
+ *   ⚠️ **The supplied pattern is the caller's risk surface.** It is applied
+ *   directly to `message`, so a pattern that backtracks super-linearly can be
+ *   made to hang on hostile input (ReDoS) — this function cannot detect or
+ *   neutralise that. Exclude the *opening* delimiter from the capture class so
+ *   the group cannot re-scan a run of delimiters: prefer `[^{}]+` over `[^}]+`,
+ *   `[^<>]+` over `[^>]+`. Never build the pattern from untrusted input, and
+ *   avoid the custom path entirely for attacker-controlled `message` values.
  * @returns `message` with placeholders substituted.
  *
  * @throws {TypeError} If a substituted plain-object value participates
@@ -122,7 +130,8 @@ const _stringify = (
  * variableReplacer(
  *   'Hello {{name}}!',
  *   { name: 'World' },
- *   /\{\{([^}]+)\}\}/g,
+ *   // `[^{}]+` — not `[^}]+` — so a run of `{` cannot be re-scanned.
+ *   /\{\{([^{}]+)\}\}/g,
  * );
  * // 'Hello World!'
  * ```

@@ -35,7 +35,7 @@ Deno.bench({
 
 // Custom-delimiter path uses a hand-rolled regex scanner instead of
 // templatize. Bench separately so we can see the gap.
-const handlebarsRe = /\{\{([^}]+)\}\}/g;
+const handlebarsRe = /\{\{([^{}]+)\}\}/g;
 Deno.bench({
   name: 'utils.variableReplacer - Custom regex (handlebars {{...}})',
 }, () => {
