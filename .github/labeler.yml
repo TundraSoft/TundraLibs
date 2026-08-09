@@ -49,6 +49,9 @@
 'pkg: slogger':
   - changed-files:
       - any-glob-to-any-file: packages/slogger/**
+'pkg: tracer':
+  - changed-files:
+      - any-glob-to-any-file: packages/tracer/**
 'pkg: utils':
   - changed-files:
       - any-glob-to-any-file: packages/utils/**

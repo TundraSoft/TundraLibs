@@ -1,0 +1,315 @@
+/**
+ * @fileoverview The {@link Tracer} — creates spans, resolves their parents from
+ * the ambient active-span store, applies sampling, and hands finished spans to
+ * the exporter.
+ *
+ * @author TundraSoft
+ *
+ * @module
+ *
+ * @example
+ * ```typescript
+ * import { ConsoleExporter, Tracer } from '@tundralibs/tracer';
+ *
+ * const tracer = new Tracer({
+ *   serviceName: 'orders',
+ *   exporter: new ConsoleExporter(),
+ * });
+ *
+ * await tracer.startActiveSpan('checkout', async (span) => {
+ *   span.setAttribute('order.id', 'ord_42');
+ *   await chargeCard();          // any span started in here parents to `checkout`
+ * });
+ * ```
+ */
+
+import { Options } from '@tundralibs/utils';
+import { activeSpan } from './activeSpan.ts';
+import { Span } from './Span.ts';
+import { randomIdGenerator } from './ids.ts';
+import { alwaysOnSampler } from './samplers.ts';
+import { FLAG_SAMPLED } from './propagation.ts';
+import { TracerConfigError } from './errors/mod.ts';
+import type {
+  Attributes,
+  IdGenerator,
+  Sampler,
+  SpanContext,
+  SpanData,
+  SpanExporter,
+  SpanOptions,
+  TracerOptions,
+} from './types/mod.ts';
+import { SpanKind } from './types/mod.ts';
+
+/** Shape a custom {@link IdGenerator} must produce — 32 lowercase hex chars. */
+const TRACE_ID_PATTERN = /^[0-9a-f]{32}$/;
+/** Shape a custom {@link IdGenerator} must produce — 16 lowercase hex chars. */
+const SPAN_ID_PATTERN = /^[0-9a-f]{16}$/;
+
+/**
+ * Creates and manages spans for one service.
+ *
+ * Parenting is automatic: a span created while another is active becomes its
+ * child, at any call depth and across every `await`, because the active span
+ * lives in an `ambient` async context rather than being threaded through
+ * function signatures.
+ */
+export class Tracer extends Options<TracerOptions> {
+  /**
+   * @param options - See {@link TracerOptions}.
+   * @throws {TracerConfigError} When `serviceName` is not a non-empty string.
+   * @throws {TracerConfigError} When `sampler` is not a function.
+   * @throws {TracerConfigError} When `exporter` has no `export` method.
+   * @throws {TracerConfigError} When `idGenerator` produces ids that are not
+   *   W3C-conformant (wrong width, non-hex, uppercase, or all-zero).
+   */
+  constructor(options: TracerOptions) {
+    super();
+    this._setOptions(options, {
+      sampler: alwaysOnSampler,
+      idGenerator: randomIdGenerator,
+      resource: {},
+    });
+  }
+
+  /**
+   * Validate and normalise options at construction. Nothing here runs on the
+   * span hot path.
+   *
+   * @throws {TracerConfigError} See the constructor.
+   */
+  protected override _processOption<K extends keyof TracerOptions>(
+    key: K,
+    value: TracerOptions[K],
+  ): TracerOptions[K] {
+    switch (key) {
+      case 'serviceName':
+        if (typeof value !== 'string' || value.trim() === '') {
+          throw new TracerConfigError(
+            'serviceName must be a non-empty string',
+            { key: 'serviceName' },
+          );
+        }
+        break;
+      case 'sampler':
+        if (typeof value !== 'function') {
+          throw new TracerConfigError('sampler must be a function', {
+            key: 'sampler',
+          });
+        }
+        break;
+      case 'exporter':
+        if (
+          value === null || typeof value !== 'object' ||
+          typeof (value as SpanExporter).export !== 'function'
+        ) {
+          throw new TracerConfigError(
+            'exporter must expose an export() method',
+            { key: 'exporter' },
+          );
+        }
+        break;
+      case 'idGenerator':
+        this.__validateIdGenerator(value as IdGenerator);
+        break;
+    }
+    return value;
+  }
+
+  /**
+   * Smoke-test a custom id generator once, at construction.
+   *
+   * Malformed ids are not rejected by collectors with an error — the spans are
+   * silently dropped, so traces simply never appear. Failing loudly here turns
+   * that into an immediate, obvious error.
+   *
+   * @throws {TracerConfigError} When output is not W3C-conformant.
+   */
+  private __validateIdGenerator(generator: IdGenerator): void {
+    if (
+      generator === null || typeof generator !== 'object' ||
+      typeof generator.traceId !== 'function' ||
+      typeof generator.spanId !== 'function'
+    ) {
+      throw new TracerConfigError(
+        'idGenerator must expose traceId() and spanId() methods',
+        { key: 'idGenerator' },
+      );
+    }
+    const traceId = generator.traceId();
+    if (!TRACE_ID_PATTERN.test(traceId) || /^0+$/.test(traceId)) {
+      throw new TracerConfigError(
+        'idGenerator.traceId() must return 32 lowercase hex characters, not all-zero',
+        { key: 'idGenerator', value: traceId },
+      );
+    }
+    const spanId = generator.spanId();
+    if (!SPAN_ID_PATTERN.test(spanId) || /^0+$/.test(spanId)) {
+      throw new TracerConfigError(
+        'idGenerator.spanId() must return 16 lowercase hex characters, not all-zero',
+        { key: 'idGenerator', value: spanId },
+      );
+    }
+  }
+
+  /** The span currently in scope, or `undefined` outside any span. */
+  public active(): Span | undefined {
+    return activeSpan.get();
+  }
+
+  /**
+   * Start a span **without** making it active. The caller owns its lifetime and
+   * must call {@link Span.end}; spans started inside will *not* parent to it.
+   * Prefer {@link Tracer.startActiveSpan} unless the span's scope genuinely
+   * does not match a function call.
+   *
+   * @param name - Operation name.
+   * @param options - See {@link SpanOptions}.
+   * @returns The new {@link Span}.
+   */
+  public startSpan(name: string, options: SpanOptions = {}): Span {
+    const idGenerator = this.getOption('idGenerator') as IdGenerator;
+    const parent = this.__resolveParent(options);
+    const kind = options.kind ?? SpanKind.INTERNAL;
+    const attributes = options.attributes ?? {};
+    const traceId = parent?.traceId ?? idGenerator.traceId();
+
+    // Child spans inherit the parent's decision so a trace is sampled whole;
+    // only roots consult the sampler.
+    const sampled = parent !== undefined
+      ? (parent.traceFlags & FLAG_SAMPLED) !== 0
+      : (this.getOption('sampler') as Sampler)({
+        traceId,
+        name,
+        kind,
+        attributes,
+        parent,
+      });
+
+    return new Span({
+      name,
+      context: {
+        traceId,
+        spanId: idGenerator.spanId(),
+        traceFlags: sampled ? FLAG_SAMPLED : 0,
+      },
+      kind,
+      startTime: options.startTime ?? new Date(),
+      parentSpanId: parent?.spanId,
+      attributes,
+      resource: this.__resourceAttributes(),
+      recording: sampled,
+      onEnd: (data) => this.__export(data),
+    });
+  }
+
+  /**
+   * Start a span, make it **active** for the duration of `fn`, and end it when
+   * `fn` settles. This is the form to reach for: everything `fn` does — at any
+   * depth, across any `await` — parents to this span automatically.
+   *
+   * The span is ended and exceptions recorded even when `fn` throws; the error
+   * is re-thrown unchanged.
+   *
+   * @typeParam R - `fn`'s return type.
+   * @param name - Operation name.
+   * @param optionsOrFn - {@link SpanOptions}, or `fn` when there are none.
+   * @param maybeFn - `fn`, when options were supplied.
+   * @returns Whatever `fn` returns.
+   */
+  public startActiveSpan<R>(name: string, fn: (span: Span) => R): R;
+  public startActiveSpan<R>(
+    name: string,
+    options: SpanOptions,
+    fn: (span: Span) => R,
+  ): R;
+  public startActiveSpan<R>(
+    name: string,
+    optionsOrFn: SpanOptions | ((span: Span) => R),
+    maybeFn?: (span: Span) => R,
+  ): R {
+    const options = typeof optionsOrFn === 'function' ? {} : optionsOrFn;
+    const fn = typeof optionsOrFn === 'function'
+      ? optionsOrFn
+      : maybeFn as (span: Span) => R;
+
+    const span = this.startSpan(name, options);
+    return activeSpan.run(span, () => {
+      let result: R;
+      try {
+        result = fn(span);
+      } catch (error) {
+        span.recordException(error);
+        span.end();
+        throw error;
+      }
+      // Async `fn`: keep the span open until the promise settles, so its
+      // duration reflects the real work rather than just the synchronous head.
+      if (result instanceof Promise) {
+        return result.then(
+          (value) => {
+            span.end();
+            return value;
+          },
+          (error: unknown) => {
+            span.recordException(error);
+            span.end();
+            throw error;
+          },
+        ) as R;
+      }
+      span.end();
+      return result;
+    });
+  }
+
+  /**
+   * Flush and release the exporter. Call before process exit so buffered spans
+   * are not lost.
+   */
+  public async shutdown(): Promise<void> {
+    await Promise.allSettled([...this.__pending]);
+    const exporter = this.getOption('exporter') as SpanExporter | undefined;
+    await exporter?.shutdown?.();
+  }
+
+  /** In-flight export promises, awaited by {@link Tracer.shutdown}. */
+  private readonly __pending: Set<Promise<void>> = new Set();
+
+  /**
+   * Resolve the parent context: an explicit one, else the active span's, else
+   * none (making this a trace root). `parent: null` forces a root.
+   */
+  private __resolveParent(options: SpanOptions): SpanContext | undefined {
+    if (options.parent === null) return undefined;
+    return options.parent ?? activeSpan.get()?.context;
+  }
+
+  /** `service.name` merged with any user-supplied resource attributes. */
+  private __resourceAttributes(): Attributes {
+    return {
+      ...(this.getOption('resource') as Attributes),
+      'service.name': this.getOption('serviceName') as string,
+    };
+  }
+
+  /**
+   * Hand a finished span to the exporter. Export failures are swallowed: a
+   * broken collector must never surface as an application error.
+   */
+  private __export(data: SpanData): void {
+    const exporter = this.getOption('exporter') as SpanExporter | undefined;
+    if (exporter === undefined) return;
+    let promise: Promise<void>;
+    try {
+      promise = exporter.export([data]);
+    } catch {
+      return; // synchronous throw from a misbehaving exporter
+    }
+    this.__pending.add(promise);
+    void promise
+      .catch(() => {/* observability must not break the application */})
+      .finally(() => this.__pending.delete(promise));
+  }
+}
