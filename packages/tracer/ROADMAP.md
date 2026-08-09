@@ -16,6 +16,12 @@ shaped the package.
   on overflow. It _is_ a `SpanExporter` wrapping another one, so it needed no
   support from `Tracer` at all.
 - **`SemConv`** — the attribute keys a service actually reaches for.
+- **Composition-root adapters** — `tracer.wrap` (the suite's Witness
+  convention: `new Norm({ witness: tracer.wrap })`) and `tracer.logContext`
+  (slogger's `contextProvider`, emitting the canonical `traceId`/`spanId`
+  keys that `otelLogFormatter` hoists — the names that once shipped wrong in
+  our own docs now live in code). Both bound arrows, both structural, no new
+  dependencies in either direction.
 
 ### Encoder: Guardian, decided by measurement
 

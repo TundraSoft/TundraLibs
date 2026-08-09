@@ -105,20 +105,20 @@ import { LogManager } from '@tundralibs/slogger';
 
 const log = LogManager.createSlogger({
   appName: 'orders',
-  contextProvider: () => {
-    const span = tracer.active();
-    // Keys are camelCase ON PURPOSE: slogger's otelLogFormatter hoists
-    // context.traceId / context.spanId into the OTel log record's first-class
-    // TraceId/SpanId fields (its `traceFields` defaults) — so logs arrive in
-    // an OTel backend already linked to their traces. Different keys work,
-    // but then the formatter needs a matching `traceFields` override.
-    return span
-      ? { traceId: span.context.traceId, spanId: span.context.spanId }
-      : {};
-  },
+  contextProvider: tracer.logContext, // ← the whole integration
 });
 
 log.info('charging'); // → { traceId: '4bf92f…', spanId: '00f067…' }
+```
+
+`tracer.logContext` emits the **canonical camelCase keys** — the exact names
+slogger's `otelLogFormatter` hoists into the OTel log record's first-class
+TraceId/SpanId fields, so logs arrive in a backend already linked to their
+traces, and the load-bearing key names live in code rather than in docs.
+Composing with the ambient request bag stays one line:
+
+```typescript
+contextProvider: () => ({ ...ambient.get(), ...tracer.logContext() }),
 ```
 
 ### 4. Sample a fraction of traces

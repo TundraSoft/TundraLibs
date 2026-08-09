@@ -497,15 +497,10 @@ span to the queries it caused, because a span created in an event handler is
 never _active_ while the operation runs. The witness closes exactly that gap:
 
 ```typescript
-const norm = new Norm({
-  engine,
-  witness: (info, fn) =>
-    tracer.startActiveSpan(
-      info.name, // 'norm.Users.find', 'norm.raw', …
-      { kind: SpanKind.INTERNAL, attributes: info.attributes },
-      fn,
-    ),
-});
+const norm = new Norm({ engine, witness: tracer.wrap });
+// tracer.wrap is the bound Witness adapter — equivalent to wiring
+// startActiveSpan(info.name, { attributes: info.attributes }, fn) by hand,
+// with non-OTLP-representable attribute values dropped for you.
 ```
 
 ```text
