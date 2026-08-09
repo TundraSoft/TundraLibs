@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.0.0...radrouter-v1.0.1) (2026-08-09)
+
+
+### Documentation
+
+* **radrouter:** link the tracer middleware recipe ([263917c](https://github.com/TundraSoft/TundraLibs/commit/263917c0bfd96a1cd7ade9ebb91ca959ed989c43))
+* **radrouter:** link the tracer middleware recipe ([b9b208d](https://github.com/TundraSoft/TundraLibs/commit/b9b208d87fc9f089eadf62ec8360e2bd4e27f804))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.0.0-dev5...radrouter-v1.0.0) (2026-08-01)
 
 
