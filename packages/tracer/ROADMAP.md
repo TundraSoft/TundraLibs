@@ -37,17 +37,26 @@ protobuf-JSON), `*TimeUnixNano` as **decimal strings**, attributes in the typed
 `{ key, value: { stringValue | intValue | … } }` wrapper, and `kind` /
 `status.code` as numeric enums.
 
-## Verification against a real collector
+### Verified against a real collector
 
-Still worth doing: an `otel/opentelemetry-collector` service container in CI,
-asserting a real collector _accepts_ the payload rather than only that it
-matches our own fixtures. The repo already runs live service containers, so
-this is house style. The encode tests pin the shape meanwhile.
+`collector.test.ts` runs against an `otel/opentelemetry-collector` service
+container in CI, so the claim is that a _real_ collector accepts the payload —
+not merely that it matches our own fixtures. It probes and **skips** when no
+collector is reachable, so a contributor without one still gets a green suite.
+
+It carries two **negative controls** (base64 ids and bare attribute values must
+both be rejected with 400). Without them a green suite would be ambiguous
+between "our encoding is right" and "this collector accepts anything".
+
+One limit worth knowing: the collector accepts int64 as a JSON **number or**
+string, so it cannot catch a numeric `*TimeUnixNano` even though emitting one
+loses precision past 2^53. That assertion lives in `encode.test.ts`. The
+collector check complements the fixtures; it does not replace them.
 
 ## Framework middleware
 
 Deliberately **not** shipped in-tree beyond what
-[RECIPES.md](docs/Tracer-Recipes.md) documents. RadRouter and RPC are both generic over
+[Tracer-Recipes](docs/Tracer-Recipes.md) documents. RadRouter and RPC are both generic over
 their middleware type and never read `ctx` themselves, so there is no canonical
 context to write an adapter against; and a generic adapter cannot _write_ to a
 context it does not know (`ctx.span = span`), which is exactly what an
@@ -74,7 +83,7 @@ inline.
   sampling belongs in the OTel Collector.
 - **Auto-instrumentation** (monkey-patching `fetch`, DB drivers) — implicit
   global patching is at odds with the suite's explicit-composition style. Manual
-  wrappers are documented in RECIPES instead.
+  wrappers are documented in the recipes instead.
 - **Metrics/logs over OTLP** — `metro-man` and `slogger` own those. Tracer
   exports spans only.
 
@@ -94,3 +103,19 @@ inline.
 - **Sampling is head-based and parent-inherited.** Child spans never re-sample;
   a partially-sampled trace renders as a waterfall with holes. `ratioSampler`
   derives its verdict from the trace id so independent services agree.
+- **Outbound tracing (restler, drivers) stays a recipe, not code.** A
+  first-class `tracer/restler` or driver hook would make outbound calls and
+  queries traced by default rather than by discipline, and unlike Express these
+  are our own APIs — so the usual "we can't track their churn" argument does not
+  apply. It was still declined: it would couple tracer to those packages (or
+  those packages to tracer) for something a ~10-line wrapper already does, and
+  the wrappers are documented in
+  [Tracer-Recipes](docs/Tracer-Recipes.md#outbound-propagating-the-trace).
+
+  `drivers` settles it further: its engines already emit `query`, `slowQuery`,
+  `transactionBegin/Commit/Rollback` and `error` with timing, so a tracer can be
+  attached **once per engine** with no dependency in either direction — see
+  [Tracing drivers without wrapping every call](docs/Tracer-Recipes.md#tracing-drivers-without-wrapping-every-call).
+  Shipping a `tracer/drivers` wrapper would duplicate a hook that already
+  exists. Revisit only if that handler turns out to be repeated verbatim across
+  real services.

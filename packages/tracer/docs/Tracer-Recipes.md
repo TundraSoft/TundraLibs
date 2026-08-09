@@ -40,6 +40,7 @@ import {
 - [AWS Lambda](#aws-lambda)
 - [RadRouter / RPC](#radrouter--rpc)
 - [Outbound: propagating the trace](#outbound-propagating-the-trace)
+- [Tracing drivers without wrapping every call](#tracing-drivers-without-wrapping-every-call)
 - [Serverless: flush before the runtime freezes](#serverless-flush-before-the-runtime-freezes)
 - [Testing traces](#testing-traces)
 
@@ -399,6 +400,59 @@ const tracedQuery = (sql: string, params: unknown[]) =>
 
 > Set `db.query.text` only if you are certain the statement carries no user
 > data — it is a common way to leak PII into a trace backend.
+
+## Tracing drivers without wrapping every call
+
+Wrapping works, but only if you remember it at every call site.
+`@tundralibs/drivers` engines are `Options`/`Events` subclasses that already
+emit the hooks a tracer wants, so you can instrument **once, per engine**, with
+no dependency in either direction — drivers never learns about tracer, and
+tracer never learns about drivers.
+
+```typescript
+import { SemConv, SpanKind, SpanStatusCode } from '@tundralibs/tracer';
+
+/** Attach tracing to a query engine. Call once, at wire-up. */
+export function traceEngine(engine: QueryEngine, dbSystem: string): void {
+  engine.on('query', (_instanceId, result) => {
+    // The event fires as the query completes, so reconstruct the window from
+    // the reported duration rather than guessing at it.
+    const end = new Date();
+    const span = tracer.startSpan('db.query', {
+      kind: SpanKind.CLIENT,
+      startTime: new Date(end.getTime() - result.time),
+      attributes: {
+        [SemConv.DB_SYSTEM]: dbSystem,
+        'db.rows_affected': result.count,
+      },
+    });
+    span.end(end);
+  });
+
+  engine.on('error', (_instanceId, error) => {
+    const span = tracer.startSpan('db.error', { kind: SpanKind.CLIENT });
+    span.recordException(error);
+    span.setStatus(SpanStatusCode.ERROR);
+    span.end();
+  });
+}
+```
+
+**Why this parents correctly.** The event is emitted _during_ the query call, so
+the ambient active span is still the caller's — the span created in the handler
+lands under whatever request span was open, with no context threading. Same
+mechanism that makes `startSpan` parent automatically everywhere else.
+
+Other events worth hanging spans off: `slowQuery`, `transactionBegin` /
+`transactionCommit` / `transactionRollback` (they carry a `transactionId`, so a
+whole transaction can be one span), `connectionFailed`, and `notice`.
+
+> `EngineQueryResult` carries `{ id, query, count, time }`. Putting
+> `result.query` on the span puts the **statement** in your trace backend —
+> treat it exactly like `db.query.text` above: sanitise, or leave it off.
+
+`@tundralibs/norm` emits no events today, so it stays the
+wrap-at-the-call-site case until it grows hooks.
 
 ## Serverless: flush before the runtime freezes
 
