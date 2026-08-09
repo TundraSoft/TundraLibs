@@ -265,6 +265,73 @@ export class Tracer extends Options<TracerOptions> {
   }
 
   /**
+   * Composition-root adapter for the suite's **Witness** convention (norm's
+   * `witness` option, and future adopters): runs `fn` inside an active span
+   * named `info.name`, so child spans — and driver-event spans created while
+   * it runs — parent to it automatically.
+   *
+   * A bound arrow, so it works detached:
+   *
+   * ```ts
+   * const norm = new Norm({ engine, witness: tracer.wrap });
+   * ```
+   *
+   * Attribute values outside the OTLP-representable set (strings, numbers,
+   * booleans, and arrays of those) are dropped rather than exported malformed.
+   * Satisfies the witness contract by construction: `fn` is invoked exactly
+   * once, its result returned unchanged, its errors recorded and re-thrown.
+   */
+  public readonly wrap = <T>(
+    info: { name: string; attributes?: Record<string, unknown> },
+    fn: () => Promise<T>,
+  ): Promise<T> => {
+    const attributes: Attributes = {};
+    for (const [key, value] of Object.entries(info.attributes ?? {})) {
+      if (
+        typeof value === 'string' || typeof value === 'number' ||
+        typeof value === 'boolean' ||
+        (Array.isArray(value) &&
+          value.every((v) =>
+            typeof v === 'string' || typeof v === 'number' ||
+            typeof v === 'boolean'
+          ))
+      ) {
+        attributes[key] = value as Attributes[string];
+      }
+    }
+    return this.startActiveSpan(info.name, { attributes }, fn);
+  };
+
+  /**
+   * Composition-root adapter for slogger's `contextProvider`: the active
+   * span's identity under the **canonical key names** — `traceId` / `spanId`,
+   * the exact keys slogger's `otelLogFormatter` hoists into the OTel log
+   * record's first-class TraceId/SpanId fields (its `traceFields` defaults).
+   * Those names are load-bearing; this adapter exists so they live in code
+   * rather than in documentation.
+   *
+   * Returns `{}` outside any span. Unsampled spans still report their ids —
+   * correlation keeps working even when nothing is exported. A bound arrow,
+   * so it works detached:
+   *
+   * ```ts
+   * // tracer only:
+   * LogManager.createSlogger({ appName, contextProvider: tracer.logContext });
+   * // composed with the ambient request bag:
+   * LogManager.createSlogger({
+   *   appName,
+   *   contextProvider: () => ({ ...ambient.get(), ...tracer.logContext() }),
+   * });
+   * ```
+   */
+  public readonly logContext = (): Record<string, unknown> => {
+    const span = activeSpan.get();
+    return span === undefined
+      ? {}
+      : { traceId: span.context.traceId, spanId: span.context.spanId };
+  };
+
+  /**
    * Flush and release the exporter. Call before process exit so buffered spans
    * are not lost.
    */

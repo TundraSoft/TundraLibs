@@ -386,3 +386,106 @@ describe('tracer.Tracer', () => {
     });
   });
 });
+
+describe('tracer.adapters', () => {
+  describe('wrap (the Witness adapter)', () => {
+    it('runs fn inside an active span with the given name and attributes', async () => {
+      const { tracer, exporter } = tracerWith();
+      const result = await tracer.wrap(
+        { name: 'norm.Users.find', attributes: { 'norm.entity': 'Users' } },
+        async () => {
+          // Auto-parenting must hold inside the wrapped fn.
+          tracer.startSpan('child').end();
+          return 42;
+        },
+      );
+      asserts.assertEquals(result, 42);
+      const op = exporter.find('norm.Users.find')!;
+      asserts.assertEquals(op.attributes['norm.entity'], 'Users');
+      asserts.assertEquals(
+        exporter.find('child')!.parentSpanId,
+        op.context.spanId,
+      );
+    });
+
+    it('drops attribute values OTLP cannot represent', async () => {
+      const { tracer, exporter } = tracerWith();
+      await tracer.wrap({
+        name: 'op',
+        attributes: {
+          ok: 'yes',
+          n: 1,
+          list: ['a', 'b'],
+          nested: { not: 'representable' },
+          mixed: ['a', { b: 1 }],
+        },
+      }, () => Promise.resolve());
+      const attrs = exporter.find('op')!.attributes;
+      asserts.assertEquals(attrs.ok, 'yes');
+      asserts.assertEquals(attrs.n, 1);
+      asserts.assertEquals(attrs.list, ['a', 'b']);
+      asserts.assertEquals('nested' in attrs, false);
+      asserts.assertEquals('mixed' in attrs, false);
+    });
+
+    it('records and rethrows errors (witness contract)', async () => {
+      const { tracer, exporter } = tracerWith();
+      await asserts.assertRejects(
+        () =>
+          tracer.wrap({ name: 'boom' }, () => {
+            return Promise.reject(new Error('op failed'));
+          }),
+        Error,
+        'op failed',
+      );
+      asserts.assertEquals(
+        exporter.find('boom')!.events[0]!.attributes['exception.message'],
+        'op failed',
+      );
+    });
+
+    it('works detached, as norm receives it', async () => {
+      const { tracer, exporter } = tracerWith();
+      const witness = tracer.wrap; // detached — must stay bound
+      await witness({ name: 'detached' }, () => Promise.resolve('ok'));
+      asserts.assertEquals(exporter.find('detached')!.name, 'detached');
+    });
+  });
+
+  describe('logContext (the contextProvider adapter)', () => {
+    it('returns {} outside any span', () => {
+      const { tracer } = tracerWith();
+      asserts.assertEquals(tracer.logContext(), {});
+    });
+
+    it('returns the CANONICAL camelCase keys inside a span', () => {
+      const { tracer } = tracerWith();
+      tracer.startActiveSpan('op', (span) => {
+        // traceId/spanId exactly — otelLogFormatter's hoisting defaults.
+        asserts.assertEquals(tracer.logContext(), {
+          traceId: span.context.traceId,
+          spanId: span.context.spanId,
+        });
+      });
+    });
+
+    it('still reports ids for unsampled spans (correlation without export)', () => {
+      const { tracer } = tracerWith({ sampler: alwaysOffSampler });
+      tracer.startActiveSpan('dropped', (span) => {
+        asserts.assertEquals(
+          (tracer.logContext() as { traceId?: string }).traceId,
+          span.context.traceId,
+        );
+      });
+    });
+
+    it('works detached, as slogger receives it', () => {
+      const { tracer } = tracerWith();
+      const provider = tracer.logContext; // detached — must stay bound
+      tracer.startActiveSpan('op', () => {
+        asserts.assert('traceId' in provider());
+      });
+      asserts.assertEquals(provider(), {});
+    });
+  });
+});
