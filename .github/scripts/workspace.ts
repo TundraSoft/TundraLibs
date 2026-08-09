@@ -32,7 +32,18 @@
 const SCOPE = '@tundralibs';
 const PACKAGES_DIR = 'packages';
 const META_PATH = '.github/workspace-meta.json';
-const NEW_PACKAGE_VERSION = '0.1.0';
+/**
+ * Version a freshly scaffolded package carries until its first release.
+ *
+ * `0.0.0`, NOT `0.1.0`: this value flows into the package manifests and from
+ * there into `.release-please-manifest.json`, which release-please reads as
+ * "already released". Seeding `0.1.0` made it treat that version as shipped,
+ * so a new package's first `feat:` bumped the minor and its FIRST published
+ * release was `0.2.0` — `0.1.0` never existed on JSR (this is exactly what
+ * happened to ambient and tracer). From `0.0.0`, the first `feat:` produces
+ * `0.1.0` as intended.
+ */
+const NEW_PACKAGE_VERSION = '0.0.0';
 
 // ---------------------------------------------------------------------
 // Workspace state
@@ -121,6 +132,12 @@ const renderReleasePleaseConfig = (pkgs: Pkg[]): string =>
       packages: Object.fromEntries(pkgs.map((p) => [`${PACKAGES_DIR}/${p.dir}`, {
         'release-type': 'node',
         'component': p.dir,
+        // A breaking (`!`) commit on a 0.x package bumps MINOR, not major —
+        // without this, release-please graduates a pre-1.0 package to 1.0.0
+        // off any breaking commit. tracer nearly shipped as an accidental
+        // 1.0.0 exactly this way (the otlp subpath rename), and pact is
+        // deliberately held pre-1.0. Inert once a package reaches 1.0.0.
+        'bump-minor-pre-major': true,
         // Prerelease bump strategy only while the package version carries
         // a prerelease suffix (1.0.0-devN -> devN+1). Stable versions use
         // normal semver bumps — self-adapts on graduation to 1.0.0.
@@ -197,6 +214,10 @@ const renderCodecov = (pkgs: Pkg[]): string => {
     '    statuses:',
     '      - type: project',
     '        target: auto',
+    // Same tolerance as the project-level status. Without it a component
+    // fails on ANY dip — including refactors that delete covered branches in
+    // packages the PR never touched.
+    '        threshold: 1%',
     '        branches:',
     "          - '!main'",
     '  individual_components:',
@@ -210,6 +231,7 @@ const renderCodecov = (pkgs: Pkg[]): string => {
       '      statuses:',
       '        - type: project',
       '          target: auto',
+      '          threshold: 1%',
     );
   }
   return lines.join('\n') + '\n';
