@@ -31,7 +31,7 @@
  */
 
 import { Guardian } from '@tundralibs/guardian';
-import type { Attributes, AttributeValue, SpanData } from '../types/mod.ts';
+import type { Attributes, AttributeValue, SpanData } from '../../types/mod.ts';
 
 /** Nanoseconds per millisecond — JS clocks are millisecond-resolution. */
 const NANOS_PER_MS = 1_000_000;

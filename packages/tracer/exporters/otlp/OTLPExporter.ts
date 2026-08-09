@@ -4,7 +4,7 @@
  *
  * Built on `RESTler` so URL validation, timeouts, headers and the request
  * pipeline are inherited rather than re-implemented. It lives behind the
- * `@tundralibs/tracer/otlp` subpath so the tracer core stays free of an HTTP
+ * `@tundralibs/tracer/exporters/otlp` subpath so the tracer core stays free of an HTTP
  * client — a CLI or worker that only creates spans never pulls this in.
  *
  * @author TundraSoft
@@ -14,7 +14,7 @@
  * @example
  * ```typescript
  * import { BatchSpanProcessor, Tracer } from '@tundralibs/tracer';
- * import { OTLPExporter } from '@tundralibs/tracer/otlp';
+ * import { OTLPExporter } from '@tundralibs/tracer/exporters/otlp';
  *
  * const tracer = new Tracer({
  *   serviceName: 'orders',
@@ -28,7 +28,7 @@
 
 import { RESTler } from '@tundralibs/restler';
 import type { RESTlerOptions } from '@tundralibs/restler/types';
-import type { SpanData, SpanExporter } from '../types/mod.ts';
+import type { SpanData, SpanExporter } from '../../types/mod.ts';
 import { encodeSpans } from './encode.ts';
 
 /** Options for {@link OTLPExporter}. */

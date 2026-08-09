@@ -1,8 +1,8 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { encodeSpans, toAnyValue, toKeyValues } from './mod.ts';
-import { SpanKind, SpanStatusCode } from '../types/mod.ts';
-import type { SpanData } from '../types/mod.ts';
+import { SpanKind, SpanStatusCode } from '../../types/mod.ts';
+import type { SpanData } from '../../types/mod.ts';
 
 const TRACE_ID = '4bf92f3577b34da6a3ce929d0e0e4736';
 const SPAN_ID = '00f067aa0ba902b7';

@@ -7,7 +7,7 @@ shaped the package.
 
 - **Kernel** — `Tracer`/`Span`, W3C `traceparent` propagation, head-based
   parent-inherited sampling, pluggable `IdGenerator`, Console/Memory exporters.
-- **`@tundralibs/tracer/otlp`** — OTLP over HTTP with a JSON payload, POSTed to
+- **`@tundralibs/tracer/exporters/otlp`** — OTLP over HTTP with a JSON payload, POSTed to
   `<baseURL>/v1/traces`, built as a `RESTler` subclass so URL validation,
   timeouts and headers are inherited. JSON only — gRPC and protobuf-over-HTTP
   stay out of scope, because a collector accepts JSON on the front door and
@@ -25,7 +25,7 @@ declaration and the output type is derived from it — there is no second
 `types/otlp.ts` to drift.
 
 The open question was its cost, and it was settled with
-[encode.bench.ts](otlp/encode.bench.ts) rather than a guess: on a default
+[encode.bench.ts](exporters/otlp/encode.bench.ts) rather than a guess: on a default
 512-span batch, Guardian runs ~1.1ms against a hand-rolled baseline's ~408µs —
 about **2.6x**, but under a millisecond more per flush, on a background timer,
 off the request path. Immaterial next to a single source of truth. Re-run the

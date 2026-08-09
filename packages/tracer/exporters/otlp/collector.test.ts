@@ -15,8 +15,8 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { getEnv } from '@tundralibs/compat/runtime';
 import { encodeSpans, OTLPExporter } from './mod.ts';
-import { SpanKind, SpanStatusCode } from '../types/mod.ts';
-import type { SpanData } from '../types/mod.ts';
+import { SpanKind, SpanStatusCode } from '../../types/mod.ts';
+import type { SpanData } from '../../types/mod.ts';
 
 const ENDPOINT = getEnv()['OTLP_ENDPOINT'] ?? 'http://localhost:4318';
 const TRACES_URL = `${ENDPOINT}/v1/traces`;

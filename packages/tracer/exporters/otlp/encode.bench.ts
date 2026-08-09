@@ -20,8 +20,8 @@
  */
 
 import { encodeSpans, toKeyValues } from './mod.ts';
-import { SpanKind, SpanStatusCode } from '../types/mod.ts';
-import type { Attributes, SpanData } from '../types/mod.ts';
+import { SpanKind, SpanStatusCode } from '../../types/mod.ts';
+import type { Attributes, SpanData } from '../../types/mod.ts';
 
 const NANOS_PER_MS = 1_000_000;
 

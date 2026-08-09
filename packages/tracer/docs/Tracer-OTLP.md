@@ -33,7 +33,7 @@ an HTTP client into a CLI or worker that only creates spans:
 
 ```typescript
 import { BatchSpanProcessor, Tracer } from '@tundralibs/tracer';
-import { OTLPExporter } from '@tundralibs/tracer/otlp';
+import { OTLPExporter } from '@tundralibs/tracer/exporters/otlp';
 
 const tracer = new Tracer({
   serviceName: 'orders',

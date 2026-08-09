@@ -1,8 +1,8 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { OTLPExporter } from './mod.ts';
-import { SpanKind, SpanStatusCode } from '../types/mod.ts';
-import type { SpanData } from '../types/mod.ts';
+import { SpanKind, SpanStatusCode } from '../../types/mod.ts';
+import type { SpanData } from '../../types/mod.ts';
 
 const spanData = (overrides: Partial<SpanData> = {}): SpanData => ({
   name: 'GET /orders',

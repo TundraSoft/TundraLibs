@@ -1,5 +1,5 @@
 /**
- * @fileoverview `@tundralibs/tracer/otlp` — OTLP/HTTP JSON export.
+ * @fileoverview `@tundralibs/tracer/exporters/otlp` — OTLP/HTTP JSON export.
  *
  * A separate subpath so the tracer core stays dependency-light: importing
  * `@tundralibs/tracer` never pulls in an HTTP client or a schema validator.
