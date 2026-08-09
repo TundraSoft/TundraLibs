@@ -455,13 +455,38 @@ api.on('call', (vendor, request, response) => {
 
 RESTler imports no logging or tracing package — observability wires up at
 the application's **composition root** through two generic constructor
-options, plus the events above:
+options, plus the events above. The vendor client stays
+observability-agnostic; it just lets the hooks flow through to `super`
+(the `RESTlerHooks` type is exported for exactly this):
 
 ```typescript
+import { RESTler, type RESTlerHooks } from '@tundralibs/restler';
+
+class GitHubAPI extends RESTler {
+  public readonly vendor = 'github';
+
+  constructor(token: string, hooks: RESTlerHooks = {}) {
+    super({
+      baseURL: 'https://api.github.com',
+      auth: { type: 'BEARER', token },
+      ...hooks, // witness? headerProvider? — never inspected here
+    });
+  }
+
+  getUser(login: string) {
+    return this._makeRequest<{ id: number; login: string }>({
+      path: `/users/${login}`,
+      method: 'GET',
+    });
+  }
+}
+
+// The app wires observability once; domain calls don't change:
 const api = new GitHubAPI(token, {
   witness: tracer.wrapClient, // a CLIENT span per outbound request
   headerProvider: tracer.propagation, // traceparent per request (tracer >= 0.5)
 });
+const res = await api.getUser('octocat'); // traced + propagated, nothing new here
 ```
 
 **`witness`** — the suite's [Witness convention](../norm/README.md#tracing-witness)

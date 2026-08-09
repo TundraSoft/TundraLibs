@@ -13,6 +13,7 @@ export type { RESTlerEndpoint } from './RESTlerEndpoint.ts';
 export type { RESTlerEvents } from './RESTlerEvents.ts';
 export type {
   RESTlerHeaderProvider,
+  RESTlerHooks,
   Witness,
   WitnessInfo,
 } from './RESTlerHooks.ts';

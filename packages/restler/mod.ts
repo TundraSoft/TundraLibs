@@ -21,6 +21,7 @@ export type {
   RESTlerEndpoint,
   RESTlerEvents,
   RESTlerHeaderProvider,
+  RESTlerHooks,
   RESTlerMethod,
   RESTlerMethodPayload,
   RESTlerOptions,

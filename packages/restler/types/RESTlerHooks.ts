@@ -45,3 +45,22 @@ export type Witness = <T>(
  * observability wiring must never break the operation.
  */
 export type RESTlerHeaderProvider = () => Record<string, string>;
+
+/**
+ * Convenience bag for threading the observability hooks from the
+ * application's composition root through a vendor client's constructor:
+ *
+ * ```ts
+ * class GitHubAPI extends RESTler {
+ *   constructor(token: string, hooks: RESTlerHooks = {}) {
+ *     super({ baseURL: 'https://api.github.com', auth: { type: 'BEARER', token }, ...hooks });
+ *   }
+ * }
+ * ```
+ */
+export type RESTlerHooks = {
+  /** See {@link Witness}. */
+  witness?: Witness;
+  /** See {@link RESTlerHeaderProvider}. */
+  headerProvider?: RESTlerHeaderProvider;
+};
