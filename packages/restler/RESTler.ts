@@ -783,7 +783,35 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @throws {@link RESTlerError} Subclasses thrown by the response handler
    *   surface unwrapped (with the `request` in their `context` redacted)
    */
-  protected async _makeRequest<B = ResponseBody>(
+  protected _makeRequest<B = ResponseBody>(
+    endpoint: RESTlerEndpoint,
+    responseHandler?: RESTlerResponseHandler,
+  ): Promise<RESTlerResponse<B>> {
+    const witness = this.getOption('witness');
+    if (witness === undefined) {
+      return this.__request<B>(endpoint, responseHandler);
+    }
+    // The whole request — endpoint resolution, headerProvider, fetch, body
+    // parsing — runs inside the witnessed window, so a tracer's span is
+    // ambient-active when the headerProvider fires (that composition is what
+    // puts THIS request's span id into an injected `traceparent`). Name and
+    // attributes stay low-cardinality and redaction-safe: the raw `path` is
+    // passed as given (no query string, no resolved URL, no userinfo).
+    return witness(
+      {
+        name: `restler.${this.vendor} ${endpoint.method}`,
+        attributes: {
+          'restler.vendor': this.vendor,
+          'http.request.method': endpoint.method,
+          'url.path': endpoint.path,
+        },
+      },
+      () => this.__request<B>(endpoint, responseHandler),
+    );
+  }
+
+  /** The request pipeline {@link _makeRequest} runs (witnessed or not). */
+  private async __request<B = ResponseBody>(
     endpoint: RESTlerEndpoint,
     responseHandler?: RESTlerResponseHandler,
   ): Promise<RESTlerResponse<B>> {
@@ -1133,6 +1161,21 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     Object.entries(this._defaultHeaders).forEach(([key, value]) => {
       headers[key] = this._replaceVersion(value, version);
     });
+    // Per-request outbound headers (traceparent, correlation ids). Layered
+    // over the defaults but under the endpoint's own headers and auth —
+    // explicit always beats ambient. Values are runtime-computed, so no
+    // {version} replacement. A throwing provider is contained: observability
+    // wiring must never break the request it decorates.
+    const headerProvider = this.getOption('headerProvider');
+    if (headerProvider !== undefined) {
+      try {
+        for (const [key, value] of Object.entries(headerProvider() ?? {})) {
+          headers[key] = String(value);
+        }
+      } catch {
+        // contained by design — see the option's contract
+      }
+    }
     // Handle auth (may be async — e.g. token refresh before the request)
     await this._authInjector(endpoint);
     if (endpoint.headers) {
@@ -1335,6 +1378,22 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
               key: key,
               value: this.__redactedOption(key, value),
             },
+          );
+        }
+        break;
+      case 'witness':
+        if (value !== undefined && typeof value !== 'function') {
+          throw new RESTlerConfigError(
+            `witness must be a function (the suite's Witness shape).`,
+            { vendor: this.vendor, key: key, value: value },
+          );
+        }
+        break;
+      case 'headerProvider':
+        if (value !== undefined && typeof value !== 'function') {
+          throw new RESTlerConfigError(
+            `headerProvider must be a function returning a header record.`,
+            { vendor: this.vendor, key: key, value: value },
           );
         }
         break;

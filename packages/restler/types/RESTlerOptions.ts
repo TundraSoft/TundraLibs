@@ -5,6 +5,7 @@
  */
 import type { RESTlerContentType } from './RESTlerContentType.ts';
 import type { RESTlerAuth } from './RESTlerAuth.ts';
+import type { RESTlerHeaderProvider, Witness } from './RESTlerHooks.ts';
 import type { TLSOptions } from '@tundralibs/compat/common';
 
 /**
@@ -71,4 +72,24 @@ export type RESTlerOptions = {
    * @see {@link RESTlerAuth}
    */
   auth?: RESTlerAuth;
+
+  /**
+   * Optional observability wrap hook — the suite's **Witness** convention.
+   * Every request runs through it (`tracer.wrapClient` opens a CLIENT span
+   * per request). Wired at the application's composition root; RESTler
+   * never imports a tracing package.
+   * @see {@link Witness}
+   */
+  witness?: Witness;
+
+  /**
+   * Optional per-request outbound header seam. Called once per request;
+   * its headers layer between the client's default `headers` and the
+   * endpoint's own (`defaults < provider < endpoint.headers`, auth always
+   * wins). `tracer.propagation` supplies a W3C `traceparent` here; a plain
+   * thunk over the ambient bag propagates a correlation id. A thrown
+   * provider is contained — the request proceeds without its headers.
+   * @see {@link RESTlerHeaderProvider}
+   */
+  headerProvider?: RESTlerHeaderProvider;
 };

@@ -133,17 +133,19 @@ console.log(res.status, res.body?.title);
 `RESTlerOptions` is passed to `super(...)` in your subclass constructor. Only
 `baseURL` is required.
 
-| Option        | Type                     | Default  | Notes                                                                |
-| ------------- | ------------------------ | -------- | -------------------------------------------------------------------- |
-| `baseURL`     | `string`                 | —        | Required. May contain a `{version}` placeholder.                     |
-| `port`        | `number`                 | —        | 1–65535.                                                             |
-| `headers`     | `Record<string, string>` | `{}`     | Default headers sent with every request.                             |
-| `timeout`     | `number`                 | `30`     | Seconds. Must be `>= 1` and `<= 120`.                                |
-| `contentType` | `RESTlerContentType`     | `'JSON'` | Default body content type (`JSON \| XML \| FORM \| TEXT \| BLOB`).   |
-| `version`     | `string`                 | —        | Replaces `{version}` in URLs, query values, and headers.             |
-| `socketPath`  | `string`                 | —        | Route over a Unix socket (Deno/Bun). Must point to an existing path. |
-| `tls`         | `TLSOptions`             | —        | TLS client auth (Deno/Bun). See [TLS](#tls-client-authentication).   |
-| `auth`        | `RESTlerAuth`            | —        | Default authentication. See [Authentication](#authentication).       |
+| Option           | Type                     | Default  | Notes                                                                                             |
+| ---------------- | ------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
+| `baseURL`        | `string`                 | —        | Required. May contain a `{version}` placeholder.                                                  |
+| `port`           | `number`                 | —        | 1–65535.                                                                                          |
+| `headers`        | `Record<string, string>` | `{}`     | Default headers sent with every request.                                                          |
+| `timeout`        | `number`                 | `30`     | Seconds. Must be `>= 1` and `<= 120`.                                                             |
+| `contentType`    | `RESTlerContentType`     | `'JSON'` | Default body content type (`JSON \| XML \| FORM \| TEXT \| BLOB`).                                |
+| `version`        | `string`                 | —        | Replaces `{version}` in URLs, query values, and headers.                                          |
+| `socketPath`     | `string`                 | —        | Route over a Unix socket (Deno/Bun). Must point to an existing path.                              |
+| `tls`            | `TLSOptions`             | —        | TLS client auth (Deno/Bun). See [TLS](#tls-client-authentication).                                |
+| `auth`           | `RESTlerAuth`            | —        | Default authentication. See [Authentication](#authentication).                                    |
+| `witness`        | `Witness`                | —        | Observability wrap hook (suite convention). See [Observability](#observability).                  |
+| `headerProvider` | `RESTlerHeaderProvider`  | —        | Per-request outbound headers (traceparent, correlation ids). See [Observability](#observability). |
 
 Values are validated in the constructor; an invalid value — or a missing
 required `baseURL` (including when it's absent from loosely-typed config loaded
@@ -451,23 +453,74 @@ api.on('call', (vendor, request, response) => {
 
 ## Observability
 
-The events above are the integration seam — RESTler imports no logging or
-tracing package.
+RESTler imports no logging or tracing package — observability wires up at
+the application's **composition root** through two generic constructor
+options, plus the events above. The vendor client stays
+observability-agnostic; it just lets the hooks flow through to `super`
+(the `RESTlerHooks` type is exported for exactly this):
 
-**Correlated logs.** Listeners fire inside the calling request's async
+```typescript
+import { RESTler, type RESTlerHooks } from '@tundralibs/restler';
+
+class GitHubAPI extends RESTler {
+  public readonly vendor = 'github';
+
+  constructor(token: string, hooks: RESTlerHooks = {}) {
+    super({
+      baseURL: 'https://api.github.com',
+      auth: { type: 'BEARER', token },
+      ...hooks, // witness? headerProvider? — never inspected here
+    });
+  }
+
+  getUser(login: string) {
+    return this._makeRequest<{ id: number; login: string }>({
+      path: `/users/${login}`,
+      method: 'GET',
+    });
+  }
+}
+
+// The app wires observability once; domain calls don't change:
+const api = new GitHubAPI(token, {
+  witness: tracer.wrapClient, // a CLIENT span per outbound request
+  headerProvider: tracer.propagation, // traceparent per request (tracer >= 0.5)
+});
+const res = await api.getUser('octocat'); // traced + propagated, nothing new here
+```
+
+**`witness`** — the suite's [Witness convention](../norm/README.md#tracing-witness)
+(shared shape with norm): every request runs through the hook with a
+span-style name (`restler.github GET`) and low-cardinality attributes
+(vendor, method, raw path — never the resolved URL or query string, which
+can carry credentials). A witness observes and must not interfere: it calls
+the wrapped `fn` exactly once, returns its result unchanged, and re-throws
+its errors.
+
+**`headerProvider`** — a per-request thunk whose headers go out on the wire,
+layered `defaults < provider < endpoint.headers` (auth always wins). It runs
+**inside the witnessed window**, which is the property propagation depends
+on: `tracer.propagation` reads the active span at send time, so the
+`traceparent` carries _that request's_ span id and the downstream service
+joins the trace correctly parented. A throwing provider is contained — the
+request proceeds without its headers. It is not tracing-specific:
+
+```typescript
+headerProvider: () => ({
+  'x-correlation-id': String(ambient.get()?.correlationId ?? ''),
+}),
+```
+
+**Correlated logs.** Event listeners fire inside the calling request's async
 context, so a logger wired with a `contextProvider`
 ([ambient](../ambient/README.md) request bag, trace identity via
 `tracer.logContext`) stamps correlation ids on every line a listener emits —
 no argument threading. See
 [Slogger-Correlation](../slogger/docs/Slogger-Correlation.md).
 
-**Outbound traces.** To make the downstream service join your trace, wrap
-calls in a `CLIENT` span and send a `traceparent` header —
-`@tundralibs/tracer` documents the ready-made shape in
+For the raw-`fetch` shape these hooks replace — or clients not built on
+RESTler — see
 [Outbound: propagating the trace](../tracer/docs/Tracer-Recipes.md#outbound-propagating-the-trace).
-The header must be injected **per request** — each call carries its own span
-id — so wrap the call site as in the recipe, or add it from an
-`_authInjector`-style endpoint override, which runs per request.
 
 ## Vendor Response Handling
 
