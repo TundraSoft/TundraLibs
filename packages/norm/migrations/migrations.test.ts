@@ -339,7 +339,10 @@ describe('norm.migrations (real SQLite end to end)', () => {
   it('v2: renamedFrom renames the column (data survives), add column + reindex', async () => {
     const norm = new Norm({ engine: engine as never, secret: SECRET });
     const db = norm.use(Schema('App', { Users: UsersV2 }));
-    const mig = new Migrator(db, { dir: migDir });
+    // Trailing slashes on `dir` are normalised away — this version continues
+    // the same migration chain as v1 above (which passed the bare `migDir`),
+    // so it only reaches version 2 if the two spellings resolve identically.
+    const mig = new Migrator(db, { dir: `${migDir}///` });
 
     asserts.assertEquals((await mig.snapshot()).version, 2);
     const [step] = await mig.plan();
