@@ -348,19 +348,14 @@ fire, and their spans parent to it automatically via
 [ambient](../ambient/README.md).
 
 ```typescript
-import { SpanKind, Tracer } from '@tundralibs/tracer';
-
-const norm = new Norm({
-  engine,
-  secret,
-  witness: (info, fn) =>
-    tracer.startActiveSpan(
-      info.name, // e.g. 'norm.Users.find', 'norm.raw'
-      { kind: SpanKind.INTERNAL, attributes: info.attributes },
-      fn,
-    ),
-});
+const norm = new Norm({ engine, secret, witness: tracer.wrap });
 ```
+
+`tracer.wrap` (tracer ≥ 0.4) is the ready-made Witness-shaped adapter: it
+opens an `INTERNAL` span named `info.name` (`'norm.Users.find'`,
+`'norm.raw'`, …), seeds the attributes, and honours the witness contract.
+Hand-roll via `startActiveSpan` only when you want a different `SpanKind`
+or extra attributes.
 
 ```text
 GET /orders                      ← request span (middleware)
