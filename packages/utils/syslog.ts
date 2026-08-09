@@ -197,7 +197,7 @@ const MIN_PRI_VALUE = 0;
 //                                    rejected that was previously accepted.
 const Patterns = {
   'RFC3164':
-    /^(<(\d{1,10})>)((?:(\d{4})\s+)?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*(\d{1,2})\s*(?:(\d{4})\s*)?(\d{1,2}:\d{1,2}:\d{1,2}))?\s*(?:([^\s\:]{1,255})\s*)?(([^\s\:\[]{1,64})?(\[(\d{1,10}|)\])?)?:(.+)/i, //NOSONAR - Allow empty process ID brackets and year-first timestamps
+    /^(<(\d{1,10})>)((?:(\d{4})\s+)?(?:(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*)?(\d{1,2})\s+(?:(\d{4})\s+)?(\d{1,2}:\d{1,2}:\d{1,2}))?\s*(?:([^\s\:]{1,255})\s+)?(([^\s\:\[]{1,64})?(\[(\d{1,10}|)\])?)?:(.+)/i, //NOSONAR - Allow empty process ID brackets and year-first timestamps
   'RFC5424':
     /^<(\d{1,10})?>\d (\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\S{1,64})\s+([^\s]{1,255})\s+([^\s]{1,255})\s+([^\s]{1,255})\s+([^\s]{1,255})\s*/i, //NOSONAR
   'STRUCTID': /\[(([a-zA-Z0-9._-]+)@(\d+(?:\.\d+)*))\s*/, // Allow dots and hyphens in element names
