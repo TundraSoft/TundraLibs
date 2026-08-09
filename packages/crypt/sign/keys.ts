@@ -87,9 +87,17 @@ export type KeyRequirement = {
 /** PEM armour, matching the detection the package has always used. */
 const PEM_ARMOUR = /-----BEGIN [A-Z ]+-----/;
 
-/** Captures a PEM block's label and body. */
+/**
+ * Captures a PEM block's label and body.
+ *
+ * Anchored at the start (modulo leading whitespace) and with the label length
+ * bounded: unanchored, the engine retried from every `-----BEGIN` candidate and
+ * re-scanned the rest of the input with `[\s\S]*?` looking for the END marker,
+ * costing O(n^2) on armour-like input that never closes. A PEM key is expected
+ * to begin the string, so there is exactly one valid start position.
+ */
 const PEM_BLOCK =
-  /-----BEGIN ([A-Z0-9 ]+)-----([\s\S]*?)-----END [A-Z0-9 ]+-----/;
+  /^\s*-----BEGIN ([A-Z0-9 ]{1,64})-----([\s\S]*?)-----END [A-Z0-9 ]{1,64}-----/;
 
 /** JOSE algorithm names by family, indexed for the JWK `alg` cross-check. */
 const JOSE_NAMES: Record<string, string> = {
@@ -131,9 +139,12 @@ export const pemToDer = (
 ): { label: string; der: Uint8Array } => {
   const match = PEM_BLOCK.exec(pem);
   const label = match?.[1] ?? '';
+  // Fallback armour strip for input PEM_BLOCK did not match. The label length
+  // is bounded so each start position costs a constant scan rather than a
+  // greedy one that backtracks across the whole remaining string.
   const body = (match?.[2] ?? pem)
-    .replace(/-----BEGIN [A-Z0-9 ]+-----/, '')
-    .replace(/-----END [A-Z0-9 ]+-----/, '')
+    .replace(/-----BEGIN [A-Z0-9 ]{1,64}-----/, '')
+    .replace(/-----END [A-Z0-9 ]{1,64}-----/, '')
     .replaceAll(/\s/g, '');
   try {
     return {
