@@ -125,6 +125,9 @@ jobs:
       # both suites call the global memcached flush() (no logical DBs to isolate).
       MEMCACHED_PORT: '11211'
       MEMCACHED_PORT2: '11212'
+      # Tracer's OTLP conformance test probes this and SKIPS when unreachable,
+      # so a contributor without a local collector still gets a green suite.
+      OTLP_ENDPOINT: http://localhost:4318
       # Coverage/analysis upload credentials. Job-level so the token-presence
       # guards (`env.*_TOKEN != ''`) on the upload steps can read them — the
       # steps self-disable until the secrets are configured, and on fork PRs
@@ -178,6 +181,22 @@ jobs:
         image: memcached:1
         ports:
           - 11212:11211
+      # OTLP collector for tracer's conformance test. The point is to assert a
+      # REAL collector accepts our payload, rather than only that it matches
+      # our own fixtures — a self-agreeing encoder can still be wrong.
+      #
+      # No config file is mounted: the stock image ships a default config with
+      # OTLP receivers on 4317 (gRPC) and 4318 (HTTP), and only HTTP is used.
+      # That matters because service containers start BEFORE checkout, so a
+      # repo config file would not exist yet.
+      #
+      # Version-pinned to what the payload was verified against. Note the
+      # collector is deliberately lenient about int64-as-number, so it does NOT
+      # catch a numeric `*TimeUnixNano`; that stays a unit-test assertion.
+      otel-collector:
+        image: otel/opentelemetry-collector:0.158.0
+        ports:
+          - 4318:4318
     strategy:
       fail-fast: false
       matrix:
