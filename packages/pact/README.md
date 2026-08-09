@@ -11,8 +11,6 @@ orchestrates, and emits events.
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
 
-> ⚠️ **Status: in active development.** Not yet published.
-
 ## Overview
 
 PACT is a **kernel**, not a framework. It owns two things — evaluating
