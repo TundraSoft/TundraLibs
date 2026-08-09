@@ -267,6 +267,11 @@ scrapers reject.
 - [Histogram](docs/MetroMan-Histogram.md) — bucketed distribution
 - [Summary](docs/MetroMan-Summary.md) — quantile distribution with sliding window
 - [Errors](errors/MetroMan-Errors.md) — error classes and matching strategies
+- [`@tundralibs/slogger`](../slogger/README.md) /
+  [`@tundralibs/tracer`](../tracer/README.md) — the sibling observability
+  pillars (logs / traces); event-emitting packages feed all three from the
+  same seam — see drivers'
+  [Observability](../drivers/README.md#observability) section for the shape
 
 ## License
 
