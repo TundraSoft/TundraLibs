@@ -73,17 +73,17 @@ it writes nothing into the request bag. Read it in the same provider:
 ```typescript
 import { tracer } from './telemetry.ts'; // your Tracer instance
 
-contextProvider: () => {
-  const span = tracer.active();
-  return span
-    ? { traceId: span.context.traceId, spanId: span.context.spanId }
-    : {};
-},
+contextProvider: tracer.logContext, // ← the whole integration (tracer >= 0.4)
 ```
 
-**The key names are load-bearing.** `traceId` / `spanId` (camelCase) are what
-`otelLogFormatter` hoists by default — see the next section. Other names work,
-but then the formatter needs a matching `traceFields` override.
+`tracer.logContext` is the bound adapter tracer ships for exactly this seam:
+it returns `{}` outside a span, still reports ids for **unsampled** spans
+(correlation keeps working when nothing is exported), and emits the
+**canonical key names** — `traceId` / `spanId` (camelCase), which is what
+`otelLogFormatter` hoists by default (see the next section). The names are
+load-bearing, which is exactly why they're encoded in the adapter rather than
+retyped in every app. Other names work, but then the formatter needs a
+matching `traceFields` override.
 
 ## The payoff: otelLogFormatter hoisting
 
@@ -121,15 +121,10 @@ provider, still zero coupling:
 ```typescript
 import { ambient } from '@tundralibs/ambient';
 
-const contextProvider = () => {
-  const span = tracer.active();
-  return {
-    ...ambient.get(), // correlationId, userId, …
-    ...(span
-      ? { traceId: span.context.traceId, spanId: span.context.spanId }
-      : {}),
-  };
-};
+const contextProvider = () => ({
+  ...ambient.get(), // correlationId, userId, …
+  ...tracer.logContext(), // trace identity, canonical keys
+});
 
 const log = LogManager.createSlogger({
   appName: 'orders',
