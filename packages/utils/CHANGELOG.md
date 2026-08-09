@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.0.0...utils-v1.0.1) (2026-08-09)
+
+
+### Bug Fixes
+
+* **utils:** bound syslog field lengths to finish the ReDoS fix ([7e47c5a](https://github.com/TundraSoft/TundraLibs/commit/7e47c5a84bfbcba12a4465b14e01f39fba4fa9ea))
+* **utils:** make the RFC3164 fields structurally disjoint ([3be4389](https://github.com/TundraSoft/TundraLibs/commit/3be438943f7c4e6b55f965ed43cff2d92a7e1524))
+* **utils:** remove polynomial-ReDoS backtracking from syslog and variableReplacer ([5909647](https://github.com/TundraSoft/TundraLibs/commit/59096470e9c825ec8ebb964954f5a10e57a3cf36))
+* **utils:** remove polynomial-ReDoS backtracking from syslog and variableReplacer ([3dc89bb](https://github.com/TundraSoft/TundraLibs/commit/3dc89bbcb40d107b88d20d429f00f9a8a2e0e247))
+
+
+### Documentation
+
+* **utils:** use the safe form in variableReplacer's pattern list ([2dd44ce](https://github.com/TundraSoft/TundraLibs/commit/2dd44ce5fd20042c1cb094e81c07f9349816d619))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.0.0-dev11...utils-v1.0.0) (2026-08-01)
 
 

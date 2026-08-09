@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/utils",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Collection of utility functions and helpers",
   "license": "MIT",
