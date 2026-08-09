@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/norm",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Typed, cross-runtime ORM over OQL and drivers — one schema drives types, validation, relations, migrations, and at-rest column encryption",
   "license": "MIT",
   "exports": {
