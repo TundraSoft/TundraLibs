@@ -24,6 +24,7 @@ TLS client authentication.
 - [Unix Sockets](#unix-sockets)
 - [TLS Client Authentication](#tls-client-authentication)
 - [Events](#events)
+- [Observability](#observability)
 - [Vendor Response Handling](#vendor-response-handling)
 - [Error Handling](#error-handling)
 - [API Reference](#api-reference)
@@ -447,6 +448,26 @@ api.on('call', (vendor, request, response) => {
   );
 });
 ```
+
+## Observability
+
+The events above are the integration seam — RESTler imports no logging or
+tracing package.
+
+**Correlated logs.** Listeners fire inside the calling request's async
+context, so a logger wired with a `contextProvider`
+([ambient](../ambient/README.md) request bag, trace identity via
+`tracer.logContext`) stamps correlation ids on every line a listener emits —
+no argument threading. See
+[Slogger-Correlation](../slogger/docs/Slogger-Correlation.md).
+
+**Outbound traces.** To make the downstream service join your trace, wrap
+calls in a `CLIENT` span and send a `traceparent` header —
+`@tundralibs/tracer` documents the ready-made shape in
+[Outbound: propagating the trace](../tracer/docs/Tracer-Recipes.md#outbound-propagating-the-trace).
+The header must be injected **per request** — each call carries its own span
+id — so wrap the call site as in the recipe, or add it from an
+`_authInjector`-style endpoint override, which runs per request.
 
 ## Vendor Response Handling
 
