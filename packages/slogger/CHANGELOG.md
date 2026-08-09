@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.1...slogger-v1.1.2) (2026-08-09)
+
+
+### Documentation
+
+* **slogger:** adopt tracer.logContext in correlation guide ([562b3e7](https://github.com/TundraSoft/TundraLibs/commit/562b3e7fa3995fa97cd638f052ff6f2f6b320472))
+* **slogger:** adopt tracer.logContext in correlation guide ([0e6aad4](https://github.com/TundraSoft/TundraLibs/commit/0e6aad4529bb57da11c4b09b47a3128a9988187c))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.0...slogger-v1.1.1) (2026-08-09)
 
 
