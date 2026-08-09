@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.4.0...pact-v0.4.1) (2026-08-09)
+
+
+### Documentation
+
+* **pact:** add Observability section ([b5372fd](https://github.com/TundraSoft/TundraLibs/commit/b5372fd6666526928c02ba45ec6e6edf153fd2d0))
+* **pact:** add Observability section ([2d7bbd0](https://github.com/TundraSoft/TundraLibs/commit/2d7bbd04caa3e1282deb56bf4810c471aa6813f0))
+
 ## [0.4.0](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.3.3...pact-v0.4.0) (2026-08-09)
 
 
