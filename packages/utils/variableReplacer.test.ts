@@ -133,7 +133,7 @@ describe('utils.variableReplacer', () => {
   it('should work with custom regex patterns', () => {
     const msg = 'Hello {{name}}, you are {{age}} years old.';
     const context = { name: 'Alice', age: 30 };
-    const customRegex = /\{\{([^}]+)\}\}/g;
+    const customRegex = /\{\{([^{}]+)\}\}/g;
 
     const result = variableReplacer(msg, context, customRegex);
     asserts.assertEquals(result, 'Hello Alice, you are 30 years old.');
@@ -142,7 +142,7 @@ describe('utils.variableReplacer', () => {
   it('custom regex respects dot-path lookup on nested values', () => {
     const msg = 'User {{user.name}} from {{user.country}}';
     const context = { user: { name: 'Bob', country: 'JP' } };
-    const customRegex = /\{\{([^}]+)\}\}/g;
+    const customRegex = /\{\{([^{}]+)\}\}/g;
     const result = variableReplacer(msg, context, customRegex);
     asserts.assertEquals(result, 'User Bob from JP');
   });
@@ -150,7 +150,7 @@ describe('utils.variableReplacer', () => {
   it('custom regex preserves placeholder on missing values', () => {
     const msg = 'Hello {{name}}, your role is {{role}}';
     const context = { name: 'Carol' };
-    const customRegex = /\{\{([^}]+)\}\}/g;
+    const customRegex = /\{\{([^{}]+)\}\}/g;
     const result = variableReplacer(msg, context, customRegex);
     asserts.assertEquals(result, 'Hello Carol, your role is {{role}}');
   });
@@ -158,7 +158,7 @@ describe('utils.variableReplacer', () => {
   it('custom regex formats arrays the same way as default delimiters', () => {
     const msg = 'Tags: <<tags>>';
     const context = { tags: ['x', 'y', 'z'] };
-    const customRegex = /<<([^>]+)>>/g;
+    const customRegex = /<<([^<>]+)>>/g;
     const result = variableReplacer(msg, context, customRegex);
     asserts.assertEquals(result, 'Tags: (x, y, z)');
   });
@@ -247,7 +247,7 @@ describe('utils.variableReplacer', () => {
   });
 
   it('rejects prototype-chain traversal (custom delimiters)', () => {
-    const customRegex = /\{\{([^}]+)\}\}/g;
+    const customRegex = /\{\{([^{}]+)\}\}/g;
     // deno-lint-ignore no-explicit-any
     (Object.prototype as any).polluted = 'leaked';
     try {
