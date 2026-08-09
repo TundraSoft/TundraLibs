@@ -93,8 +93,9 @@ inject(span.context); // 00-…-…-00  ← flag clear
 ```
 
 So correlation keeps working even when nothing is exported: log lines can still
-carry `trace_id`, and a downstream service still learns that this trace is not
-being sampled rather than deciding again for itself.
+carry `traceId` (`tracer.logContext` reports ids for unsampled spans too), and
+a downstream service still learns that this trace is not being sampled rather
+than deciding again for itself.
 
 Use `isRecording()` to skip work you would only do for the exporter's benefit:
 
