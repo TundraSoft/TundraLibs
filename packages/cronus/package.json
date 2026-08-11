@@ -1,0 +1,20 @@
+{
+  "name": "@tundralibs/cronus",
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Cross-runtime minute-resolution cron scheduler — tick-and-match (impossible expressions never crash), per-job overlap prevention, cron/run-once/run-now triggers.",
+  "exports": {
+    ".": "./mod.ts",
+    "./errors": "./errors/mod.ts",
+    "./types": "./types/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@tundralibs/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@tundralibs/compat": "workspace:*"
+  }
+}

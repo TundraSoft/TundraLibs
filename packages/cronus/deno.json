@@ -1,0 +1,12 @@
+{
+  "name": "@tundralibs/cronus",
+  "version": "0.0.0",
+  "description": "Cross-runtime minute-resolution cron scheduler \u2014 tick-and-match (impossible expressions never crash), per-job overlap prevention, cron/run-once/run-now triggers.",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./errors": "./errors/mod.ts",
+    "./types": "./types/mod.ts"
+  },
+  "imports": {}
+}
