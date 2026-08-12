@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.1.0...compat-v1.1.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.0.0...compat-v1.1.0) (2026-08-09)
 
 
