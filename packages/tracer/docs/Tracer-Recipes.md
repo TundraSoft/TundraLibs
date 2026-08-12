@@ -365,6 +365,24 @@ router.use(tracing);
 Open a `CLIENT` span and inject `traceparent`, so the callee joins this trace
 rather than starting its own.
 
+For API clients built on [`@tundralibs/restler`](../../restler/README.md)
+(≥ 1.1) this is wiring, not code — restler's two hooks compose through the
+ambient store with no coupling in either direction:
+
+```typescript
+const api = new GitHubAPI(token, {
+  witness: tracer.wrapClient, // CLIENT span per outbound request
+  headerProvider: tracer.propagation, // traceparent — carries THAT span's id
+});
+```
+
+`headerProvider` runs inside the witnessed window, so the header carries the
+per-request span, not the distant server span. Either hook also works alone:
+`headerProvider` by itself still propagates (downstream parents to whatever
+span is active), `witness` by itself still draws the client edge in the
+service map. For raw `fetch` — or any client without a header seam — wrap it
+yourself:
+
 ```typescript
 const tracedFetch = (input: string, init: RequestInit = {}) =>
   tracer.startActiveSpan(

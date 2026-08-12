@@ -95,6 +95,17 @@ await tracer.startActiveSpan(
 );
 ```
 
+For clients built on `@tundralibs/restler` (≥ 1.1) the outbound side is two
+lines of wiring — a CLIENT span per request, `traceparent` carrying that
+request's own span id:
+
+```typescript
+const api = new PaymentsAPI(token, {
+  witness: tracer.wrapClient, // span per outbound request
+  headerProvider: tracer.propagation, // traceparent per request
+});
+```
+
 ### 3. Correlate logs with traces
 
 Slogger's `contextProvider` is called for every record, so trace ids land on

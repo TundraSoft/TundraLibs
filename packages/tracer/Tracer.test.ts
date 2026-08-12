@@ -488,4 +488,95 @@ describe('tracer.adapters', () => {
       asserts.assertEquals(provider(), {});
     });
   });
+
+  describe('wrapClient (the outbound Witness adapter)', () => {
+    it('opens a CLIENT-kind span, same witness contract as wrap', async () => {
+      const { tracer, exporter } = tracerWith();
+      const result = await tracer.wrapClient(
+        {
+          name: 'restler.github GET',
+          attributes: { 'restler.vendor': 'github', dropped: { deep: true } },
+        },
+        () => Promise.resolve(42),
+      );
+      asserts.assertEquals(result, 42);
+      const span = exporter.find('restler.github GET')!;
+      asserts.assertEquals(span.kind, SpanKind.CLIENT);
+      asserts.assertEquals(span.attributes['restler.vendor'], 'github');
+      asserts.assertEquals('dropped' in span.attributes, false);
+    });
+
+    it('is ambient-active while fn runs — the propagation precondition', async () => {
+      const { tracer } = tracerWith();
+      const witness = tracer.wrapClient; // detached — must stay bound
+      await witness({ name: 'out' }, () => {
+        asserts.assert('traceId' in tracer.logContext());
+        return Promise.resolve();
+      });
+    });
+
+    it('records and rethrows errors', async () => {
+      const { tracer, exporter } = tracerWith();
+      await asserts.assertRejects(
+        () =>
+          tracer.wrapClient(
+            { name: 'boom.client' },
+            () => Promise.reject(new Error('down')),
+          ),
+        Error,
+        'down',
+      );
+      asserts.assertEquals(
+        exporter.find('boom.client')!.events[0]!.attributes[
+          'exception.message'
+        ],
+        'down',
+      );
+    });
+  });
+
+  describe('propagation (the headerProvider adapter)', () => {
+    it('returns {} outside any span — request goes out unpropagated', () => {
+      const { tracer } = tracerWith();
+      asserts.assertEquals(tracer.propagation(), {});
+    });
+
+    it('returns a valid traceparent carrying the ACTIVE span', () => {
+      const { tracer } = tracerWith();
+      tracer.startActiveSpan('op', (span) => {
+        const headers = tracer.propagation();
+        asserts.assertEquals(
+          headers['traceparent'],
+          `00-${span.context.traceId}-${span.context.spanId}-01`,
+        );
+        // The output is itself a valid carrier — round-trips through extract.
+        const parent = extract(headers);
+        asserts.assertEquals(parent!.traceId, span.context.traceId);
+      });
+    });
+
+    it('serialises unsampled spans with the flag CLEAR', () => {
+      const { tracer } = tracerWith({ sampler: alwaysOffSampler });
+      tracer.startActiveSpan('dropped', (span) => {
+        asserts.assertEquals(
+          tracer.propagation()['traceparent'],
+          `00-${span.context.traceId}-${span.context.spanId}-00`,
+        );
+      });
+    });
+
+    it('carries the wrapClient span when composed — restler wiring', async () => {
+      const { tracer } = tracerWith();
+      const provider = tracer.propagation; // detached — must stay bound
+      await tracer.wrapClient({ name: 'out' }, () => {
+        const inner = tracer.logContext() as { spanId: string };
+        // The header carries THIS request's span, not some outer one.
+        asserts.assert(
+          provider()['traceparent']!.includes(inner.spanId),
+        );
+        return Promise.resolve();
+      });
+      asserts.assertEquals(provider(), {});
+    });
+  });
 });

@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.4.1...tracer-v0.5.0) (2026-08-09)
+
+
+### Features
+
+* **tracer:** wrapClient + propagation — the outbound adapters ([2797c16](https://github.com/TundraSoft/TundraLibs/commit/2797c16b97bdca8ca4dc6d93f42e5a1490b41a71))
+* **tracer:** wrapClient + propagation outbound adapters ([0ff696c](https://github.com/TundraSoft/TundraLibs/commit/0ff696c11ce4ec7e87f9e47d048fd7835ace8904))
+
+
+### Documentation
+
+* **tracer:** revise the outbound-tracing decision record ([fc1049e](https://github.com/TundraSoft/TundraLibs/commit/fc1049e394c2aeff9af46a17e33e824ed80f44de))
+
 ## [0.4.1](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.4.0...tracer-v0.4.1) (2026-08-09)
 
 

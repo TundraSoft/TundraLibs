@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.0.1...restler-v1.1.0) (2026-08-09)
+
+
+### Features
+
+* **restler:** witness + headerProvider — the propagator hooks ([09e8968](https://github.com/TundraSoft/TundraLibs/commit/09e8968bcb20ad60a6eb017e602a3915be3be8c8))
+* **restler:** witness + headerProvider propagator hooks ([c4f8442](https://github.com/TundraSoft/TundraLibs/commit/c4f844235f555cba164c1a8a12283811c48bd055))
+
+
+### Documentation
+
+* **restler:** self-consistent Observability example + RESTlerHooks type ([fb08d01](https://github.com/TundraSoft/TundraLibs/commit/fb08d01bdf3f099ac2ba9efd3e22388da542c078))
+
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.0.0...restler-v1.0.1) (2026-08-09)
 
 

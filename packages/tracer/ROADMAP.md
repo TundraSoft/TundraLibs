@@ -22,6 +22,12 @@ shaped the package.
   keys that `otelLogFormatter` hoists — the names that once shipped wrong in
   our own docs now live in code). Both bound arrows, both structural, no new
   dependencies in either direction.
+- **Outbound propagation adapters** — `tracer.wrapClient` (the Witness
+  adapter at `SpanKind.CLIENT`, for restler's `witness` hook) and
+  `tracer.propagation` (restler's `headerProvider`: the active span as a
+  W3C `traceparent` header, `{}` outside a span, sampled flag clear on
+  unsampled spans). Completes the seam rule: leaf = events, container =
+  witness, propagator = pre-send headers.
 
 ### Encoder: Guardian, decided by measurement
 
@@ -109,13 +115,14 @@ inline.
 - **Sampling is head-based and parent-inherited.** Child spans never re-sample;
   a partially-sampled trace renders as a waterfall with holes. `ratioSampler`
   derives its verdict from the trace id so independent services agree.
-- **Outbound tracing (restler, drivers) stays a recipe, not code.** A
-  first-class `tracer/restler` or driver hook would make outbound calls and
-  queries traced by default rather than by discipline, and unlike Express these
-  are our own APIs — so the usual "we can't track their churn" argument does not
-  apply. It was still declined: it would couple tracer to those packages (or
-  those packages to tracer) for something a ~10-line wrapper already does, and
-  the wrappers are documented in
+- **Outbound tracing couples through generic seams, never imports.**
+  Originally "stays a recipe, not code"; **revised 2026-08 for restler** —
+  but the part worth not relitigating survived: no `tracer/restler` module,
+  no import in either direction. Restler grew two _generic_ hooks
+  (`witness`, `headerProvider`), tracer ships the matching bound adapters
+  (`wrapClient`, `propagation`), and the app connects them at the
+  composition root — same shape as norm's witness and slogger's
+  `contextProvider`. The raw-`fetch` wrapper remains a recipe in
   [Tracer-Recipes](docs/Tracer-Recipes.md#outbound-propagating-the-trace).
 
   `drivers` settles it further: its engines already emit `query`, `slowQuery`,

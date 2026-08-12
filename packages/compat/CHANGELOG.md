@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.0.0...compat-v1.1.0) (2026-08-09)
+
+
+### Features
+
+* **compat:** report the actual bound port on WebServer ([3507c3d](https://github.com/TundraSoft/TundraLibs/commit/3507c3d9391ac8ec4e379ebad69e011ee880ce7f))
+* **compat:** report the actual bound port on WebServer ([1cc2c88](https://github.com/TundraSoft/TundraLibs/commit/1cc2c8838ccea6c935e712951678a084c81882fa))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.0.0-dev10...compat-v1.0.0) (2026-08-01)
 
 
