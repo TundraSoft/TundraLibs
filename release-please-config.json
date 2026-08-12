@@ -76,6 +76,18 @@
         }
       ]
     },
+    "packages/cronus": {
+      "release-type": "node",
+      "component": "cronus",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "deno.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    },
     "packages/crypt": {
       "release-type": "node",
       "component": "crypt",

@@ -1,7 +1,8 @@
 {
   "packages/ambient": "0.2.2",
   "packages/cacher": "1.0.0",
-  "packages/compat": "1.0.0",
+  "packages/compat": "1.1.0",
+  "packages/cronus": "0.0.0",
   "packages/crypt": "1.0.1",
   "packages/doctor": "1.0.0",
   "packages/drivers": "1.0.1",
@@ -12,9 +13,9 @@
   "packages/oql": "1.0.0",
   "packages/pact": "0.4.2",
   "packages/radrouter": "1.0.1",
-  "packages/restler": "1.0.1",
+  "packages/restler": "1.1.0",
   "packages/rpc": "1.0.1",
   "packages/slogger": "1.1.2",
-  "packages/tracer": "0.4.1",
+  "packages/tracer": "0.5.0",
   "packages/utils": "1.0.1"
 }
