@@ -1,6 +1,24 @@
 /**
- * Slogger - Structured logging library for Deno
+ * @fileoverview `@tundralibs/slogger` — cross-runtime structured
+ * logging (Deno, Bun, Node) that fans a single log record out to many
+ * destinations in-process: console, JSON, logfmt, syslog (RFC 5424),
+ * file, HTTP, and TCP handlers, each with its own format, level
+ * threshold, and masking. A `contextProvider` stamps every record with
+ * ambient correlation data (request ids, trace ids) without threading
+ * loggers through call stacks.
+ *
  * @module
+ *
+ * @example
+ * ```typescript
+ * import { ConsoleHandler, Slogger } from '@tundralibs/slogger';
+ *
+ * const log = new Slogger({
+ *   appName: 'api',
+ *   handlers: [new ConsoleHandler({ level: 'INFO' })],
+ * });
+ * log.info('server started', { port: 8080 });
+ * ```
  */
 
 export {

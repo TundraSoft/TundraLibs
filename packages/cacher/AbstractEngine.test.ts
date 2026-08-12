@@ -4,6 +4,21 @@ import { AbstractEngine } from './AbstractEngine.ts';
 import { CacherEngineError } from './errors/mod.ts';
 import type { CacherOptions, CacheValue } from './types/mod.ts';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+
 /**
  * Test implementation of AbstractEngine for comprehensive testing
  */
@@ -123,7 +138,7 @@ describe('cacher.AbstractEngine', () => {
 
         asserts.assertEquals(engine.name, 'test-cache');
         asserts.assertEquals(engine.Engine, 'TEST');
-        asserts.assertEquals(engine.getOption('defaultExpiry'), 600);
+        asserts.assertEquals(readOption(engine, 'defaultExpiry'), 600);
       },
     );
 
@@ -155,7 +170,7 @@ describe('cacher.AbstractEngine', () => {
 
     it('should use default options when not provided', () => {
       const engine = new TestEngine('test', {});
-      asserts.assertEquals(engine.getOption('defaultExpiry'), 300);
+      asserts.assertEquals(readOption(engine, 'defaultExpiry'), 300);
     });
 
     it('should validate defaultExpiry option', () => {
@@ -180,7 +195,7 @@ describe('cacher.AbstractEngine', () => {
 
     it('should accept zero as valid defaultExpiry', () => {
       const engine = new TestEngine('test', { defaultExpiry: 0 });
-      asserts.assertEquals(engine.getOption('defaultExpiry'), 0);
+      asserts.assertEquals(readOption(engine, 'defaultExpiry'), 0);
     });
   });
 
@@ -558,11 +573,11 @@ describe('cacher.AbstractEngine', () => {
       'should process defaultExpiry option correctly in _processOption',
       () => {
         const engine = new TestEngine('test', { defaultExpiry: 600 });
-        asserts.assertEquals(engine.getOption('defaultExpiry'), 600);
+        asserts.assertEquals(readOption(engine, 'defaultExpiry'), 600);
 
         // Test with undefined (should get default)
         const engine2 = new TestEngine('test2', {});
-        asserts.assertEquals(engine2.getOption('defaultExpiry'), 300);
+        asserts.assertEquals(readOption(engine2, 'defaultExpiry'), 300);
       },
     );
   });

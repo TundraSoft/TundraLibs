@@ -71,8 +71,13 @@ strictly the 15th).
 ## Matching semantics
 
 - **Local time.** Matching reads the host's local wall clock
-  (`getMinutes()`/`getHours()`/…). Note the usual cron caveat: a DST
-  spring-forward skips wall-clock times that never occur.
+  (`getMinutes()`/`getHours()`/…), with Vixie cron's DST semantics:
+  - **Fall-back** (an hour repeats): a _fixed-time_ job — minute AND
+    hour both concrete, e.g. `30 1 * * *` — fires **once**, not twice;
+    wildcard jobs (`* * * * *`, `*/5 …`, `30 * * * *`) keep firing
+    every physical minute through the repeated hour.
+  - **Spring-forward** (an hour never occurs): jobs scheduled in the
+    skipped hour do not run that day (no catch-up).
 - **Minute boundary.** The ticker fires at each `:00` second boundary
   and evaluates every job against that minute; there is no
   sub-minute scheduling.

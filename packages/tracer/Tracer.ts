@@ -28,7 +28,7 @@ import { activeSpan } from './activeSpan.ts';
 import { Span } from './Span.ts';
 import { randomIdGenerator } from './ids.ts';
 import { alwaysOnSampler } from './samplers.ts';
-import { FLAG_SAMPLED } from './propagation.ts';
+import { FLAG_SAMPLED, inject } from './propagation.ts';
 import { TracerConfigError } from './errors/mod.ts';
 import type {
   Attributes,
@@ -66,9 +66,8 @@ export class Tracer extends Options<TracerOptions> {
    */
   constructor(options: TracerOptions) {
     super();
-    this._setOptions(options, {
+    this._setOptions({ idGenerator: randomIdGenerator, ...options }, {
       sampler: alwaysOnSampler,
-      idGenerator: randomIdGenerator,
       resource: {},
     });
   }
@@ -169,7 +168,7 @@ export class Tracer extends Options<TracerOptions> {
    * @returns The new {@link Span}.
    */
   public startSpan(name: string, options: SpanOptions = {}): Span {
-    const idGenerator = this.getOption('idGenerator') as IdGenerator;
+    const idGenerator = this._getOption('idGenerator') as IdGenerator;
     const parent = this.__resolveParent(options);
     const kind = options.kind ?? SpanKind.INTERNAL;
     const attributes = options.attributes ?? {};
@@ -179,7 +178,7 @@ export class Tracer extends Options<TracerOptions> {
     // only roots consult the sampler.
     const sampled = parent !== undefined
       ? (parent.traceFlags & FLAG_SAMPLED) !== 0
-      : (this.getOption('sampler') as Sampler)({
+      : (this._getOption('sampler') as Sampler)({
         traceId,
         name,
         kind,
@@ -285,6 +284,50 @@ export class Tracer extends Options<TracerOptions> {
     info: { name: string; attributes?: Record<string, unknown> },
     fn: () => Promise<T>,
   ): Promise<T> => {
+    return this.startActiveSpan(
+      info.name,
+      { attributes: this.__witnessAttributes(info) },
+      fn,
+    );
+  };
+
+  /**
+   * {@link Tracer.wrap} with `SpanKind.CLIENT` — the Witness-shaped adapter
+   * for **outbound** operations (an HTTP request, a call into another
+   * service). CLIENT kind is what trace backends use to draw
+   * service-dependency edges, so a wrapped outbound call shows up as an edge
+   * in the service map rather than internal work.
+   *
+   * A bound arrow, so it works detached:
+   *
+   * ```ts
+   * const api = new GitHubAPI(token, {
+   *   witness: tracer.wrapClient, // span per outbound request
+   *   headerProvider: tracer.propagation, // traceparent per request
+   * });
+   * ```
+   *
+   * Same contract and attribute sanitisation as {@link Tracer.wrap}.
+   */
+  public readonly wrapClient = <T>(
+    info: { name: string; attributes?: Record<string, unknown> },
+    fn: () => Promise<T>,
+  ): Promise<T> => {
+    return this.startActiveSpan(
+      info.name,
+      { kind: SpanKind.CLIENT, attributes: this.__witnessAttributes(info) },
+      fn,
+    );
+  };
+
+  /**
+   * Attribute values outside the OTLP-representable set (strings, numbers,
+   * booleans, and arrays of those) are dropped rather than exported
+   * malformed — witness callers pass `Record<string, unknown>`.
+   */
+  private __witnessAttributes(
+    info: { attributes?: Record<string, unknown> },
+  ): Attributes {
     const attributes: Attributes = {};
     for (const [key, value] of Object.entries(info.attributes ?? {})) {
       if (
@@ -299,8 +342,8 @@ export class Tracer extends Options<TracerOptions> {
         attributes[key] = value as Attributes[string];
       }
     }
-    return this.startActiveSpan(info.name, { attributes }, fn);
-  };
+    return attributes;
+  }
 
   /**
    * Composition-root adapter for slogger's `contextProvider`: the active
@@ -332,12 +375,37 @@ export class Tracer extends Options<TracerOptions> {
   };
 
   /**
+   * Composition-root adapter for **outbound propagation** (restler's
+   * `headerProvider`, or any per-request header seam): the active span's
+   * context as a W3C `traceparent` header, so the downstream service joins
+   * this trace instead of starting its own.
+   *
+   * Returns `{}` outside any span — the request simply goes out
+   * unpropagated. An **unsampled** span still serialises (with the sampled
+   * flag clear), so downstream learns the sampling decision rather than
+   * re-deciding for itself. A bound arrow, so it works detached:
+   *
+   * ```ts
+   * // restler (>= 1.1): every outbound request carries traceparent
+   * const api = new GitHubAPI(token, { headerProvider: tracer.propagation });
+   *
+   * // pairs with the per-request CLIENT span from `witness: tracer.wrapClient`
+   * // — the provider runs inside the witnessed window, so the header carries
+   * // that request's own span id.
+   * ```
+   */
+  public readonly propagation = (): Record<string, string> => {
+    const span = activeSpan.get();
+    return span === undefined ? {} : { traceparent: inject(span.context) };
+  };
+
+  /**
    * Flush and release the exporter. Call before process exit so buffered spans
    * are not lost.
    */
   public async shutdown(): Promise<void> {
     await Promise.allSettled(this.__pending);
-    const exporter = this.getOption('exporter') as SpanExporter | undefined;
+    const exporter = this._getOption('exporter') as SpanExporter | undefined;
     await exporter?.shutdown?.();
   }
 
@@ -356,8 +424,8 @@ export class Tracer extends Options<TracerOptions> {
   /** `service.name` merged with any user-supplied resource attributes. */
   private __resourceAttributes(): Attributes {
     return {
-      ...(this.getOption('resource') as Attributes),
-      'service.name': this.getOption('serviceName') as string,
+      ...(this._getOption('resource') as Attributes),
+      'service.name': this._getOption('serviceName') as string,
     };
   }
 
@@ -366,7 +434,7 @@ export class Tracer extends Options<TracerOptions> {
    * broken collector must never surface as an application error.
    */
   private __export(data: SpanData): void {
-    const exporter = this.getOption('exporter') as SpanExporter | undefined;
+    const exporter = this._getOption('exporter') as SpanExporter | undefined;
     if (exporter === undefined) return;
     let promise: Promise<void>;
     // The two failure modes need two different guards, and both are load-bearing:

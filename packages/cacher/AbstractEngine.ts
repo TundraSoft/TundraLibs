@@ -119,7 +119,7 @@ export abstract class AbstractEngine<
     opt: CacheValueOptions = {},
   ): Promise<void> {
     await this.init();
-    const expiry = opt.expiry ?? this.getOption('defaultExpiry')!;
+    const expiry = opt.expiry ?? this._getOption('defaultExpiry')!;
     if (this._validateExpiry(expiry) === false) {
       throw new CacherEngineError('OPERATION_INVALID_PARAMS', {
         name: this.name,

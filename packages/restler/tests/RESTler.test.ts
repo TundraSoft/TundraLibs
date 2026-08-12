@@ -103,7 +103,7 @@ class TestRESTler extends RESTler {
 
   // Expose the resolved (post-_processOption) option value for assertions.
   public readOption<K extends keyof RESTlerOptions>(key: K) {
-    return this.getOption(key);
+    return this._getOption(key);
   }
 }
 

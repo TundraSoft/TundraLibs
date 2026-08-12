@@ -170,26 +170,26 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
   }
 
   protected async _createResource(): Promise<SqliteDb> {
-    const path = this.getOption('path')!;
+    const path = this._getOption('path')!;
 
     if (path === ':memory:') {
       return await this._openDatabase(':memory:', {
-        readonly: this.getOption('readonly'),
-        create: this.getOption('create'),
+        readonly: this._getOption('readonly'),
+        create: this._getOption('create'),
       });
     }
 
     // Directory mode. Resolve `<path>/<name-lowercased>/` and ensure the
     // directory + `main.db` exist (when `create` is true).
     const dir = resolvePath(join(path, this.Name.toLowerCase()));
-    if (this.getOption('create') !== false) {
+    if (this._getOption('create') !== false) {
       await makeDir(dir, { recursive: true });
     }
     this.#schemaDir = dir;
     const mainDb = join(dir, 'main.db');
     const db = await this._openDatabase(mainDb, {
-      readonly: this.getOption('readonly'),
-      create: this.getOption('create'),
+      readonly: this._getOption('readonly'),
+      create: this._getOption('create'),
     });
 
     // Auto-attach every other `.db` file in the directory under its

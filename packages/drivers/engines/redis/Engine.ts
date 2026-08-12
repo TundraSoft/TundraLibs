@@ -99,9 +99,9 @@ export class RedisEngine
     options: EventOptionKeys<RedisEngineOptions, RedisEngineEvents>,
   ) {
     super(name, options, REDIS_DEFAULTS);
-    this.__slowThresholdMs = (this.getOption('slowQueryThreshold') ?? 0.5) *
+    this.__slowThresholdMs = (this._getOption('slowQueryThreshold') ?? 0.5) *
       1000;
-    this.__targetDb = (this.getOption('database') as number | undefined) ?? 0;
+    this.__targetDb = (this._getOption('database') as number | undefined) ?? 0;
     this._requireOptions(['host']);
   }
 
@@ -123,11 +123,11 @@ export class RedisEngine
    *   a `notice` so it isn't silently invisible.
    */
   protected async _createResource(): Promise<RedisConnection> {
-    const hostname = this.getOption('host');
-    const port = this.getOption('port')!;
-    const ssl = this.getOption('ssl');
+    const hostname = this._getOption('host');
+    const port = this._getOption('port')!;
+    const ssl = this._getOption('ssl');
     const enforceTls = _resolveEnforceTls(ssl);
-    const bufferBytes = this.getOption('maxBufferSize')! * 1024 * 1024;
+    const bufferBytes = this._getOption('maxBufferSize')! * 1024 * 1024;
 
     let conn: RedisConnection;
     try {
@@ -140,7 +140,7 @@ export class RedisEngine
     } catch (e) {
       if (!ssl || enforceTls) throw e;
       const reason = e instanceof Error ? e.message : String(e);
-      this.emit(
+      this._emit(
         'notice',
         this.instanceId,
         `WARNING: TLS connect failed (${reason}); falling back to plaintext per ssl.enforce=false`,
@@ -164,7 +164,7 @@ export class RedisEngine
       // were on a TLS connection with `enforce: false`.
       if (ssl && !enforceTls && looksLikeTlsRuntimeError(e)) {
         const reason = e instanceof Error ? e.message : String(e);
-        this.emit(
+        this._emit(
           'notice',
           this.instanceId,
           `WARNING: TLS handshake failed during auth (${reason}); falling back to plaintext per ssl.enforce=false`,
@@ -227,8 +227,8 @@ export class RedisEngine
    * support `HELLO`. Selects the configured logical database afterwards.
    */
   private async __handshake(conn: RedisConnection): Promise<void> {
-    const username = this.getOption('username');
-    const password = this.getOption('password');
+    const username = this._getOption('username');
+    const password = this._getOption('password');
     // A new (or reconnected) connection must adopt the engine's *current*
     // target database, which may have moved past the configured one via
     // `select()` — otherwise a pool refill would silently revert to the old
@@ -979,8 +979,8 @@ export class RedisEngine
       time: timeMs,
       isSlow,
     };
-    this._emit('query', this.instanceId, result);
-    if (isSlow) this._emit('slowQuery', this.instanceId, result);
+    this._emitRaw('query', this.instanceId, result);
+    if (isSlow) this._emitRaw('slowQuery', this.instanceId, result);
   }
 
   /**

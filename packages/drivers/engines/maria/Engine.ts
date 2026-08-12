@@ -98,11 +98,11 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
     // declare (e.g. `supportBigInt`, `decimalAsNumber`). Pass through as a
     // typed-loose record.
     const config: Record<string, unknown> = {
-      host: this.getOption('host'),
-      port: this.getOption('port'),
-      database: String(this.getOption('database')),
-      user: this.getOption('username'),
-      password: this.getOption('password'),
+      host: this._getOption('host'),
+      port: this._getOption('port'),
+      database: String(this._getOption('database')),
+      user: this._getOption('username'),
+      password: this._getOption('password'),
       ssl: this.__buildMariaSsl(),
       namedPlaceholders: true,
       supportBigInt: true,
@@ -166,7 +166,7 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
       key?: string;
       ca?: string[];
     } {
-    const ssl = this.getOption('ssl');
+    const ssl = this._getOption('ssl');
     if (!ssl) return undefined;
     if (ssl === true) return true;
 

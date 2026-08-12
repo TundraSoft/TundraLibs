@@ -6,6 +6,21 @@ import { PgServerError } from './PgServerError.ts';
 import { EngineError } from '../../errors/mod.ts';
 import type { EngineQuery } from '../../types/mod.ts';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+
 const env = envArgs('./packages/drivers/');
 
 const TEST_CONFIG = {
@@ -60,7 +75,7 @@ describe('drivers.PostgresEngine', () => {
     it('should default port to 5432', () => {
       const { port: _p, ...rest } = TEST_CONFIG;
       const engine = new PostgresEngine('cfg-2', rest);
-      asserts.assertEquals(engine.getOption('port'), 5432);
+      asserts.assertEquals(readOption(engine, 'port'), 5432);
     });
 
     it('should require host / database / username', () => {

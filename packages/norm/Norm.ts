@@ -216,28 +216,29 @@ export class Norm extends Options<NormConfig, NormEvents> {
         cb: (id: string, r: EngineQueryResult) => void,
       ): unknown;
     };
-    on('connect', (id) => void this.emit('connect', id));
-    on('disconnect', (id) => void this.emit('disconnect', id));
+    on('connect', (id) => void this._emit('connect', id));
+    on('disconnect', (id) => void this._emit('disconnect', id));
     on(
       'connectionFailed',
-      (id, err) => void this.emit('connectionFailed', id, err),
+      (id, err) => void this._emit('connectionFailed', id, err),
     );
-    on('error', (id, err) => void this.emit('error', id, err));
+    on('error', (id, err) => void this._emit('error', id, err));
     on(
       'query',
       (id, r) =>
-        void this.emit('query', id, r.id, r.time, r.isSlow, r.transactionId),
+        void this._emit('query', id, r.id, r.time, r.isSlow, r.transactionId),
     );
     on(
       'slowQuery',
-      (id, r) => void this.emit('slowQuery', id, r.id, r.time, r.transactionId),
+      (id, r) =>
+        void this._emit('slowQuery', id, r.id, r.time, r.transactionId),
     );
     // transactionTimeout is a SQL-only engine event (Mongo has no tx).
     if (!(engine instanceof MongoEngine)) {
       engine.on(
         'transactionTimeout',
         (_id: string, txId: string) =>
-          void this.emit('transactionTimeout', txId),
+          void this._emit('transactionTimeout', txId),
       );
     }
   }
@@ -258,7 +259,7 @@ export class Norm extends Options<NormConfig, NormEvents> {
       registry,
       this.__compileCfg,
       this.__executor,
-      (event, ...args) => void this.emit(event, ...args),
+      (event, ...args) => void this._emit(event, ...args),
       this.__witness,
     );
     // NOT intersected with Record<string, AnyDefinition> — that would

@@ -168,9 +168,9 @@ export abstract class SQLConnectionEngine<
     defaults?: Partial<O>,
   ) {
     super(name, options, { ...SQL_DEFAULTS, ...defaults } as Partial<O>);
-    this._slowThresholdMs = (this.getOption('slowQueryThreshold') ?? 0.5) *
+    this._slowThresholdMs = (this._getOption('slowQueryThreshold') ?? 0.5) *
       1000;
-    this._autoRollback = this.getOption('autoRollbackOnFailure') !== false;
+    this._autoRollback = this._getOption('autoRollbackOnFailure') !== false;
   }
 
   //#region Public API
@@ -399,7 +399,7 @@ export abstract class SQLConnectionEngine<
     };
     this._transactions.set(id, record);
     this.__armTransactionTimeout(id, record, options?.timeout);
-    this._emit('transactionBegin', this.instanceId, id);
+    this._emitRaw('transactionBegin', this.instanceId, id);
     return id;
   }
 
@@ -430,7 +430,7 @@ export abstract class SQLConnectionEngine<
     try {
       await this._commitTransaction(tx.client, transactionId);
       tx.state = 'COMMITTED';
-      this._emit('transactionCommit', this.instanceId, transactionId);
+      this._emitRaw('transactionCommit', this.instanceId, transactionId);
     } catch (e) {
       throw e instanceof EngineError ? e : new EngineError(
         'TRANSACTION_OPERATION_ERROR',
@@ -477,7 +477,7 @@ export abstract class SQLConnectionEngine<
     try {
       await this._rollbackTransaction(tx.client, transactionId);
       tx.state = 'ROLLBACK';
-      this._emit('transactionRollback', this.instanceId, transactionId);
+      this._emitRaw('transactionRollback', this.instanceId, transactionId);
     } catch (e) {
       rollbackFailed = true;
       throw e instanceof EngineError ? e : new EngineError(
@@ -1360,7 +1360,7 @@ export abstract class SQLConnectionEngine<
     record: TxRecord<T>,
     override?: number,
   ): void {
-    const seconds = override ?? this.getOption('transactionTimeout') ?? 120;
+    const seconds = override ?? this._getOption('transactionTimeout') ?? 120;
     if (seconds <= 0) return;
     record.timer = setTimeout(async () => {
       const tx = this._transactions.get(id);
@@ -1383,7 +1383,7 @@ export abstract class SQLConnectionEngine<
       // on the torn-down socket.
       if (tx.busy) {
         this.__releaseTransactionClient(id, true);
-        this._emit('transactionTimeout', this.instanceId, id);
+        this._emitRaw('transactionTimeout', this.instanceId, id);
         return;
       }
       let rollbackFailed = false;
@@ -1397,7 +1397,7 @@ export abstract class SQLConnectionEngine<
         }
       } finally {
         this.__releaseTransactionClient(id, rollbackFailed);
-        this._emit('transactionTimeout', this.instanceId, id);
+        this._emitRaw('transactionTimeout', this.instanceId, id);
       }
     }, seconds * 1000);
   }
@@ -1500,7 +1500,7 @@ export abstract class SQLEngine<
     defaults?: Partial<O>,
   ) {
     super(name, options, defaults);
-    this._pool = createEnginePool<T>(this.getOption('pool'), {
+    this._pool = createEnginePool<T>(this._getOption('pool'), {
       // `instanceId` is read lazily: the subclass's `Engine` field is only
       // initialized after this `super()` returns, so it can't be captured here.
       instanceId: () => this.instanceId,
@@ -1508,7 +1508,7 @@ export abstract class SQLEngine<
       destroy: (resource) => this._destroyResource(resource),
       validate: (resource) => this._validateResource(resource),
       ping: (resource) => this._ping(resource),
-      onWarn: (message) => this._emit('warn', this.instanceId, message),
+      onWarn: (message) => this._emitRaw('warn', this.instanceId, message),
     });
   }
 

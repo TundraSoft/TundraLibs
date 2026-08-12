@@ -148,7 +148,7 @@ export class MemcachedEngine extends BaseEngine<
     options: EventOptionKeys<MemcachedEngineOptions, MemcachedEngineEvents>,
   ) {
     super(name, options, MEMCACHED_DEFAULTS);
-    this.__slowThresholdMs = (this.getOption('slowQueryThreshold') ?? 0.5) *
+    this.__slowThresholdMs = (this._getOption('slowQueryThreshold') ?? 0.5) *
       1000;
     this._requireOptions(['host']);
   }
@@ -174,13 +174,13 @@ export class MemcachedEngine extends BaseEngine<
    * ElastiCache for Memcached).
    */
   protected async _createResource(): Promise<Connection> {
-    const host = this.getOption('host')!;
+    const host = this._getOption('host')!;
     if (host.endsWith('.sock')) {
       return await connect({ path: host });
     }
 
-    const port = this.getOption('port')!;
-    const ssl = this.getOption('ssl');
+    const port = this._getOption('port')!;
+    const ssl = this._getOption('ssl');
     const enforceTls = _resolveEnforceTls(ssl);
 
     let conn: Connection;
@@ -193,7 +193,7 @@ export class MemcachedEngine extends BaseEngine<
     } catch (e) {
       if (!ssl || enforceTls) throw e;
       const reason = e instanceof Error ? e.message : String(e);
-      this.emit(
+      this._emit(
         'notice',
         this.instanceId,
         `WARNING: TLS connect failed (${reason}); falling back to plaintext per ssl.enforce=false`,
@@ -214,7 +214,7 @@ export class MemcachedEngine extends BaseEngine<
         }
         if (!enforceTls && looksLikeTlsRuntimeError(e)) {
           const reason = e instanceof Error ? e.message : String(e);
-          this.emit(
+          this._emit(
             'notice',
             this.instanceId,
             `WARNING: TLS handshake failed during probe (${reason}); falling back to plaintext per ssl.enforce=false`,
@@ -839,7 +839,7 @@ export class MemcachedEngine extends BaseEngine<
   ): Promise<string> {
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
-    const maxBytes = this.getOption('maxBufferSize')! * 1024 * 1024;
+    const maxBytes = this._getOption('maxBufferSize')! * 1024 * 1024;
     const isCounter = command.startsWith('incr ') ||
       command.startsWith('decr ');
 
@@ -911,8 +911,8 @@ export class MemcachedEngine extends BaseEngine<
       time: timeMs,
       isSlow,
     };
-    this._emit('query', this.instanceId, result);
-    if (isSlow) this._emit('slowQuery', this.instanceId, result);
+    this._emitRaw('query', this.instanceId, result);
+    if (isSlow) this._emitRaw('slowQuery', this.instanceId, result);
   }
 
   /**
@@ -939,7 +939,7 @@ export class MemcachedEngine extends BaseEngine<
   ): Promise<{ value: string; cas?: string } | null> {
     const encoder = new TextEncoder();
     const decoder = new TextDecoder();
-    const maxBytes = this.getOption('maxBufferSize')! * 1024 * 1024;
+    const maxBytes = this._getOption('maxBufferSize')! * 1024 * 1024;
     const op = command.split(' ')[0]!;
 
     const start = performance.now();

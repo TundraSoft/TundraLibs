@@ -6,6 +6,21 @@ import { CacherError } from './errors/mod.ts';
 import type { CacherOptions } from './types/mod.ts';
 import type { CacheValue } from './types/CacheValue.ts';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+
 /**
  * Mock engine for testing purposes
  */
@@ -215,7 +230,7 @@ describe({
 
         asserts.assert(cache instanceof MockEngine);
         asserts.assertEquals(cache.name, 'test-cache');
-        asserts.assertEquals(cache.getOption('defaultExpiry'), 300);
+        asserts.assertEquals(readOption(cache, 'defaultExpiry'), 300);
       });
 
       it('should return existing instance for same name', () => {
@@ -229,7 +244,7 @@ describe({
         // Should be the same instance
         asserts.assertStrictEquals(cache1, cache2);
         // Should keep original options
-        asserts.assertEquals(cache1.getOption('defaultExpiry'), 300);
+        asserts.assertEquals(readOption(cache1, 'defaultExpiry'), 300);
       });
 
       it('should normalize and trim instance names', () => {
@@ -772,7 +787,7 @@ describe({
           asserts.assertStrictEquals(cache2, cache3);
 
           // Should maintain original configuration
-          asserts.assertEquals(cache1.getOption('defaultExpiry'), 300);
+          asserts.assertEquals(readOption(cache1, 'defaultExpiry'), 300);
 
           // Should only have one instance
           asserts.assertEquals(Cacher.getActiveInstances().length, 1);

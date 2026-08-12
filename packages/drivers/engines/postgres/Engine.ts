@@ -122,9 +122,9 @@ export class PostgresEngine
   protected async _createResource(): Promise<PgConnection> {
     // Constructor enforces host / username / database are present, so
     // the non-null assertions below are safe.
-    const hostname = this.getOption('host')!;
-    const port = this.getOption('port')!;
-    const ssl = this.getOption('ssl');
+    const hostname = this._getOption('host')!;
+    const port = this._getOption('port')!;
+    const ssl = this._getOption('ssl');
     const enforceTls = ssl
       ? (typeof ssl === 'object' ? ssl.enforce !== false : true)
       : false;
@@ -133,7 +133,7 @@ export class PostgresEngine
     // `notice` emitted on every cleartext-over-plaintext handshake. Only an
     // explicit `allowCleartextPassword: false` turns that into a refusal.
     const allowCleartextPassword =
-      this.getOption('allowCleartextPassword') !== false;
+      this._getOption('allowCleartextPassword') !== false;
 
     // First attempt: plain TCP, then SSL upgrade if configured. `tlsActive`
     // tracks whether the socket ended up encrypted — used to gate
@@ -152,7 +152,7 @@ export class PostgresEngine
       // ssl is configured but `enforce: false` — surrender encryption
       // and reconnect plain. Loud emit so this isn't silently invisible.
       const reason = e instanceof Error ? e.message : String(e);
-      this.emit(
+      this._emit(
         'notice',
         this.instanceId,
         `WARNING: TLS failed (${reason}); falling back to plaintext per ssl.enforce=false`,
@@ -162,15 +162,15 @@ export class PostgresEngine
     }
 
     const pg = new PgConnection(conn, (msg) => {
-      this.emit('notice', this.instanceId, msg);
+      this._emit('notice', this.instanceId, msg);
     }, this.instanceId);
     try {
       await pg.connect({
-        user: this.getOption('username')!,
-        database: String(this.getOption('database')),
-        password: this.getOption('password'),
-        applicationName: this.getOption('applicationName') ?? this.Name,
-        statementTimeoutMs: this.getOption('statementTimeoutMs'),
+        user: this._getOption('username')!,
+        database: String(this._getOption('database')),
+        password: this._getOption('password'),
+        applicationName: this._getOption('applicationName') ?? this.Name,
+        statementTimeoutMs: this._getOption('statementTimeoutMs'),
         tlsActive,
         allowCleartextPassword,
       });
@@ -191,22 +191,22 @@ export class PostgresEngine
         looksLikeTlsRuntimeError(e);
       if (ssl && !enforceTls && isTlsErr) {
         const reason = e instanceof Error ? e.message : String(e);
-        this.emit(
+        this._emit(
           'notice',
           this.instanceId,
           `WARNING: TLS handshake failed during startup (${reason}); falling back to plaintext per ssl.enforce=false`,
         );
         const plain = await connect({ hostname, port });
         const pgPlain = new PgConnection(plain, (msg) => {
-          this.emit('notice', this.instanceId, msg);
+          this._emit('notice', this.instanceId, msg);
         }, this.instanceId);
         try {
           await pgPlain.connect({
-            user: this.getOption('username')!,
-            database: String(this.getOption('database')),
-            password: this.getOption('password'),
-            applicationName: this.getOption('applicationName') ?? this.Name,
-            statementTimeoutMs: this.getOption('statementTimeoutMs'),
+            user: this._getOption('username')!,
+            database: String(this._getOption('database')),
+            password: this._getOption('password'),
+            applicationName: this._getOption('applicationName') ?? this.Name,
+            statementTimeoutMs: this._getOption('statementTimeoutMs'),
             // Plaintext fallback — the socket is unencrypted.
             tlsActive: false,
             allowCleartextPassword,
@@ -240,7 +240,7 @@ export class PostgresEngine
     port: number,
   ): Promise<Connection> {
     const tcp = await connect({ hostname, port });
-    const ssl = this.getOption('ssl');
+    const ssl = this._getOption('ssl');
     if (!ssl) return tcp;
 
     try {

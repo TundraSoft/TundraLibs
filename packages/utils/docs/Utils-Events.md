@@ -1,19 +1,26 @@
 # Utils - Events
 
-Type-safe event system with comprehensive async support.
+Type-safe event emitter with protected emission and per-listener
+isolation.
 
 [← Back to Utils](../README.md)
 
 ## Overview
 
-The Events class provides a robust, type-safe event handling system:
+The Events class provides a typed event surface for classes to expose:
 
-- **Type Safety**: Full TypeScript generic support
-- **Async Support**: Both sync and async event callbacks
-- **Multiple Listeners**: Register multiple callbacks per event
-- **One-Time Listeners**: Automatic cleanup after single use
-- **Error Isolation**: Individual callback failures don't affect others
-- **Method Chaining**: Fluent API design
+- **Type Safety**: the generic parameter maps event names to callback
+  signatures, checked at every `on`/`_emit` site
+- **Protected Emission**: only the class that owns the events can fire
+  them — holders of an instance subscribe via `on`/`once`/`off` but
+  cannot forge lifecycle events
+- **Per-Listener Isolation**: on the fire-and-forget paths, a listener
+  that throws (or an async listener that rejects) is contained and
+  reported — other listeners still run, and the emitter is unaffected
+- **One-Time Listeners**: `once()` auto-removes after a single fire,
+  dedupes like `on()`, and is removable via `off(event, callback)`
+- **Snapshot Semantics**: listeners added during an emission fire from
+  the next emission
 
 ## Installation
 
@@ -26,164 +33,115 @@ deno add @tundralibs/utils
 ### Constructor
 
 ```typescript
-new Events<T>();
+class MyClass extends Events<T> {}
 ```
 
-**Type Parameter `T`**: Object mapping event names to callback signatures
+**Type Parameter `T`**: Object mapping event names to callback
+signatures.
 
-### Methods
+### Public methods (subscription)
 
-- `on(event, callback)`: Register event listener
-- `once(event, callback)`: Register one-time listener
-- `off(event, callback)`: Remove event listener
-- `emit(event, ...args)`: Trigger event (async)
-- `emitSync(event, ...args)`: Trigger event (sync)
+- `on(event, callback)`: Register a listener (or an array of them);
+  duplicates are no-ops
+- `once(event, callback)`: Register a one-time listener; removable
+  before firing with `off(event, callback)`
+- `off(event, callback?)`: Remove a listener (or all listeners for the
+  event when omitted)
+
+### Protected methods (emission — for the owning class)
+
+- `_emit(event, ...args)`: Fire-and-forget. Listeners run in
+  registration order; sync throws and async rejections are routed to
+  `_onListenerError`, never propagated
+- `_emitSync(event, ...args)`: Awaits each listener in turn. A
+  throw/rejection **propagates to the awaiting caller** and stops later
+  listeners — this is the deliberate, handled emission path
+- `_emitRaw(event, ...args)`: Variance-tolerant `_emit` for generic
+  base classes (typed event key, `unknown[]` args)
+- `_onListenerError(event, error)`: Hook receiving every contained
+  listener fault; defaults to `console.error` — override to route into
+  a logger
 
 ## Usage Examples
 
-### Basic Event Handling
+### An emitting class
 
 ```typescript
 import { Events } from '@tundralibs/utils';
 
-interface MyEvents {
-  userLogin: (user: User) => void;
-  dataUpdate: (data: any[]) => void;
+interface StoreEvents {
+  change: (data: unknown) => void;
   error: (error: Error) => void;
 }
 
-const events = new Events<MyEvents>();
+class DataStore extends Events<StoreEvents> {
+  #data: unknown;
 
-// Register listener
-events.on('userLogin', (user) => {
-  console.log(`Welcome ${user.name}!`);
-});
-
-// Emit event
-events.emit('userLogin', currentUser);
-```
-
-### Async Event Handlers
-
-```typescript
-interface AppEvents {
-  save: (data: Data) => Promise<void>;
-  load: () => Promise<Data>;
+  setData(data: unknown) {
+    this.#data = data;
+    this._emit('change', data); // emission is the owner's privilege
+  }
 }
 
-const events = new Events<AppEvents>();
-
-// Async handler
-events.on('save', async (data) => {
-  await database.save(data);
-  console.log('Saved successfully');
-});
-
-// Emit and wait for all handlers
-await events.emit('save', myData);
+const store = new DataStore();
+store.on('change', (data) => console.log('changed:', data));
+store.setData({ hello: 'world' });
 ```
 
-### One-Time Listeners
+### Awaited emission (`_emitSync`)
 
 ```typescript
-// Runs only once, then auto-removes
-events.once('ready', () => {
-  console.log('App initialized');
-  startServer();
-});
-
-events.emit('ready'); // Runs handler
-events.emit('ready'); // Handler already removed, no effect
-```
-
-### Multiple Handlers
-
-```typescript
-events.on('click', () => console.log('Handler 1'));
-events.on('click', () => console.log('Handler 2'));
-events.on('click', () => console.log('Handler 3'));
-
-events.emit('click');
-// Output:
-// Handler 1
-// Handler 2
-// Handler 3
-```
-
-### Removing Listeners
-
-```typescript
-const handler = (data: string) => console.log(data);
-
-events.on('message', handler);
-events.emit('message', 'Hello'); // Logs "Hello"
-
-events.off('message', handler);
-events.emit('message', 'World'); // No output
-```
-
-### Method Chaining
-
-```typescript
-events
-  .on('start', startHandler)
-  .on('stop', stopHandler)
-  .on('error', errorHandler);
-```
-
-### Error Handling
-
-```typescript
-events.on('process', () => {
-  throw new Error('Handler failed');
-});
-
-events.on('process', () => {
-  console.log('This still runs!');
-});
-
-// Errors in individual handlers don't affect others
-events.emit('process');
-```
-
-## Best Practices
-
-1. **Type Your Events**: Always define event interfaces
-2. **Use Once for Initialization**: One-time events for setup
-3. **Handle Errors**: Wrap handlers in try-catch when needed
-4. **Clean Up**: Call `off()` to prevent memory leaks
-
-## Common Patterns
-
-### Observer Pattern
-
-```typescript
-class DataStore extends Events<{ change: (data: any) => void }> {
-  private data: any;
-
-  setData(newData: any) {
-    this.data = newData;
-    this.emit('change', newData);
+class Pipeline extends Events<{ flush: () => Promise<void> }> {
+  async flush() {
+    // Each listener completes before the next starts; a rejection
+    // surfaces HERE, where the emitter can handle it.
+    await this._emitSync('flush');
   }
 }
 ```
 
-### Lifecycle Events
+### Listener isolation (fire-and-forget)
 
 ```typescript
-interface Lifecycle {
-  init: () => Promise<void>;
-  ready: () => void;
-  shutdown: () => Promise<void>;
-}
-
-const app = new Events<Lifecycle>();
-
-app.once('init', async () => {
-  await loadConfig();
-  app.emit('ready');
+store.on('change', () => {
+  throw new Error('listener bug');
 });
+store.on('change', () => {
+  console.log('this still runs'); // isolation: one bad listener
+}); //                               cannot stop the others
+
+store.setData(1); // the throw is reported via _onListenerError
 ```
+
+### Routing listener faults
+
+```typescript
+class Service extends Events<ServiceEvents> {
+  protected override _onListenerError(
+    event: PropertyKey,
+    error: unknown,
+  ): void {
+    logger.error(`listener failed on '${String(event)}'`, { error });
+  }
+}
+```
+
+### One-time listeners
+
+```typescript
+const onReady = () => startServer();
+app.once('ready', onReady);
+app.off('ready', onReady); // removable by the ORIGINAL callback
+```
+
+## Best Practices
+
+1. **Type your events** — always define an event interface
+2. **Emit from the owner only** — if outside code needs to cause an
+   event, expose a method that does the work and emits
+3. **Use `_emitSync` when the emitter must observe failures**; use
+   `_emit` when emission must never affect the emitter
+4. **Clean up** — call `off()` for long-lived emitters
 
 ## Related Utilities
 

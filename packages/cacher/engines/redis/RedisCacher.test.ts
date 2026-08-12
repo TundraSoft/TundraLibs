@@ -4,6 +4,21 @@ import { RedisCacher, type RedisCacherOptions } from './mod.ts';
 import { CacherEngineError } from '../../errors/mod.ts';
 import { envArgs } from '@tundralibs/utils';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+
 const env = envArgs('./packages/cacher/engines/');
 
 /**
@@ -73,7 +88,7 @@ describe('cacher.engines.redis', () => {
       asserts.assert(cacher instanceof RedisCacher);
       asserts.assertEquals(cacher.name, 'redis-test');
       asserts.assertEquals(cacher.Engine, 'REDIS');
-      asserts.assertEquals(cacher.getOption('defaultExpiry'), 300);
+      asserts.assertEquals(readOption(cacher, 'defaultExpiry'), 300);
     });
 
     it('set defaults when undefined', () => {
@@ -82,7 +97,7 @@ describe('cacher.engines.redis', () => {
         port: undefined,
       } as unknown as RedisCacherOptions);
 
-      asserts.assertEquals(cacher.getOption('port'), 6379);
+      asserts.assertEquals(readOption(cacher, 'port'), 6379);
     });
 
     it('Should throw on invalid config', () => {
@@ -220,7 +235,7 @@ describe('cacher.engines.redis', () => {
         defaultExpiry: 600,
       });
 
-      asserts.assertEquals(cacher.getOption('defaultExpiry'), 600);
+      asserts.assertEquals(readOption(cacher, 'defaultExpiry'), 600);
     });
 
     it('should validate port range', () => {
@@ -464,8 +479,8 @@ describe('cacher.engines.redis', () => {
         password: 'testpass',
       });
 
-      asserts.assertEquals(cache.getOption('username'), 'testuser');
-      asserts.assertEquals(cache.getOption('password'), 'testpass');
+      asserts.assertEquals(readOption(cache, 'username'), 'testuser');
+      asserts.assertEquals(readOption(cache, 'password'), 'testpass');
     });
 
     it('should validate database number', () => {
@@ -475,7 +490,7 @@ describe('cacher.engines.redis', () => {
         port: 6379,
         db: 1,
       });
-      asserts.assertEquals(cache1.getOption('db'), 1);
+      asserts.assertEquals(readOption(cache1, 'db'), 1);
     });
 
     it('should validate and trim username/password', () => {
@@ -487,8 +502,8 @@ describe('cacher.engines.redis', () => {
         password: '  testpass  ',
       });
 
-      asserts.assertEquals(cache.getOption('username'), 'testuser');
-      asserts.assertEquals(cache.getOption('password'), 'testpass');
+      asserts.assertEquals(readOption(cache, 'username'), 'testuser');
+      asserts.assertEquals(readOption(cache, 'password'), 'testpass');
 
       // Empty string credentials should become undefined
       const cache2 = new RedisCacher('empty-cache', {
@@ -498,8 +513,8 @@ describe('cacher.engines.redis', () => {
         password: '   ',
       });
 
-      asserts.assertEquals(cache2.getOption('username'), undefined);
-      asserts.assertEquals(cache2.getOption('password'), undefined);
+      asserts.assertEquals(readOption(cache2, 'username'), undefined);
+      asserts.assertEquals(readOption(cache2, 'password'), undefined);
     });
 
     it('should handle certificate path option', async () => {

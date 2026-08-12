@@ -14,6 +14,30 @@ import {
 } from './errors/mod.ts';
 import type { PACTEvents, PACTGrants } from './types/mod.ts';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+const fireEventSync = (
+  t: unknown,
+  e: string,
+  ...a: unknown[]
+): Promise<unknown> =>
+  (t as { _emitSync(e: string, ...a: unknown[]): Promise<unknown> })._emitSync(
+    e,
+    ...a,
+  );
+
 /** Minimal cross-runtime fetch stub with call recording. */
 type SeenInit = {
   method?: string;
@@ -52,7 +76,7 @@ const SECRET =
 describe('pact.PACT', () => {
   it('constructs via Options; config is readable through getOption', () => {
     const pact = new PACT({ bits: BITS, modules: { Post: ['READ', 'EDIT'] } });
-    asserts.assertEquals(pact.getOption('bits').READ, 1n);
+    asserts.assertEquals(readOption(pact, 'bits').READ, 1n);
     asserts.assertEquals(pact.permissions.modules, ['Post']);
   });
 
@@ -956,16 +980,16 @@ describe('pact.PACT review fixes', () => {
   it('M2: the secret never surfaces via getOption/getOptions', () => {
     const pact = new PACT({ bits: BITS, secret: SECRET, issuer: 'x' });
     asserts.assertEquals(
-      (pact as unknown as { getOption(k: string): unknown }).getOption(
+      (pact as unknown as { _getOption(k: string): unknown })._getOption(
         'secret',
       ),
       undefined,
     );
     asserts.assertEquals(
-      (pact.getOptions() as { secret?: unknown }).secret,
+      (readOptions(pact) as { secret?: unknown }).secret,
       undefined,
     );
-    asserts.assertEquals(pact.getOption('issuer'), 'x'); // non-secret opts fine
+    asserts.assertEquals(readOption(pact, 'issuer'), 'x'); // non-secret opts fine
   });
 
   it('L3: HS* enforces the RFC 7518 §3.2 per-algorithm secret minimum', () => {
@@ -1855,7 +1879,7 @@ describe('pact.PACT round-4 review findings', () => {
       await new Promise((r) => setTimeout(r, 1));
       order.push('B-end');
     });
-    await pact.emitSync('verify', { sub: 'u' }, 'tok');
+    await fireEventSync(pact, 'verify', { sub: 'u' }, 'tok');
     // emitSync's contract: the next listener does not start until the
     // previous one resolves, and it returns only once all are done.
     asserts.assertEquals(order, ['A-start', 'A-end', 'B-start', 'B-end']);
@@ -1865,7 +1889,7 @@ describe('pact.PACT round-4 review findings', () => {
     const pact = new PACT({ bits: BITS, secret: SECRET });
     pact.on('verify', () => Promise.reject(new Error('audit write failed')));
     const err = await asserts.assertRejects(
-      () => pact.emitSync('verify', { sub: 'u' }, 'tok'),
+      () => fireEventSync(pact, 'verify', { sub: 'u' }, 'tok'),
       Error,
     );
     asserts.assertEquals((err as Error).message, 'audit write failed');

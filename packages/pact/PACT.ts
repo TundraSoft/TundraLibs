@@ -124,14 +124,14 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
       algorithm: 'HS256',
       expiry: 3600,
     } as Partial<PACTOptions<P>>);
-    const bits = this.getOption('bits');
+    const bits = this._getOption('bits');
     if (bits === undefined) {
       throw new PactDefinitionError(
         'PACT requires a `bits` permission registry',
         { code: 'MISSING_OPTION', option: 'bits' },
       );
     }
-    this.__permissions = new Permissions<P>(bits, this.getOption('modules'));
+    this.__permissions = new Permissions<P>(bits, this._getOption('modules'));
 
     // Validate key material against the algorithm family: HS* takes one
     // shared secret string; RS* takes a PEM { privateKey, publicKey } pair.
@@ -166,15 +166,15 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
     }
 
     // Group resolution (consumer-owned data; PACT caches + syncs).
-    const resolver = this.getOption('groupResolver');
+    const resolver = this._getOption('groupResolver');
     if (resolver !== undefined) {
       this.__groups = new Groups(resolver);
-      const interval = this.getOption('syncInterval') ?? 0;
+      const interval = this._getOption('syncInterval') ?? 0;
       if (interval > 0) this.__startSync(interval);
     }
 
     // OAuth provider instances (each doubles as a login strategy).
-    const oauth = this.getOption('oauth');
+    const oauth = this._getOption('oauth');
     if (oauth !== undefined) {
       for (const [name, config] of Object.entries(oauth)) {
         this.__oauth.set(
@@ -440,7 +440,7 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
    */
   async syncGroups(groupIds?: string[]): Promise<string[]> {
     const ids = await this.__requireGroups().sync(groupIds);
-    if (ids.length > 0) this.emit('sync', ids);
+    if (ids.length > 0) this._emit('sync', ids);
     return ids;
   }
 
@@ -500,9 +500,9 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
   async generateJWT(claims: JWTPayload): Promise<string> {
     const key = this.__signKey();
     const now = Math.floor(Date.now() / 1000);
-    const expiry = this.getOption('expiry') ?? 3600;
-    const issuer = this.getOption('issuer');
-    const audience = this.getOption('audience');
+    const expiry = this._getOption('expiry') ?? 3600;
+    const issuer = this._getOption('issuer');
+    const audience = this._getOption('audience');
     const payload: JWTPayload = {
       iat: now,
       exp: now + expiry,
@@ -514,9 +514,9 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
       this.__algorithm(),
       payload,
       key,
-      this.getOption('keyId'),
+      this._getOption('keyId'),
     );
-    this.emit('issue', token, payload);
+    this._emit('issue', token, payload);
     return token;
   }
 
@@ -539,8 +539,8 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
     token: string,
   ): Promise<T> {
     const key = this.__verifyKey();
-    const issuer = this.getOption('issuer');
-    const audience = this.getOption('audience');
+    const issuer = this._getOption('issuer');
+    const audience = this._getOption('audience');
     let claims: T;
     try {
       claims = await cryptVerifyJWT<T>(token, key, {
@@ -548,7 +548,7 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
         ...(issuer !== undefined ? { iss: issuer } : {}),
         ...(audience !== undefined ? { aud: audience } : {}),
       });
-      const isRevoked = this.getOption('isRevoked');
+      const isRevoked = this._getOption('isRevoked');
       if (isRevoked !== undefined && await isRevoked(claims)) {
         // The revocation decision is final. Isolate the audit emit so a
         // throwing `revoked` listener can't replace the PactTokenError the
@@ -591,8 +591,8 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
     const fresh = await cryptRefreshJWT(
       token,
       this.__refreshKeys(),
-      this.getOption('expiry') ?? 3600,
-      this.getOption('keyId'),
+      this._getOption('expiry') ?? 3600,
+      this._getOption('keyId'),
     );
     // The fresh token is already minted — isolate listener errors like the
     // other success emits. [F1]
@@ -699,7 +699,7 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
     name: string,
     credentials: unknown,
   ): Promise<PACTLoginResult | null> {
-    const strategy = this.getOption('strategies')?.[name];
+    const strategy = this._getOption('strategies')?.[name];
     const oauth = this.__oauth.get(name);
     if (strategy === undefined && oauth === undefined) {
       throw new PactDefinitionError(
@@ -714,7 +714,7 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
         outcome = await strategy(credentials);
       } else {
         const profile = await oauth!.callback(credentials as CallbackParams);
-        const map = this.getOption('oauth')![name]!.map;
+        const map = this._getOption('oauth')![name]!.map;
         outcome = map !== undefined
           ? await map(profile)
           : { id: `${name}:${profile.id}`, profile };
@@ -747,7 +747,7 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
       }
       result = { principal, isNew };
       // Inside the try so an autoIssue failure routes through loginFailed. [L6]
-      if (this.getOption('autoIssue') === true) {
+      if (this._getOption('autoIssue') === true) {
         result.token = await this.generateJWT({ sub: principal.id });
       }
     } catch (error) {
@@ -823,7 +823,7 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
     ...args: Parameters<PACTEvents[K]>
   ): void {
     try {
-      this.emit(event, ...args);
+      this._emit(event, ...args);
     } catch {
       // Listener exceptions are isolated by contract — the operation's
       // outcome is already final and must be reported as such.
@@ -892,7 +892,7 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
 
   /** The configured algorithm (defaulted at construction). */
   private __algorithm(): JWTAlgorithm {
-    return this.getOption('algorithm') ?? 'HS256';
+    return this._getOption('algorithm') ?? 'HS256';
   }
 
   /** True for the symmetric (`HS*`) family. */
@@ -949,7 +949,7 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
         // Isolate a throwing consumer handler so it can't surface as an
         // unhandled rejection from the detached timer. [L4]
         try {
-          this.emit('syncFailed', error as Error);
+          this._emit('syncFailed', error as Error);
         } catch { /* swallow listener errors on the detached timer path */ }
       });
     }, interval);

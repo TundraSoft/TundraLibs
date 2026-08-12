@@ -25,6 +25,21 @@ import type {
   TransactionScope,
 } from './types/mod.ts';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+
 /**
  * Stand-in translator for SQLEngine unit tests. SQLEngine declares an
  * abstract `_translator` field but these tests never exercise the OQL
@@ -170,13 +185,13 @@ class FakeSQLEngine extends SQLEngine<FakeClient, FakeOptions> {
     query: EngineQuery,
     client: FakeClient,
   ): Promise<{ data: R[]; count: number }> {
-    if (this.getOption('failExecute')) {
+    if (this._getOption('failExecute')) {
       throw new Error('Simulated execute failure');
     }
 
     this.executeCount++;
 
-    const delay = this.getOption('executeDelay') ?? 0;
+    const delay = this._getOption('executeDelay') ?? 0;
     if (delay > 0) {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
@@ -190,7 +205,7 @@ class FakeSQLEngine extends SQLEngine<FakeClient, FakeOptions> {
     client: FakeClient,
     _transactionId: string,
   ): void {
-    if (this.getOption('failBegin')) {
+    if (this._getOption('failBegin')) {
       throw new Error('Simulated begin failure');
     }
     client.inTransaction = true;
@@ -201,7 +216,7 @@ class FakeSQLEngine extends SQLEngine<FakeClient, FakeOptions> {
     client: FakeClient,
     _transactionId: string,
   ): void {
-    if (this.getOption('failCommit')) {
+    if (this._getOption('failCommit')) {
       throw new Error('Simulated commit failure');
     }
     client.inTransaction = false;
@@ -212,7 +227,7 @@ class FakeSQLEngine extends SQLEngine<FakeClient, FakeOptions> {
     client: FakeClient,
     _transactionId: string,
   ): void {
-    if (this.getOption('failRollback')) {
+    if (this._getOption('failRollback')) {
       throw new Error('Simulated rollback failure');
     }
     client.inTransaction = false;
@@ -300,10 +315,10 @@ describe('SQLEngine', () => {
     it('should apply SQL-specific defaults', async () => {
       const engine = new FakeSQLEngine('test');
 
-      asserts.assertStrictEquals(engine.getOption('slowQueryThreshold'), 0.5);
-      asserts.assertStrictEquals(engine.getOption('transactionTimeout'), 120);
+      asserts.assertStrictEquals(readOption(engine, 'slowQueryThreshold'), 0.5);
+      asserts.assertStrictEquals(readOption(engine, 'transactionTimeout'), 120);
       asserts.assertStrictEquals(
-        engine.getOption('autoRollbackOnFailure'),
+        readOption(engine, 'autoRollbackOnFailure'),
         true,
       );
     });
@@ -315,10 +330,10 @@ describe('SQLEngine', () => {
         autoRollbackOnFailure: false,
       });
 
-      asserts.assertStrictEquals(engine.getOption('slowQueryThreshold'), 1.0);
-      asserts.assertStrictEquals(engine.getOption('transactionTimeout'), 60);
+      asserts.assertStrictEquals(readOption(engine, 'slowQueryThreshold'), 1.0);
+      asserts.assertStrictEquals(readOption(engine, 'transactionTimeout'), 60);
       asserts.assertStrictEquals(
-        engine.getOption('autoRollbackOnFailure'),
+        readOption(engine, 'autoRollbackOnFailure'),
         false,
       );
     });

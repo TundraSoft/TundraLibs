@@ -78,13 +78,13 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
   public override async init(): Promise<void> {
     if (this._client !== undefined) return;
     try {
-      const ssl = this.getOption('ssl');
+      const ssl = this._getOption('ssl');
       this._client = new RedisEngine(this.name, {
-        host: this.getOption('host'),
-        port: this.getOption('port'),
-        username: this.getOption('username'),
-        password: this.getOption('password'),
-        database: this.getOption('db'),
+        host: this._getOption('host'),
+        port: this._getOption('port'),
+        username: this._getOption('username'),
+        password: this._getOption('password'),
+        database: this._getOption('db'),
         ...(ssl === undefined ? {} : { ssl }),
       });
       await this._client.connect();
@@ -93,10 +93,10 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
       throw new CacherEngineError('CONNECTION_FAILED', {
         name: this.name,
         engine: this.Engine,
-        host: this.getOption('host'),
-        port: this.getOption('port'),
-        username: this.getOption('username'),
-        db: this.getOption('db'),
+        host: this._getOption('host'),
+        port: this._getOption('port'),
+        username: this._getOption('username'),
+        db: this._getOption('db'),
         reason: (e as Error).message,
       }, e as Error);
     }

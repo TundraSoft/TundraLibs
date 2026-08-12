@@ -256,6 +256,14 @@ describe('cronus.schedule', () => {
       asserts.assert(!matches(s, at(2026, 8, 18, 0, 0))); // Tuesday — must NOT fire
     });
 
+    it('fixedTime: concrete minute AND hour, star-prefix rules', () => {
+      asserts.assertEquals(parseSchedule('30 1 * * *').fixedTime, true);
+      asserts.assertEquals(parseSchedule('30 1-2 * * *').fixedTime, true);
+      asserts.assertEquals(parseSchedule('* * * * *').fixedTime, false);
+      asserts.assertEquals(parseSchedule('*/5 1 * * *').fixedTime, false);
+      asserts.assertEquals(parseSchedule('30 * * * *').fixedTime, false);
+    });
+
     it('dow 7 matches a real Sunday date', () => {
       const s = parseSchedule('0 0 * * 7');
       asserts.assert(matches(s, at(2026, 8, 16, 0, 0))); // 2026-08-16 is Sunday

@@ -3,6 +3,21 @@ import { describe, it } from '@tundralibs/compat';
 import { MemoryCacher } from './mod.ts';
 import { CacherEngineError } from '../../errors/mod.ts';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+
 describe('cacher.engines.memory', () => {
   describe('initialization', () => {
     it('should reject a ":" in the instance name on direct construction', () => {
@@ -23,7 +38,7 @@ describe('cacher.engines.memory', () => {
         asserts.assert(cacher instanceof MemoryCacher);
         asserts.assertEquals(cacher.name, 'memory-test');
         asserts.assertEquals(cacher.Engine, 'MEMORY');
-        asserts.assertEquals(cacher.getOption('defaultExpiry'), 300);
+        asserts.assertEquals(readOption(cacher, 'defaultExpiry'), 300);
       } finally {
         cacher.finalize();
       }
@@ -35,7 +50,7 @@ describe('cacher.engines.memory', () => {
       });
 
       try {
-        asserts.assertEquals(cacher.getOption('defaultExpiry'), 600);
+        asserts.assertEquals(readOption(cacher, 'defaultExpiry'), 600);
       } finally {
         cacher.finalize();
       }

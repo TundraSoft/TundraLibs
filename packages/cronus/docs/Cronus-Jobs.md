@@ -94,12 +94,14 @@ Every run receives a `CronusRunContext`:
 ## Events
 
 Metadata only — never the action's arguments. Listeners are
-**isolated**: each callback is wrapped at registration, so a sync
-throw or an async rejection is caught and reported via
+**isolated** (inherited from `@tundralibs/utils` Events): a sync throw
+or an async rejection is caught per listener and reported via
 `console.error` — it never affects the run, the job's state, other
-listeners, the ticker, or the process. A listener that re-triggers
-its own job during `success`/`error`/`finish` hits the overlap guard
-(resolves `false`) — the guard releases only after the emissions.
+listeners, the ticker, or the process. `off(event, callback)` also
+removes `once` listeners by their original callback. A listener that
+re-triggers its own job during `success`/`error`/`finish` hits the
+overlap guard (resolves `false`) — the guard releases only after the
+emissions.
 
 | Event     | Fires when                        | Arguments                                            |
 | --------- | --------------------------------- | ---------------------------------------------------- |

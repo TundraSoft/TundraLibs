@@ -479,6 +479,26 @@ describe('cronus.Cronus', () => {
       }
     }
     const minute = (n: number) => new Date(n * 60_000);
+    /**
+     * A Date whose EPOCH is offset but whose wall-clock reading is
+     * cloned from `src` — how a DST fall-back looks to the matcher.
+     */
+    const wallClone = (src: Date, epochOffsetMs: number): Date => {
+      const d = new Date(src.getTime() + epochOffsetMs);
+      const methods = [
+        'getFullYear',
+        'getMonth',
+        'getDate',
+        'getDay',
+        'getHours',
+        'getMinutes',
+      ] as const;
+      for (const m of methods) {
+        // deno-lint-ignore no-explicit-any
+        (d as any)[m] = () => (src as any)[m]();
+      }
+      return d;
+    };
 
     it('fires matching jobs and honours enabled', () => {
       const manual = new ManualCronus();
@@ -564,6 +584,45 @@ describe('cronus.Cronus', () => {
       } finally {
         console.error = original;
       }
+    });
+
+    it('DST fall-back: a fixed-time job fires ONCE in the repeated hour', async () => {
+      const manual = new ManualCronus();
+      let runs = 0;
+      manual.add('nightly', '30 1 * * *', () => {
+        runs++;
+      });
+      const firstPass = new Date(2026, 10, 1, 1, 30); // 01:30, first time
+      manual.tick(firstPass);
+      await defer(1);
+      asserts.assertEquals(runs, 1);
+      // One physical hour later the wall clock reads 01:30 AGAIN.
+      manual.tick(wallClone(firstPass, 3_600_000));
+      await defer(1);
+      asserts.assertEquals(runs, 1); // no double-fire
+      // Next day's 01:30 is a different local key — fires normally.
+      manual.tick(new Date(2026, 10, 2, 1, 30));
+      await defer(1);
+      asserts.assertEquals(runs, 2);
+    });
+
+    it('DST fall-back: wildcard jobs keep firing every physical minute', async () => {
+      const manual = new ManualCronus();
+      let every = 0;
+      let hourly = 0;
+      manual.add('heartbeat', '* * * * *', () => {
+        every++;
+      });
+      manual.add('on-the-half', '30 * * * *', () => {
+        hourly++; // minute fixed, hour WILDCARD → not a fixed-time job
+      });
+      const firstPass = new Date(2026, 10, 1, 1, 30);
+      manual.tick(firstPass);
+      await defer(1);
+      manual.tick(wallClone(firstPass, 3_600_000)); // repeated 01:30
+      await defer(1);
+      asserts.assertEquals(every, 2); // Vixie parity: wildcards run through
+      asserts.assertEquals(hourly, 2);
     });
 
     it('a stale timer chain dies after stop()/start() (no double ticker)', () => {

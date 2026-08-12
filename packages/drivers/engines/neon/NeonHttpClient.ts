@@ -188,7 +188,7 @@ export class NeonHttpClient extends RESTler<NeonRESTlerOptions> {
     endpoint: RESTlerEndpoint,
   ): Promise<void> {
     await super._authInjector(endpoint);
-    const connectionString = this.getOption('connectionString');
+    const connectionString = this._getOption('connectionString');
     if (connectionString) {
       endpoint.headers = endpoint.headers || {};
       endpoint.headers['Neon-Connection-String'] = connectionString;

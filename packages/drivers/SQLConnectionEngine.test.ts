@@ -34,6 +34,21 @@ import type {
   SQLEngineOptions,
 } from './types/mod.ts';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+
 /**
  * Stand-in translator: these tests never touch the OQL surface, so every
  * emit hook throws to fail loudly if a future test accidentally strays into
@@ -164,7 +179,7 @@ class FakePoolFreeSQLEngine extends SQLConnectionEngine<FakeConn, FakeOptions> {
     _client: FakeConn,
   ): Promise<{ data: R[]; count: number }> {
     this.executeCount++;
-    const delay = this.getOption('executeDelay') ?? 0;
+    const delay = this._getOption('executeDelay') ?? 0;
     if (delay > 0) {
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
@@ -212,10 +227,10 @@ describe('SQLConnectionEngine (pool-free)', () => {
       asserts.assertStrictEquals(engine.Engine, 'FAKE_POOLFREE_SQL');
       asserts.assertStrictEquals(engine.status, 'CLOSED');
       // SQL defaults still apply through the pool-free base.
-      asserts.assertStrictEquals(engine.getOption('slowQueryThreshold'), 0.5);
-      asserts.assertStrictEquals(engine.getOption('transactionTimeout'), 120);
+      asserts.assertStrictEquals(readOption(engine, 'slowQueryThreshold'), 0.5);
+      asserts.assertStrictEquals(readOption(engine, 'transactionTimeout'), 120);
       // Never configured a pool.
-      asserts.assertStrictEquals(engine.getOption('pool'), undefined);
+      asserts.assertStrictEquals(readOption(engine, 'pool'), undefined);
       asserts.assertEquals(engine.poolStats, EMPTY_POOL_STATS);
     });
   });

@@ -146,7 +146,7 @@ export abstract class ConnectionEngine<
       ...defaults,
       ...options,
     } as EventOptionKeys<O, E>);
-    this._idGenerator = this.getOption('idGenerator')!;
+    this._idGenerator = this._getOption('idGenerator')!;
   }
 
   //#region Public API
@@ -181,7 +181,7 @@ export abstract class ConnectionEngine<
       this._status = 'CONNECTING';
       await this._open();
       this._status = 'READY';
-      this._emit('connect', this.instanceId);
+      this._emitRaw('connect', this.instanceId);
     } catch (e) {
       this._status = 'CLOSED';
       const error = e instanceof EngineError ? e : new EngineError(
@@ -189,7 +189,7 @@ export abstract class ConnectionEngine<
         { instanceId: this.instanceId },
         e as Error,
       );
-      this._emit('connectionFailed', this.instanceId, error);
+      this._emitRaw('connectionFailed', this.instanceId, error);
       throw error;
     }
   }
@@ -208,14 +208,14 @@ export abstract class ConnectionEngine<
     try {
       await this._close();
       this._status = 'CLOSED';
-      this._emit('disconnect', this.instanceId);
+      this._emitRaw('disconnect', this.instanceId);
     } catch (e) {
       const error = e instanceof EngineError ? e : new EngineError(
         'DISCONNECTION_FAILED',
         { instanceId: this.instanceId },
         e as Error,
       );
-      this._emit('error', this.instanceId, error);
+      this._emitRaw('error', this.instanceId, error);
       throw error;
     }
   }
@@ -368,8 +368,8 @@ export abstract class ConnectionEngine<
     // `query` / `slowQuery` are declared on the query-executing subclasses'
     // event maps (SQL/Mongo), not on the base `EngineEvents` this class is
     // generic over — cast the key so the shared helper can emit them.
-    this._emit('query' as keyof E, this.instanceId, result);
-    if (isSlow) this._emit('slowQuery' as keyof E, this.instanceId, result);
+    this._emitRaw('query' as keyof E, this.instanceId, result);
+    if (isSlow) this._emitRaw('slowQuery' as keyof E, this.instanceId, result);
     return result;
   }
 
@@ -534,7 +534,7 @@ export abstract class PooledConnectionEngine<
     defaults?: Partial<O>,
   ) {
     super(name, options, defaults);
-    this._pool = createEnginePool<T>(this.getOption('pool'), {
+    this._pool = createEnginePool<T>(this._getOption('pool'), {
       // `instanceId` is read lazily: the subclass's `Engine` field is only
       // initialized after this `super()` returns, so it can't be captured here.
       instanceId: () => this.instanceId,
@@ -542,7 +542,7 @@ export abstract class PooledConnectionEngine<
       destroy: (resource) => this._destroyResource(resource),
       validate: (resource) => this._validateResource(resource),
       ping: (resource) => this._ping(resource),
-      onWarn: (message) => this._emit('warn', this.instanceId, message),
+      onWarn: (message) => this._emitRaw('warn', this.instanceId, message),
     });
   }
 

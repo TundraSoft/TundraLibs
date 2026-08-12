@@ -4,15 +4,16 @@
  * against it. Minute resolution (`minute hour day-of-month month
  * day-of-week`); seconds and years are deliberately out of scope.
  *
- * Field support: `*`, ranges `a-b`, steps `a/n` and `*​/n` and `a-b/n`,
- * lists `a,b,c`, plus month/day NAMES (`JAN`, `MON`). Day-of-week
+ * Field support: `*`, ranges `a-b`, steps (`a/n`, `a-b/n`, and steps on
+ * the `*` wildcard), lists `a,b,c`, plus month/day NAMES (`JAN`,
+ * `MON`). Day-of-week
  * accepts both `0` and `7` for Sunday. Names must be complete tokens —
  * `JAN1` is rejected, never silently misread.
  *
  * Semantics follow POSIX/Vixie cron: when BOTH day-of-month and
  * day-of-week are restricted, a date matches if it satisfies EITHER
  * (the standard OR rule) — and, as in Vixie cron, a field beginning
- * with `*` (including `*​/n`) counts as UNrestricted for this rule.
+ * with `*` (wildcard steps included) counts as UNrestricted for this rule.
  *
  * Validity is syntactic: an expression that can never match a real
  * date (`0 0 30 2 *` — Feb 30) parses fine and simply never fires.
@@ -238,6 +239,10 @@ export function parseSchedule(expression: string): ParsedSchedule {
     // "every 2nd day AND Monday", not "OR Monday".
     domRestricted: !fields[2]!.startsWith('*'),
     dowRestricted: !fields[4]!.startsWith('*'),
+    // Vixie's fixed-time rule: minute AND hour both concrete means
+    // "once per day at this wall time" — the DST fall-back guard
+    // applies only to these (see Cronus._tick).
+    fixedTime: !fields[0]!.startsWith('*') && !fields[1]!.startsWith('*'),
   };
 }
 

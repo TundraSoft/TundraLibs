@@ -35,10 +35,20 @@ class MyClass extends Options<O, E> {
 
 ### Methods
 
-- `_setOptions(options, defaults)`: Set options with defaults
-- `getOption<K>(key)`: Get option value
+- `_setOptions(options, defaults)`: Apply defaults, then options, with
+  GROUP-AWARE merging: a partial plain-object group
+  (`server: { port: 8080 }`) merges UNDER the group's defaults instead
+  of replacing them; arrays and class instances replace wholesale; an
+  explicitly-`undefined` value defers to an existing default (and still
+  reaches `_processOption` when there is none, so required-option
+  validation works)
+- `_getOption<K>(key)`: Read one option (protected — option bags
+  routinely carry credentials; expose values through purpose-built
+  public getters)
 - `hasOption(key)`: Check if option exists
-- `getOptions()`: Get all current options as an object
+- `_getOptions()`: Read a defensive copy of the whole bag (nested
+  plain-object groups are copied too — mutating the result never
+  writes into the store)
 - All Events methods (`on`, `emit`, etc.)
 
 ## Usage Examples
@@ -72,9 +82,9 @@ class Database extends Options<DatabaseOptions, DatabaseEvents> {
   }
 
   async connect() {
-    const host = this.getOption('host');
-    const port = this.getOption('port');
-    const ssl = this.getOption('ssl');
+    const host = this._getOption('host');
+    const port = this._getOption('port');
+    const ssl = this._getOption('ssl');
 
     // Connection logic...
     this.emit('connect');
@@ -158,8 +168,8 @@ class HttpServer extends Options<ServerOptions, ServerEvents> {
   }
 
   start() {
-    const port = this.getOption('port');
-    const host = this.getOption('host');
+    const port = this._getOption('port');
+    const host = this._getOption('host');
 
     // Start server...
     this.emit('start');
@@ -199,7 +209,7 @@ abstract class Plugin extends Options<PluginOptions, PluginEvents> {
   }
 
   load() {
-    if (this.getOption('enabled')) {
+    if (this._getOption('enabled')) {
       this.emit('load');
       this.onLoad();
     }
@@ -211,7 +221,7 @@ abstract class Plugin extends Options<PluginOptions, PluginEvents> {
 
 class MyPlugin extends Plugin {
   onLoad() {
-    console.log(`${this.getOption('name')} loaded`);
+    console.log(`${this._getOption('name')} loaded`);
   }
 
   execute(data: any) {
@@ -235,7 +245,7 @@ class MyPlugin extends Plugin {
 ```typescript
 class Builder extends Options<BuilderOptions, BuilderEvents> {
   setHost(host: string) {
-    this.getOption('host'); // Current value
+    this._getOption('host'); // Current value
     return this; // Chainable
   }
 }
@@ -249,7 +259,7 @@ constructor(config: EventOptionKeys<Options, Events>) {
   this._setOptions(config, defaults);
   
   // Validate
-  if (this.getOption('port') < 1024) {
+  if (this._getOption('port') < 1024) {
     throw new Error('Port must be >= 1024');
   }
 }

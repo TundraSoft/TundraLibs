@@ -4,6 +4,21 @@ import { envArgs } from '@tundralibs/utils';
 import { MongoEngine } from './Engine.ts';
 import { EngineError } from '../../errors/mod.ts';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+
 const env = envArgs('./packages/drivers/');
 
 const TEST_CONFIG = {
@@ -59,7 +74,7 @@ describe({
       it('should default port to 27017', () => {
         const { port: _port, ...rest } = TEST_CONFIG;
         const engine = new MongoEngine('cfg-2', rest);
-        asserts.assertEquals(engine.getOption('port'), 27017);
+        asserts.assertEquals(readOption(engine, 'port'), 27017);
       });
 
       it('should require host or uri', () => {

@@ -182,8 +182,8 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
         throw new CacherEngineError('CONNECTION_FAILED', {
           name: this.name,
           engine: this.Engine,
-          host: this.getOption('host'),
-          port: this.getOption('port'),
+          host: this._getOption('host'),
+          port: this._getOption('port'),
           reason: (e as Error).message,
         }, e as Error);
       }
@@ -199,11 +199,11 @@ export class MemCacher extends AbstractEngine<MemCacherOptions> {
    * @protected
    */
   protected _createClient(): MemcachedEngine {
-    const ssl = this.getOption('ssl');
+    const ssl = this._getOption('ssl');
     return new MemcachedEngine(this.name, {
-      host: this.getOption('host'),
-      port: this.getOption('port'),
-      maxBufferSize: this.getOption('maxBufferSize')! * 1024 * 1024,
+      host: this._getOption('host'),
+      port: this._getOption('port'),
+      maxBufferSize: this._getOption('maxBufferSize')! * 1024 * 1024,
       ...(ssl === undefined ? {} : { ssl }),
     });
   }

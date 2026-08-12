@@ -7,6 +7,21 @@ import { RedisConnection } from './RedisConnection.ts';
 import { EngineError } from '../../errors/mod.ts';
 import type { Connection } from '@tundralibs/compat';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+
 const env = envArgs('./packages/drivers/');
 
 const TEST_CONFIG = {
@@ -51,12 +66,12 @@ describe({
 
       it('should default port to 6379', () => {
         const engine = new RedisEngine('cfg-2', { host: TEST_CONFIG.host });
-        asserts.assertEquals(engine.getOption('port'), 6379);
+        asserts.assertEquals(readOption(engine, 'port'), 6379);
       });
 
       it('should default database to 0', () => {
         const engine = new RedisEngine('cfg-3', TEST_CONFIG);
-        asserts.assertEquals(engine.getOption('database'), 0);
+        asserts.assertEquals(readOption(engine, 'database'), 0);
       });
 
       it('should require host', () => {
