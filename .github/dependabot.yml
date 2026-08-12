@@ -33,3 +33,9 @@ updates:
     labels:
       - dependencies
       - infra
+    groups:
+      # Actions that version in lockstep (e.g. codeql init+analyze)
+      # must bump TOGETHER — split PRs can never go green.
+      github-actions:
+        patterns:
+          - '*'

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.2...slogger-v1.1.3) (2026-08-12)
+
+
+### Bug Fixes
+
+* **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
+* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
+
 ## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.1...slogger-v1.1.2) (2026-08-09)
 
 
