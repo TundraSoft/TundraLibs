@@ -66,9 +66,8 @@ export class Tracer extends Options<TracerOptions> {
    */
   constructor(options: TracerOptions) {
     super();
-    this._setOptions(options, {
+    this._setOptions({ idGenerator: randomIdGenerator, ...options }, {
       sampler: alwaysOnSampler,
-      idGenerator: randomIdGenerator,
       resource: {},
     });
   }
@@ -169,7 +168,7 @@ export class Tracer extends Options<TracerOptions> {
    * @returns The new {@link Span}.
    */
   public startSpan(name: string, options: SpanOptions = {}): Span {
-    const idGenerator = this.getOption('idGenerator') as IdGenerator;
+    const idGenerator = this._getOption('idGenerator') as IdGenerator;
     const parent = this.__resolveParent(options);
     const kind = options.kind ?? SpanKind.INTERNAL;
     const attributes = options.attributes ?? {};
@@ -179,7 +178,7 @@ export class Tracer extends Options<TracerOptions> {
     // only roots consult the sampler.
     const sampled = parent !== undefined
       ? (parent.traceFlags & FLAG_SAMPLED) !== 0
-      : (this.getOption('sampler') as Sampler)({
+      : (this._getOption('sampler') as Sampler)({
         traceId,
         name,
         kind,
@@ -406,7 +405,7 @@ export class Tracer extends Options<TracerOptions> {
    */
   public async shutdown(): Promise<void> {
     await Promise.allSettled(this.__pending);
-    const exporter = this.getOption('exporter') as SpanExporter | undefined;
+    const exporter = this._getOption('exporter') as SpanExporter | undefined;
     await exporter?.shutdown?.();
   }
 
@@ -425,8 +424,8 @@ export class Tracer extends Options<TracerOptions> {
   /** `service.name` merged with any user-supplied resource attributes. */
   private __resourceAttributes(): Attributes {
     return {
-      ...(this.getOption('resource') as Attributes),
-      'service.name': this.getOption('serviceName') as string,
+      ...(this._getOption('resource') as Attributes),
+      'service.name': this._getOption('serviceName') as string,
     };
   }
 
@@ -435,7 +434,7 @@ export class Tracer extends Options<TracerOptions> {
    * broken collector must never surface as an application error.
    */
   private __export(data: SpanData): void {
-    const exporter = this.getOption('exporter') as SpanExporter | undefined;
+    const exporter = this._getOption('exporter') as SpanExporter | undefined;
     if (exporter === undefined) return;
     let promise: Promise<void>;
     // The two failure modes need two different guards, and both are load-bearing:

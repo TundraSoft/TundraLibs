@@ -184,7 +184,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         },
       );
     }
-    this._defaultHeaders = this.getOption('headers') || {};
+    this._defaultHeaders = this._getOption('headers') || {};
   }
 
   //#region Event registration (per-listener isolation)
@@ -357,7 +357,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         },
       );
     }
-    const auth = endpoint.auth ?? this.getOption('auth');
+    const auth = endpoint.auth ?? this._getOption('auth');
     if (auth) {
       endpoint.headers = endpoint.headers || {};
       if (auth.type === 'BASIC') {
@@ -618,7 +618,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     ...args: Parameters<RESTlerEvents[K]>
   ): void {
     try {
-      this.emit(event, ...args);
+      this._emit(event, ...args);
     } catch {
       // Defensive backstop; per-listener isolation (see `on`) already contains
       // listener faults. The base client has no logger, so any error that
@@ -787,7 +787,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     endpoint: RESTlerEndpoint,
     responseHandler?: RESTlerResponseHandler,
   ): Promise<RESTlerResponse<B>> {
-    const witness = this.getOption('witness');
+    const witness = this._getOption('witness');
     if (witness === undefined) {
       return this.__request<B>(endpoint, responseHandler);
     }
@@ -854,9 +854,9 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         signal: controller.signal,
       };
       if (body !== undefined) init.body = body;
-      const socketPath = this.getOption('socketPath');
+      const socketPath = this._getOption('socketPath');
       if (socketPath) init.unix = socketPath;
-      const tls = this.getOption('tls');
+      const tls = this._getOption('tls');
       if (tls) init.tls = tls;
 
       const resp = await this._fetch(request.url, init);
@@ -1146,9 +1146,9 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     // invalid content type shouldn't cost the caller a token refresh first.
     const contentType = 'contentType' in endpoint
       ? this.__resolveEndpointContentType(endpoint.contentType)
-      : this.getOption('contentType');
-    const baseURL = endpoint.baseURL ?? this.getOption('baseURL');
-    const port = endpoint.port ?? this.getOption('port');
+      : this._getOption('contentType');
+    const baseURL = endpoint.baseURL ?? this._getOption('baseURL');
+    const port = endpoint.port ?? this._getOption('port');
     if (endpoint.port && !this._validatePort(endpoint.port)) {
       // Validate port!!!
       throw new RESTlerConfigError(
@@ -1166,7 +1166,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     // explicit always beats ambient. Values are runtime-computed, so no
     // {version} replacement. A throwing provider is contained: observability
     // wiring must never break the request it decorates.
-    const headerProvider = this.getOption('headerProvider');
+    const headerProvider = this._getOption('headerProvider');
     if (headerProvider !== undefined) {
       try {
         for (const [key, value] of Object.entries(headerProvider() ?? {})) {
@@ -1221,7 +1221,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         { vendor: this.vendor, key: 'timeout', value: timeout },
       );
     }
-    return timeout ?? this.getOption('timeout')!;
+    return timeout ?? this._getOption('timeout')!;
   }
 
   /**
@@ -1242,7 +1242,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         { vendor: this.vendor, key: 'version', value: version },
       );
     }
-    return version ?? this.getOption('version') ?? '';
+    return version ?? this._getOption('version') ?? '';
   }
 
   /**

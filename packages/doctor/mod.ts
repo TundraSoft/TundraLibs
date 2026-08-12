@@ -1,6 +1,8 @@
 /**
- * @fileoverview Public entry point — re-exports every class, type,
- * decorator, and error the package exposes.
+ * @fileoverview `@tundralibs/doctor` — dependency-health checks for
+ * services: declare named checks (decorator or registration API), run
+ * them with timeouts and consecutive-failure tracking, and expose the
+ * aggregate as readiness/liveness results.
  *
  * @module
  */

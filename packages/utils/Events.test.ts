@@ -1,6 +1,25 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat';
-import { Events } from './Events.ts';
+import { type EventCallback, Events } from './Events.ts';
+
+/** Test harness: re-exposes the protected emission surface. */
+class TestEvents<
+  E extends Record<string, EventCallback> = Record<string, EventCallback>,
+> extends Events<E> {
+  public emit<K extends keyof E>(event: K, ...args: Parameters<E[K]>): this {
+    return this._emit(event, ...args);
+  }
+  public emitSync<K extends keyof E>(
+    event: K,
+    ...args: Parameters<E[K]>
+  ): Promise<this> {
+    return this._emitSync(event, ...args);
+  }
+  public listenerErrors: unknown[] = [];
+  protected override _onListenerError(_e: PropertyKey, err: unknown): void {
+    this.listenerErrors.push(err);
+  }
+}
 
 // Helper function to create a delayed function
 const createDelayedFunction = (delay: number, callback: () => void) => {
@@ -13,7 +32,7 @@ const createDelayedFunction = (delay: number, callback: () => void) => {
 describe('utils.Events', () => {
   it('should register and emit untyped events', () => {
     let cnt = 0;
-    const events = new Events();
+    const events = new TestEvents();
     const cb = (_name: string) => cnt++;
     events.on('hello', cb);
     events.emit('hello', 'world');
@@ -25,7 +44,7 @@ describe('utils.Events', () => {
       greet: (name: string) => void;
     };
     let cnt = 0;
-    const events = new Events<EventMap>();
+    const events = new TestEvents<EventMap>();
     const cb = (_name: string) => cnt += 2;
     events.on('greet', cb);
     events.emit('greet', 'world');
@@ -35,7 +54,7 @@ describe('utils.Events', () => {
   it(
     'should not wait for async callbacks when using emit',
     async () => {
-      const events = new Events();
+      const events = new TestEvents();
       let cnt = 0;
 
       // Create callbacks that increment counter after a delay
@@ -65,7 +84,7 @@ describe('utils.Events', () => {
   it(
     'should register and emit async events synchronously',
     async () => {
-      const events = new Events();
+      const events = new TestEvents();
       let cnt = 3;
       let timer1: ReturnType<typeof setTimeout> | undefined;
       const cb = async (_name: string) => {
@@ -91,7 +110,7 @@ describe('utils.Events', () => {
 
   it('should unregister specific event listeners', () => {
     let cnt = 0;
-    const events = new Events();
+    const events = new TestEvents();
     const cb = (_name: string) => cnt++;
     const cb2 = (_name: string) => cnt++;
     const cb3 = (_name: string) => cnt++;
@@ -103,7 +122,7 @@ describe('utils.Events', () => {
 
   it('should unregister all event listeners', () => {
     let cnt = 0;
-    const events = new Events();
+    const events = new TestEvents();
     const cb = (_name: string) => cnt++;
     const cb2 = (_name: string) => cnt++;
     const cb3 = (_name: string) => cnt++;
@@ -115,7 +134,7 @@ describe('utils.Events', () => {
 
   it('should call "once" event listeners only once', () => {
     let cnt = 0;
-    const events = new Events();
+    const events = new TestEvents();
     const cb = (_name: string) => cnt++;
     const cb2 = (_name: string) => cnt++;
     events.once('hello', [cb, cb2]);
@@ -125,14 +144,14 @@ describe('utils.Events', () => {
   });
 
   it('should not throw when emitting an unregistered event', () => {
-    const events = new Events();
+    const events = new TestEvents();
     events.emit('hello');
   });
 
   it(
     'should not throw when emitting an unregistered event',
     async () => {
-      const events = new Events();
+      const events = new TestEvents();
       // Both methods should be tested separately
       events.emit('hello');
       await events.emitSync('hello');
@@ -142,7 +161,7 @@ describe('utils.Events', () => {
   it('should support method chaining', () => {
     let count1 = 0;
     let count2 = 0;
-    const events = new Events();
+    const events = new TestEvents();
 
     // Chain multiple method calls
     events
@@ -157,7 +176,7 @@ describe('utils.Events', () => {
 
   it('should not register duplicate callbacks', () => {
     let count = 0;
-    const events = new Events();
+    const events = new TestEvents();
     const callback = () => count++;
 
     // Register the same callback twice
@@ -171,7 +190,7 @@ describe('utils.Events', () => {
   it('should handle multiple event types independently', () => {
     let count1 = 0;
     let count2 = 0;
-    const events = new Events();
+    const events = new TestEvents();
 
     events.on('event1', () => count1++);
     events.on('event2', () => count2++);
@@ -187,7 +206,7 @@ describe('utils.Events', () => {
 
   it('should continue execution when callbacks throw errors', () => {
     let executedCallbacks = 0;
-    const events = new Events();
+    const events = new TestEvents();
 
     events.on('error-test', [
       () => {
@@ -198,22 +217,20 @@ describe('utils.Events', () => {
       },
     ]);
 
-    try {
-      events.emit('error-test');
-      asserts.fail('Should have thrown an error');
-    } catch (e) {
-      asserts.assertEquals((e as Error).message, 'Test error');
-      asserts.assertEquals(
-        executedCallbacks,
-        0,
-        'Second callback should not execute after error',
-      );
-    }
+    // Isolated emission: the throw is contained (routed to
+    // _onListenerError) and the NEXT listener still runs.
+    events.emit('error-test');
+    asserts.assertEquals(executedCallbacks, 1);
+    asserts.assertEquals(events.listenerErrors.length, 1);
+    asserts.assertEquals(
+      (events.listenerErrors[0] as Error).message,
+      'Test error',
+    );
   });
 
   it('should handle async errors in emitSync', async () => {
     let executedCallbacks = 0;
-    const events = new Events();
+    const events = new TestEvents();
 
     events.on('async-error', [
       () => {
@@ -224,22 +241,19 @@ describe('utils.Events', () => {
       },
     ]);
 
-    try {
-      await events.emitSync('async-error');
-      asserts.fail('Should have thrown an error');
-    } catch (e) {
-      asserts.assertEquals((e as Error).message, 'Async test error');
-      asserts.assertEquals(
-        executedCallbacks,
-        0,
-        'Second callback should not execute after error',
-      );
-    }
+    // _emitSync is the HANDLED path: the rejection propagates to the
+    // awaiting caller and later listeners do not run.
+    await asserts.assertRejects(
+      () => events.emitSync('async-error'),
+      Error,
+      'Async test error',
+    );
+    asserts.assertEquals(executedCallbacks, 0);
   });
 
   it('should allow off() to remove an array of callbacks', () => {
     let count = 0;
-    const events = new Events();
+    const events = new TestEvents();
     const callback1 = () => count++;
     const callback2 = () => count++;
 
@@ -251,7 +265,7 @@ describe('utils.Events', () => {
   });
 
   it('should handle nested event emissions', () => {
-    const events = new Events();
+    const events = new TestEvents();
     let outerCount = 0;
     let innerCount = 0;
 
@@ -276,7 +290,7 @@ describe('utils.Events', () => {
   });
 
   it('should correctly handle once() with nested emissions', () => {
-    const events = new Events();
+    const events = new TestEvents();
     let count = 0;
 
     events.once('test', () => {
@@ -296,7 +310,7 @@ describe('utils.Events', () => {
   it(
     'should not fail when registering an empty callback array',
     () => {
-      const events = new Events();
+      const events = new TestEvents();
       events.on('test', []);
       events.emit('test'); // Should not throw
     },
@@ -305,7 +319,7 @@ describe('utils.Events', () => {
   it(
     'should not fail when off() is called for non-existent callbacks',
     () => {
-      const events = new Events();
+      const events = new TestEvents();
       const callback = () => {};
 
       // Register no callbacks
@@ -318,7 +332,7 @@ describe('utils.Events', () => {
   );
 
   it('should properly handle multiple arguments', () => {
-    const events = new Events<{
+    const events = new TestEvents<{
       multiArg: (arg1: number, arg2: string, arg3: boolean) => void;
     }>();
 
@@ -339,7 +353,7 @@ describe('utils.Events', () => {
   it(
     'should maintain correct execution order in emitSync',
     async () => {
-      const events = new Events();
+      const events = new TestEvents();
       const executionOrder: number[] = [];
 
       events.on('ordered', [
@@ -364,7 +378,7 @@ describe('utils.Events', () => {
   );
 
   it('should allow once() to work with async callbacks', async () => {
-    const events = new Events();
+    const events = new TestEvents();
     let count = 0;
 
     events.once('async-once', async () => {
@@ -390,7 +404,7 @@ describe('utils.Events', () => {
         complexEvent: (obj: { id: number; name: string }) => void;
       };
 
-      const events = new Events<ComplexEventMap>();
+      const events = new TestEvents<ComplexEventMap>();
       let receivedObject: { id: number; name: string } | null = null;
 
       events.on('complexEvent', (obj) => {
@@ -412,14 +426,14 @@ describe('utils.Events', () => {
   );
 
   it('should return this when off() is called for non-existent event', () => {
-    const events = new Events();
+    const events = new TestEvents();
     // off on event that was never registered should not throw
     const result = events.off('nonexistent');
     asserts.assertStrictEquals(result, events);
   });
 
   it('should return this when emit() is called for event with no listeners', () => {
-    const events = new Events();
+    const events = new TestEvents();
     const result = events.emit('noop');
     asserts.assertStrictEquals(result, events);
   });
@@ -428,10 +442,10 @@ describe('utils.Events', () => {
     type TestEvents = { ping: () => void };
     class TestEmitter extends Events<TestEvents> {
       fire(): this {
-        return this._emit('ping');
+        return this._emitRaw('ping');
       }
       fireWithListeners(): this {
-        return this._emit('ping');
+        return this._emitRaw('ping');
       }
     }
     const emitter = new TestEmitter();
@@ -444,7 +458,7 @@ describe('utils.Events', () => {
     type TestEvents = { ping: (n: number) => void };
     class TestEmitter extends Events<TestEvents> {
       fire(n: number): this {
-        return this._emit('ping', n);
+        return this._emitRaw('ping', n);
       }
     }
     const emitter = new TestEmitter();
@@ -454,5 +468,55 @@ describe('utils.Events', () => {
     });
     emitter.fire(42);
     asserts.assertStrictEquals(received, 42);
+  });
+});
+
+describe('utils.Events hardening (protected emission wave)', () => {
+  it('snapshot semantics: listeners added during an emission fire next time', () => {
+    const events = new TestEvents();
+    let lateRan = 0;
+    events.on('e', () => {
+      events.on('e', () => lateRan++);
+    });
+    events.emit('e');
+    asserts.assertEquals(lateRan, 0); // not in THIS emission
+    events.emit('e');
+    asserts.assertEquals(lateRan, 1); // joined the next one
+  });
+
+  it('once() is removable via off(original) and dedupes', () => {
+    const events = new TestEvents();
+    let fired = 0;
+    const cb = () => fired++;
+    events.once('e', cb);
+    events.off('e', cb); // original callback, wrapper resolved internally
+    events.emit('e');
+    asserts.assertEquals(fired, 0);
+
+    events.once('e', cb);
+    events.once('e', cb); // duplicate — no-op like on()
+    events.emit('e');
+    asserts.assertEquals(fired, 1);
+    events.emit('e');
+    asserts.assertEquals(fired, 1); // once means once
+  });
+
+  it('async listener rejection in emit() is routed to _onListenerError', async () => {
+    const events = new TestEvents();
+    let after = 0;
+    events.on('e', [
+      async () => {
+        throw new Error('async boom');
+      },
+      () => after++,
+    ]);
+    events.emit('e');
+    await new Promise((r) => setTimeout(r, 5));
+    asserts.assertEquals(after, 1);
+    asserts.assertEquals(events.listenerErrors.length, 1);
+    asserts.assertEquals(
+      (events.listenerErrors[0] as Error).message,
+      'async boom',
+    );
   });
 });

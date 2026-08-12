@@ -5,6 +5,21 @@ import { envArgs } from '@tundralibs/utils';
 import { MemcachedEngine } from './Engine.ts';
 import { EngineError } from '../../errors/mod.ts';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+
 const env = envArgs('./packages/drivers/');
 
 const TEST_CONFIG = {
@@ -66,12 +81,12 @@ describe({
           ...withoutPort,
           host: TEST_CONFIG.host,
         });
-        asserts.assertEquals(engine.getOption('port'), 11211);
+        asserts.assertEquals(readOption(engine, 'port'), 11211);
       });
 
       it('should default maxBufferSize to 2 (MB)', () => {
         const engine = new MemcachedEngine('cfg-3', TEST_CONFIG);
-        asserts.assertEquals(engine.getOption('maxBufferSize'), 2);
+        asserts.assertEquals(readOption(engine, 'maxBufferSize'), 2);
       });
 
       it('should require host', () => {

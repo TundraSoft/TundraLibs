@@ -4,6 +4,21 @@ import { BaseEngine } from './BaseEngine.ts';
 import type { EngineCapabilities, EngineOptions } from './types/mod.ts';
 import { EngineError } from './errors/mod.ts';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+
 /**
  * A minimal in-memory engine used to exercise `BaseEngine` end-to-end without
  * requiring a real network service.
@@ -34,8 +49,8 @@ class FakeEngine extends BaseEngine<FakeResource, FakeOptions> {
   public destroyed = 0;
 
   protected _createResource(): FakeResource | Promise<FakeResource> {
-    if (this.getOption('createError')) {
-      throw new Error(this.getOption('createError'));
+    if (this._getOption('createError')) {
+      throw new Error(this._getOption('createError'));
     }
     this.created++;
     return { id: this.created, closed: false };
@@ -52,12 +67,12 @@ class FakeEngine extends BaseEngine<FakeResource, FakeOptions> {
   protected override _validateResource(
     r: FakeResource,
   ): boolean | Promise<boolean> {
-    if (this.getOption('invalidate')) return false;
+    if (this._getOption('invalidate')) return false;
     return !r.closed;
   }
 
   protected _ping(_r: FakeResource): boolean {
-    const mode = this.getOption('pingFailure') ?? 'ok';
+    const mode = this._getOption('pingFailure') ?? 'ok';
     if (mode === 'throw') throw new Error('ping failed');
     if (mode === 'false') return false;
     return true;
@@ -441,8 +456,8 @@ describe('drivers.BaseEngine', () => {
       const e = new FakeEngine('o7', {
         pool: { min: 1, max: 5, idleTimeoutSeconds: 60 },
       });
-      asserts.assertEquals(e.getOption('pool')?.min, 1);
-      asserts.assertEquals(e.getOption('pool')?.max, 5);
+      asserts.assertEquals(readOption(e, 'pool')?.min, 1);
+      asserts.assertEquals(readOption(e, 'pool')?.max, 5);
     });
 
     it('should reject non-function idGenerator', () => {
@@ -458,7 +473,7 @@ describe('drivers.BaseEngine', () => {
 
     it('should accept ssl=true', () => {
       const e = new FakeEngine('o9', { ssl: true });
-      asserts.assertEquals(e.getOption('ssl'), true);
+      asserts.assertEquals(readOption(e, 'ssl'), true);
     });
 
     it('should accept ssl object with PEM string array for ca', () => {
@@ -467,7 +482,7 @@ describe('drivers.BaseEngine', () => {
           ca: ['-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----'],
         },
       });
-      asserts.assertEquals(typeof e.getOption('ssl'), 'object');
+      asserts.assertEquals(typeof readOption(e, 'ssl'), 'object');
     });
 
     it('should reject ssl object with non-array ca', () => {
@@ -782,12 +797,12 @@ describe('drivers.BaseEngine', () => {
   describe('database option validation', () => {
     it('should accept valid database string', () => {
       const e = new FakeEngine('db1', { database: 'mydb' });
-      asserts.assertEquals(e.getOption('database'), 'mydb');
+      asserts.assertEquals(readOption(e, 'database'), 'mydb');
     });
 
     it('should accept database as number (for Redis index)', () => {
       const e = new FakeEngine('db2', { database: 0 });
-      asserts.assertEquals(e.getOption('database'), 0);
+      asserts.assertEquals(readOption(e, 'database'), 0);
     });
 
     it('should reject empty database string', () => {
@@ -932,7 +947,7 @@ describe('drivers.BaseEngine', () => {
           enforce: false,
         },
       });
-      asserts.assertEquals(typeof e.getOption('ssl'), 'object');
+      asserts.assertEquals(typeof readOption(e, 'ssl'), 'object');
     });
 
     it('should reject SSL with non-boolean rejectUnauthorized', () => {

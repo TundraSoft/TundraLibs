@@ -120,9 +120,9 @@ export class TursoEngine extends SQLConnectionEngine<
    */
   protected override _open(): void {
     this._resource = new TursoHttpClient({
-      url: this.getOption('url'),
-      authToken: this.getOption('authToken') ?? '',
-      timeout: this.getOption('timeout'),
+      url: this._getOption('url'),
+      authToken: this._getOption('authToken') ?? '',
+      timeout: this._getOption('timeout'),
     });
   }
 

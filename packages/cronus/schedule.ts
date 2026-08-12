@@ -239,6 +239,10 @@ export function parseSchedule(expression: string): ParsedSchedule {
     // "every 2nd day AND Monday", not "OR Monday".
     domRestricted: !fields[2]!.startsWith('*'),
     dowRestricted: !fields[4]!.startsWith('*'),
+    // Vixie's fixed-time rule: minute AND hour both concrete means
+    // "once per day at this wall time" — the DST fall-back guard
+    // applies only to these (see Cronus._tick).
+    fixedTime: !fields[0]!.startsWith('*') && !fields[1]!.startsWith('*'),
   };
 }
 

@@ -21,14 +21,27 @@ export type EventOptionKeys<
   };
 
 /**
+ * Is `value` a plain object (object literal / null-prototype) — as
+ * opposed to an array, class instance, function, or primitive?
+ * Grouped-option merging and defensive copying apply only to these.
+ */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== 'object') return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
  * Base class combining a typed option store with an {@link Events}
  * emitter. Subclasses call `_setOptions(config, defaults)` from their
- * constructor and override {@link _processOption} to validate or
- * transform values before they're stored.
+ * constructor and override {@link Options._processOption} to validate
+ * or transform values before they're stored.
  *
- * Options live in a {@link PrivateObject} — callers read via
- * `getOption`/`getOptions`/`hasOption`, but only the subclass can
- * write (via the protected `_setOption*` methods).
+ * Options live in a {@link PrivateObject}: the store is readable only
+ * by the subclass (`_getOption`/`_getOptions`) and writable only via
+ * the protected `_setOption*` methods — option bags routinely carry
+ * credentials, so nothing is exposed on the public surface beyond
+ * {@link Options.hasOption}.
  *
  * @typeParam O - Option keys and their value types.
  * @typeParam E - Event names and their callback signatures.
@@ -43,6 +56,9 @@ export type EventOptionKeys<
  *     super();
  *     this._setOptions(c, { port: 5432 });
  *   }
+ *   get port(): number {
+ *     return this._getOption('port');
+ *   }
  * }
  *
  * new Db({ host: 'localhost', _onconnect: () => {} });
@@ -54,24 +70,36 @@ export abstract class Options<
 > extends Events<E> {
   private readonly __options: PrivateObject<O> = privateObject<O>();
 
-  constructor() {
-    super();
-  }
-
+  /** Whether `key` is present in the option store. */
   public hasOption<K extends keyof O>(key: K): boolean {
     return this.__options.has(key);
   }
 
-  public getOption<K extends keyof O>(key: K): O[K] {
+  /**
+   * Read one option. Protected: option bags routinely carry
+   * credentials — expose specific values through purpose-built public
+   * getters instead of the raw store.
+   */
+  protected _getOption<K extends keyof O>(key: K): O[K] {
     return this.__options.get(key);
   }
 
-  public getOptions(): O {
-    // Return a shallow copy so mutating the result (e.g.
-    // `getOptions().port = -1`) cannot write into the internal store and
-    // bypass `_processOption` validation. Callers must go through
-    // `_setOption` to change stored options.
-    return { ...this.__options.asObject() };
+  /**
+   * Read a defensive copy of the whole option bag: the bag itself is
+   * copied and every plain-object GROUP value is copied one level
+   * deep, so mutating the result (including `result.group.key = x`)
+   * cannot write into the internal store and bypass
+   * {@link Options._processOption} validation. Non-plain values
+   * (class instances, functions, arrays) are returned as-is.
+   */
+  protected _getOptions(): O {
+    const source = this.__options.asObject();
+    const copy: Record<string, unknown> = {};
+    for (const key in source) {
+      const value = source[key];
+      copy[key] = isPlainObject(value) ? { ...value } : value;
+    }
+    return copy as O;
   }
 
   protected _setOption<K extends keyof O>(key: K, value: O[K]): this {
@@ -82,17 +110,35 @@ export abstract class Options<
   /**
    * Apply `defaults`, override with `options`, then route each entry:
    * `_on<EventName>` keys register listeners, everything else flows
-   * through {@link _setOption} (and therefore {@link _processOption}).
+   * through {@link Options._setOption} (and therefore
+   * {@link Options._processOption}).
+   *
+   * Merging is GROUP-AWARE: when both the default and the incoming
+   * value for a key are plain objects, they are merged one level deep
+   * (`{ ...default, ...incoming }`) — a caller passing a partial
+   * `server: { port: 8080 }` keeps the other `server` defaults instead
+   * of clobbering the whole group. Non-plain values (arrays, class
+   * instances) replace wholesale. An explicitly-`undefined` incoming
+   * value defers to the default when one exists — and still reaches
+   * {@link Options._processOption} when there is none, so required-
+   * option validation keeps working.
    */
   protected _setOptions(
     options: EventOptionKeys<O, E>,
     defaults?: Partial<O>,
   ): this {
-    const finalOptions = { ...defaults } as EventOptionKeys<O, E>;
+    const finalOptions = { ...defaults } as Record<string, unknown>;
     for (const key in options) {
-      if (Object.hasOwn(options, key)) {
-        (finalOptions as Record<string, unknown>)[key] = options[key];
-      }
+      if (!Object.hasOwn(options, key)) continue;
+      const incoming = (options as Record<string, unknown>)[key];
+      // Explicit undefined defers to the default WHEN one exists;
+      // without a default it flows through so _processOption still
+      // sees (and can reject) a required-but-missing value.
+      if (incoming === undefined && Object.hasOwn(finalOptions, key)) continue;
+      const base = finalOptions[key];
+      finalOptions[key] = isPlainObject(incoming) && isPlainObject(base)
+        ? { ...base, ...incoming }
+        : incoming;
     }
     for (const key in finalOptions) {
       if (key.startsWith('_on')) {
@@ -108,9 +154,9 @@ export abstract class Options<
   }
 
   /**
-   * Validation/transformation hook for {@link _setOption}. Override to
-   * coerce or reject values; the default returns the input unchanged.
-   * Throw to reject.
+   * Validation/transformation hook for {@link Options._setOption}.
+   * Override to coerce or reject values; the default returns the input
+   * unchanged. Throw to reject.
    */
   protected _processOption(key: keyof O, value: O[typeof key]): O[typeof key] {
     return value;

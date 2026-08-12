@@ -7,6 +7,18 @@ describe('utils.Options', () => {
   type Opt = { a?: string; b?: number; c: boolean };
   type Evnt = { change: () => void };
   class TypedOptions extends Options<Opt, Evnt> {
+    public getOption<K extends string>(key: K) {
+      // deno-lint-ignore no-explicit-any
+      return this._getOption(key as any);
+    }
+    public getOptions() {
+      return this._getOptions();
+    }
+    // deno-lint-ignore no-explicit-any
+    public emit(event: any, ...args: unknown[]) {
+      // deno-lint-ignore no-explicit-any
+      return this._emitRaw(event, ...args as any);
+    }
     constructor(opt: EventOptionKeys<Opt, Evnt>) {
       super();
       super._setOptions(opt, { b: 10 });
@@ -41,6 +53,18 @@ describe('utils.Options', () => {
   }
 
   class UnTypedOptions extends Options {
+    public getOption<K extends string>(key: K) {
+      // deno-lint-ignore no-explicit-any
+      return this._getOption(key as any);
+    }
+    public getOptions() {
+      return this._getOptions();
+    }
+    // deno-lint-ignore no-explicit-any
+    public emit(event: any, ...args: unknown[]) {
+      // deno-lint-ignore no-explicit-any
+      return this._emitRaw(event, ...args as any);
+    }
     constructor(
       opt: EventOptionKeys<
         Record<string, unknown>,
@@ -186,5 +210,55 @@ describe('utils.Options', () => {
     snapshot.c = false;
     asserts.assertStrictEquals(options.getOption('c'), true);
     asserts.assertStrictEquals(options.getOptions().c, true);
+  });
+});
+
+describe('utils.Options hardening (group merge + safe copies)', () => {
+  type GroupOpts = {
+    name: string;
+    server: { port: number; host: string; secure: boolean };
+    tags: string[];
+  };
+  class Grouped extends Options<GroupOpts> {
+    constructor(cfg: Partial<GroupOpts>) {
+      super();
+      this._setOptions(cfg, {
+        server: { port: 8080, host: 'localhost', secure: false },
+        tags: ['default'],
+      });
+    }
+    public read<K extends keyof GroupOpts>(key: K): GroupOpts[K] {
+      return this._getOption(key);
+    }
+    public readAll(): GroupOpts {
+      return this._getOptions();
+    }
+  }
+
+  it('a partial group merges UNDER the group defaults', () => {
+    const o = new Grouped({
+      name: 'x',
+      server: { port: 9999 } as GroupOpts['server'],
+    });
+    asserts.assertEquals(o.read('server').port, 9999); // caller wins
+    asserts.assertEquals(o.read('server').host, 'localhost'); // default kept
+    asserts.assertEquals(o.read('server').secure, false); // default kept
+  });
+
+  it('arrays replace wholesale (no merging)', () => {
+    const o = new Grouped({ name: 'x', tags: ['a'] });
+    asserts.assertEquals(o.read('tags'), ['a']);
+  });
+
+  it('explicit undefined leaves the default in place', () => {
+    const o = new Grouped({ name: 'x', server: undefined });
+    asserts.assertEquals(o.read('server').port, 8080);
+  });
+
+  it('_getOptions() nested group copies cannot corrupt the store', () => {
+    const o = new Grouped({ name: 'x' });
+    const bag = o.readAll();
+    bag.server.port = -1;
+    asserts.assertEquals(o.read('server').port, 8080); // store untouched
   });
 });

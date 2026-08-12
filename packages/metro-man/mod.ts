@@ -1,6 +1,9 @@
 /**
- * @fileoverview Public entry point — re-exports every class, type,
- * and error the package exposes.
+ * @fileoverview `@tundralibs/metro-man` — Prometheus-compatible
+ * in-process metrics for Deno, Bun, and Node: the four standard metric
+ * types (`Counter`, `Gauge`, `Histogram`, `Summary`) and a registry
+ * (`MetroMan`) with bulk collection in JSON, debug-string, or the
+ * Prometheus text exposition format via one `dump(mode)` call.
  *
  * @module
  */

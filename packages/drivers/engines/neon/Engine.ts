@@ -115,17 +115,17 @@ export class NeonHttpEngine extends SQLConnectionEngine<
    * makes it edge/serverless-safe.
    */
   protected override _open(): void {
-    const database = this.getOption('database');
+    const database = this._getOption('database');
     this._resource = new NeonHttpClient({
-      host: this.getOption('host')!,
-      endpoint: this.getOption('endpoint'),
-      connectionString: this.getOption('connectionString'),
-      username: this.getOption('username'),
-      password: this.getOption('password'),
+      host: this._getOption('host')!,
+      endpoint: this._getOption('endpoint'),
+      connectionString: this._getOption('connectionString'),
+      username: this._getOption('username'),
+      password: this._getOption('password'),
       // Base allows `string | number` for `database`; Neon uses string names.
       database: database === undefined ? undefined : String(database),
-      token: this.getOption('token'),
-      timeout: this.getOption('timeout'),
+      token: this._getOption('token'),
+      timeout: this._getOption('timeout'),
     });
   }
 
@@ -393,7 +393,7 @@ export class NeonHttpEngine extends SQLConnectionEngine<
 
   /** Whether an option is set to a meaningful (non-empty for strings) value. */
   private __present(key: keyof NeonHttpEngineOptions): boolean {
-    const v = this.getOption(key);
+    const v = this._getOption(key);
     if (v === undefined) return false;
     if (typeof v === 'string') return v.trim().length > 0;
     return true;

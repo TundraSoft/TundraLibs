@@ -151,13 +151,13 @@ export class D1Engine extends SQLConnectionEngine<
    */
   protected override _open(): void {
     this._resource = new D1HttpClient({
-      accountId: this.getOption('accountId'),
-      databaseId: this.getOption('databaseId'),
-      apiToken: this.getOption('apiToken'),
+      accountId: this._getOption('accountId'),
+      databaseId: this._getOption('databaseId'),
+      apiToken: this._getOption('apiToken'),
       // A Cloudflare-compatible gateway / local test proxy, when set; otherwise
       // the client dials Cloudflare's cloud endpoint.
-      endpoint: this.getOption('endpoint'),
-      timeout: this.getOption('timeout'),
+      endpoint: this._getOption('endpoint'),
+      timeout: this._getOption('timeout'),
     });
   }
 

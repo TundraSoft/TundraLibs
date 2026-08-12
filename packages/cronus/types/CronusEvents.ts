@@ -10,10 +10,11 @@ import type { CronusError } from '../errors/mod.ts';
 /**
  * Cronus lifecycle events.
  *
- * Listeners are ISOLATED per listener: each callback is wrapped at
- * registration, so a sync throw OR an async rejection is caught and
- * reported via `console.error` — it never affects the run, the job's
- * state, other listeners, the ticker, or the process.
+ * Listeners are ISOLATED per listener (inherited from `Events`): a
+ * sync throw or an async rejection is caught and reported via
+ * `console.error` — it never affects the run, the job's state, other
+ * listeners, the ticker, or the process. `off(event, callback)` also
+ * removes `once` listeners by their original callback.
  */
 export type CronusEvents = {
   /** A run started. */

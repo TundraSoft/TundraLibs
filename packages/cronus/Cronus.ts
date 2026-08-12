@@ -29,7 +29,7 @@
  * ```
  */
 
-import { type EventCallback, Events } from '@tundralibs/utils';
+import { Events } from '@tundralibs/utils';
 import {
   CronusError,
   DuplicateJobError,
@@ -72,6 +72,12 @@ type CronusJob = {
   running: boolean;
   runCount: number;
   lastRun: Date | null;
+  /**
+   * Local wall-clock key of the last SCHEDULED fire — fixed-time jobs
+   * only. A DST fall-back replays a wall hour on new epoch minutes;
+   * this key (which includes the date) blocks the replay.
+   */
+  lastLocalFire: string | null;
 };
 
 /** `unref` a timer where the runtime supports it (no-op elsewhere). */
@@ -94,17 +100,14 @@ function unrefTimer(handle: TimerHandle): void {
  * guard. It also assumes actions SETTLE — an action that never resolves
  * wedges its job until `remove()` + `add()`.)
  *
- * Listeners are isolated: each listener is wrapped at registration, so
- * one that throws synchronously OR rejects asynchronously is caught and
+ * Listeners are isolated (inherited from `Events`): one that throws
+ * synchronously or rejects asynchronously is caught per listener and
  * reported via `console.error` — it never affects the run, other
  * listeners, the ticker, or the process.
  */
 export class Cronus extends Events<CronusEvents> {
   private readonly __jobs: Map<string, CronusJob> = new Map();
   private readonly __parsed: Map<string, ParsedSchedule> = new Map();
-  /** Original listener → isolation wrapper (lets `off(original)` work). */
-  private readonly __wrapped: WeakMap<EventCallback, EventCallback> =
-    new WeakMap();
   private readonly __unref: boolean;
   private __timer: TimerHandle | undefined;
   private __active = false;
@@ -116,86 +119,6 @@ export class Cronus extends Events<CronusEvents> {
   constructor(options: CronusOptions = {}) {
     super();
     this.__unref = options.unref ?? false;
-  }
-
-  /**
-   * Register a listener. The callback is wrapped for isolation: a sync
-   * throw or async rejection is caught and reported via
-   * `console.error`, never propagated.
-   */
-  public override on<K extends keyof CronusEvents>(
-    event: K,
-    callback: CronusEvents[K],
-  ): this;
-  public override on<K extends keyof CronusEvents>(
-    event: K,
-    callback: CronusEvents[K][],
-  ): this;
-  public override on(
-    event: string,
-    callback: EventCallback | EventCallback[],
-  ): this {
-    if (Array.isArray(callback)) {
-      for (const cb of callback) this.on(event as never, cb as never);
-      return this;
-    }
-    return super.on(event as never, this.__isolate(callback) as never);
-  }
-
-  /**
-   * Remove listener(s). Accepts the ORIGINAL callback passed to
-   * `on`/`once` (the isolation wrapper is resolved internally).
-   */
-  public override off<K extends keyof CronusEvents>(
-    event: K,
-    callback?: CronusEvents[K],
-  ): this;
-  public override off<K extends keyof CronusEvents>(
-    event: K,
-    callback?: CronusEvents[K][],
-  ): this;
-  public override off(
-    event: string,
-    callback?: EventCallback | EventCallback[],
-  ): this {
-    if (callback === undefined) return super.off(event as never);
-    if (Array.isArray(callback)) {
-      for (const cb of callback) this.off(event as never, cb as never);
-      return this;
-    }
-    return super.off(
-      event as never,
-      (this.__wrapped.get(callback) ?? callback) as never,
-    );
-  }
-
-  /**
-   * Register a one-shot listener (isolated like {@link Cronus.on});
-   * removable via `off(event, originalCallback)` before it fires.
-   */
-  public override once<K extends keyof CronusEvents>(
-    event: K,
-    callback: CronusEvents[K],
-  ): this;
-  public override once<K extends keyof CronusEvents>(
-    event: K,
-    callback: CronusEvents[K][],
-  ): this;
-  public override once(
-    event: string,
-    callback: EventCallback | EventCallback[],
-  ): this {
-    if (Array.isArray(callback)) {
-      for (const cb of callback) this.once(event as never, cb as never);
-      return this;
-    }
-    const isolated = this.__isolate(callback);
-    const wrapper: EventCallback = (...args: unknown[]) => {
-      super.off(event as never, wrapper as never);
-      return isolated(...args);
-    };
-    this.__wrapped.set(callback, wrapper);
-    return super.on(event as never, wrapper as never);
   }
 
   /** `true` while the ticker is running. */
@@ -249,6 +172,7 @@ export class Cronus extends Events<CronusEvents> {
       running: false,
       runCount: 0,
       lastRun: null,
+      lastLocalFire: null,
     });
     return this;
   }
@@ -427,11 +351,24 @@ export class Cronus extends Events<CronusEvents> {
       if (!job.enabled) continue;
       const parsed = this.__parsed.get(job.name);
       if (parsed === undefined || !matches(parsed, at)) continue;
+      // DST fall-back guard (Vixie parity): a FIXED-TIME job fires at
+      // most once per wall-clock minute — when the fall-back replays
+      // an hour, the second pass reads the same local key and is
+      // skipped. Wildcard jobs run every physical minute regardless.
+      let localKey: string | undefined;
+      if (parsed.fixedTime) {
+        localKey = `${at.getFullYear()}-${at.getMonth()}-${at.getDate()}T` +
+          `${at.getHours()}:${at.getMinutes()}`;
+        if (job.lastLocalFire === localKey) continue;
+      }
       if (job.running) {
-        // Overlap prevented — the previous run has not finished.
-        this.__emit('skip', job.name, new Date(at.getTime()));
+        // Overlap prevented — the previous run has not finished. The
+        // local key is NOT stamped, so if the repeated DST hour comes
+        // around the job still gets its once-per-wall-time chance.
+        this._emit('skip', job.name, new Date(at.getTime()));
         continue;
       }
+      if (localKey !== undefined) job.lastLocalFire = localKey;
       // Every job gets its OWN Date — an action or listener mutating
       // its scheduledAt cannot corrupt sibling matching or timestamps.
       void this.__run(job, new Date(at.getTime()), false);
@@ -439,44 +376,14 @@ export class Cronus extends Events<CronusEvents> {
   }
 
   /**
-   * Wrap a listener so a sync throw or async rejection is caught and
-   * reported, never propagated. Cached per original callback so
-   * registration dedupe and `off(original)` keep working.
+   * Listener faults (sync throws and async rejections — isolation is
+   * inherited from `Events`) are reported with the package brand.
    */
-  private __isolate(callback: EventCallback): EventCallback {
-    let wrapped = this.__wrapped.get(callback);
-    if (wrapped === undefined) {
-      wrapped = (...args: unknown[]) => {
-        try {
-          const out = callback(...args) as unknown;
-          if (out instanceof Promise) {
-            out.catch((error) =>
-              console.error('[cronus] async listener rejected:', error)
-            );
-          }
-        } catch (error) {
-          console.error('[cronus] listener threw:', error);
-        }
-      };
-      this.__wrapped.set(callback, wrapped);
-    }
-    return wrapped;
-  }
-
-  /**
-   * Emit defensively. Listeners registered through {@link Cronus.on}/
-   * {@link Cronus.once} are individually isolated already; this is the
-   * outer belt for anything that reached the base class directly.
-   */
-  private __emit<K extends keyof CronusEvents>(
-    event: K,
-    ...args: Parameters<CronusEvents[K]>
+  protected override _onListenerError(
+    event: PropertyKey,
+    error: unknown,
   ): void {
-    try {
-      this.emit(event, ...args);
-    } catch (error) {
-      console.error(`[cronus] '${String(event)}' listener threw:`, error);
-    }
+    console.error(`[cronus] '${String(event)}' listener error:`, error);
   }
 
   /** Snapshot a {@link CronusJob} onto its public read-only view. */
@@ -542,7 +449,7 @@ export class Cronus extends Events<CronusEvents> {
     job.lastRun = new Date();
     const runId = crypto.randomUUID();
     const started = Date.now();
-    this.__emit('run', runId, job.name, scheduledAt);
+    this._emit('run', runId, job.name, scheduledAt);
     let result: unknown;
     let failure: CronusError | undefined;
     try {
@@ -566,11 +473,11 @@ export class Cronus extends Events<CronusEvents> {
     }
     const elapsed = Date.now() - started;
     if (failure === undefined) {
-      this.__emit('success', runId, job.name, scheduledAt, elapsed, result);
+      this._emit('success', runId, job.name, scheduledAt, elapsed, result);
     } else {
-      this.__emit('error', runId, job.name, scheduledAt, elapsed, failure);
+      this._emit('error', runId, job.name, scheduledAt, elapsed, failure);
     }
-    this.__emit('finish', runId, job.name, scheduledAt, elapsed);
+    this._emit('finish', runId, job.name, scheduledAt, elapsed);
     // Release the guard LAST: a listener above that re-triggered this
     // job saw running=true and backed off (resolves false).
     job.running = false;

@@ -132,7 +132,7 @@ export class MongoEngine
     options: EventOptionKeys<MongoEngineOptions, MongoEngineEvents>,
   ) {
     super(name, options, MONGO_DEFAULTS);
-    this.__slowThresholdMs = (this.getOption('slowQueryThreshold') ?? 0.5) *
+    this.__slowThresholdMs = (this._getOption('slowQueryThreshold') ?? 0.5) *
       1000;
     if (
       this.hasOption('uri') === false &&
@@ -172,11 +172,11 @@ export class MongoEngine
       try {
         this.__client = await this._connectClient();
         this._status = 'READY';
-        this.emit('connect', this.instanceId);
+        this._emit('connect', this.instanceId);
       } catch (e) {
         this._status = 'CLOSED';
         const error = this.__wrapMongoError(e, 'connect');
-        this.emit('connectionFailed', this.instanceId, error);
+        this._emit('connectionFailed', this.instanceId, error);
         throw error;
       }
     })();
@@ -196,7 +196,7 @@ export class MongoEngine
    */
   protected _connectClient(): Promise<MongoClient> {
     return MongoClient.connect(this.__buildUri(), {
-      ...(this.getOption('driverOptions') ?? {}),
+      ...(this._getOption('driverOptions') ?? {}),
     });
   }
 
@@ -223,10 +223,10 @@ export class MongoEngine
         this.__client = null;
       }
       this._status = 'CLOSED';
-      this.emit('disconnect', this.instanceId);
+      this._emit('disconnect', this.instanceId);
     } catch (e) {
       const error = this.__wrapMongoError(e, 'disconnect');
-      this.emit('error', this.instanceId, error);
+      this._emit('error', this.instanceId, error);
       throw error;
     }
   }
@@ -866,7 +866,7 @@ export class MongoEngine
   }
 
   private __defaultDb(): string {
-    const db = this.getOption('database');
+    const db = this._getOption('database');
     if (!db) {
       throw new EngineError('MISSING_CONFIG_VALUE', {
         instanceId: this.instanceId,
@@ -883,16 +883,16 @@ export class MongoEngine
    *   hostname / IPv4 / bracketed IPv6 (guards against URI injection).
    */
   private __buildUri(): string {
-    const explicit = this.getOption('uri');
+    const explicit = this._getOption('uri');
     if (explicit) return explicit;
 
-    const host = this.getOption('host')!;
-    const port = this.getOption('port') ?? 27017;
-    const username = this.getOption('username');
-    const password = this.getOption('password');
-    const database = this.getOption('database');
-    const replicaSet = this.getOption('replicaSet');
-    const authSource = this.getOption('authSource') ??
+    const host = this._getOption('host')!;
+    const port = this._getOption('port') ?? 27017;
+    const username = this._getOption('username');
+    const password = this._getOption('password');
+    const database = this._getOption('database');
+    const replicaSet = this._getOption('replicaSet');
+    const authSource = this._getOption('authSource') ??
       (username ? 'admin' : undefined);
 
     // `host` is interpolated raw into the URI authority (username,

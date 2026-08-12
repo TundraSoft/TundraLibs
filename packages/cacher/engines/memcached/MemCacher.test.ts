@@ -5,6 +5,21 @@ import { MemCacher, type MemCacherOptions } from './mod.ts';
 import { CacherEngineError } from '../../errors/mod.ts';
 import { envArgs } from '@tundralibs/utils';
 
+// Wave-note: emission/option accessors are protected now — tests reach
+// them through deliberate casts.
+// deno-lint-ignore no-explicit-any
+const readOption = (t: unknown, k: string): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOption(k);
+// deno-lint-ignore no-explicit-any
+const readOptions = (t: unknown): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._getOptions();
+// deno-lint-ignore no-explicit-any
+const fireEvent = (t: unknown, e: string, ...a: unknown[]): any =>
+  // deno-lint-ignore no-explicit-any
+  (t as any)._emitRaw(e, ...a);
+
 const env = envArgs('./packages/cacher/engines/');
 
 /** Resolve the configured Memcached port, falling back to the default. */
@@ -78,7 +93,7 @@ describe({
         asserts.assert(cacher instanceof MemCacher);
         asserts.assertEquals(cacher.name, 'memory-test');
         asserts.assertEquals(cacher.Engine, 'MEMCACHED');
-        asserts.assertEquals(cacher.getOption('defaultExpiry'), 300);
+        asserts.assertEquals(readOption(cacher, 'defaultExpiry'), 300);
       });
 
       it('set port and maxBufferSize', () => {
@@ -88,8 +103,8 @@ describe({
           maxBufferSize: undefined,
         });
 
-        asserts.assertEquals(cacher.getOption('port'), 11211);
-        asserts.assertEquals(cacher.getOption('maxBufferSize'), 10);
+        asserts.assertEquals(readOption(cacher, 'port'), 11211);
+        asserts.assertEquals(readOption(cacher, 'maxBufferSize'), 10);
       });
 
       it('Should throw on invalid config', () => {
@@ -168,7 +183,7 @@ describe({
           defaultExpiry: 600,
         });
 
-        asserts.assertEquals(cacher.getOption('defaultExpiry'), 600);
+        asserts.assertEquals(readOption(cacher, 'defaultExpiry'), 600);
       });
 
       it('should validate port range', () => {
