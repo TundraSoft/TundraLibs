@@ -14,7 +14,7 @@
   },
   "imports": {
     "@std/toml": "jsr:@std/toml@^1.0.11",
-    "@std/yaml": "jsr:@std/yaml@^1.1.2",
+    "@std/yaml": "jsr:@std/yaml@^1.2.0",
     "@std/jsonc": "jsr:@std/jsonc@^1.0.2"
   }
 }
