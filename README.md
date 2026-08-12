@@ -18,6 +18,7 @@ published to [JSR](https://jsr.io) under the `@tundralibs` scope.
 - **[Ambient](packages/ambient/README.md)** — Cross-runtime request-scoped context over AsyncLocalStorage — correlation/trace ids and custom fields that survive await, no threading
 - **[Cacher](packages/cacher/README.md)** — Cross-runtime caching with a unified API over Memory, Redis, and Memcached engines
 - **[compat](packages/compat/README.md)** — Compatibility layer smoothing API differences across Deno, Bun, and Node.js
+- **[Cronus](packages/cronus/README.md)** — Cross-runtime minute-resolution cron scheduler — tick-and-match (impossible expressions never crash), per-job overlap prevention, cron/run-once/run-now triggers.
 - **[crypt](packages/crypt/README.md)** — Cross-runtime cryptography — hashing, AES/RSA encryption, HMAC/RSA signing, JWT, OTP, key derivation, and secure random
 - **[Doctor](packages/doctor/README.md)** — Decorator-driven dependency injection with Singleton, Scoped, and Transient vial lifecycles. The Doctor prescribes vials, dispenses doses, and treats patients.
 - **[drivers](packages/drivers/README.md)** — Cross-runtime connection drivers for SQL (PostgreSQL, MariaDB/MySQL, SQLite), MongoDB, Redis, and Memcached

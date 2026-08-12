@@ -12,6 +12,7 @@ body:
         - ambient
         - cacher
         - compat
+        - cronus
         - crypt
         - doctor
         - drivers

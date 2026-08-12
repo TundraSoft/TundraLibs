@@ -10,6 +10,9 @@
 'pkg: compat':
   - changed-files:
       - any-glob-to-any-file: packages/compat/**
+'pkg: cronus':
+  - changed-files:
+      - any-glob-to-any-file: packages/cronus/**
 'pkg: crypt':
   - changed-files:
       - any-glob-to-any-file: packages/crypt/**
