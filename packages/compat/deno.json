@@ -22,6 +22,6 @@
   },
   "imports": {
     "@std/path": "jsr:@std/path@^1.1.6",
-    "@std/testing": "jsr:@std/testing@^1.0.19"
+    "@std/testing": "jsr:@std/testing@^1.0.20"
   }
 }

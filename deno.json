@@ -31,7 +31,7 @@
   "nodeModulesDir": "auto",
   "imports": {
     "@std/asserts": "jsr:@std/assert@^1.0.19",
-    "@std/testing": "jsr:@std/testing@^1.0.19"
+    "@std/testing": "jsr:@std/testing@^1.0.20"
   },
   "fmt": {
     "indentWidth": 2,
