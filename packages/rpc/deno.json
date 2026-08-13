@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/rpc",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Remote Procedure Call + pub/sub framework over WebSocket — typed request/response, channels, middleware, and pluggable adapters",
   "license": "MIT",
   "exports": {
