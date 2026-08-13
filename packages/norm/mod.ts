@@ -9,134 +9,27 @@
  * await db.repo('Users').insert({ email: 'a@b.c', ... });
  * ```
  *
+ * This barrel is the batteries-included entry point: it registers every
+ * dialect (`postgres`, `maria`, `sqlite`, `mongo`, `neon`, `turso`,
+ * `d1`), so any `database` config works with no extra import — and every
+ * driver, native SQLite binding included, is therefore in the bundle.
+ *
+ * On an edge runtime import {@link module:core} (`@tundralibs/norm/core`)
+ * plus the one `@tundralibs/norm/engines/<dialect>` module you need; the
+ * export surface is otherwise identical.
+ *
  * @module
  */
 
-// ─── Runtime ─────────────────────────────────────────────────────────
-export { type DatabaseConfig, Norm, type NormConfig, NormDb } from './Norm.ts';
-export { coerceCount, type NormResult, ulid } from './result.ts';
-export {
-  rotateKey,
-  type RotateKeyEntityReport,
-  type RotateKeyOptions,
-  type RotateKeyProgress,
-  type RotateKeyReport,
-} from './rotate.ts';
-export type { NormScope, ScopeInput, ScopeValue } from './scope.ts';
-export {
-  type FindOptions,
-  QueryAccessor,
-  ReadRepo,
-  Repo,
-  type RepoFor,
-} from './Repo.ts';
-export {
-  type AnySQLEngine,
-  bindTx,
-  type Executor,
-  type ExecutorCapabilities,
-  type ExecutorQuery,
-  mongoExecutor,
-  type NormDMLQuery,
-  type Session,
-  sqlExecutor,
-} from './executor.ts';
-export {
-  type CompiledEntity,
-  compileRuntime,
-  type NormCrypto,
-  type NormEmit,
-  type NormEvents,
-  type ReverseMap,
-  type ReverseRelation,
-  type Runtime,
-  type Witness,
-  type WitnessInfo,
-} from './compile.ts';
-export {
-  buildCellGuardian,
-  buildWriteGuardians,
-  validateRows,
-  type WriteGuardians,
-} from './guardians.ts';
-export {
-  canonicalizePlain,
-  type CryptoOverrides,
-  decodePlain,
-  DEFAULT_ENCRYPT_ALGORITHM,
-  DEFAULT_HASH_ALGORITHM,
-  type EncryptAlgorithm,
-  type HashAlgorithm,
-  pbkdf2Verify,
-  SIBLING_HASH_ALGORITHM,
-} from './crypto.ts';
-export {
-  type AdvisoryLockErrorMeta,
-  type CryptoErrorMeta,
-  type DefinitionIssue,
-  NormAdvisoryLockError,
-  NormCryptoError,
-  NormDefinitionError,
-  NormError,
-  type NormErrorCode,
-  NormHookError,
-  NormQueryError,
-  NormUnsupportedError,
-  NormValidationError,
-  type QueryErrorMeta,
-  type ValidationIssue,
-} from './errors/mod.ts';
+// Side-effect imports: each registers one dialect's engine factory (see
+// `engines/registry.ts`). They come first so a dialect is registered
+// before any consumer code can construct a Norm.
+import './engines/postgres.ts';
+import './engines/maria.ts';
+import './engines/sqlite.ts';
+import './engines/mongo.ts';
+import './engines/neon.ts';
+import './engines/turso.ts';
+import './engines/d1.ts';
 
-// ─── Definition layer ────────────────────────────────────────────────
-
-export {
-  type AnyColumnBuilder,
-  type AnyDefinition,
-  Column,
-  ColumnBuilder,
-  type ColumnSnapshot,
-  type ColumnSpec,
-  type ComposedSchema,
-  DateColumnBuilder,
-  type DefaultInput,
-  type DefaultRowOf,
-  DIGEST_LENGTHS,
-  type DigestAlgorithm,
-  DigestColumnBuilder,
-  type EmittedForeignKey,
-  EncryptedColumnBuilder,
-  Entity,
-  type EntityQueryOptions,
-  type EntitySnapshot,
-  type EntityTableOptions,
-  type EntityViewOptions,
-  type ExpressionDefault,
-  type FilterOf,
-  type FilterShapeOf,
-  type ForeignKeyDef,
-  HashedColumnBuilder,
-  type InsertOf,
-  MaskColumnBuilder,
-  NumberColumnBuilder,
-  type PrimaryKeyOf,
-  type ProjectedRowOf,
-  type ProjectionInput,
-  type QueryDefinition,
-  type ReadHooks,
-  type ReadRowOf,
-  type RowOf,
-  Schema,
-  type SchemaDefinition,
-  type SchemaValue,
-  type Snapshot,
-  snapshot,
-  StringColumnBuilder,
-  type TableDefinition,
-  type TableHooks,
-  toMarkdown,
-  toMermaidERD,
-  toPlantUML,
-  type UpdateOf,
-  use,
-  type ViewDefinition,
-} from './definition/mod.ts';
+export * from './core.ts';

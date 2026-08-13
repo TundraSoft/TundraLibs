@@ -50,6 +50,10 @@ export type NormErrorCode =
   | 'INVALID_HANDLE'
   /** `new Norm({...})` engine/database configuration is invalid. */
   | 'INVALID_ENGINE_CONFIG'
+  /** `new Norm({ database })` named a known dialect whose engine module
+   * has not been imported — import `@tundralibs/norm/engines/<dialect>`,
+   * or the root `@tundralibs/norm` barrel which registers all of them. */
+  | 'ENGINE_NOT_REGISTERED'
   // ── Definition / registry ({@link NormDefinitionError}) ────────────
   /** Two registry keys map to the same database object, or a key is
    * provided by more than one composed schema. */

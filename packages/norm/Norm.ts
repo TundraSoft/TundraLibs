@@ -28,19 +28,28 @@
  * @since 1.0.0
  */
 
-import {
-  type EngineQueryResult,
-  type EngineTransactionOptions,
-  MariaEngine,
-  type MariaEngineOptions,
+// EVERY `@tundralibs/drivers` import in this file is TYPE-ONLY, and must
+// stay that way: a value import of an engine class here lands in the
+// runtime graph of every norm consumer, which is exactly what stopped
+// norm bundling for edge runtimes (the native SQLite adapter's
+// `bun:sqlite` / `@db/sqlite` specifiers). Engines are constructed
+// through the `engines/` registry instead.
+import type {
+  EngineQueryResult,
+  EngineTransactionOptions,
+} from '@tundralibs/drivers/types';
+import type { D1EngineOptions } from '@tundralibs/drivers/d1';
+import type { MariaEngineOptions } from '@tundralibs/drivers/maria';
+import type {
   MongoEngine,
-  type MongoEngineOptions,
-  PostgresEngine,
-  type PostgresEngineOptions,
-  SQLiteEngine,
-  type SQLiteEngineOptions,
-} from '@tundralibs/drivers';
+  MongoEngineOptions,
+} from '@tundralibs/drivers/mongo';
+import type { NeonHttpEngineOptions } from '@tundralibs/drivers/neon';
+import type { PostgresEngineOptions } from '@tundralibs/drivers/postgres';
+import type { SQLiteEngineOptions } from '@tundralibs/drivers/sqlite';
+import type { TursoEngineOptions } from '@tundralibs/drivers/turso';
 import { type EventOptionKeys, Options } from '@tundralibs/utils';
+import { resolveEngineFactory } from './engines/mod.ts';
 import {
   type AnyDefinition,
   type ComposedSchema,
@@ -86,7 +95,15 @@ import {
 } from './scope.ts';
 import { coerceCount, makeResult, type NormResult, ulid } from './result.ts';
 
-/** Engine construction config, discriminated by dialect. */
+/**
+ * Engine construction config, discriminated by dialect.
+ *
+ * `neon` (Postgres over HTTP), `turso` and `d1` (SQLite over HTTP) are
+ * the fetch-only engines — the ones that work on an edge runtime. The
+ * dialect's engine module must be registered before construction; the
+ * root `@tundralibs/norm` barrel registers all seven, while
+ * `@tundralibs/norm/core` registers none (see `engines/registry.ts`).
+ */
 export type DatabaseConfig =
   | (
     & { dialect: 'postgres' }
@@ -94,7 +111,10 @@ export type DatabaseConfig =
   )
   | ({ dialect: 'maria' } & MariaEngineOptions)
   | ({ dialect: 'sqlite' } & SQLiteEngineOptions)
-  | ({ dialect: 'mongo' } & MongoEngineOptions);
+  | ({ dialect: 'mongo' } & MongoEngineOptions)
+  | ({ dialect: 'neon' } & NeonHttpEngineOptions)
+  | ({ dialect: 'turso' } & TursoEngineOptions)
+  | ({ dialect: 'd1' } & D1EngineOptions);
 
 /** Constructor options. Exactly one of `engine` / `database`. */
 export type NormConfig = {
@@ -234,7 +254,7 @@ export class Norm extends Options<NormConfig, NormEvents> {
         void this._emit('slowQuery', id, r.id, r.time, r.transactionId),
     );
     // transactionTimeout is a SQL-only engine event (Mongo has no tx).
-    if (!(engine instanceof MongoEngine)) {
+    if (!isMongoEngine(engine)) {
       engine.on(
         'transactionTimeout',
         (_id: string, txId: string) =>
@@ -718,9 +738,7 @@ export class NormDb<R, Scope extends string = never> {
   }
 }
 
-/**
- * Pick the executor: caller-supplied `engine`, or constructed from
- * `database` via the matching dialect driver.
+/** Instance-name counter for engines Norm constructs itself.
  *
  * @internal
  */
@@ -732,12 +750,38 @@ type ResolvedEngine = {
   engine: AnySQLEngine | MongoEngine;
 };
 
+/**
+ * Is this the Mongo engine? Checked on the engine's own `Engine` label
+ * rather than `instanceof MongoEngine`, because the class reference would
+ * be a VALUE import of `@tundralibs/drivers/mongo` — dragging the Mongo
+ * driver into every consumer's bundle for a branch that only needs to
+ * know "SQL or not". Every driver engine sets `Engine`; a bare object
+ * used as a test double has none and is treated as SQL, exactly as the
+ * `instanceof` check treated it.
+ */
+function isMongoEngine(
+  engine: AnySQLEngine | MongoEngine,
+): engine is MongoEngine {
+  return (engine as { Engine?: string })?.Engine === 'MONGO';
+}
+
 function wrap(engine: AnySQLEngine | MongoEngine): ResolvedEngine {
-  return engine instanceof MongoEngine
+  return isMongoEngine(engine)
     ? { executor: mongoExecutor(engine), engine }
     : { executor: sqlExecutor(engine), engine };
 }
 
+/**
+ * Pick the executor: caller-supplied `engine`, or one built from
+ * `database` by the dialect's registered factory.
+ *
+ * @throws {NormError} `INVALID_ENGINE_CONFIG` when both `engine` and
+ *   `database` are given, when neither is, or when `database.dialect` is
+ *   not a known dialect.
+ * @throws {NormError} `ENGINE_NOT_REGISTERED` when the dialect is known
+ *   but its `@tundralibs/norm/engines/<dialect>` module has not been
+ *   imported.
+ */
 function resolveEngine(cfg: NormConfig): ResolvedEngine {
   if (cfg.engine !== undefined && cfg.database !== undefined) {
     throw new NormError(
@@ -757,34 +801,11 @@ function resolveEngine(cfg: NormConfig): ResolvedEngine {
     );
   }
   const name = `norm-${++normEngineCounter}`;
-  const db = cfg.database;
-  switch (db.dialect) {
-    case 'postgres': {
-      const { dialect: _d, ...rest } = db;
-      return wrap(new PostgresEngine(name, rest));
-    }
-    case 'maria': {
-      const { dialect: _d, ...rest } = db;
-      return wrap(new MariaEngine(name, rest));
-    }
-    case 'sqlite': {
-      const { dialect: _d, ...rest } = db;
-      return wrap(new SQLiteEngine(name, rest));
-    }
-    case 'mongo': {
-      const { dialect: _d, ...rest } = db;
-      return wrap(new MongoEngine(name, rest));
-    }
-    default: {
-      const exhaustive: never = db;
-      throw new NormError(
-        `new Norm({ database }): unknown dialect '${
-          (exhaustive as { dialect: string }).dialect
-        }'`,
-        { code: 'INVALID_ENGINE_CONFIG' },
-      );
-    }
-  }
+  const { dialect, ...rest } = cfg.database;
+  // Registry lookup, not a `switch` over imported engine classes — see
+  // `engines/registry.ts` for why the classes cannot live in this file.
+  const factory = resolveEngineFactory(dialect);
+  return wrap(factory(name, rest as Record<string, unknown>));
 }
 
 // ---------------------------------------------------------------------

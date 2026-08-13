@@ -22,15 +22,25 @@ import type {
   EngineQueryResult,
   EngineTransactionOptions,
   MongoEngine,
-  SQLEngine,
+  SQLConnectionEngine,
   TransactionScope,
 } from '@tundralibs/drivers';
 import type { Query } from '@tundralibs/oql/types';
 import { NormAdvisoryLockError, NormUnsupportedError } from './errors/mod.ts';
 
-/** Any SQL engine, dialect-erased. */
+/**
+ * Any SQL engine, dialect-erased.
+ *
+ * Rooted at `SQLConnectionEngine` — the pool-free base — rather than the
+ * pooled `SQLEngine`, so the fetch-only edge engines (`NeonHttpEngine`,
+ * `TursoEngine`, `D1Engine`, which own a single stateless HTTP client
+ * instead of a connection pool) are accepted here too. The pooled engines
+ * still satisfy it (`SQLEngine extends SQLConnectionEngine`), and the
+ * base declares the whole public surface this seam uses — the pool is an
+ * implementation detail of the subclass, never read through this type.
+ */
 // deno-lint-ignore no-explicit-any
-export type AnySQLEngine = SQLEngine<any, any, any>;
+export type AnySQLEngine = SQLConnectionEngine<any, any, any>;
 
 /** The DML query types `db.query()` accepts. */
 export type NormDMLQuery =
