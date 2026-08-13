@@ -106,7 +106,7 @@ strictly the 15th).
 Parse an expression into a `ParsedSchedule` (per-field value sets plus
 restriction flags).
 
-```typescript
+```typescript ignore
 parseSchedule(expression: string): ParsedSchedule
 ```
 
@@ -134,7 +134,7 @@ const schedule = parseSchedule('*/15 9-17 * * MON-FRI');
 Does a `Date` (local time, minute resolution) satisfy a parsed
 schedule?
 
-```typescript
+```typescript ignore
 matches(schedule: ParsedSchedule, date: Date): boolean
 ```
 
@@ -150,7 +150,7 @@ matches(parseSchedule('30 6 * * *'), new Date(2026, 0, 1, 6, 30)); // true
 
 Validate without throwing.
 
-```typescript
+```typescript ignore
 isValidSchedule(expression: string): boolean
 ```
 
