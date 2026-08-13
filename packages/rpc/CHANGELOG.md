@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.0.2...rpc-v1.1.0) (2026-08-13)
+
+
+### Features
+
+* **rpc:** carry structured data on error result frames ([#231](https://github.com/TundraSoft/TundraLibs/issues/231)) ([64ab901](https://github.com/TundraSoft/TundraLibs/commit/64ab9014f9d08b00355aec3b6e4bf6cfaa06ef97))
+
 ## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.0.1...rpc-v1.0.2) (2026-08-13)
 
 
