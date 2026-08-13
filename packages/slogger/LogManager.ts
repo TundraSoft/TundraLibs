@@ -4,60 +4,27 @@
  */
 
 import { Singleton } from '@tundralibs/utils';
-import {
-  AbstractHandler,
-  type HandlerOptions,
-} from './handlers/AbstractHandler.ts';
-import {
-  BlackholeHandler,
-  ConsoleHandler,
-  FileHandler,
-  HTTPHandler,
-  MemoryHandler,
-  StreamHandler,
-  SyslogHandler,
-  TCPHandler,
-} from './handlers/mod.ts';
-import type { SloggerFormatter, SlogObject } from './types/mod.ts';
-import {
-  jsonFormatter,
-  prettyJsonFormatter,
-} from './formatters/jsonFormatter.ts';
-import { logfmtFormatter } from './formatters/logfmt.ts';
-import { otelLogFormatter } from './formatters/otel.ts';
-import {
-  compactFormat,
-  detailedFormat,
-  keyValueFormat,
-  minimalistFormat,
-  simpleFormatter,
-  standardFormat,
-} from './formatters/string.ts';
-import { HandlerConfig, Slogger, SloggerOptions } from './Slogger.ts';
+import type { AbstractHandler, HandlerOptions } from './handlers/mod.ts';
+import type { SloggerFormatter } from './types/mod.ts';
+import { type HandlerConfig, Slogger, type SloggerOptions } from './Slogger.ts';
+import { registry } from './Registry.ts';
 import { SloggerConfigError } from './errors/mod.ts';
 /**
  * LogManager Singleton
  *
  * Manages all available handlers and formatters in the Slogger system.
  * Provides factory methods to initialize handlers and access formatters.
+ *
+ * The handler/formatter half of this surface is stored in the shared
+ * {@link registry} leaf module rather than on this class, so `Slogger`
+ * can resolve `type` / `formatter` strings without importing back into
+ * this module. Every method below forwards to that one instance — a
+ * formatter added here is immediately visible to every `Slogger`. The
+ * logger cache (`_loggers`) stays here because it constructs `Slogger`
+ * instances, which the registry deliberately knows nothing about.
  */
 @Singleton
 class Manager {
-  /** Map of registered handler constructors */
-  protected _handlers: Map<
-    string,
-    new (
-      name: string,
-      options: HandlerOptions & Record<string, unknown>,
-    ) => AbstractHandler
-  > = new Map();
-
-  /** Map of registered formatters */
-  protected _formatters: Map<
-    string,
-    SloggerFormatter
-  > = new Map();
-
   protected _loggers: Map<string, Slogger> = new Map();
 
   /**
@@ -65,42 +32,6 @@ class Manager {
    * {@link createSlogger} to detect conflicting re-creation.
    */
   private __loggerConfigs: Map<string, SloggerOptions> = new Map();
-
-  constructor() {
-    // Register built-in handlers
-    this.__registerDefaultHandlers();
-    // Register built-in formatters
-    this.__registerDefaultFormatters();
-  }
-
-  /**
-   * Registers all built-in handler types
-   */
-  private __registerDefaultHandlers(): void {
-    this.addHandler('FileHandler', FileHandler);
-    this.addHandler('ConsoleHandler', ConsoleHandler);
-    this.addHandler('HTTPHandler', HTTPHandler);
-    this.addHandler('SyslogHandler', SyslogHandler);
-    this.addHandler('TCPHandler', TCPHandler);
-    this.addHandler('StreamHandler', StreamHandler);
-    this.addHandler('MemoryHandler', MemoryHandler);
-    this.addHandler('BlackholeHandler', BlackholeHandler);
-  }
-
-  /**
-   * Registers all built-in formatters
-   */
-  private __registerDefaultFormatters(): void {
-    this.addFormatter('json', jsonFormatter);
-    this.addFormatter('prettyJson', prettyJsonFormatter);
-    this.addFormatter('standard', standardFormat);
-    this.addFormatter('detailed', detailedFormat);
-    this.addFormatter('compact', compactFormat);
-    this.addFormatter('minimalist', minimalistFormat);
-    this.addFormatter('keyValue', keyValueFormat);
-    this.addFormatter('logfmt', logfmtFormatter());
-    this.addFormatter('otelLog', otelLogFormatter());
-  }
 
   /**
    * Adds a handler constructor to the registry
@@ -122,36 +53,7 @@ class Manager {
       options: T,
     ) => AbstractHandler,
   ): void {
-    // Validate name
-    if (!name || typeof name !== 'string' || name.trim() === '') {
-      throw new SloggerConfigError('Handler name must be a non-empty string', {
-        key: 'name',
-      });
-    }
-
-    // Check for duplicates
-    if (this._handlers.has(name)) {
-      throw new SloggerConfigError(`Handler '${name}' is already registered`, {
-        key: 'name',
-      });
-    }
-
-    // Validate constructor
-    if (typeof handlerConstructor !== 'function') {
-      throw new SloggerConfigError(
-        'Handler constructor must be a valid class constructor',
-        { key: 'handlerConstructor' },
-      );
-    }
-
-    // Register the handler
-    this._handlers.set(
-      name,
-      handlerConstructor as new (
-        name: string,
-        options: HandlerOptions & Record<string, unknown>,
-      ) => AbstractHandler,
-    );
+    registry.addHandler(name, handlerConstructor);
   }
 
   /**
@@ -164,57 +66,7 @@ class Manager {
    *   function returning a string.
    */
   public addFormatter(name: string, formatter: SloggerFormatter): void {
-    // Validate name
-    if (!name || typeof name !== 'string' || name.trim() === '') {
-      throw new SloggerConfigError(
-        'Formatter name must be a non-empty string',
-        { key: 'name' },
-      );
-    }
-
-    // Check for duplicates
-    if (this._formatters.has(name)) {
-      throw new SloggerConfigError(
-        `Formatter '${name}' is already registered`,
-        { key: 'name' },
-      );
-    }
-
-    // Validate formatter
-    if (typeof formatter !== 'function') {
-      throw new SloggerConfigError('Formatter must be a valid function', {
-        key: 'formatter',
-      });
-    }
-
-    // Validate formatter output with a test log
-    try {
-      const testLog = {
-        id: '1',
-        appName: 'test',
-        hostname: 'test',
-        level: 1,
-        date: new Date(),
-        timestamp: Date.now(),
-        isoDate: new Date().toISOString(),
-        levelName: 'WARNING',
-        context: {},
-        message: 'test',
-      } as SlogObject;
-
-      const result = formatter(testLog);
-      if (typeof result !== 'string') {
-        throw new TypeError('Formatter must return a string');
-      }
-    } catch (e) {
-      throw new SloggerConfigError(
-        `Invalid formatter: ${e instanceof Error ? e.message : String(e)}`,
-        { key: 'formatter' },
-        e instanceof Error ? e : undefined,
-      );
-    }
-
-    this._formatters.set(name, formatter);
+    registry.addFormatter(name, formatter);
   }
 
   /**
@@ -227,24 +79,7 @@ class Manager {
    *   string or a formatter with `name` already exists.
    */
   public createFormatter(name: string, template: string): SloggerFormatter {
-    // Validate template
-    if (!template || typeof template !== 'string') {
-      throw new SloggerConfigError('Template must be a non-empty string', {
-        key: 'template',
-      });
-    }
-
-    // Check for duplicates
-    if (this._formatters.has(name)) {
-      throw new SloggerConfigError(
-        `Formatter '${name}' is already registered`,
-        { key: 'name' },
-      );
-    }
-
-    const formatter = simpleFormatter(template);
-    this.addFormatter(name, formatter);
-    return formatter;
+    return registry.createFormatter(name, template);
   }
 
   /**
@@ -254,7 +89,7 @@ class Manager {
    * @returns The formatter function or undefined if not found
    */
   public getFormatter(name: string): SloggerFormatter | undefined {
-    return this._formatters.get(name);
+    return registry.getFormatter(name);
   }
 
   /**
@@ -263,7 +98,7 @@ class Manager {
    * @returns Array of formatter names
    */
   public getFormatterNames(): string[] {
-    return Array.from(this._formatters.keys());
+    return registry.getFormatterNames();
   }
 
   /**
@@ -272,7 +107,7 @@ class Manager {
    * @returns Array of handler type names
    */
   public getHandlerTypes(): string[] {
-    return Array.from(this._handlers.keys());
+    return registry.getHandlerTypes();
   }
 
   /**
@@ -291,36 +126,7 @@ class Manager {
     name: string,
     options: Omit<HandlerConfig, 'name' | 'type'>,
   ): AbstractHandler {
-    const handlerConstructor = this._handlers.get(type);
-    if (!handlerConstructor) {
-      throw new SloggerConfigError(`Handler type '${type}' not found`, {
-        key: 'type',
-      });
-    }
-
-    // If formatter is specified by name, resolve it
-    if (options.formatter && typeof options.formatter === 'string') {
-      const formatterName = options.formatter;
-      const formatter = this.getFormatter(formatterName);
-      if (!formatter) {
-        throw new SloggerConfigError(`Formatter '${formatterName}' not found`, {
-          key: 'formatter',
-        });
-      }
-      options.formatter = formatter;
-    }
-
-    const handler = new handlerConstructor(name, options as HandlerOptions);
-    // Kick off async initialization (e.g. FileHandler opening its file)
-    // eagerly, but never leave the promise unhandled: an init failure
-    // (bad directory, permission denied) would otherwise surface as an
-    // uncaught rejection that terminates the process. `handle()` and
-    // `finalize()` await the same cached promise, so early records wait
-    // for setup instead of racing ahead and being dropped, and the
-    // error is re-surfaced there (swallowed by Slogger.log(), or raised
-    // by Slogger.finalize()) rather than crashing.
-    handler.ensureInitialized().catch(() => {});
-    return handler;
+    return registry.createHandler(type, name, options);
   }
 
   /**

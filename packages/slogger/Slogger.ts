@@ -13,7 +13,7 @@ import { hostname } from '@tundralibs/compat/net';
 import { onExit } from '@tundralibs/compat/runtime';
 import { AbstractHandler, type HandlerOptions } from './handlers/mod.ts';
 import type { SloggerFormatter, SlogObject } from './types/mod.ts';
-import { LogManager } from './LogManager.ts';
+import { registry } from './Registry.ts';
 import { SamplingOptions } from './handlers/AbstractHandler.ts';
 import {
   SloggerConfigError,
@@ -97,7 +97,7 @@ export type SloggerOptions = {
    *
    * Called lazily — only for records that pass the level/handler filters, so
    * muted lines never invoke it. Like formatters, the provider is compared by
-   * **reference identity** for {@link LogManager} caching: hoist it to a
+   * **reference identity** for `LogManager` caching: hoist it to a
    * stable `const`, don't pass a fresh arrow on each `createSlogger` call.
    */
   contextProvider?: () => LogContext;
@@ -241,7 +241,7 @@ export class Slogger {
           // Resolve formatter if provided as string
           if (options.formatter) {
             if (typeof options.formatter === 'string') {
-              const formatter = LogManager.getFormatter(options.formatter);
+              const formatter = registry.getFormatter(options.formatter);
               if (!formatter) {
                 throw new SloggerConfigError(
                   `Formatter '${options.formatter}' not found`,
@@ -263,7 +263,7 @@ export class Slogger {
           }
 
           // Create and register the handler
-          const handler = LogManager.createHandler(
+          const handler = registry.createHandler(
             type,
             name,
             options as HandlerOptions,
