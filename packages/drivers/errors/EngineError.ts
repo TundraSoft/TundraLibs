@@ -32,6 +32,16 @@ export type EngineErrorMeta = {
  *
  * @example
  * ```typescript
+ * import { EngineError } from '@tundralibs/drivers/errors';
+ * import { PostgresEngine } from '@tundralibs/drivers/postgres';
+ *
+ * const engine = new PostgresEngine('app', {
+ *   host: 'localhost',
+ *   database: 'app',
+ * });
+ * const sql = 'INSERT INTO users (email) VALUES (:email:)';
+ * const params = { email: 'ada@example.dev' };
+ *
  * try {
  *   await engine.execute({ sql, params });
  * } catch (err) {

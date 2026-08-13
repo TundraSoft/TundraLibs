@@ -661,6 +661,13 @@ export abstract class SQLConnectionEngine<
    *
    * @example
    * ```ts
+   * import { PostgresEngine } from '@tundralibs/drivers/postgres';
+   *
+   * const engine = new PostgresEngine('app', {
+   *   host: 'localhost',
+   *   database: 'app',
+   * });
+   *
    * const rows = await engine.transaction(async (tx) => {
    *   await tx.execute({ sql: 'INSERT INTO users ...' });
    *   return await tx.execute({ sql: 'SELECT * FROM users' });
