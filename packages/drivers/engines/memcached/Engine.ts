@@ -39,13 +39,13 @@ import {
   type TLSOptions as CompatTLSOptions,
 } from '@tundralibs/compat';
 import type { EventOptionKeys } from '@tundralibs/utils';
-import {
-  BaseEngine,
-  type EngineCapabilities,
-  EngineError,
-  type EngineQueryResult,
-  type MemcachedEngineEvents,
-} from '../../mod.ts';
+import { BaseEngine } from '../../BaseEngine.ts';
+import { EngineError } from '../../errors/mod.ts';
+import type {
+  EngineCapabilities,
+  EngineQueryResult,
+  MemcachedEngineEvents,
+} from '../../types/mod.ts';
 import { looksLikeTlsRuntimeError } from '../../tls.ts';
 import type { MemcachedEngineOptions } from './types/mod.ts';
 
