@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.0.1...rpc-v1.0.2) (2026-08-13)
+
+
+### Refactoring
+
+* **rpc:** move the pub/sub conformance harness off the public barrels ([#224](https://github.com/TundraSoft/TundraLibs/issues/224)) ([b696546](https://github.com/TundraSoft/TundraLibs/commit/b6965461ca06b369379d6ac042f22e21e2fe108d))
+
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.0.0...rpc-v1.0.1) (2026-08-09)
 
 
