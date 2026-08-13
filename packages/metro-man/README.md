@@ -142,6 +142,10 @@ produces a distinct series — be mindful of cardinality. The
 unlabelled series is keyed as `'no_label'`.
 
 ```typescript
+import { Counter } from '@tundralibs/metro-man';
+
+const counter = new Counter({ name: 'http_requests_total' });
+
 counter.inc({ method: 'GET', status: '200' });
 counter.inc({ method: 'GET', status: '500' });
 counter.inc(); // unlabelled series
@@ -214,7 +218,7 @@ Case-insensitive lookup.
 
 Dump some or all metrics in the requested format. Overloads:
 
-```typescript
+```typescript ignore
 collect('JSON', metrics?): Record<string, unknown>
 collect('STRING', metrics?): string
 collect('PROMETHEUS', metrics?): string
