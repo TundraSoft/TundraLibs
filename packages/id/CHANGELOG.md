@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/id-v1.0.1...id-v1.0.2) (2026-08-13)
+
+
+### Bug Fixes
+
+* **id:** import compat via subpaths instead of the root barrel ([7e87260](https://github.com/TundraSoft/TundraLibs/commit/7e87260acaf90cb3b4b9352f03abf5ab21b31167))
+* **id:** import compat via subpaths instead of the root barrel ([51223ab](https://github.com/TundraSoft/TundraLibs/commit/51223ab07494d645c9c547aaef61b3f62b903809))
+
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/id-v1.0.0...id-v1.0.1) (2026-08-12)
 
 
