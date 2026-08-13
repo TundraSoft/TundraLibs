@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { Connection } from '@tundralibs/compat';
+import type { Connection } from '@tundralibs/compat/net';
 import { EngineError } from '../../errors/mod.ts';
 import { encodeCommand, parseReply, type RespValue } from './resp.ts';
 

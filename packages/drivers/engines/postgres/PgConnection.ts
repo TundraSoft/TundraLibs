@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { Connection } from '@tundralibs/compat';
+import type { Connection } from '@tundralibs/compat/net';
 import { EngineError } from '../../errors/mod.ts';
 import { PgServerError } from './PgServerError.ts';
 import {

@@ -42,12 +42,8 @@
  * ```
  */
 
-import {
-  connect,
-  type Connection,
-  type TLSOptions,
-  upgradeTls,
-} from '@tundralibs/compat';
+import type { TLSOptions } from '@tundralibs/compat/common';
+import { connect, type Connection, upgradeTls } from '@tundralibs/compat/net';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import { PostgresTranslator } from '@tundralibs/oql/translator';
 import { SQLEngine } from '../../SQLEngine.ts';

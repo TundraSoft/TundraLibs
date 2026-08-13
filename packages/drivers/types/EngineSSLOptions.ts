@@ -4,7 +4,7 @@
  * @module
  */
 
-import type { TLSOptions } from '@tundralibs/compat';
+import type { TLSOptions } from '@tundralibs/compat/common';
 
 /**
  * SSL / TLS configuration for the connection.
