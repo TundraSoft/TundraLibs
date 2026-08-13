@@ -1,0 +1,28 @@
+/**
+ * @module
+ *
+ * Registers the `maria` dialect (MariaDB / MySQL). Import for its side
+ * effect:
+ *
+ * ```ts
+ * import '@tundralibs/norm/engines/maria';
+ * import { Norm } from '@tundralibs/norm/core';
+ *
+ * const norm = new Norm({ database: { dialect: 'maria', host, database, username } });
+ * ```
+ *
+ * The root `@tundralibs/norm` barrel already imports this module.
+ *
+ * Pulls the MariaDB TCP wire stack — NOT edge-safe.
+ *
+ * @since 1.2.0
+ */
+
+import { MariaEngine } from '@tundralibs/drivers/maria';
+import { registerEngine } from './registry.ts';
+
+registerEngine(
+  'maria',
+  (name: string, options: ConstructorParameters<typeof MariaEngine>[1]) =>
+    new MariaEngine(name, options),
+);

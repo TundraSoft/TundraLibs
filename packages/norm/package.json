@@ -5,10 +5,19 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
+    "./core": "./core.ts",
     "./errors": "./errors/mod.ts",
     "./definition": "./definition/mod.ts",
     "./migrations": "./migrations/mod.ts",
-    "./asserts": "./asserts/mod.ts"
+    "./asserts": "./asserts/mod.ts",
+    "./engines": "./engines/mod.ts",
+    "./engines/postgres": "./engines/postgres.ts",
+    "./engines/maria": "./engines/maria.ts",
+    "./engines/sqlite": "./engines/sqlite.ts",
+    "./engines/mongo": "./engines/mongo.ts",
+    "./engines/neon": "./engines/neon.ts",
+    "./engines/turso": "./engines/turso.ts",
+    "./engines/d1": "./engines/d1.ts"
   },
   "engines": {
     "node": ">=22"
