@@ -51,7 +51,10 @@ export type RESTlerHeaderProvider = () => Record<string, string>;
  * application's composition root through a vendor client's constructor:
  *
  * ```ts
+ * import { RESTler, type RESTlerHooks } from '@tundralibs/restler';
+ *
  * class GitHubAPI extends RESTler {
+ *   public readonly vendor = 'github';
  *   constructor(token: string, hooks: RESTlerHooks = {}) {
  *     super({ baseURL: 'https://api.github.com', auth: { type: 'BEARER', token }, ...hooks });
  *   }

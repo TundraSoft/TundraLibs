@@ -308,7 +308,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * that authenticates with a vendor-specific header extends the sensitive set
    * by overriding this method — for example:
    *
-   * ```typescript
+   * ```typescript ignore
    * protected override _isSensitiveHeader(name: string): boolean {
    *   return name.toLowerCase() === 'x-vendor-secret' ||
    *     super._isSensitiveHeader(name);
