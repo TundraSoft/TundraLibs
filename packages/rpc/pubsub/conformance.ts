@@ -7,10 +7,10 @@
  * this suite against itself and observe the same assertions
  * `MemoryPubSubAdapter` is held to.
  *
- * Usage:
+ * Usage — note the dedicated `/conformance` sub-path:
  *
  * ```ts
- * import { runAdapterConformance } from '@tundralibs/rpc/pubsub';
+ * import { runAdapterConformance } from '@tundralibs/rpc/conformance';
  * import { describe } from '@tundralibs/compat/test';
  * import { MyRedisAdapter } from './MyRedisAdapter.ts';
  *
@@ -27,6 +27,14 @@
  * `crossProcess` broadcast, which requires a separate adapter
  * instance on another process. Run an out-of-process integration
  * test in addition to this suite for those.
+ *
+ * Reachable **only** through the `/conformance` sub-path — never from
+ * `@tundralibs/rpc` or `@tundralibs/rpc/pubsub`. This module
+ * statically imports `@tundralibs/compat/test`, which resolves
+ * `bun:test` / `node:test`; those specifiers are unresolvable to
+ * browser and edge-worker bundlers (Cloudflare Workers' esbuild fails
+ * the build outright). Isolating the harness here keeps the runtime
+ * barrels bundler-safe — import it from test files only.
  *
  * @module
  */

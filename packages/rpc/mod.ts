@@ -6,7 +6,11 @@
  * types, the wire-protocol codec, and the default in-memory pub/sub
  * adapter. Cross-process broadcast adapters (Redis, etc.) are out of
  * scope here; plug your own implementation of {@link PubSubAdapter}
- * into `new Server({ pubsub: ... })`.
+ * into `new Server({ pubsub: ... })`. To verify such an adapter
+ * against the contract, import `runAdapterConformance` from the
+ * `@tundralibs/rpc/conformance` sub-path — it is kept off this barrel
+ * because it pulls in a test framework, which browser and edge-worker
+ * bundlers cannot resolve.
  *
  * `Server` and `Client` share a single wire protocol and a parallel
  * middleware mental model (`use` on Server, `useSend` / `useReceive`
@@ -71,11 +75,8 @@ export {
 
 export {
   type AdapterCapabilities,
-  type AdapterFactory,
-  type ConformanceOptions,
   MemoryPubSubAdapter,
   PubSubAdapter,
-  runAdapterConformance,
   type Subscription,
 } from './pubsub/mod.ts';
 

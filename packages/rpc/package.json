@@ -6,6 +6,7 @@
   "exports": {
     ".": "./mod.ts",
     "./pubsub": "./pubsub/mod.ts",
+    "./conformance": "./pubsub/conformance.ts",
     "./types": "./types/mod.ts",
     "./errors": "./errors/mod.ts"
   },
