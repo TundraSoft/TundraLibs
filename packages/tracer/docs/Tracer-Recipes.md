@@ -71,6 +71,17 @@ Covers `Deno.serve`, `Bun.serve`, Cloudflare Workers, and
 `(Request) => Response`.
 
 ```typescript
+import {
+  extract,
+  SemConv,
+  SpanKind,
+  SpanStatusCode,
+  Tracer,
+} from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const myHandler = (_req: Request) => Promise.resolve(new Response('ok'));
+
 const traced =
   (handler: (req: Request) => Promise<Response>) =>
   (req: Request): Promise<Response> => {
@@ -100,7 +111,7 @@ Deno.serve(traced(myHandler));
 Prefer `c.req.routePath` over the resolved path — `/orders/:id` groups in a
 backend, `/orders/42` does not.
 
-```typescript
+```typescript ignore
 app.use('*', (c, next) =>
   tracer.startActiveSpan(
     `${c.req.method} ${c.req.routePath}`,
@@ -119,7 +130,7 @@ app.use('*', (c, next) =>
 Express signals rather than wraps: `next()` returns immediately, so the response
 lifecycle has to end the span.
 
-```typescript
+```typescript ignore
 app.use((req, res, next) => {
   tracer.startActiveSpan(
     `${req.method} ${req.path}`,
@@ -145,7 +156,7 @@ through its continuations, which is exactly what `AsyncLocalStorage` guarantees.
 Same signalling shape as Express, via hooks. `onRequest` opens the span,
 the raw response's `finish` closes it.
 
-```typescript
+```typescript ignore
 fastify.addHook('onRequest', (request, reply, done) => {
   tracer.startActiveSpan(
     `${request.method} ${request.routeOptions?.url ?? request.url}`,
@@ -169,7 +180,7 @@ only when no route matched, and expect that to be high-cardinality.
 
 Koa wraps — `await next()` returns once the downstream chain finishes.
 
-```typescript
+```typescript ignore
 app.use((ctx, next) =>
   tracer.startActiveSpan(
     `${ctx.method} ${ctx._matchedRoute ?? ctx.path}`,
@@ -195,7 +206,7 @@ stream is _constructed_, recording a ~0ms duration. Use `startSpan` for the
 manual lifetime and `activeSpan.run` to make it the parent, then close it in
 `finalize`:
 
-```typescript
+```typescript ignore
 import {
   activeSpan,
   extract,
@@ -238,7 +249,7 @@ The same applies to **any** callback returning a non-promise thenable or stream:
 
 ## Oak
 
-```typescript
+```typescript ignore
 app.use((ctx, next) =>
   tracer.startActiveSpan(
     `${ctx.request.method} ${ctx.request.url.pathname}`,
@@ -255,7 +266,7 @@ app.use((ctx, next) =>
 
 h3 handlers wrap, and its helpers keep this runtime-agnostic.
 
-```typescript
+```typescript ignore
 import { defineEventHandler, getRequestHeaders, getResponseStatus } from 'h3';
 
 export default defineEventHandler((event) =>
@@ -279,7 +290,7 @@ export default defineEventHandler((event) =>
 The `handle` hook wraps the whole request, and `resolve(event)` returns the
 `Response` — so the status is available directly.
 
-```typescript
+```typescript ignore
 // src/hooks.server.ts
 export const handle: Handle = ({ event, resolve }) =>
   tracer.startActiveSpan(
@@ -302,7 +313,7 @@ export const handle: Handle = ({ event, resolve }) =>
 
 Route handlers are Fetch-standard, so wrap them like any other handler:
 
-```typescript
+```typescript ignore
 // app/api/orders/route.ts
 export const GET = traced(async (req: Request) => {
   return Response.json(await listOrders());
@@ -320,7 +331,7 @@ with `traced` from [Fetch-standard runtimes](#fetch-standard-runtimes).
 An API Gateway event carries the headers, so the trace continues from the
 caller. Note the flush — see the next section for why it is not optional.
 
-```typescript
+```typescript ignore
 export const handler = async (event, context) =>
   tracer.startActiveSpan(
     `${event.requestContext.http.method} ${event.routeKey ?? event.rawPath}`,
@@ -347,6 +358,12 @@ Both are generic over their middleware type, so the same body works — supply
 your own context type and read headers from wherever your context keeps them:
 
 ```typescript
+import { extract, SpanKind, Tracer } from '@tundralibs/tracer';
+import { RadRouter } from '@tundralibs/radrouter';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
+type AppCtx = { route: string; headers: Headers };
 type AppMw = (ctx: AppCtx, next: () => Promise<void>) => Promise<void>;
 
 const tracing: AppMw = (ctx, next) =>
@@ -370,6 +387,18 @@ For API clients built on [`@tundralibs/restler`](../../restler/README.md)
 ambient store with no coupling in either direction:
 
 ```typescript
+import { Tracer } from '@tundralibs/tracer';
+import type { RESTlerOptions } from '@tundralibs/restler';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const token = 'secret';
+
+// Your own RESTler subclass.
+declare const GitHubAPI: new (
+  token: string,
+  opts: Partial<RESTlerOptions>,
+) => unknown;
+
 const api = new GitHubAPI(token, {
   witness: tracer.wrapClient, // CLIENT span per outbound request
   headerProvider: tracer.propagation, // traceparent — carries THAT span's id
@@ -384,6 +413,16 @@ service map. For raw `fetch` — or any client without a header seam — wrap it
 yourself:
 
 ```typescript
+import {
+  inject,
+  SemConv,
+  SpanKind,
+  SpanStatusCode,
+  Tracer,
+} from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
 const tracedFetch = (input: string, init: RequestInit = {}) =>
   tracer.startActiveSpan(
     `${init.method ?? 'GET'} ${new URL(input).pathname}`,
@@ -403,6 +442,13 @@ The same shape wraps a database call — `CLIENT` kind, `db.*` attributes, no
 header injection:
 
 ```typescript
+import { SemConv, SpanKind, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const db = {
+  query: (_sql: string, _params: unknown[]) => Promise.resolve([]),
+};
+
 const tracedQuery = (sql: string, params: unknown[]) =>
   tracer.startActiveSpan(
     'db.query',
@@ -429,7 +475,22 @@ no dependency in either direction — drivers never learns about tracer, and
 tracer never learns about drivers.
 
 ```typescript
-import { SemConv, SpanKind, SpanStatusCode } from '@tundralibs/tracer';
+import { SemConv, SpanKind, SpanStatusCode, Tracer } from '@tundralibs/tracer';
+import type { EngineQueryResult } from '@tundralibs/drivers';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
+/** Whatever `@tundralibs/drivers` engine you wired up. */
+type QueryEngine = {
+  on(
+    event: 'query',
+    cb: (instanceId: string, result: EngineQueryResult) => void,
+  ): void;
+  on(
+    event: 'error',
+    cb: (instanceId: string, error: Error) => void,
+  ): void;
+};
 
 /** Attach tracing to a query engine. Call once, at wire-up. */
 export function traceEngine(engine: QueryEngine, dbSystem: string): void {
@@ -481,6 +542,16 @@ bus) and adds its own operation-level `call` event. Both yield retrospective
 spans that parent to whatever request span is active:
 
 ```typescript
+import { SpanKind, Tracer } from '@tundralibs/tracer';
+import type { NormEvents } from '@tundralibs/norm';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
+// Your configured Norm instance.
+declare const norm: {
+  on<K extends keyof NormEvents>(event: K, cb: NormEvents[K]): void;
+};
+
 // Per-query spans — same idea as the drivers recipe, via norm's bus.
 // Signature: (engineId, queryId, timeMs, isSlow, transactionId)
 norm.on('query', (_engine, _qid, timeMs, _slow, txId) => {
@@ -515,6 +586,12 @@ span to the queries it caused, because a span created in an event handler is
 never _active_ while the operation runs. The witness closes exactly that gap:
 
 ```typescript
+import { Tracer } from '@tundralibs/tracer';
+import { Norm, type NormConfig } from '@tundralibs/norm';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+declare const engine: NonNullable<NormConfig['engine']>;
+
 const norm = new Norm({ engine, witness: tracer.wrap });
 // tracer.wrap is the bound Witness adapter — equivalent to wiring
 // startActiveSpan(info.name, { attributes: info.attributes }, fn) by hand,
@@ -544,6 +621,21 @@ exactly like "tracing isn't working".
 Two ways to avoid it:
 
 ```typescript
+import {
+  BatchSpanProcessor,
+  ConsoleExporter,
+  SpanKind,
+  Tracer,
+} from '@tundralibs/tracer';
+
+const processor = new BatchSpanProcessor(new ConsoleExporter());
+const tracer = new Tracer({ serviceName: 'orders', exporter: processor });
+const handle = (_req: Request) => Promise.resolve(new Response('ok'));
+
+// Cloudflare supplies these ambiently via `@cloudflare/workers-types`.
+type Env = Record<string, string>;
+type ExecutionContext = { waitUntil(promise: Promise<unknown>): void };
+
 // 1. Flush explicitly before returning.
 await tracer.shutdown();
 
@@ -588,7 +680,13 @@ asserting — spans are queued, not exported, until a batch or the timer fires.
 For deterministic ids, inject a fixed byte source:
 
 ```typescript
-import { createRandomIdGenerator } from '@tundralibs/tracer';
+import {
+  createRandomIdGenerator,
+  MemoryExporter,
+  Tracer,
+} from '@tundralibs/tracer';
+
+const exporter = new MemoryExporter();
 
 const idGenerator = createRandomIdGenerator(
   (n) => new Uint8Array(n).fill(0x0a),

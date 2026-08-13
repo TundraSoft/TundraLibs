@@ -42,6 +42,15 @@ parse and on generation.
 parent:
 
 ```typescript
+import { extract, type Span, SpanKind, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'payments' });
+const request = new Request('https://payments.internal/charge', {
+  method: 'POST',
+});
+const route = '/charge';
+const handler = (_span: Span) => {};
+
 const parent = extract(request.headers);
 
 tracer.startActiveSpan(
@@ -70,6 +79,11 @@ Lookup is case-insensitive, and an array-valued header uses its first entry.
 callee's `extract` picks up where you left off:
 
 ```typescript
+import { inject, SpanKind, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const url = 'https://payments.internal/charge';
+
 await tracer.startActiveSpan(
   'POST /charge',
   { kind: SpanKind.CLIENT },
@@ -89,17 +103,26 @@ a level.
 ## A complete hop
 
 ```typescript
+import { extract, inject, SpanKind, Tracer } from '@tundralibs/tracer';
+
+const a = new Tracer({ serviceName: 'orders' });
+const b = new Tracer({ serviceName: 'payments' });
+
 // ---- service A ----
-let header: string;
+let header = '';
 await a.startActiveSpan('checkout', { kind: SpanKind.CLIENT }, (span) => {
-  header = inject(span.context);          // 00-4bf92f…-aaa…-01
+  header = inject(span.context); // 00-4bf92f…-aaa…-01
 });
 
 // ---- over the wire ----
 
 // ---- service B ----
 const parent = extract({ traceparent: header });
-await b.startActiveSpan('POST /charge', { kind: SpanKind.SERVER, parent }, …);
+await b.startActiveSpan(
+  'POST /charge',
+  { kind: SpanKind.SERVER, parent },
+  async () => {/* handle the request */},
+);
 ```
 
 Service B's span now shares A's `traceId` and lists A's `spanId` as its parent,

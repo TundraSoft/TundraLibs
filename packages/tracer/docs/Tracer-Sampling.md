@@ -27,6 +27,8 @@ it error"** here. If you need that, see
 [tail-based sampling](#tail-based-sampling).
 
 ```typescript
+import { ratioSampler, Tracer } from '@tundralibs/tracer';
+
 new Tracer({ serviceName: 'orders', sampler: ratioSampler(0.1) });
 ```
 
@@ -46,6 +48,10 @@ where a parent exists but its children vanished. A trace is only useful sampled
 **whole or not at all**.
 
 ```typescript
+import { Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
 tracer.startActiveSpan('root', () => { // sampler runs here, once
   tracer.startSpan('child-1').end(); // inherits
   tracer.startSpan('child-2').end(); // inherits
@@ -62,8 +68,12 @@ upstream decision holds end to end.
 random draw:
 
 ```typescript
-const threshold = Math.floor(ratio * 2 ** 32);
-return ({ traceId }) => Number.parseInt(traceId.slice(-8), 16) < threshold;
+import type { Sampler } from '@tundralibs/tracer';
+
+const ratioSampler = (ratio: number): Sampler => {
+  const threshold = Math.floor(ratio * 2 ** 32);
+  return ({ traceId }) => Number.parseInt(traceId.slice(-8), 16) < threshold;
+};
 ```
 
 Because trace ids are uniformly random, reading a fixed 32-bit window of one
@@ -86,6 +96,13 @@ A dropped span is not a no-op object. It still has a real `SpanContext`, and its
 `traceparent` still serialises — with the sampled flag **clear**:
 
 ```typescript
+import { alwaysOffSampler, inject, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({
+  serviceName: 'orders',
+  sampler: alwaysOffSampler,
+});
+
 const span = tracer.startSpan('dropped'); // sampler said no
 span.isRecording(); // false
 span.context.traceId; // a real trace id
@@ -100,6 +117,13 @@ than deciding again for itself.
 Use `isRecording()` to skip work you would only do for the exporter's benefit:
 
 ```typescript
+import { Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const span = tracer.startSpan('db.query');
+const sql = 'SELECT 1';
+const expensiveToRedact = (q: string) => q;
+
 if (span.isRecording()) {
   span.setAttribute('db.query.text', expensiveToRedact(sql));
 }
@@ -110,6 +134,8 @@ if (span.isRecording()) {
 A {@linkcode Sampler} is a plain function of {@linkcode SamplingInput}:
 
 ```typescript
+import { type Sampler, SemConv } from '@tundralibs/tracer';
+
 // Always keep health checks out, keep everything else.
 const skipHealthChecks: Sampler = ({ attributes }) =>
   attributes[SemConv.URL_PATH] !== '/healthz';

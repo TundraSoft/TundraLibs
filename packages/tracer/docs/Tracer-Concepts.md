@@ -38,6 +38,10 @@ this long", an event for "this happened".
 ## The span lifecycle
 
 ```typescript
+import { SpanStatusCode, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
 const span = tracer.startSpan('db.query'); // 1. created, clock starts
 span.setAttribute('db.system', 'postgres'); // 2. described
 span.addEvent('cache.miss'); //    …and annotated
@@ -59,10 +63,14 @@ a span mid-write or mutate trace state.
 The usual way to build a span tree is to thread the parent through every call:
 
 ```typescript
-async function checkout(span) {
+import { type Span, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
+async function checkout(span: Span) {
   await charge(span); // must pass it
 }
-async function charge(parentSpan) {
+async function charge(parentSpan: Span) {
   const s = tracer.startSpan('charge', { parent: parentSpan.context });
   // …
 }
@@ -73,6 +81,10 @@ Tracer keeps the **active span** in an
 and parents itself automatically:
 
 ```typescript
+import { Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
 await tracer.startActiveSpan('checkout', async () => {
   await charge(); // no span parameter
 });
@@ -160,6 +172,12 @@ a caught and handled exception is not necessarily a failed operation. Set the
 status yourself when it is:
 
 ```typescript
+import { SpanStatusCode, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const span = tracer.startSpan('risky');
+const risky = () => Promise.resolve();
+
 try {
   await risky();
 } catch (err) {
