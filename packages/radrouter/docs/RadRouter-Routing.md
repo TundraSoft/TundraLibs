@@ -15,6 +15,12 @@ Three-tier fallback at every leaf: **exact requested version >
 configured `defaultVersion` > unversioned slot**.
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+const getUsersV1 = async () => {};
+const getUsersV2 = async () => {};
+
 router.get('/api/users', [getUsersV1], 'v1');
 router.get('/api/users', [getUsersV2], 'v2');
 
@@ -26,6 +32,10 @@ Set a default version at construction so unversioned lookups land on a
 chosen revision:
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+type AppMw = (ctx: unknown, next: () => Promise<void>) => Promise<void>;
+
 const router = new RadRouter<AppMw>({ defaultVersion: 'v2' });
 router.find('GET', '/api/users'); // → v2 handler
 router.find('GET', '/api/users', 'v1'); // → v1 handler (exact win)
@@ -42,6 +52,11 @@ and the convention of Express / Fastify / Koa. Opt out for forgiving
 matching (e.g. human-typed URLs, legacy migrations):
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+type AppMw = (ctx: unknown, next: () => Promise<void>) => Promise<void>;
+const handler: AppMw = async () => {};
+
 const router = new RadRouter<AppMw>({ caseSensitive: false });
 router.get('/Users/Profile', [handler]);
 router.find('GET', '/users/profile'); // matches
@@ -69,6 +84,11 @@ purposes — captured parameter values come back with the request's
 original case:
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+type AppMw = (ctx: unknown, next: () => Promise<void>) => Promise<void>;
+const handler: AppMw = async () => {};
+
 const router = new RadRouter<AppMw>({ caseSensitive: false });
 router.get('/users/:userId:', [handler]);
 

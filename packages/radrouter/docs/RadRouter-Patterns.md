@@ -31,6 +31,11 @@ Consumes exactly **one** path segment (between two `/` characters) and
 binds it to `params[name]`.
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+const handler = async () => {};
+
 router.get('/users/:userId:', [handler]);
 // /users/42        → match, { userId: '42' }
 // /users/42/posts  → no match (extra segment)
@@ -41,6 +46,11 @@ router.get('/users/:userId:', [handler]);
 Multiple named params per path are fine — each binds independently:
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+const handler = async () => {};
+
 router.get('/tenants/:tenantId:/users/:userId:', [handler]);
 // /tenants/acme/users/42 → { tenantId: 'acme', userId: '42' }
 ```
@@ -53,6 +63,13 @@ suffix-discriminated resource. The captured value is everything in the
 segment **before** the literal.
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+const tarGzHandler = async () => {};
+const gzHandler = async () => {};
+const defaultHandler = async () => {};
+
 router.get('/files/:name:.tar.gz', [tarGzHandler]);
 router.get('/files/:name:.gz', [gzHandler]);
 router.get('/files/:name:', [defaultHandler]);
@@ -80,6 +97,11 @@ registration (it would otherwise register a route no lookup can reach).
 Use it for file-tree mounts, static asset paths, or catch-alls.
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+const handler = async () => {};
+
 router.get('/files/:path:-*', [handler]);
 // /files/readme.md           → { path: 'readme.md' }
 // /files/docs/api/intro.md   → { path: 'docs/api/intro.md' }
@@ -115,6 +137,11 @@ across segments) leading up to a `-` separator." The named portion
 is what gets bound; the `*-` portion is discarded.
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+const handler = async () => {};
+
 // Pattern: /api/*-:version:/data
 router.get('/api/*-:version:/data', [handler]);
 // /api/release-v1/data         → { version: 'v1' }
@@ -130,6 +157,11 @@ The `*` is **URL-greedy**, mirroring `:name:-*` on the suffix side
 final separator dash before the next static anchor:
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+const handler = async () => {};
+
 router.get('/api/*-:version:/data', [handler]);
 // /api/release/2024-01-snapshot/data → { version: 'snapshot' }
 // /api/foo/bar-baz/data              → { version: 'baz' }
@@ -144,6 +176,11 @@ backtracks to earlier dashes. This lets a pattern cope with dashes
 inside both the `:name:` value and the captured tail:
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+const handler = async () => {};
+
 router.get('/api/*-:version:/data', [handler]);
 // /api/foo-bar-baz/data → { version: 'baz' }  (rightmost dash)
 ```
@@ -179,6 +216,11 @@ The consequence is that `params` inherits **no** `Object.prototype`
 methods. Read it as data, never via inherited helpers:
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+router.get('/users/:id:', []);
+
 const { params } = router.find('GET', '/users/42')!;
 
 params.id; // ✅ '42'
