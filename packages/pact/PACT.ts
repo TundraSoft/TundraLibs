@@ -13,6 +13,8 @@
  *
  * @example
  * ```ts
+ * declare const audit: (module: string, permission: string | bigint) => void;
+ *
  * const pact = new PACT({
  *   bits: { READ: 1n, EDIT: 2n, DELETE: 4n },
  *   modules: { Post: ['READ', 'EDIT', 'DELETE'] },
