@@ -5,6 +5,8 @@ Schema validation for TypeScript — strict at compile time, forgiving at API bo
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
 
 ## Overview
 
@@ -44,6 +46,17 @@ bunx jsr add @tundralibs/guardian
 ```bash
 npx jsr add @tundralibs/guardian
 ```
+
+### Runtime support
+
+Guardian is pure TypeScript with no I/O, no filesystem access, and no
+runtime-specific globals, so it runs unchanged on **Deno**, **Bun**,
+**Node.js**, **Cloudflare Workers**, and **browsers**.
+
+Bundling for Workers or the browser needs no special configuration — no
+`nodejs_compat` flag, no aliases, no polyfills. Importing the barrel
+(`@tundralibs/guardian`) is fine on those targets; the sub-path exports
+exist for ergonomics, not bundle size.
 
 **Direct import (Deno):**
 
