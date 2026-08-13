@@ -36,6 +36,8 @@ import type { Prescription } from '../types/mod.ts';
  *
  * @example
  * ```typescript
+ * class Logger {}
+ *
  * class Handler {
  *   @Dose() public logger!: Logger;
  * }

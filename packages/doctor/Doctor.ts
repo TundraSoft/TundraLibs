@@ -515,6 +515,9 @@ class Injector {
    * specific scope — typically per-request handlers:
    *
    * ```typescript
+   * class UserHandler {}
+   * declare const id: string;
+   *
    * const handler = Doctor.resolve(UserHandler, `req-${id}`);
    * ```
    *

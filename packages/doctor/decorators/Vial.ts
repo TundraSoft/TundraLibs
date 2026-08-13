@@ -23,7 +23,7 @@ import type { VialModes, VialOptions } from '../types/mod.ts';
  *   when the class is registered twice.
  *
  * @example
- * ```typescript
+ * ```typescript ignore
  * @Vial('SINGLETON')
  * class Logger { ... }
  *
