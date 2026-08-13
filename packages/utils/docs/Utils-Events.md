@@ -33,6 +33,10 @@ deno add @tundralibs/utils
 ### Constructor
 
 ```typescript
+import { Events } from '@tundralibs/utils';
+
+type T = { change: (value: string) => void };
+
 class MyClass extends Events<T> {}
 ```
 
@@ -69,10 +73,10 @@ signatures.
 ```typescript
 import { Events } from '@tundralibs/utils';
 
-interface StoreEvents {
+type StoreEvents = {
   change: (data: unknown) => void;
   error: (error: Error) => void;
-}
+};
 
 class DataStore extends Events<StoreEvents> {
   #data: unknown;
@@ -91,6 +95,8 @@ store.setData({ hello: 'world' });
 ### Awaited emission (`_emitSync`)
 
 ```typescript
+import { Events } from '@tundralibs/utils';
+
 class Pipeline extends Events<{ flush: () => Promise<void> }> {
   async flush() {
     // Each listener completes before the next starts; a rejection
@@ -103,6 +109,20 @@ class Pipeline extends Events<{ flush: () => Promise<void> }> {
 ### Listener isolation (fire-and-forget)
 
 ```typescript
+import { Events } from '@tundralibs/utils';
+
+type StoreEvents = {
+  change: (data: unknown) => void;
+};
+
+class DataStore extends Events<StoreEvents> {
+  setData(data: unknown) {
+    this._emit('change', data);
+  }
+}
+
+const store = new DataStore();
+
 store.on('change', () => {
   throw new Error('listener bug');
 });
@@ -116,6 +136,12 @@ store.setData(1); // the throw is reported via _onListenerError
 ### Routing listener faults
 
 ```typescript
+import { Events } from '@tundralibs/utils';
+
+type ServiceEvents = { start: () => void };
+
+declare const logger: { error(message: string, context: unknown): void };
+
 class Service extends Events<ServiceEvents> {
   protected override _onListenerError(
     event: PropertyKey,
@@ -129,6 +155,13 @@ class Service extends Events<ServiceEvents> {
 ### One-time listeners
 
 ```typescript
+import { Events } from '@tundralibs/utils';
+
+class App extends Events<{ ready: () => void }> {}
+
+const app = new App();
+const startServer = () => console.log('server started');
+
 const onReady = () => startServer();
 app.once('ready', onReady);
 app.off('ready', onReady); // removable by the ORIGINAL callback

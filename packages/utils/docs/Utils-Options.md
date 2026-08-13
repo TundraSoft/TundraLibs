@@ -25,6 +25,13 @@ deno add @tundralibs/utils
 ### Constructor Pattern
 
 ```typescript
+import { type EventOptionKeys, Options } from '@tundralibs/utils';
+
+type O = { host: string; port: number };
+type E = { connect: () => void };
+
+const defaults: Partial<O> = { port: 5432 };
+
 class MyClass extends Options<O, E> {
   constructor(config: EventOptionKeys<O, E>) {
     super();
@@ -56,19 +63,19 @@ class MyClass extends Options<O, E> {
 ### Basic Usage
 
 ```typescript
-import { EventOptionKeys, Options } from '@tundralibs/utils';
+import { type EventOptionKeys, Options } from '@tundralibs/utils';
 
-interface DatabaseOptions {
+type DatabaseOptions = {
   host: string;
   port: number;
   ssl?: boolean;
-}
+};
 
-interface DatabaseEvents {
+type DatabaseEvents = {
   connect: () => void;
   error: (error: Error) => void;
   query: (sql: string) => void;
-}
+};
 
 class Database extends Options<DatabaseOptions, DatabaseEvents> {
   constructor(config: EventOptionKeys<DatabaseOptions, DatabaseEvents>) {
@@ -81,17 +88,18 @@ class Database extends Options<DatabaseOptions, DatabaseEvents> {
     });
   }
 
-  async connect() {
+  connect() {
     const host = this._getOption('host');
     const port = this._getOption('port');
     const ssl = this._getOption('ssl');
+    console.log(`connecting to ${host}:${port} (ssl: ${ssl})`);
 
     // Connection logic...
-    this.emit('connect');
+    this._emit('connect');
   }
 
-  async query(sql: string) {
-    this.emit('query', sql);
+  query(sql: string) {
+    this._emit('query', sql);
     // Query logic...
   }
 }
@@ -108,14 +116,19 @@ const db = new Database({
 ### With Multiple Event Handlers
 
 ```typescript
-interface LoggerOptions {
+import { type EventOptionKeys, Options } from '@tundralibs/utils';
+
+declare const writeToFile: (message: string) => void;
+declare const sendToServer: (message: string) => void;
+
+type LoggerOptions = {
   level: string;
   output: string;
-}
+};
 
-interface LoggerEvents {
+type LoggerEvents = {
   log: (message: string) => void;
-}
+};
 
 class Logger extends Options<LoggerOptions, LoggerEvents> {
   constructor(config: EventOptionKeys<LoggerOptions, LoggerEvents>) {
@@ -127,7 +140,7 @@ class Logger extends Options<LoggerOptions, LoggerEvents> {
   }
 
   log(message: string) {
-    this.emit('log', message);
+    this._emit('log', message);
   }
 }
 
@@ -144,18 +157,20 @@ const logger = new Logger({
 ### HTTP Server Example
 
 ```typescript
-interface ServerOptions {
+import { type EventOptionKeys, Options } from '@tundralibs/utils';
+
+type ServerOptions = {
   port: number;
   host: string;
   timeout?: number;
-}
+};
 
-interface ServerEvents {
+type ServerEvents = {
   start: () => void;
   stop: () => void;
   request: (req: Request) => void;
   error: (error: Error) => void;
-}
+};
 
 class HttpServer extends Options<ServerOptions, ServerEvents> {
   constructor(config: EventOptionKeys<ServerOptions, ServerEvents>) {
@@ -170,13 +185,14 @@ class HttpServer extends Options<ServerOptions, ServerEvents> {
   start() {
     const port = this._getOption('port');
     const host = this._getOption('host');
+    console.log(`listening on ${host}:${port}`);
 
     // Start server...
-    this.emit('start');
+    this._emit('start');
   }
 
   handleRequest(req: Request) {
-    this.emit('request', req);
+    this._emit('request', req);
   }
 }
 
@@ -191,16 +207,18 @@ const server = new HttpServer({
 ### Plugin System
 
 ```typescript
-interface PluginOptions {
+import { type EventOptionKeys, Options } from '@tundralibs/utils';
+
+type PluginOptions = {
   name: string;
   enabled?: boolean;
-}
+};
 
-interface PluginEvents {
+type PluginEvents = {
   load: () => void;
   unload: () => void;
-  execute: (data: any) => void;
-}
+  execute: (data: unknown) => void;
+};
 
 abstract class Plugin extends Options<PluginOptions, PluginEvents> {
   constructor(config: EventOptionKeys<PluginOptions, PluginEvents>) {
@@ -210,13 +228,13 @@ abstract class Plugin extends Options<PluginOptions, PluginEvents> {
 
   load() {
     if (this._getOption('enabled')) {
-      this.emit('load');
+      this._emit('load');
       this.onLoad();
     }
   }
 
   abstract onLoad(): void;
-  abstract execute(data: any): void;
+  abstract execute(data: unknown): void;
 }
 
 class MyPlugin extends Plugin {
@@ -224,8 +242,8 @@ class MyPlugin extends Plugin {
     console.log(`${this._getOption('name')} loaded`);
   }
 
-  execute(data: any) {
-    this.emit('execute', data);
+  execute(data: unknown) {
+    this._emit('execute', data);
     // Plugin logic...
   }
 }
@@ -243,6 +261,11 @@ class MyPlugin extends Plugin {
 ### Builder Pattern
 
 ```typescript
+import { Options } from '@tundralibs/utils';
+
+type BuilderOptions = { host: string };
+type BuilderEvents = { built: () => void };
+
 class Builder extends Options<BuilderOptions, BuilderEvents> {
   setHost(host: string) {
     this._getOption('host'); // Current value
@@ -254,13 +277,22 @@ class Builder extends Options<BuilderOptions, BuilderEvents> {
 ### Configuration Validation
 
 ```typescript
-constructor(config: EventOptionKeys<Options, Events>) {
-  super();
-  this._setOptions(config, defaults);
-  
-  // Validate
-  if (this._getOption('port') < 1024) {
-    throw new Error('Port must be >= 1024');
+import { type EventOptionKeys, Options } from '@tundralibs/utils';
+
+type ValidatedOptions = { port: number };
+type ValidatedEvents = { start: () => void };
+
+const defaults: Partial<ValidatedOptions> = { port: 8080 };
+
+class ValidatedServer extends Options<ValidatedOptions, ValidatedEvents> {
+  constructor(config: EventOptionKeys<ValidatedOptions, ValidatedEvents>) {
+    super();
+    this._setOptions(config, defaults);
+
+    // Validate
+    if (this._getOption('port') < 1024) {
+      throw new Error('Port must be >= 1024');
+    }
   }
 }
 ```
