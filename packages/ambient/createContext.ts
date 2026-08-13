@@ -23,8 +23,42 @@
  * ```
  */
 
-import { AsyncLocalStorage } from 'node:async_hooks';
+import type { AsyncLocalStorage } from 'node:async_hooks';
 import type { Context } from './types/mod.ts';
+
+/**
+ * The slice of the global object this module reads: `process.getBuiltinModule`,
+ * the synchronous accessor for a runtime's built-in modules. Every member is
+ * optional because none of them exist in a browser, which is the entire point
+ * of going through it.
+ */
+type BuiltinModuleHost = {
+  process?: {
+    getBuiltinModule?: (
+      id: 'node:async_hooks',
+    ) => { AsyncLocalStorage?: typeof AsyncLocalStorage } | undefined;
+  };
+};
+
+/**
+ * The runtime's `AsyncLocalStorage`, or `undefined` where the runtime has no
+ * `node:async_hooks` (browsers).
+ *
+ * Resolved through `process.getBuiltinModule` rather than a static
+ * `import { AsyncLocalStorage } from 'node:async_hooks'` so that merely
+ * *importing* this package never fails: a static specifier is resolved at
+ * module-eval time and is fatal in a browser bundle, whereas this lookup is a
+ * plain optional-chained property read that yields `undefined` there. Every
+ * supported runtime exposes it — Node >= 22.3, Bun >= 1.1.31, Deno 2.x and
+ * Cloudflare Workers under `nodejs_compat` — so on those the constructor is
+ * resolved eagerly and synchronously, exactly as the static import was. Where
+ * it resolves to `undefined`, {@link createContext} throws at call time via
+ * {@link assertAsyncLocalStorage}.
+ */
+const AsyncLocalStorageCtor: typeof AsyncLocalStorage | undefined =
+  (globalThis as BuiltinModuleHost).process?.getBuiltinModule?.(
+    'node:async_hooks',
+  )?.AsyncLocalStorage;
 
 /**
  * Assert that the runtime provides `AsyncLocalStorage` (`node:async_hooks`),
@@ -42,7 +76,7 @@ import type { Context } from './types/mod.ts';
  *   provides no `AsyncLocalStorage`.
  */
 export function assertAsyncLocalStorage(
-  candidate: unknown = AsyncLocalStorage,
+  candidate: unknown = AsyncLocalStorageCtor,
 ): void {
   if (typeof candidate !== 'function') {
     throw new TypeError(
@@ -69,7 +103,10 @@ export function assertAsyncLocalStorage(
  */
 export function createContext<T>(): Context<T> {
   assertAsyncLocalStorage();
-  const store = new AsyncLocalStorage<T>();
+  // The assert above guarantees the constructor resolved; the cast just carries
+  // that guarantee past `AsyncLocalStorageCtor`'s `| undefined`.
+  const Ctor = AsyncLocalStorageCtor as typeof AsyncLocalStorage;
+  const store = new Ctor<T>();
   return {
     run: <R>(value: T, fn: () => R): R => store.run(value, fn),
     get: (): T | undefined => store.getStore(),
