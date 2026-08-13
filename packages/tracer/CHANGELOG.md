@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.1...tracer-v0.5.2) (2026-08-13)
+
+
+### Bug Fixes
+
+* **tracer:** build the active-span context on first use, not at import ([#225](https://github.com/TundraSoft/TundraLibs/issues/225)) ([02b756c](https://github.com/TundraSoft/TundraLibs/commit/02b756c38af79a15eeec124dd007ce99b44b8efa))
+
 ## [0.5.1](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.0...tracer-v0.5.1) (2026-08-12)
 
 
