@@ -258,6 +258,11 @@ export class Server<T = unknown> {
    *
    * @example
    * ```ts
+   * import { Server } from '@tundralibs/rpc';
+   *
+   * const server = new Server();
+   * const clusterMode = true;
+   *
    * if (clusterMode && !server.adapter.capabilities.crossProcess) {
    *   console.warn('cluster mode with single-process pub/sub adapter');
    * }
@@ -298,6 +303,10 @@ export class Server<T = unknown> {
    *
    * @example Heartbeat sweeper
    * ```ts
+   * import { Server } from '@tundralibs/rpc';
+   *
+   * const server = new Server();
+   *
    * server.command('heartbeat', undefined, (ctx) => {
    *   (ctx.ws.data as { lastSeen?: number }).lastSeen = Date.now();
    * });
