@@ -41,7 +41,10 @@ Package base. Use it to catch _any_ error this package throws
 without committing to a specific class:
 
 ```typescript
-import { DoctorError } from '@tundralibs/doctor';
+import { Doctor, DoctorError, Vial } from '@tundralibs/doctor';
+
+@Vial('SINGLETON')
+class MyService {}
 
 try {
   Doctor.dispense(MyService);
@@ -60,7 +63,9 @@ Thrown by `Doctor.dispense` (and transitively by
 decorator has registered the requested class.
 
 ```typescript
-import { UnregisteredVialError } from '@tundralibs/doctor';
+import { Doctor, UnregisteredVialError } from '@tundralibs/doctor';
+
+class MyService {} // never registered with @Vial / Doctor.prescribe
 
 try {
   Doctor.dispense(MyService);
@@ -82,7 +87,7 @@ Thrown by `Doctor.dispense` (and transitively by
 to be instantiated but no scope was provided.
 
 ```typescript
-import { ScopeRequiredError } from '@tundralibs/doctor';
+import { Doctor, ScopeRequiredError, Vial } from '@tundralibs/doctor';
 
 @Vial('SCOPED')
 class Db {}
@@ -115,7 +120,13 @@ and always surfaces as this error instead of overflowing
 the stack.
 
 ```typescript
-import { CircularDependencyError } from '@tundralibs/doctor';
+import 'reflect-metadata';
+import {
+  CircularDependencyError,
+  Doctor,
+  Dose,
+  Vial,
+} from '@tundralibs/doctor';
 
 @Vial('TRANSIENT')
 class A {
@@ -149,7 +160,7 @@ Thrown by `Doctor.prescribe` (and the `@Vial` decorator that
 wraps it) when the same class is being registered a second time.
 
 ```typescript
-import { DuplicateVialError } from '@tundralibs/doctor';
+import { Doctor, DuplicateVialError } from '@tundralibs/doctor';
 
 class Logger {}
 Doctor.prescribe(Logger, 'SINGLETON');

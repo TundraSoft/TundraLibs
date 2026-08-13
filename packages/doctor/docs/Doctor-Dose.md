@@ -10,6 +10,12 @@ to fill in.
 ## Signature
 
 ```typescript
+import 'reflect-metadata';
+import { Dose, Vial } from '@tundralibs/doctor';
+
+@Vial('SINGLETON')
+class Logger {}
+
 class MyHandler {
   @Dose()
   public logger!: Logger;
@@ -35,6 +41,15 @@ array.
 ## Example
 
 ```typescript
+import 'reflect-metadata';
+import { Dose, Inoculate, Vial } from '@tundralibs/doctor';
+
+@Vial('SINGLETON')
+class Logger {}
+
+@Vial('SCOPED')
+class Database {}
+
 @Inoculate()
 class UserHandler {
   @Dose()

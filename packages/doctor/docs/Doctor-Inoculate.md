@@ -9,7 +9,7 @@ automatically treats the new instance.
 
 ## Signature
 
-```typescript
+```typescript ignore
 @Inoculate(scope?: string)
 class MyHandler { ... }
 ```
@@ -41,6 +41,14 @@ inside a `@Vial` factory) still auto-treats normally (see
 [Subclassing](#subclassing) below).
 
 ```typescript
+import 'reflect-metadata';
+import { Doctor, Dose, Inoculate, Vial } from '@tundralibs/doctor';
+
+@Vial('SCOPED')
+class Database {}
+
+declare const reqId: string;
+
 // Decoration-time default scope:
 @Inoculate('background-job')
 class JobRunner {
@@ -80,6 +88,9 @@ in only once the factory has returned — not while the factory body is
 still running.
 
 ```typescript
+import 'reflect-metadata';
+import { Doctor, Dose, Inoculate, Vial } from '@tundralibs/doctor';
+
 @Vial('SCOPED')
 class Db {/* ... */}
 
@@ -111,6 +122,12 @@ outside a factory:
   return it from the factory, if it genuinely needs a scope.
 
 ```typescript
+import 'reflect-metadata';
+import { Doctor, Dose, Inoculate, Vial } from '@tundralibs/doctor';
+
+@Vial('SCOPED')
+class Db {}
+
 @Inoculate() // no decoration scope
 class Repo {
   @Dose()
@@ -143,6 +160,12 @@ base's decoration-time scope, which the subclass therefore inherits
 automatically:
 
 ```typescript
+import 'reflect-metadata';
+import { Dose, Inoculate, Vial } from '@tundralibs/doctor';
+
+@Vial('SCOPED')
+class Database {}
+
 @Inoculate('background-job')
 class BaseHandler {
   @Dose()
@@ -165,6 +188,21 @@ dependency throws
 [`ScopeRequiredError`](../errors/Doctor-Errors.md#scoperequirederror):
 
 ```typescript
+import 'reflect-metadata';
+import { Dose, Inoculate, Vial } from '@tundralibs/doctor';
+
+@Vial('SCOPED')
+class Database {}
+
+@Vial('SINGLETON')
+class ReportService {}
+
+@Inoculate('background-job')
+class BaseHandler {
+  @Dose()
+  public db!: Database; // SCOPED
+}
+
 @Inoculate('background-job') // repeat the base's scope — its own wrapper
 class ReportHandler extends BaseHandler {
   @Dose()
@@ -182,6 +220,15 @@ it injects nothing — inject the whole chain through `Doctor.resolve`, or
 add `@Inoculate` to the level that declares the extra `@Dose`:
 
 ```typescript
+import 'reflect-metadata';
+import { Doctor, Dose, Inoculate, Vial } from '@tundralibs/doctor';
+
+@Vial('SINGLETON')
+class DepA {}
+
+@Vial('SINGLETON')
+class DepB {}
+
 @Inoculate()
 class Base {
   @Dose()
@@ -208,6 +255,20 @@ subclass decorator and construct through `Doctor.resolve` (or
 construction completes and take a caller-supplied scope:
 
 ```typescript
+import 'reflect-metadata';
+import { Doctor, Dose, Inoculate, Vial } from '@tundralibs/doctor';
+
+@Vial('SCOPED')
+class Database {}
+
+@Inoculate('background-job')
+class BaseHandler {
+  @Dose()
+  public db!: Database;
+}
+
+declare const reqId: string;
+
 class RequestHandler extends BaseHandler {}
 const h = Doctor.resolve(RequestHandler, `req-${reqId}`);
 // → db injected under `req-${reqId}`
@@ -216,6 +277,17 @@ const h = Doctor.resolve(RequestHandler, `req-${reqId}`);
 ## Example
 
 ```typescript
+import 'reflect-metadata';
+import { Dose, Inoculate, Vial } from '@tundralibs/doctor';
+
+@Vial('SCOPED')
+class Database {
+  query(sql: string): void {}
+}
+
+@Vial('SINGLETON')
+class Logger {}
+
 @Inoculate('request-1')
 class UserHandler {
   @Dose()

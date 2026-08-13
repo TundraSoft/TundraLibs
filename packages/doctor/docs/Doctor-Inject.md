@@ -9,7 +9,7 @@ never has to import the dependency class.
 
 ## Signature
 
-```typescript
+```typescript ignore
 inject<K extends keyof VialRegistry>(token: K, scope?: string): VialRegistry[K];
 ```
 
@@ -18,7 +18,7 @@ honouring the registered lifecycle — but keyed by the class name rather than t
 class object. The return type is taken from [`VialRegistry`](#vialregistry), so a
 mistyped token is a compile error.
 
-```typescript
+```typescript ignore
 import { inject } from '@tundralibs/doctor';
 
 const config = inject('Config'); // typed as Config — no `import { Config }`
@@ -31,7 +31,7 @@ const db = inject('Database', 'req-42'); // SCOPED resolution
 **empty**; you populate it by augmenting the module — either with
 [`@tundralibs/doctor/build`](Doctor-Build.md) or by hand:
 
-```typescript
+```typescript ignore
 declare module '@tundralibs/doctor' {
   interface VialRegistry {
     Config: import('./Config.ts').Config;
@@ -50,6 +50,11 @@ class up in a name index kept in sync by `prescribe` / `revoke` / `reset`. Use
 it directly when you need the loosely-typed (`unknown`) form:
 
 ```typescript
+import { Doctor, Vial } from '@tundralibs/doctor';
+
+@Vial('SINGLETON')
+class Config {}
+
 const config = Doctor.dispenseByName<Config>('Config');
 ```
 

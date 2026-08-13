@@ -9,7 +9,7 @@ under a chosen lifecycle.
 
 ## Signature
 
-```typescript
+```typescript ignore
 @Vial(mode: 'SINGLETON' | 'SCOPED' | 'TRANSIENT')
 class MyService { ... }
 
@@ -38,6 +38,11 @@ that returns the constructed instance. Doctor calls the factory
 every time it would otherwise have called `new Klass()`.
 
 ```typescript
+import { Vial } from '@tundralibs/doctor';
+
+type ConfigOpts = { port: number };
+declare const loadFromEnv: () => ConfigOpts;
+
 @Vial({
   mode: 'SINGLETON',
   factory: () => new Config(loadFromEnv()),
@@ -69,14 +74,20 @@ exactly as it would outside a factory. See
 ## Example
 
 ```typescript
+import { Vial } from '@tundralibs/doctor';
+
 @Vial('SINGLETON')
 class Logger {
-  log(msg: string) { console.log(msg); }
+  log(msg: string) {
+    console.log(msg);
+  }
 }
 
 @Vial('SCOPED')
 class Database {
-  query<T>(sql: string): T[] { ... }
+  query<T>(sql: string): T[] {
+    return []; // your driver call goes here
+  }
 }
 
 @Vial('TRANSIENT')

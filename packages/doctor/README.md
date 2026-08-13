@@ -174,6 +174,8 @@ Doctor constructs vials with a bare `new Klass()` by default — so
 any class needing arguments must register a `factory`:
 
 ```typescript
+import { Doctor } from '@tundralibs/doctor';
+
 class Database {
   constructor(public readonly url: string) {}
 }
@@ -186,7 +188,7 @@ Doctor.prescribe(Database, {
 
 The decorator form accepts the same options object:
 
-```typescript
+```typescript ignore
 @Vial({ mode: 'SCOPED', factory: () => new Database(env.URL) })
 class Database { ... }
 ```
@@ -203,7 +205,7 @@ import { build } from '@tundralibs/doctor/build';
 await build({ roots: ['./src'], out: './src/vial-registry.ts' });
 ```
 
-```typescript
+```typescript ignore
 import './vial-registry.ts'; // the generated type augmentation
 import { inject } from '@tundralibs/doctor';
 
