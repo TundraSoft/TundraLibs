@@ -81,7 +81,7 @@ type EngineConstructor = new (
  * while individual cache engines use {@link CacherEngineError} for their errors.
  *
  * @example
- * ```typescript
+ * ```typescript ignore
  * // Basic usage
  * const cache = Cacher.create('MEMORY', 'my-cache', {
  *   defaultExpiry: 300
@@ -130,7 +130,7 @@ class Manager {
    * @throws {CacherError} When an engine with the same name is already registered
    *
    * @example
-   * ```typescript
+   * ```typescript ignore
    * // Register a custom engine
    * Cacher.addEngine('CUSTOM', MyCustomEngine);
    * ```

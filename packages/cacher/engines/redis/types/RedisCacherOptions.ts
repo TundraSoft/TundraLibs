@@ -16,7 +16,6 @@ import type { CacherOptions } from '../../../types/mod.ts';
  * @example
  * ```ts
  * const options: RedisCacherOptions = {
- *   engine: 'REDIS',
  *   host: 'localhost',
  *   port: 6379,
  *   password: 'securepassword',

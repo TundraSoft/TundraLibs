@@ -20,7 +20,7 @@ const MAX_EXPIRY_SECONDS = 2592000; // 30 days
  * @template O - The options type for the specific cacher implementation, extending {@link CacherOptions}
  * @see {@link CacherOptions} for common options available to all cachers
  * @example
- * ```ts
+ * ```ts ignore
  * // Custom implementation example
  * class MyCacher extends AbstractCacher<MyOptions> {
  *   // Implementation details
@@ -103,6 +103,13 @@ export abstract class AbstractEngine<
    * @throws {@link CacherEngineError} if the expiry value is invalid
    * @example
    * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const cacher = new MemoryCacher('demo', {});
+   * const user = { name: 'Alice' };
+   * const session = { userId: 42 };
+   * const activity = { lastSeen: Date.now() };
+   *
    * // Set a value with default options
    * await cacher.set('user:1', user);
    *
@@ -164,6 +171,12 @@ export abstract class AbstractEngine<
    * @returns A promise that resolves to the cached value, or undefined if not found or expired
    * @example
    * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * type User = { name: string };
+   *
+   * const cacher = new MemoryCacher('demo', {});
+   *
    * // Get a string value
    * const username = await cacher.get<string>('user:1:username');
    *
@@ -191,6 +204,10 @@ export abstract class AbstractEngine<
    * @returns A promise that resolves to true if the key exists, false otherwise
    * @example
    * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const cacher = new MemoryCacher('demo', {});
+   *
    * if (await cacher.has('user:1')) {
    *   // Key exists in cache
    * }
@@ -208,6 +225,10 @@ export abstract class AbstractEngine<
    * @returns A promise that resolves when the key has been deleted
    * @example
    * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const cacher = new MemoryCacher('demo', {});
+   *
    * // Remove user from cache
    * await cacher.delete('user:1');
    * ```
@@ -223,6 +244,10 @@ export abstract class AbstractEngine<
    * @returns A promise that resolves when the cache has been cleared
    * @example
    * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const userCacher = new MemoryCacher('users', {});
+   *
    * // Clear all cache entries for this cacher
    * await userCacher.clear();
    * ```
