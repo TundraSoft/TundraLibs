@@ -42,10 +42,9 @@ export const isNode: boolean = g.process?.versions?.node !== undefined &&
 // Node.js compat layer. Loaded synchronously (see {@link loadBuiltin}) so
 // `cpus()`, `totalmem()`, `freemem()`, and `uptime()` share a single backend
 // with no per-runtime branching. Stays `undefined` on unrecognized runtimes
-// (browsers, etc.) so the helpers can return safe fallbacks.
-const nodeOs: typeof import('node:os') = isDeno || isBun || isNode
-  ? loadBuiltin('node:os')
-  : undefined;
+// (browsers, etc.) — they have no `getBuiltinModule` — so the helpers can
+// return safe fallbacks.
+const nodeOs: typeof import('node:os') = loadBuiltin('node:os');
 
 // #region Runtime helpers
 /** Current process ID, or `undefined` on unknown runtimes. */

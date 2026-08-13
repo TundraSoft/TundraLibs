@@ -36,13 +36,16 @@ type NodeFsHandle = Awaited<ReturnType<typeof import('node:fs').promises.open>>;
 // `await import()` — the sync variants (`readTextFileSync`, `statSync`, …)
 // need the backend before any promise can settle, and TLA here would make
 // bundlers turn every consumer module into an async initializer (see
-// {@link loadBuiltin}).
-const nodeFs: typeof import('node:fs') = isBun || isNode
-  ? loadBuiltin('node:fs')
-  : undefined;
-const nodeOs: typeof import('node:os') = isBun || isNode
-  ? loadBuiltin('node:os')
-  : undefined;
+// {@link loadBuiltin}). Deno reaches the same operations through `Deno.*`,
+// so it skips both loads.
+const nodeFs: typeof import('node:fs') = loadBuiltin(
+  'node:fs',
+  isBun || isNode,
+);
+const nodeOs: typeof import('node:os') = loadBuiltin(
+  'node:os',
+  isBun || isNode,
+);
 
 //#region Error Classes
 /**

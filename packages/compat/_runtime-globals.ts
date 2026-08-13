@@ -45,15 +45,19 @@ export const Bun: BunGlobal = (globalThis as any).Bun;
  * ESM — and work natively — then deadlock, so consumers bundling compat for
  * workerd or the browser hang forever on import.
  *
- * The optional chaining returns `undefined` on runtimes with no such hook
- * (browsers, workerd). Callers keep their existing guards, so a missing
- * backend still yields the documented fallback or an
- * `UnsupportedRuntimeError` at call time — never at import time.
+ * `when` gates the load for modules a single runtime family needs — e.g.
+ * `node:dgram`, which only `udp.ts`'s Node branch touches — so the other
+ * runtimes don't pay to initialize them. Omit it when every supported
+ * runtime uses the module: the missing hook is itself the guard on
+ * runtimes that have no built-ins at all.
  *
- * Returns `any` so each call site can annotate itself with the module's
- * `typeof import('node:x')` shape without repeating the type; the binding
- * being possibly-`undefined` off a supported runtime is exactly why every
- * caller keeps a runtime guard.
+ * Never throws. Returns `undefined` when the hook is absent (browsers,
+ * workerd), when `when` is `false`, and when `id` names no built-in — so a
+ * missing backend still surfaces as the caller's documented fallback or an
+ * `UnsupportedRuntimeError` at call time, never at import time.
+ *
+ * Typed `any` so each call site annotates itself with that module's
+ * `typeof import('node:x')` shape instead of repeating the type here.
  */
-export const loadBuiltin = (id: string): any =>
-  (globalThis as any).process?.getBuiltinModule?.(id);
+export const loadBuiltin = (id: string, when: boolean = true): any =>
+  when ? (globalThis as any).process?.getBuiltinModule?.(id) : undefined;

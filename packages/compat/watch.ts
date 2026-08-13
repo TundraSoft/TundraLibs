@@ -30,9 +30,11 @@ import { resolve } from './path.ts';
 
 // Resolved synchronously (see {@link loadBuiltin}); a top-level
 // `await import()` would async-poison every bundle compat lands in.
-const nodeFs: typeof import('node:fs') = isBun || isNode
-  ? loadBuiltin('node:fs')
-  : undefined;
+// Deno watches through `Deno.watchFs`, so it skips the load.
+const nodeFs: typeof import('node:fs') = loadBuiltin(
+  'node:fs',
+  isBun || isNode,
+);
 
 // deno-lint-ignore no-explicit-any
 const g = globalThis as any;

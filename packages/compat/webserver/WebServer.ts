@@ -106,12 +106,12 @@ type DenoServeHandlerInfo = any;
 // top-level `await import()`, which would make bundlers lower every
 // consumer module to an async initializer and deadlock legal circular
 // imports.
-const nodeHttp: typeof import('node:http') = isNode
-  ? loadBuiltin('node:http')
-  : undefined;
-const nodeHttps: typeof import('node:https') = isNode
-  ? loadBuiltin('node:https')
-  : undefined;
+// Bun and Deno serve through their own APIs, so only Node loads these.
+const nodeHttp: typeof import('node:http') = loadBuiltin('node:http', isNode);
+const nodeHttps: typeof import('node:https') = loadBuiltin(
+  'node:https',
+  isNode,
+);
 
 /**
  * `ws` is the de-facto Node WebSocket implementation; pure-JS, no native
