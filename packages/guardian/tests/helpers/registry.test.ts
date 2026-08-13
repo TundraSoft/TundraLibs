@@ -11,7 +11,7 @@ import {
   ObjectGuardian,
   StringGuardian,
 } from '../../mod.ts';
-import { resolveGuardian } from '../../guards/registry.ts';
+import { resolveGuardian } from '../../helpers/mod.ts';
 
 /**
  * Every cross-guard type transition — the methods that used to import a

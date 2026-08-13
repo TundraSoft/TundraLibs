@@ -17,7 +17,7 @@ import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
 import type { NumberGuardian } from './NumberGuardian.ts';
 import type { DateGuardian } from './DateGuardian.ts';
 import type { BigIntGuardian } from './BigIntGuardian.ts';
-import { registerGuardian, resolveGuardian } from './registry.ts';
+import { registerGuardian, resolveGuardian } from '../helpers/mod.ts';
 
 /**
  * String validator. Coerces primitives (number, bigint, boolean) and

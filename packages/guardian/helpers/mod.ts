@@ -13,6 +13,7 @@ export { isPromiseLike } from './isPromiseLike.ts';
 export { notEquals } from './notEquals.ts';
 export { nullable } from './nullable.ts';
 export { optional } from './optional.ts';
+export { registerGuardian, resolveGuardian } from './registry.ts';
 export { test } from './test.ts';
 export {
   gateAsyncStepResult,

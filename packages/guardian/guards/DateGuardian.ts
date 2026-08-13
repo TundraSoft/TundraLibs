@@ -16,7 +16,7 @@ import { format } from '@std/datetime';
 // No sibling import at all: the transitions declare `BaseGuardian<…>`
 // return types, and the constructors they hand to `process()` come from
 // the registry — so this module has no runtime edge to a sibling guard.
-import { registerGuardian, resolveGuardian } from './registry.ts';
+import { registerGuardian, resolveGuardian } from '../helpers/mod.ts';
 
 /**
  * Type representing a unit of time for date operations.

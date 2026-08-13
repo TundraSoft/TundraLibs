@@ -9,14 +9,13 @@
 
 import { type AsyncProbeTarget, BaseGuardian } from '../BaseGuardian.ts';
 import { GuardianError } from '../errors/Base.ts';
-import { gateAsyncStepResult } from '../helpers/mod.ts';
+import { gateAsyncStepResult, resolveGuardian } from '../helpers/mod.ts';
 import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
 // Sibling guards are referenced ONLY as return types here — the
 // constructors the transitions hand to `process()` come from the
 // registry, so these imports erase and create no runtime cycle.
 import type { NumberGuardian } from './NumberGuardian.ts';
 import type { StringGuardian } from './StringGuardian.ts';
-import { resolveGuardian } from './registry.ts';
 
 /**
  * Guardian for array validation and transformation.

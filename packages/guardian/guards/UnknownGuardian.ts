@@ -14,7 +14,7 @@ import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
 // constructor handed to `process()` comes from the registry, so this
 // import erases and creates no runtime cycle.
 import type { StringGuardian } from './StringGuardian.ts';
-import { resolveGuardian } from './registry.ts';
+import { resolveGuardian } from '../helpers/mod.ts';
 
 /**
  * Guardian for unknown/any values - accepts any input without validation.

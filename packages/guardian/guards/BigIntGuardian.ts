@@ -16,7 +16,7 @@ import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
 // registry, so these imports erase and create no runtime cycle.
 import type { NumberGuardian } from './NumberGuardian.ts';
 import type { StringGuardian } from './StringGuardian.ts';
-import { registerGuardian, resolveGuardian } from './registry.ts';
+import { registerGuardian, resolveGuardian } from '../helpers/mod.ts';
 
 /**
  * BigInt validator. Coerces integer numbers, integer strings, and

@@ -17,7 +17,7 @@ import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
 // registry, so these imports erase and create no runtime cycle.
 import type { NumberGuardian } from './NumberGuardian.ts';
 import type { StringGuardian } from './StringGuardian.ts';
-import { resolveGuardian } from './registry.ts';
+import { resolveGuardian } from '../helpers/mod.ts';
 
 /**
  * Boolean validator with strict-list coercion. See
