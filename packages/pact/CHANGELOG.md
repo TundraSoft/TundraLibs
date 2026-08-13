@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.4](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.4.3...pact-v0.4.4) (2026-08-13)
+
+
+### Bug Fixes
+
+* **pact:** import compat via subpaths instead of the root barrel ([f9a71e7](https://github.com/TundraSoft/TundraLibs/commit/f9a71e76c1dcb87c7e0b6a997f0165a67858accf))
+* **pact:** import compat via subpaths instead of the root barrel ([50b9009](https://github.com/TundraSoft/TundraLibs/commit/50b90095895ae97ba6dd11e069fa2fd80a284a43))
+
 ## [0.4.3](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.4.2...pact-v0.4.3) (2026-08-12)
 
 
