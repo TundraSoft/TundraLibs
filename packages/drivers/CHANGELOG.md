@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.2...drivers-v1.0.3) (2026-08-13)
+
+
+### Bug Fixes
+
+* **drivers:** import compat via subpaths instead of the root barrel ([c6d66b0](https://github.com/TundraSoft/TundraLibs/commit/c6d66b0a70b6cff7ff9c7d7d2d9259ea10911421))
+* **drivers:** import compat via subpaths instead of the root barrel ([3fa601f](https://github.com/TundraSoft/TundraLibs/commit/3fa601fdf4573feeb43a9a636fd8b91ec7aa9f97))
+* **drivers:** stop redis/memcached engines importing the root barrel ([7066d91](https://github.com/TundraSoft/TundraLibs/commit/7066d914e9c3aad374a603e2b1c013dd1a48dcb9))
+* **drivers:** stop redis/memcached engines importing the root barrel ([e7ee7da](https://github.com/TundraSoft/TundraLibs/commit/e7ee7da72bfcc072e9fe55397fbab873bfdff7df))
+* **id:** republish as 1.0.3 ([5de296b](https://github.com/TundraSoft/TundraLibs/commit/5de296b9ae28eaf1786a1397f0262f940395b02a))
+* **id:** republish as 1.0.3 ([b9de287](https://github.com/TundraSoft/TundraLibs/commit/b9de28704db3e488c41892898c3a9a38e044a1fc))
+
 ## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.1...drivers-v1.0.2) (2026-08-12)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/drivers",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Cross-runtime connection drivers for SQL (PostgreSQL, MariaDB/MySQL, SQLite), MongoDB, Redis, and Memcached",
   "license": "MIT",
   "tasks": {
