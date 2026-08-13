@@ -13,8 +13,10 @@ import { coerceDate } from '../helpers/coerce.ts';
 import { gateAsyncStepResult } from '../helpers/thenable.ts';
 import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
 import { format } from '@std/datetime';
-import { NumberGuardian } from './NumberGuardian.ts';
-import { StringGuardian } from './StringGuardian.ts';
+// No sibling import at all: the transitions declare `BaseGuardian<…>`
+// return types, and the constructors they hand to `process()` come from
+// the registry — so this module has no runtime edge to a sibling guard.
+import { registerGuardian, resolveGuardian } from './registry.ts';
 
 /**
  * Type representing a unit of time for date operations.
@@ -687,7 +689,10 @@ export class DateGuardian extends BaseGuardian<Date> {
     // arbitrarily-formatted string. Clear the inherited `date-time`
     // format hint too: the pattern is arbitrary, so we can't claim it.
     return DateGuardian.__clearDateFormat(
-      this.process((date: Date) => format(date, pattern), StringGuardian),
+      this.process(
+        (date: Date) => format(date, pattern),
+        resolveGuardian('string'),
+      ),
     );
   }
 
@@ -697,7 +702,10 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @returns This Guardian (mutated) or new instance if immutable mode
    */
   toISOString(): BaseGuardian<string> {
-    return this.process((date: Date) => date.toISOString(), StringGuardian);
+    return this.process(
+      (date: Date) => date.toISOString(),
+      resolveGuardian('string'),
+    );
   }
 
   /**
@@ -710,7 +718,7 @@ export class DateGuardian extends BaseGuardian<Date> {
     // rather than the DateGuardian's `type: string`, and drop the
     // inherited `date-time` format hint (a number has no date format).
     return DateGuardian.__clearDateFormat(
-      this.process((date: Date) => date.getTime(), NumberGuardian),
+      this.process((date: Date) => date.getTime(), resolveGuardian('number')),
     );
   }
 
@@ -723,7 +731,7 @@ export class DateGuardian extends BaseGuardian<Date> {
     return DateGuardian.__clearDateFormat(
       this.process(
         (date: Date) => Math.floor(date.getTime() / 1000),
-        NumberGuardian,
+        resolveGuardian('number'),
       ),
     );
   }
@@ -753,7 +761,7 @@ export class DateGuardian extends BaseGuardian<Date> {
     };
 
     return DateGuardian.__clearDateFormat(
-      this.process(extractors[component], NumberGuardian),
+      this.process(extractors[component], resolveGuardian('number')),
     );
   }
 
@@ -1505,6 +1513,12 @@ export class DateGuardian extends BaseGuardian<Date> {
 
   //#endregion
 }
+
+// Publish the constructor for siblings' transition methods
+// (`string().toDate()`, `number().toDate()`). Runs as part of this
+// module's evaluation, so the entry is in place before any guardian
+// instance exists.
+registerGuardian('date', DateGuardian);
 
 /**
  * Compute the age in completed years between `birth` and `now`.

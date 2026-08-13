@@ -11,9 +11,13 @@ import { GuardianError } from '../errors/Base.ts';
 import { coerceString } from '../helpers/coerce.ts';
 import { gateAsyncStepResult } from '../helpers/thenable.ts';
 import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
-import { NumberGuardian } from './NumberGuardian.ts';
-import { DateGuardian } from './DateGuardian.ts';
-import { BigIntGuardian } from './BigIntGuardian.ts';
+// Sibling guards are referenced ONLY as return types here — the
+// constructors the transitions hand to `process()` come from the
+// registry, so these imports erase and create no runtime cycle.
+import type { NumberGuardian } from './NumberGuardian.ts';
+import type { DateGuardian } from './DateGuardian.ts';
+import type { BigIntGuardian } from './BigIntGuardian.ts';
+import { registerGuardian, resolveGuardian } from './registry.ts';
 
 /**
  * String validator. Coerces primitives (number, bigint, boolean) and
@@ -2169,7 +2173,7 @@ export class StringGuardian extends BaseGuardian<string> {
         }
         return num;
       },
-      NumberGuardian,
+      resolveGuardian('number'),
     ) as NumberGuardian;
   }
 
@@ -2205,7 +2209,7 @@ export class StringGuardian extends BaseGuardian<string> {
         );
       }
       return num;
-    }, NumberGuardian) as NumberGuardian;
+    }, resolveGuardian('number')) as NumberGuardian;
   }
 
   /**
@@ -2229,7 +2233,7 @@ export class StringGuardian extends BaseGuardian<string> {
         );
       }
       return date;
-    }, DateGuardian) as DateGuardian;
+    }, resolveGuardian('date')) as DateGuardian;
   }
 
   /**
@@ -2272,11 +2276,17 @@ export class StringGuardian extends BaseGuardian<string> {
           },
         );
       }
-    }, BigIntGuardian) as BigIntGuardian;
+    }, resolveGuardian('bigint')) as BigIntGuardian;
   }
 
   //#endregion
 }
+
+// Publish the constructor for siblings' transition methods
+// (`number().toString()`, `date().toISOString()`, …). Runs as part of
+// this module's evaluation, so the entry is in place before any
+// guardian instance exists.
+registerGuardian('string', StringGuardian);
 
 /**
  * ISBN-10 checksum: digits multiplied by 10..1, sum mod 11 must be 0.

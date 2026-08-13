@@ -11,8 +11,12 @@ import { GuardianError } from '../errors/Base.ts';
 import { coerceBigInt } from '../helpers/coerce.ts';
 import { gateAsyncStepResult } from '../helpers/thenable.ts';
 import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
-import { NumberGuardian } from './NumberGuardian.ts';
-import { StringGuardian } from './StringGuardian.ts';
+// Sibling guards are referenced ONLY as return types here — the
+// constructors the transitions hand to `process()` come from the
+// registry, so these imports erase and create no runtime cycle.
+import type { NumberGuardian } from './NumberGuardian.ts';
+import type { StringGuardian } from './StringGuardian.ts';
+import { registerGuardian, resolveGuardian } from './registry.ts';
 
 /**
  * BigInt validator. Coerces integer numbers, integer strings, and
@@ -349,7 +353,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
         );
       }
       return Number(num);
-    }, NumberGuardian) as NumberGuardian;
+    }, resolveGuardian('number')) as NumberGuardian;
   }
 
   /**
@@ -870,7 +874,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
   toHex(): StringGuardian {
     return this.process((num: bigint) => {
       return num.toString(16);
-    }, StringGuardian) as StringGuardian;
+    }, resolveGuardian('string')) as StringGuardian;
   }
 
   /**
@@ -881,7 +885,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
   toBinary(): StringGuardian {
     return this.process((num: bigint) => {
       return num.toString(2);
-    }, StringGuardian) as StringGuardian;
+    }, resolveGuardian('string')) as StringGuardian;
   }
 
   /**
@@ -892,7 +896,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
   toOctal(): StringGuardian {
     return this.process((num: bigint) => {
       return num.toString(8);
-    }, StringGuardian) as StringGuardian;
+    }, resolveGuardian('string')) as StringGuardian;
   }
 
   /**
@@ -916,7 +920,7 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
         );
       }
       return num.toString(radix);
-    }, StringGuardian) as StringGuardian;
+    }, resolveGuardian('string')) as StringGuardian;
   }
 
   //#endregion
@@ -941,3 +945,9 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
 
   //#endregion
 }
+
+// Publish the constructor for siblings' transition methods
+// (`number().toBigInt()`, `string().toBigInt()`). Runs as part of this
+// module's evaluation, so the entry is in place before any guardian
+// instance exists.
+registerGuardian('bigint', BigIntGuardian);

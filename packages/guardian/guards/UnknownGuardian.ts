@@ -10,7 +10,11 @@
 import { BaseGuardian } from '../BaseGuardian.ts';
 import { GuardianError } from '../errors/Base.ts';
 import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
-import { StringGuardian } from './StringGuardian.ts';
+// The sibling guard is referenced ONLY as a return type here — the
+// constructor handed to `process()` comes from the registry, so this
+// import erases and creates no runtime cycle.
+import type { StringGuardian } from './StringGuardian.ts';
+import { resolveGuardian } from './registry.ts';
 
 /**
  * Guardian for unknown/any values - accepts any input without validation.
@@ -123,7 +127,7 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
           },
         );
       }
-    }, StringGuardian) as StringGuardian;
+    }, resolveGuardian('string')) as StringGuardian;
   }
 
   /**

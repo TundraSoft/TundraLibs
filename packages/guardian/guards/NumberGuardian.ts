@@ -12,9 +12,13 @@ import { GuardianError } from '../errors/Base.ts';
 import { coerceNumber } from '../helpers/coerce.ts';
 import { gateAsyncStepResult } from '../helpers/thenable.ts';
 import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
-import { DateGuardian } from './DateGuardian.ts';
-import { StringGuardian } from './StringGuardian.ts';
-import { BigIntGuardian } from './BigIntGuardian.ts';
+// Sibling guards are referenced ONLY as return types here — the
+// constructors the transitions hand to `process()` come from the
+// registry, so these imports erase and create no runtime cycle.
+import type { DateGuardian } from './DateGuardian.ts';
+import type { StringGuardian } from './StringGuardian.ts';
+import type { BigIntGuardian } from './BigIntGuardian.ts';
+import { registerGuardian, resolveGuardian } from './registry.ts';
 
 /**
  * Number validator. Coerces numeric strings, bigints, booleans, and
@@ -1270,7 +1274,7 @@ export class NumberGuardian extends BaseGuardian<number> {
     });
     return this.process(
       (num: number) => formatter.format(num),
-      StringGuardian,
+      resolveGuardian('string'),
     );
   }
 
@@ -1301,7 +1305,7 @@ export class NumberGuardian extends BaseGuardian<number> {
   addCommas(): BaseGuardian<string> {
     return this.process(
       (num: number) => num.toLocaleString('en-US'),
-      StringGuardian,
+      resolveGuardian('string'),
     );
   }
 
@@ -1328,7 +1332,7 @@ export class NumberGuardian extends BaseGuardian<number> {
         const digits = Math.abs(num).toString().padStart(length, '0');
         return negative ? `-${digits}` : digits;
       },
-      StringGuardian,
+      resolveGuardian('string'),
     );
   }
 
@@ -1357,7 +1361,7 @@ export class NumberGuardian extends BaseGuardian<number> {
   ): StringGuardian {
     return this.process((num: number) => {
       return num.toString(radix);
-    }, StringGuardian) as StringGuardian;
+    }, resolveGuardian('string')) as StringGuardian;
   }
 
   /**
@@ -1387,7 +1391,7 @@ export class NumberGuardian extends BaseGuardian<number> {
         );
       }
       return BigInt(num);
-    }, BigIntGuardian) as BigIntGuardian;
+    }, resolveGuardian('bigint')) as BigIntGuardian;
   }
 
   /**
@@ -1411,10 +1415,16 @@ export class NumberGuardian extends BaseGuardian<number> {
         );
       }
       return date;
-    }, DateGuardian) as DateGuardian;
+    }, resolveGuardian('date')) as DateGuardian;
   }
 
   //#endregion
 
   //#endregion
 }
+
+// Publish the constructor for siblings' transition methods
+// (`string().toNumber()`, `date().toTimestamp()`, …). Runs as part of
+// this module's evaluation, so the entry is in place before any
+// guardian instance exists.
+registerGuardian('number', NumberGuardian);

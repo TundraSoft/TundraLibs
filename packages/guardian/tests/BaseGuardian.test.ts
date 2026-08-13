@@ -1,7 +1,6 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat';
-import { StringGuardian } from '../guards/StringGuardian.ts';
-import { NumberGuardian } from '../guards/NumberGuardian.ts';
+import { NumberGuardian, StringGuardian } from '../mod.ts';
 import { GuardianError } from '../errors/Base.ts';
 
 describe('guardian.BaseGuardian', () => {

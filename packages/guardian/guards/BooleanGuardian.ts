@@ -12,8 +12,12 @@ import { BaseGuardian } from '../BaseGuardian.ts';
 import { GuardianError } from '../errors/Base.ts';
 import { coerceBoolean } from '../helpers/coerce.ts';
 import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
-import { NumberGuardian } from './NumberGuardian.ts';
-import { StringGuardian } from './StringGuardian.ts';
+// Sibling guards are referenced ONLY as return types here — the
+// constructors the transitions hand to `process()` come from the
+// registry, so these imports erase and create no runtime cycle.
+import type { NumberGuardian } from './NumberGuardian.ts';
+import type { StringGuardian } from './StringGuardian.ts';
+import { resolveGuardian } from './registry.ts';
 
 /**
  * Boolean validator with strict-list coercion. See
@@ -121,7 +125,7 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
   override toString(_description?: string): StringGuardian {
     return this.process(
       (value: boolean) => value.toString(),
-      StringGuardian,
+      resolveGuardian('string'),
     ) as StringGuardian;
   }
 
@@ -140,7 +144,7 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
   toNumber(): NumberGuardian {
     return this.process(
       (value: boolean): number => value ? 1 : 0,
-      NumberGuardian,
+      resolveGuardian('number'),
     ) as NumberGuardian;
   }
 

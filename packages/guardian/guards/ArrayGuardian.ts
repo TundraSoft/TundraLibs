@@ -11,8 +11,12 @@ import { type AsyncProbeTarget, BaseGuardian } from '../BaseGuardian.ts';
 import { GuardianError } from '../errors/Base.ts';
 import { gateAsyncStepResult } from '../helpers/mod.ts';
 import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
-import { NumberGuardian } from './NumberGuardian.ts';
-import { StringGuardian } from './StringGuardian.ts';
+// Sibling guards are referenced ONLY as return types here — the
+// constructors the transitions hand to `process()` come from the
+// registry, so these imports erase and create no runtime cycle.
+import type { NumberGuardian } from './NumberGuardian.ts';
+import type { StringGuardian } from './StringGuardian.ts';
+import { resolveGuardian } from './registry.ts';
 
 /**
  * Guardian for array validation and transformation.
@@ -626,7 +630,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
 
       const flattened = flattenArray(value, depth);
       return flattened.join(joiner);
-    }, StringGuardian) as StringGuardian;
+    }, resolveGuardian('string')) as StringGuardian;
   }
 
   /**
@@ -830,7 +834,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
   ): NumberGuardian {
     return this.process(
       (value: Array<number>) => value.reduce((acc, n) => acc + n, 0),
-      NumberGuardian,
+      resolveGuardian('number'),
     ) as NumberGuardian;
   }
 
@@ -848,7 +852,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
         value.length === 0
           ? Number.NaN
           : value.reduce((acc, n) => acc + n, 0) / value.length,
-      NumberGuardian,
+      resolveGuardian('number'),
     ) as NumberGuardian;
   }
 
@@ -863,7 +867,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
     return this.process(
       (value: Array<number>) =>
         value.length === 0 ? Infinity : Math.min(...value),
-      NumberGuardian,
+      resolveGuardian('number'),
     ) as NumberGuardian;
   }
 
@@ -878,7 +882,7 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
     return this.process(
       (value: Array<number>) =>
         value.length === 0 ? -Infinity : Math.max(...value),
-      NumberGuardian,
+      resolveGuardian('number'),
     ) as NumberGuardian;
   }
 
