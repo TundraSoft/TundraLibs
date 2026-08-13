@@ -9,12 +9,9 @@
  */
 
 import * as path from '@tundralibs/compat/path';
-import {
-  getEnv,
-  hasPermissionSync,
-  readDirSync,
-  readTextFileSync,
-} from '@tundralibs/compat';
+import { readDirSync, readTextFileSync } from '@tundralibs/compat/file';
+import { hasPermissionSync } from '@tundralibs/compat/permissions';
+import { getEnv } from '@tundralibs/compat/runtime';
 import { type PrivateObject, privateObject } from './privateObject.ts';
 
 /**
