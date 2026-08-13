@@ -43,7 +43,7 @@ npx jsr add @tundralibs/cacher
 
 ### `RedisCacherOptions`
 
-```typescript
+```typescript ignore
 type RedisCacherOptions = CacherOptions & {
   /** Redis server hostname. Required. */
   host: string;
@@ -177,6 +177,7 @@ import { RedisCacher } from '@tundralibs/cacher/engines';
 // Default TLS (system CA, no client cert)
 const cache = new RedisCacher('tls-cache', {
   host: 'redis.example.com',
+  port: 6379,
   ssl: true,
   defaultExpiry: 300,
 });
@@ -184,6 +185,7 @@ const cache = new RedisCacher('tls-cache', {
 // Custom TLS with file paths
 const cacheWithCerts = new RedisCacher('mtls-cache', {
   host: 'redis.example.com',
+  port: 6379,
   ssl: {
     caFile: '/etc/ssl/redis-ca.pem',
     certFile: '/etc/ssl/client.crt',
@@ -201,6 +203,7 @@ import { RedisCacher } from '@tundralibs/cacher/engines';
 
 const cache = new RedisCacher('sessions', {
   host: 'localhost',
+  port: 6379,
   defaultExpiry: 1800,
 });
 

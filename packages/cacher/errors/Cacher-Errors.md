@@ -44,7 +44,7 @@ npx jsr add @tundralibs/cacher
 
 Base error class for failures originating in the `Cacher` manager (engine registration, instance creation). Extends `BaseError` from `@tundralibs/utils`.
 
-```typescript
+```typescript ignore
 class CacherError<
   M extends Record<string, unknown> = Record<string, unknown>,
 > extends BaseError<M> {
@@ -54,7 +54,7 @@ class CacherError<
 
 **Example:**
 
-```typescript
+```typescript ignore
 import { CacherError } from '@tundralibs/cacher';
 
 try {
@@ -71,7 +71,7 @@ try {
 
 Typed error class for failures inside a cache engine (connection, operation, configuration). Extends `CacherError` and carries a `code` property drawn from `CacherEngineErrorCode`.
 
-```typescript
+```typescript ignore
 class CacherEngineError<M extends CacherErrorMeta = CacherErrorMeta>
   extends CacherError<M> {
   public readonly code: CacherEngineErrorCode;
@@ -88,7 +88,7 @@ class CacherEngineError<M extends CacherErrorMeta = CacherErrorMeta>
 **Example:**
 
 ```typescript
-import { CacherEngineError } from '@tundralibs/cacher';
+import { Cacher, CacherEngineError } from '@tundralibs/cacher';
 
 try {
   const cache = Cacher.create('REDIS', 'my-cache', {
@@ -172,7 +172,7 @@ const CacherEngineErrorCodes = {
 ### Catching specific error codes
 
 ```typescript
-import { CacherEngineError } from '@tundralibs/cacher';
+import { Cacher, CacherEngineError } from '@tundralibs/cacher';
 
 async function connect(host: string) {
   try {
@@ -200,7 +200,7 @@ async function connect(host: string) {
 
 ### Custom engine throwing errors
 
-```typescript
+```typescript ignore
 import { AbstractEngine, CacherEngineError } from '@tundralibs/cacher';
 import type { CacherOptions, CacheValue } from '@tundralibs/cacher/types';
 
