@@ -7,7 +7,9 @@
  * @module
  */
 
+import * as stdPath from '@std/path';
 import { isBun, isDeno, isNode, OS } from './runtime.ts';
+import { loadBuiltin } from './_runtime-globals.ts';
 
 /** PATH-variable separator: `;` on Windows, `:` elsewhere. */
 export const DELIMITER: ';' | ':' = OS === 'WINDOWS' ? `;` : `:`;
@@ -18,7 +20,12 @@ export const SEPARATOR: '\\' | '/' = OS === 'WINDOWS' ? `\\` : `/`;
 /** Regex matching one-or-more path separators (Windows: `/` or `\`; else `/`). */
 export const SEPARATOR_PATTERN = OS === 'WINDOWS' ? /[\\/]+/ : /\/+/;
 
-let nativePath: {
+/**
+ * The slice of the `node:path` / `@std/path` surface this module
+ * re-exports. Internal to this file — the exported helpers below are the
+ * public contract.
+ */
+type NativePath = {
   basename(path: string, suffix?: string): string;
   dirname(path: string): string;
   extname(path: string): string;
@@ -43,10 +50,16 @@ let nativePath: {
   }): string;
 };
 
+// `@std/path` is pure JS, so a static import is bundler-safe; `node:path`
+// comes through `process.getBuiltinModule` (see {@link loadBuiltin}).
+// Neither may be a top-level `await import()` — one TLA anywhere in a
+// module graph makes esbuild/Rollup lower every initializer in that graph
+// to an async function, which deadlocks legal circular imports downstream.
+let nativePath: NativePath;
 if (isDeno) {
-  nativePath = await import('@std/path') as typeof nativePath;
+  nativePath = stdPath as NativePath;
 } else if (isBun || isNode) {
-  nativePath = await import('node:path') as typeof nativePath;
+  nativePath = loadBuiltin('node:path');
 }
 
 export const basename = (path: string, suffix?: string): string =>

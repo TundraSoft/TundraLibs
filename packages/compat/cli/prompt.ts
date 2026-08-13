@@ -34,13 +34,17 @@
  */
 
 import { isBun, isDeno, isNode } from '../runtime.ts';
+import { loadBuiltin } from '../_runtime-globals.ts';
 
-let nodeReadline: typeof import('node:readline');
-let nodeProcess: typeof import('node:process');
-if (isDeno || isBun || isNode) {
-  nodeReadline = await import('node:readline');
-  nodeProcess = await import('node:process');
-}
+// Resolved synchronously (see {@link loadBuiltin}). Both are dereferenced
+// from sync helpers (`_setRaw`, `_writeStdout`), and a top-level
+// `await import()` would async-poison every bundle compat lands in.
+const nodeReadline: typeof import('node:readline') = isDeno || isBun || isNode
+  ? loadBuiltin('node:readline')
+  : undefined;
+const nodeProcess: typeof import('node:process') = isDeno || isBun || isNode
+  ? loadBuiltin('node:process')
+  : undefined;
 
 /**
  * Options for {@link prompt}.

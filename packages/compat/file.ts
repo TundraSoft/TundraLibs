@@ -17,28 +17,32 @@
  * ```
  */
 
-import { Bun } from './_runtime-globals.ts';
+import { Bun, loadBuiltin } from './_runtime-globals.ts';
 import { isBun, isDeno, isNode, OS } from './runtime.ts';
 import { CompatError } from './Error.ts';
 import * as path from './path.ts';
 
-/** Node.js modules, lazily imported for Bun/Node environments */
+/** Node.js modules, loaded synchronously for Bun/Node environments */
 // Local alias for the Deno-only file handle — see _runtime-globals.ts.
 // The runtime object has `.read()/.write()/.sync()/.close()` etc.; the
 // `any` typing decouples us from Deno's lib type definition.
 // deno-lint-ignore no-explicit-any
 type DenoFsFile = any;
 
-let nodeFs: typeof import('node:fs');
-let nodeOs: typeof import('node:os');
-
 /** Node.js FileHandle type from fs.promises.open() */
 type NodeFsHandle = Awaited<ReturnType<typeof import('node:fs').promises.open>>;
 
-if (isBun || isNode) {
-  nodeFs = await import('node:fs');
-  nodeOs = await import('node:os');
-}
+// Resolved through `process.getBuiltinModule` rather than a top-level
+// `await import()` — the sync variants (`readTextFileSync`, `statSync`, …)
+// need the backend before any promise can settle, and TLA here would make
+// bundlers turn every consumer module into an async initializer (see
+// {@link loadBuiltin}).
+const nodeFs: typeof import('node:fs') = isBun || isNode
+  ? loadBuiltin('node:fs')
+  : undefined;
+const nodeOs: typeof import('node:os') = isBun || isNode
+  ? loadBuiltin('node:os')
+  : undefined;
 
 //#region Error Classes
 /**
@@ -3392,7 +3396,7 @@ export const makeTempFile: (options?: TempOptions) => Promise<string> = async (
     if (isDeno) {
       return await Deno.makeTempFile(opts);
     } else if (isBun || isNode) {
-      const tmpdir = opts.dir ?? (await import('node:os')).tmpdir();
+      const tmpdir = opts.dir ?? nodeOs.tmpdir();
       const prefix = opts.prefix ?? '';
       const suffix = opts.suffix ?? '';
       // Cryptographically-random name. Date.now()+Math.random() was
@@ -3436,7 +3440,6 @@ export const makeTempFileSync: (options?: TempOptions) => string = (
     if (isDeno) {
       return Deno.makeTempFileSync(opts);
     } else if (isBun || isNode) {
-      // Use dynamic import for node:os
       const { tmpdir } = nodeOs;
       const tempdir = opts.dir ?? tmpdir();
       const prefix = opts.prefix ?? '';
@@ -3482,7 +3485,7 @@ export const makeTempDir: (options?: TempOptions) => Promise<string> = async (
     if (isDeno) {
       return await Deno.makeTempDir(opts);
     } else if (isBun || isNode) {
-      const tmpdir = opts.dir ?? (await import('node:os')).tmpdir();
+      const tmpdir = opts.dir ?? nodeOs.tmpdir();
       const prefix = opts.prefix ?? '';
       const suffix = opts.suffix ?? '';
       // Cryptographically-random name. Date.now()+Math.random() was
@@ -3526,7 +3529,6 @@ export const makeTempDirSync: (options?: TempOptions) => string = (
     if (isDeno) {
       return Deno.makeTempDirSync(opts);
     } else if (isBun || isNode) {
-      // Use dynamic import for node:os
       const { tmpdir } = nodeOs;
       const tempdir = opts.dir ?? tmpdir();
       const prefix = opts.prefix ?? '';

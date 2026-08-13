@@ -22,12 +22,14 @@
  */
 
 import { isBun, isDeno, isNode } from '../runtime.ts';
+import { loadBuiltin } from '../_runtime-globals.ts';
 import { isTTY } from './terminal.ts';
 
-let nodeProcess: typeof import('node:process');
-if (isDeno || isBun || isNode) {
-  nodeProcess = await import('node:process');
-}
+// Resolved synchronously (see {@link loadBuiltin}); a top-level
+// `await import()` would async-poison every bundle compat lands in.
+const nodeProcess: typeof import('node:process') = isDeno || isBun || isNode
+  ? loadBuiltin('node:process')
+  : undefined;
 
 /**
  * Minimal writable interface — just the `write` method. Lets us inject
