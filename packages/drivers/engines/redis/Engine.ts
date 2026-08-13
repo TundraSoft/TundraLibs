@@ -34,13 +34,13 @@ import {
   type TLSOptions as CompatTLSOptions,
 } from '@tundralibs/compat';
 import type { EventOptionKeys } from '@tundralibs/utils';
-import {
-  BaseEngine,
-  type EngineCapabilities,
-  EngineError,
-  type EngineQueryResult,
-  type RedisEngineEvents,
-} from '../../mod.ts';
+import { BaseEngine } from '../../BaseEngine.ts';
+import { EngineError } from '../../errors/mod.ts';
+import type {
+  EngineCapabilities,
+  EngineQueryResult,
+  RedisEngineEvents,
+} from '../../types/mod.ts';
 import { looksLikeTlsRuntimeError } from '../../tls.ts';
 import type { RespValue } from './resp.ts';
 import { RedisConnection } from './RedisConnection.ts';
