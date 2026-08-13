@@ -145,7 +145,7 @@ await server.close();
 
 ### `new Server<T = unknown>(options?)`
 
-```ts
+```ts ignore
 type ServerOptions<T> = {
   pubsub?: PubSubAdapter; // defaults to MemoryPubSubAdapter
   upgrade?: (req, info) => UpgradeDecision<T> | Promise<UpgradeDecision<T>>;
@@ -174,7 +174,7 @@ own policy — close, log, or drop further sends.
 
 ### Configuration (chainable)
 
-```ts
+```ts ignore
 server.use(middleware); // Koa-style middleware
 server.command(name, schema | undefined, handler); // Command handler
 server.channel(name, options); // Channel registration
@@ -182,7 +182,7 @@ server.channel(name, options); // Channel registration
 
 ### Wire-up
 
-```ts
+```ts ignore
 server.handlers(); // → WebSocketHandler<T>, pass to WebServer
 await server.listen({ port }); // standalone — internal WebServer
 await server.publish(channel, data); // server-initiated broadcast
@@ -203,6 +203,8 @@ import { Server } from '@tundralibs/rpc';
 const rpc = new Server();
 rpc.command('ping', undefined, () => 'pong');
 
+const handleUsers = (_req: Request): Response => new Response('[]');
+
 const web = new WebServer('API', {
   mode: 'TCP',
   port: 8080,
@@ -221,6 +223,8 @@ await web.start();
 ### Standalone server
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
 const server = new Server();
 server.command('echo', undefined, (ctx) => ctx.payload);
 
@@ -306,6 +310,11 @@ later. A subsequent `connect()` clears that and reconnects normally.
 Two middleware chains — one per direction:
 
 ```ts
+import { Client } from '@tundralibs/rpc';
+
+const client = new Client({ url: 'ws://localhost:8080' });
+const getAuthToken = (): string => 'token';
+
 client.useSend(async (ctx, next) => {
   // ctx.frame is the OUTBOUND frame (cmd / sub / unsub / pub).
   // Mutate, log, retry — then call next() to write the frame.
@@ -335,7 +344,7 @@ send middleware reject the awaiting caller of
 
 ### Lifecycle
 
-```ts
+```ts ignore
 client.state; // 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'CLOSING'
 await client.connect(); // open WebSocket, resolve on 'open'
 await client.command(name, body); // request/response
@@ -379,6 +388,10 @@ You can pass a `httpHandler` if you want non-WS requests to do
 something other than 404:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 await server.listen({
   port: 8080,
   httpHandler: () => new Response('Use the WebSocket endpoint'),
@@ -388,7 +401,11 @@ await server.listen({
 ### Authenticated upgrade with typed connection state
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
 type Conn = { userId: string; subscriptions: Set<string> };
+
+const verifyToken = (_token: string | null): string | undefined => undefined;
 
 const server = new Server<Conn>({
   upgrade: (req) => {
@@ -414,11 +431,19 @@ await server.listen({ port: 8080 });
 any validator that throws on invalid input fits.
 
 ```ts
-import { GuardianProxy, type } from '@tundralibs/guardian';
+import { Guardian } from '@tundralibs/guardian';
+import { Server } from '@tundralibs/rpc';
 
-const CreateUser = type({
-  name: 'string',
-  email: 'string',
+const server = new Server();
+const db = {
+  users: {
+    create: (_user: { name: string; email: string }) => Promise.resolve('u-1'),
+  },
+};
+
+const CreateUser = Guardian.object({
+  name: Guardian.string(),
+  email: Guardian.string(),
 }); // assume Guardian; replace with your schema lib
 
 server.command(
@@ -435,6 +460,10 @@ server.command(
 Plain hand-written validators work too:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 server.command(
   'sendMessage',
   (input) => {
@@ -454,6 +483,10 @@ server.command(
 ### Middleware: timing + logging
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 server.use(async (ctx, next) => {
   const start = performance.now();
   try {
@@ -473,6 +506,10 @@ the throw into a `result` frame with `ok: false`. Custom error codes
 flow through via `err.code`.
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 server.use(async (ctx, next) => {
   if (!(ctx.ws.data as { userId?: string }).userId) {
     const err = new Error('not authenticated') as Error & { code: string };
@@ -486,6 +523,12 @@ server.use(async (ctx, next) => {
 Or short-circuit silently (returns `ok: true` with no data):
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+import type { ServerWebSocket } from '@tundralibs/compat/webserver';
+
+const server = new Server();
+const rateLimited = (_ws: ServerWebSocket<unknown>) => false;
+
 server.use(async (ctx, next) => {
   if (rateLimited(ctx.ws)) {
     return; // skip handler, but ack the request
@@ -497,6 +540,11 @@ server.use(async (ctx, next) => {
 ### Channel with authorize hook
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+const canJoin = (_userId: string, _room: string): boolean => true;
+
 server.channel('chat:room1', {
   authorize: (ctx) => {
     const userId = (ctx.ws.data as { userId?: string }).userId;
@@ -514,6 +562,10 @@ server.channel('chat:room1', {
 ### Server-initiated broadcast
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 // Anywhere on the server
 await server.publish('chat:room1', {
   from: 'system',
@@ -530,6 +582,11 @@ By default, clients can only **subscribe** to channels — they can't
 publish into them. Add an `onPublish` to opt in:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+const parseChatMessage = (payload: unknown) => payload as { text: string };
+
 server.channel('chat:room1', {
   authorize: (ctx) => Boolean((ctx.ws.data as { userId?: string }).userId),
   onPublish: async (ctx, payload) => {
@@ -551,6 +608,11 @@ subscribe time, so a publish without a prior `subscribe()` is rejected
 with `NOT_SUBSCRIBED`:
 
 ```ts
+import { Client } from '@tundralibs/rpc';
+
+const client = new Client({ url: 'ws://localhost:8080' });
+const render = (_msg: unknown) => {};
+
 // Subscribe first, then publish to the same channel.
 await client.subscribe('chat:room1', (msg) => render(msg));
 await client.publish('chat:room1', { text: 'hi' });
@@ -573,6 +635,16 @@ already give you `ctx.id`, schema validation, structured ack via
 return value, custom error codes via thrown errors:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+type Conn = { userId: string };
+
+const server = new Server<Conn>();
+const ChatMessageSchema = {
+  parse: (input: unknown) => input as { channel: string; message: string },
+};
+const canSendTo = (_userId: string, _channel: string): boolean => true;
+
 server.command(
   'publishChat',
   (input) => ChatMessageSchema.parse(input),
@@ -598,7 +670,7 @@ The default `MemoryPubSubAdapter` is in-process only. For broadcast
 across multiple node instances, write an adapter against the same
 `PubSubAdapter` interface and pass it to the server:
 
-```ts
+```ts ignore
 import {
   type AdapterCapabilities,
   Server,

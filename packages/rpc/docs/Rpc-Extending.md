@@ -77,7 +77,17 @@ export class PatternServer<T = unknown> extends Server<T> {
 Use it:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+import type { ChannelOptions } from '@tundralibs/rpc';
+
+// The subclass defined in the block above.
+declare class PatternServer<T = unknown> extends Server<T> {
+  pattern(glob: string, opts: ChannelOptions<T>): this;
+}
+
 type Conn = { userId: string };
+
+const canJoin = (_userId: string, _channel: string): boolean => true;
 
 const server = new PatternServer<Conn>();
 
@@ -121,6 +131,10 @@ sub/unsub/pub frames before Hub's standard handling, override the
 matching `_handle*` method.
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+import type { InboundFrame } from '@tundralibs/rpc';
+import type { ServerWebSocket } from '@tundralibs/compat/webserver';
+
 class LoggingServer<T> extends Server<T> {
   override async _handleSubscribe(
     ws: ServerWebSocket<T>,
@@ -148,6 +162,13 @@ this, but `onSubscribe` + a per-channel ring buffer does it in
 frames, so the client can't tell them apart.
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+type Conn = { userId: string };
+
+const server = new Server<Conn>();
+const canJoin = (_userId: string, _channel: string): boolean => true;
+
 const buffers = new Map<string, unknown[]>();
 const BUFFER_SIZE = 50;
 
@@ -201,6 +222,10 @@ contract conversation when someone needs it.
 Want to inspect every outbound frame Hub sends? Override `_send`:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+import type { OutboundFrame } from '@tundralibs/rpc';
+import type { ServerWebSocket } from '@tundralibs/compat/webserver';
+
 class ObservedHub<T> extends Server<T> {
   outboundCount = 0;
 
@@ -223,6 +248,12 @@ backpressure, or anything else the primitive exposes that Hub doesn't
 surface directly.
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const metrics = {
+  bp: { inc: (_labels: { remote: string | undefined }, _value: number) => {} },
+};
+
 class MetricsServer<T> extends Server<T> {
   constructor() {
     super();

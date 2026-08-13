@@ -20,6 +20,8 @@ same contract.
 ## The Contract
 
 ```ts
+import type { AdapterCapabilities } from '@tundralibs/rpc';
+
 abstract class PubSubAdapter {
   abstract subscribe(
     topic: string,
@@ -178,10 +180,12 @@ class MyAdapter extends PubSubAdapter {
     handler: (data: unknown) => void,
   ): Subscription {
     // Register handler; return cleanup function
+    return { unsubscribe: () => {} };
   }
 
   override publish(topic: string, data: unknown): Promise<void> {
     // Send to all subscribers (possibly across processes)
+    return Promise.resolve();
   }
 
   override async close(): Promise<void> {
@@ -193,6 +197,11 @@ class MyAdapter extends PubSubAdapter {
 Pass an instance into the server:
 
 ```ts
+import { PubSubAdapter, Server } from '@tundralibs/rpc';
+
+// The subclass defined in the block above.
+declare const MyAdapter: new () => PubSubAdapter;
+
 const server = new Server({ pubsub: new MyAdapter() });
 ```
 
@@ -207,6 +216,16 @@ import {
   PubSubAdapter,
   type Subscription,
 } from '@tundralibs/rpc';
+
+// The surface your Redis client of choice has to provide.
+declare class RedisClient {
+  constructor(opts: { url: string });
+  on(event: 'message', cb: (topic: string, raw: string) => void): void;
+  subscribe(topic: string): void;
+  unsubscribe(topic: string): void;
+  publish(topic: string, payload: string): Promise<void>;
+  quit(): Promise<void>;
+}
 
 class RedisPubSubAdapter extends PubSubAdapter {
   override readonly capabilities: AdapterCapabilities = {
@@ -315,7 +334,10 @@ deliberately **not** re-exported from `@tundralibs/rpc` or
 ```ts
 import { describe } from '@tundralibs/compat/test';
 import { runAdapterConformance } from '@tundralibs/rpc/conformance';
-import { MyRedisAdapter } from './MyRedisAdapter.ts';
+import type { PubSubAdapter } from '@tundralibs/rpc';
+
+// Your adapter: `import { MyRedisAdapter } from './MyRedisAdapter.ts';`
+declare const MyRedisAdapter: new (opts: { url: string }) => PubSubAdapter;
 
 describe('MyRedisAdapter', () => {
   runAdapterConformance(() => new MyRedisAdapter({ url: 'redis://...' }));
@@ -355,6 +377,11 @@ yet — their assertions will land alongside framework-level support.
 ### Knobs
 
 ```ts
+import { runAdapterConformance } from '@tundralibs/rpc/conformance';
+import { MemoryPubSubAdapter } from '@tundralibs/rpc/pubsub';
+
+const factory = () => new MemoryPubSubAdapter();
+
 runAdapterConformance(factory, {
   deliveryTimeoutMs: 5_000, // default 1000; bump for slow transports
 });
