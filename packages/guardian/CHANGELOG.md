@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.0.0...guardian-v1.0.1) (2026-08-13)
+
+
+### Documentation
+
+* **guardian:** document Workers and browser runtime support ([#226](https://github.com/TundraSoft/TundraLibs/issues/226)) ([8aa5b19](https://github.com/TundraSoft/TundraLibs/commit/8aa5b194b5170a6b3fa41c7705ad80f401ec24cb))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.0.0-dev11...guardian-v1.0.0) (2026-08-01)
 
 
