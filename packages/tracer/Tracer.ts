@@ -216,6 +216,11 @@ export class Tracer extends Options<TracerOptions> {
    * @param optionsOrFn - {@link SpanOptions}, or `fn` when there are none.
    * @param maybeFn - `fn`, when options were supplied.
    * @returns Whatever `fn` returns.
+   * @throws {TypeError} When the runtime provides no `AsyncLocalStorage`
+   *   (`node:async_hooks`) — e.g. a browser. Making a span active needs an
+   *   async-context scope, so it fails loudly rather than silently running
+   *   `fn` with no active span. {@link Tracer.startSpan} has no such
+   *   requirement.
    */
   public startActiveSpan<R>(name: string, fn: (span: Span) => R): R;
   public startActiveSpan<R>(
@@ -279,6 +284,9 @@ export class Tracer extends Options<TracerOptions> {
    * booleans, and arrays of those) are dropped rather than exported malformed.
    * Satisfies the witness contract by construction: `fn` is invoked exactly
    * once, its result returned unchanged, its errors recorded and re-thrown.
+   *
+   * @throws {TypeError} When the runtime provides no `AsyncLocalStorage` —
+   *   see {@link Tracer.startActiveSpan}.
    */
   public readonly wrap = <T>(
     info: { name: string; attributes?: Record<string, unknown> },
@@ -308,6 +316,9 @@ export class Tracer extends Options<TracerOptions> {
    * ```
    *
    * Same contract and attribute sanitisation as {@link Tracer.wrap}.
+   *
+   * @throws {TypeError} When the runtime provides no `AsyncLocalStorage` —
+   *   see {@link Tracer.startActiveSpan}.
    */
   public readonly wrapClient = <T>(
     info: { name: string; attributes?: Record<string, unknown> },
