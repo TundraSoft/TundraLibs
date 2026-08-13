@@ -92,6 +92,27 @@ Tracer keeps the active span in its **own** context store, separate from
 `ambient`'s shared `RequestContext`. Span lifecycle is tracer's concern; the
 request bag is the application's.
 
+### Runtimes without `AsyncLocalStorage`
+
+That store is built on **first use**, not at import, so importing
+`@tundralibs/tracer` succeeds everywhere — including a browser bundle, where
+`node:async_hooks` does not exist. What changes there is only what genuinely
+depends on a scope:
+
+- `tracer.active()` returns `undefined`, and `tracer.logContext()` /
+  `tracer.propagation()` return `{}` — exactly what they return outside any
+  span, so callers need no branch.
+- `startActiveSpan` (and the `wrap` / `wrapClient` witnesses built on it)
+  throws a `TypeError`. Establishing a scope is the one thing that cannot
+  degrade quietly: silently running the callback with no active span would
+  turn a nested trace into orphaned roots.
+- `startSpan`, `span.end()`, exporters and `inject` / `extract` need no
+  context at all, so manual span lifecycles and propagation keep working.
+
+On every supported runtime — Deno, Bun, Node >= 22 and Cloudflare Workers
+under `nodejs_compat` — the store is a single process-wide instance shared by
+every caller, so nesting behaves identically to a store built at import time.
+
 ## startSpan vs startActiveSpan
 
 |                       | `startSpan`             | `startActiveSpan`                |
