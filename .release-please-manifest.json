@@ -3,7 +3,7 @@
   "packages/cacher": "1.0.1",
   "packages/compat": "1.1.2",
   "packages/cronus": "1.0.1",
-  "packages/crypt": "1.0.1",
+  "packages/crypt": "1.0.2",
   "packages/doctor": "1.0.1",
   "packages/drivers": "1.0.2",
   "packages/guardian": "1.0.0",
