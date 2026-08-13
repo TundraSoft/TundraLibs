@@ -29,7 +29,8 @@
  * @module
  */
 
-import { fetch as compatFetch, isDeno } from '@tundralibs/compat';
+import { fetch as compatFetch } from '@tundralibs/compat/fetch';
+import { isDeno } from '@tundralibs/compat/runtime';
 import { hash, hkdf } from '@tundralibs/crypt';
 import {
   decodeJWT as cryptDecodeJWT,
