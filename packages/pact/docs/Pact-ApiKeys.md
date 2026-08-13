@@ -78,6 +78,9 @@ import { PACT } from '@tundralibs/pact';
 
 const pact = new PACT({ bits: { READ: 1n } });
 
+declare const presented: string;
+declare const stored: { secretHash: string };
+
 // `presented` comes off the request; `stored.secretHash` from your database
 const ok = await pact.verifyAPIKey(presented, stored.secretHash);
 if (!ok) {
@@ -98,6 +101,14 @@ Mint on issue, store the id + hash, verify on each request:
 import { PACT } from '@tundralibs/pact';
 
 const pact = new PACT({ bits: { READ: 1n } });
+
+// your own storage — PACT keeps no records
+declare const db: {
+  apiKeys: {
+    insert(row: { id: string; secretHash: string }): Promise<void>;
+    findById(id: string): Promise<{ secretHash: string } | null>;
+  };
+};
 
 // 1. Mint — when a user creates an API key
 async function issueKey() {
@@ -127,6 +138,8 @@ import { PACT } from '@tundralibs/pact';
 const pact = new PACT({ bits: { READ: 1n } });
 
 const key = await pact.generateAPIKey();
+
+declare const body: string;
 
 // The client signs a request body with its secret…
 const signature = await pact.sign(body, key.secret);

@@ -61,6 +61,18 @@ npx jsr add @tundralibs/pact
 
 ```typescript
 import { PACT, serializeGrants } from '@tundralibs/pact';
+import type { PACTGrants, PACTLoginOutcome } from '@tundralibs/pact/types';
+
+// ── your app's own data layer and helpers ────────────────────────────
+declare const myDb: {
+  grantsForGroups(ids: string[]): Promise<Record<string, PACTGrants>>;
+};
+declare const blocklist: Set<string>;
+declare const verifyPassword: (creds: unknown) => Promise<PACTLoginOutcome>;
+declare const audit: (event: string, ...rest: unknown[]) => void;
+declare const user: { id: string; groupIds: string[] };
+declare const presented: string;
+declare const stored: { secretHash: string };
 
 const pact = new PACT({
   // authorization: the breadth of permissions, and where they apply
