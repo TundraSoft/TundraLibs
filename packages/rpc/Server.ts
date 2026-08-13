@@ -515,11 +515,16 @@ export class Server<T = unknown> {
       );
     } catch (err) {
       const code = (err as { code?: unknown })?.code;
+      // A handler may attach structured detail to the thrown error
+      // (`Object.assign(new Error(msg), { code, data })`); it rides the
+      // error frame so the caller gets more than a string.
+      const data = (err as { data?: unknown })?.data;
       this._sendResultError(
         ws,
         frame.id,
         typeof code === 'string' ? code : 'HANDLER_ERROR',
         err instanceof Error ? err.message : String(err),
+        data,
       );
     }
   }
@@ -749,12 +754,16 @@ export class Server<T = unknown> {
     id: string,
     code: string,
     message: string,
+    data?: unknown,
   ): void {
     this._send(ws, {
       id,
       type: 'result',
       ok: false,
-      error: { code, message },
+      // `data` is omitted entirely when absent — an `undefined` value
+      // would serialise away anyway, but omitting keeps the frame
+      // byte-identical to what pre-`data` servers sent.
+      error: data === undefined ? { code, message } : { code, message, data },
     });
   }
 

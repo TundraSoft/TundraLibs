@@ -239,11 +239,13 @@ export class Client {
   /**
    * Invoke a command and wait for the server's `result` frame.
    *
-   * Resolves to the handler's return value on success; rejects with
-   * an `Error` whose `.message` is the server-side error message on
-   * `ok: false` responses. Times out after `timeoutMs` (or the
-   * client's `defaultTimeoutMs`) — pass `0` to disable for a single
-   * call.
+   * Resolves to the handler's return value on success; rejects on
+   * `ok: false` responses with an `Error` whose `.message` is
+   * `` `${code}: ${serverMessage}` ``, and which also carries `.code`
+   * plus any structured `.data` the handler attached — branch on the
+   * code instead of parsing the message. Times out after `timeoutMs`
+   * (or the client's `defaultTimeoutMs`) — pass `0` to disable for a
+   * single call.
    *
    * @throws If the send path throws (a throwing `useSend` middleware, or
    *   the socket leaving `OPEN` mid-send), the returned Promise rejects
@@ -816,7 +818,9 @@ export class Client {
           return { id: obj.id, type: 'result', ok: true, data: obj.data };
         }
         if (obj.ok === false) {
-          const err = obj.error as { code?: unknown; message?: unknown } | null;
+          const err = obj.error as
+            | { code?: unknown; message?: unknown; data?: unknown }
+            | null;
           if (
             !err || typeof err.code !== 'string' ||
             typeof err.message !== 'string'
@@ -827,7 +831,14 @@ export class Client {
             id: obj.id,
             type: 'result',
             ok: false,
-            error: { code: err.code, message: err.message },
+            // `data` is optional structured detail; absent from peers
+            // that predate it, so it is carried through as-is and
+            // never validated into a rejection.
+            error: {
+              code: err.code,
+              message: err.message,
+              ...(err.data === undefined ? {} : { data: err.data }),
+            },
           };
         }
         return null;
@@ -929,8 +940,20 @@ export class Client {
     if (frame.ok) {
       pending.resolve(frame.data);
     } else {
+      // The message format is unchanged (`CODE: text`); `code` and any
+      // structured `data` are ALSO attached as properties, so callers
+      // can branch on the code and read the detail without parsing the
+      // string.
       pending.reject(
-        new Error(`${frame.error.code}: ${frame.error.message}`),
+        Object.assign(
+          new Error(`${frame.error.code}: ${frame.error.message}`),
+          {
+            code: frame.error.code,
+            ...(frame.error.data === undefined
+              ? {}
+              : { data: frame.error.data }),
+          },
+        ),
       );
     }
   }

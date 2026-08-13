@@ -323,6 +323,57 @@ describe({
         await hub.close();
       });
 
+      it('a thrown error carries code AND structured data to the client', async () => {
+        const hub = new Server();
+        hub.command('validate', undefined, () => {
+          // The documented way a handler sends detail with a failure.
+          throw Object.assign(new Error('Validation failed'), {
+            code: 'VALIDATION_FAILED',
+            data: { fields: { email: 'already taken' } },
+          });
+        });
+
+        const ws = new MockWs();
+        await open(hub, ws);
+        await send(
+          hub,
+          ws,
+          encodeInbound({ id: '1', type: 'cmd', cmd: 'validate' }),
+        );
+        asserts.assertEquals(ws.sent[0], {
+          id: '1',
+          type: 'result',
+          ok: false,
+          error: {
+            code: 'VALIDATION_FAILED',
+            message: 'Validation failed',
+            data: { fields: { email: 'already taken' } },
+          },
+        });
+        await hub.close();
+      });
+
+      it('a thrown error WITHOUT data omits the field entirely', async () => {
+        // Byte-identical to what a pre-`data` server sent.
+        const hub = new Server();
+        hub.command('plain', undefined, () => {
+          throw new Error('nope');
+        });
+        const ws = new MockWs();
+        await open(hub, ws);
+        await send(
+          hub,
+          ws,
+          encodeInbound({ id: '1', type: 'cmd', cmd: 'plain' }),
+        );
+        const frame = ws.sent[0] as { error: Record<string, unknown> };
+        asserts.assertEquals(Object.keys(frame.error).sort(), [
+          'code',
+          'message',
+        ]);
+        await hub.close();
+      });
+
       it('throws when registering the same name twice', () => {
         const hub = new Server();
         hub.command('foo', undefined, () => 1);

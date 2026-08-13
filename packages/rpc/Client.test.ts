@@ -200,6 +200,50 @@ function suite() {
     );
   });
 
+  it('command() rejection carries .code and structured .data', async () => {
+    server = new Server();
+    server.command('validate', undefined, () => {
+      throw Object.assign(new Error('Validation failed'), {
+        code: 'VALIDATION_FAILED',
+        data: { fields: { email: 'already taken' } },
+      });
+    });
+    await server.listen({ port, hostname: '127.0.0.1' });
+    client = new Client({
+      url: `ws://127.0.0.1:${port}`,
+      reconnect: { enabled: false },
+    });
+    await client.connect();
+    const err = await asserts.assertRejects(
+      () => client.command('validate'),
+      Error,
+      'Validation failed',
+    ) as Error & { code?: string; data?: { fields?: unknown } };
+    // Message format unchanged (`CODE: text`), code and data ALSO
+    // attached so callers branch without parsing the string.
+    asserts.assertEquals(err.code, 'VALIDATION_FAILED');
+    asserts.assertEquals(err.data?.fields, { email: 'already taken' });
+    asserts.assert(err.message.startsWith('VALIDATION_FAILED: '));
+  });
+
+  it('a failure without data leaves .data undefined', async () => {
+    server = new Server();
+    server.command('plain', undefined, () => {
+      throw new Error('nope');
+    });
+    await server.listen({ port, hostname: '127.0.0.1' });
+    client = new Client({
+      url: `ws://127.0.0.1:${port}`,
+      reconnect: { enabled: false },
+    });
+    await client.connect();
+    const err = await asserts.assertRejects(
+      () => client.command('plain'),
+      Error,
+    ) as Error & { data?: unknown };
+    asserts.assertEquals(err.data, undefined);
+  });
+
   it('command() rejects with REQUEST_TIMEOUT when handler never responds', async () => {
     server = new Server();
     // Handler resolves after 5 seconds — far past the client's 50 ms
