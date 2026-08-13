@@ -5,6 +5,8 @@ Type-safe, database-agnostic query definitions for TypeScript/JavaScript.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
 
 ## Overview
 
@@ -46,6 +48,19 @@ bunx jsr add @tundralibs/oql
 ```bash
 npx jsr add @tundralibs/oql
 ```
+
+### Runtime support
+
+OQL builds and translates query definitions — it never opens a connection
+or executes anything itself, so it has no I/O, no filesystem access, and
+no runtime-specific globals. It runs unchanged on **Deno**, **Bun**,
+**Node.js**, **Cloudflare Workers**, and **browsers**.
+
+Bundling for Workers or the browser needs no special configuration — no
+`nodejs_compat` flag, no aliases, no polyfills. Executing the queries OQL
+produces is the driver's job, and that is where runtime support varies:
+see [@tundralibs/drivers](https://jsr.io/@tundralibs/drivers) for which
+engines work where.
 
 ## Quick Start
 
