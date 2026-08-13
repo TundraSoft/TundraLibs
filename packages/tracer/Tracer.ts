@@ -16,6 +16,8 @@
  *   exporter: new ConsoleExporter(),
  * });
  *
+ * const chargeCard = () => Promise.resolve();
+ *
  * await tracer.startActiveSpan('checkout', async (span) => {
  *   span.setAttribute('order.id', 'ord_42');
  *   await chargeCard();          // any span started in here parents to `checkout`
@@ -277,6 +279,12 @@ export class Tracer extends Options<TracerOptions> {
    * A bound arrow, so it works detached:
    *
    * ```ts
+   * import { Tracer } from '@tundralibs/tracer';
+   * import { Norm, type NormConfig } from '@tundralibs/norm';
+   *
+   * const tracer = new Tracer({ serviceName: 'orders' });
+   * declare const engine: NonNullable<NormConfig['engine']>;
+   *
    * const norm = new Norm({ engine, witness: tracer.wrap });
    * ```
    *
@@ -309,6 +317,16 @@ export class Tracer extends Options<TracerOptions> {
    * A bound arrow, so it works detached:
    *
    * ```ts
+   * import { Tracer } from '@tundralibs/tracer';
+   * import type { RESTlerOptions } from '@tundralibs/restler';
+   *
+   * const tracer = new Tracer({ serviceName: 'orders' });
+   * const token = 'secret';
+   * declare const GitHubAPI: new (
+   *   token: string,
+   *   opts: Partial<RESTlerOptions>,
+   * ) => unknown;
+   *
    * const api = new GitHubAPI(token, {
    *   witness: tracer.wrapClient, // span per outbound request
    *   headerProvider: tracer.propagation, // traceparent per request
@@ -369,11 +387,24 @@ export class Tracer extends Options<TracerOptions> {
    * so it works detached:
    *
    * ```ts
+   * import { ambient } from '@tundralibs/ambient';
+   * import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
+   * import { Tracer } from '@tundralibs/tracer';
+   *
+   * const tracer = new Tracer({ serviceName: 'orders' });
+   * const appName = 'orders';
+   * const level = SyslogSeverities.INFO;
+   *
    * // tracer only:
-   * LogManager.createSlogger({ appName, contextProvider: tracer.logContext });
+   * LogManager.createSlogger({
+   *   appName,
+   *   level,
+   *   contextProvider: tracer.logContext,
+   * });
    * // composed with the ambient request bag:
    * LogManager.createSlogger({
    *   appName,
+   *   level,
    *   contextProvider: () => ({ ...ambient.get(), ...tracer.logContext() }),
    * });
    * ```
@@ -397,6 +428,16 @@ export class Tracer extends Options<TracerOptions> {
    * re-deciding for itself. A bound arrow, so it works detached:
    *
    * ```ts
+   * import { Tracer } from '@tundralibs/tracer';
+   * import type { RESTlerOptions } from '@tundralibs/restler';
+   *
+   * const tracer = new Tracer({ serviceName: 'orders' });
+   * const token = 'secret';
+   * declare const GitHubAPI: new (
+   *   token: string,
+   *   opts: Partial<RESTlerOptions>,
+   * ) => unknown;
+   *
    * // restler (>= 1.1): every outbound request carries traceparent
    * const api = new GitHubAPI(token, { headerProvider: tracer.propagation });
    *

@@ -15,6 +15,11 @@
  *
  * @example
  * ```typescript
+ * import { BatchSpanProcessor, Tracer } from '@tundralibs/tracer';
+ * import { OTLPExporter } from '@tundralibs/tracer/exporters/otlp';
+ *
+ * const baseURL = 'http://localhost:4318';
+ *
  * new Tracer({
  *   serviceName: 'orders',
  *   exporter: new BatchSpanProcessor(new OTLPExporter({ baseURL }), {

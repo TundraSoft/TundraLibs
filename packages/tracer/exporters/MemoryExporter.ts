@@ -15,6 +15,8 @@ import type { SpanData, SpanExporter } from '../types/mod.ts';
  *
  * @example
  * ```typescript
+ * import { MemoryExporter, Tracer } from '@tundralibs/tracer';
+ *
  * const exporter = new MemoryExporter();
  * const tracer = new Tracer({ serviceName: 'test', exporter });
  *
