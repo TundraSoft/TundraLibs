@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.3](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.2...ambient-v0.2.3) (2026-08-13)
+
+
+### Bug Fixes
+
+* **ambient:** build the shared store on first use, not at import ([f81ca54](https://github.com/TundraSoft/TundraLibs/commit/f81ca547d77e1b8cd9162ce6f09673e85c8b6335))
+* **ambient:** load AsyncLocalStorage without a static node:async_hooks import ([a9ea905](https://github.com/TundraSoft/TundraLibs/commit/a9ea905c7a746da0acce6f4d9712856de6917613))
+* **ambient:** load AsyncLocalStorage without a static node:async_hooks import ([5f645f0](https://github.com/TundraSoft/TundraLibs/commit/5f645f06d23cd31b5051d8856c33b4f677cbc64b))
+
 ## [0.2.2](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.1...ambient-v0.2.2) (2026-08-09)
 
 
