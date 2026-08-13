@@ -1,7 +1,9 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { ambient } from './mod.ts';
-import type { RequestContext } from './mod.ts';
+import { ambient, createContext } from './mod.ts';
+import { buildAmbient } from './ambient.ts';
+import { assertAsyncLocalStorage } from './createContext.ts';
+import type { Context, RequestContext } from './mod.ts';
 
 describe('ambient', () => {
   it('is empty outside any run scope', () => {
@@ -73,5 +75,102 @@ describe('ambient', () => {
     const seed: RequestContext = { correlationId: 'c5' };
     ambient.run(seed, () => ambient.set('userId', 'u'));
     asserts.assertEquals(seed.userId, undefined);
+  });
+
+  it('builds the store on first use and reuses that one instance', () => {
+    // The store is created lazily, so the very first access must still be a
+    // fully working context — and every later access must land on the same
+    // instance. A second store would not observe the first's writes, so a
+    // value written through `set` and read back through `get` (two separate
+    // accessor calls, hence two separate store lookups) proves reuse.
+    ambient.run({ correlationId: 'm1' }, () => {
+      ambient.set('userId', 'u_m1');
+      asserts.assertEquals(ambient.get()?.userId, 'u_m1');
+    });
+    ambient.run({ correlationId: 'm2' }, () => {
+      asserts.assertEquals(ambient.get()?.correlationId, 'm2');
+      asserts.assertEquals(ambient.get()?.userId, undefined); // fresh scope
+    });
+  });
+});
+
+describe('ambient (runtime without AsyncLocalStorage)', () => {
+  /**
+   * Stands in for a browser: the store can never be built. It fails through the
+   * real `assertAsyncLocalStorage` guard, so this exercises the production
+   * error rather than a copy of its message — if the message changes, these
+   * tests follow it automatically.
+   */
+  const noAsyncLocalStorage = (): never => {
+    assertAsyncLocalStorage(null);
+    throw new Error('unreachable: assertAsyncLocalStorage should have thrown');
+  };
+
+  const degraded = buildAmbient(noAsyncLocalStorage);
+
+  it('get() returns undefined instead of throwing', () => {
+    asserts.assertEquals(degraded.get(), undefined);
+  });
+
+  it('set() is a silent no-op', () => {
+    degraded.set('userId', 'u_1'); // must not throw
+    asserts.assertEquals(degraded.get(), undefined);
+  });
+
+  it('active() reports false instead of throwing', () => {
+    asserts.assertEquals(degraded.active(), false);
+  });
+
+  it('run() throws the documented TypeError', () => {
+    asserts.assertThrows(
+      () => degraded.run({ correlationId: 'c' }, () => 'never'),
+      TypeError,
+      'AsyncLocalStorage',
+    );
+  });
+
+  it('child() throws the documented TypeError', () => {
+    asserts.assertThrows(
+      () => degraded.child({ spanId: 's' }, () => 'never'),
+      TypeError,
+      'AsyncLocalStorage',
+    );
+  });
+
+  it('run() does not run the callback when it throws', () => {
+    let ran = false;
+    asserts.assertThrows(() =>
+      degraded.run({ correlationId: 'c' }, () => {
+        ran = true;
+      })
+    );
+    // Failing loudly is the point: silently running `fn` outside any context
+    // would hand the callback a scope that does not exist.
+    asserts.assertEquals(ran, false);
+  });
+
+  it('names the supported runtimes in the error', () => {
+    const error = asserts.assertThrows(
+      () => degraded.run({}, () => 'never'),
+    ) as TypeError;
+    asserts.assertStringIncludes(error.message, '@tundralibs/ambient');
+    asserts.assertStringIncludes(error.message, 'node:async_hooks');
+    asserts.assertStringIncludes(error.message, 'Deno, Bun, and Node.js >= 22');
+  });
+
+  it('works normally again once the resolver supplies a store', () => {
+    // The seam is honoured in the working direction too, so the degradation
+    // above is genuinely driven by store availability and not by the seam
+    // itself being broken.
+    const store: Context<RequestContext> = createContext<RequestContext>();
+    const working = buildAmbient(() => store);
+    working.run({ correlationId: 'w1' }, () => {
+      working.set('userId', 'u_w');
+      asserts.assertEquals(working.get()?.correlationId, 'w1');
+      asserts.assertEquals(working.get()?.userId, 'u_w');
+      asserts.assertEquals(working.active(), true);
+    });
+    asserts.assertEquals(working.get(), undefined);
+    asserts.assertEquals(working.active(), false);
   });
 });
