@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.1.1...compat-v1.1.2) (2026-08-13)
+
+
+### Bug Fixes
+
+* **compat:** load node builtins synchronously instead of via top-level await ([1e48583](https://github.com/TundraSoft/TundraLibs/commit/1e48583cb314d24c503535b09fc8d524be67347a))
+* **compat:** load node builtins synchronously instead of via top-level await ([6d0cdef](https://github.com/TundraSoft/TundraLibs/commit/6d0cdef0d2b4171014b1f3e9583dd6ccb8799757))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.1.0...compat-v1.1.1) (2026-08-12)
 
 
