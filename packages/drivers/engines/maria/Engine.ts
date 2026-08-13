@@ -34,7 +34,7 @@
 /// <reference types="npm:@types/node@22" />
 import { type Connection, createConnection } from '$maria';
 import type { EventOptionKeys } from '@tundralibs/utils';
-import { validateTLS } from '@tundralibs/compat';
+import { validateTLS } from '@tundralibs/compat/common';
 import { MariaTranslator } from '@tundralibs/oql/translator';
 import { SQLEngine } from '../../SQLEngine.ts';
 import { EngineError, type EngineErrorCode } from '../../errors/mod.ts';

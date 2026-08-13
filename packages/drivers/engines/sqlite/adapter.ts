@@ -13,8 +13,8 @@
  * @module
  */
 
-import { isBun, isDeno, isNode } from '@tundralibs/compat';
 import { pathExistsSync } from '@tundralibs/compat/file';
+import { isBun, isDeno, isNode } from '@tundralibs/compat/runtime';
 import { DriverError } from '../../errors/mod.ts';
 
 /** Uniform shape of a SQLite database handle across runtimes. */

@@ -24,7 +24,7 @@
  * @module
  */
 
-import { connect } from '@tundralibs/compat';
+import { connect } from '@tundralibs/compat/net';
 import { PgConnection } from '../postgres/PgConnection.ts';
 import { PgServerError } from '../postgres/PgServerError.ts';
 

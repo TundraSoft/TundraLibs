@@ -29,10 +29,8 @@
  * ```
  */
 
-import {
-  connect,
-  type TLSOptions as CompatTLSOptions,
-} from '@tundralibs/compat';
+import type { TLSOptions as CompatTLSOptions } from '@tundralibs/compat/common';
+import { connect } from '@tundralibs/compat/net';
 import type { EventOptionKeys } from '@tundralibs/utils';
 import { BaseEngine } from '../../BaseEngine.ts';
 import { EngineError } from '../../errors/mod.ts';
