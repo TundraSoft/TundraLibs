@@ -6,7 +6,6 @@
 ### Bug Fixes
 
 * **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
-* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
 
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.0-dev11...cacher-v1.0.0) (2026-08-01)
 
@@ -21,7 +20,6 @@
 ### Documentation
 
 * **cacher:** correct thrown error/code in engines documentation ([0c8b2b2](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/0c8b2b23f71bd5697e69e6e1b67dde248b888356))
-* **cacher:** correct thrown error/code in engines documentation ([e6b1990](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/e6b1990f2cc430e024471e80470c3b5d20705888))
 
 ## [1.0.0-dev10](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/cacher-v1.0.0-dev9...cacher-v1.0.0-dev10) (2026-07-27)
 
@@ -37,11 +35,8 @@
 ### Bug Fixes
 
 * **cacher:** resolve round-3 review findings ([71fb882](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/71fb882d4a7e9389a24a133b17bc8d6f693a0eaf))
-* **cacher:** resolve round-3 review findings ([d1e5985](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/d1e59855dc9b7f7f547570673dae2eab60738ee3))
 * **cacher:** resolve round-4 review findings ([8b0462a](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/8b0462a88fed47701ca5d170c24e8f6d8a6f4644))
-* **cacher:** resolve round-4 review findings ([a30c4a5](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/a30c4a5f707417b27db4031437dc4cebdab454e1))
 * **cacher:** resolve round-5 review findings ([3b3133b](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/3b3133b1053bfbb9e3a5477c129059916821ca91))
-* **cacher:** resolve round-5 review findings ([a4304ff](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/a4304ff80ba1ea23fe1e2847721441a035efcde8))
 
 ## [1.0.0-dev8](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/cacher-v1.0.0-dev7...cacher-v1.0.0-dev8) (2026-07-23)
 
@@ -51,7 +46,6 @@
 * **cacher:** close re-review findings — namespace-scoped clear, exptime-0, Value split ([dc51abe](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/dc51abe0e65d224a6a71ab36971f83b37fc1a723))
 * **cacher:** namespace-scoped Memcached clear, permanent expiry=0, Value type split ([edc57e0](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/edc57e0ee0c155099ce68e8635491d7aa5c52e4e))
 * **cacher:** resolve 8 review findings (password leak, has/get mismatch, expiry footgun) ([3f9959d](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/3f9959dabb79a908fad71ab2a82a439ff2725ed4))
-* **cacher:** resolve 8 review findings (password leak, has/get mismatch, expiry footgun) ([496b188](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/496b188670ae368b6c4b5106ba2f06c0c66c478a))
 
 
 ### Documentation

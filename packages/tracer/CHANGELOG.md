@@ -6,7 +6,6 @@
 ### Bug Fixes
 
 * **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
-* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
 
 ## [0.5.0](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.4.1...tracer-v0.5.0) (2026-08-09)
 
@@ -34,7 +33,6 @@
 ### Features
 
 * **tracer:** ship the composition-root adapters — wrap and logContext ([35214b9](https://github.com/TundraSoft/TundraLibs/commit/35214b91cc1f30a56813ce7b2c4701ed39a48147))
-* **tracer:** ship the composition-root adapters — wrap and logContext ([bc212e9](https://github.com/TundraSoft/TundraLibs/commit/bc212e9df56893008593d6b57c8cfc3f61946d00))
 
 ## [0.3.1](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.3.0...tracer-v0.3.1) (2026-08-09)
 
@@ -54,7 +52,6 @@
 ### Features
 
 * **tracer:** add OTLP exporter, batch processor and semantic conventions ([8b5c0da](https://github.com/TundraSoft/TundraLibs/commit/8b5c0da08b956fe354fa2db975ddfbd4e5164e8f))
-* **tracer:** add OTLP exporter, batch processor and semantic conventions ([cf8bab6](https://github.com/TundraSoft/TundraLibs/commit/cf8bab627b6b1b4d04c61b35df79a7b5a42f8bc1))
 
 
 ### Refactoring
@@ -67,7 +64,6 @@
 * **tracer:** add the event-based drivers recipe ([d911245](https://github.com/TundraSoft/TundraLibs/commit/d9112454b65765362c46980dd185c02719c48a0c))
 * **tracer:** add the how-it-works guides, and a real-collector conformance test ([8b14e60](https://github.com/TundraSoft/TundraLibs/commit/8b14e609a4abf5a931a97cddc1b41e08351412b6))
 * **tracer:** align the log-correlation example keys with otelLogFormatter ([564077d](https://github.com/TundraSoft/TundraLibs/commit/564077dd237fb444f28edc7e58be32d14104d9fc))
-* **tracer:** align the log-correlation example keys with otelLogFormatter ([8574578](https://github.com/TundraSoft/TundraLibs/commit/85745787e533d9051dbef70d3fe012ffc6112d0e))
 * **tracer:** make the recipes wiki-visible ([941195f](https://github.com/TundraSoft/TundraLibs/commit/941195ffb47d56a7c392b957cc1f825c039873a1))
 
 ## [0.2.0](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.1.0...tracer-v0.2.0) (2026-08-09)

@@ -6,7 +6,6 @@
 ### Bug Fixes
 
 * **id:** republish as 1.0.3 ([5de296b](https://github.com/TundraSoft/TundraLibs/commit/5de296b9ae28eaf1786a1397f0262f940395b02a))
-* **id:** republish as 1.0.3 ([b9de287](https://github.com/TundraSoft/TundraLibs/commit/b9de28704db3e488c41892898c3a9a38e044a1fc))
 
 ## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/id-v1.0.1...id-v1.0.2) (2026-08-13)
 
@@ -14,7 +13,6 @@
 ### Bug Fixes
 
 * **id:** import compat via subpaths instead of the root barrel ([7e87260](https://github.com/TundraSoft/TundraLibs/commit/7e87260acaf90cb3b4b9352f03abf5ab21b31167))
-* **id:** import compat via subpaths instead of the root barrel ([51223ab](https://github.com/TundraSoft/TundraLibs/commit/51223ab07494d645c9c547aaef61b3f62b903809))
 
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/id-v1.0.0...id-v1.0.1) (2026-08-12)
 
@@ -22,7 +20,6 @@
 ### Bug Fixes
 
 * **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
-* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
 
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/id-v1.0.0-dev12...id-v1.0.0) (2026-08-01)
 
@@ -37,7 +34,6 @@
 ### Documentation
 
 * **id:** correct simpleID daily counter reset behavior (resets to 0, not seed) ([23ca48f](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/23ca48fbcbe41c7ee3800c2d1d47cee42f419eac))
-* **id:** correct simpleID daily counter reset behavior (resets to 0, not seed) ([e7c5b58](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/e7c5b58798b681a49dcb0fc92ace3637264e6da8))
 
 ## [1.0.0-dev11](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/id-v1.0.0-dev10...id-v1.0.0-dev11) (2026-07-28)
 
@@ -45,7 +41,6 @@
 ### Documentation
 
 * **id:** correct nanoID alphabet + sequenceID counter documentation ([0b54804](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/0b54804c62474bbb758de4f1887994c080b3162d))
-* **id:** correct nanoID alphabet + sequenceID counter documentation ([4b2c9a9](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/4b2c9a90c8fc7707204ece3e83f8dfe050de6036))
 
 ## [1.0.0-dev10](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/id-v1.0.0-dev9...id-v1.0.0-dev10) (2026-07-27)
 
@@ -53,7 +48,6 @@
 ### Documentation
 
 * **id:** correct cuid timestamp-overflow year comment (2059, not ~4503) ([6f86c1d](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/6f86c1d2c8b6126c3ac68a1f27cdd9cbf8b922f4))
-* **id:** correct cuid timestamp-overflow year comment (2059, not ~4503) ([ffa5e4c](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/ffa5e4c674b5b4fdf49aeed882c5f7a61aceebf1))
 
 ## [1.0.0-dev9](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/id-v1.0.0-dev8...id-v1.0.0-dev9) (2026-07-25)
 
@@ -62,12 +56,8 @@
 
 * **id:** add round-3 regression tests and doc updates ([109bb05](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/109bb05fe9f4c846fa7e0841a5f7b18697023411))
 * **id:** resolve round-3 review findings ([a330907](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/a330907f47dbbbb86a04a11ffa2b90921db96556))
-* **id:** resolve round-3 review findings ([825cf78](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/825cf78dd1293734f4bbd924f883533337b3a767))
-* **id:** resolve round-3 review findings ([f04bfba](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/f04bfba942bc37469b97bab8a485127b0329aa6e))
 * **id:** resolve round-4 review findings ([4c40cf4](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/4c40cf48c465d7c0844083fa3ef52829e6d46416))
-* **id:** resolve round-4 review findings ([2fa1e48](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/2fa1e48ff391e16f00c31881e6cf931c9ee60352))
 * **id:** resolve round-5 review findings ([ab82456](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/ab824564d067093cdc1bafb3fc82928651c16d37))
-* **id:** resolve round-5 review findings ([a8369cb](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/a8369cb0c1876f28882daed773170e192e46a06d))
 
 ## [1.0.0-dev8](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/id-v1.0.0-dev7...id-v1.0.0-dev8) (2026-07-23)
 
@@ -77,7 +67,6 @@
 * **id:** close re-review findings — errors/ folder, width-bounded ObjectID timestamp, cheaper simpleID, doc drift ([229eb3b](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/229eb3be0644b5e32087868c0a20a1faa4b82245))
 * **id:** close re-review findings (errors/ folder, ObjectID timestamp width, simpleID perf, doc drift) ([765d092](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/765d0921afa0b9557d21b0565c024946c583882d))
 * **id:** resolve 10 review findings (ObjectID overflow, doc drift, fake-coverage tests) ([da3ae13](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/da3ae135a724420584cf9752223f3b6cd41789f5))
-* **id:** resolve 10 review findings (ObjectID overflow, doc drift, fake-coverage tests) ([8988890](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/89888907572f2dec67ff906961a2de24dbf240fc))
 
 
 ### Documentation

@@ -6,7 +6,6 @@
 ### Bug Fixes
 
 * **utils:** import compat via subpaths instead of the root barrel ([1ffae78](https://github.com/TundraSoft/TundraLibs/commit/1ffae78425c9a6ede1cb8ba5900f0531f858f835))
-* **utils:** import compat via subpaths instead of the root barrel ([e2c1645](https://github.com/TundraSoft/TundraLibs/commit/e2c164589c960ca8d4cc9b6524d35a95f02d783e))
 
 ## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.0.1...utils-v1.0.2) (2026-08-12)
 
@@ -14,7 +13,6 @@
 ### Bug Fixes
 
 * **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
-* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
 
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.0.0...utils-v1.0.1) (2026-08-09)
 
@@ -24,7 +22,6 @@
 * **utils:** bound syslog field lengths to finish the ReDoS fix ([7e47c5a](https://github.com/TundraSoft/TundraLibs/commit/7e47c5a84bfbcba12a4465b14e01f39fba4fa9ea))
 * **utils:** make the RFC3164 fields structurally disjoint ([3be4389](https://github.com/TundraSoft/TundraLibs/commit/3be438943f7c4e6b55f965ed43cff2d92a7e1524))
 * **utils:** remove polynomial-ReDoS backtracking from syslog and variableReplacer ([5909647](https://github.com/TundraSoft/TundraLibs/commit/59096470e9c825ec8ebb964954f5a10e57a3cf36))
-* **utils:** remove polynomial-ReDoS backtracking from syslog and variableReplacer ([3dc89bb](https://github.com/TundraSoft/TundraLibs/commit/3dc89bbcb40d107b88d20d429f00f9a8a2e0e247))
 
 
 ### Documentation
@@ -44,7 +41,6 @@
 ### Documentation
 
 * **utils:** fix templatize + syslog documentation to match real behavior/API ([1602f08](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/1602f08aabdda5361b9cd12785d4b18f5ee98133))
-* **utils:** fix templatize + syslog documentation to match real behavior/API ([e18ec22](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/e18ec22a33bcdc3c50a7537301d7e87602bab028))
 
 ## [1.0.0-dev10](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/utils-v1.0.0-dev9...utils-v1.0.0-dev10) (2026-07-27)
 
@@ -52,7 +48,6 @@
 ### Bug Fixes
 
 * **utils:** parse year-first RFC3164 syslog timestamps with the correct year ([21684d5](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/21684d579d52490ae3a77f771a31f8133219f217))
-* **utils:** parse year-first RFC3164 syslog timestamps with the correct year ([40c14c7](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/40c14c714ff03609e0616ad27ff3cc78d282615d))
 
 ## [1.0.0-dev9](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/utils-v1.0.0-dev8...utils-v1.0.0-dev9) (2026-07-25)
 
@@ -60,11 +55,8 @@
 ### Bug Fixes
 
 * **utils:** resolve round-3 review findings ([5029388](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/5029388d84075c924c9f815a15a49fc31288c179))
-* **utils:** resolve round-3 review findings ([464ffa9](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/464ffa98a3f4b70974ff408034f53bb1265e31de))
 * **utils:** resolve round-4 review findings ([71193c2](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/71193c28477cfbab882d743818ef9f946ac55d0e))
-* **utils:** resolve round-4 review findings ([a925b74](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/a925b747aa5e7d79cbdd40b8e33071092df3d826))
 * **utils:** resolve round-6 review findings ([3e728ef](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/3e728efde967beca3c72ef3e62fbe237aaad6a36))
-* **utils:** resolve round-6 review findings ([fa5ae93](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/fa5ae93b5c8e2dd5956ade7deba9e7d0133d78b1))
 
 ## [1.0.0-dev8](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/utils-v1.0.0-dev7...utils-v1.0.0-dev8) (2026-07-23)
 
@@ -72,11 +64,9 @@
 ### Bug Fixes
 
 * **utils:** asObject() returns a defensive copy for read-only PrivateObject ([ff05ef9](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/ff05ef91528669d248b899b8eec6b0a77ab29862))
-* **utils:** asObject() returns a defensive copy for read-only PrivateObject ([cac9a37](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/cac9a375e5ba360955d0ba8a714aa9fa2e4b4e5d))
 * **utils:** async memoize/@Once honor the Promise contract on cached calls ([4d2eefd](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/4d2eefde6ed8cfc3453f92d7793bab8b8f081f67))
 * **utils:** close re-review findings — async memoize/@Once honor Promise contract ([9c71bfd](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/9c71bfd3748e29f4125bc3921836d83df6d479ee))
 * **utils:** close review findings — decorator exports, SSRF ranges, validation-bypass leaks ([8b87f04](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/8b87f04dd4c2a9d9643bee36496bff9db17fc318))
-* **utils:** close review findings — decorator exports, SSRF ranges, validation-bypass leaks ([0daf2fc](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/0daf2fca21499f51beaa4671b4831ff389e5cd1f))
 
 
 ### Documentation

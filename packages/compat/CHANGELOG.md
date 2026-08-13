@@ -6,7 +6,6 @@
 ### Bug Fixes
 
 * **compat:** load node builtins synchronously instead of via top-level await ([1e48583](https://github.com/TundraSoft/TundraLibs/commit/1e48583cb314d24c503535b09fc8d524be67347a))
-* **compat:** load node builtins synchronously instead of via top-level await ([6d0cdef](https://github.com/TundraSoft/TundraLibs/commit/6d0cdef0d2b4171014b1f3e9583dd6ccb8799757))
 
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.1.0...compat-v1.1.1) (2026-08-12)
 
@@ -21,7 +20,6 @@
 ### Features
 
 * **compat:** report the actual bound port on WebServer ([3507c3d](https://github.com/TundraSoft/TundraLibs/commit/3507c3d9391ac8ec4e379ebad69e011ee880ce7f))
-* **compat:** report the actual bound port on WebServer ([1cc2c88](https://github.com/TundraSoft/TundraLibs/commit/1cc2c8838ccea6c935e712951678a084c81882fa))
 
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.0.0-dev10...compat-v1.0.0) (2026-08-01)
 
@@ -36,7 +34,6 @@
 ### Bug Fixes
 
 * **compat:** value-export WebServer from root barrel; fix broken doc examples ([541dd62](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/541dd620394875b0a61535191b268d1565bb339a))
-* **compat:** value-export WebServer from root barrel; fix broken doc examples ([be8a57a](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/be8a57aa6e61096da1ad7bdf1073de6346f42460))
 
 ## [1.0.0-dev9](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/compat-v1.0.0-dev8...compat-v1.0.0-dev9) (2026-07-25)
 
@@ -45,7 +42,6 @@
 
 * **compat:** correct malformed-Host docs to match per-runtime behavior ([2815119](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/281511946de681887a602940c1542744f4622540))
 * **compat:** resolve round-3 review findings ([7e7da05](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/7e7da05b64eb24e7172e957c7185578e3fce6684))
-* **compat:** resolve round-3 review findings ([3fccee6](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/3fccee66ccfcec55194fb87566ebc08b904c9302))
 * **compat:** resolve round-4 review findings ([ae7c2c9](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/ae7c2c929822632ce816a4ecc788201c9267fcd4))
 
 ## [1.0.0-dev8](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/compat-v1.0.0-dev7...compat-v1.0.0-dev8) (2026-07-23)
@@ -56,7 +52,6 @@
 * **compat:** close re-review findings — doc drift, write byte count, WS avg metric, abort cleanup, Deno TLS parity ([1340300](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/13403006e629bc8ce6458f471d0962c59a181999))
 * **compat:** close re-review findings (doc drift, write byte count, WS metric, abort cleanup, Deno TLS parity) ([1927f9f](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/1927f9fc0b8c2def6097d62fa76c9543550a8046))
 * **compat:** resolve 11 review findings (socket crash, silent failures, cross-runtime divergences) ([994443d](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/994443d84c4ee0a10cc3c0a332d2d794e8633341))
-* **compat:** resolve 11 review findings (socket crash, silent failures, cross-runtime divergences) ([89695c5](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/89695c5e42c347c05dd70e17b6440ff48459e46b))
 
 
 ### Documentation

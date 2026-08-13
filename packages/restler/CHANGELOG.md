@@ -6,7 +6,6 @@
 ### Bug Fixes
 
 * **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
-* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
 
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.0.1...restler-v1.1.0) (2026-08-09)
 
@@ -27,7 +26,6 @@
 ### Documentation
 
 * **restler:** add Observability section ([a5b4325](https://github.com/TundraSoft/TundraLibs/commit/a5b43251f05ad617167547420627d2cb6c1551e9))
-* **restler:** add Observability section ([69e42e3](https://github.com/TundraSoft/TundraLibs/commit/69e42e392e77a3ecdb2e6017760d9f27283d99ab))
 
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.0.0-dev7...restler-v1.0.0) (2026-08-01)
 
@@ -49,9 +47,7 @@
 ### Bug Fixes
 
 * **restler:** resolve round-3 review findings ([0a95ed5](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/0a95ed52d8d25c4b98e6f153b8bba333aee0c54e))
-* **restler:** resolve round-3 review findings ([6b75e25](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/6b75e25a51c59cac3eccae9157349228a9625b1b))
 * **restler:** resolve round-4 review findings ([fed081f](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/fed081fec8a47e6d0a65dd117c7c61f1621e1f39))
-* **restler:** resolve round-4 review findings ([6539e6e](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/6539e6e0b97780b8755870cf0aa384c4a83adcb6))
 * **restler:** resolve round-5 review findings ([59360ad](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/59360ad9715ac295357de4b65e0dd1608045b778))
 * **restler:** scrub request URL from wrapped fetch error cause chain ([8e495b6](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/8e495b6e143ceec4f7f4a3a65373dbd6f2f74494))
 
@@ -61,11 +57,8 @@
 ### Bug Fixes
 
 * **restler:** close re-review findings — redact request payload, UTF-8 BASIC auth ([7461081](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/746108183d0fd2398c3f39df7c44d2374306f3e5))
-* **restler:** close re-review findings — redact request payload, UTF-8 BASIC auth ([d035a15](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/d035a15ec2763f446d19c9a64409f63878dd649f))
 * **restler:** close review findings — credential redaction, validation parity, dep skew ([7f967a9](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/7f967a95d9e44bb6f1ddb0f3f7cc00db2760813c))
-* **restler:** close review findings — credential redaction, validation parity, dep skew ([113f88f](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/113f88f0df99aa418e5059441447c58bf6ed2b4f))
 * **restler:** release timeout timer on completion; validate endpoint version/contentType ([3d57c7a](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/3d57c7aac39df253f7cb491b402c493958103067))
-* **restler:** release timeout timer on completion; validate endpoint version/contentType ([0edfd31](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/0edfd312606ac1bcd3cb6a841d6be28771742655))
 
 ## [1.0.0-dev1](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/restler-v1.0.0-dev0...restler-v1.0.0-dev1) (2026-07-14)
 

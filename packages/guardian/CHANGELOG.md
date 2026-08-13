@@ -13,7 +13,6 @@
 ### Documentation
 
 * **guardian:** fix object default-mode and nullable-fallback examples ([c5e0cb7](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/c5e0cb7a109a102f767cb4541cf390df4dc4c93e))
-* **guardian:** fix object default-mode and nullable-fallback examples ([25e0031](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/25e00318f7847052f54da7cf033304a42b78c6ff))
 
 ## [1.0.0-dev11](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/guardian-v1.0.0-dev10...guardian-v1.0.0-dev11) (2026-07-28)
 
@@ -21,7 +20,6 @@
 ### Documentation
 
 * **guardian:** fix object default-mode and nullable-fallback examples ([c5e0cb7](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/c5e0cb7a109a102f767cb4541cf390df4dc4c93e))
-* **guardian:** fix object default-mode and nullable-fallback examples ([25e0031](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/25e00318f7847052f54da7cf033304a42b78c6ff))
 
 ## [1.0.0-dev10](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/guardian-v1.0.0-dev9...guardian-v1.0.0-dev10) (2026-07-27)
 
@@ -29,7 +27,6 @@
 ### Bug Fixes
 
 * **guardian:** optional() function-default routes on callability, not 'then' presence ([d70da7c](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/d70da7c59521feea794b94d417132c652cb9fdf4))
-* **guardian:** optional() function-default routes on callability, not 'then' presence ([45ca7ab](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/45ca7ab1011109b1690f8409889e321efb924e60))
 
 ## [1.0.0-dev9](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/guardian-v1.0.0-dev8...guardian-v1.0.0-dev9) (2026-07-25)
 
@@ -37,12 +34,9 @@
 ### Bug Fixes
 
 * **guardian:** eliminate thenable-adoption idiom across all guards ([e4fe4a1](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/e4fe4a19beb6d167307fa63d66a15b2bb5415bac))
-* **guardian:** eliminate thenable-adoption idiom across all guards ([1f268bb](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/1f268bb26c76219496ef35389bf081668d9c52c3))
 * **guardian:** refuse thenable-shaped values on async parseAsync chains ([2aa23e3](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/2aa23e327ee1f2480f989420f161938e9afe074d))
 * **guardian:** resolve round-3 review findings ([1a75cc7](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/1a75cc7e5360e8fc3cb3832064a6860c8bc9a8c4))
-* **guardian:** resolve round-3 review findings ([560b295](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/560b295e9d9918cf6efab83cab663a0c44f33df0))
 * **guardian:** resolve round-4 review findings ([bd0d024](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/bd0d02476778d48bd1345696f1a55cc1411784d7))
-* **guardian:** resolve round-4 review findings ([d8f9a21](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/d8f9a21f6dbb2fcc8b04fa55a702ca003ddb9516))
 * **guardian:** resolve round-5 review findings ([5d10b00](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/5d10b00a482c98d8519ceff0c3c8151cb7accd82))
 * **guardian:** resolve round-6 review findings ([75bcb8c](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/75bcb8c76b3a88a42bfb3e092b1a7d9fb55b8180))
 
@@ -52,7 +46,6 @@
 ### Bug Fixes
 
 * **guardian:** close re-review findings — nested async bypass, error secret leak, sync promise defaults, noSqlInjection ([2a4399a](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/2a4399a9c754934f56680ca470b8899d84fda23d))
-* **guardian:** close re-review findings — nested async bypass, error secret leak, sync promise defaults, noSqlInjection ([abc4e62](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/abc4e62c59926c406bb8355d267ac531653c72c7))
 * **guardian:** close review findings — async .test(), renameField, no-op transforms, errors/ move ([c64b009](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/c64b009d1d0439e5b64293866fbd8eed98fb3e9f))
 * **guardian:** Date transforms emit a schema matching their output type ([dd98a74](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/dd98a74c77b2885ec823b842b77265ef577643ab))
 * **guardian:** DiscriminatedUnion _cloneWith carries the custom errorMessage ([4e0bf53](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/4e0bf53a69d752dea5fdaff9f1c1d6c07c3da637))

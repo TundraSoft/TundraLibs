@@ -6,7 +6,6 @@
 ### Bug Fixes
 
 * **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
-* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
 
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.1.0...norm-v1.1.1) (2026-08-09)
 
@@ -14,7 +13,6 @@
 ### Documentation
 
 * **norm:** adopt tracer.wrap in the witness example ([6cc6ced](https://github.com/TundraSoft/TundraLibs/commit/6cc6ced985bdacb6046dae6ea5144bff307b25cb))
-* **norm:** adopt tracer.wrap in the witness example ([a5cf376](https://github.com/TundraSoft/TundraLibs/commit/a5cf376d870ec65e660aa1f4f1cebe17562657ee))
 
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.0.1...norm-v1.1.0) (2026-08-09)
 
@@ -22,7 +20,6 @@
 ### Features
 
 * **norm:** add the witness observability hook ([30643d0](https://github.com/TundraSoft/TundraLibs/commit/30643d07e0d9cbb71bb68cf6d9ed08c88ca0bd62))
-* **norm:** add the witness observability hook ([93affba](https://github.com/TundraSoft/TundraLibs/commit/93affba080aeed2d354dd93d5cd5779b1c10859b))
 
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.0.0...norm-v1.0.1) (2026-08-09)
 
@@ -30,7 +27,6 @@
 ### Bug Fixes
 
 * **norm:** remove polynomial-ReDoS backtracking from Migrator dir trim ([262c987](https://github.com/TundraSoft/TundraLibs/commit/262c9875e1ba84a7b05e879b9af03ca9ed93dc80))
-* **norm:** remove polynomial-ReDoS backtracking from Migrator dir trim ([585b44a](https://github.com/TundraSoft/TundraLibs/commit/585b44a4a7c657b3f50f50934c02a44da359c7c8))
 
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.0.0-dev0.7...norm-v1.0.0) (2026-08-01)
 
@@ -45,7 +41,6 @@
 ### Documentation
 
 * **norm:** list decryptError in the README event surface ([d973025](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/d97302582a7f60f58bc121e8769f5449e23377e6))
-* **norm:** list decryptError in the README event surface ([9f5b0aa](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/9f5b0aa7c311903e3ba0c92bed0c893e5a790c4e))
 
 ## [1.0.0-dev0.6](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/norm-v1.0.0-dev0.5...norm-v1.0.0-dev0.6) (2026-07-27)
 
@@ -69,7 +64,6 @@
 ### Bug Fixes
 
 * **norm:** resolve round-3 review findings ([efb814d](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/efb814d5f65cf46e0cc21cf374f12941d510317f))
-* **norm:** resolve round-3 review findings ([4f96393](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/4f963939d9b37b48d741119a6b35c9f580effdb3))
 * **norm:** resolve round-4 review findings ([7921e96](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/7921e9659d46eada63fcbf18daf44a1a9fc960c4))
 * **norm:** resolve round-5 review findings ([4ae1940](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/4ae1940915d8507a35f3068b90727027cb7adcd8))
 
@@ -77,7 +71,6 @@
 ### Documentation
 
 * **norm:** document scope enforcement on upsert/truncate + migrator transaction timeout ([fbf99ea](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/fbf99ea5237f32302dd292ce3f43cc662a1f5019))
-* **norm:** document scope enforcement on upsert/truncate + migrator transaction timeout ([8284215](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/8284215f2bea067994715d34080cbdcd0eea42c0))
 * **norm:** document scoped-upsert pre-flight SELECT cost and residual race ([b85df65](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/b85df65b70f697b0fa3ba0b5caa31c915dd24160))
 
 ## [1.0.0-dev0.3](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/norm-v1.0.0-dev0.2...norm-v1.0.0-dev0.3) (2026-07-23)
@@ -86,9 +79,7 @@
 ### Bug Fixes
 
 * **norm:** close re-review findings — advisory-lock affinity, scoped hashed filters, chunkSize guard ([b437248](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/b437248c75dc4678031ee54712e2f91cfe555f09))
-* **norm:** close re-review findings — advisory-lock affinity, scoped hashed filters, chunkSize guard ([722d474](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/722d474aea44227e2f97022d23dc3644f3a789e2))
 * **norm:** close review findings — migration lock leak, atomic apply, grouped-read warning ([b6f005d](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/b6f005d9799b2858abad4860490b4b3a0ebb8058))
-* **norm:** close review findings — migration lock leak, atomic apply, grouped-read warning ([a122b1a](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/a122b1a6b6b674a8930aeae726238350f962ebec))
 
 
 ### Documentation

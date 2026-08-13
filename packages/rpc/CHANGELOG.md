@@ -6,7 +6,6 @@
 ### Documentation
 
 * **rpc:** link the tracer middleware recipe ([1e4db7c](https://github.com/TundraSoft/TundraLibs/commit/1e4db7c88e0a26ad9b2196315bd8505019102ca0))
-* **rpc:** link the tracer middleware recipe ([01fef1b](https://github.com/TundraSoft/TundraLibs/commit/01fef1b3551c08ab645f4f257f39a28bf4547d8a))
 
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.0.0-dev6...rpc-v1.0.0) (2026-08-01)
 
@@ -21,7 +20,6 @@
 ### Bug Fixes
 
 * **rpc:** correlate BAD_FORMAT error frames to the offending request id ([26439af](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/26439af1bd2fdc712a245efa4b7d08b9c01036e1))
-* **rpc:** correlate BAD_FORMAT error frames to the offending request id ([9677691](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/96776915d83451f06e68a25488e195b374fbbbbf))
 
 ## [1.0.0-dev5](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/rpc-v1.0.0-dev4...rpc-v1.0.0-dev5) (2026-07-27)
 
@@ -29,7 +27,6 @@
 ### Bug Fixes
 
 * **rpc:** publish() normalizes undefined payload to null so the frame isn't rejected ([1dbae36](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/1dbae36648d2b6b719bbf4fc905a7608144098df))
-* **rpc:** publish() normalizes undefined payload to null so the frame isn't rejected ([2b94bd4](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/2b94bd44a7ee084ce4e8a1da22d1e9ce9959b5c3))
 
 ## [1.0.0-dev4](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/rpc-v1.0.0-dev3...rpc-v1.0.0-dev4) (2026-07-25)
 
@@ -37,11 +34,8 @@
 ### Bug Fixes
 
 * **rpc:** resolve round-3 review findings ([09740f0](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/09740f01985ee0886d6a731f75e21a1f1190ef8a))
-* **rpc:** resolve round-3 review findings ([38ab91b](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/38ab91bbabbb81e8fa39ebd05be70f8d8ca747d2))
 * **rpc:** resolve round-4 review findings ([44ee873](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/44ee8736c073339d1dc8853f4bf13a94d90a7bb3))
-* **rpc:** resolve round-4 review findings ([060ae6a](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/060ae6a119ee2bda8af32f15532465323a501d5f))
 * **rpc:** resolve round-5 review findings ([b2b41a9](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/b2b41a90155d0a67f5c521455f3efe5b303da9d4))
-* **rpc:** resolve round-5 review findings ([2ca62e9](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/2ca62e920db49b1b5ccb4bb9c94dd99846c0d53b))
 
 
 ### Documentation
@@ -55,7 +49,6 @@
 
 * **rpc:** close re-review findings — re-check connection after authorize await ([f673ac3](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/f673ac3a6cbb3c5198cab0bebba12f93c1fc987e))
 * **rpc:** close review findings — extension seams, error-path bugs, BaseError ([fcf6012](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/fcf601249b6b43e026e8cd854f0f5875f207623e))
-* **rpc:** close review findings — extension seams, error-path bugs, BaseError ([b7f12c4](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/b7f12c450687a6672743407f23718577e16c3c36))
 * **rpc:** re-check connection after authorize await + close re-review doc/convention findings ([70c1cbe](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/70c1cbef2eca2fcb5af55b05a099e15261e7ca64))
 * **rpc:** satisfy JSR slow-types after seam promotion ([9444354](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/9444354e9d4d7fafc9fbf4221305a76006186273))
 

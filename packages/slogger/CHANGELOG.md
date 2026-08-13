@@ -6,7 +6,6 @@
 ### Bug Fixes
 
 * **slogger:** import compat via subpaths instead of the root barrel ([3456aeb](https://github.com/TundraSoft/TundraLibs/commit/3456aeb2f9caa49439f957340a661bf0434a5732))
-* **slogger:** import compat via subpaths instead of the root barrel ([09929a4](https://github.com/TundraSoft/TundraLibs/commit/09929a4b6abc1a416787997aaea3d31b5f5cfa46))
 
 ## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.2...slogger-v1.1.3) (2026-08-12)
 
@@ -14,7 +13,6 @@
 ### Bug Fixes
 
 * **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
-* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
 
 ## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.1...slogger-v1.1.2) (2026-08-09)
 
@@ -22,7 +20,6 @@
 ### Documentation
 
 * **slogger:** adopt tracer.logContext in correlation guide ([562b3e7](https://github.com/TundraSoft/TundraLibs/commit/562b3e7fa3995fa97cd638f052ff6f2f6b320472))
-* **slogger:** adopt tracer.logContext in correlation guide ([0e6aad4](https://github.com/TundraSoft/TundraLibs/commit/0e6aad4529bb57da11c4b09b47a3128a9988187c))
 
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.0...slogger-v1.1.1) (2026-08-09)
 
@@ -61,7 +58,6 @@
 ### Documentation
 
 * **slogger:** fix broken README/handler examples + sampling option name ([54dcd1b](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/54dcd1b4e5a81dececfba79dddc8f04ebf868d5d))
-* **slogger:** fix broken README/handler examples + sampling option name ([1ea7506](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/1ea75062aae1b23ae7f751fde1d7a5f396c93bd1))
 
 ## [1.0.0-dev10](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/slogger-v1.0.0-dev9...slogger-v1.0.0-dev10) (2026-07-27)
 
@@ -69,7 +65,6 @@
 ### Documentation
 
 * **slogger:** createSlogger docs describe reference-identity config comparison ([7ff128d](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/7ff128d5f83eb40a0e664d7785aafb408d1a1c8c))
-* **slogger:** createSlogger docs describe reference-identity config comparison ([cf5f5ae](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/cf5f5aec70acfcb36b6926d264eb10bc3e3bed3f))
 
 ## [1.0.0-dev9](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/slogger-v1.0.0-dev8...slogger-v1.0.0-dev9) (2026-07-25)
 
@@ -77,15 +72,10 @@
 ### Bug Fixes
 
 * **slogger:** resolve round-3 review findings ([a0e96f7](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/a0e96f7e7ced9a53d9e7eef01f37d1ceeab211c0))
-* **slogger:** resolve round-3 review findings ([7a60bf7](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/7a60bf716ffbe236fc92b20cc5baad8d7ea00ff3))
 * **slogger:** resolve round-4 review findings ([61ff1ad](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/61ff1ad1af555e9a91a04ef97e81e6bfc71c7d26))
-* **slogger:** resolve round-4 review findings ([2e84a0d](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/2e84a0d636cce331da63b34464aeaa34e036b4c3))
 * **slogger:** resolve round-5 masking findings ([2b9d767](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/2b9d767460ef45341e580604be04f164e4e77982))
-* **slogger:** resolve round-5 masking findings ([e6ac051](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/e6ac0511346dceac0cdd20101904b553ca50d810))
 * **slogger:** resolve round-6 review findings ([f677b27](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/f677b27546fc2ef930e65bde91dab8910c31c9f9))
-* **slogger:** resolve round-6 review findings ([616e7e4](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/616e7e41224e4c93fac5de81f7f94848a13677e3))
 * **slogger:** resolve round-7 review findings ([caaafa6](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/caaafa67c4b3354405dcedb6f67d48b765a79147))
-* **slogger:** resolve round-7 review findings ([bf13ef1](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/bf13ef14ea7c7e8dd24f682332f257da25885ee3))
 
 ## [1.0.0-dev8](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/slogger-v1.0.0-dev7...slogger-v1.0.0-dev8) (2026-07-23)
 
@@ -93,9 +83,7 @@
 ### Bug Fixes
 
 * **slogger:** close re-review findings — partial-write loops, masking non-scalars, FileHandler double-open ([31fed3a](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/31fed3a41e85f690ac96a9c2b4e1ea639ff15103))
-* **slogger:** close re-review findings — partial-write loops, masking non-scalars, FileHandler double-open ([fe7b578](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/fe7b5788e7e468303d3dc84fc1aca410fa182333))
 * **slogger:** close review findings — finalize isolation, typed errors, masking + HTTP buffer fixes ([4a4a60e](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/4a4a60e313a5d04ae58ffb38cd3bcf3d0d65eeff))
-* **slogger:** close review findings — finalize isolation, typed errors, masking + HTTP buffer fixes ([1fea220](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/1fea220d2208a65ec2f65006b58d1d5a024130d8))
 
 
 ### Documentation
