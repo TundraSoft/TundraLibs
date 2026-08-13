@@ -24,6 +24,9 @@ import {
   type Session,
   use,
 } from './mod.ts';
+// `runtimeOf` is the migration seam, not part of the public barrel — the
+// test reaches it directly to read the resolved executor's capabilities.
+import { runtimeOf } from './Norm.ts';
 
 type Row = Record<string, unknown>;
 
@@ -217,6 +220,74 @@ describe('norm.Norm (config + lifecycle + tx edges)', () => {
         database: 'd',
       } as never,
     });
+  });
+
+  it('database config: the fetch-only edge dialects construct engines lazily', () => {
+    // neon / turso / d1 are registered by the root barrel exactly like the
+    // four original dialects — no import beyond `@tundralibs/norm`, no
+    // connection attempted at construction.
+    const neon = new Norm({
+      database: {
+        dialect: 'neon',
+        host: 'ep-x.eu-central-1.aws.neon.tech',
+        token: 'tok',
+      },
+    });
+    const turso = new Norm({
+      database: {
+        dialect: 'turso',
+        url: 'https://db-org.turso.io',
+        authToken: 'tok',
+      },
+    });
+    const d1 = new Norm({
+      database: {
+        dialect: 'd1',
+        accountId: 'acct',
+        databaseId: 'db',
+        apiToken: 'tok',
+      },
+    });
+    // Each resolved to a SQL executor (not the Mongo one) and reports the
+    // dialect family its translator emits: Neon speaks Postgres, Turso and
+    // D1 speak SQLite — no oql change was needed for any of them.
+    for (
+      const [norm, dialect] of [
+        [neon, 'postgres'],
+        [turso, 'sqlite'],
+        [d1, 'sqlite'],
+      ] as const
+    ) {
+      const caps =
+        runtimeOf(norm.use(Schema('S', { Users }))).executor.capabilities;
+      asserts.assertEquals(caps.dialect, dialect);
+      // One-shot HTTP: nothing survives a call, so no transactions.
+      asserts.assertEquals(caps.transactions, false);
+    }
+  });
+
+  it('mongo is detected without an instanceof check on the driver class', () => {
+    // `wrap()` keys on the engine's own `Engine` label so `Norm.ts` needs
+    // no value import of MongoEngine. A SQL engine must not be routed to
+    // the Mongo executor, and vice versa.
+    const mongo = new Norm({
+      database: {
+        dialect: 'mongo',
+        uri: 'mongodb://localhost:27017',
+        database: 'd',
+      } as never,
+    });
+    const sqlite = new Norm({ database: { dialect: 'sqlite', path: dir } });
+    asserts.assertEquals(
+      runtimeOf(mongo.use(Schema('S', { Users }))).executor.capabilities
+        .dialect,
+      'mongo',
+    );
+    asserts.assertEquals(
+      runtimeOf(sqlite.use(Schema('S', { Users }))).executor.capabilities
+        .dialect,
+      'sqlite',
+    );
   });
 
   it('NormDb: entities getter, lifecycle proxies', async () => {
