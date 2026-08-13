@@ -25,12 +25,16 @@
  */
 
 import { isBun, isDeno, isNode, RUNTIME } from './runtime.ts';
+import { loadBuiltin } from './_runtime-globals.ts';
 import { resolve } from './path.ts';
 
-let nodeFs: typeof import('node:fs');
-if (isBun || isNode) {
-  nodeFs = await import('node:fs');
-}
+// Resolved synchronously (see {@link loadBuiltin}); a top-level
+// `await import()` would async-poison every bundle compat lands in.
+// Deno watches through `Deno.watchFs`, so it skips the load.
+const nodeFs: typeof import('node:fs') = loadBuiltin(
+  'node:fs',
+  isBun || isNode,
+);
 
 // deno-lint-ignore no-explicit-any
 const g = globalThis as any;

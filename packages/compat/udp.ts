@@ -23,12 +23,15 @@
  */
 import { isBun, isDeno, isNode } from './runtime.ts';
 import { UnsupportedRuntimeError } from './Error.ts';
-import { Bun } from './_runtime-globals.ts';
+import { Bun, loadBuiltin } from './_runtime-globals.ts';
 
-let nodeDgram: typeof import('node:dgram');
-if (isNode) {
-  nodeDgram = await import('node:dgram');
-}
+// Resolved synchronously (see {@link loadBuiltin}); a top-level
+// `await import()` would async-poison every bundle compat lands in.
+// Deno and Bun have native datagram sockets, so only Node loads this.
+const nodeDgram: typeof import('node:dgram') = loadBuiltin(
+  'node:dgram',
+  isNode,
+);
 
 /**
  * Open UDP socket abstraction.

@@ -17,6 +17,7 @@
  * ```
  */
 import { isBun, isDeno, isNode } from './runtime.ts';
+import { loadBuiltin } from './_runtime-globals.ts';
 import { ConnectionTimeoutError, UnsupportedRuntimeError } from './Error.ts';
 import type { TLSOptions, ValidatedTLS } from './common.ts';
 import { combineSignals, validateTLS } from './common.ts';
@@ -38,17 +39,27 @@ type DenoStartTlsOptions = any;
 // deno-lint-ignore no-explicit-any
 type DenoTlsCertifiedKeyPem = any;
 
-// Node.js imports
-let nodeNet: typeof import('node:net');
-let nodeTls: typeof import('node:tls');
-let nodeBuffer: typeof import('node:buffer');
-let nodeOs: typeof import('node:os');
-if (isBun || isNode) {
-  nodeNet = await import('node:net');
-  nodeTls = await import('node:tls');
-  nodeBuffer = await import('node:buffer');
-  nodeOs = await import('node:os');
-}
+// Node.js built-ins, resolved synchronously through
+// `process.getBuiltinModule` (see {@link loadBuiltin}). A top-level
+// `await import()` here would make bundlers lower every consumer module to
+// an async initializer, deadlocking legal circular imports. Deno serves
+// every one of these from `Deno.*`, so it skips the loads.
+const nodeNet: typeof import('node:net') = loadBuiltin(
+  'node:net',
+  isBun || isNode,
+);
+const nodeTls: typeof import('node:tls') = loadBuiltin(
+  'node:tls',
+  isBun || isNode,
+);
+const nodeBuffer: typeof import('node:buffer') = loadBuiltin(
+  'node:buffer',
+  isBun || isNode,
+);
+const nodeOs: typeof import('node:os') = loadBuiltin(
+  'node:os',
+  isBun || isNode,
+);
 // deno-lint-ignore no-explicit-any
 const g = globalThis as any;
 

@@ -55,7 +55,7 @@
  * ```
  */
 
-import { Bun } from '../_runtime-globals.ts';
+import { Bun, loadBuiltin } from '../_runtime-globals.ts';
 
 import { isNode, RUNTIME } from '../runtime.ts';
 import { isFileSync, pathExistsSync, removeSync } from '../file.ts';
@@ -101,18 +101,34 @@ type BunServerWebSocket<_T = any> = any;
 // deno-lint-ignore no-explicit-any
 type DenoServeHandlerInfo = any;
 
-// Node.js imports
-let nodeHttp: typeof import('node:http');
-let nodeHttps: typeof import('node:https');
-// `ws` is the de-facto Node WebSocket implementation; pure-JS, no
-// native deps. Lazy-loaded so it isn't pulled in on Bun/Deno where
-// native WS support is used instead.
-let nodeWs: typeof import('ws');
-if (isNode) {
-  nodeHttp = await import('node:http');
-  nodeHttps = await import('node:https');
-  nodeWs = await import('ws');
-}
+// Node.js built-ins, resolved synchronously through
+// `process.getBuiltinModule` (see {@link loadBuiltin}) — never with a
+// top-level `await import()`, which would make bundlers lower every
+// consumer module to an async initializer and deadlock legal circular
+// imports.
+// Bun and Deno serve through their own APIs, so only Node loads these.
+const nodeHttp: typeof import('node:http') = loadBuiltin('node:http', isNode);
+const nodeHttps: typeof import('node:https') = loadBuiltin(
+  'node:https',
+  isNode,
+);
+
+/**
+ * `ws` is the de-facto Node WebSocket implementation; pure-JS, no native
+ * deps. It is an npm package rather than a built-in, so a dynamic import
+ * is the only way to reach it — and that import must stay inside the async
+ * server-start path. At module scope it would both reintroduce top-level
+ * await and break runtimes that merely *look* like Node: Cloudflare
+ * Workers exposes `process.versions.node`, so an eval-time load there
+ * would fail for every consumer importing the compat barrel.
+ *
+ * The promise is memoized, so the module is fetched once no matter how
+ * many servers start.
+ */
+let nodeWsLoad: Promise<typeof import('ws')> | undefined;
+const loadNodeWs = (): Promise<
+  typeof import('ws')
+> => (nodeWsLoad ??= import('ws'));
 
 /** Minimal shape of a Deno HTTP server handle (avoids `typeof Deno` in public types). */
 type _DenoServerHandle = {
@@ -1789,7 +1805,7 @@ export class WebServer<T = unknown> {
    *
    * @internal
    */
-  protected _startNodeServer(): Promise<void> { // NOSONAR - Complexity acceptable for server start
+  protected async _startNodeServer(): Promise<void> { // NOSONAR - Complexity acceptable for server start
     const processNodeRequest = (
       req: InstanceType<typeof nodeHttp.IncomingMessage>,
       res: InstanceType<typeof nodeHttp.ServerResponse>,
@@ -1901,9 +1917,11 @@ export class WebServer<T = unknown> {
       server = nodeHttp.createServer(processNodeRequest);
     }
 
-    // Attach the WebSocket upgrade handler if configured.
+    // Attach the WebSocket upgrade handler if configured. `ws` is loaded
+    // here — on the async start path — so servers without a `websocket`
+    // handler never pull the package in at all.
     if (this.options.websocket) {
-      this.__attachNodeWebSocketUpgrade(server);
+      this.__attachNodeWebSocketUpgrade(server, await loadNodeWs());
     }
 
     // `server.listen()` returns synchronously and binds the port in a
@@ -1943,12 +1961,17 @@ export class WebServer<T = unknown> {
    * the socket or hands it off to `ws.WebSocketServer.handleUpgrade`
    * for the actual WebSocket handshake.
    *
+   * `ws` arrives as a parameter rather than a module binding — the
+   * caller loads it lazily (see {@link loadNodeWs}) so the package stays
+   * out of module evaluation.
+   *
    * @internal
    */
   private __attachNodeWebSocketUpgrade(
     server:
       | InstanceType<typeof nodeHttp.Server>
       | InstanceType<typeof nodeHttps.Server>,
+    nodeWs: typeof import('ws'),
   ): void {
     const wsHandler = this.options.websocket;
     if (!wsHandler) return;

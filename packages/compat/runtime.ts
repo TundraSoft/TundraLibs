@@ -17,6 +17,8 @@
  * ```
  */
 
+import { loadBuiltin } from './_runtime-globals.ts';
+
 export type Runtime = 'DENO' | 'BUN' | 'NODE' | 'UNKNOWN';
 export type OperatingSystem = 'WINDOWS' | 'LINUX' | 'DARWIN' | 'UNKNOWN';
 
@@ -37,14 +39,12 @@ export const isNode: boolean = g.process?.versions?.node !== undefined &&
   g.Bun === undefined && g.Deno === undefined;
 
 // `node:os` resolves on all three runtimes — Deno provides it through its
-// Node.js compat layer. Loaded lazily so `cpus()`, `totalmem()`,
-// `freemem()`, and `uptime()` share a single backend with no per-runtime
-// branching. Stays `undefined` on unrecognized runtimes (browsers, etc.)
-// so the helpers can return safe fallbacks.
-let nodeOs: typeof import('node:os');
-if (isDeno || isBun || isNode) {
-  nodeOs = await import('node:os');
-}
+// Node.js compat layer. Loaded synchronously (see {@link loadBuiltin}) so
+// `cpus()`, `totalmem()`, `freemem()`, and `uptime()` share a single backend
+// with no per-runtime branching. Stays `undefined` on unrecognized runtimes
+// (browsers, etc.) — they have no `getBuiltinModule` — so the helpers can
+// return safe fallbacks.
+const nodeOs: typeof import('node:os') = loadBuiltin('node:os');
 
 // #region Runtime helpers
 /** Current process ID, or `undefined` on unknown runtimes. */

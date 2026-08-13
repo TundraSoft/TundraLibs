@@ -29,14 +29,15 @@
  * ```
  */
 
-import { isBun, isDeno, isNode } from '../runtime.ts';
+import { loadBuiltin } from '../_runtime-globals.ts';
 import { isTTY } from './terminal.ts';
 import type { WritableLike } from './progress.ts';
 
-let nodeProcess: typeof import('node:process');
-if (isDeno || isBun || isNode) {
-  nodeProcess = await import('node:process');
-}
+// Resolved synchronously (see {@link loadBuiltin}); a top-level
+// `await import()` would async-poison every bundle compat lands in.
+// All three runtimes expose `node:process`; anything else gets
+// `undefined` and falls back to the injected stream.
+const nodeProcess: typeof import('node:process') = loadBuiltin('node:process');
 
 /**
  * Default spinner frames — Unicode braille pattern, renders as a

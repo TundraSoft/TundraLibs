@@ -33,14 +33,17 @@
  * ```
  */
 
-import { isBun, isDeno, isNode } from '../runtime.ts';
+import { loadBuiltin } from '../_runtime-globals.ts';
 
-let nodeReadline: typeof import('node:readline');
-let nodeProcess: typeof import('node:process');
-if (isDeno || isBun || isNode) {
-  nodeReadline = await import('node:readline');
-  nodeProcess = await import('node:process');
-}
+// Resolved synchronously (see {@link loadBuiltin}). Both are dereferenced
+// from sync helpers (`_setRaw`, `_writeStdout`), and a top-level
+// `await import()` would async-poison every bundle compat lands in.
+// All three runtimes expose these; anything else gets `undefined`, which
+// the helpers below already treat as "no TTY available".
+const nodeReadline: typeof import('node:readline') = loadBuiltin(
+  'node:readline',
+);
+const nodeProcess: typeof import('node:process') = loadBuiltin('node:process');
 
 /**
  * Options for {@link prompt}.

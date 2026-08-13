@@ -2216,6 +2216,74 @@ h87g/qBXJrxZ7o+w+KxL/Q==
     });
 
     it({
+      name: 'echoes over a live connection, twice, on separate servers',
+      // On Node the WebSocket backend is the `ws` npm package, which is
+      // NOT a Node built-in and so cannot come from
+      // `process.getBuiltinModule`. It is imported lazily on the async
+      // start path and the promise is memoized — importing it at module
+      // scope would reintroduce top-level await AND break Cloudflare
+      // Workers, which reports `process.versions.node` but cannot
+      // resolve npm packages. Running the round-trip twice against two
+      // servers proves the memoized module is still usable on the second
+      // start, not consumed or half-initialized by the first.
+      fn: async () => {
+        for (const round of ['first', 'second']) {
+          const port = getNextPort();
+          const received: string[] = [];
+
+          activeServer = new WebServer('Test', {
+            mode: 'TCP',
+            port,
+            hostname: 'localhost',
+            handler: () => new Response('Not a WebSocket'),
+            websocket: {
+              open: (ws) => ws.send('welcome'),
+              message: (ws, data) => ws.send(`echo:${data}`),
+            },
+          });
+
+          await activeServer.start();
+          await delay(100);
+
+          const ws = new WebSocket(`ws://localhost:${port}/`);
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(
+              () => reject(new Error(`${round} round timed out`)),
+              5000,
+            );
+            ws.addEventListener('message', (ev) => {
+              received.push(String(ev.data));
+              if (received.length === 1) {
+                ws.send('ping');
+              } else {
+                clearTimeout(timer);
+                ws.close();
+                resolve();
+              }
+            });
+            ws.addEventListener('error', () => {
+              clearTimeout(timer);
+              reject(new Error(`${round} round errored`));
+            });
+          });
+          await delay(50);
+
+          if (received[0] !== 'welcome' || received[1] !== 'echo:ping') {
+            throw new Error(
+              `Expected ['welcome','echo:ping'] on the ${round} round, got ${
+                JSON.stringify(received)
+              }`,
+            );
+          }
+
+          await activeServer.stop(false);
+          activeServer = null;
+          await delay(50);
+        }
+      },
+    });
+
+    it({
       name: 'should track WebSocket upgrade metrics',
       fn: async () => {
         const port = getNextPort();
