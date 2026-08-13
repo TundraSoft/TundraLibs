@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/utils",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Core TypeScript building blocks — the typed Options + Events base class, BaseError, and shared helpers (config/env, memoize, IP/subnet, free-port)",
   "license": "MIT",
   "exports": {

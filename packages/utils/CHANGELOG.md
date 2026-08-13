@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.0.2...utils-v1.0.3) (2026-08-13)
+
+
+### Bug Fixes
+
+* **utils:** import compat via subpaths instead of the root barrel ([1ffae78](https://github.com/TundraSoft/TundraLibs/commit/1ffae78425c9a6ede1cb8ba5900f0531f858f835))
+* **utils:** import compat via subpaths instead of the root barrel ([e2c1645](https://github.com/TundraSoft/TundraLibs/commit/e2c164589c960ca8d4cc9b6524d35a95f02d783e))
+
 ## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.0.1...utils-v1.0.2) (2026-08-12)
 
 
