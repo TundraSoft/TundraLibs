@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.1.2...norm-v1.2.0) (2026-08-13)
+
+
+### Features
+
+* **norm:** register engines lazily so Norm works on edge runtimes ([#230](https://github.com/TundraSoft/TundraLibs/issues/230)) ([e04fa74](https://github.com/TundraSoft/TundraLibs/commit/e04fa74ef2a4abefbcc58fa1df08075b80d9093a))
+
 ## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.1.1...norm-v1.1.2) (2026-08-12)
 
 
