@@ -69,7 +69,7 @@ npx jsr add @tundralibs/drivers
 
 ### Import
 
-```typescript
+```typescript ignore
 // Base abstractions + every engine in one barrel
 import {
   BaseEngine,
@@ -148,6 +148,10 @@ error such as a constraint violation — while the outer transaction survives, s
 you can `try/catch` and carry on:
 
 ```typescript
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
+
+const engine = new SQLiteEngine('app', { path: './data' });
+
 await engine.transaction(async (tx) => {
   await tx.execute({ sql: 'INSERT INTO orders ...' });
   try {
@@ -191,6 +195,15 @@ metrics, with no dependency on any observability package:
 Attach once per engine at wire-up:
 
 ```typescript
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
+
+// Your metrics client, whatever it is.
+declare const metrics: {
+  histogram(name: string): { observe(value: number): void };
+};
+
+const engine = new SQLiteEngine('app', { path: './data' });
+
 engine.on('query', (_id, result) => {
   metrics.histogram('db_query_ms').observe(result.time);
 });

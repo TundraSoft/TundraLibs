@@ -42,7 +42,7 @@ All database-specific errors are mapped to standardized codes, enabling consiste
 
 Base error class for the drivers package.
 
-```typescript
+```typescript ignore
 import { DriverError } from '@tundralibs/drivers/errors';
 
 class DriverError<M extends Record<string, unknown>> extends BaseError<M> {
@@ -62,7 +62,7 @@ class DriverError<M extends Record<string, unknown>> extends BaseError<M> {
 
 Error thrown by `BaseEngine` and its subclasses for connection-lifecycle and engine-level failures.
 
-```typescript
+```typescript ignore
 import { EngineError } from '@tundralibs/drivers/errors';
 
 class EngineError<M extends EngineErrorMeta> extends DriverError<M> {
@@ -92,7 +92,7 @@ All `EngineError` instances include:
 
 Union of all standardized error code strings (~30 codes) accepted by the `EngineError` constructor and exposed on `EngineError.code`.
 
-```typescript
+```typescript ignore
 import type { EngineErrorCode } from '@tundralibs/drivers/errors';
 
 type EngineErrorCode =
@@ -170,6 +170,9 @@ Configuration value is invalid or malformed.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
 try {
   const engine = new PostgresEngine('db', {
     pool: { max: -5 }, // Invalid value
@@ -213,12 +216,17 @@ Failed to establish connection to the database.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 try {
   await engine.connect();
 } catch (err) {
   if (err instanceof EngineError && err.code === 'CONNECTION_FAILED') {
     console.error(`Cannot connect to ${err.engine}::${err.connectionName}`);
-    console.error('Cause:', err.cause?.message);
+    console.error('Cause:', (err.cause as Error | undefined)?.message);
   }
 }
 ```
@@ -246,6 +254,11 @@ Attempted operation without an active connection.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 try {
   await engine.execute({ sql: 'SELECT 1' });
 } catch (err) {
@@ -303,6 +316,9 @@ Timed out waiting for available connection from pool.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
 const engine = new PostgresEngine('db', {
   host: 'localhost',
   database: 'myapp',
@@ -357,6 +373,11 @@ Generic operation failure.
 **Example:**
 
 ```typescript
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const cacheEngine = new MemcachedEngine('cache', { host: 'localhost' });
+
 try {
   await cacheEngine.delete('key');
 } catch (err) {
@@ -400,6 +421,11 @@ Authentication credentials are invalid.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 try {
   await engine.connect();
 } catch (err) {
@@ -436,6 +462,11 @@ Required query parameters not provided.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 try {
   await engine.execute({
     sql: 'SELECT * FROM users WHERE id = :userId:',
@@ -480,6 +511,11 @@ Query exceeded configured timeout.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 // A query timeout is configured on the engine (e.g. Postgres'
 // `statementTimeoutMs`), not passed per call.
 try {
@@ -553,6 +589,11 @@ Unique constraint or primary key violation.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 try {
   await engine.execute({
     sql: 'INSERT INTO users (email) VALUES (:email:)',
@@ -618,6 +659,8 @@ Deadlocks are typically transient - retry the transaction.
 **Example:**
 
 ```typescript
+import { EngineError } from '@tundralibs/drivers/errors';
+
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -690,6 +733,11 @@ Transaction operation failed.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 const txn = await engine.beginTransaction();
 try {
   await engine.execute({ sql: 'INSERT INTO ...', transactionId: txn });
@@ -725,6 +773,9 @@ Fallback when an unrecognized error code is provided.
 
 ```typescript
 import { EngineError } from '@tundralibs/drivers/errors';
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
 
 try {
   await engine.execute({ sql: '...' });
@@ -760,6 +811,9 @@ try {
 ### Error Recovery
 
 ```typescript
+import type { BaseEngine } from '@tundralibs/drivers';
+import { EngineError } from '@tundralibs/drivers/errors';
+
 async function connectWithRetry(
   engine: BaseEngine,
   maxAttempts = 3,
@@ -786,6 +840,8 @@ async function connectWithRetry(
 ### Cause Chain Inspection
 
 ```typescript
+import { EngineError } from '@tundralibs/drivers/errors';
+
 function inspectError(err: unknown): void {
   if (err instanceof EngineError) {
     console.error('Engine Error:', {
@@ -797,11 +853,11 @@ function inspectError(err: unknown): void {
     });
 
     // Inspect cause chain
-    let cause = err.cause;
+    let cause: unknown = err.cause;
     let depth = 1;
     while (cause) {
-      console.error(`Cause ${depth}:`, cause.message);
-      cause = (cause as any).cause;
+      console.error(`Cause ${depth}:`, (cause as Error).message);
+      cause = (cause as { cause?: unknown }).cause;
       depth++;
     }
   }
@@ -825,8 +881,8 @@ function logEngineError(err: EngineError): void {
     stack: err.stack,
     cause: err.cause
       ? {
-        message: err.cause.message,
-        stack: err.cause.stack,
+        message: (err.cause as Error).message,
+        stack: (err.cause as Error).stack,
       }
       : undefined,
   };
