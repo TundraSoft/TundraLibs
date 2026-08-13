@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/id",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "description": "A library for generating unique identifiers",
   "license": "MIT",
