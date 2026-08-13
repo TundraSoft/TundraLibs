@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.0.0...guardian-v1.0.1) (2026-08-13)
+
+
+### Bug Fixes
+
+* **id:** republish as 1.0.3 ([5de296b](https://github.com/TundraSoft/TundraLibs/commit/5de296b9ae28eaf1786a1397f0262f940395b02a))
+* **id:** republish as 1.0.3 ([b9de287](https://github.com/TundraSoft/TundraLibs/commit/b9de28704db3e488c41892898c3a9a38e044a1fc))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.0.0-dev11...guardian-v1.0.0) (2026-08-01)
 
 
