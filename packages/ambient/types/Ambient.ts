@@ -24,6 +24,10 @@ export type Ambient = {
    * @param seed - Initial fields for the new {@link RequestContext}.
    * @param fn - The function to run within the context.
    * @returns Whatever `fn` returns.
+   * @throws {TypeError} When the runtime provides no `AsyncLocalStorage`
+   *   (`node:async_hooks`) — e.g. a browser. Establishing a scope is the one
+   *   thing that cannot degrade, so it fails loudly rather than silently
+   *   running `fn` outside any context.
    */
   run<R>(seed: RequestContext, fn: () => R): R;
 
@@ -37,24 +41,31 @@ export type Ambient = {
    * @param patch - Fields to overlay on the inherited context.
    * @param fn - The function to run within the child context.
    * @returns Whatever `fn` returns.
+   * @throws {TypeError} When the runtime provides no `AsyncLocalStorage`
+   *   (`node:async_hooks`) — same rationale as {@link Ambient.run}.
    */
   child<R>(patch: RequestContext, fn: () => R): R;
 
   /**
    * The active {@link RequestContext}, or `undefined` outside any
-   * {@link Ambient.run} scope. Never throws.
+   * {@link Ambient.run} scope. Never throws — including on runtimes with no
+   * `AsyncLocalStorage`, where no scope can ever be active.
    */
   get(): RequestContext | undefined;
 
   /**
    * Set `key` on the active {@link RequestContext}. A silent no-op (never
-   * throws) when called outside any {@link Ambient.run} scope.
+   * throws) when called outside any {@link Ambient.run} scope, or on a runtime
+   * with no `AsyncLocalStorage`.
    *
    * @param key - Field name to set.
    * @param value - Value to store.
    */
   set(key: string, value: unknown): void;
 
-  /** `true` when an {@link Ambient.run} scope is active, `false` otherwise. */
+  /**
+   * `true` when an {@link Ambient.run} scope is active, `false` otherwise —
+   * including on runtimes with no `AsyncLocalStorage`. Never throws.
+   */
   active(): boolean;
 };
