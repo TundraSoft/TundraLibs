@@ -7,7 +7,7 @@ import {
   moveFile,
   openFile,
   stat,
-} from '@tundralibs/compat';
+} from '@tundralibs/compat/file';
 import { format } from '@std/datetime';
 import { SyslogSeverities, variableReplacer } from '@tundralibs/utils';
 import { SloggerConfigError, SloggerHandlerError } from '../../errors/mod.ts';

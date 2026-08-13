@@ -9,7 +9,8 @@ import {
   variableReplacer,
 } from '@tundralibs/utils';
 import { ulid } from '@tundralibs/id';
-import { hostname, onExit } from '@tundralibs/compat';
+import { hostname } from '@tundralibs/compat/net';
+import { onExit } from '@tundralibs/compat/runtime';
 import { AbstractHandler, type HandlerOptions } from './handlers/mod.ts';
 import type { SloggerFormatter, SlogObject } from './types/mod.ts';
 import { LogManager } from './LogManager.ts';

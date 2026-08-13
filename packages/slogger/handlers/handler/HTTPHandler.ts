@@ -1,4 +1,5 @@
-import { fetch, hasPermissionSync } from '@tundralibs/compat';
+import { fetch } from '@tundralibs/compat/fetch';
+import { hasPermissionSync } from '@tundralibs/compat/permissions';
 import { jsonFormatter } from '../../formatters/mod.ts';
 import type { SlogObject } from '../../types/SlogObject.ts';
 import { AbstractHandler, type HandlerOptions } from '../AbstractHandler.ts';
