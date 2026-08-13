@@ -27,14 +27,15 @@ via `server.handlers()` or run standalone via `server.listen()`.
 
 ## Modules
 
-| Module           | Description                                                                            | Documentation                                 |
-| ---------------- | -------------------------------------------------------------------------------------- | --------------------------------------------- |
-| `Server`         | Command router + channels + middleware                                                 | This page                                     |
-| Wire protocol    | JSON envelope frames, `decodeFrame` / `encodeFrame`                                    | [docs/Rpc-Protocol](docs/Rpc-Protocol.md)     |
-| Middleware       | Koa-style middleware patterns and recipes                                              | [docs/Rpc-Middleware](docs/Rpc-Middleware.md) |
-| Pub/Sub adapters | Adapter contract, capability flags, in-memory + Redis sketch, conformance test harness | [docs/Rpc-PubSub](docs/Rpc-PubSub.md)         |
-| Extending        | Subclass overrides — pattern subscribe, frame inspection                               | [docs/Rpc-Extending](docs/Rpc-Extending.md)   |
-| `./pubsub`       | `PubSubAdapter` base + `MemoryPubSubAdapter`                                           | [docs/Rpc-PubSub](docs/Rpc-PubSub.md)         |
+| Module           | Description                                                                            | Documentation                                              |
+| ---------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `Server`         | Command router + channels + middleware                                                 | This page                                                  |
+| Wire protocol    | JSON envelope frames, `decodeFrame` / `encodeFrame`                                    | [docs/Rpc-Protocol](docs/Rpc-Protocol.md)                  |
+| Middleware       | Koa-style middleware patterns and recipes                                              | [docs/Rpc-Middleware](docs/Rpc-Middleware.md)              |
+| Pub/Sub adapters | Adapter contract, capability flags, in-memory + Redis sketch, conformance test harness | [docs/Rpc-PubSub](docs/Rpc-PubSub.md)                      |
+| Extending        | Subclass overrides — pattern subscribe, frame inspection                               | [docs/Rpc-Extending](docs/Rpc-Extending.md)                |
+| `./pubsub`       | `PubSubAdapter` base + `MemoryPubSubAdapter`                                           | [docs/Rpc-PubSub](docs/Rpc-PubSub.md)                      |
+| `./conformance`  | `runAdapterConformance` — adapter contract test harness (test files only)              | [docs/Rpc-PubSub](docs/Rpc-PubSub.md#testing-your-adapter) |
 
 ## Installation
 
@@ -61,6 +62,14 @@ npx jsr add @tundralibs/rpc
 ```typescript
 import { Server } from '@tundralibs/rpc';
 import { MemoryPubSubAdapter } from '@tundralibs/rpc/pubsub';
+```
+
+The adapter conformance harness ships on its own sub-path, and belongs
+in test files only — it imports a test framework, which browser and
+edge-worker bundlers cannot resolve:
+
+```typescript
+import { runAdapterConformance } from '@tundralibs/rpc/conformance';
 ```
 
 ## Wire protocol

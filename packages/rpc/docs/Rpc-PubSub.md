@@ -308,9 +308,13 @@ with the package, not just prose. Any adapter — including the bundled
 `MemoryPubSubAdapter` — can run the harness against itself and inherit
 the same assertions.
 
+It lives behind its own `@tundralibs/rpc/conformance` sub-path, and is
+deliberately **not** re-exported from `@tundralibs/rpc` or
+`@tundralibs/rpc/pubsub` — see [Why its own sub-path](#why-its-own-sub-path).
+
 ```ts
 import { describe } from '@tundralibs/compat/test';
-import { runAdapterConformance } from '@tundralibs/rpc';
+import { runAdapterConformance } from '@tundralibs/rpc/conformance';
 import { MyRedisAdapter } from './MyRedisAdapter.ts';
 
 describe('MyRedisAdapter', () => {
@@ -381,9 +385,24 @@ part of the universal contract (synchronous delivery, throw-on-
 subscribe-after-close). Contract drift in the harness breaks
 Memory's CI alongside any custom adapter's.
 
-> **Implementation**: [`pubsub/conformance.ts`](../pubsub/conformance.ts).
-> Re-exported at the top level (`@tundralibs/rpc`) so adapter authors
-> don't need to know about the `pubsub/` subpath.
+### Why its own sub-path
+
+The harness imports `@tundralibs/compat/test`, which resolves
+`bun:test` / `node:test` to whichever test framework the host runtime
+provides. Those specifiers do not exist for browser- and edge-targeting
+bundlers: with the harness re-exported from `@tundralibs/rpc`, a
+Cloudflare Workers build fails outright with
+`Could not resolve "bun:test"` — even for an app that only imports
+`Client`. Parking it on `@tundralibs/rpc/conformance` keeps every
+runtime barrel free of that edge, so `@tundralibs/rpc` and
+`@tundralibs/rpc/pubsub` bundle cleanly for Workers, Deno Deploy, and
+the browser with no `alias` shims.
+
+The rule that follows: `runAdapterConformance` is imported from test
+files only, and neither `mod.ts` nor `pubsub/mod.ts` may re-export it.
+
+> **Implementation**: [`pubsub/conformance.ts`](../pubsub/conformance.ts),
+> published as `@tundralibs/rpc/conformance`.
 
 ## When to Reach for Cross-Process
 
