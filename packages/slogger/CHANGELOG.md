@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.4](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.3...slogger-v1.1.4) (2026-08-13)
+
+
+### Bug Fixes
+
+* **slogger:** import compat via subpaths instead of the root barrel ([3456aeb](https://github.com/TundraSoft/TundraLibs/commit/3456aeb2f9caa49439f957340a661bf0434a5732))
+* **slogger:** import compat via subpaths instead of the root barrel ([09929a4](https://github.com/TundraSoft/TundraLibs/commit/09929a4b6abc1a416787997aaea3d31b5f5cfa46))
+
 ## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.2...slogger-v1.1.3) (2026-08-12)
 
 
