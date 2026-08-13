@@ -14,11 +14,14 @@ To tag every log line of a request with a `correlationId`, you normally have to
 _carry_ it — passing a logger (or the id) down through every function:
 
 ```typescript
-async function handleOrder(log, order) {
+type Logger = { info(message: string): void };
+type Order = { id: string };
+
+async function handleOrder(log: Logger, order: Order) {
   log.info('processing');
   await chargeCard(log, order); // must thread `log`
 }
-async function chargeCard(log, order) {
+async function chargeCard(log: Logger, order: Order) {
   log.info('charging'); // only works because `log` was threaded in
 }
 ```
@@ -97,10 +100,13 @@ so hand it `ambient.get()` and every line carries whatever the request boundary
 set, no `reqId` argument in sight:
 
 ```typescript
-import { LogManager } from '@tundralibs/slogger';
+import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
 import { ambient } from '@tundralibs/ambient';
 
-const log = LogManager.createSlogger({ appName: 'orders' });
+const log = LogManager.createSlogger({
+  appName: 'orders',
+  level: SyslogSeverities.INFO,
+});
 
 async function chargeOrder(orderId: string): Promise<void> {
   log.info('charging order', () => ({ ...ambient.get(), orderId }));
@@ -126,6 +132,8 @@ import { createContext } from '@tundralibs/ambient';
 type Tenant = { id: string; schema: string };
 
 const tenantCtx = createContext<Tenant>();
+
+async function handle(_payload: unknown): Promise<void> {}
 
 async function runJob(
   job: { tenant: Tenant; payload: unknown },

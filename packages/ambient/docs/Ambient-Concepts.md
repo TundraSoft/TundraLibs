@@ -24,18 +24,26 @@ function that logs — which classically means threading it through every
 signature in between:
 
 ```typescript
+type Order = { id: string };
+
 async function handleOrder(reqId: string, order: Order) {
   await chargeCard(reqId, order); // carried
 }
 async function chargeCard(reqId: string, order: Order) {
   await fraudCheck(reqId, order); // carried again
 }
+async function fraudCheck(_reqId: string, _order: Order) {}
 ```
 
 Every intermediate function pays for a value it never uses. Ambient inverts
 this: set the context **once** at the boundary, read it **anywhere** below.
 
 ```typescript
+import { ambient } from '@tundralibs/ambient';
+
+const order = { id: 'ord_42' };
+async function handleOrder(_order: { id: string }): Promise<void> {}
+
 ambient.run({ correlationId: crypto.randomUUID() }, () => handleOrder(order));
 
 // five frames deep, after any number of awaits:
@@ -54,6 +62,11 @@ Node) is "a thread-local, but for async": the value set by `run` follows the
 each concurrent flow sees only its own value.
 
 ```typescript
+import { ambient } from '@tundralibs/ambient';
+
+const work = async (): Promise<string | undefined> =>
+  ambient.get()?.correlationId;
+
 await Promise.all([
   ambient.run({ correlationId: 'A' }, work), // work() sees A
   ambient.run({ correlationId: 'B' }, work), // work() sees B — same code,
@@ -70,7 +83,9 @@ is **shallow-copied**, so later mutation via `set` never leaks back into the
 caller's object:
 
 ```typescript
-const seed = { correlationId: 'c1' };
+import { ambient, type RequestContext } from '@tundralibs/ambient';
+
+const seed: RequestContext = { correlationId: 'c1' };
 ambient.run(seed, () => ambient.set('userId', 'u1'));
 seed.userId; // undefined — the scope worked on a copy
 ```
@@ -79,6 +94,8 @@ seed.userId; // undefined — the scope worked on a copy
 untouched once `fn` returns:
 
 ```typescript
+import { ambient } from '@tundralibs/ambient';
+
 ambient.run({ correlationId: 'c1', tenant: 't1' }, () => {
   ambient.child({ tenant: 't2' }, () => {
     ambient.get()?.tenant; // 't2', correlationId still 'c1'
@@ -96,6 +113,13 @@ Outside any scope, `child` behaves like `run` over the patch alone.
 an error handler — observes the enrichment:
 
 ```typescript
+import { ambient } from '@tundralibs/ambient';
+
+const token = 'bearer …';
+async function authenticate(_token: string): Promise<string> {
+  return 'u_123';
+}
+
 ambient.run({ correlationId: 'c1' }, async () => {
   ambient.set('userId', await authenticate(token));
   // every later reader in this scope sees userId
@@ -131,7 +155,12 @@ that is not request-shaped — a tenant in a job worker, a transaction handle �
 semantics:
 
 ```typescript
+import { createContext } from '@tundralibs/ambient';
+
 const tenant = createContext<{ id: string; schema: string }>();
+
+const job = { tenant: { id: 't1', schema: 'tenant_1' }, payload: {} };
+async function handle(_payload: unknown): Promise<void> {}
 
 await tenant.run(job.tenant, () => handle(job.payload));
 
