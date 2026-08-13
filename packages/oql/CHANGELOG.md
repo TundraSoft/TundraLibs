@@ -13,7 +13,6 @@
 ### Documentation
 
 * **oql:** fix broken join + HASH-args examples (structural) ([74f746c](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/74f746c0183cc9619c3d4bca7f52370eef8bb99e))
-* **oql:** fix broken join + HASH-args examples (structural) ([dc3b6ae](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/dc3b6ae25086b957571da9d33ed196487c21abdf))
 
 ## [1.0.0-dev6.6](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/oql-v1.0.0-dev6.5...oql-v1.0.0-dev6.6) (2026-07-28)
 
@@ -21,9 +20,7 @@
 ### Documentation
 
 * **oql:** fix broken join + HASH-args examples (structural) ([74f746c](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/74f746c0183cc9619c3d4bca7f52370eef8bb99e))
-* **oql:** fix broken join + HASH-args examples (structural) ([dc3b6ae](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/dc3b6ae25086b957571da9d33ed196487c21abdf))
 * **oql:** fix broken query examples (referenced columns not in column list) ([3e7e1f4](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/3e7e1f4129cbacf255577d0faf931d965b9fa026))
-* **oql:** fix broken query examples (referenced columns not in column list) ([521430a](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/521430ab8498a67802f995e9d07dd2f51636a1a0))
 
 ## [1.0.0-dev6.6](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/oql-v1.0.0-dev6.5...oql-v1.0.0-dev6.6) (2026-07-28)
 
@@ -31,7 +28,6 @@
 ### Documentation
 
 * **oql:** fix broken query examples (referenced columns not in column list) ([3e7e1f4](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/3e7e1f4129cbacf255577d0faf931d965b9fa026))
-* **oql:** fix broken query examples (referenced columns not in column list) ([521430a](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/521430ab8498a67802f995e9d07dd2f51636a1a0))
 
 ## [1.0.0-dev6.5](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/oql-v1.0.0-dev6.4...oql-v1.0.0-dev6.5) (2026-07-25)
 
@@ -39,9 +35,7 @@
 ### Bug Fixes
 
 * **oql:** resolve round-3 review findings ([7d8cb7b](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/7d8cb7b4d360d2dfb2f6b08ec64cadb2fa18995e))
-* **oql:** resolve round-3 review findings ([77fd8a8](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/77fd8a876091dfc69ee7fe61e0376ee1ae0ecbf6))
 * **oql:** resolve round-4 review findings ([49ddec9](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/49ddec9d0246bfe7564d00523e1326dbc282fc65))
-* **oql:** resolve round-4 review findings ([abf3945](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/abf394576770e1bbb01c99a87462b846759307d5))
 
 ## [1.0.0-dev6.4](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/oql-v1.0.0-dev6.3...oql-v1.0.0-dev6.4) (2026-07-23)
 
@@ -49,9 +43,7 @@
 ### Bug Fixes
 
 * **oql:** close re-review findings — Mongo COUNT(col) & Maria comment escaping ([7850c89](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/7850c89f1258d01ec5970acb960c2b7d16e28bb5))
-* **oql:** close re-review findings — Mongo COUNT(col) & Maria comment escaping ([d6ea9a2](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/d6ea9a296a307d37e5c1cf917a6a6fd7a5906048))
 * **oql:** close review findings — offset-only SQL, Mongo joins/dates/LIKE, param keying ([3f1a155](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/3f1a155e2b8369bf7b21555eddc6f593b6e8b872))
-* **oql:** close review findings — offset-only SQL, Mongo joins/dates/LIKE, param keying ([860b0d8](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/860b0d8821419edfa7fecab793d1f6d086184c74))
 
 ## [1.0.0-dev6.3](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/oql-v1.0.0-dev6.2...oql-v1.0.0-dev6.3) (2026-07-14)
 

@@ -7,7 +7,6 @@
 
 * **crypt:** bound the label length in PEM_ARMOUR too ([3e94ad9](https://github.com/TundraSoft/TundraLibs/commit/3e94ad9d0b595bf7ffd74730d866d44718b42e30))
 * **crypt:** remove polynomial-ReDoS backtracking from PEM parsing ([541a405](https://github.com/TundraSoft/TundraLibs/commit/541a405e5bf70b7318015ec9d4497b0ab0099105))
-* **crypt:** remove polynomial-ReDoS backtracking from PEM parsing ([7b38afc](https://github.com/TundraSoft/TundraLibs/commit/7b38afc30ec4fe3d676c223012c07a087615e36d))
 
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.0.0-dev12...crypt-v1.0.0) (2026-08-01)
 
@@ -22,7 +21,6 @@
 ### Documentation
 
 * **crypt:** fix non-exported import example + AES MAC description ([8791da5](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/8791da5c3d679fb9b7ad1417559551cf49051974))
-* **crypt:** fix non-exported import example + AES MAC description ([1a1c0c3](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/1a1c0c3a50ab5c4b2934cf385d73e71d9c80f213))
 
 ## [1.0.0-dev11](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/crypt-v1.0.0-dev10...crypt-v1.0.0-dev11) (2026-07-27)
 
@@ -30,7 +28,6 @@
 ### Bug Fixes
 
 * **crypt:** pbkdf2Verify returns false on malformed hash instead of throwing ([efcc1cd](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/efcc1cd4f9ce7e31058992b8545c70bc72152040))
-* **crypt:** pbkdf2Verify returns false on malformed hash instead of throwing ([0ce690f](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/0ce690f4c957f01d2cf45957df1e09205b08fc44))
 
 ## [1.0.0-dev10](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/crypt-v1.0.0-dev9...crypt-v1.0.0-dev10) (2026-07-25)
 
@@ -38,11 +35,8 @@
 ### Bug Fixes
 
 * **crypt:** resolve round-3 review findings ([2e027a4](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/2e027a47e5a5954b124c436034131ca7162877e6))
-* **crypt:** resolve round-3 review findings ([ba17be3](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/ba17be32e756d493b971ff7aca0c36b59b79c605))
 * **crypt:** resolve round-4 review findings ([41189c6](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/41189c65f4ab9b505d9cc09d9befbec4d726ecf2))
-* **crypt:** resolve round-4 review findings ([db67fd9](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/db67fd9edf54005cd3cbd6faf094577ceccdbaa4))
 * **crypt:** resolve round-6 review findings ([1b4b7f7](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/1b4b7f7844dd7123267b5d6a7f2fd2fb4890fc0e))
-* **crypt:** resolve round-6 review findings ([2497bee](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/2497beeddfd649e7810da18c6385dc847ee1c92e))
 
 ## [1.0.0-dev9](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/crypt-v1.0.0-dev8...crypt-v1.0.0-dev9) (2026-07-23)
 
@@ -50,17 +44,13 @@
 ### Features
 
 * **crypt:** accept RFC 9068 typ values in verifyJWT ([9df39a3](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/9df39a380609ddf1f77596e008e637a37e498904))
-* **crypt:** accept RFC 9068 typ values in verifyJWT ([aea29f2](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/aea29f2b43fee0069919b91abad5f86a776ce8e1))
 * **crypt:** add ECDSA (ES256/384/512) and accept CryptoKey/JWK keys ([fdf5aa2](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/fdf5aa2450c4d4bce43d387e43de20f37e067013))
-* **crypt:** add ECDSA (ES256/384/512) and accept CryptoKey/JWK keys ([569d092](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/569d092134551eb06754f54c6e774f6ef25f269a))
 
 
 ### Bug Fixes
 
 * **crypt:** close re-review findings — BIP39 NFKD normalization, doc drift ([174f9d0](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/174f9d0ecc1a250d24040fe994c7b6c6d0c9754b))
-* **crypt:** close re-review findings — BIP39 NFKD normalization, doc drift ([6f81226](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/6f812268931f3502d01a950efc5fedce12b29a80))
 * **crypt:** close review findings — honest RSA sizing, OTP SHA-1 defaults, PS* refresh, 12-byte GCM nonce ([b457c8f](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/b457c8fbca02cdb4304c1f73ea560a4dff9c675a))
-* **crypt:** close review findings — honest RSA sizing, OTP SHA-1 defaults, PS* refresh, 12-byte GCM nonce ([f6f5ef9](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/f6f5ef9c4232c569d75cc1a81129da03a44805d6))
 * **crypt:** treat JWT typ as optional per RFC 7519 §5.1 ([4272b62](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/4272b62af629e0acddea0f3978d7bf3c44333a6c))
 
 

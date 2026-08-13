@@ -6,7 +6,6 @@
 ### Bug Fixes
 
 * **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
-* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
 
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.0...metro-man-v1.0.1) (2026-08-09)
 
@@ -14,7 +13,6 @@
 ### Documentation
 
 * **metro-man:** cross-link the sibling observability pillars ([2ded4b1](https://github.com/TundraSoft/TundraLibs/commit/2ded4b1148c221ef33b199e0e462dfff3785a5fd))
-* **metro-man:** cross-link the sibling observability pillars ([9099fe1](https://github.com/TundraSoft/TundraLibs/commit/9099fe1797e27c25cce021654b15cdcdaee83196))
 
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.0-dev7...metro-man-v1.0.0) (2026-08-01)
 
@@ -29,7 +27,6 @@
 ### Bug Fixes
 
 * **metro-man:** de-duplicate histogram buckets / summary quantiles ([67d9000](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/67d9000894cfcc09e8a56c34de48e5741bc556c6))
-* **metro-man:** de-duplicate histogram buckets / summary quantiles ([7886d25](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/7886d253147df3b9f14899261abd9db451aca5e7))
 
 ## [1.0.0-dev6](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/metro-man-v1.0.0-dev5...metro-man-v1.0.0-dev6) (2026-07-27)
 
@@ -37,13 +34,11 @@
 ### Bug Fixes
 
 * **metro-man:** de-duplicate collect() selection list so families aren't emitted twice ([de57c54](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/de57c54475d342d62afd9163711f4dcf6ad89e43))
-* **metro-man:** de-duplicate collect() selection list so families aren't emitted twice ([c0e0630](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/c0e0630883894f29523c8c11043192610706ad68))
 
 
 ### Documentation
 
 * **metro-man:** note collect() de-duplicates a repeated selection name ([2fc3c62](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/2fc3c620089e51e288eaced6b4dc1c4e227118af))
-* **metro-man:** note collect() de-duplicates a repeated selection name ([c54ecef](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/c54ecefa7c17841ed3bdcee925e31b26d7c15091))
 
 ## [1.0.0-dev5](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/metro-man-v1.0.0-dev4...metro-man-v1.0.0-dev5) (2026-07-25)
 
@@ -51,10 +46,8 @@
 ### Bug Fixes
 
 * **metro-man:** resolve round-3 review findings ([53c7e3d](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/53c7e3dbae699c15db4dd7942e7a2904697f6e6f))
-* **metro-man:** resolve round-3 review findings ([b3e7974](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/b3e7974bb9f3b8b64172fdeb140d7d78633ec271))
 * **metro-man:** resolve round-4 review findings ([d5295f8](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/d5295f882a6d0474c2076e3c26577b7e5b83b508))
 * **metro-man:** resolve round-5 review findings ([023edbd](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/023edbde2b021b35c0cb90e917f3617f89264be0))
-* **metro-man:** resolve round-5 review findings ([98f8845](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/98f884586c0a39a369efbdbafc4b48a682fbe6b3))
 * **metro-man:** terminate Prometheus exposition with a trailing line feed ([448a109](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/448a1099f352aec6e2e2d1d379e967aa8fc54923))
 
 
@@ -69,9 +62,7 @@
 
 * **metro-man:** close re-review findings — reject non-finite Summary window ([a8ad297](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/a8ad29788220a0352a70a8135a60cedf0078f09f))
 * **metro-man:** close review findings — validation, bounded retention, ordering ([1c3c82a](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/1c3c82a77b57869689743ec547a48ab8f2341bb8))
-* **metro-man:** close review findings — validation, bounded retention, ordering ([39097e8](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/39097e8269247288b8186b3501655f237c771a1c))
 * **metro-man:** make Summary _sum/_count cumulative (Prometheus semantics) ([e176a1b](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/e176a1bda80a8ba52bb51e853cf35db08abbf9ae))
-* **metro-man:** make Summary _sum/_count cumulative (Prometheus semantics) ([fbea47a](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/fbea47ac8f353deeb7364ee2efefbf2cf3fc66ef))
 * **metro-man:** reject non-finite Summary window and Histogram buckets ([2592c89](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/2592c895c6cc002d28ab254b54e1c5d5b8b86cb7))
 
 ## [1.0.0-dev3](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/metro-man-v1.0.0-dev2...metro-man-v1.0.0-dev3) (2026-07-14)

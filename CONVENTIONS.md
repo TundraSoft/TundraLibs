@@ -11,6 +11,7 @@ quietly breaking the pattern.
 - [File and folder naming](#file-and-folder-naming)
 - [Exported types live in a `types/` folder](#exported-types-live-in-a-types-folder)
 - [Custom errors live in an `errors/` folder](#custom-errors-live-in-an-errors-folder)
+- [Imports go through folder barrels](#imports-go-through-folder-barrels)
 - [Privacy prefixing](#privacy-prefixing)
 - [JSDoc: link custom types, declare throws](#jsdoc-link-custom-types-declare-throws)
 - [Module-level constants are `UPPER_SNAKE_CASE`](#module-level-constants-are-upper_snake_case)
@@ -131,6 +132,21 @@ export type { ClearOptions, HTTPMethod, ... } from './types/mod.ts';
 // don't re-export from implementation — duplicates the root mod.ts
 // and creates two import paths for the same type.
 ```
+
+### Large type surfaces may group into subfolders
+
+A package with many exported types MAY organise `types/` into
+subsystem subfolders (`types/application/`, `types/context/`, …).
+The EXPORTED IDENTIFIER spells the full namespace chain — package
+prefix + subfolder + file — while the FILE NAME is just the leaf:
+`types/application/Events.ts` exports `RapidApplicationEvents`;
+`types/Middleware.ts` (the root implies the package prefix) exports
+`RapidMiddleware`. Never a bare `Events` or `Middleware` — generic
+names collide across packages; the identifier must stand alone at
+any import site. `types/mod.ts` remains the single barrel over all
+of it — subfolders get no `mod.ts` of their own. Internal-only
+types never move here at all — they stay in the file that uses them
+(see below).
 
 ### Internal types stay where they're used
 
@@ -265,6 +281,33 @@ assertion failure during setup) can keep raw `throw new Error(...)`
 without breaking the rules. The `errors/` folder appears the
 moment you have a second distinct failure mode you'd want callers
 to branch on.
+
+## Imports go through folder barrels
+
+Every project folder in a package — including internal-only ones
+like `utils/` or `transports/` — carries a `mod.ts` barrel, and
+imports follow three rules:
+
+- **Cross-folder imports go through the barrel.** A file in
+  `context/` importing a parser writes
+  `from '../utils/mod.ts'`, never `from '../utils/parseBody.ts'`.
+  The folder's surface is its barrel; reaching around it couples
+  callers to the folder's internal layout.
+- **Same-folder siblings import directly** (`from './Context.ts'`).
+  Routing a sibling import through the folder's own barrel creates a
+  self-cycle for nothing.
+- **One import statement per module.** Merge value and type imports:
+  `import { WebServer, type WebSocketHandler } from '…'` — never two
+  `import` lines with the same specifier.
+
+Test files are the exception to the first rule: a test imports its
+paired file directly (`parseBody.test.ts` → `./parseBody.ts`), same
+as it sits next to it.
+
+Cycle care: when a barrel re-exports a runtime module that imports
+back across folders (the middleware runner importing the context
+base, say), keep that back-edge `import type` — a type-only import
+erases at compile time and cannot create a runtime cycle.
 
 ## Privacy prefixing
 

@@ -6,11 +6,7 @@
 ### Bug Fixes
 
 * **drivers:** import compat via subpaths instead of the root barrel ([c6d66b0](https://github.com/TundraSoft/TundraLibs/commit/c6d66b0a70b6cff7ff9c7d7d2d9259ea10911421))
-* **drivers:** import compat via subpaths instead of the root barrel ([3fa601f](https://github.com/TundraSoft/TundraLibs/commit/3fa601fdf4573feeb43a9a636fd8b91ec7aa9f97))
 * **drivers:** stop redis/memcached engines importing the root barrel ([7066d91](https://github.com/TundraSoft/TundraLibs/commit/7066d914e9c3aad374a603e2b1c013dd1a48dcb9))
-* **drivers:** stop redis/memcached engines importing the root barrel ([e7ee7da](https://github.com/TundraSoft/TundraLibs/commit/e7ee7da72bfcc072e9fe55397fbab873bfdff7df))
-* **id:** republish as 1.0.3 ([5de296b](https://github.com/TundraSoft/TundraLibs/commit/5de296b9ae28eaf1786a1397f0262f940395b02a))
-* **id:** republish as 1.0.3 ([b9de287](https://github.com/TundraSoft/TundraLibs/commit/b9de28704db3e488c41892898c3a9a38e044a1fc))
 
 ## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.1...drivers-v1.0.2) (2026-08-12)
 
@@ -18,7 +14,6 @@
 ### Bug Fixes
 
 * **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
-* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
 
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.0...drivers-v1.0.1) (2026-08-09)
 
@@ -26,7 +21,6 @@
 ### Documentation
 
 * **drivers:** document the event seam for tracing and metrics ([15016dd](https://github.com/TundraSoft/TundraLibs/commit/15016dd4752510634c6b2a289288cabf8f43ac8c))
-* **drivers:** document the event seam for tracing and metrics ([23e601e](https://github.com/TundraSoft/TundraLibs/commit/23e601ea3a32fe2989ec3135b69363f67cdc8838))
 
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.0-dev11...drivers-v1.0.0) (2026-08-01)
 
@@ -41,7 +35,6 @@
 ### Documentation
 
 * **drivers:** fix error-handling examples to use the real engine API ([66168de](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/66168de8a89e4c81ecc9a883edde740416eee255))
-* **drivers:** fix error-handling examples to use the real engine API ([68566bd](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/68566bd2d0612421003e448e89e15023d6dbe5e7))
 
 ## [1.0.0-dev10](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/drivers-v1.0.0-dev9...drivers-v1.0.0-dev10) (2026-07-27)
 
@@ -49,7 +42,6 @@
 ### Bug Fixes
 
 * **drivers:** skip backtick and [bracket] identifiers in Bun placeholder rewrite ([98d88e5](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/98d88e5e9af5bb04c1284dd907b2e857f60c6e78))
-* **drivers:** skip backtick and [bracket] identifiers in Bun placeholder rewrite ([a90eae2](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/a90eae27317aeee926a08382adb99477d22989e8))
 
 ## [1.0.0-dev9](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/drivers-v1.0.0-dev8...drivers-v1.0.0-dev9) (2026-07-25)
 
@@ -57,9 +49,7 @@
 ### Bug Fixes
 
 * **drivers:** resolve round-3 review findings ([9e95777](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/9e9577734633a7780ce2ff9fadd28a829fe4fe25))
-* **drivers:** resolve round-3 review findings ([d06cccf](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/d06cccfac93877d308854c961e483ec4b3e59529))
 * **drivers:** resolve round-4 review findings ([24ba320](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/24ba320e5bdbe187950d7dd89fc48ca3cce7eb0e))
-* **drivers:** resolve round-4 review findings ([1826571](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/1826571e51117de948559838088491a79465e01f))
 
 ## [1.0.0-dev8](https://github.com/TundraSoft/TundraLibs-1.0.0/compare/drivers-v1.0.0-dev7...drivers-v1.0.0-dev8) (2026-07-23)
 
@@ -67,11 +57,9 @@
 ### Bug Fixes
 
 * **drivers:** close re-review findings — tx-timeout busy guard, SCRAM mutual-auth, memcached ttl=0 ([0f46673](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/0f466732ab2440fd2f6cf08a38ba4b635bc9d469))
-* **drivers:** close re-review findings — tx-timeout busy guard, SCRAM mutual-auth, memcached ttl=0 ([c234aba](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/c234aba624f5c0fa9cc5c4cc1e01a5e270bb2083))
 * **drivers:** close review findings — idle-eviction min floor, CAS injection, MULTI connection health ([71cdcfc](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/71cdcfc3a0e6cbe0ce19dfb82de623add0ed6ce5))
 * **drivers:** close review findings — idle-eviction min floor, CAS injection, MULTI health ([4ae407c](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/4ae407c3d132bd653e39cac8c363471781fdb4ef))
 * **drivers:** preserve RESP 64-bit integer precision; SASLprep SCRAM passwords ([2d2e0e9](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/2d2e0e9ebb23429ddb46456722c7a14e97e5002e))
-* **drivers:** preserve RESP 64-bit integer precision; SASLprep SCRAM passwords ([381c21d](https://github.com/TundraSoft/TundraLibs-1.0.0/commit/381c21d372e6ec35ac7ee1381a5a7790d7d55447))
 
 
 ### Documentation
