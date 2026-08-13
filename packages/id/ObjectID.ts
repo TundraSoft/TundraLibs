@@ -30,7 +30,7 @@
  * const customId = customGen(); // Uses "srv" as machine identifier
  * ```
  */
-import { getProcessId } from '@tundralibs/compat';
+import { getProcessId } from '@tundralibs/compat/runtime';
 import { ALPHA_NUMERIC, nanoID } from './nanoID.ts';
 import { InvalidOptionError } from './errors/mod.ts';
 

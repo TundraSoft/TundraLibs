@@ -63,7 +63,7 @@
  * const customId = customSeq(); // Starts counting from 1000
  * ```
  */
-import { getProcessId } from '@tundralibs/compat';
+import { getProcessId } from '@tundralibs/compat/runtime';
 import { InvalidOptionError } from './errors/mod.ts';
 
 /**
