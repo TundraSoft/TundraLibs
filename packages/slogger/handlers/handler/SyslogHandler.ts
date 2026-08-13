@@ -5,12 +5,8 @@
  *
  * @module
  */
-import {
-  connect,
-  type Connection,
-  type UdpSocket,
-  udpSocket,
-} from '@tundralibs/compat';
+import { connect, type Connection } from '@tundralibs/compat/net';
+import { type UdpSocket, udpSocket } from '@tundralibs/compat/udp';
 import { AbstractHandler, type HandlerOptions } from '../AbstractHandler.ts';
 import type { SlogObject } from '../../types/SlogObject.ts';
 import { SloggerConfigError, SloggerHandlerError } from '../../errors/mod.ts';

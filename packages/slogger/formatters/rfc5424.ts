@@ -17,7 +17,7 @@
  *
  * @module
  */
-import { PID } from '@tundralibs/compat';
+import { PID } from '@tundralibs/compat/runtime';
 import { type SyslogFacilities } from '@tundralibs/utils';
 import type { SloggerFormatter, SlogObject } from '../types/mod.ts';
 

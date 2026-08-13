@@ -19,7 +19,7 @@
  * @module
  */
 
-import { connect, type Connection } from '@tundralibs/compat';
+import { connect, type Connection } from '@tundralibs/compat/net';
 import { AbstractHandler, type HandlerOptions } from '../AbstractHandler.ts';
 import { SloggerConfigError, SloggerHandlerError } from '../../errors/mod.ts';
 
