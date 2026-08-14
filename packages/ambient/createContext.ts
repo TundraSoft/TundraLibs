@@ -12,6 +12,8 @@
  * ```typescript
  * import { createContext } from '@tundralibs/ambient';
  *
+ * declare function someAsyncWork(): Promise<void>;
+ *
  * const tenant = createContext<string>();
  *
  * await tenant.run('acme', async () => {
