@@ -130,9 +130,16 @@ export abstract class ConnectionEngine<
   //#endregion Engine state
 
   /**
-   * @param name - Connection name for this engine instance
+   * Validates and stores options; opens no connection — call
+   * {@link ConnectionEngine.connect} (or issue a query) for that.
+   *
+   * @param name - Connection name for this engine instance; trimmed, and forms
+   *   the second half of {@link ConnectionEngine.instanceId}
    * @param options - Engine options + event handlers
-   * @param defaults - Subclass-supplied defaults (merged with built-in defaults)
+   * @param defaults - Subclass-supplied defaults (caller options win)
+   *
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` when an option fails
+   *   validation in {@link ConnectionEngine._processOption}
    */
   constructor(
     name: string,
@@ -390,6 +397,21 @@ export abstract class ConnectionEngine<
 
   //#region Option processing
 
+  /**
+   * Validates the options common to every engine (`idGenerator`, `host`,
+   * `port`, `database`, `username`, `password`, `pool`, `ssl`) and returns the
+   * value unchanged. Subclasses override this to add their own keys and must
+   * delegate unknown ones back here.
+   *
+   * `host`/`username`/`password` accept `undefined` — whether `host` is
+   * mandatory is decided per engine, not here.
+   *
+   * @returns The validated value, unmodified.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` for any value that
+   *   fails its check.
+   *
+   * @internal
+   */
   protected override _processOption<K extends keyof EngineOptions>(
     key: K,
     value: O[K],
@@ -524,9 +546,16 @@ export abstract class PooledConnectionEngine<
   //#endregion Pool
 
   /**
+   * Builds the pool from the resolved `pool` option and wires it to this
+   * class's resource seams. The pool starts empty — no socket is opened until
+   * {@link PooledConnectionEngine.connect}.
+   *
    * @param name - Connection name for this engine instance
    * @param options - Engine options + event handlers
-   * @param defaults - Subclass-supplied defaults (merged with built-in defaults)
+   * @param defaults - Subclass-supplied defaults (caller options win)
+   *
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` when an option fails
+   *   validation in {@link ConnectionEngine._processOption}
    */
   constructor(
     name: string,

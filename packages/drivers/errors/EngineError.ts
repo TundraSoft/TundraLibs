@@ -53,16 +53,34 @@ export type EngineErrorMeta = {
  */
 export class EngineError<M extends EngineErrorMeta = EngineErrorMeta>
   extends DriverError<M> {
+  /** Branch on this rather than the message text. */
   public readonly code: EngineErrorCode;
   /** Engine class name, e.g. `'PostgresEngine'`. */
   public readonly engine: string;
   /** Connection name from `instanceId`. */
   public readonly connectionName: string;
 
+  /**
+   * Emits the resolved code template verbatim — engine errors add no wrapper
+   * around it, since `instanceId` is already spelled out inside the template.
+   *
+   * @internal
+   */
   protected override get _messageTemplate(): string {
     return '${message}';
   }
 
+  /**
+   * Builds an error from a code, resolving its message template against
+   * `meta`. A code missing from {@link EngineErrorCodes} is downgraded to
+   * `'UNKNOWN_ERROR'` and preserved at `meta.originalCode` rather than
+   * throwing, so a driver mapping an unfamiliar server error still produces a
+   * usable error.
+   *
+   * @param code - Key into {@link EngineErrorCodes}.
+   * @param meta - Template variables; `instanceId` must be `"<Engine>::<Name>"`.
+   * @param cause - Underlying error to chain.
+   */
   constructor(code: EngineErrorCode, meta: M, cause?: Error) {
     if (!EngineErrorCodes[code]) {
       meta.originalCode = code;
@@ -75,6 +93,12 @@ export class EngineError<M extends EngineErrorMeta = EngineErrorMeta>
     this.code = code;
   }
 
+  /**
+   * Substitutes the template, additionally exposing `engine` and `name` (the
+   * two halves of `instanceId`) on top of the inherited variables.
+   *
+   * @internal
+   */
   protected override _makeMessage(): string {
     const vars = {
       ...this.context,

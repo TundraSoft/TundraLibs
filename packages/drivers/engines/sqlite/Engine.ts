@@ -92,9 +92,21 @@ const SQLITE_DEFAULTS: Partial<SQLiteEngineOptions> = {
   pool: { min: 1, max: 1 },
 };
 
+/**
+ * Local-file (or `':memory:'`) SQLite engine over the runtime's native
+ * bindings. The pool is pinned to a single handle — SQLite tolerates parallel
+ * writers poorly — so `Capabilities.pooledConnections` is `false` even though
+ * this extends the pooled {@link SQLEngine}. In directory mode each schema is
+ * a separate `.db` file `ATTACH`ed under its filename.
+ */
 export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
+  /** Always `'SQLITE'`. */
   public readonly Engine = 'SQLITE';
 
+  /**
+   * No advisory locks (there is no server) and no in-place `ALTER` of a
+   * column's type — a type change requires a table rebuild.
+   */
   public readonly Capabilities: SQLEngineCapabilities = {
     pooledConnections: false,
     transactions: true,
@@ -105,6 +117,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     parameterReplacement: { prefix: ':', suffix: '' },
   };
 
+  /** Emits SQLite-dialect SQL, including the file-per-schema emulation. */
   protected readonly _translator: SQLiteTranslator = new SQLiteTranslator();
 
   /**
@@ -137,6 +150,10 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
   #preparedCache: WeakMap<SqliteDb, Map<string, SqliteStmt>> = new WeakMap();
 
   /**
+   * Validates options; the database file is neither created nor opened until
+   * the first connect. Pass `path: ':memory:'` for an ephemeral database, or a
+   * directory under which `<name>/main.db` is created.
+   *
    * @throws {EngineError} `MISSING_CONFIG_VALUE` if `path` is missing.
    */
   constructor(
@@ -169,6 +186,13 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     return openDatabase(path, options);
   }
 
+  /**
+   * Opens the handle. In directory mode this also creates `<path>/<name>/`
+   * (unless `create: false`) and `ATTACH`es every sibling `.db` file under its
+   * filename, so persisted schemas are queryable without a prior
+   * `CREATE_SCHEMA`. A failing `ATTACH` closes the new handle before
+   * rethrowing rather than leaking it.
+   */
   protected async _createResource(): Promise<SqliteDb> {
     const path = this._getOption('path')!;
 
@@ -226,6 +250,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     return db;
   }
 
+  /** Finalizes every cached prepared statement, then closes the handle. */
   protected _destroyResource(db: SqliteDb): void {
     // Finalize cached prepared statements before closing the handle —
     // some bindings (notably better-sqlite3) leak file descriptors if
@@ -238,6 +263,7 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     }
   }
 
+  /** Always `true` — a local file handle has no connection to lose. */
   protected _ping(): boolean {
     return true;
   }
@@ -277,6 +303,11 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     return standardized;
   }
 
+  /**
+   * Runs the statement through the prepared-statement cache, then completes
+   * `DROP_SCHEMA` by unlinking the detached schema's `.db` file — a `DETACH`
+   * alone would leave the file behind. The unlink is best-effort.
+   */
   protected async _execute<R extends Record<string, unknown>>(
     query: EngineQuery,
     client: SqliteDb,
@@ -399,14 +430,17 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     cache.clear();
   }
 
+  /** Issues `BEGIN` on the single shared handle. */
   protected _beginTransaction(client: SqliteDb): void {
     client.exec('BEGIN');
   }
 
+  /** Issues `COMMIT` on the single shared handle. */
   protected _commitTransaction(client: SqliteDb): void {
     client.exec('COMMIT');
   }
 
+  /** Issues `ROLLBACK` on the single shared handle. */
   protected _rollbackTransaction(client: SqliteDb): void {
     client.exec('ROLLBACK');
   }
@@ -443,6 +477,11 @@ export class SQLiteEngine extends SQLEngine<SqliteDb, SQLiteEngineOptions> {
     return value;
   }
 
+  /**
+   * Maps a SQLite result code onto the standard engine error codes, recovering
+   * `constraint`/`column`/`table` from the driver's message text where it
+   * names them.
+   */
   protected override _wrapDriverError(
     error: unknown,
     query: EngineQuery,

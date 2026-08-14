@@ -136,6 +136,8 @@ export class MemcachedEngine extends BaseEngine<
   private readonly __broken: WeakSet<Connection> = new WeakSet();
 
   /**
+   * Validates options; no socket is opened until the first command.
+   *
    * @param name - Unique connection name.
    * @param options - Engine options + event handlers.
    * @throws {EngineError} `MISSING_CONFIG_VALUE` if `host` is not provided.
@@ -1080,6 +1082,15 @@ export class MemcachedEngine extends BaseEngine<
 
   //#region Option processing
 
+  /**
+   * Validates the Memcached-only options and delegates the rest to the base.
+   *
+   * @returns The validated value, unmodified.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` for any value that
+   *   fails its check.
+   *
+   * @internal
+   */
   protected override _processOption<K extends keyof MemcachedEngineOptions>(
     key: K,
     value: MemcachedEngineOptions[K],

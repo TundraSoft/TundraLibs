@@ -103,13 +103,24 @@ import { D1HttpClient } from './D1HttpClient.ts';
 import { D1HttpError } from './D1HttpError.ts';
 import type { D1EngineOptions } from './types/mod.ts';
 
+/**
+ * Cloudflare D1 over its REST query API, for edge and serverless runtimes.
+ * Pool-free: each statement is one standalone HTTP request, so transactions,
+ * prepared statements and advisory locks are unsupported.
+ */
 export class D1Engine extends SQLConnectionEngine<
   D1HttpClient,
   D1EngineOptions,
   SQLEngineEvents
 > {
+  /** Always `'D1'`. */
   public readonly Engine: string = 'D1';
 
+  /**
+   * Everything requiring a persistent session is `false`; `inPlaceAlter` is
+   * `false` because SQLite rebuilds a table to change a column's type,
+   * independent of the transport.
+   */
   public readonly Capabilities: SQLEngineCapabilities = {
     // One-shot REST: no session survives a call, so no pool / tx / prepared
     // statement / advisory lock can span requests. Honest `false`s.
@@ -128,9 +139,13 @@ export class D1Engine extends SQLConnectionEngine<
     parameterReplacement: undefined,
   };
 
+  /** Emits SQLite-dialect SQL, shared with {@link SQLiteEngine}. */
   protected readonly _translator: SQLiteTranslator = new SQLiteTranslator();
 
   /**
+   * Validates options. No request is made here. Set `endpoint` to target a
+   * Cloudflare-compatible gateway or local proxy instead of the cloud API.
+   *
    * @throws {EngineError} `MISSING_CONFIG_VALUE` if `accountId`, `databaseId`,
    *   or `apiToken` is missing.
    */
@@ -180,6 +195,12 @@ export class D1Engine extends SQLConnectionEngine<
 
   //#region SQLConnectionEngine hooks
 
+  /**
+   * Issues one REST request with positional params. Cells arrive as plain JSON
+   * so decoding is pass-through apart from BLOBs, which D1 sends as a byte
+   * array. `count` is the row count when rows came back (including
+   * `RETURNING`), otherwise `meta.changes`.
+   */
   protected async _execute<R extends Record<string, unknown>>(
     query: EngineQuery,
     client: D1HttpClient,
@@ -216,14 +237,30 @@ export class D1Engine extends SQLConnectionEngine<
   // `beginTransaction`/`commit`/`rollback` guard on `Capabilities.transactions`
   // (declared `false`) and reject before ever reaching these.
 
+  /**
+   * Unreachable in practice — the base guards on `Capabilities.transactions`
+   * first.
+   *
+   * @throws {@link EngineError} `UNSUPPORTED_OPERATION`, always.
+   */
   protected _beginTransaction(): never {
     throw this.__unsupportedTransaction();
   }
 
+  /**
+   * Unreachable in practice — no transaction can have been opened.
+   *
+   * @throws {@link EngineError} `UNSUPPORTED_OPERATION`, always.
+   */
   protected _commitTransaction(): never {
     throw this.__unsupportedTransaction();
   }
 
+  /**
+   * Unreachable in practice — no transaction can have been opened.
+   *
+   * @throws {@link EngineError} `UNSUPPORTED_OPERATION`, always.
+   */
   protected _rollbackTransaction(): never {
     throw this.__unsupportedTransaction();
   }
@@ -338,6 +375,12 @@ export class D1Engine extends SQLConnectionEngine<
     } as EngineQuery;
   }
 
+  /**
+   * Maps a {@link D1HttpError} onto the standard engine error codes. D1's
+   * `code` is Cloudflare's numeric API code rather than a `SQLITE_*` string, so
+   * the mapping is driven off the message text and the numeric code is kept as
+   * diagnostic metadata only.
+   */
   protected override _wrapDriverError(
     error: unknown,
     query: EngineQuery,
@@ -404,6 +447,16 @@ export class D1Engine extends SQLConnectionEngine<
 
   //#region Option processing
 
+  /**
+   * Validates the D1-only options (`accountId`, `databaseId`, `apiToken`,
+   * `endpoint`, `timeout`) and delegates the rest to the base.
+   *
+   * @returns The validated value, unmodified.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` for any value that
+   *   fails its check.
+   *
+   * @internal
+   */
   protected override _processOption<K extends keyof D1EngineOptions>(
     key: K,
     value: D1EngineOptions[K],
@@ -454,6 +507,7 @@ export class D1Engine extends SQLConnectionEngine<
 
   //#region Helpers
 
+  /** Builds the shared `UNSUPPORTED_OPERATION` error for the transaction seams. */
   private __unsupportedTransaction(): EngineError {
     return new EngineError('UNSUPPORTED_OPERATION', {
       instanceId: this.instanceId,
