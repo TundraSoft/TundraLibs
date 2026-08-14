@@ -33,6 +33,10 @@
  *
  * @example Complex filters
  * ```typescript
+ * import type { QueryFilter } from '@tundralibs/oql';
+ *
+ * type User = { age: number; verified: boolean; email: string };
+ *
  * const filter: QueryFilter<User> = {
  *   $or: [
  *     { '@age': { $gte: 18, $lt: 65 } },

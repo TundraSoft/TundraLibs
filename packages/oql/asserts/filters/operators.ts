@@ -321,6 +321,8 @@ const isExpressionObject = (value: unknown): boolean =>
  *
  * @example
  * ```ts
+ * declare const value: unknown;
+ *
  * if (isOperators(value)) {
  *   // value is Operators<T>
  * }

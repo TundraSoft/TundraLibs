@@ -14,33 +14,33 @@ import type { AggregateFunction } from './AggregateFunction.ts';
  * @template FT - Flattened table schema with `'@'` prefix.
  *
  * **COUNT** — rows or distinct column values.
- * ```ts
+ * ```ts ignore
  * { $$_aggregate: 'COUNT' }                               // COUNT(*)
  * { $$_aggregate: 'COUNT', column: '@id' }                 // COUNT(column)
  * { $$_aggregate: 'COUNT', column: '@id', distinct: true } // COUNT(DISTINCT column)
  * ```
  *
  * **Numeric (SUM/MIN/MAX/AVG)** — operate on number/bigint/Date.
- * ```ts
+ * ```ts ignore
  * { $$_aggregate: 'SUM', column: '@amount' }
  * { $$_aggregate: 'AVG', column: '@price', distinct: true }
  * { $$_aggregate: 'MIN', column: '@createdAt' }
  * ```
  *
  * **STRING_AGG** — concatenate string values with a delimiter.
- * ```ts
+ * ```ts ignore
  * { $$_aggregate: 'STRING_AGG', column: '@name',  separator: ', ' }
  * { $$_aggregate: 'STRING_AGG', column: '@email', separator: ';', distinct: true }
  * ```
  *
  * **ARRAY_AGG** — collect values into an array.
- * ```ts
+ * ```ts ignore
  * { $$_aggregate: 'ARRAY_AGG', column: '@id' }
  * { $$_aggregate: 'ARRAY_AGG', column: '@tag', distinct: true }
  * ```
  *
  * **JSON_ROW** — aggregate columns into a JSON object with custom keys.
- * ```ts
+ * ```ts ignore
  * {
  *   $$_aggregate: 'JSON_ROW',
  *   columns: { userId: '@id', userName: '@name', userEmail: '@email' },

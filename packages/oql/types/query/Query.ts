@@ -76,6 +76,7 @@ type PartialDataWithExpressions<T extends TableType> = {
  *   joins: {
  *     Profile: {
  *       table: 'profiles', type: 'LEFT',
+ *       columns: ['userId', 'bio'],
  *       on: { '@Profile.@userId': '@id' },
  *     },
  *   },
@@ -428,7 +429,7 @@ export type Query<
              * `addColumns` / `dropColumns`.
              *
              * @example
-             * ```ts
+             * ```ts ignore
              * { type: 'ALTER_TABLE', table: 'users',
              *   renameColumns: { email: 'email_address' } }
              * ```

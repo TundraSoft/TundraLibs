@@ -21,7 +21,7 @@ export type JoinDetails<
    * Must explicitly list every column that will be referenced.
    *
    * @example
-   * ```ts
+   * ```ts ignore
    * Profile: {
    *   table: 'profiles',
    *   columns: ['userId', 'bio', 'email'], // userId must be listed for join

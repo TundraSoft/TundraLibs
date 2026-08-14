@@ -13,6 +13,8 @@
  * import { assertSelect } from '@tundralibs/oql/asserts';
  * import { PostgresTranslator } from '@tundralibs/oql/translator';
  *
+ * type User = { id: number; email: string; age: number };
+ *
  * const query: Query<'SELECT', User> = {
  *   type: 'SELECT',
  *   table: 'users',
@@ -31,6 +33,10 @@
  *
  * @example INSERT with expressions
  * ```typescript
+ * import type { Query } from '@tundralibs/oql';
+ *
+ * type Order = { userId: number; total: number; createdAt: Date };
+ *
  * const query: Query<'INSERT', Order> = {
  *   type: 'INSERT',
  *   table: 'orders',

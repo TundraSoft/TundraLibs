@@ -416,6 +416,9 @@ export const assertJoins: <
  *
  * @example
  * ```ts
+ * declare const value: unknown;
+ * declare const columnList: string[];
+ *
  * if (isJoins(value, columnList)) {
  *   // value is Joins<PT, LT>
  *   // Can safely use with database queries

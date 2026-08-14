@@ -276,6 +276,8 @@ export const assertQueryFilter: <T extends TableType = TableType>(
  *
  * @example
  * ```ts
+ * declare const value: unknown;
+ *
  * if (isQueryFilter(value, ['age', 'status'])) {
  *   // value is QueryFilter<T>
  *   // Can safely use with database queries
