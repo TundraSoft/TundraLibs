@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.0.1...oql-v1.0.2) (2026-08-14)
+
+
+### Bug Fixes
+
+* **oql:** emit correct SQLite LPAD/RPAD and stop stranding the fill parameter ([21e535c](https://github.com/TundraSoft/TundraLibs/commit/21e535c2a91002c1a5b0f8e9a142566cfc3ab14e))
+
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.0.0...oql-v1.0.1) (2026-08-13)
 
 
