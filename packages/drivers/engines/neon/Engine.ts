@@ -56,13 +56,25 @@ import { NeonHttpClient } from './NeonHttpClient.ts';
 import { NeonHttpError } from './NeonHttpError.ts';
 import type { NeonHttpEngineOptions } from './types/mod.ts';
 
+/**
+ * Postgres over Neon's SQL-over-HTTP endpoint, for edge and serverless
+ * runtimes where a TCP socket is unavailable. Pool-free: each query is one
+ * standalone HTTP request, so transactions, prepared statements and advisory
+ * locks are unsupported.
+ */
 export class NeonHttpEngine extends SQLConnectionEngine<
   NeonHttpClient,
   NeonHttpEngineOptions,
   SQLEngineEvents
 > {
+  /** Always `'NEON'`. */
   public readonly Engine: string = 'NEON';
 
+  /**
+   * Everything requiring a persistent session is `false`; the per-server
+   * Postgres facts (`inPlaceAlter`, `referentialActions`) stay `true` because
+   * the transport does not change them.
+   */
   public readonly Capabilities: SQLEngineCapabilities = {
     // One-shot HTTP: no session survives a call, so no pool / tx / prepared
     // statement / advisory lock can span requests. Honest `false`s.
@@ -79,9 +91,12 @@ export class NeonHttpEngine extends SQLConnectionEngine<
     parameterReplacement: undefined,
   };
 
+  /** Emits Postgres-dialect SQL, shared with {@link PostgresEngine}. */
   protected readonly _translator: PostgresTranslator = new PostgresTranslator();
 
   /**
+   * Validates options. No request is made here.
+   *
    * @throws {EngineError} `MISSING_CONFIG_VALUE` if `host` is missing, or if no
    *   authentication mechanism (a `connectionString`, `username`+`password`+
    *   `database`, or a `token`) is supplied.
@@ -148,6 +163,11 @@ export class NeonHttpEngine extends SQLConnectionEngine<
 
   //#region SQLConnectionEngine hooks
 
+  /**
+   * Issues one HTTP request and decodes each cell from Postgres text using the
+   * column OID, so values match what the socket-based {@link PostgresEngine}
+   * would return.
+   */
   protected async _execute<R extends Record<string, unknown>>(
     query: EngineQuery,
     client: NeonHttpClient,
@@ -181,14 +201,30 @@ export class NeonHttpEngine extends SQLConnectionEngine<
   // `beginTransaction`/`commit`/`rollback` guard on `Capabilities.transactions`
   // (declared `false`) and reject before ever reaching these.
 
+  /**
+   * Unreachable in practice — the base guards on `Capabilities.transactions`
+   * first.
+   *
+   * @throws {@link EngineError} `UNSUPPORTED_OPERATION`, always.
+   */
   protected _beginTransaction(): never {
     throw this.__unsupportedTransaction();
   }
 
+  /**
+   * Unreachable in practice — no transaction can have been opened.
+   *
+   * @throws {@link EngineError} `UNSUPPORTED_OPERATION`, always.
+   */
   protected _commitTransaction(): never {
     throw this.__unsupportedTransaction();
   }
 
+  /**
+   * Unreachable in practice — no transaction can have been opened.
+   *
+   * @throws {@link EngineError} `UNSUPPORTED_OPERATION`, always.
+   */
   protected _rollbackTransaction(): never {
     throw this.__unsupportedTransaction();
   }
@@ -304,6 +340,11 @@ export class NeonHttpEngine extends SQLConnectionEngine<
     } as EngineQuery;
   }
 
+  /**
+   * Maps a {@link NeonHttpError}'s SQLSTATE onto the standard engine error
+   * codes. Only query-relevant fields are copied across — the connection
+   * string and request headers are deliberately left on the client.
+   */
   protected override _wrapDriverError(
     error: unknown,
     query: EngineQuery,
@@ -345,6 +386,16 @@ export class NeonHttpEngine extends SQLConnectionEngine<
 
   //#region Option processing
 
+  /**
+   * Validates the Neon-only options (`endpoint`, `connectionString`, `token`,
+   * `timeout`) and delegates the rest to the base.
+   *
+   * @returns The validated value, unmodified.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` for any value that
+   *   fails its check.
+   *
+   * @internal
+   */
   protected override _processOption<K extends keyof NeonHttpEngineOptions>(
     key: K,
     value: NeonHttpEngineOptions[K],
@@ -383,8 +434,7 @@ export class NeonHttpEngine extends SQLConnectionEngine<
     }
     // Unknown-to-this-switch keys (host/username/password/database/pool/ssl and
     // the SQL knobs) fall through to the base validators.
-    // deno-lint-ignore no-explicit-any
-    return super._processOption(key as any, value);
+    return super._processOption(key, value);
   }
 
   //#endregion Option processing
@@ -399,6 +449,7 @@ export class NeonHttpEngine extends SQLConnectionEngine<
     return true;
   }
 
+  /** Builds the shared `UNSUPPORTED_OPERATION` error for the transaction seams. */
   private __unsupportedTransaction(): EngineError {
     return new EngineError('UNSUPPORTED_OPERATION', {
       instanceId: this.instanceId,

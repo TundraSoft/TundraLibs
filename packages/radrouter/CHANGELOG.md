@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.0.1...radrouter-v1.0.2) (2026-08-14)
+
+
+### Documentation
+
+* **radrouter:** verify documentation examples and document the public API ([#237](https://github.com/TundraSoft/TundraLibs/issues/237)) ([6c1c477](https://github.com/TundraSoft/TundraLibs/commit/6c1c477112a3cd4ed721c1ede9ecace0288f4c91))
+
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.0.0...radrouter-v1.0.1) (2026-08-09)
 
 
