@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.5](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.4...slogger-v1.1.5) (2026-08-14)
+
+
+### Bug Fixes
+
+* **slogger:** return a ScopedSlogger type instead of casting to Slogger ([#254](https://github.com/TundraSoft/TundraLibs/issues/254)) ([60c5b3f](https://github.com/TundraSoft/TundraLibs/commit/60c5b3fe4606d13a69558f7c1b9b29e2b4a24d0a))
+
 ## [1.1.4](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.3...slogger-v1.1.4) (2026-08-13)
 
 

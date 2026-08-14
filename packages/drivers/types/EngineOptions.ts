@@ -11,6 +11,11 @@ import type { EngineNetworkOptions } from './EngineNetworkOptions.ts';
 import type { EnginePoolOptions } from './EnginePoolOptions.ts';
 import type { EngineSecurityOptions } from './EngineSecurityOptions.ts';
 
+/**
+ * The option floor every engine accepts: network target, TLS, pooling and
+ * ID generation. Engine-specific option types intersect this with their own
+ * fields, so anything here is safe to pass to any engine.
+ */
 export type EngineOptions =
   & {
     /**
