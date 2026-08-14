@@ -175,20 +175,20 @@ Construct an empty registry.
 
 ### `counter(options) → Counter`
 
-Create a {@link MetroMan-Counter} and register it under
+Create a [Counter](docs/MetroMan-Counter.md) and register it under
 `options.name`.
 
 ### `gauge(options) → Gauge`
 
-Create a {@link MetroMan-Gauge} and register it.
+Create a [Gauge](docs/MetroMan-Gauge.md) and register it.
 
 ### `histogram(options) → Histogram`
 
-Create a {@link MetroMan-Histogram} and register it.
+Create a [Histogram](docs/MetroMan-Histogram.md) and register it.
 
 ### `summary(options) → Summary`
 
-Create a {@link MetroMan-Summary} and register it.
+Create a [Summary](docs/MetroMan-Summary.md) and register it.
 
 ### `register(...instances) → void`
 
