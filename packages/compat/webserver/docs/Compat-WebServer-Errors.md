@@ -39,7 +39,7 @@ All server errors extend `ServerError`, which extends the base `BaseError` class
 
 Base class for all server-related errors.
 
-```typescript
+```typescript ignore
 class ServerError extends BaseError {
   readonly mode: ServerMode;
   readonly operation: string;
@@ -62,6 +62,10 @@ class ServerError extends BaseError {
 - Failures during start/stop operations
 
 ```typescript
+import { ServerError, type WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 try {
   server.start();
 } catch (error) {
@@ -69,7 +73,7 @@ try {
     console.log(`Operation failed: ${error.operation}`);
     console.log(`Mode: ${error.mode}`);
     console.log(`Message: ${error.message}`);
-    if (error.cause) {
+    if (error.cause instanceof Error) {
       console.log(`Caused by: ${error.cause.message}`);
     }
   }
@@ -80,17 +84,13 @@ try {
 
 Thrown when server options are invalid.
 
-```typescript
+```typescript ignore
 class ServerConfigurationError extends ServerError {
-  readonly option: string;
-  readonly value: unknown;
-  readonly expected: string;
-
   constructor(
-    mode: string,
-    option: string,
+    mode: ServerMode | 'N/A',
+    key: string,
     value: unknown,
-    expected: string,
+    expected?: string,
   );
 }
 ```
@@ -104,6 +104,8 @@ class ServerConfigurationError extends ServerError {
 - Invalid socket path
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 // Invalid port
 new WebServer('API', {
   mode: 'TCP',
@@ -129,13 +131,22 @@ new WebServer('API', {
 **Handling:**
 
 ```typescript
+import {
+  ServerConfigurationError,
+  type ServerOptions,
+  WebServer,
+} from '@tundralibs/compat/webserver';
+
+declare const config: ServerOptions;
+
 try {
   const server = new WebServer('API', config);
 } catch (error) {
   if (error instanceof ServerConfigurationError) {
-    console.error(`Invalid config: ${error.option}`);
-    console.error(`Got: ${JSON.stringify(error.value)}`);
-    console.error(`Expected: ${error.expected}`);
+    // The offending key, its value and the expectation are folded
+    // into `message`; `operation` is always 'CONFIGURATION'.
+    console.error(`Invalid config: ${error.message}`);
+    console.error(`Mode: ${error.mode}, operation: ${error.operation}`);
   }
 }
 ```
@@ -144,7 +155,7 @@ try {
 
 Thrown when the server lacks required permissions.
 
-```typescript
+```typescript ignore
 class ServerPermissionError extends ServerError {
   constructor(message: string, mode: ServerMode);
 }
@@ -157,6 +168,8 @@ class ServerPermissionError extends ServerError {
 - Cannot write to UNIX socket directory
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 // Unreadable certificate
 new WebServer('API', {
   mode: 'TCP',
@@ -174,6 +187,14 @@ new WebServer('API', {
 **Handling:**
 
 ```typescript
+import {
+  type ServerOptions,
+  ServerPermissionError,
+  WebServer,
+} from '@tundralibs/compat/webserver';
+
+declare const config: ServerOptions;
+
 try {
   const server = new WebServer('API', config);
 } catch (error) {
@@ -188,7 +209,7 @@ try {
 
 Thrown when attempting to start an already-running server.
 
-```typescript
+```typescript ignore
 class ServerAlreadyRunningError extends ServerError {
   constructor(mode: ServerMode, operation: string);
 }
@@ -199,6 +220,10 @@ class ServerAlreadyRunningError extends ServerError {
 - Calling `start()` when state is not 'STOPPED'
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 server.start();
 server.start(); // Throws ServerAlreadyRunningError
 ```
@@ -206,6 +231,13 @@ server.start(); // Throws ServerAlreadyRunningError
 **Handling:**
 
 ```typescript
+import {
+  ServerAlreadyRunningError,
+  type WebServer,
+} from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 try {
   server.start();
 } catch (error) {
@@ -222,7 +254,7 @@ try {
 
 Thrown when attempting operations on a stopped server.
 
-```typescript
+```typescript ignore
 class ServerNotRunningError extends ServerError {
   constructor(mode: ServerMode, operation: string);
 }
@@ -235,6 +267,10 @@ class ServerNotRunningError extends ServerError {
 - Calling `unref()` when not running
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 await server.stop();
 await server.stop(); // Throws ServerNotRunningError
 ```
@@ -242,6 +278,13 @@ await server.stop(); // Throws ServerNotRunningError
 **Handling:**
 
 ```typescript
+import {
+  ServerNotRunningError,
+  type WebServer,
+} from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 try {
   await server.stop();
 } catch (error) {
@@ -256,7 +299,11 @@ try {
 The server emits `onError` events for runtime errors:
 
 ```typescript
-server.on('onError', (name, error, request?, info?) => {
+import { ServerError, type WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
+server.on('onError', (name, error, request, info) => {
   console.error(`[${name}] Error:`, error.message);
 
   if (error instanceof ServerError) {
@@ -285,7 +332,13 @@ server.on('onError', (name, error, request?, info?) => {
 ### Graceful Degradation
 
 ```typescript
-function createServer(config: ServerOptions): Server | null {
+import {
+  ServerConfigurationError,
+  type ServerOptions,
+  WebServer,
+} from '@tundralibs/compat/webserver';
+
+function createServer(config: ServerOptions): WebServer | null {
   try {
     return new WebServer('API', config);
   } catch (error) {
@@ -301,7 +354,12 @@ function createServer(config: ServerOptions): Server | null {
 ### Retry with Backoff
 
 ```typescript
-async function startWithRetry(server: Server, maxRetries = 3): Promise<void> {
+import { ServerError, type WebServer } from '@tundralibs/compat/webserver';
+
+async function startWithRetry(
+  server: WebServer,
+  maxRetries = 3,
+): Promise<void> {
   for (let i = 0; i < maxRetries; i++) {
     try {
       server.start();
@@ -322,7 +380,11 @@ async function startWithRetry(server: Server, maxRetries = 3): Promise<void> {
 ### Centralized Error Logging
 
 ```typescript
-function setupErrorHandling(server: Server): void {
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const logger: { error(entry: unknown): void };
+
+function setupErrorHandling(server: WebServer): void {
   server.on('onError', (name, error, request, info) => {
     const logEntry = {
       timestamp: new Date().toISOString(),
@@ -353,6 +415,17 @@ function setupErrorHandling(server: Server): void {
 ### Error Response Customization
 
 ```typescript
+import { type RequestInfo, WebServer } from '@tundralibs/compat/webserver';
+
+declare function handleRequest(
+  req: Request,
+  info: RequestInfo,
+): Promise<Response>;
+declare class ValidationError extends Error {
+  readonly fields: string[];
+}
+declare class NotFoundError extends Error {}
+
 const server = new WebServer('API', {
   mode: 'TCP',
   port: 8080,
@@ -391,10 +464,16 @@ const server = new WebServer('API', {
 **Solution:**
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+declare const port: number;
+
 try {
   server.start();
 } catch (error) {
-  if (error.cause?.code === 'EADDRINUSE') {
+  const cause = (error as Error).cause as { code?: string } | undefined;
+  if (cause?.code === 'EADDRINUSE') {
     console.error(`Port ${port} is already in use`);
     // Try different port, or kill existing process
   }
@@ -408,7 +487,10 @@ try {
 The server automatically removes existing socket files, but if issues persist:
 
 ```typescript
-import { removeSync } from '../file.ts';
+import { removeSync } from '@tundralibs/compat/file';
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
 
 // Manual cleanup before starting
 try {
@@ -425,7 +507,9 @@ server.start();
 **Solution:**
 
 ```typescript
-import { isFileSync } from '../file.ts';
+import { isFileSync } from '@tundralibs/compat/file';
+
+declare const config: { tls: { certFile: string } };
 
 // Validate before creating server
 if (!isFileSync(config.tls.certFile)) {
@@ -441,7 +525,11 @@ if (!isFileSync(config.tls.certFile)) {
 The server catches handler exceptions and returns 500, but you should handle errors:
 
 ```typescript
-handler: (async (req, info) => {
+import type { ServerHandler } from '@tundralibs/compat/webserver';
+
+declare function processRequest(req: Request): Promise<Response>;
+
+const handler: ServerHandler = async (req, info) => {
   try {
     return await processRequest(req);
   } catch (error) {
@@ -454,7 +542,7 @@ handler: (async (req, info) => {
       headers: { 'Content-Type': 'text/plain' },
     });
   }
-});
+};
 ```
 
 ### Malformed Request
@@ -481,7 +569,9 @@ Because of this divergence, on Deno and Bun you should guard URL parsing (or
 validate the `Host` header) if untrusted clients can send a malformed `Host`:
 
 ```typescript
-handler: ((req, info) => {
+import type { ServerHandler } from '@tundralibs/compat/webserver';
+
+const handler: ServerHandler = (req, info) => {
   let url: URL;
   try {
     url = new URL(req.url);
@@ -490,7 +580,7 @@ handler: ((req, info) => {
   }
   // ...use `url` safely
   return new Response('OK');
-});
+};
 ```
 
 ### Shutdown Timeout
@@ -500,6 +590,10 @@ handler: ((req, info) => {
 **Solution:**
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 const stopTimeout = setTimeout(() => {
   console.warn('Graceful stop timeout, forcing...');
   server.stop(false).catch(console.error);
