@@ -8,7 +8,7 @@
  *
  * @example
  * ```typescript
- * import { readFile, writeFile, pathExists } from '@tundrasoft/compat/file';
+ * import { readFile, writeFile, pathExists } from '@tundralibs/compat/file';
  *
  * const exists = await pathExists('./data.txt');
  * if (exists) {
@@ -287,7 +287,7 @@ export class FileTypeMismatch extends FileOperationError {
  * @throws {FileInvalidPath} If the path is invalid (empty, not a string, or contains null bytes)
  *
  * @example
- * ```ts
+ * ```ts ignore
  * validatePath('/path/to/file.txt', 'read'); // OK
  * validatePath('', 'read'); // Throws FileInvalidPath
  * validatePath('path\0with\0null', 'read'); // Throws FileInvalidPath
@@ -357,7 +357,7 @@ const validatePath = (pathStr: string, operation: string): void => {
  * @returns A custom FileOperationError subclass appropriate for the error
  *
  * @example
- * ```ts
+ * ```ts ignore
  * try {
  *   await Deno.readTextFile('/missing/file.txt');
  * } catch (err) {
@@ -3828,6 +3828,8 @@ class FileHandle {
    *
    * @example
    * ```ts
+   * declare const file: AsyncFileHandle;
+   *
    * const encoder = new TextEncoder();
    * const bytesWritten = await file.write(encoder.encode('Hello'));
    * console.log(`Wrote ${bytesWritten} bytes`);
@@ -3888,7 +3890,7 @@ class FileHandle {
    * @throws {FileOperationError} If the handle is closed or write fails
    *
    * @example
-   * ```ts
+   * ```ts ignore
    * const encoder = new TextEncoder();
    * const bytesWritten = file.writeSync(encoder.encode('Hello'));
    * ```
@@ -3933,6 +3935,9 @@ class FileHandle {
    *
    * @example
    * ```ts
+   * declare const file: AsyncFileHandle;
+   * declare const data: Uint8Array;
+   *
    * await file.write(data);
    * await file.sync(); // Ensure data is persisted to disk
    * ```
@@ -3981,7 +3986,7 @@ class FileHandle {
    * @throws {FileOperationError} If the handle is closed or sync fails
    *
    * @example
-   * ```ts
+   * ```ts ignore
    * file.writeSync(data);
    * file.syncSync(); // Ensure data is persisted to disk
    * ```

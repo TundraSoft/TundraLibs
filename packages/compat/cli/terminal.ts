@@ -29,6 +29,8 @@ const g = globalThis as any;
  *
  * @example
  * ```ts
+ * declare function renderProgressBar(): void;
+ *
  * if (isTTY()) renderProgressBar();
  * else console.log('progress: 50%');
  * ```

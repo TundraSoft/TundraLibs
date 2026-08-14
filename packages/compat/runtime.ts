@@ -9,7 +9,7 @@
  *
  * @example
  * ```typescript
- * import { RUNTIME, isDeno, getEnv } from '@tundrasoft/compat/runtime';
+ * import { RUNTIME, isDeno, getEnv } from '@tundralibs/compat/runtime';
  *
  * if (isDeno) {
  *   console.log('Running on Deno');

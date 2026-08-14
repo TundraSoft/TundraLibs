@@ -13,13 +13,15 @@
  * ```ts
  * import { Spinner } from '@tundralibs/compat/cli';
  *
+ * declare function connect(): Promise<void>;
+ *
  * const spin = new Spinner({ label: 'Connecting' });
  * spin.start();
  * try {
  *   await connect();
  *   spin.succeed('Connected');
  * } catch (err) {
- *   spin.fail(`Failed: ${err.message}`);
+ *   spin.fail(`Failed: ${(err as Error).message}`);
  * }
  * ```
  *

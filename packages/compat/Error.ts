@@ -1,5 +1,5 @@
 /**
- * @fileoverview Error classes for `@tundrasoft/compat`. All extend
+ * @fileoverview Error classes for `@tundralibs/compat`. All extend
  * {@link CompatError}, which captures `runtime` and `os` automatically
  * and exposes a `toJSON()` for structured logging.
  *

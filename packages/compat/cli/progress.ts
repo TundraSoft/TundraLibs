@@ -12,6 +12,9 @@
  * ```ts
  * import { ProgressBar } from '@tundralibs/compat/cli';
  *
+ * declare const items: string[];
+ * declare function process(item: string): Promise<void>;
+ *
  * const bar = new ProgressBar({ total: items.length, label: 'Indexing' });
  * for (const item of items) {
  *   await process(item);

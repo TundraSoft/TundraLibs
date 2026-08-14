@@ -10,10 +10,10 @@
  * ```typescript
  * import { listen, hostname } from '@tundralibs/compat/net';
  *
- * const listener = listen({ port: 8080 });
+ * const listener = await listen({ port: 8080 });
  * listener.close();
  *
- * const host = await hostname();
+ * const host = hostname();
  * ```
  */
 import { isBun, isDeno, isNode } from './runtime.ts';
@@ -211,6 +211,8 @@ export type Connection = {
    *
    * @example
    * ```typescript
+   * declare const conn: Connection;
+   *
    * const data = await conn.read();
    * if (data) {
    *   const text = new TextDecoder().decode(data);
@@ -951,6 +953,8 @@ export async function listen(options: ListenOptions): Promise<Listener> {
  *
  * @example TCP connection with timeout:
  * ```typescript
+ * import { ConnectionTimeoutError } from '@tundralibs/compat';
+ *
  * try {
  *   const conn = await connect({
  *     hostname: 'example.com',
@@ -967,6 +971,8 @@ export async function listen(options: ListenOptions): Promise<Listener> {
  *
  * @example TCP connection with abort signal:
  * ```typescript
+ * import { ConnectionTimeoutError } from '@tundralibs/compat';
+ *
  * const controller = new AbortController();
  *
  * // Abort after 3 seconds
