@@ -28,7 +28,13 @@ Slogger configuration consists of three main components:
 
 The main configuration object for creating a Slogger instance.
 
-```typescript ignore
+```typescript
+import type {
+  HandlerConfig,
+  SamplingOptions,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 interface SloggerOptions {
   appName: string; // Application identifier
   level: SyslogSeverities; // Global minimum log level
@@ -127,7 +133,13 @@ Each handler requires a configuration object with common and handler-specific op
 
 ### Common Handler Options
 
-```typescript ignore
+```typescript
+import type {
+  SamplingOptions,
+  SloggerFormatter,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 interface HandlerConfig {
   name: string; // Unique handler identifier
   type: string; // Handler type

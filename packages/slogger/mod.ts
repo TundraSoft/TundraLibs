@@ -60,6 +60,7 @@ export {
   type HTTPHandlerOptions,
   MemoryHandler,
   type MemoryHandlerOptions,
+  type SamplingOptions,
   StreamHandler,
   type StreamHandlerOptions,
   SyslogHandler,
