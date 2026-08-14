@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.0.1...crypt-v1.0.2) (2026-08-14)
+
+
+### Bug Fixes
+
+* **crypt:** drop the causeMessage placeholder when no cause is supplied ([#250](https://github.com/TundraSoft/TundraLibs/issues/250)) ([9bf75e7](https://github.com/TundraSoft/TundraLibs/commit/9bf75e70c68b2ffb6a458c94107c149d89bb2257))
+
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.0.0...crypt-v1.0.1) (2026-08-09)
 
 

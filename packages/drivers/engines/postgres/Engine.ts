@@ -65,12 +65,24 @@ const POSTGRES_DEFAULTS: Partial<PostgresEngineOptions> = {
   port: 5432,
 };
 
+/**
+ * Pooled Postgres engine speaking the v3 frontend/backend protocol over a raw
+ * TCP socket — no `pg` or `postgres.js` dependency. Also the base for the
+ * wire-compatible aliases ({@link CockroachEngine}, {@link YugabyteEngine},
+ * {@link AlloyDBEngine}, {@link CitusEngine}).
+ */
 export class PostgresEngine
   extends SQLEngine<PgConnection, PostgresEngineOptions> {
   // Typed `string` (not the literal) so wire-compatible alias engines
   // (e.g. CockroachEngine) can override it with their own identity.
+  /** `'POSTGRES'`; alias engines override it with their own identity. */
   public readonly Engine: string = 'POSTGRES';
 
+  /**
+   * Full relational feature set. `parameterReplacement` is left `undefined`
+   * because {@link PostgresEngine._standardizeQuery} rewrites placeholders to
+   * `$N` itself rather than letting the base standardizer do it.
+   */
   public readonly Capabilities: SQLEngineCapabilities = {
     pooledConnections: true,
     transactions: true,
@@ -83,9 +95,12 @@ export class PostgresEngine
     parameterReplacement: undefined,
   };
 
+  /** Emits Postgres-dialect SQL; shared unchanged by the alias engines. */
   protected readonly _translator: PostgresTranslator = new PostgresTranslator();
 
   /**
+   * Validates options and defaults `port` to 5432. No socket is opened here.
+   *
    * @throws {EngineError} `MISSING_CONFIG_VALUE` if `host`, `database`, or `username` is missing.
    */
   constructor(
@@ -300,14 +315,17 @@ export class PostgresEngine
     return rest;
   }
 
+  /** Sends Terminate and closes the socket. */
   protected async _destroyResource(conn: PgConnection): Promise<void> {
     await conn.close();
   }
 
+  /** Cheap liveness check on pool checkout — socket state only, no round trip. */
   protected override _validateResource(conn: PgConnection): boolean {
     return !conn.closed;
   }
 
+  /** Round-trips `SELECT 1`; any failure reports dead rather than throwing. */
   protected async _ping(conn: PgConnection): Promise<boolean> {
     try {
       await conn.simpleQuery('SELECT 1');
@@ -321,6 +339,11 @@ export class PostgresEngine
 
   //#region SQLEngine hooks
 
+  /**
+   * Issues the extended-protocol query, reading the ordered `EncodedParam`
+   * array that {@link PostgresEngine._standardizeQuery} stashed on the query
+   * rather than `query.params`.
+   */
   protected async _execute<R extends Record<string, unknown>>(
     query: EngineQuery,
     client: PgConnection,
@@ -338,14 +361,17 @@ export class PostgresEngine
     };
   }
 
+  /** Issues `BEGIN` on the transaction's reserved connection. */
   protected async _beginTransaction(client: PgConnection): Promise<void> {
     await client.simpleQuery('BEGIN');
   }
 
+  /** Issues `COMMIT` on the transaction's reserved connection. */
   protected async _commitTransaction(client: PgConnection): Promise<void> {
     await client.simpleQuery('COMMIT');
   }
 
+  /** Issues `ROLLBACK` on the transaction's reserved connection. */
   protected async _rollbackTransaction(client: PgConnection): Promise<void> {
     await client.simpleQuery('ROLLBACK');
   }
@@ -398,6 +424,7 @@ export class PostgresEngine
     } as EngineQuery;
   }
 
+  /** Maps a `PgServerError` SQLSTATE onto the standard engine error codes. */
   protected override _wrapDriverError(
     error: unknown,
     query: EngineQuery,
@@ -410,6 +437,14 @@ export class PostgresEngine
 
   //#region Error mapping
 
+  /**
+   * Translates a thrown value into an {@link EngineError}: `PgServerError`
+   * SQLSTATEs go through {@link pgSqlStateToCode} and carry through the
+   * server's table/column/constraint fields; anything else becomes a generic
+   * connect- or query-failure.
+   *
+   * @param op - `'connect'` or `'query'`, selecting the fallback code.
+   */
   private __mapPgError(
     error: unknown,
     op: string,

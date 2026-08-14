@@ -130,9 +130,16 @@ export abstract class ConnectionEngine<
   //#endregion Engine state
 
   /**
-   * @param name - Connection name for this engine instance
+   * Validates and stores options; opens no connection — call
+   * {@link ConnectionEngine.connect} (or issue a query) for that.
+   *
+   * @param name - Connection name for this engine instance; trimmed, and forms
+   *   the second half of {@link ConnectionEngine.instanceId}
    * @param options - Engine options + event handlers
-   * @param defaults - Subclass-supplied defaults (merged with built-in defaults)
+   * @param defaults - Subclass-supplied defaults (caller options win)
+   *
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` when an option fails
+   *   validation in {@link ConnectionEngine._processOption}
    */
   constructor(
     name: string,
@@ -390,11 +397,35 @@ export abstract class ConnectionEngine<
 
   //#region Option processing
 
-  protected override _processOption<K extends keyof EngineOptions>(
+  /**
+   * Validates the options common to every engine (`idGenerator`, `host`,
+   * `port`, `database`, `username`, `password`, `pool`, `ssl`) and returns the
+   * value unchanged. Subclasses override this to add their own keys and must
+   * delegate unknown ones back here.
+   *
+   * `host`/`username`/`password` accept `undefined` — whether `host` is
+   * mandatory is decided per engine, not here.
+   *
+   * `K` is bounded by `keyof O`, not `keyof EngineOptions`, so a subclass
+   * that widens `O` with its own option names can delegate straight back
+   * here without casting the key.
+   *
+   * @returns The validated value, unmodified.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` for any value that
+   *   fails its check.
+   *
+   * @internal
+   */
+  protected override _processOption<K extends keyof O>(
     key: K,
     value: O[K],
   ): O[K] {
-    switch (key) {
+    // Switch on the key narrowed to the common option names rather than on
+    // `key` itself: `keyof O` is an unresolved type parameter here, so it
+    // offers no literals to complete or narrow against, while this concrete
+    // union does. Purely a type-level narrowing — erased at runtime.
+    const optionKey = key as keyof EngineOptions;
+    switch (optionKey) {
       case 'idGenerator':
         if (
           typeof value !== 'function' ||
@@ -402,7 +433,7 @@ export abstract class ConnectionEngine<
         ) {
           throw new EngineError('INVALID_CONFIG_VALUE', {
             instanceId: this.instanceId,
-            option: key,
+            option: optionKey,
             reason: 'must be a function returning a string',
           });
         }
@@ -417,7 +448,7 @@ export abstract class ConnectionEngine<
         if (typeof value !== 'string' || value.trim().length === 0) {
           throw new EngineError('INVALID_CONFIG_VALUE', {
             instanceId: this.instanceId,
-            option: key,
+            option: optionKey,
             reason: 'must be a non-empty string',
           });
         }
@@ -433,7 +464,7 @@ export abstract class ConnectionEngine<
         ) {
           throw new EngineError('INVALID_CONFIG_VALUE', {
             instanceId: this.instanceId,
-            option: key,
+            option: optionKey,
             reason:
               'must be a non-empty string or a non-negative integer (database index)',
           });
@@ -448,7 +479,7 @@ export abstract class ConnectionEngine<
         ) {
           throw new EngineError('INVALID_CONFIG_VALUE', {
             instanceId: this.instanceId,
-            option: key,
+            option: optionKey,
             reason: 'must be an integer between 1 and 65535',
           });
         }
@@ -457,7 +488,7 @@ export abstract class ConnectionEngine<
         if (!validatePoolOptions(value)) {
           throw new EngineError('INVALID_CONFIG_VALUE', {
             instanceId: this.instanceId,
-            option: key,
+            option: optionKey,
             reason:
               'must be an object with optional positive integer "min", "max" (min ≤ max), idleTimeoutSeconds, acquireTimeoutSeconds',
           });
@@ -467,13 +498,17 @@ export abstract class ConnectionEngine<
         if (!_validateSslOptions(value)) {
           throw new EngineError('INVALID_CONFIG_VALUE', {
             instanceId: this.instanceId,
-            option: key,
+            option: optionKey,
             reason:
               'must be a boolean or an object with optional "cert"/"key" (string), "ca" (string[]), "certFile"/"keyFile"/"caFile" (string), "rejectUnauthorized" / "enforce" (boolean)',
           });
         }
         break;
     }
+    // The `Options` base declares this hook non-generically (`key: keyof O`),
+    // so it returns the whole `O[keyof O]` union. This is the one boundary
+    // where the generic chain meets that non-generic base — subclass
+    // overrides below delegate to *this* generic signature and need no cast.
     return super._processOption(key, value) as O[K];
   }
 
@@ -524,9 +559,16 @@ export abstract class PooledConnectionEngine<
   //#endregion Pool
 
   /**
+   * Builds the pool from the resolved `pool` option and wires it to this
+   * class's resource seams. The pool starts empty — no socket is opened until
+   * {@link PooledConnectionEngine.connect}.
+   *
    * @param name - Connection name for this engine instance
    * @param options - Engine options + event handlers
-   * @param defaults - Subclass-supplied defaults (merged with built-in defaults)
+   * @param defaults - Subclass-supplied defaults (caller options win)
+   *
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` when an option fails
+   *   validation in {@link ConnectionEngine._processOption}
    */
   constructor(
     name: string,

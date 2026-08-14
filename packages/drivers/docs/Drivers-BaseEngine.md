@@ -37,16 +37,48 @@ The engine composes an internal `ConnectionPool<T>` — created and owned as
 single-connection mode (one warm connection, no idle eviction, queueing is
 still in place). Configure `pool: { min, max, ... }` for multi-connection.
 
+### Where to import the bases from
+
+The abstract bases ship on their own sub-path, `@tundralibs/drivers/base`,
+alongside the types you need to declare an engine. Import them from there
+rather than from the package root: the root barrel re-exports every concrete
+engine, including the native `SQLiteEngine` whose adapter loads a per-runtime
+binding (`bun:sqlite`, `jsr:@db/sqlite`, `better-sqlite3`), and those
+specifiers will break a bundle aimed at an edge or browser runtime.
+`@tundralibs/drivers/base` reaches no concrete engine at all.
+
+```typescript
+import {
+  BaseEngine, // = PooledConnectionEngine — pooled, generic
+  ConnectionEngine, // pool-free, generic
+  PooledConnectionEngine,
+  SQLConnectionEngine, // pool-free, SQL surface
+  SQLEngine, // pooled, SQL surface
+} from '@tundralibs/drivers/base';
+```
+
 ## Quick Start (subclassing)
 
 ```typescript
-import { BaseEngine, EngineError } from '@tundralibs/drivers';
+import { BaseEngine } from '@tundralibs/drivers/base';
+import { EngineError } from '@tundralibs/drivers/errors';
 import type {
   EngineCapabilities,
   EngineEvents,
   EngineOptions,
 } from '@tundralibs/drivers/types';
 import type { EventOptionKeys } from '@tundralibs/utils';
+
+// Whatever your protocol client looks like.
+type MyConnection = {
+  closed: boolean;
+  send(command: string): Promise<string>;
+  close(): Promise<void>;
+};
+declare function connectToServer(
+  host: string,
+  port: number,
+): Promise<MyConnection>;
 
 type MyOptions = EngineOptions & {
   host: string;
@@ -76,8 +108,8 @@ class MyEngine extends BaseEngine<MyConnection, MyOptions> {
 
   protected async _createResource(): Promise<MyConnection> {
     return await connectToServer(
-      this.getOption('host')!,
-      this.getOption('port')!,
+      this._getOption('host')!,
+      this._getOption('port')!,
     );
   }
 
@@ -85,7 +117,7 @@ class MyEngine extends BaseEngine<MyConnection, MyOptions> {
     await c.close();
   }
 
-  protected _validateResource(c: MyConnection): boolean {
+  protected override _validateResource(c: MyConnection): boolean {
     return !c.closed;
   }
 
@@ -169,6 +201,13 @@ The pool lives inline on the engine. Two modes:
   than left to time out
 
 ```typescript
+import type { EngineOptions } from '@tundralibs/drivers/types';
+
+// The engine from Quick Start above.
+declare class MyEngine {
+  constructor(name: string, options: EngineOptions & { host: string });
+}
+
 const single = new MyEngine('one', { host: '...' }); // 1 conn
 const pooled = new MyEngine('many', {
   host: '...',
@@ -208,10 +247,24 @@ Subscribe via `engine.on('eventName', handler)` or supply via the
 | `notice`           | `(instanceId, message)` | Server-side notice / informational message (Postgres `NOTICE`, MariaDB warning, Redis/Memcached TLS-downgrade notices). Distinct from `warn` — "the server told us something". |
 
 ```typescript
+import type { EngineError } from '@tundralibs/drivers/errors';
+import type { EngineEvents, EngineOptions } from '@tundralibs/drivers/types';
+import type { EventOptionKeys } from '@tundralibs/utils';
+
+// The engine from Quick Start above.
+declare class MyEngine {
+  constructor(
+    name: string,
+    options: EventOptionKeys<EngineOptions & { host: string }, EngineEvents>,
+  );
+}
+
 const engine = new MyEngine('app', {
   host: '...',
   _onconnect: (id) => console.log('connected', id),
-  _onconnectionFailed: (id, err) => console.error(id, err.code, err.message),
+  // Handler type is `Error`; always an `EngineError` at runtime.
+  _onconnectionFailed: (id, err) =>
+    console.error(id, (err as EngineError).code, err.message),
 });
 ```
 
@@ -223,6 +276,11 @@ values in `EngineErrorCodes`. See
 for the SQL-engine-specific subset.
 
 ```typescript
+import { EngineError } from '@tundralibs/drivers/errors';
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
+const engine = new MemcachedEngine('app-cache', { host: 'localhost' });
+
 try {
   await engine.connect();
 } catch (e) {
