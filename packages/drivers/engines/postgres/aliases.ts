@@ -42,8 +42,10 @@ import type { SQLEngineCapabilities } from '../../types/mod.ts';
  * ```
  */
 export class CockroachEngine extends PostgresEngine {
+  /** Distinct identity for telemetry; the wire protocol is still Postgres. */
   public override readonly Engine = 'COCKROACH';
 
+  /** Stock Postgres minus `advisoryLock`. */
   public override readonly Capabilities: SQLEngineCapabilities = {
     pooledConnections: true,
     transactions: true,
@@ -82,8 +84,10 @@ export class CockroachEngine extends PostgresEngine {
  * ```
  */
 export class YugabyteEngine extends PostgresEngine {
+  /** Distinct identity for telemetry; the wire protocol is still Postgres. */
   public override readonly Engine = 'YUGABYTE';
 
+  /** Stock Postgres minus `advisoryLock`. */
   public override readonly Capabilities: SQLEngineCapabilities = {
     pooledConnections: true,
     transactions: true,
@@ -120,10 +124,12 @@ export class YugabyteEngine extends PostgresEngine {
  * ```
  */
 export class AlloyDBEngine extends PostgresEngine {
+  /** Distinct identity for telemetry; the wire protocol is still Postgres. */
   public override readonly Engine = 'ALLOYDB';
 
   // Full parity with stock Postgres — AlloyDB is enhanced Postgres, not a
   // reimplementation. Identity alias only.
+  /** Identical to stock Postgres. */
   public override readonly Capabilities: SQLEngineCapabilities = {
     pooledConnections: true,
     transactions: true,
@@ -165,10 +171,12 @@ export class AlloyDBEngine extends PostgresEngine {
  * ```
  */
 export class CitusEngine extends PostgresEngine {
+  /** Distinct identity for telemetry; the wire protocol is still Postgres. */
   public override readonly Engine = 'CITUS';
 
   // Full parity with stock Postgres at the coordinator (Citus is a PG
   // extension). Distributed-table FK/DDL caveats are schema-design, not caps.
+  /** Identical to stock Postgres. */
   public override readonly Capabilities: SQLEngineCapabilities = {
     pooledConnections: true,
     transactions: true,

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.5](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.4.4...pact-v0.4.5) (2026-08-14)
+
+
+### Documentation
+
+* **pact:** verify documentation examples and document the public API ([#245](https://github.com/TundraSoft/TundraLibs/issues/245)) ([3ad43ad](https://github.com/TundraSoft/TundraLibs/commit/3ad43ad58897a5b5f3465d7940df96a1c0dc2d5e))
+
 ## [0.4.4](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.4.3...pact-v0.4.4) (2026-08-13)
 
 

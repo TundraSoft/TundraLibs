@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.0.1...guardian-v1.0.2) (2026-08-14)
+
+
+### Documentation
+
+* **guardian:** verify documentation examples and document the public API ([#255](https://github.com/TundraSoft/TundraLibs/issues/255)) ([1fe5507](https://github.com/TundraSoft/TundraLibs/commit/1fe55075b6e95ef6aab7813fd5703aedf82173b5))
+
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.0.0...guardian-v1.0.1) (2026-08-13)
 
 

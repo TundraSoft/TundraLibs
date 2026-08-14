@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.1...cacher-v1.0.2) (2026-08-14)
+
+
+### Documentation
+
+* **cacher:** verify documentation examples and document the public API ([#244](https://github.com/TundraSoft/TundraLibs/issues/244)) ([01c5290](https://github.com/TundraSoft/TundraLibs/commit/01c52905919b11e7d2dd90e802972c045a88daa9))
+
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.0...cacher-v1.0.1) (2026-08-12)
 
 

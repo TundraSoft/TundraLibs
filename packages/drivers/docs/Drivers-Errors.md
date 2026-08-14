@@ -11,6 +11,8 @@ Comprehensive error handling for all driver engines.
 - [Overview](#overview)
 - [Error Classes](#error-classes)
 - [Error Codes](#error-codes)
+  - [Code Reference](#code-reference)
+  - [Branching on a Code](#branching-on-a-code)
   - [Configuration Errors](#configuration-errors)
   - [Connection Lifecycle Errors](#connection-lifecycle-errors)
   - [Pool Errors](#pool-errors)
@@ -42,7 +44,7 @@ All database-specific errors are mapped to standardized codes, enabling consiste
 
 Base error class for the drivers package.
 
-```typescript
+```typescript ignore
 import { DriverError } from '@tundralibs/drivers/errors';
 
 class DriverError<M extends Record<string, unknown>> extends BaseError<M> {
@@ -62,7 +64,7 @@ class DriverError<M extends Record<string, unknown>> extends BaseError<M> {
 
 Error thrown by `BaseEngine` and its subclasses for connection-lifecycle and engine-level failures.
 
-```typescript
+```typescript ignore
 import { EngineError } from '@tundralibs/drivers/errors';
 
 class EngineError<M extends EngineErrorMeta> extends DriverError<M> {
@@ -90,9 +92,9 @@ All `EngineError` instances include:
 
 ### EngineErrorCode
 
-Union of all standardized error code strings (~30 codes) accepted by the `EngineError` constructor and exposed on `EngineError.code`.
+Union of the **30** standardized error-code strings accepted by the `EngineError` constructor and exposed on `EngineError.code`. Every one of them is listed in the [Code Reference](#code-reference) below.
 
-```typescript
+```typescript ignore
 import type { EngineErrorCode } from '@tundralibs/drivers/errors';
 
 type EngineErrorCode =
@@ -154,6 +156,95 @@ EngineErrorCodes['CONNECTION_FAILED'];
 
 ## Error Codes
 
+### Code Reference
+
+All **30** codes in `EngineErrorCode`, grouped the way `EngineErrorCodes.ts` groups them. Every `EngineError` carries `instanceId` (`"<Engine>::<Name>"`); the **Metadata** column lists the _additional_ variables that code's message template consumes. Each code links to its detail section below.
+
+| Code                                                          | Group         | Raised when                                                                                                                                                  | Metadata                     |
+| ------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------- |
+| [`INVALID_CONFIG_VALUE`](#invalid_config_value)               | Configuration | An option failed validation — raised eagerly at construction, before any connection is attempted.                                                            | `option`, `reason`           |
+| [`MISSING_CONFIG_VALUE`](#missing_config_value)               | Configuration | A required option was not supplied.                                                                                                                          | `option`                     |
+| [`CONNECTION_FAILED`](#connection_failed)                     | Connection    | `connect()` could not establish a connection — bad host/port, network failure, or the server is down.                                                        | —                            |
+| [`DISCONNECTION_FAILED`](#disconnection_failed)               | Connection    | `disconnect()` could not close cleanly.                                                                                                                      | —                            |
+| [`NO_CONNECTION`](#no_connection)                             | Connection    | An operation ran with no active connection. Call `connect()` first.                                                                                          | —                            |
+| [`CONNECTION_LOST`](#connection_lost)                         | Connection    | An established connection dropped mid-flight — also mapped from Postgres `08xxx` / `57Pxx` SQLSTATEs.                                                        | `reason`                     |
+| [`POOL_DRAINING`](#pool_draining)                             | Pool          | A connection was requested while the pool is shutting down (during `disconnect()`).                                                                          | —                            |
+| [`POOL_ACQUIRE_TIMEOUT`](#pool_acquire_timeout)               | Pool          | The wait for a free pooled connection exceeded `acquireTimeoutSeconds`.                                                                                      | `timeoutMs`                  |
+| [`POOL_RESOURCE_FAILED`](#pool_resource_failed)               | Pool          | Reserved for a failure to create a new pool resource. **No throw site raises it today** — the pool reports that as `CONNECTION_FAILED`.                      | —                            |
+| [`OPERATION_FAILED`](#operation_failed)                       | Operation     | Catch-all for a named engine operation that failed (cache `get`/`set`/`delete`, Mongo commands, HTTP round-trips).                                           | `operation`, `reason`        |
+| [`UNSUPPORTED_OPERATION`](#unsupported_operation)             | Operation     | The engine has no implementation for the operation — e.g. transactions on the fetch-only HTTP engines.                                                       | `operation`                  |
+| [`INVALID_AUTH`](#invalid_auth)                               | Auth          | Credentials were rejected — Postgres auth handshake, Redis `AUTH`, or SQLSTATE `28000` / `28P01`.                                                            | `reason`                     |
+| [`PERMISSION_DENIED`](#permission_denied)                     | Auth          | Authenticated, but not authorized — SQLSTATE `42501`, SQLite `SQLITE_READONLY`, Redis `NOPERM`, or Mongo `Unauthorized`.                                     | `reason`                     |
+| [`MISSING_PARAMETERS`](#missing_parameters)                   | Query         | The SQL names `:param:` placeholders that `params` does not supply. Raised before the query is sent.                                                         | `missing`                    |
+| [`QUERY_EXECUTION_FAILED`](#query_execution_failed)           | Query         | The server rejected the statement for a reason with no more specific code. The default for unmapped SQLSTATEs.                                               | `reason`                     |
+| [`QUERY_TIMEOUT`](#query_timeout)                             | Query         | The statement exceeded the engine's configured timeout — Postgres `57014`, MariaDB `ER_QUERY_TIMEOUT`.                                                       | `timeoutMs`                  |
+| [`SYNTAX_ERROR`](#syntax_error)                               | Query         | The statement did not parse — SQLSTATE `42601`, or a SQLite `syntax error`.                                                                                  | `reason`                     |
+| [`DATABASE_NOT_FOUND`](#database_not_found)                   | Schema        | The named database/catalog does not exist — SQLSTATE `3D000`, MariaDB `ER_BAD_DB_ERROR`.                                                                     | `database`                   |
+| [`TABLE_NOT_FOUND`](#table_not_found)                         | Schema        | The referenced table does not exist — SQLSTATE `42P01`, or SQLite `no such table`.                                                                           | `table`                      |
+| [`COLUMN_NOT_FOUND`](#column_not_found)                       | Schema        | The referenced column does not exist — SQLSTATE `42703`, or SQLite `no such column`.                                                                         | `column`                     |
+| [`DUPLICATE_KEY`](#duplicate_key)                             | Constraint    | A UNIQUE or PRIMARY KEY constraint was violated — SQLSTATE `23505`, MariaDB `ER_DUP_ENTRY`, SQLite `SQLITE_CONSTRAINT_UNIQUE`, Mongo `DuplicateKey` (11000). | `constraint`                 |
+| [`FOREIGN_KEY_VIOLATION`](#foreign_key_violation)             | Constraint    | A FOREIGN KEY constraint was violated — SQLSTATE `23503`.                                                                                                    | `constraint`                 |
+| [`NOT_NULL_VIOLATION`](#not_null_violation)                   | Constraint    | A NOT NULL column received `NULL` — SQLSTATE `23502`.                                                                                                        | `column`                     |
+| [`CHECK_VIOLATION`](#check_violation)                         | Constraint    | A CHECK constraint rejected the value — SQLSTATE `23514`.                                                                                                    | `constraint`                 |
+| [`DEADLOCK`](#deadlock)                                       | Concurrency   | The server broke a deadlock and chose this transaction as the victim — SQLSTATE `40P01`. **Retry it.**                                                       | —                            |
+| [`LOCK_TIMEOUT`](#lock_timeout)                               | Concurrency   | Waiting on a row/table lock timed out — SQLSTATE `55P03`, MariaDB `ER_LOCK_WAIT_TIMEOUT`.                                                                    | —                            |
+| [`SERIALIZATION_FAILURE`](#serialization_failure)             | Concurrency   | An MVCC conflict under `SERIALIZABLE` — SQLSTATE `40001`. **Retry it.**                                                                                      | —                            |
+| [`TRANSACTION_NOT_FOUND`](#transaction_not_found)             | Transaction   | A `transactionId` was passed that the engine does not know — usually already committed or rolled back.                                                       | `transactionId`              |
+| [`TRANSACTION_OPERATION_ERROR`](#transaction_operation_error) | Transaction   | `begin` / `commit` / `rollback` itself failed.                                                                                                               | `operation`, `transactionId` |
+| [`UNKNOWN_ERROR`](#unknown_error)                             | Fallback      | The `EngineError` constructor received a code that is not in `EngineErrorCodes`. It coerces to this and preserves the original.                              | `reason`, `originalCode`     |
+
+Which codes you can actually see depends on the engine. The Postgres SQLSTATE map is shared verbatim with the Neon HTTP engine, so those two cover the widest range. SQLite's mapper — used by the native, Turso, and D1 engines — matches on the driver's error code and message text instead, and covers a narrower set: it never produces `DEADLOCK`, `LOCK_TIMEOUT`, `QUERY_TIMEOUT`, `SERIALIZATION_FAILURE`, `DATABASE_NOT_FOUND`, or `INVALID_AUTH`. Anything a mapper does not recognise becomes `QUERY_EXECUTION_FAILED` with the driver's own message on `reason` and the original error on `cause`.
+
+### Branching on a Code
+
+`err.code` is the stable discriminator. Group the codes by the reaction they deserve rather than handling all 30 individually:
+
+```typescript
+import { EngineError } from '@tundralibs/drivers/errors';
+import type { EngineErrorCode } from '@tundralibs/drivers/errors';
+
+/** Transient — the same call may succeed if you try it again. */
+const RETRYABLE: ReadonlySet<EngineErrorCode> = new Set([
+  'DEADLOCK',
+  'SERIALIZATION_FAILURE',
+  'LOCK_TIMEOUT',
+  'POOL_ACQUIRE_TIMEOUT',
+  'CONNECTION_LOST',
+]);
+
+/** Deployment/config problems — retrying will never help. */
+const FATAL: ReadonlySet<EngineErrorCode> = new Set([
+  'INVALID_CONFIG_VALUE',
+  'MISSING_CONFIG_VALUE',
+  'INVALID_AUTH',
+  'PERMISSION_DENIED',
+  'DATABASE_NOT_FOUND',
+  'TABLE_NOT_FOUND',
+  'COLUMN_NOT_FOUND',
+  'SYNTAX_ERROR',
+  'UNSUPPORTED_OPERATION',
+]);
+
+export type Verdict = 'retry' | 'fatal' | 'conflict' | 'other' | 'not-ours';
+
+export function classify(err: unknown): Verdict {
+  if (!(err instanceof EngineError)) return 'not-ours';
+  if (RETRYABLE.has(err.code)) return 'retry';
+  if (FATAL.has(err.code)) return 'fatal';
+  switch (err.code) {
+    case 'DUPLICATE_KEY':
+    case 'FOREIGN_KEY_VIOLATION':
+    case 'NOT_NULL_VIOLATION':
+    case 'CHECK_VIOLATION':
+      // A constraint spoke: this is data, not infrastructure. Surface it
+      // to the caller (`err.context.constraint` names the constraint).
+      return 'conflict';
+    default:
+      return 'other';
+  }
+}
+```
+
 ### Configuration Errors
 
 #### INVALID_CONFIG_VALUE
@@ -170,6 +261,9 @@ Configuration value is invalid or malformed.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
 try {
   const engine = new PostgresEngine('db', {
     pool: { max: -5 }, // Invalid value
@@ -213,12 +307,17 @@ Failed to establish connection to the database.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 try {
   await engine.connect();
 } catch (err) {
   if (err instanceof EngineError && err.code === 'CONNECTION_FAILED') {
     console.error(`Cannot connect to ${err.engine}::${err.connectionName}`);
-    console.error('Cause:', err.cause?.message);
+    console.error('Cause:', (err.cause as Error | undefined)?.message);
   }
 }
 ```
@@ -246,6 +345,11 @@ Attempted operation without an active connection.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 try {
   await engine.execute({ sql: 'SELECT 1' });
 } catch (err) {
@@ -303,6 +407,9 @@ Timed out waiting for available connection from pool.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
 const engine = new PostgresEngine('db', {
   host: 'localhost',
   database: 'myapp',
@@ -332,13 +439,15 @@ try {
 
 #### POOL_RESOURCE_FAILED
 
-Failed to create new connection for the pool.
+Reserved for a failure to create a new connection for the pool.
 
 **Template:** `Failed to create a new pool resource for ${instanceId}`
 
 **Metadata:**
 
 - `instanceId` - Engine instance identifier
+
+> **Not currently thrown.** No code path in the package raises this code. When the pool fails to create a resource for a queued waiter, it rejects that waiter with the underlying `EngineError` if there is one, and otherwise wraps the cause in a `CONNECTION_FAILED`. The code stays in the union for compatibility — do not write a handler that waits for it.
 
 ### Operation Errors
 
@@ -357,6 +466,11 @@ Generic operation failure.
 **Example:**
 
 ```typescript
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const cacheEngine = new MemcachedEngine('cache', { host: 'localhost' });
+
 try {
   await cacheEngine.delete('key');
 } catch (err) {
@@ -400,6 +514,11 @@ Authentication credentials are invalid.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 try {
   await engine.connect();
 } catch (err) {
@@ -436,6 +555,11 @@ Required query parameters not provided.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 try {
   await engine.execute({
     sql: 'SELECT * FROM users WHERE id = :userId:',
@@ -480,6 +604,11 @@ Query exceeded configured timeout.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 // A query timeout is configured on the engine (e.g. Postgres'
 // `statementTimeoutMs`), not passed per call.
 try {
@@ -553,6 +682,11 @@ Unique constraint or primary key violation.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 try {
   await engine.execute({
     sql: 'INSERT INTO users (email) VALUES (:email:)',
@@ -618,6 +752,8 @@ Deadlocks are typically transient - retry the transaction.
 **Example:**
 
 ```typescript
+import { EngineError } from '@tundralibs/drivers/errors';
+
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -690,6 +826,11 @@ Transaction operation failed.
 **Example:**
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import { EngineError } from '@tundralibs/drivers/errors';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
+
 const txn = await engine.beginTransaction();
 try {
   await engine.execute({ sql: 'INSERT INTO ...', transactionId: txn });
@@ -725,6 +866,9 @@ Fallback when an unrecognized error code is provided.
 
 ```typescript
 import { EngineError } from '@tundralibs/drivers/errors';
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+
+const engine = new PostgresEngine('db', { host: 'localhost', database: 'app' });
 
 try {
   await engine.execute({ sql: '...' });
@@ -760,6 +904,9 @@ try {
 ### Error Recovery
 
 ```typescript
+import type { BaseEngine } from '@tundralibs/drivers/base';
+import { EngineError } from '@tundralibs/drivers/errors';
+
 async function connectWithRetry(
   engine: BaseEngine,
   maxAttempts = 3,
@@ -786,6 +933,8 @@ async function connectWithRetry(
 ### Cause Chain Inspection
 
 ```typescript
+import { EngineError } from '@tundralibs/drivers/errors';
+
 function inspectError(err: unknown): void {
   if (err instanceof EngineError) {
     console.error('Engine Error:', {
@@ -797,11 +946,11 @@ function inspectError(err: unknown): void {
     });
 
     // Inspect cause chain
-    let cause = err.cause;
+    let cause: unknown = err.cause;
     let depth = 1;
     while (cause) {
-      console.error(`Cause ${depth}:`, cause.message);
-      cause = (cause as any).cause;
+      console.error(`Cause ${depth}:`, (cause as Error).message);
+      cause = (cause as { cause?: unknown }).cause;
       depth++;
     }
   }
@@ -825,8 +974,8 @@ function logEngineError(err: EngineError): void {
     stack: err.stack,
     cause: err.cause
       ? {
-        message: err.cause.message,
-        stack: err.cause.stack,
+        message: (err.cause as Error).message,
+        stack: (err.cause as Error).stack,
       }
       : undefined,
   };
