@@ -45,7 +45,11 @@ Loads configuration files from a directory and returns a Config object.
 Retrieves a configuration value by key with optional default.
 
 ```typescript
-const port = config.get<number>('server.port', 3000);
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
+const port = config.get<number>('server.port');
 ```
 
 #### `has(key: string): boolean`
@@ -53,6 +57,10 @@ const port = config.get<number>('server.port', 3000);
 Checks if a configuration key exists.
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 if (config.has('database.host')) {
   // Connect to database
 }
@@ -63,6 +71,10 @@ if (config.has('database.host')) {
 Returns list of all root configuration keys.
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 const configs = config.list(); // ['database', 'server', 'logging']
 ```
 
@@ -71,8 +83,12 @@ const configs = config.list(); // ['database', 'server', 'logging']
 Iterates over array or object values.
 
 ```typescript
-config.forEach('servers', (server) => {
-  console.log(server.name);
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
+config.forEach('servers', (name, server) => {
+  console.log(name, server);
 });
 ```
 
@@ -81,6 +97,10 @@ config.forEach('servers', (server) => {
 Returns keys at the specified path or root level.
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 const dbKeys = config.keys('database'); // ['host', 'port', 'name']
 ```
 
@@ -98,7 +118,7 @@ const config = await loadConfig({
 
 // Access configuration values
 const dbHost = config.get<string>('database.host');
-const dbPort = config.get<number>('database.port', 5432);
+const dbPort = config.get<number>('database.port');
 ```
 
 ### Environment Variable Substitution
@@ -118,25 +138,25 @@ const dbPort = config.get<number>('database.port', 5432);
 **TypeScript:**
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 // Automatically uses system environment variables
 const config = await loadConfig({ path: './config' });
 
-// Or provide custom environment
-const config = await loadConfig({
+// Or point at a specific .env file
+const custom = await loadConfig({
   path: './config',
-  env: {
-    DB_HOST: 'localhost',
-    DB_PORT: '5432',
-    DB_PASSWORD: 'secret',
-  },
+  env: './config/.env',
 });
 
-console.log(config.get('database.host')); // 'localhost'
+console.log(custom.get('database.host')); // 'localhost'
 ```
 
 ### Selective File Loading
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 // Load only database configurations
 const config = await loadConfig({
   path: './config',
@@ -144,7 +164,7 @@ const config = await loadConfig({
 });
 
 // Exclude test configurations
-const config = await loadConfig({
+const withoutTests = await loadConfig({
   path: './config',
   exclude: [/test/i, /mock/i],
 });
@@ -185,6 +205,8 @@ path = "/var/log/app.log"
 ```
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 const config = await loadConfig({ path: './config' });
 
 // Access from any format
@@ -196,14 +218,16 @@ console.log(config.get('logging.console.level')); // From TOML
 ### Nested Object Access
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 const config = await loadConfig({ path: './config' });
 
 // Deep object traversal with dot notation
 const timeout = config.get<number>('server.http.options.timeout');
 
-// Array access
-config.forEach('server.hosts', (host) => {
-  console.log(`Connecting to ${host}`);
+// Iterate the direct entries of a set
+config.forEach('server', (key, value) => {
+  console.log(`${key} = ${value}`);
 });
 
 // Check nested paths
@@ -215,6 +239,8 @@ if (config.has('server.http.ssl.enabled')) {
 ### Type-Safe Access
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 interface DatabaseConfig {
   host: string;
   port: number;
@@ -224,16 +250,16 @@ interface DatabaseConfig {
 const config = await loadConfig({ path: './config' });
 
 // Type-safe retrieval
-const dbConfig = {
-  host: config.get<string>('database.host')!,
-  port: config.get<number>('database.port', 5432),
-  ssl: config.get<boolean>('database.ssl', false),
+const dbConfig: DatabaseConfig = {
+  host: config.get<string>('database.host'),
+  port: config.get<number>('database.port'),
+  ssl: config.get<boolean>('database.ssl'),
 };
 ```
 
 ### Working with Arrays
 
-```typescript
+```typescript ignore
 // config.json
 {
   "servers": [
@@ -254,9 +280,12 @@ config.forEach('servers', (server) => {
 ## Error Handling
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 try {
   const config = await loadConfig({ path: './config' });
-} catch (error) {
+} catch (err) {
+  const error = err as Error;
   if (error.message.includes('Config path not found')) {
     console.error('Configuration directory not found');
   } else if (error.message.includes('Permission denied')) {
@@ -284,6 +313,8 @@ config/
 ### 2. Use Environment-Specific Configs
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 const env = Deno.env.get('ENVIRONMENT') || 'development';
 const config = await loadConfig({
   path: `./config/${env}`,
@@ -294,14 +325,28 @@ const config = await loadConfig({
 ### 3. Provide Sensible Defaults
 
 ```typescript
-const port = config.get<number>('server.port', 3000);
-const host = config.get<string>('server.host', '0.0.0.0');
-const workers = config.get<number>('server.workers', 4);
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
+const port = config.has('server.port')
+  ? config.get<number>('server.port')
+  : 3000;
+const host = config.has('server.host')
+  ? config.get<string>('server.host')
+  : '0.0.0.0';
+const workers = config.has('server.workers')
+  ? config.get<number>('server.workers')
+  : 4;
 ```
 
 ### 4. Validate Required Values
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 const requiredKeys = ['database.host', 'api.key', 'server.port'];
 
 for (const key of requiredKeys) {
@@ -333,6 +378,8 @@ for (const key of requiredKeys) {
 **Problem:** Variable shows as `${VAR}` instead of value
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 // Wrong - env disabled
 const config = await loadConfig({ path: './config', env: false });
 ```
@@ -340,6 +387,8 @@ const config = await loadConfig({ path: './config', env: false });
 **Solution:**
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 // Correct - env enabled (default)
 const config = await loadConfig({ path: './config' });
 ```
@@ -349,13 +398,21 @@ const config = await loadConfig({ path: './config' });
 **Problem:** Getting `undefined` for existing config
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 // Wrong - incorrect key path
-const value = config.get('database-host'); // undefined
+const value = config.get('database-host'); // throws
 ```
 
 **Solution:**
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 // Correct - use dot notation
 const value = config.get('database.host');
 ```
@@ -365,15 +422,23 @@ const value = config.get('database.host');
 **Problem:** Runtime type mismatch
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 // Wrong - assuming type
-const port = config.get('server.port') + 100; // Could be string!
+const port = config.get<number>('server.port') + 100; // Could be string!
 ```
 
 **Solution:**
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 // Correct - explicit type and validation
-const port = config.get<number>('server.port', 3000);
+const port = config.get<number>('server.port');
 if (typeof port !== 'number') {
   throw new Error('Invalid port configuration');
 }
