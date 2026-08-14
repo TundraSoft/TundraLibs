@@ -72,7 +72,7 @@ case-insensitive databases.
 
 Generate a 25-character CUID.
 
-```typescript
+```typescript ignore
 function cuid(): string;
 ```
 

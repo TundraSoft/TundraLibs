@@ -66,7 +66,7 @@ to downstream parsers).
 
 Generate a CUID2 identifier.
 
-```typescript
+```typescript ignore
 function cuid2(length?: number): string;
 ```
 
