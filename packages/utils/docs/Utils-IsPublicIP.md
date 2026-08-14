@@ -108,6 +108,12 @@ function handleAPIRequest(req: Request): Response {
 ### Network Type Classification
 
 ```typescript
+import {
+  isPublicIP,
+  isValidIPv4,
+  isValidIPv6Structure,
+} from '@tundralibs/utils';
+
 function getNetworkType(
   ip: string,
 ): 'public' | 'private' | 'loopback' | 'link-local' | 'invalid' {
@@ -139,6 +145,8 @@ getNetworkType('169.254.1.1'); // 'link-local'
 ### Content Delivery Network (CDN) Routing
 
 ```typescript
+import { isPublicIP } from '@tundralibs/utils';
+
 interface CDNConfig {
   publicEndpoint: string;
   internalEndpoint: string;
@@ -169,6 +177,8 @@ const endpoint2 = getCDNEndpoint('192.168.1.10', cdnConfig);
 ### Rate Limiting by Network Type
 
 ```typescript
+import { isPublicIP } from '@tundralibs/utils';
+
 class RateLimiter {
   private limits = {
     public: { requests: 100, window: 60000 }, // 100 req/min
@@ -201,6 +211,8 @@ limiter.isAllowed('192.168.1.1'); // Private: 1000 req/min limit
 ### Firewall Rule Generator
 
 ```typescript
+import { isPublicIP } from '@tundralibs/utils';
+
 interface FirewallRule {
   source: string;
   action: 'allow' | 'deny';
@@ -235,6 +247,8 @@ const rule2 = generateFirewallRule('192.168.1.1', 'admin');
 ### Logging and Analytics
 
 ```typescript
+import { isPublicIP } from '@tundralibs/utils';
+
 interface RequestLog {
   ip: string;
   timestamp: number;
@@ -281,6 +295,8 @@ console.log(logger.getStats());
 ### Geographic Routing (Dual Stack)
 
 ```typescript
+import { isPublicIP } from '@tundralibs/utils';
+
 interface RoutingConfig {
   publicIPv4Gateway: string;
   publicIPv6Gateway: string;
@@ -314,6 +330,8 @@ selectGateway('192.168.1.1', routing); // '10.0.0.1'
 ### Audit and Compliance
 
 ```typescript
+import { isPublicIP } from '@tundralibs/utils';
+
 interface AccessAudit {
   ip: string;
   networkType: 'public' | 'private';
@@ -357,7 +375,7 @@ auditAccess('192.168.1.1', '/public-api', true);
 
 Uses `isIPv4InRange` for precise binary comparison:
 
-```typescript
+```typescript ignore
 for (const [network, mask] of ipv4Ranges) {
   if (isIPv4InRange(ip, network, mask)) {
     return false; // Private range
@@ -370,7 +388,7 @@ return true; // Public
 
 Uses string prefix matching for efficiency (optimized for common cases):
 
-```typescript
+```typescript ignore
 // Link-local: fe80::/10
 if (expandedIPv6.startsWith('fe8') || expandedIPv6.startsWith('fe9') || ...) {
   return false;
@@ -397,6 +415,8 @@ return true; // Public
 For high-performance scenarios:
 
 ```typescript
+import { isPublicIP } from '@tundralibs/utils';
+
 // Cache results for frequently checked IPs
 const publicIPCache = new Map<string, boolean>();
 
@@ -411,7 +431,9 @@ function isPublicIPCached(ip: string): boolean {
   // Limit cache size
   if (publicIPCache.size > 10000) {
     const firstKey = publicIPCache.keys().next().value;
-    publicIPCache.delete(firstKey);
+    if (firstKey !== undefined) {
+      publicIPCache.delete(firstKey);
+    }
   }
 
   return result;
@@ -425,6 +447,12 @@ function isPublicIPCached(ip: string): boolean {
 ✅ **Use for security decisions:**
 
 ```typescript
+import { isPublicIP } from '@tundralibs/utils';
+
+declare const clientIP: string;
+declare function enforceRateLimiting(ip: string): void;
+declare function requireAuthentication(): void;
+
 if (isPublicIP(clientIP)) {
   // Apply public-facing security rules
   enforceRateLimiting(clientIP);
@@ -435,7 +463,13 @@ if (isPublicIP(clientIP)) {
 ✅ **Combine with validation:**
 
 ```typescript
-import { isValidIPv4, isValidIPv6Structure } from '@tundralibs/utils';
+import {
+  isPublicIP,
+  isValidIPv4,
+  isValidIPv6Structure,
+} from '@tundralibs/utils';
+
+declare const ip: string;
 
 if ((isValidIPv4(ip) || isValidIPv6Structure(ip)) && isPublicIP(ip)) {
   // Valid and public
@@ -445,6 +479,8 @@ if ((isValidIPv4(ip) || isValidIPv6Structure(ip)) && isPublicIP(ip)) {
 ✅ **Handle both IPv4 and IPv6:**
 
 ```typescript
+import { isPublicIP } from '@tundralibs/utils';
+
 function routeTraffic(ip: string) {
   const isPublic = isPublicIP(ip);
   const isIPv6 = ip.includes(':');
@@ -463,6 +499,10 @@ function routeTraffic(ip: string) {
 ✅ **Use for content delivery optimization:**
 
 ```typescript
+import { isPublicIP } from '@tundralibs/utils';
+
+declare const clientIP: string;
+
 const cacheTTL = isPublicIP(clientIP) ? 3600 : 60; // Longer cache for public
 ```
 
@@ -471,6 +511,10 @@ const cacheTTL = isPublicIP(clientIP) ? 3600 : 60; // Longer cache for public
 ❌ **Don't assume validity:**
 
 ```typescript
+import { isPublicIP, isValidIPv4 } from '@tundralibs/utils';
+
+declare const userInput: string;
+
 // BAD: Invalid IPs return false (could be misinterpreted)
 if (isPublicIP(userInput)) {
   // Could be invalid, not just private
@@ -485,18 +529,29 @@ if (isValidIPv4(userInput) && isPublicIP(userInput)) {
 ❌ **Don't use for geolocation:**
 
 ```typescript
-// BAD: isPublicIP doesn't determine location
-if (isPublicIP(ip)) {
-  return 'US'; // Wrong!
-}
+import { isPublicIP } from '@tundralibs/utils';
 
-// GOOD: Use a geolocation service
-const location = await geolocate(ip);
+declare function geolocate(ip: string): Promise<string>;
+
+async function locate(ip: string): Promise<string> {
+  // BAD: isPublicIP doesn't determine location
+  if (isPublicIP(ip)) {
+    return 'US'; // Wrong!
+  }
+
+  // GOOD: Use a geolocation service
+  return await geolocate(ip);
+}
 ```
 
 ❌ **Don't hardcode assumptions:**
 
 ```typescript
+import { isInSubnet, isPublicIP } from '@tundralibs/utils';
+
+declare const ip: string;
+declare function skipAuthentication(): void;
+
 // BAD: Assuming private = trusted
 if (!isPublicIP(ip)) {
   skipAuthentication(); // Dangerous!
@@ -512,6 +567,10 @@ if (trustedNetworks.some((net) => isInSubnet(ip, net))) {
 ❌ **Don't forget IPv6:**
 
 ```typescript
+import { isPublicIP } from '@tundralibs/utils';
+
+declare const ip: string;
+
 // BAD: Only checking IPv4 private ranges manually
 if (ip.startsWith('192.168.')) {}
 

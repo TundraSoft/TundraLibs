@@ -27,6 +27,8 @@ deno add @tundralibs/utils
 Class decorator that enforces singleton pattern.
 
 ```typescript
+import { Singleton } from '@tundralibs/utils';
+
 @Singleton
 class MyClass {
   // class implementation
@@ -60,6 +62,8 @@ console.log(db1.connectionString); // "postgresql://..."
 ### Configuration Manager
 
 ```typescript
+import { Singleton } from '@tundralibs/utils';
+
 @Singleton
 class AppConfig {
   private settings = new Map<string, unknown>();
@@ -92,6 +96,8 @@ console.log(config2.get('theme')); // 'dark' (same instance)
 ### Logger Instance
 
 ```typescript
+import { Singleton } from '@tundralibs/utils';
+
 @Singleton
 class Logger {
   private level: string;
@@ -121,6 +127,8 @@ console.log(logger1 === logger2); // true
 ### With Initialization
 
 ```typescript
+import { Singleton } from '@tundralibs/utils';
+
 @Singleton
 class CacheManager {
   private cache = new Map<string, any>();
@@ -153,6 +161,8 @@ const cache = new CacheManager(); // Initializes once
 ### Inheritance
 
 ```typescript
+import { Singleton } from '@tundralibs/utils';
+
 @Singleton
 class BaseService {
   constructor(public name: string) {}
@@ -188,6 +198,8 @@ console.log(api1.url); // "https://api.com"
 ### Global State
 
 ```typescript
+import { Singleton } from '@tundralibs/utils';
+
 @Singleton
 class AppState {
   private state: Record<string, any> = {};
@@ -201,12 +213,17 @@ class AppState {
   }
 }
 
-export const appState = new AppState();
+const appState = new AppState();
+export { appState };
 ```
 
 ### Resource Pool
 
 ```typescript
+import { Singleton } from '@tundralibs/utils';
+
+declare class Connection {}
+
 @Singleton
 class ConnectionPool {
   private connections: Connection[] = [];

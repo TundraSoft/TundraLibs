@@ -9,7 +9,7 @@ Multi-format configuration file loader with environment variable substitution an
 The Config utility provides a powerful system for loading and managing application configuration from multiple file formats (JSON, YAML, TOML) with support for:
 
 - **Multiple Formats**: JSON, JSONC, YAML, TOML
-- **Environment Variables**: Automatic substitution with `${VAR}` syntax
+- **Environment Variables**: Opt-in `${VAR}` substitution, via the `env` option
 - **Directory Filtering**: Include/exclude patterns for selective loading
 - **Type Safety**: Full TypeScript support with generic types
 - **Nested Access**: Dot notation for deep object traversal
@@ -29,30 +29,68 @@ Loads configuration files from a directory and returns a Config object.
 
 **Parameters:**
 
-| Parameter         | Type                                | Required | Description                                              |
-| ----------------- | ----------------------------------- | -------- | -------------------------------------------------------- |
-| `options.path`    | `string`                            | Yes      | Directory path containing config files                   |
-| `options.env`     | `boolean \| Record<string, string>` | No       | Environment variables for substitution (default: `true`) |
-| `options.include` | `RegExp[]`                          | No       | Patterns to include specific files                       |
-| `options.exclude` | `RegExp[]`                          | No       | Patterns to exclude specific files                       |
+| Parameter         | Type                | Required | Description                                                                                              |
+| ----------------- | ------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `options.path`    | `string`            | Yes      | Directory path containing config files                                                                   |
+| `options.env`     | `boolean \| string` | No       | `true` loads `.env` from `options.path`; a string loads it from that path; omitted means no substitution |
+| `options.include` | `RegExp[]`          | No       | Patterns to include specific files                                                                       |
+| `options.exclude` | `RegExp[]`          | No       | Patterns to exclude specific files                                                                       |
+
+`env` selects a source, it is not a bag of variables — pass `true` or a
+path, never a `Record`. Substitution is **off** unless you ask for it.
+When it is on, values come from the system environment, the `.env` file,
+and Docker secrets, merged in that order (see
+[envArgs](Utils-EnvArgs.md)).
 
 **Returns:** `Promise<ConfigType>` - Configuration object with typed access methods
 
 ### ConfigType Methods
 
-#### `get<T>(key: string, defaultValue?: T): T | undefined`
+#### `get<T>(path: string): T` — `get<T>(path: string, defaultValue: T): T`
 
-Retrieves a configuration value by key with optional default.
+Resolves a dot-separated path and casts the result to `T`. Two overloads,
+one difference: what happens when the path does not resolve.
+
+- **Without a default**, `get` **throws** — `Config set "…" does not
+  exist` for an unknown set, `Config item "…" does not exist in set "…"`
+  for anything deeper.
+- **With a default**, it returns the default instead of throwing.
+
+The default applies in exactly the cases [`has`](#haspath-string-boolean)
+reports as `false`: an unknown set, a missing segment, a path running
+through a `null` intermediate or a primitive, and a key that exists but
+holds `undefined`. So `config.get(p, d)` is `config.has(p) ? config.get(p) : d`.
+
+A stored `null` is a value the config author wrote down, so it is
+returned as-is — as are the falsy `0`, `''` and `false`. The default
+replaces _missing_, not _falsy_.
+
+Both overloads return `T`; passing a default never widens the result to
+`T | undefined`.
 
 ```typescript
-const port = config.get<number>('server.port', 3000);
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
+// Required — throws if 'server.port' is not configured.
+const port = config.get<number>('server.port');
+
+// Optional — falls back to 3000 when it is not.
+const fallbackPort = config.get<number>('server.port', 3000);
 ```
 
-#### `has(key: string): boolean`
+#### `has(path: string): boolean`
 
-Checks if a configuration key exists.
+Checks whether a path resolves to a defined value. Never throws — an
+unknown set, a missing segment and a key holding `undefined` all return
+`false`.
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 if (config.has('database.host')) {
   // Connect to database
 }
@@ -63,24 +101,43 @@ if (config.has('database.host')) {
 Returns list of all root configuration keys.
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 const configs = config.list(); // ['database', 'server', 'logging']
 ```
 
-#### `forEach(key: string, callback: Function): void`
+#### `forEach(set: string, callback: (key: string, value: unknown) => void): void`
 
-Iterates over array or object values.
+Iterates the **direct entries of one set** — the top level of a single
+config file. The first argument is a set name, not a path: passing
+`'server.hosts'` throws `Config set "server.hosts" does not exist`. The
+callback receives the key and the value as two arguments.
 
 ```typescript
-config.forEach('servers', (server) => {
-  console.log(server.name);
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
+// 'database' is a set — i.e. the file database.json / .yaml / .toml.
+config.forEach('database', (key, value) => {
+  console.log(key, value);
 });
 ```
 
-#### `keys(key?: string): string[]`
+#### `keys(set: string): string[]`
 
-Returns keys at the specified path or root level.
+Returns the direct keys of one set. Like `forEach`, it takes a set name
+— required, and top-level only — and throws if the set is unknown. Use
+`list()` for the set names themselves, and `get()` to reach anything
+deeper.
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 const dbKeys = config.keys('database'); // ['host', 'port', 'name']
 ```
 
@@ -98,7 +155,7 @@ const config = await loadConfig({
 
 // Access configuration values
 const dbHost = config.get<string>('database.host');
-const dbPort = config.get<number>('database.port', 5432);
+const dbPort = config.get<number>('database.port');
 ```
 
 ### Environment Variable Substitution
@@ -118,25 +175,25 @@ const dbPort = config.get<number>('database.port', 5432);
 **TypeScript:**
 
 ```typescript
-// Automatically uses system environment variables
-const config = await loadConfig({ path: './config' });
+import { loadConfig } from '@tundralibs/utils';
 
-// Or provide custom environment
-const config = await loadConfig({
+// `env: true` reads .env from the config directory, plus system env
+const config = await loadConfig({ path: './config', env: true });
+
+// Or point at a specific .env file
+const custom = await loadConfig({
   path: './config',
-  env: {
-    DB_HOST: 'localhost',
-    DB_PORT: '5432',
-    DB_PASSWORD: 'secret',
-  },
+  env: './config/.env',
 });
 
-console.log(config.get('database.host')); // 'localhost'
+console.log(custom.get('database.host')); // 'localhost'
 ```
 
 ### Selective File Loading
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 // Load only database configurations
 const config = await loadConfig({
   path: './config',
@@ -144,7 +201,7 @@ const config = await loadConfig({
 });
 
 // Exclude test configurations
-const config = await loadConfig({
+const withoutTests = await loadConfig({
   path: './config',
   exclude: [/test/i, /mock/i],
 });
@@ -185,6 +242,8 @@ path = "/var/log/app.log"
 ```
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 const config = await loadConfig({ path: './config' });
 
 // Access from any format
@@ -196,14 +255,16 @@ console.log(config.get('logging.console.level')); // From TOML
 ### Nested Object Access
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 const config = await loadConfig({ path: './config' });
 
 // Deep object traversal with dot notation
 const timeout = config.get<number>('server.http.options.timeout');
 
-// Array access
-config.forEach('server.hosts', (host) => {
-  console.log(`Connecting to ${host}`);
+// Iterate the direct entries of a set
+config.forEach('server', (key, value) => {
+  console.log(`${key} = ${value}`);
 });
 
 // Check nested paths
@@ -215,6 +276,8 @@ if (config.has('server.http.ssl.enabled')) {
 ### Type-Safe Access
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 interface DatabaseConfig {
   host: string;
   port: number;
@@ -224,39 +287,53 @@ interface DatabaseConfig {
 const config = await loadConfig({ path: './config' });
 
 // Type-safe retrieval
-const dbConfig = {
-  host: config.get<string>('database.host')!,
-  port: config.get<number>('database.port', 5432),
-  ssl: config.get<boolean>('database.ssl', false),
+const dbConfig: DatabaseConfig = {
+  host: config.get<string>('database.host'),
+  port: config.get<number>('database.port'),
+  ssl: config.get<boolean>('database.ssl'),
 };
 ```
 
 ### Working with Arrays
 
-```typescript
-// config.json
+**config.json:**
+
+```json
 {
   "servers": [
     { "name": "web1", "ip": "10.0.0.1" },
     { "name": "web2", "ip": "10.0.0.2" }
   ]
 }
+```
 
-// Access array elements
-const servers = config.get<Array<any>>('servers');
+The file is the set, so the array sits at `config.servers`. An array is
+an ordinary value — `forEach` iterates a set's direct entries, not the
+contents of one of them, so iterate the array itself:
 
-// Iterate with forEach
-config.forEach('servers', (server) => {
+```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
+type Server = { name: string; ip: string };
+
+const servers = config.get<Array<Server>>('config.servers', []);
+
+for (const server of servers) {
   console.log(`${server.name}: ${server.ip}`);
-});
+}
 ```
 
 ## Error Handling
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 try {
   const config = await loadConfig({ path: './config' });
-} catch (error) {
+} catch (err) {
+  const error = err as Error;
   if (error.message.includes('Config path not found')) {
     console.error('Configuration directory not found');
   } else if (error.message.includes('Permission denied')) {
@@ -284,6 +361,8 @@ config/
 ### 2. Use Environment-Specific Configs
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
 const env = Deno.env.get('ENVIRONMENT') || 'development';
 const config = await loadConfig({
   path: `./config/${env}`,
@@ -294,14 +373,27 @@ const config = await loadConfig({
 ### 3. Provide Sensible Defaults
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 const port = config.get<number>('server.port', 3000);
 const host = config.get<string>('server.host', '0.0.0.0');
 const workers = config.get<number>('server.workers', 4);
 ```
 
+Each call returns `number` / `string`, not `number | undefined` — the
+default is part of the result type, so there is nothing to narrow
+afterwards. Reserve the no-default form for values the application
+cannot start without, and let it throw.
+
 ### 4. Validate Required Values
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 const requiredKeys = ['database.host', 'api.key', 'server.port'];
 
 for (const key of requiredKeys) {
@@ -333,15 +425,19 @@ for (const key of requiredKeys) {
 **Problem:** Variable shows as `${VAR}` instead of value
 
 ```typescript
-// Wrong - env disabled
-const config = await loadConfig({ path: './config', env: false });
+import { loadConfig } from '@tundralibs/utils';
+
+// Wrong - substitution is off unless you ask for it
+const config = await loadConfig({ path: './config' });
 ```
 
 **Solution:**
 
 ```typescript
-// Correct - env enabled (default)
-const config = await loadConfig({ path: './config' });
+import { loadConfig } from '@tundralibs/utils';
+
+// Correct - env enabled
+const config = await loadConfig({ path: './config', env: true });
 ```
 
 ### 2. Undefined Values
@@ -349,13 +445,21 @@ const config = await loadConfig({ path: './config' });
 **Problem:** Getting `undefined` for existing config
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 // Wrong - incorrect key path
-const value = config.get('database-host'); // undefined
+const value = config.get('database-host'); // throws
 ```
 
 **Solution:**
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 // Correct - use dot notation
 const value = config.get('database.host');
 ```
@@ -365,15 +469,23 @@ const value = config.get('database.host');
 **Problem:** Runtime type mismatch
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 // Wrong - assuming type
-const port = config.get('server.port') + 100; // Could be string!
+const port = config.get<number>('server.port') + 100; // Could be string!
 ```
 
 **Solution:**
 
 ```typescript
+import { loadConfig } from '@tundralibs/utils';
+
+const config = await loadConfig({ path: './config' });
+
 // Correct - explicit type and validation
-const port = config.get<number>('server.port', 3000);
+const port = config.get<number>('server.port');
 if (typeof port !== 'number') {
   throw new Error('Invalid port configuration');
 }

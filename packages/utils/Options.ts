@@ -102,6 +102,12 @@ export abstract class Options<
     return copy as O;
   }
 
+  /**
+   * Write one option. The only path into the store, so every value —
+   * including those applied by {@link Options._setOptions} — passes
+   * through {@link Options._processOption} first; a rejection thrown
+   * there surfaces here uncaught.
+   */
   protected _setOption<K extends keyof O>(key: K, value: O[K]): this {
     this.__options.set(key, this._processOption(key, value));
     return this;

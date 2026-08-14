@@ -68,6 +68,8 @@ line2"
 **TypeScript:**
 
 ```typescript
+import { envArgs } from '@tundralibs/utils';
+
 const config = envArgs('./config/.env');
 
 const dbConfig = {
@@ -80,6 +82,8 @@ const dbConfig = {
 ### Docker Secrets
 
 ```typescript
+import { envArgs } from '@tundralibs/utils';
+
 // Enable Docker secrets loading from /run/secrets/
 const env = envArgs(undefined, true);
 
@@ -89,6 +93,8 @@ const dbPassword = env.get('db_password'); // From /run/secrets/db_password
 ### Iterating Variables
 
 ```typescript
+import { envArgs } from '@tundralibs/utils';
+
 const env = envArgs();
 
 // Get all keys

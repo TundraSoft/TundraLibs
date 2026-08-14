@@ -42,11 +42,11 @@
  *
  * @example Type-safe object iteration:
  * ```typescript
- * interface Config {
+ * type Config = {
  *   host: string;
  *   port: number;
  *   ssl: boolean;
- * }
+ * };
  *
  * type ConfigEntries = Entries<Config>;
  *
@@ -95,13 +95,13 @@
  *
  * @example Configuration validation:
  * ```typescript
- * interface DatabaseConfig {
+ * type DatabaseConfig = {
  *   host: string;
  *   port: number;
  *   username: string;
  *   password: string;
  *   ssl: boolean;
- * }
+ * };
  *
  * type ConfigEntries = Entries<DatabaseConfig>;
  *

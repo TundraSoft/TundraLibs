@@ -101,6 +101,9 @@ throw new ValidationError('Invalid ${field}', { field: 'email' });
 ```typescript
 import { memoize, throttle } from '@tundralibs/utils';
 
+const factorial = (n: number): number => (n <= 1 ? 1 : n * factorial(n - 1));
+const updateUI = () => console.log('viewport changed');
+
 const expensiveCalc = memoize((n: number) => factorial(n), 5000);
 const handleScroll = throttle(() => updateUI(), 100);
 ```

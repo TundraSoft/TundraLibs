@@ -33,7 +33,7 @@ Finds and returns an available TCP port within the specified range.
 
 Custom error class for port allocation failures.
 
-```typescript
+```typescript ignore
 class PortError extends Error {
   constructor(message: string);
 }
@@ -54,6 +54,8 @@ console.log(`Server starting on port ${port}`);
 ### Custom Port Range
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
 // Find port for development server
 const devPort = await getFreePort({ min: 3000, max: 4000 });
 
@@ -64,6 +66,8 @@ const prodPort = await getFreePort({ min: 8000, max: 9000 });
 ### Excluding Reserved Ports
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
 // Avoid commonly used ports
 const port = await getFreePort({
   min: 3000,
@@ -80,13 +84,15 @@ const port = await getFreePort({
 ### Multiple Service Allocation
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
 // Allocate ports for a microservices cluster
 const services = ['api', 'auth', 'data', 'cache'];
-const ports = services.map((service) => {
+const ports = await Promise.all(services.map(async (service) => {
   const port = await getFreePort({ min: 8000, max: 9000 });
   console.log(`${service} service: port ${port}`);
   return port;
-});
+}));
 ```
 
 ### Test Fixtures
@@ -168,6 +174,8 @@ This approach balances randomization (good for parallel processes) with determin
 ✅ **Use appropriate ranges:**
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
 // Development: 3000-5000
 const devPort = await getFreePort({ min: 3000, max: 5000 });
 
@@ -181,6 +189,8 @@ const prodPort = await getFreePort({ min: 8000, max: 9000 });
 ✅ **Exclude known service ports:**
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
 const port = await getFreePort({
   exclude: [3306, 5432, 6379, 27017], // MySQL, PostgreSQL, Redis, MongoDB
 });
@@ -189,6 +199,8 @@ const port = await getFreePort({
 ✅ **Handle allocation failures gracefully:**
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
 let port: number;
 try {
   port = await getFreePort({ min: 3000, max: 3100 });
@@ -200,6 +212,9 @@ try {
 ✅ **Use in test setup/teardown:**
 
 ```typescript
+import { beforeEach } from '@tundralibs/compat/test';
+import { getFreePort } from '@tundralibs/utils';
+
 let testPort: number;
 
 beforeEach(async () => {
@@ -212,6 +227,8 @@ beforeEach(async () => {
 ❌ **Avoid privileged ports without permission:**
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
 // BAD: Will fail without elevated privileges
 const port = await getFreePort({ min: 1, max: 1023 });
 ```
@@ -219,6 +236,8 @@ const port = await getFreePort({ min: 1, max: 1023 });
 ❌ **Don't use overly restrictive ranges:**
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
 // BAD: High chance of failure
 const port = await getFreePort({ min: 3000, max: 3005 }); // Only 6 ports
 ```
@@ -226,6 +245,11 @@ const port = await getFreePort({ min: 3000, max: 3005 }); // Only 6 ports
 ❌ **Don't assume port stays free:**
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
+declare function someAsyncOperation(): Promise<void>;
+declare function startServer(port: number): void;
+
 // BAD: Race condition
 const port = await getFreePort();
 await someAsyncOperation(); // Port might be taken now
@@ -235,20 +259,23 @@ startServer(port); // Could fail
 ❌ **Don't reuse ports immediately in parallel:**
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
 // BAD: Potential conflicts
-const ports = [
+const parallelPorts = [
   getFreePort(),
   getFreePort(), // Might return same port
   getFreePort(),
 ];
 
 // BETTER: Exclude previously allocated ports
-let excludeList: number[] = [];
-const ports = Array.from({ length: 3 }, () => {
+const excludeList: number[] = [];
+const ports: number[] = [];
+for (let i = 0; i < 3; i++) {
   const port = await getFreePort({ exclude: excludeList });
   excludeList.push(port);
-  return port;
-});
+  ports.push(port);
+}
 ```
 
 ## Performance Considerations
@@ -263,6 +290,8 @@ const ports = Array.from({ length: 3 }, () => {
 ### Development Environment
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
 // Auto-assign ports for dev stack
 const config = {
   frontend: getFreePort({ min: 3000, max: 4000 }),
@@ -274,14 +303,18 @@ const config = {
 ### CI/CD Testing
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
 // Parallel test isolation
 const testSuitePort = await getFreePort({ min: 9000, max: 10000 });
-process.env.TEST_PORT = testSuitePort.toString();
+Deno.env.set('TEST_PORT', testSuitePort.toString());
 ```
 
 ### Docker/Container Port Mapping
 
 ```typescript
+import { getFreePort } from '@tundralibs/utils';
+
 // Find host port for container mapping
 const hostPort = await getFreePort({ min: 30000, max: 32000 });
 // docker run -p ${hostPort}:8080 myimage

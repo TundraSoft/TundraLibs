@@ -59,6 +59,13 @@ setTimeout(() => throttledLog('Fourth call'), 2500); // ✓ Executes
 ### API Rate Limiting
 
 ```typescript
+import { throttle } from '@tundralibs/utils';
+
+interface User {
+  id: string;
+  name: string;
+}
+
 const fetchUserData = throttle(
   async (userId: string): Promise<User> => {
     const response = await fetch(`/api/users/${userId}`);
@@ -76,6 +83,12 @@ await fetchUserData('123'); // ✗ Returns cached result
 ### UI Event Handling
 
 ```typescript
+import { throttle } from '@tundralibs/utils';
+
+declare function updateScrollPosition(): void;
+declare function checkVisibility(): void;
+declare function lazyLoadImages(): void;
+
 const handleScroll = throttle(() => {
   updateScrollPosition();
   checkVisibility();
@@ -88,6 +101,10 @@ window.addEventListener('scroll', handleScroll);
 ### Per-Argument Throttling
 
 ```typescript
+import { throttle } from '@tundralibs/utils';
+
+declare function fetchUser(userId: string): Promise<{ id: string }>;
+
 // Each userId has its own throttle
 const getUserData = throttle(
   async (userId: string) => await fetchUser(userId),
@@ -104,6 +121,8 @@ await getUserData('user1'); // ✗ Cached (within 5s for user1)
 ### Global Throttling
 
 ```typescript
+import { throttle } from '@tundralibs/utils';
+
 // Throttles all calls regardless of arguments
 const logAny = throttle(
   (message: string) => console.log(message),
@@ -121,7 +140,12 @@ logAny('Message 3'); // ✗ Ignored (within 1s)
 ```typescript
 import { Throttle } from '@tundralibs/utils';
 
+declare const api: { search(query: string): Promise<string[]> };
+declare const database: { save(state: unknown): void };
+
 class SearchComponent {
+  state = {};
+
   @Throttle(300) // 300ms throttle
   async search(query: string) {
     console.log('Searching for:', query);
@@ -166,6 +190,12 @@ search.search('abcd'); // ✓ Searches
 ### Database Query Optimization
 
 ```typescript
+import { throttle } from '@tundralibs/utils';
+
+declare const database: {
+  query(sql: string, params: unknown[]): Promise<void>;
+};
+
 const updateUserStats = throttle(
   async (userId: string) => {
     await database.query(
@@ -189,6 +219,19 @@ updateUserStats('user123'); // ✗ Skipped
 ### Resize Handler
 
 ```typescript
+import { throttle } from '@tundralibs/utils';
+
+declare const window: {
+  innerWidth: number;
+  innerHeight: number;
+  scrollY: number;
+  addEventListener(type: string, listener: () => void): void;
+};
+
+declare function adjustLayout(width: number, height: number): void;
+declare function recalculatePositions(): void;
+declare function redraw(): void;
+
 const handleResize = throttle(() => {
   const width = window.innerWidth;
   const height = window.innerHeight;
@@ -219,6 +262,18 @@ window.addEventListener('resize', handleResize);
 ### Scroll Progress Tracking
 
 ```typescript
+import { throttle } from '@tundralibs/utils';
+
+declare const window: {
+  innerWidth: number;
+  innerHeight: number;
+  scrollY: number;
+  addEventListener(type: string, listener: () => void): void;
+};
+
+declare const document: { body: { scrollHeight: number } };
+declare const progressBar: { style: { width: string } };
+
 const updateProgress = throttle(() => {
   const scrollPercent =
     (window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100;
@@ -231,6 +286,17 @@ window.addEventListener('scroll', updateProgress);
 ### Real-Time Search
 
 ```typescript
+import { throttle } from '@tundralibs/utils';
+
+declare const api: { search(query: string): Promise<string[]> };
+declare function displayResults(results: string[]): void;
+declare const searchInput: {
+  addEventListener(
+    type: 'input',
+    listener: (event: { target: { value: string } }) => void,
+  ): void;
+};
+
 const performSearch = throttle(async (query: string) => {
   const results = await api.search(query);
   displayResults(results);

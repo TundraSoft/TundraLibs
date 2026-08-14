@@ -59,6 +59,10 @@ console.log(memoized(6)); // Logs "Computing...", returns 216
 ### With TTL (Time-To-Live)
 
 ```typescript
+import { memoize } from '@tundralibs/utils';
+
+declare function fetchFromAPI(id: string): Promise<string>;
+
 // Cache expires after 5 seconds
 const getData = memoize(
   async (id: string) => await fetchFromAPI(id),
@@ -77,6 +81,13 @@ await getData('user123'); // Fetches again (cache expired)
 
 ```typescript
 import { Memoize } from '@tundralibs/utils'; // also available at '@tundralibs/utils/memoize'
+
+interface Data {
+  id: number;
+}
+
+declare const api: { get(path: string): Promise<Data> };
+declare function complexCalculation(precision: number): number;
 
 class Calculator {
   @Memoize(10) // 10 second cache
@@ -104,6 +115,12 @@ await calc.fetchData(1);
 ### Async Function Deduplication
 
 ```typescript
+import { memoize } from '@tundralibs/utils';
+
+declare const database: {
+  users: { findById(id: string): Promise<{ id: string }> };
+};
+
 const fetchUser = memoize(async (id: string) => {
   return await database.users.findById(id);
 });
@@ -115,13 +132,15 @@ const [user1, user2, user3] = await Promise.all([
   fetchUser('123'),
 ]);
 
-console.log(user1 === user2 === user3); // true (same cached result)
+console.log(user1 === user2 && user2 === user3); // true (same cached result)
 ```
 
 ### Fibonacci with Memoization
 
 ```typescript
-const fibonacci = memoize((n: number): number => {
+import { memoize } from '@tundralibs/utils';
+
+const fibonacci: (n: number) => number = memoize((n: number): number => {
   if (n <= 1) return n;
   return fibonacci(n - 1) + fibonacci(n - 2);
 });
@@ -133,12 +152,14 @@ console.log(fibonacci(40)); // Fast with memoization
 ### API Rate Limiting
 
 ```typescript
+import { memoize } from '@tundralibs/utils';
+
 // Cache API responses for 1 minute
 const getWeather = memoize(
   async (city: string) => {
     return await fetch(`/api/weather?city=${city}`).then((r) => r.json());
   },
-  60000,
+  60, // seconds
 );
 
 // Multiple requests within 1 minute return cached data
@@ -165,8 +186,12 @@ await getWeather('London'); // Cached
 ### Non-Serializable Arguments
 
 ```typescript
+import { memoize } from '@tundralibs/utils';
+
+declare function fetchData(id: number): Promise<string>;
+
 // ❌ Functions as arguments don't memoize well
-const bad = memoize((fn: Function) => fn());
+const bad = memoize((fn: () => unknown) => fn());
 
 // ✅ Use primitive arguments
 const good = memoize((id: number) => fetchData(id));
@@ -175,6 +200,8 @@ const good = memoize((id: number) => fetchData(id));
 ### Side Effects
 
 ```typescript
+import { memoize } from '@tundralibs/utils';
+
 // ❌ Don't memoize functions with side effects
 const bad = memoize(() => {
   console.log('Side effect!');

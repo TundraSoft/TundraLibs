@@ -85,6 +85,8 @@ console.log(parsed.message); // 'john changed user'
 ### RFC 5424 with Structured Data
 
 ```typescript
+import { parse } from '@tundralibs/utils';
+
 const message =
   '<165>1 2003-08-24T05:14:15.000003-07:00 192.0.2.1 myproc 8710 - [exampleSDID@32473 iut="3" eventSource="Application"] A message';
 
@@ -148,6 +150,8 @@ console.log(syslogString);
 ### Log Aggregation
 
 ```typescript
+import { parse, type SyslogObject, SyslogSeverities } from '@tundralibs/utils';
+
 class SyslogAggregator {
   private logs: SyslogObject[] = [];
 
@@ -173,7 +177,9 @@ class SyslogAggregator {
 ### Security Event Monitoring
 
 ```typescript
-import { parse, SyslogFacilities } from '@tundralibs/utils';
+import { parse, SyslogFacilities, type SyslogObject } from '@tundralibs/utils';
+
+declare function alertSecurityTeam(event: SyslogObject): void;
 
 function monitorSecurityEvents(message: string) {
   const parsed = parse(message);
@@ -192,6 +198,8 @@ function monitorSecurityEvents(message: string) {
 ### Structured Data Parsing
 
 ```typescript
+import { parse } from '@tundralibs/utils';
+
 const message =
   '<165>1 2024-02-04T10:30:00Z host app 123 - [origin@123 ip="192.168.1.1" user="admin"][meta@456 action="login" status="success"] User logged in';
 
@@ -229,11 +237,13 @@ async function processLogFile(path: string) {
       const parsed = parse(line);
       stats.total++;
 
-      const facilityCount = stats.byFacility.get(parsed.facilityName) || 0;
-      stats.byFacility.set(parsed.facilityName, facilityCount + 1);
+      const facility = parsed.facilityName ?? 'UNKNOWN';
+      const facilityCount = stats.byFacility.get(facility) || 0;
+      stats.byFacility.set(facility, facilityCount + 1);
 
-      const severityCount = stats.bySeverity.get(parsed.severityName) || 0;
-      stats.bySeverity.set(parsed.severityName, severityCount + 1);
+      const severity = parsed.severityName ?? 'UNKNOWN';
+      const severityCount = stats.bySeverity.get(severity) || 0;
+      stats.bySeverity.set(severity, severityCount + 1);
     } catch (error) {
       console.error('Failed to parse:', line);
     }
@@ -293,6 +303,11 @@ nil value `-`.
 Priority (PRI) = (Facility × 8) + Severity
 
 ```typescript
+import { SyslogFacilities, SyslogSeverities } from '@tundralibs/utils';
+
+const facility = SyslogFacilities.USER;
+const severity = SyslogSeverities.INFO;
+
 const priority = (facility * 8) + severity;
 // Example: (USER=1 * 8) + INFO=6 = 14
 ```

@@ -129,6 +129,13 @@
  *
  * @example API response with immutable metadata:
  * ```typescript
+ * interface User {
+ *   id: number;
+ * }
+ *
+ * declare const users: User[];
+ * declare const newUsers: User[];
+ *
  * interface APIResponse<T> {
  *   data: T;
  *   timestamp: string;
@@ -159,14 +166,14 @@
  *   userId: string;
  *   currentRoute: string;
  *   isAuthenticated: boolean;
- *   preferences: UserPreferences;
+ *   preferences: Record<string, string>;
  *   temporaryData: Record<string, any>;
  * }
  *
  * type ProtectedState = MakeReadOnly<ApplicationState, 'sessionId' | 'userId'>;
  *
  * class StateManager {
- *   private state: ProtectedState;
+ *   constructor(private state: ProtectedState) {}
  *
  *   updateState(updates: Partial<Omit<ProtectedState, 'sessionId' | 'userId'>>) {
  *     // Cannot accidentally modify protected system identifiers

@@ -137,6 +137,80 @@ describe('utils.Config', () => {
     });
   });
 
+  it('Config object - get with a default value', () => {
+    const config = Config({
+      server: {
+        port: 8080,
+        host: '',
+        debug: false,
+        retries: 0,
+        replica: null,
+        label: undefined,
+        tls: {
+          enabled: true,
+        },
+      },
+    });
+
+    // A path that resolves ignores the default entirely — including when
+    // the stored value is falsy.
+    asserts.assertEquals(config.get('server.port', 3000), 8080);
+    asserts.assertEquals(config.get('server.host', '0.0.0.0'), '');
+    asserts.assertEquals(config.get('server.debug', true), false);
+    asserts.assertEquals(config.get('server.retries', 5), 0);
+    asserts.assertEquals(config.get('server.tls.enabled', false), true);
+
+    // Missing set, missing key, and missing nested key all yield the default.
+    asserts.assertEquals(config.get('nosuchset.port', 3000), 3000);
+    asserts.assertEquals(config.get('server.workers', 4), 4);
+    asserts.assertEquals(config.get('server.tls.cert', '/tls.pem'), '/tls.pem');
+
+    // So do the paths that would otherwise raise a raw TypeError: a `null`
+    // intermediate, and traversal into a primitive.
+    asserts.assertEquals(
+      config.get('server.replica.host', 'localhost'),
+      'localhost',
+    );
+    asserts.assertEquals(config.get('server.port.value', 1), 1);
+
+    // `null` is a value the config author wrote down: it is returned as-is.
+    asserts.assertEquals(config.get('server.replica', 'fallback'), null);
+
+    // A key holding `undefined` is what `has()` calls missing, so the
+    // default applies — keeping `get(p, d)` equal to `has(p) ? get(p) : d`.
+    asserts.assertEquals(config.has('server.label'), false);
+    asserts.assertEquals(config.get('server.label', 'unnamed'), 'unnamed');
+    asserts.assertEquals(config.has('server.replica'), true);
+
+    // Without a default the behaviour is unchanged — missing paths throw.
+    asserts.assertThrows(
+      () => config.get('server.workers'),
+      Error,
+      'Config item "workers" does not exist in set "server"',
+    );
+    asserts.assertThrows(
+      () => config.get('nosuchset.port'),
+      Error,
+      'Config set "nosuchset" does not exist',
+    );
+    asserts.assertThrows(
+      () => config.get('server.replica.host'),
+      Error,
+      'Config item "replica.host" does not exist in set "server"',
+    );
+    // …and a present-but-undefined key still hands back the `undefined`.
+    asserts.assertEquals(config.get('server.label'), undefined);
+
+    // The default must not widen the result type to `T | undefined`:
+    // these assignments would not compile if it did.
+    const port: number = config.get('server.port', 3000);
+    const workers: number = config.get('server.workers', 4);
+    const explicit: string = config.get<string>('server.name', 'api');
+    asserts.assertEquals(port, 8080);
+    asserts.assertEquals(workers, 4);
+    asserts.assertEquals(explicit, 'api');
+  });
+
   it('Config object - deep nesting and edge cases', () => {
     const config = Config({
       server: {
