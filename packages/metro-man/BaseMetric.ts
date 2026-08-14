@@ -57,8 +57,10 @@ export type SeriesEntry<T> = {
  *
  * @example
  * ```typescript
+ * type MyMetricOptions = { name: string; help?: string; type: 'COUNTER' };
+ *
  * class MyMetric extends BaseMetric<number, MyMetricOptions> {
- *   constructor(opt: MyMetricOptions) {
+ *   constructor(opt: Omit<MyMetricOptions, 'type'>) {
  *     super({ ...opt, type: 'COUNTER' });
  *   }
  * }
@@ -68,14 +70,25 @@ export abstract class BaseMetric<
   T,
   O extends MetricOptions = MetricOptions,
 > {
+  /** Prometheus family name, validated against {@link METRIC_NAME_PATTERN}. */
   public readonly name: string;
+
+  /**
+   * Description rendered on the `# HELP` line. Empty string when the
+   * caller omitted `help`.
+   */
   public readonly help: string;
+
+  /** Metric kind, fixed by the concrete subclass at construction. */
   public readonly type: MetricType;
 
   /** Per-series storage. Key is the canonical label string. */
   protected _data: Map<string, SeriesEntry<T>> = new Map();
 
   /**
+   * Validate the option fields every metric kind shares, then record
+   * `name`, `help`, and `type`.
+   *
    * @param opt - Concrete options object. Subclasses inject `type`
    *   themselves before delegating to `super()`.
    *
@@ -90,14 +103,12 @@ export abstract class BaseMetric<
     this.type = opt.type;
   }
 
-  /**
-   * Render `_data` in one of three formats.
-   *
-   * @param mode - `'STRING'` for the bracket-prefixed debug form,
-   *   `'PROMETHEUS'` for `# HELP` / `# TYPE` exposition,
-   *   `'JSON'` for the {@link MetricOutput} object.
-   */
+  /** Snapshot every series as a {@link MetricOutput} object. */
   public dump(mode: 'JSON'): MetricOutput<T>;
+  /**
+   * Render every series as text — `'STRING'` gives the bracket-prefixed
+   * debug form, `'PROMETHEUS'` the `# HELP` / `# TYPE` exposition.
+   */
   public dump(mode: 'STRING' | 'PROMETHEUS'): string;
   public dump(
     mode: 'STRING' | 'PROMETHEUS' | 'JSON',
