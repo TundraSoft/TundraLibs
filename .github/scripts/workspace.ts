@@ -262,6 +262,8 @@ ${dropdownOptions(pkgs)}
         - Deno
         - Bun
         - Node.js
+        - Cloudflare Workers
+        - Browser
         - Multiple / all
     validations:
       required: true
@@ -269,7 +271,10 @@ ${dropdownOptions(pkgs)}
     id: runtime-version
     attributes:
       label: Runtime version
-      placeholder: e.g. deno 2.9.0
+      description: >-
+        For Cloudflare Workers, include the wrangler/workerd version and your
+        compatibility_date. For a browser, include the browser and the bundler.
+      placeholder: e.g. deno 2.9.0 / wrangler 4.123.0 + compat date 2026-08-04 / Chrome 141 + Vite 8
     validations:
       required: true
   - type: textarea
