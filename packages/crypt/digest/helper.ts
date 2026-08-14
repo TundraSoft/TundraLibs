@@ -17,8 +17,11 @@ import { DigestAlgorithms } from './types/mod.ts';
  *
  * @example
  * ```typescript
+ * import type { DigestAlgorithms } from '@tundralibs/crypt/digest';
+ *
  * validateDigestAlgorithm('SHA-256'); // Valid, no error
- * validateDigestAlgorithm('MD5'); // Throws error
+ * // The type already rejects 'MD5'; the runtime guard catches untyped input.
+ * validateDigestAlgorithm('MD5' as DigestAlgorithms); // Throws error
  * ```
  */
 export const validateDigestAlgorithm = (digest: DigestAlgorithms): void => {

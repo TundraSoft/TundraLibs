@@ -14,6 +14,9 @@
  * ```typescript
  * import { signEC, signHMAC, signRSA } from '@tundralibs/crypt/sign';
  *
+ * declare const privateKeyPEM: string;
+ * declare const ecPrivateKeyPEM: string;
+ *
  * const hmacSig = await signHMAC('data', 'secret');
  * const rsaSig = await signRSA('data', privateKeyPEM);
  * const ecSig = await signEC('data', ecPrivateKeyPEM);

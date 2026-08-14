@@ -2164,7 +2164,7 @@ export type BIP39Result = {
  * @example
  * ```typescript
  * // Use custom wordlist
- * const customWords = ['word1', 'word2', ...]; // 2048 custom words
+ * declare const customWords: string[]; // 2048 custom words
  * const result = await generateBIP39Mnemonic({
  *   wordlist: customWords,
  *   wordCount: 15
