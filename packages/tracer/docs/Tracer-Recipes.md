@@ -111,7 +111,22 @@ Deno.serve(traced(myHandler));
 Prefer `c.req.routePath` over the resolved path — `/orders/:id` groups in a
 backend, `/orders/42` does not.
 
-```typescript ignore
+```typescript
+// Deno resolves Hono from JSR; under plain Node/Bun use a bare
+// `from 'hono'` instead.
+import { Hono } from 'jsr:@hono/hono@^4.13.1';
+import {
+  extract,
+  SemConv,
+  type Span,
+  SpanKind,
+  SpanStatusCode,
+  Tracer,
+} from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const app = new Hono<{ Variables: { span: Span } }>();
+
 app.use('*', (c, next) =>
   tracer.startActiveSpan(
     `${c.req.method} ${c.req.routePath}`,
@@ -130,8 +145,26 @@ app.use('*', (c, next) =>
 Express signals rather than wraps: `next()` returns immediately, so the response
 lifecycle has to end the span.
 
-```typescript ignore
-app.use((req, res, next) => {
+```typescript
+// Deno resolves Express via the `npm:` specifier; under plain
+// Node/Bun use a bare `from 'express'` instead.
+import express, {
+  type NextFunction,
+  type Request,
+  type Response,
+} from 'npm:express@^5.2.1';
+import {
+  extract,
+  SemConv,
+  SpanKind,
+  SpanStatusCode,
+  Tracer,
+} from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const app = express();
+
+app.use((req: Request, res: Response, next: NextFunction) => {
   tracer.startActiveSpan(
     `${req.method} ${req.path}`,
     { kind: SpanKind.SERVER, parent: extract(req.headers) },
@@ -156,7 +189,21 @@ through its continuations, which is exactly what `AsyncLocalStorage` guarantees.
 Same signalling shape as Express, via hooks. `onRequest` opens the span,
 the raw response's `finish` closes it.
 
-```typescript ignore
+```typescript
+// Deno resolves Fastify via the `npm:` specifier; under plain
+// Node/Bun use a bare `from 'fastify'` instead.
+import Fastify from 'npm:fastify@^5.11.3';
+import {
+  extract,
+  SemConv,
+  SpanKind,
+  SpanStatusCode,
+  Tracer,
+} from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const fastify = Fastify();
+
 fastify.addHook('onRequest', (request, reply, done) => {
   tracer.startActiveSpan(
     `${request.method} ${request.routeOptions?.url ?? request.url}`,
@@ -180,7 +227,22 @@ only when no route matched, and expect that to be high-cardinality.
 
 Koa wraps — `await next()` returns once the downstream chain finishes.
 
-```typescript ignore
+```typescript
+// Deno resolves Koa via the `npm:` specifier and picks up `@types/koa`
+// on its own; under plain Node/Bun use a bare `from 'koa'` with
+// `@types/koa` installed.
+import Koa from 'npm:koa@^3.2.1';
+import {
+  extract,
+  SemConv,
+  SpanKind,
+  SpanStatusCode,
+  Tracer,
+} from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const app = new Koa();
+
 app.use((ctx, next) =>
   tracer.startActiveSpan(
     `${ctx.method} ${ctx._matchedRoute ?? ctx.path}`,
@@ -206,13 +268,27 @@ stream is _constructed_, recording a ~0ms duration. Use `startSpan` for the
 manual lifetime and `activeSpan.run` to make it the parent, then close it in
 `finalize`:
 
-```typescript ignore
+```typescript
+// Deno resolves Nest and RxJS via the `npm:` specifier; under plain
+// Node/Bun use bare `from '@nestjs/common'` / `from 'rxjs/operators'`.
+import {
+  type CallHandler,
+  type ExecutionContext,
+  Injectable,
+  type NestInterceptor,
+} from 'npm:@nestjs/common@^11.1.29';
+import type { Observable } from 'npm:rxjs@^7.8.2';
+import { finalize, tap } from 'npm:rxjs@^7.8.2/operators';
 import {
   activeSpan,
   extract,
+  SemConv,
   SpanKind,
   SpanStatusCode,
+  Tracer,
 } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
 
 @Injectable()
 export class TracingInterceptor implements NestInterceptor {
@@ -249,7 +325,13 @@ The same applies to **any** callback returning a non-promise thenable or stream:
 
 ## Oak
 
-```typescript ignore
+```typescript
+import { Application } from 'jsr:@oak/oak@^17.1.4';
+import { extract, SemConv, SpanKind, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const app = new Application();
+
 app.use((ctx, next) =>
   tracer.startActiveSpan(
     `${ctx.request.method} ${ctx.request.url.pathname}`,
@@ -266,8 +348,19 @@ app.use((ctx, next) =>
 
 h3 handlers wrap, and its helpers keep this runtime-agnostic.
 
-```typescript ignore
-import { defineEventHandler, getRequestHeaders, getResponseStatus } from 'h3';
+```typescript
+// Deno resolves h3 via the `npm:` specifier; under plain Node/Bun use
+// a bare `from 'h3'` instead.
+import {
+  defineEventHandler,
+  getRequestHeaders,
+  getResponseStatus,
+  type H3Event,
+} from 'npm:h3@^1.15.11';
+import { extract, SemConv, SpanKind, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const handler = (_event: H3Event) => Promise.resolve({ ok: true });
 
 export default defineEventHandler((event) =>
   tracer.startActiveSpan(
@@ -290,8 +383,31 @@ export default defineEventHandler((event) =>
 The `handle` hook wraps the whole request, and `resolve(event)` returns the
 `Response` — so the status is available directly.
 
-```typescript ignore
+```typescript
 // src/hooks.server.ts
+// Deno resolves SvelteKit via the `npm:` specifier; inside a scaffolded
+// app use a bare `from '@sveltejs/kit'` instead.
+import type { Handle } from 'npm:@sveltejs/kit@^2.70.2';
+import {
+  extract,
+  SemConv,
+  type Span,
+  SpanKind,
+  SpanStatusCode,
+  Tracer,
+} from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
+// src/app.d.ts — SvelteKit's own way to type what you put on `locals`.
+declare global {
+  namespace App {
+    interface Locals {
+      span: Span;
+    }
+  }
+}
+
 export const handle: Handle = ({ event, resolve }) =>
   tracer.startActiveSpan(
     `${event.request.method} ${event.route.id ?? event.url.pathname}`,
@@ -313,8 +429,15 @@ export const handle: Handle = ({ event, resolve }) =>
 
 Route handlers are Fetch-standard, so wrap them like any other handler:
 
-```typescript ignore
+```typescript
 // app/api/orders/route.ts
+// No Next.js import: a route handler is Fetch-standard. `traced` is the
+// wrapper from the Fetch-standard runtimes recipe above.
+declare const traced: (
+  handler: (req: Request) => Promise<Response>,
+) => (req: Request) => Promise<Response>;
+declare function listOrders(): Promise<unknown>;
+
 export const GET = traced(async (req: Request) => {
   return Response.json(await listOrders());
 });
@@ -331,8 +454,24 @@ with `traced` from [Fetch-standard runtimes](#fetch-standard-runtimes).
 An API Gateway event carries the headers, so the trace continues from the
 caller. Note the flush — see the next section for why it is not optional.
 
-```typescript ignore
-export const handler = async (event, context) =>
+```typescript
+// Deno resolves the Lambda event types via the `npm:` specifier; under
+// plain Node/Bun use a bare `from 'aws-lambda'` with
+// `@types/aws-lambda` installed.
+import type {
+  APIGatewayProxyEventV2,
+  Context,
+} from 'npm:@types/aws-lambda@^8.10.162';
+import { extract, SemConv, SpanKind, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const businessLogic = (_event: APIGatewayProxyEventV2) =>
+  Promise.resolve({ ok: true });
+
+export const handler = async (
+  event: APIGatewayProxyEventV2,
+  _context: Context,
+) =>
   tracer.startActiveSpan(
     `${event.requestContext.http.method} ${event.routeKey ?? event.rawPath}`,
     { kind: SpanKind.SERVER, parent: extract(event.headers ?? {}) },
