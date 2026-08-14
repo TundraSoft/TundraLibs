@@ -19,6 +19,7 @@ The Crypt package provides battle-tested cryptographic operations using the nati
 | [Sign](sign/Crypt-Sign.md)                   | HMAC, RSA and ECDSA digital signatures                 | [Docs](sign/Crypt-Sign.md)             |
 | [Generators](generators/Crypt-Generators.md) | Key pairs, secrets, and BIP39 mnemonics                | [Docs](generators/Crypt-Generators.md) |
 | [JWT](JWT/Crypt-JWT.md)                      | JSON Web Token creation and verification (HS/RS/PS/ES) | [Docs](JWT/Crypt-JWT.md)               |
+| [JWT Errors](JWT/errors/Crypt-JWT-Errors.md) | `JWTError` and its 12 stable error codes               | [Docs](JWT/errors/Crypt-JWT-Errors.md) |
 | [OTP](OTP/Crypt-OTP.md)                      | Time-based and HMAC-based one-time passwords           | [Docs](OTP/Crypt-OTP.md)               |
 
 ## Installation

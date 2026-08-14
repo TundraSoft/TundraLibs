@@ -280,6 +280,18 @@ const newRsaToken = await refreshJWT(oldToken, {
 });
 ```
 
+## Errors
+
+Every failure in `issueJWT`, `verifyJWT`, `decodeJWT`, and `refreshJWT` is a
+`JWTError` carrying a stable code in `error.context.code` (there is no `.code`
+getter — read it from `context`). Which code you catch also tells you whether
+the signature had already verified: `EXPIRED_TOKEN` means an authentic token,
+`INVALID_SIGNATURE` means an unauthenticated one.
+
+All 12 codes, what triggers each, and the security-relevant distinctions
+between them are documented in
+[Crypt-JWT-Errors](errors/Crypt-JWT-Errors.md).
+
 ## Examples
 
 ### Basic JWT Flow
