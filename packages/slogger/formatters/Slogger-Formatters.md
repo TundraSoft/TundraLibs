@@ -181,6 +181,7 @@ import {
   keyValueFormat,
   minimalistFormat,
   standardFormat,
+  SyslogSeverities,
 } from '@tundralibs/slogger';
 
 // By name
@@ -206,7 +207,7 @@ Structured JSON output for machine processing and log aggregation.
 
 ### Output Structure
 
-```typescript
+```typescript ignore
 {
   "id": "01HKQR2TPXXXXXXXXXXXXXXX",  // ULID
   "appName": "MyApp",
@@ -264,6 +265,7 @@ Wraps other formatters to automatically redact sensitive data.
 
 ```typescript
 import {
+  jsonFormatter,
   maskingFormatter,
   MaskingStrategy,
   Slogger,
@@ -298,6 +300,15 @@ const logger = new Slogger({
 Completely redacts sensitive values.
 
 ```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+  MaskingStrategy,
+} from '@tundralibs/slogger/formatters';
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+
 maskingFormatter({
   strategy: MaskingStrategy.FULL,
   sensitiveFields: ['password', 'apiKey'],
@@ -318,6 +329,15 @@ logger.info('User authenticated', {
 Partially masks sensitive values, showing some characters.
 
 ```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+  MaskingStrategy,
+} from '@tundralibs/slogger/formatters';
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+
 maskingFormatter({
   strategy: MaskingStrategy.PARTIAL,
   sensitiveFields: ['email', 'phone'],
@@ -335,12 +355,15 @@ logger.info('User registered', {
 ### Options
 
 ```typescript
+import { MaskingStrategy } from '@tundralibs/slogger/formatters';
+import type { SloggerFormatter } from '@tundralibs/slogger/types';
+
 interface MaskingFormatterOptions {
-  strategy?: MaskingStrategy; // FULL or PARTIAL (default: PARTIAL)
+  strategy?: MaskingStrategy; // FULL, PARTIAL, PREFIX or SUFFIX (default: FULL)
   maskChar?: string; // Character for masking (default: '*')
   sensitiveFields?: string[]; // Field names to mask
   sensitivePatterns?: RegExp[]; // Regex patterns to match and mask
-  baseFormatter?: string | SloggerFormatter; // Underlying formatter
+  baseFormatter?: SloggerFormatter; // Underlying formatter
 }
 ```
 
@@ -384,6 +407,11 @@ for the full contract.
 Define regex patterns to mask values matching specific formats:
 
 ```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+} from '@tundralibs/slogger/formatters';
+
 maskingFormatter({
   sensitivePatterns: [
     // Email addresses
@@ -406,7 +434,13 @@ maskingFormatter({
 #### Basic Masking
 
 ```typescript
-import { maskingFormatter, MaskingStrategy } from '@tundralibs/slogger';
+import {
+  jsonFormatter,
+  maskingFormatter,
+  MaskingStrategy,
+  Slogger,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
 
 const logger = new Slogger({
   appName: 'App',
@@ -437,6 +471,15 @@ logger.info('Login attempt', {
 #### Email Masking
 
 ```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+  MaskingStrategy,
+  Slogger,
+  standardFormat,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'App',
   level: SyslogSeverities.INFO,
@@ -461,6 +504,14 @@ logger.info('Contact user@example.com for support');
 #### Production Security Setup
 
 ```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+  MaskingStrategy,
+  Slogger,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'ProdApp',
   level: SyslogSeverities.INFO,
@@ -559,6 +610,8 @@ const logger = new Slogger({
 ### Example: Custom Colored Console Formatter
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 import type { SlogObject } from '@tundralibs/slogger';
 
 const colors = {
@@ -593,6 +646,8 @@ const logger = new Slogger({
 ### Example: Template Formatter
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 import type { SlogObject } from '@tundralibs/slogger';
 
 function templateFormatter(template: string) {
@@ -624,7 +679,15 @@ const logger = new Slogger({
 ### Registering Custom Formatters
 
 ```typescript
-import { LogManager } from '@tundralibs/slogger';
+import {
+  LogManager,
+  Slogger,
+  type SloggerFormatter,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
+declare const csvFormatter: SloggerFormatter;
+declare const coloredFormatter: SloggerFormatter;
 
 LogManager.addFormatter('csv', csvFormatter);
 LogManager.addFormatter('colored', coloredFormatter);
@@ -679,6 +742,13 @@ const logger = new Slogger({
 ### Combining Masking with Other Formatters
 
 ```typescript
+import {
+  detailedFormat,
+  jsonFormatter,
+  Slogger,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 import { maskingFormatter, MaskingStrategy } from '@tundralibs/slogger';
 
 const logger = new Slogger({
