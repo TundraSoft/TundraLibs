@@ -34,6 +34,7 @@ import {
   standardFormat,
 } from './formatters/string.ts';
 import { HandlerConfig, Slogger, SloggerOptions } from './Slogger.ts';
+import type { ScopedSlogger } from './types/mod.ts';
 import { SloggerConfigError } from './errors/mod.ts';
 /**
  * LogManager Singleton
@@ -363,10 +364,32 @@ class Manager {
    * req.info('hi');  // context: { reqId, userId }
    * ```
    */
+  public createSlogger(config: SloggerOptions): Slogger;
+  /**
+   * Scoped overload — see the unscoped signature for the caching and
+   * config-conflict rules.
+   *
+   * Passing `scopes` returns a {@link Slogger.scope} view, typed as
+   * {@link ScopedSlogger}: the full logging surface **without**
+   * `finalize()` / `registerHandler()`, which the wrapper does not have
+   * at runtime either. The cached root owns the handlers — reach it via
+   * `getLogger(config.appName)` to finalize.
+   *
+   * @param config - Config for the underlying (cached) root logger.
+   * @param scopes - Context fields pre-bound to every record emitted
+   *   through the returned view.
+   * @throws {SloggerConfigError} When a Slogger with `config.appName`
+   *   already exists and `config` differs from the configuration it
+   *   was created with.
+   */
+  public createSlogger(
+    config: SloggerOptions,
+    scopes: Record<string, unknown> | undefined,
+  ): ScopedSlogger;
   public createSlogger(
     config: SloggerOptions,
     scopes?: Record<string, unknown>,
-  ): Slogger {
+  ): Slogger | ScopedSlogger {
     const name = config.appName;
     let log = this._loggers.get(name);
     if (!log) {
@@ -474,10 +497,29 @@ class Manager {
    * reqLog.info('handled request');  // context: { reqId, userId }
    * ```
    */
+  public getLogger(name: string): Slogger;
+  /**
+   * Scoped overload — see the unscoped signature.
+   *
+   * Passing `scopes` returns a {@link Slogger.scope} view, typed as
+   * {@link ScopedSlogger}: no `finalize()` / `registerHandler()`, since
+   * the registered root logger owns the handlers. Call
+   * `getLogger(name)` without `scopes` to get that root.
+   *
+   * @param name - `appName` the logger was registered under.
+   * @param scopes - Context fields pre-bound to every record emitted
+   *   through the returned view.
+   * @throws {SloggerConfigError} When no logger has been registered
+   *   under `name`.
+   */
+  public getLogger(
+    name: string,
+    scopes: Record<string, unknown> | undefined,
+  ): ScopedSlogger;
   public getLogger(
     name: string,
     scopes?: Record<string, unknown>,
-  ): Slogger {
+  ): Slogger | ScopedSlogger {
     const log = this._loggers.get(name);
     if (!log) {
       throw new SloggerConfigError(`Logger '${name}' not found`, {

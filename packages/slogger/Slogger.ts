@@ -12,7 +12,11 @@ import { ulid } from '@tundralibs/id';
 import { hostname } from '@tundralibs/compat/net';
 import { onExit } from '@tundralibs/compat/runtime';
 import { AbstractHandler, type HandlerOptions } from './handlers/mod.ts';
-import type { SloggerFormatter, SlogObject } from './types/mod.ts';
+import type {
+  ScopedSlogger,
+  SloggerFormatter,
+  SlogObject,
+} from './types/mod.ts';
 import { LogManager } from './LogManager.ts';
 import { SamplingOptions } from './handlers/AbstractHandler.ts';
 import {
@@ -364,13 +368,18 @@ export class Slogger {
    * `level`), and a nested `scope()` for composition. Resource-owning
    * methods (`registerHandler`, `finalize`) are intentionally absent
    * — scopes are views over the root logger, not separate destinations.
+   * That absence is in the type: the return is a
+   * {@link ScopedSlogger}, so calling `finalize()` on a scope is a
+   * compile error rather than a runtime `TypeError`. Finalize the root
+   * logger instead — it owns the handlers, and flushing it flushes
+   * every scope taken from it.
    *
    * Root loggers pay zero overhead for this feature; the merge code
    * lives on the wrapper, not on `log()`.
    *
    * @param bindings - Pre-bound context fields for the returned wrapper.
-   * @returns A scoped logger surface — assignable to `Slogger` for
-   *   logging purposes.
+   * @returns A {@link ScopedSlogger} — the full logging surface minus
+   *   `finalize()` / `registerHandler()`.
    *
    * @example
    * ```typescript
@@ -384,9 +393,11 @@ export class Slogger {
    * reqLog.info('handled request');               // ctx: { reqId, userId }
    * reqLog.info('slow', { latencyMs: 1247 });      // ctx: { reqId, userId, latencyMs }
    * reqLog.info('override', { reqId: 'other' });   // ctx: { reqId: 'other', userId }
+   *
+   * // reqLog.finalize();  // ✗ compile error — finalize the root `log`.
    * ```
    */
-  public scope(bindings: Record<string, unknown>): Slogger {
+  public scope(bindings: Record<string, unknown>): ScopedSlogger {
     // Freeze so a caller can't mutate the merged set under our feet.
     const frozen = Object.freeze({ ...bindings });
     // Arrow functions capture `this` from the enclosing method, so no
@@ -444,9 +455,12 @@ export class Slogger {
       emerg,
       emergency: emerg,
       // Composes — nested scope merges on top of this one.
-      scope: (more: Record<string, unknown>): Slogger =>
+      scope: (more: Record<string, unknown>): ScopedSlogger =>
         this.scope({ ...frozen, ...more }),
-    } as unknown as Slogger;
+      // No cast: the literal is checked against ScopedSlogger, so the
+      // omission of `finalize` / `registerHandler` is the declared
+      // contract instead of a lie hidden behind `as unknown as`.
+    };
   }
 
   /**

@@ -79,7 +79,11 @@ export {
   type SloggerHandlerErrorContext,
 } from './errors/mod.ts';
 
-export type { SloggerFormatter, SlogObject } from './types/mod.ts';
+export type {
+  ScopedSlogger,
+  SloggerFormatter,
+  SlogObject,
+} from './types/mod.ts';
 
 export {
   type HandlerConfig,
