@@ -4,9 +4,9 @@ Koa-style middleware composes around every command. Use it for
 auth, rate limits, timing, logging, request-scoped state, and error
 routing — anything that crosscuts your handlers.
 
-> Hub middleware is **per-command** — it sees `ctx.cmd`, `ctx.payload`,
+> `Server` middleware is **per-command** — it sees `ctx.cmd`, `ctx.payload`,
 > `ctx.id`. For lower-level message middleware (sees raw decoded
-> messages, not Hub commands), use the
+> messages, not `Server` commands), use the
 > [`@tundralibs/compat/websocket`](../../compat/websocket/Compat-WebSocket.md)
 > primitive directly.
 
@@ -332,8 +332,8 @@ server.command('createPost', PostSchema, requireAuth(async (ctx) => {/* … */})
 
 ## Recipe: Heartbeat / Liveness
 
-Hub deliberately doesn't ship a built-in heartbeat. **Application-level
-heartbeat is a 10-line userland recipe** because Hub already gives you
+`Server` deliberately doesn't ship a built-in heartbeat. **Application-level
+heartbeat is a 10-line userland recipe** because `Server` already gives you
 everything you need: command handlers, `ctx.ws.data` for per-connection
 state, `server.connections` for iteration, and `ws.close()` for
 disconnecting stale sockets.
@@ -432,11 +432,11 @@ iterate:
 - **Don't log `ws.data` carelessly.** Per-connection state often
   carries auth tokens, session IDs, or PII. Make sure debug logs,
   metrics, and error reports don't dump it wholesale.
-- **Mass-action capability.** Code with `hub` in scope can send to
-  or close every connection. Keep the `hub` reference out of any
+- **Mass-action capability.** Code holding the `server` in scope can send to
+  or close every connection. Keep the `server` reference out of any
   module that handles untrusted input as code (eval-style, not as
   data).
-- **Filter for cross-tenant safety.** If one Hub serves multiple
+- **Filter for cross-tenant safety.** If one `Server` serves multiple
   tenants, the sweeper sees all of them — filter on
   `ws.data.tenantId` (or equivalent) inside the loop.
 - **Don't `await` per connection without batching.** `await

@@ -121,8 +121,45 @@ Failure:
 }
 ```
 
-`data` is omitted when undefined. The `error` object always has
-`code` and `message` strings.
+`data` is omitted when undefined. The `error` object always has `code`
+and `message` strings, plus an **optional** `data` of structured detail
+a handler chose to send along (field-level validation errors, a retry
+hint, …):
+
+```jsonc
+{
+  "id": "1",
+  "type": "result",
+  "ok": false,
+  "error": {
+    "code": "VALIDATION",
+    "message": "name required",
+    "data": { "fields": { "name": "required" } }
+  }
+}
+```
+
+A handler opts in by attaching `data` to the error it throws; the field
+is omitted entirely when absent, so peers that predate it are
+unaffected. `Client.command()` surfaces it as `.data` on the rejection
+alongside `.code`:
+
+```ts
+import { Client } from '@tundralibs/rpc';
+
+const client = new Client({ url: 'ws://localhost:8080' });
+await client.connect();
+
+try {
+  await client.command('createUser', { email: 'nope' });
+} catch (err) {
+  const { code, data } = err as Error & { code?: string; data?: unknown };
+  console.error(code, data); // 'VALIDATION' { fields: { name: 'required' } }
+}
+```
+
+`error.data` crosses the wire to the caller, so it carries the same
+disclosure duty as any error body — never put internals in it.
 
 ### `subscribed` / `unsubscribed`
 

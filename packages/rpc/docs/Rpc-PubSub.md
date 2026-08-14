@@ -78,9 +78,9 @@ Capabilities declare what the adapter does **beyond** the required
 minimum.
 
 > **Today they are adapter self-description, not framework-enforced.**
-> Hub does not currently gate any feature on these flags — it just
+> `Server` does not currently gate any feature on these flags — it just
 > calls `subscribe` / `publish` / `close`. The flags exist for _your_
-> code to inspect at startup (see below). When Hub gains pattern
+> code to inspect at startup (see below). When `Server` gains pattern
 > subscribe, presence, or replay features, the corresponding flags
 > will become enforced — adapters declaring `false` will refuse to
 > register the dependent features. Until then, treat the matrix as
@@ -102,7 +102,7 @@ if (
   process.env.CLUSTER_MODE === 'on' && !server.adapter.capabilities.crossProcess
 ) {
   console.warn(
-    'Hub: in-process adapter configured but CLUSTER_MODE=on — ' +
+    'rpc: in-process adapter configured but CLUSTER_MODE=on — ' +
       'subscribers on other instances will not receive publishes.',
   );
 }
@@ -116,9 +116,9 @@ if (!server.adapter.capabilities.guaranteedDelivery) {
 }
 ```
 
-Custom adapters that mis-declare are user error — Hub trusts what the
-adapter says. If you write a Redis pub/sub adapter and set
-`guaranteedDelivery: true`, Hub won't catch the lie; your downstream
+Custom adapters that mis-declare are user error — `Server` trusts what
+the adapter says. If you write a Redis pub/sub adapter and set
+`guaranteedDelivery: true`, `Server` won't catch the lie; your downstream
 code will.
 
 ## `MemoryPubSubAdapter`
@@ -476,9 +476,9 @@ with "no clients connected on this server."
 
 Both are useful but have outsized implementation costs in some
 backends. Don't claim them in `capabilities` unless you actually
-implement them — the framework checks at runtime and a false claim
-manifests as silently dropped messages or empty presence lists. Real
-test pressure helps catch this.
+implement them — nothing verifies the claim for you, so a false one
+manifests downstream as silently dropped messages or empty presence
+lists. Real test pressure helps catch this.
 
 ---
 
