@@ -40,6 +40,11 @@ export type JWTErrorMeta = {
  *
  * @example
  * ```ts
+ * import { verifyJWT } from '@tundralibs/crypt/JWT';
+ *
+ * declare const token: string;
+ * declare const secret: string;
+ *
  * try {
  *   await verifyJWT(token, secret);
  * } catch (e) {
@@ -51,6 +56,8 @@ export type JWTErrorMeta = {
  *
  * @example Construction
  * ```ts
+ * declare const original: Error;
+ *
  * throw new JWTError('EXPIRED_TOKEN');
  * throw new JWTError('INVALID_SIGNATURE', { causeMessage: 'HMAC verification failed' });
  * throw new JWTError('UNKNOWN_ERROR', { causeMessage: original.message }, original);
