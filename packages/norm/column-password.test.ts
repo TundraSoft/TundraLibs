@@ -74,4 +74,47 @@ describe('norm.Column.password — PBKDF2 (salted) vs SHA-256 (deterministic)', 
     // stored as a fixed 64-hex digest, not the plaintext
     asserts.assertEquals((hit.data[0]!.pin as string).length, 64);
   });
+
+  it("a digest column's default() is declared plaintext, then digested on write", async () => {
+    // `DigestColumnBuilder.default()` takes PLAINTEXT; the digesting
+    // happens on the way to the database, exactly like a supplied value.
+    const Accounts = Entity('accounts', {
+      id: Column.int(),
+      pin: Column.password('SHA-256').default('changeme'),
+    }, { pk: ['id'] });
+
+    const d = await makeTempDir({ prefix: 'norm-pw-def-db-' });
+    const m = await makeTempDir({ prefix: 'norm-pw-def-mig-' });
+    try {
+      const openAcc = () =>
+        new Norm({ engine: new SQLiteEngine('pwdef', { path: d }) })
+          .use(Schema('App', { Accounts }));
+      await new Migrator(openAcc(), { dir: m }).snapshot();
+      await new Migrator(openAcc(), { dir: m }).apply();
+
+      // `pin` omitted → the default fires.
+      await openAcc().repo('Accounts').insert({ id: 1 });
+      const row = (await openAcc().repo('Accounts').find({ '@id': 1 }))
+        .data[0]!;
+      const stored = row.pin as string;
+
+      // The plaintext default never reaches the column…
+      asserts.assertNotStrictEquals(stored, 'changeme');
+      asserts.assertEquals(stored.length, 64);
+      // …it is stored as the SHA-256 digest OF that plaintext.
+      asserts.assertEquals(
+        stored,
+        '057ba03d6c44104863dc7361fe4578965d1887360f90a0895882e58a6248fc86',
+      );
+      // …and the defaulted row is still found by the plaintext filter.
+      const hit = await openAcc().repo('Accounts').find({
+        '@pin': 'changeme',
+      });
+      asserts.assertEquals(hit.data.length, 1);
+      asserts.assertEquals(hit.data[0]!.id, 1);
+    } finally {
+      await removeDir(d, { recursive: true });
+      await removeDir(m, { recursive: true });
+    }
+  });
 });
