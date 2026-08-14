@@ -13,6 +13,8 @@
  *
  * @example
  * ```ts
+ * declare const audit: (module: string, permission: string | bigint) => void;
+ *
  * const pact = new PACT({
  *   bits: { READ: 1n, EDIT: 2n, DELETE: 4n },
  *   modules: { Post: ['READ', 'EDIT', 'DELETE'] },
@@ -110,6 +112,13 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
   protected _fetch: typeof globalThis.fetch = compatFetch;
 
   /**
+   * Build the engine from the permission registry plus whichever token, group
+   * and OAuth wiring the deployment needs. `algorithm` defaults to `HS256` and
+   * `expiry` to 3600 seconds; `secret` is held privately rather than in the
+   * option store, so `getOptions()` can never surface it. Supplying
+   * `groupResolver` enables the group cache, and a positive `syncInterval`
+   * starts its refresh timer.
+   *
    * @throws {@link PactDefinitionError} when `bits` is missing
    *   (`MISSING_OPTION`), the registry is malformed (via {@link Permissions}),
    *   the `secret` shape/length contradicts the algorithm (`INVALID_OPTION`),
@@ -215,6 +224,11 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
     event: K,
     callback: PACTEvents[K],
   ): this;
+  /**
+   * Register several listeners for `event` — equivalent to calling
+   * {@link PACT.on} once per entry, with the same isolation and non-function
+   * handling.
+   */
   override on<K extends keyof PACTEvents>(
     event: K,
     callback: PACTEvents[K][],
@@ -242,6 +256,10 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
     event: K,
     callback: PACTEvents[K],
   ): this;
+  /**
+   * Register several one-shot listeners for `event`. Each fires and removes
+   * itself independently of the others.
+   */
   override once<K extends keyof PACTEvents>(
     event: K,
     callback: PACTEvents[K][],
@@ -271,6 +289,10 @@ export class PACT<P extends PACTPermissionBits = PACTPermissionBits>
     event: K,
     callback?: PACTEvents[K],
   ): this;
+  /**
+   * Remove several listeners for `event`, or every listener for it when
+   * `callback` is omitted. Entries that were never registered are ignored.
+   */
   override off<K extends keyof PACTEvents>(
     event: K,
     callback?: PACTEvents[K][],

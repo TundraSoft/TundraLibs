@@ -87,19 +87,30 @@ denial is a 403, a definition error is a bug:
 
 ```typescript
 import { PACT, PactDefinitionError, PactDeniedError } from '@tundralibs/pact';
+import type { PACTGrants } from '@tundralibs/pact/types';
 
-try {
-  pact.assert('Post', 'DELETE', grants);
-} catch (err) {
-  if (err instanceof PactDeniedError) {
-    // authorization outcome — err.module / err.permission are typed
-    return respond(403, `denied: ${err.permission} on ${err.module}`);
+declare const pact: PACT;
+declare const grants: PACTGrants;
+declare const respond: (status: number, body: string) => Response;
+
+function deletePost(): Response {
+  try {
+    pact.assert('Post', 'DELETE', grants);
+  } catch (err) {
+    if (err instanceof PactDeniedError) {
+      // authorization outcome — err.context.module / .permission are typed
+      return respond(
+        403,
+        `denied: ${err.context.permission} on ${err.context.module}`,
+      );
+    }
+    if (err instanceof PactDefinitionError) {
+      // a bug in how PACT was configured (e.g. UNKNOWN_MODULE) — fix the setup
+      return respond(500, 'authorization is misconfigured');
+    }
+    throw err;
   }
-  if (err instanceof PactDefinitionError) {
-    // a bug in how PACT was configured (e.g. UNKNOWN_MODULE) — fix the setup
-    return respond(500, 'authorization is misconfigured');
-  }
-  throw err;
+  return respond(204, '');
 }
 ```
 
@@ -109,21 +120,29 @@ flat switch instead of a class ladder:
 ```typescript
 import { PACT, PactError } from '@tundralibs/pact';
 
-try {
-  await pact.login('google', { code, verifier });
-} catch (err) {
-  if (err instanceof PactError) {
-    switch (err.code) {
-      case 'OAUTH_STATE_MISMATCH':
-        return respond(400, 'stale or forged callback');
-      case 'OAUTH_EXCHANGE_FAILED':
-      case 'OAUTH_PROFILE_FAILED':
-        return respond(502, 'upstream OAuth provider failed');
-      case 'UNKNOWN_STRATEGY':
-        throw err; // config bug — no provider named 'google'
+declare const pact: PACT;
+declare const code: string;
+declare const verifier: string;
+declare const respond: (status: number, body: string) => Response;
+
+async function oauthCallback(): Promise<Response> {
+  try {
+    await pact.login('google', { code, verifier });
+  } catch (err) {
+    if (err instanceof PactError) {
+      switch (err.code) {
+        case 'OAUTH_STATE_MISMATCH':
+          return respond(400, 'stale or forged callback');
+        case 'OAUTH_EXCHANGE_FAILED':
+        case 'OAUTH_PROFILE_FAILED':
+          return respond(502, 'upstream OAuth provider failed');
+        case 'UNKNOWN_STRATEGY':
+          throw err; // config bug — no provider named 'google'
+      }
     }
+    throw err;
   }
-  throw err;
+  return respond(204, '');
 }
 ```
 
@@ -132,6 +151,8 @@ contract — useful for structured logging:
 
 ```typescript
 import { PACT, PactError } from '@tundralibs/pact';
+
+declare const err: unknown;
 
 if (err instanceof PactError) {
   err.code; // stable PactErrorCode, or undefined when the site left it unset
@@ -152,18 +173,25 @@ when verifying or refreshing, handle both:
 import { PACT, PactTokenError } from '@tundralibs/pact';
 import { JWTError } from '@tundralibs/crypt/JWT';
 
-try {
-  const claims = await pact.verifyJWT(token);
-} catch (err) {
-  if (err instanceof PactTokenError) {
-    // err.code === 'TOKEN_REVOKED' — your isRevoked seam vetoed a valid token
-    return respond(401, 'token revoked');
+declare const pact: PACT;
+declare const token: string;
+declare const respond: (status: number, body: string) => Response;
+
+async function authenticate(): Promise<Response> {
+  try {
+    const claims = await pact.verifyJWT(token);
+  } catch (err) {
+    if (err instanceof PactTokenError) {
+      // err.code === 'TOKEN_REVOKED' — your isRevoked seam vetoed a valid token
+      return respond(401, 'token revoked');
+    }
+    if (err instanceof JWTError) {
+      // bad signature, expired, or wrong iss/aud — raised by @tundralibs/crypt
+      return respond(401, 'token invalid');
+    }
+    throw err;
   }
-  if (err instanceof JWTError) {
-    // bad signature, expired, or wrong iss/aud — raised by @tundralibs/crypt
-    return respond(401, 'token invalid');
-  }
-  throw err;
+  return respond(200, 'ok');
 }
 ```
 
@@ -227,6 +255,9 @@ takes a single handler or an array of handlers:
 ```typescript
 import { PACT } from '@tundralibs/pact';
 
+declare const audit: { log(event: string, ...rest: unknown[]): void };
+declare const revocationStore: { record(jti: string): void };
+
 const pact = new PACT({
   bits: { READ: 1n, EDIT: 2n },
   modules: { Post: ['READ', 'EDIT'] },
@@ -241,6 +272,12 @@ Or attach later with `.on(event, handler)` — the same events, registered
 imperatively:
 
 ```typescript
+import { PACT } from '@tundralibs/pact';
+
+declare const pact: PACT;
+declare const metrics: { increment(key: string): void };
+declare const audit: { log(event: string, ...rest: unknown[]): void };
+
 pact.on('login', (strategy, principal, isNew) => {
   metrics.increment(`login.${strategy}.${isNew ? 'signup' : 'return'}`);
 });
