@@ -117,7 +117,7 @@ const mig = new Migrator(db, { dir: './migrations' });
 
 The everyday loop is **snapshot → review → apply**:
 
-```typescript
+```typescript ignore
 await mig.snapshot(); // write 0001.json (.sql is opt-in — see below)
 await mig.plan(); // inspect the DDL each pending version would run
 await mig.apply(); // execute it + record in _norm_migrations
@@ -133,7 +133,7 @@ plan artifacts are **opt-in** — construct the Migrator with
 them on demand with [`renderPlans()`](#renderplans) (see
 [Reviewable stored plans](#reviewable-stored-plans)).
 
-```typescript
+```typescript ignore
 const s = await mig.snapshot();
 // { version: 1, path: './migrations/0001.json', written: true }
 
@@ -150,7 +150,7 @@ your definitions and move on.
 Compares the filesystem against the database — what is applied, what is
 pending, and whether the applied head still matches its recorded hash.
 
-```typescript
+```typescript ignore
 const st = await mig.status();
 // { dbVersion: 1, fsVersion: 3, pending: [2, 3], hashOk: true }
 ```
@@ -166,7 +166,7 @@ const st = await mig.status();
 Returns the DDL each pending version would run, oldest first — **inspect
 this before you apply.** No side effects; nothing touches the database.
 
-```typescript
+```typescript ignore
 const steps = await mig.plan();
 for (const step of steps) {
   console.log(`v${step.version}`);
@@ -192,7 +192,7 @@ Executes the pending plan and records each version in `_norm_migrations`.
 Status and plan are computed **inside** the lock, so a plan can never go
 stale while waiting on a concurrent run.
 
-```typescript
+```typescript ignore
 const r = await mig.apply();
 // { applied: [2, 3], durationMs: 41 }
 ```
@@ -206,7 +206,7 @@ const r = await mig.apply();
 
 Options:
 
-```typescript
+```typescript ignore
 await mig.apply({
   allowDrop: true, // emit DROP TABLE/COLUMN (default false)
   appliedBy: 'ci-runner', // audit column; defaults to $USER/$USERNAME
@@ -267,7 +267,7 @@ database (and is never created at all on Postgres/SQLite).
 **Dry run** — compute and return the full plan without executing or
 recording anything (drift is still checked):
 
-```typescript
+```typescript ignore
 const dry = await mig.apply({ dryRun: true });
 // { applied: [], durationMs: 2, plannedQueries: [ …PlannedStep… ] }
 console.log(dry.plannedQueries![0].blockedDrops);
@@ -284,7 +284,7 @@ back mid-copy. The Migrator therefore **disarms** that timer by default,
 so a version may run as long as it needs. Set
 `transactionTimeoutMs` on the constructor to re-impose a ceiling:
 
-```typescript
+```typescript ignore
 const mig = new Migrator(db, {
   dir: './migrations',
   transactionTimeoutMs: 0, // default — disarmed, no per-version cap
@@ -312,7 +312,7 @@ reverted rows from `_norm_migrations`. Rolling back a `CREATE` is a
 `DROP`, so drops are implied and always allowed here — that is the whole
 point of a rollback.
 
-```typescript
+```typescript ignore
 await mig.rollback({ to: 2 }); // revert down to v2
 // { reverted: [4, 3], durationMs: 18 }
 
@@ -331,7 +331,7 @@ Postgres/SQLite, checkpoint-resumable on MariaDB/Mongo.
 
 Returns the applied migrations, **newest first**.
 
-```typescript
+```typescript ignore
 const hist = await mig.history();
 for (const h of hist) {
   console.log(h.version, h.appliedAt, h.appliedBy, `${h.durationMs}ms`);
@@ -346,7 +346,7 @@ disk. Use it after hand-editing definitions, or to repair an artifact
 that went missing or was tampered with (`apply()` refuses to run without
 a matching one).
 
-```typescript
+```typescript ignore
 const out = await mig.renderPlans();
 // [{ version: 1, files: ['…/0001.sqlite.sql', '…/0001.postgres.sql', '…/0001.maria.sql'] }, …]
 ```
@@ -403,7 +403,7 @@ plan would emit is instead collected into `blockedDrops` — as
 recording the version with the drop quietly skipped (which would
 permanently desync the database from the snapshot chain):
 
-```typescript
+```typescript ignore
 const dry = await mig.apply({ dryRun: true });
 // dry.plannedQueries[0].blockedDrops → ['Users.fullName']
 
@@ -424,7 +424,7 @@ NORM never emits DDL column defaults (defaults are system-generated at
 write time), so adding a `NOT NULL` column fails on a populated table.
 The diff cannot know the row count, so it always **warns**:
 
-```typescript
+```typescript ignore
 const [step] = await mig.plan();
 // step.warnings → ["Users.age: adding a NOT NULL column will fail if
 //   'users' has rows — make it nullable() and backfill, then tighten…"]
@@ -467,7 +467,7 @@ untouched for `lockStaleMs` (default **15 minutes**) is treated as
 abandoned — a killed pod, an OOM, a `kill -9` — and the next contender
 reclaims it instead of waiting forever:
 
-```typescript
+```typescript ignore
 const mig = new Migrator(db, {
   dir: './migrations',
   lockStaleMs: 60 * 60_000, // an hour, for very long rebuilds
@@ -494,13 +494,15 @@ column and emits a `RENAME COLUMN` (data survives) instead of a
 drop-plus-add:
 
 ```typescript
+import { Column, Entity } from '@tundralibs/norm';
+
 const Users = Entity('users', {
   id: Column.integer(),
   fullName: Column.varchar(120).nullable().renamedFrom('displayName'),
 }, { pk: ['id'] });
 ```
 
-```typescript
+```typescript ignore
 const [step] = await mig.plan();
 // the ALTER carries: renameColumns: { displayName: 'fullName' }
 ```
@@ -513,6 +515,8 @@ hint required** — it emits `RENAME TO` and re-creates any indexes whose
 names embed the table name:
 
 ```typescript
+import { Column, Entity } from '@tundralibs/norm';
+
 // key stays 'Folks'; physical name folks → people
 const Folks = Entity('people', {
   id: Column.integer(),
@@ -562,7 +566,7 @@ The **copy** step has two forms:
   **chunked** by `rebuildChunkSize` (default 500) and paged in primary-key
   order, so a multi-million-row table never materializes in memory:
 
-```typescript
+```typescript ignore
 const mig = new Migrator(db, {
   dir: './migrations',
   rebuildChunkSize: 1000, // rows per page/INSERT during a crypto rebuild
@@ -600,6 +604,8 @@ DDL — inline in `CREATE TABLE` on a fresh table, or as an
 `ADD CONSTRAINT` when added to an existing one.
 
 ```typescript
+import { Column, Entity } from '@tundralibs/norm';
+
 const Profiles = Entity('profiles', {
   userId: Column.integer(),
 }, {
@@ -654,7 +660,7 @@ and resumes on retry instead. See
 
 ## API reference
 
-```typescript
+```typescript ignore
 new Migrator(db: object, options: {
   dir: string;              // migrations directory (snapshots + lock)
   rebuildChunkSize?: number; // rows per page in a crypto rebuild (500)
