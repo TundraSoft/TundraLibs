@@ -153,6 +153,7 @@ export class ObjectGuardian<
   TInput extends Record<string, unknown>,
   TOutput extends Record<string, unknown> = TInput,
 > extends BaseGuardian<TOutput> {
+  /** Emitted schema type. */
   protected override readonly _type = 'object';
   private readonly __schema: ObjectSchema<TInput>;
 
@@ -1153,6 +1154,16 @@ export class ObjectGuardian<
     return input as Record<string, unknown>;
   }
 
+  /**
+   * Strict-mode gate: reject the input outright when it carries keys
+   * the schema doesn't describe. A no-op in every other mode, and it
+   * runs before per-field validation, so an unknown key wins over a
+   * field-level failure.
+   *
+   * @throws {GuardianError} When extra keys are present in strict mode.
+   *
+   * @internal
+   */
   private __validateStrictMode(
     inputObj: Record<string, unknown>,
     schemaKeys: Set<string>,
@@ -1222,6 +1233,15 @@ export class ObjectGuardian<
     return 'parse';
   }
 
+  /**
+   * Run every declared field's guardian. Failures are **collected**,
+   * not thrown, so one parse reports every bad field at once.
+   *
+   * @returns `[validatedFields, errorsByKey]`. Each error already has
+   *   its key prepended to the path.
+   *
+   * @internal
+   */
   private __validateSchemaProperties(
     inputObj: Record<string, unknown>,
   ): [Record<string, unknown>, Record<string, GuardianError>] {
@@ -1270,6 +1290,13 @@ export class ObjectGuardian<
     return [result, errors];
   }
 
+  /**
+   * Passthrough mode: copy unknown keys onto the result unvalidated.
+   * A no-op in every other mode. Prototype-pollution keys are dropped
+   * rather than copied — see `PROTO_POLLUTION_KEYS`.
+   *
+   * @internal
+   */
   private __addPassthroughProperties(
     result: Record<string, unknown>,
     inputObj: Record<string, unknown>,
@@ -1335,6 +1362,15 @@ export class ObjectGuardian<
     }
   }
 
+  /**
+   * Wrap the collected per-key failures in one envelope error whose
+   * `cause` map holds them all, and throw it. Returns quietly when
+   * `errors` is empty.
+   *
+   * @throws {GuardianError} When `errors` is non-empty.
+   *
+   * @internal
+   */
   private __throwIfErrors(
     errors: Record<string, GuardianError>,
     input: unknown,
@@ -1361,6 +1397,17 @@ export class ObjectGuardian<
     throw mainError;
   }
 
+  /**
+   * The synchronous object pipeline in call order: type check, strict
+   * gate, declared fields, passthrough / catchall keys, then throw the
+   * aggregated envelope. Refinements run after this, on the composed
+   * chain.
+   *
+   * @throws {GuardianError} When the input is not a plain object, when
+   *   strict mode sees an unknown key, or when any field failed.
+   *
+   * @internal
+   */
   private __validateObjectWithoutRefinements(
     input: unknown,
   ): TInput | (TInput & Record<string, unknown>) {

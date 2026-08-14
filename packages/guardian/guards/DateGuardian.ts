@@ -52,10 +52,12 @@ type DurationUnit = 'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days';
  * @see {@link Guardian.date}
  */
 export class DateGuardian extends BaseGuardian<Date> {
-  // `_type = 'string'` because the JSON Schema / OpenAPI emit
-  // represents dates as `{ type: 'string', format: 'date-time' }`.
-  // Markdown emit appends the `format` so the output reads
-  // `**Type:** string (date-time)`, which is reasonably clear.
+  /**
+   * Emitted schema type — `'string'`, not `'date'`, because JSON
+   * Schema / OpenAPI represent dates as
+   * `{ type: 'string', format: 'date-time' }`. Markdown emit appends
+   * the format, so it reads `**Type:** string (date-time)`.
+   */
   protected override readonly _type = 'string';
 
   /**
@@ -664,18 +666,6 @@ export class DateGuardian extends BaseGuardian<Date> {
   //#region Transformation Methods
 
   /**
-   * Formats date to string using the specified pattern.
-   *
-   * @param pattern - Date format pattern (using $datetime format function)
-   * @returns This Guardian (mutated) or new instance if immutable mode
-   *
-   * @example
-   * ```ts
-   * const schema = new DateGuardian().format('yyyy-MM-dd');
-   * schema.parse(new Date('2023-06-15')); // '2023-06-15'
-   * ```
-   */
-  /**
    * Drop the inherited date `format` hint (`date-time` / `date` /
    * `time`) after a transform whose output is no longer a date. The
    * clone's metadata is a fresh copy (BaseGuardian copies on
@@ -690,6 +680,26 @@ export class DateGuardian extends BaseGuardian<Date> {
     return guard;
   }
 
+  /**
+   * Renders the date as a string using `pattern`, crossing the chain
+   * out of date validation. The result's runtime class is a
+   * {@link StringGuardian} (so the emitted schema is a string schema),
+   * but the declared type is widened to `BaseGuardian<string>` — string
+   * validators are not statically chainable after this.
+   *
+   * The inherited `date-time` format hint is cleared from the emitted
+   * schema, since an arbitrary pattern can't be claimed as one.
+   *
+   * @param pattern - `@std/datetime` format pattern, e.g. `yyyy-MM-dd`.
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * Guardian.date().format('yyyy-MM-dd').parse(new Date('2023-06-15'));
+   * // '2023-06-15'
+   * ```
+   */
   format(pattern: string): BaseGuardian<string> {
     // Cross into StringGuardian so the emitted schema reflects the
     // string output — otherwise the clone stays a DateGuardian
@@ -704,7 +714,7 @@ export class DateGuardian extends BaseGuardian<Date> {
   /**
    * Transforms date to ISO string.
    *
-   * @returns This Guardian (mutated) or new instance if immutable mode
+   * @returns A new guardian carrying the transform; the receiver is never mutated.
    */
   toISOString(): BaseGuardian<string> {
     return this.process((date: Date) => date.toISOString(), StringGuardian);
@@ -713,7 +723,7 @@ export class DateGuardian extends BaseGuardian<Date> {
   /**
    * Transforms date to Unix timestamp (milliseconds).
    *
-   * @returns This Guardian (mutated) or new instance if immutable mode
+   * @returns A new guardian carrying the transform; the receiver is never mutated.
    */
   toTimestamp(): BaseGuardian<number> {
     // Cross into NumberGuardian so the emitted schema is `type: number`
@@ -727,7 +737,7 @@ export class DateGuardian extends BaseGuardian<Date> {
   /**
    * Transforms date to Unix timestamp (seconds).
    *
-   * @returns This Guardian (mutated) or new instance if immutable mode
+   * @returns A new guardian carrying the transform; the receiver is never mutated.
    */
   toUnixTimestamp(): BaseGuardian<number> {
     return DateGuardian.__clearDateFormat(
@@ -742,7 +752,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * Extracts specific component from date.
    *
    * @param component - Date component to extract
-   * @returns This Guardian (mutated) or new instance if immutable mode
+   * @returns A new guardian carrying the transform; the receiver is never mutated.
    *
    * @example
    * ```ts

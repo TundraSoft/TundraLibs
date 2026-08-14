@@ -39,6 +39,7 @@ import { StringGuardian } from './StringGuardian.ts';
  * ```
  */
 export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
+  /** Emitted schema type. */
   protected override readonly _type = 'array';
   private readonly __elementGuardian: BaseGuardian<T> | undefined;
   /**

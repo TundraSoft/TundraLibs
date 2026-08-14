@@ -33,17 +33,13 @@ import { StringGuardian } from './StringGuardian.ts';
  * @see {@link Guardian.bigint}
  */
 export class BigIntGuardian extends BaseGuardian<bigint> {
-  // `bigint` is the runtime-accurate type; `toOpenAPI` overrides this
-  // to `integer` + `int64` format for schema emit, but markdown /
-  // introspection sees the real native type.
+  /**
+   * Emitted schema type. `bigint` is the runtime-accurate name;
+   * `toOpenAPI` overrides it to `integer` + `int64` format, but
+   * markdown and introspection see the real native type.
+   */
   protected override readonly _type = 'bigint';
 
-  /**
-   * Creates a new BigIntGuardian instance.
-   *
-   * @param initialTransform - Optional composed transformation from previous guardian
-   * @param metaData - Optional metadata for this guardian
-   */
   /**
    * Creates a new BigIntGuardian instance.
    *

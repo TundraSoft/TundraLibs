@@ -33,6 +33,7 @@ import { BigIntGuardian } from './BigIntGuardian.ts';
  * @see {@link Guardian.string}
  */
 export class StringGuardian extends BaseGuardian<string> {
+  /** Emitted schema type. */
   protected override readonly _type = 'string';
 
   /**
@@ -246,21 +247,6 @@ export class StringGuardian extends BaseGuardian<string> {
   }
 
   /**
-   * Validates string against a regular expression.
-   *
-   * @param pattern - Regular expression pattern to match
-   * @param errorMessage - Optional custom error message
-   * @returns A new StringGuardian with the validation applied (the receiver is never mutated)
-   * @throws {GuardianError} If string does not match the specified pattern
-   *
-   * @example
-   * ```ts
-   * const schema = new StringGuardian().pattern(/^[a-zA-Z]+$/, 'Letters only');
-   * schema.parse('hello123'); // throws GuardianError
-   * schema.parse('hello'); // 'hello'
-   * ```
-   */
-  /**
    * Return a stateless copy of a caller-supplied pattern. A `g` / `y`
    * regex is stateful: `.test()` advances its `lastIndex`, so the same
    * guardian would flip between pass and fail on identical input (a
@@ -277,6 +263,26 @@ export class StringGuardian extends BaseGuardian<string> {
     return new RegExp(pattern.source, pattern.flags.replace(/[gy]/g, ''));
   }
 
+  /**
+   * Validates the string against a regular expression.
+   *
+   * `g` and `y` flags are stripped before matching, so a stateful regex
+   * can't make repeated parses of the same input flip between pass and
+   * fail. The pattern is also recorded on the metadata, surfacing as
+   * `pattern` in emitted schemas.
+   *
+   * @param pattern - Tested with `.test()`; not anchored for you.
+   * @param errorMessage - Replaces the default failure message.
+   * @throws {GuardianError} At parse time, when the string does not
+   *   match.
+   *
+   * @example
+   * ```ts
+   * const Letters = new StringGuardian().pattern(/^[a-z]+$/, 'Letters only');
+   * Letters.parse('hello');    // 'hello'
+   * Letters.parse('hello123'); // throws GuardianError
+   * ```
+   */
   pattern(pattern: RegExp, errorMessage?: string): this {
     // Neutralise stateful `g` / `y` flags so repeated parses are
     // deterministic — see `__statelessPattern`.

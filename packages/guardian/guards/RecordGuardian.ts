@@ -87,6 +87,7 @@ export class RecordGuardian<
   K extends string | number,
   V,
 > extends BaseGuardian<Record<K, V>> {
+  /** Emitted schema type. */
   protected override readonly _type = 'record';
   private readonly __keyValidator: BaseGuardian<K>;
   private readonly __valueValidator: BaseGuardian<V>;

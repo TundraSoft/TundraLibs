@@ -40,6 +40,10 @@ import type {
  * ```
  */
 export class SetGuardian<T> extends BaseGuardian<Set<T>> {
+  /**
+   * Emitted schema type. The emit overrides replace it with
+   * `array` + `uniqueItems`, the closest JSON Schema equivalent.
+   */
   protected override readonly _type = 'set';
   private readonly __elementGuardian: FinishedGuardian<T> | undefined;
   /**
@@ -51,7 +55,13 @@ export class SetGuardian<T> extends BaseGuardian<Set<T>> {
   private __async: boolean = false;
 
   /**
-   * @param elementGuardian - Optional per-element validator.
+   * Accepts a `Set` or an array (the wire format — JSON has no `Set`)
+   * and always yields a fresh `Set`. Deduplication happens **after**
+   * each element is validated, so duplicates are silently collapsed
+   * rather than rejected.
+   *
+   * @param elementGuardian - Optional per-element validator. Omitted,
+   *   elements pass through unchecked.
    * @param metaData        - Optional metadata.
    */
   constructor(

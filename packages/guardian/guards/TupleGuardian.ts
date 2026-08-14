@@ -58,6 +58,10 @@ export class TupleGuardian<
   T extends readonly FinishedGuardian<unknown>[],
   R = never,
 > extends BaseGuardian<TupleResult<T, R>> {
+  /**
+   * Emitted schema type — `'array'`; positional typing is carried by
+   * `prefixItems` / `minItems` / `maxItems` in the emit overrides.
+   */
   protected override readonly _type = 'array';
   private readonly __guardians: readonly [...T];
   /** Variadic tail guardian; `undefined` means a fixed-length tuple. */

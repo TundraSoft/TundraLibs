@@ -482,7 +482,8 @@ export class Guardian {
    *   name: Guardian.string()
    * }).strict();
    *
-   * // Anonymous object - accepts any object structure
+   * // Anonymous object - accepts any object, but strips every key
+   * // unless .passthrough() / .catchall() is chained
    * const anyObject = Guardian.object();
    * ```
    *
@@ -503,6 +504,26 @@ export class Guardian {
     schema: T,
     metaData?: GuardianMetaData,
   ): ObjectGuardian<InferObjectType<T>>;
+  /**
+   * Creates an anonymous object validator: any object passes the type
+   * gate (arrays, `null` and non-objects are rejected), typed
+   * `Record<string, unknown>`.
+   *
+   * **It strips every key.** With no schema to describe them, the
+   * default `strip` mode drops all properties and yields `{}`. Chain
+   * `.passthrough()` to keep them, or `.catchall(guard)` to keep and
+   * validate them.
+   *
+   * @param metaData - Optional metadata for the validator.
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * Guardian.object().parse({ a: 1 });                 // {}
+   * Guardian.object().passthrough().parse({ a: 1 });   // { a: 1 }
+   * ```
+   */
   static object(
     schema?: undefined,
     metaData?: GuardianMetaData,
@@ -549,6 +570,29 @@ export class Guardian {
     valueValidator: BaseGuardian<V>,
     metaData?: GuardianMetaData,
   ): RecordGuardian<string, V>;
+  /**
+   * Creates a record validator with an explicit key guardian — for
+   * pattern-constrained or numeric keys. See the one-argument overload
+   * for the plain `Record<string, V>` case.
+   *
+   * @template K - Key type, taken from the key guardian's output.
+   * @template V - Value type.
+   * @param keyValidator - Runs against every key. Keys always arrive as
+   *   strings, so a numeric key type relies on the guardian's coercion.
+   * @param valueValidator - Runs against every value.
+   * @param metaData - Optional metadata for the validator.
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * const envVars = Guardian.record(
+   *   Guardian.string().pattern(/^[A-Z_]+$/),
+   *   Guardian.string(),
+   * );
+   * envVars.parse({ API_KEY: 'abc' }); // { API_KEY: 'abc' }
+   * ```
+   */
   static record<K extends string | number, V>(
     keyValidator: BaseGuardian<K>,
     valueValidator: BaseGuardian<V>,
@@ -1112,23 +1156,33 @@ export class Guardian {
   }
 }
 
-// Namespace merge — exposes `Guardian.infer<typeof T>` and
-// `Guardian.inferInput<typeof T>` as TypeScript type aliases. The
-// previous runtime stubs were footguns (they always threw); these
-// type-only aliases give the documented usage without the runtime
-// hazard. Lives in the type namespace, so they coexist with the
-// `Guardian.string()` / `Guardian.number()` / etc. value-position
-// statics without conflict.
-//
-// @example
-// ```ts
-// const schema = Guardian.object({ name: Guardian.string() });
-// type User = Guardian.infer<typeof schema>;       // { name: string }
-// type UserInput = Guardian.inferInput<typeof schema>;
-// ```
+/**
+ * Type-only companion to the {@link Guardian} factory class. A
+ * declaration merge, so these aliases live in the type namespace and
+ * coexist with the value-position statics (`Guardian.string()`, …).
+ * Earlier runtime stubs of the same names always threw; these are pure
+ * aliases with no runtime hazard.
+ */
 // deno-lint-ignore no-namespace
 export namespace Guardian {
+  /**
+   * The type a schema's `parse()` **returns** — after coercion,
+   * transforms and refinements. Alias of {@link GuardianInfer}.
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * const Schema = Guardian.object({ name: Guardian.string() });
+   * type User = Guardian.infer<typeof Schema>; // { name: string }
+   * ```
+   */
   export type infer<T extends FinishedGuardian<unknown>> = GuardianInfer<T>;
+  /**
+   * The type a schema **accepts** — the shape before any `.transform()`
+   * rewrites it. Diverges from {@link infer} only when the chain
+   * changes the type. Alias of {@link GuardianInferInput}.
+   */
   export type inferInput<T extends FinishedGuardian<unknown>> =
     GuardianInferInput<T>;
 }

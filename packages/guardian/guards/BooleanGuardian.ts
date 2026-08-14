@@ -32,6 +32,7 @@ import { StringGuardian } from './StringGuardian.ts';
  * @see {@link Guardian.boolean}
  */
 export class BooleanGuardian extends BaseGuardian<boolean> {
+  /** Emitted schema type. */
   protected override readonly _type = 'boolean';
   /**
    * Creates a new BooleanGuardian instance.

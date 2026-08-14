@@ -49,6 +49,11 @@ import { StringGuardian } from './StringGuardian.ts';
  * ```
  */
 export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
+  /**
+   * Emitted schema type. Never reaches output — the emit overrides
+   * below produce either an empty schema (anything goes) or the custom
+   * `schemaEmit` stored by `intersection()` / `instanceof()` / …
+   */
   protected override readonly _type = 'unknown';
 
   /**
@@ -337,12 +342,24 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
     return schema;
   }
 
+  /**
+   * Emits the structural schema recorded by `Guardian.intersection` /
+   * `.instanceof` / `.never` / `.preprocess`, with `.describe()`
+   * metadata layered on top. Falls back to the base emit — an
+   * unconstrained schema — when no override was recorded.
+   */
   override toJSONSchema(): Record<string, unknown> {
     const emit = this._metaData?.schemaEmit?.jsonSchema;
     if (emit) return { ...emit(), ...this.__docMetaSchema() };
     return super.toJSONSchema();
   }
 
+  /**
+   * Renders the markdown recorded by `Guardian.intersection` /
+   * `.instanceof` / … when present; otherwise the base rendering.
+   * Unlike the schema emits, doc metadata is not layered on — the
+   * recorded string is used verbatim.
+   */
   override toMarkdown(): string {
     const emit = this._metaData?.schemaEmit?.markdown;
     if (emit) return emit();

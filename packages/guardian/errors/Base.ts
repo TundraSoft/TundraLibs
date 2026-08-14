@@ -10,11 +10,51 @@
 import { BaseError, BaseErrorJson, variableReplacer } from '@tundralibs/utils';
 import type { GuardianErrorMeta } from '../types/mod.ts';
 
+/**
+ * The error every guardian raises when validation fails. Beyond the
+ * message it carries structured {@link GuardianErrorMeta} context
+ * (`expected`, `got`, `comparison`, `type`, `path`) plus a `cause` map
+ * of nested errors — composite guardians aggregate one child error per
+ * failing field or element, so a whole object's failures arrive in a
+ * single throw.
+ *
+ * {@link toJSON} redacts the raw offending value; `error.message` and
+ * `error.context.got` keep it intact in memory.
+ *
+ * @example
+ * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
+ * const User = Guardian.object({
+ *   address: Guardian.object({ zip: Guardian.string() }),
+ * });
+ *
+ * const [err] = User.safeParse({ address: { zip: null } });
+ * for (const { path, error } of err?.leafErrors() ?? []) {
+ *   console.log(path.join('.'), error.message);
+ *   // 'address.zip  Cannot coerce null to string'
+ * }
+ * ```
+ */
 export class GuardianError extends BaseError<GuardianErrorMeta> {
+  /**
+   * Guardian composes its messages at the throw site, so the template
+   * is a bare passthrough. {@link _makeMessage} fast-paths on exactly
+   * this shape.
+   */
   protected override get _messageTemplate(): string {
     return '${message}';
   }
 
+  /**
+   * Wraps a validation failure. Guardians construct these; callers
+   * normally only receive them.
+   *
+   * @param message - Already-composed failure text. Any `${…}`
+   *   placeholders left in it are resolved against `meta`.
+   * @param meta - Structured context describing the failure. `got`
+   *   holds the raw offending value and is redacted on serialisation.
+   */
   constructor(
     message: string,
     meta: GuardianErrorMeta,
@@ -23,6 +63,15 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     super(message, meta);
   }
 
+  /**
+   * Serialise for logs and error aggregators with the raw offending
+   * value scrubbed out: string values in `context.got`, the message and
+   * the stack are replaced by a `[redacted string, length N]` marker,
+   * and each nested cause is redacted against its own `got`. Scalars
+   * and structural labels survive so type diagnostics stay readable.
+   * The unredacted value remains reachable in memory via
+   * `error.message` / `error.context.got`.
+   */
   public override toJSON<T extends BaseErrorJson = BaseErrorJson>(): T {
     let causeValue: Record<string, string> | undefined = undefined;
 
@@ -168,6 +217,14 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     return value;
   }
 
+  /**
+   * Record `error` under `key` in this error's cause map — how
+   * composite guardians fold per-field failures into one throw.
+   * Re-using a key replaces the previous entry.
+   *
+   * @param key - Field name, or the stringified index for positional
+   *   containers.
+   */
   public addCause(key: string, error: GuardianError): void {
     this.context.cause ??= {};
     this.context.cause[key] = error;
@@ -190,7 +247,8 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
    *   address: Guardian.object({ zipCode: Guardian.string() }),
    * });
    *
-   * const [err] = User.safeParse({ address: { zipCode: 42 } });
+   * // `42` would COERCE to '42' and pass — use a value string rejects.
+   * const [err] = User.safeParse({ address: { zipCode: null } });
    * err?.path;           // [] — top-level aggregate
    * err?.context.cause?.address?.context.cause?.zipCode?.path;
    *                      // ['address', 'zipCode']
@@ -217,6 +275,12 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     return this;
   }
 
+  /**
+   * Recursive worker behind {@link prependPath}; `visited` breaks a
+   * cause graph that loops back on itself.
+   *
+   * @internal
+   */
   private __prependPathWithVisited(
     segment: string | number,
     visited: Set<GuardianError>,
@@ -247,6 +311,12 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     yield* this.__leafErrorsWithVisited(new Set<GuardianError>());
   }
 
+  /**
+   * Recursive worker behind {@link leafErrors}; `visited` breaks
+   * cycles.
+   *
+   * @internal
+   */
   private *__leafErrorsWithVisited(
     visited: Set<GuardianError>,
   ): IterableIterator<
@@ -264,10 +334,24 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     }
   }
 
+  /**
+   * Flatten the cause tree into a `{ 'address.zipCode': message }` map
+   * — dot-joined key path to leaf message. The convenient shape for
+   * form error state; reach for {@link leafErrors} when the structured
+   * path array or the error object itself is needed. A cycle is
+   * reported once, suffixed ` [circular]`.
+   */
   public listCauses(): Record<string, string> {
     return this.__listCausesWithVisited(new Set());
   }
 
+  /**
+   * Recursive worker behind {@link listCauses}. `visited` is
+   * backtracked on the way out so a diamond (the same error reached by
+   * two different paths) still expands under both.
+   *
+   * @internal
+   */
   private __listCausesWithVisited(
     visited: Set<GuardianError>,
   ): Record<string, string> {
@@ -300,10 +384,23 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     return causes;
   }
 
+  /**
+   * Number of **direct** child errors — one per field or element that
+   * failed at this level. Not recursive; count {@link leafErrors} for
+   * the whole tree.
+   */
   public causeSize(): number {
     return this.context.cause ? Object.keys(this.context.cause).length : 0;
   }
 
+  /**
+   * Render a context value for message interpolation: arrays become
+   * `(a, b)`, dates ISO strings, booleans `TRUE` / `FALSE`, bigints get
+   * a trailing `n`. Only called when a template actually references the
+   * placeholder — see {@link _makeMessage}.
+   *
+   * @internal
+   */
   private static __formatValue(value: unknown): string {
     if (Array.isArray(value)) {
       return `(${value.map((v) => GuardianError.__formatValue(v)).join(', ')})`;
@@ -326,6 +423,13 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
     }
   }
 
+  /**
+   * Resolve the final message text. Overridden purely for speed: the
+   * common Guardian shape — a fully-composed message with no remaining
+   * `${…}` placeholders under the trivial template — short-circuits
+   * past two `variableReplacer` passes and the value formatting, which
+   * is what keeps `safeParse` cheap on the failure path.
+   */
   protected override _makeMessage(): string {
     // Fast path: most Guardian error sites use a static message plus
     // structured context (the context is consumed by tooling /

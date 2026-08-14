@@ -128,6 +128,12 @@ const INTERNAL_METADATA_KEYS = new Set([
  * ```
  */
 export abstract class BaseGuardian<T> {
+  /**
+   * The chain as it currently stands — {@link _baseTransform} with
+   * every chained step wrapped on top. `parse()` invokes this;
+   * composite guardians call a child's copy directly to skip the
+   * per-field `parse()` overhead on the hot path.
+   */
   protected _composedTransform: GuardianTransform<unknown, T>;
   /**
    * The transform this guardian was CONSTRUCTED with — the bottom of
@@ -141,7 +147,19 @@ export abstract class BaseGuardian<T> {
    * {@link _assertNoChainedSteps}.
    */
   protected _baseTransform: GuardianTransform<unknown, T>;
+  /**
+   * Backing field for {@link metaData}. Read it directly only where a
+   * deferred `lazy()` async probe must NOT be settled (inside the probe
+   * itself, or on a construction-time hot path); everything else should
+   * go through the getter.
+   */
   protected _metaData: GuardianMetaData | undefined = undefined;
+  /**
+   * Schema type name the doc emitters (`toOpenAPI` / `toJSONSchema` /
+   * `toMarkdown`) put on the wire. It is the **emitted** name, not
+   * necessarily the runtime `typeof` — `DateGuardian` sets `'string'`
+   * because JSON Schema has no date type.
+   */
   protected readonly _type: string = 'unknown';
   /**
    * `true` while this guardian's async verdict is **provisional**: a
@@ -173,6 +191,17 @@ export abstract class BaseGuardian<T> {
     return this._metaData;
   }
 
+  /**
+   * Seeds a new chain. Chain methods go through {@link _cloneWith}
+   * rather than calling this directly.
+   *
+   * @param initialTransform - Bottom of the chain: validates raw input
+   *   and converts it to `T`. Subclass constructors pass their own type
+   *   check (and coercion) here.
+   * @param metaData - Copied rather than retained by reference, so each
+   *   instance owns its bag and constraint setters can't leak into the
+   *   caller's variable.
+   */
   constructor(
     initialTransform: GuardianTransform<unknown, T>,
     metaData?: GuardianMetaData,
@@ -882,29 +911,48 @@ export abstract class BaseGuardian<T> {
   }
 
   /**
-   * Makes this guardian accept `undefined`. With a `defaultValue`,
-   * substitutes the default whenever the input is `undefined`;
-   * without one, passes `undefined` through unchanged.
+   * Makes this guardian accept `undefined` and pass it through
+   * unchanged. A finisher: the chain is sealed afterwards, so any
+   * further chain-extension method throws.
    *
-   * Idempotent: calling `.optional()` twice returns the same
-   * instance. A second call's default (if any) is **not** applied
-   * — the schema is sealed on first call. Friendly to generic
-   * helper code that doesn't know whether the schema is already
+   * Idempotent — a second `.optional()` returns the same instance, so
+   * generic helper code needn't track whether the schema is already
    * optional.
-   *
-   * @param defaultValue - Default value or function returning one.
-   * @returns This guardian narrowed to {@link FinishedGuardian}.
    *
    * @example
    * ```ts
    * import { Guardian } from '@tundralibs/guardian';
    *
-   * Guardian.string().optional().parse(undefined);        // undefined
-   * Guardian.string().optional('x').parse(undefined);     // 'x'
-   * Guardian.string().optional().parse('hi');             // 'hi'
+   * Guardian.string().optional().parse(undefined); // undefined
+   * Guardian.string().optional().parse('hi');      // 'hi'
    * ```
    */
   optional(): FinishedGuardian<T | undefined>;
+  /**
+   * Makes this guardian accept `undefined` and substitute
+   * `defaultValue` for it. The substituted value is itself run through
+   * this guardian's chain, so an invalid default fails at parse time
+   * rather than slipping past validation. Inside an object schema the
+   * default also fires for an **absent** key, not just an explicit
+   * `undefined`.
+   *
+   * A guardian that is already optional is returned unchanged and the
+   * new default is **ignored** — the schema is sealed on the first
+   * `.optional()`.
+   *
+   * @param defaultValue - A value, or a factory invoked once per parse.
+   *   A factory returning a `Promise` cannot be detected at build time,
+   *   so the guardian is not flagged async: {@link parse} rejects when
+   *   it sees the pending Promise and {@link parseAsync} is required.
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * Guardian.string().optional('x').parse(undefined);   // 'x'
+   * Guardian.number().optional(() => 0).parse(undefined); // 0
+   * ```
+   */
   optional<D>(defaultValue: D | (() => D)): FinishedGuardian<T | D>;
   optional<D>(
     _defaultValue?: D | (() => D),
@@ -1155,6 +1203,13 @@ export abstract class BaseGuardian<T> {
     return this.__parseAsyncSlow(input);
   }
 
+  /**
+   * {@link parseAsync}'s awaiting path, taken only when the chain is
+   * flagged async. Split out so the sync fast path avoids the Promise
+   * allocation an `async` wrapper would force.
+   *
+   * @internal
+   */
   private async __parseAsyncSlow(input: unknown): Promise<T> {
     try {
       const result = this._composedTransform(input);
@@ -1176,6 +1231,14 @@ export abstract class BaseGuardian<T> {
     }
   }
 
+  /**
+   * Normalise anything the chain threw into a {@link GuardianError} —
+   * a user `.process()` / `.refine()` callback may throw a plain
+   * `Error`, and callers branch on `instanceof GuardianError`. The
+   * original is passed through untouched when it already is one.
+   *
+   * @internal
+   */
   private __wrapValidationError(error: unknown, input: unknown): Error {
     if (error instanceof GuardianError) return error;
     return new GuardianError('Validation failed', {
