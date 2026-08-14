@@ -22,6 +22,8 @@ import { StringGuardian } from './StringGuardian.ts';
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const schema = new ArrayGuardian(Guardian.string().minLength(3))
  *   .minLength(1)
  *   .maxLength(10);
@@ -37,6 +39,7 @@ import { StringGuardian } from './StringGuardian.ts';
  * ```
  */
 export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
+  /** Emitted schema type. */
   protected override readonly _type = 'array';
   private readonly __elementGuardian: BaseGuardian<T> | undefined;
   /**
@@ -183,6 +186,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const exactLength = Guardian.array().length(3);
    * exactLength.parse([1, 2, 3]); // [1, 2, 3]
    * exactLength.parse([1, 2]); // throws GuardianError
@@ -217,6 +222,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const nonEmpty = Guardian.array().minLength(1);
    * nonEmpty.parse([1, 2, 3]); // [1, 2, 3]
    * nonEmpty.parse([]); // throws GuardianError
@@ -257,6 +264,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const limitedArray = Guardian.array().maxLength(5);
    * limitedArray.parse([1, 2, 3]); // [1, 2, 3]
    * limitedArray.parse([1, 2, 3, 4, 5, 6]); // throws GuardianError
@@ -296,6 +305,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const nonEmpty = Guardian.array().nonEmpty();
    * nonEmpty.parse([1, 2, 3]); // [1, 2, 3]
    * nonEmpty.parse([]); // throws GuardianError
@@ -318,6 +329,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const uniqueArray = Guardian.array().unique();
    * uniqueArray.parse([1, 2, 3]); // [1, 2, 3]
    * uniqueArray.parse([1, 2, 2]); // throws GuardianError
@@ -374,6 +387,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const mustHaveHello = Guardian.array(Guardian.string()).includes('hello');
    * mustHaveHello.parse(['hello', 'world']); // ['hello', 'world']
    * mustHaveHello.parse(['world']); // throws GuardianError
@@ -403,6 +418,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const noHello = Guardian.array(Guardian.string()).excludes('hello');
    * noHello.parse(['world', 'test']); // ['world', 'test']
    * noHello.parse(['hello', 'world']); // throws GuardianError
@@ -439,6 +456,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const doubled = Guardian.array(Guardian.number())
    *   .map(x => x * 2);
    * doubled.parse([1, 2, 3]); // [2, 4, 6]
@@ -462,6 +481,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const evens = Guardian.array(Guardian.number())
    *   .filter(x => x % 2 === 0);
    * evens.parse([1, 2, 3, 4]); // [2, 4]
@@ -487,6 +508,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const firstThree = Guardian.array().take(3);
    * firstThree.parse([1, 2, 3, 4, 5]); // [1, 2, 3]
    * ```
@@ -506,6 +529,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const skipTwo = Guardian.array().skip(2);
    * skipTwo.parse([1, 2, 3, 4, 5]); // [3, 4, 5]
    * ```
@@ -525,6 +550,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const sorted = Guardian.array(Guardian.number()).sort();
    * sorted.parse([3, 1, 4, 1, 5]); // [1, 1, 3, 4, 5]
    * ```
@@ -546,6 +573,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const reversed = Guardian.array(Guardian.string()).reverse();
    * reversed.parse(['a', 'b', 'c']); // ['c', 'b', 'a']
    * ```
@@ -564,6 +593,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const noNullArray = Guardian.array().noNulls();
    * noNullArray.parse([1, 2, 3]); // [1, 2, 3]
    * noNullArray.parse([1, null, 3]); // throws GuardianError
@@ -600,6 +631,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const flattened = Guardian.array().flatten();
    * flattened.parse([1, [2, 3], 4]); // "1,2,3,4"
    *
@@ -636,6 +669,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const compacted = Guardian.array().compact();
    * compacted.parse([1, null, 2, undefined, 3, false, 4, 0, 5, "", 6, NaN]); // [1, 2, 3, 4, 5, 6]
    * ```
@@ -662,6 +697,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const unique = Guardian.array().onlyUnique();
    * unique.parse([1, 2, 2, 3, 1, 4]); // [1, 2, 3, 4]
    *
@@ -697,6 +734,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.array(Guardian.number()).sorted().parse([1, 2, 3]);          // ok
    * Guardian.array(Guardian.number()).sorted({ order: 'desc' }).parse([3, 2, 1]); // ok
    * ```
@@ -738,8 +777,14 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
-   * type User = { id: number; email: string };
-   * const Users = Guardian.array(userSchema).distinctBy((u: User) => u.email);
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * const userSchema = Guardian.object({
+   *   id: Guardian.number(),
+   *   email: Guardian.string(),
+   * });
+   *
+   * const Users = Guardian.array(userSchema).distinctBy((u) => u.email);
    * ```
    */
   distinctBy<K>(
@@ -799,6 +844,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.array(Guardian.number()).chunk(2).parse([1, 2, 3, 4, 5]);
    * // [[1, 2], [3, 4], [5]]
    * ```
@@ -890,6 +937,8 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.array(Guardian.string())
    *   .reduce<string>((acc, s) => acc + s, '');
    * ```

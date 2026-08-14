@@ -32,6 +32,8 @@ type MakeOptional<T> =
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const userSchema = Guardian.object({
  *   name: Guardian.string(),
  *   age: Guardian.number().optional(),
@@ -66,6 +68,8 @@ export type GuardianInfer<T> = T extends BaseGuardian<infer U>
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const schema = Guardian.object({
  *   name: Guardian.string(),
  *   age: Guardian.string()

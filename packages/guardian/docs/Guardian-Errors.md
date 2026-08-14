@@ -47,12 +47,16 @@ The `context.*` fields are populated by Guardian's validators — you don't cons
 Redaction only affects the **serialized** form. The unredacted values stay reachable in-memory for programmatic use:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const [err] = Guardian.string().equals('SECRET').safeParse('user-input');
 
-err.message; // in-memory: full text, unredacted
-err.context.got; // 'user-input' — still available for your own handling
+if (err) {
+  err.message; // in-memory: full text, unredacted
+  err.context.got; // 'user-input' — still available for your own handling
 
-JSON.stringify(err.toJSON()); // the raw 'user-input' value does NOT appear
+  JSON.stringify(err.toJSON()); // the raw 'user-input' value does NOT appear
+}
 ```
 
 ## Causes and paths
@@ -60,9 +64,12 @@ JSON.stringify(err.toJSON()); // the raw 'user-input' value does NOT appear
 When validation fails on a single field, the error is direct:
 
 ```typescript
+import { Guardian, GuardianError } from '@tundralibs/guardian';
+
 try {
   Guardian.string().minLength(3).parse('hi');
 } catch (e) {
+  if (!(e instanceof GuardianError)) throw e;
   e.message;
   // 'String must be at least 3 characters long'
   e.context.got; // 'hi'
@@ -74,6 +81,8 @@ try {
 When validation fails on multiple fields (object schema), each field's error is attached as a `cause`:
 
 ```typescript
+import { Guardian, GuardianError } from '@tundralibs/guardian';
+
 const User = Guardian.object({
   name: Guardian.string(),
   age: Guardian.number().min(0).max(120),
@@ -82,6 +91,7 @@ const User = Guardian.object({
 try {
   User.parse({ name: 123, age: -5 }); // both fields fail
 } catch (e) {
+  if (!(e instanceof GuardianError)) throw e;
   e.message;
   // 'Object validation failed with 2 error(s)'
   e.context.cause;
@@ -94,7 +104,7 @@ try {
 
 Use `.listCauses()` to flatten the tree into a path → message map:
 
-```typescript
+```typescript ignore
 e.listCauses();
 // {
 //   'name':              'Cannot coerce ... to string',
@@ -105,6 +115,8 @@ e.listCauses();
 Nested objects produce dotted paths:
 
 ```typescript
+import { Guardian, GuardianError } from '@tundralibs/guardian';
+
 const Org = Guardian.object({
   user: Guardian.object({
     contact: Guardian.object({
@@ -116,6 +128,7 @@ const Org = Guardian.object({
 try {
   Org.parse({ user: { contact: { email: 'not-an-email' } } });
 } catch (e) {
+  if (!(e instanceof GuardianError)) throw e;
   e.listCauses();
   // {
   //   'user.contact.email': 'Invalid email...',
@@ -126,11 +139,14 @@ try {
 Array element failures include the index in the path:
 
 ```typescript
+import { Guardian, GuardianError } from '@tundralibs/guardian';
+
 const Tags = Guardian.array(Guardian.string().minLength(2));
 
 try {
   Tags.parse(['ok', '', 'good']);
 } catch (e) {
+  if (!(e instanceof GuardianError)) throw e;
   e.message;
   // 'Array element at index 1: String must be at least 2 characters long'
   e.context.arrayIndex; // 1
@@ -142,6 +158,8 @@ try {
 `.leafErrors()` returns an iterator over every leaf in the `cause` tree, paired with its absolute `path` from the root. The convenient surface for form / API code that wants "here's every field that failed and why":
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Schema = Guardian.object({
   user: Guardian.object({
     email: Guardian.string().email(),
@@ -178,7 +196,7 @@ if (err) {
 
 Production code typically uses `.safeParse()` to avoid the cost of throwing on every bad request:
 
-```typescript
+```typescript ignore
 const [err, user] = User.safeParse(req.body);
 if (err) {
   // Either a dotted-key map (legacy form)…
@@ -201,6 +219,11 @@ The tuple form (`[err, value]`) lets the caller branch on `err` cleanly. When `e
 For async chains:
 
 ```typescript
+import type { BaseGuardian } from '@tundralibs/guardian';
+
+declare const User: BaseGuardian<{ name: string }>;
+declare const req: { body: unknown };
+
 const [err, user] = await User.safeParseAsync(req.body);
 ```
 
@@ -209,6 +232,8 @@ const [err, user] = await User.safeParseAsync(req.body);
 `.superRefine([...])` accumulates failures across the array — every check runs even if earlier ones fail. The resulting error's `.context.cause` carries each per-refinement error keyed by its declared path:
 
 ```typescript
+import { Guardian, GuardianError } from '@tundralibs/guardian';
+
 const Schema = Guardian.object({
   password: Guardian.string(),
   confirm: Guardian.string(),
@@ -230,6 +255,7 @@ const Schema = Guardian.object({
 try {
   Schema.parse({ password: 'no', confirm: 'differ', age: 15 });
 } catch (e) {
+  if (!(e instanceof GuardianError)) throw e;
   e.message;
   // '3 refinement error(s): too short; passwords differ; must be 18+'
   e.context.cause;
@@ -243,7 +269,7 @@ Object-level failures (`Guardian.object({...})`) and refinement failures use the
 
 Every constraint method accepts an optional message override:
 
-```typescript
+```typescript ignore
 Guardian.string().minLength(3, 'Name must be at least 3 characters');
 Guardian.number().min(0, 'Age cannot be negative');
 Guardian.array(Guardian.string()).maxLength(10, 'Tag list is too long');

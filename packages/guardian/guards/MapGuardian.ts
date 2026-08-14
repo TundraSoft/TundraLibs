@@ -32,6 +32,8 @@ import type {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Headers = Guardian.map(
  *   Guardian.string(),
  *   Guardian.string(),
@@ -44,6 +46,10 @@ import type {
  * ```
  */
 export class MapGuardian<K, V> extends BaseGuardian<Map<K, V>> {
+  /**
+   * Emitted schema type. The emit overrides replace it with the
+   * `[key, value]` pair-array form JSON Schema can express.
+   */
   protected override readonly _type = 'map';
   private readonly __keyGuardian: FinishedGuardian<K>;
   private readonly __valueGuardian: FinishedGuardian<V>;
@@ -56,6 +62,10 @@ export class MapGuardian<K, V> extends BaseGuardian<Map<K, V>> {
   private __async: boolean = false;
 
   /**
+   * Accepts a `Map`, an entry-pair array, or a plain object, and always
+   * yields a fresh `Map`. Later duplicate keys overwrite earlier ones,
+   * as `Map.set` does.
+   *
    * @param keyGuardian   - Validator for each key.
    * @param valueGuardian - Validator for each value.
    * @param metaData      - Optional metadata.
@@ -239,6 +249,11 @@ export class MapGuardian<K, V> extends BaseGuardian<Map<K, V>> {
     };
   }
 
+  /**
+   * JSON Schema 2020-12 form: an array of two-element
+   * `[key, value]` pairs, matching what `[...map]` serialises to. Uses
+   * `prefixItems` where {@link toOpenAPI} uses the 3.0 `items` array.
+   */
   override toJSONSchema(): Record<string, unknown> {
     return {
       $schema: 'https://json-schema.org/draft/2020-12/schema',

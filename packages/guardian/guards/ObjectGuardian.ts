@@ -90,6 +90,8 @@ export type ObjectRefinement<T> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * // Basic object schema (strip mode by default)
  * const userSchema = Guardian.object({
  *   id: Guardian.number(),
@@ -105,6 +107,8 @@ export type ObjectRefinement<T> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * // Strict mode - only defined properties allowed
  * const strictUser = Guardian.object({
  *   id: Guardian.number(),
@@ -117,6 +121,8 @@ export type ObjectRefinement<T> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * // Shape transformation
  * const transformedUser = Guardian.object({
  *   firstName: Guardian.string(),
@@ -130,10 +136,12 @@ export type ObjectRefinement<T> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * // Complex validation with refine
  * const registerSchema = Guardian.object({
  *   email: Guardian.string().email(),
- *   password: Guardian.string().min(8),
+ *   password: Guardian.string().minLength(8),
  *   confirmPassword: Guardian.string()
  * }).refine(
  *   (data) => data.password === data.confirmPassword,
@@ -145,6 +153,7 @@ export class ObjectGuardian<
   TInput extends Record<string, unknown>,
   TOutput extends Record<string, unknown> = TInput,
 > extends BaseGuardian<TOutput> {
+  /** Emitted schema type. */
   protected override readonly _type = 'object';
   private readonly __schema: ObjectSchema<TInput>;
 
@@ -311,6 +320,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const strictUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string()
@@ -332,6 +343,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const strippedUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string()
@@ -358,6 +371,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const frame = Guardian.object({
    *   v: Guardian.number(),
    *   event: Guardian.string(),
@@ -389,6 +404,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const Tagged = Guardian.object({
    *   v: Guardian.number(),
    *   event: Guardian.string(),
@@ -466,6 +483,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const requiredFieldsUser = Guardian.object({
    *   id: Guardian.number().optional(),
    *   name: Guardian.string().optional(),
@@ -503,6 +522,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const safeUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string(),
@@ -540,6 +561,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const baseUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string()
@@ -583,6 +606,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const fullUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string(),
@@ -629,6 +654,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const fullUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string(),
@@ -671,6 +698,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const user = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string(),
@@ -714,6 +743,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const user = Guardian.object({
    *   id: Guardian.number().optional(),
    *   name: Guardian.string().optional(),
@@ -765,6 +796,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const baseUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string()
@@ -819,6 +852,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const BaseUser  = Guardian.object({ id: Guardian.string(), name: Guardian.string() });
    * const Audited   = Guardian.object({ createdAt: Guardian.date(), updatedAt: Guardian.date() });
    * const AuditedUser = BaseUser.merge(Audited);
@@ -877,6 +912,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const User = Guardian.object({ id: Guardian.string(), email: Guardian.string() });
    * const SortBy = User.keyOf();
    * SortBy.parse('email');  // ok
@@ -969,6 +1006,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const userTransform = Guardian.object({
    *   firstName: Guardian.string(),
    *   lastName: Guardian.string(),
@@ -1029,6 +1068,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const complexSchema = Guardian.object({
    *   email: Guardian.string().email(),
    *   password: Guardian.string(),
@@ -1113,6 +1154,16 @@ export class ObjectGuardian<
     return input as Record<string, unknown>;
   }
 
+  /**
+   * Strict-mode gate: reject the input outright when it carries keys
+   * the schema doesn't describe. A no-op in every other mode, and it
+   * runs before per-field validation, so an unknown key wins over a
+   * field-level failure.
+   *
+   * @throws {GuardianError} When extra keys are present in strict mode.
+   *
+   * @internal
+   */
   private __validateStrictMode(
     inputObj: Record<string, unknown>,
     schemaKeys: Set<string>,
@@ -1182,6 +1233,15 @@ export class ObjectGuardian<
     return 'parse';
   }
 
+  /**
+   * Run every declared field's guardian. Failures are **collected**,
+   * not thrown, so one parse reports every bad field at once.
+   *
+   * @returns `[validatedFields, errorsByKey]`. Each error already has
+   *   its key prepended to the path.
+   *
+   * @internal
+   */
   private __validateSchemaProperties(
     inputObj: Record<string, unknown>,
   ): [Record<string, unknown>, Record<string, GuardianError>] {
@@ -1230,6 +1290,13 @@ export class ObjectGuardian<
     return [result, errors];
   }
 
+  /**
+   * Passthrough mode: copy unknown keys onto the result unvalidated.
+   * A no-op in every other mode. Prototype-pollution keys are dropped
+   * rather than copied — see `PROTO_POLLUTION_KEYS`.
+   *
+   * @internal
+   */
   private __addPassthroughProperties(
     result: Record<string, unknown>,
     inputObj: Record<string, unknown>,
@@ -1295,6 +1362,15 @@ export class ObjectGuardian<
     }
   }
 
+  /**
+   * Wrap the collected per-key failures in one envelope error whose
+   * `cause` map holds them all, and throw it. Returns quietly when
+   * `errors` is empty.
+   *
+   * @throws {GuardianError} When `errors` is non-empty.
+   *
+   * @internal
+   */
   private __throwIfErrors(
     errors: Record<string, GuardianError>,
     input: unknown,
@@ -1321,6 +1397,17 @@ export class ObjectGuardian<
     throw mainError;
   }
 
+  /**
+   * The synchronous object pipeline in call order: type check, strict
+   * gate, declared fields, passthrough / catchall keys, then throw the
+   * aggregated envelope. Refinements run after this, on the composed
+   * chain.
+   *
+   * @throws {GuardianError} When the input is not a plain object, when
+   *   strict mode sees an unknown key, or when any field failed.
+   *
+   * @internal
+   */
   private __validateObjectWithoutRefinements(
     input: unknown,
   ): TInput | (TInput & Record<string, unknown>) {

@@ -19,6 +19,7 @@ import {
   thenableResultError,
 } from './helpers/mod.ts';
 import type {
+  Brand,
   FinishedGuardian,
   GuardianMetaData,
   GuardianSafeParseResult,
@@ -85,33 +86,6 @@ const INTERNAL_METADATA_KEYS = new Set([
 ]);
 
 /**
- * Nominal brand. Attaches a phantom tag `B` to a base type `T` so the
- * compiler treats two structurally-identical types as distinct.
- *
- * Used by {@link BaseGuardian.brand} to produce types like
- * `Brand<string, 'UserId'>` — assignment-incompatible with a raw
- * `string` or with `Brand<string, 'OrderId'>` even though all three
- * are `string` at runtime.
- *
- * `__brand` is a unique-symbol-keyed property, so brand metadata
- * never collides with a real field on the underlying value and never
- * shows up at runtime.
- *
- * @example
- * ```ts
- * type UserId  = Brand<string, 'UserId'>;
- * type OrderId = Brand<string, 'OrderId'>;
- *
- * const a: UserId  = 'u_1' as UserId;
- * const b: OrderId = a; // ❌ compile error
- * ```
- */
-declare const __guardianBrand: unique symbol;
-export type Brand<T, B extends string | symbol> = T & {
-  readonly [__guardianBrand]: B;
-};
-
-/**
  * Abstract parent of every guardian. Holds the composed transform
  * chain (`_composedTransform`) and the metadata bag (`_metaData`)
  * used by the doc emitters. Subclasses extend it with type-specific
@@ -142,14 +116,24 @@ export type Brand<T, B extends string | symbol> = T & {
  *
  * @example
  * ```ts
+ * import { Guardian, StringGuardian } from '@tundralibs/guardian';
+ *
+ * // The constructor argument keeps the result a StringGuardian, so
+ * // `.minLength()` is still chainable after the transform.
  * const Trimmed = Guardian.string()
- *   .process((s) => s.trim())
+ *   .process((s) => s.trim(), StringGuardian)
  *   .minLength(1);
  *
  * Trimmed.parse('  hi  '); // 'hi'
  * ```
  */
 export abstract class BaseGuardian<T> {
+  /**
+   * The chain as it currently stands — {@link _baseTransform} with
+   * every chained step wrapped on top. `parse()` invokes this;
+   * composite guardians call a child's copy directly to skip the
+   * per-field `parse()` overhead on the hot path.
+   */
   protected _composedTransform: GuardianTransform<unknown, T>;
   /**
    * The transform this guardian was CONSTRUCTED with — the bottom of
@@ -163,7 +147,19 @@ export abstract class BaseGuardian<T> {
    * {@link _assertNoChainedSteps}.
    */
   protected _baseTransform: GuardianTransform<unknown, T>;
+  /**
+   * Backing field for {@link metaData}. Read it directly only where a
+   * deferred `lazy()` async probe must NOT be settled (inside the probe
+   * itself, or on a construction-time hot path); everything else should
+   * go through the getter.
+   */
   protected _metaData: GuardianMetaData | undefined = undefined;
+  /**
+   * Schema type name the doc emitters (`toOpenAPI` / `toJSONSchema` /
+   * `toMarkdown`) put on the wire. It is the **emitted** name, not
+   * necessarily the runtime `typeof` — `DateGuardian` sets `'string'`
+   * because JSON Schema has no date type.
+   */
   protected readonly _type: string = 'unknown';
   /**
    * `true` while this guardian's async verdict is **provisional**: a
@@ -195,6 +191,17 @@ export abstract class BaseGuardian<T> {
     return this._metaData;
   }
 
+  /**
+   * Seeds a new chain. Chain methods go through {@link _cloneWith}
+   * rather than calling this directly.
+   *
+   * @param initialTransform - Bottom of the chain: validates raw input
+   *   and converts it to `T`. Subclass constructors pass their own type
+   *   check (and coercion) here.
+   * @param metaData - Copied rather than retained by reference, so each
+   *   instance owns its bag and constraint setters can't leak into the
+   *   caller's variable.
+   */
   constructor(
     initialTransform: GuardianTransform<unknown, T>,
     metaData?: GuardianMetaData,
@@ -374,27 +381,75 @@ export abstract class BaseGuardian<T> {
    * functions that hand-roll a `Promise` return aren't detected
    * (use an `async` keyword if you need detection).
    *
+   * **This overload omits the constructor.** At runtime the new
+   * instance is built from `this.constructor`, so the runtime class is
+   * preserved; statically the result widens to
+   * {@link BaseGuardian}`<U>` and the subclass surface
+   * (`.minLength()`, `.integer()`, …) is no longer reachable. To keep
+   * chaining subclass validators, pass that subclass as the
+   * `constructor` argument — see the second overload.
+   *
    * @template U - Output type after this step.
-   * @template V - Resulting guardian class.
    * @param fn - Receives the current chain output; returns the next.
-   * @param constructor - Optional. Pass a guardian constructor (e.g.
-   *   `NumberGuardian`) to change the runtime class of the result —
-   *   useful when transforming string → number or similar. When
-   *   omitted, the new instance is constructed from `this.constructor`
-   *   so the runtime class is preserved.
-   * @returns A fresh guardian carrying the extended chain. The
-   *   receiving instance is never mutated.
+   * @returns A fresh guardian carrying the extended chain, typed as
+   *   {@link BaseGuardian}`<U>`. The receiving instance is never
+   *   mutated.
    * @throws {GuardianError} If called after `.optional()` / `.nullable()`.
    *
    * @example
    * ```ts
-   * // Stay in StringGuardian
-   * Guardian.string().process((s) => s.trim());
+   * import { Guardian } from '@tundralibs/guardian';
    *
-   * // Cross into NumberGuardian
-   * Guardian.string().process((s) => parseInt(s, 10), NumberGuardian);
+   * // Runtime class stays StringGuardian; static type is
+   * // BaseGuardian<string>.
+   * Guardian.string().process((s) => s.trim());
    * ```
    */
+  process<U>(fn: GuardianTransform<T, U>): BaseGuardian<U>;
+  /**
+   * Append a transform step and pin the result's guardian class.
+   *
+   * Passing `constructor` does two things at once: it selects the
+   * runtime class the fresh instance is built from, AND it keeps the
+   * result statically typed as that class — so subclass validators
+   * stay chainable after the transform. Pass a DIFFERENT class to
+   * cross types (string → number via `NumberGuardian`), or the SAME
+   * class to stay put (`StringGuardian`) and go on calling
+   * `.minLength()` / `.pattern()` / … afterwards.
+   *
+   * @template U - Output type after this step.
+   * @template V - Resulting guardian class, inferred from `constructor`.
+   * @param fn - Receives the current chain output; returns the next.
+   * @param constructor - Guardian class the result is constructed from
+   *   and typed as.
+   * @returns A fresh `V` carrying the extended chain. The receiving
+   *   instance is never mutated.
+   * @throws {GuardianError} If called after `.optional()` / `.nullable()`.
+   *
+   * @example
+   * ```ts
+   * import {
+   *   Guardian,
+   *   NumberGuardian,
+   *   StringGuardian,
+   * } from '@tundralibs/guardian';
+   *
+   * // Stay in StringGuardian — `.minLength()` is still available.
+   * Guardian.string().process((s) => s.trim(), StringGuardian).minLength(1);
+   *
+   * // Cross into NumberGuardian — `.integer()` is now available.
+   * Guardian.string()
+   *   .process((s) => parseInt(s, 10), NumberGuardian)
+   *   .integer();
+   * ```
+   */
+  process<U, V extends BaseGuardian<U>>(
+    fn: GuardianTransform<T, U>,
+    constructor: new (
+      initialTransform?: GuardianTransform<unknown, U>,
+      metaData?: GuardianMetaData,
+    ) => V,
+  ): V;
   process<U, V extends BaseGuardian<U> = BaseGuardian<U>>(
     fn: GuardianTransform<T, U>,
     constructor?: new (
@@ -544,6 +599,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().test(
    *   (s) => s.length >= 5,
    *   'must be at least 5 characters',
@@ -606,6 +663,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().equals('admin', 'Only admin allowed');
    * ```
    */
@@ -621,6 +680,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().notEquals('forbidden');
    * ```
    */
@@ -638,6 +699,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().isIn(['draft', 'published', 'archived']);
    * ```
    */
@@ -653,6 +716,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().isNotIn(['admin', 'root', 'system']);
    * ```
    */
@@ -688,6 +753,10 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * declare function emailExists(email: string): Promise<boolean>;
+   *
    * // Cross-DB uniqueness check on a string
    * const UniqueEmail = Guardian.string()
    *   .email()
@@ -800,6 +869,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const nullableString = Guardian.string().nullable();
    * nullableString.parse('hello'); // 'hello'
    * nullableString.parse(null);    // null
@@ -840,27 +911,48 @@ export abstract class BaseGuardian<T> {
   }
 
   /**
-   * Makes this guardian accept `undefined`. With a `defaultValue`,
-   * substitutes the default whenever the input is `undefined`;
-   * without one, passes `undefined` through unchanged.
+   * Makes this guardian accept `undefined` and pass it through
+   * unchanged. A finisher: the chain is sealed afterwards, so any
+   * further chain-extension method throws.
    *
-   * Idempotent: calling `.optional()` twice returns the same
-   * instance. A second call's default (if any) is **not** applied
-   * — the schema is sealed on first call. Friendly to generic
-   * helper code that doesn't know whether the schema is already
+   * Idempotent — a second `.optional()` returns the same instance, so
+   * generic helper code needn't track whether the schema is already
    * optional.
-   *
-   * @param defaultValue - Default value or function returning one.
-   * @returns This guardian narrowed to {@link FinishedGuardian}.
    *
    * @example
    * ```ts
-   * Guardian.string().optional().parse(undefined);        // undefined
-   * Guardian.string().optional('x').parse(undefined);     // 'x'
-   * Guardian.string().optional().parse('hi');             // 'hi'
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * Guardian.string().optional().parse(undefined); // undefined
+   * Guardian.string().optional().parse('hi');      // 'hi'
    * ```
    */
   optional(): FinishedGuardian<T | undefined>;
+  /**
+   * Makes this guardian accept `undefined` and substitute
+   * `defaultValue` for it. The substituted value is itself run through
+   * this guardian's chain, so an invalid default fails at parse time
+   * rather than slipping past validation. Inside an object schema the
+   * default also fires for an **absent** key, not just an explicit
+   * `undefined`.
+   *
+   * A guardian that is already optional is returned unchanged and the
+   * new default is **ignored** — the schema is sealed on the first
+   * `.optional()`.
+   *
+   * @param defaultValue - A value, or a factory invoked once per parse.
+   *   A factory returning a `Promise` cannot be detected at build time,
+   *   so the guardian is not flagged async: {@link parse} rejects when
+   *   it sees the pending Promise and {@link parseAsync} is required.
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * Guardian.string().optional('x').parse(undefined);   // 'x'
+   * Guardian.number().optional(() => 0).parse(undefined); // 0
+   * ```
+   */
   optional<D>(defaultValue: D | (() => D)): FinishedGuardian<T | D>;
   optional<D>(
     _defaultValue?: D | (() => D),
@@ -958,6 +1050,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().minLength(3).parse('hello'); // 'hello'
    * ```
    */
@@ -1069,6 +1163,11 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import type { BaseGuardian } from '@tundralibs/guardian';
+   *
+   * declare const Schema: BaseGuardian<string>;
+   * declare const input: unknown;
+   *
    * const result = await Schema.parseAsync(input);
    * ```
    */
@@ -1104,6 +1203,13 @@ export abstract class BaseGuardian<T> {
     return this.__parseAsyncSlow(input);
   }
 
+  /**
+   * {@link parseAsync}'s awaiting path, taken only when the chain is
+   * flagged async. Split out so the sync fast path avoids the Promise
+   * allocation an `async` wrapper would force.
+   *
+   * @internal
+   */
   private async __parseAsyncSlow(input: unknown): Promise<T> {
     try {
       const result = this._composedTransform(input);
@@ -1125,6 +1231,14 @@ export abstract class BaseGuardian<T> {
     }
   }
 
+  /**
+   * Normalise anything the chain threw into a {@link GuardianError} —
+   * a user `.process()` / `.refine()` callback may throw a plain
+   * `Error`, and callers branch on `instanceof GuardianError`. The
+   * original is passed through untouched when it already is one.
+   *
+   * @internal
+   */
   private __wrapValidationError(error: unknown, input: unknown): Error {
     if (error instanceof GuardianError) return error;
     return new GuardianError('Validation failed', {
@@ -1144,7 +1258,7 @@ export abstract class BaseGuardian<T> {
    * { … data … }` without destructuring a result object.
    *
    * @example
-   * ```ts
+   * ```ts ignore
    * const [err, user] = User.safeParse(req.body);
    * if (err) return badRequest(err);
    * // `user` is User here
@@ -1262,6 +1376,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const schema = Guardian.string()
    *   .minLength(3)
    *   .describe({
@@ -1302,15 +1418,18 @@ export abstract class BaseGuardian<T> {
    * Attach a **nominal brand** to the guardian's output type. Pure
    * compile-time machinery — the runtime value is unchanged, and the
    * validator chain is unmodified. The compiler sees the parsed value
-   * as `T & { readonly __brand: B }`, so two structurally-identical
-   * brands (`Brand<string, 'UserId'>` vs `Brand<string, 'OrderId'>`)
-   * become assignment-incompatible.
+   * as {@link Brand}`<T, B>`, so two structurally-identical brands
+   * (`Brand<string, 'UserId'>` vs `Brand<string, 'OrderId'>`) become
+   * assignment-incompatible.
    *
    * @template B - The brand tag — usually a string literal naming the
    *   semantic type (`'UserId'`, `'Email'`, `'SerialisedDate'`, etc.).
+   * @returns The same guardian, retyped to emit {@link Brand}`<T, B>`.
    *
    * @example
-   * ```ts
+   * ```ts ignore
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const UserId  = Guardian.string().uuid().brand<'UserId'>();
    * const OrderId = Guardian.string().uuid().brand<'OrderId'>();
    *
@@ -1341,6 +1460,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().minLength(3).toOpenAPI();
    * // { type: 'string', minLength: 3 }
    * ```
@@ -1391,6 +1512,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().describe({ title: 'Username', examples: ['ada'] }).toMarkdown();
    * ```
    */
@@ -1463,6 +1586,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```typescript
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const userSchema = Guardian.object({
    *   id: Guardian.number().integer().positive(),
    *   name: Guardian.string().minLength(1),

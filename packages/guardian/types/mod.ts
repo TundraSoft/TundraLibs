@@ -1,4 +1,5 @@
 // Export from individual type files
+export type { Brand } from './Brand.ts';
 export type { FinishedGuardian } from './FinishedGuardian.ts';
 export type { GuardianErrorMeta } from './GuardianErrorMeta.ts';
 export type { GuardianInfer, GuardianInferInput } from './Infer.ts';

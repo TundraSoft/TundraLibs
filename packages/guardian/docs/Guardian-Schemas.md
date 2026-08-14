@@ -23,6 +23,8 @@ Composition primitives: building structured types from the [validators](Guardian
 ## `Guardian.object`
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const User = Guardian.object({
   id: Guardian.number().integer().positive(),
   name: Guardian.string().minLength(1),
@@ -38,6 +40,10 @@ User.parse({ id: 1, name: 'Ada' });
 Properties not declared in the schema are silently dropped:
 
 ```typescript
+import type { BaseGuardian } from '@tundralibs/guardian';
+
+declare const User: BaseGuardian<{ id: number; name: string }>; // from above
+
 User.parse({ id: 1, name: 'Ada', secret: 'leaked' });
 // → { id: 1, name: 'Ada' }   ← `secret` is dropped
 ```
@@ -52,6 +58,8 @@ This is safer than the typical "passthrough" default — extra keys from the cli
 | `.catchall(g)`       | run guardian `g` against every **unknown** key's value | partially-typed bags where extras must still pass a shared validator       |
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Strict = Guardian.object({ id: Guardian.number() }).strict();
 Strict.parse({ id: 1, extra: 'x' }); // throws
 
@@ -71,6 +79,8 @@ Tagged.parse({ id: 1, count: 5 });
 **Set the mode before chaining cross-field validation.** A mode change rebuilds the object guardian from its schema, which cannot carry over `.refine()` / `.superRefine()` / `.transform()` / `.process()` steps added earlier in the chain. Rather than silently drop them, the mode setters **throw** when a step is already present — so put the mode first. (The same rule applies to the [schema-manipulation methods](#schema-manipulation) and to tuple `.rest()` / `.labels()`, which rebuild from their parts for the same reason.)
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 // ✓ mode first, then refine
 Guardian.object({ a: Guardian.string(), b: Guardian.string() })
   .strict()
@@ -87,6 +97,8 @@ Guardian.object({ a: Guardian.string() })
 A property's guardian carries the optional/nullable semantics:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Schema = Guardian.object({
   name: Guardian.string(), // required
   email: Guardian.string().email().optional(), // T | undefined (omittable from input)
@@ -97,6 +109,14 @@ const Schema = Guardian.object({
 The inferred type respects this:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+const Schema = Guardian.object({
+  name: Guardian.string(),
+  email: Guardian.string().email().optional(),
+  bio: Guardian.string().nullable(),
+});
+
 type S = Guardian.infer<typeof Schema>;
 // { name: string; email?: string; bio: string | null }
 ```
@@ -119,6 +139,8 @@ type S = Guardian.infer<typeof Schema>;
 | `.shape` (getter)          | read-only access to the underlying `{ [key]: guardian }` map                              |
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Base = Guardian.object({
   id: Guardian.number(),
   name: Guardian.string(),
@@ -134,6 +156,8 @@ const WithRole = Base.extend({ role: Guardian.string() });
 **Derive before you chain.** Every method in this table rebuilds the guardian from its schema, exactly like the mode setters above, and for the same reason cannot carry `.refine()` / `.superRefine()` / `.transform()` / `.process()` steps across. They therefore **throw** when a step is already present rather than silently dropping it:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 // ✗ refine first, then derive → throws GuardianError at build time
 Guardian.object({ password: Guardian.string(), confirm: Guardian.string() })
   .refine((d) => d.password === d.confirm, 'passwords must match')
@@ -155,6 +179,8 @@ Guardian.object({ password: Guardian.string(), confirm: Guardian.string() })
 **Note on `forbiddenKeys` + strip mode:** under the default `strip` mode, unknown keys are dropped _before_ `forbiddenKeys` runs as a refinement — making the check a no-op. Combine with `.passthrough()` (or rely on `.strict()`) to make `forbiddenKeys` meaningful.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 // Works as expected:
 Guardian.object({ id: Guardian.number() })
   .passthrough()
@@ -168,6 +194,8 @@ Guardian.object({ id: Guardian.number() })
 ## `Guardian.array`
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Tags = Guardian.array(Guardian.string()).minLength(1).maxLength(10);
 Tags.parse(['guardian', 'validation']); // OK
 ```
@@ -190,6 +218,8 @@ Tags.parse(['guardian', 'validation']); // OK
 ### Without an element validator
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Anything = Guardian.array();
 Anything.parse([1, 'mixed', true]); // accepts heterogeneous arrays
 ```
@@ -199,6 +229,8 @@ Anything.parse([1, 'mixed', true]); // accepts heterogeneous arrays
 Fixed-length, position-typed array. Each position has its own validator and contributes its own type to the output tuple.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Range = Guardian.tuple([
   Guardian.number().integer().min(0),
   Guardian.number().integer().min(0),
@@ -211,6 +243,8 @@ const r = Range.parse([10, 20]);
 Multiple-element tuples preserve every position's type:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Triple = Guardian.tuple([
   Guardian.string(),
   Guardian.number(),
@@ -224,6 +258,10 @@ const [s, n, b] = Triple.parse(['x', 1, true]);
 Length is exact:
 
 ```typescript
+import type { BaseGuardian } from '@tundralibs/guardian';
+
+declare const Range: BaseGuardian<[number, number]>; // from above
+
 Range.parse([10, 20, 30]); // throws — too long
 Range.parse([10]); // throws — too short
 ```
@@ -231,6 +269,10 @@ Range.parse([10]); // throws — too short
 Errors carry the failing index:
 
 ```typescript
+import type { BaseGuardian } from '@tundralibs/guardian';
+
+declare const Triple: BaseGuardian<[string, number, boolean]>; // from above
+
 try {
   Triple.parse(['x', 'not-a-number', true]);
 } catch (e) {
@@ -243,6 +285,8 @@ try {
 Drop the fixed-length requirement and accept additional elements typed by `g`:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const MoveCommand = Guardian.tuple([
   Guardian.literal('move'),
   Guardian.number().integer(),
@@ -260,6 +304,8 @@ The fixed prefix still must be present; tail elements may number zero or more.
 Attach human-readable names to tuple positions so errors say `'y' (index 1)` instead of just `index 1`:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Coord = Guardian.tuple([
   Guardian.number(),
   Guardian.number().positive(),
@@ -279,12 +325,16 @@ Label count must match the fixed-prefix length; constructor throws otherwise.
 Object with arbitrary keys, all values of one type.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 // 1-arg form: Record<string, V>
 const Metrics = Guardian.record(Guardian.number());
 Metrics.parse({ uptime: 60, errors: 0 });
 ```
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 // 2-arg form: pattern-validated keys
 const EnvVars = Guardian.record(
   Guardian.string().pattern(/^[A-Z_]+$/),
@@ -305,6 +355,7 @@ EnvVars.parse({ API_KEY: 'abc', DB_HOST: 'localhost' });
 `Set<T>` validator. JSON has no `Set` literal, so arrays are accepted at the boundary and deduplicated naturally by the resulting `Set`.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
 const Tags = Guardian.set(Guardian.string().minLength(1));
 
 Tags.parse(['a', 'b', 'a']); // Set { 'a', 'b' }
@@ -315,6 +366,7 @@ Tags.parse('not-iterable'); // throws
 The element guardian is optional. Without one, inputs flow through untouched into a `Set<unknown>`:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
 Guardian.set().parse([1, 'two', true, null]);
 // → Set { 1, 'two', true, null }
 ```
@@ -328,6 +380,7 @@ Schema emit: `type: 'array'` with `uniqueItems: true` — the closest JSON Schem
 Three input shapes are accepted at the boundary:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
 const Headers = Guardian.map(Guardian.string(), Guardian.string());
 
 Headers.parse(new Map([['x-trace', 'abc']])); // native Map
@@ -338,6 +391,7 @@ Headers.parse({ 'x-trace': 'abc' }); // plain object (string keys only)
 For non-string keys, pass an array of pairs:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
 const Lookup = Guardian.map(Guardian.number(), Guardian.string());
 Lookup.parse([[1, 'one'], [2, 'two']]); // Map<number, string>
 ```
@@ -349,6 +403,7 @@ Schema emit: an array of fixed-length `[K, V]` tuples — the only faithful JSON
 Union of mutually-exclusive shapes. Tries each member in order; returns the first that validates.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
 const IdOrName = Guardian.oneOf([
   Guardian.number().integer().positive(),
   Guardian.string().minLength(1),
@@ -364,6 +419,7 @@ The error message is **mandatory** — Guardian forces you to name what the unio
 `null` / `undefined` are passed through to the members like any other input, so a nullable / optional member matches them and the mandatory message is what surfaces when none do:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
 Guardian.oneOf([Guardian.string().nullable()], 'string or null').parse(null); // null
 Guardian.oneOf([Guardian.string(), Guardian.number()], 'string or number')
   .parse(null);
@@ -373,6 +429,7 @@ Guardian.oneOf([Guardian.string(), Guardian.number()], 'string or number')
 **Ordering matters under coerce-by-default.** Put more specific types first, otherwise a more-permissive earlier member will absorb the input:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
 // Wrong: string comes first; '42' coerces nothing, 42 coerces to '42' and matches string.
 Guardian.oneOf([Guardian.string(), Guardian.number()], 'msg').parse(42);
 // → '42'   ← surprising; the string branch ate it
@@ -389,6 +446,7 @@ For tagged-shape unions, prefer [`discriminatedUnion`](#guardiandiscriminateduni
 Tagged union where one field selects the variant. Build a lookup map at construction; `parse()` reads the discriminator and dispatches to the matching branch.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
 const Shape = Guardian.discriminatedUnion('kind', [
   Guardian.object({
     kind: Guardian.literal('circle'),
@@ -415,8 +473,15 @@ if (s.kind === 'circle') s.radius; // type-narrowed
 A single branch can match several discriminator values — useful for protocol-version aliases:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const FrameV1 = Guardian.object({
   v: Guardian.enum(['v1', 'v1.0'] as const), // either value routes here
+  data: Guardian.object({}),
+});
+
+const FrameV2 = Guardian.object({
+  v: Guardian.enum(['v2'] as const),
   data: Guardian.object({}),
 });
 
@@ -429,6 +494,10 @@ Two branches sharing the same discriminator value is a **construction-time error
 ### Errors
 
 ```typescript
+import type { BaseGuardian } from '@tundralibs/guardian';
+
+declare const Shape: BaseGuardian<{ kind: string }>; // from above
+
 Shape.parse({ kind: 'octagon', sides: 8 });
 // throws: "Unknown kind: 'octagon' (expected one of: circle, square, triangle)"
 ```
@@ -449,6 +518,8 @@ Useful for UI form generation (render a "kind" dropdown from `allowedValues`, th
 `A & B` — the input must satisfy **both** schemas. For object intersections, results are merged via spread with the right side winning on conflicts (matches `extend()` / `merge()` semantics).
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Identified = Guardian.object({ id: Guardian.string() });
 const Named = Guardian.object({ name: Guardian.string() });
 const Person = Guardian.intersection(Identified, Named);
@@ -466,9 +537,11 @@ For non-object intersections (rare), `b`'s output replaces `a`'s — use `.refin
 Defer resolution of an inner guardian until parse time. Required for recursive types — the thunk closes over the as-yet-unbound name and reads it on the first parse:
 
 ```typescript
+import { BaseGuardian, Guardian } from '@tundralibs/guardian';
+
 type Tree = { value: number; children: Tree[] };
 
-const TreeSchema: Guardian.BaseGuardian<Tree> = Guardian.object({
+const TreeSchema: BaseGuardian<Tree> = Guardian.object({
   value: Guardian.number(),
   children: Guardian.array(Guardian.lazy(() => TreeSchema)),
 });
@@ -491,6 +564,7 @@ Schema emit uses cycle detection: a `LazyGuardian` that emits itself emits `{ $r
 Apply an input transform **before** any guardian runs. Useful for boundary normalisation where you want the schema declaration to remain a clean shape:
 
 ```typescript
+import { BaseGuardian, Guardian } from '@tundralibs/guardian';
 const Trimmed = Guardian.preprocess(
   (v) => typeof v === 'string' ? v.trim() : v,
   Guardian.string().minLength(1),
@@ -515,6 +589,7 @@ Schema emit delegates to the inner schema (preprocess is a runtime concern; the 
 Validate that the input is an instance of a class. Returns the instance unchanged.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
 const Url = Guardian.instanceof(URL);
 const FormBody = Guardian.instanceof(FormData);
 const ErrLike = Guardian.instanceof(Error);
@@ -532,6 +607,17 @@ Schema emit: `{ type: 'object' }` with a `className` annotation — `instanceof`
 Always throws. The runtime mirror of TypeScript's `never` type — useful as an exhaustiveness guard in discriminated-union switch statements and as a placeholder in conditional schema construction:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+const EventUnion = Guardian.discriminatedUnion('type', [
+  Guardian.object({ type: Guardian.literal('created') }),
+  Guardian.object({ type: Guardian.literal('updated') }),
+  Guardian.object({ type: Guardian.literal('deleted') }),
+]);
+
+declare function onCreated(e: unknown): string;
+declare function onUpdated(e: unknown): string;
+declare function onDeleted(e: unknown): string;
 function handle(event: Guardian.infer<typeof EventUnion>): string {
   switch (event.type) {
     case 'created':
@@ -551,6 +637,8 @@ Calling `.parse()` always throws a `GuardianError` with `comparison: 'never'`.
 ## Type inference
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Schema = Guardian.object({
   id: Guardian.number(),
   tags: Guardian.array(Guardian.string()),
@@ -563,6 +651,10 @@ type T = Guardian.infer<typeof Schema>;
 `Guardian.infer<T>` and `Guardian.inferInput<T>` work in TypeScript **type position**. They're namespace-merged type aliases; there's no runtime overhead.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+declare const Schema: ReturnType<typeof Guardian.string>; // from above
+
 // Same effect, different spelling — both work:
 type A = Guardian.infer<typeof Schema>;
 import { type GuardianInfer } from '@tundralibs/guardian';
@@ -572,6 +664,8 @@ type B = GuardianInfer<typeof Schema>;
 `inferInput` produces the _input_ type before any `.process()` / `.transform()` reshape:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Schema = Guardian.string().process((s) => s.length);
 type Out = Guardian.infer<typeof Schema>; // number
 type In = Guardian.inferInput<typeof Schema>; // string
@@ -581,7 +675,7 @@ type In = Guardian.inferInput<typeof Schema>; // string
 
 `.brand<B>()` attaches a phantom tag to the output type. The runtime is a no-op — the brand lives entirely in TypeScript's type system — but two structurally-identical brands are assignment-incompatible:
 
-```typescript
+```typescript ignore
 const UserId = Guardian.string().uuid().brand<'UserId'>();
 const OrderId = Guardian.string().uuid().brand<'OrderId'>();
 

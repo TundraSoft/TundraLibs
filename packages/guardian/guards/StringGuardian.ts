@@ -23,6 +23,8 @@ import { BigIntGuardian } from './BigIntGuardian.ts';
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Name = Guardian.string().minLength(1).maxLength(50);
  * Name.parse('Ada');  // 'Ada'
  * Name.parse(42);     // '42'  ← coerced
@@ -31,6 +33,7 @@ import { BigIntGuardian } from './BigIntGuardian.ts';
  * @see {@link Guardian.string}
  */
 export class StringGuardian extends BaseGuardian<string> {
+  /** Emitted schema type. */
   protected override readonly _type = 'string';
 
   /**
@@ -244,21 +247,6 @@ export class StringGuardian extends BaseGuardian<string> {
   }
 
   /**
-   * Validates string against a regular expression.
-   *
-   * @param pattern - Regular expression pattern to match
-   * @param errorMessage - Optional custom error message
-   * @returns A new StringGuardian with the validation applied (the receiver is never mutated)
-   * @throws {GuardianError} If string does not match the specified pattern
-   *
-   * @example
-   * ```ts
-   * const schema = new StringGuardian().pattern(/^[a-zA-Z]+$/, 'Letters only');
-   * schema.parse('hello123'); // throws GuardianError
-   * schema.parse('hello'); // 'hello'
-   * ```
-   */
-  /**
    * Return a stateless copy of a caller-supplied pattern. A `g` / `y`
    * regex is stateful: `.test()` advances its `lastIndex`, so the same
    * guardian would flip between pass and fail on identical input (a
@@ -275,6 +263,26 @@ export class StringGuardian extends BaseGuardian<string> {
     return new RegExp(pattern.source, pattern.flags.replace(/[gy]/g, ''));
   }
 
+  /**
+   * Validates the string against a regular expression.
+   *
+   * `g` and `y` flags are stripped before matching, so a stateful regex
+   * can't make repeated parses of the same input flip between pass and
+   * fail. The pattern is also recorded on the metadata, surfacing as
+   * `pattern` in emitted schemas.
+   *
+   * @param pattern - Tested with `.test()`; not anchored for you.
+   * @param errorMessage - Replaces the default failure message.
+   * @throws {GuardianError} At parse time, when the string does not
+   *   match.
+   *
+   * @example
+   * ```ts
+   * const Letters = new StringGuardian().pattern(/^[a-z]+$/, 'Letters only');
+   * Letters.parse('hello');    // 'hello'
+   * Letters.parse('hello123'); // throws GuardianError
+   * ```
+   */
   pattern(pattern: RegExp, errorMessage?: string): this {
     // Neutralise stateful `g` / `y` flags so repeated parses are
     // deterministic — see `__statelessPattern`.
@@ -1027,6 +1035,8 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().base64().parse('aGVsbG8=');                // 'hello'
    * Guardian.string().base64({ urlSafe: true }).parse('aGVsbG8'); // 'hello' (url-safe, unpadded ok)
    * ```
@@ -1073,6 +1083,11 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * declare const sha256Hex: string;
+   * declare const addr: string;
+   *
    * Guardian.string().hex().parse('deadBEEF');                       // ok
    * Guardian.string().hex({ length: 64 }).parse(sha256Hex);          // sha256
    * Guardian.string().hex({ length: 40, prefix: '0x' }).parse(addr); // eth address
@@ -1265,6 +1280,8 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().mimeType().parse('application/json');
    * Guardian.string().mimeType(['image/png', 'image/jpeg']).parse('image/png');
    * ```
@@ -1369,6 +1386,8 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const usZip = Guardian.string().postalCode(/^\d{5}(-\d{4})?$/);
    * usZip.parse('94103');       // ok
    * usZip.parse('94103-1234');  // ok
@@ -1406,6 +1425,8 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().emoji().parse('hi 👋');         // ok (contains emoji)
    * Guardian.string().emoji({ onlyEmoji: true }).parse('👋✨'); // ok
    * Guardian.string().emoji({ onlyEmoji: true }).parse('hi 👋'); // throws
@@ -1470,6 +1491,8 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().encodeUri().parse('hello world & friends');
    * // → 'hello%20world%20%26%20friends'
    * ```
@@ -1485,6 +1508,8 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().decodeUri().parse('hello%20world');
    * // → 'hello world'
    * ```
@@ -1553,6 +1578,8 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().latLngString().parse('40.7128,-74.0060');
    * // → '40.7128,-74.0060'
    * Guardian.string().latLngString({ separator: '|' }).parse('40.7 | -74.0');
@@ -1619,6 +1646,8 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().base58().parse('17Aqf7XknZRsCmWy7q9bqrtMRmTcZAhRy');
    * ```
    */
@@ -1646,6 +1675,8 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().base32().parse('JBSWY3DPEHPK3PXP'); // 'Hello!\xde\xad\xbe\xef'
    * ```
    */
@@ -1738,6 +1769,8 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().json().parse('{"a":1}');     // '{"a":1}'
    * Guardian.string().json().parse('not json');     // throws
    * ```
@@ -1781,6 +1814,8 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const PolicyA = Guardian.string().password({
    *   minLength: 12,
    *   requireSymbol: true,
@@ -2241,6 +2276,8 @@ export class StringGuardian extends BaseGuardian<string> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().toBigInt().parse('12345');                 // 12345n
    * Guardian.string().toBigInt({ hex: true }).parse('0xdeadbeef'); // 3735928559n
    * ```

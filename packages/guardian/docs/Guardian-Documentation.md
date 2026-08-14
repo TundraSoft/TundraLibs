@@ -15,6 +15,8 @@ Every guardian can emit machine-readable documentation. Useful for API docs, UI 
 Emit an OpenAPI 3.0 schema fragment. Useful when plugging Guardian into an OpenAPI-aware framework (FastAPI-style routers, Swagger UI, etc.).
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const User = Guardian.object({
   id: Guardian.number().integer().positive(),
   name: Guardian.string().minLength(1).maxLength(50),
@@ -41,6 +43,10 @@ The output is a fragment — it doesn't include the OpenAPI document envelope (`
 Emit a self-contained JSON Schema Draft 2020-12 document with the `$schema` header. The most useful method for documentation pipelines and codegen.
 
 ```typescript
+import type { BaseGuardian } from '@tundralibs/guardian';
+
+declare const User: BaseGuardian<unknown>; // the schema from above
+
 User.toJSONSchema();
 // {
 //   $schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -74,7 +80,7 @@ Now your JS validation and your Python types are derived from the same source.
 
 ### Form generation (`@rjsf/core`)
 
-```typescript
+```typescript ignore
 import Form from '@rjsf/core';
 import validator from '@rjsf/validator-ajv8';
 
@@ -103,6 +109,8 @@ Most modern tooling (AJV 8+, datamodel-code-generator, JSON Forms) supports 2020
 `.toJSONSchema()` on a `DiscriminatedUnionGuardian` emits proper `$defs` + `discriminator` + `oneOf`:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Shape = Guardian.discriminatedUnion('kind', [
   Guardian.object({
     kind: Guardian.literal('circle'),
@@ -142,6 +150,8 @@ Code generators (`datamodel-codegen`, `quicktype`) produce narrowed types from t
 Emit human-readable Markdown:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Schema = Guardian.string()
   .minLength(3)
   .maxLength(20)
@@ -169,6 +179,8 @@ Useful for auto-generating reference docs from your schemas.
 Attach metadata that flows into `toOpenAPI()`, `toJSONSchema()`, and `toMarkdown()`:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Age = Guardian.number().integer().min(0).max(120).describe({
   title: 'Age',
   description: 'Age in years.',

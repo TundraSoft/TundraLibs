@@ -90,7 +90,7 @@ const user = UserSchema.parse({
 
 ### `safeParse` for non-throwing flow
 
-```typescript
+```typescript ignore
 const [err, user] = UserSchema.safeParse(input);
 if (err) {
   return Response.json({ error: err.message }, { status: 400 });
@@ -103,6 +103,8 @@ if (err) {
 Strings from `URLSearchParams`, form data, environment variables, and JSON-from-CSV are all coerced to their declared types by default:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const QuerySchema = Guardian.object({
   page: Guardian.number().integer().min(1),
   limit: Guardian.number().integer().min(1).max(100),
@@ -119,6 +121,8 @@ See [Validators](docs/Guardian-Validators.md#coercion-rules) for the full coerci
 ### Discriminated unions
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Shape = Guardian.discriminatedUnion('kind', [
   Guardian.object({
     kind: Guardian.literal('circle'),
@@ -145,13 +149,15 @@ if (s.kind === 'circle') s.radius; // narrowed to `number`
 Object/array/record/tuple/discriminated-union are joined by a handful of meta-combinators for cases the four primary shapes don't reach:
 
 ```typescript
+import { BaseGuardian, Guardian } from '@tundralibs/guardian';
+
 // Set / Map at the boundary (JSON has neither — wire format is array / object).
 Guardian.set(Guardian.string()); // Set<string>
 Guardian.map(Guardian.string(), Guardian.number()); // Map<string, number>
 
 // Recursive types via a lazy reference to a not-yet-defined schema.
 type Tree = { value: number; children: Tree[] };
-const TreeSchema: Guardian.BaseGuardian<Tree> = Guardian.object({
+const TreeSchema: BaseGuardian<Tree> = Guardian.object({
   value: Guardian.number(),
   children: Guardian.array(Guardian.lazy(() => TreeSchema)),
 });
@@ -178,7 +184,7 @@ See [Schemas](docs/Guardian-Schemas.md) for the full set, including `instanceof`
 
 `.brand<'UserId'>()` produces an assignment-incompatible alias of the underlying type — zero runtime cost, full compile-time safety:
 
-```typescript
+```typescript ignore
 const UserId = Guardian.string().uuid().brand<'UserId'>();
 const OrderId = Guardian.string().uuid().brand<'OrderId'>();
 
@@ -191,6 +197,11 @@ loadUser(oid); // ❌ compile error: OrderId not assignable to UserId
 ### Documentation emit
 
 ```typescript
+import { Guardian, type ObjectGuardian } from '@tundralibs/guardian';
+
+type User = { id: number; name: string };
+declare const UserSchema: ObjectGuardian<User>;
+
 UserSchema.toOpenAPI(); // OpenAPI 3.0 schema fragment
 UserSchema.toJSONSchema(); // JSON Schema Draft 2020-12 (full document with $schema header)
 UserSchema.toMarkdown(); // Markdown documentation for the schema

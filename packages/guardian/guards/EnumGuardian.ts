@@ -26,9 +26,11 @@ import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
  * ```
  */
 export class EnumGuardian<T> extends BaseGuardian<T> {
-  // Enum is its own type at the runtime / markdown level; the
-  // `toOpenAPI` override infers the JSON Schema `type` from the
-  // allowed values instead of using this raw value.
+  /**
+   * Emitted schema type. Enum is its own type at the runtime /
+   * markdown level; the `toOpenAPI` override infers the JSON Schema
+   * `type` from the allowed values rather than using this raw name.
+   */
   protected override readonly _type = 'enum';
   private readonly __allowedValues: readonly T[];
 
@@ -39,11 +41,8 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
    * @param metaData - Optional metadata for this guardian
    *
    * @throws {Error} When `allowedValues` is empty.
-   * @throws {GuardianError} When `caseInsensitive` is requested
-   *   but two of the allowed values lowercase to the same string
-   *   (ambiguous canonical form).
-   * @throws {TypeError} When `caseInsensitive` is requested but
-   *   the allowed values are not all strings.
+   *
+   * @see {@link caseInsensitive} for its own construction-time throws.
    */
   constructor(allowedValues: readonly T[], metaData?: GuardianMetaData) {
     if (!allowedValues || allowedValues.length === 0) {
@@ -98,12 +97,15 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
    * lowercase to the same string (e.g. `['Foo', 'foo']`), the method
    * throws — case-insensitive matching would be ambiguous.
    *
-   * @returns This EnumGuardian, mutated to match case-insensitively.
-   * @throws {Error} If any allowed value is not a string, or if the
-   *   lowercased allowed list has duplicates.
+   * @returns A new EnumGuardian matching case-insensitively; the
+   *   receiver is never mutated.
+   * @throws {TypeError} If any allowed value is not a string.
+   * @throws {Error} If the lowercased allowed list has duplicates.
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const method = Guardian.enum(['GET', 'POST', 'PUT']).caseInsensitive();
    * method.parse('get');   // 'GET'   ← canonical case returned
    * method.parse('POST');  // 'POST'
