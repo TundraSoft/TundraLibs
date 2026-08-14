@@ -96,6 +96,7 @@ export type StreamHandlerOptions = HandlerOptions & {
  * producer rather than blowing up memory.
  */
 export class StreamHandler extends AbstractHandler {
+  /** Runtime discriminator for this handler kind. */
   public readonly mode = 'stream';
   // deno-lint-ignore no-explicit-any
   private readonly __stream: WritableStream<any>;
@@ -107,6 +108,9 @@ export class StreamHandler extends AbstractHandler {
   private readonly __encoder = new TextEncoder();
 
   /**
+   * Validates and stores the stream; the writer lock is only taken later,
+   * in {@link init}.
+   *
    * @param name - Handler name identifier
    * @param options - Configuration options for the handler
    * @throws {SloggerConfigError} When `stream` is not a
@@ -126,6 +130,10 @@ export class StreamHandler extends AbstractHandler {
     this.__useTextMode = options.useTextMode === true;
   }
 
+  /**
+   * Acquires the stream's writer lock, which this handler then holds
+   * until `finalize()`. Idempotent — a second call is a no-op.
+   */
   public override async init(): Promise<void> {
     await super.init();
     if (!this.__writer) {
@@ -149,6 +157,11 @@ export class StreamHandler extends AbstractHandler {
     await super.handle(log);
   }
 
+  /**
+   * Write one record plus the terminator, lazily acquiring the writer if
+   * `init()` was never called. Awaits `writer.ready` first, so a slow
+   * sink applies backpressure instead of queueing in memory.
+   */
   protected async _handle(message: string): Promise<void> {
     if (!this.__writer) await this.init();
     if (!this.__writer) return;
@@ -161,6 +174,11 @@ export class StreamHandler extends AbstractHandler {
     );
   }
 
+  /**
+   * Drain the sink and give up the writer — closing the stream, or only
+   * releasing the lock when `closeOnFinalize` is `false`. Never rejects:
+   * a stream that already closed or errored is treated as done.
+   */
   public override async finalize(): Promise<void> {
     // Await init when it was started (the declarative path) so the writer
     // is acquired before we decide whether to close/release it. Without

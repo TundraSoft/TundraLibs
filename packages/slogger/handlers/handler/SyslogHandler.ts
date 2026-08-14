@@ -112,6 +112,7 @@ export type SyslogHandlerOptions =
  * ```
  */
 export class SyslogHandler extends AbstractHandler {
+  /** Runtime discriminator for this handler kind. */
   public readonly mode = 'syslog';
   private readonly __transport: SyslogTransport;
   private readonly __framing: 'octet-count' | 'lf';
@@ -137,6 +138,9 @@ export class SyslogHandler extends AbstractHandler {
   private __writeChain: Promise<void> = Promise.resolve();
 
   /**
+   * Validates the transport and builds the fixed RFC 5424 wire
+   * formatter. The socket itself is opened lazily, on the first record.
+   *
    * @param name - Handler name identifier
    * @param options - Configuration options for the handler
    * @throws {SloggerConfigError} When `transport` is missing, has an
@@ -205,6 +209,10 @@ export class SyslogHandler extends AbstractHandler {
     return this.__wireFormatter(log);
   }
 
+  /**
+   * Ship one record, queued behind any earlier write on the same socket.
+   * A failure drops the connection so the next record re-dials.
+   */
   protected _handle(message: string): Promise<void> {
     // Serialise through the write chain: concurrent fire-and-forget
     // logs must not interleave their writes on the shared socket.
@@ -286,6 +294,10 @@ export class SyslogHandler extends AbstractHandler {
     }
   }
 
+  /**
+   * Flush every queued record, then close the socket. Safe to call more
+   * than once; a later record simply re-dials.
+   */
   public override async finalize(): Promise<void> {
     // Drain the write chain BEFORE dropping the socket. Enqueuing the
     // drop as the tail task guarantees every queued record is flushed
@@ -300,6 +312,11 @@ export class SyslogHandler extends AbstractHandler {
     await super.finalize();
   }
 
+  /**
+   * Open the stream socket (TCP / UNIX) or datagram socket (UDP) if one
+   * isn't already held, coalescing concurrent callers onto a single
+   * in-flight dial.
+   */
   private async __ensureConnected(): Promise<void> {
     if (this.__connection || this.__udp) return;
     if (this.__connecting !== undefined) {
@@ -327,6 +344,11 @@ export class SyslogHandler extends AbstractHandler {
     await this.__connecting;
   }
 
+  /**
+   * Close and clear whichever socket is held. Close errors are ignored —
+   * the peer may already be gone, and the goal is only to reach a state
+   * where the next record re-dials.
+   */
   private __dropConnection(): void {
     if (this.__connection) {
       try {

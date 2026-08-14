@@ -490,5 +490,15 @@ class Manager {
 }
 
 // Export the singleton instance
-/** */
+/**
+ * Process-wide registry of handler types and named formatters, and the
+ * get-or-create cache of {@link Slogger} instances behind
+ * `createSlogger()` / `getLogger()`.
+ *
+ * A singleton — every import site gets the same instance, so a handler
+ * or formatter registered once is visible to every logger in the
+ * process. The eight built-in handler types and nine built-in formatters
+ * are registered at module load; `addHandler()` / `addFormatter()` reject
+ * a name that is already taken.
+ */
 export const LogManager: Manager = new Manager();
