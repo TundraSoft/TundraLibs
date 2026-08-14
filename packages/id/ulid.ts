@@ -336,7 +336,7 @@ function encodeRandom(randomBytes: Uint8Array): string {
  * @internal
  *
  * @example
- * ```typescript
+ * ```typescript ignore
  * const bytes = new Uint8Array([0x00, 0x00, 0xFF, 0xFF]);
  * const incremented = incrementRandom(bytes, Date.now()); // [0x00, 0x01, 0x00, 0x00]
  * ```
@@ -390,6 +390,7 @@ function incrementRandom(
  * const date = new Date(timestamp); // 2019-01-01T00:00:00.000Z
  *
  * // Validate ULID age
+ * const someUlid = ulid();
  * const ageMs = Date.now() - getTimestamp(someUlid);
  * const ageHours = ageMs / (1000 * 60 * 60);
  * ```

@@ -107,7 +107,7 @@ function initSequenceID(counter: number = 0) {
    *
    * @example
    * ```typescript
-   * const generator = initSequenceID();
+   * const generator = sequenceID();
    * const id1 = generator();      // Uses internal counter
    * const id2 = generator(5000);  // Resets counter to 5000
    * const id3 = generator();      // Continues from 5001
@@ -174,9 +174,9 @@ function initSequenceID(counter: number = 0) {
  *
  * // Override counter mid-sequence
  * const flexSeq = sequenceID();
- * const id1 = flexSeq();       // Uses internal counter
- * const id2 = flexSeq(5000);   // Resets to 5000
- * const id3 = flexSeq();       // Continues from 5001
+ * const flexId1 = flexSeq();     // Uses internal counter
+ * const flexId2 = flexSeq(5000); // Resets to 5000
+ * const flexId3 = flexSeq();     // Continues from 5001
  *
  * // Use as database primary key
  * const userIdGen = sequenceID();

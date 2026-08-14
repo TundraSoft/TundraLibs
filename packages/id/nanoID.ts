@@ -85,7 +85,7 @@ const MAX_U32_PER_CALL = 16384;
  * @throws {@link InvalidOptionError} If the length parameter is less than 1
  *
  * @example
- * ```typescript
+ * ```typescript ignore
  * const randomNumbers = random(5); // Uint32Array with 5 random values
  * ```
  */

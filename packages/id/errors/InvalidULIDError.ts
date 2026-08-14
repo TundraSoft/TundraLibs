@@ -36,6 +36,8 @@ export type InvalidULIDErrorMeta = {
  *
  * @example
  * ```ts
+ * import { getTimestamp } from '@tundralibs/id/ulid';
+ *
  * try {
  *   getTimestamp('not-a-ulid');
  * } catch (e) {

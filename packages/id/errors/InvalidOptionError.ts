@@ -31,6 +31,8 @@ export type InvalidOptionErrorMeta = {
  *
  * @example
  * ```ts
+ * import { ObjectID } from '@tundralibs/id/ObjectID';
+ *
  * try {
  *   ObjectID(-1);
  * } catch (e) {
