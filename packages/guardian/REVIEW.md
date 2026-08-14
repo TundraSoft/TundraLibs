@@ -97,7 +97,7 @@ The remaining items in this review — stability vs. churn, type-level vs runtim
 
 ### 2. `safeParse` returns `[error, data]` (Go-style tuple)
 
-```ts
+```ts ignore
 const [err, data] = schema.safeParse(input);
 if (err) ...
 ```
@@ -132,7 +132,7 @@ When an array element fails validation, `ArrayGuardian` mutates the inner `Guard
 
 The current code throws at runtime if you call `.process()` after `.optional()`:
 
-```ts
+```ts ignore
 Guardian.string().optional().process((x) => x.toUpperCase());
 // → throws GuardianError: "Cannot call process() after optional()"
 ```
@@ -143,7 +143,7 @@ The constraint is correct (the transform chain would no longer match its input t
 
 ### 2. `Guardian.object` defaults to **passthrough**
 
-```ts
+```ts ignore
 const userSchema = Guardian.object({
   id: Guardian.number(),
   name: Guardian.string(),
@@ -182,7 +182,7 @@ Zod has `z.coerce.number()`, `z.coerce.date()`, etc. — useful for parsing form
 
 ### 6. Refinements are applied **after** transforms, regardless of declaration order
 
-```ts
+```ts ignore
 Guardian.object({...})
   .refine(d => d.password === d.confirm, 'mismatch')   // declared first
   .transform(d => ({...d, hashedPassword: hash(d.password)}));  // declared second
@@ -196,7 +196,7 @@ In `ObjectGuardian.parse()`, the transform chain runs first (via `super.parse()`
 
 Minor but cumulative: every `parse()` on an object schema does `Object.entries(this._schema)` (allocates), then `Object.keys(inputObj)` for strict-mode check (another allocation), then a `Set(schemaKeys)` allocation. For a hot-path validator this should be precomputed at construction:
 
-```ts
+```ts ignore
 private readonly _entries: [string, BaseGuardian<unknown>][] = Object.entries(this._schema);
 private readonly _schemaKeys: Set<string> = new Set(Object.keys(this._schema));
 ```
@@ -205,7 +205,7 @@ Estimated 5–15% gain on object validation. Free win.
 
 ### 8. `parseAsync` always goes through the Promise machinery
 
-```ts
+```ts ignore
 async parseAsync(input: unknown): Promise<T> {
   const result = this._composedTransform(input);
   return isPromiseLike(result) ? await result : result;
@@ -220,7 +220,7 @@ The `async` keyword wraps the result in a Promise regardless. For schemas with n
 
 This is _the_ hot path:
 
-```ts
+```ts ignore
 const composedTransform = (input: unknown) => {
   const intermediateResult = currentTransform(input);
   if (isPromiseLike(intermediateResult)) {
@@ -236,7 +236,7 @@ For schemas with no async steps, the `isPromiseLike` check runs on every call. F
 
 ### 10. `Guardian.infer<T>(_g: T)` throws at runtime
 
-```ts
+```ts ignore
 static infer<T>(_g: T): GuardianInfer<T> {
   throw new Error('Guardian.infer is a type-only utility…');
 }
@@ -244,7 +244,7 @@ static infer<T>(_g: T): GuardianInfer<T> {
 
 `Guardian.infer` is intended as a type-only utility, but it exists at runtime as a throwing function. Users will eventually call it by accident. This should be a pure type alias:
 
-```ts
+```ts ignore
 export type Infer<T> = T extends BaseGuardian<infer U> ? U : never;
 // usage: type User = Infer<typeof schema>;
 ```

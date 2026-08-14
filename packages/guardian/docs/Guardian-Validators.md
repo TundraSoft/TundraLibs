@@ -32,6 +32,8 @@ To opt out of coercion, chain a `.test()` with your own typeof check, or write a
 ## `Guardian.string()`
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Name = Guardian.string().minLength(1).maxLength(50);
 Name.parse('Ada'); // 'Ada'
 Name.parse(42); // '42'  ← coerced
@@ -101,6 +103,8 @@ Name.parse(42); // '42'  ← coerced
 ### Example: a username
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Username = Guardian.string()
   .trim()
   .toLowerCase()
@@ -117,6 +121,8 @@ const Username = Guardian.string()
 ## `Guardian.number()`
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Age = Guardian.number().integer().min(0).max(120);
 Age.parse(42); // 42
 Age.parse('42'); // 42  ← coerced
@@ -166,6 +172,8 @@ Age.parse('42'); // 42  ← coerced
 ### Example: pagination
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Page = Guardian.number().integer().min(1);
 const Limit = Guardian.number().integer().min(1).max(100);
 
@@ -177,6 +185,8 @@ Limit.parse('200'); // throws — exceeds max
 ## `Guardian.boolean()`
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Accepted = Guardian.boolean();
 Accepted.parse(true); // true
 Accepted.parse('yes'); // true   ← coerced
@@ -203,6 +213,8 @@ Accepted.parse(42); // throws — only 0/1 accepted
 ### Example: terms-of-service gate
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const TosAccepted = Guardian.boolean().true('Terms must be accepted');
 TosAccepted.parse('yes'); // true
 TosAccepted.parse(false); // throws — 'Terms must be accepted'
@@ -211,6 +223,8 @@ TosAccepted.parse(false); // throws — 'Terms must be accepted'
 ## `Guardian.date()`
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Birthday = Guardian.date()
   .min(new Date('1900-01-01'))
   .max(new Date());
@@ -253,6 +267,8 @@ Birthday.parse(802915200000); // Date  ← coerced from epoch ms
 ## `Guardian.bigint()`
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Big = Guardian.bigint().positive();
 Big.parse(42n); // 42n
 Big.parse(42); // 42n   ← coerced from integer
@@ -281,6 +297,8 @@ Big.parse(3.14); // throws — non-integer
 ## `Guardian.enum([...])` / `Guardian.literal(v)`
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Role = Guardian.enum(['admin', 'user', 'guest'] as const);
 type RoleT = Guardian.infer<typeof Role>; // 'admin' | 'user' | 'guest'
 
@@ -301,6 +319,8 @@ const ApiVersion = Guardian.literal('v1');
 ### Case-insensitive matching
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Method = Guardian.enum(['GET', 'POST', 'PUT', 'DELETE'])
   .caseInsensitive();
 Method.parse('get'); // 'GET'   ← canonical case returned
@@ -315,6 +335,8 @@ Construction throws if any allowed value isn't a string, or if two values lowerc
 `Guardian.literal(value)` is the idiomatic way to declare a discriminator field for [discriminated unions](Guardian-Schemas.md#discriminated-union):
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 Guardian.object({
   kind: Guardian.literal('circle'),
   radius: Guardian.number(),
@@ -326,6 +348,8 @@ Guardian.object({
 Type-erased escape hatch. Accepts any input; you provide your own validation via `.process(fn)` or `.test(fn)`.
 
 ```typescript
+import { Guardian, GuardianError } from '@tundralibs/guardian';
+
 const Json = Guardian.unknown().process((raw) => {
   if (typeof raw !== 'string') {
     throw new GuardianError('Expected JSON string', {
