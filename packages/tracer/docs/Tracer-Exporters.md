@@ -17,7 +17,7 @@ Where finished spans go, and how batching keeps that off the request path.
 
 ## The exporter contract
 
-{@linkcode SpanExporter} is two methods, one of them optional:
+`SpanExporter` is two methods, one of them optional:
 
 ```typescript
 import type { SpanData } from '@tundralibs/tracer';
@@ -71,7 +71,7 @@ By default a span is exported the moment it ends — one export call per span.
 Fine for console and memory; wrong for anything over a network, where it means
 one HTTP round-trip per span.
 
-{@linkcode BatchSpanProcessor} buffers spans and flushes them in batches. It
+`BatchSpanProcessor` buffers spans and flushes them in batches. It
 _is_ a `SpanExporter` that wraps another one, so it needs no special support
 from `Tracer` — it just goes in the `exporter` slot:
 

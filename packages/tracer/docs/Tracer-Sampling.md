@@ -131,7 +131,7 @@ if (span.isRecording()) {
 
 ## Writing a sampler
 
-A {@linkcode Sampler} is a plain function of {@linkcode SamplingInput}:
+A `Sampler` is a plain function of `SamplingInput`:
 
 ```typescript
 import { type Sampler, SemConv } from '@tundralibs/tracer';

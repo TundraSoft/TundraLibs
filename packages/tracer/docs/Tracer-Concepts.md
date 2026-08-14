@@ -27,7 +27,7 @@ checkout ───────────────────────�
   db.query           ──────── 120ms               trace 4bf92f…, span ccc…, parent aaa…
 ```
 
-Every span carries a {@linkcode SpanContext}: the `traceId` it belongs to, its
+Every span carries a `SpanContext`: the `traceId` it belongs to, its
 own `spanId`, and the sampling flag. That triple is the _only_ thing that has to
 travel between processes — see [Tracer-Propagation](Tracer-Propagation.md).
 
@@ -55,7 +55,7 @@ is inert: further writes are silently dropped rather than throwing or
 retroactively changing an exported span.
 
 Exporters never receive the live `Span`. They receive an immutable
-{@linkcode SpanData} snapshot, so a slow or asynchronous exporter cannot observe
+`SpanData` snapshot, so a slow or asynchronous exporter cannot observe
 a span mid-write or mutate trace state.
 
 ## Why nesting is automatic
@@ -145,7 +145,7 @@ is recorded on the span and re-thrown unchanged.
 
 ## Span kind
 
-{@linkcode SpanKind} tells a backend how to draw the span, and its numeric values
+`SpanKind` tells a backend how to draw the span, and its numeric values
 are OTLP's:
 
 | Kind                    | Use for                                       |
@@ -199,5 +199,5 @@ so every span operation is total:
 
 The one place tracer _does_ throw is **construction** — an invalid
 `serviceName`, `sampler`, `exporter`, or `idGenerator` raises
-{@linkcode TracerConfigError} immediately. A misconfiguration is cheap to
+`TracerConfigError` immediately. A misconfiguration is cheap to
 surface at startup and expensive to discover as missing traces later.

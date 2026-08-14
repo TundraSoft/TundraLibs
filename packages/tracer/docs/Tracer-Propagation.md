@@ -38,7 +38,7 @@ parse and on generation.
 
 ## Inbound: extract
 
-{@linkcode extract} turns headers into a {@linkcode SpanContext} to use as a
+`extract` turns headers into a `SpanContext` to use as a
 parent:
 
 ```typescript
@@ -75,7 +75,7 @@ Lookup is case-insensitive, and an array-valued header uses its first entry.
 
 ## Outbound: inject
 
-{@linkcode inject} serialises a span's context back into a header value, so the
+`inject` serialises a span's context back into a header value, so the
 callee's `extract` picks up where you left off:
 
 ```typescript
