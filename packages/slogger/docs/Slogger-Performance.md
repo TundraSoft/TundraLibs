@@ -99,6 +99,12 @@ const logger = new Slogger({
 Use functions for expensive context computation:
 
 ```typescript
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+declare function expensiveCalculation(): unknown;
+declare function gatherSystemInfo(): unknown;
+
 // ❌ Bad: Always computed
 logger.debug('User action', {
   result: expensiveCalculation(), // Always runs
@@ -123,6 +129,8 @@ logger.debug('User action', () => ({
 Sample high-volume logs while preserving errors:
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'HighVolume',
   level: SyslogSeverities.DEBUG,
@@ -148,7 +156,7 @@ const logger = new Slogger({
 
 Tune buffer sizes for your workload:
 
-```typescript
+```typescript ignore
 {
   name: 'high-throughput',
   type: 'FileHandler',
@@ -173,7 +181,7 @@ Tune buffer sizes for your workload:
 
 Increase batch size for remote logging:
 
-```typescript
+```typescript ignore
 {
   name: 'remote',
   type: 'HTTPHandler',
@@ -193,7 +201,7 @@ Increase batch size for remote logging:
 JSON formatting is the canonical structured-output format and avoids
 the template-render path entirely:
 
-```typescript
+```typescript ignore
 {
   name: 'file',
   type: 'FileHandler',
@@ -214,7 +222,7 @@ fastest in isolation.
 
 Each handler adds overhead:
 
-```typescript
+```typescript ignore
 // ❌ Less efficient: 5 handlers
 handlers: [
   { name: 'console', type: 'ConsoleHandler', level: SyslogSeverities.INFO },
@@ -237,6 +245,8 @@ handlers: [
 ### Production Configuration
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'ProdApp',
   level: SyslogSeverities.INFO, // Skip debug logs
@@ -263,7 +273,7 @@ const logger = new Slogger({
       name: 'remote-errors',
       type: 'HTTPHandler',
       level: SyslogSeverities.ERROR,
-      url: process.env.LOG_ENDPOINT,
+      url: Deno.env.get('LOG_ENDPOINT'),
       batchSize: 50,
       formatter: 'json',
     },
@@ -274,6 +284,8 @@ const logger = new Slogger({
 ### High-Volume Configuration
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'HighVolumeApp',
   level: SyslogSeverities.INFO,
@@ -297,6 +309,8 @@ const logger = new Slogger({
 ### Development Configuration
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'DevApp',
   level: SyslogSeverities.DEBUG, // All logs
@@ -315,6 +329,12 @@ const logger = new Slogger({
 Minimize log calls in hot paths:
 
 ```typescript
+import { type Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+declare const item: unknown;
+declare function expensiveMetadata(): unknown;
+
 // ❌ Bad: String concatenation always happens
 logger.debug('Processing item: ' + JSON.stringify(item));
 
@@ -339,7 +359,7 @@ if (logger.level >= SyslogSeverities.DEBUG) {
 
 File handlers use configurable buffers:
 
-```typescript
+```typescript ignore
 {
   name: 'file',
   type: 'FileHandler',
@@ -360,6 +380,14 @@ Example:
 Keep context objects reasonable:
 
 ```typescript
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+declare const request: Request & { path: string };
+declare const largeRequestBody: unknown;
+declare const completeUserObject: unknown;
+declare const user: { id: string };
+
 // ❌ Large context (may cause memory pressure)
 logger.info('Request', {
   body: largeRequestBody, // Potentially MBs
@@ -380,7 +408,7 @@ logger.info('Request', {
 
 Slogger automatically flushes buffers on process exit:
 
-```typescript
+```typescript ignore
 const logger = new Slogger(/* ... */);
 
 // Automatic cleanup on process exit
@@ -404,13 +432,13 @@ await logger.finalize();
 
 1. **Increase log level:**
 
-```typescript
+```typescript ignore
 level: SyslogSeverities.INFO; // Skip DEBUG logs
 ```
 
 2. **Enable sampling:**
 
-```typescript
+```typescript ignore
 sampling: {
   sampleRate: 0.1;
 } // Sample 10%
@@ -418,13 +446,13 @@ sampling: {
 
 3. **Use lazy context:**
 
-```typescript
+```typescript ignore
 logger.debug('Message', () => ({ expensive: computation() }));
 ```
 
 4. **Reduce handler count:**
 
-```typescript
+```typescript ignore
 // Consolidate handlers
 handlers: [
   { name: 'file', type: 'FileHandler', level: SyslogSeverities.INFO },
@@ -444,25 +472,25 @@ handlers: [
 
 1. **Reduce buffer sizes:**
 
-```typescript
+```typescript ignore
 bufferSizeBytes: 2048; // 2KB instead of 16KB
 ```
 
 2. **Increase flush frequency:**
 
-```typescript
+```typescript ignore
 maxFileSizeBytes: 10 * 1024 * 1024; // Smaller files, more frequent rotation
 ```
 
 3. **Reduce batch sizes:**
 
-```typescript
+```typescript ignore
 batchSize: 10; // Smaller HTTP batches
 ```
 
 4. **Compact context objects:**
 
-```typescript
+```typescript ignore
 // Only log essential fields
 logger.info('Event', { id, type }); // Not entire objects
 ```
@@ -479,7 +507,7 @@ logger.info('Event', { id, type }); // Not entire objects
 
 1. **Increase buffer size:**
 
-```typescript
+```typescript ignore
 bufferSizeBytes: 16384; // 16KB for less frequent writes
 ```
 
@@ -491,7 +519,7 @@ bufferSizeBytes: 16384; // 16KB for less frequent writes
 
 3. **Separate logs by volume:**
 
-```typescript
+```typescript ignore
 handlers: [
   {
     name: 'high-volume',
@@ -521,19 +549,19 @@ handlers: [
 
 1. **Increase batch size:**
 
-```typescript
+```typescript ignore
 batchSize: 100; // Fewer requests
 ```
 
 2. **Raise level threshold:**
 
-```typescript
+```typescript ignore
 level: SyslogSeverities.ERROR; // Only errors
 ```
 
 3. **Add local fallback:**
 
-```typescript
+```typescript ignore
 handlers: [
   {
     name: 'http',

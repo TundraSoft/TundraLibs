@@ -281,11 +281,11 @@ const logger = new Slogger({
       strategy: MaskingStrategy.PARTIAL,
       maskChar: '*',
       sensitiveFields: ['password', 'apiKey', 'token', 'secret'],
-      customPatterns: [
+      sensitivePatterns: [
         /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, // Email
         /\b\d{3}-\d{2}-\d{4}\b/g, // SSN
       ],
-      baseFormatter: 'json',
+      baseFormatter: jsonFormatter,
     }),
   }],
 });
@@ -301,7 +301,7 @@ Completely redacts sensitive values.
 maskingFormatter({
   strategy: MaskingStrategy.FULL,
   sensitiveFields: ['password', 'apiKey'],
-  baseFormatter: 'json',
+  baseFormatter: jsonFormatter,
 });
 
 logger.info('User authenticated', {
@@ -321,7 +321,7 @@ Partially masks sensitive values, showing some characters.
 maskingFormatter({
   strategy: MaskingStrategy.PARTIAL,
   sensitiveFields: ['email', 'phone'],
-  baseFormatter: 'json',
+  baseFormatter: jsonFormatter,
 });
 
 logger.info('User registered', {
@@ -339,7 +339,7 @@ interface MaskingFormatterOptions {
   strategy?: MaskingStrategy; // FULL or PARTIAL (default: PARTIAL)
   maskChar?: string; // Character for masking (default: '*')
   sensitiveFields?: string[]; // Field names to mask
-  customPatterns?: RegExp[]; // Regex patterns to match and mask
+  sensitivePatterns?: RegExp[]; // Regex patterns to match and mask
   baseFormatter?: string | SloggerFormatter; // Underlying formatter
 }
 ```
@@ -385,7 +385,7 @@ Define regex patterns to mask values matching specific formats:
 
 ```typescript
 maskingFormatter({
-  customPatterns: [
+  sensitivePatterns: [
     // Email addresses
     /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
     // Credit card numbers
@@ -397,7 +397,7 @@ maskingFormatter({
     // API keys (example pattern)
     /\bsk-[a-zA-Z0-9]{32,}\b/g,
   ],
-  baseFormatter: 'json',
+  baseFormatter: jsonFormatter,
 });
 ```
 
@@ -420,7 +420,7 @@ const logger = new Slogger({
     formatter: maskingFormatter({
       strategy: MaskingStrategy.FULL,
       sensitiveFields: ['password', 'token'],
-      baseFormatter: 'json',
+      baseFormatter: jsonFormatter,
     }),
   }],
 });
@@ -446,10 +446,10 @@ const logger = new Slogger({
     level: SyslogSeverities.INFO,
     formatter: maskingFormatter({
       strategy: MaskingStrategy.PARTIAL,
-      customPatterns: [
+      sensitivePatterns: [
         /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
       ],
-      baseFormatter: 'standard',
+      baseFormatter: standardFormat,
     }),
   }],
 });
@@ -486,12 +486,12 @@ const logger = new Slogger({
         'socialSecurity',
         'bankAccount',
       ],
-      customPatterns: [
+      sensitivePatterns: [
         /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
         /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g,
         /\b\d{3}-\d{2}-\d{4}\b/g,
       ],
-      baseFormatter: 'json',
+      baseFormatter: jsonFormatter,
     }),
   }],
 });
@@ -692,7 +692,7 @@ const logger = new Slogger({
       formatter: maskingFormatter({
         strategy: MaskingStrategy.PARTIAL,
         sensitiveFields: ['password', 'token'],
-        baseFormatter: 'detailed',
+        baseFormatter: detailedFormat,
       }),
     },
     {
@@ -704,7 +704,7 @@ const logger = new Slogger({
       formatter: maskingFormatter({
         strategy: MaskingStrategy.FULL,
         sensitiveFields: ['password', 'token', 'apiKey'],
-        baseFormatter: 'json',
+        baseFormatter: jsonFormatter,
       }),
     },
   ],
