@@ -34,6 +34,8 @@ record and merged **under** the call/scope context — explicit fields always
 win, and precedence is `provider < scope < per-call`:
 
 ```typescript
+import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
+
 const log = LogManager.createSlogger({
   appName: 'orders',
   level: SyslogSeverities.INFO,
@@ -55,7 +57,7 @@ Two properties to rely on:
 `await`. Hand its live bag to the provider and every line in the request
 carries the request's context, with no per-call argument:
 
-```typescript
+```typescript ignore
 import { ambient } from '@tundralibs/ambient';
 
 contextProvider: () => ambient.get() ?? {},
@@ -70,7 +72,7 @@ the live bag at log time, not a snapshot.
 [`tracer`](../../tracer/README.md) keeps its active span in its own store —
 it writes nothing into the request bag. Read it in the same provider:
 
-```typescript
+```typescript ignore
 import { tracer } from './telemetry.ts'; // your Tracer instance
 
 contextProvider: tracer.logContext, // ← the whole integration (tracer >= 0.4)
@@ -92,7 +94,7 @@ matching `traceFields` override.
 the attributes and into the log record's **first-class `TraceId` / `SpanId`
 fields**:
 
-```typescript
+```typescript ignore
 handlers: [{
   name: 'otel',
   type: 'HTTPHandler',
@@ -119,7 +121,11 @@ Request context, trace identity, and OTel-linked output — three sources, one
 provider, still zero coupling:
 
 ```typescript
+import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
 import { ambient } from '@tundralibs/ambient';
+import type { Tracer } from '@tundralibs/tracer';
+
+declare const tracer: Tracer; // your Tracer instance, e.g. './telemetry.ts'
 
 const contextProvider = () => ({
   ...ambient.get(), // correlationId, userId, …
