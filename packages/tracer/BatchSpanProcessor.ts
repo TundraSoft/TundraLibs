@@ -89,6 +89,9 @@ export class BatchSpanProcessor implements SpanExporter {
   private __shuttingDown = false;
 
   /**
+   * Wrap an exporter in a bounded queue. Nothing is queued or scheduled until
+   * the first span ends, so constructing one is free.
+   *
    * @param exporter - The exporter that receives each batch.
    * @param options - See {@link BatchSpanProcessorOptions}.
    */
@@ -161,6 +164,7 @@ export class BatchSpanProcessor implements SpanExporter {
     }, this.__delayMs);
   }
 
+  /** Disarm the flush timer, if one is pending. */
   private __clearTimer(): void {
     if (this.__timer === undefined) return;
     clearTimeout(this.__timer);
