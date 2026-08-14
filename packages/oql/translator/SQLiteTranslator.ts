@@ -73,15 +73,23 @@ const SQL_TYPE_MAP: Record<string, string> = {
   XML: 'TEXT',
 };
 
+/**
+ * Emits SQLite SQL. Stateless and reusable — see {@link AbstractTranslator}
+ * for the shared method surface and the module header above for the
+ * emulations SQLite needs (schemas, TRUNCATE, materialized views).
+ */
 export class SQLiteTranslator extends AbstractTranslator {
+  /** Dialect tag, reported on every error this translator raises. */
   public override readonly Dialect = 'sqlite';
 
+  /** Double quotes; an embedded quote doubles to `""`. */
   protected override readonly _identifierQuote: IdentifierQuote = {
     open: '"',
     close: '"',
     escape: '""',
   };
 
+  /** Named placeholders in the engine-compat `:name:` form. */
   protected override readonly _parameterStyle: ParameterStyle = {
     // `:name:` form is what the engine layer's `_standardizeQuery`
     // rewrites to dialect-native. Emitting it from every translator means
@@ -93,6 +101,11 @@ export class SQLiteTranslator extends AbstractTranslator {
     suffix: ':',
   };
 
+  /**
+   * Only `materializedView` is off. `schema` and `truncate` read as
+   * supported because they are emulated, not native — the flags gate the
+   * public entry points, so turning them off would make the calls throw.
+   */
   protected override readonly _support: DialectSupport = {
     // CREATE_SCHEMA / DROP_SCHEMA are emulated via ATTACH DATABASE — see
     // `_buildCreateSchema` / `_buildDropSchema`. The companion engine
@@ -118,6 +131,11 @@ export class SQLiteTranslator extends AbstractTranslator {
    */
   protected override readonly _offsetOnlyLimit: string | null = '-1';
 
+  /**
+   * SQLite expression emitters. `HASH` / `ENCRYPT` / `DECRYPT` are
+   * identity — SQLite ships no crypto, so the value passes through
+   * untransformed rather than failing.
+   */
   protected override readonly _expressionMap: ExpressionMap = new Map<
     Expressions['$$_expression'],
     (args: string[]) => string
@@ -225,6 +243,11 @@ export class SQLiteTranslator extends AbstractTranslator {
     ['DECRYPT', (a) => a[0]!],
   ]);
 
+  /**
+   * SQLite aggregate emitters. `STRING_AGG` and `ARRAY_AGG` are spelled
+   * `group_concat` / `json_group_array` here, so results come back as a
+   * JSON string rather than a native array.
+   */
   protected override readonly _aggregateMap: AggregateMap = new Map<
     AggregateFunction,
     (args: string[]) => string
@@ -244,6 +267,11 @@ export class SQLiteTranslator extends AbstractTranslator {
     ['JSON_ROW', (a) => `json_group_array(json_object(${a.join(', ')}))`],
   ]);
 
+  /**
+   * SQLite filter-operator emitters. `$ilike` / `$nilike` fall back to
+   * plain `LIKE`, which SQLite folds case-insensitively for ASCII only —
+   * accented and non-Latin text compares case-*sensitively*.
+   */
   protected override readonly _filterOperatorMap: FilterOperatorMap = new Map<
     string,
     (column: string, value: string) => string
@@ -291,13 +319,16 @@ export class SQLiteTranslator extends AbstractTranslator {
   // DML: UPSERT
   // ---------------------------------------------------------------------------
 
-  // SQLite spells the conflicting-row reference in lowercase (`excluded`),
-  // unlike Postgres's `EXCLUDED`. Otherwise the upsert is identical, so we
-  // reuse the shared `_buildOnConflictUpsert`.
+  /**
+   * SQLite spells the conflicting-row reference in lowercase (`excluded`),
+   * unlike Postgres's `EXCLUDED`. Otherwise the upsert is identical, so we
+   * reuse the shared `_buildOnConflictUpsert`.
+   */
   protected override get _excludedKeyword(): string {
     return 'excluded';
   }
 
+  /** `INSERT … ON CONFLICT DO UPDATE`, via the shared builder. */
   protected override _buildUpsert(
     q: Query<'UPSERT'>,
     params: Parameters,
@@ -337,6 +368,13 @@ export class SQLiteTranslator extends AbstractTranslator {
     return `DETACH DATABASE ${this._quoteIdentifier(q.schema)}`;
   }
 
+  /**
+   * Covers rename-column, add-column, drop-column and rename-table only.
+   *
+   * @throws {@link DialectUnsupportedError} `ALTER COLUMN` when
+   *   `alterColumns` is set, `ALTER CONSTRAINT` when foreign keys are
+   *   added or dropped.
+   */
   protected override _buildAlterTable(q: Query<'ALTER_TABLE'>): string[] {
     // SQLite cannot modify a column in place or touch constraints on
     // an existing table — both require the full table-rebuild dance
@@ -385,6 +423,7 @@ export class SQLiteTranslator extends AbstractTranslator {
     return stmts;
   }
 
+  /** `q.cascade` is accepted and dropped — see the note below. */
   protected override _buildDropTable(q: Query<'DROP_TABLE'>): string {
     const tableSql = this._qualifiedTable(q.table, q.schema);
     const ifExists = q.ifExists ? 'IF EXISTS ' : '';
@@ -403,6 +442,10 @@ export class SQLiteTranslator extends AbstractTranslator {
     return `DELETE FROM ${this._qualifiedTable(q.table, q.schema)}`;
   }
 
+  /**
+   * SQLite has partial indexes, so `q.where` becomes a `WHERE` clause on
+   * the index. `q.method` has no SQLite equivalent and is ignored.
+   */
   protected override _buildCreateIndex(
     q: Query<'CREATE_INDEX'>,
     params: Parameters,
@@ -423,6 +466,7 @@ export class SQLiteTranslator extends AbstractTranslator {
     return sql;
   }
 
+  /** `q.table` is accepted and ignored — see the note below. */
   protected override _buildDropIndex(q: Query<'DROP_INDEX'>): string {
     // `q.table` is part of the OQL contract for API uniformity but
     // SQLite identifies indexes by name alone — accepted, ignored.
@@ -461,6 +505,10 @@ export class SQLiteTranslator extends AbstractTranslator {
     return `CREATE VIEW ${ifNotExists}${viewSql} AS ${inner}`;
   }
 
+  /**
+   * `q.materialized` needs no special case — a `materialized: true`
+   * CREATE_VIEW already fell back to a plain view on SQLite.
+   */
   protected override _buildDropView(q: Query<'DROP_VIEW'>): string {
     const viewSql = this._qualifiedTable(q.view, q.schema);
     const ifExists = q.ifExists ? 'IF EXISTS ' : '';
@@ -508,6 +556,11 @@ export class SQLiteTranslator extends AbstractTranslator {
   // Privates
   // ---------------------------------------------------------------------------
 
+  /**
+   * Types collapse to SQLite's storage classes via `SQL_TYPE_MAP`, with
+   * `TEXT` as the fallback for anything unrecognised. `def.comment` has no
+   * SQLite DDL syntax, so it is emitted as a trailing block comment.
+   */
   protected override _renderColumnDefinition(
     name: string,
     def: ColumnDefinition,

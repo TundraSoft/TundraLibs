@@ -107,6 +107,34 @@ const LIKE_ESCAPE_CHAR = '\\';
 /** LIKE wildcards (plus the escape char itself) that must be escaped. */
 const LIKE_WILDCARDS = /[\\%_]/g;
 
+/**
+ * Turns a validated {@link Query} into dialect SQL plus its bind params.
+ *
+ * Not instantiable — construct {@link SQLiteTranslator},
+ * {@link PostgresTranslator} or {@link MariaTranslator} instead. Subclass
+ * it only to add a new SQL dialect: supply the abstract data members
+ * (quoting, param style, emitter maps, {@link DialectSupport} flags) and
+ * the abstract `_build*` methods, and every public entry point comes for
+ * free. Mongo is not a subclass — see {@link MongoTranslator}.
+ *
+ * Instances are stateless and reusable; each public call allocates its own
+ * {@link Parameters}.
+ *
+ * @example
+ * ```typescript
+ * import { SQLiteTranslator } from '@tundralibs/oql/translator';
+ *
+ * const t: AbstractTranslator = new SQLiteTranslator();
+ * const { sql, params } = t.select({
+ *   type: 'SELECT',
+ *   table: 'users',
+ *   columns: ['id', 'name'],
+ *   projection: { '@id': true, '@name': true },
+ *   where: { '@name': { $eq: 'Ada' } },
+ * });
+ * // SELECT "id" AS "id", "name" AS "name" FROM "users" WHERE "name" = :p_0:
+ * ```
+ */
 export abstract class AbstractTranslator {
   /** Human-readable dialect name (`'sqlite'`, `'postgres'`, `'maria'`, …). */
   public abstract readonly Dialect: string;
@@ -537,25 +565,68 @@ export abstract class AbstractTranslator {
   // DDL builders — abstract, concretes own them
   // =========================================================================
 
+  /**
+   * Reached only when `_support.schema` is true — the public
+   * {@link createSchema} throws first otherwise, so implementations need
+   * no support check of their own. The same holds for every sibling
+   * builder guarded by a {@link DialectSupport} flag.
+   */
   protected abstract _buildCreateSchema(q: Query<'CREATE_SCHEMA'>): string;
+
+  /** Counterpart to {@link _buildCreateSchema}. */
   protected abstract _buildDropSchema(q: Query<'DROP_SCHEMA'>): string;
+
+  /**
+   * One statement per requested action. Dialects that could combine
+   * actions into a single `ALTER TABLE` deliberately don't, so a partial
+   * failure is easy to locate.
+   */
   protected abstract _buildAlterTable(q: Query<'ALTER_TABLE'>): string[];
+
+  /** Build a `DROP TABLE`. */
   protected abstract _buildDropTable(q: Query<'DROP_TABLE'>): string;
+
+  /** Reached only when `_support.truncate` is true. */
   protected abstract _buildTruncate(q: Query<'TRUNCATE'>): string;
+
+  /**
+   * `params` is threaded through for the partial-index `WHERE` body, but
+   * {@link createIndex} inlines rather than binds those values and
+   * discards the collected record — see its note.
+   */
   protected abstract _buildCreateIndex(
     q: Query<'CREATE_INDEX'>,
     params: Parameters,
   ): string;
+
+  /** Build a `DROP INDEX`. */
   protected abstract _buildDropIndex(q: Query<'DROP_INDEX'>): string;
+
+  /**
+   * Dialects without materialized views ignore `q.materialized` and emit a
+   * plain view rather than throwing — see {@link DialectSupport}.
+   */
   protected abstract _buildCreateView(
     q: Query<'CREATE_VIEW'>,
     params: Parameters,
   ): string;
+
+  /** Build a `DROP VIEW`. */
   protected abstract _buildDropView(q: Query<'DROP_VIEW'>): string;
+
+  /**
+   * Returns an array because no dialect can both rename and redefine a
+   * view in one statement.
+   */
   protected abstract _buildAlterView(
     q: Query<'ALTER_VIEW'>,
     params: Parameters,
   ): string[];
+
+  /**
+   * Dialects without materialized views emit a no-op `SELECT 1` so the
+   * caller's statement sequence keeps its shape.
+   */
   protected abstract _buildRefreshMaterializedView(
     q: Query<'REFRESH_MATERIALIZED_VIEW'>,
   ): string;
@@ -1189,6 +1260,16 @@ export abstract class AbstractTranslator {
     return items.join(', ');
   }
 
+  /**
+   * Resolve one projection key to its SQL source, trying aggregate alias →
+   * expression alias → join alias (auto-expanded to a `JSON_ROW` over the
+   * join's declared columns) → plain column ref. Everything but the last
+   * lands in `exprCache` so GROUP BY / ORDER BY can reuse the body instead
+   * of re-translating it and double-binding its literal params.
+   *
+   * @throws {@link OqlError} `JOIN_NO_COLUMNS` when a join alias is
+   *   projected but the join declares no columns to expand.
+   */
   private __resolveProjectionSource(
     stripped: string,
     q: Query<'SELECT'>,
@@ -1251,6 +1332,14 @@ export abstract class AbstractTranslator {
     return this._resolveColumnRef(`@${stripped}`, hasJoins);
   }
 
+  /**
+   * Build the `FROM` clause. Without joins that is the bare qualified
+   * table; with joins the base table takes {@link BASE_ALIAS} and each
+   * join contributes an `AS <alias> ON …` chain.
+   *
+   * @throws {@link DialectUnsupportedError} On a `RIGHT` / `FULL` join the
+   *   dialect's {@link DialectSupport} flags disclaim.
+   */
   private __buildFrom(
     q: Query<'SELECT'>,
     hasJoins: boolean,
@@ -1284,6 +1373,13 @@ export abstract class AbstractTranslator {
     return from;
   }
 
+  /**
+   * Render the right-hand side of one `ON` pair. A string naming a column
+   * in scope becomes a column ref, so `on: { '@Profile.@userId': '@id' }`
+   * joins two columns rather than binding the literal `'@id'`. Anything
+   * else falls through to expression / literal handling — the same rule
+   * value positions in `WHERE` follow.
+   */
   private __renderJoinValue(
     value: unknown,
     scope: string[],
@@ -1344,6 +1440,7 @@ export abstract class AbstractTranslator {
     return groupBy.length > 0 ? ` GROUP BY ${groupBy.join(', ')}` : '';
   }
 
+  /** Build the ` ORDER BY` clause, or `''` when `q.orderBy` is empty. */
   private __buildOrderBy(
     q: Query<'SELECT'>,
     hasJoins: boolean,
@@ -1750,6 +1847,16 @@ export abstract class AbstractTranslator {
     return opParts.join(' AND ');
   }
 
+  /**
+   * Emit one `<column> <op> <value>` predicate. `$null`, `$between`, `$in`
+   * and `$nin` are handled here because their SQL shape isn't a simple
+   * binary infix; everything else defers to the dialect's
+   * `_filterOperatorMap`, which is also what makes an unknown operator a
+   * per-dialect rather than a global failure.
+   *
+   * @throws {@link DialectUnsupportedError} When `op` has no entry in the
+   *   dialect's operator map.
+   */
   private __emitOperator(
     colSql: string,
     op: string,
@@ -1877,6 +1984,16 @@ export abstract class AbstractTranslator {
     return [this.__renderExprArg(args, scope, params, hasJoins)];
   }
 
+  /**
+   * Flatten a named-argument expression node into the positional array its
+   * emitter expects. This is where each expression's argument order is
+   * pinned, and where optional args (`SUBSTR.length`, `LPAD.fill`) decide
+   * the emitter's arity.
+   *
+   * @throws {@link OqlError} `UNHANDLED_EXPRESSION` if an expression type
+   *   takes object args but is missing a case here — a translator bug, not
+   *   bad caller input.
+   */
   private __flattenObjectArgs(
     type: Expressions['$$_expression'],
     args: Record<string, unknown>,
@@ -1914,6 +2031,12 @@ export abstract class AbstractTranslator {
     }
   }
 
+  /**
+   * Render one expression argument. An `@`-prefixed string is a column ref
+   * only if it is actually in scope — otherwise it binds as a literal, so
+   * user data that happens to start with `@` can't be smuggled into an
+   * identifier position.
+   */
   private __renderExprArg(
     value: unknown,
     scope: string[],
@@ -1933,6 +2056,13 @@ export abstract class AbstractTranslator {
     return this._parameterize(value, params);
   }
 
+  /**
+   * Flatten an aggregate node into its emitter's positional args. Bare
+   * `COUNT` yields none; `JSON_ROW` yields an alternating key/value run;
+   * `STRING_AGG` appends its separator (default `','`). Keys and the
+   * separator go through `_textParameterize` because they land in
+   * overload-ambiguous positions on some dialects.
+   */
   private __flattenAggregateArgs(
     agg: Aggregates,
     scope: string[],
@@ -1964,6 +2094,16 @@ export abstract class AbstractTranslator {
     ];
   }
 
+  /**
+   * Render an aggregate's operand. Unlike a filter value position, a
+   * literal is never bound here — aggregating over a constant is a
+   * mistake in the query, not a shorthand — so only a column ref or an
+   * expression node is accepted.
+   *
+   * @throws {@link OqlError} `INVALID_AGGREGATE_COLUMN` for a non-string,
+   *   non-expression operand; `INVALID_COLUMN_REF` (from
+   *   {@link _resolveColumnRef}) for a string missing its `@` prefix.
+   */
   private __renderAggregateColumn(
     column: unknown,
     scope: string[],
