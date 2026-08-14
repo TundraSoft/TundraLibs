@@ -38,8 +38,9 @@ export type ItOptions = {
 };
 
 /**
- * Setup or teardown callback. `this` is the suite context on Deno; Bun and
- * Node invoke it unbound, so don't rely on `this` for portable tests.
+ * Setup or teardown callback. The hook is handed straight to the runtime's own
+ * runner, so whatever `this` ends up being is that runner's behaviour, not
+ * something this package normalises — don't rely on `this` in portable tests.
  *
  * @typeParam T - Shape of `this` inside the hook.
  */
