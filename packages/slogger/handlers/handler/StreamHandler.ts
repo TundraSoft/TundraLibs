@@ -8,20 +8,39 @@
  *
  * - **Gzipped log file** — pipe through `new CompressionStream('gzip')`:
  *   ```ts
+ *   import { StreamHandler } from '@tundralibs/slogger/handlers';
+ *   import { SyslogSeverities } from '@tundralibs/utils';
+ *
  *   const file = await Deno.open('logs.gz', { write: true, create: true });
  *   const gzip = new CompressionStream('gzip');
  *   gzip.readable.pipeTo(file.writable);
- *   new StreamHandler('gz', { level: INFO, stream: gzip.writable });
+ *   new StreamHandler('gz', {
+ *     level: SyslogSeverities.INFO,
+ *     stream: gzip.writable,
+ *   });
  *   ```
  * - **stdout / stderr** — already a `WritableStream<Uint8Array>`:
  *   ```ts
- *   new StreamHandler('stderr', { level: WARN, stream: Deno.stderr.writable });
+ *   import { StreamHandler } from '@tundralibs/slogger/handlers';
+ *   import { SyslogSeverities } from '@tundralibs/utils';
+ *
+ *   new StreamHandler('stderr', {
+ *     level: SyslogSeverities.WARNING,
+ *     stream: Deno.stderr.writable,
+ *   });
  *   ```
  * - **In-memory capture for tests** — string sink:
  *   ```ts
+ *   import { StreamHandler } from '@tundralibs/slogger/handlers';
+ *   import { SyslogSeverities } from '@tundralibs/utils';
+ *
  *   const chunks: string[] = [];
  *   const stream = new WritableStream<string>({ write: (c) => { chunks.push(c); } });
- *   new StreamHandler('capture', { level: INFO, stream, useTextMode: true });
+ *   new StreamHandler('capture', {
+ *     level: SyslogSeverities.INFO,
+ *     stream,
+ *     useTextMode: true,
+ *   });
  *   ```
  *
  * @module

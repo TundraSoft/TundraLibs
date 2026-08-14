@@ -88,8 +88,12 @@ export type SloggerOptions = {
    * `@tundralibs/ambient`:
    *
    * ```ts
+   * import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
+   * import { ambient } from '@tundralibs/ambient';
+   *
    * const log = LogManager.createSlogger({
    *   appName: 'orders',
+   *   level: SyslogSeverities.INFO,
    *   contextProvider: () => ambient.get() ?? {},
    * });
    * log.info('charging'); // every line carries the ambient context, no thunk
@@ -322,6 +326,12 @@ export class Slogger {
    *
    * @example
    * ```typescript
+   * import type { Slogger } from '@tundralibs/slogger';
+   *
+   * declare const log: Slogger;
+   * declare const reqId: string;
+   * declare const userId: string;
+   *
    * const reqLog = log.scope({ reqId, userId });
    * reqLog.info('handled request');               // ctx: { reqId, userId }
    * reqLog.info('slow', { latencyMs: 1247 });      // ctx: { reqId, userId, latencyMs }

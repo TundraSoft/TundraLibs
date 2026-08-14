@@ -351,8 +351,15 @@ class Manager {
    *
    * @example
    * ```typescript
-   * const root  = LogManager.createSlogger({ appName: 'app', level, handlers: [...] });
-   * const req   = LogManager.createSlogger({ appName: 'app', ... }, { reqId, userId });
+   * import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
+   *
+   * declare const reqId: string;
+   * declare const userId: string;
+   *
+   * // Same config object on both calls — see the reference-identity rule.
+   * const config = { appName: 'app', level: SyslogSeverities.INFO };
+   * const root = LogManager.createSlogger(config);
+   * const req = LogManager.createSlogger(config, { reqId, userId });
    * req.info('hi');  // context: { reqId, userId }
    * ```
    */
@@ -458,6 +465,11 @@ class Manager {
    *
    * @example
    * ```typescript
+   * import { LogManager } from '@tundralibs/slogger';
+   *
+   * declare const reqId: string;
+   * declare const userId: string;
+   *
    * const reqLog = LogManager.getLogger('app', { reqId, userId });
    * reqLog.info('handled request');  // context: { reqId, userId }
    * ```

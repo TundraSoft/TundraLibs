@@ -11,11 +11,16 @@
  *
  * @example
  * ```typescript
- * import { ConsoleHandler, Slogger } from '@tundralibs/slogger';
+ * import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
  *
  * const log = new Slogger({
  *   appName: 'api',
- *   handlers: [new ConsoleHandler({ level: 'INFO' })],
+ *   level: SyslogSeverities.INFO,
+ *   handlers: [{
+ *     name: 'console',
+ *     type: 'ConsoleHandler',
+ *     level: SyslogSeverities.INFO,
+ *   }],
  * });
  * log.info('server started', { port: 8080 });
  * ```

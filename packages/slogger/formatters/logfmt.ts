@@ -163,7 +163,9 @@ const _flatten = (
  *
  * @example
  * ```typescript
- * import { logfmtFormatter } from '@tundralibs/slogger';
+ * import { logfmtFormatter, type SlogObject } from '@tundralibs/slogger';
+ *
+ * declare const slogObject: SlogObject;
  *
  * const fmt = logfmtFormatter();
  * fmt(slogObject);

@@ -73,6 +73,9 @@ export type SyslogHandlerOptions =
  *
  * @example Local journald (Linux) via /dev/log
  * ```typescript
+ * import { SyslogHandler } from '@tundralibs/slogger/handlers';
+ * import { SyslogFacilities, SyslogSeverities } from '@tundralibs/utils';
+ *
  * new SyslogHandler('local-syslog', {
  *   level: SyslogSeverities.DEBUG,
  *   transport: { type: 'unix', path: '/dev/log' },
@@ -83,6 +86,9 @@ export type SyslogHandlerOptions =
  *
  * @example Remote rsyslog over TCP
  * ```typescript
+ * import { SyslogHandler } from '@tundralibs/slogger/handlers';
+ * import { SyslogFacilities, SyslogSeverities } from '@tundralibs/utils';
+ *
  * new SyslogHandler('remote-syslog', {
  *   level: SyslogSeverities.INFO,
  *   transport: { type: 'tcp', host: 'logs.example.com', port: 514 },
@@ -94,6 +100,9 @@ export type SyslogHandlerOptions =
  *
  * @example Classic UDP rsyslog (`*.* @logs.example.com:514`)
  * ```typescript
+ * import { SyslogHandler } from '@tundralibs/slogger/handlers';
+ * import { SyslogFacilities, SyslogSeverities } from '@tundralibs/utils';
+ *
  * new SyslogHandler('udp-syslog', {
  *   level: SyslogSeverities.INFO,
  *   transport: { type: 'udp', host: 'logs.example.com', port: 514 },

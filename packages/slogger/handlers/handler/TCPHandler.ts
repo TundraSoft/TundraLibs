@@ -52,6 +52,10 @@ export type TCPHandlerOptions = HandlerOptions & {
  *
  * @example Logstash TCP input with JSON formatting
  * ```typescript
+ * import { jsonFormatter } from '@tundralibs/slogger/formatters';
+ * import { TCPHandler } from '@tundralibs/slogger/handlers';
+ * import { SyslogSeverities } from '@tundralibs/utils';
+ *
  * new TCPHandler('logstash', {
  *   level: SyslogSeverities.INFO,
  *   host: 'logstash.internal',
@@ -62,6 +66,10 @@ export type TCPHandlerOptions = HandlerOptions & {
  *
  * @example Vector socket source with logfmt
  * ```typescript
+ * import { logfmtFormatter } from '@tundralibs/slogger/formatters';
+ * import { TCPHandler } from '@tundralibs/slogger/handlers';
+ * import { SyslogSeverities } from '@tundralibs/utils';
+ *
  * new TCPHandler('vector', {
  *   level: SyslogSeverities.INFO,
  *   host: '127.0.0.1',
