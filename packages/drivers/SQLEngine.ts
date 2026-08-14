@@ -158,9 +158,16 @@ export abstract class SQLConnectionEngine<
   //#endregion Internal state
 
   /**
+   * Layers the SQL defaults (`slowQueryThreshold`, `transactionTimeout`,
+   * `autoRollbackOnFailure`) under the subclass defaults and caches the first
+   * two as ms/boolean so the per-query path avoids repeated option lookups.
+   *
    * @param name - Connection name.
    * @param options - Engine options + event handlers.
-   * @param defaults - Subclass-supplied defaults (merged with built-in defaults).
+   * @param defaults - Subclass-supplied defaults (caller options win).
+   *
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` when an option fails
+   *   validation in {@link SQLConnectionEngine._processOption}
    */
   constructor(
     name: string,
@@ -661,6 +668,13 @@ export abstract class SQLConnectionEngine<
    *
    * @example
    * ```ts
+   * import { PostgresEngine } from '@tundralibs/drivers/postgres';
+   *
+   * const engine = new PostgresEngine('app', {
+   *   host: 'localhost',
+   *   database: 'app',
+   * });
+   *
    * const rows = await engine.transaction(async (tx) => {
    *   await tx.execute({ sql: 'INSERT INTO users ...' });
    *   return await tx.execute({ sql: 'SELECT * FROM users' });
@@ -1057,6 +1071,13 @@ export abstract class SQLConnectionEngine<
     return await this.execute({ ...translated, transactionId });
   }
 
+  /**
+   * Guard for the single-statement DDL helpers: rejects a caller-supplied
+   * `transactionId` when the dialect cannot run `sql` inside a transaction,
+   * so the caller gets a clear error instead of a driver-level one.
+   *
+   * @throws {@link EngineError} `UNSUPPORTED_OPERATION` when both conditions hold.
+   */
   private __refuseTxIfUnsafe(
     sql: string,
     transactionId: string | undefined,
@@ -1159,6 +1180,17 @@ export abstract class SQLConnectionEngine<
 
   //#region Option processing
 
+  /**
+   * Validates the SQL-only options and delegates everything else to
+   * {@link ConnectionEngine._processOption}. `transactionTimeout` accepts `0`
+   * (disables the timer); `slowQueryThreshold` must be strictly positive.
+   *
+   * @returns The validated value, unmodified.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` for any value that
+   *   fails its check.
+   *
+   * @internal
+   */
   protected override _processOption<K extends keyof O>(
     key: K,
     value: O[K],
@@ -1197,11 +1229,9 @@ export abstract class SQLConnectionEngine<
         }
         break;
     }
-    // BaseEngine's _processOption is typed against keyof EngineOptions;
     // SQL-specific keys are unknown to the base switch and fall through
-    // as no-ops. Cast to keep TS happy without losing runtime safety.
-    // deno-lint-ignore no-explicit-any
-    return super._processOption(key as any, value);
+    // as no-ops.
+    return super._processOption(key, value);
   }
 
   //#endregion Option processing
@@ -1355,6 +1385,13 @@ export abstract class SQLConnectionEngine<
     }
   }
 
+  /**
+   * Starts the auto-rollback timer for a transaction, storing the handle on
+   * `record.timer`. A resolved timeout of `0` or less arms nothing, leaving
+   * the transaction open indefinitely.
+   *
+   * @param override - Seconds, in place of the `transactionTimeout` option.
+   */
   private __armTransactionTimeout(
     id: string,
     record: TxRecord<T>,
@@ -1402,6 +1439,13 @@ export abstract class SQLConnectionEngine<
     }, seconds * 1000);
   }
 
+  /**
+   * Folds one completed query into `_queryStats`. `averageExecutionTimeMs`
+   * tracks successful queries only, so failures move `failedQueries` and
+   * `totalQueries` but leave the mean untouched.
+   *
+   * @internal
+   */
   protected override _recordQueryStats(
     timeMs: number,
     isSlow: boolean,
@@ -1490,9 +1534,16 @@ export abstract class SQLEngine<
   //#endregion Pool
 
   /**
+   * Builds the pool from the resolved `pool` option and wires it to this
+   * class's resource seams. The pool starts empty — no socket is opened until
+   * {@link SQLEngine.connect} or the first query.
+   *
    * @param name - Connection name for this engine instance
    * @param options - Engine options + event handlers
-   * @param defaults - Subclass-supplied defaults (merged with built-in defaults)
+   * @param defaults - Subclass-supplied defaults (caller options win)
+   *
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` when an option fails
+   *   validation in {@link SQLConnectionEngine._processOption}
    */
   constructor(
     name: string,
