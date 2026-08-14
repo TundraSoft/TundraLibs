@@ -83,6 +83,8 @@ gateway or a local test proxy rather than Cloudflare's cloud endpoint — leave 
 unset for real D1:
 
 ```typescript
+import { D1Engine } from '@tundralibs/drivers/d1';
+
 const local = new D1Engine('local', {
   accountId: 'acct',
   databaseId: 'db',

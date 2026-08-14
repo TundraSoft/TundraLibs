@@ -60,7 +60,12 @@ const REDIS_DEFAULTS: Partial<RedisEngineOptions> = {
  */
 export class RedisEngine
   extends BaseEngine<RedisConnection, RedisEngineOptions, RedisEngineEvents> {
+  /** Always `'REDIS'`. */
   public readonly Engine = 'REDIS';
+  /**
+   * Pooled, but no transaction surface: the server's `MULTI`/`EXEC` is not
+   * wired through, so `transactions` is `false`.
+   */
   public readonly Capabilities: EngineCapabilities = {
     pooledConnections: true,
     // Redis supports MULTI/EXEC, but this driver doesn't expose a
@@ -88,6 +93,8 @@ export class RedisEngine
   private readonly __connDb: WeakMap<RedisConnection, number> = new WeakMap();
 
   /**
+   * Validates options; no socket is opened until the first command.
+   *
    * @param name - Connection name.
    * @param options - Engine options + event handlers.
    * @throws {EngineError} `MISSING_CONFIG_VALUE` if `host` is missing.
@@ -199,14 +206,17 @@ export class RedisEngine
     return rest;
   }
 
+  /** Closes the socket. */
   protected _destroyResource(conn: RedisConnection): void {
     conn.close();
   }
 
+  /** Cheap liveness check on pool checkout — socket state only, no round trip. */
   protected override _validateResource(conn: RedisConnection): boolean {
     return !conn.closed;
   }
 
+  /** Round-trips `PING` and checks for `PONG`; any failure reports dead. */
   protected async _ping(conn: RedisConnection): Promise<boolean> {
     try {
       const reply = await conn.send(['PING']);
@@ -503,6 +513,10 @@ export class RedisEngine
     field: string,
     value: string,
   ): Promise<number | bigint>;
+  /**
+   * Set several fields in the hash at once. Returns the number of NEW fields
+   * created (existing fields updated still return 0).
+   */
   public async hset(
     key: string,
     fields: Record<string, string>,

@@ -69,10 +69,16 @@ npx jsr add @tundralibs/drivers
 
 ### Import
 
-```typescript
-// Base abstractions + every engine in one barrel
+```typescript ignore
+// Writing your own engine? The abstract bases live on their own subpath,
+// so subclassing costs you nothing but the base classes themselves — no
+// concrete engine (and no native SQLite binding) enters your bundle.
+import { BaseEngine, SQLEngine } from '@tundralibs/drivers/base';
+
+// Every engine in one barrel. Convenient on a server; note that it pulls
+// in the native SQLite adapter, so edge/browser bundles should prefer the
+// per-engine subpaths below.
 import {
-  BaseEngine,
   D1Engine,
   MariaEngine,
   MemcachedEngine,
@@ -80,7 +86,6 @@ import {
   NeonHttpEngine,
   PostgresEngine,
   RedisEngine,
-  SQLEngine,
   SQLiteEngine,
   TursoEngine,
 } from '@tundralibs/drivers';
@@ -148,6 +153,10 @@ error such as a constraint violation — while the outer transaction survives, s
 you can `try/catch` and carry on:
 
 ```typescript
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
+
+const engine = new SQLiteEngine('app', { path: './data' });
+
 await engine.transaction(async (tx) => {
   await tx.execute({ sql: 'INSERT INTO orders ...' });
   try {
@@ -191,6 +200,15 @@ metrics, with no dependency on any observability package:
 Attach once per engine at wire-up:
 
 ```typescript
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
+
+// Your metrics client, whatever it is.
+declare const metrics: {
+  histogram(name: string): { observe(value: number): void };
+};
+
+const engine = new SQLiteEngine('app', { path: './data' });
+
 engine.on('query', (_id, result) => {
   metrics.histogram('db_query_ms').observe(result.time);
 });
