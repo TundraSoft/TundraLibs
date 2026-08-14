@@ -37,10 +37,30 @@ The engine composes an internal `ConnectionPool<T>` — created and owned as
 single-connection mode (one warm connection, no idle eviction, queueing is
 still in place). Configure `pool: { min, max, ... }` for multi-connection.
 
+### Where to import the bases from
+
+The abstract bases ship on their own sub-path, `@tundralibs/drivers/base`,
+alongside the types you need to declare an engine. Import them from there
+rather than from the package root: the root barrel re-exports every concrete
+engine, including the native `SQLiteEngine` whose adapter loads a per-runtime
+binding (`bun:sqlite`, `jsr:@db/sqlite`, `better-sqlite3`), and those
+specifiers will break a bundle aimed at an edge or browser runtime.
+`@tundralibs/drivers/base` reaches no concrete engine at all.
+
+```typescript
+import {
+  BaseEngine, // = PooledConnectionEngine — pooled, generic
+  ConnectionEngine, // pool-free, generic
+  PooledConnectionEngine,
+  SQLConnectionEngine, // pool-free, SQL surface
+  SQLEngine, // pooled, SQL surface
+} from '@tundralibs/drivers/base';
+```
+
 ## Quick Start (subclassing)
 
 ```typescript
-import { BaseEngine } from '@tundralibs/drivers';
+import { BaseEngine } from '@tundralibs/drivers/base';
 import { EngineError } from '@tundralibs/drivers/errors';
 import type {
   EngineCapabilities,

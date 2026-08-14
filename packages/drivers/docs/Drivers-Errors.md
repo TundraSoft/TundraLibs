@@ -811,7 +811,7 @@ try {
 ### Error Recovery
 
 ```typescript
-import type { BaseEngine } from '@tundralibs/drivers';
+import type { BaseEngine } from '@tundralibs/drivers/base';
 import { EngineError } from '@tundralibs/drivers/errors';
 
 async function connectWithRetry(

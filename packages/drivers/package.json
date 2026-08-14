@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./mod.ts",
+    "./base": "./base.ts",
     "./errors": "./errors/mod.ts",
     "./engines": "./engines/mod.ts",
     "./d1": "./engines/d1/mod.ts",

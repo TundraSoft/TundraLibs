@@ -70,9 +70,15 @@ npx jsr add @tundralibs/drivers
 ### Import
 
 ```typescript ignore
-// Base abstractions + every engine in one barrel
+// Writing your own engine? The abstract bases live on their own subpath,
+// so subclassing costs you nothing but the base classes themselves — no
+// concrete engine (and no native SQLite binding) enters your bundle.
+import { BaseEngine, SQLEngine } from '@tundralibs/drivers/base';
+
+// Every engine in one barrel. Convenient on a server; note that it pulls
+// in the native SQLite adapter, so edge/browser bundles should prefer the
+// per-engine subpaths below.
 import {
-  BaseEngine,
   D1Engine,
   MariaEngine,
   MemcachedEngine,
@@ -80,7 +86,6 @@ import {
   NeonHttpEngine,
   PostgresEngine,
   RedisEngine,
-  SQLEngine,
   SQLiteEngine,
   TursoEngine,
 } from '@tundralibs/drivers';
