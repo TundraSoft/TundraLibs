@@ -58,7 +58,7 @@ npx jsr add @tundralibs/compat
 
 Creates a test suite (group of related tests).
 
-```typescript
+```typescript ignore
 function describe(
   name: string,
   fn: () => void | Promise<void>,
@@ -99,7 +99,7 @@ describe({
 
 Creates a test case. `test()` is an alias for `it()`.
 
-```typescript
+```typescript ignore
 function it(
   name: string,
   fn: () => void | Promise<void>,
@@ -149,7 +149,7 @@ it({
 
 Runs once before all tests in the current suite.
 
-```typescript
+```typescript ignore
 function beforeAll(fn: HookFn): void;
 
 type HookFn = () => void | Promise<void>;
@@ -159,6 +159,13 @@ type HookFn = () => void | Promise<void>;
 
 ```typescript
 import { beforeAll, describe, it } from '@tundralibs/compat/test';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assert(expr: unknown, msg?: string): asserts expr;
+declare const database: {
+  connect(): Promise<void>;
+  query(sql: string): Promise<unknown>;
+};
 
 describe('Database', () => {
   beforeAll(async () => {
@@ -176,7 +183,7 @@ describe('Database', () => {
 
 Runs once after all tests in the current suite.
 
-```typescript
+```typescript ignore
 function afterAll(fn: HookFn): void;
 ```
 
@@ -184,6 +191,8 @@ function afterAll(fn: HookFn): void;
 
 ```typescript
 import { afterAll, describe, it } from '@tundralibs/compat/test';
+
+declare const database: { disconnect(): Promise<void> };
 
 describe('Database', () => {
   afterAll(async () => {
@@ -198,7 +207,7 @@ describe('Database', () => {
 
 Runs before each test in the current suite.
 
-```typescript
+```typescript ignore
 function beforeEach(fn: HookFn): void;
 ```
 
@@ -206,6 +215,13 @@ function beforeEach(fn: HookFn): void;
 
 ```typescript
 import { beforeEach, describe, it } from '@tundralibs/compat/test';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assertEquals<T>(actual: T, expected: T): void;
+declare class Counter {
+  readonly value: number;
+  increment(): void;
+}
 
 describe('Counter', () => {
   let counter: Counter;
@@ -229,7 +245,7 @@ describe('Counter', () => {
 
 Runs after each test in the current suite.
 
-```typescript
+```typescript ignore
 function afterEach(fn: HookFn): void;
 ```
 
@@ -237,6 +253,12 @@ function afterEach(fn: HookFn): void;
 
 ```typescript
 import { afterEach, describe, it } from '@tundralibs/compat/test';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assert(expr: unknown, msg?: string): asserts expr;
+declare function cleanupTempFiles(): Promise<void>;
+declare function createFile(path: string): Promise<void>;
+declare function fileExists(path: string): Promise<boolean>;
 
 describe('File operations', () => {
   afterEach(async () => {
@@ -275,7 +297,7 @@ interface ItOptions {
 
 Configuration for test suites.
 
-```typescript
+```typescript ignore
 interface DescribeOptions extends ItOptions {
   permissions?: PermissionOptions; // Deno only
   sanitizeOps?: boolean; // Deno only
@@ -444,7 +466,9 @@ it('Normal test', () => {
 
 ```typescript
 import { describe, it } from '@tundralibs/compat/test';
-import { assertEquals } from '@std/assert';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assertEquals<T>(actual: T, expected: T): void;
 
 describe('Math operations', () => {
   it('should add', () => {
@@ -469,7 +493,10 @@ describe('Math operations', () => {
 
 ```typescript
 import { describe, it } from '@tundralibs/compat/test';
-import { assert, assertEquals } from '@std/assert';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assert(expr: unknown, msg?: string): asserts expr;
+declare function assertEquals<T>(actual: T, expected: T): void;
 
 describe('Async operations', () => {
   it('should fetch data', async () => {
@@ -506,6 +533,24 @@ import {
   describe,
   it,
 } from '@tundralibs/compat/test';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assert(expr: unknown, msg?: string): asserts expr;
+declare function assertEquals<T>(actual: T, expected: T): void;
+
+type User = { id: string; name: string; email: string };
+
+declare class Database {
+  static connect(): Promise<Database>;
+  migrate(): Promise<void>;
+  disconnect(): Promise<void>;
+  users: {
+    create(data: { name: string; email: string }): Promise<User>;
+    update(id: string, data: Partial<User>): Promise<void>;
+    findById(id: string): Promise<User>;
+    deleteAll(): Promise<void>;
+  };
+}
 
 describe('User service', () => {
   let database: Database;
@@ -548,6 +593,11 @@ describe('User service', () => {
 
 ```typescript
 import { describe, it } from '@tundralibs/compat/test';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assert(expr: unknown, msg?: string): asserts expr;
+// `Bun` is typed by `@types/bun` in Bun projects.
+declare const Bun: { file(path: string): { text(): Promise<string> } };
 
 describe('File system', () => {
   it({
@@ -592,7 +642,11 @@ describe('File system', () => {
 ```typescript
 import { describe, it } from '@tundralibs/compat/test';
 
-describe('Network operations', {
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assert(expr: unknown, msg?: string): asserts expr;
+
+describe({
+  name: 'Network operations',
   permissions: {
     net: ['api.example.com'],
     read: ['./config.json'],
@@ -615,7 +669,13 @@ describe('Network operations', {
 
 ```typescript
 import { beforeEach, describe, it } from '@tundralibs/compat/test';
-import { assertEquals } from '@std/assert';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assertEquals<T>(actual: T, expected: T): void;
+declare class Calculator {
+  add(a: number, b: number): number;
+  subtract(a: number, b: number): number;
+}
 
 describe('Calculator', () => {
   let calc: Calculator;
@@ -654,7 +714,14 @@ describe('Calculator', () => {
 
 ```typescript
 import { describe, it } from '@tundralibs/compat/test';
-import { assertRejects, assertThrows } from '@std/assert';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assertThrows(
+  fn: () => unknown,
+  ErrorClass?: new (...args: never[]) => Error,
+  msgIncludes?: string,
+): void;
+declare function assertRejects(fn: () => Promise<unknown>): Promise<void>;
 
 describe('Error handling', () => {
   it('should throw error', () => {
@@ -691,6 +758,10 @@ describe('Error handling', () => {
 
 ```typescript
 import { describe, it } from '@tundralibs/compat/test';
+import { SEPARATOR } from '@tundralibs/compat/path';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assertEquals<T>(actual: T, expected: T): void;
 
 describe('Path handling', () => {
   it({
@@ -699,7 +770,7 @@ describe('Path handling', () => {
     linux: false,
     darwin: false,
     fn() {
-      assertEquals(path.separator, '\\');
+      assertEquals(SEPARATOR, '\\');
     },
   });
 
@@ -707,7 +778,7 @@ describe('Path handling', () => {
     name: 'should use forward slash on Unix',
     windows: false,
     fn() {
-      assertEquals(path.separator, '/');
+      assertEquals(SEPARATOR, '/');
     },
   });
 });
@@ -724,6 +795,16 @@ describe('Path handling', () => {
 **Example:**
 
 ```typescript
+import { it } from '@tundralibs/compat/test';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assert(expr: unknown, msg?: string): asserts expr;
+declare function assertEquals<T>(actual: T, expected: T): void;
+declare const userService: {
+  getAll(): Promise<{ id: string; name: string }[]>;
+  create(data: { name: string }): Promise<{ id: string; name: string }>;
+};
+
 // ✅ Good - Descriptive and focused
 it('should return empty array when no users exist', async () => {
   const users = await userService.getAll();
