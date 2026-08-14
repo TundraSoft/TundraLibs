@@ -78,7 +78,7 @@ instead of `TranslatedQuery` (see [NoSQL Translators](#nosql-translators)).
 
 ### DML Operations
 
-```typescript
+```typescript ignore
 abstract class AbstractTranslator {
   // DML methods — one per query-type discriminator
   select(query: Query<'SELECT'>): TranslatedQuery;
@@ -135,11 +135,12 @@ type TranslatedQuery = {
 PostgreSQL-specific translator with full feature support.
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
 import { PostgresTranslator } from '@tundralibs/oql/translator';
 
 const translator = new PostgresTranslator();
 
-const query = {
+const query: Query<'SELECT'> = {
   type: 'SELECT',
   table: 'users',
   columns: ['id', 'email', 'age'],
@@ -167,7 +168,10 @@ const { sql, params } = translator.select(query);
 MariaDB/MySQL-specific translator.
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
 import { MariaTranslator } from '@tundralibs/oql/translator';
+
+declare const query: Query<'SELECT'>; // the same query as above
 
 const translator = new MariaTranslator();
 const { sql, params } = translator.select(query);
@@ -189,7 +193,10 @@ const { sql, params } = translator.select(query);
 SQLite-specific translator.
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
 import { SQLiteTranslator } from '@tundralibs/oql/translator';
+
+declare const query: Query<'SELECT'>; // the same query as above
 
 const translator = new SQLiteTranslator();
 const { sql, params } = translator.select(query);
@@ -213,12 +220,13 @@ const { sql, params } = translator.select(query);
 Translates OQL to MongoDB operations.
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
 import { MongoTranslator } from '@tundralibs/oql/translator';
 import type { MongoAction } from '@tundralibs/oql/translator';
 
 const translator = new MongoTranslator();
 
-const query = {
+const query: Query<'SELECT'> = {
   type: 'SELECT',
   table: 'users',
   columns: ['id', 'email', 'age'],
@@ -267,7 +275,7 @@ carrying its own `params` shape. Drivers `switch (action.sql)` and use
 
 **Mongo Action Types:**
 
-```typescript
+```typescript ignore
 type MongoAction =
   | MongoFindAction
   | MongoAggregateAction
@@ -321,11 +329,12 @@ const record = params.asRecord();
 ### Basic SELECT Translation
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
 import { PostgresTranslator } from '@tundralibs/oql/translator';
 
 const translator = new PostgresTranslator();
 
-const query = {
+const query: Query<'SELECT'> = {
   type: 'SELECT',
   table: 'users',
   columns: ['id', 'email', 'username', 'age'],
@@ -357,11 +366,12 @@ console.log(params);
 ### INSERT with Expressions
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
 import { PostgresTranslator } from '@tundralibs/oql/translator';
 
 const translator = new PostgresTranslator();
 
-const query = {
+const query: Query<'INSERT'> = {
   type: 'INSERT',
   table: 'orders',
   columns: ['userId', 'total', 'createdAt'],
@@ -382,11 +392,12 @@ const { sql, params } = translator.insert(query);
 ### SELECT with JOINs and Aggregates
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
 import { PostgresTranslator } from '@tundralibs/oql/translator';
 
 const translator = new PostgresTranslator();
 
-const query = {
+const query: Query<'SELECT'> = {
   type: 'SELECT',
   table: 'orders',
   columns: ['id', 'userId', 'total'],
@@ -423,11 +434,12 @@ const { sql, params } = translator.select(query);
 ### UPSERT Translation
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
 import { PostgresTranslator } from '@tundralibs/oql/translator';
 
 const translator = new PostgresTranslator();
 
-const query = {
+const query: Query<'UPSERT'> = {
   type: 'UPSERT',
   table: 'users',
   columns: ['id', 'email', 'updatedAt'],
@@ -449,11 +461,12 @@ const { sql, params } = translator.upsert(query);
 ### MongoDB Translation
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
 import { MongoTranslator } from '@tundralibs/oql/translator';
 
 const translator = new MongoTranslator();
 
-const query = {
+const query: Query<'SELECT'> = {
   type: 'SELECT',
   table: 'users',
   columns: ['id', 'email', 'age'],
@@ -491,11 +504,12 @@ const action = translator.select(query);
 ### CREATE TABLE Translation
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
 import { PostgresTranslator } from '@tundralibs/oql/translator';
 
 const translator = new PostgresTranslator();
 
-const query = {
+const query: Query<'CREATE_TABLE'> = {
   type: 'CREATE_TABLE',
   table: 'users',
   schema: 'public',
