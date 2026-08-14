@@ -65,6 +65,15 @@ export type JWTErrorMeta = {
  */
 export class JWTError<M extends JWTErrorMeta = JWTErrorMeta>
   extends BaseError<M> {
+  /**
+   * Build the error from a {@link JWTErrorCodes} key, which selects the
+   * message template. The resolved code and everything in `meta` are exposed
+   * on `context`.
+   *
+   * @param code - A code absent from {@link JWTErrorCodes} is kept as `context.originalCode` and replaced with `'INVALID_JWT'`
+   * @param meta - Extra context; `causeMessage` fills the `${causeMessage}` slot most templates carry. Omit it and the placeholder is left in `message` verbatim, so supply one whenever the code's template has the slot.
+   * @param cause - Underlying error that triggered this one, if any
+   */
   constructor(code: JWTErrorCode, meta?: Omit<M, 'code'>, cause?: Error) {
     const context: M = { code, ...meta } as M;
     if (!JWTErrorCodes[code]) {

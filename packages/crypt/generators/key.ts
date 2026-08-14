@@ -401,6 +401,23 @@ const derToPem = (der: ArrayBuffer, type: string): string => {
 };
 
 // Convenience aliases for common key types
+
+/**
+ * {@link generateRSAKeyPair} preset to RSA-OAEP with SHA-256, the pairing
+ * `encryptRSA`/`decryptRSA` expect. The keys are always extractable — call
+ * `generateRSAKeyPair` directly to opt out.
+ *
+ * @param keySize - Modulus size in bits; 2048 is the floor, larger costs generation and per-operation time
+ * @param format - Encoding for the `*Exported` fields. Omit and only the {@link CryptoKey} handles come back.
+ *
+ * @throws {Error} If `format` is `'RAW'`, which RSA cannot export
+ *
+ * @example
+ * ```ts
+ * const { publicKeyExported } = await generateRSAEncryptionKeys(2048, 'PEM');
+ * console.log(publicKeyExported); // -----BEGIN PUBLIC KEY----- …
+ * ```
+ */
 export const generateRSAEncryptionKeys = (
   keySize: RSAKeySize = 2048,
   format?: KeyFormat,
@@ -412,6 +429,20 @@ export const generateRSAEncryptionKeys = (
     format,
   });
 
+/**
+ * {@link generateRSAKeyPair} preset to RSA-PSS with SHA-256, for the `PS*`
+ * side of `signRSA`/`verifyRSA`. The keys are always extractable — call
+ * `generateRSAKeyPair` directly to opt out.
+ *
+ * PSS and PKCS#1 v1.5 are different primitives, so these keys cannot serve
+ * the `RS*` algorithms: signing `RS256` with one is refused rather than
+ * silently downgraded.
+ *
+ * @param keySize - Modulus size in bits; 2048 is the floor, larger costs generation and per-operation time
+ * @param format - Encoding for the `*Exported` fields. Omit and only the {@link CryptoKey} handles come back.
+ *
+ * @throws {Error} If `format` is `'RAW'`, which RSA cannot export
+ */
 export const generateRSASigningKeys = (
   keySize: RSAKeySize = 2048,
   format?: KeyFormat,
@@ -423,6 +454,13 @@ export const generateRSASigningKeys = (
     format,
   });
 
+/**
+ * {@link generateECKeyPair} preset to ECDSA, for `signEC`/`verifyEC`. The keys
+ * are always extractable — call `generateECKeyPair` directly to opt out.
+ *
+ * @param curve - Curve, which also settles the JOSE algorithm and its digest: P-256 → ES256, P-384 → ES384, P-521 → ES512
+ * @param format - Encoding for the `*Exported` fields. Omit and only the {@link CryptoKey} handles come back. `'RAW'` exports the public key alone, leaving `privateKeyExported` undefined.
+ */
 export const generateECDSAKeys = (
   curve: EllipticCurve = 'P-256',
   format?: KeyFormat,
@@ -433,6 +471,17 @@ export const generateECDSAKeys = (
     format,
   });
 
+/**
+ * {@link generateECKeyPair} preset to ECDH for key agreement. The keys are
+ * always extractable — call `generateECKeyPair` directly to opt out.
+ *
+ * Granted `deriveKey` only, so `crypto.subtle.deriveBits` will reject the
+ * private key; derive a {@link CryptoKey} and export it if you need raw bytes.
+ * Both sides must share a curve — a P-256 key cannot agree with a P-384 one.
+ *
+ * @param curve - Curve both parties must agree on
+ * @param format - Encoding for the `*Exported` fields. Omit and only the {@link CryptoKey} handles come back. `'RAW'` exports the public key alone, which is the usual thing to hand a peer.
+ */
 export const generateECDHKeys = (
   curve: EllipticCurve = 'P-256',
   format?: KeyFormat,
