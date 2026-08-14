@@ -18,6 +18,8 @@ Cross-runtime path manipulation utilities with a unified API.
 
 The Path module provides platform-aware path manipulation utilities that work consistently across Windows, macOS, and Linux on all supported runtimes.
 
+Node and Bun delegate to `node:path`; every other runtime — Deno, browsers, Cloudflare Workers — uses `@std/path`, which is pure JavaScript. Path manipulation is therefore string work only and needs no filesystem access, so it stays available in edge and browser bundles.
+
 ### Features
 
 | Feature          | Bun | Deno | Node.js |

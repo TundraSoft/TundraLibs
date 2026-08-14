@@ -1,14 +1,15 @@
 /**
- * @fileoverview Cross-runtime `node:path`-compatible API. On Deno
- * this delegates to `@std/path`; on Node/Bun to `node:path`. Each
- * helper is a pass-through with the same semantics as the underlying
- * implementation, so see the Node docs for behaviour details.
+ * @fileoverview Cross-runtime `node:path`-compatible API. On Node and
+ * Bun this delegates to `node:path`; everywhere else — Deno, browsers,
+ * workerd — to `@std/path`, which is pure JS and needs no host APIs.
+ * Each helper is a pass-through with the same semantics as the
+ * underlying implementation, so see the Node docs for behaviour details.
  *
  * @module
  */
 
 import * as stdPath from '@std/path';
-import { isBun, isDeno, isNode, OS } from './runtime.ts';
+import { isBun, isNode, OS } from './runtime.ts';
 import { loadBuiltin } from './_runtime-globals.ts';
 
 /** PATH-variable separator: `;` on Windows, `:` elsewhere. */
@@ -50,17 +51,18 @@ type NativePath = {
   }): string;
 };
 
-// `@std/path` is pure JS, so a static import is bundler-safe; `node:path`
-// comes through `process.getBuiltinModule` (see {@link loadBuiltin}).
+// `@std/path` is pure JS with no host dependencies, so it is the backend
+// everywhere except Node and Bun — including browsers and workerd, which
+// is what keeps every helper below callable there. Node and Bun use their
+// own `node:path` so results match the rest of the host's file APIs; it
+// comes through `process.getBuiltinModule` (see {@link loadBuiltin}) and
+// falls back to `@std/path` when that hook is missing.
 // Neither may be a top-level `await import()` — one TLA anywhere in a
 // module graph makes esbuild/Rollup lower every initializer in that graph
 // to an async function, which deadlocks legal circular imports downstream.
-let nativePath: NativePath;
-if (isDeno) {
-  nativePath = stdPath as NativePath;
-} else if (isBun || isNode) {
-  nativePath = loadBuiltin('node:path');
-}
+const nativePath: NativePath = isBun || isNode
+  ? loadBuiltin('node:path') ?? stdPath as NativePath
+  : stdPath as NativePath;
 
 /**
  * Last path segment.
