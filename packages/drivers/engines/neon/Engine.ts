@@ -434,8 +434,7 @@ export class NeonHttpEngine extends SQLConnectionEngine<
     }
     // Unknown-to-this-switch keys (host/username/password/database/pool/ssl and
     // the SQL knobs) fall through to the base validators.
-    // deno-lint-ignore no-explicit-any
-    return super._processOption(key as any, value);
+    return super._processOption(key, value);
   }
 
   //#endregion Option processing

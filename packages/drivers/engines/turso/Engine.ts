@@ -341,8 +341,7 @@ export class TursoEngine extends SQLConnectionEngine<
         break;
     }
     // Unknown-to-this-switch keys fall through to the base validators.
-    // deno-lint-ignore no-explicit-any
-    return super._processOption(key as any, value);
+    return super._processOption(key, value);
   }
 
   //#endregion Option processing

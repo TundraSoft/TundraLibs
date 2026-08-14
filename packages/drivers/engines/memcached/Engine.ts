@@ -1109,8 +1109,7 @@ export class MemcachedEngine extends BaseEngine<
         }
         break;
     }
-    // deno-lint-ignore no-explicit-any
-    return super._processOption(key as any, value);
+    return super._processOption(key, value);
   }
 
   //#endregion Option processing

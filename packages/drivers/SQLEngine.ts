@@ -1229,11 +1229,9 @@ export abstract class SQLConnectionEngine<
         }
         break;
     }
-    // BaseEngine's _processOption is typed against keyof EngineOptions;
     // SQL-specific keys are unknown to the base switch and fall through
-    // as no-ops. Cast to keep TS happy without losing runtime safety.
-    // deno-lint-ignore no-explicit-any
-    return super._processOption(key as any, value);
+    // as no-ops.
+    return super._processOption(key, value);
   }
 
   //#endregion Option processing
