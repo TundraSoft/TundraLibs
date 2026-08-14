@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { Permissions } from './Permissions.ts';
 import { PactDefinitionError, PactDeniedError } from './errors/mod.ts';
 

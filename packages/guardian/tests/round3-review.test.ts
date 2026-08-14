@@ -6,7 +6,7 @@
  * whole review can be re-verified in one run.
  */
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { Guardian, GuardianError } from '../mod.ts';
 
 describe('guardian.round-3 review regressions', () => {

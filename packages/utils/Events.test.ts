@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { type EventCallback, Events } from './Events.ts';
 
 /** Test harness: re-exposes the protected emission surface. */

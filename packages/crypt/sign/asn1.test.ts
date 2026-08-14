@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { describeDerKey, sec1ToPkcs8 } from './asn1.ts';
 import { pemToDer } from './keys.ts';
 

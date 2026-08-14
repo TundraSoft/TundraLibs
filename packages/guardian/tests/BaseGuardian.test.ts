@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { Guardian } from '../Guardian.ts';
 import { StringGuardian } from '../guards/StringGuardian.ts';
 import { NumberGuardian } from '../guards/NumberGuardian.ts';

@@ -8,8 +8,12 @@
  * - Path utilities
  * - Runtime detection
  * - Permissions
- * - Testing framework
  * - Fetch with TLS support
+ *
+ * The test helpers are deliberately NOT re-exported here: `test.ts`
+ * imports `bun:test` and `node:test`, which esbuild and wrangler cannot
+ * resolve, so a barrel that pulls them in fails every Cloudflare Workers
+ * build. Import them from `@tundralibs/compat/test` instead.
  *
  * @module
  *
@@ -222,19 +226,6 @@ export {
   type UpgradeTlsOptions,
 } from './net.ts';
 export { type UdpSocket, udpSocket, type UdpSocketOptions } from './udp.ts';
-export {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  type DescribeOptions,
-  type HookFn,
-  it,
-  type ItOptions,
-  type PermissionOptions,
-  test,
-} from './test.ts';
 export {
   type FsEvent,
   type FsEventKind,

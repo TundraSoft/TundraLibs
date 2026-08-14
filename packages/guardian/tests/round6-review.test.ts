@@ -27,7 +27,7 @@
  * point.
  */
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { Guardian, GuardianError } from '../mod.ts';
 
 // A thenable-shaped value: an object with a callable `then`. Promise

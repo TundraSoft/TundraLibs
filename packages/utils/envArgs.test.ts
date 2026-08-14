@@ -1,11 +1,10 @@
 import * as asserts from '@std/asserts';
+import { describe, it } from '@tundralibs/compat/test';
 import {
   cwd,
-  describe,
   isBun,
   isDeno,
   isNode,
-  it,
   makeDirSync,
   removeSync,
   writeTextFileSync,

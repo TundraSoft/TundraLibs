@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { Cacher } from './Cacher.ts';
 import { AbstractEngine } from './AbstractEngine.ts';
 import { CacherError } from './errors/mod.ts';

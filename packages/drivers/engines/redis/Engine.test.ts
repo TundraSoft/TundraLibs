@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { envArgs } from '@tundralibs/utils';
 import { RedisEngine } from './Engine.ts';
 import { RespError, type RespValue } from './resp.ts';

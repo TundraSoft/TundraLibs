@@ -1,9 +1,8 @@
 import * as asserts from '@std/asserts';
+import { describe, it } from '@tundralibs/compat/test';
 import {
-  describe,
   FileAccessDenied,
   FileNotFound,
-  it,
   makeDir,
   remove,
   writeTextFile,

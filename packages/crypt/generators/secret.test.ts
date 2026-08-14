@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertMatch, assertThrows } from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import {
   generateAlphanumericSecret,
   generateBase32Secret,

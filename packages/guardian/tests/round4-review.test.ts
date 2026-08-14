@@ -10,7 +10,7 @@
  * Each test is RED on the pre-fix source and GREEN after the fix.
  */
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { type BaseGuardian, Guardian, GuardianError } from '../mod.ts';
 
 describe('guardian.round-4 review regressions', () => {

@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { Guardian } from '../mod.ts';
 
 const DRAFT = 'https://json-schema.org/draft/2020-12/schema';

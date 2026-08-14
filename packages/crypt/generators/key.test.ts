@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertRejects } from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import {
   generateECDHKeys,
   generateECDSAKeys,
