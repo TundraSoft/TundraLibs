@@ -244,6 +244,52 @@ function suite() {
     asserts.assertEquals(err.data, undefined);
   });
 
+  it('an out-of-band error frame rejects with .code attached', async () => {
+    // Regression: the out-of-band reject path (a standalone
+    // `{ type: 'error', id, code, message }` frame) used to hand back a
+    // BARE `new Error('CODE: text')`, while the `result` path above
+    // attached `.code`. A caller who had learned `err.code` works read
+    // `undefined` for protocol-level failures. Both paths now build the
+    // same shape.
+    //
+    // Driving the real server (rather than hand-feeding a frame to the
+    // dispatcher) also pins the server's id recovery: the correlation
+    // only exists because BAD_FORMAT carries the offending id back. Lose
+    // it and there is no pending to reject, and this call hangs to
+    // REQUEST_TIMEOUT instead — a distinguishable failure.
+    server = new Server();
+    server.command('echo', undefined, (ctx) => ctx.payload);
+    await server.listen({ port, hostname: '127.0.0.1' });
+    client = new Client({
+      url: `ws://127.0.0.1:${port}`,
+      reconnect: { enabled: false },
+      // Short, so a lost correlation fails the test quickly rather than
+      // stalling the suite for the 30s default.
+      defaultTimeoutMs: 1000,
+    });
+    await client.connect();
+    client.useSend((ctx, next) => {
+      // Keep the id, break the type: well-formed JSON the server cannot
+      // decode, whose id is still recoverable — so the BAD_FORMAT error
+      // frame comes back correlated to this very request.
+      ctx.frame = {
+        id: ctx.frame.id,
+        type: 'weird',
+      } as unknown as ClientSendContext['frame'];
+      return next();
+    });
+    const err = await asserts.assertRejects(
+      () => client.command('echo', 'hi'),
+      Error,
+    ) as Error & { code?: string; data?: unknown };
+    asserts.assertEquals(err.code, 'BAD_FORMAT');
+    // Message format is byte-identical to the pre-fix bare Error, so
+    // anyone matching on the string is unaffected.
+    asserts.assertEquals(err.message, 'BAD_FORMAT: invalid frame');
+    // `ServerErrorFrame` has no `data` field — nothing to attach.
+    asserts.assertEquals(err.data, undefined);
+  });
+
   it('command() rejects with REQUEST_TIMEOUT when handler never responds', async () => {
     server = new Server();
     // Handler resolves after 5 seconds — far past the client's 50 ms

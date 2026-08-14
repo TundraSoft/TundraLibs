@@ -928,11 +928,16 @@ them, when a `command()` cannot be completed: `REQUEST_TIMEOUT` (no
 socket dropped with the call in flight) and `CLOSED` (`client.close()`
 was called with the call in flight).
 
-Only failures that arrive as a `result` frame attach a `.code`
-property to the rejection. The three above — and rejections caused by
-an out-of-band `error` frame — carry their code in the `Error`'s
-`message` instead, so branch on `err.message` when you need to
-distinguish them.
+Every failure that arrives from the server attaches a `.code` property
+to the rejection — both the `result` frame path above and a rejection
+caused by a correlated out-of-band `error` frame (e.g. `BAD_FORMAT`
+for a malformed frame whose id the server could recover). Only the
+`result` path can also carry `.data`; the `error` frame has no field
+for it.
+
+The three client-side codes above are the exception: they have no wire
+frame behind them and carry their code in the `Error`'s `message`
+only, so branch on `err.message` for those.
 
 ## Runtime support
 

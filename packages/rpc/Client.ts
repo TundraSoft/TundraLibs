@@ -77,6 +77,31 @@ const DEFAULT_RECONNECT: Required<ReconnectPolicy> = {
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
+ * Build the rejection handed to a caller whose request failed on the
+ * wire: an `Error` messaged `` `${code}: ${message}` `` that ALSO
+ * carries `code` — and `data` when the frame supplied any — as
+ * properties, so callers branch on the code instead of parsing the
+ * string.
+ *
+ * Both server-driven reject paths go through here (a `result` frame
+ * with `ok: false`, and a correlated out-of-band `error` frame) so
+ * they cannot drift back into handing out different error shapes.
+ * Only the `result` arm has structured detail to pass — the
+ * `ServerErrorFrame` shape has no `data` field — so the out-of-band
+ * caller simply omits the argument.
+ */
+function rejectionError(
+  code: string,
+  message: string,
+  data?: unknown,
+): Error & { code: string; data?: unknown } {
+  return Object.assign(new Error(`${code}: ${message}`), {
+    code,
+    ...(data === undefined ? {} : { data }),
+  });
+}
+
+/**
  * RPC + pub/sub client. See module JSDoc for lifecycle.
  *
  * @example
@@ -891,7 +916,7 @@ export class Client {
    * The shared `decodeFrame` helper in `protocol.ts` is hardcoded to the
    * server's input side (`InboundFrame`: `cmd` / `sub` / `unsub` /
    * `pub`) and returns null for anything else — so the client has to
-   * do its own envelope validation. We accept the four
+   * do its own envelope validation. We accept the five
    * client-facing types (`result` / `subscribed` / `unsubscribed` /
    * `msg` / `error`) and drop everything else as malformed.
    */
@@ -1001,8 +1026,10 @@ export class Client {
 
   /**
    * Route a validated server frame to its per-type dispatcher. An
-   * out-of-band `error` frame rejects the request its `id` correlates to;
-   * an uncorrelated one is dropped (observable via {@link useReceive}).
+   * out-of-band `error` frame rejects the request its `id` correlates
+   * to — with the frame's `code` attached, matching the `result` reject
+   * path; an uncorrelated one is dropped (observable via
+   * {@link useReceive}).
    */
   protected _dispatchFrame(frame: OutboundFrame): void {
     switch (frame.type) {
@@ -1026,7 +1053,11 @@ export class Client {
             if (pending.timeoutHandle !== undefined) {
               clearTimeout(pending.timeoutHandle);
             }
-            pending.reject(new Error(`${frame.code}: ${frame.message}`));
+            // Same shape as the `result` reject path: message format
+            // unchanged (`CODE: text`), with `code` attached so callers
+            // branch on protocol failures the same way they branch on
+            // handler failures. No `data` — the `error` frame has none.
+            pending.reject(rejectionError(frame.code, frame.message));
             this._pending.delete(frame.id);
           }
         }
@@ -1055,15 +1086,7 @@ export class Client {
       // can branch on the code and read the detail without parsing the
       // string.
       pending.reject(
-        Object.assign(
-          new Error(`${frame.error.code}: ${frame.error.message}`),
-          {
-            code: frame.error.code,
-            ...(frame.error.data === undefined
-              ? {}
-              : { data: frame.error.data }),
-          },
-        ),
+        rejectionError(frame.error.code, frame.error.message, frame.error.data),
       );
     }
   }
