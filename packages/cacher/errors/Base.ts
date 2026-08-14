@@ -8,6 +8,13 @@ import { BaseError } from '@tundralibs/utils';
 export class CacherError<
   M extends Record<string, unknown> = Record<string, unknown>,
 > extends BaseError<M> {
+  /**
+   * Passes the constructor's `message` through verbatim — Manager errors are
+   * written as complete sentences at the throw site rather than assembled from
+   * metadata.
+   *
+   * @protected
+   */
   protected override get _messageTemplate(): string {
     return '${message}';
   }

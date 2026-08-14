@@ -73,13 +73,24 @@ import { TursoHttpClient } from './TursoHttpClient.ts';
 import { TursoHttpError } from './TursoHttpError.ts';
 import type { HranaNamedArg, TursoEngineOptions } from './types/mod.ts';
 
+/**
+ * libSQL / Turso over the Hrana HTTP pipeline, for edge and serverless
+ * runtimes. Pool-free: each statement is one standalone HTTP request, so
+ * transactions, prepared statements and advisory locks are unsupported.
+ */
 export class TursoEngine extends SQLConnectionEngine<
   TursoHttpClient,
   TursoEngineOptions,
   SQLEngineEvents
 > {
+  /** Always `'TURSO'`. */
   public readonly Engine: string = 'TURSO';
 
+  /**
+   * Everything requiring a persistent session is `false`; `inPlaceAlter` is
+   * `false` because SQLite rebuilds a table to change a column's type,
+   * independent of the transport.
+   */
   public readonly Capabilities: SQLEngineCapabilities = {
     // One-shot Hrana HTTP: no session survives a call, so no pool / tx /
     // prepared statement / advisory lock can span requests. Honest `false`s.
@@ -98,9 +109,13 @@ export class TursoEngine extends SQLConnectionEngine<
     parameterReplacement: { prefix: ':', suffix: '' },
   };
 
+  /** Emits SQLite-dialect SQL, shared with {@link SQLiteEngine}. */
   protected readonly _translator: SQLiteTranslator = new SQLiteTranslator();
 
   /**
+   * Validates options. No request is made here. `authToken` may be omitted or
+   * empty for an unauthenticated local `sqld`.
+   *
    * @throws {EngineError} `MISSING_CONFIG_VALUE` if `url` is missing.
    */
   constructor(
@@ -145,6 +160,11 @@ export class TursoEngine extends SQLConnectionEngine<
 
   //#region SQLConnectionEngine hooks
 
+  /**
+   * Issues one Hrana request with the params as `named_args`, decoding each
+   * cell from its Hrana tag. `count` is the row count when rows came back
+   * (including `RETURNING`), otherwise the affected-row count.
+   */
   protected async _execute<R extends Record<string, unknown>>(
     query: EngineQuery,
     client: TursoHttpClient,
@@ -190,18 +210,39 @@ export class TursoEngine extends SQLConnectionEngine<
   // `beginTransaction`/`commit`/`rollback` guard on `Capabilities.transactions`
   // (declared `false`) and reject before ever reaching these.
 
+  /**
+   * Unreachable in practice — the base guards on `Capabilities.transactions`
+   * first.
+   *
+   * @throws {@link EngineError} `UNSUPPORTED_OPERATION`, always.
+   */
   protected _beginTransaction(): never {
     throw this.__unsupportedTransaction();
   }
 
+  /**
+   * Unreachable in practice — no transaction can have been opened.
+   *
+   * @throws {@link EngineError} `UNSUPPORTED_OPERATION`, always.
+   */
   protected _commitTransaction(): never {
     throw this.__unsupportedTransaction();
   }
 
+  /**
+   * Unreachable in practice — no transaction can have been opened.
+   *
+   * @throws {@link EngineError} `UNSUPPORTED_OPERATION`, always.
+   */
   protected _rollbackTransaction(): never {
     throw this.__unsupportedTransaction();
   }
 
+  /**
+   * Maps a {@link TursoHttpError}'s SQLite code onto the standard engine error
+   * codes. Only query-relevant fields are copied across — the auth token is
+   * deliberately left on the client.
+   */
   protected override _wrapDriverError(
     error: unknown,
     query: EngineQuery,
@@ -243,6 +284,17 @@ export class TursoEngine extends SQLConnectionEngine<
 
   //#region Option processing
 
+  /**
+   * Validates the Turso-only options and delegates the rest to the base.
+   * `timeout` is bounded to 1–120 seconds eagerly, so an out-of-range value
+   * fails at construction rather than on the first request.
+   *
+   * @returns The validated value, unmodified.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` for any value that
+   *   fails its check.
+   *
+   * @internal
+   */
   protected override _processOption<K extends keyof TursoEngineOptions>(
     key: K,
     value: TursoEngineOptions[K],
@@ -289,14 +341,14 @@ export class TursoEngine extends SQLConnectionEngine<
         break;
     }
     // Unknown-to-this-switch keys fall through to the base validators.
-    // deno-lint-ignore no-explicit-any
-    return super._processOption(key as any, value);
+    return super._processOption(key, value);
   }
 
   //#endregion Option processing
 
   //#region Helpers
 
+  /** Builds the shared `UNSUPPORTED_OPERATION` error for the transaction seams. */
   private __unsupportedTransaction(): EngineError {
     return new EngineError('UNSUPPORTED_OPERATION', {
       instanceId: this.instanceId,

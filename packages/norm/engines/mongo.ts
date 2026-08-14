@@ -7,6 +7,8 @@
  * import '@tundralibs/norm/engines/mongo';
  * import { Norm } from '@tundralibs/norm/core';
  *
+ * declare const host: string, database: string;
+ *
  * const norm = new Norm({ database: { dialect: 'mongo', host, database } });
  * ```
  *

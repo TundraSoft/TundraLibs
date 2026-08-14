@@ -74,6 +74,7 @@ against an undeclared module or an inapplicable permission throws
 ```typescript
 import { PACT } from '@tundralibs/pact';
 // pact configured as in "The bitmask model" above
+declare const pact: PACT;
 
 pact.can('Ghost', 'READ', {}); // throws PactDefinitionError — UNKNOWN_MODULE
 pact.can('Billing', 'EDIT', {}); // throws PactDefinitionError — PERMISSION_NOT_IN_MODULE
@@ -109,6 +110,7 @@ semantics.
 ```typescript
 import { PACT } from '@tundralibs/pact';
 // pact configured as in "The bitmask model" above
+declare const pact: PACT;
 
 const grants = { Post: 3n }; // READ | EDIT
 
@@ -156,6 +158,7 @@ against the module's catalog when one exists).
 ```typescript
 import { PACT } from '@tundralibs/pact';
 // pact configured as in "The bitmask model" above
+declare const pact: PACT;
 
 pact.grant(0n, 'READ', 'EDIT'); // 3n — READ | EDIT
 pact.revoke(3n, 'EDIT'); // 1n — READ
@@ -197,6 +200,7 @@ instance rule yourself.
 ```typescript
 import { PACT } from '@tundralibs/pact';
 // pact configured as in "The bitmask model" above
+declare const pact: PACT;
 
 function editPost(
   post: { authorId: string },

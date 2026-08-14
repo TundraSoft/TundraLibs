@@ -23,7 +23,7 @@ nobody actually wants. Build per-vendor.
 
 **Sketch:**
 
-```ts
+```ts ignore
 import { AbstractHandler, type HandlerOptions } from '@tundralibs/slogger';
 
 type SlackHandlerOptions = HandlerOptions & {
@@ -64,7 +64,7 @@ factor it out for your wire format if you want.
 
 **Sketch:**
 
-```ts
+```ts ignore
 import { AbstractHandler, type HandlerOptions } from '@tundralibs/slogger';
 import type { SlogObject } from '@tundralibs/slogger';
 
@@ -101,7 +101,7 @@ inherently per-app. Spammy code paths look different in every codebase.
 
 **Sketch:**
 
-```ts
+```ts ignore
 type DedupHandlerOptions = HandlerOptions & {
   inner: AbstractHandler;
   windowMs: number;
@@ -134,6 +134,12 @@ or use a generic HTTPHandler with the vendor's JSON formatter.
 **Generic recipe — DatadogHandler:**
 
 ```ts
+import {
+  HTTPHandler,
+  type SlogObject,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 // Use the existing HTTPHandler + a custom formatter:
 const datadogFormatter = (log: SlogObject): string =>
   JSON.stringify({
@@ -151,7 +157,7 @@ new HTTPHandler('dd', {
   url: 'https://http-intake.logs.datadoghq.com/api/v2/logs',
   method: 'POST',
   batchSize: 100,
-  headers: { 'DD-API-KEY': process.env.DATADOG_API_KEY },
+  headers: { 'DD-API-KEY': Deno.env.get('DATADOG_API_KEY')! },
   formatter: datadogFormatter,
 });
 ```

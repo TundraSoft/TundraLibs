@@ -32,6 +32,9 @@ public key verifies.
 ```typescript
 import { PACT } from '@tundralibs/pact';
 
+declare const myPrivateKeyPem: string;
+declare const myPublicKeyPem: string;
+
 // HS* (symmetric) - one shared secret string >= the hash size in bytes
 // (RFC 7518 §3.2): HS256 >= 32, HS384 >= 48, HS512 >= 64
 const hmac = new PACT({
@@ -97,6 +100,8 @@ becomes a decimal string) before embedding them in a payload - and
 ```typescript
 import { PACT, serializeGrants } from '@tundralibs/pact';
 
+declare const pact: PACT;
+
 // grants is a { module -> BigInt mask } map (e.g. from grantsForGroups)
 const grants = { Post: 3n }; // READ | EDIT
 
@@ -121,6 +126,9 @@ blocklist, a key-rotation watermark) without PACT owning a store.
 
 ```typescript
 import { PACT } from '@tundralibs/pact';
+
+declare const blocklist: Set<string>;
+declare const token: string;
 
 const pact = new PACT({
   bits: { READ: 1n, EDIT: 2n },
@@ -151,6 +159,9 @@ re-issues the same claims with a fresh `exp = now + expiry`.
 ```typescript
 import { PACT } from '@tundralibs/pact';
 
+declare const pact: PACT;
+declare const oldToken: string;
+
 // Re-verifies the old token (including revocation), then re-issues
 // with a fresh exp = now + expiry.
 const fresh = await pact.refreshJWT(oldToken);
@@ -170,6 +181,9 @@ for authorization, where `verifyJWT` is the only safe path.
 ```typescript
 import { PACT } from '@tundralibs/pact';
 
+declare const pact: PACT;
+declare const token: string;
+
 // No signature check - inspection only.
 const { header, payload } = pact.decodeJWT(token);
 console.log(header.kid, payload.sub);
@@ -185,6 +199,8 @@ webhook signatures, and signed URLs.
 
 ```typescript
 import { PACT } from '@tundralibs/pact';
+
+declare const webhookBody: string;
 
 const pact = new PACT({
   bits: { READ: 1n },
@@ -221,6 +237,8 @@ after construction. The token lifecycle emits five events:
 
 ```typescript
 import { PACT } from '@tundralibs/pact';
+
+declare const audit: (event: string, detail?: unknown) => void;
 
 const pact = new PACT({
   bits: { READ: 1n },

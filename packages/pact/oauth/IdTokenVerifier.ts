@@ -150,6 +150,14 @@ export class IdTokenVerifier {
    */
   private __lastForcedRefresh = 0;
 
+  /**
+   * Create a verifier bound to one provider. The policy defaults to
+   * `'preferred'`, under which an unreachable key set degrades to decode-only
+   * — claims are still validated and `onDegraded` fires — rather than failing
+   * the login; `'required'` makes that case fatal.
+   *
+   * @param provider - instance name, used to label errors and degrade reports.
+   */
   constructor(
     provider: string,
     fetchRef: FetchRef,

@@ -46,6 +46,7 @@ export type HTTPHandlerOptions = HandlerOptions & {
  * degrades to bounded data loss instead of unbounded memory growth.
  */
 export class HTTPHandler extends AbstractHandler {
+  /** Runtime discriminator for this handler kind. */
   public readonly mode = 'http';
 
   /** Default cap on the in-memory queue, in log records. */
@@ -73,6 +74,11 @@ export class HTTPHandler extends AbstractHandler {
   /** Records dropped (oldest-first) to keep the queue under the cap. */
   private __droppedLogCount: number = 0;
 
+  /**
+   * Formatted records awaiting delivery — the batch still filling up,
+   * plus any failed batch restored ahead of it for retry. Bounded by
+   * `maxBufferSize`, drop-oldest.
+   */
   protected _logs: Array<string> = [];
 
   /**

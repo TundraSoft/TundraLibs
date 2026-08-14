@@ -93,12 +93,23 @@ export interface ColumnSpec<
   T = unknown,
   Opt extends boolean = boolean,
 > {
+  /** Logical SQL type the factory emitted (`'VARCHAR'`, `'JSONB'`, …).
+   * Each dialect renders it to its own spelling. */
   readonly type: string;
+  /** Declared width for the sized string/binary types. */
   readonly length?: number;
+  /** Total digits, for `DECIMAL` / `NUMERIC`. */
   readonly precision?: number;
+  /** Digits after the point, for `DECIMAL` / `NUMERIC`. */
   readonly scale?: number;
+  /** Accepts NULL — which also makes the column omittable on insert. */
   readonly nullable?: true;
+  /** Encrypted at rest; the PHYSICAL column becomes TEXT regardless of
+   * `type`, and the column is not filterable on its own. */
   readonly encrypt?: true;
+  /** A deterministic `<name>_hash` sibling is maintained on write, so
+   * plaintext equality filters can rewrite to an indexed digest
+   * lookup. Only meaningful alongside `encrypt`. */
   readonly hash?: true;
   /** One-way DIGEST column (`Column.hash(algo)`): plaintext in, digest
    * at rest, equality filters rewrite through the same digest. The
@@ -109,7 +120,9 @@ export interface ColumnSpec<
   readonly project?: false;
   /** `false` = rejected in WHERE / ORDER BY. */
   readonly filterable?: false;
+  /** Rejected in insert payloads (set on computed columns like masks). */
   readonly disableInsert?: true;
+  /** Rejected in update payloads. */
   readonly disableUpdate?: true;
   /** Documentation + DDL comment (`COMMENT ON COLUMN …`). */
   readonly comment?: string;
@@ -121,12 +134,20 @@ export interface ColumnSpec<
   readonly min?: number | string;
   /** Range ceiling — number, or bigint/Date canonicalized to a string. */
   readonly max?: number | string;
+  /** Shortest allowed string. On a digest column this constrains the
+   * PLAINTEXT, not the stored hash. */
   readonly minLength?: number;
+  /** Longest allowed string — a validator, independent of `length`. */
   readonly maxLength?: number;
+  /** Canonicalized defaults per slot: `insert` fires when the payload
+   * omits the column, `update` on every update. Bigints and Dates are
+   * stored as strings; generators and DB expressions pass through. */
   readonly default?: {
     readonly insert?: unknown;
     readonly update?: unknown;
   };
+  /** Value hooks. Not serializable — the snapshot layer strips them,
+   * so they never participate in migration diffs. */
   readonly transforms?: {
     readonly beforeWrite?: (v: never) => unknown;
     readonly afterRead?: (v: never) => unknown;
@@ -230,6 +251,10 @@ export class ColumnBuilder<
   /** The emitted plain column data. */
   public readonly spec: ColumnSpec<T, Opt>;
 
+  /**
+   * Wraps a spec directly. Prefer the {@linkcode Column} factories —
+   * this is the seam the chain methods use to produce each new builder.
+   */
   constructor(spec: ColumnSpec<T, Opt>) {
     this.spec = spec;
   }
@@ -348,6 +373,8 @@ export class StringColumnBuilder<
   T extends string | null = string,
   Opt extends boolean = false,
 > extends ColumnBuilder<T, Opt> {
+  /** As {@linkcode ColumnBuilder.nullable}, keeping the string surface
+   * so the validators stay chainable. */
   public override nullable(): _KeepHidden<
     this,
     StringColumnBuilder<T | null, true>
@@ -357,6 +384,7 @@ export class StringColumnBuilder<
     ) as _KeepHidden<this, StringColumnBuilder<T | null, true>>;
   }
 
+  /** As {@linkcode ColumnBuilder.default}, keeping the string surface. */
   public override default(
     v: DefaultInput<NonNullable<T>>,
   ): _KeepHidden<this, StringColumnBuilder<T, true>> {
@@ -421,6 +449,8 @@ export class EncryptedColumnBuilder<
     throw new Error('encrypt(): column is already encrypted.');
   }
 
+  /** As {@linkcode ColumnBuilder.nullable}, keeping the encrypted
+   * surface so `.hash()` stays reachable. */
   public override nullable(): _KeepHidden<
     this,
     EncryptedColumnBuilder<T | null, true>
@@ -430,6 +460,8 @@ export class EncryptedColumnBuilder<
     ) as _KeepHidden<this, EncryptedColumnBuilder<T | null, true>>;
   }
 
+  /** As {@linkcode ColumnBuilder.default}. The value is declared as
+   * PLAINTEXT — encryption happens on the way to the database. */
   public override default(
     v: DefaultInput<NonNullable<T>>,
   ): _KeepHidden<this, EncryptedColumnBuilder<T, true>> {
@@ -463,6 +495,8 @@ export class HashedColumnBuilder<
   T = string,
   Opt extends boolean = false,
 > extends EncryptedColumnBuilder<T, Opt> {
+  /** Narrowed so `hash: true` is visible at the type level — that is
+   * what drives the sibling column's synthesis in `Entity()`. */
   declare readonly spec: ColumnSpec<T, Opt> & { readonly hash: true };
 
   /** The class IS the brand — enforce it, so a directly-constructed
@@ -477,6 +511,8 @@ export class HashedColumnBuilder<
     );
   }
 
+  /** As {@linkcode ColumnBuilder.nullable}, preserving the `hash`
+   * brand so the sibling is still synthesized. */
   public override nullable(): _KeepHidden<
     this,
     HashedColumnBuilder<T | null, true>
@@ -486,6 +522,7 @@ export class HashedColumnBuilder<
     ) as _KeepHidden<this, HashedColumnBuilder<T | null, true>>;
   }
 
+  /** As {@linkcode ColumnBuilder.default}, preserving the `hash` brand. */
   public override default(
     v: DefaultInput<NonNullable<T>>,
   ): _KeepHidden<this, HashedColumnBuilder<T, true>> {
@@ -500,6 +537,8 @@ export class NumberColumnBuilder<
   T extends number | bigint | null = number,
   Opt extends boolean = false,
 > extends ColumnBuilder<T, Opt> {
+  /** As {@linkcode ColumnBuilder.nullable}, keeping `min` / `max` /
+   * `lov` chainable. */
   public override nullable(): _KeepHidden<
     this,
     NumberColumnBuilder<T | null, true>
@@ -509,6 +548,7 @@ export class NumberColumnBuilder<
     ) as _KeepHidden<this, NumberColumnBuilder<T | null, true>>;
   }
 
+  /** As {@linkcode ColumnBuilder.default}, keeping the numeric surface. */
   public override default(
     v: DefaultInput<NonNullable<T>>,
   ): _KeepHidden<this, NumberColumnBuilder<T, true>> {
@@ -554,6 +594,8 @@ export class DateColumnBuilder<
   T extends Date | null = Date,
   Opt extends boolean = false,
 > extends ColumnBuilder<T, Opt> {
+  /** As {@linkcode ColumnBuilder.nullable}, keeping `min` / `max`
+   * chainable. */
   public override nullable(): _KeepHidden<
     this,
     DateColumnBuilder<T | null, true>
@@ -563,6 +605,8 @@ export class DateColumnBuilder<
     ) as _KeepHidden<this, DateColumnBuilder<T | null, true>>;
   }
 
+  /** As {@linkcode ColumnBuilder.default}, keeping the date surface.
+   * A literal `Date` is canonicalized to an ISO string in the spec. */
   public override default(
     v: DefaultInput<NonNullable<T>>,
   ): _KeepHidden<this, DateColumnBuilder<T, true>> {
@@ -597,6 +641,8 @@ export class DigestColumnBuilder<
   T extends string | null = string,
   Opt extends boolean = false,
 > extends ColumnBuilder<T, Opt> {
+  /** As {@linkcode ColumnBuilder.nullable}, keeping the digest surface
+   * (and its plaintext validators) chainable. */
   public override nullable(): _KeepHidden<
     this,
     DigestColumnBuilder<T | null, true>
@@ -606,6 +652,8 @@ export class DigestColumnBuilder<
     ) as _KeepHidden<this, DigestColumnBuilder<T | null, true>>;
   }
 
+  /** As {@linkcode ColumnBuilder.default}. The value is declared as
+   * PLAINTEXT — it is digested on the way to the database. */
   public override default(
     v: DefaultInput<NonNullable<T>>,
   ): _KeepHidden<this, DigestColumnBuilder<T, true>> {
@@ -663,6 +711,8 @@ export class MaskColumnBuilder<
   T extends string | null = string,
   Opt extends boolean = false,
 > extends ColumnBuilder<T, Opt> {
+  /** Narrowed so the write-exclusion and the `masked` brand are
+   * visible at the type level, not just at runtime. */
   declare readonly spec: ColumnSpec<T, Opt> & {
     readonly disableInsert: true;
     readonly disableUpdate: true;
@@ -670,6 +720,9 @@ export class MaskColumnBuilder<
     readonly masked: { readonly source: string };
   };
 
+  /** Declare the mask nullable when its SOURCE is nullable — a null
+   * source yields a null mask. TS cannot infer this, so it is
+   * annotation on trust. */
   public override nullable(): _KeepHidden<
     this,
     MaskColumnBuilder<T | null, true>
@@ -679,20 +732,31 @@ export class MaskColumnBuilder<
     ) as _KeepHidden<this, MaskColumnBuilder<T | null, true>>;
   }
 
+  /** Unavailable — a mask is computed from its source.
+   * @throws {@link Error} Always. */
   public override default(): never {
     throw new Error('mask columns are computed — no defaults.');
   }
+  /** Unavailable — a mask is computed from its source.
+   * @throws {@link Error} Always. */
   public override defaultOnUpdate(): never {
     throw new Error('mask columns are computed — no defaults.');
   }
+  /** Unavailable — a mask is never written.
+   * @throws {@link Error} Always. */
   public override beforeWrite(): never {
     throw new Error('mask columns are never written.');
   }
+  /** Unavailable — the mask fn already IS the read transform.
+   * @throws {@link Error} Always. */
   public override afterRead(): never {
     throw new Error(
       'mask columns ARE the read transform — put logic in the mask fn.',
     );
   }
+  /** Unavailable — a mask is presentation over an already-decrypted
+   * source, and is never stored.
+   * @throws {@link Error} Always. */
   public override encrypt(): never {
     throw new Error('mask columns are presentation — nothing to encrypt.');
   }

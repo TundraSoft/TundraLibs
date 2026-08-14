@@ -47,6 +47,11 @@ export class Groups {
    */
   private __clearedThrough = 0;
 
+  /**
+   * Wrap a consumer's group resolver in a lazy cache. Nothing is fetched here
+   * — ids resolve on first use and stay cached until {@link Groups.sync}
+   * refreshes them or {@link Groups.clear} drops them.
+   */
   constructor(resolver: GroupResolver) {
     this.__resolver = resolver;
   }

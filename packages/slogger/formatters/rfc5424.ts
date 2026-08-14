@@ -117,8 +117,10 @@ const _msg = (value: string): string =>
  *
  * @example
  * ```typescript
- * import { rfc5424Formatter } from '@tundralibs/slogger';
+ * import { rfc5424Formatter, type SlogObject } from '@tundralibs/slogger';
  * import { SyslogFacilities } from '@tundralibs/utils';
+ *
+ * declare const slogObject: SlogObject;
  *
  * const fmt = rfc5424Formatter({
  *   facility: SyslogFacilities.LOCAL0,

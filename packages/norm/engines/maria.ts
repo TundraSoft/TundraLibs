@@ -8,6 +8,8 @@
  * import '@tundralibs/norm/engines/maria';
  * import { Norm } from '@tundralibs/norm/core';
  *
+ * declare const host: string, database: string, username: string;
+ *
  * const norm = new Norm({ database: { dialect: 'maria', host, database, username } });
  * ```
  *

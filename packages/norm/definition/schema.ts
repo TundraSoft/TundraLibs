@@ -5,7 +5,7 @@
  * collection of entities (`Schema('Blog', {...})`) — the database
  * namespace is the separate `dbSchema` option on `Entity()`.
  *
- * ```ts
+ * ```ts ignore
  * // models/blog/mod.ts — the folder IS the schema
  * export const Blog = Schema('Blog', { Users, Posts, Comments });
  *

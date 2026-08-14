@@ -12,7 +12,11 @@ import { ulid } from '@tundralibs/id';
 import { hostname } from '@tundralibs/compat/net';
 import { onExit } from '@tundralibs/compat/runtime';
 import { AbstractHandler, type HandlerOptions } from './handlers/mod.ts';
-import type { SloggerFormatter, SlogObject } from './types/mod.ts';
+import type {
+  ScopedSlogger,
+  SloggerFormatter,
+  SlogObject,
+} from './types/mod.ts';
 import { LogManager } from './LogManager.ts';
 import { SamplingOptions } from './handlers/AbstractHandler.ts';
 import {
@@ -49,10 +53,19 @@ export type HandlerConfig = {
  */
 export type LogContext = Record<string, unknown>;
 
-/** */
+/**
+ * Constructor options for {@link Slogger}, and the cache key
+ * {@link LogManager}'s `createSlogger()` compares against — note its
+ * reference-identity rule for the function-valued fields here.
+ */
 export type SloggerOptions = {
   /** Application name for logging context */
   appName: string;
+  /**
+   * Threshold severity: records numerically above this are dropped
+   * before any handler runs. Syslog ordering, so `0` (EMERGENCY) is the
+   * most severe and `7` (DEBUG) the least.
+   */
   level: SyslogSeverities;
   /**
    * Handler configurations. Omit to create a Slogger that silently
@@ -88,8 +101,12 @@ export type SloggerOptions = {
    * `@tundralibs/ambient`:
    *
    * ```ts
+   * import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
+   * import { ambient } from '@tundralibs/ambient';
+   *
    * const log = LogManager.createSlogger({
    *   appName: 'orders',
+   *   level: SyslogSeverities.INFO,
    *   contextProvider: () => ambient.get() ?? {},
    * });
    * log.info('charging'); // every line carries the ambient context, no thunk
@@ -103,12 +120,48 @@ export type SloggerOptions = {
   contextProvider?: () => LogContext;
 };
 
-/** */
+/**
+ * A logger: one app name, one severity threshold, and a set of handlers
+ * that every surviving record is fanned out to.
+ *
+ * Construct one directly for a standalone logger, or go through
+ * {@link LogManager} for a named, cached one. Log calls are synchronous,
+ * and handler failures never reach the caller — a dead log sink cannot
+ * break the code that logged to it.
+ *
+ * @example
+ * ```typescript
+ * import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+ *
+ * const log = new Slogger({
+ *   appName: 'api',
+ *   level: SyslogSeverities.INFO,
+ *   handlers: [
+ *     { name: 'out', type: 'ConsoleHandler', level: SyslogSeverities.INFO },
+ *   ],
+ * });
+ * log.info('listening', { port: 8080 });
+ * await log.finalize(); // guaranteed flush before exit
+ * ```
+ */
 export class Slogger {
+  /** Stamped on every record; also the {@link LogManager} cache key. */
   public readonly appName: string;
+
+  /** Stamped on every record. Resolved once, at construction. */
   public readonly hostname: string;
+
+  /**
+   * Threshold severity — see {@link SloggerOptions.level}. Fixed for the
+   * life of the logger; a handler may filter more aggressively than this
+   * but never less.
+   */
   public readonly level: SyslogSeverities;
 
+  /**
+   * Registered handlers in registration order. Every record that clears
+   * {@link level} is offered to each of them.
+   */
   protected _handlers: Array<AbstractHandler> = [];
   private __exitCleanup?: () => void;
   /**
@@ -124,6 +177,9 @@ export class Slogger {
   private readonly __contextProvider?: () => LogContext;
 
   /**
+   * Validates the options, builds the configured handlers, and registers
+   * a best-effort flush on process exit.
+   *
    * @param options - Logger configuration. See {@link SloggerOptions}.
    * @throws {SloggerConfigError} When `appName` is not a non-empty
    *   string of at most 30 characters.
@@ -312,23 +368,36 @@ export class Slogger {
    * `level`), and a nested `scope()` for composition. Resource-owning
    * methods (`registerHandler`, `finalize`) are intentionally absent
    * — scopes are views over the root logger, not separate destinations.
+   * That absence is in the type: the return is a
+   * {@link ScopedSlogger}, so calling `finalize()` on a scope is a
+   * compile error rather than a runtime `TypeError`. Finalize the root
+   * logger instead — it owns the handlers, and flushing it flushes
+   * every scope taken from it.
    *
    * Root loggers pay zero overhead for this feature; the merge code
    * lives on the wrapper, not on `log()`.
    *
    * @param bindings - Pre-bound context fields for the returned wrapper.
-   * @returns A scoped logger surface — assignable to `Slogger` for
-   *   logging purposes.
+   * @returns A {@link ScopedSlogger} — the full logging surface minus
+   *   `finalize()` / `registerHandler()`.
    *
    * @example
    * ```typescript
+   * import type { Slogger } from '@tundralibs/slogger';
+   *
+   * declare const log: Slogger;
+   * declare const reqId: string;
+   * declare const userId: string;
+   *
    * const reqLog = log.scope({ reqId, userId });
    * reqLog.info('handled request');               // ctx: { reqId, userId }
    * reqLog.info('slow', { latencyMs: 1247 });      // ctx: { reqId, userId, latencyMs }
    * reqLog.info('override', { reqId: 'other' });   // ctx: { reqId: 'other', userId }
+   *
+   * // reqLog.finalize();  // ✗ compile error — finalize the root `log`.
    * ```
    */
-  public scope(bindings: Record<string, unknown>): Slogger {
+  public scope(bindings: Record<string, unknown>): ScopedSlogger {
     // Freeze so a caller can't mutate the merged set under our feet.
     const frozen = Object.freeze({ ...bindings });
     // Arrow functions capture `this` from the enclosing method, so no
@@ -386,11 +455,30 @@ export class Slogger {
       emerg,
       emergency: emerg,
       // Composes — nested scope merges on top of this one.
-      scope: (more: Record<string, unknown>): Slogger =>
+      scope: (more: Record<string, unknown>): ScopedSlogger =>
         this.scope({ ...frozen, ...more }),
-    } as unknown as Slogger;
+      // No cast: the literal is checked against ScopedSlogger, so the
+      // omission of `finalize` / `registerHandler` is the declared
+      // contract instead of a lie hidden behind `as unknown as`.
+    };
   }
 
+  /**
+   * Emit one record at `level` to every handler that accepts it.
+   *
+   * Returns as soon as the handlers have been dispatched — their I/O runs
+   * in the background and their rejections are swallowed. Nothing beyond
+   * the two threshold checks is computed for a record no handler wants:
+   * the `context` thunk, the {@link SloggerOptions.contextProvider}, the
+   * record id and the ISO timestamp are all resolved lazily.
+   *
+   * @param context - Structured fields, or a thunk producing them. Merged
+   *   over the {@link SloggerOptions.contextProvider} output — fields
+   *   passed here win on collision.
+   * @throws Whatever a `context` thunk or a
+   *   {@link SloggerOptions.contextProvider} throws — neither is guarded,
+   *   so a failing provider surfaces at the log call site.
+   */
   public log(
     level: SyslogSeverities,
     message: string,
@@ -469,6 +557,7 @@ export class Slogger {
     }
   }
 
+  /** Emit at `DEBUG` (7), the least severe level. See {@link log}. */
   public debug(
     message: string,
     context: LogContext | (() => LogContext) = {},
@@ -476,6 +565,7 @@ export class Slogger {
     this.log(SyslogSeverities.DEBUG, message, context);
   }
 
+  /** Emit at `INFO` (6). See {@link log}. */
   public info(
     message: string,
     context: LogContext | (() => LogContext) = {},
@@ -483,8 +573,13 @@ export class Slogger {
     this.log(SyslogSeverities.INFO, message, context);
   }
 
-  public information = this.info;
+  /** Alias for {@link info}. */
+  public information: (
+    message: string,
+    context?: LogContext | (() => LogContext),
+  ) => void = this.info;
 
+  /** Emit at `NOTICE` (5). See {@link log}. */
   public notice(
     message: string,
     context: LogContext | (() => LogContext) = {},
@@ -492,6 +587,7 @@ export class Slogger {
     this.log(SyslogSeverities.NOTICE, message, context);
   }
 
+  /** Emit at `WARNING` (4). See {@link log}. */
   public warn(
     message: string,
     context: LogContext | (() => LogContext) = {},
@@ -499,8 +595,13 @@ export class Slogger {
     this.log(SyslogSeverities.WARNING, message, context);
   }
 
-  public warning = this.warn;
+  /** Alias for {@link warn}. */
+  public warning: (
+    message: string,
+    context?: LogContext | (() => LogContext),
+  ) => void = this.warn;
 
+  /** Emit at `ERROR` (3) — the default sampling-bypass threshold. See {@link log}. */
   public err(
     message: string,
     context: LogContext | (() => LogContext) = {},
@@ -508,8 +609,13 @@ export class Slogger {
     this.log(SyslogSeverities.ERROR, message, context);
   }
 
-  public error = this.err;
+  /** Alias for {@link err}. */
+  public error: (
+    message: string,
+    context?: LogContext | (() => LogContext),
+  ) => void = this.err;
 
+  /** Emit at `CRITICAL` (2). See {@link log}. */
   public crit(
     message: string,
     context: LogContext | (() => LogContext) = {},
@@ -517,8 +623,13 @@ export class Slogger {
     this.log(SyslogSeverities.CRITICAL, message, context);
   }
 
-  public critical = this.crit;
+  /** Alias for {@link crit}. */
+  public critical: (
+    message: string,
+    context?: LogContext | (() => LogContext),
+  ) => void = this.crit;
 
+  /** Emit at `ALERT` (1). See {@link log}. */
   public alert(
     message: string,
     context: LogContext | (() => LogContext) = {},
@@ -526,6 +637,7 @@ export class Slogger {
     this.log(SyslogSeverities.ALERT, message, context);
   }
 
+  /** Emit at `EMERGENCY` (0), the most severe level. See {@link log}. */
   public emerg(
     message: string,
     context: LogContext | (() => LogContext) = {},
@@ -533,7 +645,11 @@ export class Slogger {
     this.log(SyslogSeverities.EMERGENCY, message, context);
   }
 
-  public emergency = this.emerg;
+  /** Alias for {@link emerg}. */
+  public emergency: (
+    message: string,
+    context?: LogContext | (() => LogContext),
+  ) => void = this.emerg;
 
   /**
    * Finalizes the logger, cleaning up all handlers.

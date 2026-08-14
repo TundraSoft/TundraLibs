@@ -46,6 +46,19 @@ With `autoIssue: true`, a successful login also mints a JWT with
 ```typescript
 import { PACT } from '@tundralibs/pact';
 
+// ── your app's own store and helpers ─────────────────────────────────
+declare const db: {
+  findByEmail(
+    email: string,
+  ): Promise<{ id: string; email: string; hash: string } | null>;
+};
+declare const verifyHash: (password: string, hash: string) => Promise<boolean>;
+declare const audit: (
+  strategy: string,
+  principalId: string,
+  isNew: boolean,
+) => void;
+
 const pact = new PACT({
   bits: { READ: 1n, WRITE: 2n },
   secret: 'a-256-bit-shared-secret-for-hs256!',
@@ -136,6 +149,13 @@ For id_token providers you can add a replay guard the same way: send a
 ```typescript
 import { PACT } from '@tundralibs/pact';
 
+// ── your session store and the request's query string ────────────────
+declare const session: {
+  set(key: string, value: { state: string; verifier: string }): Promise<void>;
+  get(key: string): Promise<{ state: string; verifier: string }>;
+};
+declare const query: URLSearchParams;
+
 const pact = new PACT({
   bits: { READ: 1n },
   oauth: {
@@ -183,6 +203,14 @@ the default outcome is `{ id: '<instance>:<profile.id>', profile }` with
 
 ```typescript
 import { PACT } from '@tundralibs/pact';
+
+// ── your app's own store, session and request query ──────────────────
+declare const db: {
+  findByOAuth(provider: string, id: string): Promise<{ id: string } | null>;
+  createUser(data: { email?: string; name?: string }): Promise<{ id: string }>;
+};
+declare const query: URLSearchParams;
+declare const stashed: { state: string; verifier: string };
 
 const pact = new PACT({
   bits: { READ: 1n },
@@ -287,7 +315,7 @@ Choose `'required'` when you would rather fail a login than accept an
 unverified token (`OAUTH_JWKS_UNAVAILABLE`). Recommended for high-assurance
 deployments that can absorb the availability coupling.
 
-```typescript
+```typescript ignore
 oauth: {
   apple: {
     provider: 'apple',
@@ -321,7 +349,7 @@ under any key anyway.
 **Microsoft (tenant-aware).** The authorize/token endpoints are tenant-scoped.
 Set `tenant` for a single-tenant app; it defaults to `common`.
 
-```typescript
+```typescript ignore
 oauth: {
   entra: {
     provider: 'microsoft',
@@ -341,7 +369,7 @@ a short-lived **ES256 JWT** you must mint out-of-band (PACT does not mint
 provider client secrets) and pass in. The preset sends `response_mode=form_post`, so the callback
 arrives as a POST body.
 
-```typescript
+```typescript ignore
 oauth: {
   apple: {
     provider: 'apple',
@@ -359,7 +387,7 @@ cached). The issuer **must be `https://`** — a missing issuer throws
 `PactDefinitionError`, at construction). It is also the trust anchor for the
 `id_token`'s `iss` when the issuer publishes no userinfo endpoint.
 
-```typescript
+```typescript ignore
 oauth: {
   corp: {
     provider: 'oidc',

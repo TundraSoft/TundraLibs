@@ -182,9 +182,13 @@ export class ReadRepo<
   Self extends keyof R & string,
   D extends AnyDef = Extract<R[Self], AnyDef>,
 > {
+  /** The compiled registry — shared by every repo from the same handle. */
   protected readonly _runtime: Runtime;
+  /** This entity's compiled plan: columns, masks, filterability, hooks. */
   protected readonly _compiled: CompiledEntity;
+  /** The engine seam queries are issued against. */
   protected readonly _executor: Executor;
+  /** Transaction this repo is pinned to; undefined = autocommit. */
   protected readonly _txId: string | undefined;
   /** Effective scope, inherited from the `db.scope(...)` handle this
    * repo was reached through, and not yet narrowed — _scopeForOp
@@ -275,6 +279,10 @@ export class ReadRepo<
   public find(
     filter?: FilterOf<R, Self>,
   ): Promise<NormResult<DefaultRowOf<R, Self>[]>>;
+  /** Grouped report: the projection becomes the GROUP BY, and each row
+   * carries both the grouped columns and the aggregates. `total` is
+   * unavailable here — a COUNT over groups answers a different
+   * question. */
   public find<
     const P extends ProjectionInput & ValidProjection<R, Self, P>,
     const A extends AggregateInput,
@@ -285,6 +293,7 @@ export class ReadRepo<
       aggregates: A;
     },
   ): Promise<NormResult<(ProjectedRowOf<R, Self, P> & AggRowOf<A>)[]>>;
+  /** Aggregates with no projection — one ungrouped row of totals. */
   public find<const A extends AggregateInput>(
     filter: FilterOf<R, Self> | undefined,
     options: Omit<FindOptions, 'project' | 'aggregates' | 'total'> & {
@@ -292,10 +301,13 @@ export class ReadRepo<
       aggregates: A;
     },
   ): Promise<NormResult<AggRowOf<A>[]>>;
+  /** Explicit projection — the row type is derived from the literal,
+   * so renames and relation expansions type exactly. */
   public find<const P extends ProjectionInput & ValidProjection<R, Self, P>>(
     filter: FilterOf<R, Self> | undefined,
     options: Omit<FindOptions, 'project' | 'aggregates'> & { project: P },
   ): Promise<NormResult<ProjectedRowOf<R, Self, P>[]>>;
+  /** Default shape with paging / `total` / `decrypt` options. */
   public find(
     filter?: FilterOf<R, Self>,
     options?: FindOptions & { project?: never; aggregates?: never },
@@ -522,12 +534,15 @@ export class ReadRepo<
   public findOne(
     filter?: FilterOf<R, Self>,
   ): Promise<NormResult<DefaultRowOf<R, Self> | null>>;
+  /** First matching row under an explicit projection, or null. */
   public findOne<
     const P extends ProjectionInput & ValidProjection<R, Self, P>,
   >(
     filter: FilterOf<R, Self> | undefined,
     options: Omit<FindOptions, 'limit' | 'project'> & { project: P },
   ): Promise<NormResult<ProjectedRowOf<R, Self, P> | null>>;
+  /** First matching row in the default shape, or null. `limit` is not
+   * accepted — it is pinned to 1. */
   public findOne(
     filter?: FilterOf<R, Self>,
     options?: Omit<FindOptions, 'limit'> & { project?: never },
@@ -599,6 +614,8 @@ export class ReadRepo<
   // Read helpers
   // ───────────────────────────────────────────────────────────────────
 
+  /** The table/schema pair every IR this repo builds starts from.
+   * @internal */
   protected _irBase(): { table: string; schema?: string } {
     const def = this._compiled.def as { name: string; dbSchema?: string };
     return {
@@ -621,6 +638,10 @@ export class ReadRepo<
     this.__walkFilterableRefs(filterOrOrder);
   }
 
+  /** Recursive worker behind {@linkcode _assertFilterable} — every
+   * value is visited, since column refs appear in key AND value
+   * position.
+   * @internal */
   private __walkFilterableRefs(obj: unknown): void {
     if (obj === null || obj === undefined) return;
     if (typeof obj === 'string') {
@@ -688,6 +709,9 @@ export class ReadRepo<
     return await this.__rewriteWhereNode(node) as QueryFilter;
   }
 
+  /** Recursive worker behind {@linkcode _prepareWhere}. Async because
+   * rewriting a hashed ref has to digest the comparand.
+   * @internal */
   private async __rewriteWhereNode(node: unknown): Promise<unknown> {
     if (node === null || node === undefined) return node;
     // Date is `typeof 'object'` with NO enumerable keys — without this
@@ -1587,6 +1611,9 @@ export class ReadRepo<
     );
   }
 
+  /** Decrypt every encrypted cell in a read, local and joined, in
+   * place. Failures follow the instance's `onDecryptFailure` policy.
+   * @internal */
   protected async _decryptRead(
     rows: Row[],
     plan: ProjectionPlan,
@@ -1734,6 +1761,11 @@ export class ReadRepo<
     }
   }
 
+  /** Compute the plan's virtual masks onto base rows and drop sources
+   * that were fetched only to feed one. Two-phase (read all sources,
+   * then assign) so a mask renamed onto a source key cannot feed later
+   * masks its own output.
+   * @internal */
   protected _applyMasks(
     rows: Row[],
     plan: ProjectionPlan,
@@ -1890,6 +1922,7 @@ export class Repo<
     pk: PrimaryKeyOf<D>,
     options?: { decrypt?: boolean },
   ): Promise<NormResult<DefaultRowOf<R, Self> | null>>;
+  /** Fetch one row by primary key under an explicit projection. */
   public getByPK<
     const P extends ProjectionInput & ValidProjection<R, Self, P>,
   >(
@@ -1931,7 +1964,7 @@ export class Repo<
    * @throws {@link NormValidationError} If a value fails its column rules.
    *
    * @example
-   * ```typescript
+   * ```typescript ignore
    * const r = await db.repo('Users').insert({ email: 'a@b.c', name: 'A' });
    * r.data[0].id; // generated
    * ```

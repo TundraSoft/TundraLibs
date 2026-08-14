@@ -42,7 +42,7 @@ Outputs logs to the console with optional colorization.
 
 ### Configuration
 
-```typescript
+```typescript ignore
 {
   name: 'console',
   type: 'ConsoleHandler',
@@ -91,7 +91,7 @@ Writes logs to files with automatic rotation and buffering.
 
 ### Configuration
 
-```typescript
+```typescript ignore
 {
   name: 'file',
   type: 'FileHandler',
@@ -172,7 +172,7 @@ Sends logs to HTTP endpoints with batching and retry logic.
 
 ### Configuration
 
-```typescript
+```typescript ignore
 {
   name: 'remote',
   type: 'HTTPHandler',
@@ -244,7 +244,7 @@ logger.info('Application event', {
 
 #### Datadog
 
-```typescript
+```typescript ignore
 {
   name: 'datadog',
   type: 'HTTPHandler',
@@ -257,7 +257,7 @@ logger.info('Application event', {
 
 #### Elasticsearch
 
-```typescript
+```typescript ignore
 {
   name: 'elasticsearch',
   type: 'HTTPHandler',
@@ -273,7 +273,7 @@ logger.info('Application event', {
 
 #### Custom Service
 
-```typescript
+```typescript ignore
 {
   name: 'custom',
   type: 'HTTPHandler',
@@ -294,7 +294,7 @@ A no-op handler that discards all logs. Useful for testing and benchmarking.
 
 ### Configuration
 
-```typescript
+```typescript ignore
 {
   name: 'null',
   type: 'BlackholeHandler',
@@ -335,8 +335,11 @@ logger.debug('Neither will this');
 Create custom handlers by extending `AbstractHandler`:
 
 ```typescript
-import { AbstractHandler, HandlerOptions } from '@tundralibs/slogger';
-import type { SlogObject } from '@tundralibs/slogger';
+import {
+  AbstractHandler,
+  type HandlerOptions,
+} from '@tundralibs/slogger/handlers';
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
 
 class CustomHandler extends AbstractHandler {
   public readonly mode = 'custom';
@@ -349,21 +352,21 @@ class CustomHandler extends AbstractHandler {
     // Initialize custom handler
   }
 
-  protected async _handle(log: SlogObject): Promise<void> {
-    const formatted = this.formatter(log);
+  // `message` is the record already rendered by this handler's formatter.
+  protected async _handle(message: string): Promise<void> {
     // Custom log handling logic
-    await this.customLogic(formatted);
+    await this.customLogic(message);
   }
 
   private async customLogic(message: string): Promise<void> {
     // Implementation
   }
 
-  public async init(): Promise<void> {
+  public override async init(): Promise<void> {
     // Optional: Initialize resources
   }
 
-  public async finalize(): Promise<void> {
+  public override async finalize(): Promise<void> {
     // Optional: Cleanup resources
   }
 }
@@ -379,6 +382,7 @@ const logger = new Slogger({
   handlers: [{
     name: 'custom-handler',
     type: 'custom',
+    level: SyslogSeverities.INFO,
     customOption: 'value',
     formatter: 'json',
   }],
@@ -392,6 +396,8 @@ const logger = new Slogger({
 All handlers support these common options:
 
 ```typescript
+import type { SloggerFormatter, SyslogSeverities } from '@tundralibs/slogger';
+
 interface HandlerOptions {
   level: SyslogSeverities; // Minimum log level
   formatter?: string | SloggerFormatter; // Output formatter
@@ -405,6 +411,8 @@ interface HandlerOptions {
 ### Per-Handler Sampling
 
 ```typescript
+import { SyslogSeverities } from '@tundralibs/slogger';
+
 handlers: [
   {
     name: 'debug-logs',
@@ -466,6 +474,8 @@ const logger = new Slogger({
 ### High-Volume Application
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'HighVolume',
   level: SyslogSeverities.DEBUG,
@@ -488,6 +498,8 @@ const logger = new Slogger({
 ### Development vs Production
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const isDev = Deno.env.get('ENV') === 'development';
 
 const logger = new Slogger({
@@ -515,7 +527,7 @@ const logger = new Slogger({
         name: 'errors',
         type: 'HTTPHandler',
         level: SyslogSeverities.ERROR,
-        url: process.env.LOG_ENDPOINT,
+        url: Deno.env.get('LOG_ENDPOINT'),
         formatter: 'json',
       },
     ],

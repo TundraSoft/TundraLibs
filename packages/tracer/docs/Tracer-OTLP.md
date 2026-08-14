@@ -52,6 +52,10 @@ validation, timeouts and header handling, so a hosted backend's auth is just a
 header:
 
 ```typescript
+import { OTLPExporter } from '@tundralibs/tracer/exporters/otlp';
+
+const apiKey = 'hcaik_…';
+
 new OTLPExporter({
   baseURL: 'https://api.honeycomb.io',
   headers: { 'x-honeycomb-team': apiKey },
@@ -66,6 +70,11 @@ application error. `onExportError` is the only way to see them, and a production
 deployment should always set it:
 
 ```typescript
+import { OTLPExporter } from '@tundralibs/tracer/exporters/otlp';
+
+const baseURL = 'http://localhost:4318';
+const log = { error: (_msg: string, _meta: Record<string, unknown>) => {} };
+
 new OTLPExporter({
   baseURL,
   onExportError: (err, spans) =>

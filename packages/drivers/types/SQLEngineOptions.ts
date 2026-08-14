@@ -6,6 +6,10 @@
 
 import type { EngineOptions } from './EngineOptions.ts';
 
+/**
+ * {@link EngineOptions} plus the query- and transaction-level knobs that only
+ * SQL engines honour.
+ */
 export type SQLEngineOptions = EngineOptions & {
   /**
    * Wall-clock duration in seconds above which a query is considered slow

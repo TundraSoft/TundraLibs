@@ -31,6 +31,9 @@ export type SloggerFinalizeFailure = {
 export class SloggerFinalizeError
   extends SloggerError<{ failures: SloggerFinalizeFailure[] }> {
   /**
+   * Summarises the failing handler names into the message and chains the
+   * first failure as `cause`.
+   *
    * @param failures - Per-handler failures collected while finalizing
    *   every handler; must be non-empty.
    */

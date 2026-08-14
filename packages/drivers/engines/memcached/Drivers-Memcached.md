@@ -59,7 +59,7 @@ npx jsr add @tundralibs/drivers
 
 ### Import
 
-```typescript
+```typescript ignore
 import { MemcachedEngine } from '@tundralibs/drivers/memcached';
 // or
 import { MemcachedEngine } from '@tundralibs/drivers/engines';
@@ -125,6 +125,8 @@ list.
 Pass a path ending in `.sock` as `host`:
 
 ```typescript
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
 const cache = new MemcachedEngine('local', {
   host: '/var/run/memcached/memcached.sock',
 });
@@ -143,6 +145,10 @@ Retrieve the value stored at `key`.
 **Returns:** Raw stored value, or `null` if the key is missing / expired.
 
 ```typescript
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
+const cache = new MemcachedEngine('app-cache', { host: 'localhost' });
+
 const value = await cache.get('user:1');
 if (value !== null) {
   const user = JSON.parse(value);
@@ -158,6 +164,10 @@ for optimistic concurrency control.
 **Returns:** `{ value, cas }` on hit, `null` if the key is missing / expired.
 
 ```typescript
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
+const cache = new MemcachedEngine('app-cache', { host: 'localhost' });
+
 const result = await cache.gets('counter');
 if (result) {
   const next = (Number(result.value) + 1).toString();
@@ -255,6 +265,11 @@ Update the expiry of an existing key without re-sending its value.
 key did not exist.
 
 ```typescript
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
+const cache = new MemcachedEngine('app-cache', { host: 'localhost' });
+declare const sid: string;
+
 // Sliding-window cache: extend session if it's still active.
 const ok = await cache.touch(`session:${sid}`, 1800);
 if (!ok) {
@@ -298,6 +313,10 @@ Flush all data from the server.
 **Returns:** `true` on success.
 
 ```typescript
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
+const cache = new MemcachedEngine('app-cache', { host: 'localhost' });
+
 await cache.flush(); // immediate
 await cache.flush(10); // entries expire after 10 seconds
 ```
@@ -308,6 +327,10 @@ Retrieve server statistics as raw `STAT <key> <value>` lines (with the
 trailing `END` filtered out).
 
 ```typescript
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
+const cache = new MemcachedEngine('app-cache', { host: 'localhost' });
+
 const lines = await cache.stats();
 for (const line of lines) {
   console.log(line); // e.g. "STAT pid 1234"
@@ -319,6 +342,10 @@ for (const line of lines) {
 Retrieve the server version string.
 
 ```typescript
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
+const cache = new MemcachedEngine('app-cache', { host: 'localhost' });
+
 const v = await cache.version(); // "1.6.41"
 ```
 
@@ -327,6 +354,8 @@ const v = await cache.version(); // "1.6.41"
 ### Optimistic concurrency control
 
 ```typescript
+import type { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
 async function safeIncrement(cache: MemcachedEngine, key: string) {
   for (let attempt = 0; attempt < 5; attempt++) {
     const fetched = await cache.gets(key);
@@ -348,6 +377,8 @@ async function safeIncrement(cache: MemcachedEngine, key: string) {
 ### Sliding-window session cache
 
 ```typescript
+import type { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
 class SessionCache {
   constructor(private cache: MemcachedEngine, private ttl: number) {}
 
@@ -372,6 +403,15 @@ class SessionCache {
 ### Pooled, observed cache
 
 ```typescript
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
+// Your logger, whatever it is.
+declare const log: {
+  info(message: string): void;
+  warn(message: string): void;
+  error(message: string, err: Error): void;
+};
+
 const cache = new MemcachedEngine('app-cache', {
   host: 'cache.internal',
   port: 11211,
@@ -396,6 +436,10 @@ console.log(cache.poolStats); // { total, active, idle, waiting }
 ### Staggered invalidation across a fleet
 
 ```typescript
+import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+
+const cache = new MemcachedEngine('app-cache', { host: 'cache.internal' });
+
 // All workers issue this; Memcached schedules the flush, so caches don't
 // stampede the origin all at once.
 const stagger = Math.floor(Math.random() * 30); // 0–30 seconds

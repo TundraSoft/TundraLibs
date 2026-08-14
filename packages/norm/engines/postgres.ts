@@ -7,6 +7,8 @@
  * import '@tundralibs/norm/engines/postgres';
  * import { Norm } from '@tundralibs/norm/core';
  *
+ * declare const host: string, database: string, username: string;
+ *
  * const norm = new Norm({ database: { dialect: 'postgres', host, database, username } });
  * ```
  *

@@ -94,9 +94,18 @@ run inside an existing transaction. All resolve to one or more
 [`EngineQueryResult`](../types/EngineQueryResult.ts) values.
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+
+const engine = new PostgresEngine('app', {
+  host: 'localhost',
+  database: 'app',
+});
+
 const r = await engine.select<{ id: number; name: string }>({
   type: 'SELECT',
-  source: { table: 'users' },
+  table: 'users',
+  columns: ['id', 'name'],
+  projection: { '@id': true, '@name': true },
   // ...rest of the OQL Query
 });
 console.log(r.data); // typed rows (R[])
@@ -118,7 +127,7 @@ console.log(r.count); // rows returned
 
 ### count
 
-```typescript
+```typescript ignore
 public count(
   q: Query<'COUNT'>,
   transactionId?: string,
@@ -130,6 +139,15 @@ public `{ Count: number }` shape, available at `result.data[0].Count`. The
 outer `result.count` is the row count of the result set and is always `1`.
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+import type { Query } from '@tundralibs/oql/types';
+
+const engine = new PostgresEngine('app', {
+  host: 'localhost',
+  database: 'app',
+});
+declare const q: Query<'COUNT'>;
+
 const r = await engine.count(q);
 console.log(r.data[0].Count); // the count value
 ```
@@ -178,6 +196,13 @@ released on exit — **COMMIT** if `fn` resolves, **ROLLBACK** if it throws — 
 it can never leak from the pool. Whatever `fn` returns is the result:
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+
+const engine = new PostgresEngine('app', {
+  host: 'localhost',
+  database: 'app',
+});
+
 const rows = await engine.transaction(async (tx) => {
   await tx.execute({
     sql: 'INSERT INTO users (name) VALUES (:n:)',
@@ -201,6 +226,13 @@ auto-rollback to the innermost savepoint rather than aborting the whole
 transaction.
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+
+const engine = new PostgresEngine('app', {
+  host: 'localhost',
+  database: 'app',
+});
+
 await engine.transaction(async (tx) => {
   await tx.execute({ sql: 'INSERT INTO orders ...' });
   try {
@@ -269,6 +301,13 @@ The same name appearing twice maps to the same placeholder index (and the
 value is supplied once).
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+
+const engine = new PostgresEngine('app', {
+  host: 'localhost',
+  database: 'app',
+});
+
 await engine.execute({
   sql: 'SELECT * FROM users WHERE id = :id: OR parent = :id:',
   params: { id: 1 }, // bound once, used twice
@@ -318,6 +357,13 @@ In addition to [`BaseEngine` events](Drivers-BaseEngine.md#events):
 ## Stats
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+
+const engine = new PostgresEngine('app', {
+  host: 'localhost',
+  database: 'app',
+});
+
 console.log(engine.queryStats);
 // {
 //   totalQueries: 187,

@@ -95,9 +95,22 @@ describe('cacher.engines.redis', () => {
       const cacher = new RedisCacher('boo', {
         host: 'localhost',
         port: undefined,
-      } as unknown as RedisCacherOptions);
+      });
 
       asserts.assertEquals(readOption(cacher, 'port'), 6379);
+    });
+
+    it('should default the port to 6379 when it is omitted', () => {
+      // `port` is optional (like MemCacherOptions.port); omitting it must
+      // still yield a usable port rather than `undefined` reaching the
+      // driver. No cast here on purpose — this only compiles while the
+      // option stays optional.
+      const cacher = new RedisCacher('redis-no-port', {
+        host: 'localhost',
+      });
+
+      asserts.assertEquals(readOption(cacher, 'port'), 6379);
+      asserts.assertEquals(readOptions(cacher).port, 6379);
     });
 
     it('Should throw on invalid config', () => {

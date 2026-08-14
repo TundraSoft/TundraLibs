@@ -36,7 +36,7 @@ import { NormError } from './Base.ts';
  * findings live on `error.context.issues`.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * try {
  *   await db.repo('Users').insert({ email: 'not-an-email', status: 'banned' });
  * } catch (e) {
@@ -49,6 +49,13 @@ import { NormError } from './Base.ts';
  * ```
  */
 export class NormValidationError extends NormError<ValidationErrorMeta> {
+  /**
+   * Flattens `meta.issues` into a multi-line message; the model and op
+   * of the FIRST issue label the whole batch.
+   *
+   * @param cause - The originating `GuardianError`, kept for callers
+   *   that want the raw Guardian surface.
+   */
   constructor(meta: ValidationErrorMeta, cause?: Error) {
     const n = meta.issues.length;
     const model = meta.issues[0]?.model ?? '<unknown>';

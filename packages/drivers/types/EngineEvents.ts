@@ -6,6 +6,10 @@
  *
  * @example
  * ```ts
+ * import { MemcachedEngine } from '@tundralibs/drivers/memcached';
+ *
+ * const engine = new MemcachedEngine('cache', { host: 'localhost' });
+ *
  * engine.on('connect', (instanceId) => console.log(`${instanceId} ready`));
  * engine.on('connectionFailed', (instanceId, err) => console.error(err));
  * ```

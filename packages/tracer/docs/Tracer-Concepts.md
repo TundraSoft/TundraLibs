@@ -27,7 +27,7 @@ checkout ───────────────────────�
   db.query           ──────── 120ms               trace 4bf92f…, span ccc…, parent aaa…
 ```
 
-Every span carries a {@linkcode SpanContext}: the `traceId` it belongs to, its
+Every span carries a `SpanContext`: the `traceId` it belongs to, its
 own `spanId`, and the sampling flag. That triple is the _only_ thing that has to
 travel between processes — see [Tracer-Propagation](Tracer-Propagation.md).
 
@@ -38,6 +38,10 @@ this long", an event for "this happened".
 ## The span lifecycle
 
 ```typescript
+import { SpanStatusCode, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
 const span = tracer.startSpan('db.query'); // 1. created, clock starts
 span.setAttribute('db.system', 'postgres'); // 2. described
 span.addEvent('cache.miss'); //    …and annotated
@@ -51,7 +55,7 @@ is inert: further writes are silently dropped rather than throwing or
 retroactively changing an exported span.
 
 Exporters never receive the live `Span`. They receive an immutable
-{@linkcode SpanData} snapshot, so a slow or asynchronous exporter cannot observe
+`SpanData` snapshot, so a slow or asynchronous exporter cannot observe
 a span mid-write or mutate trace state.
 
 ## Why nesting is automatic
@@ -59,10 +63,14 @@ a span mid-write or mutate trace state.
 The usual way to build a span tree is to thread the parent through every call:
 
 ```typescript
-async function checkout(span) {
+import { type Span, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
+async function checkout(span: Span) {
   await charge(span); // must pass it
 }
-async function charge(parentSpan) {
+async function charge(parentSpan: Span) {
   const s = tracer.startSpan('charge', { parent: parentSpan.context });
   // …
 }
@@ -73,6 +81,10 @@ Tracer keeps the **active span** in an
 and parents itself automatically:
 
 ```typescript
+import { Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
 await tracer.startActiveSpan('checkout', async () => {
   await charge(); // no span parameter
 });
@@ -133,7 +145,7 @@ is recorded on the span and re-thrown unchanged.
 
 ## Span kind
 
-{@linkcode SpanKind} tells a backend how to draw the span, and its numeric values
+`SpanKind` tells a backend how to draw the span, and its numeric values
 are OTLP's:
 
 | Kind                    | Use for                                       |
@@ -160,6 +172,12 @@ a caught and handled exception is not necessarily a failed operation. Set the
 status yourself when it is:
 
 ```typescript
+import { SpanStatusCode, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const span = tracer.startSpan('risky');
+const risky = () => Promise.resolve();
+
 try {
   await risky();
 } catch (err) {
@@ -181,5 +199,5 @@ so every span operation is total:
 
 The one place tracer _does_ throw is **construction** — an invalid
 `serviceName`, `sampler`, `exporter`, or `idGenerator` raises
-{@linkcode TracerConfigError} immediately. A misconfiguration is cheap to
+`TracerConfigError` immediately. A misconfiguration is cheap to
 surface at startup and expensive to discover as missing traces later.

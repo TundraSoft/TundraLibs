@@ -20,6 +20,7 @@ export type BlackholeHandlerOptions = HandlerOptions;
  * - Disabling specific log channels temporarily
  */
 export class BlackholeHandler extends AbstractHandler {
+  /** Runtime discriminator for this handler kind. */
   public readonly mode = 'blackhole';
 
   /**

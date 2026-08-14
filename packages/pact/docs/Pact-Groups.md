@@ -46,6 +46,11 @@ Set `groupResolver` (required for every group method) and, optionally,
 
 ```typescript
 import { PACT } from '@tundralibs/pact';
+import type { PACTGrants } from '@tundralibs/pact';
+
+declare const db: {
+  grantsForGroups(ids: string[]): Promise<Record<string, PACTGrants>>;
+};
 
 const pact = new PACT({
   bits: { READ: 1n, EDIT: 2n, DELETE: 4n },
@@ -71,6 +76,10 @@ no grants** (`{}`), so they are not re-fetched on every check.
 ```typescript
 import { PACT } from '@tundralibs/pact';
 import type { GroupResolver, PACTGrants } from '@tundralibs/pact';
+
+declare const db: {
+  grantRowsFor(id: string): Promise<Array<{ module: string; mask: string }>>;
+};
 
 const groupResolver: GroupResolver = async (groupIds) => {
   const result: Record<string, PACTGrants> = {};
@@ -103,6 +112,9 @@ argument adds per-principal grants that OR in the same way (shown under
 import { PACT } from '@tundralibs/pact';
 
 // given the `pact` configured above
+declare const pact: PACT;
+declare const user: { id: string; groupIds: string[] };
+
 const allowed = await pact.hasPermissionForGroups(
   'Post',
   'EDIT',
@@ -119,6 +131,9 @@ a `PACTGrants` map you can reuse.
 
 ```typescript
 import { PACT } from '@tundralibs/pact';
+
+declare const pact: PACT;
+declare const user: { id: string; groupIds: string[] };
 
 const grants = await pact.grantsForGroups(user.groupIds, {
   Post: 4n, // a direct DELETE grant on top of the group grants
@@ -137,6 +152,8 @@ grant) provides.
 
 ```typescript
 import { PACT } from '@tundralibs/pact';
+
+declare const pact: PACT;
 
 // Suppose the resolver returns:
 //   editors → { Post: 3n }     (READ | EDIT)
@@ -158,6 +175,8 @@ changes on your side are not visible until you re-sync.
 
 ```typescript
 import { PACT } from '@tundralibs/pact';
+
+declare const pact: PACT;
 
 // First call resolves 'editors' through the resolver and caches it.
 await pact.hasPermissionForGroups('Post', 'EDIT', ['editors']);
@@ -181,6 +200,11 @@ The cache is a snapshot; re-sync to pick up changes to your group grants:
 
 ```typescript
 import { PACT } from '@tundralibs/pact';
+import type { PACTGrants } from '@tundralibs/pact';
+
+declare const db: {
+  grantsForGroups(ids: string[]): Promise<Record<string, PACTGrants>>;
+};
 
 const pact = new PACT({
   bits: { READ: 1n, EDIT: 2n },
@@ -214,6 +238,11 @@ having cached only some of the ids it was asked to resolve.
 
 ```typescript
 import { Groups } from '@tundralibs/pact';
+import type { PACTGrants } from '@tundralibs/pact';
+
+declare const db: {
+  grantsForGroups(ids: string[]): Promise<Record<string, PACTGrants>>;
+};
 
 const groups = new Groups((ids) => db.grantsForGroups(ids));
 await groups.ensure(['editors']); // resolve + cache
@@ -234,6 +263,9 @@ before embedding, deserialize after verifying.
 
 ```typescript
 import { deserializeGrants, PACT, serializeGrants } from '@tundralibs/pact';
+
+declare const pact: PACT;
+declare const user: { id: string; groupIds: string[] };
 
 const grants = await pact.grantsForGroups(user.groupIds);
 
@@ -256,6 +288,11 @@ grants:
 
 ```typescript
 import { combineGrants } from '@tundralibs/pact';
+import type { PACTGrants } from '@tundralibs/pact';
+
+declare const directGrants: PACTGrants;
+declare const tenantGrants: PACTGrants;
+declare const roleGrants: PACTGrants;
 
 const merged = combineGrants(directGrants, tenantGrants, roleGrants);
 // Later sets only ever add bits — grants are allow-only.

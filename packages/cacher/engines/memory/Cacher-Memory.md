@@ -166,6 +166,8 @@ await cache.set('config:features', { beta: true }, { expiry: 0 });
 ### Cleanup on Shutdown
 
 ```typescript
+import { MemoryCacher } from '@tundralibs/cacher/engines';
+
 const cache = new MemoryCacher('temp', {});
 
 // ... use cache

@@ -61,13 +61,37 @@ function redactSecrets(
 }
 
 /**
- * Type definition for engine constructor.
- * Used for type-safe engine registration with flexible options.
+ * Constructor of a cache engine, as seen by a REGISTERING caller.
+ *
+ * Generic in the engine's own options type so a concrete engine is
+ * assignable: construct-signature parameters are contravariant, so a
+ * fixed `options: unknown` here would make every concrete engine
+ * (whose constructor takes its OWN options type) unassignable — the
+ * registry could then only be fed through a cast.
+ *
+ * @typeParam O - The engine's options type.
  */
-type EngineConstructor = new (
+export type EngineConstructor<O extends CacherOptions = CacherOptions> = new (
   name: string,
-  options: unknown,
-) => AbstractEngine;
+  options: O,
+) => AbstractEngine<O>;
+
+/**
+ * Options-erased constructor used for STORAGE only.
+ *
+ * The registry is heterogeneous — engines with different options types
+ * share one map — so the stored form drops the options type. Reads go
+ * through {@link Manager.create}, which re-applies the caller's options
+ * type at the call site.
+ *
+ * @internal
+ */
+type StoredEngineConstructor = new (
+  name: string,
+  // deno-lint-ignore no-explicit-any -- heterogeneous registry: see doc comment
+  options: any,
+  // deno-lint-ignore no-explicit-any -- ditto for the engine's own options type
+) => AbstractEngine<any>;
 
 /**
  * Cache Manager class that handles engine registration and instance creation.
@@ -81,7 +105,7 @@ type EngineConstructor = new (
  * while individual cache engines use {@link CacherEngineError} for their errors.
  *
  * @example
- * ```typescript
+ * ```typescript ignore
  * // Basic usage
  * const cache = Cacher.create('MEMORY', 'my-cache', {
  *   defaultExpiry: 300
@@ -103,7 +127,7 @@ class Manager {
    * Map of registered engine constructors keyed by engine name.
    * @private
    */
-  protected _engines: Map<string, EngineConstructor> = new Map();
+  protected _engines: Map<string, StoredEngineConstructor> = new Map();
 
   /**
    * Map of created cache instances keyed by instance name.
@@ -130,14 +154,14 @@ class Manager {
    * @throws {CacherError} When an engine with the same name is already registered
    *
    * @example
-   * ```typescript
+   * ```typescript ignore
    * // Register a custom engine
    * Cacher.addEngine('CUSTOM', MyCustomEngine);
    * ```
    */
-  addEngine(
+  addEngine<O extends CacherOptions = CacherOptions>(
     name: string,
-    engine: EngineConstructor,
+    engine: EngineConstructor<O>,
   ): void {
     // Validate input parameters
     if (!name || typeof name !== 'string') {
@@ -552,17 +576,35 @@ class Manager {
   private __registeredDefaultEngines(): void {
     this.addEngine(
       'MEMORY',
-      MemoryCacher as unknown as EngineConstructor,
+      MemoryCacher,
     );
     this.addEngine(
       'REDIS',
-      RedisCacher as unknown as EngineConstructor,
+      RedisCacher,
     );
     this.addEngine(
       'MEMCACHED',
-      MemCacher as unknown as EngineConstructor,
+      MemCacher,
     );
   }
 }
 
+/**
+ * The process-wide cache manager: registry of engine types plus the named
+ * instances built from them.
+ *
+ * `MEMORY`, `REDIS` and `MEMCACHED` are registered on first import. Reach for
+ * this instead of constructing engines directly when different parts of an
+ * application need to share one cache by name — {@link Manager.create} returns
+ * the existing instance for a name it has already built.
+ *
+ * @example
+ * ```ts
+ * const cache = Cacher.create('MEMORY', 'sessions', { defaultExpiry: 300 });
+ * await cache.set('user:1', { name: 'Alice' });
+ *
+ * // Anywhere else in the process, the same instance:
+ * const same = Cacher.getInstance('sessions');
+ * ```
+ */
 export const Cacher: Manager = new Manager();
