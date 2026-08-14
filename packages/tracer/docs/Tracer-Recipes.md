@@ -228,10 +228,11 @@ only when no route matched, and expect that to be high-cardinality.
 Koa wraps — `await next()` returns once the downstream chain finishes.
 
 ```typescript
-// Deno resolves Koa via the `npm:` specifier and picks up `@types/koa`
-// on its own; under plain Node/Bun use a bare `from 'koa'` with
-// `@types/koa` installed.
+// Koa ships no types of its own, so they come from DefinitelyTyped and the
+// middleware signature has to be annotated explicitly; under plain Node/Bun
+// use bare `from 'koa'` with `@types/koa` installed.
 import Koa from 'npm:koa@^3.2.1';
+import type { Context, Next } from 'npm:@types/koa@^3.0.0';
 import {
   extract,
   SemConv,
@@ -243,7 +244,7 @@ import {
 const tracer = new Tracer({ serviceName: 'orders' });
 const app = new Koa();
 
-app.use((ctx, next) =>
+app.use((ctx: Context, next: Next) =>
   tracer.startActiveSpan(
     `${ctx.method} ${ctx._matchedRoute ?? ctx.path}`,
     { kind: SpanKind.SERVER, parent: extract(ctx.headers) },
