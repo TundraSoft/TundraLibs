@@ -127,6 +127,12 @@
  *   includeArchived?: boolean;
  * }
  *
+ * type SearchResult = { id: number };
+ * declare function searchDatabase(
+ *   query: string,
+ *   params: SearchParams,
+ * ): SearchResult[];
+ *
  * // Different endpoints require different parameters
  * type BasicSearch = MakeRequired<SearchParams, 'query'>;
  * type CategorySearch = MakeRequired<SearchParams, 'query' | 'category'>;
@@ -163,7 +169,14 @@
  * // For authentication
  * type AuthUserData = MakeRequired<UserEntity, 'id' | 'email' | 'hashedPassword'>;
  *
+ * declare function generateId(): string;
+ *
  * class UserService {
+ *   declare private database: {
+ *     create(data: UserEntity): Promise<UserEntity>;
+ *     update(id: string, data: UserEntity): Promise<UserEntity>;
+ *   };
+ *
  *   async createUser(userData: CreateUserData): Promise<UserEntity> {
  *     // email, name, and hashedPassword are guaranteed to be present
  *     return this.database.create({
@@ -195,6 +208,8 @@
  *   enableMetrics?: boolean;
  *   metricsPort?: number;
  * }
+ *
+ * declare function isValidUrl(url: string): boolean;
  *
  * // Production environment requirements
  * type ProductionConfig = MakeRequired<AppConfig, 'apiUrl' | 'apiKey' | 'dbUrl' | 'dbPassword'>;
@@ -230,6 +245,10 @@
  *     paymentMethod?: string;
  *   };
  * }
+ *
+ * declare function getDefaultPreferences(
+ *   info: WizardData['personalInfo'],
+ * ): NonNullable<WizardData['preferences']>;
  *
  * type Step1Complete = MakeRequired<WizardData, 'step' | 'personalInfo'>;
  * type Step2Complete = MakeRequired<Step1Complete, 'preferences'>;

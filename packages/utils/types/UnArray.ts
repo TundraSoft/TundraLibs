@@ -84,7 +84,7 @@
  *   events: T
  * ): UnArray<T>[] {
  *   const eventArray = Array.isArray(events) ? events : [events];
- *   return eventArray;
+ *   return eventArray as UnArray<T>[];
  * }
  *
  * // Usage with conditional types
@@ -94,7 +94,7 @@
  *
  * function processInput<T>(input: T): ProcessResult<T> {
  *   if (Array.isArray(input)) {
- *     return { items: input, count: input.length } as ProcessResult<T>;
+ *     return { items: input, count: input.length } as unknown as ProcessResult<T>;
  *   }
  *   return { item: input, single: true } as ProcessResult<T>;
  * }

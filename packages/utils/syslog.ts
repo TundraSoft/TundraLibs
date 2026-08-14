@@ -49,6 +49,9 @@
  *
  * @example Usage in log filtering:
  * ```typescript
+ * declare function alertOncall(message: string): void;
+ *
+ * const parsed = parse('<34>Oct 11 22:14:15 mymachine su: john changed user');
  * if (parsed.severity <= SyslogSeverities.ERROR) {
  *   alertOncall(parsed.message);
  * }

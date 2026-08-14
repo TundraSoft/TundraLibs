@@ -33,6 +33,8 @@ export type BaseErrorJson = {
  *
  * @example
  * ```typescript
+ * declare const networkError: Error;
+ *
  * const e = new BaseError(
  *   'User ${id} not found',
  *   { id: 42 },

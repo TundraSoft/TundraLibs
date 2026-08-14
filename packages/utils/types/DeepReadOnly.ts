@@ -47,6 +47,11 @@
  *
  * @example State management with immutable data:
  * ```typescript
+ * interface User {
+ *   id: number;
+ *   name: string;
+ * }
+ *
  * interface AppState {
  *   user: User | null;
  *   settings: {
@@ -70,6 +75,11 @@
  *
  * @example API response types:
  * ```typescript
+ * interface User {
+ *   id: number;
+ *   name: string;
+ * }
+ *
  * interface ApiResponse<T> {
  *   data: T;
  *   meta: {

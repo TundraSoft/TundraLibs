@@ -26,7 +26,7 @@
  * @typeParam T - Template string literal.
  *
  * @example
- * ```typescript
+ * ```typescript ignore
  * type V = ExtractVariableNames<'Hi ${name}, ${day}'>; // 'name' | 'day'
  * ```
  */
@@ -184,7 +184,9 @@ const _stringify = (
  * @example Log-style template — preserve placeholders on missing keys
  * ```typescript
  * const log = templatize('[${time}] ${level}: ${msg}', { onMissing: 'literal' });
- * log({ time: '12:00', msg: 'hi' });  // '[12:00] ${level}: hi'
+ * // `level` is absent at runtime; the values type still requires every key.
+ * log({ time: '12:00', level: undefined as unknown as string, msg: 'hi' });
+ * // '[12:00] ${level}: hi'
  * ```
  *
  * @example Dot-path lookup against nested values

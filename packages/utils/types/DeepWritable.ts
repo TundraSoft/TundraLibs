@@ -76,7 +76,7 @@
  *
  * function createEditForm(profile: UserProfile): EditableProfile {
  *   // Create a mutable copy for editing
- *   const editableProfile: EditableProfile = structuredClone(profile);
+ *   const editableProfile = structuredClone(profile) as EditableProfile;
  *
  *   // Now we can modify all properties for form editing
  *   editableProfile.personal.name = 'Updated Name';
@@ -109,7 +109,7 @@
  * type ProcessableResponse = DeepWritable<ReadonlyApiResponse>;
  *
  * function processApiResponse(response: ReadonlyApiResponse): ProcessableResponse {
- *   const mutable: ProcessableResponse = structuredClone(response);
+ *   const mutable = structuredClone(response) as ProcessableResponse;
  *
  *   // Add computed properties or modify data
  *   mutable.data.users.forEach(user => {
@@ -143,7 +143,7 @@
  * type MutableAppState = DeepWritable<ReadonlyAppState>;
  *
  * function createDraftState(state: ReadonlyAppState): MutableAppState {
- *   const draft: MutableAppState = structuredClone(state);
+ *   const draft = structuredClone(state) as MutableAppState;
  *
  *   // Can now modify the draft for state updates
  *   if (draft.user) {
@@ -171,7 +171,7 @@
  * }
  *
  * function setupTest(baseData: ReadonlyTestData) {
- *   const testData: DeepWritable<ReadonlyTestData> = structuredClone(baseData);
+ *   const testData = structuredClone(baseData) as DeepWritable<ReadonlyTestData>;
  *
  *   // Modify for specific test requirements
  *   testData.config.timeout = 5000;

@@ -22,7 +22,7 @@
  *
  * @example Basic entity flattening:
  * ```typescript
- * interface User {
+ * type User = {
  *   id: number;
  *   profile: {
  *     name: string;
@@ -36,7 +36,7 @@
  *     title: string;
  *     content: string;
  *   }>;
- * }
+ * };
  *
  * type FlatUser = FlattenEntity<User>;
  * // Result: {
@@ -54,7 +54,7 @@
  *
  * @example Database mapping:
  * ```typescript
- * interface OrderEntity {
+ * type OrderEntity = {
  *   orderId: string;
  *   customer: {
  *     customerId: string;
@@ -70,7 +70,7 @@
  *     quantity: number;
  *     price: number;
  *   }>;
- * }
+ * };
  *
  * type FlatOrder = FlattenEntity<OrderEntity>;
  *
@@ -249,7 +249,7 @@ import type { UnionToIntersection } from './UnionToIntersection.ts';
  * type FlatForm = FlattenEntity<FormData>;
  *
  * // Form validation using flattened keys
- * const validators: Record<keyof FlatForm, (value: any) => boolean> = {
+ * const validators: Partial<Record<keyof FlatForm, (value: any) => boolean>> = {
  *   '$personal.$name': (value) => typeof value === 'string' && value.length > 0,
  *   '$personal.$email': (value) => /\S+@\S+\.\S+/.test(value),
  *   '$personal.$address.$zipCode': (value) => /^\d{5}$/.test(value),

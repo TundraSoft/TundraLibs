@@ -18,6 +18,8 @@
  *
  * @example
  * ```typescript
+ * declare function connectToDb(): { host: string };
+ *
  * const init = once(() => connectToDb());
  * const a = init(); // runs
  * const b = init(); // returns cached
@@ -63,6 +65,8 @@ export const once = <T extends (...args: any[]) => any>(fn: T): T => {
  *
  * @example
  * ```typescript
+ * declare function connect(): Promise<void>;
+ *
  * class Service {
  *   @Once
  *   async init() { await connect(); }

@@ -42,6 +42,8 @@ const NOT_CALLED: unique symbol = Symbol('throttle.notCalled');
  *
  * @example
  * ```typescript
+ * declare function handleScroll(): void;
+ *
  * const onScroll = throttle(handleScroll, 16); // ~60fps
  * window.addEventListener('scroll', onScroll);
  * ```
@@ -150,6 +152,8 @@ export const throttle = <T extends (...args: any[]) => any>(
  *
  * @example
  * ```typescript
+ * declare const api: { search(q: string): Promise<string[]> };
+ *
  * class Search {
  *   @Throttle(1000)
  *   async run(q: string) { return api.search(q); }

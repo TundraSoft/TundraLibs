@@ -33,10 +33,10 @@ export type EventCallback = (...args: any[]) => unknown;
  *
  * @example
  * ```typescript
- * interface AppEvents {
+ * type AppEvents = {
  *   start: () => void;
  *   error: (e: Error) => void;
- * }
+ * };
  * class App extends Events<AppEvents> {
  *   run() { this._emit('start'); }
  * }
@@ -200,7 +200,11 @@ export class Events<
    *
    * @example
    * ```typescript
+   * type BaseEvents = { connect: (id: string) => void };
+   *
    * abstract class Base<E extends BaseEvents> extends Events<E> {
+   *   abstract readonly id: string;
+   *
    *   protected _onConnect(): void {
    *     // Strict _emit fails: variance on E['connect'].
    *     this._emitRaw('connect', this.id); // works

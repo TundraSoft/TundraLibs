@@ -84,6 +84,10 @@
  * type UserAPIResponse = UserData | UserPreferences | UserMetadata;
  * type CompleteUser = UnionToIntersection<UserAPIResponse>;
  *
+ * declare function fetchUserData(id: string): Promise<UserData>;
+ * declare function fetchUserPreferences(id: string): Promise<UserPreferences>;
+ * declare function fetchUserMetadata(id: string): Promise<UserMetadata>;
+ *
  * // Usage in API client
  * async function fetchCompleteUser(id: string): Promise<CompleteUser> {
  *   const [userData, preferences, metadata] = await Promise.all([
@@ -146,6 +150,10 @@
  * ): FullApplication<T[number]> {
  *   return plugins.reduce((app, plugin) => ({ ...app, ...plugin }), {}) as any;
  * }
+ *
+ * declare const corePlugin: CorePlugin;
+ * declare const databasePlugin: DatabasePlugin;
+ * declare const cachePlugin: CachePlugin;
  *
  * const app = createApp(corePlugin, databasePlugin, cachePlugin);
  * // app.core.init(), app.database.query(), app.cache.set() are all available
