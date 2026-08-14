@@ -36,7 +36,7 @@ import { NormError } from './Base.ts';
  * findings live on `error.context.issues`.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * try {
  *   await db.repo('Users').insert({ email: 'not-an-email', status: 'banned' });
  * } catch (e) {

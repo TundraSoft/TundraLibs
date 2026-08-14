@@ -42,7 +42,7 @@ import type { NormErrorCode } from './NormErrorCodes.ts';
  * `error.context.issues`.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * try {
  *   Entity('users', { id: Column.integer() }, { pk: [] });
  * } catch (e) {

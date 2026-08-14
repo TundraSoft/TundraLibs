@@ -5,7 +5,7 @@
  * counterpart for entity definitions. Because definitions are PLAIN
  * DATA, docs and diagrams are pure functions over them:
  *
- * ```ts
+ * ```ts ignore
  * const registry = use(Blog, Stats);
  * console.log(toMermaidERD(registry)); // ER diagram (mermaid)
  * console.log(toMarkdown(Blog));       // per-entity reference doc
@@ -183,7 +183,7 @@ export function toMermaidERD(input: DocInput): string {
  * encrypted markers), crow's-foot FK relationships labelled by alias,
  * and dashed `derives` edges from views/queries to their base table.
  *
- * ```ts
+ * ```ts ignore
  * await writeTextFile('schema.puml', toPlantUML(use(Blog, Stats)));
  * ```
  */

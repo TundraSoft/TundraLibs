@@ -26,7 +26,7 @@ import { NormError } from './Base.ts';
  * happened.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * try {
  *   await db.repo('Users').insert({ email: 'x@y.com' });
  * } catch (e) {

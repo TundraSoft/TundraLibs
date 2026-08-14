@@ -4,7 +4,7 @@
  * `Entity(name, columns, options)` — the single definition
  * constructor. The options bag carries the kind discriminator:
  *
- * ```ts
+ * ```ts ignore
  * Entity('users',  {...cols}, { pk: ['id'], fk: {...}, index: {...} })  // TABLE (default kind)
  * Entity('active', {...cols}, { type: 'VIEW',  query: select })        // VIEW
  * Entity('stats',  {...cols}, { type: 'QUERY', query: select })        // QUERY

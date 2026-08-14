@@ -6,7 +6,7 @@
  * resolve here, with named errors), compiles the shared Runtime, and
  * returns a fully-typed {@link NormDb}:
  *
- * ```ts
+ * ```ts ignore
  * const norm = new Norm({ database: { dialect: 'postgres', ... },
  *                          secret: Deno.env.get('NORM_SECRET') });
  * const db    = norm.use(Blog, Stats);   // full app
@@ -135,7 +135,7 @@ export type NormConfig = {
    * `raw()` runs through it, so a tracer wired at the composition root makes
    * each operation an active span and driver query events nest under it:
    *
-   * ```ts
+   * ```ts ignore
    * new Norm({ engine, witness: (info, fn) =>
    *   tracer.startActiveSpan(info.name, fn) });
    * ```
@@ -162,7 +162,7 @@ type NormEventHandlers = {
  * leak them.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * const norm = new Norm({ engine, secret: Deno.env.get('APP_SECRET') });
  * const db = norm.use(Identity, Shortener);
  * await norm.connect();
@@ -559,7 +559,7 @@ export class NormDb<R, Scope extends string = never> {
    * string. Parameterized values are the injection-safe path; a
    * concatenated string is not.
    *
-   * ```ts
+   * ```ts ignore
    * const r = await db.raw<{ n: number }>(
    *   'SELECT count(*) AS n FROM users WHERE status = :s:',
    *   { s: 'active' },

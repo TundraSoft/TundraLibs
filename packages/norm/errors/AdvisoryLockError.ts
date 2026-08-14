@@ -29,7 +29,7 @@ export type AdvisoryLockErrorMeta = {
  * `LOCK_TIMEOUT` code.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * try {
  *   await ex.withAdvisoryLock('norm:migrator', 30_000, run);
  * } catch (e) {

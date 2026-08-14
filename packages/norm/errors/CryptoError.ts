@@ -59,7 +59,7 @@ function cryptoMessage(meta: CryptoErrorMeta): string {
  * `error.context` names the entity, column, pk, and which step failed.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * try {
  *   await db.repo('Users').find();
  * } catch (e) {

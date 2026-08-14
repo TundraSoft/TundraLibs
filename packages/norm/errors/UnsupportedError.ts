@@ -24,7 +24,7 @@ export type UnsupportedErrorMeta = {
  * The requested operation is not supported by the configured engine.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * try {
  *   await db.transaction(async (tx) => { ... });
  * } catch (e) {

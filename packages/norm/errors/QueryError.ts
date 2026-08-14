@@ -27,7 +27,7 @@ export type QueryErrorMeta = {
  * The requested read/write shape is invalid for the target entity.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * try {
  *   await db.repo('Users').find({ '@ssn': 'nope' });
  * } catch (e) {

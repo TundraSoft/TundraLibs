@@ -1931,7 +1931,7 @@ export class Repo<
    * @throws {@link NormValidationError} If a value fails its column rules.
    *
    * @example
-   * ```typescript
+   * ```typescript ignore
    * const r = await db.repo('Users').insert({ email: 'a@b.c', name: 'A' });
    * r.data[0].id; // generated
    * ```
