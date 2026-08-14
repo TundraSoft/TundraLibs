@@ -135,7 +135,7 @@ Different configurations produce different ID formats:
 
 Creates a date-based sequential ID generator function.
 
-```typescript
+```typescript ignore
 function simpleID(
   seed?: number,
   minLen?: number,
@@ -188,6 +188,8 @@ function simpleID(
 The returned function generates the next ID in sequence:
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 const gen = simpleID();
 const id1 = gen(); // 202412260001n
 const id2 = gen(); // 202412260002n
@@ -310,6 +312,8 @@ SimpleID automatically resets the counter to zero at the start of each new day. 
 The generator tracks the current date (YYYYMMDD format) and compares it on each ID generation:
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 const gen = simpleID(0, 4);
 
 // December 26, 2024
@@ -340,6 +344,8 @@ SimpleID is ideal for scenarios requiring human-readable, date-traceable identif
 Perfect for invoices, receipts, quotes, and purchase orders:
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 const invoiceGen = simpleID(1000, 4);
 const receiptGen = simpleID(5000, 4);
 const quoteGen = simpleID(2000, 4);
@@ -355,6 +361,8 @@ const quote = quoteGen(); // QTE-202412262001
 Track orders with date-based references:
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 const orderGen = simpleID(0, 6);
 
 // Orders are naturally sorted by date
@@ -367,6 +375,8 @@ const order2 = orderGen(); // 20241226000002
 Generate support tickets or event tickets:
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 const ticketGen = simpleID(10000, 5);
 
 // Support tickets
@@ -379,6 +389,8 @@ const ticket2 = ticketGen(); // TKT-2024122610002
 High-frequency log entries with microsecond precision:
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 const logGen = simpleID(0, 3, true);
 
 // Precise event timestamps
@@ -391,6 +403,8 @@ const event2 = logGen(); // 20241226143052789002
 Generate daily report identifiers:
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 const reportGen = simpleID(1, 3);
 
 // Daily report numbering
@@ -409,6 +423,8 @@ Select `minLen` based on expected daily volume:
 - **6 digits** (000001-999999): Up to ~1,000,000 IDs per day
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 // Low volume (< 10K/day)
 const lowVol = simpleID(0, 4);
 
@@ -424,6 +440,8 @@ const highVol = simpleID(0, 6);
 Start sequences at meaningful numbers:
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 // Start at 1 for natural counting
 const natural = simpleID(1, 4);
 
@@ -439,6 +457,8 @@ const legacy = simpleID(10000, 5);
 Add prefixes and separators for better readability:
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 const gen = simpleID(1000, 4);
 const id = gen();
 
@@ -457,7 +477,7 @@ const formatted = id.toString().replace(
 
 Keep IDs as BigInt in databases for efficient sorting and indexing:
 
-```typescript
+```typescript ignore
 // PostgreSQL
 CREATE TABLE invoices (
   id BIGINT PRIMARY KEY,
@@ -490,6 +510,8 @@ const getDateInTz = (tz: string) => {
 Enable microseconds only when needed:
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 // Standard business documents (NO microseconds)
 const invoiceGen = simpleID(1000, 4, false);
 
@@ -502,6 +524,8 @@ const logGen = simpleID(0, 3, true);
 Design counter length with future growth in mind:
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 // Current: 100 orders/day
 // Growth: 1000 orders/day expected
 // Use 5 digits for headroom
