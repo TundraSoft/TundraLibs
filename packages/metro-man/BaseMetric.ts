@@ -57,8 +57,10 @@ export type SeriesEntry<T> = {
  *
  * @example
  * ```typescript
+ * type MyMetricOptions = { name: string; help?: string; type: 'COUNTER' };
+ *
  * class MyMetric extends BaseMetric<number, MyMetricOptions> {
- *   constructor(opt: MyMetricOptions) {
+ *   constructor(opt: Omit<MyMetricOptions, 'type'>) {
  *     super({ ...opt, type: 'COUNTER' });
  *   }
  * }
