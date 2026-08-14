@@ -14,8 +14,10 @@ that needs `${var}`-style substitution all flow through it.
   lookup tokens at construction; render is a tight loop, no regex per
   call.
 - **Type-safe**: variable names are extracted at compile time from a
-  template string literal. Missing or misspelled keys are TypeScript
-  errors, not silent failures at runtime.
+  template string literal, so misspelled or extra keys are TypeScript
+  errors rather than silent failures at runtime. The keys themselves
+  are optional — omitting one is legal, and `onMissing` decides how it
+  renders.
 - **Dot-path lookup**: `${user.name}` walks `values.user.name`
   _and_ accepts the flat `{'user.name': 'x'}` form.
 - **Arrays** render as `(a, b, c)`. **Plain objects** render via
@@ -46,7 +48,9 @@ type TemplateOptions = {
 ```
 
 `TemplateValues<T>` is computed at the type level from the template
-string — required keys are inferred per `${name}` placeholder.
+string — one optional key is inferred per `${name}` placeholder. Keys
+are optional because the renderer explicitly handles absent values via
+`onMissing`; keys that aren't placeholders are still rejected.
 
 ## Examples
 
@@ -60,8 +64,8 @@ const greet = templatize('Hello, ${name}! Welcome to ${place}.');
 greet({ name: 'Alice', place: 'TypeScript' });
 // 'Hello, Alice! Welcome to TypeScript.'
 
-// @ts-expect-error missing 'place'
-greet({ name: 'Bob' }); // ❌ TS error: missing 'place'
+// Omitting a placeholder is allowed — `onMissing` decides the output.
+greet({ name: 'Bob' }); // 'Hello, Bob! Welcome to .'
 greet({
   name: 'Bob',
   // @ts-expect-error extra key: not a placeholder in the template
@@ -78,7 +82,7 @@ should stay visible:
 import { templatize } from '@tundralibs/utils';
 
 const line = templatize('[${time}] ${level}: ${msg}', { onMissing: 'literal' });
-line({ time: '12:00:01', level: undefined as unknown as string, msg: 'hi' });
+line({ time: '12:00:01', msg: 'hi' }); // `level` simply omitted
 // '[12:00:01] ${level}: hi'   ← the `${level}` placeholder survives
 ```
 
@@ -93,7 +97,7 @@ fields should disappear, not leak `${...}` syntax:
 import { templatize } from '@tundralibs/utils';
 
 const url = templatize('/users/${id}?token=${token}');
-url({ id: '42', token: undefined as unknown as string });
+url({ id: '42' }); // `token` simply omitted
 // '/users/42?token='   ← clean empty rather than `?token=${token}`
 ```
 

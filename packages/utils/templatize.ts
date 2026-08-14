@@ -36,13 +36,23 @@ type ExtractVariableNames<T extends string> = T extends
   : never;
 
 /**
- * Object shape required to render a template — one string-typed key
- * per `${var}` in the template.
+ * Object shape accepted when rendering a template — one string-typed
+ * key per `${var}` in the template.
+ *
+ * Every key is **optional**: the renderer deliberately tolerates
+ * missing values, and {@link TemplateOptions.onMissing} decides what
+ * they render as (`'empty'` → `''`, the default; `'literal'` → the
+ * original `${var}` text). Requiring the keys would contradict that
+ * contract and force callers into `undefined`-shaped casts just to
+ * exercise the behaviour the option exists for.
+ *
+ * Keys that aren't placeholders in the template are still rejected —
+ * excess-property checking on the object literal catches typos.
  *
  * @typeParam T - Template string literal.
  */
 type TemplateValues<T extends string> = {
-  [K in ExtractVariableNames<T>]: string;
+  [K in ExtractVariableNames<T>]?: string;
 };
 
 /**
@@ -184,8 +194,8 @@ const _stringify = (
  * @example Log-style template — preserve placeholders on missing keys
  * ```typescript
  * const log = templatize('[${time}] ${level}: ${msg}', { onMissing: 'literal' });
- * // `level` is absent at runtime; the values type still requires every key.
- * log({ time: '12:00', level: undefined as unknown as string, msg: 'hi' });
+ * // `level` may simply be omitted — the values keys are optional.
+ * log({ time: '12:00', msg: 'hi' });
  * // '[12:00] ${level}: hi'
  * ```
  *
