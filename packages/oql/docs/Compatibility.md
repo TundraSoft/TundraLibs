@@ -312,22 +312,22 @@ The table below summarises the per-dialect emission. The general rule:
 - **literal**: materialised at translate time (e.g. UUID generated via
   `crypto.randomUUID()` and inlined as a string literal).
 
-| Expression            | Postgres                                       | MariaDB                                       | SQLite                                                                  | MongoDB                                |
-| --------------------- | ---------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------- |
-| ADD/SUBTRACT/…        | native                                         | native                                        | native                                                                  | native (`$add` / `$subtract` / …)      |
-| POWER                 | native                                         | native                                        | native (`POWER` via SQLite built-in math, default since 3.35.0)         | native (`$pow`)                        |
-| ROUND                 | native                                         | native                                        | native                                                                  | native                                 |
-| CONCAT                | native (`\|\|`)                                | native (`CONCAT`)                             | native (`\|\|`)                                                         | native (`$concat`)                     |
-| LENGTH/LOWER/UPPER    | native                                         | native                                        | native                                                                  | native                                 |
-| TRIM/LTRIM/RTRIM      | native                                         | native                                        | native                                                                  | native (`$trim` / `$ltrim` / `$rtrim`) |
-| SUBSTR                | native (`SUBSTRING`)                           | native (`SUBSTRING`)                          | native (`substr`)                                                       | native (`$substrCP`)                   |
-| REPLACE               | native                                         | native                                        | native                                                                  | native (`$replaceAll`)                 |
-| LPAD / RPAD           | native                                         | native                                        | emulated (via `printf`; space-pad only — a custom fill char is ignored) | passthrough                            |
-| NOW / CURRENT_*       | native                                         | native                                        | native (via `datetime('now')`)                                          | native (`$$NOW`)                       |
-| DATE_ADD / DATE_DIFF  | native                                         | native (via `TIMESTAMPADD` / `TIMESTAMPDIFF`) | native                                                                  | native (`$dateAdd` / `$dateDiff`)      |
-| **UUID**              | native (`gen_random_uuid()`)                   | native (`UUID()`)                             | **literal** (`crypto.randomUUID()`)                                     | **literal** (`crypto.randomUUID()`)    |
-| **HASH**              | native (`digest()` via pgcrypto)               | native (`SHA2(.., 256)`)                      | **passthrough** (no built-in crypto)                                    | **passthrough**                        |
-| **ENCRYPT / DECRYPT** | native (`pgp_sym_encrypt` / `pgp_sym_decrypt`) | native (`AES_ENCRYPT` / `AES_DECRYPT`)        | **passthrough**                                                         | **passthrough**                        |
+| Expression            | Postgres                                       | MariaDB                                       | SQLite                                                           | MongoDB                                |
+| --------------------- | ---------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------- |
+| ADD/SUBTRACT/…        | native                                         | native                                        | native                                                           | native (`$add` / `$subtract` / …)      |
+| POWER                 | native                                         | native                                        | native (`POWER` via SQLite built-in math, default since 3.35.0)  | native (`$pow`)                        |
+| ROUND                 | native                                         | native                                        | native                                                           | native                                 |
+| CONCAT                | native (`\|\|`)                                | native (`CONCAT`)                             | native (`\|\|`)                                                  | native (`$concat`)                     |
+| LENGTH/LOWER/UPPER    | native                                         | native                                        | native                                                           | native                                 |
+| TRIM/LTRIM/RTRIM      | native                                         | native                                        | native                                                           | native (`$trim` / `$ltrim` / `$rtrim`) |
+| SUBSTR                | native (`SUBSTRING`)                           | native (`SUBSTRING`)                          | native (`substr`)                                                | native (`$substrCP`)                   |
+| REPLACE               | native                                         | native                                        | native                                                           | native (`$replaceAll`)                 |
+| LPAD / RPAD           | native                                         | native                                        | emulated (`printf` + `replace` + `substr`; custom fill honoured) | passthrough                            |
+| NOW / CURRENT_*       | native                                         | native                                        | native (via `datetime('now')`)                                   | native (`$$NOW`)                       |
+| DATE_ADD / DATE_DIFF  | native                                         | native (via `TIMESTAMPADD` / `TIMESTAMPDIFF`) | native                                                           | native (`$dateAdd` / `$dateDiff`)      |
+| **UUID**              | native (`gen_random_uuid()`)                   | native (`UUID()`)                             | **literal** (`crypto.randomUUID()`)                              | **literal** (`crypto.randomUUID()`)    |
+| **HASH**              | native (`digest()` via pgcrypto)               | native (`SHA2(.., 256)`)                      | **passthrough** (no built-in crypto)                             | **passthrough**                        |
+| **ENCRYPT / DECRYPT** | native (`pgp_sym_encrypt` / `pgp_sym_decrypt`) | native (`AES_ENCRYPT` / `AES_DECRYPT`)        | **passthrough**                                                  | **passthrough**                        |
 
 ### UUID gotcha
 
@@ -431,8 +431,8 @@ We **silently fall back / passthrough** for:
   no-op `REFRESH`.
 - `UUID` on SQLite / MongoDB → `crypto.randomUUID()` literal.
 - `HASH` / `ENCRYPT` / `DECRYPT` on SQLite / MongoDB → passthrough.
-- `LPAD` / `RPAD` on SQLite → emulated via `printf` (space-pad only;
-  custom fill char ignored). On MongoDB → passthrough.
+- `LPAD` / `RPAD` on MongoDB → passthrough. (SQLite is **not** in this
+  list: it composes the real thing — see below.)
 - `TRUNCATE` on SQLite / MongoDB → `DELETE` with no filter.
 - `DROP INDEX ifExists` / `cascade` flags on MariaDB → silently dropped
   (the grammar doesn't accept them; missing-index becomes a hard error).
@@ -440,6 +440,29 @@ We **silently fall back / passthrough** for:
 The split is deliberate: silent fallbacks happen when there's a
 reasonable substitute that keeps the query semantically meaningful;
 we throw when emitting anything would actively mislead the caller.
+
+## `LPAD` / `RPAD` on SQLite
+
+SQLite ships neither function, so the translator composes them:
+`printf('%*s', n, '')` builds a run of `n` spaces, `replace()` swaps each
+space for the fill, an inner `substr` cuts that run to the shortfall, and
+an outer `substr` truncates an input that is already longer than the
+target width.
+
+This is a real emulation, not a space-padding approximation — the fill
+you pass is the fill you get. Verified by executing the emitted SQL on
+SQLite 3.53.4 and diffing it against the same query on Postgres 17 and
+MariaDB 11: custom fill, multi-character fill (`LPAD('x', 6, 'abc')` →
+`abcabx`), truncation of an over-long input, NULL input/length/fill,
+non-ASCII input, empty input, and zero length all agree.
+
+Two edges cannot agree with both references at once, because Postgres
+and MariaDB disagree with **each other** there. SQLite follows Postgres:
+
+| Input             | Postgres | MariaDB | SQLite (ours) |
+| ----------------- | -------- | ------- | ------------- |
+| negative length   | `''`     | `NULL`  | `''`          |
+| empty fill (`''`) | input    | `NULL`  | input         |
 
 ---
 

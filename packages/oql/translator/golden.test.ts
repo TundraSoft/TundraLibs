@@ -450,6 +450,224 @@ const CASES: Case[] = [
       },
     },
   },
+  // ---------------------------------------------------------------------------
+  // LPAD / RPAD
+  //
+  // SQLite ships neither function, so it composes them. The composition is
+  // pinned here because it silently regressed once already: it used to emit
+  // `printf('%Ns', …)`, which pads with spaces no matter what fill was
+  // requested, and parked the fill in a `/* … */` comment — leaving `p_1`
+  // registered in `params` but referenced nowhere the engine could see it.
+  //
+  // The params assertions below are the guard against that: every bound
+  // parameter must appear in executable SQL, never only in a comment.
+  //
+  // Verified by executing the emitted SQL against SQLite 3.53.4 and diffing
+  // against the same query on Postgres 17 and MariaDB 11 — 36/36 cases
+  // (custom fill, multi-char fill, truncation, NULL input/length/fill,
+  // unicode, empty input, zero/negative length) agree with Postgres.
+  // ---------------------------------------------------------------------------
+  {
+    // The fill must reach executable SQL. `replace()` swaps each space of a
+    // `printf`-built run for the fill, the inner `substr` cuts that run to
+    // the shortfall, and the outer `substr` truncates an over-long input.
+    name: 'LPAD with a custom fill pads with that fill on every dialect',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      expressions: {
+        padded: {
+          $$_expression: 'LPAD',
+          args: { string: '@name', length: 10, fill: '*' },
+        },
+      },
+      projection: { '@padded': 'padded' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT substr(substr(replace(printf(\'%*s\', max(0, :p_0:), \'\'), \' \', :p_1:), 1, max(0, :p_0: - length("name"))) || "name", 1, max(0, :p_0:)) AS "padded" FROM "users"',
+        params: { p_0: 10, p_1: '*' },
+      },
+      postgres: {
+        sql: 'SELECT LPAD("name", :p_0:, :p_1:) AS "padded" FROM "users"',
+        params: { p_0: 10, p_1: '*' },
+      },
+      maria: {
+        sql: 'SELECT LPAD(`name`, :p_0:, :p_1:) AS `padded` FROM `users`',
+        params: { p_0: 10, p_1: '*' },
+      },
+    },
+  },
+  {
+    // RPAD had the identical defect and gets the identical composition,
+    // differing only in which side of the input the pad run is joined to.
+    name: 'RPAD with a custom fill pads with that fill on every dialect',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      expressions: {
+        padded: {
+          $$_expression: 'RPAD',
+          args: { string: '@name', length: 10, fill: '*' },
+        },
+      },
+      projection: { '@padded': 'padded' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT substr("name" || substr(replace(printf(\'%*s\', max(0, :p_0:), \'\'), \' \', :p_1:), 1, max(0, :p_0: - length("name"))), 1, max(0, :p_0:)) AS "padded" FROM "users"',
+        params: { p_0: 10, p_1: '*' },
+      },
+      postgres: {
+        sql: 'SELECT RPAD("name", :p_0:, :p_1:) AS "padded" FROM "users"',
+        params: { p_0: 10, p_1: '*' },
+      },
+      maria: {
+        sql: 'SELECT RPAD(`name`, :p_0:, :p_1:) AS `padded` FROM `users`',
+        params: { p_0: 10, p_1: '*' },
+      },
+    },
+  },
+  {
+    // Omitted fill defaults to a space. SQLite takes the same path with a
+    // literal `' '` rather than a second emitter, so only one composition
+    // has to be correct — and `params` holds just the length.
+    name: 'LPAD without a fill defaults to space',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      expressions: {
+        padded: {
+          $$_expression: 'LPAD',
+          args: { string: '@name', length: 10 },
+        },
+      },
+      projection: { '@padded': 'padded' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT substr(substr(replace(printf(\'%*s\', max(0, :p_0:), \'\'), \' \', \' \'), 1, max(0, :p_0: - length("name"))) || "name", 1, max(0, :p_0:)) AS "padded" FROM "users"',
+        params: { p_0: 10 },
+      },
+      postgres: {
+        sql: 'SELECT LPAD("name", :p_0:) AS "padded" FROM "users"',
+        params: { p_0: 10 },
+      },
+      maria: {
+        sql: "SELECT LPAD(`name`, :p_0:, ' ') AS `padded` FROM `users`",
+        params: { p_0: 10 },
+      },
+    },
+  },
+  {
+    name: 'RPAD without a fill defaults to space',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      expressions: {
+        padded: {
+          $$_expression: 'RPAD',
+          args: { string: '@name', length: 10 },
+        },
+      },
+      projection: { '@padded': 'padded' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT substr("name" || substr(replace(printf(\'%*s\', max(0, :p_0:), \'\'), \' \', \' \'), 1, max(0, :p_0: - length("name"))), 1, max(0, :p_0:)) AS "padded" FROM "users"',
+        params: { p_0: 10 },
+      },
+      postgres: {
+        sql: 'SELECT RPAD("name", :p_0:) AS "padded" FROM "users"',
+        params: { p_0: 10 },
+      },
+      maria: {
+        sql: "SELECT RPAD(`name`, :p_0:, ' ') AS `padded` FROM `users`",
+        params: { p_0: 10 },
+      },
+    },
+  },
+  {
+    // Multi-character fill. The other dialects repeat the fill and cut it
+    // mid-sequence (`LPAD('x', 6, 'abc')` → `abcabx`); the inner
+    // `substr(…, 1, shortfall)` is what reproduces that cut, so the fill
+    // must be bound whole rather than assumed to be one character.
+    name: 'LPAD carries a multi-character fill through as one bound value',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      expressions: {
+        padded: {
+          $$_expression: 'LPAD',
+          args: { string: '@name', length: 6, fill: 'abc' },
+        },
+      },
+      projection: { '@padded': 'padded' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT substr(substr(replace(printf(\'%*s\', max(0, :p_0:), \'\'), \' \', :p_1:), 1, max(0, :p_0: - length("name"))) || "name", 1, max(0, :p_0:)) AS "padded" FROM "users"',
+        params: { p_0: 6, p_1: 'abc' },
+      },
+      postgres: {
+        sql: 'SELECT LPAD("name", :p_0:, :p_1:) AS "padded" FROM "users"',
+        params: { p_0: 6, p_1: 'abc' },
+      },
+      maria: {
+        sql: 'SELECT LPAD(`name`, :p_0:, :p_1:) AS `padded` FROM `users`',
+        params: { p_0: 6, p_1: 'abc' },
+      },
+    },
+  },
+  {
+    // Truncation: an input longer than the target width is cut to the
+    // width, keeping the leftmost characters, on all three dialects. The
+    // outer `substr(…, 1, max(0, length))` is the SQLite half of that.
+    name: 'RPAD truncates an over-long input via the outer substr',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'name'],
+      expressions: {
+        padded: {
+          $$_expression: 'RPAD',
+          args: { string: '@name', length: 4, fill: 'ab' },
+        },
+      },
+      projection: { '@padded': 'padded' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT substr("name" || substr(replace(printf(\'%*s\', max(0, :p_0:), \'\'), \' \', :p_1:), 1, max(0, :p_0: - length("name"))), 1, max(0, :p_0:)) AS "padded" FROM "users"',
+        params: { p_0: 4, p_1: 'ab' },
+      },
+      postgres: {
+        sql: 'SELECT RPAD("name", :p_0:, :p_1:) AS "padded" FROM "users"',
+        params: { p_0: 4, p_1: 'ab' },
+      },
+      maria: {
+        sql: 'SELECT RPAD(`name`, :p_0:, :p_1:) AS `padded` FROM `users`',
+        params: { p_0: 4, p_1: 'ab' },
+      },
+    },
+  },
   {
     // $startsWith / $endsWith / $contains splice the bound value into a LIKE
     // pattern. A `%` / `_` / escape-char in that value must be escaped so it
@@ -2070,5 +2288,52 @@ describe('oql.translator.golden', () => {
         });
       }
     });
+  }
+});
+
+/**
+ * A bound parameter whose only occurrence is inside a SQL comment is
+ * registered but unreachable: an engine that strips comments before
+ * substitution, or that validates that every bound parameter is used, sees
+ * a parameter that goes nowhere — and `createView` persists the comment
+ * into the stored view body. SQLite's `LPAD`/`RPAD` used to do exactly
+ * that with the fill argument.
+ *
+ * This sweeps every golden case rather than the pad emitters alone, so the
+ * same mistake cannot reappear in another emitter unnoticed.
+ */
+describe('oql.translator.golden: no parameter is referenced only in a comment', () => {
+  /** Blank out block and line comments, keeping offsets irrelevant. */
+  const stripComments = (sql: string): string =>
+    sql.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*/g, ' ');
+
+  for (const c of CASES) {
+    for (const dialect of ['sqlite', 'postgres', 'maria'] as const) {
+      if (c.throws?.includes(dialect)) continue;
+
+      it(`${c.name} (${dialect})`, () => {
+        const t = translators[dialect];
+        // deno-lint-ignore no-explicit-any
+        const fn = (t as any)[c.method].bind(t);
+        let out;
+        try {
+          out = normalize(fn(c.query));
+        } catch {
+          // Dialects that legitimately reject a case are covered by the
+          // main golden suite; nothing to check here.
+          return;
+        }
+        for (const stmt of out) {
+          const bare = stripComments(stmt.sql);
+          for (const name of Object.keys(stmt.params ?? {})) {
+            asserts.assertStringIncludes(
+              bare,
+              `:${name}:`,
+              `param '${name}' is registered but does not appear in ${dialect} SQL outside a comment: ${stmt.sql}`,
+            );
+          }
+        }
+      });
+    }
   }
 });
