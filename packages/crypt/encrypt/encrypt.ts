@@ -10,6 +10,8 @@
  * ```typescript
  * import { encryptAES, encryptRSA } from '@tundralibs/crypt/encrypt';
  *
+ * declare const publicKeyPEM: string;
+ *
  * const encrypted = await encryptAES('secret data', 'password');
  * const rsaEncrypted = await encryptRSA('data', publicKeyPEM);
  * ```

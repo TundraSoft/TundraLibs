@@ -19,6 +19,7 @@ The Crypt package provides battle-tested cryptographic operations using the nati
 | [Sign](sign/Crypt-Sign.md)                   | HMAC, RSA and ECDSA digital signatures                 | [Docs](sign/Crypt-Sign.md)             |
 | [Generators](generators/Crypt-Generators.md) | Key pairs, secrets, and BIP39 mnemonics                | [Docs](generators/Crypt-Generators.md) |
 | [JWT](JWT/Crypt-JWT.md)                      | JSON Web Token creation and verification (HS/RS/PS/ES) | [Docs](JWT/Crypt-JWT.md)               |
+| [JWT Errors](JWT/errors/Crypt-JWT-Errors.md) | `JWTError` and its 12 stable error codes               | [Docs](JWT/errors/Crypt-JWT-Errors.md) |
 | [OTP](OTP/Crypt-OTP.md)                      | Time-based and HMAC-based one-time passwords           | [Docs](OTP/Crypt-OTP.md)               |
 
 ## Installation
@@ -77,6 +78,8 @@ console.log(decrypted); // 'secret message'
 ```typescript
 import { hkdf, pbkdf2Hash, pbkdf2Verify } from '@tundralibs/crypt/encrypt';
 
+declare const masterSecret: Uint8Array;
+
 // Passwords: slow, salted PBKDF2 (store the string, verify against it)
 const stored = await pbkdf2Hash('correct horse battery staple');
 const ok = await pbkdf2Verify('correct horse battery staple', stored); // true
@@ -104,6 +107,9 @@ ECDSA and RSA work the same way, and every function takes a PEM string, a
 
 ```typescript
 import { signEC, verifyEC } from '@tundralibs/crypt/sign';
+
+declare const ecPrivateKeyPEM: string;
+declare const ecPublicKeyJWK: JsonWebKey;
 
 // Curve and hash are read from the key (P-256 → SHA-256). The signature is
 // the raw R‖S form JOSE requires, not DER.

@@ -2164,7 +2164,7 @@ export type BIP39Result = {
  * @example
  * ```typescript
  * // Use custom wordlist
- * const customWords = ['word1', 'word2', ...]; // 2048 custom words
+ * declare const customWords: string[]; // 2048 custom words
  * const result = await generateBIP39Mnemonic({
  *   wordlist: customWords,
  *   wordCount: 15
@@ -2418,6 +2418,21 @@ const mnemonicToEntropy = async (
 };
 
 // Convenience aliases for common use cases
+
+/**
+ * Positional-argument shorthand for {@link generateBIP39Mnemonic}, fixed to
+ * the built-in English wordlist — call that directly to supply another
+ * language.
+ *
+ * @param wordCount - Phrase length, which sets the entropy behind it: 12 words is 128 bits, 24 is 256
+ * @param passphrase - Folded into seed derivation only. It leaves no trace in the phrase, so it cannot be recovered from one and a different passphrase silently yields a different valid-looking seed.
+ *
+ * @example
+ * ```ts
+ * const { phrase, seed } = await generateSeedPhrase(24);
+ * console.log(phrase.split(' ').length, seed.length); // 24 64
+ * ```
+ */
 export const generateSeedPhrase = (
   wordCount: BIP39WordCount = 12,
   passphrase?: string,
@@ -2428,6 +2443,12 @@ export const generateSeedPhrase = (
   seed: Uint8Array;
 }> => generateBIP39Mnemonic({ wordCount, passphrase });
 
+/**
+ * {@link generateSeedPhrase} pinned to 12 words (128 bits of entropy) — the
+ * default most wallets present.
+ *
+ * @param passphrase - Folded into seed derivation only; it cannot be recovered from the phrase
+ */
 export const generate12WordSeed = (passphrase?: string): Promise<{
   words: string[];
   phrase: string;
@@ -2435,6 +2456,12 @@ export const generate12WordSeed = (passphrase?: string): Promise<{
   seed: Uint8Array;
 }> => generateBIP39Mnemonic({ wordCount: 12, passphrase });
 
+/**
+ * {@link generateSeedPhrase} pinned to 24 words (256 bits of entropy), for
+ * keys that should outlast the 12-word default.
+ *
+ * @param passphrase - Folded into seed derivation only; it cannot be recovered from the phrase
+ */
 export const generate24WordSeed = (passphrase?: string): Promise<{
   words: string[];
   phrase: string;
@@ -2442,4 +2469,16 @@ export const generate24WordSeed = (passphrase?: string): Promise<{
   seed: Uint8Array;
 }> => generateBIP39Mnemonic({ wordCount: 24, passphrase });
 
-export const validateSeedPhrase = validateBIP39Mnemonic;
+/**
+ * Alias of {@link validateBIP39Mnemonic}.
+ *
+ * Confirms only that the phrase is well-formed — word count, wordlist
+ * membership, and BIP39 checksum. It never throws; every malformed input,
+ * including a phrase from a wordlist other than the one passed, simply returns
+ * `false`. A `true` says nothing about the entropy behind the phrase or about
+ * who holds it.
+ */
+export const validateSeedPhrase: (
+  mnemonic: string,
+  wordlist?: readonly string[],
+) => Promise<boolean> = validateBIP39Mnemonic;

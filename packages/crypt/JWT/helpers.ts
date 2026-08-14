@@ -138,6 +138,11 @@ export const rsaScheme = (alg: JWTAlgorithm): 'PKCS1' | 'PSS' =>
  * Spread it to widen the set without losing these two:
  *
  * ```ts
+ * import { verifyJWT } from '@tundralibs/crypt/JWT';
+ *
+ * declare const token: string;
+ * declare const key: string;
+ *
  * await verifyJWT(token, key, { typ: [...JWT_DEFAULT_TYPES, 'my+jwt'] });
  * ```
  *
@@ -646,19 +651,24 @@ const isRefreshKeyConfig = (
  *
  * @example
  * ```typescript
+ * import { verifyJWT } from '@tundralibs/crypt/JWT';
+ *
+ * declare const token: string;
+ * declare const appropriateKey: string;
+ *
  * // Decode token for debugging
  * const { header, payload } = decodeJWT(token);
  * console.log('Algorithm:', header.alg);
  * console.log('Expires:', new Date(payload.exp! * 1000));
  *
  * // Check token contents before verification
- * const { payload } = decodeJWT(token);
- * if (payload.iss !== 'expected-issuer') {
+ * const { payload: claims } = decodeJWT(token);
+ * if (claims.iss !== 'expected-issuer') {
  *   console.log('Wrong issuer, skipping verification');
- *   return;
+ * } else {
+ *   // Now verify with appropriate key
+ *   await verifyJWT(token, appropriateKey);
  * }
- * // Now verify with appropriate key
- * await verifyJWT(token, appropriateKey);
  * ```
  *
  * @see {@link verifyJWT} For secure token verification
@@ -787,14 +797,25 @@ export const decodeJWT = (
  *
  * @example
  * ```typescript
+ * declare const oldToken: string;
+ * declare const token: string;
+ * declare const ecToken: string;
+ * declare const hmacSecret: string;
+ * declare const publicKey: string;
+ * declare const privateKey: string;
+ * declare const publicKeyPEM: string;
+ * declare const privateKeyPEM: string;
+ * declare const ecPublicKey: string;
+ * declare const ecPrivateKey: string;
+ *
  * // HMAC token refresh (same secret for verify and sign)
- * const newToken = await refreshJWT(oldToken, 'secret-key');
+ * const hmacToken = await refreshJWT(oldToken, 'secret-key');
  *
  * // HMAC with custom extension
- * const newToken = await refreshJWT(oldToken, 'secret-key', 7200); // 2 hours
+ * const longerToken = await refreshJWT(oldToken, 'secret-key', 7200); // 2 hours
  *
  * // RSA token refresh (separate public/private keys)
- * const newToken = await refreshJWT(
+ * const rsaToken = await refreshJWT(
  *   oldToken,
  *   {
  *     verifyKey: publicKeyPEM,  // Verify old token with public key
@@ -804,7 +825,7 @@ export const decodeJWT = (
  * );
  *
  * // RSA with key ID
- * const newToken = await refreshJWT(
+ * const keyedToken = await refreshJWT(
  *   oldToken,
  *   { verifyKey: publicKey, signKey: privateKey },
  *   3600,
@@ -812,7 +833,7 @@ export const decodeJWT = (
  * );
  *
  * // ECDSA token refresh — same shape as RSA
- * const newToken = await refreshJWT(
+ * const ecRefreshed = await refreshJWT(
  *   ecToken,
  *   { verifyKey: ecPublicKey, signKey: ecPrivateKey },
  * );

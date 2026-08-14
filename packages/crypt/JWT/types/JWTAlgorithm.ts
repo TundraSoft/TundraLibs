@@ -33,14 +33,20 @@
  *
  * @example
  * ```ts
+ * import { issueJWT, type JWTPayload } from '@tundralibs/crypt/JWT';
+ *
+ * declare const payload: JWTPayload;
+ * declare const privateKeyPEM: string;
+ * declare const ecPrivateKeyPEM: string;
+ *
  * // HMAC
- * const token = await issueJWT('HS256', payload, 'secret-key');
+ * const hmacToken = await issueJWT('HS256', payload, 'secret-key');
  *
  * // RSA
- * const token = await issueJWT('RS256', payload, privateKeyPEM);
+ * const rsaToken = await issueJWT('RS256', payload, privateKeyPEM);
  *
  * // ECDSA — the key must be on P-256
- * const token = await issueJWT('ES256', payload, ecPrivateKeyPEM);
+ * const ecToken = await issueJWT('ES256', payload, ecPrivateKeyPEM);
  * ```
  *
  * @see {@link https://tools.ietf.org/html/rfc7518#section-3} RFC 7518 — JWT Algorithms

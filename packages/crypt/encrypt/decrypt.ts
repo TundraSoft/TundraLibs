@@ -10,6 +10,10 @@
  * ```typescript
  * import { decryptAES, decryptRSA } from '@tundralibs/crypt/encrypt';
  *
+ * declare const encryptedData: string;
+ * declare const encrypted: string;
+ * declare const privateKeyPEM: string;
+ *
  * const decrypted = await decryptAES(encryptedData, 'password');
  * const rsaDecrypted = await decryptRSA(encrypted, privateKeyPEM);
  * ```
@@ -87,6 +91,8 @@ export async function decryptAES(
  *
  * @example
  * ```typescript
+ * declare const encryptedEnvelope: string;
+ *
  * const decryptedBinary = await decryptAES(
  *   encryptedEnvelope,
  *   'secret',
@@ -240,6 +246,8 @@ export async function decryptRSA(
  *
  * @example
  * ```typescript
+ * declare const privateKey: string;
+ *
  * const binary = await decryptRSA('base64EncryptedData==', privateKey, { returnBinary: true });
  * ```
  */

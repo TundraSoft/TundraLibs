@@ -14,6 +14,10 @@
  * ```typescript
  * import { verifyEC, verifyHMAC, verifyRSA } from '@tundralibs/crypt/sign';
  *
+ * declare const signature: string;
+ * declare const publicKeyPEM: string;
+ * declare const ecPublicKeyPEM: string;
+ *
  * const valid = await verifyHMAC('data', signature, 'secret');
  * const rsaValid = await verifyRSA('data', signature, publicKeyPEM);
  * const ecValid = await verifyEC('data', signature, ecPublicKeyPEM);
@@ -52,6 +56,8 @@ import {
  *
  * @example
  * ```ts
+ * import { signHMAC } from '@tundralibs/crypt/sign';
+ *
  * const signature = await signHMAC('my data', 'mysecret');
  * const isValid = await verifyHMAC('my data', signature, 'mysecret');
  * console.log(isValid); // true
@@ -59,6 +65,8 @@ import {
  *
  * @example
  * ```ts
+ * import { signHMAC } from '@tundralibs/crypt/sign';
+ *
  * const binaryData = new Uint8Array([1, 2, 3, 4]);
  * const signature = await signHMAC(binaryData, 'mysecret', { hashAlgorithm: 'SHA-512' });
  * const isValid = await verifyHMAC(binaryData, signature, 'mysecret', { hashAlgorithm: 'SHA-512' });
@@ -267,6 +275,8 @@ export const verifyRSA = async (
  *
  * @example
  * ```typescript
+ * declare const signature: string;
+ *
  * const publicKey = `-----BEGIN PUBLIC KEY-----
  * MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
  * -----END PUBLIC KEY-----`;

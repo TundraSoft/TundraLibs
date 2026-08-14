@@ -82,14 +82,19 @@ import {
  *
  * @example
  * ```typescript
+ * import { generateECDSAKeys } from '@tundralibs/crypt/generators';
+ *
+ * declare const privateKeyPEM: string;
+ * declare const ecPrivateKeyPEM: string;
+ *
  * // HMAC JWT with expiration
- * const token = await issueJWT('HS256', {
+ * const hmacToken = await issueJWT('HS256', {
  *   sub: 'user123',
  *   exp: Math.floor(Date.now() / 1000) + 3600 // 1 hour
  * }, 'my-secret-key');
  *
  * // RSA JWT with private key
- * const token = await issueJWT('RS256', {
+ * const rsaToken = await issueJWT('RS256', {
  *   sub: 'user456',
  *   iss: 'auth.example.com',
  *   aud: ['api.example.com', 'web.example.com'],
@@ -97,7 +102,7 @@ import {
  * }, privateKeyPEM);
  *
  * // JWT with key ID for rotation
- * const token = await issueJWT('HS512', {
+ * const keyedToken = await issueJWT('HS512', {
  *   sub: 'service-account',
  * }, 'service-secret', 'key-2024-01');
  *
@@ -110,7 +115,7 @@ import {
  * }, privateKeyPEM, { typ: 'at+jwt', kid: 'key-2024-01' });
  *
  * // ECDSA JWT — the key must be on P-256 for ES256
- * const token = await issueJWT('ES256', {
+ * const ecToken = await issueJWT('ES256', {
  *   sub: 'user789',
  * }, ecPrivateKeyPEM);
  *

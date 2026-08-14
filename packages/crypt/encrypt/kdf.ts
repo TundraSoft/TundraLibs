@@ -244,6 +244,8 @@ const toBytes = (v: string | Uint8Array | undefined): Uint8Array =>
  *
  * @example
  * ```ts
+ * declare const secret: Uint8Array;
+ *
  * const signKey = await hkdf(secret, { info: 'jwt' });
  * const macKey = await hkdf(secret, { info: 'hmac' }); // independent of signKey
  * ```
