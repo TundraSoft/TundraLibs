@@ -58,6 +58,8 @@ SCRAM-SHA-256 (or to cleartext over TLS, which is always permitted — the
 transport is already encrypted).
 
 ```typescript
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
+
 // Refuse to send a password unless the transport is encrypted.
 const pg = new PostgresEngine('app', {
   host: 'db.internal',

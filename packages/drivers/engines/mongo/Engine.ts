@@ -95,7 +95,12 @@ const HOST_PATTERN =
  */
 export class MongoEngine
   extends ConnectionEngine<MongoClient, MongoEngineOptions, MongoEngineEvents> {
+  /** Always `'MONGO'`. */
   public readonly Engine = 'MONGO';
+  /**
+   * All `false`: the driver runs its own connection pool, and neither
+   * transactions nor prepared statements are wired through to the OQL surface.
+   */
   public readonly Capabilities: EngineCapabilities = {
     // Mongo has its own internal pool — we don't expose ours.
     pooledConnections: false,
@@ -127,6 +132,14 @@ export class MongoEngine
    * (seconds). A query slower than this fires `slowQuery`. */
   private readonly __slowThresholdMs: number;
 
+  /**
+   * Validates options; no client is created until {@link MongoEngine.connect}.
+   * Supply either a full `uri` or a `host` — the remaining pieces are assembled
+   * into a connection string.
+   *
+   * @throws {@link EngineError} `MISSING_CONFIG_VALUE` if neither `uri` nor
+   *   `host` is set.
+   */
   constructor(
     name: string,
     options: EventOptionKeys<MongoEngineOptions, MongoEngineEvents>,
@@ -200,6 +213,18 @@ export class MongoEngine
     });
   }
 
+  /**
+   * Close the shared `MongoClient`.
+   *
+   * Waits out an in-flight {@link MongoEngine.connect} first, so a client
+   * created by that attempt is closed rather than orphaned. Idempotent once
+   * `CLOSED`.
+   *
+   * @throws {@link EngineError} If closing the client fails.
+   *
+   * @emits disconnect - On successful close.
+   * @emits error - When closing the client throws.
+   */
   public override async disconnect(): Promise<void> {
     // A connect is still in flight (status CONNECTING, `__client` still
     // null): join it before inspecting `__client`. Otherwise the attempt
@@ -231,6 +256,10 @@ export class MongoEngine
     }
   }
 
+  /**
+   * Round-trips the `admin` database's `ping` command. Returns `false` rather
+   * than throwing when disconnected or when the command fails.
+   */
   public override async ping(): Promise<boolean> {
     if (this._status === 'CLOSED' || !this.__client) return false;
     try {
@@ -520,6 +549,10 @@ export class MongoEngine
     return this.__executeOQL<R>(this.__translator.upsert(q));
   }
 
+  /**
+   * Run a `COUNT` Query. Both the native count and the aggregate-pipeline
+   * fallback used for joined counts are normalised to a single `{ Count }` row.
+   */
   public async count(
     q: Query<'COUNT'>,
   ): Promise<EngineQueryResult<{ Count: number }>> {
@@ -559,6 +592,11 @@ export class MongoEngine
     return this.__runMany(this.__translator.createTable(q));
   }
 
+  /**
+   * Run an `ALTER_TABLE` Query. Only `renameTo` produces a command
+   * (`renameCollection`) — collections are schemaless, so adding or dropping
+   * columns is a no-op that resolves to an empty result array.
+   */
   public alterTable(
     q: Query<'ALTER_TABLE'>,
   ): Promise<EngineQueryResult[]> {
@@ -657,6 +695,10 @@ export class MongoEngine
     }
   }
 
+  /**
+   * Run a translator-emitted action list sequentially. There is no transaction
+   * wrapper, so a mid-list failure leaves the earlier actions applied.
+   */
   private async __runMany(
     actions: ReadonlyArray<MongoAction>,
   ): Promise<EngineQueryResult[]> {
@@ -865,6 +907,12 @@ export class MongoEngine
     }
   }
 
+  /**
+   * The configured database name, required for every collection operation.
+   *
+   * @throws {@link EngineError} `MISSING_CONFIG_VALUE` when `database` is unset
+   *   — it is optional at construction because a `uri` may carry it.
+   */
   private __defaultDb(): string {
     const db = this._getOption('database');
     if (!db) {
@@ -923,6 +971,12 @@ export class MongoEngine
     return `mongodb://${auth}${hostPort}${path}${query ? `?${query}` : ''}`;
   }
 
+  /**
+   * Maps a driver error's `code`/`codeName` onto the standard engine error
+   * codes, falling back to `OPERATION_FAILED`.
+   *
+   * @param op - The operation name recorded on the error metadata.
+   */
   private __wrapMongoError(e: unknown, op: string): EngineError {
     if (e instanceof EngineError) return e;
     const err = e as { code?: number | string; codeName?: string } & Error;

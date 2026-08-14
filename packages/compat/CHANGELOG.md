@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.1.2...compat-v1.1.3) (2026-08-14)
+
+
+### Documentation
+
+* **compat:** verify documentation examples and document the public API ([#251](https://github.com/TundraSoft/TundraLibs/issues/251)) ([25de308](https://github.com/TundraSoft/TundraLibs/commit/25de3081db5b826e8112ca8f722247040f321a28))
+
 ## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.1.1...compat-v1.1.2) (2026-08-13)
 
 
