@@ -59,8 +59,12 @@ export type SummarySeries = {
  * ```
  */
 export class Summary extends BaseMetric<SummarySeries, SummaryOptions> {
+  /** Requested quantiles, de-duplicated and sorted ascending. */
   protected _quantiles: Array<number>;
+
+  /** Sliding retention window for the quantile samples, in seconds. */
   protected _window: number;
+
   /**
    * Per-series state. `data` is the windowed sample buffer (second →
    * observations) that feeds the quantile estimates and is pruned by
@@ -71,9 +75,16 @@ export class Summary extends BaseMetric<SummarySeries, SummaryOptions> {
     string,
     { data: Record<number, Array<number>>; sum: number; count: number }
   > = new Map();
+  /**
+   * Epoch second of the last observe-time purge. Read-time purges
+   * deliberately leave it alone — see {@link _purge}.
+   */
   protected _lastPurge: number;
 
   /**
+   * Create a summary. `quantiles` defaults to `[0.5, 0.9, 0.99]` and
+   * `window` to `600` seconds; `type` is injected automatically.
+   *
    * @throws {@link InvalidMetricOptionsError} When `quantiles` is not
    *   an array of finite numbers in the range `[0, 1]`, or `window`
    *   is not a finite number in the range `[1, 600]` (`NaN` and
@@ -192,11 +203,23 @@ export class Summary extends BaseMetric<SummarySeries, SummaryOptions> {
     return super.remove(labels);
   }
 
+  /**
+   * Snapshot with the quantiles recomputed first, so they reflect only
+   * the samples still inside the window. `count` and `sum` are the
+   * cumulative lifetime totals.
+   */
   public override toJSON(): MetricOutput<SummarySeries> {
     this._calculate();
     return super.toJSON();
   }
 
+  /**
+   * Prometheus exposition for the summary family: one
+   * `{quantile="…"}` line per configured quantile, then `_sum` and
+   * `_count`. Quantiles are recomputed over the current window first;
+   * `_sum`/`_count` stay cumulative. A summary with no observations
+   * renders just its `# HELP` / `# TYPE` header lines.
+   */
   public override toPrometheus(): string {
     this._calculate();
     // Assemble a flat line list — the two header lines first, then each
@@ -218,6 +241,10 @@ export class Summary extends BaseMetric<SummarySeries, SummaryOptions> {
     return lines.join('\n') + '\n';
   }
 
+  /**
+   * Debug dump with the quantiles recomputed over the current window
+   * first.
+   */
   public override toString(): string {
     this._calculate();
     return super.toString();
@@ -293,6 +320,13 @@ export class Summary extends BaseMetric<SummarySeries, SummaryOptions> {
     return Math.floor(Date.now() / 1000);
   }
 
+  /**
+   * Render one series' quantile, `_sum`, and `_count` lines, with no
+   * trailing line feed — the caller joins and terminates the document.
+   *
+   * @param labels - Pre-rendered label segments, empty for the
+   *   unlabelled series.
+   */
   private __renderSeries(labels: string[], v: SummarySeries): string {
     const labelStr = labels.join(',');
     const lines: string[] = this._quantiles.map((q) => {

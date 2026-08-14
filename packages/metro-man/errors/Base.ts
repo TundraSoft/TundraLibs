@@ -19,6 +19,11 @@ import { BaseError } from '@tundralibs/utils';
 export class MetroManError<
   M extends Record<string, unknown> = Record<string, unknown>,
 > extends BaseError<M> {
+  /**
+   * Every MetroMan throw site passes an already-formed message, so the
+   * template interpolates that and nothing else — the structured
+   * `context` stays queryable rather than being spliced into the text.
+   */
   protected override get _messageTemplate(): string {
     return '${message}';
   }
