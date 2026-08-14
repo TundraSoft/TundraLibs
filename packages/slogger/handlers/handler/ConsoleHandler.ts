@@ -17,8 +17,14 @@ export type ConsoleHandlerOptions = HandlerOptions & {
  * colorization based on log level.
  */
 export class ConsoleHandler extends AbstractHandler {
+  /** Runtime discriminator for this handler kind. */
   public readonly mode = 'console';
 
+  /**
+   * Whether {@link _format} wraps output in ANSI colour codes. Off by
+   * default — the escape sequences are noise once output is piped or
+   * redirected to a file.
+   */
   protected _useColor: boolean;
 
   /**

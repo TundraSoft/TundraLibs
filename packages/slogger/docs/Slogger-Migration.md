@@ -31,6 +31,9 @@ console.warn('Deprecated API used');
 ```typescript
 import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
 
+declare const userId: string;
+declare const error: Error;
+
 const logger = new Slogger({
   appName: 'MyApp',
   level: SyslogSeverities.INFO,
@@ -88,6 +91,8 @@ logger.error('Operation failed', { error: err.message });
 
 ```typescript
 import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
+declare const err: Error;
 
 const logger = new Slogger({
   appName: 'MyApp',
@@ -171,6 +176,8 @@ logger.error({ err }, 'Operation failed');
 ```typescript
 import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
 
+declare const err: Error;
+
 const logger = new Slogger({
   appName: 'MyApp',
   level: SyslogSeverities.INFO,
@@ -235,6 +242,9 @@ logger.error({ err: error }, 'Request failed');
 
 ```typescript
 import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
+declare const port: number;
+declare const error: Error;
 
 const logger = new Slogger({
   appName: 'myapp',
@@ -301,6 +311,8 @@ logger.error('Error occurred', error);
 ```typescript
 import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
 
+declare const error: Error;
+
 const logger = new Slogger({
   appName: 'MyApp',
   level: SyslogSeverities.INFO,
@@ -343,7 +355,7 @@ Deno's standard library logging module.
 
 ### Before (Deno std/log)
 
-```typescript
+```typescript ignore
 import * as log from 'https://deno.land/std/log/mod.ts';
 
 await log.setup({
@@ -371,6 +383,8 @@ logger.error('Error occurred', error);
 
 ```typescript
 import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
+declare const error: Error;
 
 const logger = new Slogger({
   appName: 'MyApp',
@@ -475,6 +489,12 @@ Take advantage of Slogger-specific features:
 ### Pattern 1: Replace String Interpolation
 
 ```typescript
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+declare const userId: string;
+declare const ip: string;
+
 // Before
 logger.info(`User ${userId} logged in from ${ip}`);
 
@@ -484,7 +504,7 @@ logger.info('User logged in', { userId, ip });
 
 ### Pattern 2: Error Logging
 
-```typescript
+```typescript ignore
 // Before
 logger.error('Failed:', error);
 
@@ -498,7 +518,7 @@ logger.error('Failed', {
 
 ### Pattern 3: Child Loggers
 
-```typescript
+```typescript ignore
 // Before (Winston/Pino child loggers)
 const childLogger = logger.child({ component: 'auth' });
 childLogger.info('Login attempt');
@@ -515,7 +535,7 @@ const authLogger = new Slogger({
 
 ### Pattern 4: Custom Formatters
 
-```typescript
+```typescript ignore
 // Before (Winston)
 const customFormat = winston.format.printf(({ level, message, timestamp }) => {
   return `${timestamp} ${level}: ${message}`;
@@ -530,7 +550,11 @@ function customFormatter(log: SlogObject): string {
 
 const logger = new Slogger({
   appName: 'MyApp',
+  level: SyslogSeverities.INFO,
   handlers: [{
+    name: 'console',
+    type: 'ConsoleHandler',
+    level: SyslogSeverities.INFO,
     formatter: customFormatter,
   }],
 });
@@ -542,7 +566,7 @@ const logger = new Slogger({
 
 **Solution:** Check log level configuration. Slogger uses syslog levels (0-7), lower is more severe.
 
-```typescript
+```typescript ignore
 // Set to DEBUG to see all logs
 level: SyslogSeverities.DEBUG;
 ```
@@ -552,6 +576,11 @@ level: SyslogSeverities.DEBUG;
 **Solution:** Ensure context is an object, not concatenated to message.
 
 ```typescript
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+declare const userId: string;
+
 // ❌ Wrong
 logger.info('User: ' + userId);
 
@@ -563,7 +592,7 @@ logger.info('User action', { userId });
 
 **Solution:** Check file permissions and ensure directory exists.
 
-```typescript
+```typescript ignore
 // Slogger creates directories automatically, but check permissions
 {
   directory: './logs', // Must have write permission
@@ -575,7 +604,7 @@ logger.info('User action', { userId });
 
 **Solution:** Use lazy context evaluation and appropriate log levels.
 
-```typescript
+```typescript ignore
 // Use lazy context for expensive operations
 logger.debug('Expensive data', () => ({
   data: expensiveCalculation(),

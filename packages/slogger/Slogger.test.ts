@@ -11,6 +11,7 @@ import { Slogger } from './Slogger.ts';
 import { AbstractHandler } from './handlers/AbstractHandler.ts';
 import { SyslogSeverities } from '@tundralibs/utils';
 import { LogManager } from './LogManager.ts';
+import type { ScopedSlogger } from './types/mod.ts';
 import { SlogObject } from './types/mod.ts';
 import {
   SloggerConfigError,
@@ -1055,6 +1056,98 @@ describe('slogger.core', () => {
       asserts.assertEquals(handler.messages.length, 2);
       asserts.assertEquals(handler.messages[0]!.context, { svc: 'auth' });
       asserts.assertEquals(handler.messages[1]!.context, { svc: 'billing' });
+    });
+
+    it('scoped wrapper genuinely lacks the resource-owning methods', () => {
+      // The runtime object never had `finalize` / `registerHandler`; the
+      // `@ts-expect-error`s below pin that the *type* now says so too
+      // (an unused expect-error fails the type-check, so each one is a
+      // live assertion that the member is gone at compile time).
+      const { logger } = makeLogger();
+      const scoped = logger.scope({ reqId: 'r-1' });
+      const bag = scoped as unknown as Record<string, unknown>;
+
+      asserts.assertEquals(typeof bag.finalize, 'undefined');
+      asserts.assertEquals(typeof bag.registerHandler, 'undefined');
+      asserts.assertEquals(Object.hasOwn(bag, 'finalize'), false);
+      asserts.assertEquals(Object.hasOwn(bag, 'registerHandler'), false);
+      // Not a Slogger instance — it inherits nothing from the prototype.
+      asserts.assertEquals(scoped instanceof Slogger, false);
+      // …while the root logger keeps both.
+      asserts.assertEquals(typeof logger.finalize, 'function');
+      asserts.assertEquals(typeof logger.registerHandler, 'function');
+
+      // @ts-expect-error finalize() is not part of the scoped surface
+      scoped.finalize;
+      // @ts-expect-error registerHandler() is not part of the scoped surface
+      scoped.registerHandler;
+    });
+
+    it('nesting stays narrow — scope() on a scope is still a ScopedSlogger', () => {
+      const { logger, handler } = makeLogger();
+      // Typed explicitly: the annotation is the assertion. If scope()
+      // widened back to Slogger this still compiles, so the
+      // expect-errors below carry the narrowing check down the chain.
+      const nested: ScopedSlogger = logger.scope({ a: 1 }).scope({ b: 2 });
+      const bag = nested as unknown as Record<string, unknown>;
+
+      nested.info('deep');
+      asserts.assertEquals(handler.messages[0]!.context, { a: 1, b: 2 });
+      asserts.assertEquals(typeof bag.finalize, 'undefined');
+
+      // @ts-expect-error the omission survives composition
+      nested.finalize;
+    });
+
+    it('a full Slogger is assignable where a ScopedSlogger is expected', () => {
+      const { logger, handler } = makeLogger();
+
+      // A consumer that only logs should accept both a root logger and
+      // a scoped view — ScopedSlogger is the superset-safe parameter.
+      const emit = (log: ScopedSlogger, msg: string): void => log.info(msg);
+
+      emit(logger, 'from root');
+      emit(logger.scope({ reqId: 'r-1' }), 'from scope');
+
+      asserts.assertEquals(handler.messages.length, 2);
+      asserts.assertEquals(handler.messages[0]!.context, {});
+      asserts.assertEquals(handler.messages[1]!.context, { reqId: 'r-1' });
+    });
+
+    it('LogManager hands back the narrowed type only when scopes are passed', () => {
+      const config = {
+        appName: 'ScopeMgrApp3',
+        level: SyslogSeverities.DEBUG,
+        handlers: [{
+          name: 'cap',
+          type: 'TestHandler',
+          level: SyslogSeverities.DEBUG,
+        }],
+      };
+      // No scopes -> the real cached Slogger, finalize() intact.
+      const root = LogManager.createSlogger(config);
+      asserts.assertEquals(typeof root.finalize, 'function');
+      asserts.assertEquals(
+        typeof LogManager.getLogger('ScopeMgrApp3').finalize,
+        'function',
+      );
+
+      // With scopes -> a scoped view, finalize() absent at both levels.
+      const scoped = LogManager.createSlogger(config, { svc: 'auth' });
+      const fetched = LogManager.getLogger('ScopeMgrApp3', { svc: 'auth' });
+      asserts.assertEquals(
+        typeof (scoped as unknown as Record<string, unknown>).finalize,
+        'undefined',
+      );
+      asserts.assertEquals(
+        typeof (fetched as unknown as Record<string, unknown>).finalize,
+        'undefined',
+      );
+
+      // @ts-expect-error createSlogger(config, scopes) returns a ScopedSlogger
+      scoped.finalize;
+      // @ts-expect-error getLogger(name, scopes) returns a ScopedSlogger
+      fetched.finalize;
     });
   });
 });

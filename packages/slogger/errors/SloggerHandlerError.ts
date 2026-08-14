@@ -32,6 +32,9 @@ export type SloggerHandlerErrorContext = {
 export class SloggerHandlerError
   extends SloggerError<SloggerHandlerErrorContext> {
   /**
+   * Builds the error verbatim from `message` — throw sites are expected
+   * to name the handler and the failing operation.
+   *
    * @param message - Human-readable description of the failure.
    * @param context - Structured context carrying at least the failing
    *   handler's `handler` name.

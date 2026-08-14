@@ -231,6 +231,8 @@ Structured context is always available to handlers/formatters, but the
 message string itself is never substituted against it:
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({ appName: 'MyApp', level: SyslogSeverities.INFO });
 
 // Message stays literal — `${user}` is NOT replaced.
@@ -242,6 +244,8 @@ If you want `${path}` placeholders in the message resolved against the
 context, set `interpolateMessage: true`:
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'MyApp',
   level: SyslogSeverities.INFO,
@@ -270,6 +274,7 @@ folding request-scoped context in automatically — pair it with
 per-call argument:
 
 ```typescript
+import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
 import { ambient } from '@tundralibs/ambient';
 
 const log = LogManager.createSlogger({
@@ -286,6 +291,10 @@ ambient.run({ correlationId: crypto.randomUUID() }, () => {
 Precedence is **provider < scope < per-call**:
 
 ```typescript
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const log: Slogger; // the logger created above
+
 log.scope({ svc: 'auth' }).info('done', { attempt: 2 });
 // context: { ...provider(), svc: 'auth', attempt: 2 }
 ```
@@ -306,7 +315,7 @@ story is in [Slogger-Correlation](docs/Slogger-Correlation.md).
 
 Main logging class with methods for all syslog severity levels:
 
-```typescript
+```typescript ignore
 const logger = new Slogger(options: SloggerOptions);
 
 // Logging methods (highest to lowest severity)
@@ -319,16 +328,40 @@ logger.notice(message: string, context?: LogContext | (() => LogContext));
 logger.info(message: string, context?: LogContext | (() => LogContext));
 logger.debug(message: string, context?: LogContext | (() => LogContext));
 
-// Utility methods
+// Bound-context child logger (see ScopedSlogger below)
+logger.scope(bindings: LogContext): ScopedSlogger;
+
+// Utility methods — root logger only
 logger.registerHandler(handler: AbstractHandler): void;
 await logger.finalize(): Promise<void>;
+```
+
+### ScopedSlogger
+
+`scope()` returns a `ScopedSlogger`: a lightweight view over the root
+logger that pre-merges `bindings` into every record. It carries the
+whole logging surface (`log()`, every severity method, and a nested
+`scope()` that composes) but **not** `finalize()` or
+`registerHandler()` — a scope owns no handlers, so those two live on
+the root logger alone. Calling them on a scope is a compile error;
+finalize the root instead, which flushes every scope taken from it.
+
+A full `Slogger` is assignable to `ScopedSlogger`, so a helper that
+only logs should take the narrower type and accept either:
+
+```typescript
+import type { ScopedSlogger } from '@tundralibs/slogger';
+
+function handle(log: ScopedSlogger, id: string): void {
+  log.info('handled', { id });
+}
 ```
 
 ### LogManager Singleton
 
 Manages handlers and formatters globally:
 
-```typescript
+```typescript ignore
 import { LogManager } from '@tundralibs/slogger';
 
 // Register custom handlers and formatters
@@ -354,6 +387,11 @@ being silently handed to a caller that asked for masking-`ssn`+`password`.)
 Use `LogManager.getLogger(appName)` to retrieve an existing instance
 without restating its config.
 
+Both `createSlogger(config, scopes)` and `getLogger(name, scopes)` take
+an optional second argument of pre-bound context fields. With it they
+return a `ScopedSlogger` (the root stays cached unscoped); without it
+they return the root `Slogger`, `finalize()` included.
+
 ### Errors
 
 Everything the package throws derives from `SloggerError` (which
@@ -367,6 +405,9 @@ import {
   SloggerFinalizeError, // one or more handlers failed during finalize()
   SloggerHandlerError, // runtime delivery/persistence failure in a handler
 } from '@tundralibs/slogger/errors';
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
 
 try {
   await logger.finalize();

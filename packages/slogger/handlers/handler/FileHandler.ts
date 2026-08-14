@@ -40,14 +40,38 @@ export type FileHandlerOptions = HandlerOptions & {
  * for better performance.
  */
 export class FileHandler extends AbstractHandler {
+  /** Runtime discriminator for this handler kind. */
   public readonly mode = 'file';
+
+  /**
+   * Directory as configured, placeholders unexpanded — `init()` expands
+   * them fresh on every call so a `${date}` path rolls over.
+   */
   protected _directory: string;
+
+  /** Filename as configured, placeholders unexpanded. */
   protected _filenameTemplate: string;
+
   private readonly __maxFileSizeBytes: number;
+
+  /**
+   * Write-buffer size. A single record larger than this skips the buffer
+   * and goes straight to the file.
+   */
   protected _bufferSizeBytes: number;
 
+  /**
+   * Resolved path of the active log file — `_directory` joined with
+   * `_filenameTemplate`, placeholders substituted at construction.
+   * Rotation renames this path away and reopens it, so the value itself
+   * never changes.
+   */
   protected _logFile: string;
 
+  /**
+   * Open handle on {@link _logFile}. `undefined` before `init()`, while
+   * rotating, and after `finalize()`.
+   */
   protected _fileHandle: AsyncFileHandle | undefined = undefined;
   private __pointer: number = 0;
   private readonly __buffer: Uint8Array;

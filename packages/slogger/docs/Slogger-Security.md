@@ -32,6 +32,7 @@ The masking formatter wraps other formatters to redact sensitive data.
 
 ```typescript
 import {
+  jsonFormatter,
   maskingFormatter,
   MaskingStrategy,
   Slogger,
@@ -50,7 +51,7 @@ const logger = new Slogger({
     formatter: maskingFormatter({
       strategy: MaskingStrategy.PARTIAL,
       sensitiveFields: ['password', 'apiKey', 'token'],
-      baseFormatter: 'json',
+      baseFormatter: jsonFormatter,
     }),
   }],
 });
@@ -71,6 +72,8 @@ logger.info('User login', {
 Completely redacts sensitive values:
 
 ```typescript
+import { maskingFormatter, MaskingStrategy } from '@tundralibs/slogger';
+
 maskingFormatter({
   strategy: MaskingStrategy.FULL,
   sensitiveFields: ['password', 'token'],
@@ -85,6 +88,8 @@ maskingFormatter({
 Shows first and last characters:
 
 ```typescript
+import { maskingFormatter, MaskingStrategy } from '@tundralibs/slogger';
+
 maskingFormatter({
   strategy: MaskingStrategy.PARTIAL,
   sensitiveFields: ['email', 'phone'],
@@ -277,6 +282,8 @@ const defaultSensitiveFields = [
 Add application-specific sensitive fields:
 
 ```typescript
+import { maskingFormatter } from '@tundralibs/slogger';
+
 maskingFormatter({
   sensitiveFields: [
     // Default fields (included automatically)
@@ -298,6 +305,10 @@ maskingFormatter({
 Masking works recursively on nested objects:
 
 ```typescript
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+
 logger.info('User profile', {
   user: {
     id: '123',
@@ -322,11 +333,19 @@ Use regex patterns to mask specific data formats.
 ### Email Addresses
 
 ```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+  type Slogger,
+} from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+
 maskingFormatter({
-  customPatterns: [
+  sensitivePatterns: [
     /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
   ],
-  baseFormatter: 'json',
+  baseFormatter: jsonFormatter,
 });
 
 logger.info('Contact support at support@example.com');
@@ -336,8 +355,12 @@ logger.info('Contact support at support@example.com');
 ### Credit Card Numbers
 
 ```typescript
+import { maskingFormatter, type Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+
 maskingFormatter({
-  customPatterns: [
+  sensitivePatterns: [
     /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g,
   ],
 });
@@ -349,8 +372,12 @@ logger.info('Payment', { card: '4532-1234-5678-9010' });
 ### Phone Numbers (US)
 
 ```typescript
+import { maskingFormatter, type Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+
 maskingFormatter({
-  customPatterns: [
+  sensitivePatterns: [
     /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g,
   ],
 });
@@ -362,8 +389,12 @@ logger.info('Call 555-123-4567 for help');
 ### Social Security Numbers (US)
 
 ```typescript
+import { maskingFormatter, type Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+
 maskingFormatter({
-  customPatterns: [
+  sensitivePatterns: [
     /\b\d{3}-\d{2}-\d{4}\b/g,
   ],
 });
@@ -375,8 +406,12 @@ logger.info('SSN: 123-45-6789');
 ### IP Addresses
 
 ```typescript
+import { maskingFormatter, type Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+
 maskingFormatter({
-  customPatterns: [
+  sensitivePatterns: [
     /\b(?:\d{1,3}\.){3}\d{1,3}\b/g, // IPv4
   ],
 });
@@ -388,8 +423,10 @@ logger.info('Connection from 192.168.1.100');
 ### API Keys
 
 ```typescript
+import { maskingFormatter } from '@tundralibs/slogger';
+
 maskingFormatter({
-  customPatterns: [
+  sensitivePatterns: [
     /\bsk-[a-zA-Z0-9]{32,}\b/g, // Stripe-style
     /\bgh[ps]_[A-Za-z0-9_]{36}\b/g, // GitHub
     /\bAKIA[0-9A-Z]{16}\b/g, // AWS
@@ -401,7 +438,7 @@ maskingFormatter({
 
 ### 1. Always Mask Passwords
 
-```typescript
+```typescript ignore
 // ❌ Never log passwords unmasked
 logger.error('Login failed', { username, password });
 
@@ -415,7 +452,7 @@ const logger = new Slogger({
     level: SyslogSeverities.INFO,
     formatter: maskingFormatter({
       sensitiveFields: ['password'],
-      baseFormatter: 'json',
+      baseFormatter: jsonFormatter,
     }),
   }],
 });
@@ -426,6 +463,15 @@ const logger = new Slogger({
 Different masking per environment:
 
 ```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+  MaskingStrategy,
+  Slogger,
+  standardFormat,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 const isDev = Deno.env.get('ENV') === 'development';
 
 const logger = new Slogger({
@@ -441,7 +487,7 @@ const logger = new Slogger({
         : maskingFormatter({ // Mask in production
           strategy: MaskingStrategy.PARTIAL,
           sensitiveFields: ['password', 'token'],
-          baseFormatter: 'standard',
+          baseFormatter: standardFormat,
         }),
     },
     {
@@ -453,7 +499,7 @@ const logger = new Slogger({
       formatter: maskingFormatter({ // Always mask files
         strategy: MaskingStrategy.FULL,
         sensitiveFields: ['password', 'token', 'apiKey'],
-        baseFormatter: 'json',
+        baseFormatter: jsonFormatter,
       }),
     },
   ],
@@ -463,6 +509,8 @@ const logger = new Slogger({
 ### 3. Mask External API Keys
 
 ```typescript
+import { maskingFormatter } from '@tundralibs/slogger';
+
 maskingFormatter({
   sensitiveFields: [
     'apiKey',
@@ -472,7 +520,7 @@ maskingFormatter({
     'awsAccessKey',
     'awsSecretKey',
   ],
-  customPatterns: [
+  sensitivePatterns: [
     /\bsk_live_[a-zA-Z0-9]{32}\b/g, // Stripe live keys
     /\brk_live_[a-zA-Z0-9]{32}\b/g, // Stripe restricted keys
   ],
@@ -482,6 +530,8 @@ maskingFormatter({
 ### 4. Mask PII (Personally Identifiable Information)
 
 ```typescript
+import { maskingFormatter } from '@tundralibs/slogger';
+
 maskingFormatter({
   sensitiveFields: [
     'email',
@@ -493,7 +543,7 @@ maskingFormatter({
     'passport',
     'driverLicense',
   ],
-  customPatterns: [
+  sensitivePatterns: [
     /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, // Email
     /\b\d{3}-\d{2}-\d{4}\b/g, // SSN
     /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, // Phone
@@ -503,7 +553,7 @@ maskingFormatter({
 
 ### 5. Sanitize User Input
 
-```typescript
+```typescript ignore
 // ❌ Don't log raw user input
 logger.info('User submitted', {
   rawInput: request.body, // May contain sensitive data
@@ -519,7 +569,7 @@ logger.info('User submitted', {
 const logger = new Slogger({
   handlers: [{
     formatter: maskingFormatter({
-      customPatterns: [
+      sensitivePatterns: [
         // Pattern to match common injection attempts
         /(\b(SELECT|INSERT|UPDATE|DELETE|DROP)\b)/gi,
       ],
@@ -531,6 +581,18 @@ const logger = new Slogger({
 ### 6. Separate Sensitive and Non-Sensitive Logs
 
 ```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+  MaskingStrategy,
+  Slogger,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
+declare const userId: string;
+declare const action: string;
+declare const sensitiveAction: string;
+
 const logger = new Slogger({
   appName: 'App',
   level: SyslogSeverities.INFO,
@@ -543,7 +605,7 @@ const logger = new Slogger({
       filenameTemplate: 'public.log',
       formatter: maskingFormatter({
         strategy: MaskingStrategy.FULL,
-        baseFormatter: 'json',
+        baseFormatter: jsonFormatter,
       }),
     },
     {
@@ -566,7 +628,7 @@ logger.warning('Audit event', { userId, sensitiveAction });
 
 Implement log review processes:
 
-```typescript
+```typescript ignore
 // JSON logs are easier to analyze programmatically
 {
   name: 'reviewable',
@@ -593,6 +655,14 @@ grep -E "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}" logs/*.log
 For GDPR compliance, mask all PII:
 
 ```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+  MaskingStrategy,
+  Slogger,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 const gdprLogger = new Slogger({
   appName: 'GDPR-Compliant-App',
   level: SyslogSeverities.INFO,
@@ -635,11 +705,11 @@ const gdprLogger = new Slogger({
         'token',
         'apiKey',
       ],
-      customPatterns: [
+      sensitivePatterns: [
         /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g,
         /\b(?:\d{1,3}\.){3}\d{1,3}\b/g,
       ],
-      baseFormatter: 'json',
+      baseFormatter: jsonFormatter,
     }),
   }],
 });
@@ -650,6 +720,14 @@ const gdprLogger = new Slogger({
 For payment card data:
 
 ```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+  MaskingStrategy,
+  Slogger,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 const pciLogger = new Slogger({
   appName: 'PCI-Compliant-App',
   level: SyslogSeverities.INFO,
@@ -668,25 +746,25 @@ const pciLogger = new Slogger({
         'expiryDate',
         'cardholderName',
       ],
-      customPatterns: [
+      sensitivePatterns: [
         // Credit card numbers
         /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/g,
         // CVV
         /\b\d{3,4}\b/g,
       ],
-      baseFormatter: 'json',
+      baseFormatter: jsonFormatter,
     }),
   }],
 });
 
 // ❌ Never log full card data
-logger.info('Payment processed', {
+pciLogger.info('Payment processed', {
   cardNumber: '4532-1234-5678-9010', // Masked
   amount: 99.99,
 });
 
 // ✅ Log only last 4 digits manually
-logger.info('Payment processed', {
+pciLogger.info('Payment processed', {
   cardLast4: '9010', // Safe to log
   amount: 99.99,
 });
@@ -697,6 +775,14 @@ logger.info('Payment processed', {
 For healthcare data:
 
 ```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+  MaskingStrategy,
+  Slogger,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 const hipaaLogger = new Slogger({
   appName: 'HIPAA-Compliant-App',
   level: SyslogSeverities.INFO,
@@ -722,7 +808,7 @@ const hipaaLogger = new Slogger({
         'medication',
         'labResults',
       ],
-      baseFormatter: 'json',
+      baseFormatter: jsonFormatter,
     }),
   }],
 });

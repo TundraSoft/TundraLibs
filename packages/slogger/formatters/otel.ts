@@ -155,7 +155,9 @@ const _flattenAttributes = (
  *
  * @example
  * ```typescript
- * import { otelLogFormatter } from '@tundralibs/slogger';
+ * import { otelLogFormatter, type SlogObject } from '@tundralibs/slogger';
+ *
+ * declare const slogObject: SlogObject;
  *
  * const fmt = otelLogFormatter({
  *   resource: { 'service.version': '1.2.3', 'deployment.environment': 'prod' },

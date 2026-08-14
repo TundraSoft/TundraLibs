@@ -155,8 +155,8 @@ serve(async (request) => {
     logger.error('Request failed', {
       method: request.method,
       path: url.pathname,
-      error: error.message,
-      stack: error.stack,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
     });
 
     return new Response('Internal Server Error', { status: 500 });
@@ -183,6 +183,8 @@ const logger = new Slogger({
     formatter: 'json',
   }],
 });
+
+type Handler = (request: Request) => Promise<Response>;
 
 function loggingMiddleware(handler: Handler): Handler {
   return async (request: Request) => {
@@ -211,7 +213,7 @@ function loggingMiddleware(handler: Handler): Handler {
 
       logger.error('Request failed', {
         requestId,
-        error: error.message,
+        error: (error as Error).message,
         duration: Math.round(duration),
       });
 
@@ -260,6 +262,10 @@ const logger = new Slogger({
   ],
 });
 
+declare function fetchUserFromDatabase(
+  userId: string,
+): Promise<{ username: string } | undefined>;
+
 // API endpoint example
 async function handleUser(userId: string) {
   logger.debug('Fetching user', { userId });
@@ -283,8 +289,8 @@ async function handleUser(userId: string) {
   } catch (error) {
     logger.error('Failed to fetch user', {
       userId,
-      error: error.message,
-      stack: error.stack,
+      error: (error as Error).message,
+      stack: (error as Error).stack,
     });
 
     return new Response('Internal Server Error', { status: 500 });
@@ -313,6 +319,10 @@ const logger = new Slogger({
     },
   }],
 });
+
+declare const db: {
+  query(sql: string, params?: unknown[]): Promise<unknown[]>;
+};
 
 async function executeQuery(sql: string, params?: unknown[]) {
   const queryId = crypto.randomUUID();
@@ -351,7 +361,7 @@ async function executeQuery(sql: string, params?: unknown[]) {
     logger.error('Query failed', {
       queryId,
       sql,
-      error: error.message,
+      error: (error as Error).message,
       duration: Math.round(duration),
     });
 
@@ -387,6 +397,11 @@ const logger = new Slogger({
     },
   ],
 });
+
+declare function validatePayment(paymentId: string): Promise<void>;
+declare function callPaymentGateway(
+  paymentId: string,
+): Promise<{ id: string; status: string }>;
 
 async function processPayment(
   paymentId: string,
@@ -429,8 +444,8 @@ async function processPayment(
       paymentId,
       traceId,
       spanId,
-      error: error.message,
-      errorCode: error.code,
+      error: (error as Error).message,
+      errorCode: (error as { code?: string }).code,
     });
 
     throw error;
@@ -466,6 +481,8 @@ const logger = new Slogger({
   ],
 });
 
+declare function processFile(file: string): Promise<void>;
+
 async function processFiles(files: string[]) {
   logger.info(`Processing ${files.length} files...`);
 
@@ -480,7 +497,7 @@ async function processFiles(files: string[]) {
     } catch (error) {
       logger.error(`✗ Failed to process ${file}`, {
         file,
-        error: error.message,
+        error: (error as Error).message,
       });
     }
   }
@@ -537,9 +554,9 @@ Deno.test('should log errors', () => {
 
   logger.error('Test error', { code: 500 });
 
-  assert(logs.length === 1);
-  assert(logs[0].includes('Test error'));
-  assert(logs[0].includes('500'));
+  if (logs.length !== 1) throw new Error('expected exactly one log line');
+  if (!logs[0].includes('Test error')) throw new Error('message missing');
+  if (!logs[0].includes('500')) throw new Error('context missing');
 });
 ```
 
