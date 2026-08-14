@@ -116,6 +116,53 @@ describe('norm.definition-edges (builders + validation + emitters)', () => {
     asserts.assertEquals(hashed.c.hash, true);
   });
 
+  it('digest builders: default() declares PLAINTEXT and keeps the digest kind', () => {
+    const spec = Entity('d', {
+      id: Column.integer(),
+      // Sibling of the encrypted case above: the declared default is the
+      // PLAINTEXT — digesting happens on the way to the database.
+      pin: Column.hash('SHA-256').default('changeme'),
+      pw: Column.password('SHA-512').maxLength(72).default('letmein'),
+    }, { pk: ['id'] }).columns;
+
+    asserts.assertEquals(spec.pin.hashed, 'SHA-256');
+    asserts.assertEquals(spec.pin.default?.insert, 'changeme');
+    // The stored default is the literal plaintext, NOT a precomputed
+    // digest: the physical column is digest-sized (64 hex chars) while
+    // the default is the 8-char plaintext the caller wrote.
+    asserts.assertEquals(spec.pin.length, 64);
+    asserts.assertEquals((spec.pin.default?.insert as string).length, 8);
+
+    // maxLength() constrains the PLAINTEXT, so it coexists with the
+    // digest's own storage length rather than overriding it.
+    asserts.assertEquals(spec.pw.hashed, 'SHA-512');
+    asserts.assertEquals(spec.pw.length, 128);
+    asserts.assertEquals(spec.pw.maxLength, 72);
+    asserts.assertEquals(spec.pw.default?.insert, 'letmein');
+
+    // The digest kind survives default(), so plaintext validators stay
+    // chainable after it (they constrain the password policy).
+    const chained = Column.hash('SHA-256').default('changeme')
+      .minLength(8).maxLength(64);
+    asserts.assertEquals(chained instanceof DigestColumnBuilder, true);
+    asserts.assertEquals(chained.spec.minLength, 8);
+    asserts.assertEquals(chained.spec.maxLength, 64);
+    asserts.assertEquals(chained.spec.default?.insert, 'changeme');
+
+    // default() returns a NEW builder — the source is left untouched.
+    const base = Column.hash('SHA-256');
+    const withDefault = base.default('changeme');
+    asserts.assertNotStrictEquals<unknown>(withDefault, base);
+    asserts.assertEquals(base.spec.default, undefined);
+    asserts.assertEquals(withDefault.spec.default?.insert, 'changeme');
+
+    // Generator and expression forms survive the digest surface too.
+    const gen = Column.hash('SHA-256').default(() => 'rotating');
+    asserts.assertEquals(typeof gen.spec.default?.insert, 'function');
+    const expr = Column.hash('SHA-256').default({ $$_expression: 'X' });
+    asserts.assertEquals(expr.spec.default?.insert, { $$_expression: 'X' });
+  });
+
   it('remaining factories emit the right specs (char/decimal/boolean/date)', () => {
     const spec = Entity('f', {
       id: Column.integer(),

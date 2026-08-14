@@ -99,7 +99,7 @@ never reaches a query.
 
 The instance also exposes crypto helpers for the raw escape hatches:
 
-```typescript
+```typescript ignore
 const cipher = await db.encrypt('ada@example.dev'); // this instance's secret + algorithm
 const plain = await db.decrypt(cipher); // → 'ada@example.dev'
 const digest = await db.hash('ada@example.dev'); // SHA-256 by default — matches siblings
@@ -129,7 +129,7 @@ const Profiles = Entity('profiles', {
 `profiles.birthday` is a `Date | null` to your code on both write and
 read. At rest it is AES ciphertext:
 
-```typescript
+```typescript ignore
 const prof = await db.repo('Profiles').getByPK({ userId });
 prof.data?.birthday instanceof Date; // true — decrypted and decoded on read
 ```
@@ -184,6 +184,8 @@ operations work against a column whose ciphertext is unusable for
 comparison.
 
 ```typescript
+import { Column, Entity } from '@tundralibs/norm';
+
 const Users = Entity('users', {
   id: Column.uuid().default({ $$_expression: 'UUID' }),
   email: Column.varchar(255).pattern(/^\S+@\S+\.\S+$/)
@@ -216,7 +218,7 @@ speak plaintext, and NORM rewrites to the digest sibling under the
 hood. Equality-class operators only (`$eq`, `$ne`, `$in`, `$nin`,
 `$null`); ordering by a digest is meaningless and stays rejected.
 
-```typescript
+```typescript ignore
 // Equality — rewritten to email_hash = sha256('ada@shortly.dev').
 // The column's beforeWrite (trim + lowercase) runs on the lookup too,
 // so a differently-cased/whitespaced input still finds the row.
@@ -241,7 +243,7 @@ Because the digest is deterministic, an encrypted-and-hashed column can
 be an **upsert conflict key** (via the sibling) even though the
 ciphertext can't:
 
-```typescript
+```typescript ignore
 // Encrypted `email` cannot be a conflict key directly — ciphertext is
 // nondeterministic — so conflict on the id and update email; NORM
 // auto-adds `email_hash` to updateOnConflict so the digest re-syncs
@@ -272,7 +274,7 @@ and filter by plaintext; NORM digests on the way in and the column
 stores only the hex digest. There is nothing to decrypt, so `.encrypt()`
 on a digest column is a hard error.
 
-```typescript
+```typescript ignore
 const Users = Entity('users', {
   // ...
   pin: Column.hash('SHA-256').nullable(), // one-way digest, plaintext lookups
@@ -283,7 +285,7 @@ The algorithm — `'SHA-256'` (default), `'SHA-384'`, or `'SHA-512'` —
 determines the physical `VARCHAR` length: 64, 96, or 128 hex
 characters respectively.
 
-```typescript
+```typescript ignore
 const row = (await db.repo('Users').insert({ pin: '4471' /* ... */ })).data[0]!;
 row.pin; // 64-hex SHA-256 digest — the plaintext '4471' is gone
 
@@ -304,7 +306,7 @@ A mask is a **presentation** column: computed client-side from a
 sibling `source` column _after_ decryption, never stored, never sent
 to SQL, and excluded from inserts, updates, filters, and ordering.
 
-```typescript
+```typescript ignore
 const Users = Entity('users', {
   apiKey: Column.varchar(256).encrypt(), // the raw, encrypted source
   apiKeyHint: Column.mask('apiKey', (v) => `…${v.slice(-4)}`),
@@ -316,7 +318,7 @@ const Users = Entity('users', {
 masked `apiKeyHint` are **independently projectable** — a default read
 carries both:
 
-```typescript
+```typescript ignore
 const row = (await db.repo('Users').insert({ apiKey: 'ak-ada-0001' /* ... */ }))
   .data[0]!;
 row.apiKey; // 'ak-ada-0001' (decrypted)
@@ -347,7 +349,7 @@ Details that matter:
 RETURNING), while keeping it writable and explicitly projectable. It is
 the natural home for a stored credential you verify but never surface.
 
-```typescript
+```typescript ignore
 const Users = Entity('users', {
   // ...
   passwordHash: Column.varchar(64).hidden().unfilterable(),
@@ -358,7 +360,7 @@ The password-verification pattern — the hash never leaves the database
 on a default read, but you can opt into it for the one query that
 checks a login:
 
-```typescript
+```typescript ignore
 // Default read: passwordHash is absent.
 const user = await db.repo('Users').findOne({ '@email': 'ada@shortly.dev' });
 'passwordHash' in (user.data ?? {}); // false
@@ -383,6 +385,8 @@ callbacks. Any callback you omit falls back to the built-in
 AES/SHA implementation from `@tundralibs/crypt`.
 
 ```typescript
+import type { EncryptAlgorithm, HashAlgorithm } from '@tundralibs/norm';
+
 type CryptoOverrides = {
   encrypt?: (
     plaintext: string,
@@ -405,6 +409,13 @@ another.
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
+import { SQLiteEngine } from '@tundralibs/drivers';
+
+declare const kms: {
+  encrypt(plain: string, secret: string, algo: string): Promise<string>;
+  decrypt(cipher: string, secret: string, algo: string): Promise<string>;
+};
+const engine = new SQLiteEngine('app', { path: './data' });
 
 const norm = new Norm({
   engine,
@@ -425,6 +436,16 @@ SHA-256; swapping `hash` for a keyed HMAC binds every digest to your
 secret:
 
 ```typescript
+import { type HashAlgorithm, Norm } from '@tundralibs/norm';
+import { SQLiteEngine } from '@tundralibs/drivers';
+
+declare function hmac(
+  plain: string,
+  key: string,
+  algo: HashAlgorithm,
+): Promise<string>;
+const engine = new SQLiteEngine('app', { path: './data' });
+
 const norm = new Norm({
   engine,
   secret: process.env.NORM_SECRET,
@@ -485,6 +506,15 @@ decides what a read does with that one cell:
 | `'throw'`            | The read raises a typed `NormCryptoError` naming the entity, column, and pk. Use it when a failure must be loud — an operational alarm rather than a silent gap.                             |
 
 ```typescript
+import { Norm } from '@tundralibs/norm';
+import { SQLiteEngine } from '@tundralibs/drivers';
+
+declare const metrics: {
+  increment(name: string, tags: Record<string, string>): void;
+};
+const engine = new SQLiteEngine('app', { path: './data' });
+const secret = process.env.NORM_SECRET;
+
 const norm = new Norm({
   engine,
   secret,
@@ -503,7 +533,7 @@ event **never** carries the ciphertext or the failed value — only
 identifiers. Under `'throw'`, the same context rides on
 `NormCryptoError.context`:
 
-```typescript
+```typescript ignore
 try {
   await db.repo('Vaults').find();
 } catch (e) {
@@ -530,7 +560,7 @@ in primary-key order, decrypts each cell with `oldKey`, and re-encrypts
 it with `newKey`, streaming in chunks so a multi-million-row table never
 lands in memory at once.
 
-```typescript
+```typescript ignore
 import { rotateKey } from '@tundralibs/norm';
 
 // Run during a downtime window (app stopped, or not writing encrypted
@@ -556,7 +586,7 @@ resumes safely: re-running skips whatever already moved, and a mistyped
 `oldKey` surfaces as "0 rotated, everything unknown" — never as silent
 corruption.
 
-```typescript
+```typescript ignore
 // Preview the job first — classifies + counts, writes nothing:
 const preview = await rotateKey(db, { oldKey, newKey, dryRun: true });
 console.log(`${preview.rotatedCells} cells would rotate`);

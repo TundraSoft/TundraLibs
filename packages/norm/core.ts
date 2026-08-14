@@ -12,7 +12,7 @@
  * Import from here on Cloudflare Workers / Vercel Edge / Vite, and add
  * only the engine you actually use:
  *
- * ```ts
+ * ```ts ignore
  * import '@tundralibs/norm/engines/d1';
  * import { Norm } from '@tundralibs/norm/core';
  *

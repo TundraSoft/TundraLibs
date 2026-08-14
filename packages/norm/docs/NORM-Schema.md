@@ -307,12 +307,17 @@ two modes — **you decide**:
 | `Column.password('PBKDF2')`                                      | **Salted** PBKDF2 hash — the correct choice for real passwords. Each hash is unique, so the column is **not filterable**: read the row and `pbkdf2Verify(candidate, row.field)`. |
 
 ```typescript
-import { Column, Entity, pbkdf2Verify } from '@tundralibs/norm';
+import { Column, Entity, Norm, pbkdf2Verify, Schema } from '@tundralibs/norm';
 
 const Users = Entity('users', {
   id: Column.uuid().default({ $$_expression: 'UUID' }),
   secret: Column.password('PBKDF2').minLength(12), // salted, verify-based
 }, { pk: ['id'] });
+
+declare const userId: string;
+declare const candidatePassword: string;
+const db = new Norm({ database: { dialect: 'sqlite', path: './data' } })
+  .use(Schema('Identity', { Users }));
 
 // Log in: look the user up by a filterable column, then verify.
 const row = (await db.repo('Users').find({ '@id': userId })).data[0];
@@ -372,7 +377,7 @@ here — most are compile errors, a few are guarded runtime throws:
 
 ## Defining entities
 
-```typescript
+```typescript ignore
 Entity(name, columns, options);
 ```
 
@@ -768,7 +773,7 @@ is the separate `dbSchema` option on `Entity()`. Group entities with
 `Schema(name, entities)`, then compose any number of schemas into one
 typed registry with `use(...schemas)`.
 
-```typescript
+```typescript ignore
 import { Schema, use } from '@tundralibs/norm';
 import { Users } from './identity/users.ts';
 import { Profiles } from './identity/profiles.ts';

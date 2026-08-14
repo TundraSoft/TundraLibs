@@ -27,7 +27,7 @@ export type QueryErrorMeta = {
  * The requested read/write shape is invalid for the target entity.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * try {
  *   await db.repo('Users').find({ '@ssn': 'nope' });
  * } catch (e) {
@@ -38,6 +38,12 @@ export type QueryErrorMeta = {
  * ```
  */
 export class NormQueryError extends NormError<QueryErrorMeta> {
+  /**
+   * Unlike the other norm errors this one takes its `message` verbatim
+   * — the throw sites phrase the rejection themselves.
+   *
+   * @param meta - Set `code` here; it is what `error.code` reads.
+   */
   constructor(message: string, meta: QueryErrorMeta, cause?: Error) {
     super(message, meta, cause);
   }

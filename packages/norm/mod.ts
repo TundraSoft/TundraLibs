@@ -3,7 +3,7 @@
  * schemas, docs, snapshots) + runtime (Norm facade, generated-Guardian
  * validation, repos over the executor seam).
  *
- * ```ts
+ * ```ts ignore
  * const norm = new Norm({ database: {...}, secret });
  * const db = norm.use(Blog, Stats);
  * await db.repo('Users').insert({ email: 'a@b.c', ... });

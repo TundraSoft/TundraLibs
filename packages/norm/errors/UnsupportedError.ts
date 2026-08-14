@@ -24,7 +24,7 @@ export type UnsupportedErrorMeta = {
  * The requested operation is not supported by the configured engine.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * try {
  *   await db.transaction(async (tx) => { ... });
  * } catch (e) {
@@ -35,6 +35,12 @@ export type UnsupportedErrorMeta = {
  * ```
  */
 export class NormUnsupportedError extends NormError<UnsupportedErrorMeta> {
+  /**
+   * Names the feature the configured engine cannot serve.
+   *
+   * @param meta - `dialect` is optional and merely sharpens the
+   *   message; `feature` names what was asked for.
+   */
   constructor(meta: UnsupportedErrorMeta, cause?: Error) {
     super(
       `The configured engine${

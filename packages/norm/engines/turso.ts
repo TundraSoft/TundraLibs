@@ -8,8 +8,10 @@
  * import '@tundralibs/norm/engines/turso';
  * import { Norm } from '@tundralibs/norm/core';
  *
+ * declare const env: Record<string, string>;
+ *
  * const norm = new Norm({
- *   database: { dialect: 'turso', url: env.TURSO_URL, token: env.TURSO_TOKEN },
+ *   database: { dialect: 'turso', url: env.TURSO_URL, authToken: env.TURSO_TOKEN },
  * });
  * ```
  *

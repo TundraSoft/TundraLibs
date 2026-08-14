@@ -7,7 +7,7 @@
  * consecutive snapshots is the migration, and "down" is the reverse
  * diff.
  *
- * ```ts
+ * ```ts ignore
  * const mig = new Migrator(db, { dir: './migrations' });
  * await mig.snapshot();          // 0001.json (no-op if unchanged)
  * await mig.plan();              // inspect the DDL first
@@ -161,7 +161,7 @@ export type ApplyResult = {
  * keep it out of the request path.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * const mig = new Migrator(db, { dir: './migrations' });
  * await mig.snapshot();    // 0001.json (JSON only — SQL is opt-in)
  * await mig.renderPlans(); // optional: 0001.<dialect>.sql from the JSON
