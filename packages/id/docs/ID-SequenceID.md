@@ -93,7 +93,7 @@ SequenceID generates a 64-bit integer composed of three components — this matc
 
 **Example ID Decomposition:**
 
-```typescript
+```typescript ignore
 ID: 72623859790382856n
 
 Server ID:    1            (Process ID % 256)
@@ -133,7 +133,7 @@ import { sequenceID } from 'jsr:@tundralibs/id';
 
 Creates a database-friendly sequential ID generator.
 
-```typescript
+```typescript ignore
 function sequenceID(cnt?: number): (counter?: number) => bigint;
 ```
 
@@ -155,6 +155,8 @@ A generator function that produces unique 64-bit integer IDs.
 **Example:**
 
 ```typescript
+import { sequenceID } from '@tundralibs/id';
+
 const generator = sequenceID();
 const id = generator(); // 72623859790382856n
 ```
@@ -373,7 +375,7 @@ CREATE TABLE users (
 CREATE INDEX idx_users_id ON users(id);
 ```
 
-```typescript
+```typescript ignore
 import { sequenceID } from '@tundralibs/id';
 import { Pool } from 'pg';
 
@@ -416,7 +418,7 @@ CREATE TABLE orders (
 ) ENGINE=InnoDB;
 ```
 
-```typescript
+```typescript ignore
 import { sequenceID } from '@tundralibs/id';
 import mysql from 'mysql2/promise';
 

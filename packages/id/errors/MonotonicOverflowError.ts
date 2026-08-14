@@ -38,6 +38,17 @@ export type MonotonicOverflowErrorMeta = {
  */
 export class MonotonicOverflowError
   extends IDError<MonotonicOverflowErrorMeta> {
+  /**
+   * Construct directly only when implementing a monotonic generator with
+   * the same overflow guarantee; the bundled monotonic paths raise it
+   * themselves.
+   *
+   * @param message - Error text; a `${timestamp}` placeholder is substituted
+   *   from `meta`.
+   * @param meta - Millisecond timestamp at which the random space was
+   *   exhausted; becomes `error.context`.
+   * @param cause - Underlying error for chaining.
+   */
   constructor(
     message: string,
     meta: MonotonicOverflowErrorMeta,

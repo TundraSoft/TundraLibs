@@ -93,7 +93,7 @@ import { nanoID } from 'jsr:@tundralibs/id';
 
 Generates a cryptographically secure unique identifier.
 
-```typescript
+```typescript ignore
 function nanoID(size?: number, base?: string): string;
 ```
 
@@ -441,7 +441,7 @@ const sessionId = nanoID(32); // Security-critical (maximum uniqueness)
 import { ALPHA_NUMERIC_CASE, nanoID, PASSWORD, WEB_SAFE } from '@tundralibs/id';
 
 // ❌ BAD: Using complex characters where not needed
-const filename = nanoID(12, PASSWORD); // Special chars problematic in filenames
+const badFilename = nanoID(12, PASSWORD); // Special chars problematic in filenames
 
 // ✅ GOOD: Appropriate character sets
 const filename = nanoID(12, ALPHA_NUMERIC_CASE); // Safe for all systems
@@ -478,7 +478,7 @@ const batchIds = generateBatch(10000);
 import { nanoID } from '@tundralibs/id';
 
 // ❌ BAD: No error handling
-function createUser(name: string) {
+function createUserUnchecked(name: string) {
   const id = nanoID(0); // Will throw error
   return { id, name };
 }

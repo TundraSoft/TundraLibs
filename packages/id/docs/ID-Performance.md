@@ -148,6 +148,8 @@ NanoID (32)       ██████                          ~48 bytes
 **Per-ID Memory Usage:**
 
 ```typescript
+import { nanoID, ObjectID, sequenceID, simpleID, ulid } from '@tundralibs/id';
+
 // Minimal Memory
 const seq = sequenceID(); // ~8 bytes per ID (number)
 const simple = simpleID(0, 4); // ~16 bytes per ID (4-8 char string)
@@ -157,13 +159,15 @@ const oid = ObjectID(0); // ~24 bytes per ID (24 char hex string)
 const nano = nanoID(10); // ~24 bytes per ID (10 char string)
 
 // Higher Memory
-const ulid = ulid(); // ~32 bytes per ID (26 char string)
+const ulidId = ulid(); // ~32 bytes per ID (26 char string)
 const nano32 = nanoID(32); // ~48 bytes per ID (32 char string)
 ```
 
 **Generator Instance Memory:**
 
 ```typescript
+import { nanoID, ObjectID, sequenceID, simpleID, ulid } from '@tundralibs/id';
+
 // Near-zero overhead
 nanoID(); // Stateless function
 ulid(); // Stateless function
@@ -199,6 +203,8 @@ ObjectID(0); // ~48 bytes (machineId + processId + counter)
 **Concurrent Performance:**
 
 ```typescript
+import { nanoID, ObjectID } from '@tundralibs/id';
+
 // Good: NanoID scales linearly with cores
 async function generateInParallel() {
   const promises = Array.from(
@@ -239,6 +245,14 @@ const oid2 = ObjectID(2);
 **1. Choose the Right Alphabet**
 
 ```typescript
+import {
+  ALPHA_NUMERIC,
+  ALPHABETS,
+  nanoID,
+  NUMBERS,
+  PASSWORD,
+} from '@tundralibs/id';
+
 // Fastest: Numeric only
 const numeric = nanoID(10, NUMBERS); // ~30% faster than alphanumeric
 
@@ -255,6 +269,8 @@ const password = nanoID(10, PASSWORD); // More secure, but slower
 **2. Optimize Length**
 
 ```typescript
+import { nanoID } from '@tundralibs/id';
+
 // Ultra-fast: Short IDs
 const short = nanoID(8); // 2x faster than 16-char
 const medium = nanoID(16); // Standard
@@ -264,6 +280,8 @@ const long = nanoID(32); // Secure but 2x slower
 **3. Batch Generation**
 
 ```typescript
+import { nanoID } from '@tundralibs/id';
+
 // Inefficient: Creating many small IDs
 const ids = [];
 for (let i = 0; i < 1000; i++) {
@@ -271,7 +289,7 @@ for (let i = 0; i < 1000; i++) {
 }
 
 // Better: Pre-generate if possible
-const ids = Array.from({ length: 1000 }, () => nanoID(10));
+const preGeneratedIds = Array.from({ length: 1000 }, () => nanoID(10));
 
 // Best: Use a pool for high-frequency access
 class IDPool {
@@ -294,6 +312,8 @@ class IDPool {
 **4. Collision Probability**
 
 ```typescript
+import { nanoID } from '@tundralibs/id';
+
 // For 1 million IDs, collision probability:
 nanoID(8); // 0.0001% (1 in 1M)      - Not recommended
 nanoID(10); // 0.000001% (1 in 100M)  - Good for most apps
@@ -306,8 +326,10 @@ nanoID(21); // ~0% (1 in 10^34)       - Default, excellent
 **1. Reuse Generators**
 
 ```typescript
+import { ObjectID } from '@tundralibs/id';
+
 // ❌ Inefficient: Creating generator per call
-function getNewId() {
+function getNewIdSlow() {
   return ObjectID(0)(); // Overhead every time
 }
 
@@ -321,6 +343,10 @@ function getNewId() {
 **2. Manual Machine ID for Performance**
 
 ```typescript
+import { ObjectID } from '@tundralibs/id';
+
+declare function getWorkerId(): number;
+
 // Slightly slower: Auto-detects machine ID
 const autoOid = ObjectID(0);
 
@@ -351,6 +377,13 @@ function getCreatedTime(id: string): Date {
 **4. Batch Generation Strategy**
 
 ```typescript
+import { ObjectID } from '@tundralibs/id';
+
+declare const db: {
+  collection: { insertMany(docs: unknown[]): Promise<void> };
+};
+declare const data: Record<string, unknown>;
+
 // For bulk inserts
 function* generateObjectIDs(count: number): Generator<string> {
   const oid = ObjectID(0);
@@ -371,6 +404,8 @@ await db.collection.insertMany(
 **1. Standard vs Monotonic**
 
 ```typescript
+import { monotonicUlid, ulid } from '@tundralibs/id';
+
 // Fastest: Standard ULID (no state)
 const id1 = ulid(); // ~1.0μs
 
@@ -384,18 +419,22 @@ const id2 = monotonicUlid(); // ~1.1μs
 **2. Custom Timestamp for Batch Generation**
 
 ```typescript
+import { ulid } from '@tundralibs/id';
+
 // Inefficient: System calls for each ID
 const ids = Array.from({ length: 1000 }, () => ulid());
 
 // Efficient: Reuse timestamp for batch
 const timestamp = Date.now();
-const ids = Array.from({ length: 1000 }, () => ulid(timestamp));
+const batchedIds = Array.from({ length: 1000 }, () => ulid(timestamp));
 // ~10% faster for large batches
 ```
 
 **3. Monotonic Batch Generation**
 
 ```typescript
+import { monotonicUlid } from '@tundralibs/id';
+
 // Best for high-frequency generation in same ms
 const timestamp = Date.now();
 const ids = [];
@@ -408,12 +447,16 @@ for (let i = 0; i < 100; i++) {
 **4. Timestamp Extraction**
 
 ```typescript
+import { getTimestamp, ulid } from '@tundralibs/id';
+
 // Fast: Direct timestamp extraction
 const id = ulid();
 const timestamp = getTimestamp(id); // ~0.1μs
 
 // Avoid re-generating for timestamp comparison
 // Instead, extract and compare
+const id1 = ulid();
+const id2 = ulid();
 const time1 = getTimestamp(id1);
 const time2 = getTimestamp(id2);
 if (time1 < time2) { /* ... */ }
@@ -422,6 +465,8 @@ if (time1 < time2) { /* ... */ }
 **5. Pre-allocation for High Throughput**
 
 ```typescript
+import { ulid } from '@tundralibs/id';
+
 // For scenarios requiring 10k+ IDs/second
 class ULIDPool {
   private pool: string[] = [];
@@ -450,6 +495,8 @@ class ULIDPool {
 **1. Default vs Override**
 
 ```typescript
+import { sequenceID } from '@tundralibs/id';
+
 // Fastest: Default sequential generation
 const id = sequenceID(); // ~0.1μs
 
@@ -461,6 +508,8 @@ const id2 = sequenceID(1000); // ~0.15μs
 **2. Thread Safety**
 
 ```typescript
+import { sequenceID } from '@tundralibs/id';
+
 // Each worker should have its own sequence
 // to avoid contention
 
@@ -476,21 +525,25 @@ const getWorker2Id = () => sequenceID(worker2Sequence++);
 **3. Reset Strategy**
 
 ```typescript
+import { sequenceID } from '@tundralibs/id';
+
 // For long-running processes, consider overflow
 let currentSeq = 0;
 const MAX_SAFE_INTEGER = 9007199254740991;
 
-function getNextId(): number {
+function getNextId(): bigint {
   if (currentSeq >= MAX_SAFE_INTEGER) {
     currentSeq = 0; // Reset or handle overflow
   }
-  return sequenceID(currentSeq++);
+  return sequenceID(currentSeq++)();
 }
 ```
 
 **4. Combine with Timestamp**
 
 ```typescript
+import { sequenceID } from '@tundralibs/id';
+
 // For distributed uniqueness with high performance
 function makeGlobalId(workerId: number): string {
   const timestamp = Date.now();
@@ -505,6 +558,8 @@ function makeGlobalId(workerId: number): string {
 **1. Length vs Performance**
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 // Fastest: 4 characters
 const short = simpleID(0, 4)(); // ~0.4μs
 
@@ -520,8 +575,10 @@ const long = simpleID(0, 8)(); // ~0.6μs
 **2. Reuse Generator Instances**
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 // ❌ Avoid: Creating new generator each time
-function getId() {
+function getIdSlow() {
   return simpleID(0, 6)();
 }
 
@@ -535,16 +592,18 @@ function getId() {
 **3. Worker-Specific Seeds**
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 // In distributed systems, use worker-specific seeds
 class WorkerIDGenerator {
-  private generator;
+  private generator: () => bigint;
 
   constructor(workerId: number) {
     // Use worker ID as seed for uniqueness
     this.generator = simpleID(workerId, 6);
   }
 
-  generate(): string {
+  generate(): bigint {
     return this.generator();
   }
 }
@@ -559,6 +618,8 @@ const worker2Ids = new WorkerIDGenerator(2);
 **4. Balance Length and Collision**
 
 ```typescript
+import { simpleID } from '@tundralibs/id';
+
 // For 1 million IDs:
 simpleID(0, 4); // Risk of collision in large datasets
 simpleID(0, 6); // Good balance for most applications
@@ -629,6 +690,8 @@ class EventIDGenerator {
 ```typescript
 // Solution: Pre-generate IDs in batches
 import { ObjectID } from '@tundralibs/id';
+
+declare const db: { insertMany(docs: unknown[]): Promise<void> };
 
 async function bulkInsert(records: any[]): Promise<void> {
   const oid = ObjectID(0);
@@ -756,7 +819,7 @@ const id = ulid();
 
 **Pattern 1: Thread-Local Generators**
 
-```typescript
+```typescript ignore
 // Deno Workers example
 import { ObjectID } from '@tundralibs/id';
 
@@ -822,12 +885,12 @@ class ThreadSafeSequence {
     }
   }
 
-  getForThread(threadId: number): number {
+  getForThread(threadId: number): bigint {
     const range = this.ranges.get(threadId)!;
     if (range.current >= range.end) {
       throw new Error('Range exhausted');
     }
-    return sequenceID(range.current++);
+    return sequenceID(range.current++)();
   }
 }
 
@@ -839,6 +902,8 @@ class ThreadSafeSequence {
 **Pattern 4: Message-Passing ID Generation**
 
 ```typescript
+import { ObjectID } from '@tundralibs/id';
+
 // Centralized ID generator with message queue
 class CentralIDGenerator {
   private generator = ObjectID(0);
@@ -903,6 +968,8 @@ deno bench simpleID.bench.ts
 ### Benchmark Code Structure
 
 ```typescript
+import { ALPHABETS, nanoID, ulid } from '@tundralibs/id';
+
 // Example benchmark structure
 Deno.bench({
   name: 'id.Generate nanoID of length 10',
@@ -973,7 +1040,7 @@ Deno.serve((req) => {
 
 **Scenario**: MongoDB document insertion
 
-```typescript
+```typescript ignore
 import { ObjectID } from '@tundralibs/id';
 import { MongoClient } from 'mongodb';
 
@@ -1009,6 +1076,12 @@ await collection.insertMany(records);
 ```typescript
 import { ulid } from '@tundralibs/id';
 
+declare const kafka: {
+  produce(
+    message: { topic: string; key: string; value: string },
+  ): Promise<void>;
+};
+
 class EventBus {
   async publish(event: string, data: any): Promise<void> {
     const eventId = ulid(); // ~1μs
@@ -1039,6 +1112,8 @@ class EventBus {
 
 ```typescript
 import { nanoID } from '@tundralibs/id';
+
+declare const storage: { writeBatch(entries: unknown[]): Promise<void> };
 
 class LogAggregator {
   private buffer: any[] = [];
@@ -1094,7 +1169,7 @@ class LogAggregator {
 
 ### vs. uuid (Node.js standard)
 
-```typescript
+```typescript ignore
 // TundraLibs NanoID
 nanoID(10); // ~0.8μs
 // UUID v4 (Node.js)
@@ -1120,7 +1195,7 @@ ulid(); // ~1.2μs
 
 ### vs. nanoid (npm package)
 
-```typescript
+```typescript ignore
 // TundraLibs NanoID
 import { nanoID } from '@tundralibs/id';
 nanoID(10); // ~0.8μs
@@ -1141,7 +1216,7 @@ nanoid(10); // ~0.9μs
 
 ### vs. MongoDB ObjectID (Official Driver)
 
-```typescript
+```typescript ignore
 // TundraLibs ObjectID
 const oid = ObjectID(0);
 oid(); // ~0.3μs
@@ -1162,7 +1237,7 @@ new ObjectId(); // ~0.5μs
 
 ### vs. cuid / cuid2
 
-```typescript
+```typescript ignore
 // TundraLibs ULID
 ulid(); // ~1.0μs
 
@@ -1180,7 +1255,7 @@ createId(); // ~2.0μs
 
 ### vs. Short UUID
 
-```typescript
+```typescript ignore
 // TundraLibs SimpleID
 simpleID(0, 6)(); // ~0.5μs
 
@@ -1348,6 +1423,8 @@ measureIDGeneration(() => ulid(), 100000);
 ### Memory Profiling
 
 ```typescript
+import { nanoID } from '@tundralibs/id';
+
 // Check memory usage
 function measureMemoryUsage(
   generator: () => string,
@@ -1373,6 +1450,8 @@ measureMemoryUsage(() => nanoID(10), 10000);
 ### Profiling Hot Paths
 
 ```typescript
+import { nanoID } from '@tundralibs/id';
+
 // Identify if ID generation is a bottleneck
 class RequestHandler {
   private idGenerationTime = 0;
@@ -1400,6 +1479,8 @@ class RequestHandler {
 ### Comparative Profiling
 
 ```typescript
+import { nanoID, ObjectID, sequenceID, simpleID, ulid } from '@tundralibs/id';
+
 // Compare multiple implementations
 async function compareGenerators(): Promise<void> {
   const generators = {

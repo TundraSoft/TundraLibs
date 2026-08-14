@@ -73,7 +73,7 @@ ULIDs use **Crockford's Base32** alphabet: `0123456789ABCDEFGHJKMNPQRSTVWXYZ`
 
 Generates a ULID with the current or specified timestamp.
 
-```typescript
+```typescript ignore
 function ulid(timestamp?: number, monotonic?: boolean): string;
 ```
 
@@ -132,7 +132,7 @@ const mono2 = ulid(Date.now(), true);
 
 Generates a monotonic ULID with guaranteed lexicographic ordering within the same millisecond.
 
-```typescript
+```typescript ignore
 function monotonicUlid(timestamp?: number): string;
 ```
 
@@ -179,7 +179,7 @@ const log2 = monotonicUlid(); // "01ARZ3NDEKTSV4RRFFQ69G5FAW"
 
 Extracts the timestamp component from a ULID string.
 
-```typescript
+```typescript ignore
 function getTimestamp(id: string): number;
 ```
 
@@ -230,6 +230,8 @@ Generate ULIDs for general-purpose unique identifiers:
 
 ```typescript
 import { ulid } from '@tundralibs/id';
+
+declare const db: { users: { insert(row: unknown): Promise<void> } };
 
 // Simple ID generation
 const userId = ulid();
@@ -292,6 +294,10 @@ class Logger {
 
     // IDs will be sorted even if logs happen in same millisecond
     this.writeToDatabase(logEntry);
+  }
+
+  private writeToDatabase(entry: unknown): void {
+    // Persist the entry with your storage layer of choice
   }
 }
 
@@ -362,6 +368,14 @@ ULIDs are designed to sort lexicographically by creation time, making database q
 
 ```typescript
 import { ulid } from '@tundralibs/id';
+
+declare const db: {
+  collection: {
+    find(query: unknown): { sort(order: unknown): Promise<unknown[]> };
+  };
+};
+declare const startTime: number;
+declare const endTime: number;
 
 // Generate ULIDs over time
 const id1 = ulid(1600000000000); // Sept 13, 2020
@@ -441,6 +455,8 @@ Maintain event order with high-frequency logging:
 import { monotonicUlid } from '@tundralibs/id';
 
 class EventLogger {
+  private eventStore!: { append(event: unknown): Promise<void> };
+
   async logEvent(type: string, data: unknown) {
     const event = {
       id: monotonicUlid(), // Guarantees order
@@ -454,6 +470,7 @@ class EventLogger {
 }
 
 // Even thousands of events per second maintain order
+const logger = new EventLogger();
 for (let i = 0; i < 10000; i++) {
   await logger.logEvent('user_action', { index: i });
 }
@@ -463,7 +480,7 @@ for (let i = 0; i < 10000; i++) {
 
 Track and correlate API requests:
 
-```typescript
+```typescript ignore
 import { ulid } from '@tundralibs/id';
 
 app.use((req, res, next) => {
@@ -496,6 +513,8 @@ ULIDs use the same bit length as UUIDs, making them suitable for any system desi
 The timestamp-first design enables natural chronological ordering:
 
 ```typescript
+import { ulid } from '@tundralibs/id';
+
 const ids = [
   ulid(Date.now() + 1000), // +1 second
   ulid(Date.now()), // now
@@ -539,8 +558,10 @@ const random = crypto.getRandomValues(new Uint8Array(10));
 When generating many IDs in rapid succession:
 
 ```typescript
+import { monotonicUlid, ulid } from '@tundralibs/id';
+
 // ❌ Don't use regular ulid() for high-frequency
-const ids = Array.from({ length: 10000 }, () => ulid());
+const unorderedIds = Array.from({ length: 10000 }, () => ulid());
 // May have inconsistent ordering within same millisecond
 
 // ✅ Use monotonicUlid() instead
@@ -552,7 +573,7 @@ const ids = Array.from({ length: 10000 }, () => monotonicUlid());
 
 While ULIDs can be stored as binary (16 bytes), string storage is recommended:
 
-```typescript
+```typescript ignore
 // ✅ Recommended: String storage
 {
   _id: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
@@ -571,13 +592,15 @@ While ULIDs can be stored as binary (16 bytes), string storage is recommended:
 In multi-process or multi-machine environments:
 
 ```typescript
+import { monotonicUlid, ulid } from '@tundralibs/id';
+
 // ✅ Use regular ulid() - no global state
 // Different servers, workers, or isolates
 const id = ulid();
 
 // ❌ Don't use monotonicUlid() across processes
 // Global state not shared between processes
-const id = monotonicUlid(); // May not be monotonic across boundaries
+const monotonicId = monotonicUlid(); // May not be monotonic across boundaries
 ```
 
 ### Include Timestamp Extraction in Queries
@@ -585,6 +608,12 @@ const id = monotonicUlid(); // May not be monotonic across boundaries
 Leverage the timestamp component for efficient filtering:
 
 ```typescript
+import { ulid } from '@tundralibs/id';
+
+declare const db: { find(query: unknown): Promise<unknown[]> };
+declare const startTime: number;
+declare const endTime: number;
+
 // Generate range boundaries
 const startId = ulid(startTime);
 const endId = ulid(endTime);
@@ -600,6 +629,8 @@ const results = await db.find({
 Always validate ULIDs from external sources:
 
 ```typescript
+import { getTimestamp } from '@tundralibs/id';
+
 function isValidUlid(id: string): boolean {
   if (id.length !== 26) return false;
 
@@ -620,6 +651,15 @@ function isValidUlid(id: string): boolean {
 ULIDs naturally cluster by time in B-tree indexes:
 
 ```typescript
+import { ulid } from '@tundralibs/id';
+
+declare const db: {
+  collection: {
+    createIndex(spec: unknown): Promise<void>;
+    find(query: unknown): Promise<unknown[]>;
+  };
+};
+
 // ✅ Good: New ULIDs append to index
 // Minimizes index rebalancing and write amplification
 await db.collection.createIndex({ id: 1 });
@@ -668,7 +708,7 @@ const recentDocs = await db.collection.find({
 
 ULIDs can coexist with UUIDs in the same system:
 
-```typescript
+```typescript ignore
 import { ulid } from '@tundralibs/id';
 import { v4 as uuidv4 } from 'uuid';
 
