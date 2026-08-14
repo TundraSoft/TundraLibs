@@ -19,6 +19,7 @@ import {
   thenableResultError,
 } from './helpers/mod.ts';
 import type {
+  Brand,
   FinishedGuardian,
   GuardianMetaData,
   GuardianSafeParseResult,
@@ -83,33 +84,6 @@ const INTERNAL_METADATA_KEYS = new Set([
   // never forwarded as a schema constraint.
   'schemaEmit',
 ]);
-
-/**
- * Nominal brand. Attaches a phantom tag `B` to a base type `T` so the
- * compiler treats two structurally-identical types as distinct.
- *
- * Used by {@link BaseGuardian.brand} to produce types like
- * `Brand<string, 'UserId'>` — assignment-incompatible with a raw
- * `string` or with `Brand<string, 'OrderId'>` even though all three
- * are `string` at runtime.
- *
- * `__brand` is a unique-symbol-keyed property, so brand metadata
- * never collides with a real field on the underlying value and never
- * shows up at runtime.
- *
- * @example
- * ```ts ignore
- * type UserId  = Brand<string, 'UserId'>;
- * type OrderId = Brand<string, 'OrderId'>;
- *
- * const a: UserId  = 'u_1' as UserId;
- * const b: OrderId = a; // ❌ compile error
- * ```
- */
-declare const __guardianBrand: unique symbol;
-export type Brand<T, B extends string | symbol> = T & {
-  readonly [__guardianBrand]: B;
-};
 
 /**
  * Abstract parent of every guardian. Holds the composed transform
@@ -1381,12 +1355,13 @@ export abstract class BaseGuardian<T> {
    * Attach a **nominal brand** to the guardian's output type. Pure
    * compile-time machinery — the runtime value is unchanged, and the
    * validator chain is unmodified. The compiler sees the parsed value
-   * as `T & { readonly __brand: B }`, so two structurally-identical
-   * brands (`Brand<string, 'UserId'>` vs `Brand<string, 'OrderId'>`)
-   * become assignment-incompatible.
+   * as {@link Brand}`<T, B>`, so two structurally-identical brands
+   * (`Brand<string, 'UserId'>` vs `Brand<string, 'OrderId'>`) become
+   * assignment-incompatible.
    *
    * @template B - The brand tag — usually a string literal naming the
    *   semantic type (`'UserId'`, `'Email'`, `'SerialisedDate'`, etc.).
+   * @returns The same guardian, retyped to emit {@link Brand}`<T, B>`.
    *
    * @example
    * ```ts ignore

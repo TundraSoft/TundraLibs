@@ -1,8 +1,10 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat';
+import { Guardian } from '../Guardian.ts';
 import { StringGuardian } from '../guards/StringGuardian.ts';
 import { NumberGuardian } from '../guards/NumberGuardian.ts';
 import { GuardianError } from '../errors/Base.ts';
+import type { Brand } from '../types/mod.ts';
 
 describe('guardian.BaseGuardian', () => {
   describe('describe method', () => {
@@ -172,6 +174,17 @@ describe('guardian.BaseGuardian', () => {
       // StringGuardian)`, so the caller lands on a StringGuardian and
       // can go on applying string validators.
       const digits = new NumberGuardian().toString().minLength(3);
+
+      asserts.assertInstanceOf(digits, StringGuardian);
+      asserts.assertEquals(digits.parse(1234), '1234');
+      asserts.assertThrows(() => digits.parse(42), GuardianError);
+    });
+
+    it('should chain subclass validators off the public factory too', () => {
+      // Same chain as above but entered through `Guardian.number()`,
+      // the documented public route — this is the exact expression
+      // the overload split was reported against.
+      const digits = Guardian.number().toString().minLength(3);
 
       asserts.assertInstanceOf(digits, StringGuardian);
       asserts.assertEquals(digits.parse(1234), '1234');
@@ -755,6 +768,25 @@ describe('guardian.BaseGuardian', () => {
       asserts.assertEquals(base.parse(-5), -5);
       // Refined rejects.
       asserts.assertThrows(() => positive.parse(-5), GuardianError);
+    });
+  });
+
+  describe('brand method', () => {
+    it('should retype the output without touching the runtime value', () => {
+      type UserId = Brand<string, 'UserId'>;
+
+      const UserIdGuard = new StringGuardian().minLength(3).brand<'UserId'>();
+
+      // Compile-time assertion as much as a runtime one: the annotation
+      // only holds if the exported `Brand` type still describes exactly
+      // what `.brand()` emits. Widening or renaming either side fails
+      // to type-check here.
+      const id: UserId = UserIdGuard.parse('u_01HZY4');
+
+      // The brand is phantom — at runtime this is the plain string that
+      // went through the (still active) validator chain.
+      asserts.assertEquals<string>(id, 'u_01HZY4');
+      asserts.assertThrows(() => UserIdGuard.parse('u'), GuardianError);
     });
   });
 });

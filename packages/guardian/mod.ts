@@ -68,6 +68,7 @@ export { GuardianError } from './errors/mod.ts';
 
 // Type surface — single re-export site, all types live under ./types/.
 export type {
+  Brand,
   FinishedGuardian,
   GuardianErrorMeta,
   GuardianInfer,
