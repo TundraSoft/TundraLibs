@@ -42,21 +42,31 @@ Guardian.number().test((n) => n > 0, 'must be positive', '> 0');
 `.process(fn)` is the workhorse: it takes the current output, runs `fn`, and replaces the output. Used internally by every chain method.
 
 ```typescript
-import { Guardian } from '@tundralibs/guardian';
+import { Guardian, StringGuardian } from '@tundralibs/guardian';
 
 // Trim then validate length
 const Name = Guardian.string()
-  .process((s) => s.trim())
+  .process((s) => s.trim(), StringGuardian) // pass a constructor
   .minLength(1, 'name required');
 ```
 
-You can change the output type:
+The second argument is the guardian class the result is built from **and typed as**. Omit it and the runtime class is still preserved, but the static type widens to `BaseGuardian<T>` — which has no `.minLength()`, `.pattern()`, or any other subclass validator. So pass the class you want to keep chaining on, even when the output type doesn't change:
 
 ```typescript
-import { Guardian, NumberGuardian } from '@tundralibs/guardian';
+import { Guardian } from '@tundralibs/guardian';
+
+// No constructor → BaseGuardian<string>: fine when you're done chaining.
+const Trimmed = Guardian.string().process((s) => s.trim());
+Trimmed.parse('  hi  '); // 'hi'
+```
+
+The same argument is what lets you change the output type:
+
+```typescript
+import { Guardian, NumberGuardian, StringGuardian } from '@tundralibs/guardian';
 
 const LowerHex = Guardian.string()
-  .process((s) => s.toLowerCase())
+  .process((s) => s.toLowerCase(), StringGuardian)
   .pattern(/^[0-9a-f]+$/);
 
 // Convert string to number

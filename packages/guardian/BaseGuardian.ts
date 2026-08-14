@@ -142,10 +142,12 @@ export type Brand<T, B extends string | symbol> = T & {
  *
  * @example
  * ```ts
- * import { Guardian } from '@tundralibs/guardian';
+ * import { Guardian, StringGuardian } from '@tundralibs/guardian';
  *
+ * // The constructor argument keeps the result a StringGuardian, so
+ * // `.minLength()` is still chainable after the transform.
  * const Trimmed = Guardian.string()
- *   .process((s) => s.trim())
+ *   .process((s) => s.trim(), StringGuardian)
  *   .minLength(1);
  *
  * Trimmed.parse('  hi  '); // 'hi'
@@ -376,29 +378,75 @@ export abstract class BaseGuardian<T> {
    * functions that hand-roll a `Promise` return aren't detected
    * (use an `async` keyword if you need detection).
    *
+   * **This overload omits the constructor.** At runtime the new
+   * instance is built from `this.constructor`, so the runtime class is
+   * preserved; statically the result widens to
+   * {@link BaseGuardian}`<U>` and the subclass surface
+   * (`.minLength()`, `.integer()`, …) is no longer reachable. To keep
+   * chaining subclass validators, pass that subclass as the
+   * `constructor` argument — see the second overload.
+   *
    * @template U - Output type after this step.
-   * @template V - Resulting guardian class.
    * @param fn - Receives the current chain output; returns the next.
-   * @param constructor - Optional. Pass a guardian constructor (e.g.
-   *   `NumberGuardian`) to change the runtime class of the result —
-   *   useful when transforming string → number or similar. When
-   *   omitted, the new instance is constructed from `this.constructor`
-   *   so the runtime class is preserved.
-   * @returns A fresh guardian carrying the extended chain. The
-   *   receiving instance is never mutated.
+   * @returns A fresh guardian carrying the extended chain, typed as
+   *   {@link BaseGuardian}`<U>`. The receiving instance is never
+   *   mutated.
    * @throws {GuardianError} If called after `.optional()` / `.nullable()`.
    *
    * @example
    * ```ts
-   * import { Guardian, NumberGuardian } from '@tundralibs/guardian';
+   * import { Guardian } from '@tundralibs/guardian';
    *
-   * // Stay in StringGuardian
+   * // Runtime class stays StringGuardian; static type is
+   * // BaseGuardian<string>.
    * Guardian.string().process((s) => s.trim());
-   *
-   * // Cross into NumberGuardian
-   * Guardian.string().process((s) => parseInt(s, 10), NumberGuardian);
    * ```
    */
+  process<U>(fn: GuardianTransform<T, U>): BaseGuardian<U>;
+  /**
+   * Append a transform step and pin the result's guardian class.
+   *
+   * Passing `constructor` does two things at once: it selects the
+   * runtime class the fresh instance is built from, AND it keeps the
+   * result statically typed as that class — so subclass validators
+   * stay chainable after the transform. Pass a DIFFERENT class to
+   * cross types (string → number via `NumberGuardian`), or the SAME
+   * class to stay put (`StringGuardian`) and go on calling
+   * `.minLength()` / `.pattern()` / … afterwards.
+   *
+   * @template U - Output type after this step.
+   * @template V - Resulting guardian class, inferred from `constructor`.
+   * @param fn - Receives the current chain output; returns the next.
+   * @param constructor - Guardian class the result is constructed from
+   *   and typed as.
+   * @returns A fresh `V` carrying the extended chain. The receiving
+   *   instance is never mutated.
+   * @throws {GuardianError} If called after `.optional()` / `.nullable()`.
+   *
+   * @example
+   * ```ts
+   * import {
+   *   Guardian,
+   *   NumberGuardian,
+   *   StringGuardian,
+   * } from '@tundralibs/guardian';
+   *
+   * // Stay in StringGuardian — `.minLength()` is still available.
+   * Guardian.string().process((s) => s.trim(), StringGuardian).minLength(1);
+   *
+   * // Cross into NumberGuardian — `.integer()` is now available.
+   * Guardian.string()
+   *   .process((s) => parseInt(s, 10), NumberGuardian)
+   *   .integer();
+   * ```
+   */
+  process<U, V extends BaseGuardian<U>>(
+    fn: GuardianTransform<T, U>,
+    constructor: new (
+      initialTransform?: GuardianTransform<unknown, U>,
+      metaData?: GuardianMetaData,
+    ) => V,
+  ): V;
   process<U, V extends BaseGuardian<U> = BaseGuardian<U>>(
     fn: GuardianTransform<T, U>,
     constructor?: new (

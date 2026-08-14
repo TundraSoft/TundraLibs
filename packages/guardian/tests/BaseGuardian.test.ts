@@ -138,6 +138,55 @@ describe('guardian.BaseGuardian', () => {
       );
       asserts.assertInstanceOf(numberGuard, NumberGuardian);
     });
+
+    // The three cases below are as much COMPILE-time assertions as
+    // runtime ones. `process()` used to declare a single signature
+    // returning `V | BaseGuardian<U>`; the union meant no subclass
+    // method was reachable on the result even when the constructor was
+    // supplied. None of these chains carry a cast — if the overload
+    // split regresses, `deno test` fails to type-check the file.
+    it('should keep the target guardian chainable across a type change', () => {
+      const port = new StringGuardian()
+        .process((val) => Number.parseInt(val, 10), NumberGuardian)
+        .integer()
+        .min(1)
+        .max(65535);
+
+      asserts.assertInstanceOf(port, NumberGuardian);
+      asserts.assertEquals(port.parse('8080'), 8080);
+      asserts.assertThrows(() => port.parse('99999'), GuardianError);
+    });
+
+    it('should stay in the same guardian when it is passed back in', () => {
+      const name = new StringGuardian()
+        .process((val) => val.trim(), StringGuardian)
+        .minLength(3, 'name required');
+
+      asserts.assertInstanceOf(name, StringGuardian);
+      asserts.assertEquals(name.parse('  ada  '), 'ada');
+      asserts.assertThrows(() => name.parse('  a  '), GuardianError);
+    });
+
+    it('should chain subclass validators after a subclass transform', () => {
+      // `NumberGuardian.toString()` routes through `process(fn,
+      // StringGuardian)`, so the caller lands on a StringGuardian and
+      // can go on applying string validators.
+      const digits = new NumberGuardian().toString().minLength(3);
+
+      asserts.assertInstanceOf(digits, StringGuardian);
+      asserts.assertEquals(digits.parse(1234), '1234');
+      asserts.assertThrows(() => digits.parse(42), GuardianError);
+    });
+
+    it('should widen to BaseGuardian when no constructor is passed', () => {
+      // Without the constructor the RUNTIME class is still preserved
+      // (`_cloneWith` builds from `this.constructor`) — only the static
+      // type widens to `BaseGuardian<U>`.
+      const trimmed = new StringGuardian().process((val) => val.trim());
+
+      asserts.assertInstanceOf(trimmed, StringGuardian);
+      asserts.assertEquals(trimmed.parse('  ada  '), 'ada');
+    });
   });
 
   describe('test method', () => {
