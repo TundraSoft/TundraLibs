@@ -29,8 +29,8 @@ export type RedisCacherOptions = CacherOptions & {
   /** The Redis server host. Required. */
   host: string;
 
-  /** The Redis server port. Defaults to 6379. */
-  port: number;
+  /** The Redis server port. Defaults to 6379 if not specified. */
+  port?: number;
 
   /** Optional Redis username for authentication. */
   username?: string;
