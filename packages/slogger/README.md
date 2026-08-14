@@ -231,6 +231,8 @@ Structured context is always available to handlers/formatters, but the
 message string itself is never substituted against it:
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({ appName: 'MyApp', level: SyslogSeverities.INFO });
 
 // Message stays literal — `${user}` is NOT replaced.
@@ -242,6 +244,8 @@ If you want `${path}` placeholders in the message resolved against the
 context, set `interpolateMessage: true`:
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'MyApp',
   level: SyslogSeverities.INFO,
@@ -270,6 +274,7 @@ folding request-scoped context in automatically — pair it with
 per-call argument:
 
 ```typescript
+import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
 import { ambient } from '@tundralibs/ambient';
 
 const log = LogManager.createSlogger({
@@ -286,6 +291,10 @@ ambient.run({ correlationId: crypto.randomUUID() }, () => {
 Precedence is **provider < scope < per-call**:
 
 ```typescript
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const log: Slogger; // the logger created above
+
 log.scope({ svc: 'auth' }).info('done', { attempt: 2 });
 // context: { ...provider(), svc: 'auth', attempt: 2 }
 ```
@@ -306,7 +315,7 @@ story is in [Slogger-Correlation](docs/Slogger-Correlation.md).
 
 Main logging class with methods for all syslog severity levels:
 
-```typescript
+```typescript ignore
 const logger = new Slogger(options: SloggerOptions);
 
 // Logging methods (highest to lowest severity)
@@ -328,7 +337,7 @@ await logger.finalize(): Promise<void>;
 
 Manages handlers and formatters globally:
 
-```typescript
+```typescript ignore
 import { LogManager } from '@tundralibs/slogger';
 
 // Register custom handlers and formatters
@@ -367,6 +376,9 @@ import {
   SloggerFinalizeError, // one or more handlers failed during finalize()
   SloggerHandlerError, // runtime delivery/persistence failure in a handler
 } from '@tundralibs/slogger/errors';
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
 
 try {
   await logger.finalize();
