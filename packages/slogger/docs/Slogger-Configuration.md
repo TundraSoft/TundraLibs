@@ -29,6 +29,12 @@ Slogger configuration consists of three main components:
 The main configuration object for creating a Slogger instance.
 
 ```typescript
+import type {
+  HandlerConfig,
+  SamplingOptions,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 interface SloggerOptions {
   appName: string; // Application identifier
   level: SyslogSeverities; // Global minimum log level
@@ -41,7 +47,7 @@ interface SloggerOptions {
 
 String identifier for your application. Appears in all log entries.
 
-```typescript
+```typescript ignore
 const logger = new Slogger({
   appName: 'MyApp',
   // ...
@@ -59,7 +65,7 @@ const logger = new Slogger({
 Global minimum severity level. Controls which logs are processed.
 
 ```typescript
-import { SyslogSeverities } from '@tundralibs/slogger';
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
 
 const logger = new Slogger({
   appName: 'MyApp',
@@ -75,6 +81,8 @@ See [Log Levels](#log-levels) for details.
 Array of handler configurations. Each handler represents an output destination.
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'MyApp',
   level: SyslogSeverities.INFO,
@@ -104,6 +112,8 @@ See [Handler Configuration](#handler-configuration) for details.
 Optional global sampling configuration applied to all handlers.
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'MyApp',
   level: SyslogSeverities.DEBUG,
@@ -124,6 +134,12 @@ Each handler requires a configuration object with common and handler-specific op
 ### Common Handler Options
 
 ```typescript
+import type {
+  SamplingOptions,
+  SloggerFormatter,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 interface HandlerConfig {
   name: string; // Unique handler identifier
   type: string; // Handler type
@@ -144,7 +160,7 @@ interface HandlerConfig {
 
 ### ConsoleHandler Options
 
-```typescript
+```typescript ignore
 {
   name: 'console',
   type: 'ConsoleHandler',
@@ -156,7 +172,7 @@ interface HandlerConfig {
 
 ### FileHandler Options
 
-```typescript
+```typescript ignore
 {
   name: 'file',
   type: 'FileHandler',
@@ -180,7 +196,7 @@ interface HandlerConfig {
 
 ### HTTPHandler Options
 
-```typescript
+```typescript ignore
 {
   name: 'http',
   type: 'HTTPHandler',
@@ -198,7 +214,7 @@ interface HandlerConfig {
 
 ### BlackholeHandler Options
 
-```typescript
+```typescript ignore
 {
   name: 'null',
   type: 'BlackholeHandler',
@@ -226,7 +242,10 @@ Slogger uses syslog severity levels (RFC 5424).
 ### Using Log Levels
 
 ```typescript
-import { SyslogSeverities } from '@tundralibs/slogger';
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+declare const value: unknown;
 
 logger.emergency('System is unusable'); // Level 0
 logger.alert('Immediate action required'); // Level 1
@@ -243,6 +262,8 @@ logger.debug('Variable value: ' + value); // Level 7
 Logs are filtered by comparing numeric levels:
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 // Global level: INFO (6)
 const logger = new Slogger({
   appName: 'MyApp',
@@ -260,6 +281,8 @@ logger.error('Error message'); // Logged (3 <= 6)
 Each handler can have its own minimum level:
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'MyApp',
   level: SyslogSeverities.DEBUG, // Global: DEBUG (7)
@@ -296,6 +319,8 @@ Reduce log volume by sampling a percentage of logs.
 Applied to all handlers:
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'HighVolume',
   level: SyslogSeverities.DEBUG,
@@ -312,6 +337,8 @@ const logger = new Slogger({
 Different sampling rates for each handler:
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'MyApp',
   level: SyslogSeverities.DEBUG,
@@ -338,6 +365,8 @@ const logger = new Slogger({
 ### Sampling Options
 
 ```typescript
+import type { SyslogSeverities } from '@tundralibs/slogger';
+
 interface SamplingOptions {
   sampleRate?: number; // 0.0-1.0 (0.1 = 10%, 1.0 = 100%)
   bypassSamplingForLevel?: SyslogSeverities; // Logs at/above always logged
@@ -351,6 +380,8 @@ Adapt configuration to different environments.
 ### Development vs Production
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const isDev = Deno.env.get('ENV') === 'development';
 
 const logger = new Slogger({
@@ -393,7 +424,7 @@ const logger = new Slogger({
 ### Configuration from Environment
 
 ```typescript
-import { SyslogSeverities } from '@tundralibs/slogger';
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
 
 const logLevelMap: Record<string, SyslogSeverities> = {
   'emergency': SyslogSeverities.EMERGENCY,
@@ -424,7 +455,14 @@ const logger = new Slogger({
 ### Configuration from File
 
 ```typescript
+import {
+  type HandlerConfig,
+  Slogger,
+  type SyslogSeverities,
+} from '@tundralibs/slogger';
 import { parse } from 'https://deno.land/std/jsonc/mod.ts';
+
+declare const logLevelMap: Record<string, SyslogSeverities>; // see above
 
 interface LogConfig {
   appName: string;
@@ -437,7 +475,7 @@ interface LogConfig {
 }
 
 const configText = await Deno.readTextFile('./config/logging.jsonc');
-const config: LogConfig = parse(configText);
+const config = parse(configText) as unknown as LogConfig;
 
 const logger = new Slogger({
   appName: config.appName,
@@ -451,6 +489,12 @@ const logger = new Slogger({
 ### Multiple Environments
 
 ```typescript
+import {
+  Slogger,
+  type SloggerOptions,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 type Environment = 'development' | 'staging' | 'production';
 
 const configs: Record<Environment, SloggerOptions> = {
@@ -502,7 +546,7 @@ const configs: Record<Environment, SloggerOptions> = {
         name: 'errors',
         type: 'HTTPHandler',
         level: SyslogSeverities.ERROR,
-        url: process.env.LOG_ENDPOINT!,
+        url: Deno.env.get('LOG_ENDPOINT')!,
         formatter: 'json',
       },
     ],
@@ -516,6 +560,12 @@ const logger = new Slogger(configs[env]);
 ### Conditional Handlers
 
 ```typescript
+import {
+  type HandlerConfig,
+  Slogger,
+  SyslogSeverities,
+} from '@tundralibs/slogger';
+
 const handlers: HandlerConfig[] = [
   {
     name: 'console',
@@ -560,6 +610,8 @@ const logger = new Slogger({
 ### Dynamic Handler Addition
 
 ```typescript
+import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
+
 const logger = new Slogger({
   appName: 'MyApp',
   level: SyslogSeverities.INFO,

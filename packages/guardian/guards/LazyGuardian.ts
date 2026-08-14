@@ -5,6 +5,8 @@
  * Required for recursive types:
  *
  * ```ts
+ * import { BaseGuardian, Guardian } from '@tundralibs/guardian';
+ *
  * type Tree = { value: number; children: Tree[] };
  *
  * const TreeSchema: BaseGuardian<Tree> = Guardian.object({
@@ -44,6 +46,8 @@ import type {
  *
  * @example
  * ```ts
+ * import { BaseGuardian, Guardian } from '@tundralibs/guardian';
+ *
  * type Node = { value: number; next: Node | null };
  *
  * const NodeSchema: BaseGuardian<Node> = Guardian.object({
@@ -55,6 +59,10 @@ import type {
  * ```
  */
 export class LazyGuardian<T> extends BaseGuardian<T> {
+  /**
+   * Emitted schema type. Never actually reaches output — the emit
+   * overrides below delegate to the resolved inner guardian's type.
+   */
   protected override readonly _type = 'lazy';
   /** Per-emit cycle detection — shared across the call tree of a single
    * `toOpenAPI` / `toJSONSchema` call. WeakSet keyed by instance. */
@@ -147,6 +155,11 @@ export class LazyGuardian<T> extends BaseGuardian<T> {
     }
   }
 
+  /**
+   * Inline the resolved schema, emitting `{ $ref: '#' }` on a
+   * recursive visit — see {@link toOpenAPI} for the cycle-detection
+   * caveat.
+   */
   override toJSONSchema(): Record<string, unknown> {
     if (LazyGuardian.__emitStack.has(this)) {
       return { $ref: '#' };
@@ -159,6 +172,11 @@ export class LazyGuardian<T> extends BaseGuardian<T> {
     }
   }
 
+  /**
+   * Render the resolved schema, substituting a
+   * `_(recursive — see above)_` note on a recursive visit rather than
+   * looping.
+   */
   override toMarkdown(): string {
     if (LazyGuardian.__emitStack.has(this)) {
       return '_(recursive — see above)_';

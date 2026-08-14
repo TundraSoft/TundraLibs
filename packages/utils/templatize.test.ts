@@ -202,20 +202,50 @@ describe('utils.templatize', () => {
   describe('onMissing option', () => {
     it('default behaviour replaces missing keys with empty string', () => {
       const parser = templatize('a${x}b');
-      // deno-lint-ignore no-explicit-any
-      asserts.assertEquals(parser({} as any), 'ab');
+      asserts.assertEquals(parser({}), 'ab');
     });
 
     it('onMissing: "empty" matches the default', () => {
       const parser = templatize('a${x}b', { onMissing: 'empty' });
-      // deno-lint-ignore no-explicit-any
-      asserts.assertEquals(parser({} as any), 'ab');
+      asserts.assertEquals(parser({}), 'ab');
     });
 
     it('onMissing: "literal" keeps the `${var}` placeholder', () => {
       const parser = templatize('a${x}b', { onMissing: 'literal' });
-      // deno-lint-ignore no-explicit-any
-      asserts.assertEquals(parser({} as any), 'a${x}b');
+      asserts.assertEquals(parser({}), 'a${x}b');
+    });
+
+    // `TemplateValues<T>` marks every key optional precisely because
+    // `onMissing` is the documented escape hatch for absent values.
+    // These render calls must therefore type-check with no cast — a
+    // regression to required keys breaks compilation here, not just
+    // the assertion.
+    it('omitting a key type-checks and renders per onMissing', () => {
+      const template = '[${time}] ${level}: ${msg}';
+
+      const empty = templatize(template, { onMissing: 'empty' });
+      asserts.assertEquals(
+        empty({ time: '12:00:01', msg: 'hi' }),
+        '[12:00:01] : hi',
+      );
+
+      const literal = templatize(template, { onMissing: 'literal' });
+      asserts.assertEquals(
+        literal({ time: '12:00:01', msg: 'hi' }),
+        '[12:00:01] ${level}: hi',
+      );
+
+      // Every key omitted at once, still no cast needed.
+      asserts.assertEquals(empty({}), '[] : ');
+      asserts.assertEquals(
+        literal({}),
+        '[${time}] ${level}: ${msg}',
+      );
+    });
+
+    it('explicit `undefined` is treated the same as an omitted key', () => {
+      const parser = templatize('a${x}b', { onMissing: 'literal' });
+      asserts.assertEquals(parser({ x: undefined }), 'a${x}b');
     });
 
     it('onMissing affects null/undefined differently — `null` becomes "null", undefined hits the missing path', () => {

@@ -1,7 +1,7 @@
 /**
  * Definition layer — Guardian-style builders emitting plain data.
  *
- * ```ts
+ * ```ts ignore
  * const Users = Entity('users', {
  *   id: Column.uuid().default({ $$_expression: 'UUID' }),
  *   email: Column.varchar(255).pattern(/^\S+@\S+$/).encrypt().hash(),

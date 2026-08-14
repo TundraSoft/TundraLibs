@@ -6,6 +6,11 @@ import type { CacheValue } from './CacheValue.ts';
  * @see {@link AbstractCacher.set} The method that uses these options
  * @example
  * ```ts
+ * import { MemoryCacher } from '@tundralibs/cacher/engines';
+ *
+ * const cache = new MemoryCacher('demo', {});
+ * const value = { hello: 'world' };
+ *
  * // Set with custom expiry (10 minutes)
  * await cache.set('key', value, { expiry: 600 });
  *

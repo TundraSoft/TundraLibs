@@ -69,7 +69,7 @@ try {
   assertSelect(query);
   console.log('Query is valid');
 } catch (error) {
-  console.error('Validation failed:', error.message);
+  console.error('Validation failed:', (error as Error).message);
 }
 
 // Type guard variant - returns boolean
@@ -87,6 +87,8 @@ if (isSelect(query)) {
 
 ```typescript
 import { assertQuery, isQuery } from '@tundralibs/oql/asserts';
+
+declare const query: unknown;
 
 assertQuery(query); // Throws TypeError if invalid
 const valid = isQuery(query); // Returns boolean
@@ -113,6 +115,8 @@ const valid = isQuery(query); // Returns boolean
 ```typescript
 import { assertSelect, isSelect } from '@tundralibs/oql/asserts';
 
+declare const query: unknown;
+
 assertSelect(query); // Throws TypeError if invalid
 const valid = isSelect(query); // Returns boolean
 ```
@@ -137,6 +141,8 @@ const valid = isSelect(query); // Returns boolean
 ```typescript
 import { assertInsert, isInsert } from '@tundralibs/oql/asserts';
 
+declare const query: unknown;
+
 assertInsert(query);
 const valid = isInsert(query);
 ```
@@ -153,6 +159,8 @@ const valid = isInsert(query);
 
 ```typescript
 import { assertUpdate, isUpdate } from '@tundralibs/oql/asserts';
+
+declare const query: unknown;
 
 assertUpdate(query);
 const valid = isUpdate(query);
@@ -171,6 +179,8 @@ const valid = isUpdate(query);
 ```typescript
 import { assertDelete, isDelete } from '@tundralibs/oql/asserts';
 
+declare const query: unknown;
+
 assertDelete(query);
 const valid = isDelete(query);
 ```
@@ -188,6 +198,8 @@ const valid = isDelete(query);
 ```typescript
 import { assertUpsert, isUpsert } from '@tundralibs/oql/asserts';
 
+declare const query: unknown;
+
 assertUpsert(query);
 const valid = isUpsert(query);
 ```
@@ -204,6 +216,8 @@ const valid = isUpsert(query);
 
 ```typescript
 import { assertCount, isCount } from '@tundralibs/oql/asserts';
+
+declare const query: unknown;
 
 assertCount(query);
 const valid = isCount(query);
@@ -226,6 +240,8 @@ const valid = isCount(query);
 ```typescript
 import { assertCreateTable, isCreateTable } from '@tundralibs/oql/asserts';
 
+declare const query: unknown;
+
 assertCreateTable(query);
 const valid = isCreateTable(query);
 ```
@@ -242,6 +258,8 @@ const valid = isCreateTable(query);
 
 ```typescript
 import { assertAlterTable, isAlterTable } from '@tundralibs/oql/asserts';
+
+declare const query: unknown;
 
 assertAlterTable(query);
 const valid = isAlterTable(query);
@@ -264,6 +282,8 @@ const valid = isAlterTable(query);
 ```typescript
 import { assertCreateIndex, isCreateIndex } from '@tundralibs/oql/asserts';
 
+declare const query: unknown;
+
 assertCreateIndex(query);
 const valid = isCreateIndex(query);
 ```
@@ -280,6 +300,8 @@ const valid = isCreateIndex(query);
 ```typescript
 import { assertCreateView, isCreateView } from '@tundralibs/oql/asserts';
 
+declare const query: unknown;
+
 assertCreateView(query);
 const valid = isCreateView(query);
 ```
@@ -294,6 +316,8 @@ const valid = isCreateView(query);
 
 ```typescript
 import { assertAlterView, isAlterView } from '@tundralibs/oql/asserts';
+
+declare const query: unknown;
 
 assertAlterView(query);
 const valid = isAlterView(query);
@@ -312,6 +336,8 @@ const valid = isAlterView(query);
 
 ```typescript
 import { assertDropView, isDropView } from '@tundralibs/oql/asserts';
+
+declare const query: unknown;
 
 assertDropView(query);
 const valid = isDropView(query);
@@ -334,6 +360,8 @@ import {
   isRefreshMaterializedView,
 } from '@tundralibs/oql/asserts';
 
+declare const query: unknown;
+
 assertRefreshMaterializedView(query);
 const valid = isRefreshMaterializedView(query);
 ```
@@ -348,6 +376,8 @@ const valid = isRefreshMaterializedView(query);
 
 ```typescript
 import { assertDropTable, isDropTable } from '@tundralibs/oql/asserts';
+
+declare const query: unknown;
 
 assertDropTable(query);
 const valid = isDropTable(query);
@@ -365,6 +395,8 @@ const valid = isDropTable(query);
 ```typescript
 import { assertTruncate, isTruncate } from '@tundralibs/oql/asserts';
 
+declare const query: unknown;
+
 assertTruncate(query);
 const valid = isTruncate(query);
 ```
@@ -381,6 +413,8 @@ const valid = isTruncate(query);
 ```typescript
 import { assertCreateSchema, isCreateSchema } from '@tundralibs/oql/asserts';
 
+declare const query: unknown;
+
 assertCreateSchema(query);
 const valid = isCreateSchema(query);
 ```
@@ -396,6 +430,8 @@ const valid = isCreateSchema(query);
 ```typescript
 import { assertDropSchema, isDropSchema } from '@tundralibs/oql/asserts';
 
+declare const query: unknown;
+
 assertDropSchema(query);
 const valid = isDropSchema(query);
 ```
@@ -410,6 +446,8 @@ const valid = isDropSchema(query);
 
 ```typescript
 import { assertDropIndex, isDropIndex } from '@tundralibs/oql/asserts';
+
+declare const query: unknown;
 
 assertDropIndex(query);
 const valid = isDropIndex(query);
@@ -569,6 +607,8 @@ Signature: `assertJoinFilter(x, columnList?)` / `isJoinFilter(x, columnList?)`. 
 ```typescript
 import { assertJoins, isJoins } from '@tundralibs/oql/asserts';
 
+declare const value: unknown;
+
 assertJoins(
   {
     Profile: {
@@ -713,6 +753,10 @@ import type { Query } from '@tundralibs/oql';
 import { assertSelect } from '@tundralibs/oql/asserts';
 import { PostgresTranslator } from '@tundralibs/oql/translator';
 
+declare const database: {
+  query(sql: string, params: Record<string, unknown>): unknown;
+};
+
 function executeQuery(query: Query<'SELECT', any>) {
   // Validate structure
   assertSelect(query);
@@ -748,6 +792,8 @@ function handleQuery(query: unknown) {
 
 ```typescript
 import { assertSelect } from '@tundralibs/oql/asserts';
+
+declare function executeQuery(query: unknown): unknown;
 
 function validateAndExecute(query: unknown) {
   try {
@@ -811,6 +857,8 @@ assertSelect(complexQuery);
 Validators provide detailed error messages:
 
 ```typescript
+import { assertQueryFilter, assertSelect } from '@tundralibs/oql/asserts';
+
 // Missing required field
 assertSelect({ type: 'SELECT' });
 // TypeError: Invalid SELECT query: 'table' is required

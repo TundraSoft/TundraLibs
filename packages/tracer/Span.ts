@@ -66,7 +66,10 @@ export class Span {
   private __endTime?: Date;
 
   /**
-   * @param init - See {@link SpanInit}. Created by {@link Tracer}, not callers.
+   * Constructed by the {@link Tracer}, not by callers — a span built directly
+   * has no parent, no sampling decision, and no route to an exporter.
+   *
+   * @param init - See {@link SpanInit}.
    */
   constructor(init: SpanInit) {
     this.name = init.name;

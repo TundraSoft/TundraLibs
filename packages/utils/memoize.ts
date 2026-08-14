@@ -47,11 +47,13 @@ type CachedItem<T> = {
  *
  * @example
  * ```typescript
+ * declare function createCacheKey(args: Array<unknown>): string;
+ *
  * createCacheKey([1, 2, "hello"]); // '[1,2,"hello"]'
  * createCacheKey([{ a: 1 }, [1, 2]]); // '[{"a":1},[1,2]]'
  *
  * // Handles circular references gracefully
- * const circular = { a: 1 };
+ * const circular: Record<string, unknown> = { a: 1 };
  * circular.self = circular;
  * createCacheKey([circular]); // Falls back to unique timestamp-based key
  *

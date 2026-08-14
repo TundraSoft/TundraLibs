@@ -76,6 +76,10 @@ const SENSITIVE_HEADER =
  * console.log(res.body?.id);
  * ```
  *
+ * @typeParam O - The options bag the subclass accepts. Extend
+ *   {@link RESTlerOptions} to add vendor-specific options; they then type the
+ *   constructor argument and `_getOption`.
+ *
  * @see {@link RESTlerOptions} for configuration options
  * @see {@link RESTlerEndpoint} for the per-request endpoint shape
  */
@@ -206,6 +210,14 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     event: K,
     callback: RESTlerEvents[K],
   ): this;
+  /**
+   * Array form: each entry is registered — and isolation-wrapped —
+   * independently, so one faulty listener does not affect its siblings.
+   *
+   * @param event - The event to subscribe to.
+   * @param callback - The listeners to register. Non-function entries are
+   *   dropped rather than registered.
+   */
   override on<K extends keyof RESTlerEvents>(
     event: K,
     callback: RESTlerEvents[K][],
@@ -238,6 +250,13 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     event: K,
     callback: RESTlerEvents[K],
   ): this;
+  /**
+   * Array form: each entry fires at most once, independently of the others.
+   *
+   * @param event - The event to subscribe to.
+   * @param callback - The listeners to register. Non-function entries are
+   *   dropped rather than registered.
+   */
   override once<K extends keyof RESTlerEvents>(
     event: K,
     callback: RESTlerEvents[K][],
@@ -270,6 +289,14 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     event: K,
     callback?: RESTlerEvents[K],
   ): this;
+  /**
+   * Array form: each entry is resolved back to the isolation wrapper
+   * {@link on} registered for it, then removed.
+   *
+   * @param event - The event to unsubscribe from.
+   * @param callback - The listeners to remove. When omitted, every listener
+   *   for `event` is removed.
+   */
   override off<K extends keyof RESTlerEvents>(
     event: K,
     callback?: RESTlerEvents[K][],
@@ -308,7 +335,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * that authenticates with a vendor-specific header extends the sensitive set
    * by overriding this method — for example:
    *
-   * ```typescript
+   * ```typescript ignore
    * protected override _isSensitiveHeader(name: string): boolean {
    *   return name.toLowerCase() === 'x-vendor-secret' ||
    *     super._isSensitiveHeader(name);

@@ -71,11 +71,13 @@ write one app-level adapter that calls `router.find()` and runs the
 chain. Errors bubble up via `next(err)` per Express convention:
 
 ```ts
+// Deno resolves Express via the `npm:` specifier; under plain
+// Node/Bun use a bare `from 'express'` instead.
 import express, {
   type NextFunction,
   type Request,
   type Response,
-} from 'express';
+} from 'npm:express@^4.21.0';
 import { type HTTPMethod, RadRouter } from '@tundralibs/radrouter';
 
 type ExpressMw = (req: Request, res: Response, next: NextFunction) => void;
@@ -119,7 +121,7 @@ same shape as RadRouter's default `Middleware` — so the adapter is
 essentially a chain runner. Captured params live in `ctx.state`:
 
 ```ts
-import { Application, type Middleware as OakMw } from '@oak/oak';
+import { Application, type Middleware as OakMw } from 'jsr:@oak/oak@^17.1.4';
 import { type HTTPMethod, RadRouter } from '@tundralibs/radrouter';
 
 type AppState = { radParams: Record<string, string> };
@@ -174,6 +176,9 @@ it's worth understanding the contract:
   injection).
 
 ```ts
+type AppCtx = { response: Response };
+type AppMw = (ctx: AppCtx, next: () => Promise<void>) => Promise<void>;
+
 const timing: AppMw = async (ctx, next) => {
   const start = performance.now();
   await next();
@@ -189,6 +194,10 @@ you want a `405 Method Not Allowed` on path matches with mismatched
 methods, probe each method:
 
 ```ts
+import { type HTTPMethod, RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+
 const METHODS: HTTPMethod[] = [
   'GET',
   'POST',
@@ -198,14 +207,17 @@ const METHODS: HTTPMethod[] = [
   'HEAD',
   'OPTIONS',
 ];
-const allowed = METHODS.filter((m) => router.find(m, pathname));
-if (allowed.length) {
-  return new Response('Method Not Allowed', {
-    status: 405,
-    headers: { Allow: allowed.join(', ') },
-  });
-}
-return new Response('Not Found', { status: 404 });
+
+const onMiss = (pathname: string): Response => {
+  const allowed = METHODS.filter((m) => router.find(m, pathname));
+  if (allowed.length) {
+    return new Response('Method Not Allowed', {
+      status: 405,
+      headers: { Allow: allowed.join(', ') },
+    });
+  }
+  return new Response('Not Found', { status: 404 });
+};
 ```
 
 This is N lookups instead of 1; do it only on miss, not on every

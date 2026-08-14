@@ -63,7 +63,7 @@ npx jsr add @tundralibs/crypt
 
 Creates an HMAC signature.
 
-```typescript
+```typescript ignore
 async function signHMAC(
   data: string | Uint8Array,
   secret: SigningKey,
@@ -84,7 +84,7 @@ console.log(signature); // hex string
 
 Verifies an HMAC signature.
 
-```typescript
+```typescript ignore
 async function verifyHMAC(
   data: string | Uint8Array,
   signature: string,
@@ -98,6 +98,8 @@ async function verifyHMAC(
 ```typescript
 import { verifyHMAC } from '@tundralibs/crypt/sign';
 
+declare const signature: string;
+
 const isValid = await verifyHMAC('my data', signature, 'secret-key');
 console.log(isValid); // true or false
 ```
@@ -106,7 +108,7 @@ console.log(isValid); // true or false
 
 Creates an RSA-PSS signature.
 
-```typescript
+```typescript ignore
 async function signRSA(
   data: string | Uint8Array,
   privateKey: SigningKey,
@@ -127,7 +129,7 @@ const signature = await signRSA('my data', privateKey);
 
 Verifies an RSA-PSS signature.
 
-```typescript
+```typescript ignore
 async function verifyRSA(
   data: string | Uint8Array,
   signature: string,
@@ -141,6 +143,8 @@ async function verifyRSA(
 ```typescript
 import { verifyRSA } from '@tundralibs/crypt/sign';
 
+declare const signature: string;
+
 const publicKey = `-----BEGIN PUBLIC KEY-----...`;
 const isValid = await verifyRSA('my data', signature, publicKey);
 ```
@@ -149,7 +153,7 @@ const isValid = await verifyRSA('my data', signature, publicKey);
 
 Creates an ECDSA signature on a NIST P-curve.
 
-```typescript
+```typescript ignore
 async function signEC(
   data: string | Uint8Array,
   privateKey: SigningKey,
@@ -182,7 +186,7 @@ const pinned = await signEC('my data', privateKey, { curve: 'P-256' });
 
 Verifies an ECDSA signature.
 
-```typescript
+```typescript ignore
 async function verifyEC(
   data: string | Uint8Array,
   signature: string,
@@ -195,6 +199,8 @@ async function verifyEC(
 
 ```typescript
 import { verifyEC } from '@tundralibs/crypt/sign';
+
+declare const signature: string;
 
 const publicKey = `-----BEGIN PUBLIC KEY-----...`;
 const isValid = await verifyEC('my data', signature, publicKey);
@@ -323,8 +329,14 @@ const isValid = await verifyEC(
 ```typescript
 import { verifyEC } from '@tundralibs/crypt/sign';
 
-const { keys } = await (await fetch(jwksUri)).json();
-const jwk = keys.find((k) => k.kid === kid);
+declare const jwksUri: string;
+declare const kid: string;
+declare const signature: string;
+
+const { keys } = await (await fetch(jwksUri)).json() as {
+  keys: (JsonWebKey & { kid?: string })[];
+};
+const jwk = keys.find((k) => k.kid === kid)!;
 
 // No PEM conversion: the JWK is used directly, and its own alg/use/key_ops
 // are checked against the operation before any signature is examined.

@@ -12,6 +12,9 @@
  * ```ts
  * import { ProgressBar } from '@tundralibs/compat/cli';
  *
+ * declare const items: string[];
+ * declare function process(item: string): Promise<void>;
+ *
  * const bar = new ProgressBar({ total: items.length, label: 'Indexing' });
  * for (const item of items) {
  *   await process(item);
@@ -73,19 +76,35 @@ const FRAME_INTERVAL_MS = 16; // ~60fps render cap in TTY mode
  * an error path to leave the bar at its current state with a newline).
  */
 export class ProgressBar {
+  /** Value that counts as 100%. @internal */
   readonly __total: number;
+  /** Bar width in characters. @internal */
   readonly __width: number;
+  /** Glyph for completed portion. @internal */
   readonly __fillChar: string;
+  /** Glyph for remaining portion. @internal */
   readonly __emptyChar: string;
+  /** Sink for rendered frames. @internal */
   readonly __stream: WritableLike;
+  /** Whether to render in-place vs. one line per percent. @internal */
   readonly __tty: boolean;
 
+  /** Text shown beside the bar. @internal */
   __label: string;
+  /** Current progress, clamped to `[0, __total]`. @internal */
   __current: number = 0;
+  /** Timestamp of the last TTY frame, for rate limiting. @internal */
   __lastRenderAt: number = 0;
+  /** Last emitted percentage; `-1` before the first render. @internal */
   __lastRenderedPct: number = -1;
+  /** Set by {@link complete}/{@link stop}; later calls no-op. @internal */
   __stopped: boolean = false;
 
+  /**
+   * Defaults: width 40, `█`/`░` glyphs, `process.stdout`, TTY detected.
+   *
+   * @throws {@link RangeError} When `total` is not a positive finite number.
+   */
   constructor(options: ProgressBarOptions) {
     if (
       typeof options.total !== 'number' ||
@@ -156,6 +175,13 @@ export class ProgressBar {
     this.__stopped = true;
   }
 
+  /**
+   * Draw one frame. On a TTY this rewrites the line and is rate-limited to
+   * roughly 60fps; otherwise it emits one line per whole percent so CI logs
+   * stay readable. `force` bypasses both throttles for the final frame.
+   *
+   * @internal
+   */
   __render(force: boolean): void {
     const pct = Math.floor((this.__current / this.__total) * 100);
 

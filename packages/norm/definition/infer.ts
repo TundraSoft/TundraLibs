@@ -40,7 +40,7 @@ type _DisabledKeys<
  * Complete row shape — every column (synthesized hash siblings
  * included) at its derived TS value type.
  *
- * ```ts
+ * ```ts ignore
  * type UserRow = RowOf<typeof Users>;
  * // { id: string; email: string; email_hash: string; age: number | null }
  * ```

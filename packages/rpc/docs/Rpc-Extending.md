@@ -28,7 +28,7 @@ generalizes.
 
 ## Recipe: Pattern subscribe via subclass
 
-Want `chat:*` wildcards without waiting for Hub to ship pattern
+Want `chat:*` wildcards without waiting for `Server` to ship pattern
 matching? Override `_handleSubscribe`:
 
 ```ts
@@ -77,7 +77,17 @@ export class PatternServer<T = unknown> extends Server<T> {
 Use it:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+import type { ChannelOptions } from '@tundralibs/rpc';
+
+// The subclass defined in the block above.
+declare class PatternServer<T = unknown> extends Server<T> {
+  pattern(glob: string, opts: ChannelOptions<T>): this;
+}
+
 type Conn = { userId: string };
+
+const canJoin = (_userId: string, _channel: string): boolean => true;
 
 const server = new PatternServer<Conn>();
 
@@ -92,7 +102,7 @@ server.pattern('user:**', {
 ```
 
 That's the entire feature. ~25 lines. You pick the glob syntax,
-precedence (exact-first vs pattern-first), cleanup policy. Hub
+precedence (exact-first vs pattern-first), cleanup policy. `Server`
 provides the primitives; you compose.
 
 For a runnable version, see
@@ -104,7 +114,7 @@ For a runnable version, see
   `chat:room1` won't reach a `chat:*` subscriber on instance B unless
   the underlying pub/sub adapter does pattern matching server-side
   (Redis `PSUBSCRIBE`, NATS `*`/`>`). The subclass approach lazily
-  registers concrete channels — fine within one Hub, but the adapter
+  registers concrete channels — fine within one `Server`, but the adapter
   still sees only literal names.
 - **Capability self-description.** `MemoryPubSubAdapter.capabilities.patternSubscribe`
   stays `false` because the _adapter_ still doesn't pattern-match. The
@@ -116,11 +126,15 @@ Until then, the subclass approach covers single-process apps.
 
 ## Recipe: Custom inbound frame inspection
 
-Hub's middleware wraps **commands**. If you need to react to
-sub/unsub/pub frames before Hub's standard handling, override the
+`Server`'s middleware wraps **commands**. If you need to react to
+sub/unsub/pub frames before `Server`'s standard handling, override the
 matching `_handle*` method.
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+import type { InboundFrame } from '@tundralibs/rpc';
+import type { ServerWebSocket } from '@tundralibs/compat/webserver';
+
 class LoggingServer<T> extends Server<T> {
   override async _handleSubscribe(
     ws: ServerWebSocket<T>,
@@ -142,12 +156,19 @@ class LoggingServer<T> extends Server<T> {
 
 ## Recipe: Replay — last-N messages on subscribe
 
-"New subscribers should see the last 50 messages." Hub doesn't ship
+"New subscribers should see the last 50 messages." `Server` doesn't ship
 this, but `onSubscribe` + a per-channel ring buffer does it in
 ~10 lines. The replay path uses the same wire shape as live `msg`
 frames, so the client can't tell them apart.
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+type Conn = { userId: string };
+
+const server = new Server<Conn>();
+const canJoin = (_userId: string, _channel: string): boolean => true;
+
 const buffers = new Map<string, unknown[]>();
 const BUFFER_SIZE = 50;
 
@@ -186,7 +207,7 @@ not broadcast through the adapter).
 - **Persistence.** The buffer dies with the process. Restart the
   server → no history. Fine for "last 50 chat messages while you
   reconnect" — not fine for guaranteed event delivery.
-- **Cross-process replay.** Each Hub instance has its own buffer. A
+- **Cross-process replay.** Each `Server` instance has its own buffer. A
   subscriber on instance B doesn't see messages captured by
   instance A.
 - **Replay-by-cursor.** You can't say "give me everything since
@@ -198,10 +219,14 @@ contract conversation when someone needs it.
 
 ## Recipe: Wrapping send for outbound observation
 
-Want to inspect every outbound frame Hub sends? Override `_send`:
+Want to inspect every outbound frame `Server` sends? Override `_send`:
 
 ```ts
-class ObservedHub<T> extends Server<T> {
+import { Server } from '@tundralibs/rpc';
+import type { OutboundFrame } from '@tundralibs/rpc';
+import type { ServerWebSocket } from '@tundralibs/compat/webserver';
+
+class ObservedServer<T> extends Server<T> {
   outboundCount = 0;
 
   override _send(ws: ServerWebSocket<T>, frame: OutboundFrame): void {
@@ -216,13 +241,19 @@ acknowledgement, msg fan-out, and protocol error. One choke point.
 
 ## Reaching the underlying primitive
 
-Hub wraps a `WebSocketServer` from `@tundralibs/compat/websocket`.
+`Server` wraps a `WebSocketServer` from `@tundralibs/compat/websocket`.
 You can reach it through `server._wss` (from a subclass) if you need to
 register a secondary message handler, set a custom codec, observe
-backpressure, or anything else the primitive exposes that Hub doesn't
+backpressure, or anything else the primitive exposes that `Server` doesn't
 surface directly.
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const metrics = {
+  bp: { inc: (_labels: { remote: string | undefined }, _value: number) => {} },
+};
+
 class MetricsServer<T> extends Server<T> {
   constructor() {
     super();
@@ -235,11 +266,11 @@ class MetricsServer<T> extends Server<T> {
 
 ## When NOT to subclass
 
-If your extension is something most Hub users would want, it's
-probably worth proposing as a Hub feature instead of subclassing.
+If your extension is something most `Server` users would want, it's
+probably worth proposing as a package feature instead of subclassing.
 The subclass approach is the right tool when:
 
-- You need a policy decision Hub deliberately leaves out (pattern
+- You need a policy decision `Server` deliberately leaves out (pattern
   syntax, glob vs MQTT vs regex, exact-vs-pattern precedence).
 - The feature is specific to your deployment / topology.
 - You want to ship the change immediately rather than wait for a

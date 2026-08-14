@@ -9,7 +9,7 @@
  *
  * @example
  * ```typescript
- * import { RUNTIME, isDeno, getEnv } from '@tundrasoft/compat/runtime';
+ * import { RUNTIME, isDeno, getEnv } from '@tundralibs/compat/runtime';
  *
  * if (isDeno) {
  *   console.log('Running on Deno');
@@ -19,7 +19,10 @@
 
 import { loadBuiltin } from './_runtime-globals.ts';
 
+/** Detected JavaScript runtime. `'UNKNOWN'` covers browsers and workerd. */
 export type Runtime = 'DENO' | 'BUN' | 'NODE' | 'UNKNOWN';
+
+/** Host operating system, normalised across runtimes. */
 export type OperatingSystem = 'WINDOWS' | 'LINUX' | 'DARWIN' | 'UNKNOWN';
 
 /**
@@ -33,8 +36,16 @@ export type Architecture = 'X64' | 'ARM64' | 'X86' | 'ARM' | 'UNKNOWN';
 // deno-lint-ignore no-explicit-any
 const g = globalThis as any;
 
+/** Whether the `Deno` global is present. Evaluated once at import time. */
 export const isDeno: boolean = g.Deno !== undefined;
+
+/** Whether the `Bun` global is present. Evaluated once at import time. */
 export const isBun: boolean = g.Bun !== undefined;
+
+/**
+ * Whether this is genuine Node — Bun and Deno both expose
+ * `process.versions.node`, so those are excluded explicitly.
+ */
 export const isNode: boolean = g.process?.versions?.node !== undefined &&
   g.Bun === undefined && g.Deno === undefined;
 
@@ -81,6 +92,13 @@ export function getRuntime(): Runtime {
 /** Cached {@link getRuntime}. */
 export const RUNTIME: Runtime = getRuntime();
 
+/**
+ * Detect the host OS, folding `win32`/`windows` together. Returns
+ * `'UNKNOWN'` on any platform outside the supported three, and on
+ * runtimes that expose neither `Deno.build` nor `process.platform`.
+ *
+ * @see {@link OS} for the cached value.
+ */
 export function getOS(): OperatingSystem {
   const platform = g.Deno?.build?.os ||
     (isNode || isBun ? g.process.platform : undefined);
@@ -238,6 +256,10 @@ export const onUnhandledRejection = (
   return () => {};
 };
 
+/**
+ * OS signals {@link onSignal} accepts. Windows honours only `SIGINT`
+ * and `SIGBREAK`.
+ */
 export type Signal = 'SIGINT' | 'SIGTERM' | 'SIGHUP' | 'SIGBREAK';
 
 /**

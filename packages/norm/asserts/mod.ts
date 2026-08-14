@@ -6,7 +6,7 @@
  * and `compileRuntime()` all delegate here, and hand-built
  * definitions can be validated with the same functions:
  *
- * ```ts
+ * ```ts ignore
  * import { assertDefinition } from '@tundralibs/norm/asserts';
  * assertDefinition(myHandBuiltDef); // NormDefinitionError on issues
  * ```

@@ -25,27 +25,41 @@ import type { CounterOptions } from './types/mod.ts';
  * ```
  */
 export class Counter extends BaseMetric<number, CounterOptions> {
+  /**
+   * Create a counter. `type` is injected automatically, so callers
+   * normally pass only `name` and `help`.
+   *
+   * @throws {@link InvalidMetricOptionsError} When `name` is missing or
+   *   isn't a legal Prometheus metric name.
+   */
   constructor(opt: Omit<CounterOptions, 'type'> & { type?: 'COUNTER' }) {
     super({ ...opt, type: 'COUNTER' });
   }
 
+  /** Increment the unlabelled series by 1. */
+  public inc(): void;
   /**
-   * Increment the named series.
+   * Increment the series identified by `labels` by 1.
    *
-   * Overloads:
-   * - `inc()` — increment unlabelled by 1
-   * - `inc(labels)` — increment labelled series by 1
-   * - `inc(amount)` — increment unlabelled by `amount`
-   * - `inc(amount, labels)` — increment labelled series by `amount`
+   * @throws {@link InvalidLabelError} When `labels` contains a name
+   *   that isn't a legal Prometheus label name.
+   */
+  public inc(labels: Record<string, string>): void;
+  /**
+   * Increment the unlabelled series by `amount`.
+   *
+   * @throws {@link InvalidMetricOptionsError} When `amount` is
+   *   negative or non-finite — counters cannot decrease.
+   */
+  public inc(amount: number): void;
+  /**
+   * Increment the series identified by `labels` by `amount`.
    *
    * @throws {@link InvalidMetricOptionsError} When `amount` is
    *   negative or non-finite — counters cannot decrease.
    * @throws {@link InvalidLabelError} When `labels` contains a name
    *   that isn't a legal Prometheus label name.
    */
-  public inc(): void;
-  public inc(labels: Record<string, string>): void;
-  public inc(amount: number): void;
   public inc(amount: number, labels: Record<string, string>): void;
   public inc(
     amountOrLabels?: number | Record<string, string>,

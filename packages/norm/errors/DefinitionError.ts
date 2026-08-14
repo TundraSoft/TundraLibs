@@ -42,7 +42,7 @@ import type { NormErrorCode } from './NormErrorCodes.ts';
  * `error.context.issues`.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * try {
  *   Entity('users', { id: Column.integer() }, { pk: [] });
  * } catch (e) {
@@ -55,6 +55,10 @@ import type { NormErrorCode } from './NormErrorCodes.ts';
  * ```
  */
 export class NormDefinitionError extends NormError<DefinitionErrorMeta> {
+  /**
+   * Flattens every issue into one message, so a broken schema reports
+   * all of its faults in a single throw rather than one per compile.
+   */
   constructor(meta: DefinitionErrorMeta, cause?: Error) {
     const summary = meta.issues
       .map((i) => `  - ${i.model}.${i.path}: ${i.message}`)

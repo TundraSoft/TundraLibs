@@ -40,6 +40,8 @@ For a server engine, skip the manual engine and pass a `database`
 config instead:
 
 ```typescript
+import { Norm } from '@tundralibs/norm';
+
 const norm = new Norm({
   database: {
     dialect: 'postgres',
@@ -124,7 +126,7 @@ database handle. `use()` resolves foreign keys across schema
 boundaries, so `Links.ownerId → Users` works even though they live in
 different schemas.
 
-```typescript
+```typescript ignore
 import { Schema } from '@tundralibs/norm';
 import { Users } from './models/identity/users.ts';
 import { Profiles } from './models/identity/profiles.ts';
@@ -142,7 +144,7 @@ Never hand-write DDL. Snapshot the composed registry and apply it — the
 Migrator creates the tables, indexes, digest siblings, and foreign
 keys, and records what it did.
 
-```typescript
+```typescript ignore
 import { Migrator } from '@tundralibs/norm/migrations';
 
 const mig = new Migrator(db, { dir: './migrations' });
@@ -165,7 +167,7 @@ Every operation returns a `NormResult` envelope. Reads carry `data`;
 counts carry only `count`. The `id` is a ULID that also appears on the
 `call` event, so you can correlate a slow query in your logs.
 
-```typescript
+```typescript ignore
 const created = await db.repo('Users').insert({
   email: '  Ada@Shortly.DEV ',
   password: 'hunter2boat',
@@ -202,7 +204,7 @@ reference.
 never think about that. You filter by the plaintext and NORM rewrites
 the comparison to the SHA-256 digest sibling:
 
-```typescript
+```typescript ignore
 // Transparent: this becomes  WHERE email_hash = sha256('ada@shortly.dev')
 const found = await db.repo('Users').findOne({ '@email': 'ada@shortly.dev' });
 
@@ -217,7 +219,7 @@ await db.repo('Users').insert({
 `password` is a one-way digest column — you write and filter by the
 plaintext, but only the digest is ever stored:
 
-```typescript
+```typescript ignore
 await db.repo('Users').findOne({ '@password': 'hunter2boat' }); // matches Ada
 // The stored value is a 64-char hex digest; the plaintext is unrecoverable.
 ```
@@ -232,7 +234,7 @@ columns, and the crypto override hooks.
 Because `Profiles.User` declared `reverseProject: true`, a default read
 of a user eagerly includes its profile:
 
-```typescript
+```typescript ignore
 const u = await db.repo('Users').getByPK({ id: adaId });
 u.data?.Profile; // { userId, bio, birthday } | null
 ```
@@ -240,7 +242,7 @@ u.data?.Profile; // { userId, bio, birthday } | null
 Project relations explicitly to shape the result — depth-1, no
 fan-out. Reverse to-many relations come back as arrays:
 
-```typescript
+```typescript ignore
 const org = await db.repo('Organisations').find(undefined, {
   project: {
     '@name': true,
@@ -256,7 +258,7 @@ const active = await db.repo('Links').find({ '@Visits.@country': 'IN' });
 Many-to-many is a database VIEW that joins the junction once, declared
 with a logical foreign key so it reads like an ordinary relation:
 
-```typescript
+```typescript ignore
 // A view: post_tags ⋈ tags, with a logical fk back to Posts.
 const posts = await db.repo('Posts').find(undefined, {
   project: { '@title': true, '@Tags': { '@name': true } }, // one call, one SELECT
@@ -268,7 +270,7 @@ const posts = await db.repo('Posts').find(undefined, {
 Grouped aggregates live on the typed `find()` surface — the projected
 columns become the `GROUP BY`:
 
-```typescript
+```typescript ignore
 const byCountry = await db.repo('Visits').find(undefined, {
   project: { '@country': true },
   aggregates: { visits: { fn: 'COUNT', column: '@id' } },
@@ -305,7 +307,7 @@ an always-on equality filter. In a request handler you scope once to
 the current tenant and every subsequent call is confined to it — you
 can't forget the tenant filter:
 
-```typescript
+```typescript ignore
 function handler(req) {
   const orgDb = db.scope({ '@orgId': req.orgId });
 
@@ -333,7 +335,7 @@ doesn't have is gracefully skipped. See [Scoping](NORM-Scoping.md).
 `db.transaction(fn)` commits when `fn` resolves and rolls back if it
 throws. The `tx` handle shares everything (including an active scope):
 
-```typescript
+```typescript ignore
 await db.transaction(async (tx) => {
   const post = await tx.repo('Posts').insert({ title, authorId });
   await tx.repo('Audit').insert({ action: 'post.created', userId: authorId });
@@ -347,7 +349,7 @@ transaction, and drags in ambiguous `disconnect`/`set` semantics. The
 sanctioned pattern is an explicit transaction, which reads clearly and
 composes with everything else:
 
-```typescript
+```typescript ignore
 await db.transaction(async (tx) => {
   const user = await tx.repo('Users').insert({ email, displayName });
   await tx.repo('Posts').insert(
@@ -363,7 +365,7 @@ resolve its writes fold into the outer transaction; on throw only the
 inner block is rolled back and the error is rethrown, so you can
 `try/catch` it and continue the outer transaction.
 
-```typescript
+```typescript ignore
 await db.transaction(async (tx) => {
   await tx.repo('Users').insert({ email, displayName });
   try {
@@ -389,7 +391,7 @@ Test against a real SQLite database — it's fast enough to be the
 default, and the Migrator applies your actual definitions, so you test
 the real schema:
 
-```typescript
+```typescript ignore
 import { Migrator } from '@tundralibs/norm/migrations';
 import { SQLiteEngine } from '@tundralibs/drivers';
 

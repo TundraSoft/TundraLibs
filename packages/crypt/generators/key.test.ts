@@ -637,4 +637,27 @@ describe('crypt.generators.key', () => {
       'P-256',
     );
   });
+
+  it('generateRSAKeyPair - defaults keySize to 2048 and hashAlgorithm to SHA-256', async () => {
+    // Both options are optional; the defaults match the values the
+    // convenience wrappers have always hard-coded.
+    const keyPair = await generateRSAKeyPair({ algorithm: 'RSA-OAEP' });
+
+    assert(keyPair.publicKey instanceof CryptoKey);
+    const algorithm = keyPair.publicKey.algorithm as RsaHashedKeyAlgorithm;
+    assertEquals(algorithm.modulusLength, 2048);
+    assertEquals(algorithm.hash.name, 'SHA-256');
+  });
+
+  it('generateRSAKeyPair - explicit options still override the defaults', async () => {
+    const keyPair = await generateRSAKeyPair({
+      algorithm: 'RSA-PSS',
+      keySize: 3072,
+      hashAlgorithm: 'SHA-512',
+    });
+
+    const algorithm = keyPair.publicKey.algorithm as RsaHashedKeyAlgorithm;
+    assertEquals(algorithm.modulusLength, 3072);
+    assertEquals(algorithm.hash.name, 'SHA-512');
+  });
 });

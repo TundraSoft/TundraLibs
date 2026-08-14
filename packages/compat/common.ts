@@ -14,13 +14,20 @@ import { CompatError } from './Error.ts';
 //#region TLSOptions
 /** Invalid TLS configuration. `source` names the offending field (`'cert'`, `'key'`, `'ca[0]'`). */
 export class FetchTLSError extends CompatError {
+  /** Offending field, e.g. `'cert'`, `'keyFile'`, `'ca[0]'`, or `'tls'`. */
   public readonly source: string;
 
+  /**
+   * Records which field was rejected alongside the message.
+   *
+   * @param source - Field path the caller should correct.
+   */
   constructor(message: string, source: string, cause?: Error) {
     super(message, cause);
     this.source = source;
   }
 
+  /** Adds `source` to the base payload. */
   override toJSON(): Record<string, unknown> {
     return {
       ...super.toJSON(),
@@ -31,13 +38,16 @@ export class FetchTLSError extends CompatError {
 
 /** A file referenced by `tls` options or a UNIX socket path doesn't exist. */
 export class FetchFileNotFoundError extends CompatError {
+  /** Path as supplied by the caller, before resolution. */
   public readonly path: string;
 
+  /** Builds the message from `path`. */
   constructor(path: string, cause?: Error) {
     super(`File not found: ${path}`, cause);
     this.path = path;
   }
 
+  /** Adds `path` to the base payload. */
   override toJSON(): Record<string, unknown> {
     return {
       ...super.toJSON(),
@@ -51,14 +61,18 @@ export class FetchInvalidPEMError extends FetchTLSError {}
 
 /** Path-traversal guard tripped — `../` or null byte in a user-supplied path. */
 export class FetchPathTraversalError extends CompatError {
+  /** Path as supplied by the caller, before resolution. */
   public readonly path: string;
+  /** Fixed discriminator, so handlers can branch without `instanceof`. */
   public readonly reason = 'path_traversal';
 
+  /** Builds the message from `path`. */
   constructor(path: string, cause?: Error) {
     super(`Path traversal detected: ${path}`, cause);
     this.path = path;
   }
 
+  /** Adds `path` and `reason` to the base payload. */
   override toJSON(): Record<string, unknown> {
     return {
       ...super.toJSON(),
@@ -68,41 +82,6 @@ export class FetchPathTraversalError extends CompatError {
   }
 }
 
-/**
- * TLS configuration. Every field is optional — supply only what your
- * use case needs:
- *
- * - **No fields, just `tls: true`** — server-only TLS using system
- *   trust roots (typical Postgres/MariaDB hosted-DB connection).
- * - **`{ ca }` / `{ caFile }`** — server-only TLS with a custom CA
- *   (typical self-hosted server with private CA).
- * - **`{ cert, key, ca? }` / `{ certFile, keyFile, caFile? }`** —
- *   mutual TLS with a client certificate.
- * - **`{ rejectUnauthorized: false }`** — disable certificate
- *   verification entirely. Convenient for self-signed dev certs;
- *   never use in production.
- *
- * Pick ONE presentation style — inline PEM strings (`cert` / `key` /
- * `ca`) or filesystem paths (`certFile` / `keyFile` / `caFile`). Mixing
- * the two is rejected, both at the type level (the field sets are
- * mutually exclusive) and by {@link validateTLS} at runtime.
- *
- * ## Runtime Support
- *
- * | Runtime | File-based | String-based | rejectUnauthorized |
- * |---------|------------|--------------|--------------------|
- * | Deno    | ✅         | ✅           | ❌ throws — use CLI flag |
- * | Bun     | ✅         | ✅           | ✅                 |
- * | Node.js | ✅         | ✅           | ✅                 |
- *
- * Deno has no in-process way to disable certificate verification —
- * `caCerts` only *adds* trust, it never skips it. Passing
- * `rejectUnauthorized: false` on Deno throws a hard error directing you
- * to the `--unsafely-ignore-certificate-errors=<host>` CLI flag (or to
- * supply the server's CA via `tls.ca` / `tls.caFile`).
- *
- * @see {@link fetch} for usage with fetch requests
- */
 /** Inline PEM material. */
 type InlineTLS = {
   /** PEM-encoded certificate string. */
@@ -123,6 +102,21 @@ type FileTLS = {
   caFile?: string;
 };
 
+/**
+ * TLS configuration. Every field is optional: `tls: true` alone gets
+ * server-only TLS against the system trust roots, `ca`/`caFile` adds a
+ * private CA, and `cert`+`key` (or `certFile`+`keyFile`) turns on mutual
+ * TLS — supplying only one half of that pair is rejected.
+ *
+ * Pick one presentation style: inline PEM strings or filesystem paths.
+ * Mixing them is rejected at the type level and again by
+ * {@link validateTLS} at runtime.
+ *
+ * Deno has no in-process way to skip certificate verification, so
+ * `rejectUnauthorized: false` throws there — pass
+ * `--unsafely-ignore-certificate-errors=<host>` or supply the server's CA
+ * instead. Bun and Node honour it.
+ */
 export type TLSOptions =
   & {
     /**

@@ -91,11 +91,8 @@ TLS client authentication (mTLS) allows your application to authenticate itself 
 Recommended for production environments where certificates are stored on disk:
 
 ```typescript
-import {
-  fetch,
-  FetchFileNotFoundError,
-  FetchTLSError,
-} from '@tundralibs/compat/fetch';
+import { FetchFileNotFoundError, FetchTLSError } from '@tundralibs/compat';
+import { fetch } from '@tundralibs/compat/fetch';
 
 const response = await fetch('https://secure.api.com/data', {
   tls: {
@@ -111,6 +108,8 @@ const response = await fetch('https://secure.api.com/data', {
 For embedded credentials or when loading from environment variables:
 
 ```typescript
+import { fetch } from '@tundralibs/compat/fetch';
+
 const response = await fetch('https://secure.api.com/data', {
   tls: {
     cert: process.env.CLIENT_CERT!, // PEM certificate string
@@ -142,6 +141,13 @@ Supported key types:
 > Only Bun supports the `keyPassword` option.
 
 ```typescript
+import { fetch } from '@tundralibs/compat/fetch';
+import { readTextFileSync } from '@tundralibs/compat/file';
+
+const url = 'https://secure.api.com/data';
+const certPem = readTextFileSync('/etc/ssl/client.crt');
+const encryptedKeyPem = readTextFileSync('/etc/ssl/client.key');
+
 // Bun only - will throw UnsupportedRuntimeError on Deno
 const response = await fetch(url, {
   tls: {
@@ -157,6 +163,8 @@ const response = await fetch(url, {
 Connect to services via Unix domain sockets instead of TCP:
 
 ```typescript
+import { fetch } from '@tundralibs/compat/fetch';
+
 // Docker API
 const containers = await fetch('http://localhost/containers/json', {
   unix: '/var/run/docker.sock',
@@ -171,6 +179,8 @@ const health = await fetch('http://localhost/health', {
 ### Combined with TLS
 
 ```typescript
+import { fetch } from '@tundralibs/compat/fetch';
+
 // Secure Unix socket connection
 const response = await fetch('https://localhost/api', {
   unix: '/var/run/secure.sock',
@@ -187,7 +197,7 @@ const response = await fetch('https://localhost/api', {
 
 Enhanced fetch with TLS and Unix socket support.
 
-```typescript
+```typescript ignore
 fetch(
   input: RequestInfo | URL,
   init?: RequestInit & {
@@ -219,7 +229,7 @@ See [Compat-Common → TLSOptions](Compat-Common.md#tlsoptions) for the full typ
 
 All fields are optional and compose freely — supply only what your use case needs:
 
-```typescript
+```typescript ignore
 import type { TLSOptions } from '@tundralibs/compat';
 
 type TLSOptions = {
@@ -254,7 +264,7 @@ All error classes are defined in the [Compat-Common](Compat-Common.md#error-clas
 
 Base error for TLS configuration issues.
 
-```typescript
+```typescript ignore
 class FetchTLSError extends CompatError {
   source: string; // Which TLS component caused the error
 }
@@ -264,7 +274,7 @@ class FetchTLSError extends CompatError {
 
 Thrown when a required file doesn't exist.
 
-```typescript
+```typescript ignore
 class FetchFileNotFoundError extends CompatError {
   path: string; // The missing file path
 }
@@ -274,7 +284,7 @@ class FetchFileNotFoundError extends CompatError {
 
 Thrown when PEM format validation fails.
 
-```typescript
+```typescript ignore
 class FetchInvalidPEMError extends FetchTLSError {
   source: string; // e.g., 'cert', 'key', 'ca[0]'
 }
@@ -284,7 +294,7 @@ class FetchInvalidPEMError extends FetchTLSError {
 
 Thrown when path traversal attack is detected.
 
-```typescript
+```typescript ignore
 class FetchPathTraversalError extends CompatError {
   path: string; // The suspicious path
   reason: string; // Always 'path_traversal'
@@ -295,12 +305,12 @@ class FetchPathTraversalError extends CompatError {
 
 ```typescript
 import {
-  fetch,
   FetchFileNotFoundError,
   FetchInvalidPEMError,
   FetchPathTraversalError,
   FetchTLSError,
-} from '@tundralibs/compat/fetch';
+} from '@tundralibs/compat';
+import { fetch } from '@tundralibs/compat/fetch';
 
 try {
   const response = await fetch('https://secure.api.com/data', {
@@ -314,7 +324,8 @@ try {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
 
-  return await response.json();
+  const data = await response.json();
+  console.log(data);
 } catch (error) {
   if (error instanceof FetchPathTraversalError) {
     // Security violation - log and reject
@@ -344,6 +355,10 @@ try {
 All file paths are validated against directory traversal attacks:
 
 ```typescript
+import { fetch } from '@tundralibs/compat/fetch';
+
+const url = 'https://secure.api.com/data';
+
 // These will throw FetchPathTraversalError
 await fetch(url, {
   tls: { certFile: '../../../etc/passwd', keyFile: 'key.pem' },

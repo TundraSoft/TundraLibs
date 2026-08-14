@@ -29,6 +29,12 @@ export type MalformedPathErrorMeta = {
  *
  * @example
  * ```ts
+ * import { MalformedPathError, RadRouter } from '@tundralibs/radrouter';
+ *
+ * type MW = () => Promise<void>;
+ * const router = new RadRouter<MW>();
+ * const mw: MW = async () => {};
+ *
  * try {
  *   router.get('/users/:1bad:', [mw]);
  * } catch (e) {
@@ -39,6 +45,14 @@ export type MalformedPathErrorMeta = {
  * ```
  */
 export class MalformedPathError extends RadRouterError<MalformedPathErrorMeta> {
+  /**
+   * Raised by the router while parsing a registration path; construct
+   * one directly only to re-raise that failure from wrapping code.
+   *
+   * @param message - `${var}` placeholders are substituted from `meta`.
+   * @param meta - Surfaced on `error.context`.
+   * @param cause - Original error to chain, if any.
+   */
   constructor(message: string, meta: MalformedPathErrorMeta, cause?: Error) {
     super(message, meta, cause);
   }

@@ -29,6 +29,10 @@ import { isBun, isDeno, isNode } from '../runtime.ts';
 // deno-lint-ignore no-explicit-any
 const g = globalThis as any;
 
+/**
+ * A single parsed flag value. Numeric and boolean literals are coerced
+ * from their string form.
+ */
 export type ArgValue = string | number | boolean;
 
 /**

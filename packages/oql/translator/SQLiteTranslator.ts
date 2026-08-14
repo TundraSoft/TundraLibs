@@ -73,15 +73,23 @@ const SQL_TYPE_MAP: Record<string, string> = {
   XML: 'TEXT',
 };
 
+/**
+ * Emits SQLite SQL. Stateless and reusable — see {@link AbstractTranslator}
+ * for the shared method surface and the module header above for the
+ * emulations SQLite needs (schemas, TRUNCATE, materialized views).
+ */
 export class SQLiteTranslator extends AbstractTranslator {
+  /** Dialect tag, reported on every error this translator raises. */
   public override readonly Dialect = 'sqlite';
 
+  /** Double quotes; an embedded quote doubles to `""`. */
   protected override readonly _identifierQuote: IdentifierQuote = {
     open: '"',
     close: '"',
     escape: '""',
   };
 
+  /** Named placeholders in the engine-compat `:name:` form. */
   protected override readonly _parameterStyle: ParameterStyle = {
     // `:name:` form is what the engine layer's `_standardizeQuery`
     // rewrites to dialect-native. Emitting it from every translator means
@@ -93,6 +101,11 @@ export class SQLiteTranslator extends AbstractTranslator {
     suffix: ':',
   };
 
+  /**
+   * Only `materializedView` is off. `schema` and `truncate` read as
+   * supported because they are emulated, not native — the flags gate the
+   * public entry points, so turning them off would make the calls throw.
+   */
   protected override readonly _support: DialectSupport = {
     // CREATE_SCHEMA / DROP_SCHEMA are emulated via ATTACH DATABASE — see
     // `_buildCreateSchema` / `_buildDropSchema`. The companion engine
@@ -118,6 +131,11 @@ export class SQLiteTranslator extends AbstractTranslator {
    */
   protected override readonly _offsetOnlyLimit: string | null = '-1';
 
+  /**
+   * SQLite expression emitters. `HASH` / `ENCRYPT` / `DECRYPT` are
+   * identity — SQLite ships no crypto, so the value passes through
+   * untransformed rather than failing.
+   */
   protected override readonly _expressionMap: ExpressionMap = new Map<
     Expressions['$$_expression'],
     (args: string[]) => string
@@ -151,31 +169,11 @@ export class SQLiteTranslator extends AbstractTranslator {
           : `SUBSTR(${a[0]}, ${a[1]})`,
     ],
     ['REPLACE', (a) => `REPLACE(${a[0]}, ${a[1]}, ${a[2]})`],
-    // SQLite has no native LPAD/RPAD; emulate via printf. Only space padding
-    // is portable — a custom fill char is ignored (annotated inline so it's
-    // visible in the emitted SQL).
-    [
-      'LPAD',
-      (a) => {
-        const fill = a.length === 3 ? a[2] : `' '`;
-        const sql = `substr(printf('%' || (${a[1]}) || 's', ${a[0]}), 1, ${
-          a[1]
-        })`;
-        return fill !== `' '`
-          ? `${sql} /* fill=${fill} ignored: SQLite has no native LPAD with custom fill */`
-          : sql;
-      },
-    ],
-    [
-      'RPAD',
-      (a) => {
-        const fill = a.length === 3 ? a[2] : `' '`;
-        return `substr(printf('%-' || (${a[1]}) || 's', ${a[0]}), 1, ${a[1]})` +
-          (fill !== `' '`
-            ? ` /* fill=${fill} ignored: SQLite has no native RPAD with custom fill */`
-            : '');
-      },
-    ],
+    // SQLite has no native LPAD/RPAD; both are composed in
+    // `__padExpression` so a custom fill pads with the fill the caller
+    // asked for, exactly as it does on Postgres and MariaDB.
+    ['LPAD', (a) => this.__padExpression(a, 'left')],
+    ['RPAD', (a) => this.__padExpression(a, 'right')],
     ['NOW', () => `datetime('now')`],
     ['CURRENT_DATE', () => `date('now')`],
     ['CURRENT_TIME', () => `time('now')`],
@@ -225,6 +223,11 @@ export class SQLiteTranslator extends AbstractTranslator {
     ['DECRYPT', (a) => a[0]!],
   ]);
 
+  /**
+   * SQLite aggregate emitters. `STRING_AGG` and `ARRAY_AGG` are spelled
+   * `group_concat` / `json_group_array` here, so results come back as a
+   * JSON string rather than a native array.
+   */
   protected override readonly _aggregateMap: AggregateMap = new Map<
     AggregateFunction,
     (args: string[]) => string
@@ -244,6 +247,11 @@ export class SQLiteTranslator extends AbstractTranslator {
     ['JSON_ROW', (a) => `json_group_array(json_object(${a.join(', ')}))`],
   ]);
 
+  /**
+   * SQLite filter-operator emitters. `$ilike` / `$nilike` fall back to
+   * plain `LIKE`, which SQLite folds case-insensitively for ASCII only —
+   * accented and non-Latin text compares case-*sensitively*.
+   */
   protected override readonly _filterOperatorMap: FilterOperatorMap = new Map<
     string,
     (column: string, value: string) => string
@@ -291,13 +299,16 @@ export class SQLiteTranslator extends AbstractTranslator {
   // DML: UPSERT
   // ---------------------------------------------------------------------------
 
-  // SQLite spells the conflicting-row reference in lowercase (`excluded`),
-  // unlike Postgres's `EXCLUDED`. Otherwise the upsert is identical, so we
-  // reuse the shared `_buildOnConflictUpsert`.
+  /**
+   * SQLite spells the conflicting-row reference in lowercase (`excluded`),
+   * unlike Postgres's `EXCLUDED`. Otherwise the upsert is identical, so we
+   * reuse the shared `_buildOnConflictUpsert`.
+   */
   protected override get _excludedKeyword(): string {
     return 'excluded';
   }
 
+  /** `INSERT … ON CONFLICT DO UPDATE`, via the shared builder. */
   protected override _buildUpsert(
     q: Query<'UPSERT'>,
     params: Parameters,
@@ -337,6 +348,13 @@ export class SQLiteTranslator extends AbstractTranslator {
     return `DETACH DATABASE ${this._quoteIdentifier(q.schema)}`;
   }
 
+  /**
+   * Covers rename-column, add-column, drop-column and rename-table only.
+   *
+   * @throws {@link DialectUnsupportedError} `ALTER COLUMN` when
+   *   `alterColumns` is set, `ALTER CONSTRAINT` when foreign keys are
+   *   added or dropped.
+   */
   protected override _buildAlterTable(q: Query<'ALTER_TABLE'>): string[] {
     // SQLite cannot modify a column in place or touch constraints on
     // an existing table — both require the full table-rebuild dance
@@ -385,6 +403,7 @@ export class SQLiteTranslator extends AbstractTranslator {
     return stmts;
   }
 
+  /** `q.cascade` is accepted and dropped — see the note below. */
   protected override _buildDropTable(q: Query<'DROP_TABLE'>): string {
     const tableSql = this._qualifiedTable(q.table, q.schema);
     const ifExists = q.ifExists ? 'IF EXISTS ' : '';
@@ -403,6 +422,10 @@ export class SQLiteTranslator extends AbstractTranslator {
     return `DELETE FROM ${this._qualifiedTable(q.table, q.schema)}`;
   }
 
+  /**
+   * SQLite has partial indexes, so `q.where` becomes a `WHERE` clause on
+   * the index. `q.method` has no SQLite equivalent and is ignored.
+   */
   protected override _buildCreateIndex(
     q: Query<'CREATE_INDEX'>,
     params: Parameters,
@@ -423,6 +446,7 @@ export class SQLiteTranslator extends AbstractTranslator {
     return sql;
   }
 
+  /** `q.table` is accepted and ignored — see the note below. */
   protected override _buildDropIndex(q: Query<'DROP_INDEX'>): string {
     // `q.table` is part of the OQL contract for API uniformity but
     // SQLite identifies indexes by name alone — accepted, ignored.
@@ -461,6 +485,10 @@ export class SQLiteTranslator extends AbstractTranslator {
     return `CREATE VIEW ${ifNotExists}${viewSql} AS ${inner}`;
   }
 
+  /**
+   * `q.materialized` needs no special case — a `materialized: true`
+   * CREATE_VIEW already fell back to a plain view on SQLite.
+   */
   protected override _buildDropView(q: Query<'DROP_VIEW'>): string {
     const viewSql = this._qualifiedTable(q.view, q.schema);
     const ifExists = q.ifExists ? 'IF EXISTS ' : '';
@@ -508,6 +536,11 @@ export class SQLiteTranslator extends AbstractTranslator {
   // Privates
   // ---------------------------------------------------------------------------
 
+  /**
+   * Types collapse to SQLite's storage classes via `SQL_TYPE_MAP`, with
+   * `TEXT` as the fallback for anything unrecognised. `def.comment` has no
+   * SQLite DDL syntax, so it is emitted as a trailing block comment.
+   */
   protected override _renderColumnDefinition(
     name: string,
     def: ColumnDefinition,
@@ -521,5 +554,53 @@ export class SQLiteTranslator extends AbstractTranslator {
       sql += ` /* ${safe} */`;
     }
     return sql;
+  }
+
+  /**
+   * Compose SQLite's missing `LPAD` / `RPAD` out of the functions it does
+   * ship, matching Postgres/MariaDB semantics rather than approximating
+   * them.
+   *
+   * `printf('%*s', n, '')` materialises a run of `n` spaces and
+   * `replace()` swaps each space for the fill, so a multi-character fill
+   * repeats and is then cut mid-sequence by the inner `substr` — the same
+   * rule the other dialects follow (`LPAD('x', 6, 'abc')` → `abcabx`).
+   * The outer `substr` reproduces their truncation of an input that is
+   * already longer than the target width (`LPAD('hello world', 5)` →
+   * `hello`), which keeps the leftmost characters for both directions.
+   *
+   * `max(0, …)` clamps both widths, because SQLite reads a negative
+   * `printf` width as "left justify" and a negative `substr` length as
+   * "count backwards" — neither of which is "no padding".
+   *
+   * NULL propagates without an explicit guard: a NULL length or fill
+   * makes the inner `substr` NULL, and a NULL input makes the
+   * concatenation NULL, so all three yield NULL as they do elsewhere.
+   * The width reaches `printf` as an argument (`%*s`) rather than being
+   * concatenated into the format string, so a length that arrives as a
+   * column value cannot inject `printf` directives.
+   *
+   * Two edges are unreachable for every dialect at once, because
+   * Postgres and MariaDB disagree there: on a negative length and on an
+   * empty fill Postgres yields `''` / the untouched input while MariaDB
+   * yields NULL. This follows Postgres.
+   *
+   * @param args Rendered arguments — `[string, length]`, or
+   *   `[string, length, fill]` when the caller supplied a fill.
+   * @param side `'left'` to pad in front (`LPAD`), `'right'` to pad
+   *   behind (`RPAD`).
+   * @returns The SQLite expression implementing the pad.
+   */
+  private __padExpression(args: string[], side: 'left' | 'right'): string {
+    const [str, len] = args;
+    const fill = args.length === 3 ? args[2] : `' '`;
+    // Clamped target width, reused for the pad run and the truncation.
+    const width = `max(0, ${len})`;
+    // How many characters are actually missing from the input.
+    const shortfall = `max(0, ${len} - length(${str}))`;
+    const pad =
+      `substr(replace(printf('%*s', ${width}, ''), ' ', ${fill}), 1, ${shortfall})`;
+    const joined = side === 'left' ? `${pad} || ${str}` : `${str} || ${pad}`;
+    return `substr(${joined}, 1, ${width})`;
   }
 }

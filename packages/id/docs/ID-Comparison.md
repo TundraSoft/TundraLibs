@@ -85,7 +85,7 @@
 
 → **Use NanoID** (21 chars, customizable, URL-safe)
 
-```typescript
+```typescript ignore
 // Short, clean URLs
 https://app.com/p/g0b30yv24uuo0grjv
 ```
@@ -132,6 +132,8 @@ the native 24-char hex `ObjectId`)
 → **Use NanoID** with custom alphabet (high entropy)
 
 ```typescript
+import { ALPHA_NUMERIC_CASE, nanoID } from '@tundralibs/id';
+
 // 32-char alphanumeric token
 nanoID(32, ALPHA_NUMERIC_CASE);
 ```
@@ -622,6 +624,8 @@ const apiKey = nanoID(32, ALPHA_NUMERIC_CASE);
 #### 🛡️ **Medium Security (Session IDs, Resource IDs)**
 
 ```typescript
+import { nanoID, ulid } from '@tundralibs/id';
+
 // NanoID or ULID work well
 const sessionId = nanoID(); // 21 chars
 const resourceId = ulid(); // 26 chars
@@ -636,6 +640,8 @@ const resourceId = ulid(); // 26 chars
 #### 📊 **Low Security (Internal IDs, Database Keys)**
 
 ```typescript
+import { sequenceID, simpleID } from '@tundralibs/id';
+
 // Any generator is suitable
 const userId = sequenceID()();
 const orderId = simpleID()();
@@ -710,7 +716,7 @@ CREATE TABLE users_seq (
 
 #### MongoDB
 
-```typescript
+```typescript ignore
 // ObjectID (native format)
 {
   _id: ObjectId("507f1f77bcf86cd799439011"), // 12 bytes (binary)

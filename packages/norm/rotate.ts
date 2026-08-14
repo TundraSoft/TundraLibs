@@ -31,7 +31,7 @@
  * across a rotation with no reindex.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * import { rotateKey } from '@tundralibs/norm';
  *
  * const report = await rotateKey(db, {

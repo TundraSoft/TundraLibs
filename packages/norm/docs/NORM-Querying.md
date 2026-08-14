@@ -30,7 +30,7 @@ Every example below operates on a composed database handle `db`. You
 obtain one by opening an engine, constructing a `Norm`, and composing
 one or more schemas with `use`:
 
-```typescript
+```typescript ignore
 import { Norm } from '@tundralibs/norm';
 import { SQLiteEngine } from '@tundralibs/drivers';
 import { Identity, Shortener } from './models/mod.ts';
@@ -79,7 +79,7 @@ all** for `count`/`update`/`delete`/`truncate` (the answer rides
 `count`). For reads, `count` is the size of THIS page — use
 `total: true` when you need the full match count under pagination.
 
-```typescript
+```typescript ignore
 const r = await db.repo('Users').find({ '@role': 'admin' });
 r.id; // '01J...' — correlate with the `call` event
 r.op; // 'SELECT'
@@ -95,7 +95,7 @@ r.isSlow; // engine slow-query flag
 The **filter is the first positional argument**, not an option. The
 second argument is `FindOptions`:
 
-```typescript
+```typescript ignore
 type FindOptions = {
   orderBy?: Record<string, 'ASC' | 'DESC'>;
   project?: ProjectionInput; // typed projection (see Projections)
@@ -107,7 +107,7 @@ type FindOptions = {
 };
 ```
 
-```typescript
+```typescript ignore
 const admins = await db.repo('Users').find({ '@role': 'admin' }, {
   orderBy: { '@displayName': 'ASC' },
   limit: 20,
@@ -131,7 +131,7 @@ useful for bulk exports that never need plaintext.
 Returns the first matching row (even when several match) or `null`.
 It takes the same options as `find` except `limit` (forced to 1):
 
-```typescript
+```typescript ignore
 const one = await db.repo('Users').findOne({ '@email': 'ada@shortly.dev' });
 one.count; // 0 or 1
 one.data?.role; // string | undefined
@@ -147,7 +147,7 @@ withProfile.data?.Profile; // { bio: string } | null
 Fetch one row by primary key (all columns for a composite key). Options
 are `{ project?, decrypt? }`:
 
-```typescript
+```typescript ignore
 const user = await db.repo('Users').getByPK({ id: someId });
 user.data; // DefaultRowOf<...> | null
 
@@ -160,7 +160,7 @@ const tag = await db.repo('PostTags').getByPK({ postId: 1, tagId: 2 });
 Counts matching rows. The answer rides `count`; the envelope has **no
 `data`**. An empty `{}` filter counts all rows.
 
-```typescript
+```typescript ignore
 const n = await db.repo('Users').count({ '@role': 'viewer' });
 n.count; // number
 
@@ -176,7 +176,7 @@ operators below; `$and` / `$or` compose sub-filters.
 
 ### Equality shorthand
 
-```typescript
+```typescript ignore
 await db.repo('Users').find({ '@role': 'admin' }); // role = 'admin'
 await db.repo('Links').find({ '@isActive': true }); // isActive = true
 ```
@@ -196,7 +196,7 @@ await db.repo('Links').find({ '@isActive': true }); // isActive = true
 | `$or`      | Any sub-filter matches.                  |
 | `$and`     | All sub-filters match.                   |
 
-```typescript
+```typescript ignore
 // $in over a hashed column — plaintext equality, rewritten to digests:
 await db.repo('Users').find({
   '@email': { $in: ['bob@shortly.dev', 'eve@shortly.dev'] },
@@ -218,7 +218,7 @@ await db.repo('Users').find({
 A `'@Alias.@col'` key filters through a foreign-key alias or a reverse
 relation. The relation name comes from your FK declaration:
 
-```typescript
+```typescript ignore
 // belongsTo: Links → Owner (a Users FK):
 await db.repo('Links').find({ '@Owner.@role': 'viewer' });
 
@@ -231,7 +231,7 @@ lifted into a correlated `$exists` subquery, so it never fans out — a
 base row matching N related rows still comes back once, and `count()`
 does not over-count:
 
-```typescript
+```typescript ignore
 // Every link with at least one visit from 'IN' — each link ONCE:
 const inLinks = await db.repo('Links').find({ '@Visits.@country': 'IN' });
 inLinks.count; // distinct links, no join fan-out
@@ -252,7 +252,7 @@ supply a comparison value (it runs as an `EXISTS` subquery, which has
 nothing to compare an outer column against), so that spelling throws
 rather than silently comparing against the literal text:
 
-```typescript
+```typescript ignore
 // belongsTo in value position — joins, compares column to column:
 await db.repo('Links').find({ '@createdAt': { $gt: '@Owner.@createdAt' } });
 
@@ -270,7 +270,7 @@ transparently rewritten to digest equality on the synthesized
 write path applies. Digests support equality only:
 `$eq` / `$ne` / `$in` / `$nin` / `$null`.
 
-```typescript
+```typescript ignore
 // Filter by plaintext — rewritten to email_hash = sha256('ada@...').
 // beforeWrite trims + lowercases, so this matches regardless of case:
 const one = await db.repo('Users').findOne({
@@ -281,7 +281,7 @@ const one = await db.repo('Users').findOne({
 A standalone `Column.hash(algo)` digest column (e.g. a PIN) works the
 same way — store and filter by the plaintext, never see it again:
 
-```typescript
+```typescript ignore
 const byPin = await db.repo('Users').findOne({ '@pin': '4471' });
 ```
 
@@ -307,7 +307,7 @@ not runtime throws.
 
 ### Local columns and renames
 
-```typescript
+```typescript ignore
 // Pick columns:
 const slim = await db.repo('Users').find(undefined, {
   project: { '@id': true, '@displayName': true },
@@ -332,7 +332,7 @@ shape), a string (whole relation, renamed), or a nested
 by construction** — a whole-relation target expands to its own LOCAL
 default shape, never recursing further.
 
-```typescript
+```typescript ignore
 // belongsTo → object | null; sub-projection with a rename:
 const links = await db.repo('Links').find({ '@Owner.@role': 'viewer' }, {
   project: {
@@ -372,7 +372,7 @@ three cardinalities in query results:
 Project a relation by naming its alias. A belongsTo is named by the FK
 key; a reverse relation by the FK's `reverseAs` (or the derived name):
 
-```typescript
+```typescript ignore
 // hasOne reverse, sub-projected:
 const withProfile = await db.repo('Users').findOne({ '@id': adaId }, {
   project: { '@id': true, '@Profile': { '@bio': true } },
@@ -387,7 +387,7 @@ A FK declared `project: true` (belongsTo) or `reverseProject: true`
 carries it, as the target's LOCAL default row (depth-1 — eager never
 recurses):
 
-```typescript
+```typescript ignore
 // Users.Profile is an eager hasOne; a default read carries it:
 const adaFull = await db.repo('Users').getByPK({ id: adaId });
 adaFull.data?.Profile; // the profile row, or null when absent
@@ -400,7 +400,7 @@ declares a **logical** foreign key back to the near entity. The M2M
 then reads like a plain relation — **one call, one SELECT**, no
 junction pivoting:
 
-```typescript
+```typescript ignore
 // A tags_of_posts VIEW carries a logical fk to Posts (reverseAs 'Tags'):
 const posts = await db.repo('Posts').find(undefined, {
   project: { '@id': true, '@title': true, '@Tags': { '@name': true } },
@@ -430,7 +430,7 @@ non-aggregated projection key). Aggregate outputs land as the driver
 returns them — numbers on SQLite, BIGINT/NUMERIC **strings** on
 Postgres/MariaDB — so coerce with `Number(...)` at the call site.
 
-```typescript
+```typescript ignore
 // Grouped: visits per country.
 const perCountry = await db.repo('Visits').find(undefined, {
   project: { '@country': true }, // the GROUP BY key
@@ -472,7 +472,7 @@ a truncated report looks exactly like a complete one.
 
 Ask for the page you want:
 
-```typescript
+```typescript ignore
 // Every group. Know your cardinality first — this is an unbounded read.
 const all = await db.repo('Visits').find(undefined, {
   project: { '@country': true },
@@ -493,7 +493,7 @@ When a grouped read fills the default page exactly, norm emits a
 `warning` event with the code `grouped-page-cap` — the truncation is
 never silent:
 
-```typescript
+```typescript ignore
 norm.on('warning', (entity, op, code, message) => {
   if (code === 'grouped-page-cap') logger.warn({ entity, op }, message);
 });
@@ -508,7 +508,7 @@ Page with `limit` + `offset`, and set `total: true` to also receive
 the full match count (a second `COUNT` sharing the same rewritten
 filter and its joins):
 
-```typescript
+```typescript ignore
 const page = await db.repo('Links').find(undefined, {
   orderBy: { '@slug': 'ASC' },
   limit: 10,
@@ -538,7 +538,7 @@ Accepts a single row or an array (batch). Returns the inserted rows
 (`RETURNING`) — decrypted, with `hidden()` columns stripped and virtual
 masks computed. `count` is the number of returned rows.
 
-```typescript
+```typescript ignore
 const created = await db.repo('Users').insert({
   email: 'Ada@Shortly.dev',
   apiKey: 'ak-ada-0001',
@@ -574,7 +574,7 @@ updates ALL rows and emits a warning event** — pass an explicit `{}`
 to silence it when you mean "all rows". Hashed columns filter by
 plaintext equality here too.
 
-```typescript
+```typescript ignore
 await db.repo('Users').update({ loginCount: 1 }, {
   '@email': 'ada@shortly.dev',
 });
@@ -588,7 +588,7 @@ await db.repo('Links').update({ isActive: false }, {}); // ALL rows, no warning
 Symmetric with update: `delete(filter?)` returns a count-only envelope;
 a missing filter deletes ALL rows with a warning; `{}` silences it.
 
-```typescript
+```typescript ignore
 await db.repo('PostTags').deleteByPK({ postId: 1, tagId: 2 });
 await db.repo('PostTags').delete({}); // explicit all-rows, no warning
 ```
@@ -601,7 +601,7 @@ column can never be a conflict key (nondeterministic ciphertext) — use
 its `<col>_hash` sibling; and updating an encrypted+hashed column
 auto-syncs its digest sibling so plaintext lookups keep working.
 
-```typescript
+```typescript ignore
 await db.repo('Links').upsert({
   id: 500,
   slug: 'link-00', // collides with the unique index
@@ -631,7 +631,7 @@ the probe's check-then-act race. See
 Removes every row. Count-only envelope (`op: 'TRUNCATE'`, `count: 0`);
 pass `{ cascade: true }` where the dialect supports it.
 
-```typescript
+```typescript ignore
 await db.repo('Visits').truncate();
 await db.repo('Links').truncate({ cascade: true });
 ```
@@ -652,7 +652,7 @@ Runs a hand-built OQL IR through the dialect translator. Rows come back
 RAW by default; **bind to an entity** to ride the read pipeline's
 decrypt + decode + `afterRead` column transforms:
 
-```typescript
+```typescript ignore
 // Entity-bound: email comes back decrypted.
 const bound = await db.query({
   type: 'SELECT',
@@ -687,7 +687,7 @@ MongoDB throws `NormUnsupportedError`.
 **Always** pass values through `params`; never interpolate into the
 string — parameterized values are the injection-safe path.
 
-```typescript
+```typescript ignore
 const r = await db.raw<{ n: number | bigint }>(
   'SELECT count(*) AS n FROM users WHERE role = :role:',
   { role: 'viewer' },

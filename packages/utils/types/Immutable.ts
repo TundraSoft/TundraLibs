@@ -43,11 +43,11 @@
  *
  * @example Configuration objects:
  * ```typescript
- * interface AppConfig {
+ * type AppConfig = {
  *   apiUrl: string;
  *   timeout: number;
  *   retries: number;
- * }
+ * };
  *
  * type ReadonlyConfig = Immutable<AppConfig>;
  *
@@ -60,11 +60,11 @@
  *
  * @example API responses:
  * ```typescript
- * interface ApiResponse {
+ * type ApiResponse = {
  *   data: unknown[];
  *   status: number;
  *   message: string;
- * }
+ * };
  *
  * type ImmutableResponse = Immutable<ApiResponse>;
  *
@@ -107,11 +107,11 @@
  *
  * @example Function parameters:
  * ```typescript
- * interface Options {
+ * type Options = {
  *   debug: boolean;
  *   verbose: boolean;
  *   output: string;
- * }
+ * };
  *
  * function processWithOptions(options: Immutable<Options>): void {
  *   // options cannot be modified

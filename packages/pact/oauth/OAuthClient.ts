@@ -73,6 +73,12 @@ export class OAuthClient {
   private __discovered?: Endpoints;
 
   /**
+   * Create a client for one configured provider instance. Endpoints come from
+   * the named preset; the `oidc` preset instead resolves them by discovery
+   * against `config.issuer`, which must be https because it is also the trust
+   * anchor for the returned `id_token`. Nothing is fetched here — discovery is
+   * deferred to first use.
+   *
    * @param name - the configured instance name
    * @param config - the provider-instance configuration
    * @param fetchRef - late-bound `fetch` supplier

@@ -11,6 +11,10 @@
  *
  * @example
  * ```typescript
+ * import type { WebServer } from '@tundralibs/compat/webserver';
+ *
+ * declare const server: WebServer;
+ *
  * const m = server.metrics;
  * console.log(m.requests.active, '/', m.requests.peakActive);
  * console.log('avg', m.responseTime.average, 'ms');

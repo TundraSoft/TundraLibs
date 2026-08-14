@@ -59,7 +59,7 @@ Encrypts data using AES encryption.
 
 **Signature:**
 
-```typescript
+```typescript ignore
 async function encryptAES(
   data: string | Uint8Array,
   secret: string,
@@ -96,7 +96,7 @@ Decrypts AES-encrypted data.
 
 **Signature:**
 
-```typescript
+```typescript ignore
 async function decryptAES(
   data: string,
   secret: string,
@@ -126,6 +126,8 @@ async function decryptAES(
 ```typescript
 import { decryptAES } from '@tundralibs/crypt/encrypt';
 
+declare const encrypted: string;
+
 const decrypted = await decryptAES(encrypted, 'mySecretKey');
 console.log(decrypted); // 'sensitive data'
 ```
@@ -136,7 +138,7 @@ Encrypts data using RSA-OAEP.
 
 **Signature:**
 
-```typescript
+```typescript ignore
 async function encryptRSA(
   data: string | Uint8Array,
   publicKey: string,
@@ -173,7 +175,7 @@ Decrypts RSA-OAEP encrypted data.
 
 **Signature:**
 
-```typescript
+```typescript ignore
 async function decryptRSA(
   data: string,
   privateKey: string,
@@ -202,6 +204,8 @@ async function decryptRSA(
 ```typescript
 import { decryptRSA } from '@tundralibs/crypt/encrypt';
 
+declare const encrypted: string;
+
 const privateKey = `-----BEGIN PRIVATE KEY-----...`;
 const decrypted = await decryptRSA(encrypted, privateKey);
 ```
@@ -215,7 +219,7 @@ is fast and is the correct primitive for **domain separation**: vary the
 the guarantee that no derived key reveals the secret or any sibling key.
 Prefer it over ad-hoc `secret + label` concatenation.
 
-```typescript
+```typescript ignore
 hkdf(
   ikm: string | Uint8Array,
   options?: {
@@ -249,6 +253,8 @@ hkdf(
 
 ```typescript
 import { hkdf } from '@tundralibs/crypt/encrypt';
+
+declare const secret: Uint8Array;
 
 // Two independent keys from one secret — signing vs MAC.
 const signKey = await hkdf(secret, { info: 'jwt' });

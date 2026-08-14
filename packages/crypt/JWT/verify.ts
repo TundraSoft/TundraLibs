@@ -122,6 +122,16 @@ import {
  *
  * @example
  * ```typescript
+ * import { JWTError } from '@tundralibs/crypt/JWT';
+ *
+ * declare const token: string;
+ * declare const accessToken: string;
+ * declare const idToken: string;
+ * declare const clientId: string;
+ * declare const publicKeyPEM: string;
+ * declare const header: { kid?: string };
+ * declare const jwks: { keys: (JsonWebKey & { kid?: string })[] };
+ *
  * // Basic HMAC verification
  * try {
  *   const payload = await verifyJWT(token, 'my-secret-key');
@@ -135,7 +145,7 @@ import {
  * // RSA verification with claim validation. The claim keys are `aud`, `iss`
  * // and `jti` (not `audience`/`issuer`/`jwtId`) — unknown keys are silently
  * // ignored, so a wrong name means that check never runs.
- * const payload = await verifyJWT(token, publicKeyPEM, {
+ * const rsaPayload = await verifyJWT(token, publicKeyPEM, {
  *   algorithm: 'RS256',
  *   aud: 'api.example.com',
  *   iss: 'auth.example.com',
@@ -144,7 +154,7 @@ import {
  * });
  *
  * // Verification with required claims
- * const payload = await verifyJWT(token, 'my-secret-key', {
+ * const strictPayload = await verifyJWT(token, 'my-secret-key', {
  *   requiredClaims: ['sub', 'iat', 'role'],
  *   jti: 'unique-token-id-123'
  * });
@@ -157,8 +167,8 @@ import {
  * });
  *
  * // ECDSA with a JWK straight from a provider's JWKS — no PEM conversion.
- * const jwk = jwks.keys.find((k) => k.kid === header.kid);
- * const claims = await verifyJWT(idToken, jwk, {
+ * const jwk = jwks.keys.find((k) => k.kid === header.kid)!;
+ * const idClaims = await verifyJWT(idToken, jwk, {
  *   algorithm: 'ES256',   // binds the key to P-256
  *   iss: 'https://accounts.example.com',
  *   aud: clientId,

@@ -22,6 +22,10 @@ surface.
 
 ```typescript
 import { Cronus } from '@tundralibs/cronus';
+import type { CronusAction } from '@tundralibs/cronus/types';
+
+declare function buildReport(): Promise<void>;
+declare const betaSync: CronusAction;
 
 const cron = new Cronus();
 
@@ -61,6 +65,13 @@ so the old and new registrations can briefly run concurrently.
 ## Run-once and run-now
 
 ```typescript
+import { Cronus } from '@tundralibs/cronus';
+
+declare function runMigration(): Promise<void>;
+
+const cron = new Cronus();
+cron.add('report', '0 6 * * *', () => {});
+
 // Run ONCE at the next matching minute, then auto-remove:
 cron.addOnce('migrate', '0 3 * * *', runMigration);
 
@@ -124,7 +135,7 @@ even when the action threw; subscribe to `error` for the failure.
 
 ### `add()`
 
-```typescript
+```typescript ignore
 add(name: string, schedule: string, action: CronusAction, options?: CronusJobOptions): this
 ```
 
@@ -175,7 +186,7 @@ not cancel a run already in flight; registrations survive and
 
 ### `trigger()`
 
-```typescript
+```typescript ignore
 trigger(name: string): Promise<boolean>
 ```
 

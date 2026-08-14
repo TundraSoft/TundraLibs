@@ -39,6 +39,7 @@ export type MemoryHandlerOptions = HandlerOptions & {
  * inspect specific fields.
  */
 export class MemoryHandler extends AbstractHandler {
+  /** Runtime discriminator for this handler kind. */
   public readonly mode = 'memory';
   private readonly __capacity: number;
   private readonly __buffer: SlogObject[];
@@ -48,6 +49,9 @@ export class MemoryHandler extends AbstractHandler {
   private __count = 0;
 
   /**
+   * Allocates the ring buffer up front, so memory use is fixed at
+   * `capacity` records for the life of the handler.
+   *
    * @param name - Handler name identifier
    * @param options - Configuration options for the handler
    * @throws {SloggerConfigError} When `capacity` is not a positive

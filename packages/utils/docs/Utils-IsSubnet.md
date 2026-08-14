@@ -66,6 +66,8 @@ isSubnet('192.168.0.0/24/25'); // false - multiple slashes
 ### IPv6 Subnet Validation
 
 ```typescript
+import { isSubnet } from '@tundralibs/utils';
+
 // Valid IPv6 subnets
 isSubnet('2001:db8::/32'); // true - /32 subnet
 isSubnet('::/0'); // true - all IPv6 addresses
@@ -88,6 +90,8 @@ isSubnet('2001:db8:::1/64'); // false - too many colons
 ### Input Validation for Network Configuration
 
 ```typescript
+import { isSubnet, isValidIPv4, isValidIPv6Structure } from '@tundralibs/utils';
+
 interface NetworkConfig {
   subnet: string;
   gateway: string;
@@ -131,6 +135,8 @@ if (errors.length > 0) {
 ### Firewall Rule Validation
 
 ```typescript
+import { isSubnet, isValidIPv4, isValidIPv6Structure } from '@tundralibs/utils';
+
 interface FirewallRule {
   id: number;
   source: string;
@@ -179,6 +185,8 @@ rules.forEach((rule) => {
 ### Subnet Mask Range Validator
 
 ```typescript
+import { isSubnet } from '@tundralibs/utils';
+
 function getSubnetInfo(cidr: string): {
   valid: boolean;
   network?: string;
@@ -227,6 +235,8 @@ console.log(getSubnetInfo('192.168.1.1'));
 ### Network Planning and Subnetting
 
 ```typescript
+import { isSubnet } from '@tundralibs/utils';
+
 interface SubnetPlan {
   name: string;
   cidr: string;
@@ -273,6 +283,8 @@ if (validation.valid) {
 ### Router Configuration Validator
 
 ```typescript
+import { isSubnet, isValidIPv4, isValidIPv6Structure } from '@tundralibs/utils';
+
 interface RouteEntry {
   destination: string;
   gateway: string;
@@ -325,6 +337,8 @@ validateRoutingTable(routingTable);
 ### API Input Sanitization
 
 ```typescript
+import { isSubnet } from '@tundralibs/utils';
+
 interface SubnetRequest {
   action: 'create' | 'update' | 'delete';
   cidr: string;
@@ -376,6 +390,8 @@ if (result.valid) {
 ### Docker Network Configuration
 
 ```typescript
+import { isSubnet, isValidIPv4 } from '@tundralibs/utils';
+
 interface DockerNetwork {
   name: string;
   subnet: string;
@@ -421,6 +437,8 @@ validateDockerNetwork(dockerNet);
 ### Cloud VPC CIDR Validation
 
 ```typescript
+import { isSubnet } from '@tundralibs/utils';
+
 interface VPCConfig {
   vpcCIDR: string;
   subnets: {
@@ -474,6 +492,8 @@ console.log(vpcValidation);
 Returns `false` for all invalid inputs:
 
 ```typescript
+import { isSubnet } from '@tundralibs/utils';
+
 // Missing subnet mask
 isSubnet('192.168.1.0'); // false
 
@@ -500,6 +520,8 @@ isSubnet('192.168.0.0/0'); // true (single "0" is valid)
 For detailed error reporting:
 
 ```typescript
+import { isValidIPv4, isValidIPv6Structure } from '@tundralibs/utils';
+
 function validateSubnetWithDetails(cidr: string): {
   valid: boolean;
   error?: string;
@@ -555,6 +577,8 @@ console.log(validateSubnetWithDetails('192.168.0.0/33'));
 For bulk validation:
 
 ```typescript
+import { isSubnet } from '@tundralibs/utils';
+
 function validateSubnetBatch(cidrs: string[]): Map<string, boolean> {
   const results = new Map<string, boolean>();
 
@@ -585,6 +609,10 @@ results.forEach((valid, cidr) => {
 ✅ **Validate before use:**
 
 ```typescript
+import { isSubnet } from '@tundralibs/utils';
+
+declare const userInput: string;
+
 if (isSubnet(userInput)) {
   // Safe to parse and use
   const [network, mask] = userInput.split('/');
@@ -596,6 +624,9 @@ if (isSubnet(userInput)) {
 ```typescript
 import { isInSubnet, isSubnet } from '@tundralibs/utils';
 
+declare const ip: string;
+declare const cidr: string;
+
 if (isSubnet(cidr)) {
   const inRange = isInSubnet(ip, cidr);
 }
@@ -604,6 +635,10 @@ if (isSubnet(cidr)) {
 ✅ **Provide clear feedback:**
 
 ```typescript
+import { isSubnet } from '@tundralibs/utils';
+
+declare const config: { subnet: string };
+
 if (!isSubnet(config.subnet)) {
   throw new Error(
     `Invalid subnet CIDR notation: ${config.subnet}. Expected format: IPv4/mask or IPv6/mask`,
@@ -614,6 +649,8 @@ if (!isSubnet(config.subnet)) {
 ✅ **Handle both IP versions:**
 
 ```typescript
+import { isSubnet } from '@tundralibs/utils';
+
 function processSubnet(cidr: string) {
   if (!isSubnet(cidr)) {
     return null;
@@ -629,20 +666,28 @@ function processSubnet(cidr: string) {
 ❌ **Don't skip validation:**
 
 ```typescript
+import { isSubnet } from '@tundralibs/utils';
+
+declare const userInput: string;
+
 // BAD: Assumes input is valid
 const [network, mask] = userInput.split('/');
 const maskNum = parseInt(mask); // Could be NaN or out of range
 
 // GOOD: Validate first
 if (isSubnet(userInput)) {
-  const [network, mask] = userInput.split('/');
-  const maskNum = parseInt(mask);
+  const [checked, checkedMask] = userInput.split('/');
+  const checkedMaskNum = parseInt(checkedMask);
 }
 ```
 
 ❌ **Don't validate IP and CIDR separately when subnet expected:**
 
 ```typescript
+import { isSubnet, isValidIPv4 } from '@tundralibs/utils';
+
+declare const input: string;
+
 // BAD: Allows IP without mask
 if (isValidIPv4(input)) {
   // But subnet operations need mask!
@@ -657,6 +702,10 @@ if (isSubnet(input)) {
 ❌ **Don't assume mask is reasonable:**
 
 ```typescript
+import { isSubnet } from '@tundralibs/utils';
+
+declare const cidr: string;
+
 // Even if valid, /32 and /0 are edge cases
 if (isSubnet(cidr)) {
   const mask = parseInt(cidr.split('/')[1]);

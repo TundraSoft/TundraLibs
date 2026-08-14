@@ -25,6 +25,8 @@ import { BigIntGuardian } from './BigIntGuardian.ts';
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Age = Guardian.number().integer().min(0).max(120);
  * Age.parse(42);    // 42
  * Age.parse('42');  // 42  ← coerced
@@ -33,6 +35,7 @@ import { BigIntGuardian } from './BigIntGuardian.ts';
  * @see {@link Guardian.number}
  */
 export class NumberGuardian extends BaseGuardian<number> {
+  /** Emitted schema type. */
   protected override readonly _type = 'number';
   /**
    * Creates a new NumberGuardian instance.
@@ -611,6 +614,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.number().unixSeconds().parse(1700000000);   // ok
    * Guardian.number().unixSeconds().parse(1700000000000); // throws (too large)
    * ```
@@ -646,6 +651,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.number().unixMillis().parse(Date.now());     // ok
    * Guardian.number().unixMillis().parse(1700000000);     // throws (too small — looks like seconds)
    * ```
@@ -680,6 +687,18 @@ export class NumberGuardian extends BaseGuardian<number> {
     return result;
   }
 
+  /**
+   * {@link power}'s fixed-base branch. Compares `log(num) / log(base)`
+   * against its rounding with a `1e-10` epsilon rather than demanding
+   * an exact integer — `Math.log(1000) / Math.log(10)` is
+   * `2.9999999999999996`, so a strict test would reject genuine perfect
+   * powers.
+   *
+   * @throws {GuardianError} When `base <= 1`, or when `num` is not a
+   *   perfect power of `base`.
+   *
+   * @internal
+   */
   private __checkSpecificBasePower(
     num: number,
     base: number,
@@ -717,6 +736,15 @@ export class NumberGuardian extends BaseGuardian<number> {
     }
   }
 
+  /**
+   * {@link power}'s any-base branch: trial-divides bases `2..√num`
+   * looking for an integer exponent above 1. `1` is accepted outright
+   * (it is `1^n` for every `n`).
+   *
+   * @throws {GuardianError} When no base yields an integer exponent.
+   *
+   * @internal
+   */
   private __checkAnyBasePower(num: number, errorMessage?: string): void {
     // 1 is a special case - it's 1^n for any n
     if (num === 1) {
@@ -880,6 +908,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.number().percentage().parse(42);              // 42
    * Guardian.number().percentage().parse(150);             // throws
    * Guardian.number().percentage({ allowOver: true }).parse(150); // 150
@@ -1040,6 +1070,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.number().bigDecimal({ scale: 2 }).parse(19.99);  // ok
    * Guardian.number().bigDecimal({ scale: 2 }).parse(19.999); // throws
    * ```
@@ -1097,6 +1129,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.number().evenlyDivisible([2, 3]).parse(12); // ok (multiple of 6)
    * Guardian.number().evenlyDivisible([2, 3]).parse(8);  // throws (not / 3)
    * ```

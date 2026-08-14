@@ -25,6 +25,9 @@
  * ```typescript
  * import { Cronus } from '@tundralibs/cronus';
  *
+ * declare function purgeExpired(): Promise<void>;
+ * declare function runMigration(): Promise<void>;
+ *
  * const cron = new Cronus();
  * cron.on('error', (_id, name, _at, _ms, err) =>
  *   console.error(`job ${name} failed:`, err.message));

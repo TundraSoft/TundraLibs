@@ -18,4 +18,8 @@ export {
   type TCPHandlerOptions,
 } from './handler/mod.ts';
 
-export { AbstractHandler, type HandlerOptions } from './AbstractHandler.ts';
+export {
+  AbstractHandler,
+  type HandlerOptions,
+  type SamplingOptions,
+} from './AbstractHandler.ts';

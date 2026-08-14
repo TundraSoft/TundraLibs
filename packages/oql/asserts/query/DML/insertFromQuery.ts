@@ -2,7 +2,7 @@
  * `INSERT_FROM_QUERY` validator — `INSERT INTO ... SELECT ...`.
  *
  * Shape:
- * ```ts
+ * ```ts ignore
  * {
  *   type: 'INSERT_FROM_QUERY',
  *   table: 'order_history',

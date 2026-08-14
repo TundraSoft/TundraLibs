@@ -15,7 +15,7 @@ Full surface of `@tundralibs/radrouter`. For runtime semantics see
 
 ## Constructor
 
-```ts
+```ts ignore
 new RadRouter<M = Middleware>(options?: RouterOptions)
 ```
 
@@ -41,6 +41,8 @@ Typed-shape consumers narrow it by declaring their own alias and
 passing it as the type argument:
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
 type AppCtx = { request: Request; state: Record<string, unknown> };
 type AppMw = (ctx: AppCtx, next: () => Promise<void>) => Promise<void>;
 
@@ -53,7 +55,7 @@ fails to register at compile time.
 
 ## Registration
 
-```ts
+```ts ignore
 router.use(middleware);                                         // global middleware
 router.addRoute(method, path, middlewares, version?);           // generic
 router.get(path, middlewares, version?);                        // ← shorthand for each method
@@ -84,7 +86,7 @@ router.options(path, middlewares, version?);
 
 ## Lookup
 
-```ts
+```ts ignore
 router.find(method, path, version?): RouteMatch<M> | undefined
 
 type RouteMatch<M> = {
@@ -110,6 +112,12 @@ The trade-off is that `params` inherits **no** `Object.prototype`
 methods. These **throw `TypeError`** (or read as `undefined`):
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+router.get('/users/:id:', []);
+const match = router.find('GET', '/users/value')!;
+
 match.params.hasOwnProperty('id'); // TypeError: not a function
 match.params.toString(); // TypeError: not a function
 String(match.params); // TypeError: cannot convert to primitive
@@ -120,6 +128,12 @@ match.params.constructor; // undefined
 Read `params` as data — all of these work:
 
 ```ts
+import { RadRouter } from '@tundralibs/radrouter';
+
+const router = new RadRouter();
+router.get('/users/:id:', []);
+const match = router.find('GET', '/users/value')!;
+
 match.params.id; // 'value'
 'id' in match.params; // true
 Object.keys(match.params); // ['id']
@@ -130,7 +144,7 @@ Object.prototype.hasOwnProperty.call(match.params, 'id'); // true
 
 ## Maintenance
 
-```ts
+```ts ignore
 router.clear({ keepGlobalMiddlewares?: boolean });
 router.getStats();   // { totalRoutes, totalNodes }
 ```

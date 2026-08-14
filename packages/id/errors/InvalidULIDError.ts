@@ -36,6 +36,8 @@ export type InvalidULIDErrorMeta = {
  *
  * @example
  * ```ts
+ * import { getTimestamp } from '@tundralibs/id/ulid';
+ *
  * try {
  *   getTimestamp('not-a-ulid');
  * } catch (e) {
@@ -46,6 +48,16 @@ export type InvalidULIDErrorMeta = {
  * ```
  */
 export class InvalidULIDError extends IDError<InvalidULIDErrorMeta> {
+  /**
+   * Construct directly only when writing your own ULID decoder;
+   * {@link getTimestamp} raises it itself.
+   *
+   * @param message - Error text; `${id}`, `${reason}` and the remaining
+   *   `meta` keys are substituted as `${...}` placeholders.
+   * @param meta - The string that failed to decode and why; becomes
+   *   `error.context`.
+   * @param cause - Underlying error for chaining.
+   */
   constructor(
     message: string,
     meta: InvalidULIDErrorMeta,

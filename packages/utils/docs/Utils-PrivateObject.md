@@ -33,6 +33,26 @@ Creates a private object with controlled access.
 
 **Returns:** PrivateObject with access methods
 
+**`T` must be a `type` alias, not an `interface`.** It is constrained to
+`Record<string, unknown>`, and an interface will not satisfy that —
+`Index signature for type 'string' is missing in type 'MyData'`.
+Interfaces are open, since declaration merging lets another file add
+members later, so TypeScript withholds the implicit index signature; a
+`type` alias with the same members is closed and qualifies. For a
+generated or third-party shape, intersect it:
+
+```typescript
+import { privateObject } from '@tundralibs/utils';
+
+interface Generated {
+  token: string;
+}
+
+type MyData = Generated & Record<string, unknown>;
+
+const store = privateObject<MyData>({ token: 'secret' });
+```
+
 ### PrivateObject Methods
 
 - `get<K>(key: K): T[K]` - Retrieve value
@@ -77,6 +97,8 @@ console.log(store.has('email')); // false
 ### Immutable Mode
 
 ```typescript
+import { privateObject } from '@tundralibs/utils';
+
 const config = privateObject(
   { apiKey: 'secret', timeout: 5000 },
   false, // Disable mutations
@@ -92,6 +114,8 @@ config.clear(); // Throws Error!
 ### Iteration
 
 ```typescript
+import { privateObject } from '@tundralibs/utils';
+
 const userData = privateObject({
   firstName: 'Alice',
   lastName: 'Smith',
@@ -111,6 +135,8 @@ console.log(keys); // ['firstName', 'lastName', 'age']
 ### Class Private State
 
 ```typescript
+import { privateObject } from '@tundralibs/utils';
+
 class User {
   private data = privateObject({
     id: 0,
@@ -141,11 +167,13 @@ class User {
 ### Configuration Store
 
 ```typescript
-interface AppConfig {
+import { privateObject } from '@tundralibs/utils';
+
+type AppConfig = {
   apiUrl: string;
   timeout: number;
   retries: number;
-}
+};
 
 const config = privateObject<AppConfig>({
   apiUrl: 'https://api.example.com',
@@ -165,6 +193,8 @@ function updateTimeout(ms: number) {
 ### Cache Implementation
 
 ```typescript
+import { privateObject } from '@tundralibs/utils';
+
 class Cache<T> {
   private store = privateObject<Record<string, T>>({});
 
@@ -205,11 +235,13 @@ class Cache<T> {
 ### Settings Manager
 
 ```typescript
-interface Settings {
+import { privateObject } from '@tundralibs/utils';
+
+type Settings = {
   theme: 'light' | 'dark';
   language: string;
   notifications: boolean;
-}
+};
 
 class SettingsManager {
   private settings = privateObject<Settings>({
@@ -250,6 +282,8 @@ class SettingsManager {
 ### Private Module State
 
 ```typescript
+import { privateObject } from '@tundralibs/utils';
+
 const state = privateObject({
   initialized: false,
   connections: 0,
@@ -273,6 +307,8 @@ export function getStatus() {
 ### Type-Safe Storage
 
 ```typescript
+import { privateObject } from '@tundralibs/utils';
+
 type UserData = {
   id: number;
   username: string;

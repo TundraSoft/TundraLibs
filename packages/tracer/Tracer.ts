@@ -16,6 +16,8 @@
  *   exporter: new ConsoleExporter(),
  * });
  *
+ * const chargeCard = () => Promise.resolve();
+ *
  * await tracer.startActiveSpan('checkout', async (span) => {
  *   span.setAttribute('order.id', 'ord_42');
  *   await chargeCard();          // any span started in here parents to `checkout`
@@ -57,6 +59,12 @@ const SPAN_ID_PATTERN = /^[0-9a-f]{16}$/;
  */
 export class Tracer extends Options<TracerOptions> {
   /**
+   * Create a tracer for one service.
+   *
+   * Every option is validated here — including a one-shot smoke test of a
+   * custom `idGenerator` — so a misconfiguration surfaces at construction
+   * rather than as traces that silently never arrive.
+   *
    * @param options - See {@link TracerOptions}.
    * @throws {TracerConfigError} When `serviceName` is not a non-empty string.
    * @throws {TracerConfigError} When `sampler` is not a function.
@@ -213,8 +221,7 @@ export class Tracer extends Options<TracerOptions> {
    *
    * @typeParam R - `fn`'s return type.
    * @param name - Operation name.
-   * @param optionsOrFn - {@link SpanOptions}, or `fn` when there are none.
-   * @param maybeFn - `fn`, when options were supplied.
+   * @param fn - Runs with the span active; the span ends when it settles.
    * @returns Whatever `fn` returns.
    * @throws {TypeError} When the runtime provides no `AsyncLocalStorage`
    *   (`node:async_hooks`) — e.g. a browser. Making a span active needs an
@@ -223,6 +230,18 @@ export class Tracer extends Options<TracerOptions> {
    *   requirement.
    */
   public startActiveSpan<R>(name: string, fn: (span: Span) => R): R;
+  /**
+   * {@link Tracer.startActiveSpan} with span options — identical lifetime and
+   * error handling, applied to a span configured by `options`.
+   *
+   * @typeParam R - `fn`'s return type.
+   * @param name - Operation name.
+   * @param options - See {@link SpanOptions}.
+   * @param fn - Runs with the span active; the span ends when it settles.
+   * @returns Whatever `fn` returns.
+   * @throws {TypeError} Without `AsyncLocalStorage` — see
+   *   {@link Tracer.startActiveSpan}.
+   */
   public startActiveSpan<R>(
     name: string,
     options: SpanOptions,
@@ -277,6 +296,12 @@ export class Tracer extends Options<TracerOptions> {
    * A bound arrow, so it works detached:
    *
    * ```ts
+   * import { Tracer } from '@tundralibs/tracer';
+   * import { Norm, type NormConfig } from '@tundralibs/norm';
+   *
+   * const tracer = new Tracer({ serviceName: 'orders' });
+   * declare const engine: NonNullable<NormConfig['engine']>;
+   *
    * const norm = new Norm({ engine, witness: tracer.wrap });
    * ```
    *
@@ -309,6 +334,16 @@ export class Tracer extends Options<TracerOptions> {
    * A bound arrow, so it works detached:
    *
    * ```ts
+   * import { Tracer } from '@tundralibs/tracer';
+   * import type { RESTlerOptions } from '@tundralibs/restler';
+   *
+   * const tracer = new Tracer({ serviceName: 'orders' });
+   * const token = 'secret';
+   * declare const GitHubAPI: new (
+   *   token: string,
+   *   opts: Partial<RESTlerOptions>,
+   * ) => unknown;
+   *
    * const api = new GitHubAPI(token, {
    *   witness: tracer.wrapClient, // span per outbound request
    *   headerProvider: tracer.propagation, // traceparent per request
@@ -369,11 +404,24 @@ export class Tracer extends Options<TracerOptions> {
    * so it works detached:
    *
    * ```ts
+   * import { ambient } from '@tundralibs/ambient';
+   * import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
+   * import { Tracer } from '@tundralibs/tracer';
+   *
+   * const tracer = new Tracer({ serviceName: 'orders' });
+   * const appName = 'orders';
+   * const level = SyslogSeverities.INFO;
+   *
    * // tracer only:
-   * LogManager.createSlogger({ appName, contextProvider: tracer.logContext });
+   * LogManager.createSlogger({
+   *   appName,
+   *   level,
+   *   contextProvider: tracer.logContext,
+   * });
    * // composed with the ambient request bag:
    * LogManager.createSlogger({
    *   appName,
+   *   level,
    *   contextProvider: () => ({ ...ambient.get(), ...tracer.logContext() }),
    * });
    * ```
@@ -397,6 +445,16 @@ export class Tracer extends Options<TracerOptions> {
    * re-deciding for itself. A bound arrow, so it works detached:
    *
    * ```ts
+   * import { Tracer } from '@tundralibs/tracer';
+   * import type { RESTlerOptions } from '@tundralibs/restler';
+   *
+   * const tracer = new Tracer({ serviceName: 'orders' });
+   * const token = 'secret';
+   * declare const GitHubAPI: new (
+   *   token: string,
+   *   opts: Partial<RESTlerOptions>,
+   * ) => unknown;
+   *
    * // restler (>= 1.1): every outbound request carries traceparent
    * const api = new GitHubAPI(token, { headerProvider: tracer.propagation });
    *

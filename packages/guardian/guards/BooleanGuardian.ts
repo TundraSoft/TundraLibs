@@ -21,6 +21,8 @@ import { StringGuardian } from './StringGuardian.ts';
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Accepted = Guardian.boolean().true('Terms must be accepted');
  * Accepted.parse(true);   // true
  * Accepted.parse('yes');  // true   ← coerced
@@ -30,6 +32,7 @@ import { StringGuardian } from './StringGuardian.ts';
  * @see {@link Guardian.boolean}
  */
 export class BooleanGuardian extends BaseGuardian<boolean> {
+  /** Emitted schema type. */
   protected override readonly _type = 'boolean';
   /**
    * Creates a new BooleanGuardian instance.

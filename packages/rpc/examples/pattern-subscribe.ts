@@ -9,7 +9,10 @@
  *
  * Then connect a WebSocket client (e.g. browser DevTools):
  *
- *   const ws = new WebSocket('ws://localhost:8088');
+ *   // The `user` query param becomes ws.data.userId, and `user:**`
+ *   // only authorizes channels owned by that user — so connect as 42
+ *   // for the `user:42:dm` subscribe below to be accepted.
+ *   const ws = new WebSocket('ws://localhost:8088/?user=42');
  *   ws.onmessage = (e) => console.log(JSON.parse(e.data));
  *   ws.onopen = () => {
  *     ws.send(JSON.stringify({ id: '1', type: 'sub', channel: 'chat:room1' }));

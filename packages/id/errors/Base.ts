@@ -10,6 +10,7 @@
  * @example
  * ```ts
  * import { IDError } from '@tundralibs/id/errors';
+ * import { ObjectID } from '@tundralibs/id/ObjectID';
  *
  * try {
  *   ObjectID(-1);

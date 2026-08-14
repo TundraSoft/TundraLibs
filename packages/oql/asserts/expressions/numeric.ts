@@ -1249,6 +1249,11 @@ export const assertNumericExpression: (
  *
  * @example
  * ```ts
+ * declare function getExpression(): unknown;
+ * declare function getAllExpressions(): unknown[];
+ * declare function buildQuery(): unknown;
+ * declare function executeQuery(x: unknown): void;
+ *
  * const expr: unknown = getExpression();
  *
  * if (isNumericExpression(expr)) {
@@ -1288,7 +1293,9 @@ export const assertNumericExpression: (
  *
  * // Filter expressions by category
  * const expressions: unknown[] = getAllExpressions();
- * const numericExpressions = expressions.filter(isNumericExpression);
+ * const numericExpressions = expressions.filter((x) =>
+ *   isNumericExpression(x)
+ * );
  * console.log(`Found ${numericExpressions.length} numeric expressions`);
  *
  * // Validate with column list

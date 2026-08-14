@@ -20,7 +20,7 @@ length, lowercase-alphanumeric, **not** time-sortable by design.
 
 ## Overview
 
-CUID2 is the cryptographically secure successor to {@link ./ID-CUID.md CUID}.
+CUID2 is the cryptographically secure successor to [CUID](./ID-CUID.md).
 Every character is drawn from `crypto.getRandomValues`, the format
 deliberately omits a timestamp segment (so the minting time can't be
 reconstructed), and the length is configurable to match your collision-
@@ -66,7 +66,7 @@ to downstream parsers).
 
 Generate a CUID2 identifier.
 
-```typescript
+```typescript ignore
 function cuid2(length?: number): string;
 ```
 

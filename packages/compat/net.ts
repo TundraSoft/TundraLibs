@@ -10,10 +10,10 @@
  * ```typescript
  * import { listen, hostname } from '@tundralibs/compat/net';
  *
- * const listener = listen({ port: 8080 });
+ * const listener = await listen({ port: 8080 });
  * listener.close();
  *
- * const host = await hostname();
+ * const host = hostname();
  * ```
  */
 import { isBun, isDeno, isNode } from './runtime.ts';
@@ -211,6 +211,8 @@ export type Connection = {
    *
    * @example
    * ```typescript
+   * declare const conn: Connection;
+   *
    * const data = await conn.read();
    * if (data) {
    *   const text = new TextDecoder().decode(data);
@@ -919,132 +921,6 @@ export async function listen(options: ListenOptions): Promise<Listener> {
 }
 
 /**
- * Creates a TCP, TLS, or Unix socket connection to the specified destination.
- *
- * This function provides a unified API across Deno, Bun, and Node.js for
- * creating network connections with optional TLS encryption.
- *
- * **Runtime Implementation:**
- * - **Deno**: Uses `Deno.connect()` for TCP/Unix, `Deno.connectTls()` for TLS
- * - **Bun**: Uses `net.createConnection()` for TCP/Unix, `tls.connect()` for TLS
- * - **Node.js**: Uses `net.createConnection()` for TCP/Unix, `tls.connect()` for TLS
- *
- * @param options - Connection configuration options
- * @returns A promise that resolves to a Connection object
- * @throws {Error} If the connection fails
- * @throws {ConnectionTimeoutError} If the connection times out
- * @throws {FetchPathTraversalError} If TLS file paths contain traversal sequences
- * @throws {FetchFileNotFoundError} If TLS certificate/key files don't exist
- * @throws {FetchInvalidPEMError} If TLS certificates are not valid PEM format
- *
- * @example TCP connection:
- * ```typescript
- * const conn = await connect({ hostname: 'example.com', port: 80 });
- * await conn.write('GET / HTTP/1.1\r\nHost: example.com\r\n\r\n');
- * const data = await conn.read();
- * if (data) {
- *   const response = new TextDecoder().decode(data);
- *   console.log(response);
- * }
- * conn.close();
- * ```
- *
- * @example TCP connection with timeout:
- * ```typescript
- * try {
- *   const conn = await connect({
- *     hostname: 'example.com',
- *     port: 80,
- *     timeout: 5000  // 5 second timeout
- *   });
- *   conn.close();
- * } catch (err) {
- *   if (err instanceof ConnectionTimeoutError) {
- *     console.log('Connection timed out');
- *   }
- * }
- * ```
- *
- * @example TCP connection with abort signal:
- * ```typescript
- * const controller = new AbortController();
- *
- * // Abort after 3 seconds
- * setTimeout(() => controller.abort(), 3000);
- *
- * try {
- *   const conn = await connect({
- *     hostname: 'example.com',
- *     port: 80,
- *     signal: controller.signal
- *   });
- *   conn.close();
- * } catch (err) {
- *   if (err instanceof ConnectionTimeoutError) {
- *     console.log('Connection was aborted');
- *   }
- * }
- * ```
- *
- * @example Combining timeout and signal:
- * ```typescript
- * const controller = new AbortController();
- *
- * // Whichever happens first will abort the connection
- * const conn = await connect({
- *   hostname: 'example.com',
- *   port: 80,
- *   timeout: 10000,  // 10 second timeout
- *   signal: controller.signal  // OR manual abort
- * });
- * conn.close();
- * ```
- *
- * @example TLS connection with file-based certificates:
- * ```typescript
- * const conn = await connect({
- *   hostname: 'secure.example.com',
- *   port: 443,
- *   tls: {
- *     certFile: '/path/to/client.crt',
- *     keyFile: '/path/to/client.key',
- *     caFile: '/path/to/ca.crt', // optional
- *   }
- * });
- * await conn.write('Hello secure world!\n');
- * const data = await conn.read();
- * conn.close();
- * ```
- *
- * @example TLS connection with string-based certificates:
- * ```typescript
- * const conn = await connect({
- *   hostname: 'api.example.com',
- *   port: 8443,
- *   tls: {
- *     cert: '-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----',
- *     key: '-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----',
- *   }
- * });
- * conn.close();
- * ```
- *
- * @example Unix socket connection:
- * ```typescript
- * const conn = await connect({ path: '/tmp/app.sock' });
- * await conn.write('Hello via Unix socket\n');
- * const data = await conn.read();
- * conn.close();
- * ```
- *
- * @example With default hostname:
- * ```typescript
- * // Connects to localhost:8080
- * const conn = await connect({ port: 8080 });
- * conn.close();
- * ```
- */
-/**
  * Normalise a `TLSOptions` literal into a {@link ValidatedTLS} record.
  * Handles file vs. string presentation, the optional-cert use cases
  * (server-only TLS, mTLS, no-cert), and threads `rejectUnauthorized`
@@ -1056,6 +932,31 @@ function _validateTlsOptions(tls: TLSOptions): ValidatedTLS {
   return validated;
 }
 
+/**
+ * Open a TCP, TLS, or UNIX-socket connection.
+ *
+ * Pass `path` for a UNIX socket, or `port` (with `hostname`, default
+ * `127.0.0.1`) for TCP. Setting `tls` upgrades the same call to TLS.
+ * `timeout` and `signal` may be combined — whichever fires first aborts
+ * the attempt.
+ *
+ * @throws {@link ConnectionTimeoutError} When `timeout` elapses or
+ *   `signal` aborts.
+ * @throws {@link FetchPathTraversalError} When a TLS file path contains `../`.
+ * @throws {@link FetchFileNotFoundError} When a TLS certificate or key
+ *   file is missing.
+ * @throws {@link FetchInvalidPEMError} When TLS material is not valid PEM.
+ * @throws {@link UnsupportedRuntimeError} On runtimes with no socket backend.
+ *
+ * @example
+ * ```ts
+ * const conn = await connect({ hostname: 'example.com', port: 80 });
+ * await conn.write('GET / HTTP/1.1\r\nHost: example.com\r\n\r\n');
+ * conn.close();
+ * ```
+ *
+ * @see {@link listen} to accept connections instead.
+ */
 export async function connect(options: ConnectOptions): Promise<Connection> {
   // Common TLS validation (before runtime-specific code)
   let tlsCert: string | undefined;

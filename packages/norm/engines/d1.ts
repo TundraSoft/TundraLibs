@@ -8,6 +8,8 @@
  * import '@tundralibs/norm/engines/d1';
  * import { Norm } from '@tundralibs/norm/core';
  *
+ * declare const env: Record<string, string>;
+ *
  * const norm = new Norm({
  *   database: {
  *     dialect: 'd1',

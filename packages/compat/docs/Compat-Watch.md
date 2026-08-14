@@ -63,7 +63,7 @@ npx jsr add @tundralibs/compat
 
 ## API Reference
 
-```typescript
+```typescript ignore
 type FsEventKind = 'create' | 'modify' | 'remove' | 'rename' | 'any';
 
 type FsEvent = {
@@ -132,6 +132,8 @@ Practical implications:
 Pass `{ recursive: true }` to watch subdirectories:
 
 ```typescript
+import { watch } from '@tundralibs/compat/watch';
+
 const w = watch('./src', { recursive: true });
 ```
 
@@ -152,6 +154,8 @@ that error surface rather than silently falling back to polling
 
 ```typescript
 import { watch } from '@tundralibs/compat/watch';
+
+declare function rebuild(): Promise<void>;
 
 const w = watch('./src', { recursive: true });
 for await (const ev of w) {

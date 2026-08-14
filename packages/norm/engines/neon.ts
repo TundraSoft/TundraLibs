@@ -8,6 +8,8 @@
  * import '@tundralibs/norm/engines/neon';
  * import { Norm } from '@tundralibs/norm/core';
  *
+ * declare const env: Record<string, string>;
+ *
  * const norm = new Norm({
  *   database: { dialect: 'neon', host: env.NEON_HOST, connectionString: env.NEON_URL },
  * });

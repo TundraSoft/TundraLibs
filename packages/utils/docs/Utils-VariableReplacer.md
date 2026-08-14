@@ -36,7 +36,7 @@ deno add @tundralibs/utils
 
 ## API
 
-```typescript
+```typescript ignore
 variableReplacer(
   message: string,
   context: Record<string, unknown>,
@@ -72,6 +72,8 @@ variableReplacer('Hello ${name}!', { name: 'World' });
 ### Dot-path / nested context
 
 ```typescript
+import { variableReplacer } from '@tundralibs/utils';
+
 variableReplacer(
   'User: ${user.firstName} ${user.lastName} (${user.id})',
   { user: { firstName: 'John', lastName: 'Doe', id: 123 } },
@@ -82,6 +84,8 @@ variableReplacer(
 ### Array formatting
 
 ```typescript
+import { variableReplacer } from '@tundralibs/utils';
+
 variableReplacer('Available: ${colors}', { colors: ['red', 'green', 'blue'] });
 // 'Available: (red, green, blue)'
 ```
@@ -89,6 +93,8 @@ variableReplacer('Available: ${colors}', { colors: ['red', 'green', 'blue'] });
 ### Missing values stay literal
 
 ```typescript
+import { variableReplacer } from '@tundralibs/utils';
+
 variableReplacer('Name: ${name}, City: ${city}', { name: 'Bob' });
 // 'Name: Bob, City: ${city}'   ← unmapped placeholder survives
 ```
@@ -101,6 +107,8 @@ custom regex. It MUST be global (`/g`) and have exactly one capture
 group around the variable name.
 
 ```typescript
+import { variableReplacer } from '@tundralibs/utils';
+
 // Handlebars-style
 variableReplacer(
   'Hello {{name}}!',
@@ -125,6 +133,8 @@ as `(a, b, c)`, missing-key keeps the original placeholder.
 ### Error message templating (typical usage)
 
 ```typescript
+import { variableReplacer } from '@tundralibs/utils';
+
 class ValidationError {
   constructor(field: string, value: unknown, rule: string) {
     const message = variableReplacer(

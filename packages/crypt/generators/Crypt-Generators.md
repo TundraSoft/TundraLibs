@@ -48,7 +48,7 @@ npx jsr add @tundralibs/crypt
 
 Generates RSA key pairs for encryption or signing.
 
-```typescript
+```typescript ignore
 async function generateRSAKeyPair(
   options: RSAKeyOptions,
 ): Promise<GeneratedKeyPair>;
@@ -56,7 +56,7 @@ async function generateRSAKeyPair(
 interface RSAKeyOptions {
   algorithm: 'RSA-OAEP' | 'RSA-PSS';
   keySize: number;
-  hashAlgorithm?: string;
+  hashAlgorithm: 'SHA-256' | 'SHA-384' | 'SHA-512'; // required
   format?: 'PEM' | 'DER' | 'JWK';
   extractable?: boolean;
 }
@@ -71,6 +71,7 @@ const { publicKey, privateKey, publicKeyExported, privateKeyExported } =
   await generateRSAKeyPair({
     algorithm: 'RSA-OAEP',
     keySize: 2048,
+    hashAlgorithm: 'SHA-256',
     format: 'PEM',
   });
 ```
@@ -79,7 +80,7 @@ const { publicKey, privateKey, publicKeyExported, privateKeyExported } =
 
 Generates elliptic curve key pairs.
 
-```typescript
+```typescript ignore
 async function generateECKeyPair(
   options: ECKeyOptions,
 ): Promise<GeneratedKeyPair>;
@@ -110,7 +111,7 @@ const { publicKeyExported, privateKeyExported } = await generateECKeyPair({
 
 Generates a cryptographically secure random secret.
 
-```typescript
+```typescript ignore
 const secretGenerator: (
   byteLengthOrOptions: number | SecretGeneratorOptions,
   encoding?: 'HEX' | 'BASE64' | 'BASE32' | 'ALPHANUMERIC',
@@ -130,7 +131,7 @@ const alphaSecret = secretGenerator(16, 'ALPHANUMERIC');
 
 #### Convenience Functions
 
-```typescript
+```typescript ignore
 const generateHexSecret: (byteLength: number) => string;
 const generateBase64Secret: (byteLength: number) => string;
 const generateBase32Secret: (byteLength: number) => string;
@@ -165,11 +166,10 @@ const password = generatePassword(16, {
 
 Generates a BIP39 mnemonic phrase asynchronously.
 
-```typescript
+```typescript ignore
 const generateBIP39Mnemonic: (
-  wordCount?: 12 | 15 | 18 | 21 | 24,
-  options?: BIP39Options,
-) => Promise<{ mnemonic: string; entropy: Uint8Array }>;
+  options?: BIP39Options, // { wordCount?: 12 | 15 | 18 | 21 | 24, ... }
+) => Promise<BIP39Result>; // { words, phrase, entropy, seed }
 ```
 
 Aliases: `generate12WordSeed()`, `generate24WordSeed()`, `generateSeedPhrase()`
@@ -179,15 +179,15 @@ Aliases: `generate12WordSeed()`, `generate24WordSeed()`, `generateSeedPhrase()`
 ```typescript
 import { generateBIP39Mnemonic } from '@tundralibs/crypt/generators';
 
-const { mnemonic } = await generateBIP39Mnemonic(12);
-console.log(mnemonic); // 'abandon ability able about...'
+const { phrase } = await generateBIP39Mnemonic({ wordCount: 12 });
+console.log(phrase); // 'abandon ability able about...'
 ```
 
 #### `mnemonicToSeed()`
 
 Converts mnemonic to seed for key derivation.
 
-```typescript
+```typescript ignore
 async function mnemonicToSeed(
   mnemonic: string,
   passphrase?: string,
@@ -199,6 +199,8 @@ async function mnemonicToSeed(
 ```typescript
 import { mnemonicToSeed } from '@tundralibs/crypt/generators';
 
+declare const mnemonic: string;
+
 const seed = await mnemonicToSeed(mnemonic, 'optional passphrase');
 ```
 
@@ -208,7 +210,7 @@ Validates a BIP39 mnemonic phrase (async). The mnemonic and the wordlist are
 compared in `NFKD` form — matching `mnemonicToSeed` — so an IME-composed
 (NFC/NFD) mnemonic still validates against an official NFKD wordlist.
 
-```typescript
+```typescript ignore
 const validateBIP39Mnemonic: (
   mnemonic: string,
   wordlist?: string[],
@@ -234,16 +236,17 @@ const isValid = await validateBIP39Mnemonic('abandon ability able...');
 import { generateRSAKeyPair } from '@tundralibs/crypt/generators';
 import { decryptRSA, encryptRSA } from '@tundralibs/crypt/encrypt';
 
-// Generate key pair
-const { publicKey, privateKey } = await generateRSAKeyPair({
+// Generate key pair — `format: 'PEM'` fills in the exported PEM strings
+const { publicKeyExported, privateKeyExported } = await generateRSAKeyPair({
   algorithm: 'RSA-OAEP',
   keySize: 2048,
+  hashAlgorithm: 'SHA-256',
   format: 'PEM',
 });
 
-// Use for encryption
-const encrypted = await encryptRSA('secret', publicKey);
-const decrypted = await decryptRSA(encrypted, privateKey);
+// Use for encryption — encryptRSA/decryptRSA take the PEM strings
+const encrypted = await encryptRSA('secret', publicKeyExported as string);
+const decrypted = await decryptRSA(encrypted, privateKeyExported as string);
 ```
 
 ### Generate API Keys
@@ -268,15 +271,15 @@ import {
 } from '@tundralibs/crypt/generators';
 
 // 1. Generate mnemonic (async)
-const { mnemonic } = await generateBIP39Mnemonic(24);
-console.log('Save this safely:', mnemonic);
+const { phrase } = await generateBIP39Mnemonic({ wordCount: 24 });
+console.log('Save this safely:', phrase);
 
 // 2. Validate mnemonic (async)
-const isValid = await validateBIP39Mnemonic(mnemonic);
+const isValid = await validateBIP39Mnemonic(phrase);
 
 // 3. Derive seed for key generation
 if (isValid) {
-  const seed = await mnemonicToSeed(mnemonic, 'optional passphrase');
+  const seed = await mnemonicToSeed(phrase, 'optional passphrase');
   // Use seed for HD wallet key derivation
 }
 ```

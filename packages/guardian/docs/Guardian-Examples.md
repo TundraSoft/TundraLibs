@@ -26,6 +26,8 @@ Real-world patterns. Each example is self-contained and runnable.
 ```typescript
 import { Guardian } from '@tundralibs/guardian';
 
+declare const db: { posts: { insert(row: unknown): Promise<unknown> } };
+
 const CreatePostBody = Guardian.object({
   title: Guardian.string().minLength(1).maxLength(200),
   body: Guardian.string().minLength(1),
@@ -53,6 +55,8 @@ async function handleCreatePost(req: Request): Promise<Response> {
 Both arrive as strings; coerce-by-default handles them transparently.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const ListParams = Guardian.object({
   page: Guardian.number().integer().min(1).optional(1),
   limit: Guardian.number().integer().min(1).max(100).optional(20),
@@ -72,6 +76,8 @@ parseQuery(new URL('https://x/posts?page=3&limit=50&sort=desc'));
 ## Environment variable parsing
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Env = Guardian.object({
   PORT: Guardian.number().integer().validPort().optional(8080),
   NODE_ENV: Guardian.enum(['development', 'production', 'test']).optional(
@@ -92,6 +98,8 @@ const config = Env.parse(Deno.env.toObject());
 ## Config file loading
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const RetryPolicy = Guardian.object({
   maxAttempts: Guardian.number().integer().min(1).max(10),
   initialDelayMs: Guardian.number().integer().min(0),
@@ -121,6 +129,8 @@ const config = Config.parse(
 ## Database row → domain object
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 // Raw row from a typed driver (still has stringly-typed columns sometimes).
 type Row = {
   id: number;
@@ -162,6 +172,10 @@ const u = User.parse({
 ## Multi-step forms
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+declare const allFormData: unknown;
+
 const Step1 = Guardian.object({
   email: Guardian.string().email(),
   password: Guardian.string().minLength(8),
@@ -184,6 +198,8 @@ const registration = Step3.parse(allFormData);
 ## Polymorphic events
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Event = Guardian.discriminatedUnion('type', [
   Guardian.object({
     type: Guardian.literal('user.created'),
@@ -206,6 +222,10 @@ const Event = Guardian.discriminatedUnion('type', [
 
 type Event = Guardian.infer<typeof Event>;
 
+declare function onCreated(e: Event): void;
+declare function onUpdated(e: Event): void;
+declare function onDeleted(e: Event): void;
+
 function handle(raw: unknown) {
   const event = Event.parse(raw);
   switch (event.type) {
@@ -222,8 +242,12 @@ function handle(raw: unknown) {
 ## Pagination response wrapper
 
 ```typescript
-function paginated<T extends Guardian.infer<infer _>>(
-  item: T,
+import { type FinishedGuardian, Guardian } from '@tundralibs/guardian';
+
+declare function fetchPosts(): Promise<unknown>;
+
+function paginated<T>(
+  item: FinishedGuardian<T>,
 ) {
   return Guardian.object({
     data: Guardian.array(item),
@@ -246,6 +270,11 @@ const response = PostListResponse.parse(await fetchPosts());
 Catch every problem on the form in one pass:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+declare const formData: unknown;
+declare function highlightField(path: string, message: string): void;
+
 const Register = Guardian.object({
   username: Guardian.string().minLength(3).maxLength(20).pattern(
     /^[a-z][a-z0-9_]*$/i,
@@ -286,6 +315,12 @@ if (err) {
 ## PATCH endpoint with partial updates
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+declare const db: {
+  users: { update(id: number, patch: unknown): Promise<unknown> };
+};
+
 const User = Guardian.object({
   id: Guardian.number().integer().positive(),
   name: Guardian.string().minLength(1).maxLength(50),
@@ -316,13 +351,15 @@ async function patchUser(id: number, raw: unknown) {
 `Guardian.lazy(thunk)` defers the resolution of an inner guardian to parse time, so a schema can reference itself before it's fully assigned:
 
 ```typescript
+import { BaseGuardian, Guardian } from '@tundralibs/guardian';
+
 type Category = {
   id: string;
   name: string;
   children: Category[];
 };
 
-const CategorySchema: Guardian.BaseGuardian<Category> = Guardian.object({
+const CategorySchema: BaseGuardian<Category> = Guardian.object({
   id: Guardian.string().uuid(),
   name: Guardian.string().minLength(1),
   children: Guardian.array(Guardian.lazy(() => CategorySchema)),
@@ -344,6 +381,8 @@ A `lazy()`-wrapped guardian carries its resolved schema's async-ness up to its p
 This holds for **forward-referenced and recursive** schemas too — the case above, where the container is built before the thunk's target exists. The container can't resolve the thunk at construction time, so its async verdict stays provisional and is re-probed on the next `metaData` read (at the latest, when you call `parse()` / `parseAsync()`), by which point the binding is assigned. Declaration order therefore doesn't change the outcome:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 // Container FIRST, target after — the canonical `lazy()` arrangement.
 const Wrap = Guardian.object({ x: Guardian.lazy(() => Inner) });
 const Inner = Guardian.string().refine(async (v) => v.length > 3, 'too short');
@@ -358,6 +397,8 @@ await Wrap.parseAsync({ x: 'no' }); // rejects with 'too short'
 JSON has neither `Set` nor `Map`, so wire formats arrive as arrays or objects. Guardian validates them against your declared collection type:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Tags = Guardian.set(Guardian.string().minLength(1));
 
 Tags.parse(['guardian', 'validation', 'guardian']);
@@ -378,6 +419,8 @@ NumericLookup.parse([[1, 'one'], [2, 'two']]);
 Combine two independent schemas without restructuring either. Useful when shapes come from separate packages or domains:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Identified = Guardian.object({
   id: Guardian.string().uuid(),
   createdAt: Guardian.date(),
@@ -402,7 +445,7 @@ const user = NamedEntity.parse({
 
 Wrap UUID-shaped string IDs in a nominal brand so mixing them up is a compile error:
 
-```typescript
+```typescript ignore
 const UserId = Guardian.string().uuid().brand<'UserId'>();
 const OrderId = Guardian.string().uuid().brand<'OrderId'>();
 
@@ -426,6 +469,10 @@ loadUser(o); // ❌ compile error: OrderId not assignable to UserId
 For form-style UIs, walk every leaf failure with its absolute path:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+declare function highlightField(path: string, message: string): void;
+
 const Order = Guardian.object({
   customer: Guardian.object({
     email: Guardian.string().email(),
@@ -462,6 +509,8 @@ Numeric path segments (like `0` above) preserve the index — read `path` direct
 Normalise incoming strings with `Guardian.preprocess`, then accept extra metadata fields via `.catchall()`:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Trimmed = Guardian.preprocess(
   (v) => typeof v === 'string' ? v.trim() : v,
   Guardian.string().minLength(1),

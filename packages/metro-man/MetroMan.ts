@@ -45,6 +45,7 @@ import type {
  * ```
  */
 export class MetroMan {
+  /** Registered metrics, keyed by trimmed lower-cased name. */
   protected _instances: Map<string, BaseMetric<unknown, any>> = new Map();
 
   /**
@@ -169,20 +170,40 @@ export class MetroMan {
   }
 
   /**
-   * Dump some or all registered metrics in the requested format.
+   * Concatenate the bracket-prefixed debug dump of the selected metrics.
    *
-   * Defaults to `'JSON'`. When `metrics` is supplied, names that
-   * aren't registered are skipped silently — wrap calls in
-   * {@link has} if you need to detect missing names.
-   *
-   * The selection list is a filter: an **empty** list (`[]`) selects
-   * nothing and yields empty output (`{}` for JSON, `''` for the string
-   * formats), the same as a list whose names all fail to match. Only an
-   * **omitted** selection (`undefined`) dumps every registered metric.
+   * `metrics` is a filter — omit it to dump every registered metric; an
+   * empty list selects nothing and yields `''`. Unregistered names are
+   * skipped silently, so pair with {@link has} to detect them.
    */
   public collect(type: 'STRING', metrics?: string[]): string;
+  /**
+   * Dump the selected metrics as an object keyed by normalised metric
+   * name, each value a {@link MetricOutput} snapshot.
+   *
+   * `metrics` is a filter — omit it to dump every registered metric; an
+   * empty list selects nothing and yields `{}`. Unregistered names are
+   * skipped silently, so pair with {@link has} to detect them.
+   */
   public collect(type: 'JSON', metrics?: string[]): Record<string, unknown>;
+  /**
+   * Render the selected metrics as one Prometheus text-exposition
+   * document, ready to serve from `/metrics`. Repeated names render
+   * once — a duplicated family makes a scraper reject the whole
+   * document.
+   *
+   * `metrics` is a filter — omit it to dump every registered metric; an
+   * empty list selects nothing and yields `''`. Unregistered names are
+   * skipped silently, so pair with {@link has} to detect them.
+   */
   public collect(type: 'PROMETHEUS', metrics?: string[]): string;
+  /**
+   * Dump the selected metrics as JSON — the format used when no `type`
+   * is given.
+   *
+   * `metrics` is a filter — omit it to dump every registered metric; an
+   * empty list selects nothing and yields `{}`.
+   */
   public collect(metrics?: string[]): Record<string, unknown>;
   public collect(
     typeOrMetrics?: 'STRING' | 'JSON' | 'PROMETHEUS' | string[],

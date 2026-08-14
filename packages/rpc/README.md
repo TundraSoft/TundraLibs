@@ -145,14 +145,36 @@ await server.close();
 
 ### `new Server<T = unknown>(options?)`
 
+Every option is optional; this spells all of them out at once.
+
 ```ts
-type ServerOptions<T> = {
-  pubsub?: PubSubAdapter; // defaults to MemoryPubSubAdapter
-  upgrade?: (req, info) => UpgradeDecision<T> | Promise<UpgradeDecision<T>>;
-  maxFrameSize?: number; // bytes — default 1 MB; 0 disables
-  backpressureThreshold?: number; // bytes — undefined disables observation
-  onBackpressure?: (ws, bufferedAmount) => void | Promise<void>;
-};
+import { Server } from '@tundralibs/rpc';
+import { MemoryPubSubAdapter } from '@tundralibs/rpc/pubsub';
+
+type Conn = { userId: string };
+
+const server = new Server<Conn>({
+  // Pub/sub adapter — this is the default when omitted.
+  pubsub: new MemoryPubSubAdapter(),
+
+  // Decides what `T` becomes for each connection.
+  upgrade: (req, info) => {
+    const userId = req.headers.get('x-user-id');
+    if (!userId) return false; // refuse — falls through to HTTP
+    console.log('upgrade from', info.remoteAddress);
+    return { data: { userId } };
+  },
+
+  // Incoming frames over this many bytes are rejected before
+  // decoding. Default 1 MB; 0 disables the cap.
+  maxFrameSize: 1_048_576,
+
+  // Outbound-buffer soft cap in bytes. Omit to disable observation.
+  backpressureThreshold: 4 * 1_048_576,
+  onBackpressure: (ws, bufferedAmount) => {
+    console.warn('slow consumer', ws.data.userId, bufferedAmount);
+  },
+});
 ```
 
 `T` is the per-connection state type. The `upgrade` hook (same shape
@@ -174,18 +196,47 @@ own policy — close, log, or drop further sends.
 
 ### Configuration (chainable)
 
+`use`, `command`, and `channel` all return the server, so registration
+chains:
+
 ```ts
-server.use(middleware); // Koa-style middleware
-server.command(name, schema | undefined, handler); // Command handler
-server.channel(name, options); // Channel registration
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server()
+  // Koa-style middleware — wraps every command.
+  .use(async (ctx, next) => {
+    console.log('->', ctx.cmd);
+    await next();
+  })
+  // Command with no validator — the handler gets the raw payload.
+  .command('echo', undefined, (ctx) => ctx.payload)
+  // Command with a validator — `ctx.payload` is the validator's return type.
+  .command(
+    'greet',
+    (input) => input as { name: string },
+    (ctx) => `hello ${ctx.payload.name}`,
+  )
+  // Channel registration — `{}` is subscribe-only, no hooks.
+  .channel('news', {});
 ```
 
 ### Wire-up
 
 ```ts
-server.handlers(); // → WebSocketHandler<T>, pass to WebServer
-await server.listen({ port }); // standalone — internal WebServer
-await server.publish(channel, data); // server-initiated broadcast
+import { Server } from '@tundralibs/rpc';
+import type { WebSocketHandler } from '@tundralibs/compat/webserver';
+
+const server = new Server();
+server.channel('news', {});
+
+// Either — mount into a WebServer you already run…
+const handlers: WebSocketHandler<unknown> = server.handlers();
+console.log('mount these on WebServer.websocket:', handlers);
+
+// …or run standalone on an internally-managed WebServer.
+await server.listen({ port: 8080 });
+
+await server.publish('news', { headline: 'Hello' }); // broadcast
 await server.close(); // tear down
 ```
 
@@ -202,6 +253,8 @@ import { Server } from '@tundralibs/rpc';
 
 const rpc = new Server();
 rpc.command('ping', undefined, () => 'pong');
+
+const handleUsers = (_req: Request): Response => new Response('[]');
 
 const web = new WebServer('API', {
   mode: 'TCP',
@@ -221,6 +274,8 @@ await web.start();
 ### Standalone server
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
 const server = new Server();
 server.command('echo', undefined, (ctx) => ctx.payload);
 
@@ -267,19 +322,42 @@ await client.close();
 
 ### `new Client(options)`
 
+`url` is the only required option; the rest are shown here with their
+defaults.
+
 ```ts
-type ClientOptions = {
-  url: string; // ws:// or wss://
-  protocols?: string | string[]; // sub-protocol(s) on handshake
-  defaultTimeoutMs?: number; // default 30_000; 0 disables
-  reconnect?: {
-    enabled?: boolean; // default true
-    maxAttempts?: number; // default 10
-    initialDelayMs?: number; // default 500
-    backoffFactor?: number; // default 2
-    maxDelayMs?: number; // default 30_000
-  };
-};
+import { Client } from '@tundralibs/rpc';
+
+const client = new Client({
+  url: 'ws://localhost:8080', // ws:// or wss://
+
+  // Sub-protocol(s) offered on the handshake. Nothing in this package
+  // requires one — the server picks via its upgrade hook's `protocol`.
+  protocols: ['my-app-v1'],
+
+  defaultTimeoutMs: 30_000, // 0 disables command timeouts
+
+  reconnect: {
+    enabled: true,
+    maxAttempts: 10,
+    initialDelayMs: 500,
+    backoffFactor: 2,
+    maxDelayMs: 30_000,
+  },
+
+  // A subscription replayed after a reconnect was refused (the
+  // connection lost its authorization, or the channel is gone). The
+  // dead subscription has already been dropped when this fires.
+  onSubscriptionError: (channel, error) => {
+    console.warn('re-subscribe refused:', channel, error.message);
+  },
+
+  // Auto-reconnect exhausted `reconnect.maxAttempts`. The client now
+  // stays DISCONNECTED and will not retry on its own.
+  onReconnectFailed: (attempts) => {
+    console.error(`gave up after ${attempts} attempts`);
+  },
+});
 ```
 
 When `reconnect.enabled` is true (default), an unexpected close
@@ -306,6 +384,11 @@ later. A subsequent `connect()` clears that and reconnects normally.
 Two middleware chains — one per direction:
 
 ```ts
+import { Client } from '@tundralibs/rpc';
+
+const client = new Client({ url: 'ws://localhost:8080' });
+const getAuthToken = (): string => 'token';
+
 client.useSend(async (ctx, next) => {
   // ctx.frame is the OUTBOUND frame (cmd / sub / unsub / pub).
   // Mutate, log, retry — then call next() to write the frame.
@@ -336,11 +419,31 @@ send middleware reject the awaiting caller of
 ### Lifecycle
 
 ```ts
-client.state; // 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'CLOSING'
-await client.connect(); // open WebSocket, resolve on 'open'
-await client.command(name, body); // request/response
-await client.subscribe(channel, h); // returns subscription handle
-await client.publish(channel, p); // ack'd publish
+import { Client } from '@tundralibs/rpc';
+import type { ClientState, ClientSubscription } from '@tundralibs/rpc';
+
+const client = new Client({ url: 'ws://localhost:8080' });
+
+// 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'CLOSING'
+const state: ClientState = client.state;
+console.log(state);
+
+await client.connect(); // open WebSocket, resolves on 'open'
+
+// Request/response — the type parameter types the resolved value.
+const reply = await client.command<{ text: string }>('echo', { text: 'hi' });
+console.log(reply.text);
+
+// Returns a subscription handle.
+const sub: ClientSubscription = await client.subscribe('chat:room1', (data) => {
+  console.log('msg:', data);
+});
+
+// Ack'd publish — needs `onPublish` on the server's channel, and the
+// active subscription above (see "Client publish via channel onPublish").
+await client.publish('chat:room1', { text: 'hi' });
+
+await sub.unsubscribe();
 await client.close(); // graceful close, stops reconnects
 ```
 
@@ -379,6 +482,10 @@ You can pass a `httpHandler` if you want non-WS requests to do
 something other than 404:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 await server.listen({
   port: 8080,
   httpHandler: () => new Response('Use the WebSocket endpoint'),
@@ -388,7 +495,11 @@ await server.listen({
 ### Authenticated upgrade with typed connection state
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
 type Conn = { userId: string; subscriptions: Set<string> };
+
+const verifyToken = (_token: string | null): string | undefined => undefined;
 
 const server = new Server<Conn>({
   upgrade: (req) => {
@@ -414,12 +525,20 @@ await server.listen({ port: 8080 });
 any validator that throws on invalid input fits.
 
 ```ts
-import { GuardianProxy, type } from '@tundralibs/guardian';
+import { Guardian } from '@tundralibs/guardian';
+import { Server } from '@tundralibs/rpc';
 
-const CreateUser = type({
-  name: 'string',
-  email: 'string',
-}); // assume Guardian; replace with your schema lib
+const server = new Server();
+const db = {
+  users: {
+    create: (_user: { name: string; email: string }) => Promise.resolve('u-1'),
+  },
+};
+
+const CreateUser = Guardian.object({
+  name: Guardian.string(),
+  email: Guardian.string().email(),
+});
 
 server.command(
   'createUser',
@@ -435,6 +554,10 @@ server.command(
 Plain hand-written validators work too:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 server.command(
   'sendMessage',
   (input) => {
@@ -454,6 +577,10 @@ server.command(
 ### Middleware: timing + logging
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 server.use(async (ctx, next) => {
   const start = performance.now();
   try {
@@ -473,6 +600,10 @@ the throw into a `result` frame with `ok: false`. Custom error codes
 flow through via `err.code`.
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 server.use(async (ctx, next) => {
   if (!(ctx.ws.data as { userId?: string }).userId) {
     const err = new Error('not authenticated') as Error & { code: string };
@@ -486,6 +617,12 @@ server.use(async (ctx, next) => {
 Or short-circuit silently (returns `ok: true` with no data):
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+import type { ServerWebSocket } from '@tundralibs/compat/webserver';
+
+const server = new Server();
+const rateLimited = (_ws: ServerWebSocket<unknown>) => false;
+
 server.use(async (ctx, next) => {
   if (rateLimited(ctx.ws)) {
     return; // skip handler, but ack the request
@@ -497,6 +634,11 @@ server.use(async (ctx, next) => {
 ### Channel with authorize hook
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+const canJoin = (_userId: string, _room: string): boolean => true;
+
 server.channel('chat:room1', {
   authorize: (ctx) => {
     const userId = (ctx.ws.data as { userId?: string }).userId;
@@ -514,6 +656,10 @@ server.channel('chat:room1', {
 ### Server-initiated broadcast
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 // Anywhere on the server
 await server.publish('chat:room1', {
   from: 'system',
@@ -530,6 +676,11 @@ By default, clients can only **subscribe** to channels — they can't
 publish into them. Add an `onPublish` to opt in:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+const parseChatMessage = (payload: unknown) => payload as { text: string };
+
 server.channel('chat:room1', {
   authorize: (ctx) => Boolean((ctx.ws.data as { userId?: string }).userId),
   onPublish: async (ctx, payload) => {
@@ -551,6 +702,11 @@ subscribe time, so a publish without a prior `subscribe()` is rejected
 with `NOT_SUBSCRIBED`:
 
 ```ts
+import { Client } from '@tundralibs/rpc';
+
+const client = new Client({ url: 'ws://localhost:8080' });
+const render = (_msg: unknown) => {};
+
 // Subscribe first, then publish to the same channel.
 await client.subscribe('chat:room1', (msg) => render(msg));
 await client.publish('chat:room1', { text: 'hi' });
@@ -573,6 +729,16 @@ already give you `ctx.id`, schema validation, structured ack via
 return value, custom error codes via thrown errors:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+type Conn = { userId: string };
+
+const server = new Server<Conn>();
+const ChatMessageSchema = {
+  parse: (input: unknown) => input as { channel: string; message: string },
+};
+const canSendTo = (_userId: string, _channel: string): boolean => true;
+
 server.command(
   'publishChat',
   (input) => ChatMessageSchema.parse(input),
@@ -601,10 +767,21 @@ across multiple node instances, write an adapter against the same
 ```ts
 import {
   type AdapterCapabilities,
-  Server,
   PubSubAdapter,
+  Server,
   type Subscription,
 } from '@tundralibs/rpc';
+
+// The surface your Redis client of choice has to provide — `cacher`
+// already speaks Redis, or use a direct driver.
+declare class RedisClient {
+  constructor(opts: { url: string });
+  on(event: 'message', cb: (topic: string, raw: string) => void): void;
+  subscribe(topic: string): void;
+  unsubscribe(topic: string): void;
+  publish(topic: string, payload: string): Promise<void>;
+  quit(): Promise<void>;
+}
 
 class RedisPubSubAdapter extends PubSubAdapter {
   override readonly capabilities: AdapterCapabilities = {
@@ -617,24 +794,76 @@ class RedisPubSubAdapter extends PubSubAdapter {
     backpressureVisibility: false,
   };
 
-  // ... use cacher's redis client or a direct driver
+  // Two connections: a Redis connection in subscribe mode can't issue
+  // normal commands, so PUBLISH needs its own.
+  private __pub: RedisClient;
+  private __sub: RedisClient;
+  private __handlers = new Map<string, Set<(data: unknown) => void>>();
+  private __closed = false;
 
-  override subscribe(topic: string, handler: (data: unknown) => void): Subscription {
-    // SUBSCRIBE topic on a pub-only Redis connection
-    // Route incoming messages to handler
-    // Return { unsubscribe() { /* UNSUBSCRIBE */ } }
+  constructor(opts: { url: string }) {
+    super();
+    this.__pub = new RedisClient(opts);
+    this.__sub = new RedisClient(opts);
+    this.__sub.on('message', (topic, raw) => {
+      const handlers = this.__handlers.get(topic);
+      if (!handlers) return;
+      let data: unknown;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        return; // malformed — drop
+      }
+      // One throwing subscriber must not stop the rest of the fan-out.
+      for (const fn of [...handlers]) {
+        try {
+          fn(data);
+        } catch { /* swallow */ }
+      }
+    });
+  }
+
+  override subscribe(
+    topic: string,
+    handler: (data: unknown) => void,
+  ): Subscription {
+    if (this.__closed) throw new Error('adapter closed');
+    let set = this.__handlers.get(topic);
+    if (!set) {
+      set = new Set();
+      this.__handlers.set(topic, set);
+      this.__sub.subscribe(topic); // SUBSCRIBE on the first local handler
+    }
+    set.add(handler);
+    return {
+      unsubscribe: () => {
+        const current = this.__handlers.get(topic);
+        if (!current) return;
+        current.delete(handler); // idempotent
+        if (current.size === 0) {
+          this.__handlers.delete(topic);
+          this.__sub.unsubscribe(topic); // UNSUBSCRIBE on the last one
+        }
+      },
+    };
   }
 
   override async publish(topic: string, data: unknown): Promise<void> {
-    // PUBLISH topic JSON.stringify(data)
+    if (this.__closed) return; // publish after close must not deliver
+    await this.__pub.publish(topic, JSON.stringify(data));
   }
 
   override async close(): Promise<void> {
-    // QUIT
+    if (this.__closed) return; // idempotent
+    this.__closed = true;
+    this.__handlers.clear();
+    await Promise.all([this.__sub.quit(), this.__pub.quit()]);
   }
 }
 
-const server = new Server({ pubsub: new RedisPubSubAdapter(...) });
+const server = new Server({
+  pubsub: new RedisPubSubAdapter({ url: 'redis://localhost:6379' }),
+});
 ```
 
 Full adapter contract and capability flags: [Rpc-PubSub](docs/Rpc-PubSub.md).
@@ -659,6 +888,56 @@ same channel.
 | `PUBLISH_ERROR`   | server   | `onPublish` handler threw                                                                 |
 | `HANDLER_ERROR`   | server   | Command handler threw without a custom `.code`                                            |
 | _custom_          | userland | Throw `Object.assign(new Error(msg), { code: 'YOUR_CODE' })` from a handler or middleware |
+
+A thrown error may also carry a `data` property. It rides along on the
+`result` frame's `error` object and reaches the caller as `.data` on
+the rejection, so a failure can return structure rather than only a
+string:
+
+```ts
+import { Client, Server } from '@tundralibs/rpc';
+
+const server = new Server();
+server.command('createUser', undefined, () => {
+  throw Object.assign(new Error('invalid user'), {
+    code: 'VALIDATION',
+    data: { fields: { email: 'must be an email address' } },
+  });
+});
+await server.listen({ port: 8080, hostname: '127.0.0.1' });
+
+const client = new Client({ url: 'ws://127.0.0.1:8080' });
+await client.connect();
+
+try {
+  await client.command('createUser', { email: 'nope' });
+} catch (err) {
+  const { code, data } = err as Error & { code?: string; data?: unknown };
+  console.error(code, data); // 'VALIDATION' { fields: { … } }
+}
+
+await client.close();
+await server.close();
+```
+
+`error.data` is sent verbatim to the caller — keep internals out of it.
+
+Three more codes are raised **client-side**, with no wire frame behind
+them, when a `command()` cannot be completed: `REQUEST_TIMEOUT` (no
+`result` arrived within `defaultTimeoutMs`), `CONNECTION_LOST` (the
+socket dropped with the call in flight) and `CLOSED` (`client.close()`
+was called with the call in flight).
+
+Every failure that arrives from the server attaches a `.code` property
+to the rejection — both the `result` frame path above and a rejection
+caused by a correlated out-of-band `error` frame (e.g. `BAD_FORMAT`
+for a malformed frame whose id the server could recover). Only the
+`result` path can also carry `.data`; the `error` frame has no field
+for it.
+
+The three client-side codes above are the exception: they have no wire
+frame behind them and carry their code in the `Error`'s `message`
+only, so branch on `err.message` for those.
 
 ## Runtime support
 

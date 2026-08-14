@@ -9,9 +9,41 @@ import { standardFormat } from '../formatters/mod.ts';
 import { SloggerConfigError } from '../errors/mod.ts';
 
 /**
- * Configuration options for sampling behavior
- * @property sampleRate - Percentage of logs to keep (0.01 = 1%, 1.0 = 100%)
- * @property bypassSamplingForLevel - Logs at or above this level bypass sampling
+ * Configuration options for sampling behaviour.
+ *
+ * Sampling is a throughput control: it drops a random fraction of
+ * low-severity records before they reach the handler's transport, so
+ * chatty `DEBUG`/`INFO` traffic doesn't overwhelm a file, an HTTP
+ * collector, or a syslog daemon. Severe records are exempted via
+ * {@link SamplingOptions.bypassSamplingForLevel} so an incident is
+ * never hidden by the sampler.
+ *
+ * Sampling can be set globally on the {@link Slogger} options (applies
+ * to every handler that doesn't configure its own) or per handler via
+ * {@link HandlerOptions.sampling}; the per-handler value wins.
+ *
+ * @property sampleRate - Fraction of eligible logs to keep, from `0`
+ *   (drop everything eligible) to `1` (keep everything). `0.01` keeps
+ *   roughly 1%, `0.1` roughly 10%. Selection is random per record, so
+ *   the rate is statistical, not an exact quota. Defaults to `1`,
+ *   meaning no sampling is applied at all.
+ * @property bypassSamplingForLevel - Severity threshold that escapes
+ *   sampling. Records at this severity **or more severe** (a syslog
+ *   level numerically at or below it) are always emitted, whatever
+ *   `sampleRate` says. Defaults to `SyslogSeverities.ERROR` (`3`), so
+ *   errors, criticals, alerts and emergencies are never sampled out.
+ *
+ * @example
+ * ```typescript
+ * import { SyslogSeverities } from '@tundralibs/slogger';
+ * import type { SamplingOptions } from '@tundralibs/slogger';
+ *
+ * // Keep 5% of the noise, but never drop a warning or worse.
+ * const sampling: SamplingOptions = {
+ *   sampleRate: 0.05,
+ *   bypassSamplingForLevel: SyslogSeverities.WARNING,
+ * };
+ * ```
  */
 export type SamplingOptions = {
   sampleRate?: number;

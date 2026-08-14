@@ -33,6 +33,8 @@ export class ConsoleExporter implements SpanExporter {
   private readonly __json: boolean;
 
   /**
+   * Create a console exporter — human-readable summaries unless `json` is set.
+   *
    * @param options - See {@link ConsoleExporterOptions}.
    */
   constructor(options: ConsoleExporterOptions = {}) {

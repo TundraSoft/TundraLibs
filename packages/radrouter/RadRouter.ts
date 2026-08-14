@@ -1,23 +1,13 @@
 /**
- * `RadRouter` — a compressed radix-tree HTTP router with parameter,
- * greedy, and version-aware matching.
+ * @fileoverview The compressed radix trie behind {@link RadRouter}.
  *
- * The trie is **path-compressed**: a static node stores a multi-character
- * label, not a single segment. Routes with shared prefixes
- * (e.g. /api/v1/users, /api/v1/posts) share that prefix as a single node
- * and split lazily on insert. Lookup walks the URL string with a single
- * integer cursor — no path.split('/') allocation, no Map.get() per hop.
+ * A static node stores a multi-character label rather than one segment,
+ * so routes with a shared prefix (`/api/v1/users`, `/api/v1/posts`)
+ * occupy one node and split lazily on insert. Lookup walks the URL with
+ * a single integer cursor — no `path.split('/')` allocation, no
+ * `Map.get()` per hop.
  *
- * Matching priority at every node: static > param > greedy.
- * Handler resolution at every leaf (three-tier):
- *   exact requested version > configured defaultVersion > unversioned slot.
- *
- * Path matching is case-sensitive by default (RFC 3986). Pass
- * `caseSensitive: false` for forgiving matching.
- *
- * Slash handling: registration is lenient (`/api//users` → `/api/users`);
- * lookup is strict (a request for `/api//users` will NOT match a route
- * registered as `/api/users`).
+ * @module
  */
 
 import type {
@@ -134,14 +124,52 @@ class RouteNode<M = Middleware> {
   }
 }
 
+/**
+ * HTTP router generic over the consumer's middleware type — it stores
+ * and returns middleware but never invokes it, so `M` may be any shape.
+ *
+ * Which route wins is a property of the tree, never of registration
+ * order. At each node the alternatives are tried static →
+ * `:name:<literal>` (longest literal first) → `:name:` → greedy,
+ * backtracking on failure, so `/users/me` beats `/users/:id:` and
+ * `/files/:n:.tar.gz` beats `/files/:n:.gz`. At the matched leaf the
+ * handler is then chosen exact requested version →
+ * {@link RadRouter.defaultVersion} → unversioned.
+ *
+ * @typeParam M - Consumer's middleware function type; defaults to the
+ *   unconstrained {@link Middleware} shape.
+ *
+ * @example
+ * ```ts
+ * const router = new RadRouter();
+ * router.get('/files/:name:', [async () => {}]);
+ * router.get('/files/latest', [async () => {}]);
+ *
+ * router.find('GET', '/files/latest'); // static child wins
+ * router.find('GET', '/files/a.txt')?.params.name; // 'a.txt'
+ * ```
+ */
 export class RadRouter<M = Middleware> {
   private __root: RouteNode<M> = new RouteNode('static', '');
   private __globalMiddlewares: M[] = [];
 
+  /**
+   * Version consulted when the requested one has no handler at the
+   * matched leaf — the middle tier of {@link RadRouter.find}'s fallback.
+   * Left `undefined`, that fallback is just exact-then-unversioned.
+   */
   public readonly defaultVersion?: string;
+
+  /**
+   * Whether static path text must match the casing it was registered
+   * with. Captured parameter values keep the request's original case
+   * either way.
+   */
   public readonly caseSensitive: boolean;
 
   /**
+   * Creates an empty router. Both settings are fixed for its lifetime.
+   *
    * @param options - Optional {@link RouterOptions} controlling
    *   case sensitivity and the configured default version.
    */
@@ -165,6 +193,18 @@ export class RadRouter<M = Middleware> {
 
   // ---------- normalization ----------
 
+  /**
+   * Registration-time normalisation: case-folds the static text when
+   * {@link RadRouter.caseSensitive} is off — leaving `:name:` tokens
+   * alone so parameter names stay stable identifiers — then forces a
+   * leading `/` and strips a trailing one. `''` passes through
+   * untouched so {@link RadRouter.__parsePath} can reject it with a
+   * message that names the problem.
+   *
+   * @param mergeSlashes - Collapse runs of `/` into one. Registration
+   *   is lenient and passes `true`; lookup is strict and normalises
+   *   through {@link RadRouter.__normalizeForLookup} instead.
+   */
   private __normalizePath(path: string, mergeSlashes: boolean): string {
     if (path === '') return '';
 
@@ -225,6 +265,13 @@ export class RadRouter<M = Middleware> {
   // ---------- chunk parsing (insert-time only) ----------
 
   /**
+   * Guard a `:name:` token before it becomes a {@link RouteParams} key:
+   * names must read as identifiers, so no dashes, dots or leading
+   * digits.
+   *
+   * @param segment - The whole segment the name came from; carried on
+   *   the error so the message can quote it.
+   *
    * @throws {MalformedPathError} When `name` doesn't match
    *   `[A-Za-z_]\\w*`. The original `segment` and the bad
    *   `paramName` are attached to `error.context`.

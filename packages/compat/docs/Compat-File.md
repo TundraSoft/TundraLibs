@@ -77,7 +77,7 @@ npx jsr add @tundralibs/compat
 
 Checks if a path exists.
 
-```typescript
+```typescript ignore
 async function pathExists(path: string): Promise<boolean>;
 ```
 
@@ -94,7 +94,7 @@ console.log(exists); // true or false
 
 Synchronous version of `pathExists()`.
 
-```typescript
+```typescript ignore
 function pathExistsSync(path: string): boolean;
 ```
 
@@ -102,7 +102,7 @@ function pathExistsSync(path: string): boolean;
 
 Checks if a path points to a file.
 
-```typescript
+```typescript ignore
 async function isFile(path: string): Promise<boolean>;
 function isFileSync(path: string): boolean;
 ```
@@ -119,7 +119,7 @@ const isRegularFile = await isFile('./document.pdf');
 
 Checks if a path points to a directory.
 
-```typescript
+```typescript ignore
 async function isDirectory(path: string): Promise<boolean>;
 function isDirectorySync(path: string): boolean;
 ```
@@ -132,7 +132,7 @@ function isDirectorySync(path: string): boolean;
 
 Gets detailed file or directory information.
 
-```typescript
+```typescript ignore
 async function stat(path: string): Promise<FileInfo>;
 function statSync(path: string): FileInfo;
 
@@ -166,7 +166,7 @@ console.log(`Modified: ${info.mtime}`);
 
 Reads a file as binary data.
 
-```typescript
+```typescript ignore
 async function readFile(path: string): Promise<Uint8Array>;
 function readFileSync(path: string): Uint8Array;
 ```
@@ -184,7 +184,7 @@ console.log(data.length); // File size in bytes
 
 Reads a file as UTF-8 text.
 
-```typescript
+```typescript ignore
 async function readTextFile(path: string): Promise<string>;
 function readTextFileSync(path: string): string;
 ```
@@ -202,9 +202,11 @@ console.log(content);
 
 Reads and parses a JSON file.
 
-```typescript
-async function readJSONFile<T = unknown>(path: string): Promise<T>;
-function readJSONFileSync<T = unknown>(path: string): T;
+```typescript ignore
+async function readJSONFile<T extends Record<string, unknown>>(
+  path: string,
+): Promise<T>;
+function readJSONFileSync<T extends Record<string, unknown>>(path: string): T;
 ```
 
 **Example:**
@@ -212,10 +214,10 @@ function readJSONFileSync<T = unknown>(path: string): T;
 ```typescript
 import { readJSONFile } from '@tundralibs/compat/file';
 
-interface Config {
+type Config = {
   port: number;
   host: string;
-}
+};
 
 const config = await readJSONFile<Config>('./config.json');
 console.log(config.port);
@@ -227,7 +229,7 @@ console.log(config.port);
 
 Writes binary data to a file.
 
-```typescript
+```typescript ignore
 async function writeFile(
   path: string,
   data: Uint8Array,
@@ -271,7 +273,7 @@ await writeFile('./data.bin', data);
 
 Writes text to a file.
 
-```typescript
+```typescript ignore
 async function writeTextFile(
   path: string,
   content: string,
@@ -297,22 +299,18 @@ await writeTextFile('./output.txt', 'Hello, World!');
 
 Writes an object as JSON to a file.
 
-```typescript
+```typescript ignore
 async function writeJSONFile(
   path: string,
   data: unknown,
-  options?: JSONWriteOptions,
+  options?: WriteOptions & { space?: number | string },
 ): Promise<void>;
 
 function writeJSONFileSync(
   path: string,
   data: unknown,
-  options?: JSONWriteOptions,
+  options?: WriteOptions & { space?: number | string },
 ): void;
-
-interface JSONWriteOptions extends WriteOptions {
-  spaces?: number | string;
-}
 ```
 
 **Example:**
@@ -321,7 +319,7 @@ interface JSONWriteOptions extends WriteOptions {
 import { writeJSONFile } from '@tundralibs/compat/file';
 
 const config = { port: 3000, host: 'localhost' };
-await writeJSONFile('./config.json', config, { spaces: 2 });
+await writeJSONFile('./config.json', config, { space: 2 });
 ```
 
 ### File Handles
@@ -339,7 +337,7 @@ Low-level file handle operations for fine-grained control over file I/O. Useful 
 
 Opens a file and returns an async file handle with **only async methods**.
 
-```typescript
+```typescript ignore
 async function openFile(
   path: string,
   options: OpenOptions,
@@ -456,6 +454,8 @@ file.close();
 **Example - Truncate existing file:**
 
 ```typescript
+import { openFile } from '@tundralibs/compat/file';
+
 const file = await openFile('./output.txt', {
   write: true,
   create: true,
@@ -473,7 +473,7 @@ try {
 
 Synchronously opens a file and returns a sync file handle with **only sync methods**.
 
-```typescript
+```typescript ignore
 function openFileSync(
   path: string,
   options: OpenOptions,
@@ -531,22 +531,26 @@ try {
 The file handles use **strict type separation** to prevent accidentally mixing async and sync operations:
 
 ```typescript
+import { openFile, openFileSync } from '@tundralibs/compat/file';
+
+declare const data: Uint8Array;
+
 // ✅ Async handle - Only async methods available
 const asyncFile = await openFile('./log.txt', { write: true, create: true });
-const bytes = await asyncFile.write(data); // Returns Promise<number>
+const asyncBytes = await asyncFile.write(data); // Returns Promise<number>
 await asyncFile.sync(); // Returns Promise<void>
 // asyncFile.writeSync() doesn't exist!       // ❌ Not available
 
 // ✅ Sync handle - Only sync methods available
 const syncFile = openFileSync('./log.txt', { write: true, create: true });
-const bytes = syncFile.write(data); // Returns number directly (blocking)
+const syncBytes = syncFile.write(data); // Returns number directly (blocking)
 syncFile.sync(); // Returns void directly (blocking)
 // syncFile.write() never returns Promise    // ❌ Always blocking
 ```
 
 **Why This Matters:**
 
-```typescript
+```typescript ignore
 // ❌ This would be dangerous if allowed:
 const file = await openFile('./log.txt', { write: true });
 file.writeSync(data); // Would block event loop in async context!
@@ -564,7 +568,7 @@ This design ensures you can't accidentally block the event loop by using sync op
 
 Creates a directory.
 
-```typescript
+```typescript ignore
 async function makeDir(
   path: string,
   options?: { recursive?: boolean; mode?: number },
@@ -589,7 +593,7 @@ await makeDir('./data/logs/2024', { recursive: true });
 
 Lists directory contents with optional filtering.
 
-```typescript
+```typescript ignore
 async function readDir(
   path: string,
   options?: ReadDirOptions,
@@ -625,7 +629,7 @@ interface ReadDirOptions {
 **Example:**
 
 ```typescript
-import { readDir } from '@tundralibs/compat/file';
+import { readDir, readDirSync } from '@tundralibs/compat/file';
 
 // List all entries
 for await (const entry of readDir('./src')) {
@@ -670,20 +674,9 @@ for (const entry of readDirSync('./config', { exts: ['.json', '.yaml'] })) {
 
 Removes a file or directory.
 
-```typescript
-async function remove(
-  path: string,
-  options?: RemoveOptions,
-): Promise<void>;
-
-function removeSync(
-  path: string,
-  options?: RemoveOptions,
-): void;
-
-interface RemoveOptions {
-  recursive?: boolean;
-}
+```typescript ignore
+async function remove(path: string): Promise<void>;
+function removeSync(path: string): void;
 ```
 
 **Example:**
@@ -694,15 +687,15 @@ import { remove } from '@tundralibs/compat/file';
 // Remove file
 await remove('./temp.txt');
 
-// Remove directory and contents
-await remove('./temp-dir', { recursive: true });
+// Remove directory and contents (directories are always removed recursively)
+await remove('./temp-dir');
 ```
 
 #### `emptyDir()` / `emptyDirSync()`
 
 Removes all contents of a directory while keeping the directory.
 
-```typescript
+```typescript ignore
 async function emptyDir(path: string): Promise<void>;
 function emptyDirSync(path: string): void;
 ```
@@ -721,7 +714,7 @@ await emptyDir('./cache');
 
 Copies a file.
 
-```typescript
+```typescript ignore
 async function copyFile(
   src: string,
   dest: string,
@@ -758,11 +751,11 @@ import {
   writeJSONFile,
 } from '@tundralibs/compat/file';
 
-interface AppConfig {
+type AppConfig = {
   port: number;
   host: string;
   debug: boolean;
-}
+};
 
 async function loadConfig(path: string): Promise<AppConfig> {
   const defaults: AppConfig = {
@@ -775,7 +768,7 @@ async function loadConfig(path: string): Promise<AppConfig> {
     return await readJSONFile<AppConfig>(path);
   }
 
-  await writeJSONFile(path, defaults, { spaces: 2 });
+  await writeJSONFile(path, defaults, { space: 2 });
   return defaults;
 }
 ```
@@ -962,7 +955,7 @@ async function findConfigFiles(dirPath: string): Promise<string[]> {
 
 Converts a `file://` URL to a platform-specific file path.
 
-```typescript
+```typescript ignore
 function fromFileUrl(url: string | URL): string;
 ```
 
@@ -980,24 +973,24 @@ function fromFileUrl(url: string | URL): string;
 import { fromFileUrl } from '@tundralibs/compat/file';
 
 // Basic conversion
-const path = fromFileUrl('file:///home/user/file.txt');
-console.log(path); // '/home/user/file.txt' on Unix
+const unixPath = fromFileUrl('file:///home/user/file.txt');
+console.log(unixPath); // '/home/user/file.txt' on Unix
 
 // With URL object
 const url = new URL('file:///C:/Users/user/file.txt');
-const path = fromFileUrl(url);
-console.log(path); // 'C:\\Users\\user\\file.txt' on Windows
+const windowsPath = fromFileUrl(url);
+console.log(windowsPath); // 'C:\\Users\\user\\file.txt' on Windows
 
 // With encoded characters
-const path = fromFileUrl('file:///path/to/file%20with%20spaces.txt');
-console.log(path); // '/path/to/file with spaces.txt'
+const decodedPath = fromFileUrl('file:///path/to/file%20with%20spaces.txt');
+console.log(decodedPath); // '/path/to/file with spaces.txt'
 ```
 
 #### `toFileUrl()`
 
 Converts a file path to a `file://` URL.
 
-```typescript
+```typescript ignore
 function toFileUrl(filePath: string): URL;
 ```
 
@@ -1012,24 +1005,24 @@ function toFileUrl(filePath: string): URL;
 **Example:**
 
 ```typescript
-import { toFileUrl } from '@tundralibs/compat/file';
+import { fromFileUrl, toFileUrl } from '@tundralibs/compat/file';
 
 // Basic conversion
-const url = toFileUrl('/home/user/file.txt');
-console.log(url.href); // 'file:///home/user/file.txt'
+const unixUrl = toFileUrl('/home/user/file.txt');
+console.log(unixUrl.href); // 'file:///home/user/file.txt'
 
 // Windows path
-const url = toFileUrl('C:\\Users\\user\\file.txt');
-console.log(url.href); // 'file:///C:/Users/user/file.txt'
+const windowsUrl = toFileUrl('C:\\Users\\user\\file.txt');
+console.log(windowsUrl.href); // 'file:///C:/Users/user/file.txt'
 
 // Relative path (converts to absolute)
-const url = toFileUrl('./file.txt');
-console.log(url.href); // 'file:///current/working/dir/file.txt'
+const relativeUrl = toFileUrl('./file.txt');
+console.log(relativeUrl.href); // 'file:///current/working/dir/file.txt'
 
 // Round-trip conversion
 const originalPath = '/home/user/file.txt';
-const url = toFileUrl(originalPath);
-const convertedPath = fromFileUrl(url);
+const roundTripUrl = toFileUrl(originalPath);
+const convertedPath = fromFileUrl(roundTripUrl);
 console.log(originalPath === convertedPath); // true
 ```
 
@@ -1090,6 +1083,8 @@ try {
 ```typescript
 import { openFile } from '@tundralibs/compat/file';
 
+declare const data: Uint8Array;
+
 // ✅ Good - Always close in finally
 const file = await openFile('./data.txt', { write: true, create: true });
 try {
@@ -1100,9 +1095,12 @@ try {
 }
 
 // ❌ Bad - File might not close if error occurs
-const file = await openFile('./data.txt', { write: true, create: true });
-await file.write(data);
-file.close(); // Might not execute
+const unguardedFile = await openFile('./data.txt', {
+  write: true,
+  create: true,
+});
+await unguardedFile.write(data);
+unguardedFile.close(); // Might not execute
 ```
 
 ---
@@ -1129,7 +1127,7 @@ import {
   removeSync,
   writeTextFile,
   writeTextFileSync,
-} from './file.ts';
+} from '@tundralibs/compat/file';
 ```
 
 ## API
@@ -1137,6 +1135,8 @@ import {
 ### Read Operations
 
 ```typescript
+import { readTextFile, readTextFileSync } from '@tundralibs/compat/file';
+
 // Async
 const content = await readTextFile('./config.json');
 
@@ -1147,6 +1147,8 @@ const contentSync = readTextFileSync('./config.json');
 ### Write Operations
 
 ```typescript
+import { writeTextFile, writeTextFileSync } from '@tundralibs/compat/file';
+
 // Async
 await writeTextFile('./output.txt', 'Hello World');
 
@@ -1157,6 +1159,15 @@ writeTextFileSync('./output.txt', 'Hello World');
 ### Path Checking
 
 ```typescript
+import {
+  isDirectory,
+  isDirectorySync,
+  isFile,
+  isFileSync,
+  pathExists,
+  pathExistsSync,
+} from '@tundralibs/compat/file';
+
 // Check if path exists
 const exists = await pathExists('./data');
 const existsSync = pathExistsSync('./data');
@@ -1173,6 +1184,8 @@ const dirSync = isDirectorySync('./data');
 ### Remove Operations
 
 ```typescript
+import { remove, removeSync } from '@tundralibs/compat/file';
+
 // Async
 await remove('./temp.txt');
 
@@ -1185,7 +1198,7 @@ removeSync('./temp.txt');
 ### Configuration Loading
 
 ```typescript
-import { pathExists, readTextFile } from './file.ts';
+import { pathExists, readTextFile } from '@tundralibs/compat/file';
 
 async function loadConfig(path: string) {
   if (!(await pathExists(path))) {
@@ -1200,8 +1213,12 @@ async function loadConfig(path: string) {
 ### Safe File Writing
 
 ```typescript
-import { isDirectory, pathExists, writeTextFile } from './file.ts';
-import * as path from './path.ts';
+import {
+  isDirectory,
+  pathExists,
+  writeTextFile,
+} from '@tundralibs/compat/file';
+import * as path from '@tundralibs/compat/path';
 
 async function safeWrite(filePath: string, content: string) {
   const dir = path.dirname(filePath);

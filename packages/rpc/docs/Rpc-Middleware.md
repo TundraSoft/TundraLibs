@@ -4,9 +4,9 @@ Koa-style middleware composes around every command. Use it for
 auth, rate limits, timing, logging, request-scoped state, and error
 routing — anything that crosscuts your handlers.
 
-> Hub middleware is **per-command** — it sees `ctx.cmd`, `ctx.payload`,
+> `Server` middleware is **per-command** — it sees `ctx.cmd`, `ctx.payload`,
 > `ctx.id`. For lower-level message middleware (sees raw decoded
-> messages, not Hub commands), use the
+> messages, not `Server` commands), use the
 > [`@tundralibs/compat/websocket`](../../compat/websocket/Compat-WebSocket.md)
 > primitive directly.
 
@@ -28,6 +28,8 @@ routing — anything that crosscuts your handlers.
 ```ts
 import type { Middleware } from '@tundralibs/rpc';
 
+type MyConn = { userId: string };
+
 const mw: Middleware<MyConn> = async (ctx, next) => {
   // before
   await next();
@@ -45,6 +47,10 @@ Middleware runs in registration order, with each one wrapping the rest
 of the chain in `next()`:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 server.use(async (_, next) => {
   console.log('1: before');
   await next();
@@ -76,6 +82,10 @@ Outer middleware sees the inner middleware's after-effects in
 Middleware writes to it; later middleware and the handler read.
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 server.use(async (ctx, next) => {
   ctx.state.startedAt = performance.now();
   await next();
@@ -104,6 +114,12 @@ any downstream middleware. The framework still acks the request with
 `ok: true` (data: `undefined`) so the client isn't left waiting:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+import type { ServerWebSocket } from '@tundralibs/compat/webserver';
+
+const server = new Server();
+const rateLimited = (_ws: ServerWebSocket<unknown>) => false;
+
 server.use(async (ctx, _next) => {
   if (rateLimited(ctx.ws)) {
     // handler never runs; client gets { ok: true, data: undefined }
@@ -123,6 +139,10 @@ Throws from middleware (or the handler) become `result` frames with
 `HANDLER_ERROR`.
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 class AuthError extends Error {
   code = 'UNAUTHENTICATED';
   constructor() {
@@ -151,6 +171,11 @@ Wrap `await next()` in `try / catch` if you want middleware to log /
 swallow / transform errors before they reach the client:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+const metrics = { commandErrors: { inc: (_labels: { cmd: string }) => {} } };
+
 server.use(async (ctx, next) => {
   try {
     await next();
@@ -167,7 +192,13 @@ Set typed connection state in the upgrade hook, gate commands in
 middleware:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
 type Conn = { userId: string; roles: Set<string> };
+
+const verifyToken = (_token: string | null): string | undefined => undefined;
+const rolesFor = (_userId: string): Set<string> => new Set();
+const requiredRolesFor = (_cmd: string): string[] => [];
 
 const server = new Server<Conn>({
   upgrade: (req) => {
@@ -197,7 +228,11 @@ server.use(async (ctx, next) => {
 Per-connection token bucket in `ws.data` (or a separate WeakMap):
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
 type Conn = { tokens: number; refillAt: number };
+
+const server = new Server();
 
 server.use(async (ctx, next) => {
   const now = Date.now();
@@ -223,6 +258,10 @@ server.use(async (ctx, next) => {
 ## Recipe: Timing + Logging
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 server.use(async (ctx, next) => {
   const t0 = performance.now();
   let outcome: 'ok' | 'fail' = 'ok';
@@ -247,6 +286,10 @@ middleware and the handler.
 Middleware sees every command. Use `ctx.cmd` to scope behavior:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
+const server = new Server();
+
 const PUBLIC_COMMANDS = new Set(['ping', 'time']);
 
 server.use(async (ctx, next) => {
@@ -264,6 +307,14 @@ sign the middleware should be split — register the auth one only on
 private commands by wrapping them in a higher-order helper:
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+import type { CommandHandler } from '@tundralibs/rpc';
+
+type Conn = { userId: string };
+
+const server = new Server<Conn>();
+const PostSchema = (input: unknown) => input as { title: string };
+
 const requireAuth =
   <P, R>(handler: CommandHandler<Conn, P, R>): CommandHandler<Conn, P, R> =>
   async (ctx) => {
@@ -281,8 +332,8 @@ server.command('createPost', PostSchema, requireAuth(async (ctx) => {/* … */})
 
 ## Recipe: Heartbeat / Liveness
 
-Hub deliberately doesn't ship a built-in heartbeat. **Application-level
-heartbeat is a 10-line userland recipe** because Hub already gives you
+`Server` deliberately doesn't ship a built-in heartbeat. **Application-level
+heartbeat is a 10-line userland recipe** because `Server` already gives you
 everything you need: command handlers, `ctx.ws.data` for per-connection
 state, `server.connections` for iteration, and `ws.close()` for
 disconnecting stale sockets.
@@ -298,6 +349,8 @@ The client pings the server on a timer; the server tracks last-seen
 and sweeps stale connections.
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
 type Conn = { lastSeen?: number };
 
 const server = new Server<Conn>({
@@ -335,6 +388,8 @@ first, push from the server using a system channel and have clients
 echo back via a `pong` command.
 
 ```ts
+import { Server } from '@tundralibs/rpc';
+
 type Conn = { lastPong?: number };
 
 const server = new Server<Conn>({
@@ -377,11 +432,11 @@ iterate:
 - **Don't log `ws.data` carelessly.** Per-connection state often
   carries auth tokens, session IDs, or PII. Make sure debug logs,
   metrics, and error reports don't dump it wholesale.
-- **Mass-action capability.** Code with `hub` in scope can send to
-  or close every connection. Keep the `hub` reference out of any
+- **Mass-action capability.** Code holding the `server` in scope can send to
+  or close every connection. Keep the `server` reference out of any
   module that handles untrusted input as code (eval-style, not as
   data).
-- **Filter for cross-tenant safety.** If one Hub serves multiple
+- **Filter for cross-tenant safety.** If one `Server` serves multiple
   tenants, the sweeper sees all of them — filter on
   `ws.data.tenantId` (or equivalent) inside the loop.
 - **Don't `await` per connection without batching.** `await

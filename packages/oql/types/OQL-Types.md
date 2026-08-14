@@ -21,6 +21,8 @@ Type definitions for Object Query Language queries.
 
 The OQL type system provides comprehensive TypeScript types for defining database queries. All types are fully generic and support custom table schemas with complete type inference.
 
+These types validate a query's **shape** — which properties exist, which columns a schema declares, and what each operator accepts. Rules that span sibling properties are validated by `assertQuery` at **runtime**, because TypeScript cannot express a constraint from one property onto another: that a `having` key names an aggregate declared in `aggregates`, that `having` is only used alongside `aggregates`, and that every column referenced anywhere in the query appears in `columns`. A query that type-checks is well-formed, not necessarily well-scoped — run `assertQuery` before translating.
+
 ## Installation
 
 **Deno:**
@@ -50,7 +52,7 @@ npx jsr add @tundralibs/oql
 each operation is a conditional branch of `Query`, discriminated on the
 `QT` (query-type) parameter.
 
-```typescript
+```typescript ignore
 export type Query<
   QT extends QueryTypes = QueryTypes,
   PT extends TableType = TableType,
@@ -128,6 +130,8 @@ are supported:
   part.
 
 ```typescript
+import type { ColumnIdentifier } from '@tundralibs/oql';
+
 // Examples:
 const col1: ColumnIdentifier = '@id'; // OK
 const col2: ColumnIdentifier = '@users.@email'; // OK (note the second @)
@@ -144,7 +148,7 @@ preamble (`table`, optional `schema`, and `columns: Array<keyof PT>`).
 
 ### SELECT branch — `Query<'SELECT', PT, LT>`
 
-```typescript
+```typescript ignore
 {
   type: 'SELECT';
   table: string;
@@ -184,7 +188,7 @@ for post-aggregation filtering.
 an expression returning that column's type. An optional `projection`
 (`RETURNING`) lists plain column names.
 
-```typescript
+```typescript ignore
 {
   type: 'INSERT';
   table: string;
@@ -204,7 +208,7 @@ an expression returning that column's type. An optional `projection`
 and each value may be a literal OR an expression. There is no
 `columns`-keyed `RETURNING`/`projection` on `UPDATE`.
 
-```typescript
+```typescript ignore
 {
   type: 'UPDATE';
   table: string;
@@ -224,7 +228,7 @@ Like `INSERT`, `data` values may be expressions, and an optional
 `projection` (`RETURNING`) is available. `conflictKeys` and
 `updateOnConflict` use `@`-prefixed identifiers.
 
-```typescript
+```typescript ignore
 {
   type: 'UPSERT';
   table: string;
@@ -249,7 +253,7 @@ composition (`$and` / `$or`), correlated subquery predicates
 **flattened** entity keys (the `@`-prefixed column identifiers). There
 is **no `$not`** member.
 
-```typescript
+```typescript ignore
 type QueryFilter<
   PT extends TableType = TableType,
   FPT extends FlattenEntity<PT, '', '@'> = FlattenEntity<PT, '', '@'>,
@@ -268,7 +272,7 @@ The `$exists` / `$nexists` payload — a correlated
 `NOT EXISTS (…)` subquery predicate (SQL dialects only; the Mongo
 translator throws).
 
-```typescript
+```typescript ignore
 type ExistsFilter<PT, FPT> = {
   table: string; // subquery table
   schema?: string; // optional subquery table schema
@@ -286,7 +290,7 @@ type ExistsFilter<PT, FPT> = {
 };
 ```
 
-```typescript
+```typescript ignore
 // Users that have at least one paid order:
 where: {
   $exists: {
@@ -327,7 +331,7 @@ whose type union includes `Expressions<...>` (the comparison ops
 `$like`/`$nlike`/`$ilike`/`$nilike`) accepts an Expression object
 (`{ $$_expression: 'X', args: ... }`) in place of a literal value:
 
-```typescript
+```typescript ignore
 where: {
   '@tax': { $eq: { $$_expression: 'MULTIPLY', args: ['@subtotal', 0.085] } },
 }
@@ -360,7 +364,7 @@ Configuration for a single joined table. `table` and `columns` are
 **required**; `type` is **optional** and there is **no `'FULL OUTER'`**
 value (the full-join value is `'FULL'`):
 
-```typescript
+```typescript ignore
 type JoinDetails<
   PT extends TableType = TableType,
   LT extends Record<string, TableType> = Record<string, TableType>,
@@ -393,7 +397,7 @@ branches like `NOW` omit `args`). It is **not** the union
 `NumericExpressions | StringExpressions | DateExpressions` — those are
 separate string-literal name unions (see below).
 
-```typescript
+```typescript ignore
 type Expressions<
   T extends TableType = TableType,
   FT extends FlattenEntity<T, '', '@'> = FlattenEntity<T, '', '@'>,
@@ -674,7 +678,7 @@ type AggregateFunction =
 objects, keyed by `$$_aggregate`. (In a query, aggregates are supplied
 as a `Record<string, Aggregates<...>>` — an alias name → aggregate.)
 
-```typescript
+```typescript ignore
 type Aggregates<
   T extends TableType = TableType,
   FT extends FlattenEntity<T, '', '@'> = FlattenEntity<T, '', '@'>,
@@ -729,7 +733,7 @@ type Aggregates<
 ### Complex SELECT with Joins and Aggregates
 
 ```typescript
-import type { Query } from '@tundralibs/oql';
+import { assertQuery, type Query } from '@tundralibs/oql';
 
 type Order = {
   id: number;
@@ -766,21 +770,26 @@ const query: Query<
     '@orderCount': true,
     '@avgOrder': true,
   },
-  having: {
-    '@totalRevenue': { $gte: 1000 },
-  },
   orderBy: {
     '@totalRevenue': 'DESC',
   },
   limit: 100,
 };
+
+// `having` filters on the aggregate alias `@totalRevenue`, which is a
+// column of neither table. A filter key can't be tied to a sibling
+// `aggregates` entry in the type system, so `assertQuery` enforces
+// that scoping at runtime instead.
+assertQuery({ ...query, having: { '@totalRevenue': { $gte: 1000 } } });
 ```
 
 ### INSERT with Expressions
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
+
 type Product = {
-  id: number;
+  id?: number; // database-generated, so optional in `data`
   name: string;
   price: number;
   createdAt: Date;
@@ -801,6 +810,16 @@ const query: Query<'INSERT', Product> = {
 ### Complex Filters
 
 ```typescript
+import type { QueryFilter } from '@tundralibs/oql';
+
+type User = {
+  age: number;
+  status: string;
+  role: string;
+  email: string;
+  deletedAt: Date | null;
+};
+
 const complexFilter: QueryFilter<User> = {
   $or: [
     {

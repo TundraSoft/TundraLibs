@@ -45,9 +45,16 @@ export type HistogramSeries = {
  * ```
  */
 export class Histogram extends BaseMetric<HistogramSeries, HistogramOptions> {
+  /**
+   * Configured bucket upper bounds, de-duplicated and sorted ascending.
+   * The `+Inf` bucket is added at render time and is not stored here.
+   */
   protected _buckets: number[];
 
   /**
+   * Create a histogram. `buckets` defaults to `[1, 1.5, 2, 5, 10]`;
+   * `type` is injected automatically.
+   *
    * @throws {@link InvalidMetricOptionsError} When `buckets` is
    *   present but isn't an array of numbers, or contains a non-finite
    *   bound (`NaN`, `±Infinity`) — a non-finite `le` renders exposition
@@ -117,6 +124,12 @@ export class Histogram extends BaseMetric<HistogramSeries, HistogramOptions> {
     }
   }
 
+  /**
+   * Prometheus exposition for the histogram family: one cumulative
+   * `_bucket{le="…"}` line per configured bound, then `le="+Inf"`,
+   * `_sum`, and `_count`. A histogram with no observations renders
+   * just its `# HELP` / `# TYPE` header lines.
+   */
   public override toPrometheus(): string {
     // Assemble a flat line list — the two header lines first, then each
     // series' rendered block — and join with a single line feed, adding
@@ -137,6 +150,13 @@ export class Histogram extends BaseMetric<HistogramSeries, HistogramOptions> {
     return lines.join('\n') + '\n';
   }
 
+  /**
+   * Render one series' `_bucket`/`_sum`/`_count` lines, with no
+   * trailing line feed — the caller joins and terminates the document.
+   *
+   * @param labels - Pre-rendered label segments, empty for the
+   *   unlabelled series.
+   */
   private __renderSeries(labels: string[], v: HistogramSeries): string {
     const labelStr = labels.join(',');
     const lines: string[] = v.buckets.map((b) => {

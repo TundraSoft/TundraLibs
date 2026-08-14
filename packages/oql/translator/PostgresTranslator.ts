@@ -82,15 +82,27 @@ const PG_INDEX_METHODS = new Set([
   'BRIN',
 ]);
 
+/**
+ * Emits PostgreSQL SQL. Stateless and reusable — see
+ * {@link AbstractTranslator} for the shared method surface. This is the
+ * dialect with the fewest emulations: schemas, TRUNCATE, FULL JOIN,
+ * materialized views and partial indexes are all native.
+ */
 export class PostgresTranslator extends AbstractTranslator {
+  /** Dialect tag, reported on every error this translator raises. */
   public override readonly Dialect = 'postgres';
 
+  /** Double quotes; an embedded quote doubles to `""`. */
   protected override readonly _identifierQuote: IdentifierQuote = {
     open: '"',
     close: '"',
     escape: '""',
   };
 
+  /**
+   * Named `:name:` placeholders, not Postgres's native `$N` — the engine
+   * layer does that rewrite.
+   */
   protected override readonly _parameterStyle: ParameterStyle = {
     // Engine-compat `:name:` form. The Postgres engine's overridden
     // `_standardizeQuery` rewrites this to `$N` and stashes the encoded
@@ -100,6 +112,7 @@ export class PostgresTranslator extends AbstractTranslator {
     suffix: ':',
   };
 
+  /** Everything on except `RETURNING` for UPDATE / DELETE — see below. */
   protected override readonly _support: DialectSupport = {
     schema: true,
     materializedView: true,
@@ -119,6 +132,13 @@ export class PostgresTranslator extends AbstractTranslator {
    */
   protected override readonly _offsetOnlyLimit: string | null = null;
 
+  /**
+   * Postgres expression emitters. Unlike SQLite's pass-throughs, the
+   * crypto ones emit real calls: `HASH` → `digest()` and
+   * `ENCRYPT` / `DECRYPT` → `pgp_sym_*`, all of which need the `pgcrypto`
+   * extension installed. `UUID` → `gen_random_uuid()`, core since PG 13
+   * and pgcrypto before that.
+   */
   protected override readonly _expressionMap: ExpressionMap = new Map<
     Expressions['$$_expression'],
     (args: string[]) => string
@@ -196,6 +216,11 @@ export class PostgresTranslator extends AbstractTranslator {
     ['DECRYPT', (a) => `pgp_sym_decrypt(${a[0]}, ${a[1]})`],
   ]);
 
+  /**
+   * Postgres aggregate emitters. `ARRAY_AGG` returns a native array and
+   * `JSON_ROW` a `jsonb` value, so neither needs client-side parsing the
+   * way SQLite's JSON-string equivalents do.
+   */
   protected override readonly _aggregateMap: AggregateMap = new Map<
     AggregateFunction,
     (args: string[]) => string
@@ -213,6 +238,11 @@ export class PostgresTranslator extends AbstractTranslator {
     ['JSON_ROW', (a) => `jsonb_agg(jsonb_build_object(${a.join(', ')}))`],
   ]);
 
+  /**
+   * Postgres filter-operator emitters. The only dialect where `$ilike` is
+   * genuinely case-insensitive for non-ASCII text — Postgres has a real
+   * `ILIKE`, where SQLite and MariaDB fall back to `LIKE`.
+   */
   protected override readonly _filterOperatorMap: FilterOperatorMap = new Map<
     string,
     (column: string, value: string) => string
@@ -239,6 +269,7 @@ export class PostgresTranslator extends AbstractTranslator {
   // Postgres references the proposed row as `EXCLUDED` (the
   // AbstractTranslator default), so it relies on the shared
   // `_buildOnConflictUpsert` without overriding `_excludedKeyword`.
+  /** `INSERT … ON CONFLICT DO UPDATE`, via the shared builder. */
   protected override _buildUpsert(
     q: Query<'UPSERT'>,
     params: Parameters,
@@ -250,15 +281,28 @@ export class PostgresTranslator extends AbstractTranslator {
   // DDL
   // ---------------------------------------------------------------------------
 
+  /**
+   * Native `CREATE SCHEMA`. `IF NOT EXISTS` is unconditional, so this is
+   * idempotent regardless of what the caller asked for.
+   */
   protected override _buildCreateSchema(q: Query<'CREATE_SCHEMA'>): string {
     return `CREATE SCHEMA IF NOT EXISTS ${this._quoteIdentifier(q.schema)}`;
   }
 
+  /**
+   * Native `DROP SCHEMA`, always `IF EXISTS`. Without `q.cascade` Postgres
+   * refuses to drop a schema that still contains objects.
+   */
   protected override _buildDropSchema(q: Query<'DROP_SCHEMA'>): string {
     const cascade = q.cascade ? ' CASCADE' : '';
     return `DROP SCHEMA IF EXISTS ${this._quoteIdentifier(q.schema)}${cascade}`;
   }
 
+  /**
+   * Covers every `ALTER_TABLE` action — Postgres is the only dialect here
+   * with no gaps, including in-place column modification and foreign-key
+   * constraint changes.
+   */
   protected override _buildAlterTable(q: Query<'ALTER_TABLE'>): string[] {
     // Postgres can take multiple actions in one ALTER TABLE statement, but
     // we emit one statement per action for parity with SQLite/MariaDB and
@@ -338,6 +382,7 @@ export class PostgresTranslator extends AbstractTranslator {
     return stmts;
   }
 
+  /** Honours `q.cascade`, which drops dependent views and constraints. */
   protected override _buildDropTable(q: Query<'DROP_TABLE'>): string {
     const tableSql = this._qualifiedTable(q.table, q.schema);
     const ifExists = q.ifExists ? 'IF EXISTS ' : '';
@@ -345,12 +390,21 @@ export class PostgresTranslator extends AbstractTranslator {
     return `DROP TABLE ${ifExists}${tableSql}${cascade}`;
   }
 
+  /**
+   * Native `TRUNCATE TABLE`. `q.cascade` extends it to tables holding a
+   * foreign key into this one; without it Postgres refuses when any exist.
+   */
   protected override _buildTruncate(q: Query<'TRUNCATE'>): string {
     const tableSql = this._qualifiedTable(q.table, q.schema);
     const cascade = q.cascade ? ' CASCADE' : '';
     return `TRUNCATE TABLE ${tableSql}${cascade}`;
   }
 
+  /**
+   * `q.where` becomes a partial-index predicate and `q.method` a `USING`
+   * clause — but only for a method in `PG_INDEX_METHODS`; anything else is
+   * dropped rather than passed through to the server.
+   */
   protected override _buildCreateIndex(
     q: Query<'CREATE_INDEX'>,
     params: Parameters,
@@ -374,6 +428,7 @@ export class PostgresTranslator extends AbstractTranslator {
     return sql;
   }
 
+  /** `q.table` is accepted and ignored — see the note below. */
   protected override _buildDropIndex(q: Query<'DROP_INDEX'>): string {
     // `q.table` is part of the OQL contract for API uniformity but
     // Postgres identifies indexes by name alone — accepted, ignored.
@@ -385,6 +440,13 @@ export class PostgresTranslator extends AbstractTranslator {
     return `DROP INDEX ${ifExists}${name}${cascade}`;
   }
 
+  /**
+   * Real materialized views when `q.materialized` is set. Postgres offers
+   * `OR REPLACE` only on a plain view and `IF NOT EXISTS` only on a
+   * materialized one, so each branch silently drops the flag it cannot
+   * express — check which kind of view you asked for before relying on
+   * either.
+   */
   protected override _buildCreateView(
     q: Query<'CREATE_VIEW'>,
     params: Parameters,
@@ -414,6 +476,10 @@ export class PostgresTranslator extends AbstractTranslator {
     return `${this._parameterize(value, params)}::text`;
   }
 
+  /**
+   * `q.materialized` must match how the view was created — Postgres
+   * rejects `DROP VIEW` against a materialized view and vice versa.
+   */
   protected override _buildDropView(q: Query<'DROP_VIEW'>): string {
     const viewSql = this._qualifiedTable(q.view, q.schema);
     const ifExists = q.ifExists ? 'IF EXISTS ' : '';
@@ -455,6 +521,11 @@ export class PostgresTranslator extends AbstractTranslator {
     return stmts;
   }
 
+  /**
+   * The only dialect that refreshes for real. `q.concurrently` keeps the
+   * view readable during the rebuild, but Postgres requires the view to
+   * carry a unique index for it.
+   */
   protected override _buildRefreshMaterializedView(
     q: Query<'REFRESH_MATERIALIZED_VIEW'>,
   ): string {
@@ -492,6 +563,10 @@ export class PostgresTranslator extends AbstractTranslator {
   // Privates
   // ---------------------------------------------------------------------------
 
+  /**
+   * `def.comment` lands as an inline block comment rather than a proper
+   * `COMMENT ON COLUMN` statement — a known shortcut, see the inline note.
+   */
   protected override _renderColumnDefinition(
     name: string,
     def: ColumnDefinition,

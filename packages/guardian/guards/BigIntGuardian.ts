@@ -22,6 +22,8 @@ import { StringGuardian } from './StringGuardian.ts';
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Big = Guardian.bigint().positive();
  * Big.parse(42n);   // 42n
  * Big.parse(42);    // 42n   ← coerced
@@ -31,17 +33,13 @@ import { StringGuardian } from './StringGuardian.ts';
  * @see {@link Guardian.bigint}
  */
 export class BigIntGuardian extends BaseGuardian<bigint> {
-  // `bigint` is the runtime-accurate type; `toOpenAPI` overrides this
-  // to `integer` + `int64` format for schema emit, but markdown /
-  // introspection sees the real native type.
+  /**
+   * Emitted schema type. `bigint` is the runtime-accurate name;
+   * `toOpenAPI` overrides it to `integer` + `int64` format, but
+   * markdown and introspection see the real native type.
+   */
   protected override readonly _type = 'bigint';
 
-  /**
-   * Creates a new BigIntGuardian instance.
-   *
-   * @param initialTransform - Optional composed transformation from previous guardian
-   * @param metaData - Optional metadata for this guardian
-   */
   /**
    * Creates a new BigIntGuardian instance.
    *
@@ -236,6 +234,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.bigint().uint(8).parse(255n);   // ok
    * Guardian.bigint().uint(8).parse(256n);   // throws (>= 2^8)
    * ```
@@ -268,6 +268,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.bigint().int(8).parse(127n);    // ok
    * Guardian.bigint().int(8).parse(128n);    // throws (>= 2^7)
    * Guardian.bigint().int(8).parse(-128n);   // ok

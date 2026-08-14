@@ -82,6 +82,11 @@ import { COUNT_ALIAS } from './AbstractTranslator.ts';
 // Drivers can `switch (a.sql) { case 'find': … }` and TypeScript will narrow
 // `a.params` automatically — no `as any` cast on the dispatch path.
 
+/**
+ * A plain `find()`. Emitted for a SELECT that needs no pipeline —
+ * anything requiring aliasing, joins or aggregates becomes a
+ * {@link MongoAggregateAction} instead.
+ */
 export type MongoFindAction = {
   sql: 'find';
   params: {
@@ -100,6 +105,10 @@ export type MongoFindAction = {
   };
 };
 
+/**
+ * An aggregation pipeline. Also the shape `insertQuery` emits, where the
+ * final `$merge` stage is what performs the write.
+ */
 export type MongoAggregateAction = {
   sql: 'aggregate';
   params: {
@@ -108,6 +117,10 @@ export type MongoAggregateAction = {
   };
 };
 
+/**
+ * An insert. `params.data` stays singular or plural exactly as the caller
+ * passed it, so the driver picks `insertOne` / `insertMany` from its shape.
+ */
 export type MongoInsertAction = {
   sql: 'insert';
   params: {
@@ -116,6 +129,11 @@ export type MongoInsertAction = {
   };
 };
 
+/**
+ * An update. `params.data` is already wrapped in its Mongo update
+ * operators (`$set`, and `$setOnInsert` on the upsert path) — pass it
+ * through untouched.
+ */
 export type MongoUpdateAction = {
   sql: 'update';
   params: {
@@ -151,6 +169,10 @@ export type MongoBulkWriteAction = {
   };
 };
 
+/**
+ * A delete. Also what `truncate` emits, with an empty `filter` — so an
+ * empty filter here is intentional, never a dropped predicate.
+ */
 export type MongoDeleteAction = {
   sql: 'delete';
   params: {
@@ -160,6 +182,10 @@ export type MongoDeleteAction = {
   };
 };
 
+/**
+ * A native `count`. Only emitted for a join-free COUNT; with joins the
+ * query falls back to a pipeline.
+ */
 export type MongoCountAction = {
   sql: 'count';
   params: {
@@ -168,11 +194,20 @@ export type MongoCountAction = {
   };
 };
 
+/**
+ * An explicit `createCollection`. Optional in practice — Mongo creates the
+ * collection on first write — but emitted so CREATE_TABLE has an effect.
+ */
 export type MongoCreateCollectionAction = {
   sql: 'createCollection';
   params: { collection: string };
 };
 
+/**
+ * A `createIndex`. Every key is ascending (`1`) — OQL's `CREATE_INDEX`
+ * carries no per-column direction. A partial index arrives as
+ * `options.partialFilterExpression`.
+ */
 export type MongoCreateIndexAction = {
   sql: 'createIndex';
   params: {
@@ -182,21 +217,35 @@ export type MongoCreateIndexAction = {
   };
 };
 
+/** A `dropIndex`. Mongo scopes index names per-collection. */
 export type MongoDropIndexAction = {
   sql: 'dropIndex';
   params: { name: string; collection?: string };
 };
 
+/**
+ * A collection drop, emitted for both DROP_TABLE and DROP_VIEW — Mongo
+ * drops a view the same way it drops a collection.
+ */
 export type MongoDropAction = {
   sql: 'drop';
   params: { collection: string; options: { ifExists: boolean } };
 };
 
+/**
+ * A `renameCollection` — the only ALTER_TABLE action Mongo can act on,
+ * and how `alterView` handles a rename-only request.
+ */
 export type MongoRenameCollectionAction = {
   sql: 'renameCollection';
   params: { collection: string; target: string };
 };
 
+/**
+ * A `createView`. `viewOn` is the source collection and `pipeline` the
+ * view body — the translated SELECT, expanded to pipeline stages even
+ * when it would otherwise have been a plain `find`.
+ */
 export type MongoCreateViewAction = {
   sql: 'createView';
   params: {
@@ -206,11 +255,20 @@ export type MongoCreateViewAction = {
   };
 };
 
+/**
+ * A `dropDatabase`, emitted for DROP_SCHEMA. Note the asymmetry: there is
+ * no create counterpart, because `createSchema` throws.
+ */
 export type MongoDropDatabaseAction = {
   sql: 'dropDatabase';
   params: { database: string };
 };
 
+/**
+ * Do nothing. Emitted where a SQL dialect would have work to do but Mongo
+ * has none — `refreshMaterializedView`, say — so a caller's statement
+ * sequence keeps its length and positions.
+ */
 export type MongoNoopAction = {
   sql: 'noop';
   params: Record<string, never>;
@@ -280,13 +338,49 @@ const MONGO_TIME_UNITS: Record<TimeUnit, string> = {
   YEARS: 'year',
 };
 
+/**
+ * Turns a validated {@link Query} into a {@link MongoAction} for the mongo
+ * driver to execute. Mirrors the SQL translators' method surface but is
+ * not an {@link AbstractTranslator} — there is no SQL string or parameter
+ * record, just a discriminated action object.
+ *
+ * Stateless and reusable. Several OQL features have no Mongo equivalent
+ * and throw rather than degrade silently; the module header above lists
+ * them.
+ *
+ * @example
+ * ```typescript
+ * const mongo = new MongoTranslator();
+ * const action = mongo.select({
+ *   type: 'SELECT',
+ *   table: 'users',
+ *   columns: ['id', 'name'],
+ *   projection: { '@id': true, '@name': true },
+ * });
+ * if (action.sql === 'find') {
+ *   // action.params is narrowed to the find shape here
+ *   console.log(action.params.collection, action.params.filter);
+ * }
+ * ```
+ */
 export class MongoTranslator {
+  /** Dialect tag, reported on every error this translator raises. */
   public readonly Dialect = 'mongo';
 
   // =========================================================================
   // Public API — one method per query type
   // =========================================================================
 
+  /**
+   * Translate a `SELECT`. Returns a plain `find` when it can and an
+   * aggregation pipeline when the query needs one (aliased projections,
+   * joins, aggregates, grouping) — check `action.sql` before reading
+   * `params`.
+   *
+   * @throws {@link DialectUnsupportedError} For `distinct`, an
+   *   `$exists` / `$nexists` filter, `STRING_AGG`, and any other
+   *   expression or operator with no Mongo equivalent.
+   */
   public select(
     q: Query<'SELECT'>,
   ): MongoFindAction | MongoAggregateAction {
@@ -294,6 +388,10 @@ export class MongoTranslator {
     return this.#buildSelect(q);
   }
 
+  /**
+   * Translate an `INSERT`. There is no `RETURNING` equivalent, so unlike
+   * the SQL translators nothing is projected back.
+   */
   public insert(q: Query<'INSERT'>): MongoInsertAction {
     assertInsert(q);
     const data = q.data;
@@ -306,6 +404,11 @@ export class MongoTranslator {
     };
   }
 
+  /**
+   * Translate an `INSERT … SELECT`. The pipeline runs over the *source*
+   * collection and writes with `$merge`, so `params.collection` is the
+   * source, not the insert target — the target appears in the final stage.
+   */
   public insertQuery(q: Query<'INSERT_FROM_QUERY'>): MongoAggregateAction {
     assertInsertFromQuery(q);
     // `INSERT INTO target SELECT … FROM source` — emitted as an aggregation
@@ -367,6 +470,10 @@ export class MongoTranslator {
     return pipeline;
   }
 
+  /**
+   * Translate an `UPDATE`. Always `multiple: true`, and a `q.where`-less
+   * query yields an empty filter that matches the whole collection.
+   */
   public update(q: Query<'UPDATE'>): MongoUpdateAction {
     assertUpdate(q);
     return {
@@ -382,6 +489,10 @@ export class MongoTranslator {
     };
   }
 
+  /**
+   * Translate a `DELETE`. Always `multiple: true`, and a `q.where`-less
+   * query yields an empty filter — which deletes every document.
+   */
   public delete(q: Query<'DELETE'>): MongoDeleteAction {
     assertDelete(q);
     return {
@@ -396,6 +507,15 @@ export class MongoTranslator {
     };
   }
 
+  /**
+   * Translate an `UPSERT`. A single row becomes an `update` with
+   * `upsert: true`; an array of rows becomes a `bulkWrite` — check
+   * `action.sql` before reading `params`.
+   *
+   * @throws {@link DialectUnsupportedError} When a row leaves a conflict
+   *   key null or absent. Mongo would match an arbitrary document rather
+   *   than fail, so a partial key is refused up front.
+   */
   public upsert(
     q: Query<'UPSERT'>,
   ): MongoUpdateAction | MongoBulkWriteAction {
@@ -491,6 +611,13 @@ export class MongoTranslator {
     return { filter, update };
   }
 
+  /**
+   * Translate a `COUNT`. A join-free count is a native `count`; with joins
+   * it is rewritten as a SELECT and comes back as a pipeline.
+   *
+   * @throws {@link DialectUnsupportedError} When `q.distinct` is set —
+   *   Mongo has no count-level DISTINCT.
+   */
   public count(
     q: Query<'COUNT'>,
   ): MongoCountAction | MongoFindAction | MongoAggregateAction {
@@ -532,6 +659,13 @@ export class MongoTranslator {
   // DDL
   // ---------------------------------------------------------------------------
 
+  /**
+   * Always throws — a Mongo database springs into existence on its first
+   * write, so there is nothing to emit. Validates `q` first, so a
+   * malformed query still fails as a malformed query.
+   *
+   * @throws {@link DialectUnsupportedError} Unconditionally.
+   */
   public createSchema(q: Query<'CREATE_SCHEMA'>): never {
     assertCreateSchema(q);
     throw new DialectUnsupportedError(
@@ -540,6 +674,10 @@ export class MongoTranslator {
     );
   }
 
+  /**
+   * Translate a `DROP_SCHEMA` to `dropDatabase`. Unconditional — Mongo
+   * offers no `ifExists` or `cascade` here, so both are ignored.
+   */
   public dropSchema(q: Query<'DROP_SCHEMA'>): MongoDropDatabaseAction {
     assertDropSchema(q);
     return {
@@ -548,6 +686,13 @@ export class MongoTranslator {
     };
   }
 
+  /**
+   * Translate a `CREATE_TABLE` into a `createCollection` plus one unique
+   * `createIndex` per key. Column definitions are discarded — Mongo
+   * collections are schemaless, so only the uniqueness constraints
+   * survive: the primary key as an index named `_pk`, and each entry of
+   * `q.uniqueKeys` under its own name.
+   */
   public createTable(
     q: Query<'CREATE_TABLE'>,
   ): Array<MongoCreateCollectionAction | MongoCreateIndexAction> {
@@ -590,6 +735,11 @@ export class MongoTranslator {
     return out;
   }
 
+  /**
+   * Translate an `ALTER_TABLE`. Only `renameTo` produces anything; column
+   * and constraint changes are silently dropped, so a request that only
+   * adds columns returns an empty array rather than throwing.
+   */
   public alterTable(
     q: Query<'ALTER_TABLE'>,
   ): MongoRenameCollectionAction[] {
@@ -608,6 +758,11 @@ export class MongoTranslator {
     return out;
   }
 
+  /**
+   * Translate a `DROP_TABLE`. `q.ifExists` rides along in
+   * `params.options`; the driver decides whether to swallow a missing
+   * collection, since Mongo's `drop` has no such flag.
+   */
   public dropTable(q: Query<'DROP_TABLE'>): MongoDropAction {
     assertDropTable(q);
     return {
@@ -616,6 +771,11 @@ export class MongoTranslator {
     };
   }
 
+  /**
+   * Translate a `TRUNCATE` into an unfiltered delete. The collection and
+   * its indexes survive, unlike a drop — but this walks every document, so
+   * it is not the O(1) operation SQL `TRUNCATE` is.
+   */
   public truncate(q: Query<'TRUNCATE'>): MongoDeleteAction {
     assertTruncate(q);
     return {
@@ -628,6 +788,11 @@ export class MongoTranslator {
     };
   }
 
+  /**
+   * Translate a `CREATE_INDEX`. `q.where` becomes a
+   * `partialFilterExpression`; `q.method` has no Mongo equivalent and is
+   * ignored.
+   */
   public createIndex(q: Query<'CREATE_INDEX'>): MongoCreateIndexAction {
     assertCreateIndex(q);
     return {
@@ -653,6 +818,7 @@ export class MongoTranslator {
     };
   }
 
+  /** Translate a `DROP_INDEX`. `q.ifExists` and `q.cascade` are ignored. */
   public dropIndex(q: Query<'DROP_INDEX'>): MongoDropIndexAction {
     assertDropIndex(q);
     // `q.table` is guaranteed by the OQL contract; Mongo uses it as
@@ -682,6 +848,11 @@ export class MongoTranslator {
     };
   }
 
+  /**
+   * Translate a `DROP_VIEW`. Emits the same `drop` as
+   * {@link MongoTranslator.dropTable} — Mongo makes no distinction, so
+   * this will happily drop a plain collection of the same name.
+   */
   public dropView(q: Query<'DROP_VIEW'>): MongoDropAction {
     assertDropView(q);
     // Views drop the same way collections do.
@@ -691,6 +862,14 @@ export class MongoTranslator {
     };
   }
 
+  /**
+   * Translate an `ALTER_VIEW`. Redefining emits drop-then-create, which is
+   * not atomic: a reader between the two statements sees no view at all.
+   * A rename with no `q.query` uses `renameCollection` instead.
+   *
+   * @throws {@link OqlError} `ALTER_VIEW_EMPTY` when neither `renameTo`
+   *   nor `query` is set.
+   */
   public alterView(
     q: Query<'ALTER_VIEW'>,
   ): Array<

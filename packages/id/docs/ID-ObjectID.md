@@ -71,7 +71,7 @@ is **not** a uniform hex value.
 
 ### ObjectID Function
 
-```typescript
+```typescript ignore
 function ObjectID(
   counter?: number,
   machineId?: string,
@@ -237,6 +237,8 @@ console.log(`Created at: ${date.toISOString()} + ${millis}ms`);
 ### Utility Function for Timestamp Extraction
 
 ```typescript
+import { ObjectID } from '@tundralibs/id';
+
 function extractObjectIdTimestamp(objectId: string): Date {
   // Extract timestamp (seconds)
   const timestampHex = objectId.substring(0, 8);
@@ -251,6 +253,7 @@ function extractObjectIdTimestamp(objectId: string): Date {
 }
 
 // Usage
+const generateId = ObjectID();
 const id = generateId();
 const createdAt = extractObjectIdTimestamp(id);
 console.log(createdAt.toISOString());
@@ -266,6 +269,8 @@ timestamp and origin (not as a native MongoDB `_id` — see
 
 ```typescript
 import { ObjectID } from '@tundralibs/id';
+
+declare const collection: { insertOne(doc: unknown): Promise<unknown> };
 
 const generateId = ObjectID();
 
@@ -328,6 +333,8 @@ Generate unique file identifiers:
 ```typescript
 import { ObjectID } from '@tundralibs/id';
 
+declare function saveFile(path: string, file: File): Promise<void>;
+
 const fileGen = ObjectID(0, 'file');
 
 async function uploadFile(file: File) {
@@ -376,6 +383,8 @@ IDs generated later will be lexicographically greater:
 
 ```typescript
 import { ObjectID } from '@tundralibs/id';
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const generateId = ObjectID();
 
@@ -438,6 +447,8 @@ console.log(ids.size === 2_000_000); // => true (no duplicates)
 Safe to use across multiple machines and processes:
 
 ```typescript
+import { ObjectID } from '@tundralibs/id';
+
 // Machine A
 const machineA = ObjectID(0, 'machA');
 
@@ -487,7 +498,7 @@ export function createUser() {
 }
 
 // ❌ Bad - Creating new generator each time
-export function createUser() {
+export function createUserBad() {
   const gen = ObjectID(0, 'usr'); // Creates new generator
   return {
     id: gen(),
@@ -548,6 +559,8 @@ function areIdsEqual(id1: string, id2: string): boolean {
 Validate ObjectID format when receiving from external sources:
 
 ```typescript
+declare const requestBody: { id: string };
+
 function isValidObjectId(id: string): boolean {
   // Check length (26 characters)
   if (id.length !== 26) return false;
@@ -615,7 +628,7 @@ function MongoCompatibleObjectID() {
 
 ### Using with MongoDB Drivers
 
-```typescript
+```typescript ignore
 import { MongoClient, ObjectId } from 'mongodb';
 import { ObjectID } from '@tundralibs/id';
 

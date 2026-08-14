@@ -1,7 +1,41 @@
 import type { FlattenEntity } from '@tundralibs/utils';
 import type { GetColumnByType } from '../common/GetColumnByType.ts';
 import type { TableType } from '../common/TableType.ts';
+import type { NumericExpressions } from './NumericExpressions.ts';
 import type { TimeUnit } from './TimeUnit.ts';
+
+/**
+ * A single argument to an arithmetic expression: a numeric column
+ * reference, a numeric literal, or a nested expression that itself
+ * yields a number.
+ *
+ * Nesting is what `SUBTRACT(total, MULTIPLY(price, qty))` needs.
+ * The runtime has always supported it —
+ * `AbstractTranslator._translateExpression` recurses through
+ * `__renderExprArg`, and `assertNumericExpression` validates nested
+ * args to a depth of 10 — so the nested member only brings the type
+ * in line with the behaviour on both sides of it.
+ *
+ * Restricted to {@link NumericExpressions} rather than the whole
+ * {@link Expressions} union: that is exactly the set the runtime
+ * validator accepts in a numeric position, so a string expression
+ * such as `CONCAT` stays rejected at compile time instead of
+ * throwing at assert time.
+ *
+ * @template T  - Table schema type.
+ * @template FT - Flattened table type with `'@'` prefix for column
+ *                references.
+ *
+ * @internal
+ */
+type NumericExpressionArg<
+  T extends TableType,
+  FT extends FlattenEntity<T, '', '@'>,
+> =
+  | GetColumnByType<FT, number | bigint>
+  | number
+  | bigint
+  | Extract<Expressions<T, FT>, { $$_expression: NumericExpressions }>;
 
 /**
  * Type-safe expression definitions for computed values in database
@@ -54,50 +88,50 @@ export type Expressions<
 > = {
   /** Addition: sum of all numeric arguments. */
   $$_expression: 'ADD';
-  args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
+  args: Array<NumericExpressionArg<T, FT>>;
 } | {
   /** Subtraction: subtract remaining args from the first. */
   $$_expression: 'SUBTRACT';
-  args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
+  args: Array<NumericExpressionArg<T, FT>>;
 } | {
   /** Multiplication: product of all numeric arguments. */
   $$_expression: 'MULTIPLY';
-  args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
+  args: Array<NumericExpressionArg<T, FT>>;
 } | {
   /** Division: divide first arg by second. */
   $$_expression: 'DIVIDE';
-  args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
+  args: Array<NumericExpressionArg<T, FT>>;
 } | {
   /** Modulo: remainder after dividing first by second. */
   $$_expression: 'MODULO';
-  args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
+  args: Array<NumericExpressionArg<T, FT>>;
 } | {
   /** Absolute value. */
   $$_expression: 'ABS';
-  args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
+  args: Array<NumericExpressionArg<T, FT>>;
 } | {
   /** Ceiling: round up to nearest integer. */
   $$_expression: 'CEIL';
-  args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
+  args: Array<NumericExpressionArg<T, FT>>;
 } | {
   /** Floor: round down to nearest integer. */
   $$_expression: 'FLOOR';
-  args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
+  args: Array<NumericExpressionArg<T, FT>>;
 } | {
   /** Round to nearest integer. */
   $$_expression: 'ROUND';
-  args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
+  args: Array<NumericExpressionArg<T, FT>>;
 } | {
   /** Power: raise `base` to the power of `exponent` (base^exponent). */
   $$_expression: 'POWER';
   args: {
-    base: GetColumnByType<FT, number | bigint> | number | bigint;
-    exponent: GetColumnByType<FT, number | bigint> | number | bigint;
+    base: NumericExpressionArg<T, FT>;
+    exponent: NumericExpressionArg<T, FT>;
   };
 } | {
   /** Square root. */
   $$_expression: 'SQRT';
-  args: Array<GetColumnByType<FT, number | bigint> | number | bigint>;
+  args: Array<NumericExpressionArg<T, FT>>;
 } | {
   /** Length: number of characters in a string. */
   $$_expression: 'LENGTH';

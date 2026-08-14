@@ -33,7 +33,7 @@
  * }
  *
  * // Make phone and address optional for user creation
- * type CreateUserRequest = Optional<User, 'phone' | 'address'>;
+ * type CreateUserRequest = MakeOptional<User, 'phone' | 'address'>;
  * // Result: {
  * //   id: number;
  * //   name: string;
@@ -73,8 +73,10 @@
  * // or more specifically:
  * type ProductPatch = MakeOptional<Product, 'name' | 'price' | 'description' | 'category' | 'inStock'>;
  *
- * async function updateProduct(id: number, updates: ProductPatch): Promise<Product> {
- *   const existing = await getProduct(id);
+ * declare function getProduct(id: number): Promise<Product>;
+ *
+ * async function updateProduct(updates: ProductUpdate): Promise<Product> {
+ *   const existing = await getProduct(updates.id);
  *   return {
  *     ...existing,
  *     ...updates,
@@ -83,8 +85,8 @@
  * }
  *
  * // Usage:
- * updateProduct(1, { price: 29.99 }); // Only update price
- * updateProduct(1, { name: 'New Name', inStock: false }); // Update multiple fields
+ * updateProduct({ id: 1, price: 29.99 }); // Only update price
+ * updateProduct({ id: 1, name: 'New Name', inStock: false }); // Update multiple
  * ```
  *
  * @example API request types:
@@ -97,6 +99,9 @@
  *   sortOrder: 'asc' | 'desc';
  *   filters: Record<string, any>;
  * }
+ *
+ * type SearchResult = { id: number };
+ * declare function performSearch(params: SearchParams): Promise<SearchResult[]>;
  *
  * // Make pagination and sorting optional with defaults
  * type SearchRequest = MakeOptional<SearchParams, 'page' | 'limit' | 'sortBy' | 'sortOrder'>;
@@ -129,6 +134,10 @@
  *   ssl: boolean;
  *   maxConnections: number;
  *   timeout: number;
+ * }
+ *
+ * declare class Connection {
+ *   constructor(config: DatabaseConfig);
  * }
  *
  * // Make connection tuning parameters optional

@@ -44,7 +44,7 @@ npx jsr add @tundralibs/crypt
 
 Generates a time-based OTP.
 
-```typescript
+```typescript ignore
 async function generateTOTP(
   secret: string,
   options?: TOTPOptions,
@@ -64,7 +64,7 @@ console.log(otp); // '123456'
 
 Verifies a time-based OTP.
 
-```typescript
+```typescript ignore
 async function verifyTOTP(
   otp: string,
   key: string,
@@ -90,7 +90,7 @@ const isValid = await verifyTOTP('123456', 'JBSWY3DPEHPK3PXP');
 
 Generates a counter-based OTP.
 
-```typescript
+```typescript ignore
 async function generateHOTP(
   secret: string,
   counter: number,
@@ -110,7 +110,7 @@ const otp = await generateHOTP('JBSWY3DPEHPK3PXP', 0);
 
 Verifies a counter-based OTP.
 
-```typescript
+```typescript ignore
 async function verifyHOTP(
   otp: string,
   key: string,
@@ -131,7 +131,7 @@ async function verifyHOTP(
 Builds an `otpauth://` URL for authenticator apps (Google Authenticator,
 Authy, …), typically rendered as a QR code.
 
-```typescript
+```typescript ignore
 function generateOTPAuthURL(options: OTPAuthURLOptions): string;
 ```
 
@@ -197,6 +197,8 @@ if (isValid) {
 
 ```typescript
 import { verifyTOTP } from '@tundralibs/crypt/OTP';
+
+declare const userOTP: string;
 
 // Allow ±1 time window (90 seconds total)
 const isValid = await verifyTOTP(

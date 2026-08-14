@@ -39,7 +39,9 @@ Package base. Use it to catch _any_ error this package throws
 without committing to a specific class:
 
 ```typescript
-import { MetroManError } from '@tundralibs/metro-man';
+import { MetroMan, MetroManError } from '@tundralibs/metro-man';
+
+const registry = new MetroMan();
 
 try {
   registry.get('something');
@@ -60,7 +62,7 @@ Thrown from a metric constructor (`Counter`, `Gauge`, `Histogram`,
 `type`, malformed `buckets` / `quantiles`, out-of-range `window`.
 
 ```typescript
-import { InvalidMetricOptionsError } from '@tundralibs/metro-man';
+import { Counter, InvalidMetricOptionsError } from '@tundralibs/metro-man';
 
 try {
   new Counter({} as never);
@@ -83,7 +85,7 @@ Thrown by `MetroMan.register` (and the factory methods) when a
 metric is already registered under the same case-insensitive name.
 
 ```typescript
-import { DuplicateMetricError } from '@tundralibs/metro-man';
+import { DuplicateMetricError, MetroMan } from '@tundralibs/metro-man';
 
 const m = new MetroMan();
 m.counter({ name: 'requests' });
@@ -114,7 +116,9 @@ Thrown when a labels record is rejected. Two reasons:
   malformed exposition and cannot be fixed by escaping.
 
 ```typescript
-import { InvalidLabelError } from '@tundralibs/metro-man';
+import { Histogram, InvalidLabelError } from '@tundralibs/metro-man';
+
+const histogram = new Histogram({ name: 'request_seconds' });
 
 try {
   histogram.observe(1, { le: '5' });
@@ -140,7 +144,9 @@ the (case-insensitive) name. `MetroMan.has(name)` is the
 non-throwing alternative.
 
 ```typescript
-import { MetricNotFoundError } from '@tundralibs/metro-man';
+import { MetricNotFoundError, MetroMan } from '@tundralibs/metro-man';
+
+const registry = new MetroMan();
 
 try {
   registry.get('nope');

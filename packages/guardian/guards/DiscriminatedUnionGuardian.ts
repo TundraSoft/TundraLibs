@@ -41,6 +41,8 @@ type UnionOf<T extends readonly unknown[]> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Shape = Guardian.discriminatedUnion('kind', [
  *   Guardian.object({
  *     kind: Guardian.literal('circle'),
@@ -63,6 +65,10 @@ export class DiscriminatedUnionGuardian<
   T extends // deno-lint-ignore no-explicit-any
   readonly ObjectGuardian<any>[],
 > extends BaseGuardian<UnionOf<T>> {
+  /**
+   * Emitted schema type — `'object'`, since every branch is an object;
+   * the `oneOf` structure is added by the emit overrides.
+   */
   protected override readonly _type = 'object';
   private readonly __discriminator: K;
   private readonly __members: readonly [...T];
@@ -77,11 +83,23 @@ export class DiscriminatedUnionGuardian<
   private readonly __lookup: ReadonlyMap<unknown, T[number]>;
 
   /**
+   * Builds the discriminator-value lookup up front, so parsing is a
+   * single map hit into one branch rather than a try-every-member scan.
+   * That means the branches are validated eagerly, here.
+   *
+   * @param discriminator - Field name every branch must declare with a
+   *   literal / enum guardian.
+   * @param members - Branch guardians. A multi-value enum on the
+   *   discriminator routes its whole allowed set to that branch.
+   * @param errorMessage - Replaces the default "not an object" and
+   *   "unknown discriminator" parse messages.
+   *
    * @throws {Error} When `discriminator` is empty or non-string.
    * @throws {Error} When `members` is empty, or when two branches
    *   share the same discriminator value (would silently shadow).
-   * @throws {TypeError} When a branch's discriminator field isn't
-   *   an `EnumGuardian` or `LiteralGuardian`.
+   * @throws {TypeError} When a branch is not an {@link ObjectGuardian},
+   *   or its discriminator field is not an {@link EnumGuardian} —
+   *   which is what `Guardian.literal()` returns.
    * @throws {GuardianError} (at parse time, via the composed
    *   transform) when the input discriminator doesn't match any
    *   registered branch value.

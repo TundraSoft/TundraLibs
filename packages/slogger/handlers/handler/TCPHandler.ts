@@ -52,6 +52,10 @@ export type TCPHandlerOptions = HandlerOptions & {
  *
  * @example Logstash TCP input with JSON formatting
  * ```typescript
+ * import { jsonFormatter } from '@tundralibs/slogger/formatters';
+ * import { TCPHandler } from '@tundralibs/slogger/handlers';
+ * import { SyslogSeverities } from '@tundralibs/utils';
+ *
  * new TCPHandler('logstash', {
  *   level: SyslogSeverities.INFO,
  *   host: 'logstash.internal',
@@ -62,6 +66,10 @@ export type TCPHandlerOptions = HandlerOptions & {
  *
  * @example Vector socket source with logfmt
  * ```typescript
+ * import { logfmtFormatter } from '@tundralibs/slogger/formatters';
+ * import { TCPHandler } from '@tundralibs/slogger/handlers';
+ * import { SyslogSeverities } from '@tundralibs/utils';
+ *
  * new TCPHandler('vector', {
  *   level: SyslogSeverities.INFO,
  *   host: '127.0.0.1',
@@ -71,6 +79,7 @@ export type TCPHandlerOptions = HandlerOptions & {
  * ```
  */
 export class TCPHandler extends AbstractHandler {
+  /** Runtime discriminator for this handler kind. */
   public readonly mode = 'tcp';
   private readonly __host: string;
   private readonly __port: number;
@@ -92,6 +101,9 @@ export class TCPHandler extends AbstractHandler {
   private __writeChain: Promise<void> = Promise.resolve();
 
   /**
+   * Validates the destination only — nothing is dialled until the first
+   * record, so constructing this handler cannot fail on a down peer.
+   *
    * @param name - Handler name identifier
    * @param options - Configuration options for the handler
    * @throws {SloggerConfigError} When `host` is not a non-empty
@@ -118,6 +130,10 @@ export class TCPHandler extends AbstractHandler {
     this.__framing = options.framing ?? 'lf';
   }
 
+  /**
+   * Write one record, queued behind any earlier write on the same
+   * socket. A failure drops the connection so the next record re-dials.
+   */
   protected _handle(message: string): Promise<void> {
     // Serialise through the write chain: concurrent fire-and-forget
     // logs must not interleave their writes on the shared socket.
@@ -185,6 +201,10 @@ export class TCPHandler extends AbstractHandler {
     }
   }
 
+  /**
+   * Flush every queued record, then close the connection. Safe to call
+   * more than once; a later record simply re-dials.
+   */
   public override async finalize(): Promise<void> {
     // Drain the write chain BEFORE dropping the connection. Enqueuing
     // the drop as the tail task guarantees every queued record is
@@ -199,6 +219,10 @@ export class TCPHandler extends AbstractHandler {
     await super.finalize();
   }
 
+  /**
+   * Dial the destination if no connection is held, coalescing concurrent
+   * callers onto a single in-flight connect.
+   */
   private async __ensureConnected(): Promise<void> {
     if (this.__connection) return;
     if (this.__connecting) {
@@ -218,6 +242,11 @@ export class TCPHandler extends AbstractHandler {
     await this.__connecting;
   }
 
+  /**
+   * Close and clear the connection. Close errors are ignored — the peer
+   * may already be gone, and the goal is only to reach a state where the
+   * next record re-dials.
+   */
   private __dropConnection(): void {
     if (this.__connection) {
       try {
@@ -229,6 +258,10 @@ export class TCPHandler extends AbstractHandler {
     }
   }
 
+  /**
+   * Apply the configured framing: `'octet-count'` prefixes the byte
+   * length (RFC 6587 §3.4.1), `'lf'` appends a newline.
+   */
   private __frame(message: string): Uint8Array {
     if (this.__framing === 'octet-count') {
       const bytes = this.__encoder.encode(message);

@@ -24,6 +24,14 @@ import type { GaugeOptions } from './types/mod.ts';
  * ```
  */
 export class Gauge extends BaseMetric<number, GaugeOptions> {
+  /**
+   * Create a gauge. `type` is injected automatically, so callers
+   * normally pass only `name` and `help`. Every series starts at `0`
+   * on its first {@link inc}/{@link dec}/{@link set}.
+   *
+   * @throws {@link InvalidMetricOptionsError} When `name` is missing or
+   *   isn't a legal Prometheus metric name.
+   */
   constructor(opt: Omit<GaugeOptions, 'type'> & { type?: 'GAUGE' }) {
     super({ ...opt, type: 'GAUGE' });
   }
@@ -48,22 +56,30 @@ export class Gauge extends BaseMetric<number, GaugeOptions> {
     entry.data = value;
   }
 
+  /** Increment the unlabelled series by 1. */
+  public inc(): void;
   /**
-   * Increment the named series.
+   * Increment the series identified by `labels` by 1.
    *
-   * Overloads:
-   * - `inc()` — increment unlabelled by 1
-   * - `inc(labels)` — increment labelled by 1
-   * - `inc(amount)` — increment unlabelled by `amount`
-   * - `inc(amount, labels)` — increment labelled by `amount`
+   * @throws {@link InvalidLabelError} When `labels` contains a name
+   *   that isn't a legal Prometheus label name.
+   */
+  public inc(labels: Record<string, string>): void;
+  /**
+   * Increment the unlabelled series by `amount`. A negative `amount`
+   * is legal on a gauge and decrements.
+   *
+   * @throws {@link InvalidMetricOptionsError} When `amount` is non-finite.
+   */
+  public inc(amount: number): void;
+  /**
+   * Increment the series identified by `labels` by `amount`. A negative
+   * `amount` is legal on a gauge and decrements.
    *
    * @throws {@link InvalidMetricOptionsError} When `amount` is non-finite.
    * @throws {@link InvalidLabelError} When `labels` contains a name
    *   that isn't a legal Prometheus label name.
    */
-  public inc(): void;
-  public inc(labels: Record<string, string>): void;
-  public inc(amount: number): void;
   public inc(amount: number, labels: Record<string, string>): void;
   public inc(
     amountOrLabels?: number | Record<string, string>,
@@ -80,16 +96,30 @@ export class Gauge extends BaseMetric<number, GaugeOptions> {
     entry.data += amount;
   }
 
+  /** Decrement the unlabelled series by 1. */
+  public dec(): void;
   /**
-   * Decrement the named series. Same overloads as {@link inc}.
+   * Decrement the series identified by `labels` by 1.
+   *
+   * @throws {@link InvalidLabelError} When `labels` contains a name
+   *   that isn't a legal Prometheus label name.
+   */
+  public dec(labels: Record<string, string>): void;
+  /**
+   * Decrement the unlabelled series by `amount`. Gauges are unbounded,
+   * so the value may go negative.
+   *
+   * @throws {@link InvalidMetricOptionsError} When `amount` is non-finite.
+   */
+  public dec(amount: number): void;
+  /**
+   * Decrement the series identified by `labels` by `amount`. Gauges are
+   * unbounded, so the value may go negative.
    *
    * @throws {@link InvalidMetricOptionsError} When `amount` is non-finite.
    * @throws {@link InvalidLabelError} When `labels` contains a name
    *   that isn't a legal Prometheus label name.
    */
-  public dec(): void;
-  public dec(labels: Record<string, string>): void;
-  public dec(amount: number): void;
   public dec(amount: number, labels: Record<string, string>): void;
   public dec(
     amountOrLabels?: number | Record<string, string>,

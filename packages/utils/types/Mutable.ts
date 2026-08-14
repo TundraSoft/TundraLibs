@@ -43,11 +43,11 @@
  *
  * @example Form editing:
  * ```typescript
- * interface ReadonlyProfile {
+ * type ReadonlyProfile = {
  *   readonly username: string;
  *   readonly email: string;
  *   readonly bio: string;
- * }
+ * };
  *
  * type EditableProfile = Mutable<ReadonlyProfile>;
  *
@@ -60,11 +60,11 @@
  *
  * @example API response modification:
  * ```typescript
- * interface ReadonlyApiData {
+ * type ReadonlyApiData = {
  *   readonly id: string;
  *   readonly timestamp: Date;
  *   readonly values: number[];
- * }
+ * };
  *
  * type ProcessableData = Mutable<ReadonlyApiData>;
  *
@@ -108,11 +108,11 @@
  *
  * @example Testing with mutable data:
  * ```typescript
- * interface ReadonlyConfig {
+ * type ReadonlyConfig = {
  *   readonly host: string;
  *   readonly port: number;
  *   readonly ssl: boolean;
- * }
+ * };
  *
  * type TestConfig = Mutable<ReadonlyConfig>;
  *

@@ -24,7 +24,19 @@ export type CacherErrorMeta = {
  */
 export class CacherEngineError<M extends CacherErrorMeta = CacherErrorMeta>
   extends CacherError<M> {
+  /**
+   * The error code this instance was constructed with, for programmatic
+   * branching. An unrecognised code is coerced to `'UNKNOWN_ERROR'` and the
+   * original preserved on `meta.originalCode`.
+   */
   public readonly code: CacherEngineErrorCode;
+
+  /**
+   * Passes the resolved message through verbatim — the constructor has already
+   * mapped `code` to its template in {@link CacherEngineErrorCodes}.
+   *
+   * @protected
+   */
   protected override get _messageTemplate(): string {
     return '${message}';
   }

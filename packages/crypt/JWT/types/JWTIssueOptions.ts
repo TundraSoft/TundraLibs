@@ -7,6 +7,11 @@
  *
  * @example
  * ```ts
+ * import { issueJWT } from '@tundralibs/crypt/JWT';
+ *
+ * declare const secret: string;
+ * declare const privateKey: string;
+ *
  * // Key ID for rotation
  * const token = await issueJWT('HS256', { sub: 'u1' }, secret, {
  *   kid: 'key-2024-01',

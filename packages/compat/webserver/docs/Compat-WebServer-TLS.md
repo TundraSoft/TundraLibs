@@ -35,6 +35,8 @@ Two configuration approaches are supported:
 Reference certificate files by path:
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 const server = new WebServer('SecureAPI', {
   mode: 'TCP',
   port: 443,
@@ -64,6 +66,8 @@ During construction, the server validates:
 - You have read permission for all files
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 // This will throw ServerConfigurationError
 const server = new WebServer('API', {
   mode: 'TCP',
@@ -81,6 +85,10 @@ const server = new WebServer('API', {
 Provide certificate content directly:
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
+declare const caCert: string;
+
 const cert = `-----BEGIN CERTIFICATE-----
 MIIDXTCCAkWgAwIBAgIJAJC1HiIAZAiUMA0Gcx...
 -----END CERTIFICATE-----`;
@@ -118,6 +126,8 @@ String-based configuration is useful when:
 - Certificates are embedded in the application
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 // From environment variables
 const server = new WebServer('API', {
   mode: 'TCP',
@@ -136,7 +146,7 @@ The CA certificate is used to verify client certificates or establish a trust ch
 
 ### File-Based
 
-```typescript
+```typescript ignore
 tls: {
   certFile: '/etc/ssl/server.crt',
   keyFile: '/etc/ssl/server.key',
@@ -146,7 +156,7 @@ tls: {
 
 ### String-Based
 
-```typescript
+```typescript ignore
 tls: {
   cert: serverCert,
   key: serverKey,
@@ -216,6 +226,8 @@ certbot certonly --standalone -d example.com
 ```
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 const server = new WebServer('ProdAPI', {
   mode: 'TCP',
   port: 443,
@@ -234,7 +246,7 @@ const server = new WebServer('ProdAPI', {
 - Uses `Bun.file()` for efficient certificate loading
 - Supports all standard TLS options
 
-```typescript
+```typescript ignore
 // Bun internally does:
 tls: {
   cert: Bun.file(certFile),
@@ -247,7 +259,7 @@ tls: {
 - Reads certificate files into memory
 - Uses `Deno.serve()` TLS options
 
-```typescript
+```typescript ignore
 // Deno internally does:
 {
   cert: Deno.readTextFileSync(certFile),
@@ -260,7 +272,7 @@ tls: {
 - Uses `node:https` module
 - Standard Node.js TLS options
 
-```typescript
+```typescript ignore
 // Node.js internally does:
 https.createServer({
   cert: fs.readFileSync(certFile),

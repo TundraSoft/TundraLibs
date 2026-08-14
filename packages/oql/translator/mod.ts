@@ -9,10 +9,11 @@
  *
  * @example PostgreSQL translation
  * ```typescript
+ * import type { Query } from '@tundralibs/oql';
  * import { PostgresTranslator } from '@tundralibs/oql/translator';
  *
  * const translator = new PostgresTranslator();
- * const query = {
+ * const query: Query<'SELECT'> = {
  *   type: 'SELECT',
  *   table: 'users',
  *   columns: ['id', 'email', 'age'],
@@ -27,7 +28,10 @@
  *
  * @example MongoDB translation
  * ```typescript
+ * import type { Query } from '@tundralibs/oql';
  * import { MongoTranslator } from '@tundralibs/oql/translator';
+ *
+ * declare const query: Query<'SELECT'>; // the same query as above
  *
  * const translator = new MongoTranslator();
  * const action = translator.select(query);

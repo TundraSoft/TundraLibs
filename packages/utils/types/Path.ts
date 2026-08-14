@@ -22,7 +22,7 @@
  *
  * @example Basic usage:
  * ```typescript
- * interface Config {
+ * type Config = {
  *   database: {
  *     host: string;
  *     port: number;
@@ -34,7 +34,7 @@
  *   logging: {
  *     level: 'debug' | 'info' | 'warn' | 'error';
  *   };
- * }
+ * };
  *
  * type ConfigPaths = Paths<Config>;
  * // Result: {
@@ -75,7 +75,7 @@ import { UnionToIntersection } from './UnionToIntersection.ts';
  *
  * @example Form field paths:
  * ```typescript
- * interface UserForm {
+ * type UserForm = {
  *   personal: {
  *     name: string;
  *     email: string;
@@ -89,17 +89,18 @@ import { UnionToIntersection } from './UnionToIntersection.ts';
  *     theme: 'light' | 'dark';
  *     notifications: boolean;
  *   };
- * }
+ * };
  *
  * type FormPaths = Paths<UserForm>;
  *
+ * declare const form: UserForm;
+ *
  * // Usage in form library
- * function getFieldValue<P extends keyof FormPaths>(
+ * // Implementation would parse the path and return the value
+ * declare function getFieldValue<P extends keyof FormPaths>(
  *   form: UserForm,
  *   path: P
- * ): FormPaths[P] {
- *   // Implementation would parse the path and return the value
- * }
+ * ): FormPaths[P];
  *
  * const email = getFieldValue(form, 'personal.email'); // Type: string
  * const theme = getFieldValue(form, 'preferences.theme'); // Type: 'light' | 'dark'
@@ -107,7 +108,7 @@ import { UnionToIntersection } from './UnionToIntersection.ts';
  *
  * @example Configuration access:
  * ```typescript
- * interface DatabaseConfig {
+ * type DatabaseConfig = {
  *   connection: {
  *     host: string;
  *     port: number;
@@ -116,16 +117,14 @@ import { UnionToIntersection } from './UnionToIntersection.ts';
  *       cert: string;
  *     };
  *   };
- * }
+ * };
  *
  * type ConfigPaths = Paths<DatabaseConfig>;
  *
  * // Type-safe configuration getter
- * function getConfig<P extends keyof ConfigPaths>(
+ * declare function getConfig<P extends keyof ConfigPaths>(
  *   path: P
- * ): ConfigPaths[P] {
- *   // Implementation would resolve the configuration value
- * }
+ * ): ConfigPaths[P]; // Implementation would resolve the configuration value
  *
  * const port = getConfig('connection.port'); // Type: number
  * const sslEnabled = getConfig('connection.ssl.enabled'); // Type: boolean
@@ -219,6 +218,15 @@ export type Paths<
  *   return current;
  * }
  *
+ * type Settings = {
+ *   app: {
+ *     name: string;
+ *     version: string;
+ *     features: { darkMode: boolean; notifications: boolean };
+ *   };
+ *   user: { id: number; email: string };
+ * };
+ *
  * const settings: Settings = {
  *   app: { name: 'MyApp', version: '1.0.0', features: { darkMode: true, notifications: false } },
  *   user: { id: 123, email: 'user@example.com' }
@@ -230,7 +238,7 @@ export type Paths<
  *
  * @example With configuration validation:
  * ```typescript
- * interface Config {
+ * type Config = {
  *   database: {
  *     host: string;
  *     port: number;
@@ -239,7 +247,10 @@ export type Paths<
  *       timeout: number;
  *     };
  *   };
- * }
+ * };
+ *
+ * declare const config: Config;
+ * declare function getValue<T, P extends string>(obj: T, path: P): PathValue<T, P>;
  *
  * // Type-safe configuration validator
  * function validateConfigPath<P extends string>(

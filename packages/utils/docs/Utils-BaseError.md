@@ -25,7 +25,7 @@ deno add @tundralibs/utils
 
 ### Constructor
 
-```typescript
+```typescript ignore
 new BaseError<M>(message: string, context?: M, cause?: Error)
 ```
 
@@ -34,6 +34,28 @@ new BaseError<M>(message: string, context?: M, cause?: Error)
 - `message`: Template string with `${var}` placeholders
 - `context`: Object with data for template substitution
 - `cause`: Optional underlying error for chaining
+
+**`M` must be a `type` alias, not an `interface`.** It is constrained to
+`Record<string, unknown>`, and an interface will not satisfy that —
+`Index signature for type 'string' is missing in type 'MyContext'`.
+Interfaces are open, since declaration merging lets another file add
+members later, so TypeScript withholds the implicit index signature; a
+`type` alias with the same members is closed and qualifies. For a shape
+you cannot change, intersect it:
+
+```typescript
+import { BaseError } from '@tundralibs/utils';
+
+interface Generated {
+  requestId: string;
+}
+
+type MyContext = Generated & Record<string, unknown>;
+
+class RequestError extends BaseError<MyContext> {}
+
+throw new RequestError('Request ${requestId} failed', { requestId: 'r-1' });
+```
 
 ### Methods
 
@@ -58,29 +80,41 @@ throw new BaseError(
 ### Error Chaining
 
 ```typescript
-try {
-  await database.connect();
-} catch (err) {
-  throw new BaseError(
-    'Failed to initialize app',
-    { component: 'database' },
-    err, // Chain the original error
-  );
-}
+import { BaseError } from '@tundralibs/utils';
 
-// Get root cause
-const rootCause = error.getRootCause();
-console.log(rootCause.message); // Original database error
+declare const database: { connect(): Promise<void> };
+
+const initialize = async () => {
+  try {
+    await database.connect();
+  } catch (err) {
+    throw new BaseError(
+      'Failed to initialize app',
+      { component: 'database' },
+      err as Error, // Chain the original error
+    );
+  }
+};
+
+try {
+  await initialize();
+} catch (error) {
+  // Get root cause
+  const rootCause = (error as BaseError).getRootCause();
+  console.log(rootCause.message); // Original database error
+}
 ```
 
 ### Custom Error Classes
 
 ```typescript
-interface ValidationContext {
+import { BaseError } from '@tundralibs/utils';
+
+type ValidationContext = {
   field: string;
   value: unknown;
   rule: string;
-}
+};
 
 class ValidationError extends BaseError<ValidationContext> {
   protected override get _messageTemplate(): string {
@@ -98,13 +132,11 @@ throw new ValidationError('', {
 ### Code Snippet Extraction
 
 ```typescript
+import { BaseError } from '@tundralibs/utils';
+
 const error = new BaseError('Something went wrong', { line: 42 });
 
-const snippet = error.getCodeSnippet({
-  before: 2,
-  after: 2,
-  syntaxHighlight: false,
-});
+const snippet = error.getCodeSnippet(2);
 
 console.log(snippet);
 // Shows 2 lines before and after the error line
@@ -113,13 +145,15 @@ console.log(snippet);
 ### JSON Serialization
 
 ```typescript
+import { BaseError } from '@tundralibs/utils';
+
 const error = new BaseError(
   'API request failed',
   { endpoint: '/users', status: 404 },
   new Error('Not Found'),
 );
 
-const errorJson = error.toJson();
+const errorJson = error.toJSON();
 console.log(JSON.stringify(errorJson, null, 2));
 ```
 

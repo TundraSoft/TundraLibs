@@ -17,7 +17,7 @@
  *   ServerState,
  *   ServerWebSocket,
  *   WebSocketHandler,
- * } from './types/mod.ts';
+ * } from '@tundralibs/compat/webserver';
  * ```
  */
 

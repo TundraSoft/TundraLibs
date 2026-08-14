@@ -24,6 +24,11 @@ import {
  *   serialization, no network.
  */
 export class MemoryPubSubAdapter extends PubSubAdapter {
+  /**
+   * Ordering and delivery are guaranteed because dispatch is a direct
+   * function call; everything requiring shared or durable state —
+   * patterns, presence, replay, cross-process — is `false`.
+   */
   override readonly capabilities: AdapterCapabilities = {
     patternSubscribe: false,
     presence: false,
@@ -38,6 +43,14 @@ export class MemoryPubSubAdapter extends PubSubAdapter {
     new Map();
   private __closed = false;
 
+  /**
+   * Add `handler` to `topic`'s subscriber set. Registering the same
+   * function twice is a no-op — handlers are held in a `Set`, so it is
+   * delivered to once and the first `unsubscribe()` removes it.
+   *
+   * @throws {@link Error} When called after {@link close}. (The adapter
+   *   contract permits either throwing or no-op'ing; this one throws.)
+   */
   override subscribe(
     topic: string,
     handler: (data: unknown) => void,
@@ -61,6 +74,13 @@ export class MemoryPubSubAdapter extends PubSubAdapter {
     };
   }
 
+  /**
+   * Call every subscriber of `topic` synchronously — handlers have already
+   * run by the time the returned promise is awaited. `data` is passed by
+   * reference with no serialization, so subscribers see the same object.
+   * A throwing handler is swallowed so fan-out continues. No-ops after
+   * {@link close}.
+   */
   override publish(topic: string, data: unknown): Promise<void> {
     if (this.__closed) return Promise.resolve();
     const set = this.__subscribers.get(topic);
@@ -75,6 +95,10 @@ export class MemoryPubSubAdapter extends PubSubAdapter {
     return Promise.resolve();
   }
 
+  /**
+   * Drop every subscriber and latch the adapter closed. Idempotent, and
+   * terminal — there is no reopen.
+   */
   override close(): Promise<void> {
     this.__closed = true;
     this.__subscribers.clear();

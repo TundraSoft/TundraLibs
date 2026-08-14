@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.0.0...oql-v1.0.1) (2026-08-13)
+
+
+### Documentation
+
+* **oql:** document Workers and browser runtime support ([#232](https://github.com/TundraSoft/TundraLibs/issues/232)) ([a5fb294](https://github.com/TundraSoft/TundraLibs/commit/a5fb29400ea9ca492511c052533378395c9499d4))
+
 ## [1.0.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.0.0-dev6.7...oql-v1.0.0) (2026-08-01)
 
 

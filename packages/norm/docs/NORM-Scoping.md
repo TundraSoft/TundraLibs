@@ -24,7 +24,15 @@ connection, runtime, and any active transaction — only the implicit
 filter is added. It is typically created per request:
 
 ```typescript
-import { Norm } from '@tundralibs/norm';
+import { Column, Entity, Norm, Schema } from '@tundralibs/norm';
+
+const App = Schema('App', {
+  Tickets: Entity('tickets', {
+    id: Column.integer(),
+    orgId: Column.integer(),
+  }, { pk: ['id'] }),
+});
+const norm = new Norm({ database: { dialect: 'sqlite', path: './data' } });
 
 const db = norm.use(App);
 
@@ -36,7 +44,7 @@ function handler(req: Request, orgId: number) {
 
 Scopes compose — chaining merges (the later value wins on a collision):
 
-```typescript
+```typescript ignore
 const scoped = db.scope({ '@orgId': 42 }).scope({ '@region': 'EU' });
 // every operation carries orgId = 42 AND region = 'EU'
 ```
@@ -46,7 +54,7 @@ const scoped = db.scope({ '@orgId': 42 }).scope({ '@region': 'EU' });
 `find`, `findOne`, `getByPK`, and `count` AND the scope into the
 `WHERE`:
 
-```typescript
+```typescript ignore
 await orgDb.repo('Tickets').find({ '@status': 'open' });
 // WHERE orgId = 42 AND status = 'open'
 
@@ -59,7 +67,7 @@ await orgDb.repo('Tickets').count();
 `insert` auto-fills the scope value — you may omit it, or pass it (it
 must match, or the insert is rejected):
 
-```typescript
+```typescript ignore
 await orgDb.repo('Tickets').insert({ title: 'Bug' });
 // orgId = 42 is filled in automatically
 
@@ -70,7 +78,7 @@ await orgDb.repo('Tickets').insert({ title: 'Bug', orgId: 99 });
 `update` and `delete` constrain the `WHERE`, and `update` additionally
 rejects a payload that would move a row out of scope:
 
-```typescript
+```typescript ignore
 await orgDb.repo('Tickets').update({ status: 'closed' }, { '@id': 7 });
 // WHERE orgId = 42 AND id = 7 — can only close this org's ticket #7
 
@@ -86,7 +94,7 @@ auto-fills the scope value (you may omit it), rejects a payload that
 contradicts the scope, and — the part specific to `upsert` — can never
 adopt or overwrite another tenant's row:
 
-```typescript
+```typescript ignore
 await orgDb.repo('Tickets').upsert(
   { extKey: 'T-1', title: 'Bug' }, // orgId auto-filled
   { conflictKeys: ['extKey'] },
@@ -131,7 +139,7 @@ up, identically on all four dialects:
   the list then names a real index, and the conflict can only ever match
   inside the scope, at the engine level:
 
-```typescript
+```typescript ignore
 const Tickets = Entity('tickets', {
   id: Column.integer(),
   orgId: Column.integer(),
@@ -176,7 +184,7 @@ this one — an unscopeable, irreversible cross-scope wipe. Use
 `delete({})` (which IS scoped) to clear only this scope, or call
 `truncate()` on an unscoped handle for a true table truncate:
 
-```typescript
+```typescript ignore
 await orgDb.repo('Tickets').truncate();
 // throws NormQueryError — cannot truncate from a scoped handle
 
@@ -194,7 +202,7 @@ The scoped handle is typed: `db.scope({ '@orgId': X })` makes `orgId`
 scope fills it. The base handle still requires it, and
 genuinely-required non-scope columns stay required:
 
-```typescript
+```typescript ignore
 const orgDb = db.scope({ '@orgId': 42 });
 
 await orgDb.repo('Tickets').insert({ title: 'Bug' }); // ok — orgId optional
@@ -214,7 +222,7 @@ A scope column that an entity doesn't have is silently skipped for that
 entity — it is queried unscoped. This lets one scoped handle span a
 whole registry where only some tables carry the partition column:
 
-```typescript
+```typescript ignore
 const orgDb = db.scope({ '@orgId': 42 });
 
 await orgDb.repo('Tickets').count(); // WHERE orgId = 42  (Tickets has orgId)
@@ -227,7 +235,7 @@ Every result from a scoped operation carries the scope that was applied
 under `result.scoped`, keyed by `@column` — for audit logging. It is
 absent when nothing applied (the graceful case above):
 
-```typescript
+```typescript ignore
 const r = await orgDb.repo('Tickets').count();
 r.scoped; // { '@orgId': 42 }
 

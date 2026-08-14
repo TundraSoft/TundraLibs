@@ -17,9 +17,9 @@
  *
  * @example Basic HTTP server
  * ```typescript
- * import { WebServer } from './WebServer.ts';
+ * import { WebServer } from '@tundralibs/compat/webserver';
  *
- * const server = new WebServer('MyAPI', {
+ * const server: WebServer = new WebServer('MyAPI', {
  *   mode: 'TCP',
  *   port: 8080,
  *   handler: (request, info) => {
@@ -237,10 +237,10 @@ const _stringifyThrown = (err: unknown): string => {
  *
  * @example TCP server with metrics monitoring
  * ```typescript
- * const server = new WebServer('API', {
+ * const server: WebServer = new WebServer('API', {
  *   mode: 'TCP',
  *   port: 3000,
- *   handler: async (req, info) => {
+ *   handler: async (req, info): Promise<Response> => {
  *     const url = new URL(req.url);
  *     if (url.pathname === '/metrics') {
  *       return Response.json(server.metrics);
@@ -390,6 +390,8 @@ export class WebServer<T = unknown> {
    *
    * @example
    * ```typescript
+   * declare const server: WebServer;
+   *
    * const metrics = server.metrics;
    * console.log(`Total requests: ${metrics.requests.total}`);
    * console.log(`Active connections: ${metrics.requests.active}`);
@@ -422,6 +424,8 @@ export class WebServer<T = unknown> {
    *
    * @example
    * ```typescript
+   * declare const server: WebServer;
+   *
    * server.start();
    * console.log(`Server listening on ${server.address}`);
    * // TCP: "Server listening on localhost:8080"
@@ -448,6 +452,10 @@ export class WebServer<T = unknown> {
    * which port the OS picked:
    *
    * ```typescript
+   * import type { ServerHandler } from '@tundralibs/compat/webserver';
+   *
+   * declare const handler: ServerHandler;
+   *
    * const server = new WebServer('t', { mode: 'TCP', port: 0, handler });
    * await server.start();
    * await fetch(`http://localhost:${server.port}/`);
@@ -612,6 +620,8 @@ export class WebServer<T = unknown> {
    *
    * @example Single listener
    * ```typescript
+   * declare const server: WebServer;
+   *
    * server.on('onResponse', (name, req, info, res) => {
    *   console.log(`${req.method} ${req.url} -> ${res.status}`);
    * });
@@ -619,6 +629,10 @@ export class WebServer<T = unknown> {
    *
    * @example Multiple listeners
    * ```typescript
+   * declare const server: WebServer;
+   * declare const logger: { error(err: Error): void };
+   * declare const metrics: { recordError(err: Error): void };
+   *
    * server.on('onError', [
    *   (name, error) => logger.error(error),
    *   (name, error) => metrics.recordError(error),
@@ -632,6 +646,12 @@ export class WebServer<T = unknown> {
     event: K,
     listener: ServerEvents[K],
   ): void;
+  /**
+   * Batch form of {@link on} — registers every listener in the array, in
+   * order, for the same event.
+   *
+   * @typeParam K - Event name key from {@link ServerEvents}
+   */
   public on<K extends keyof ServerEvents>(
     event: K,
     listener: ServerEvents[K][],
@@ -662,13 +682,20 @@ export class WebServer<T = unknown> {
    *
    * @example Remove specific listener
    * ```typescript
-   * const myHandler = (name, req, info, res) => console.log(res.status);
+   * import type { ServerEvents } from '@tundralibs/compat/webserver';
+   *
+   * declare const server: WebServer;
+   *
+   * const myHandler: ServerEvents['onResponse'] = (name, req, info, res) =>
+   *   console.log(res.status);
    * server.on('onResponse', myHandler);
    * server.off('onResponse', myHandler);
    * ```
    *
    * @example Remove all listeners for an event
    * ```typescript
+   * declare const server: WebServer;
+   *
    * server.off('onError'); // Removes all error handlers
    * ```
    *
@@ -679,11 +706,22 @@ export class WebServer<T = unknown> {
     listener: ServerEvents[K],
   ): void;
 
+  /**
+   * Batch form of {@link off} — removes each listener in the array.
+   * Entries that were never registered are ignored.
+   *
+   * @typeParam K - Event name key from {@link ServerEvents}
+   */
   public off<K extends keyof ServerEvents>(
     event: K,
     listener: ServerEvents[K][],
   ): void;
 
+  /**
+   * Removes every listener registered for `event`.
+   *
+   * @typeParam K - Event name key from {@link ServerEvents}
+   */
   public off<K extends keyof ServerEvents>(
     event: K,
   ): void;
@@ -723,6 +761,8 @@ export class WebServer<T = unknown> {
    *
    * @example
    * ```typescript
+   * declare const server: WebServer;
+   *
    * // Reset metrics every hour
    * setInterval(() => {
    *   const oldMetrics = server.metrics;
@@ -797,6 +837,10 @@ export class WebServer<T = unknown> {
    *
    * @example Basic usage
    * ```typescript
+   * import type { ServerOptions } from '@tundralibs/compat/webserver';
+   *
+   * declare const options: ServerOptions;
+   *
    * const server = new WebServer('API', options);
    * await server.start();
    * console.log(`Listening on ${server.address}`);
@@ -804,6 +848,10 @@ export class WebServer<T = unknown> {
    *
    * @example With error handling
    * ```typescript
+   * import { ServerAlreadyRunningError } from '@tundralibs/compat/webserver';
+   *
+   * declare const server: WebServer;
+   *
    * try {
    *   await server.start();
    * } catch (error) {
@@ -817,6 +865,10 @@ export class WebServer<T = unknown> {
    *
    * @example With abort signal
    * ```typescript
+   * import type { ServerOptions } from '@tundralibs/compat/webserver';
+   *
+   * declare const options: ServerOptions;
+   *
    * const controller = new AbortController();
    * const server = new WebServer('API', {
    *   ...options,
@@ -883,6 +935,8 @@ export class WebServer<T = unknown> {
    *
    * @example Graceful shutdown
    * ```typescript
+   * declare const server: WebServer;
+   *
    * // Wait for active requests to complete
    * await server.stop();
    * console.log('Server stopped gracefully');
@@ -890,6 +944,8 @@ export class WebServer<T = unknown> {
    *
    * @example Force shutdown
    * ```typescript
+   * declare const server: WebServer;
+   *
    * // Immediately close all connections
    * await server.stop(false);
    * console.log('Server force stopped');
@@ -897,6 +953,8 @@ export class WebServer<T = unknown> {
    *
    * @example With timeout
    * ```typescript
+   * declare const server: WebServer;
+   *
    * const stopTimeout = setTimeout(() => {
    *   console.log('Stop taking too long, forcing...');
    *   server.stop(false);
@@ -964,6 +1022,8 @@ export class WebServer<T = unknown> {
    *
    * @example
    * ```typescript
+   * declare const server: WebServer;
+   *
    * server.start();
    * server.unref(); // Process can exit even with server running
    * // ... later ...
@@ -998,6 +1058,10 @@ export class WebServer<T = unknown> {
    *
    * @example
    * ```typescript
+   * import type { ServerOptions } from '@tundralibs/compat/webserver';
+   *
+   * declare const metricsOptions: ServerOptions;
+   *
    * // Start a metrics server that won't prevent process exit
    * const metricsServer = new WebServer('Metrics', metricsOptions);
    * metricsServer.start();

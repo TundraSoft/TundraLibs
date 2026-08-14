@@ -38,14 +38,30 @@ export type ConfigType = {
   /** Direct keys of `set`. Throws if the set is unknown. */
   keys: (set: string) => Array<string>;
   /**
-   * Resolve `path` and cast to `T`.
+   * Resolve `path` and cast to `T`, in one of two forms.
    *
-   * @throws {Error} If any segment is missing, or the path runs through a
-   *   `null` intermediate or a primitive (reported as the friendly
-   *   `Config item "…" does not exist` error, never a raw `TypeError`);
-   *   numeric segments never index into string characters.
+   * `get(path)` — no default — throws when the path does not resolve.
+   *
+   * `get(path, defaultValue)` returns `defaultValue` instead of throwing.
+   * It does so in exactly the cases {@link ConfigType.has} reports as
+   * `false`: an unknown set, a missing segment, a path running through a
+   * `null` intermediate or a primitive, or a key that exists but holds
+   * `undefined`. A stored `null` is a real value — it is returned as-is,
+   * never replaced by the default.
+   *
+   * Both forms return `T`; supplying a default never widens the result
+   * to `T | undefined`.
+   *
+   * @throws {Error} Single-argument form only: if any segment is missing,
+   *   or the path runs through a `null` intermediate or a primitive
+   *   (reported as the friendly `Config item "…" does not exist` error,
+   *   never a raw `TypeError`); numeric segments never index into string
+   *   characters. The two-argument form returns the default instead.
    */
-  get: <T = unknown>(path: string) => T;
+  get: {
+    <T = unknown>(path: string): T;
+    <T = unknown>(path: string, defaultValue: T): T;
+  };
   /** Iterate the direct entries of `set`. Throws if the set is unknown. */
   forEach: (
     set: string,
@@ -104,10 +120,18 @@ export const Config = <
       const configSet = _data[setKey];
       return configSet ? Object.keys(configSet) : [];
     },
-    get: <T = unknown>(path: string): T => {
+    // The rest tuple is what separates `get(path)` from
+    // `get(path, undefined)`: only an argument that was actually passed
+    // gives `defaultValue.length === 1`, so the no-default form keeps
+    // throwing exactly as before. Callers see the overload pair declared
+    // on ConfigType['get'], not this signature.
+    get: <T = unknown>(path: string, ...defaultValue: [T] | []): T => {
       const paths = path.split('.');
       const set = paths.shift();
       if (!set || !_configSets.includes(set)) {
+        if (defaultValue.length === 1) {
+          return defaultValue[0];
+        }
         throw new Error(`Config set "${set}" does not exist`);
       }
       let obj: any = _data[set];
@@ -128,6 +152,9 @@ export const Config = <
           obj === null || typeof obj !== 'object' ||
           Object.keys(obj).includes(key) === false
         ) {
+          if (defaultValue.length === 1) {
+            return defaultValue[0];
+          }
           throw new Error(
             `Config item "${
               traversed.join('.')
@@ -136,6 +163,14 @@ export const Config = <
         } else {
           obj = obj[key];
         }
+      }
+      // A key that is present but holds `undefined` is what `has()` calls
+      // missing, so the defaulting form treats it the same way — keeping
+      // `get(p, d)` equivalent to `has(p) ? get(p) : d`. `null` is a value
+      // the config author wrote down, so it survives untouched. The
+      // no-default form is unchanged: it still hands back the `undefined`.
+      if (obj === undefined && defaultValue.length === 1) {
+        return defaultValue[0];
       }
       return obj;
     },

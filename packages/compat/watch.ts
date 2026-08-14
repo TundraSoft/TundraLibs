@@ -293,6 +293,8 @@ class NodeWatcher extends BaseWatcher {
  *
  * @example Watch multiple paths
  * ```ts
+ * declare function rebuild(paths: string[]): void;
+ *
  * const w = watch(['./pkg-a/src', './pkg-b/src']);
  * for await (const ev of w) rebuild(ev.paths);
  * ```

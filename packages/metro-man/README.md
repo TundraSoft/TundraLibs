@@ -142,6 +142,10 @@ produces a distinct series — be mindful of cardinality. The
 unlabelled series is keyed as `'no_label'`.
 
 ```typescript
+import { Counter } from '@tundralibs/metro-man';
+
+const counter = new Counter({ name: 'http_requests_total' });
+
 counter.inc({ method: 'GET', status: '200' });
 counter.inc({ method: 'GET', status: '500' });
 counter.inc(); // unlabelled series
@@ -171,20 +175,20 @@ Construct an empty registry.
 
 ### `counter(options) → Counter`
 
-Create a {@link MetroMan-Counter} and register it under
+Create a [Counter](docs/MetroMan-Counter.md) and register it under
 `options.name`.
 
 ### `gauge(options) → Gauge`
 
-Create a {@link MetroMan-Gauge} and register it.
+Create a [Gauge](docs/MetroMan-Gauge.md) and register it.
 
 ### `histogram(options) → Histogram`
 
-Create a {@link MetroMan-Histogram} and register it.
+Create a [Histogram](docs/MetroMan-Histogram.md) and register it.
 
 ### `summary(options) → Summary`
 
-Create a {@link MetroMan-Summary} and register it.
+Create a [Summary](docs/MetroMan-Summary.md) and register it.
 
 ### `register(...instances) → void`
 
@@ -214,7 +218,7 @@ Case-insensitive lookup.
 
 Dump some or all metrics in the requested format. Overloads:
 
-```typescript
+```typescript ignore
 collect('JSON', metrics?): Record<string, unknown>
 collect('STRING', metrics?): string
 collect('PROMETHEUS', metrics?): string

@@ -63,6 +63,9 @@ npx jsr add @tundralibs/cronus
 ```typescript
 import { Cronus } from '@tundralibs/cronus';
 
+declare function purgeExpired(): Promise<void>;
+declare function runMigration(): Promise<void>;
+
 const cron = new Cronus();
 
 // Observability — actions and listeners can throw without harm:
@@ -97,6 +100,8 @@ holding the loop, the process can exit mid-run of an async job; the
 host is responsible for draining in-flight work before exit:
 
 ```typescript
+import { Cronus } from '@tundralibs/cronus';
+
 const cron = new Cronus({ unref: true });
 ```
 

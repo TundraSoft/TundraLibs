@@ -9,6 +9,11 @@ import type { JWTAlgorithm } from './JWTAlgorithm.ts';
  *
  * @example
  * ```ts
+ * import { verifyJWT } from '@tundralibs/crypt/JWT';
+ *
+ * declare const token: string;
+ * declare const secret: string;
+ *
  * const options: JWTVerifyOptions = {
  *   aud: 'api.example.com',
  *   iss: 'auth.example.com',
@@ -61,6 +66,11 @@ export type JWTVerifyOptions = {
    * either side.
    *
    * ```ts
+   * import { JWT_DEFAULT_TYPES, verifyJWT } from '@tundralibs/crypt/JWT';
+   *
+   * declare const token: string;
+   * declare const key: string;
+   *
    * // Not checked — a token with any typ, or none, verifies.
    * await verifyJWT(token, key);
    *

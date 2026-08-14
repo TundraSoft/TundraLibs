@@ -78,7 +78,7 @@ npx jsr add @tundralibs/crypt
 
 Creates a signed JWT.
 
-```typescript
+```typescript ignore
 const issueJWT: <T extends JWTPayload = JWTPayload>(
   algo: JWTAlgorithm,
   payload: T,
@@ -103,6 +103,8 @@ const issueJWT: <T extends JWTPayload = JWTPayload>(
 ```typescript
 import { issueJWT } from '@tundralibs/crypt/JWT';
 
+declare const privateKeyPEM: string;
+
 const token = await issueJWT(
   'HS256',
   { sub: 'user-123', role: 'admin' },
@@ -122,7 +124,7 @@ const accessToken = await issueJWT(
 
 Verifies and decodes a JWT.
 
-```typescript
+```typescript ignore
 const verifyJWT: <T extends JWTPayload = JWTPayload>(
   token: string,
   key: SigningKey,
@@ -142,6 +144,8 @@ const verifyJWT: <T extends JWTPayload = JWTPayload>(
 
 ```typescript
 import { verifyJWT } from '@tundralibs/crypt/JWT';
+
+declare const token: string;
 
 const payload = await verifyJWT(token, 'my-jwt-secret');
 console.log(payload.sub); // 'user-123'
@@ -179,6 +183,10 @@ and algorithm pinning; `typ` is supplementary, which is why it is opt-in.) Pin
 ```typescript
 import { JWT_DEFAULT_TYPES, verifyJWT } from '@tundralibs/crypt/JWT';
 
+declare const token: string;
+declare const publicKeyPEM: string;
+declare const key: string;
+
 // Resource server: access tokens only — a plain JWT or id_token is rejected
 // with a JWTError (code INVALID_HEADER) even though its signature is valid.
 const claims = await verifyJWT(token, publicKeyPEM, {
@@ -196,7 +204,7 @@ An unrecognised `typ` throws a `JWTError` with code `INVALID_HEADER`.
 
 Decodes a JWT without verifying the signature.
 
-```typescript
+```typescript ignore
 const decodeJWT: (
   token: string,
 ) => { header: JWTHeader; payload: JWTPayload };
@@ -221,6 +229,8 @@ can rely on the `instanceof JWTError` contract.
 ```typescript
 import { decodeJWT } from '@tundralibs/crypt/JWT';
 
+declare const token: string;
+
 const { header, payload } = decodeJWT(token);
 console.log(header.alg); // 'HS256'
 ```
@@ -229,7 +239,7 @@ console.log(header.alg); // 'HS256'
 
 Refreshes a JWT by verifying it and issuing a new one with extended expiration.
 
-```typescript
+```typescript ignore
 const refreshJWT: <T extends JWTPayload = JWTPayload>(
   token: string,
   keyOrKeys: string | RefreshKeyConfig,
@@ -256,15 +266,31 @@ plain `JWT`.
 ```typescript
 import { refreshJWT } from '@tundralibs/crypt/JWT';
 
+declare const oldToken: string;
+declare const publicKeyPEM: string;
+declare const privateKeyPEM: string;
+
 // HMAC
 const newToken = await refreshJWT(oldToken, 'my-secret', 7200); // 2 hours
 
 // RSA
-const newToken = await refreshJWT(oldToken, {
+const newRsaToken = await refreshJWT(oldToken, {
   verifyKey: publicKeyPEM,
   signKey: privateKeyPEM,
 });
 ```
+
+## Errors
+
+Every failure in `issueJWT`, `verifyJWT`, `decodeJWT`, and `refreshJWT` is a
+`JWTError` carrying a stable code in `error.context.code` (there is no `.code`
+getter — read it from `context`). Which code you catch also tells you whether
+the signature had already verified: `EXPIRED_TOKEN` means an authentic token,
+`INVALID_SIGNATURE` means an unauthenticated one.
+
+All 12 codes, what triggers each, and the security-relevant distinctions
+between them are documented in
+[Crypt-JWT-Errors](errors/Crypt-JWT-Errors.md).
 
 ## Examples
 
@@ -305,6 +331,9 @@ try {
 ```typescript
 import { issueJWT, verifyJWT } from '@tundralibs/crypt/JWT';
 
+declare const privateKeyPEM: string;
+declare const publicKeyPEM: string;
+
 const token = await issueJWT('RS256', { sub: 'user-123' }, privateKeyPEM);
 const payload = await verifyJWT(token, publicKeyPEM);
 ```
@@ -313,6 +342,8 @@ const payload = await verifyJWT(token, publicKeyPEM);
 
 ```typescript
 import { decodeJWT } from '@tundralibs/crypt/JWT';
+
+declare const token: string;
 
 // Useful for inspecting algorithm before verification
 const { header } = decodeJWT(token);
@@ -323,6 +354,9 @@ console.log(header.alg); // 'RS256'
 
 ```typescript
 import { issueJWT, verifyJWT } from '@tundralibs/crypt/JWT';
+
+declare const privateKeyPEM: string;
+declare const publicKeyPEM: string;
 
 // Authorization server — mint an access token
 const accessToken = await issueJWT(
@@ -387,9 +421,15 @@ because 521 bits rounds up to 66 bytes per half.
 ```typescript
 import { decodeJWT, verifyJWT } from '@tundralibs/crypt/JWT';
 
+declare const idToken: string;
+declare const jwksUri: string;
+declare const clientId: string;
+
 const { header } = decodeJWT(idToken);
-const { keys } = await (await fetch(jwksUri)).json();
-const jwk = keys.find((k) => k.kid === header.kid);
+const { keys } = await (await fetch(jwksUri)).json() as {
+  keys: (JsonWebKey & { kid?: string })[];
+};
+const jwk = keys.find((k) => k.kid === header.kid)!;
 
 // The JWK goes in directly — no PEM conversion. Pinning `algorithm` also
 // pins the curve, so a key on any other curve is refused.

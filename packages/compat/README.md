@@ -74,7 +74,7 @@ import { RUNTIME } from 'jsr:@tundralibs/compat/runtime';
 ### Runtime Detection
 
 ```typescript
-import { isBun, isDeno, isNode, RUNTIME } from './runtime.ts';
+import { isBun, isDeno, isNode, RUNTIME } from '@tundralibs/compat/runtime';
 
 console.log(`Running on: ${RUNTIME}`);
 // Output: "Running on: DENO" or "BUN" or "NODE"
@@ -97,7 +97,7 @@ import {
   pathExists,
   readTextFile,
   writeTextFile,
-} from './file.ts';
+} from '@tundralibs/compat/file';
 
 // Read file
 const content = await readTextFile('./config.json');
@@ -114,7 +114,7 @@ if (await pathExists('./data')) {
 ### HTTP Server
 
 ```typescript
-import { WebServer } from './webserver/WebServer.ts';
+import { WebServer } from '@tundralibs/compat/webserver';
 
 const server = new WebServer('MyAPI', {
   mode: 'TCP',
@@ -134,17 +134,17 @@ server.start();
 ### Testing
 
 ```typescript
-import { describe, it } from './test.ts';
-import { assertEquals } from '@std/assert';
+import { describe, it } from '@tundralibs/compat/test';
+import { strictEqual } from 'node:assert';
 
 describe('Math operations', () => {
   it('should add numbers', () => {
-    assertEquals(1 + 1, 2);
+    strictEqual(1 + 1, 2);
   });
 
   it('should handle async', async () => {
     const result = await Promise.resolve(42);
-    assertEquals(result, 42);
+    strictEqual(result, 42);
   });
 });
 ```
@@ -295,7 +295,7 @@ import {
   removeSync,
   writeTextFile,
   writeTextFileSync,
-} from './file.ts';
+} from '@tundralibs/compat/file';
 ```
 
 **[→ File Documentation](docs/Compat-File.md)**
@@ -332,6 +332,10 @@ see `@tundralibs/rpc`.
 
 ```typescript
 import { WebSocketServer } from '@tundralibs/compat/websocket';
+
+// Your own auth check.
+const verifyToken = (header: string | null): string | null =>
+  header?.startsWith('Bearer ') ? header.slice(7) : null;
 
 const wss = new WebSocketServer<{ userId: string }>({
   upgrade: (req) => {
@@ -388,7 +392,7 @@ const host = hostname();
 Path manipulation utilities.
 
 ```typescript
-import * as path from './path.ts';
+import * as path from '@tundralibs/compat/path';
 
 path.join('foo', 'bar', 'baz'); // 'foo/bar/baz'
 path.dirname('/foo/bar/baz'); // '/foo/bar'
@@ -403,7 +407,10 @@ path.extname('file.txt'); // '.txt'
 Check runtime permissions (Deno) or simulate (Bun/Node).
 
 ```typescript
-import { hasPermission, hasPermissionSync } from './permissions.ts';
+import {
+  hasPermission,
+  hasPermissionSync,
+} from '@tundralibs/compat/permissions';
 
 const canRead = await hasPermission({ name: 'read', path: './data' });
 const canWrite = hasPermissionSync({ name: 'write', path: './output' });
@@ -416,7 +423,7 @@ const canWrite = hasPermissionSync({ name: 'write', path: './output' });
 Cross-runtime testing utilities.
 
 ```typescript
-import { afterEach, beforeEach, describe, it } from './test.ts';
+import { afterEach, beforeEach, describe, it } from '@tundralibs/compat/test';
 ```
 
 **[→ Test Documentation](docs/Compat-Test.md)**

@@ -85,6 +85,11 @@ All engines extend [`AbstractEngine`](../README.md#custom-engine) and share this
 ### `set<T>(key, value, options?)`
 
 ```typescript
+import { MemoryCacher } from '@tundralibs/cacher/engines';
+
+const cache = new MemoryCacher('demo', {});
+const data = { userId: 42 };
+
 await cache.set('user:1', { name: 'Alice' });
 await cache.set('session:x', data, { expiry: 600, window: true });
 ```
@@ -101,6 +106,12 @@ await cache.set('session:x', data, { expiry: 600, window: true });
 Returns the cached value, or `undefined` if missing or expired.
 
 ```typescript
+import { MemoryCacher } from '@tundralibs/cacher/engines';
+
+type User = { name: string };
+
+const cache = new MemoryCacher('demo', {});
+
 const user = await cache.get<User>('user:1');
 ```
 
@@ -109,6 +120,10 @@ const user = await cache.get<User>('user:1');
 Returns `true` if the key exists and has not expired.
 
 ```typescript
+import { MemoryCacher } from '@tundralibs/cacher/engines';
+
+const cache = new MemoryCacher('demo', {});
+
 if (await cache.has('feature-flag:beta')) { /* ... */ }
 ```
 
@@ -117,6 +132,10 @@ if (await cache.has('feature-flag:beta')) { /* ... */ }
 Removes a single entry.
 
 ```typescript
+import { MemoryCacher } from '@tundralibs/cacher/engines';
+
+const cache = new MemoryCacher('demo', {});
+
 await cache.delete('user:1');
 ```
 
@@ -125,6 +144,10 @@ await cache.delete('user:1');
 Removes all entries in this instance's namespace.
 
 ```typescript
+import { MemoryCacher } from '@tundralibs/cacher/engines';
+
+const cache = new MemoryCacher('demo', {});
+
 await cache.clear();
 ```
 
@@ -133,6 +156,10 @@ await cache.clear();
 Establishes the backend connection (Redis, Memcached). Called automatically by every operation — only call explicitly if you want to pre-connect.
 
 ```typescript
+import { MemoryCacher } from '@tundralibs/cacher/engines';
+
+const cache = new MemoryCacher('demo', {});
+
 await cache.init();
 ```
 
@@ -141,6 +168,10 @@ await cache.init();
 Releases backend resources. Call during application shutdown.
 
 ```typescript
+import { MemoryCacher } from '@tundralibs/cacher/engines';
+
+const cache = new MemoryCacher('demo', {});
+
 await cache.finalize();
 ```
 

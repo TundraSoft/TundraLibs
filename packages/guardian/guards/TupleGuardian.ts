@@ -45,6 +45,8 @@ type TupleResult<
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const range = Guardian.tuple([
  *   Guardian.number().integer().min(0),
  *   Guardian.number().integer().min(0),
@@ -56,6 +58,10 @@ export class TupleGuardian<
   T extends readonly FinishedGuardian<unknown>[],
   R = never,
 > extends BaseGuardian<TupleResult<T, R>> {
+  /**
+   * Emitted schema type — `'array'`; positional typing is carried by
+   * `prefixItems` / `minItems` / `maxItems` in the emit overrides.
+   */
   protected override readonly _type = 'array';
   private readonly __guardians: readonly [...T];
   /** Variadic tail guardian; `undefined` means a fixed-length tuple. */
@@ -272,6 +278,8 @@ export class TupleGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const cmd = Guardian.tuple([
    *   Guardian.literal('move'),
    *   Guardian.number().integer(),
@@ -306,6 +314,8 @@ export class TupleGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const xy = Guardian.tuple([Guardian.number(), Guardian.number()])
    *   .labels(['x', 'y']);
    *

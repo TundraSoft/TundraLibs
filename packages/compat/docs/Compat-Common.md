@@ -134,6 +134,11 @@ conn.close();
 **Example — Custom CA:**
 
 ```typescript
+import { connect } from '@tundralibs/compat/net';
+import { readTextFileSync } from '@tundralibs/compat/file';
+
+const corporateCaPem = readTextFileSync('/etc/ssl/corp-ca.pem');
+
 const conn = await connect({
   hostname: 'internal.corp',
   port: 443,
@@ -145,6 +150,8 @@ conn.close();
 **Example — Mutual TLS (mTLS):**
 
 ```typescript
+import { connect } from '@tundralibs/compat/net';
+
 const conn = await connect({
   hostname: 'secure.api.com',
   port: 443,
@@ -182,7 +189,7 @@ All error classes extend `CompatError` which captures the current `runtime` and 
 
 Base error for TLS configuration issues. Extended by `FetchInvalidPEMError`.
 
-```typescript
+```typescript ignore
 class FetchTLSError extends CompatError {
   /** Which TLS component caused the error: 'cert', 'key', 'ca[0]', etc. */
   readonly source: string;
@@ -191,7 +198,7 @@ class FetchTLSError extends CompatError {
 
 **Constructor:**
 
-```typescript
+```typescript ignore
 new FetchTLSError(message: string, source: string, cause?: Error)
 ```
 
@@ -199,6 +206,11 @@ new FetchTLSError(message: string, source: string, cause?: Error)
 
 ```typescript
 import { FetchTLSError } from '@tundralibs/compat';
+import { connect } from '@tundralibs/compat/net';
+import { readTextFileSync } from '@tundralibs/compat/file';
+
+const badCert = 'not-a-pem';
+const validKey = readTextFileSync('/etc/ssl/client.key');
 
 try {
   await connect({
@@ -218,7 +230,7 @@ try {
 
 Thrown when a required file (certificate, key, CA, or Unix socket) does not exist.
 
-```typescript
+```typescript ignore
 class FetchFileNotFoundError extends CompatError {
   /** The path to the missing file. */
   readonly path: string;
@@ -227,7 +239,7 @@ class FetchFileNotFoundError extends CompatError {
 
 **Constructor:**
 
-```typescript
+```typescript ignore
 new FetchFileNotFoundError(path: string, cause?: Error)
 ```
 
@@ -235,6 +247,7 @@ new FetchFileNotFoundError(path: string, cause?: Error)
 
 ```typescript
 import { FetchFileNotFoundError } from '@tundralibs/compat';
+import { connect } from '@tundralibs/compat/net';
 
 try {
   await connect({
@@ -263,7 +276,7 @@ base64-encoded-content
 
 Supported types: `CERTIFICATE`, `PRIVATE KEY`, `RSA PRIVATE KEY`, `EC PRIVATE KEY`.
 
-```typescript
+```typescript ignore
 class FetchInvalidPEMError extends FetchTLSError {
   /** Which TLS component has invalid PEM: 'cert', 'key', 'ca[0]', etc. */
   readonly source: string;
@@ -272,7 +285,7 @@ class FetchInvalidPEMError extends FetchTLSError {
 
 **Constructor:**
 
-```typescript
+```typescript ignore
 new FetchInvalidPEMError(message: string, source: string, cause?: Error)
 ```
 
@@ -282,6 +295,10 @@ new FetchInvalidPEMError(message: string, source: string, cause?: Error)
 
 ```typescript
 import { FetchInvalidPEMError } from '@tundralibs/compat';
+import { connect } from '@tundralibs/compat/net';
+import { readTextFileSync } from '@tundralibs/compat/file';
+
+const validKey = readTextFileSync('/etc/ssl/client.key');
 
 try {
   await connect({
@@ -300,7 +317,7 @@ try {
 
 Thrown when a file path contains directory traversal sequences (`../`, `..\`) or null bytes — a security violation.
 
-```typescript
+```typescript ignore
 class FetchPathTraversalError extends CompatError {
   /** The path that triggered the traversal detection. */
   readonly path: string;
@@ -311,7 +328,7 @@ class FetchPathTraversalError extends CompatError {
 
 **Constructor:**
 
-```typescript
+```typescript ignore
 new FetchPathTraversalError(path: string, cause?: Error)
 ```
 
@@ -324,6 +341,7 @@ new FetchPathTraversalError(path: string, cause?: Error)
 
 ```typescript
 import { FetchPathTraversalError } from '@tundralibs/compat';
+import { connect } from '@tundralibs/compat/net';
 
 try {
   await connect({
@@ -345,7 +363,7 @@ try {
 
 Validates PEM content for certificate, key, and optional CA certificates. Synchronous.
 
-```typescript
+```typescript ignore
 function validateTLSContent(
   cert?: string,
   key?: string,
@@ -369,6 +387,11 @@ function validateTLSContent(
 
 ```typescript
 import { validateTLSContent } from '@tundralibs/compat';
+import { readTextFileSync } from '@tundralibs/compat/file';
+
+const certPem = readTextFileSync('/etc/ssl/client.crt');
+const keyPem = readTextFileSync('/etc/ssl/client.key');
+const caPem = readTextFileSync('/etc/ssl/ca.crt');
 
 const tls = validateTLSContent(certPem, keyPem, [caPem]);
 // tls.cert, tls.key, tls.ca are now validated
@@ -378,7 +401,7 @@ const tls = validateTLSContent(certPem, keyPem, [caPem]);
 
 Reads TLS files from disk and validates their PEM content. Synchronous.
 
-```typescript
+```typescript ignore
 function validateTLSFiles(
   certFile?: string,
   keyFile?: string,
@@ -419,7 +442,7 @@ const tls = validateTLSFiles(
 
 Validates a Unix socket path for security and existence. Asynchronous.
 
-```typescript
+```typescript ignore
 async function validateUnixSocket(socketPath: string): Promise<void>;
 ```
 
@@ -435,7 +458,7 @@ async function validateUnixSocket(socketPath: string): Promise<void>;
 **Example:**
 
 ```typescript
-import { validateUnixSocket } from '@tundralibs/compat';
+import { validateUnixSocket } from '@tundralibs/compat/common';
 
 await validateUnixSocket('/var/run/docker.sock');
 // Socket path is valid and exists
@@ -445,7 +468,7 @@ await validateUnixSocket('/var/run/docker.sock');
 
 Combines a timeout duration and an optional `AbortSignal` into a single `AbortSignal` that triggers when either condition fires first.
 
-```typescript
+```typescript ignore
 function combineSignals(
   timeout?: number,
   signal?: AbortSignal,
