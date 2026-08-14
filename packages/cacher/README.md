@@ -174,15 +174,26 @@ isolation guaranteed by `clear()`. The same rule is enforced by
 
 Registers a custom cache engine constructor.
 
-```typescript ignore
-import { AbstractEngine } from '@tundralibs/cacher';
+```typescript
+import { AbstractEngine, Cacher } from '@tundralibs/cacher';
+import type { CacherOptions, CacheValue } from '@tundralibs/cacher/types';
 
-class MyCustomEngine extends AbstractEngine {
-  // implementation
+class MyCustomEngine extends AbstractEngine<CacherOptions> {
+  public readonly Engine = 'CUSTOM';
+
+  protected _set(_key: string, _value: CacheValue): void {}
+  protected _get(_key: string): CacheValue | undefined {
+    return undefined;
+  }
+  protected _has(_key: string): boolean {
+    return false;
+  }
+  protected _delete(_key: string): void {}
+  protected _clear(): void {}
 }
 
 Cacher.addEngine('CUSTOM', MyCustomEngine);
-const cache = Cacher.create('CUSTOM', 'custom-cache', options);
+const cache = Cacher.create('CUSTOM', 'custom-cache', { defaultExpiry: 300 });
 ```
 
 ### `cache.set<T>(key, value, options?)`
