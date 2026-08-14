@@ -21,6 +21,8 @@ Type definitions for Object Query Language queries.
 
 The OQL type system provides comprehensive TypeScript types for defining database queries. All types are fully generic and support custom table schemas with complete type inference.
 
+These types validate a query's **shape** — which properties exist, which columns a schema declares, and what each operator accepts. Rules that span sibling properties are validated by `assertQuery` at **runtime**, because TypeScript cannot express a constraint from one property onto another: that a `having` key names an aggregate declared in `aggregates`, that `having` is only used alongside `aggregates`, and that every column referenced anywhere in the query appears in `columns`. A query that type-checks is well-formed, not necessarily well-scoped — run `assertQuery` before translating.
+
 ## Installation
 
 **Deno:**
@@ -731,7 +733,7 @@ type Aggregates<
 ### Complex SELECT with Joins and Aggregates
 
 ```typescript
-import type { Query } from '@tundralibs/oql';
+import { assertQuery, type Query } from '@tundralibs/oql';
 
 type Order = {
   id: number;
@@ -768,14 +770,17 @@ const query: Query<
     '@orderCount': true,
     '@avgOrder': true,
   },
-  having: {
-    '@totalRevenue': { $gte: 1000 },
-  },
   orderBy: {
     '@totalRevenue': 'DESC',
   },
   limit: 100,
 };
+
+// `having` filters on the aggregate alias `@totalRevenue`, which is a
+// column of neither table. A filter key can't be tied to a sibling
+// `aggregates` entry in the type system, so `assertQuery` enforces
+// that scoping at runtime instead.
+assertQuery({ ...query, having: { '@totalRevenue': { $gte: 1000 } } });
 ```
 
 ### INSERT with Expressions

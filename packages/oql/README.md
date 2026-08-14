@@ -381,7 +381,7 @@ explicit `$group` pipeline instead.
 ### Aggregation Functions
 
 ```typescript
-import type { Query } from '@tundralibs/oql';
+import { assertQuery, type Query } from '@tundralibs/oql';
 
 type Order = { id: number; userId: number; total: number };
 
@@ -400,10 +400,14 @@ const query: Query<'SELECT', Order> = {
     '@orderCount': true,
     '@avgOrder': true,
   },
-  having: {
-    '@totalRevenue': { $gte: 1000 },
-  },
 };
+
+// `having` filters on the aggregate alias `@totalRevenue`, which is
+// not a column of `Order`. TypeScript can't tie a filter key to a
+// sibling `aggregates` entry, so that scoping rule is enforced by
+// `assertQuery` at runtime: every `having` key must name a declared
+// aggregate, and `having` without `aggregates` is rejected outright.
+assertQuery({ ...query, having: { '@totalRevenue': { $gte: 1000 } } });
 ```
 
 ### Expression System
