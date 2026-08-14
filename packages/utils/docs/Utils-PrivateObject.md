@@ -77,6 +77,8 @@ console.log(store.has('email')); // false
 ### Immutable Mode
 
 ```typescript
+import { privateObject } from '@tundralibs/utils';
+
 const config = privateObject(
   { apiKey: 'secret', timeout: 5000 },
   false, // Disable mutations
@@ -92,6 +94,8 @@ config.clear(); // Throws Error!
 ### Iteration
 
 ```typescript
+import { privateObject } from '@tundralibs/utils';
+
 const userData = privateObject({
   firstName: 'Alice',
   lastName: 'Smith',
@@ -111,6 +115,8 @@ console.log(keys); // ['firstName', 'lastName', 'age']
 ### Class Private State
 
 ```typescript
+import { privateObject } from '@tundralibs/utils';
+
 class User {
   private data = privateObject({
     id: 0,
@@ -141,11 +147,13 @@ class User {
 ### Configuration Store
 
 ```typescript
-interface AppConfig {
+import { privateObject } from '@tundralibs/utils';
+
+type AppConfig = {
   apiUrl: string;
   timeout: number;
   retries: number;
-}
+};
 
 const config = privateObject<AppConfig>({
   apiUrl: 'https://api.example.com',
@@ -165,6 +173,8 @@ function updateTimeout(ms: number) {
 ### Cache Implementation
 
 ```typescript
+import { privateObject } from '@tundralibs/utils';
+
 class Cache<T> {
   private store = privateObject<Record<string, T>>({});
 
@@ -205,11 +215,13 @@ class Cache<T> {
 ### Settings Manager
 
 ```typescript
-interface Settings {
+import { privateObject } from '@tundralibs/utils';
+
+type Settings = {
   theme: 'light' | 'dark';
   language: string;
   notifications: boolean;
-}
+};
 
 class SettingsManager {
   private settings = privateObject<Settings>({
@@ -250,6 +262,8 @@ class SettingsManager {
 ### Private Module State
 
 ```typescript
+import { privateObject } from '@tundralibs/utils';
+
 const state = privateObject({
   initialized: false,
   connections: 0,
@@ -273,6 +287,8 @@ export function getStatus() {
 ### Type-Safe Storage
 
 ```typescript
+import { privateObject } from '@tundralibs/utils';
+
 type UserData = {
   id: number;
   username: string;

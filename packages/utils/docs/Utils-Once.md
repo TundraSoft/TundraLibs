@@ -43,6 +43,8 @@ Decorator for class methods.
 ```typescript
 import { once } from '@tundralibs/utils';
 
+declare function loadConfiguration(): { debug: boolean };
+
 const initialize = once(() => {
   console.log('Initializing...');
   return loadConfiguration();
@@ -56,6 +58,10 @@ initialize(); // Returns cached config (no log)
 ### Expensive Computation
 
 ```typescript
+import { once } from '@tundralibs/utils';
+
+declare function complexPiCalculation(precision: number): number;
+
 const calculatePi = once((precision: number) => {
   console.log('Computing π...');
   // Expensive calculation
@@ -70,6 +76,11 @@ console.log(pi1 === pi2); // true
 ### Async Initialization
 
 ```typescript
+import { once } from '@tundralibs/utils';
+
+declare function delay(ms: number): Promise<void>;
+declare class DatabaseConnection {}
+
 const connectDB = once(async () => {
   console.log('Connecting to database...');
   await delay(1000);
@@ -87,6 +98,8 @@ console.log(db1 === db2); // true
 ```typescript
 import { Once } from '@tundralibs/utils';
 
+declare function connectToDatabase(): Promise<unknown>;
+
 class Application {
   @Once
   initialize() {
@@ -95,6 +108,10 @@ class Application {
     this.setupRoutes();
     return 'ready';
   }
+
+  loadPlugins() {}
+
+  setupRoutes() {}
 
   @Once
   async loadDatabase() {
@@ -112,6 +129,8 @@ app.initialize(); // Returns cached result
 ### Error Handling
 
 ```typescript
+import { once } from '@tundralibs/utils';
+
 const riskyOperation = once(() => {
   throw new Error('Operation failed');
 });
@@ -119,19 +138,25 @@ const riskyOperation = once(() => {
 try {
   riskyOperation();
 } catch (err) {
-  console.log(err.message); // "Operation failed"
+  console.log((err as Error).message); // "Operation failed"
 }
 
 try {
   riskyOperation(); // Throws same cached error
 } catch (err) {
-  console.log(err.message); // "Operation failed"
+  console.log((err as Error).message); // "Operation failed"
 }
 ```
 
 ### Resource Allocation
 
 ```typescript
+import { once } from '@tundralibs/utils';
+
+declare class Logger {
+  constructor(options: { level: string; output: string });
+}
+
 const getLogger = once(() => {
   console.log('Creating logger instance...');
   return new Logger({
@@ -141,7 +166,8 @@ const getLogger = once(() => {
 });
 
 // Safe to call from multiple modules
-export const logger = getLogger();
+const logger = getLogger();
+export { logger };
 ```
 
 ## Best Practices
@@ -156,6 +182,12 @@ export const logger = getLogger();
 ### Module Initialization
 
 ```typescript
+import { once } from '@tundralibs/utils';
+
+declare function loadConfig(): void;
+declare function setupHooks(): void;
+declare function registerPlugins(): void;
+
 const initializeModule = once(() => {
   console.log('Module initializing...');
   loadConfig();
@@ -170,6 +202,8 @@ export { initializeModule };
 ### Lazy Loading
 
 ```typescript
+import { once } from '@tundralibs/utils';
+
 const getHeavyLib = once(async () => {
   console.log('Loading heavy library...');
   return await import('./heavy-library.js');
