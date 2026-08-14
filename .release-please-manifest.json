@@ -17,5 +17,5 @@
   "packages/rpc": "1.1.0",
   "packages/slogger": "1.1.4",
   "packages/tracer": "0.5.2",
-  "packages/utils": "1.0.3"
+  "packages/utils": "1.0.4"
 }
