@@ -33,7 +33,7 @@ npx jsr add @tundralibs/utils
 **Direct import (Deno):**
 
 ```typescript
-import type { DeepReadOnly, FlattenEntity } from 'jsr:@tundralibs/utils/types';
+import type { DeepReadOnly, FlattenEntity } from 'jsr:@tundralibs/utils';
 ```
 
 ## Table of Contents
@@ -71,6 +71,8 @@ import type { DeepReadOnly, FlattenEntity } from 'jsr:@tundralibs/utils/types';
 Recursively applies readonly constraints to all properties of a type and its nested objects.
 
 ```typescript
+import type { DeepReadOnly } from '@tundralibs/utils';
+
 type User = {
   id: number;
   profile: {
@@ -100,6 +102,8 @@ type ImmutableUser = DeepReadOnly<User>;
 Recursively removes readonly constraints from all properties of a type and its nested objects.
 
 ```typescript
+import type { DeepWritable } from '@tundralibs/utils';
+
 type ReadonlyConfig = {
   readonly database: {
     readonly host: string;
@@ -125,6 +129,8 @@ type MutableConfig = DeepWritable<ReadonlyConfig>;
 Makes all properties of an object type readonly at the top level (shallow).
 
 ```typescript
+import type { Immutable } from '@tundralibs/utils';
+
 type User = {
   id: number;
   name: string;
@@ -150,6 +156,8 @@ type ImmutableUser = Immutable<User>;
 Removes readonly modifiers from all properties of an object type at the top level (shallow).
 
 ```typescript
+import type { Mutable } from '@tundralibs/utils';
+
 type ReadonlyUser = {
   readonly id: number;
   readonly name: string;
@@ -176,6 +184,8 @@ type MutableUser = Mutable<ReadonlyUser>;
 Makes only specified properties of an object readonly while leaving others mutable.
 
 ```typescript
+import type { MakeReadOnly } from '@tundralibs/utils';
+
 type User = {
   id: number;
   name: string;
@@ -208,6 +218,8 @@ type ProtectedUser = MakeReadOnly<User, 'id' | 'role'>;
 Makes only specified properties of an object required while leaving others as-is.
 
 ```typescript
+import type { MakeRequired } from '@tundralibs/utils';
+
 type FormData = {
   name?: string;
   email?: string;
@@ -240,6 +252,8 @@ type RequiredForm = MakeRequired<FormData, 'name' | 'email'>;
 Makes only specified properties of an object optional while keeping others required.
 
 ```typescript
+import type { MakeOptional } from '@tundralibs/utils';
+
 type User = {
   id: number;
   name: string;
@@ -247,7 +261,7 @@ type User = {
   phone: string;
 };
 
-type CreateUserRequest = MakeOptional<User, 'phone' | 'address'>;
+type CreateUserRequest = MakeOptional<User, 'phone'>;
 // Result: {
 //   id: number;
 //   name: string;
@@ -274,6 +288,8 @@ type CreateUserRequest = MakeOptional<User, 'phone' | 'address'>;
 Recursively flattens nested objects to dot-notation keys with configurable identifier prefix.
 
 ```typescript
+import type { FlattenEntity } from '@tundralibs/utils';
+
 type BlogPost = {
   title: string;
   author: {
@@ -317,6 +333,14 @@ type FlatBlogPost = FlattenEntity<BlogPost>;
 **Examples:**
 
 ```typescript
+import type { FlattenEntity } from '@tundralibs/utils';
+
+type Config = {
+  server: {
+    host: string;
+  };
+};
+
 // Custom identifier
 type FlatConfig = FlattenEntity<Config, '', '_'>;
 // Uses underscore: _server._host
@@ -335,6 +359,8 @@ const query = {
 Generates all possible paths through an object type using dot notation.
 
 ```typescript
+import type { Paths } from '@tundralibs/utils';
+
 type Config = {
   database: {
     host: string;
@@ -369,6 +395,8 @@ type ConfigPaths = Paths<Config>;
 Extracts the type of a nested property from a dot-notation path.
 
 ```typescript
+import type { PathValue } from '@tundralibs/utils';
+
 type AppConfig = {
   server: {
     host: string;
@@ -407,6 +435,8 @@ type Invalid = PathValue<AppConfig, 'invalid.path'>; // never
 Flattens complex intersection types for better IntelliSense display.
 
 ```typescript
+import type { Simplify } from '@tundralibs/utils';
+
 type A = { x: number; y: string };
 type B = { z: boolean };
 type C = A & B;
@@ -434,6 +464,8 @@ type SimplifiedC = Simplify<C>;
 Removes properties with a value type of `never` from object types.
 
 ```typescript
+import type { ExcludeNever } from '@tundralibs/utils';
+
 type InputType = {
   validProp: string;
   invalidProp: never;
@@ -462,6 +494,8 @@ type CleanType = ExcludeNever<InputType>;
 Selects only properties from an object that match a specified value type.
 
 ```typescript
+import type { PickByType } from '@tundralibs/utils';
+
 type User = {
   id: number;
   name: string;
@@ -491,6 +525,8 @@ type NumericProps = PickByType<User, number>;
 Removes all properties from an object that match a specified value type.
 
 ```typescript
+import type { OmitByType } from '@tundralibs/utils';
+
 type UserClass = {
   id: number;
   name: string;
@@ -519,6 +555,8 @@ type UserData = OmitByType<UserClass, Function>;
 Converts an object type to an array of `[key, value]` tuple types.
 
 ```typescript
+import type { Entries } from '@tundralibs/utils';
+
 type User = {
   id: number;
   name: string;
@@ -540,6 +578,13 @@ type UserEntries = Entries<User>;
 **Example:**
 
 ```typescript
+import type { Entries } from '@tundralibs/utils';
+
+type Config = {
+  host: string;
+  port: number;
+};
+
 function processConfig(config: Config): void {
   const entries = Object.entries(config) as Entries<Config>;
   entries.forEach(([key, value]) => {
@@ -556,6 +601,8 @@ function processConfig(config: Config): void {
 Extracts the element type from array types.
 
 ```typescript
+import type { UnArray } from '@tundralibs/utils';
+
 type StringArray = string[];
 type StringElement = UnArray<StringArray>; // string
 
@@ -594,6 +641,8 @@ type UnwrappedString = UnArray<SingleString>; // string
 Transforms union types into intersection types.
 
 ```typescript
+import type { UnionToIntersection } from '@tundralibs/utils';
+
 type A = { x: number };
 type B = { y: string };
 type C = { z: boolean };
@@ -617,6 +666,8 @@ Uses distributive conditional types and contravariance in function parameter pos
 **Example:**
 
 ```typescript
+import type { UnionToIntersection } from '@tundralibs/utils';
+
 // Type-safe object merging
 function mergeObjects<T extends Record<string, unknown>[]>(
   ...objects: T
