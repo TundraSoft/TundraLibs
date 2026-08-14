@@ -34,7 +34,7 @@ rolling counter, a per-process fingerprint, and a random tail — giving you:
 Pairs with `Guardian.string().cuid()` from `@tundralibs/guardian`, which
 validates the same 25-char `c[a-z0-9]{24}` format.
 
-> **Looking for CUID2?** Use {@link ./ID-CUID2.md cuid2} instead — it's
+> **Looking for CUID2?** Use [cuid2](./ID-CUID2.md) instead — it's
 > cryptographically secure, deliberately not time-sortable (so the
 > minting time can't be reconstructed from the ID), and configurable
 > length. CUID v1 is kept for compatibility and process-local
@@ -143,10 +143,10 @@ const ok = CuidGuard.parse(id); // round-trips cleanly
 **Prefer something else when:**
 
 - You need cryptographic collision resistance → use
-  {@link ./ID-CUID2.md cuid2}.
+  [cuid2](./ID-CUID2.md).
 - You need distributed sortability across machines without coordination
-  → use {@link ./ID-ULID.md ulid}.
-- You need MongoDB-native IDs → use {@link ./ID-ObjectID.md ObjectID}.
+  → use [ulid](./ID-ULID.md).
+- You need MongoDB-native IDs → use [ObjectID](./ID-ObjectID.md).
 
 ## CUID vs CUID2
 
