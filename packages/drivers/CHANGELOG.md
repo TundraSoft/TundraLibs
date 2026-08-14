@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.3...drivers-v1.0.4) (2026-08-14)
+
+
+### Bug Fixes
+
+* **drivers:** bound _processOption to keyof O for subclass option validation ([#241](https://github.com/TundraSoft/TundraLibs/issues/241)) ([99736fe](https://github.com/TundraSoft/TundraLibs/commit/99736fe8ece08b3b4d5325e9358cdb36c9769ba8))
+
 ## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.2...drivers-v1.0.3) (2026-08-13)
 
 

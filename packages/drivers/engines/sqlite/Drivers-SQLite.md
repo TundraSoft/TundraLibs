@@ -80,7 +80,7 @@ lifecycle, etc.). SQLite-specific additions:
 
 ### `schemaDir`
 
-```typescript
+```typescript ignore
 get schemaDir(): string | null
 ```
 

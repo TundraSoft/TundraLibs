@@ -26,8 +26,10 @@ import type { SQLEngineCapabilities } from '../../types/mod.ts';
  * class targets a standard MySQL-protocol connection.
  */
 export class PlanetScaleEngine extends MariaEngine {
+  /** Distinct identity for telemetry; the wire protocol is still MySQL. */
   public override readonly Engine = 'PLANETSCALE';
 
+  /** Stock MariaDB minus `advisoryLock` and `referentialActions`. */
   public override readonly Capabilities: SQLEngineCapabilities = {
     pooledConnections: true,
     transactions: true,

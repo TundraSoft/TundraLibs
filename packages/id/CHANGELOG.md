@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/id-v1.0.3...id-v1.0.4) (2026-08-14)
+
+
+### Documentation
+
+* **id:** verify documentation examples and document the public API ([#249](https://github.com/TundraSoft/TundraLibs/issues/249)) ([dea99a0](https://github.com/TundraSoft/TundraLibs/commit/dea99a0b3a60d0e4b94fb699f10833642576ac5f))
+
 ## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/id-v1.0.2...id-v1.0.3) (2026-08-13)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.0.1...cronus-v1.0.2) (2026-08-14)
+
+
+### Documentation
+
+* **cronus:** verify documentation examples and document the public API ([#238](https://github.com/TundraSoft/TundraLibs/issues/238)) ([20acacc](https://github.com/TundraSoft/TundraLibs/commit/20acacce3a0e2c753906dc27fb0cd298d33f1422))
+
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.0.0...cronus-v1.0.1) (2026-08-12)
 
 
