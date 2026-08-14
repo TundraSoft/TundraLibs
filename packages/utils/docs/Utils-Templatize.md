@@ -34,7 +34,7 @@ deno add @tundralibs/utils
 
 ## API
 
-```typescript
+```typescript ignore
 templatize<T extends string>(
   template: T,
   options?: TemplateOptions,
@@ -60,8 +60,13 @@ const greet = templatize('Hello, ${name}! Welcome to ${place}.');
 greet({ name: 'Alice', place: 'TypeScript' });
 // 'Hello, Alice! Welcome to TypeScript.'
 
+// @ts-expect-error missing 'place'
 greet({ name: 'Bob' }); // ❌ TS error: missing 'place'
-greet({ name: 'Bob', location: 'Somewhere' }); // ❌ TS error: extra key
+greet({
+  name: 'Bob',
+  // @ts-expect-error extra key: not a placeholder in the template
+  location: 'Somewhere',
+});
 ```
 
 ### Log-style template — preserve placeholders on missing keys
@@ -70,8 +75,10 @@ For human-tailed output (logs, debug prints), unmapped variables
 should stay visible:
 
 ```typescript
+import { templatize } from '@tundralibs/utils';
+
 const line = templatize('[${time}] ${level}: ${msg}', { onMissing: 'literal' });
-line({ time: '12:00:01', msg: 'hi' });
+line({ time: '12:00:01', level: undefined as unknown as string, msg: 'hi' });
 // '[12:00:01] ${level}: hi'   ← the `${level}` placeholder survives
 ```
 
@@ -83,6 +90,8 @@ For URLs / SQL / messages that go to users or services, missing
 fields should disappear, not leak `${...}` syntax:
 
 ```typescript
+import { templatize } from '@tundralibs/utils';
+
 const url = templatize('/users/${id}?token=${token}');
 url({ id: '42', token: undefined as unknown as string });
 // '/users/42?token='   ← clean empty rather than `?token=${token}`
@@ -91,6 +100,8 @@ url({ id: '42', token: undefined as unknown as string });
 ### Dot-path lookup against nested values
 
 ```typescript
+import { templatize } from '@tundralibs/utils';
+
 const fmt = templatize('User: ${user.name} <${user.email}>');
 
 // Both shapes work at runtime:
@@ -104,6 +115,8 @@ fmt({ user: { name: 'Alice', email: 'a@x.com' } } as any); // nested
 ### Array values
 
 ```typescript
+import { templatize } from '@tundralibs/utils';
+
 const fmt = templatize('Tags: ${tags}');
 fmt({ tags: ['ts', 'logger', 'fast'] as unknown as string });
 // 'Tags: (ts, logger, fast)'
@@ -113,6 +126,8 @@ fmt({ tags: ['ts', 'logger', 'fast'] as unknown as string });
 
 - A template with **no** placeholders compiles to a constant function:
   ```typescript
+  import { templatize } from '@tundralibs/utils';
+
   const c = templatize('Static text');
   c(null as any); // 'Static text'  — no values needed
   ```
