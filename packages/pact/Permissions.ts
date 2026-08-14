@@ -52,6 +52,12 @@ export class Permissions<P extends PACTPermissionBits = PACTPermissionBits> {
   private readonly __modules: Map<string, ModuleEntry<P>> | undefined;
 
   /**
+   * Build the engine from a permission registry and an optional module
+   * catalog. With a catalog, every check is additionally validated against the
+   * module's applicable set — an unknown module, or a permission the module
+   * does not declare, is a configuration error rather than a denial. Without
+   * one, any registered permission is checkable against any module name.
+   *
    * @param bits - the permission registry (name → positive, unique BigInt bit).
    * @param modules - optional module catalog (module → applicable permissions).
    *
