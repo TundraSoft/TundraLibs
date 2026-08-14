@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.0.3...utils-v1.0.4) (2026-08-14)
+
+
+### Documentation
+
+* **utils:** verify documentation examples and document the public API ([#248](https://github.com/TundraSoft/TundraLibs/issues/248)) ([d0d0210](https://github.com/TundraSoft/TundraLibs/commit/d0d021038538f2185e44fda28a3951f0f7d1c67e))
+
 ## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.0.2...utils-v1.0.3) (2026-08-13)
 
 

@@ -65,6 +65,8 @@ Point it at a **local `sqld`** (the standalone libSQL server) by giving an
 `Authorization` header is sent):
 
 ```typescript
+import { TursoEngine } from '@tundralibs/drivers/turso';
+
 const local = new TursoEngine('local', { url: 'http://localhost:8080' });
 ```
 

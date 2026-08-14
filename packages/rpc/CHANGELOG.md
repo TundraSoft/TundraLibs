@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.1.0...rpc-v1.1.1) (2026-08-14)
+
+
+### Bug Fixes
+
+* **rpc:** attach the error code when rejecting on an out-of-band error frame ([#242](https://github.com/TundraSoft/TundraLibs/issues/242)) ([1ab3fbf](https://github.com/TundraSoft/TundraLibs/commit/1ab3fbfbc324262ac01534cf08f4ca90633b6376))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.0.2...rpc-v1.1.0) (2026-08-13)
 
 

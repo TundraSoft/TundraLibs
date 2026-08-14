@@ -72,6 +72,10 @@ it, so none of them fail with a spurious `NO_CONNECTION`.
 ## Direct driver access
 
 ```typescript
+import { MongoEngine } from '@tundralibs/drivers/mongo';
+
+const m = new MongoEngine('app', { host: 'localhost', database: 'myapp' });
+
 const client = await m.client(); // raw MongoClient
 const db = await m.db('analytics'); // raw Db
 const col = await m.collection('logs'); // raw Collection
@@ -127,6 +131,12 @@ row, not in the outer `count` field. The count is at
 of rows in `data`).
 
 ```typescript
+import { MongoEngine } from '@tundralibs/drivers/mongo';
+import type { Query } from '@tundralibs/oql/types';
+
+const m = new MongoEngine('app', { host: 'localhost', database: 'myapp' });
+declare const query: Query<'COUNT'>;
+
 const result = await m.count(query);
 const n = result.data[0].Count; // the COUNT value
 // result.count === 1            // always — it's the row count of `data`
