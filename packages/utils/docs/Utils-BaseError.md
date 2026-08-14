@@ -35,6 +35,28 @@ new BaseError<M>(message: string, context?: M, cause?: Error)
 - `context`: Object with data for template substitution
 - `cause`: Optional underlying error for chaining
 
+**`M` must be a `type` alias, not an `interface`.** It is constrained to
+`Record<string, unknown>`, and an interface will not satisfy that —
+`Index signature for type 'string' is missing in type 'MyContext'`.
+Interfaces are open, since declaration merging lets another file add
+members later, so TypeScript withholds the implicit index signature; a
+`type` alias with the same members is closed and qualifies. For a shape
+you cannot change, intersect it:
+
+```typescript
+import { BaseError } from '@tundralibs/utils';
+
+interface Generated {
+  requestId: string;
+}
+
+type MyContext = Generated & Record<string, unknown>;
+
+class RequestError extends BaseError<MyContext> {}
+
+throw new RequestError('Request ${requestId} failed', { requestId: 'r-1' });
+```
+
 ### Methods
 
 - `toJson()`: Serialize error to JSON

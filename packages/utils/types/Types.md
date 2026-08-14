@@ -10,6 +10,30 @@ Advanced TypeScript utility types for type manipulation and transformation.
 
 The Types module provides a comprehensive collection of TypeScript utility types for advanced type manipulation, transformation, and composition. These types enable better type safety, improved developer experience, and more expressive type definitions.
 
+**Pass a `type` alias, not an `interface`.** `Entries`, `Immutable`,
+`Mutable`, `Paths`, `PathValue` and `FlattenEntity` constrain their
+argument to `Record<string, unknown>`, and an interface will not satisfy
+it — `Index signature for type 'string' is missing in type 'MyShape'`.
+Interfaces are open, since declaration merging lets another file add
+members later, so TypeScript withholds the implicit index signature that
+proves the shape is a closed, string-keyed bag; a `type` alias with the
+same members is closed and qualifies. When the shape is generated or
+comes from a third-party package, intersect it:
+
+```typescript
+import type { Entries, Paths } from '@tundralibs/utils/types';
+
+interface Generated {
+  host: string;
+  port: number;
+}
+
+type MyShape = Generated & Record<string, unknown>;
+
+type ShapeEntries = Entries<MyShape>;
+type ShapePaths = Paths<MyShape>;
+```
+
 ## Installation
 
 **Deno:**

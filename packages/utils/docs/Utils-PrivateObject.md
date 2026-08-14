@@ -33,6 +33,26 @@ Creates a private object with controlled access.
 
 **Returns:** PrivateObject with access methods
 
+**`T` must be a `type` alias, not an `interface`.** It is constrained to
+`Record<string, unknown>`, and an interface will not satisfy that —
+`Index signature for type 'string' is missing in type 'MyData'`.
+Interfaces are open, since declaration merging lets another file add
+members later, so TypeScript withholds the implicit index signature; a
+`type` alias with the same members is closed and qualifies. For a
+generated or third-party shape, intersect it:
+
+```typescript
+import { privateObject } from '@tundralibs/utils';
+
+interface Generated {
+  token: string;
+}
+
+type MyData = Generated & Record<string, unknown>;
+
+const store = privateObject<MyData>({ token: 'secret' });
+```
+
 ### PrivateObject Methods
 
 - `get<K>(key: K): T[K]` - Retrieve value

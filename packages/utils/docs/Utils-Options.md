@@ -40,6 +40,36 @@ class MyClass extends Options<O, E> {
 }
 ```
 
+**`O` and `E` must be `type` aliases, not `interface`s.** Both are
+constrained to `Record<string, unknown>`, and TypeScript refuses an
+interface there — `Index signature for type 'string' is missing in type
+'MyOptions'`. It is not a bug in this class: interfaces are open, since
+declaration merging lets another file add members later, so TypeScript
+will not grant them the implicit index signature that proves the shape
+is a closed, string-keyed bag. A `type` alias with identical members is
+closed, so it qualifies.
+
+If the shape comes from generated code or a third-party package and you
+cannot change it, intersect it:
+
+```typescript
+import { type EventOptionKeys, Options } from '@tundralibs/utils';
+
+interface Generated {
+  host: string;
+  port: number;
+}
+
+type MyOptions = Generated & Record<string, unknown>;
+
+class Client extends Options<MyOptions> {
+  constructor(config: EventOptionKeys<MyOptions>) {
+    super();
+    this._setOptions(config, {});
+  }
+}
+```
+
 ### Methods
 
 - `_setOptions(options, defaults)`: Apply defaults, then options, with
