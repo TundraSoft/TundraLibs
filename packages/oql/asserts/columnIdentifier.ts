@@ -217,6 +217,7 @@ export const assertColumnIdentifier: (
  * // Result: ['@id', '@name', '@email']
  *
  * // Type narrowing in conditionals
+ * declare function getUserInput(): unknown;
  * const value: unknown = getUserInput();
  * if (isColumnIdentifier(value)) {
  *   // TypeScript knows value is ColumnIdentifier (string) here

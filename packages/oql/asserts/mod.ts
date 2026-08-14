@@ -23,13 +23,15 @@
  *   assertSelect(query);
  *   console.log('Query is valid');
  * } catch (error) {
- *   console.error('Invalid query:', error.message);
+ *   console.error('Invalid query:', (error as Error).message);
  * }
  * ```
  *
  * @example Type guard usage
  * ```typescript
  * import { isSelect } from '@tundralibs/oql/asserts';
+ *
+ * declare const query: unknown;
  *
  * if (isSelect(query)) {
  *   // TypeScript now knows query is SelectQuery

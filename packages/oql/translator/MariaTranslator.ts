@@ -97,15 +97,24 @@ const MARIA_INTERVAL_UNITS = {
   YEARS: 'YEAR',
 } as const;
 
+/**
+ * Emits MariaDB / MySQL SQL. Stateless and reusable — see
+ * {@link AbstractTranslator} for the shared method surface and the module
+ * header above for the gaps (no FULL JOIN, no materialized views, no
+ * partial indexes).
+ */
 export class MariaTranslator extends AbstractTranslator {
+  /** Dialect tag; `'maria'` covers MySQL too — there is no separate one. */
   public override readonly Dialect = 'maria';
 
+  /** Backticks, not the SQL-standard double quote; `` ` `` doubles to ` `` `. */
   protected override readonly _identifierQuote: IdentifierQuote = {
     open: '`',
     close: '`',
     escape: '``',
   };
 
+  /** Named placeholders in the engine-compat `:name:` form. */
   protected override readonly _parameterStyle: ParameterStyle = {
     // Engine-compat `:name:` form. The maria engine's `_standardizeQuery`
     // rewrites to `:name` (one colon — what the mariadb client expects
@@ -115,6 +124,11 @@ export class MariaTranslator extends AbstractTranslator {
     suffix: ':',
   };
 
+  /**
+   * `fullJoin` and `materializedView` are the two off. A FULL JOIN throws
+   * rather than being emulated with a UNION, since the emulation changes
+   * the plan and the duplicate-row semantics.
+   */
   protected override readonly _support: DialectSupport = {
     schema: true, // CREATE DATABASE
     materializedView: false,
@@ -135,6 +149,12 @@ export class MariaTranslator extends AbstractTranslator {
   protected override readonly _offsetOnlyLimit: string | null =
     '18446744073709551615';
 
+  /**
+   * MariaDB expression emitters. Crypto is native but not interchangeable
+   * with the other dialects': `HASH` is `SHA2(…, 256)` and
+   * `ENCRYPT` / `DECRYPT` are `AES_*`, so ciphertext written here will not
+   * decrypt under Postgres's `pgp_sym_*`.
+   */
   protected override readonly _expressionMap: ExpressionMap = new Map<
     Expressions['$$_expression'],
     (args: string[]) => string
@@ -207,6 +227,11 @@ export class MariaTranslator extends AbstractTranslator {
     ['DECRYPT', (a) => `AES_DECRYPT(${a[0]}, ${a[1]})`],
   ]);
 
+  /**
+   * MariaDB aggregate emitters. `STRING_AGG` becomes `GROUP_CONCAT`, whose
+   * result is truncated at `group_concat_max_len` (1024 bytes by default)
+   * — silently, without an error.
+   */
   protected override readonly _aggregateMap: AggregateMap = new Map<
     AggregateFunction,
     (args: string[]) => string
@@ -223,6 +248,12 @@ export class MariaTranslator extends AbstractTranslator {
     ['JSON_ROW', (a) => `JSON_ARRAYAGG(JSON_OBJECT(${a.join(', ')}))`],
   ]);
 
+  /**
+   * MariaDB filter-operator emitters. Case sensitivity here is a property
+   * of the column's collation, not the operator: `$like` is already
+   * case-*insensitive* under the default `_ci` collations, which is why
+   * `$ilike` maps to the same `LIKE`.
+   */
   protected override readonly _filterOperatorMap: FilterOperatorMap = new Map<
     string,
     (column: string, value: string) => string
@@ -247,6 +278,12 @@ export class MariaTranslator extends AbstractTranslator {
   // DML: UPSERT — MariaDB uses `INSERT ... ON DUPLICATE KEY UPDATE`.
   // ---------------------------------------------------------------------------
 
+  /**
+   * `INSERT … ON DUPLICATE KEY UPDATE`, not the `ON CONFLICT` form the
+   * other SQL dialects share. Two consequences: `q.conflictKeys` names no
+   * target in the SQL (MariaDB matches against *any* unique key), and the
+   * DO-NOTHING case is faked with a self-assignment — see below.
+   */
   protected override _buildUpsert(
     q: Query<'UPSERT'>,
     params: Parameters,
@@ -289,15 +326,29 @@ export class MariaTranslator extends AbstractTranslator {
   // DDL
   // ---------------------------------------------------------------------------
 
+  /**
+   * A MariaDB schema *is* a database, so this emits `CREATE DATABASE` —
+   * a heavier object than Postgres's schema, and not nestable under one.
+   */
   protected override _buildCreateSchema(q: Query<'CREATE_SCHEMA'>): string {
     return `CREATE DATABASE IF NOT EXISTS ${this._quoteIdentifier(q.schema)}`;
   }
 
+  /**
+   * `DROP DATABASE` — unconditionally destructive. `q.cascade` is
+   * irrelevant here (see below), so this drops a populated schema where
+   * Postgres would refuse.
+   */
   protected override _buildDropSchema(q: Query<'DROP_SCHEMA'>): string {
     // MariaDB has no CASCADE on DROP DATABASE — it always drops the contents.
     return `DROP DATABASE IF EXISTS ${this._quoteIdentifier(q.schema)}`;
   }
 
+  /**
+   * Covers every `ALTER_TABLE` action. `alterColumns` uses
+   * `MODIFY COLUMN`, which replaces the whole definition — anything the
+   * caller omits from the new definition is reset, not preserved.
+   */
   protected override _buildAlterTable(q: Query<'ALTER_TABLE'>): string[] {
     const tableSql = this._qualifiedTable(q.table, q.schema);
     const stmts: string[] = [];
@@ -368,6 +419,11 @@ export class MariaTranslator extends AbstractTranslator {
     return stmts;
   }
 
+  /**
+   * `q.cascade` emits the `CASCADE` keyword, which MariaDB parses for
+   * porting compatibility and then ignores — it does not cascade to
+   * dependent objects the way Postgres does.
+   */
   protected override _buildDropTable(q: Query<'DROP_TABLE'>): string {
     const tableSql = this._qualifiedTable(q.table, q.schema);
     const ifExists = q.ifExists ? 'IF EXISTS ' : '';
@@ -375,12 +431,21 @@ export class MariaTranslator extends AbstractTranslator {
     return `DROP TABLE ${ifExists}${tableSql}${cascade}`;
   }
 
+  /** Native `TRUNCATE TABLE`; `q.cascade` is dropped — see below. */
   protected override _buildTruncate(q: Query<'TRUNCATE'>): string {
     const tableSql = this._qualifiedTable(q.table, q.schema);
     // MariaDB's TRUNCATE has no CASCADE; users must DROP foreign keys first.
     return `TRUNCATE TABLE ${tableSql}`;
   }
 
+  /**
+   * `q.method` splits two ways: `'FULLTEXT'` is an index *kind* and
+   * replaces `UNIQUE`, while `BTREE` / `HASH` become a trailing `USING`
+   * clause. Any other method is dropped.
+   *
+   * @throws {@link DialectUnsupportedError} When `q.where` is set —
+   *   MariaDB has no partial indexes.
+   */
   protected override _buildCreateIndex(
     q: Query<'CREATE_INDEX'>,
     params: Parameters,
@@ -410,6 +475,11 @@ export class MariaTranslator extends AbstractTranslator {
     return `CREATE ${kind}INDEX ${ifNotExists}${indexSql} ON ${tableSql} (${cols})${method}`;
   }
 
+  /**
+   * The one dialect that needs `q.table` in the SQL — MariaDB scopes index
+   * names per-table. `q.ifExists` and `q.cascade` are accepted and
+   * ignored; see below.
+   */
   protected override _buildDropIndex(q: Query<'DROP_INDEX'>): string {
     // MariaDB scopes indexes per-table, so DROP INDEX requires the
     // owning table in the SQL. `q.table` is guaranteed by the OQL
@@ -441,6 +511,10 @@ export class MariaTranslator extends AbstractTranslator {
     return `CREATE ${orReplace}VIEW ${viewSql} AS ${inner}`;
   }
 
+  /**
+   * `q.materialized` needs no special case — a `materialized: true`
+   * CREATE_VIEW already fell back to a plain view on MariaDB.
+   */
   protected override _buildDropView(q: Query<'DROP_VIEW'>): string {
     const viewSql = this._qualifiedTable(q.view, q.schema);
     const ifExists = q.ifExists ? 'IF EXISTS ' : '';
@@ -546,6 +620,11 @@ export class MariaTranslator extends AbstractTranslator {
   // Privates
   // ---------------------------------------------------------------------------
 
+  /**
+   * The only dialect with a real inline `COMMENT` clause. Types come from
+   * `SQL_TYPE_MAP`, falling back to `TEXT`; note that the temporal types
+   * carry an explicit `(6)` precision — see the map's note.
+   */
   protected override _renderColumnDefinition(
     name: string,
     def: ColumnDefinition,

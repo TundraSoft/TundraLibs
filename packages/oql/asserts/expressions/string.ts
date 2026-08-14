@@ -145,6 +145,8 @@ export const assertUUIDExpression: (
  *
  * @example
  * ```ts
+ * declare function getExpression(): unknown;
+ *
  * const expr = { $$_expression: 'UUID' };
  * if (isUUIDExpression(expr)) {
  *   // expr is narrowed to Extract<Expressions, { $$_expression: 'UUID' }>
@@ -1313,6 +1315,11 @@ export const assertStringExpression: (
  *
  * @example
  * ```ts
+ * declare function getExpression(): unknown;
+ * declare function getAllExpressions(): unknown[];
+ * declare function buildQuery(): unknown;
+ * declare function executeQuery(x: unknown): void;
+ *
  * const expr: unknown = getExpression();
  *
  * if (isStringExpression(expr)) {
@@ -1355,7 +1362,9 @@ export const assertStringExpression: (
  *
  * // Filter expressions by category
  * const expressions: unknown[] = getAllExpressions();
- * const stringExpressions = expressions.filter(isStringExpression);
+ * const stringExpressions = expressions.filter((x) =>
+ *   isStringExpression(x)
+ * );
  * console.log(`Found ${stringExpressions.length} string expressions`);
  *
  * // Validate query expressions with column validation

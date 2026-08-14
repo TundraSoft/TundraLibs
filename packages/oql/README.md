@@ -27,7 +27,7 @@ OQL provides a comprehensive type system for defining database queries that can 
 | [Types](types/OQL-Types.md)                | Query type definitions and interfaces               | [Docs](types/OQL-Types.md)           |
 | [Asserts](asserts/OQL-Asserts.md)          | Runtime query validators                            | [Docs](asserts/OQL-Asserts.md)       |
 | [Translator](translator/OQL-Translator.md) | SQL/NoSQL query translators                         | [Docs](translator/OQL-Translator.md) |
-| `@tundralibs/oql/errors`                   | Error types (`OqlError`, `DialectUnsupportedError`) | —                                    |
+| [Errors](errors/OQL-Errors.md)             | Error types (`OqlError`, `DialectUnsupportedError`) | [Docs](errors/OQL-Errors.md)         |
 
 ## Installation
 
@@ -147,6 +147,10 @@ OQL supports all standard database operations:
 Full TypeScript support with type inference:
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
+
+type User = { id: number; email: string; age: number };
+
 const query: Query<'SELECT', User> = {
   type: 'SELECT',
   table: 'users',
@@ -170,6 +174,10 @@ ORDER BY, HAVING, …) must appear in `columns`. The runtime validator
 rejects queries that reference an unlisted column.
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
+
+type User = { id: number; email: string; status: string; createdAt: Date };
+
 const query: Query<'SELECT', User> = {
   type: 'SELECT',
   table: 'users',
@@ -190,7 +198,7 @@ without needing the full table schema in scope. Higher-level layers
 
 ### Comprehensive Filter System
 
-```typescript
+```typescript ignore
 const filters: QueryFilter<User> = {
   // Direct value equality
   '@status': 'active',
@@ -244,6 +252,10 @@ filter is (SELECT / COUNT / UPDATE / DELETE `where`, nested in
 `$and` / `$or`):
 
 ```typescript
+import type { QueryFilter } from '@tundralibs/oql';
+
+type User = { id: number; status: string };
+
 const filters: QueryFilter<User> = {
   '@status': 'active',
   // Users with at least one paid order…
@@ -279,6 +291,10 @@ the `@` prefix so the parser can tell a column reference from a
 literal string regardless of where the reference appears.
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
+
+type User = { id: number; username: string };
+
 const query: Query<'SELECT', User, {
   orders: { userId: number; total: number };
   profiles: { userId: number; bio: string };
@@ -320,7 +336,7 @@ matches, and the value-comparison operators (`$eq`, `$ne`, `$in`,
 `$nin`, `$null`) — but the string and numeric operator families
 (`$like`, `$gt`, etc.) intentionally don't apply.
 
-```typescript
+```typescript ignore
 type Doc = { id: number; payload: Record<string, unknown> };
 
 const filters: QueryFilter<Doc> = {
@@ -344,7 +360,7 @@ top-level `$`-prefixed key inside a filter value is treated as an
 operator. If you genuinely need to exact-match a JSON document that
 contains operator-shaped keys, wrap it explicitly in `$eq`:
 
-```typescript
+```typescript ignore
 // Means: payload exactly equals { $eq: 1, foo: 'bar' }
 '@payload': { $eq: { $eq: 1, foo: 'bar' } }
 ```
@@ -365,6 +381,10 @@ explicit `$group` pipeline instead.
 ### Aggregation Functions
 
 ```typescript
+import { assertQuery, type Query } from '@tundralibs/oql';
+
+type Order = { id: number; userId: number; total: number };
+
 const query: Query<'SELECT', Order> = {
   type: 'SELECT',
   table: 'orders',
@@ -380,10 +400,14 @@ const query: Query<'SELECT', Order> = {
     '@orderCount': true,
     '@avgOrder': true,
   },
-  having: {
-    '@totalRevenue': { $gte: 1000 },
-  },
 };
+
+// `having` filters on the aggregate alias `@totalRevenue`, which is
+// not a column of `Order`. TypeScript can't tie a filter key to a
+// sibling `aggregates` entry, so that scoping rule is enforced by
+// `assertQuery` at runtime: every `having` key must name a declared
+// aggregate, and `having` without `aggregates` is rejected outright.
+assertQuery({ ...query, having: { '@totalRevenue': { $gte: 1000 } } });
 ```
 
 ### Expression System
@@ -391,6 +415,10 @@ const query: Query<'SELECT', Order> = {
 Compute values within queries:
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
+
+type Product = { name: string; price: number; quantity: number };
+
 const query: Query<'SELECT', Product> = {
   type: 'SELECT',
   table: 'products',
@@ -441,6 +469,10 @@ on the database side. The query still runs and the column round-trips
 cleanly, but the **stored value is plaintext**.
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
+
+type User = { id: number; password: string };
+
 // Looks like it hashes on every dialect…
 const insert: Query<'INSERT', User> = {
   type: 'INSERT',
@@ -480,14 +512,17 @@ arbitrary user input as a view filter without your own validation.
 All queries can be validated before execution:
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
 import { assertInsert, assertSelect } from '@tundralibs/oql/asserts';
+
+declare const query: Query<'SELECT'>;
 
 try {
   assertSelect(query);
   // Query is valid, safe to execute
 } catch (error) {
   // Query validation failed
-  console.error(error.message);
+  console.error((error as Error).message);
 }
 ```
 
@@ -496,6 +531,10 @@ try {
 ### SELECT with Filtering
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
+
+type User = { id: number; email: string; createdAt: Date };
+
 const query: Query<'SELECT', User> = {
   type: 'SELECT',
   table: 'users',
@@ -519,6 +558,10 @@ const query: Query<'SELECT', User> = {
 ### INSERT with Expressions
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
+
+type Order = { userId: number; total: number; createdAt: Date };
+
 const query: Query<'INSERT', Order> = {
   type: 'INSERT',
   table: 'orders',
@@ -539,6 +582,14 @@ one _without_ that discriminator — is passed through as a **literal
 payload** (typical case: JSON / JSONB column values).
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
+
+type User = {
+  id: number;
+  profile: Record<string, unknown>;
+  createdAt: Date;
+};
+
 const query: Query<'INSERT', User> = {
   type: 'INSERT',
   table: 'users',
@@ -561,6 +612,10 @@ in a real JSON payload. No escape hatch is needed.
 ### UPDATE with WHERE Clause
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
+
+type User = { id: number; email: string; updatedAt: Date };
+
 const query: Query<'UPDATE', User> = {
   type: 'UPDATE',
   table: 'users',
@@ -576,6 +631,10 @@ const query: Query<'UPDATE', User> = {
 ### UPSERT with Conflict Resolution
 
 ```typescript
+import type { Query } from '@tundralibs/oql';
+
+type User = { id: number; email: string; username: string };
+
 const query: Query<'UPSERT', User> = {
   type: 'UPSERT',
   table: 'users',
@@ -595,6 +654,7 @@ const query: Query<'UPSERT', User> = {
 - [Type System](types/OQL-Types.md) - Complete type definitions
 - [Validators](asserts/OQL-Asserts.md) - Runtime validation
 - [Translators](translator/OQL-Translator.md) - SQL/NoSQL translation
+- [Errors](errors/OQL-Errors.md) - Error classes and stable error codes
 - [Compatibility](docs/Compatibility.md) - Database compatibility matrix
 
 ## Performance

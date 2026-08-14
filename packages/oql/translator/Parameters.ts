@@ -36,6 +36,11 @@ type ParamEntry = {
   value: unknown;
 };
 
+/**
+ * Bind-parameter accumulator for one translation pass. Feed it values with
+ * {@link Parameters.add} as SQL is built, then hand
+ * {@link Parameters.asRecord} to the driver alongside the statement.
+ */
 export class Parameters {
   /**
    * Dedup key → entry. The key is a *derived* lookup token
@@ -46,7 +51,11 @@ export class Parameters {
   readonly #params: Map<unknown, ParamEntry> = new Map();
   readonly #prefix: string;
 
-  /** @param prefix - Param-name prefix. Trailing `_` is added if absent. */
+  /**
+   * Names are allocated as `<prefix><n>` from a counter that starts at 0.
+   *
+   * @param prefix - Param-name prefix. Trailing `_` is added if absent.
+   */
   constructor(prefix = 'p') {
     this.#prefix = prefix.endsWith('_') ? prefix : `${prefix}_`;
   }
@@ -72,6 +81,7 @@ export class Parameters {
     return out;
   }
 
+  /** Distinct params registered so far — post-dedup, so ≤ the `add` count. */
   public get size(): number {
     return this.#params.size;
   }

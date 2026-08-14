@@ -41,6 +41,8 @@ import type { QueryFilter } from './QueryFilter.ts';
  *
  * @example Users that have at least one paid order
  * ```ts
+ * import type { QueryFilter } from '@tundralibs/oql';
+ *
  * const filter: QueryFilter<{ id: number; name: string }> = {
  *   $exists: {
  *     table: 'orders',

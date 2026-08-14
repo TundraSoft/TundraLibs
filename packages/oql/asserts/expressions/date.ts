@@ -49,6 +49,8 @@ export const assertNowExpression: (
  *
  * @example
  * ```ts
+ * declare function getUserInput(): unknown;
+ *
  * const expr = { $$_expression: 'NOW' };
  * if (isNowExpression(expr)) {
  *   // expr is narrowed to Extract<Expressions, { $$_expression: 'NOW' }>
@@ -108,6 +110,8 @@ export const assertCurrentDateExpression: (
  *
  * @example
  * ```ts
+ * declare const expr: unknown;
+ *
  * if (isCurrentDateExpression(expr)) {
  *   // expr is narrowed to Extract<Expressions, { $$_expression: 'CURRENT_DATE' }>
  *   console.log('Current date expression');
@@ -157,6 +161,8 @@ export const assertCurrentTimeExpression: (
  *
  * @example
  * ```ts
+ * declare const expr: unknown;
+ *
  * if (isCurrentTimeExpression(expr)) {
  *   // expr is narrowed to Extract<Expressions, { $$_expression: 'CURRENT_TIME' }>
  *   console.log('Current time expression');
@@ -210,6 +216,8 @@ export const assertCurrentTimestampExpression: (
  *
  * @example
  * ```ts
+ * declare const expr: unknown;
+ *
  * if (isCurrentTimestampExpression(expr)) {
  *   // expr is narrowed to Extract<Expressions, { $$_expression: 'CURRENT_TIMESTAMP' }>
  *   console.log('Current timestamp expression');
@@ -266,6 +274,8 @@ export const assertCurrentTimestampTZExpression: (
  *
  * @example
  * ```ts
+ * declare const expr: unknown;
+ *
  * if (isCurrentTimestampTZExpression(expr)) {
  *   // expr is narrowed to Extract<Expressions, { $$_expression: 'CURRENT_TIMESTAMPTZ' }>
  *   console.log('Current timestamp with timezone expression');
@@ -382,6 +392,9 @@ export const assertDateAddExpression: (
  *
  * @example
  * ```ts
+ * declare function getExpressionFromUser(): unknown;
+ * declare function processDateCalculation(x: unknown): void;
+ *
  * const expr = {
  *   $$_expression: 'DATE_ADD',
  *   args: { date: new Date(), amount: 5, unit: 'DAYS' }
@@ -490,6 +503,11 @@ export const assertDateExpression: (
  *
  * @example
  * ```ts
+ * declare function getExpression(): unknown;
+ * declare function getAllExpressions(): unknown[];
+ * declare function buildQuery(): unknown;
+ * declare function executeQuery(x: unknown): void;
+ *
  * const expr: unknown = getExpression();
  *
  * if (isDateExpression(expr)) {
@@ -516,7 +534,7 @@ export const assertDateExpression: (
  *
  * // Filter expressions by category
  * const expressions: unknown[] = getAllExpressions();
- * const dateExpressions = expressions.filter(isDateExpression);
+ * const dateExpressions = expressions.filter((x) => isDateExpression(x));
  * console.log(`Found ${dateExpressions.length} date expressions`);
  *
  * // Validate query expressions with column validation
