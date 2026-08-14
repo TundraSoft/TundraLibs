@@ -35,6 +35,8 @@ Exactly one place should call `ambient.run` per request — the outermost
 boundary. Everything below it, at any depth, reads the same bag.
 
 ```typescript
+import { ambient } from '@tundralibs/ambient';
+
 // Fetch-standard (Deno.serve, Bun.serve, compat/webserver, Workers)
 async function withRequestContext(
   req: Request,
@@ -57,6 +59,10 @@ mint fresh.
 Later enrichment goes through `set` — authentication is the classic case:
 
 ```typescript
+import { ambient } from '@tundralibs/ambient';
+
+const user = { id: 'u_123' };
+
 ambient.set('userId', user.id); // every subsequent log line carries it
 ```
 
@@ -67,8 +73,12 @@ thunk invoked per emitted record and merged **under** the call/scope context —
 explicit fields always win:
 
 ```typescript
+import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
+import { ambient } from '@tundralibs/ambient';
+
 const log = LogManager.createSlogger({
   appName: 'orders',
+  level: SyslogSeverities.INFO,
   contextProvider: () => ambient.get() ?? {}, // ← the whole integration
 });
 
@@ -96,8 +106,15 @@ The correlation between logs and traces happens, again, at the composition
 root:
 
 ```typescript
+import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
+import { ambient } from '@tundralibs/ambient';
+import { Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
 const log = LogManager.createSlogger({
   appName: 'orders',
+  level: SyslogSeverities.INFO,
   contextProvider: () => ({
     ...ambient.get(), // the request bag
     ...tracer.logContext(), // live trace identity, tracer's own store
@@ -122,6 +139,10 @@ Propagating the id **outward** is also yours — set the header on outbound
 calls:
 
 ```typescript
+import { ambient } from '@tundralibs/ambient';
+
+const url = 'https://payments.internal/charge';
+
 await fetch(url, {
   headers: { 'x-correlation-id': String(ambient.get()?.correlationId ?? '') },
 });
@@ -136,6 +157,15 @@ Request context dies with its request — a job picked up later must _rebuild_
 its scope from whatever travelled with the message:
 
 ```typescript
+import { ambient } from '@tundralibs/ambient';
+
+type Job = { payload: unknown; correlationId?: string };
+
+const payload = { orderId: 'ord_42' };
+const queue = { enqueue: async (_job: Job): Promise<void> => {} };
+const job: Job = { payload, correlationId: 'c1' };
+const process = async (_payload: unknown): Promise<void> => {};
+
 // producer: snapshot what the job needs
 await queue.enqueue({
   payload,

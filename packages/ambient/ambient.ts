@@ -13,6 +13,8 @@
  * ```typescript
  * import { ambient } from '@tundralibs/ambient';
  *
+ * declare const request: Request;
+ *
  * // At the request boundary (e.g. rAPId / rpc middleware) — set it ONCE.
  * ambient.run({ correlationId: crypto.randomUUID() }, () => handle(request));
  *
