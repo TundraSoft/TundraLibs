@@ -95,20 +95,33 @@ export class Server<T = unknown> {
   // reachable from a subclass, but may be rearranged between minor
   // versions. Nothing here is part of the public surface unless typed
   // as `public`.
+  /** Constructor options, stored unmodified. */
   protected readonly _opts: ServerOptions<T>;
+  /** Active pub/sub adapter; surfaced publicly via {@link adapter}. */
   protected readonly _pubsub: PubSubAdapter;
+  /** The underlying transport primitive this Server routes frames for. */
   protected readonly _wss: WebSocketServer<T, InboundFrame>;
 
+  /** Command middleware, run in registration order before the handler. */
   protected readonly _middleware: Middleware<T>[] = [];
   private readonly __commands = new Map<string, _CommandRegistration<T>>();
   // `protected` extension seam — a subclass (see examples/pattern-subscribe.ts)
   // reads/writes this to register channels lazily. Explicitly typed because
   // JSR slow-types requires an explicit type on every public-API symbol.
+  /** Registered channels keyed by exact name — no pattern matching. */
   protected readonly _channels: Map<string, ChannelOptions<T>> = new Map();
   private readonly __connState = new WeakMap<ServerWebSocket<T>, _ConnState>();
 
+  /** Set by {@link close}; makes late upgrades and frames be refused. */
   protected _closed = false;
 
+  /**
+   * Create a server with no commands or channels registered — chain
+   * {@link command} and {@link channel} next.
+   *
+   * @param options - Without `pubsub`, a {@link MemoryPubSubAdapter} is
+   *   created, which does not broadcast across processes.
+   */
   constructor(options: ServerOptions<T> = {}) {
     this._opts = options;
     this._pubsub = options.pubsub ?? new MemoryPubSubAdapter();
@@ -372,6 +385,11 @@ export class Server<T = unknown> {
   // Internal handlers
   // =========================================================================
 
+  /**
+   * Tear down a disconnected connection's subscriptions and fire each
+   * channel's `onUnsubscribe`. Hooks are fire-and-forget here — the socket
+   * is already gone, so throws and rejections are swallowed.
+   */
   protected _handleClose(ws: ServerWebSocket<T>): void {
     const state = this.__connState.get(ws);
     if (!state) return;
@@ -413,6 +431,11 @@ export class Server<T = unknown> {
     }
   }
 
+  /**
+   * Route one decoded client frame to its per-type handler. After
+   * {@link close} nothing is served — the socket is closed instead, since
+   * a mounted outer `WebServer` can keep delivering frames.
+   */
   protected async _dispatch(
     ws: ServerWebSocket<T>,
     frame: InboundFrame,
@@ -447,6 +470,14 @@ export class Server<T = unknown> {
   // Command path
   // -------------------------------------------------------------------------
 
+  /**
+   * Serve a `cmd` frame: validate, run the middleware chain, invoke the
+   * handler, and answer with exactly one `result`. Always replies — an
+   * unregistered command answers `UNKNOWN_COMMAND`, a rejected validator
+   * `VALIDATION`, and a throwing handler `HANDLER_ERROR` unless it
+   * attached a string `.code`. A handler's `.data` rides along on the
+   * error frame as structured detail.
+   */
   protected async _handleCommand(
     ws: ServerWebSocket<T>,
     frame: CommandFrame,
@@ -542,6 +573,15 @@ export class Server<T = unknown> {
   // Pub/Sub path
   // -------------------------------------------------------------------------
 
+  /**
+   * Serve a `sub` frame, answering `subscribed` on success or a `result`
+   * error (`UNKNOWN_CHANNEL`, `AUTHZ_ERROR`, `FORBIDDEN`). `authorize` is
+   * re-run on every subscribe, so a client whose access was revoked has
+   * its existing subscription dropped — firing `onUnsubscribe` — rather
+   * than keeping the one it was granted earlier. A duplicate subscribe
+   * from a still-authorized client is re-acked without re-firing
+   * `onSubscribe`.
+   */
   protected async _handleSubscribe(
     ws: ServerWebSocket<T>,
     frame: SubscribeFrame,
@@ -640,6 +680,12 @@ export class Server<T = unknown> {
     }
   }
 
+  /**
+   * Serve an `unsub` frame. Idempotent: a stray unsub for a channel that
+   * was never subscribed still gets an `unsubscribed` ack, but only a
+   * removal that actually took effect fires `onUnsubscribe`, keeping that
+   * hook one-for-one with `onSubscribe`.
+   */
   protected async _handleUnsubscribe(
     ws: ServerWebSocket<T>,
     frame: UnsubscribeFrame,
@@ -678,6 +724,13 @@ export class Server<T = unknown> {
     }
   }
 
+  /**
+   * Serve a `pub` frame by handing it to the channel's `onPublish` hook.
+   * The client must already be subscribed — that is what carries the
+   * subscribe-time `authorize` decision onto this path. Answers
+   * `UNKNOWN_CHANNEL`, `PUBLISH_REFUSED` (no `onPublish` registered),
+   * `NOT_SUBSCRIBED`, or `PUBLISH_ERROR` if the hook throws.
+   */
   protected async _handlePublish(
     ws: ServerWebSocket<T>,
     frame: PublishFrame,
@@ -736,6 +789,11 @@ export class Server<T = unknown> {
   // Wire helpers
   // -------------------------------------------------------------------------
 
+  /**
+   * Encode and send one frame, then poll back-pressure so
+   * {@link ServerOptions.onBackpressure} fires for Server-originated
+   * traffic. A socket that closed mid-send is swallowed, not thrown.
+   */
   protected _send(ws: ServerWebSocket<T>, frame: OutboundFrame): void {
     try {
       ws.send(encodeFrame(frame));
@@ -750,6 +808,7 @@ export class Server<T = unknown> {
     this._wss.__checkBackpressure(ws);
   }
 
+  /** Answer request `id` with a success `result` carrying `data`. */
   protected _sendResultOk(
     ws: ServerWebSocket<T>,
     id: string,
@@ -758,6 +817,14 @@ export class Server<T = unknown> {
     this._send(ws, { id, type: 'result', ok: true, data });
   }
 
+  /**
+   * Answer request `id` with a failure `result`. The client rejects on
+   * `` `${code}: ${message}` `` but reads `code` off the error object, so
+   * `code` is the stable contract and `message` is free-form.
+   *
+   * @param data - Optional structured detail. Omitted from the frame
+   *   entirely when absent, keeping it byte-identical to pre-`data` peers.
+   */
   protected _sendResultError(
     ws: ServerWebSocket<T>,
     id: string,
@@ -776,6 +843,11 @@ export class Server<T = unknown> {
     });
   }
 
+  /**
+   * Send a subscription ack echoing the client's frame `id`. That echo is
+   * what lets the client tell its own unsub ack apart from a
+   * server-initiated drop, which carries an id the client never sent.
+   */
   protected _sendSubscribed(
     ws: ServerWebSocket<T>,
     id: string,

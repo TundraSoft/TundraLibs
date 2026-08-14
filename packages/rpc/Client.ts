@@ -93,14 +93,21 @@ export class Client {
   // these fields if they need to. The double-underscore naming is
   // strictly informational — nothing inside this class is part of the
   // public surface unless typed as `public`.
+  /** Constructor options, stored unmodified. */
   protected readonly _opts: ClientOptions;
+  /** Reconnect policy with every field defaulted. */
   protected readonly _reconnect: Required<ReconnectPolicy>;
+  /** Timeout applied to calls that don't pass their own `timeoutMs`. */
   protected readonly _defaultTimeoutMs: number;
 
+  /** Send-path middleware, run in registration order. */
   protected readonly _sendMiddleware: ClientSendMiddleware[] = [];
+  /** Receive-path middleware, run in registration order. */
   protected readonly _receiveMiddleware: ClientReceiveMiddleware[] = [];
 
+  /** In-flight requests awaiting a `result`, keyed by frame id. */
   protected readonly _pending: Map<string, _PendingRequest> = new Map();
+  /** Locally-tracked subscriptions, keyed by channel name. */
   protected readonly _subscriptions: Map<string, _ChannelSubscription> =
     new Map();
   // Frame ids of `unsub` frames this client has sent whose `unsubscribed`
@@ -114,18 +121,26 @@ export class Client {
   // NOT merely until `unsubscribe()`'s ack-wait times out. Bounding the
   // window to the timeout would let a late ack be misread as
   // server-initiated and delete a freshly re-created subscription.
+  /** Ids of our own `unsub` frames whose `unsubscribed` ack is outstanding. */
   protected readonly _pendingUnsubs: Set<string> = new Set();
 
+  /** The live socket, or `null` while disconnected or between retries. */
   protected _ws: WebSocket | null = null;
+  /** Current connection state; surfaced publicly via {@link state}. */
   protected _state: ClientState = 'DISCONNECTED';
+  /** Latched by {@link close} to stop reconnects; cleared by {@link connect}. */
   protected _closeRequested = false;
+  /** Retries used in the current backoff cycle; reset to 0 on a good open. */
   protected _reconnectAttempt = 0;
   // Handle + waker for the backoff sleep between reconnect attempts, so
   // `close()` can cancel a pending retry instead of leaving a timer —
   // and the event loop — alive up to `maxDelayMs` after close.
+  /** Armed backoff timer, or `undefined` when no retry is parked. */
   protected _reconnectTimer: ReturnType<typeof setTimeout> | undefined =
     undefined;
+  /** Resolver that unparks the backoff sleep early (used by {@link close}). */
   protected _reconnectWake: (() => void) | undefined = undefined;
+  /** Monotonic frame-id counter, reset on every successful open. */
   protected _nextId = 0;
   // Per-connection nonce, bumped on every (re)connect. Folded into the
   // frame-id prefix so ids minted on a new socket can never collide
@@ -133,8 +148,16 @@ export class Client {
   // otherwise the sequential `c1, c2, …` counter would let an old
   // socket's late reply resolve a freshly minted request with the same
   // id.
+  /** Per-connection nonce forming the `c<connId>-` frame-id prefix. */
   protected _connId = 0;
 
+  /**
+   * Create a client. Does not open the socket — call {@link connect}.
+   *
+   * @param opts - Only `url` is required; the rest default to a 30s
+   *   request timeout and reconnect enabled with 10 attempts.
+   * @throws {@link RpcConfigError} When `url` is missing or not a string.
+   */
   constructor(opts: ClientOptions) {
     if (!opts.url || typeof opts.url !== 'string') {
       throw new RpcConfigError(
@@ -447,17 +470,33 @@ export class Client {
   // Internals
   // =========================================================================
 
+  /**
+   * Mint the next frame id, shaped `c<connId>-<n>`. The connection nonce
+   * keeps ids unique across reconnects, so a late `result` from a dead
+   * socket can never resolve a request minted on the new one.
+   */
   protected _nextFrameId(): string {
     this._nextId++;
     return `c${this._connId}-${this._nextId}`;
   }
 
+  /**
+   * Guard every public send path against a non-`CONNECTED` state.
+   *
+   * @throws {@link RpcStateError} When the client is not connected.
+   */
   protected _assertSendable(): void {
     if (this._state !== 'CONNECTED') {
       throw new RpcStateError(`Client not connected (state=${this._state})`);
     }
   }
 
+  /**
+   * Open one WebSocket and settle on its first `open` or `error`. On
+   * success it bumps the connection nonce, wires the socket handlers, and
+   * replays surviving subscriptions; on failure state returns to
+   * `'DISCONNECTED'` and the error is re-thrown to the caller.
+   */
   protected _openSocket(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       this._state = 'CONNECTING';
@@ -498,6 +537,11 @@ export class Client {
     });
   }
 
+  /**
+   * Attach the steady-state `message` / `close` / `error` listeners to a
+   * socket that has already opened. Non-string messages are dropped — the
+   * server only ever sends text JSON.
+   */
   protected _wireSocketHandlers(ws: WebSocket): void {
     ws.addEventListener('message', (event: MessageEvent) => {
       // The wire format is text JSON. Binary frames are unexpected
@@ -516,6 +560,12 @@ export class Client {
     });
   }
 
+  /**
+   * React to the socket closing: reject every in-flight request with
+   * `CONNECTION_LOST`, drop outstanding unsub correlations, and arm the
+   * backoff — but only when the close was not requested by {@link close}
+   * and the socket had actually reached `'CONNECTED'`.
+   */
   protected _handleClose(_event: CloseEvent): void {
     const wasConnected = this._state === 'CONNECTED';
     this._ws = null;
@@ -532,6 +582,13 @@ export class Client {
     }
   }
 
+  /**
+   * Sleep out one exponential-backoff delay, then reopen — recursing on
+   * failure until `maxAttempts` is spent, at which point
+   * {@link ClientOptions.onReconnectFailed} fires and retrying stops.
+   * Unparks early and bails if {@link close} or a manual {@link connect}
+   * intervenes, so it can never open a second concurrent socket.
+   */
   protected async _scheduleReconnect(): Promise<void> {
     if (this._reconnectAttempt >= this._reconnect.maxAttempts) {
       // Exhausted every attempt. Previously this returned silently,
@@ -586,6 +643,13 @@ export class Client {
     }
   }
 
+  /**
+   * Record an in-flight request under `id` and return the promise its
+   * `result` frame will settle.
+   *
+   * @param timeoutMs - Arms a `REQUEST_TIMEOUT` rejection; `0` or less
+   *   leaves the request pending indefinitely.
+   */
   protected _registerPending<R>(
     id: string,
     timeoutMs: number,
@@ -619,6 +683,7 @@ export class Client {
     this._pending.delete(id);
   }
 
+  /** Reject and clear every in-flight request, cancelling their timeouts. */
   protected _rejectAllPending(err: Error): void {
     for (const [id, pending] of this._pending) {
       if (pending.timeoutHandle !== undefined) {
@@ -629,6 +694,11 @@ export class Client {
     }
   }
 
+  /**
+   * Create the local subscription record for `channel`, including the
+   * `pendingAck` promise that the server's `subscribed` frame resolves.
+   * Overwrites any existing record for the same channel.
+   */
   protected _registerSubscription(
     channel: string,
     handler: (data: unknown) => void,
@@ -649,6 +719,11 @@ export class Client {
     return sub;
   }
 
+  /**
+   * Build the caller-facing {@link ClientSubscription} handle. Its
+   * `unsubscribe()` is idempotent per handle and best-effort — it never
+   * throws, since the server drops subscriptions on close regardless.
+   */
   protected _makeSubscriptionHandle(channel: string): ClientSubscription {
     let unsubscribed = false;
     return {
@@ -700,6 +775,11 @@ export class Client {
     };
   }
 
+  /**
+   * Replay every surviving subscription over a freshly opened socket.
+   * Fire-and-forget: failures don't fail {@link connect}, they surface
+   * through {@link ClientOptions.onSubscriptionError}.
+   */
   protected _resubscribeAll(): void {
     // Replay subscriptions after a reconnect. Each gets a fresh
     // pendingAck so callers that re-await the subscription handle
@@ -761,6 +841,13 @@ export class Client {
     this._opts.onSubscriptionError?.(channel, error);
   }
 
+  /**
+   * Run `frame` through the {@link useSend} chain; the final `next()`
+   * writes it to the wire. A middleware that skips `next()` silently drops
+   * the frame, leaving the caller's request to time out.
+   *
+   * @throws {@link RpcStateError} When a middleware calls `next()` twice.
+   */
   protected async _sendThroughMiddleware(frame: InboundFrame): Promise<void> {
     const ctx: ClientSendContext = { frame, state: {} };
     const chain = this._sendMiddleware;
@@ -782,6 +869,13 @@ export class Client {
     await runner(0);
   }
 
+  /**
+   * Serialize and write a frame to the live socket.
+   *
+   * @throws {@link RpcStateError} When the socket is absent or not `OPEN`
+   *   — including when it closed mid-send, after the caller's own
+   *   `_assertSendable` guard already passed.
+   */
   protected _writeFrame(frame: InboundFrame): void {
     if (!this._ws || this._ws.readyState !== 1 /* OPEN */) {
       throw new RpcStateError('Client not connected');
@@ -870,6 +964,11 @@ export class Client {
     }
   }
 
+  /**
+   * Run `frame` through the {@link useReceive} chain; the final `next()`
+   * dispatches it. A middleware that throws is logged and swallowed so one
+   * bad frame can't take down the receive loop.
+   */
   protected async _receiveThroughMiddleware(
     frame: OutboundFrame,
   ): Promise<void> {
@@ -900,6 +999,11 @@ export class Client {
     }
   }
 
+  /**
+   * Route a validated server frame to its per-type dispatcher. An
+   * out-of-band `error` frame rejects the request its `id` correlates to;
+   * an uncorrelated one is dropped (observable via {@link useReceive}).
+   */
   protected _dispatchFrame(frame: OutboundFrame): void {
     switch (frame.type) {
       case 'result':
@@ -930,6 +1034,12 @@ export class Client {
     }
   }
 
+  /**
+   * Settle the request correlated with a `result` frame. On `ok: false`
+   * the rejection is an `Error` messaged `` `${code}: ${message}` `` with
+   * `.code` and any structured `.data` attached as properties. A frame
+   * whose id matches nothing (a late reply after a timeout) is dropped.
+   */
   protected _dispatchResult(frame: ResultFrame): void {
     const pending = this._pending.get(frame.id);
     if (!pending) return;
@@ -958,6 +1068,11 @@ export class Client {
     }
   }
 
+  /**
+   * Handle a `subscribed` / `unsubscribed` ack. An `unsubscribed` whose id
+   * we sent just settles the waiting `unsubscribe()`; one we never sent is
+   * a server-initiated drop and removes the local subscription.
+   */
   protected _dispatchSubAck(frame: SubscribedFrame): void {
     if (frame.type === 'unsubscribed') {
       // Correlate against our own outstanding unsub before touching the
@@ -1002,6 +1117,11 @@ export class Client {
     }
   }
 
+  /**
+   * Deliver a `msg` frame to its channel handler. Messages for unknown
+   * channels are dropped, and a throwing handler is logged rather than
+   * allowed to break the receive loop.
+   */
   protected _dispatchMessage(frame: MessageFrame): void {
     const sub = this._subscriptions.get(frame.channel);
     if (!sub) return;
