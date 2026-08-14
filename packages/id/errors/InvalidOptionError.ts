@@ -43,6 +43,15 @@ export type InvalidOptionErrorMeta = {
  * ```
  */
 export class InvalidOptionError extends IDError<InvalidOptionErrorMeta> {
+  /**
+   * Construct directly only when writing a generator that shares this
+   * validation contract; the bundled generators raise it themselves.
+   *
+   * @param message - Error text; `${generator}`, `${option}` and `${value}`
+   *   placeholders are substituted from `meta`.
+   * @param meta - Identifies the rejected argument; becomes `error.context`.
+   * @param cause - Underlying error for chaining.
+   */
   constructor(
     message: string,
     meta: InvalidOptionErrorMeta,

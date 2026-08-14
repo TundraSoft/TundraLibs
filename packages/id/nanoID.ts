@@ -46,7 +46,7 @@ export const ALPHABETS = 'abcdefghijklmnopqrstuvwxyz';
 /**
  * Web-safe characters: a-z, 0-9, _, - (URL-safe, 38 characters)
  */
-export const WEB_SAFE = ALPHABETS + '_' + NUMBERS + '-';
+export const WEB_SAFE: string = ALPHABETS + '_' + NUMBERS + '-';
 
 /**
  * Alphanumeric characters: a-z, A-Z, 0-9
@@ -55,14 +55,15 @@ export const ALPHA_NUMERIC: string = ALPHABETS + NUMBERS +
   ALPHABETS.toUpperCase();
 
 /**
- * Case-sensitive alphanumeric: a-z, 0-9 (lowercase only)
+ * Lowercase alphanumeric: a-z, 0-9 (36 characters). Despite the name this
+ * set carries no uppercase — {@link ALPHA_NUMERIC} is the mixed-case one.
  */
-export const ALPHA_NUMERIC_CASE = ALPHABETS + NUMBERS;
+export const ALPHA_NUMERIC_CASE: string = ALPHABETS + NUMBERS;
 
 /**
  * Password-safe characters including special symbols
  */
-export const PASSWORD = '!@$%^&*' + WEB_SAFE;
+export const PASSWORD: string = '!@$%^&*' + WEB_SAFE;
 
 /**
  * Web Crypto's `getRandomValues` rejects any view longer than 65536 bytes
