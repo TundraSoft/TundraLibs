@@ -193,6 +193,14 @@ outside the `1…120` second range, or a `contentType` that isn't one of
 `_makeRequest` resolves to a `RESTlerResponse<T>`:
 
 ```typescript
+import type { RESTlerResponse } from '@tundralibs/restler';
+
+declare const api: {
+  getUser(
+    login: string,
+  ): Promise<RESTlerResponse<{ id: number; login: string }>>;
+};
+
 const res = await api.getUser('octocat');
 
 res.url; // Final requested URL
@@ -266,7 +274,7 @@ console.log(res.body?.size, res.body?.type); // Blob size and MIME type
 `auth` is a discriminated union keyed by `type`. Set it instance-wide (in
 `RESTlerOptions`) or per request (on the endpoint — the endpoint wins).
 
-```typescript
+```typescript ignore
 // Basic — sends `Authorization: Basic base64(user:pass)`
 { type: 'BASIC', username: 'user', password: 'secret' }
 
@@ -362,6 +370,8 @@ inline PEM (`cert` / `key` / `ca`) **or** file paths (`certFile` / `keyFile` /
 > Plain HTTPS against public CAs needs no `tls` option and works everywhere.
 
 ```typescript
+import { RESTler } from '@tundralibs/restler';
+
 class SecureAPI extends RESTler {
   public readonly vendor = 'secure';
 
@@ -436,6 +446,21 @@ metrics listener can neither reject a successful response, mask the real error,
 nor silence the other listeners.
 
 ```typescript
+import { RESTler } from '@tundralibs/restler';
+
+class GitHubAPI extends RESTler {
+  public readonly vendor = 'github';
+
+  constructor(token: string) {
+    super({
+      baseURL: 'https://api.github.com',
+      auth: { type: 'BEARER', token },
+    });
+  }
+}
+
+declare const token: string;
+
 const api = new GitHubAPI(token);
 
 api.on('rateLimit', (vendor, limit, reset, remaining) => {
@@ -461,6 +486,12 @@ observability-agnostic; it just lets the hooks flow through to `super`
 
 ```typescript
 import { RESTler, type RESTlerHooks } from '@tundralibs/restler';
+
+declare const token: string;
+declare const tracer: {
+  wrapClient: RESTlerHooks['witness'];
+  propagation: RESTlerHooks['headerProvider'];
+};
 
 class GitHubAPI extends RESTler {
   public readonly vendor = 'github';
@@ -505,7 +536,7 @@ on: `tracer.propagation` reads the active span at send time, so the
 joins the trace correctly parented. A throwing provider is contained — the
 request proceeds without its headers. It is not tracing-specific:
 
-```typescript
+```typescript ignore
 headerProvider: () => ({
   'x-correlation-id': String(ambient.get()?.correlationId ?? ''),
 }),
@@ -595,7 +626,17 @@ throws.
 | `RESTlerError`        | Base class for all of the above.                                           |
 
 ```typescript
-import { RESTlerError, RESTlerTimeoutError } from '@tundralibs/restler';
+import {
+  RESTlerError,
+  type RESTlerResponse,
+  RESTlerTimeoutError,
+} from '@tundralibs/restler';
+
+declare const api: {
+  getUser(
+    login: string,
+  ): Promise<RESTlerResponse<{ id: number; login: string }>>;
+};
 
 try {
   const res = await api.getUser('octocat');
