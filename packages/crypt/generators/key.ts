@@ -65,10 +65,13 @@ export type KeyFormat = 'PEM' | 'DER' | 'JWK' | 'RAW';
 export type RSAKeyOptions = {
   /** Algorithm type */
   algorithm: 'RSA-OAEP' | 'RSA-PSS';
-  /** Key size in bits */
-  keySize: RSAKeySize;
-  /** Hash algorithm to use */
-  hashAlgorithm: RSAHashAlgorithm;
+  /** Key size in bits. Defaults to `2048`. */
+  keySize?: RSAKeySize;
+  /**
+   * Hash algorithm to use. Defaults to `SHA-256`, matching every other
+   * RSA/EC/HMAC surface in this package.
+   */
+  hashAlgorithm?: RSAHashAlgorithm;
   /** Export format for keys */
   format?: KeyFormat;
   /** Whether keys should be extractable */
@@ -143,8 +146,13 @@ export type GeneratedKeyPair = {
 export const generateRSAKeyPair = async (
   options: RSAKeyOptions,
 ): Promise<GeneratedKeyPair> => {
-  const { algorithm, keySize, hashAlgorithm, format, extractable = true } =
-    options;
+  const {
+    algorithm,
+    keySize = 2048,
+    hashAlgorithm = 'SHA-256',
+    format,
+    extractable = true,
+  } = options;
 
   // Generate the key pair
   const keyPair = await crypto.subtle.generateKey(
