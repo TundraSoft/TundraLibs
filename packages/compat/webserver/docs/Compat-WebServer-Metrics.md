@@ -31,6 +31,10 @@ The WebServer module automatically tracks performance metrics for all requests a
 Access metrics via the `metrics` property:
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 const metrics = server.metrics;
 ```
 
@@ -39,6 +43,10 @@ The returned object is a **deep copy** to prevent external mutation. Access it a
 Reset all metrics to initial values:
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 server.resetMetrics();
 ```
 
@@ -93,6 +101,10 @@ interface ServerMetrics {
 | `peakActive` | `number` | Highest concurrent requests observed       |
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 const { requests } = server.metrics;
 
 console.log(`Total requests: ${requests.total}`);
@@ -119,6 +131,10 @@ Status codes are grouped by category:
 | `5xx` | 500-599 | Server errors |
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 const { statusCodes } = server.metrics;
 
 console.log(`Success: ${statusCodes['2xx']}`);
@@ -142,6 +158,10 @@ Response times are in **milliseconds**:
 | `average` | `number` | Average response time |
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 const { responseTime } = server.metrics;
 
 console.log(`Min: ${responseTime.min.toFixed(2)}ms`);
@@ -171,6 +191,10 @@ console.log(`Avg: ${responseTime.average.toFixed(2)}ms`);
 | `connectionDuration.average` | `number` | Average connection duration (ms) |
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 const { websocket } = server.metrics;
 
 console.log(`Active connections: ${websocket.connections.active}`);
@@ -189,10 +213,12 @@ console.log(
 Expose metrics via HTTP:
 
 ```typescript
-const server = new WebServer('API', {
+import { WebServer } from '@tundralibs/compat/webserver';
+
+const server: WebServer = new WebServer('API', {
   mode: 'TCP',
   port: 8080,
-  handler: (req) => {
+  handler: (req): Response => {
     const url = new URL(req.url);
 
     if (url.pathname === '/metrics') {
@@ -217,6 +243,10 @@ const server = new WebServer('API', {
 Export in Prometheus text format:
 
 ```typescript
+import type { ServerMetrics, WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 function formatPrometheus(metrics: ServerMetrics): string {
   const lines: string[] = [];
 
@@ -253,13 +283,19 @@ function formatPrometheus(metrics: ServerMetrics): string {
 }
 
 // In handler:
-if (
-  url.pathname === '/metrics' &&
-  req.headers.get('accept')?.includes('text/plain')
-) {
-  return new Response(formatPrometheus(server.metrics), {
-    headers: { 'Content-Type': 'text/plain' },
-  });
+function handler(req: Request): Response {
+  const url = new URL(req.url);
+
+  if (
+    url.pathname === '/metrics' &&
+    req.headers.get('accept')?.includes('text/plain')
+  ) {
+    return new Response(formatPrometheus(server.metrics), {
+      headers: { 'Content-Type': 'text/plain' },
+    });
+  }
+
+  return new Response('OK');
 }
 ```
 
@@ -268,6 +304,10 @@ if (
 Log metrics periodically:
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 setInterval(() => {
   const m = server.metrics;
   console.log(JSON.stringify({
@@ -286,6 +326,10 @@ setInterval(() => {
 Reset metrics periodically for rolling stats:
 
 ```typescript
+import type { ServerMetrics, WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 let hourlyStats: ServerMetrics[] = [];
 
 setInterval(() => {
@@ -315,6 +359,10 @@ function getDailyStats() {
 Alert on thresholds:
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 setInterval(() => {
   const m = server.metrics;
 
@@ -343,6 +391,10 @@ setInterval(() => {
 Avoid resetting metrics while processing requests - the `active` count will be inaccurate:
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 // Bad - resets active count mid-request
 server.resetMetrics();
 
@@ -357,6 +409,11 @@ if (server.metrics.requests.active === 0) {
 The metrics object is a copy, so it's safe to use asynchronously:
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+declare function saveToDatabase(snapshot: unknown): Promise<void>;
+
 // Safe - works with a snapshot
 const snapshot = server.metrics;
 await saveToDatabase(snapshot);
@@ -367,6 +424,10 @@ await saveToDatabase(snapshot);
 `min` starts at `Infinity` before any requests:
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 const { responseTime } = server.metrics;
 const minDisplay = responseTime.min === Infinity
   ? 'N/A'
@@ -378,6 +439,10 @@ const minDisplay = responseTime.min === Infinity
 Metrics are lightweight, but if you're storing historical data:
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 // Store only essential fields
 const snapshot = {
   timestamp: Date.now(),
@@ -391,7 +456,7 @@ const snapshot = {
 
 For production, consider a dedicated metrics endpoint:
 
-```typescript
+```typescript ignore
 // Main API server
 const apiServer = new WebServer('API', { port: 8080, ... });
 

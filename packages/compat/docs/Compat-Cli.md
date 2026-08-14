@@ -70,7 +70,7 @@ npx jsr add @tundralibs/compat
 Returns the user-supplied CLI tokens. Node's `argv[0]` (the runtime
 path) and `argv[1]` (the script path) are stripped automatically.
 
-```typescript
+```typescript ignore
 function args(): string[];
 ```
 
@@ -89,7 +89,7 @@ Parses CLI tokens into a structured object. Standard tier — covers
 the shapes most scripts need without the surface area of a full
 parser like yargs/cliffy.
 
-```typescript
+```typescript ignore
 type ArgValue = string | number | boolean;
 
 type ParsedArgs = {
@@ -152,7 +152,7 @@ Reports whether one of the standard streams is connected to a
 terminal. Use it to switch between rich output (colors, progress
 bars) and plain output (log files, CI pipelines).
 
-```typescript
+```typescript ignore
 function isTTY(stream?: 'stdin' | 'stdout' | 'stderr'): boolean;
 ```
 
@@ -175,7 +175,7 @@ if (isTTY()) {
 Terminal dimensions in characters. Falls back to `{ columns: 80, rows: 24 }`
 when no terminal is attached.
 
-```typescript
+```typescript ignore
 function consoleSize(): { columns: number; rows: number };
 ```
 
@@ -197,7 +197,7 @@ stdin to raw mode and masks input with `*`; with `password: 'silent'`
 nothing is echoed (sudo-style). Falls back to a plain read when
 stdin isn't a TTY (piped input).
 
-```typescript
+```typescript ignore
 type PromptOptions = {
   default?: string;
   password?: boolean | 'masked' | 'silent';
@@ -221,7 +221,7 @@ Numbered selection menu. Renders a list, asks for a number, validates,
 re-prompts on invalid input. Pressing Enter on an empty line picks
 the default if one was provided.
 
-```typescript
+```typescript ignore
 type ChooseOptions = {
   default?: number; // 0-based index of the default choice
 };
@@ -254,7 +254,7 @@ In non-TTY mode (CI, redirected output) emits one line per percent
 change so logs stay readable. Rate-limits TTY renders to ~60fps so
 tight update loops don't flood the terminal.
 
-```typescript
+```typescript ignore
 type WritableLike = { write(chunk: string): unknown };
 
 type ProgressBarOptions = {
@@ -283,6 +283,9 @@ class ProgressBar {
 ```typescript
 import { ProgressBar } from '@tundralibs/compat/cli';
 
+declare const items: string[];
+declare function process(item: string): Promise<void>;
+
 const bar = new ProgressBar({ total: items.length, label: 'Indexing' });
 for (const item of items) {
   await process(item);
@@ -297,7 +300,7 @@ In TTY mode animates braille frames in place. In non-TTY mode emits
 a single "starting" line on `start()` and a final line on
 `succeed`/`fail`/`stop` — no animation in non-interactive output.
 
-```typescript
+```typescript ignore
 const SPINNER_FRAMES_BRAILLE: readonly string[];
 //   ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
 const SPINNER_FRAMES_ASCII: readonly string[];
@@ -341,13 +344,15 @@ in practice — opt-in keeps behavior predictable.
 ```typescript
 import { Spinner } from '@tundralibs/compat/cli';
 
+declare function connect(): Promise<void>;
+
 const spin = new Spinner({ label: 'Connecting' });
 spin.start();
 try {
   await connect();
   spin.succeed('Connected');
 } catch (err) {
-  spin.fail(`Failed: ${err.message}`);
+  spin.fail(`Failed: ${(err as Error).message}`);
 }
 ```
 
@@ -357,6 +362,9 @@ try {
 
 ```typescript
 import { argv, isTTY, ProgressBar, prompt } from '@tundralibs/compat/cli';
+
+declare function loadWork(host: string): Promise<string[]>;
+declare function process(item: string): Promise<void>;
 
 const opts = argv();
 const concurrency = typeof opts.concurrency === 'number' ? opts.concurrency : 4;
@@ -385,6 +393,8 @@ CI without changing flags:
 
 ```typescript
 import { isTTY, Spinner } from '@tundralibs/compat/cli';
+
+declare function build(): Promise<void>;
 
 if (isTTY()) {
   const spin = new Spinner({ label: 'Building' });

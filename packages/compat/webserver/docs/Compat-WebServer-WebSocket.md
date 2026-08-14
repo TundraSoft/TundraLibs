@@ -69,7 +69,7 @@ ws.onmessage = (e) => console.log(e.data);
 
 ### WebSocketHandler
 
-```typescript
+```typescript ignore
 interface WebSocketHandler {
   open?: (ws: ServerWebSocket, ctx: WebSocketUpgradeContext) => void;
   message?: (ws: ServerWebSocket, data: WebSocketData) => void;
@@ -88,7 +88,7 @@ interface WebSocketHandler {
 
 Called when a connection is established.
 
-```typescript
+```typescript ignore
 open: ((ws, ctx) => {
   console.log('New connection from', ctx.remoteAddress);
   console.log('Request URL:', ctx.request.url);
@@ -100,7 +100,7 @@ open: ((ws, ctx) => {
 
 Called when a message is received.
 
-```typescript
+```typescript ignore
 message: ((ws, data) => {
   if (typeof data === 'string') {
     const msg = JSON.parse(data);
@@ -116,7 +116,7 @@ message: ((ws, data) => {
 
 Called when connection closes.
 
-```typescript
+```typescript ignore
 close: ((ws, code, reason) => {
   console.log(`Connection closed: ${code} - ${reason}`);
   cleanupConnection(ws);
@@ -135,7 +135,7 @@ Common close codes:
 
 Called on WebSocket errors. Native on Deno and Node (`ws`); on Bun, errors thrown by your handlers are caught and synthesized into this callback.
 
-```typescript
+```typescript ignore
 error: ((ws, error) => {
   console.error('WebSocket error:', error.message);
   ws.close(1011, 'Internal error');
@@ -146,7 +146,7 @@ error: ((ws, error) => {
 
 Called on ping/pong frames. Available on Bun and Node.js. Deno consumes ping/pong frames internally — its WebSocket doesn't surface them, so handlers are unreachable there (a hard runtime limit, not an oversight).
 
-```typescript
+```typescript ignore
 ping: (ws, data) => {
   console.log('Ping received');
 },
@@ -159,7 +159,7 @@ pong: (ws, data) => {
 
 Called when the send buffer is drained. Bun fires it natively; Node.js fires it via `ws`'s drain event; Deno is emulated by polling `bufferedAmount` after each `send()`.
 
-```typescript
+```typescript ignore
 drain: ((ws) => {
   console.log('Buffer drained, can send more data');
 });
@@ -167,7 +167,7 @@ drain: ((ws) => {
 
 ### ServerWebSocket Interface
 
-```typescript
+```typescript ignore
 interface ServerWebSocket<T = unknown> {
   send(data: WebSocketData): void;
   close(code?: number, reason?: string): void;
@@ -197,7 +197,7 @@ WebSocket connections must be authenticated during the upgrade handshake, as the
 
 Simple but visible in logs/history:
 
-```typescript
+```typescript ignore
 // Client
 const ws = new WebSocket('ws://localhost:8080?token=abc123');
 
@@ -222,7 +222,7 @@ websocket: {
 
 Use `Sec-WebSocket-Protocol` header:
 
-```typescript
+```typescript ignore
 // Client
 const ws = new WebSocket('ws://localhost:8080', ['auth-token-abc123']);
 
@@ -250,7 +250,7 @@ websocket: {
 
 For browser clients with existing session:
 
-```typescript
+```typescript ignore
 websocket: {
   open: ((ws, ctx) => {
     const cookies = ctx.request.headers.get('cookie');
@@ -268,7 +268,7 @@ websocket: {
 
 Authenticate in the first message:
 
-```typescript
+```typescript ignore
 const pendingAuth = new Set();
 
 websocket: {
@@ -308,7 +308,7 @@ websocket: {
 
 Pre-authenticate via HTTP, then upgrade:
 
-```typescript
+```typescript ignore
 const upgradeTokens = new Map(); // token -> user
 
 handler: async (req, info) => {
@@ -354,7 +354,7 @@ websocket: {
 
 ### JSON Protocol
 
-```typescript
+```typescript ignore
 interface Message {
   type: string;
   payload?: unknown;
@@ -398,7 +398,7 @@ websocket: {
 
 ### Binary Data
 
-```typescript
+```typescript ignore
 websocket: {
   message: ((ws, data) => {
     if (data instanceof Uint8Array) {
@@ -417,7 +417,7 @@ websocket: {
 
 ### Tracking Connected Clients
 
-```typescript
+```typescript ignore
 const clients = new Set<ServerWebSocket>();
 
 websocket: {
@@ -444,6 +444,8 @@ function broadcast(message: string) {
 ### Room/Channel System
 
 ```typescript
+import type { ServerWebSocket } from '@tundralibs/compat/webserver';
+
 const rooms = new Map<string, Set<ServerWebSocket>>();
 
 function joinRoom(ws: ServerWebSocket, roomId: string) {
@@ -478,7 +480,7 @@ function broadcastToRoom(
 
 ### Heartbeat/Keep-Alive
 
-```typescript
+```typescript ignore
 const lastPong = new Map<ServerWebSocket, number>();
 
 websocket: {
@@ -510,7 +512,7 @@ setInterval(() => {
 
 ### 1. Always Validate Input
 
-```typescript
+```typescript ignore
 message: ((ws, data) => {
   if (typeof data !== 'string' || data.length > 65536) {
     ws.close(1009, 'Message too large');
@@ -522,7 +524,7 @@ message: ((ws, data) => {
 
 ### 2. Handle Errors Gracefully
 
-```typescript
+```typescript ignore
 message: ((ws, data) => {
   try {
     const msg = JSON.parse(data as string);
@@ -535,7 +537,7 @@ message: ((ws, data) => {
 
 ### 3. Use Idle Timeout
 
-```typescript
+```typescript ignore
 websocket: {
   idleTimeout: 120, // Close after 2 minutes of inactivity
   // ...
@@ -544,7 +546,7 @@ websocket: {
 
 ### 4. Clean Up on Close
 
-```typescript
+```typescript ignore
 close: ((ws, code, reason) => {
   // Remove from all data structures
   clients.delete(ws);
@@ -557,7 +559,7 @@ close: ((ws, code, reason) => {
 
 ### 5. Rate Limiting
 
-```typescript
+```typescript ignore
 const messageCount = new Map<ServerWebSocket, number>();
 
 websocket: {

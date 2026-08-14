@@ -25,6 +25,8 @@
  *
  * @example TCP mode
  * ```typescript
+ * import { WebServer } from '@tundralibs/compat/webserver';
+ *
  * const server = new WebServer('API', {
  *   mode: 'TCP',
  *   port: 8080,
@@ -35,6 +37,8 @@
  *
  * @example UNIX mode (Linux/macOS only)
  * ```typescript
+ * import { WebServer } from '@tundralibs/compat/webserver';
+ *
  * const server = new WebServer('API', {
  *   mode: 'UNIX',
  *   unixSocketPath: '/var/run/myapp.sock',

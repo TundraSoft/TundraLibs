@@ -94,7 +94,7 @@ import { connect, hostname, listen } from 'jsr:@tundralibs/compat/net';
 
 Options for creating a TCP, TLS, or Unix socket listener.
 
-```typescript
+```typescript ignore
 type ListenOptions =
   | {
     /** The port number to listen on */
@@ -130,7 +130,7 @@ type ListenOptions =
 
 Options for creating a TCP, TLS, or Unix socket connection.
 
-```typescript
+```typescript ignore
 type ConnectOptions =
   | {
     /** The port number to connect to */
@@ -176,7 +176,7 @@ type ConnectOptions =
 
 A cross-runtime listener type for TCP, TLS, or Unix sockets.
 
-```typescript
+```typescript ignore
 type Listener = {
   /** Accepts an incoming connection */
   accept(): Promise<Connection>;
@@ -236,7 +236,7 @@ type Connection = {
 
 Options for upgrading a plain TCP connection to TLS.
 
-```typescript
+```typescript ignore
 type UpgradeTlsOptions = {
   /** Hostname for SAN/SNI certificate verification (required). */
   hostname: string;
@@ -254,7 +254,7 @@ type UpgradeTlsOptions = {
 
 Creates a TCP, TLS, or Unix socket listener.
 
-```typescript
+```typescript ignore
 async function listen(options: ListenOptions): Promise<Listener>;
 ```
 
@@ -303,6 +303,8 @@ while (true) {
 **Example - TLS server with file-based certificates:**
 
 ```typescript
+import { listen } from '@tundralibs/compat/net';
+
 const listener = await listen({
   port: 8443,
   hostname: '0.0.0.0',
@@ -322,6 +324,8 @@ listener.close();
 **Example - TLS server with string-based certificates:**
 
 ```typescript
+import { listen } from '@tundralibs/compat/net';
+
 const listener = await listen({
   port: 8443,
   tls: {
@@ -338,6 +342,8 @@ listener.close();
 **Example - Unix socket server:**
 
 ```typescript
+import { listen } from '@tundralibs/compat/net';
+
 const listener = await listen({ path: '/tmp/myapp.sock' });
 console.log('Server listening on Unix socket');
 
@@ -353,6 +359,8 @@ listener.close();
 **Example - Listener with graceful shutdown:**
 
 ```typescript
+import { listen } from '@tundralibs/compat/net';
+
 const controller = new AbortController();
 
 const listener = await listen({
@@ -370,6 +378,8 @@ console.log('Server shut down gracefully');
 **Example - Testing port availability:**
 
 ```typescript
+import { listen } from '@tundralibs/compat/net';
+
 async function isPortAvailable(port: number): Promise<boolean> {
   try {
     const listener = await listen({ port });
@@ -391,7 +401,7 @@ if (await isPortAvailable(8080)) {
 
 Creates a TCP or Unix socket connection to the specified destination.
 
-```typescript
+```typescript ignore
 async function connect(options: ConnectOptions): Promise<Connection>;
 ```
 
@@ -466,6 +476,9 @@ try {
 **Example - Abort connection manually:**
 
 ```typescript
+import { connect } from '@tundralibs/compat/net';
+import { ConnectionTimeoutError } from '@tundralibs/compat';
+
 const controller = new AbortController();
 
 // Cancel connection after 3 seconds
@@ -488,6 +501,9 @@ try {
 **Example - Combine timeout and signal:**
 
 ```typescript
+import { connect } from '@tundralibs/compat/net';
+import { ConnectionTimeoutError } from '@tundralibs/compat';
+
 const controller = new AbortController();
 
 // Whichever happens first will abort the connection
@@ -514,6 +530,8 @@ controller.abort();
 **Example - TLS connection (file-based):**
 
 ```typescript
+import { connect } from '@tundralibs/compat/net';
+
 // Secure connection with client certificates
 const conn = await connect({
   hostname: 'secure.example.com',
@@ -533,6 +551,8 @@ conn.close();
 **Example - TLS connection (string-based):**
 
 ```typescript
+import { connect } from '@tundralibs/compat/net';
+
 // Using certificate content directly
 const conn = await connect({
   hostname: 'api.example.com',
@@ -549,6 +569,8 @@ conn.close();
 **Example - Unix socket connection:**
 
 ```typescript
+import { connect } from '@tundralibs/compat/net';
+
 // Connect to a Unix domain socket
 const conn = await connect({ path: '/tmp/app.sock' });
 
@@ -566,6 +588,8 @@ conn.close();
 **Example - Connect to localhost:**
 
 ```typescript
+import { connect } from '@tundralibs/compat/net';
+
 // Connects to localhost:8080
 const conn = await connect({ port: 8080 });
 
@@ -576,6 +600,8 @@ conn.close();
 **Example - Echo client:**
 
 ```typescript
+import { connect } from '@tundralibs/compat/net';
+
 async function echoClient(message: string) {
   const conn = await connect({ hostname: 'localhost', port: 8080 });
 
@@ -583,12 +609,11 @@ async function echoClient(message: string) {
   await conn.write(message);
 
   // Read echo
-  const buffer = new Uint8Array(1024);
-  const bytesRead = await conn.read(buffer);
+  const echo = await conn.read();
 
-  if (bytesRead !== null) {
+  if (echo !== null) {
     const decoder = new TextDecoder();
-    const response = decoder.decode(buffer.subarray(0, bytesRead));
+    const response = decoder.decode(echo);
     console.log('Server echoed:', response);
   }
 
@@ -601,6 +626,8 @@ await echoClient('Hello, World!');
 **Example - Check connection info:**
 
 ```typescript
+import { connect } from '@tundralibs/compat/net';
+
 const conn = await connect({ hostname: 'example.com', port: 80 });
 
 console.log('Connected to:', conn.remoteAddr);
@@ -621,7 +648,7 @@ Upgrades a plain TCP `Connection` to TLS in place. Used by protocols that negoti
 
 The original `Connection` should be considered consumed after a successful upgrade — do not call `read`/`write` on it. Use the returned connection instead.
 
-```typescript
+```typescript ignore
 async function upgradeTls(
   conn: Connection,
   options: UpgradeTlsOptions,
@@ -714,6 +741,10 @@ if (reply && new TextDecoder().decode(reply).startsWith('220')) {
 **Example — mTLS upgrade:**
 
 ```typescript
+import { type Connection, upgradeTls } from '@tundralibs/compat/net';
+
+declare const conn: Connection;
+
 const tlsConn = await upgradeTls(conn, {
   hostname: 'secure.internal.corp',
   tls: {
@@ -728,7 +759,7 @@ const tlsConn = await upgradeTls(conn, {
 
 Gets the hostname of the current machine.
 
-```typescript
+```typescript ignore
 function hostname(): string;
 ```
 
@@ -754,6 +785,8 @@ console.log(`Machine hostname: ${host}`);
 **Example - Server logging:**
 
 ```typescript
+import { hostname, listen } from '@tundralibs/compat/net';
+
 async function startServer(port: number) {
   const host = hostname();
   const listener = await listen({ port });
@@ -860,12 +893,11 @@ async function httpGet(hostname: string, path: string): Promise<string> {
 
   // Read response
   const chunks: Uint8Array[] = [];
-  const buffer = new Uint8Array(4096);
 
   while (true) {
-    const bytesRead = await conn.read(buffer);
-    if (bytesRead === null) break;
-    chunks.push(buffer.slice(0, bytesRead));
+    const chunk = await conn.read();
+    if (chunk === null) break;
+    chunks.push(chunk);
   }
 
   conn.close();
@@ -925,7 +957,7 @@ console.log('Open ports:', openPorts);
 ### Connection with Retry Logic
 
 ```typescript
-import { connect } from '@tundralibs/compat/net';
+import { connect, type Connection } from '@tundralibs/compat/net';
 import { ConnectionTimeoutError } from '@tundralibs/compat';
 
 async function connectWithRetry(
@@ -933,7 +965,7 @@ async function connectWithRetry(
   port: number,
   maxRetries = 3,
   timeout = 5000,
-) {
+): Promise<Connection> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Connection attempt ${attempt}/${maxRetries}`);
@@ -944,17 +976,15 @@ async function connectWithRetry(
       if (err instanceof ConnectionTimeoutError) {
         console.log(`Attempt ${attempt} timed out`);
       } else {
-        console.log(`Attempt ${attempt} failed:`, err.message);
-      }
-
-      if (attempt === maxRetries) {
-        throw new Error(`Failed to connect after ${maxRetries} attempts`);
+        console.log(`Attempt ${attempt} failed:`, (err as Error).message);
       }
 
       // Wait before retrying
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
+
+  throw new Error(`Failed to connect after ${maxRetries} attempts`);
 }
 
 const conn = await connectWithRetry('example.com', 80);

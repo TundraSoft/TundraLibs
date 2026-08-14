@@ -110,6 +110,8 @@ server.start();
 Standard HTTP server on a TCP port:
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 const server = new WebServer('API', {
   mode: 'TCP',
   port: 3000, // Default: 8008
@@ -137,6 +139,8 @@ const server = new WebServer('API', {
 Unix domain socket server (IPC):
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 const server = new WebServer('LocalAPI', {
   mode: 'UNIX',
   unixSocketPath: '/var/run/myapp.sock',
@@ -163,6 +167,8 @@ curl --unix-socket /var/run/myapp.sock http://localhost/
 **File-based certificates:**
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 const server = new WebServer('SecureAPI', {
   mode: 'TCP',
   port: 443,
@@ -178,6 +184,8 @@ const server = new WebServer('SecureAPI', {
 **String-based certificates:**
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 const server = new WebServer('SecureAPI', {
   mode: 'TCP',
   port: 443,
@@ -195,6 +203,8 @@ const server = new WebServer('SecureAPI', {
 See [WebSocket Documentation](../websocket/Compat-WebSocket.md) for complete details.
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 const server = new WebServer('WSServer', {
   mode: 'TCP',
   port: 8080,
@@ -224,6 +234,10 @@ or attach typed connection state — runs once per incoming upgrade,
 before the handshake completes.
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
+declare function verifyToken(token: string | null): string | null;
+
 type ConnState = { userId: string };
 
 const server = new WebServer<ConnState>('WSServer', {
@@ -290,7 +304,7 @@ all, for comparison.
 
 **Bun** — `Bun.serve()` returns a WS-aware server:
 
-```ts
+```ts ignore
 Bun.serve({
   port: 8080,
   fetch(req, server) {
@@ -349,7 +363,7 @@ the runtime's native WebSocket type and won't accept the compat
 
 ### Constructor
 
-```typescript
+```typescript ignore
 new WebServer<T = unknown>(name: string, options: ServerOptions<ServerMode, T>)
 ```
 
@@ -390,6 +404,10 @@ Creates a new server instance. Validates all options during construction.
 Starts the server and begins accepting connections.
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 server.start();
 console.log(`Listening on ${server.address}`);
 ```
@@ -404,6 +422,10 @@ console.log(`Listening on ${server.address}`);
 Stops the server.
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 // Graceful: wait for active requests
 await server.stop();
 
@@ -420,6 +442,10 @@ await server.stop(false);
 Registers an event listener.
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 server.on('onResponse', (name, req, info, res) => {
   console.log(`${req.method} ${req.url} → ${res.status}`);
 });
@@ -430,6 +456,11 @@ server.on('onResponse', (name, req, info, res) => {
 Removes event listener(s).
 
 ```typescript
+import type { ServerEvents, WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+declare const myHandler: ServerEvents['onError'];
+
 // Remove specific listener
 server.off('onError', myHandler);
 
@@ -446,6 +477,10 @@ Marks server as referenced (prevents process exit).
 Marks server as unreferenced (allows process exit).
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const metricsServer: WebServer;
+
 // Metrics server that won't block shutdown
 metricsServer.start();
 metricsServer.unref();
@@ -456,6 +491,10 @@ metricsServer.unref();
 Resets all metrics to initial values.
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 setInterval(() => {
   console.log('Hourly stats:', server.metrics);
   server.resetMetrics();
@@ -473,6 +512,10 @@ setInterval(() => {
 | `onWarning`  | `(name, message)`                 | Warning (e.g., unsupported option) |
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 server.on('onStart', (name, mode) => {
   console.log(`[${name}] Started in ${mode} mode`);
 });
@@ -490,6 +533,10 @@ server.on('onError', (name, error, req, info) => {
 ## Metrics
 
 ```typescript
+import type { WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+
 const metrics = server.metrics;
 
 // Request metrics
@@ -516,6 +563,8 @@ console.log(`WS Messages: ${metrics.websocket.messages.received}`);
 ### REST API with JSON
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 const server = new WebServer('RestAPI', {
   mode: 'TCP',
   port: 3000,
@@ -541,6 +590,8 @@ server.start();
 ### Graceful Shutdown with Abort Signal
 
 ```typescript
+import { WebServer } from '@tundralibs/compat/webserver';
+
 const controller = new AbortController();
 
 const server = new WebServer('API', {
@@ -562,10 +613,12 @@ process.on('SIGINT', () => {
 ### Metrics Endpoint
 
 ```typescript
-const server = new WebServer('API', {
+import { WebServer } from '@tundralibs/compat/webserver';
+
+const server: WebServer = new WebServer('API', {
   mode: 'TCP',
   port: 8080,
-  handler: (req, info) => {
+  handler: (req, info): Response => {
     const url = new URL(req.url);
 
     if (url.pathname === '/metrics') {
@@ -580,6 +633,14 @@ const server = new WebServer('API', {
 ### Multi-Listener Logging
 
 ```typescript
+import type { RequestInfo, WebServer } from '@tundralibs/compat/webserver';
+
+declare const server: WebServer;
+declare const metricsCollector: {
+  record(req: Request, res: Response, info: RequestInfo): void;
+};
+declare const alertService: { warn(message: string): void };
+
 server.on('onResponse', [
   // Console logging
   (name, req, info, res) => {

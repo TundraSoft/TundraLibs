@@ -82,6 +82,10 @@ await wss.listen({ port: 8080 });
 Want to broadcast to all connected clients?
 
 ```ts
+import { WebSocketServer } from '@tundralibs/compat/websocket';
+
+declare const wss: WebSocketServer;
+
 wss.onMessage((ctx) => {
   wss.broadcast(`from ${ctx.ws.remoteAddress}: ${ctx.message}`);
 });
@@ -91,7 +95,7 @@ wss.onMessage((ctx) => {
 
 ### `new WebSocketServer<T = unknown, M = string>(options?)`
 
-```ts
+```ts ignore
 type WebSocketServerOptions<T, M> = {
   codec?: Codec<M>; // defaults to StringCodec
   upgrade?: (req, info) => UpgradeDecision<T> | Promise<UpgradeDecision<T>>;
@@ -109,7 +113,7 @@ return `false` to refuse, `true` to accept with default data, or
 
 ### Configuration (chainable)
 
-```ts
+```ts ignore
 wss.use(middleware); // Koa-style middleware
 wss.onMessage(handler); // terminal — runs after all middleware
 wss.onOpen(handler); // connection opened
@@ -123,7 +127,7 @@ Each `on*` registration replaces the previous. `use()` appends.
 
 ### Send + lifecycle
 
-```ts
+```ts ignore
 wss.handlers(); // → WebSocketHandler<T>, pass to WebServer
 await wss.listen({ port }); // standalone — internal WebServer
 wss.send(ws, message); // codec-encode, send to one ws, observe backpressure
@@ -135,6 +139,8 @@ await wss.close(); // tear down
 ### Limits + backpressure
 
 ```ts
+import { WebSocketServer } from '@tundralibs/compat/websocket';
+
 new WebSocketServer({
   maxFrameSize: 1_048_576, // bytes — default 1 MB; 0 disables
   backpressureThreshold: 16_384, // bytes — undefined disables observation
@@ -174,6 +180,11 @@ custom codecs, implement the same shape:
 ```ts
 import type { Codec } from '@tundralibs/compat/websocket';
 
+declare const msgpack: {
+  encode(msg: unknown): Uint8Array;
+  decode(raw: Uint8Array): unknown;
+};
+
 const MsgpackCodec: Codec<unknown> = {
   encode: (msg) => msgpack.encode(msg),
   decode: (raw) => {
@@ -194,6 +205,8 @@ the codec — `onDecodeError(ws, raw, 'oversize')` fires so you can
 react (close the connection, log, send a structured rejection).
 
 ```ts
+import { WebSocketServer } from '@tundralibs/compat/websocket';
+
 const wss = new WebSocketServer({
   maxFrameSize: 256 * 1024, // 256 KB
 });
@@ -215,6 +228,8 @@ outbound buffer climbs above a byte threshold after a server-side
 send.
 
 ```ts
+import { WebSocketServer } from '@tundralibs/compat/websocket';
+
 const wss = new WebSocketServer({
   backpressureThreshold: 64 * 1024, // 64 KB
 });
@@ -263,6 +278,8 @@ await server.start();
 ### Standalone server
 
 ```ts
+import { WebSocketServer } from '@tundralibs/compat/websocket';
+
 const wss = new WebSocketServer();
 wss.onMessage((ctx) => ctx.ws.send(`echo: ${ctx.message}`));
 
@@ -273,6 +290,10 @@ You can pass a `httpHandler` if you want non-WS requests to do
 something other than 404:
 
 ```ts
+import type { WebSocketServer } from '@tundralibs/compat/websocket';
+
+declare const wss: WebSocketServer;
+
 await wss.listen({
   port: 8080,
   httpHandler: () => new Response('Use the WebSocket endpoint'),
@@ -282,6 +303,10 @@ await wss.listen({
 ### Authenticated upgrade with typed connection state
 
 ```ts
+import { WebSocketServer } from '@tundralibs/compat/websocket';
+
+declare function verifyToken(token: string | null): string | null;
+
 type Conn = { userId: string };
 
 const wss = new WebSocketServer<Conn>({
@@ -339,7 +364,7 @@ Bring your own — anything that satisfies `Codec<M>` works. Below: a
 length-prefixed text protocol where each frame is `<n>:<payload>`.
 
 ```ts
-import type { Codec } from '@tundralibs/compat/websocket';
+import { type Codec, WebSocketServer } from '@tundralibs/compat/websocket';
 
 type LpFrame = { length: number; payload: string };
 
@@ -363,6 +388,10 @@ const wss = new WebSocketServer({ codec: LpCodec });
 ### Middleware: timing + logging
 
 ```ts
+import type { WebSocketServer } from '@tundralibs/compat/websocket';
+
+declare const wss: WebSocketServer;
+
 wss.use(async (ctx, next) => {
   const t0 = performance.now();
   try {
@@ -380,6 +409,8 @@ middleware and the terminal `onMessage` handler.
 ### Broadcasting to all connections
 
 ```ts
+import { WebSocketServer } from '@tundralibs/compat/websocket';
+
 const wss = new WebSocketServer();
 
 setInterval(() => {
@@ -394,6 +425,10 @@ block the others.
 For per-connection filtering, iterate `wss.connections` directly:
 
 ```ts
+import type { WebSocketServer } from '@tundralibs/compat/websocket';
+
+declare const wss: WebSocketServer<{ role?: string }>;
+
 for (const ws of wss.connections) {
   if (ws.data?.role === 'admin') {
     ws.send('admin ping');

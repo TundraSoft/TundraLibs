@@ -39,6 +39,13 @@
  *
  * @example
  * ```typescript
+ * import {
+ *   type ServerOptions,
+ *   WebServer,
+ * } from '@tundralibs/compat/webserver';
+ *
+ * declare const options: ServerOptions;
+ *
  * const server = new WebServer('MyServer', options);
  *
  * console.log(server.state); // 'STOPPED'

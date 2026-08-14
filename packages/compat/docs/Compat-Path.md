@@ -52,7 +52,7 @@ npx jsr add @tundralibs/compat
 
 ### Path Separators
 
-```typescript
+```typescript ignore
 const DELIMITER: string; // Path delimiter (: on Unix, ; on Windows)
 const SEPARATOR: string; // Directory separator (/ on Unix, \ on Windows)
 const SEPARATOR_PATTERN: RegExp; // Matches both / and \
@@ -73,7 +73,7 @@ console.log(`Delimiter: ${DELIMITER}`); // : on Unix, ; on Windows
 
 Joins path segments into a single path.
 
-```typescript
+```typescript ignore
 function join(...paths: string[]): string;
 ```
 
@@ -99,7 +99,7 @@ const configPath = join(process.cwd(), 'config', 'app.json');
 
 Returns the directory name of a path.
 
-```typescript
+```typescript ignore
 function dirname(path: string): string;
 ```
 
@@ -123,7 +123,7 @@ console.log(dirname('relative/path/file.txt')); // 'relative/path'
 
 Returns the last portion of a path.
 
-```typescript
+```typescript ignore
 function basename(path: string, ext?: string): string;
 ```
 
@@ -148,7 +148,7 @@ console.log(basename('C:\\Users\\document.pdf')); // 'document.pdf'
 
 Returns the extension of a path.
 
-```typescript
+```typescript ignore
 function extname(path: string): string;
 ```
 
@@ -173,7 +173,7 @@ console.log(extname('.gitignore')); // ''
 
 Resolves path segments into an absolute path.
 
-```typescript
+```typescript ignore
 function resolve(...paths: string[]): string;
 ```
 
@@ -204,7 +204,7 @@ const dataPath = resolve('/home/user', '../shared', 'data.json');
 
 Normalizes a path, resolving `..` and `.` segments.
 
-```typescript
+```typescript ignore
 function normalize(path: string): string;
 ```
 
@@ -230,7 +230,7 @@ console.log(normalize('src//components/./Button.tsx'));
 
 Determines if a path is absolute.
 
-```typescript
+```typescript ignore
 function isAbsolute(path: string): boolean;
 ```
 
@@ -255,7 +255,7 @@ console.log(isAbsolute('./src/index.ts')); // false
 
 Computes the relative path from one path to another.
 
-```typescript
+```typescript ignore
 function relative(from: string, to: string): string;
 ```
 
@@ -282,7 +282,7 @@ console.log(rel2); // 'logs/app.log'
 
 Parses a path into its components.
 
-```typescript
+```typescript ignore
 function parse(path: string): ParsedPath;
 
 interface ParsedPath {
@@ -323,7 +323,7 @@ const winPath = parse('C:\\Users\\file.txt');
 
 Formats a parsed path object into a path string.
 
-```typescript
+```typescript ignore
 function format(pathObject: Partial<ParsedPath>): string;
 ```
 
@@ -393,7 +393,7 @@ const jsFile = changeExtension(tsFile, '.js');
 ### Relative Path Navigation
 
 ```typescript
-import { dirname, join, relative } from '@tundralibs/compat/path';
+import { dirname, extname, relative } from '@tundralibs/compat/path';
 
 function getRelativeImportPath(
   fromFile: string,

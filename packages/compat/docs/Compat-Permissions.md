@@ -65,7 +65,7 @@ npx jsr add @tundralibs/compat
 
 ### Permission Object
 
-```typescript
+```typescript ignore
 type PermissionObject<T extends PermissionName = PermissionName> =
   & {
     name: T;
@@ -83,7 +83,7 @@ type PermissionObject<T extends PermissionName = PermissionName> =
 
 Gets the permission status for a given permission.
 
-```typescript
+```typescript ignore
 async function getPermissions(
   options: PermissionObject,
 ): Promise<PermissionResponse>;
@@ -124,7 +124,7 @@ const envStatus = await getPermissions({ name: 'env', variable: 'HOME' });
 
 Synchronous version of `getPermissions()`.
 
-```typescript
+```typescript ignore
 function getPermissionsSync(
   options: PermissionObject,
 ): PermissionResponse;
@@ -145,7 +145,7 @@ if (writeStatus === 'GRANTED') {
 
 Checks if a permission is granted (convenience wrapper).
 
-```typescript
+```typescript ignore
 async function hasPermission(
   options: PermissionObject,
 ): Promise<boolean>;
@@ -172,7 +172,7 @@ if (await hasPermission({ name: 'net', host: 'github.com' })) {
 
 Synchronous version of `hasPermission()`.
 
-```typescript
+```typescript ignore
 function hasPermissionSync(
   options: PermissionObject,
 ): boolean;
@@ -268,6 +268,8 @@ function canAccessPath(path: string): boolean {
 import { hasPermission } from '@tundralibs/compat/permissions';
 import { isDeno } from '@tundralibs/compat/runtime';
 
+declare function createConnection(host: string): Promise<unknown>;
+
 async function connectToDatabase(host: string) {
   if (isDeno) {
     // In Deno, verify network permission
@@ -287,7 +289,10 @@ async function connectToDatabase(host: string) {
 ```typescript
 import { describe, it } from '@tundralibs/compat/test';
 import { hasPermissionSync } from '@tundralibs/compat/permissions';
-import { assert, assertThrows } from '@std/assert';
+
+// Assertions come from your preferred library (e.g. `@std/assert` on Deno).
+declare function assert(expr: unknown, msg?: string): asserts expr;
+declare function assertThrows(fn: () => unknown): void;
 
 describe('File operations', () => {
   it({
@@ -394,24 +399,28 @@ node script.ts
 ```typescript
 import { hasPermission } from '@tundralibs/compat/permissions';
 
-// ✅ Good - Specific scope
-const canRead = await hasPermission({
-  name: 'read',
-  path: './config.json',
-});
+declare const defaultConfig: Record<string, unknown>;
 
-// ✅ Good - Graceful fallback
-if (!canRead) {
-  console.warn('Using default config');
-  return defaultConfig;
-}
+async function loadConfig() {
+  // ✅ Good - Specific scope
+  const canRead = await hasPermission({
+    name: 'read',
+    path: './config.json',
+  });
 
-// ❌ Bad - Too broad (checking all read permission)
-const canReadAnything = await hasPermission({ name: 'read' });
+  // ✅ Good - Graceful fallback
+  if (!canRead) {
+    console.warn('Using default config');
+    return defaultConfig;
+  }
 
-// ❌ Bad - No fallback
-if (!canRead) {
-  throw new Error('Need read permission!'); // Unhelpful
+  // ❌ Bad - Too broad (checking all read permission)
+  const canReadAnything = await hasPermission({ name: 'read' });
+
+  // ❌ Bad - No fallback
+  if (!canReadAnything) {
+    throw new Error('Need read permission!'); // Unhelpful
+  }
 }
 ```
 
@@ -444,7 +453,10 @@ try {
 ## Usage
 
 ```typescript
-import { hasPermission, hasPermissionSync } from './permissions.ts';
+import {
+  hasPermission,
+  hasPermissionSync,
+} from '@tundralibs/compat/permissions';
 ```
 
 ## API
@@ -454,6 +466,8 @@ import { hasPermission, hasPermissionSync } from './permissions.ts';
 Async permission check.
 
 ```typescript
+import { hasPermission } from '@tundralibs/compat/permissions';
+
 const canRead = await hasPermission({ name: 'read', path: './data' });
 const canWrite = await hasPermission({ name: 'write', path: './output' });
 const canNet = await hasPermission({ name: 'net', host: 'api.example.com' });
@@ -464,6 +478,8 @@ const canNet = await hasPermission({ name: 'net', host: 'api.example.com' });
 Sync permission check.
 
 ```typescript
+import { hasPermissionSync } from '@tundralibs/compat/permissions';
+
 const canRead = hasPermissionSync({ name: 'read', path: './data' });
 ```
 
@@ -490,7 +506,7 @@ const canRead = hasPermissionSync({ name: 'read', path: './data' });
 ### Pre-flight Checks
 
 ```typescript
-import { hasPermissionSync } from './permissions.ts';
+import { hasPermissionSync } from '@tundralibs/compat/permissions';
 
 function ensurePermissions() {
   if (!hasPermissionSync({ name: 'read', path: './config' })) {
@@ -506,7 +522,9 @@ function ensurePermissions() {
 ### Conditional Features
 
 ```typescript
-import { hasPermission } from './permissions.ts';
+import { hasPermission } from '@tundralibs/compat/permissions';
+
+declare function loadFromFile(path: string): Promise<string | undefined>;
 
 async function loadSecrets() {
   if (await hasPermission({ name: 'env', variable: 'API_KEY' })) {

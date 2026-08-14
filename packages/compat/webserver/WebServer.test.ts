@@ -87,6 +87,45 @@ describe('WebServer', () => {
         }
       });
 
+      it('should expose option/value/expected as structured fields', () => {
+        let threw = false;
+        try {
+          new WebServer('', {
+            mode: 'TCP',
+            port: getNextPort(),
+            handler: () => new Response('OK'),
+          });
+        } catch (error) {
+          threw = true;
+          if (!(error instanceof ServerConfigurationError)) {
+            throw new Error(
+              `Expected ServerConfigurationError, got ${error?.constructor?.name}`,
+            );
+          }
+          // The values are readable without parsing the message.
+          if (typeof error.option !== 'string' || error.option.length === 0) {
+            throw new Error(
+              `Expected a non-empty 'option', got: ${error.option}`,
+            );
+          }
+          if (!error.message.includes(error.option)) {
+            throw new Error(
+              `Message should still name the option; got: ${error.message}`,
+            );
+          }
+          const json = error.toJSON();
+          if (json.option !== error.option) {
+            throw new Error('toJSON() should carry the option');
+          }
+          if (!('value' in json)) {
+            throw new Error('toJSON() should carry the value');
+          }
+        }
+        if (!threw) {
+          throw new Error('Expected error to be thrown');
+        }
+      });
+
       it('should throw ServerConfigurationError for whitespace-only name', () => {
         let threw = false;
         try {

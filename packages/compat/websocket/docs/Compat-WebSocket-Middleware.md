@@ -25,6 +25,8 @@ routing — anything that crosscuts your `onMessage` handler.
 ```ts
 import type { Middleware } from '@tundralibs/compat/websocket';
 
+type MyConn = { userId: string };
+
 const mw: Middleware<MyConn> = async (ctx, next) => {
   // before
   await next();
@@ -44,6 +46,10 @@ Middleware runs in registration order, with each one wrapping the rest
 of the chain in `next()`:
 
 ```ts
+import type { WebSocketServer } from '@tundralibs/compat/websocket';
+
+declare const wss: WebSocketServer;
+
 wss.use(async (_, next) => {
   console.log('1: before');
   await next();
@@ -78,6 +84,10 @@ message. Middleware writes to it; later middleware and the
 `onMessage` handler read.
 
 ```ts
+import type { WebSocketServer } from '@tundralibs/compat/websocket';
+
+declare const wss: WebSocketServer;
+
 wss.use(async (ctx, next) => {
   ctx.state.startedAt = performance.now();
   await next();
@@ -102,6 +112,12 @@ auto-ack — there is no protocol-level response on the primitive,
 so a short-circuited message is simply not processed.
 
 ```ts
+import type { ServerWebSocket } from '@tundralibs/compat/webserver';
+import type { WebSocketServer } from '@tundralibs/compat/websocket';
+
+declare const wss: WebSocketServer;
+declare function rateLimited(ws: ServerWebSocket): boolean;
+
 wss.use(async (ctx, _next) => {
   if (rateLimited(ctx.ws)) {
     return; // drop
@@ -114,6 +130,12 @@ If you want short-circuiting to send something back to the client,
 do it explicitly:
 
 ```ts
+import type { ServerWebSocket } from '@tundralibs/compat/webserver';
+import type { WebSocketServer } from '@tundralibs/compat/websocket';
+
+declare const wss: WebSocketServer;
+declare function rateLimited(ws: ServerWebSocket): boolean;
+
 wss.use(async (ctx, next) => {
   if (rateLimited(ctx.ws)) {
     ctx.ws.send('rate limited');
@@ -130,6 +152,11 @@ chain and land in the configured `onError` handler. When no handler
 is set, the throw is swallowed to keep the connection alive.
 
 ```ts
+import type { WebSocketServer } from '@tundralibs/compat/websocket';
+
+declare const wss: WebSocketServer;
+declare const metrics: { errors: { inc(): void } };
+
 wss.onError((err, ws) => {
   console.error(`connection ${ws.remoteAddress} crashed:`, err);
 });
@@ -153,6 +180,10 @@ frame.
 ## Recipe: Timing + Logging
 
 ```ts
+import type { WebSocketServer } from '@tundralibs/compat/websocket';
+
+declare const wss: WebSocketServer;
+
 wss.use(async (ctx, next) => {
   const t0 = performance.now();
   let outcome: 'ok' | 'fail' = 'ok';
@@ -176,6 +207,8 @@ middleware and the handler.
 Per-connection token bucket using `ws.data` as the carrier:
 
 ```ts
+import { WebSocketServer } from '@tundralibs/compat/websocket';
+
 type Conn = { tokens: number; refillAt: number };
 
 const wss = new WebSocketServer<Conn>({
@@ -207,6 +240,10 @@ wss.use(async (ctx, next) => {
 Inspect the message before deciding whether to dispatch:
 
 ```ts
+import type { WebSocketServer } from '@tundralibs/compat/websocket';
+
+declare const wss: WebSocketServer;
+
 wss.use(async (ctx, next) => {
   if (typeof ctx.message === 'string' && ctx.message.startsWith('IGNORE:')) {
     return; // drop

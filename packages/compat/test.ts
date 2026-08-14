@@ -37,6 +37,13 @@ export type ItOptions = {
   darwin?: boolean;
 };
 
+/**
+ * Setup or teardown callback. The hook is handed straight to the runtime's own
+ * runner, so whatever `this` ends up being is that runner's behaviour, not
+ * something this package normalises — don't rely on `this` in portable tests.
+ *
+ * @typeParam T - Shape of `this` inside the hook.
+ */
 export type HookFn<T = unknown> = (this: T) => void | Promise<void>;
 
 /**
@@ -118,6 +125,12 @@ function shouldIgnore(options: ItOptions): boolean {
  * @throws {@link UnsupportedRuntimeError} On unknown runtimes.
  */
 export function describe(name: string, fn: () => void | Promise<void>): void;
+/**
+ * Options form of {@link describe} — carries `name` and `fn` alongside
+ * runtime/OS filters, hooks, and Deno's permission and sanitizer flags.
+ *
+ * @throws {@link UnsupportedRuntimeError} On unknown runtimes.
+ */
 export function describe<T = unknown>(options: DescribeOptions<T>): void;
 export function describe<T = unknown>( // NOSONAR - complexity will be there.
   nameOrOptions: string | DescribeOptions<T>,
@@ -209,6 +222,12 @@ describe.only = function (name: string, fn: () => void | Promise<void>): void {
  * unknown runtimes.
  */
 export function it(name: string, fn: () => void | Promise<void>): void;
+/**
+ * Options form of {@link it} — carries `name` and `fn` alongside the
+ * runtime/OS filters and the `ignore` / `only` flags.
+ *
+ * @throws {@link UnsupportedRuntimeError} On unknown runtimes.
+ */
 export function it(options: ItOptions): void;
 export function it( // NOSONAR - complexity will be there.
   nameOrOptions: string | ItOptions,
@@ -275,7 +294,7 @@ it.only = function (name: string, fn: () => void | Promise<void>): void {
 };
 
 /** Alias for {@link it}. */
-export const test = it;
+export const test: typeof it = it;
 
 // =============================================================================
 // Hooks

@@ -65,7 +65,7 @@ npx jsr add @tundralibs/compat
 
 #### Constants
 
-```typescript
+```typescript ignore
 const RUNTIME: Runtime; // 'DENO' | 'BUN' | 'NODE' | 'UNKNOWN'
 const isDeno: boolean; // true if running in Deno
 const isBun: boolean; // true if running in Bun
@@ -92,7 +92,7 @@ if (isDeno) {
 
 Gets the current runtime.
 
-```typescript
+```typescript ignore
 function getRuntime(): Runtime;
 
 type Runtime = 'DENO' | 'BUN' | 'NODE' | 'UNKNOWN';
@@ -128,7 +128,7 @@ switch (runtime) {
 
 #### Constants
 
-```typescript
+```typescript ignore
 const OS: OperatingSystem; // 'WINDOWS' | 'LINUX' | 'DARWIN' | 'UNKNOWN'
 ```
 
@@ -148,7 +148,7 @@ if (OS === 'WINDOWS') {
 
 Gets the current operating system.
 
-```typescript
+```typescript ignore
 function getOS(): OperatingSystem;
 
 type OperatingSystem = 'WINDOWS' | 'LINUX' | 'DARWIN' | 'UNKNOWN';
@@ -174,7 +174,7 @@ const pathSeparator = os === 'WINDOWS' ? '\\' : '/';
 
 #### Constants
 
-```typescript
+```typescript ignore
 const ARCH: Architecture; // 'X64' | 'ARM64' | 'X86' | 'ARM' | 'UNKNOWN'
 ```
 
@@ -188,6 +188,8 @@ labels. Anything else (`ppc`, `mips`, `riscv64`, `s390x`, …) becomes
 ```typescript
 import { ARCH } from '@tundralibs/compat/runtime';
 
+declare function loadNative(lib: string): void;
+
 if (ARCH === 'ARM64') {
   loadNative('libfoo.aarch64.so');
 } else if (ARCH === 'X64') {
@@ -199,7 +201,7 @@ if (ARCH === 'ARM64') {
 
 Function form for callers that prefer a call over the constant.
 
-```typescript
+```typescript ignore
 function getArch(): Architecture;
 ```
 
@@ -209,7 +211,7 @@ function getArch(): Architecture;
 
 Gets the current process ID.
 
-```typescript
+```typescript ignore
 function getProcessId(): number | undefined;
 
 const PID: number | undefined; // Constant form
@@ -232,7 +234,7 @@ Terminates the current process with the given exit code. Wraps
 continue past the call. Throws an `Error` on unknown runtimes (no
 exit primitive available).
 
-```typescript
+```typescript ignore
 function exit(code?: number): never;
 ```
 
@@ -240,6 +242,8 @@ function exit(code?: number): never;
 
 ```typescript
 import { exit } from '@tundralibs/compat/runtime';
+
+declare const configMissing: boolean;
 
 if (configMissing) {
   console.error('config not found');
@@ -258,7 +262,7 @@ exit(0);
 
 Gets environment variables as an object.
 
-```typescript
+```typescript ignore
 function getEnv(): Record<string, string>;
 ```
 
@@ -285,7 +289,7 @@ console.log(env.NODE_ENV);
 
 Gets the current working directory.
 
-```typescript
+```typescript ignore
 function cwd(): string;
 ```
 
@@ -304,7 +308,7 @@ console.log(`Working directory: ${currentDir}`);
 
 Gets the machine's hostname. This function is exported from the `net` module.
 
-```typescript
+```typescript ignore
 function hostname(): string;
 ```
 
@@ -325,7 +329,7 @@ The Runtime module provides unified event handling for process lifecycle and err
 
 Registers a handler to be called when the process exits.
 
-```typescript
+```typescript ignore
 function onExit(handler: () => void): () => void;
 ```
 
@@ -360,6 +364,8 @@ cleanup();
 **Example - Class with cleanup:**
 
 ```typescript
+import { onExit } from '@tundralibs/compat/runtime';
+
 class DatabaseConnection {
   private exitCleanup?: () => void;
 
@@ -386,7 +392,7 @@ class DatabaseConnection {
 
 Registers a handler to be called when an uncaught error occurs.
 
-```typescript
+```typescript ignore
 function onError(handler: (error: Error) => void): () => void;
 ```
 
@@ -420,7 +426,7 @@ const cleanup = onError((error) => {
 
 Registers a handler to be called when an unhandled promise rejection occurs.
 
-```typescript
+```typescript ignore
 function onUnhandledRejection(handler: (reason: unknown) => void): () => void;
 ```
 
@@ -453,7 +459,7 @@ const cleanup = onUnhandledRejection((reason) => {
 
 Registers a handler to be called when the process receives an OS signal.
 
-```typescript
+```typescript ignore
 function onSignal(signal: Signal, handler: () => void): () => void;
 
 type Signal = 'SIGINT' | 'SIGTERM' | 'SIGHUP' | 'SIGBREAK';
@@ -525,7 +531,7 @@ Logical CPU count. Prefers `os.availableParallelism()` (Node 19+,
 respects cgroup quotas under Docker/K8s) and falls back to
 `os.cpus().length`. Always ≥ 1.
 
-```typescript
+```typescript ignore
 function cpus(): number;
 ```
 
@@ -534,6 +540,8 @@ function cpus(): number;
 ```typescript
 import { cpus } from '@tundralibs/compat/runtime';
 
+declare function createPool(options: { size: number }): unknown;
+
 const pool = createPool({ size: cpus() });
 ```
 
@@ -541,7 +549,7 @@ const pool = createPool({ size: cpus() });
 
 Total / free system memory in bytes.
 
-```typescript
+```typescript ignore
 function totalmem(): number;
 function freemem(): number;
 ```
@@ -566,7 +574,7 @@ console.log(`mem: ${freeGiB} / ${totalGiB} GiB free`);
 Host machine uptime in seconds. (For _process_ uptime use
 `performance.now() / 1000`.)
 
-```typescript
+```typescript ignore
 function uptime(): number;
 ```
 
@@ -575,7 +583,7 @@ function uptime(): number;
 Current process memory snapshot. Wraps `Deno.memoryUsage()` /
 `process.memoryUsage()` with a normalized shape.
 
-```typescript
+```typescript ignore
 type MemoryUsage = {
   rss: number; // resident set size
   heapTotal: number; // V8 heap committed
@@ -612,6 +620,9 @@ setInterval(() => {
 ```typescript
 import { isBun, isDeno, isNode } from '@tundralibs/compat/runtime';
 
+// `Bun` is typed by `@types/bun` in Bun projects.
+declare const Bun: { file(path: string): { text(): Promise<string> } };
+
 async function readFile(path: string): Promise<string> {
   if (isDeno) {
     return await Deno.readTextFile(path);
@@ -635,6 +646,11 @@ async function readFile(path: string): Promise<string> {
 
 ```typescript
 import { RUNTIME } from '@tundralibs/compat/runtime';
+
+// `Bun` is typed by `@types/bun` in Bun projects.
+declare const Bun: {
+  serve(options: { port: number; fetch: (req: Request) => Response }): unknown;
+};
 
 async function createServer(port: number) {
   switch (RUNTIME) {
@@ -703,6 +719,7 @@ function getConfigPath(): string {
 
 ```typescript
 import { cwd, getEnv } from '@tundralibs/compat/runtime';
+import { join } from '@tundralibs/compat/path';
 
 interface AppConfig {
   port: number;
@@ -726,10 +743,11 @@ function loadConfig(): AppConfig {
 ### Logging with Runtime Info
 
 ```typescript
-import { hostname, OS, PID, RUNTIME } from '@tundralibs/compat/runtime';
+import { OS, PID, RUNTIME } from '@tundralibs/compat/runtime';
+import { hostname } from '@tundralibs/compat/net';
 
 async function logSystemInfo() {
-  const host = await hostname();
+  const host = hostname();
 
   console.log('System Information:');
   console.log(`  Runtime: ${RUNTIME}`);
@@ -794,7 +812,10 @@ async function getFileSystem() {
 import { describe, it } from '@tundralibs/compat/test';
 import { cwd, getEnv, isDeno, PID, RUNTIME } from '@tundralibs/compat/runtime';
 import { hostname } from '@tundralibs/compat/net';
-import { assert, assertMatch } from '@std/assert';
+
+// Bring your own assertions (e.g. `@std/assert` on Deno).
+declare function assert(expr: unknown, msg?: string): asserts expr;
+declare function assertMatch(actual: string, expected: RegExp): void;
 
 describe(`Runtime: ${RUNTIME}`, () => {
   it('should detect correct runtime', () => {
@@ -819,8 +840,8 @@ describe(`Runtime: ${RUNTIME}`, () => {
     name: 'should get hostname',
     // Only test in Deno
     ignore: !isDeno,
-    async fn() {
-      const host = await hostname();
+    fn() {
+      const host = hostname();
       assert(host.length > 0);
     },
   });
@@ -830,7 +851,7 @@ describe(`Runtime: ${RUNTIME}`, () => {
 ### OS-Specific Behavior
 
 ```typescript
-import { OS } from '@tundralibs/compat/runtime';
+import { getEnv, OS } from '@tundralibs/compat/runtime';
 
 function getLineEnding(): string {
   return OS === 'WINDOWS' ? '\r\n' : '\n';
@@ -882,6 +903,8 @@ Operating system is detected from:
 **Example:**
 
 ```typescript
+import { getRuntime, isDeno } from '@tundralibs/compat/runtime';
+
 // ✅ Good - Direct constant check
 if (isDeno) {
   // Deno code
@@ -909,7 +932,7 @@ if (typeof Deno !== 'undefined' && 'permissions' in Deno) {
 ## Usage
 
 ```typescript
-import { isBun, isDeno, isNode, RUNTIME } from './runtime.ts';
+import { isBun, isDeno, isNode, RUNTIME } from '@tundralibs/compat/runtime';
 ```
 
 ## API
@@ -928,7 +951,10 @@ import { isBun, isDeno, isNode, RUNTIME } from './runtime.ts';
 ### Conditional Logic
 
 ```typescript
-import { isBun, isDeno, isNode, RUNTIME } from './runtime.ts';
+import { isBun, isDeno, isNode, RUNTIME } from '@tundralibs/compat/runtime';
+
+// `Bun` is typed by `@types/bun` in Bun projects.
+declare const Bun: { file(path: string): unknown };
 
 // String-based check
 switch (RUNTIME) {
@@ -963,6 +989,8 @@ if (isNode) {
 ### Feature Detection
 
 ```typescript
+import { isBun, isDeno, isNode } from '@tundralibs/compat/runtime';
+
 function getServerType() {
   if (isBun) return 'Bun.serve';
   if (isDeno) return 'Deno.serve';
