@@ -15,7 +15,7 @@
   "packages/radrouter": "1.0.1",
   "packages/restler": "1.1.1",
   "packages/rpc": "1.1.0",
-  "packages/slogger": "1.1.4",
+  "packages/slogger": "1.1.5",
   "packages/tracer": "0.5.2",
   "packages/utils": "1.0.3"
 }
