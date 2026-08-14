@@ -59,6 +59,8 @@ you need:
 import '@tundralibs/norm/engines/d1'; // or /neon, or /turso
 import { Column, Entity, Norm, Schema } from '@tundralibs/norm/core';
 
+declare const env: Record<string, string>; // the Worker's bindings
+
 const norm = new Norm({
   database: {
     dialect: 'd1',
@@ -153,14 +155,16 @@ don't type-check — `hash()` exists only after `encrypt()`, validators
 disappear after `encrypt()`, and so on.
 
 ```typescript
+import { Column } from '@tundralibs/norm';
+
 Column.varchar(255) // VARCHAR(255)
   .nullable() // NULL allowed
   .minLength(3).maxLength(50)
   .pattern(/^[a-z]+$/)
-  .lov(['a', 'b', 'c']) // narrows the TS type to the union
-  .default('a')
   .beforeWrite((v) => v.trim())
   .afterRead((v) => v.toUpperCase())
+  .lov(['a', 'b', 'c']) // narrows the TS type to the union
+  .default('a')
   .comment('A column');
 
 Column.integer();
@@ -171,7 +175,6 @@ Column.double();
 Column.real();
 Column.boolean();
 Column.json<{ tags: string[] }>();
-Column.jsonb();
 Column.date();
 Column.time();
 Column.datetime();
@@ -188,6 +191,8 @@ Column.mask('card', (v) => '****' + v.slice(-4)); // virtual, computed on read
 keys that reference the **target's registry key**, never a table name:
 
 ```typescript
+import { Column, Entity } from '@tundralibs/norm';
+
 const Profiles = Entity('profiles', {
   userId: Column.uuid(),
   bio: Column.text().nullable(),
@@ -213,7 +218,7 @@ reference, relations, hooks, and validators.
 
 ## Querying
 
-```typescript
+```typescript ignore
 // find(filter?, options?) — filter FIRST
 await db.repo('Users').find({ '@role': 'admin' }, {
   orderBy: { '@displayName': 'ASC' },
@@ -248,7 +253,7 @@ This is what NORM does that mainstream TS ORMs don't. `.encrypt()`
 works on **any** column kind — the value stays its declared TypeScript
 type, and only the storage is ciphertext:
 
-```typescript
+```typescript ignore
 birthday: Column.timestamp().encrypt().nullable(), // Date in TS, TEXT at rest
 ```
 
@@ -257,7 +262,7 @@ Add `.hash()` to an encrypted column and NORM synthesizes a
 upsert conflict keys all work against ciphertext by transparently
 rewriting to the digest:
 
-```typescript
+```typescript ignore
 email: Column.varchar(255).encrypt().hash(),
 // unique on the sibling:
 unique: { email: ['email_hash'] },
@@ -278,7 +283,7 @@ columns, masks, and the crypto override hooks.
 The `Migrator` derives migrations from your definitions — no
 hand-written SQL:
 
-```typescript
+```typescript ignore
 import { Migrator } from '@tundralibs/norm/migrations';
 
 const mig = new Migrator(db, { dir: './migrations' });
@@ -306,7 +311,7 @@ rename hints, the rebuild engine, and stored plans.
 `db.scope({...})` returns a handle whose every read **and** write
 carries an always-on equality filter — the tenant-scoping primitive:
 
-```typescript
+```typescript ignore
 const orgDb = db.scope({ '@orgId': currentOrgId });
 
 await orgDb.repo('Tickets').find();          // WHERE orgId = currentOrgId
@@ -330,7 +335,7 @@ rides `result.scoped` for auditing. Scopes are equality-only. See
 
 ## Transactions & escape hatches
 
-```typescript
+```typescript ignore
 await db.transaction(async (tx) => {
   await tx.repo('Users').insert({ ... });
   await tx.repo('Audit').insert({ ... });
@@ -362,6 +367,13 @@ Wire the metadata-only event surface to your logger — it never carries
 row data, plaintext, or secrets:
 
 ```typescript
+import { Norm } from '@tundralibs/norm';
+import { SQLiteEngine } from '@tundralibs/drivers';
+
+const engine = new SQLiteEngine('app', { path: './data' });
+const secret = process.env.SECRET;
+const log = console;
+
 const norm = new Norm({
   engine,
   secret,
@@ -392,7 +404,7 @@ runs through it, so a tracer's active span is open while the driver events
 fire, and their spans parent to it automatically via
 [ambient](../ambient/README.md).
 
-```typescript
+```typescript ignore
 const norm = new Norm({ engine, secret, witness: tracer.wrap });
 ```
 
