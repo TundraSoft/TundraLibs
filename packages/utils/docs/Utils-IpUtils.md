@@ -20,7 +20,7 @@ These utilities are essential for network programming, security rules, access co
 
 Matches valid IPv4 address format (dotted decimal notation).
 
-```typescript
+```typescript ignore
 const IPV4_REGEX: RegExp; // /^(\d{1,3}\.){3}\d{1,3}$/
 ```
 
@@ -28,7 +28,7 @@ const IPV4_REGEX: RegExp; // /^(\d{1,3}\.){3}\d{1,3}$/
 
 Basic IPv6 character validation (hex digits, colons, dots).
 
-```typescript
+```typescript ignore
 const IPV6_REGEX: RegExp; // /^[0-9a-fA-F:.]+$/
 ```
 
@@ -36,7 +36,7 @@ const IPV6_REGEX: RegExp; // /^[0-9a-fA-F:.]+$/
 
 Validates individual IPv4 octets (0-255).
 
-```typescript
+```typescript ignore
 const IPV4_SEGMENT: RegExp; // /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/
 ```
 
@@ -44,7 +44,7 @@ const IPV4_SEGMENT: RegExp; // /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/
 
 Validates individual IPv6 hexadecimal segments (1-4 hex digits).
 
-```typescript
+```typescript ignore
 const IPV6_SEGMENT: RegExp; // /^[0-9A-Fa-f]{1,4}$/
 ```
 
@@ -69,6 +69,8 @@ const IPV6_SEGMENT: RegExp; // /^[0-9A-Fa-f]{1,4}$/
 Validates if a string is a properly formatted IPv4 address with octets in range 0-255.
 
 ```typescript
+import { isValidIPv4 } from '@tundralibs/utils';
+
 isValidIPv4('192.168.1.1'); // true
 isValidIPv4('255.255.255.0'); // true
 isValidIPv4('256.1.1.1'); // false (octet > 255)
@@ -80,6 +82,8 @@ isValidIPv4('192.168.1'); // false (incomplete)
 Validates IPv6 address structure including compression, IPv4-mapped, and mixed notation.
 
 ```typescript
+import { isValidIPv6Structure } from '@tundralibs/utils';
+
 isValidIPv6Structure('2001:db8::1'); // true
 isValidIPv6Structure('::1'); // true (loopback)
 isValidIPv6Structure('::ffff:192.168.1.1'); // true (IPv4-mapped)
@@ -99,6 +103,8 @@ input — including a bare IPv4 address or a leading single colon — rather tha
 throwing.
 
 ```typescript
+import { expandIPv6 } from '@tundralibs/utils';
+
 expandIPv6('2001:db8::1');
 // Returns: '2001:db8:0:0:0:0:0:1'
 
@@ -126,6 +132,8 @@ expandIPv6('invalid');
 Converts IPv4 address to 32-bit binary string representation.
 
 ```typescript
+import { ipv4ToBinary } from '@tundralibs/utils';
+
 ipv4ToBinary('192.168.1.1');
 // Returns: '11000000101010000000000100000001'
 
@@ -141,6 +149,8 @@ ipv4ToBinary('10.0.0.1');
 Converts IPv6 address to 128-bit binary string representation.
 
 ```typescript
+import { ipv6ToBinary } from '@tundralibs/utils';
+
 ipv6ToBinary('2001:db8::1');
 // Returns: '00100000000000010000110110111000...' (128 bits)
 
@@ -153,6 +163,8 @@ ipv6ToBinary('::1');
 Converts IPv4 address to 32-bit unsigned integer.
 
 ```typescript
+import { ipv4ToLong } from '@tundralibs/utils';
+
 ipv4ToLong('192.168.1.1'); // Returns: 3232235777
 ipv4ToLong('10.0.0.1'); // Returns: 167772161
 ipv4ToLong('0.0.0.0'); // Returns: 0
@@ -162,6 +174,8 @@ ipv4ToLong('255.255.255.255'); // Returns: 4294967295
 Useful for sorting IPs numerically:
 
 ```typescript
+import { ipv4ToLong } from '@tundralibs/utils';
+
 const ips = ['192.168.1.10', '192.168.1.1', '10.0.0.1'];
 ips.sort((a, b) => ipv4ToLong(a) - ipv4ToLong(b));
 // Result: ['10.0.0.1', '192.168.1.1', '192.168.1.10']
@@ -172,6 +186,8 @@ ips.sort((a, b) => ipv4ToLong(a) - ipv4ToLong(b));
 Converts IPv4 to hexadecimal segments for IPv6-mapped addresses.
 
 ```typescript
+import { ipv4ToHexSegments } from '@tundralibs/utils';
+
 ipv4ToHexSegments('192.168.1.1');
 // Returns: ['c0a8', '0101']
 
@@ -188,6 +204,8 @@ const ipv6Mapped = `::ffff:${segments[0]}:${segments[1]}`;
 Checks if IPv4 address falls within a CIDR range using efficient bitwise operations.
 
 ```typescript
+import { isIPv4InRange } from '@tundralibs/utils';
+
 isIPv4InRange('192.168.1.10', '192.168.0.0', 16); // true
 isIPv4InRange('192.168.1.10', '192.168.1.0', 24); // true
 isIPv4InRange('10.0.0.1', '192.168.0.0', 16); // false
@@ -390,6 +408,10 @@ compareSubnets('2001:db8::1', '2001:db9::1', 64, true); // false (different /64)
 ✅ **Validate before converting:**
 
 ```typescript
+import { ipv4ToBinary, isValidIPv4 } from '@tundralibs/utils';
+
+declare const ip: string;
+
 if (isValidIPv4(ip)) {
   const binary = ipv4ToBinary(ip);
   // ... use binary
@@ -399,7 +421,9 @@ if (isValidIPv4(ip)) {
 ✅ **Use constants instead of magic numbers:**
 
 ```typescript
-import { IPV4_BITS, IPV6_BITS } from '@tundralibs/utils';
+import { IPV4_BITS } from '@tundralibs/utils';
+
+declare const mask: number;
 
 if (mask > 0 && mask <= IPV4_BITS) {
   // Valid IPv4 mask
@@ -409,6 +433,11 @@ if (mask > 0 && mask <= IPV4_BITS) {
 ✅ **Normalize IPv6 before comparing:**
 
 ```typescript
+import { expandIPv6 } from '@tundralibs/utils';
+
+declare const ip1: string;
+declare const ip2: string;
+
 const normalized1 = expandIPv6(ip1);
 const normalized2 = expandIPv6(ip2);
 if (normalized1 === normalized2) {
@@ -419,6 +448,12 @@ if (normalized1 === normalized2) {
 ✅ **Use binary operations for subnet checks:**
 
 ```typescript
+import { isIPv4InRange } from '@tundralibs/utils';
+
+declare const ip: string;
+declare const network: string;
+declare const mask: number;
+
 // Efficient bit-level comparison
 const inRange = isIPv4InRange(ip, network, mask);
 ```
@@ -428,18 +463,27 @@ const inRange = isIPv4InRange(ip, network, mask);
 ❌ **Don't convert without validation:**
 
 ```typescript
+import { ipv4ToBinary, isValidIPv4 } from '@tundralibs/utils';
+
+declare const userInput: string;
+
 // BAD: Could throw or return garbage
 const binary = ipv4ToBinary(userInput);
 
 // GOOD: Validate first
 if (isValidIPv4(userInput)) {
-  const binary = ipv4ToBinary(userInput);
+  const validated = ipv4ToBinary(userInput);
 }
 ```
 
 ❌ **Don't compare compressed IPv6 directly:**
 
 ```typescript
+import { expandIPv6 } from '@tundralibs/utils';
+
+declare const ip1: string;
+declare const ip2: string;
+
 // BAD: '2001:db8::1' !== '2001:0db8::0001'
 if (ip1 === ip2) {}
 
@@ -450,6 +494,10 @@ if (expandIPv6(ip1) === expandIPv6(ip2)) {}
 ❌ **Don't use string operations for ranges:**
 
 ```typescript
+import { isIPv4InRange } from '@tundralibs/utils';
+
+declare const ip: string;
+
 // BAD: String comparison doesn't work for IPs
 if (ip >= '192.168.0.0' && ip <= '192.168.255.255') {}
 

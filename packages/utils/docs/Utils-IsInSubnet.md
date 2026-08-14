@@ -55,6 +55,8 @@ isInSubnet('192.168.1.0', '192.168.0.0/24'); // false (next subnet)
 ### IPv6 Subnet Membership
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
 // Standard IPv6 checks
 isInSubnet('2001:db8::1', '2001:db8::/32'); // true
 isInSubnet('2001:db8:1::1', '2001:db8::/32'); // true (same /32 block)
@@ -95,6 +97,8 @@ isPrivateIP('127.0.0.1'); // true (loopback)
 ### Access Control Lists (ACL)
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
 interface ACLRule {
   name: string;
   subnet: string;
@@ -147,6 +151,8 @@ checkACL('192.168.1.1', aclRules); // 'deny' (no match, default)
 ### Multi-Tier Network Validation
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
 const NETWORK_TIERS = {
   dmz: ['10.0.1.0/24', '10.0.2.0/24'],
   backend: ['10.0.10.0/24', '10.0.11.0/24'],
@@ -189,6 +195,8 @@ canAccess('10.0.100.10', '10.0.20.5'); // true (Management can access Database)
 ### Load Balancer Backend Pool Selection
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
 interface BackendPool {
   name: string;
   subnet: string;
@@ -248,6 +256,8 @@ console.log(pool?.name); // 'US-East' or 'Management' based on weight
 ### Geographic Routing
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
 interface GeoRegion {
   name: string;
   subnets: string[];
@@ -289,6 +299,8 @@ getCDNEndpoint('8.8.8.8'); // 'https://cdn-global.example.com'
 ### VPN Subnet Assignment
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
 interface VPNPool {
   name: string;
   subnet: string;
@@ -331,6 +343,8 @@ const contrIP = assignVPNAddress('contractors', vpnPools); // '10.9.0.10'
 ### Network Monitoring and Alerting
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
 interface MonitoringZone {
   name: string;
   subnets: string[];
@@ -379,6 +393,8 @@ const monitor = new NetworkMonitor([
 The function returns `false` for all error conditions (silent failure):
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
 // Invalid IP addresses
 isInSubnet('invalid', '192.168.0.0/24'); // false
 isInSubnet('256.1.1.1', '192.168.0.0/24'); // false
@@ -398,7 +414,13 @@ isInSubnet('2001:db8::1', '192.168.0.0/16'); // false (IPv6 vs IPv4)
 For explicit validation:
 
 ```typescript
-import { isSubnet, isValidIPv4, isValidIPv6Structure } from '@tundralibs/utils';
+import {
+  IPV4_REGEX,
+  isInSubnet,
+  isSubnet,
+  isValidIPv4,
+  isValidIPv6Structure,
+} from '@tundralibs/utils';
 
 function validateSubnetCheck(ip: string, cidr: string): string | true {
   if (!isSubnet(cidr)) {
@@ -441,6 +463,8 @@ if (validation === true) {
 For high-throughput scenarios:
 
 ```typescript
+import { ipv4ToBinary } from '@tundralibs/utils';
+
 // Cache subnet binary representation
 const subnetCache = new Map<string, { binary: string; mask: number }>();
 
@@ -468,6 +492,11 @@ function isInSubnetCached(ip: string, cidr: string): boolean {
 ✅ **Use for security decisions:**
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
+declare const clientIP: string;
+declare const trustedNetwork: string;
+
 if (isInSubnet(clientIP, trustedNetwork)) {
   // Allow privileged access
 }
@@ -476,7 +505,10 @@ if (isInSubnet(clientIP, trustedNetwork)) {
 ✅ **Combine with validation:**
 
 ```typescript
-import { isSubnet, isValidIPv4 } from '@tundralibs/utils';
+import { isInSubnet, isSubnet, isValidIPv4 } from '@tundralibs/utils';
+
+declare const ip: string;
+declare const cidr: string;
 
 if (isValidIPv4(ip) && isSubnet(cidr) && isInSubnet(ip, cidr)) {
   // All inputs valid
@@ -486,6 +518,8 @@ if (isValidIPv4(ip) && isSubnet(cidr) && isInSubnet(ip, cidr)) {
 ✅ **Handle both IP versions:**
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
 function checkAccess(ip: string): boolean {
   return (
     isInSubnet(ip, '10.0.0.0/8') ||
@@ -497,6 +531,13 @@ function checkAccess(ip: string): boolean {
 ✅ **Use for network segmentation:**
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
+declare const ip: string;
+declare const destIP: string;
+declare function getTier(ip: string): string;
+declare function getAllowedDestinations(tier: string): string[];
+
 const tier = getTier(ip);
 const allowedTiers = getAllowedDestinations(tier);
 if (allowedTiers.some((subnet) => isInSubnet(destIP, subnet))) {
@@ -509,23 +550,32 @@ if (allowedTiers.some((subnet) => isInSubnet(destIP, subnet))) {
 ❌ **Don't assume validation:**
 
 ```typescript
-// BAD: No validation, could return false unexpectedly
-if (!isInSubnet(userInput, cidr)) {
-  // Is it outside subnet, or is the input invalid?
-}
+import { isInSubnet, isValidIPv4 } from '@tundralibs/utils';
 
-// GOOD: Explicit validation
-if (!isValidIPv4(userInput)) {
-  return 'Invalid IP address';
-}
-if (!isInSubnet(userInput, cidr)) {
-  return 'IP not in allowed subnet';
+function check(userInput: string, cidr: string): string | undefined {
+  // BAD: No validation, could return false unexpectedly
+  if (!isInSubnet(userInput, cidr)) {
+    // Is it outside subnet, or is the input invalid?
+  }
+
+  // GOOD: Explicit validation
+  if (!isValidIPv4(userInput)) {
+    return 'Invalid IP address';
+  }
+  if (!isInSubnet(userInput, cidr)) {
+    return 'IP not in allowed subnet';
+  }
 }
 ```
 
 ❌ **Don't mix IP versions:**
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
+declare const ip: string;
+declare const cidr: string;
+
 // BAD: Will always return false
 isInSubnet('192.168.1.1', '2001:db8::/32');
 
@@ -540,6 +590,10 @@ if (isIPv4 === isIPv4Subnet) {
 ❌ **Don't use string comparison:**
 
 ```typescript
+import { isInSubnet } from '@tundralibs/utils';
+
+declare const ip: string;
+
 // BAD: String comparison doesn't work
 if (ip >= '192.168.0.0' && ip <= '192.168.255.255') {}
 
