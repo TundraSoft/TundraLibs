@@ -2,7 +2,7 @@
   "packages/ambient": "0.2.3",
   "packages/cacher": "1.0.1",
   "packages/compat": "1.1.3",
-  "packages/cronus": "1.0.1",
+  "packages/cronus": "1.0.2",
   "packages/crypt": "1.0.2",
   "packages/doctor": "1.0.1",
   "packages/drivers": "1.0.3",
