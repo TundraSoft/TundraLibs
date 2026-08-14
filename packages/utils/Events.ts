@@ -57,6 +57,7 @@ export class Events<
    * Duplicate registrations are no-ops.
    */
   public on<K extends keyof E>(event: K, callback: E[K]): this;
+  /** Array form: registers each callback in array order. */
   public on<K extends keyof E>(event: K, callback: E[K][]): this;
   public on(event: string, callback: EventCallback | EventCallback[]) {
     if (!this.__events.has(event)) {
@@ -82,6 +83,10 @@ export class Events<
    * wrapper is resolved automatically.
    */
   public off<K extends keyof E>(event: K, callback?: E[K]): this;
+  /**
+   * Array form: removes each listed callback. An EMPTY array removes
+   * nothing — omit the argument entirely to clear every listener.
+   */
   public off<K extends keyof E>(event: K, callback?: E[K][]): this;
   public off(event: string, callback?: EventCallback | EventCallback[]) {
     if (!this.__events.has(event)) {
@@ -119,6 +124,10 @@ export class Events<
    * `off(event, originalCallback)`.
    */
   public once<K extends keyof E>(event: K, callback: E[K]): this;
+  /**
+   * Array form: registers each callback as its own one-shot listener —
+   * they fire independently, not as a single group.
+   */
   public once<K extends keyof E>(event: K, callback: E[K][]): this;
   public once(event: string, callback: EventCallback | EventCallback[]) {
     if (Array.isArray(callback)) {

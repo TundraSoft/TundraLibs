@@ -152,16 +152,40 @@ export type StructuredDataKey = `${string}@${string}`;
  * Parsed syslog message object.
  */
 export interface SyslogObject {
+  /** Facility code, decoded from PRI as `Math.floor(pri / 8)`. */
   facility: SyslogFacilities;
+  /**
+   * Name for {@link SyslogObject.facility}, resolved on parse.
+   * Derived output only — {@link stringify} omits it from its input and
+   * recomputes PRI from the numeric code.
+   */
   facilityName?: SyslogFacility;
+  /** Severity code, decoded from PRI as `pri % 8`. */
   severity: SyslogSeverities;
+  /**
+   * Name for {@link SyslogObject.severity}, resolved on parse.
+   * Derived output only — see {@link SyslogObject.facilityName}.
+   */
   severityName?: SyslogSeverity;
+  /** Event time. {@link stringify} always emits it as RFC 3339 UTC. */
   timestamp: Date;
+  /** Origin host; `undefined` when the wire format carried the NILVALUE `-`. */
   hostname?: string;
+  /** Originating application (RFC 3164 TAG); `undefined` for NILVALUE `-`. */
   appName?: string;
+  /**
+   * Emitting process ID. Left `undefined` when absent or unparseable
+   * rather than defaulting; {@link stringify} rejects negatives and `NaN`.
+   */
   processId?: number;
+  /** RFC 5424 MSGID identifying the message type; `undefined` for `-`. */
   messageId?: string;
+  /**
+   * RFC 5424 SD-ELEMENTs keyed by SD-ID. Absent rather than empty when
+   * the message carried no structured data.
+   */
   structuredData?: Record<StructuredDataKey, Record<string, string>>;
+  /** Free-form message text; may be empty when `structuredData` carries the payload. */
   message: string;
 }
 

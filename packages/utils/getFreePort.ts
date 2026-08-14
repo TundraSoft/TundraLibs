@@ -19,6 +19,12 @@ interface GetFreePortOptions {
 
 /** Thrown by {@link getFreePort} for invalid ranges or exhausted attempts. */
 export class PortError extends Error {
+  /**
+   * Sets `name` to `'PortError'` so the error is identifiable after
+   * serialization, where the prototype is lost.
+   *
+   * @param message - Reason the port lookup failed.
+   */
   constructor(message: string) {
     super(message);
     this.name = 'PortError';

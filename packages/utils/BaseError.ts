@@ -47,7 +47,18 @@ export type BaseErrorJson = {
 export class BaseError<
   M extends Record<string, unknown> = Record<string, unknown>,
 > extends Error {
+  /**
+   * When the error was constructed. Also exposed to
+   * {@link BaseError._messageTemplate} as `${timeStamp}`, and serialized
+   * as an ISO string by {@link BaseError.toJSON}.
+   */
   public readonly timeStamp: Date = new Date();
+
+  /**
+   * Values passed to the constructor, kept for inspection after the
+   * message has been rendered. Every key is also a `${key}` placeholder
+   * available to the message and to {@link BaseError._messageTemplate}.
+   */
   declare public readonly context: M;
   /** Message after `${var}` substitution but before {@link _messageTemplate} wrapping. */
   protected _baseMessage: string = '';
@@ -62,6 +73,10 @@ export class BaseError<
   declare public readonly cause?: Error;
 
   /**
+   * Substitutes `context` into `message`, then wraps the result in
+   * {@link BaseError._messageTemplate} — so `error.message` on a
+   * constructed instance is the fully-rendered text, not the input.
+   *
    * @param message - Error text; `${ctxKey}` placeholders are substituted from `context`.
    * @param context - Values for substitution and to attach as `error.context`.
    * @param cause - Underlying error for chaining (walked by {@link getRootCause}).
@@ -212,6 +227,13 @@ export class BaseError<
     } as T;
   }
 
+  /**
+   * Render {@link BaseError._messageTemplate} against `context` plus the
+   * reserved `message` and `timeStamp` variables. Called once from the
+   * constructor to produce the final `error.message`; override only to
+   * change the rendering itself — to change the format, override
+   * {@link BaseError._messageTemplate} instead.
+   */
   protected _makeMessage(): string {
     const vars = {
       ...this.context,

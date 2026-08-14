@@ -14,11 +14,17 @@ export const IPV4_SEGMENT = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
 /** A single IPv6 group (1–4 hex digits). */
 export const IPV6_SEGMENT = /^[0-9A-Fa-f]{1,4}$/;
 
+/** Largest valid IPv4 CIDR prefix — the upper bound for `/n` validation. */
 export const IPV4_MAX_SUBNET = 32;
+/** Width of an IPv4 address, for mask arithmetic. */
 export const IPV4_BITS = 32;
+/** Width of an IPv6 address, for mask arithmetic. */
 export const IPV6_BITS = 128;
+/** Bits per IPv4 octet, for the shift that packs dotted-decimal into a long. */
 export const OCTET_BITS = 8;
+/** Bits per IPv6 group — four hex digits. */
 export const IPV6_SEGMENT_BITS = 16;
+/** Largest valid IPv6 CIDR prefix — the upper bound for `/n` validation. */
 export const IPV6_MAX_SUBNET = 128;
 
 /** True iff `ip` is dotted-decimal IPv4 with every octet in 0–255. */
