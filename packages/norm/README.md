@@ -457,6 +457,8 @@ not exposed. ³ Correlated subqueries have no MongoDB find-filter form.
 - **[Security](docs/NORM-Security.md)** — encryption, digests, masks.
 - **[Migrations](docs/NORM-Migrations.md)** — the `Migrator` workflow.
 - **[Scoping](docs/NORM-Scoping.md)** — tenant scoping & default filters.
+- **[Errors](docs/NORM-Errors.md)** — the error classes and every stable
+  `NormErrorCode`.
 
 ## License
 
