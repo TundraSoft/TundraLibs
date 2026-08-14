@@ -4,6 +4,10 @@
  * @module
  */
 
+/**
+ * Construction options for {@link Cronus}. Every field is optional —
+ * the defaults suit a standalone cron daemon.
+ */
 export type CronusOptions = {
   /**
    * `unref` the internal timer so a running scheduler does NOT keep the
