@@ -13,7 +13,17 @@ export type JoinDetails<
   LT extends Record<string, TableType> = Record<string, TableType>,
   JT extends TableType = TableType,
 > = {
-  table: keyof LT;
+  /**
+   * Physical table name to join, as it exists in the database.
+   *
+   * This is not the alias. The alias is the key this
+   * {@link JoinDetails} is filed under in {@link Joins} — a
+   * translator emits `JOIN <table> AS <key>` — and column references
+   * elsewhere in the query (`'@Profile.@bio'`) address that key. The
+   * two are independent, so a `Profile` alias may perfectly well
+   * point at a `profiles` table.
+   */
+  table: string;
   schema?: string;
   /**
    * List of columns available from the joined table. Required for
