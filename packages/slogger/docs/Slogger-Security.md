@@ -153,23 +153,29 @@ coercion). None of the following are masked by the defaults:
 | `authUrl`, `authMethod`, `author`                                                                                                                                     | `auth`       |
 | `isPrivate`, `privateIp`, `privateer`                                                                                                                                 | `private`    |
 | `spinner`, `pinboard`                                                                                                                                                 | `pin`        |
+| `bypass`, `compass`, `surpass`, `encompass`, `overpass`, `passenger`, `passive`, `passed`, `db_pass`                                                                  | `pass`       |
+| `cwd`, `fwd`, `userPwd`, `pwdHash`                                                                                                                                    | `pwd`        |
 
 Two distinct reasons a key stays visible appear above: a term used as a
 **qualifier** (not the head) — `tokenBucket`, `nextTokenCount` — and a
 term that **is** the head but is one of the **whole-key-only generic
-words** (`key`, `token`, `auth`, `private`, `pin`) — `sortKey`,
-`pageToken`, `nextPageToken`, `continuationToken`, `csrfToken`,
-`resetToken`. The latter are ubiquitous pagination cursors and
-anti-forgery / reset tokens; masking them would break downstream jobs
-that resume from a logged cursor, so `token` (like `key`) never
-head-matches on its own. Their scalar type is preserved, and only the
-**enumerated** `*Token`/`*Key` secrets (below) are masked.
+words** (`key`, `token`, `auth`, `private`, `pin`, `pass`, `pwd`) —
+`sortKey`, `pageToken`, `nextPageToken`, `continuationToken`,
+`csrfToken`, `resetToken`, `bypass`, `compass`. The token ones are
+ubiquitous pagination cursors and anti-forgery / reset tokens; masking
+them would break downstream jobs that resume from a logged cursor, so
+`token` (like `key`) never head-matches on its own. `pass` is worse
+still — it is an ordinary English suffix, so head-matching it would
+redact `bypass`, `compass`, `surpass` and `encompass`. Their scalar type
+is preserved, and only the **enumerated** `*Token`/`*Key` secrets (below)
+are masked.
 
-**The bare generic words `key`, `token`, `auth`, `private` and `pin` are
-further restricted to whole-key matching only** (tiers 2 and 3 skip
-them). They are the head of far too many benign compounds (`sortKey`,
-`cacheKey`, `pageToken`, `nextPageToken`, `continuationToken`, `authUrl`,
-`isPrivate`) to head-match safely. A real secret compound that ends in
+**The bare generic words `key`, `token`, `auth`, `private`, `pin`,
+`pass` and `pwd` are further restricted to whole-key matching only**
+(tiers 2 and 3 skip them). They are the head of far too many benign
+compounds (`sortKey`, `cacheKey`, `pageToken`, `nextPageToken`,
+`continuationToken`, `authUrl`, `isPrivate`, `bypass`, `compass`) to
+head-match safely. A real secret compound that ends in
 one of these generic heads is therefore **not** caught by the generic
 word alone — it is caught only when the **specific compound is itself a
 configured field**. The defaults enumerate the common crypto-key and
@@ -188,6 +194,14 @@ component-suffix matching (and their run-together spellings — `authtoken`
 is **not** one of these (e.g. `symmetricKey`, `deployKey`, `webhookKey`,
 `webhookToken`, `pageToken`, `csrfToken`) is intentionally left visible —
 add it to `sensitiveFields` if you need it masked.
+
+The password family works the same way. `password`, `passwd` and
+`passphrase` are long and specific enough to head-match, so
+`db_password`, `userPassword` and the run-together `dbpassword` are all
+caught. The short spellings `pass` and `pwd` are whole-key only, so a
+qualified `db_pass`, `userPwd` or `x-pwd` is **not** masked by the
+defaults — name the exact key in `sensitiveFields`, or prefer the
+unambiguous `dbPassword` over `dbPass` when you choose the key.
 
 #### Limitations (by design)
 
@@ -221,13 +235,23 @@ string `'[Circular]'`. The original log object is never mutated.
 
 ### Default Sensitive Fields
 
-Slogger automatically masks these common fields:
+This is the **canonical list** — the one place in the documentation that
+enumerates the defaults, mirroring `DEFAULT_SENSITIVE_FIELDS` in
+`formatters/maskingFormatter.ts`. Other pages link here rather than
+restate it. Entries marked `whole-key only` match a context key only when
+they are the entire key (see
+[Matching Semantics](#matching-semantics)); every other entry is also
+head-anchored across word components and run-together spellings.
+
+Slogger automatically masks these fields:
 
 ```typescript
 const defaultSensitiveFields = [
   'password',
   'passwd',
   'passphrase',
+  'pass', // whole-key only
+  'pwd', // whole-key only
   'secret',
   'clientSecret',
   'client_secret',
@@ -279,26 +303,39 @@ const defaultSensitiveFields = [
 
 ### Custom Sensitive Fields
 
-Add application-specific sensitive fields:
+> **`sensitiveFields` REPLACES the defaults — it does not extend them.**
+> Passing a short list silently turns off every default not in it, so
+> `ssn`, `cvv`, `apiKey` and the rest would then be logged in cleartext.
+> To keep the defaults, restate the ones you want alongside your own —
+> copy them from
+> [Default Sensitive Fields](#default-sensitive-fields) above.
 
 ```typescript
 import { maskingFormatter } from '@tundralibs/slogger';
 
 maskingFormatter({
   sensitiveFields: [
-    // Default fields (included automatically)
+    // The defaults you want to keep — this list REPLACES them, so
+    // anything omitted here is no longer masked.
     'password',
     'token',
+    'apiKey',
+    'ssn',
+    'cvv',
 
-    // Custom application fields
+    // The application's own fields, on top.
     'internalId',
     'customerKey',
-    'sessionToken',
-    'privateKey',
     'symmetricKey',
+    'db_pass', // qualified `pass`/`pwd` compounds are not defaults
   ],
 });
 ```
+
+The example above masks exactly those ten field names and nothing else.
+If you only need to add a field or two, it is usually safer to leave
+`sensitiveFields` unset and rename the offending context key to one the
+defaults already cover.
 
 ### Nested Field Masking
 
