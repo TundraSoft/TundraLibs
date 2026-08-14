@@ -108,7 +108,7 @@ Outside any scope, `child` behaves like `run` over the patch alone.
 
 ## The bag is mutable and live
 
-`get()` returns the live {@linkcode RequestContext}, not a snapshot, and
+`get()` returns the live `RequestContext`, not a snapshot, and
 `set()` writes into it. Anything reading later in the same scope — a log line,
 an error handler — observes the enrichment:
 
@@ -143,7 +143,7 @@ break the code it flows through:
 | `ambient.active()`     | `false`      |
 | `ctx.getOr(fallback)`  | the fallback |
 
-The one place ambient _does_ throw is {@linkcode createContext} on a runtime
+The one place ambient _does_ throw is `createContext` on a runtime
 without `AsyncLocalStorage` — a misconfiguration, surfaced loudly at startup
 rather than as silently-missing context later.
 
@@ -151,7 +151,7 @@ rather than as silently-missing context later.
 
 `ambient` is one blessed store with one blessed shape. When you need context
 that is not request-shaped — a tenant in a job worker, a transaction handle —
-{@linkcode createContext} gives you an independent, typed store with the same
+`createContext` gives you an independent, typed store with the same
 semantics:
 
 ```typescript
