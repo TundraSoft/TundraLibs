@@ -77,6 +77,8 @@ console.log(decrypted); // 'secret message'
 ```typescript
 import { hkdf, pbkdf2Hash, pbkdf2Verify } from '@tundralibs/crypt/encrypt';
 
+declare const masterSecret: Uint8Array;
+
 // Passwords: slow, salted PBKDF2 (store the string, verify against it)
 const stored = await pbkdf2Hash('correct horse battery staple');
 const ok = await pbkdf2Verify('correct horse battery staple', stored); // true
@@ -104,6 +106,9 @@ ECDSA and RSA work the same way, and every function takes a PEM string, a
 
 ```typescript
 import { signEC, verifyEC } from '@tundralibs/crypt/sign';
+
+declare const ecPrivateKeyPEM: string;
+declare const ecPublicKeyJWK: JsonWebKey;
 
 // Curve and hash are read from the key (P-256 → SHA-256). The signature is
 // the raw R‖S form JOSE requires, not DER.

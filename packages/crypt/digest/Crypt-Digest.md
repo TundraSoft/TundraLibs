@@ -63,7 +63,7 @@ Generates a cryptographic hash using the specified algorithm.
 
 **Signature:**
 
-```typescript
+```typescript ignore
 async function digest(
   data: string | Uint8Array,
   options?: DigestOptions,
@@ -107,7 +107,7 @@ Convenience function for SHA-256 hashing (most commonly used).
 
 **Signature:**
 
-```typescript
+```typescript ignore
 async function sha256(
   data: string | Uint8Array,
   encoding?: 'hex' | 'base64',
@@ -139,7 +139,7 @@ Convenience function for SHA-512 hashing.
 
 **Signature:**
 
-```typescript
+```typescript ignore
 async function sha512(
   data: string | Uint8Array,
   encoding?: 'hex' | 'base64',
@@ -168,7 +168,7 @@ Convenience function for SHA-384 hashing.
 
 **Signature:**
 
-```typescript
+```typescript ignore
 async function sha384(
   data: string | Uint8Array,
   encoding?: 'hex' | 'base64',
@@ -197,7 +197,7 @@ Convenience function for SHA-1 hashing.
 
 **Signature:**
 
-```typescript
+```typescript ignore
 async function sha1(
   data: string | Uint8Array,
   encoding?: 'hex' | 'base64',
@@ -272,16 +272,16 @@ const checksum = await generateChecksum(new Uint8Array([1, 2, 3, 4, 5]));
 import { sha256 } from '@tundralibs/crypt/digest';
 
 class ContentStore {
-  private store = new Map<string, string>();
+  private entries = new Map<string, string>();
 
   async store(content: string): Promise<string> {
     const hash = await sha256(content);
-    this.store.set(hash, content);
+    this.entries.set(hash, content);
     return hash;
   }
 
   retrieve(hash: string): string | undefined {
-    return this.store.get(hash);
+    return this.entries.get(hash);
   }
 }
 

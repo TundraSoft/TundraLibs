@@ -87,6 +87,15 @@ testnet use.
 ### **API Examples**
 
 ```typescript
+import {
+  generate12WordSeed,
+  generateBIP39Mnemonic,
+  mnemonicToSeed,
+  validateBIP39Mnemonic,
+} from '@tundralibs/crypt/generators';
+
+declare const passphrase: string;
+
 // Basic generation
 const mnemonic = await generate12WordSeed();
 
@@ -125,7 +134,7 @@ const seed = await mnemonicToSeed(mnemonic.phrase, passphrase);
 
 ### **Development Tools**
 
-```javascript
+```javascript ignore
 // Hardhat configuration
 accounts: {
   mnemonic: "generated-mnemonic-phrase",
