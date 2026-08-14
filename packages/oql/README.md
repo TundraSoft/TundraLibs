@@ -27,7 +27,7 @@ OQL provides a comprehensive type system for defining database queries that can 
 | [Types](types/OQL-Types.md)                | Query type definitions and interfaces               | [Docs](types/OQL-Types.md)           |
 | [Asserts](asserts/OQL-Asserts.md)          | Runtime query validators                            | [Docs](asserts/OQL-Asserts.md)       |
 | [Translator](translator/OQL-Translator.md) | SQL/NoSQL query translators                         | [Docs](translator/OQL-Translator.md) |
-| `@tundralibs/oql/errors`                   | Error types (`OqlError`, `DialectUnsupportedError`) | —                                    |
+| [Errors](errors/OQL-Errors.md)             | Error types (`OqlError`, `DialectUnsupportedError`) | [Docs](errors/OQL-Errors.md)         |
 
 ## Installation
 
@@ -654,6 +654,7 @@ const query: Query<'UPSERT', User> = {
 - [Type System](types/OQL-Types.md) - Complete type definitions
 - [Validators](asserts/OQL-Asserts.md) - Runtime validation
 - [Translators](translator/OQL-Translator.md) - SQL/NoSQL translation
+- [Errors](errors/OQL-Errors.md) - Error classes and stable error codes
 - [Compatibility](docs/Compatibility.md) - Database compatibility matrix
 
 ## Performance
