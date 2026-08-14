@@ -22,10 +22,10 @@
 import type { Sampler } from './types/mod.ts';
 
 /** Record every span. The default. */
-export const alwaysOnSampler: Sampler = () => true;
+export const alwaysOnSampler: Sampler = (): boolean => true;
 
 /** Record nothing — spans still propagate ids, but are never exported. */
-export const alwaysOffSampler: Sampler = () => false;
+export const alwaysOffSampler: Sampler = (): boolean => false;
 
 /** Number of distinct values in the 32-bit window read from the trace id. */
 const ID_WINDOW = 2 ** 32;

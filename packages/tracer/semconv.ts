@@ -17,7 +17,10 @@
  *
  * @example
  * ```typescript
- * import { SemConv } from '@tundralibs/tracer';
+ * import { SemConv, Tracer } from '@tundralibs/tracer';
+ *
+ * const tracer = new Tracer({ serviceName: 'orders' });
+ * const span = tracer.startSpan('GET /orders/42');
  *
  * span.setAttributes({
  *   [SemConv.HTTP_REQUEST_METHOD]: 'GET',

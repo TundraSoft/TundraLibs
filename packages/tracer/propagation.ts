@@ -13,7 +13,12 @@
  *
  * @example
  * ```typescript
- * import { extract, inject } from '@tundralibs/tracer';
+ * import { extract, inject, Tracer } from '@tundralibs/tracer';
+ *
+ * const tracer = new Tracer({ serviceName: 'orders' });
+ * const request = new Request('https://orders.internal/checkout');
+ * const headers = new Headers();
+ * const span = tracer.startSpan('checkout');
  *
  * const parent = extract(request.headers);          // inbound: join the trace
  * headers.set('traceparent', inject(span.context)); // outbound: continue it

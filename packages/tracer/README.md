@@ -61,6 +61,9 @@ const tracer = new Tracer({
   exporter: new ConsoleExporter(),
 });
 
+const db = { query: (_sql: string) => Promise.resolve() };
+const chargeCard = () => Promise.resolve();
+
 await tracer.startActiveSpan('checkout', async (span) => {
   span.setAttribute('order.id', 'ord_42');
 
@@ -77,7 +80,13 @@ await tracer.startActiveSpan('checkout', async (span) => {
 `extract` joins the caller's trace on the way in; `inject` hands it onward:
 
 ```typescript
-import { extract, inject, SpanKind } from '@tundralibs/tracer';
+import { extract, inject, SpanKind, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const request = new Request('https://orders.internal/checkout', {
+  method: 'POST',
+});
+const route = '/checkout';
 
 // Inbound — join the caller's trace (or start one if there's no header).
 const parent = extract(request.headers);
@@ -100,6 +109,18 @@ lines of wiring — a CLIENT span per request, `traceparent` carrying that
 request's own span id:
 
 ```typescript
+import { Tracer } from '@tundralibs/tracer';
+import type { RESTlerOptions } from '@tundralibs/restler';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const token = 'secret';
+
+// Your own RESTler subclass.
+declare const PaymentsAPI: new (
+  token: string,
+  opts: Partial<RESTlerOptions>,
+) => unknown;
+
 const api = new PaymentsAPI(token, {
   witness: tracer.wrapClient, // span per outbound request
   headerProvider: tracer.propagation, // traceparent per request
@@ -112,10 +133,14 @@ Slogger's `contextProvider` is called for every record, so trace ids land on
 every log line — click a log, jump to its trace:
 
 ```typescript
-import { LogManager } from '@tundralibs/slogger';
+import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
+import { Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
 
 const log = LogManager.createSlogger({
   appName: 'orders',
+  level: SyslogSeverities.INFO,
   contextProvider: tracer.logContext, // ← the whole integration
 });
 
@@ -128,7 +153,7 @@ TraceId/SpanId fields, so logs arrive in a backend already linked to their
 traces, and the load-bearing key names live in code rather than in docs.
 Composing with the ambient request bag stays one line:
 
-```typescript
+```typescript ignore
 contextProvider: () => ({ ...ambient.get(), ...tracer.logContext() }),
 ```
 
@@ -157,7 +182,19 @@ Tracer never sees your framework's context, so you write the ~10-line adapter
 and keep full type knowledge — including writing back to `ctx`:
 
 ```typescript
-async function tracing(ctx, next) {
+import { extract, type Span, SpanKind, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+
+// Your framework's context — you know its real shape, Tracer doesn't.
+type Ctx = {
+  request: { headers: Headers; method: string };
+  route: string;
+  response: { status: number };
+  span?: Span;
+};
+
+async function tracing(ctx: Ctx, next: () => Promise<void>) {
   const parent = extract(ctx.request.headers);
   return tracer.startActiveSpan(
     `${ctx.request.method} ${ctx.route}`,
@@ -211,7 +248,10 @@ Backends key their UI off these exact strings, so `SemConv` keeps them a
 compile-time concern rather than a typo:
 
 ```typescript
-import { SemConv } from '@tundralibs/tracer';
+import { SemConv, Tracer } from '@tundralibs/tracer';
+
+const tracer = new Tracer({ serviceName: 'orders' });
+const span = tracer.startSpan('GET /orders/42');
 
 span.setAttributes({
   [SemConv.HTTP_REQUEST_METHOD]: 'GET',
@@ -228,6 +268,10 @@ or to make ids deterministic in tests. A custom generator is smoke-tested once
 at construction, because malformed ids are _silently dropped_ by collectors:
 
 ```typescript
+import { type IdGenerator, Tracer } from '@tundralibs/tracer';
+
+declare const myGenerator: IdGenerator;
+
 new Tracer({ serviceName: 'orders', idGenerator: myGenerator });
 ```
 
