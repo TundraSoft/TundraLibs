@@ -21,6 +21,8 @@ import { StringGuardian } from './StringGuardian.ts';
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Accepted = Guardian.boolean().true('Terms must be accepted');
  * Accepted.parse(true);   // true
  * Accepted.parse('yes');  // true   ← coerced

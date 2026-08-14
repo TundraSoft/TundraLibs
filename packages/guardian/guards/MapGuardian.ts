@@ -32,6 +32,8 @@ import type {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Headers = Guardian.map(
  *   Guardian.string(),
  *   Guardian.string(),

@@ -98,7 +98,7 @@ const INTERNAL_METADATA_KEYS = new Set([
  * shows up at runtime.
  *
  * @example
- * ```ts
+ * ```ts ignore
  * type UserId  = Brand<string, 'UserId'>;
  * type OrderId = Brand<string, 'OrderId'>;
  *
@@ -142,6 +142,8 @@ export type Brand<T, B extends string | symbol> = T & {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Trimmed = Guardian.string()
  *   .process((s) => s.trim())
  *   .minLength(1);
@@ -388,6 +390,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian, NumberGuardian } from '@tundralibs/guardian';
+   *
    * // Stay in StringGuardian
    * Guardian.string().process((s) => s.trim());
    *
@@ -544,6 +548,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().test(
    *   (s) => s.length >= 5,
    *   'must be at least 5 characters',
@@ -606,6 +612,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().equals('admin', 'Only admin allowed');
    * ```
    */
@@ -621,6 +629,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().notEquals('forbidden');
    * ```
    */
@@ -638,6 +648,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().isIn(['draft', 'published', 'archived']);
    * ```
    */
@@ -653,6 +665,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().isNotIn(['admin', 'root', 'system']);
    * ```
    */
@@ -688,6 +702,10 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * declare function emailExists(email: string): Promise<boolean>;
+   *
    * // Cross-DB uniqueness check on a string
    * const UniqueEmail = Guardian.string()
    *   .email()
@@ -800,6 +818,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const nullableString = Guardian.string().nullable();
    * nullableString.parse('hello'); // 'hello'
    * nullableString.parse(null);    // null
@@ -855,6 +875,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().optional().parse(undefined);        // undefined
    * Guardian.string().optional('x').parse(undefined);     // 'x'
    * Guardian.string().optional().parse('hi');             // 'hi'
@@ -958,6 +980,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().minLength(3).parse('hello'); // 'hello'
    * ```
    */
@@ -1069,6 +1093,11 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import type { BaseGuardian } from '@tundralibs/guardian';
+   *
+   * declare const Schema: BaseGuardian<string>;
+   * declare const input: unknown;
+   *
    * const result = await Schema.parseAsync(input);
    * ```
    */
@@ -1144,7 +1173,7 @@ export abstract class BaseGuardian<T> {
    * { … data … }` without destructuring a result object.
    *
    * @example
-   * ```ts
+   * ```ts ignore
    * const [err, user] = User.safeParse(req.body);
    * if (err) return badRequest(err);
    * // `user` is User here
@@ -1262,6 +1291,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const schema = Guardian.string()
    *   .minLength(3)
    *   .describe({
@@ -1310,7 +1341,9 @@ export abstract class BaseGuardian<T> {
    *   semantic type (`'UserId'`, `'Email'`, `'SerialisedDate'`, etc.).
    *
    * @example
-   * ```ts
+   * ```ts ignore
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const UserId  = Guardian.string().uuid().brand<'UserId'>();
    * const OrderId = Guardian.string().uuid().brand<'OrderId'>();
    *
@@ -1341,6 +1374,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().minLength(3).toOpenAPI();
    * // { type: 'string', minLength: 3 }
    * ```
@@ -1391,6 +1426,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.string().describe({ title: 'Username', examples: ['ada'] }).toMarkdown();
    * ```
    */
@@ -1463,6 +1500,8 @@ export abstract class BaseGuardian<T> {
    *
    * @example
    * ```typescript
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const userSchema = Guardian.object({
    *   id: Guardian.number().integer().positive(),
    *   name: Guardian.string().minLength(1),

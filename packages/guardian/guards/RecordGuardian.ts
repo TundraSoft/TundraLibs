@@ -43,6 +43,8 @@ export type RecordRefinement<K extends string | number, V> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * // Basic record with string keys and number values
  * const scores = Guardian.record(
  *   Guardian.string(),
@@ -55,9 +57,11 @@ export type RecordRefinement<K extends string | number, V> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * // Record with key pattern validation
  * const config = Guardian.record(
- *   Guardian.string().regex(/^[A-Z_]+$/),
+ *   Guardian.string().pattern(/^[A-Z_]+$/),
  *   Guardian.string()
  * );
  *
@@ -67,6 +71,8 @@ export type RecordRefinement<K extends string | number, V> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * // Record with complex value validation
  * const userProfiles = Guardian.record(
  *   Guardian.string().uuid(),
@@ -156,6 +162,8 @@ export class RecordGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const validatedRecord = Guardian.record(
    *   Guardian.string(),
    *   Guardian.number()
@@ -200,6 +208,8 @@ export class RecordGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const scores = Guardian.record(
    *   Guardian.string(),
    *   Guardian.number()
@@ -225,6 +235,8 @@ export class RecordGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const config = Guardian.record(
    *   Guardian.string(),
    *   Guardian.string()
@@ -253,6 +265,8 @@ export class RecordGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const limitedConfig = Guardian.record(
    *   Guardian.string(),
    *   Guardian.string()
@@ -281,6 +295,8 @@ export class RecordGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const exactConfig = Guardian.record(
    *   Guardian.string(),
    *   Guardian.number()
@@ -309,6 +325,8 @@ export class RecordGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const requiredConfig = Guardian.record(
    *   Guardian.string(),
    *   Guardian.string()
@@ -337,6 +355,8 @@ export class RecordGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const safeConfig = Guardian.record(
    *   Guardian.string(),
    *   Guardian.string()
@@ -362,6 +382,8 @@ export class RecordGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.record(Guardian.string(), Guardian.string())
    *   .forbiddenKeyPattern(/^_internal_/);  // reject any key starting with `_internal_`
    * ```
@@ -384,6 +406,8 @@ export class RecordGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.record(Guardian.string(), Guardian.string())
    *   .valueRefinement((v) => v.startsWith('https://'), 'all values must be HTTPS');
    * ```

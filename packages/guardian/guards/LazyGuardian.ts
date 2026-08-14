@@ -5,6 +5,8 @@
  * Required for recursive types:
  *
  * ```ts
+ * import { BaseGuardian, Guardian } from '@tundralibs/guardian';
+ *
  * type Tree = { value: number; children: Tree[] };
  *
  * const TreeSchema: BaseGuardian<Tree> = Guardian.object({
@@ -44,6 +46,8 @@ import type {
  *
  * @example
  * ```ts
+ * import { BaseGuardian, Guardian } from '@tundralibs/guardian';
+ *
  * type Node = { value: number; next: Node | null };
  *
  * const NodeSchema: BaseGuardian<Node> = Guardian.object({

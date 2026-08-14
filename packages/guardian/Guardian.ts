@@ -68,6 +68,10 @@ import { GuardianError } from './errors/Base.ts';
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
+ * declare const requestBody: unknown;
+ *
  * const User = Guardian.object({
  *   id:    Guardian.number().integer().positive(),
  *   name:  Guardian.string().minLength(1),
@@ -91,6 +95,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const schema = Guardian.string().minLength(3);
    * const typeInfo = Guardian.type(schema); // "StringGuardian"
    * ```
@@ -106,6 +112,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const schema = Guardian.string()
    *   .minLength(3)
    *   .maxLength(50)
@@ -126,6 +134,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const schema = Guardian.number()
    *   .positive()
    *   .integer()
@@ -151,6 +161,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const userIdOrEmail = Guardian.oneOf([
    *   Guardian.number().positive().integer(),
    *   Guardian.string().pattern(/^[^@]+@[^@]+$/)
@@ -273,6 +285,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * // Array of unknown elements
    * const anyArray = Guardian.array().minLength(1);
    * anyArray.parse([1, 'hello', true]); // [1, 'hello', true]
@@ -303,6 +317,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const anyValue = Guardian.unknown();
    * anyValue.parse('hello'); // 'hello'
    * anyValue.parse(42); // 42
@@ -326,6 +342,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const schema = Guardian.boolean().true();
    * const result = schema.parse(true); // true
    * ```
@@ -342,6 +360,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const schema = Guardian.date()
    *   .min(new Date('2020-01-01'))
    *   .max(new Date('2030-12-31'));
@@ -360,6 +380,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const schema = Guardian.bigint().positive().min(0n);
    * const result = schema.parse(42n); // 42n
    * ```
@@ -379,6 +401,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * // TypeScript enum
    * enum Color { Red = 'red', Green = 'green', Blue = 'blue' }
    * const colorSchema = Guardian.enum(Object.values(Color));
@@ -412,6 +436,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const v1 = Guardian.literal('v1');
    * v1.parse('v1');   // 'v1'
    * v1.parse('v2');   // throws
@@ -441,6 +467,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * // Defined schema (strip mode by default — unknown keys are dropped)
    * const userSchema = Guardian.object({
    *   id: Guardian.number(),
@@ -460,6 +488,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * // Shape transformation
    * const transformedUser = Guardian.object({
    *   firstName: Guardian.string(),
@@ -501,13 +531,15 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * // 1-arg form — Record<string, number>
    * const metrics = Guardian.record(Guardian.number());
    * metrics.parse({ uptimeSec: 60, errorCount: 0 }); // ✅
    *
    * // 2-arg form — pattern-validated keys
    * const envVars = Guardian.record(
-   *   Guardian.string().regex(/^[A-Z_]+$/),
+   *   Guardian.string().pattern(/^[A-Z_]+$/),
    *   Guardian.string(),
    * );
    * envVars.parse({ API_KEY: 'abc', DB_HOST: 'localhost' }); // ✅
@@ -562,6 +594,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const missedSeqRange = Guardian.tuple([
    *   Guardian.number().integer().min(0),
    *   Guardian.number().integer().min(0),
@@ -603,6 +637,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const Shape = Guardian.discriminatedUnion('kind', [
    *   Guardian.object({
    *     kind: Guardian.literal('circle'),
@@ -620,6 +656,8 @@ export class Guardian {
    *
    * @example Multi-value discriminator (aliases route to the same branch)
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const Rect = Guardian.object({
    *   kind: Guardian.enum(['square', 'rect'] as const),
    *   side: Guardian.number(),
@@ -666,6 +704,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { BaseGuardian, Guardian } from '@tundralibs/guardian';
+   *
    * type Node = { value: number; next: Node | null };
    *
    * const NodeSchema: BaseGuardian<Node> = Guardian.object({
@@ -701,6 +741,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const Identified = Guardian.object({ id: Guardian.string() });
    * const Named = Guardian.object({ name: Guardian.string() });
    * const Person = Guardian.intersection(Identified, Named);
@@ -813,6 +855,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const Trimmed = Guardian.preprocess(
    *   (v) => typeof v === 'string' ? v.trim() : v,
    *   Guardian.string().minLength(1),
@@ -904,6 +948,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const Tags = Guardian.set(Guardian.string().minLength(1));
    *
    * Tags.parse(['foo', 'bar', 'foo']);  // Set { 'foo', 'bar' }
@@ -936,6 +982,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const Headers = Guardian.map(Guardian.string(), Guardian.string());
    *
    * Headers.parse(new Map([['x-trace', 'abc']]));         // Map { ... }
@@ -965,6 +1013,8 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const Url = Guardian.instanceof(URL);
    * Url.parse(new URL('https://example.com'));  // URL { … }
    * Url.parse('https://example.com');           // throws
@@ -1025,6 +1075,10 @@ export class Guardian {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * declare const anything: unknown;
+   *
    * const Forbidden = Guardian.never();
    * Forbidden.parse(anything);  // always throws
    * ```

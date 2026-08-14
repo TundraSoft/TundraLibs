@@ -8,6 +8,11 @@ import type { GuardianError } from '../errors/Base.ts';
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
+ * const schema = Guardian.string();
+ * declare const input: unknown;
+ *
  * const [error, data] = schema.safeParse(input);
  * if (error) {
  *   console.error('Validation failed:', error.message);

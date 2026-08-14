@@ -41,6 +41,8 @@ type UnionOf<T extends readonly unknown[]> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Shape = Guardian.discriminatedUnion('kind', [
  *   Guardian.object({
  *     kind: Guardian.literal('circle'),

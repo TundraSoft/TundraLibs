@@ -25,6 +25,8 @@ import type {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Tags = Guardian.set(Guardian.string().minLength(1));
  *
  * Tags.parse(['foo', 'bar', 'foo']);

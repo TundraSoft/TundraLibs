@@ -45,6 +45,8 @@ type TupleResult<
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const range = Guardian.tuple([
  *   Guardian.number().integer().min(0),
  *   Guardian.number().integer().min(0),
@@ -272,6 +274,8 @@ export class TupleGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const cmd = Guardian.tuple([
    *   Guardian.literal('move'),
    *   Guardian.number().integer(),
@@ -306,6 +310,8 @@ export class TupleGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const xy = Guardian.tuple([Guardian.number(), Guardian.number()])
    *   .labels(['x', 'y']);
    *

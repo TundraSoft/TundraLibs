@@ -25,6 +25,8 @@ import { BigIntGuardian } from './BigIntGuardian.ts';
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Age = Guardian.number().integer().min(0).max(120);
  * Age.parse(42);    // 42
  * Age.parse('42');  // 42  ← coerced
@@ -611,6 +613,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.number().unixSeconds().parse(1700000000);   // ok
    * Guardian.number().unixSeconds().parse(1700000000000); // throws (too large)
    * ```
@@ -646,6 +650,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.number().unixMillis().parse(Date.now());     // ok
    * Guardian.number().unixMillis().parse(1700000000);     // throws (too small — looks like seconds)
    * ```
@@ -880,6 +886,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.number().percentage().parse(42);              // 42
    * Guardian.number().percentage().parse(150);             // throws
    * Guardian.number().percentage({ allowOver: true }).parse(150); // 150
@@ -1040,6 +1048,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.number().bigDecimal({ scale: 2 }).parse(19.99);  // ok
    * Guardian.number().bigDecimal({ scale: 2 }).parse(19.999); // throws
    * ```
@@ -1097,6 +1107,8 @@ export class NumberGuardian extends BaseGuardian<number> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.number().evenlyDivisible([2, 3]).parse(12); // ok (multiple of 6)
    * Guardian.number().evenlyDivisible([2, 3]).parse(8);  // throws (not / 3)
    * ```

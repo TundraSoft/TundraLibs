@@ -19,7 +19,7 @@
  *
  * // Thenable objects
  * isPromiseLike({ then: () => {} }) // true
- * isPromiseLike({ then: (resolve, reject) => resolve(42) }) // true
+ * isPromiseLike({ then: (res: (v: number) => void) => res(42) }) // true
  *
  * // Async functions
  * isPromiseLike(async () => {}) // true

@@ -23,6 +23,8 @@ import { StringGuardian } from './StringGuardian.ts';
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const anyValue = Guardian.unknown();
  * anyValue.parse('hello'); // 'hello'
  * anyValue.parse(42); // 42
@@ -37,6 +39,8 @@ import { StringGuardian } from './StringGuardian.ts';
  *
  * @example With transformations
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const stringified = Guardian.unknown()
  *   .process(value => JSON.stringify(value));
  *
@@ -91,6 +95,8 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const stringified = Guardian.unknown().toStringValue();
    * stringified.parse(42); // '42'
    * stringified.parse({ name: 'John' }); // '{"name":"John"}'
@@ -134,6 +140,8 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const jsonified = Guardian.unknown().toJSON();
    * jsonified.parse({ name: 'John' }); // '{"name":"John"}'
    * jsonified.parse([1, 2, 3]); // '[1,2,3]'
@@ -168,6 +176,8 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const isString = (value: unknown): value is string => typeof value === 'string';
    * const stringGuard = Guardian.unknown().narrow(isString);
    * stringGuard.parse('hello'); // 'hello' (typed as string)
@@ -205,6 +215,8 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const isString = (value: unknown): value is string => typeof value === 'string';
    * const stringGuard = Guardian.unknown().as(isString);
    * stringGuard.parse('hello'); // 'hello' (typed as string)
@@ -235,6 +247,8 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const nullish = Guardian.unknown().nullish();
    * nullish.parse(null); // null
    * nullish.parse(undefined); // undefined
@@ -266,6 +280,8 @@ export class UnknownGuardian<T = unknown> extends BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const nonNullish = Guardian.unknown().nonNullish();
    * nonNullish.parse('hello'); // 'hello'
    * nonNullish.parse(42); // 42

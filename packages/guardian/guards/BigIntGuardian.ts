@@ -22,6 +22,8 @@ import { StringGuardian } from './StringGuardian.ts';
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Big = Guardian.bigint().positive();
  * Big.parse(42n);   // 42n
  * Big.parse(42);    // 42n   ← coerced
@@ -236,6 +238,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.bigint().uint(8).parse(255n);   // ok
    * Guardian.bigint().uint(8).parse(256n);   // throws (>= 2^8)
    * ```
@@ -268,6 +272,8 @@ export class BigIntGuardian extends BaseGuardian<bigint> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.bigint().int(8).parse(127n);    // ok
    * Guardian.bigint().int(8).parse(128n);    // throws (>= 2^7)
    * Guardian.bigint().int(8).parse(-128n);   // ok

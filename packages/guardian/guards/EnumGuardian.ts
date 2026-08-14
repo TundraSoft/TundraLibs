@@ -104,6 +104,8 @@ export class EnumGuardian<T> extends BaseGuardian<T> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const method = Guardian.enum(['GET', 'POST', 'PUT']).caseInsensitive();
    * method.parse('get');   // 'GET'   ← canonical case returned
    * method.parse('POST');  // 'POST'

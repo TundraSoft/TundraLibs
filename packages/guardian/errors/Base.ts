@@ -184,9 +184,15 @@ export class GuardianError extends BaseError<GuardianErrorMeta> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * const User = Guardian.object({
+   *   address: Guardian.object({ zipCode: Guardian.string() }),
+   * });
+   *
    * const [err] = User.safeParse({ address: { zipCode: 42 } });
-   * err.path;            // [] — top-level aggregate
-   * err.context.cause?.address?.context.cause?.zipCode?.path;
+   * err?.path;           // [] — top-level aggregate
+   * err?.context.cause?.address?.context.cause?.zipCode?.path;
    *                      // ['address', 'zipCode']
    * ```
    */

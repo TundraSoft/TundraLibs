@@ -41,6 +41,8 @@ type DurationUnit = 'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days';
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * const Recent = Guardian.date().past();
  * Recent.parse(new Date('2024-01-01'));   // Date
  * Recent.parse('2024-01-01');              // Date  ← coerced
@@ -408,6 +410,8 @@ export class DateGuardian extends BaseGuardian<Date> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * Guardian.date().withinRange(7, 'days')   // ±7 days from now
    * Guardian.date().withinRange(1, 'hours')  // ±1 hour
    * ```
@@ -573,6 +577,8 @@ export class DateGuardian extends BaseGuardian<Date> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * // US Federal FY: Oct (10) → Sep
    * Guardian.date().fiscalYear(10, 2026)
    *   // Oct 1 2025 → Sep 30 2026
@@ -625,6 +631,8 @@ export class DateGuardian extends BaseGuardian<Date> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const schema = Guardian.date().dateOnly();
    * schema.toOpenAPI(); // { type: 'string', format: 'date' }
    * ```
@@ -641,6 +649,8 @@ export class DateGuardian extends BaseGuardian<Date> {
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const schema = Guardian.date().timeOnly();
    * schema.toOpenAPI(); // { type: 'string', format: 'time' }
    * ```

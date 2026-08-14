@@ -90,6 +90,8 @@ export type ObjectRefinement<T> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * // Basic object schema (strip mode by default)
  * const userSchema = Guardian.object({
  *   id: Guardian.number(),
@@ -105,6 +107,8 @@ export type ObjectRefinement<T> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * // Strict mode - only defined properties allowed
  * const strictUser = Guardian.object({
  *   id: Guardian.number(),
@@ -117,6 +121,8 @@ export type ObjectRefinement<T> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * // Shape transformation
  * const transformedUser = Guardian.object({
  *   firstName: Guardian.string(),
@@ -130,10 +136,12 @@ export type ObjectRefinement<T> = {
  *
  * @example
  * ```ts
+ * import { Guardian } from '@tundralibs/guardian';
+ *
  * // Complex validation with refine
  * const registerSchema = Guardian.object({
  *   email: Guardian.string().email(),
- *   password: Guardian.string().min(8),
+ *   password: Guardian.string().minLength(8),
  *   confirmPassword: Guardian.string()
  * }).refine(
  *   (data) => data.password === data.confirmPassword,
@@ -311,6 +319,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const strictUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string()
@@ -332,6 +342,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const strippedUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string()
@@ -358,6 +370,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const frame = Guardian.object({
    *   v: Guardian.number(),
    *   event: Guardian.string(),
@@ -389,6 +403,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const Tagged = Guardian.object({
    *   v: Guardian.number(),
    *   event: Guardian.string(),
@@ -466,6 +482,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const requiredFieldsUser = Guardian.object({
    *   id: Guardian.number().optional(),
    *   name: Guardian.string().optional(),
@@ -503,6 +521,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const safeUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string(),
@@ -540,6 +560,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const baseUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string()
@@ -583,6 +605,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const fullUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string(),
@@ -629,6 +653,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const fullUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string(),
@@ -671,6 +697,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const user = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string(),
@@ -714,6 +742,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const user = Guardian.object({
    *   id: Guardian.number().optional(),
    *   name: Guardian.string().optional(),
@@ -765,6 +795,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const baseUser = Guardian.object({
    *   id: Guardian.number(),
    *   name: Guardian.string()
@@ -819,6 +851,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const BaseUser  = Guardian.object({ id: Guardian.string(), name: Guardian.string() });
    * const Audited   = Guardian.object({ createdAt: Guardian.date(), updatedAt: Guardian.date() });
    * const AuditedUser = BaseUser.merge(Audited);
@@ -877,6 +911,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const User = Guardian.object({ id: Guardian.string(), email: Guardian.string() });
    * const SortBy = User.keyOf();
    * SortBy.parse('email');  // ok
@@ -969,6 +1005,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const userTransform = Guardian.object({
    *   firstName: Guardian.string(),
    *   lastName: Guardian.string(),
@@ -1029,6 +1067,8 @@ export class ObjectGuardian<
    *
    * @example
    * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
    * const complexSchema = Guardian.object({
    *   email: Guardian.string().email(),
    *   password: Guardian.string(),
