@@ -16,6 +16,8 @@ Custom validators, post-validation predicates, and data reshaping.
 Add a predicate. Returns the input unchanged on `true`; throws `GuardianError` with `msg` on `false`.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Even = Guardian.number().test(
   (n) => n % 2 === 0,
   'must be even',
@@ -28,6 +30,8 @@ Even.parse(5); // throws — 'must be even'
 The third argument is an `expected` hint that surfaces in the error's `context.expected` — useful for tooling, not displayed in the default message:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 Guardian.number().test((n) => n > 0, 'must be positive', '> 0');
 ```
 
@@ -38,6 +42,8 @@ Guardian.number().test((n) => n > 0, 'must be positive', '> 0');
 `.process(fn)` is the workhorse: it takes the current output, runs `fn`, and replaces the output. Used internally by every chain method.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 // Trim then validate length
 const Name = Guardian.string()
   .process((s) => s.trim())
@@ -47,13 +53,15 @@ const Name = Guardian.string()
 You can change the output type:
 
 ```typescript
+import { Guardian, NumberGuardian } from '@tundralibs/guardian';
+
 const LowerHex = Guardian.string()
   .process((s) => s.toLowerCase())
   .pattern(/^[0-9a-f]+$/);
 
 // Convert string to number
 const Port = Guardian.string()
-  .process((s) => parseInt(s, 10), Guardian.number) // pass a constructor
+  .process((s) => parseInt(s, 10), NumberGuardian) // pass a constructor
   .integer()
   .min(1)
   .max(65535);
@@ -62,6 +70,8 @@ const Port = Guardian.string()
 `.transform(fn)` is an alias for `.process()` on `ObjectGuardian` — useful for reshaping object outputs:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const FullName = Guardian.object({
   first: Guardian.string(),
   last: Guardian.string(),
@@ -78,6 +88,8 @@ FullName.parse({ first: 'Ada', last: 'Lovelace' });
 Predicate available on **every** guardian — primitives (`string`, `number`, …) as well as composites (`object`, `array`, `tuple`, `record`, `set`, `map`, `lazy`). Adds a validator that runs at its declaration position in the chain. Failure throws a `GuardianError` with `comparison: 'refinement'` and a mandatory message.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 // On a primitive — equivalent to `.test()` but with a required message.
 Guardian.string().refine(
   (s) => s.endsWith('@example.com'),
@@ -94,6 +106,8 @@ Guardian.array(Guardian.number()).refine(
 The canonical use is **cross-field validation on `ObjectGuardian`**, where the predicate receives the parsed shape and decides based on multiple fields:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Register = Guardian.object({
   password: Guardian.string().minLength(8),
   confirm: Guardian.string(),
@@ -112,6 +126,10 @@ Register.parse({ password: 'secret123', confirm: 'wrong' });
 `.refine()` is inlined into the transform chain at its position. This is what most users expect from reading the code:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+declare function hash(password: string): string;
+
 const Schema = Guardian.object({
   password: Guardian.string(),
   confirm: Guardian.string(),
@@ -133,7 +151,9 @@ If you wrote `.transform(...).refine(...)`, the refinement would run on the **tr
 Chained `.refine()` calls short-circuit: if the first fails, subsequent ones don't run.
 
 ```typescript
-Guardian.object({ value: Guardian.number() })
+import { Guardian } from '@tundralibs/guardian';
+
+const Schema = Guardian.object({ value: Guardian.number() })
   .refine((d) => d.value > 0, 'must be positive', 'value')
   .refine((d) => d.value % 2 === 0, 'must be even', 'value');
 
@@ -158,6 +178,8 @@ For collecting all failures across multiple checks, use [`.superRefine()`](#supe
 Batch-refine. Adds a **single** chain step that runs every check in the array and accumulates failures before throwing.
 
 ```typescript
+import { Guardian, GuardianError } from '@tundralibs/guardian';
+
 const Register = Guardian.object({
   username: Guardian.string(),
   password: Guardian.string(),
@@ -185,6 +207,7 @@ try {
     age: 15,
   });
 } catch (err) {
+  if (!(err instanceof GuardianError)) throw err;
   err.message;
   // '3 refinement error(s): password too short; passwords differ; must be 18+'
   err.context.cause;
@@ -211,6 +234,8 @@ This is what to reach for in form-validation flows where you want every failing 
 `.optional()` and `.nullable()` seal the chain. After either, the only methods available are documentation-emit (`toOpenAPI`, `toJSONSchema`, `toMarkdown`, `describe`), parsing (`parse`, `safeParse`, `parseAsync`, `safeParseAsync`), and the other finisher.
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const Schema = Guardian.string().optional();
 // Schema.process(...)  ← compile error (process not on FinishedGuardian)
 // Schema.test(...)     ← compile error
@@ -218,7 +243,7 @@ const Schema = Guardian.string().optional();
 
 The compile-time block matches what the runtime would have thrown. To extend the chain further, declare the chain before `.optional()`:
 
-```typescript
+```typescript ignore
 // ❌ Won't compile
 Guardian.string().optional().minLength(3);
 
@@ -231,6 +256,8 @@ Guardian.string().minLength(3).optional();
 Accepts `undefined`. With a default, substitutes when input is `undefined`:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 Guardian.string().optional().parse(undefined); // undefined
 Guardian.string().optional('fallback').parse(undefined); // 'fallback'
 Guardian.string().optional(() => crypto.randomUUID()).parse(undefined); // generated value
@@ -239,6 +266,8 @@ Guardian.string().optional(() => crypto.randomUUID()).parse(undefined); // gener
 When a default is provided, the output type narrows — `undefined` is no longer a possible output:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const With = Guardian.string().optional('x'); // FinishedGuardian<string>
 const Without = Guardian.string().optional(); // FinishedGuardian<string | undefined>
 ```
@@ -248,6 +277,8 @@ const Without = Guardian.string().optional(); // FinishedGuardian<string | undef
 Accepts `null`:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 Guardian.string().nullable().parse(null); // null
 Guardian.string().nullable().parse('hi'); // 'hi'
 Guardian.string().nullable().parse(undefined); // throws — undefined isn't accepted
@@ -256,6 +287,8 @@ Guardian.string().nullable().parse(undefined); // throws — undefined isn't acc
 `.nullable()` does **not** take a default. `null` is a value the caller chose ("explicitly empty"); silently replacing it would discard information. `.nullable()` is also a finisher, so it seals the chain — you cannot `.process()` after it. If you genuinely need to map `null` to a fallback, do it in a `preprocess` step, which runs **before** the string check:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 Guardian.preprocess((v) => v ?? 'default-name', Guardian.string());
 // null → 'default-name', 'hi' → 'hi'
 ```
@@ -265,6 +298,8 @@ Guardian.preprocess((v) => v ?? 'default-name', Guardian.string());
 Chain both for `T | null | undefined`:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
 const S = Guardian.string().nullable().optional();
 // FinishedGuardian<string | null | undefined>
 
@@ -284,6 +319,12 @@ Both finishers are idempotent: calling `.optional()` on an already-optional sche
 Refinement validators may return `Promise<boolean>`. Guardian detects async functions at build time and routes the schema through `parseAsync`:
 
 ```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+declare const db: {
+  users: { exists(q: { username: string }): Promise<boolean> };
+};
+
 const Schema = Guardian.object({
   username: Guardian.string(),
 }).refine(
@@ -310,7 +351,9 @@ Async detection works for `async function` and async arrow functions. A sync fun
 **Thenable-shaped values must go through the sync entry points.** `parseAsync()` / `safeParseAsync()` return a `Promise<T>`, and the ECMAScript promise resolution procedure _adopts_ any thenable handed to it — a validated object carrying a callable `then` would be replaced by its resolution, and a thenable that never settles would hang the caller forever. No implementation can return such a value from a `Promise<T>`, so the async entry points **refuse** it with a usage error instead of substituting data silently:
 
 ```typescript
-const thenable = { id: 1, then: (r) => r(42) };
+import { Guardian } from '@tundralibs/guardian';
+
+const thenable = { id: 1, then: (r: (value: number) => void) => r(42) };
 
 Guardian.unknown().parse(thenable); // → the object itself ✅
 await Guardian.unknown().parseAsync(thenable);
