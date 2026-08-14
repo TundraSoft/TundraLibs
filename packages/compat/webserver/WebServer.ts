@@ -646,6 +646,12 @@ export class WebServer<T = unknown> {
     event: K,
     listener: ServerEvents[K],
   ): void;
+  /**
+   * Batch form of {@link on} — registers every listener in the array, in
+   * order, for the same event.
+   *
+   * @typeParam K - Event name key from {@link ServerEvents}
+   */
   public on<K extends keyof ServerEvents>(
     event: K,
     listener: ServerEvents[K][],
@@ -700,11 +706,22 @@ export class WebServer<T = unknown> {
     listener: ServerEvents[K],
   ): void;
 
+  /**
+   * Batch form of {@link off} — removes each listener in the array.
+   * Entries that were never registered are ignored.
+   *
+   * @typeParam K - Event name key from {@link ServerEvents}
+   */
   public off<K extends keyof ServerEvents>(
     event: K,
     listener: ServerEvents[K][],
   ): void;
 
+  /**
+   * Removes every listener registered for `event`.
+   *
+   * @typeParam K - Event name key from {@link ServerEvents}
+   */
   public off<K extends keyof ServerEvents>(
     event: K,
   ): void;

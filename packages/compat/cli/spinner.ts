@@ -99,17 +99,30 @@ const ESC_CLEAR_LINE = '\r\x1b[2K';
  * `succeed()` | `fail()` | `stop()`.
  */
 export class Spinner {
+  /** Animation frames, cycled in order. @internal */
   readonly __frames: readonly string[];
+  /** Delay between frames, in milliseconds. @internal */
   readonly __intervalMs: number;
+  /** Sink for rendered frames. @internal */
   readonly __stream: WritableLike;
+  /** Animate in-place; non-TTY prints one static line. @internal */
   readonly __tty: boolean;
 
+  /** Text shown beside the spinner. @internal */
   __label: string;
+  /** Index into {@link __frames}. @internal */
   __frameIdx: number = 0;
+  /** Animation timer, `null` when not running. @internal */
   __timer: ReturnType<typeof setInterval> | null = null;
+  /** Set once finished; later calls no-op. @internal */
   __stopped: boolean = false;
+  /** Set by {@link start}; guards against a second start. @internal */
   __started: boolean = false;
 
+  /**
+   * Defaults: braille frames, 80ms interval, `process.stdout`, TTY
+   * auto-detected. An empty `frames` array falls back to the braille set.
+   */
   constructor(options: SpinnerOptions = {}) {
     this.__frames = options.frames && options.frames.length > 0
       ? options.frames
@@ -190,6 +203,13 @@ export class Spinner {
     this.__stopped = true;
   }
 
+  /**
+   * Shared tail of {@link succeed} and {@link fail}: stops the timer and
+   * writes the final status line. `symbol` is dropped in non-TTY mode.
+   *
+   * @param label - Overrides the current label for the final line only.
+   * @internal
+   */
   __finish(symbol: string, label: string | undefined): void {
     if (this.__stopped) return;
     this.__clearTimer();
@@ -203,6 +223,7 @@ export class Spinner {
     this.__stopped = true;
   }
 
+  /** Cancel the animation timer if one is pending. @internal */
   __clearTimer(): void {
     if (this.__timer !== null) {
       clearInterval(this.__timer);
@@ -210,11 +231,13 @@ export class Spinner {
     }
   }
 
+  /** Step to the next frame, rendering only on a TTY. @internal */
   __advance(): void {
     this.__frameIdx = (this.__frameIdx + 1) % this.__frames.length;
     if (this.__tty) this.__render();
   }
 
+  /** Clear the line and write the current frame plus label. @internal */
   __render(): void {
     const labelStr = this.__label.length > 0 ? ` ${this.__label}` : '';
     this.__stream.write(

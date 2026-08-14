@@ -62,26 +62,42 @@ if (isDeno) {
   nativePath = loadBuiltin('node:path');
 }
 
+/**
+ * Last path segment.
+ *
+ * @param suffix - Trimmed from the result when the segment ends with it.
+ */
 export const basename = (path: string, suffix?: string): string =>
   nativePath.basename(path, suffix);
 
+/** Directory portion of `path` — everything before the last segment. */
 export const dirname = (path: string): string => nativePath.dirname(path);
 
+/** Extension of the last segment, including the leading dot, or `''`. */
 export const extname = (path: string): string => nativePath.extname(path);
 
+/** Joins segments with the platform separator and normalizes the result. */
 export const join = (...paths: string[]): string => nativePath.join(...paths);
 
+/** Collapses `.`, `..` and repeated separators. Does not touch the disk. */
 export const normalize = (path: string): string => nativePath.normalize(path);
 
+/**
+ * Resolves segments right-to-left into an absolute path, stopping at the
+ * first absolute one and falling back to the current working directory.
+ */
 export const resolve = (...paths: string[]): string =>
   nativePath.resolve(...paths);
 
+/** Relative path that walks from `from` to `to`. */
 export const relative = (from: string, to: string): string =>
   nativePath.relative(from, to);
 
+/** Whether `path` is absolute. */
 export const isAbsolute = (path: string): boolean =>
   nativePath.isAbsolute(path);
 
+/** Splits a path into its `root`, `dir`, `base`, `ext` and `name` parts. */
 export const parse = (path: string): {
   root: string;
   dir: string;
@@ -90,6 +106,7 @@ export const parse = (path: string): {
   name: string;
 } => nativePath.parse(path);
 
+/** Inverse of {@link parse}. `base` wins over `name` + `ext`. */
 export const format = (pathObject: {
   root?: string;
   dir?: string;

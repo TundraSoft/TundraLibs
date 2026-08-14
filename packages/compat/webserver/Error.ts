@@ -14,10 +14,12 @@ import { CompatError } from '../Error.ts';
  * `'PERMISSION'`) that triggered the failure.
  */
 export class ServerError extends CompatError {
+  /** Lifecycle step that failed, e.g. `'start'`, `'CONFIGURATION'`. */
   public readonly operation: string;
   /** `'N/A'` when the failure is mode-independent (e.g. invalid mode itself). */
   public readonly mode: ServerMode | 'N/A';
 
+  /** Repairs the prototype chain so `instanceof` survives transpilation. */
   constructor(
     message: string,
     mode: ServerMode | 'N/A',
@@ -34,6 +36,7 @@ export class ServerError extends CompatError {
     }
   }
 
+  /** Adds `mode` and `operation` to the base payload. */
   override toJSON(): Record<string, unknown> {
     const base = super.toJSON();
     return {
@@ -46,6 +49,11 @@ export class ServerError extends CompatError {
 
 /** Thrown when an op needs the server running but it isn't (e.g. `stop()` on a stopped server). */
 export class ServerNotRunningError extends ServerError {
+  /**
+   * The message is fixed.
+   *
+   * @param operation - The action that was refused, recorded for diagnostics.
+   */
   constructor(mode: ServerMode, operation: string) {
     super('Cannot perform action as server is not running.', mode, operation);
     Object.setPrototypeOf(this, new.target.prototype);
@@ -57,6 +65,11 @@ export class ServerNotRunningError extends ServerError {
 
 /** Thrown by `start()` if the server is not in `'STOPPED'` state. */
 export class ServerAlreadyRunningError extends ServerError {
+  /**
+   * The message is fixed.
+   *
+   * @param operation - The action that was refused, recorded for diagnostics.
+   */
   constructor(mode: ServerMode, operation: string) {
     super(
       'Cannot perform action as server is already running.',
@@ -82,6 +95,11 @@ export class ServerConfigurationError extends ServerError {
   /** What a valid value looks like, when the thrower described it. */
   public readonly expected?: string;
 
+  /**
+   * Renders `option` and `value` into the message, appending `expected`
+   * after `. Expected: ` when supplied. `operation` is always
+   * `'CONFIGURATION'`.
+   */
   constructor(
     mode: ServerMode | 'N/A',
     option: string,
@@ -102,6 +120,7 @@ export class ServerConfigurationError extends ServerError {
     }
   }
 
+  /** Adds `option`, `value` and `expected` to the base payload. */
   override toJSON(): Record<string, unknown> {
     return {
       ...super.toJSON(),
@@ -117,6 +136,7 @@ export class ServerConfigurationError extends ServerError {
  * UNIX socket directory.
  */
 export class ServerPermissionError extends ServerError {
+  /** `operation` is always `'PERMISSION'`. */
   constructor(message: string, mode: ServerMode) {
     super(message, mode, 'PERMISSION');
     Object.setPrototypeOf(this, new.target.prototype);

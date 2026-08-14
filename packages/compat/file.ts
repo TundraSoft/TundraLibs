@@ -94,6 +94,7 @@ export class FileOperationError extends CompatError {
     }
   }
 
+  /** Adds `operation` and `path` to the base payload. */
   override toJSON(): Record<string, unknown> {
     const base = super.toJSON();
     return {
@@ -689,7 +690,7 @@ export const isDirectory: (path: string) => Promise<boolean> = async (
  * }
  * ```
  */
-export const isDir = isDirectory;
+export const isDir: (path: string) => Promise<boolean> = isDirectory;
 
 /**
  * Synchronously checks if the given path exists and is a directory (not a file).
@@ -751,7 +752,7 @@ export const isDirectorySync: (path: string) => boolean = (
  * }
  * ```
  */
-export const isDirSync = isDirectorySync;
+export const isDirSync: (path: string) => boolean = isDirectorySync;
 //#endregion File existence checks
 
 //#region File metadata operations

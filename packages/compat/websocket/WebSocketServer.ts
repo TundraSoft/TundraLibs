@@ -98,23 +98,32 @@ const exceedsFrameSize = (raw: WebSocketData, max: number): boolean => {
  *   built-in {@link StringCodec} passes text frames through).
  */
 export class WebSocketServer<T = unknown, M = string> {
+  /** Options as supplied to the constructor, unmerged. @internal */
   readonly __opts: WebSocketServerOptions<T, M>;
+  /** Resolved codec; {@link StringCodec} when none was supplied. @internal */
   readonly __codec: Codec<M>;
+  /** Inbound frame cap in bytes; `0` disables. Default 1 MiB. @internal */
   readonly __maxFrameSize: number;
+  /** Buffered-bytes cap; `undefined` disables reporting. @internal */
   readonly __backpressureThreshold: number | undefined;
 
+  /** Registered middleware, run in registration order. @internal */
   readonly __middleware: Middleware<T, M>[] = [];
+  /** Currently open sockets. Added on open, removed on close. @internal */
   readonly __connections: Set<ServerWebSocket<T>> = new Set<
     ServerWebSocket<T>
   >();
 
+  /** Terminal message handler, run after all middleware. @internal */
   __onMessage: _MessageHandler<T, M> | null = null;
+  /** Connection-open handler. @internal */
   __onOpen:
     | ((
       ws: ServerWebSocket<T>,
       ctx: WebSocketUpgradeContext,
     ) => void | Promise<void>)
     | null = null;
+  /** Connection-close handler. @internal */
   __onClose:
     | ((
       ws: ServerWebSocket<T>,
@@ -122,13 +131,27 @@ export class WebSocketServer<T = unknown, M = string> {
       reason: string,
     ) => void | Promise<void>)
     | null = null;
+  /** Handler for frames that were oversize or failed to decode. @internal */
   __onDecodeError: _DecodeErrorHandler<T> | null = null;
+  /** Handler for sockets past the buffer threshold. @internal */
   __onBackpressure: _BackpressureHandler<T> | null = null;
+  /** Catch-all for throws escaping a handler or middleware. @internal */
   __onError: ((err: unknown, ws: ServerWebSocket<T>) => void) | null = null;
 
+  /**
+   * Server owned by {@link listen}; `null` when driven by an external
+   * {@link WebServer}.
+   *
+   * @internal
+   */
   __webServer: WebServer<T> | null = null;
+  /** Set by {@link close}; guards against double teardown. @internal */
   __closed = false;
 
+  /**
+   * Nothing binds until {@link listen} or {@link handlers} is called, so
+   * construction cannot fail.
+   */
   constructor(options: WebSocketServerOptions<T, M> = {}) {
     this.__opts = options;
     this.__codec = options.codec ??
@@ -357,6 +380,12 @@ export class WebSocketServer<T = unknown, M = string> {
   // Internal handlers
   // =========================================================================
 
+  /**
+   * Track the socket and run the open handler. Throws from the handler are
+   * routed to `__onError` rather than rejecting.
+   *
+   * @internal
+   */
   async __handleOpen(
     ws: ServerWebSocket<T>,
     ctx: WebSocketUpgradeContext,
@@ -371,6 +400,14 @@ export class WebSocketServer<T = unknown, M = string> {
     }
   }
 
+  /**
+   * Size-check, decode, then run the frame through the middleware chain.
+   * Oversize frames and decode failures divert to
+   * {@link __fireDecodeError} and never reach middleware. A codec that
+   * throws is treated the same as one returning `null`.
+   *
+   * @internal
+   */
   async __handleMessage(
     ws: ServerWebSocket<T>,
     raw: WebSocketData,
@@ -412,6 +449,12 @@ export class WebSocketServer<T = unknown, M = string> {
     }
   }
 
+  /**
+   * Untrack the socket and run the close handler. Throws from the handler
+   * are routed to `__onError` rather than rejecting.
+   *
+   * @internal
+   */
   async __handleClose(
     ws: ServerWebSocket<T>,
     code: number,
@@ -427,6 +470,12 @@ export class WebSocketServer<T = unknown, M = string> {
     }
   }
 
+  /**
+   * Notify the decode-error handler, passing the undecoded frame. A no-op
+   * when no handler is registered — the frame is dropped silently.
+   *
+   * @internal
+   */
   async __fireDecodeError(
     ws: ServerWebSocket<T>,
     raw: WebSocketData,
@@ -440,6 +489,18 @@ export class WebSocketServer<T = unknown, M = string> {
     }
   }
 
+  /**
+   * Fire the backpressure handler if `ws.bufferedAmount` now exceeds the
+   * configured threshold. A no-op when no threshold or no handler is set.
+   *
+   * {@link send} and {@link broadcast} call this for you. Callers that
+   * bypass those paths and write to the socket directly must call it
+   * themselves, or the handler never fires for their traffic —
+   * `@tundralibs/rpc`'s `Server` does exactly this, so treat the name as
+   * load-bearing despite the `__` prefix.
+   *
+   * @internal
+   */
   __checkBackpressure(ws: ServerWebSocket<T>): void {
     const threshold = this.__backpressureThreshold;
     if (threshold === undefined || !this.__onBackpressure) return;

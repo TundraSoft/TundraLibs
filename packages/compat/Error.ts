@@ -42,9 +42,12 @@ const compatErrorToJSON = (self: CompatErrorLike): Record<string, unknown> => ({
 
 /** Base error for compat operations. Captures `runtime` and `os` at throw time. */
 export class CompatError extends Error {
+  /** Runtime detected when the error was constructed. */
   public readonly runtime: Runtime;
+  /** Operating system detected when the error was constructed. */
   public readonly os: OperatingSystem;
 
+  /** Snapshots the detected runtime and OS onto the instance. */
   constructor(message: string, cause?: Error) {
     super(message, { cause });
     this.runtime = RUNTIME;
@@ -52,6 +55,7 @@ export class CompatError extends Error {
     finalizeCompatError(this, new.target);
   }
 
+  /** Structured form for logging. Flattens `cause` to `name`/`message`. */
   toJSON(): Record<string, unknown> {
     return compatErrorToJSON(this);
   }
@@ -59,9 +63,12 @@ export class CompatError extends Error {
 
 /** `TypeError` flavour of {@link CompatError}. Same fields, same `toJSON()`. */
 export class CompatTypeError extends TypeError {
+  /** Runtime detected when the error was constructed. */
   public readonly runtime: Runtime;
+  /** Operating system detected when the error was constructed. */
   public readonly os: OperatingSystem;
 
+  /** Snapshots the detected runtime and OS onto the instance. */
   constructor(message: string, cause?: Error) {
     super(message, { cause });
     this.runtime = RUNTIME;
@@ -69,6 +76,7 @@ export class CompatTypeError extends TypeError {
     finalizeCompatError(this, new.target);
   }
 
+  /** Structured form for logging. Flattens `cause` to `name`/`message`. */
   toJSON(): Record<string, unknown> {
     return compatErrorToJSON(this);
   }
@@ -80,11 +88,19 @@ export class CompatTypeError extends TypeError {
  * `timeoutMs`.
  */
 export class ConnectionTimeoutError extends CompatError {
+  /** Target host. Absent for UNIX-socket connects. */
   public readonly hostname?: string;
+  /** Target port. Absent for UNIX-socket connects. */
   public readonly port?: number;
+  /** UNIX socket path. Absent for TCP and TLS connects. */
   public readonly path?: string;
+  /** Timeout that elapsed, in milliseconds. */
   public readonly timeoutMs?: number;
 
+  /**
+   * Pass `hostname`/`port` for TCP and TLS, or `path` for UNIX sockets — the
+   * message renders whichever is present, preferring `path`.
+   */
   constructor(
     hostname?: string,
     port?: number,
@@ -100,6 +116,7 @@ export class ConnectionTimeoutError extends CompatError {
     this.timeoutMs = timeoutMs;
   }
 
+  /** Adds the connect target and `timeoutMs` to the base payload. */
   override toJSON(): Record<string, unknown> {
     return {
       ...super.toJSON(),
@@ -117,9 +134,17 @@ export class ConnectionTimeoutError extends CompatError {
  * detected runtime for diagnostics.
  */
 export class UnsupportedRuntimeError extends CompatError {
+  /** The call that could not be serviced, as named by the throw site. */
   public readonly operation: string;
+  /** Runtime that lacked the feature. */
   public readonly detectedRuntime: Runtime;
 
+  /**
+   * Builds the message from `operation` and `detectedRuntime`.
+   *
+   * @param detectedRuntime - Defaults to the runtime detected at import time.
+   * @param additionalDetails - Appended after a colon to explain the gap.
+   */
   constructor(
     operation: string,
     detectedRuntime: Runtime = RUNTIME,
@@ -134,6 +159,7 @@ export class UnsupportedRuntimeError extends CompatError {
     this.detectedRuntime = detectedRuntime;
   }
 
+  /** Adds `operation` and `detectedRuntime` to the base payload. */
   override toJSON(): Record<string, unknown> {
     return {
       ...super.toJSON(),

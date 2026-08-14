@@ -9,8 +9,13 @@
 import { isDeno } from './runtime.ts';
 import { CompatTypeError } from './Error.ts';
 
+/**
+ * Outcome of a permission probe. Deno's `'prompt'` state is reported as
+ * `'DENIED'` — nothing is granted until it is actually granted.
+ */
 export type PermissionResponse = 'GRANTED' | 'DENIED';
 
+/** Permission descriptors compat can probe, matching Deno's names. */
 export type PermissionName =
   | 'env'
   | 'ffi'
@@ -32,6 +37,14 @@ const VALID_PERMISSIONS: Set<PermissionName> = new Set([
   'import',
 ]);
 
+/**
+ * A {@link PermissionName} plus the narrowing field that permission
+ * accepts — `variable` for `env`, `host` for `net`, `path` for the
+ * filesystem and `ffi` grants. Omitting the field probes the whole
+ * permission rather than one resource.
+ *
+ * @typeParam T - The permission described; picks the legal extra field.
+ */
 export type PermissionObject<T extends PermissionName = PermissionName> =
   & {
     name: T;
