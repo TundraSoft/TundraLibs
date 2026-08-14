@@ -17,6 +17,8 @@
  * ```typescript
  * import { Cronus } from '@tundralibs/cronus';
  *
+ * declare function purgeExpired(): Promise<void>;
+ *
  * const cron = new Cronus();
  * cron.on('error', (_id, name, _at, _ms, err) =>
  *   console.error(`job ${name} failed:`, err.message));
@@ -116,6 +118,12 @@ export class Cronus extends Events<CronusEvents> {
   /** Last epoch-minute evaluated — guards against double evaluation. */
   private __lastTickMinute = -1;
 
+  /**
+   * Create a scheduler. The ticker does not start until {@link Cronus.start}
+   * is called, so jobs can be registered first.
+   *
+   * @param options - See {@link CronusOptions}.
+   */
   constructor(options: CronusOptions = {}) {
     super();
     this.__unref = options.unref ?? false;

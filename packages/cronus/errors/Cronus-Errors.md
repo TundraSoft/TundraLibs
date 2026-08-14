@@ -57,6 +57,11 @@ import {
   InvalidScheduleError,
 } from '@tundralibs/cronus';
 
+const cron = new Cronus();
+const name = 'hourly-cleanup';
+const schedule = '0 * * * *';
+const action = () => {};
+
 try {
   cron.add(name, schedule, action);
 } catch (e) {
