@@ -15,6 +15,16 @@ import type { JWTPayload } from '../types/JWTPayload.ts';
 import { type JWTErrorCode, JWTErrorCodes } from './JWTErrorCodes.ts';
 
 /**
+ * The `${causeMessage}` slot as it appears in {@link JWTErrorCodes}, together
+ * with the separator that introduces it (` - `). Matching the separator is the
+ * point: dropping the placeholder alone would leave a dangling `foo -`.
+ *
+ * The leading class is bounded and cannot match the placeholder's own `$`, so
+ * there is nothing for the engine to re-scan on templates that lack the slot.
+ */
+const CAUSE_MESSAGE_SLOT = /[\s-]{0,8}\$\{causeMessage\}/;
+
+/**
  * Metadata attached to every {@link JWTError}.
  */
 export type JWTErrorMeta = {
@@ -34,7 +44,8 @@ export type JWTErrorMeta = {
  * JWT-specific error class. Auto-maps unknown error codes to
  * `'INVALID_JWT'` (preserving the original code in
  * `context.originalCode`) and interpolates `${causeMessage}` in
- * the message template.
+ * the message template — dropping that slot, separator included,
+ * when no cause text is supplied.
  *
  * @template M - Error metadata type extending {@link JWTErrorMeta}.
  *
@@ -71,7 +82,7 @@ export class JWTError<M extends JWTErrorMeta = JWTErrorMeta>
    * on `context`.
    *
    * @param code - A code absent from {@link JWTErrorCodes} is kept as `context.originalCode` and replaced with `'INVALID_JWT'`
-   * @param meta - Extra context; `causeMessage` fills the `${causeMessage}` slot most templates carry. Omit it and the placeholder is left in `message` verbatim, so supply one whenever the code's template has the slot.
+   * @param meta - Extra context; `causeMessage` fills the `${causeMessage}` slot most templates carry. Omit it and the slot is dropped along with its separator, leaving the template's fixed text on its own.
    * @param cause - Underlying error that triggered this one, if any
    */
   constructor(code: JWTErrorCode, meta?: Omit<M, 'code'>, cause?: Error) {
@@ -82,13 +93,13 @@ export class JWTError<M extends JWTErrorMeta = JWTErrorMeta>
     }
     context.code = code;
 
-    // Handle template interpolation for causeMessage.
+    // Handle template interpolation for causeMessage. When there is no cause
+    // text the whole slot — placeholder plus the separator that introduces it
+    // — is dropped, so the message never ships `${causeMessage}` verbatim.
+    // `BaseError` substitutes the placeholder from `context` when it survives.
     let message = JWTErrorCodes[code];
-    if (message.includes('${causeMessage}') && context.causeMessage) {
-      message = message.replace(
-        '${causeMessage}',
-        String(context.causeMessage),
-      );
+    if (String(context.causeMessage ?? '').trim() === '') {
+      message = message.replace(CAUSE_MESSAGE_SLOT, '');
     }
 
     super(message, context, cause);

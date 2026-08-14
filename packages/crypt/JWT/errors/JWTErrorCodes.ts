@@ -4,6 +4,8 @@
  * Each code maps to a descriptive template — `${causeMessage}` is
  * substituted from `error.context.causeMessage` at throw time so
  * callers can attach the underlying reason without parsing strings.
+ * A throw site that supplies none loses the slot and the ` - `
+ * separator ahead of it rather than emitting the placeholder.
  *
  * @module
  */
@@ -11,7 +13,8 @@
 /**
  * Standard JWT error codes. Each value is a message template; the
  * `${causeMessage}` placeholder is filled from `error.context` at
- * throw time.
+ * throw time, or dropped — separator and all — when the throw site
+ * supplies no cause text.
  */
 export const JWTErrorCodes = {
   /** JWT token has passed its expiration time. */

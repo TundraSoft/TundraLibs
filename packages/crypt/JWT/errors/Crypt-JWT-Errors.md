@@ -33,8 +33,8 @@ Two things about that are easy to get wrong, and both matter:
   `OqlError`, which do expose `.code`.)
 - **Never branch on `err.message`.** Messages are built from a template per
   code and interpolate a `causeMessage`; when a throw site supplies none, the
-  literal text `${causeMessage}` is left in the message. It is diagnostic
-  text, not an API.
+  slot and its `-` separator are dropped, so the same code yields a shorter
+  message. It is diagnostic text, not an API.
 
 ## Installation
 

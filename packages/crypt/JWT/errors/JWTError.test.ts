@@ -104,8 +104,59 @@ describe('crypt.JWT.Error', () => {
   it('JWTError - Template interpolation without causeMessage', () => {
     const error = new JWTError('INVALID_SIGNATURE');
 
-    // Should contain the template variable since no causeMessage was provided
-    asserts.assert(error.message.includes('${causeMessage}'));
+    // The slot goes, and the ` - ` that introduced it goes with it.
+    asserts.assertEquals(error.message, 'JWT signature verification failed');
+  });
+
+  it('JWTError - Every templated code drops the slot cleanly', () => {
+    const expected: Partial<Record<JWTErrorCode, string>> = {
+      INVALID_JWT: 'JWT token is invalid',
+      INVALID_SECRET: 'Invalid or empty secret provided',
+      INVALID_PAYLOAD: 'Invalid payload format or content',
+      INVALID_HEADER: 'Invalid JWT header format',
+      INVALID_SIGNATURE: 'JWT signature verification failed',
+      INVALID_FORMAT: 'Invalid JWT token format',
+      UNSUPPORTED_ALGORITHM: 'Unsupported JWT algorithm',
+      INVALID_CLAIMS: 'Invalid JWT claims',
+      UNKNOWN_ERROR: 'Unknown JWT error',
+    };
+
+    for (const [code, message] of Object.entries(expected)) {
+      const error = new JWTError(code as JWTErrorCode);
+      asserts.assertEquals(error.message, message);
+      // No placeholder, and no separator left hanging off the end.
+      asserts.assert(!error.message.includes('${'));
+      asserts.assertEquals(error.message, error.message.trimEnd());
+      asserts.assert(!error.message.endsWith('-'));
+      // Supplying the cause restores the full sentence.
+      asserts.assertEquals(
+        new JWTError(code as JWTErrorCode, { causeMessage: 'boom' }).message,
+        `${message} - boom`,
+      );
+    }
+  });
+
+  it('JWTError - Blank causeMessage is treated as absent', () => {
+    for (const causeMessage of ['', '   ']) {
+      const error = new JWTError('INVALID_CLAIMS', { causeMessage });
+      asserts.assertEquals(error.message, 'Invalid JWT claims');
+      // The value still reaches context even though it shaped no message.
+      asserts.assertEquals(error.context.causeMessage, causeMessage);
+    }
+  });
+
+  it('JWTError - Unknown code maps to INVALID_JWT without a slot', () => {
+    const error = new JWTError('NO_SUCH_CODE' as JWTErrorCode);
+
+    asserts.assertEquals(error.message, 'JWT token is invalid');
+    asserts.assertEquals(error.context.code, 'INVALID_JWT');
+    asserts.assertEquals(error.context.originalCode, 'NO_SUCH_CODE');
+  });
+
+  it('JWTError - Codes without a slot are untouched', () => {
+    const error = new JWTError('EXPIRED_TOKEN', { causeMessage: 'ignored' });
+
+    asserts.assertEquals(error.message, 'JWT token is expired');
   });
 
   it('JWTError - All error codes coverage', () => {
