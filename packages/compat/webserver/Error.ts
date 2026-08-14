@@ -75,21 +75,40 @@ export class ServerAlreadyRunningError extends ServerError {
  * out of range, or references a missing TLS file / UNIX socket dir.
  */
 export class ServerConfigurationError extends ServerError {
+  /** Option that failed validation (e.g. `'port'`, `'tls.certFile'`). */
+  public readonly option: string;
+  /** The rejected value, as supplied. */
+  public readonly value: unknown;
+  /** What a valid value looks like, when the thrower described it. */
+  public readonly expected?: string;
+
   constructor(
     mode: ServerMode | 'N/A',
-    key: string,
+    option: string,
     value: unknown,
     expected?: string,
   ) {
-    let message = `Invalid server configuration for key '${key}': ${value}`;
+    let message = `Invalid server configuration for key '${option}': ${value}`;
     if (expected) {
       message += `. Expected: ${expected}`;
     }
     super(message, mode, 'CONFIGURATION');
+    this.option = option;
+    this.value = value;
+    this.expected = expected;
     Object.setPrototypeOf(this, new.target.prototype);
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
     }
+  }
+
+  override toJSON(): Record<string, unknown> {
+    return {
+      ...super.toJSON(),
+      option: this.option,
+      value: this.value,
+      expected: this.expected,
+    };
   }
 }
 

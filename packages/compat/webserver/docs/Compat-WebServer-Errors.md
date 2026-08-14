@@ -86,14 +86,25 @@ Thrown when server options are invalid.
 
 ```typescript ignore
 class ServerConfigurationError extends ServerError {
+  /** Option that failed validation (e.g. `'port'`, `'tls.certFile'`). */
+  readonly option: string;
+  /** The rejected value, as supplied. */
+  readonly value: unknown;
+  /** What a valid value looks like, when the thrower described it. */
+  readonly expected?: string;
+
   constructor(
     mode: ServerMode | 'N/A',
-    key: string,
+    option: string,
     value: unknown,
     expected?: string,
   );
 }
 ```
+
+The three values are exposed as readonly properties and included in
+`toJSON()`, so a caller can branch on `err.option` instead of parsing
+the message.
 
 **When thrown:**
 
