@@ -9,7 +9,11 @@
  *
  * @example
  * ```ts
- * import { RadRouterError } from '@tundralibs/radrouter/errors';
+ * import { RadRouter, RadRouterError } from '@tundralibs/radrouter';
+ *
+ * type MW = () => Promise<void>;
+ * const router = new RadRouter<MW>();
+ * const mw: MW = async () => {};
  *
  * try {
  *   router.get('/users/:bad name:', [mw]);

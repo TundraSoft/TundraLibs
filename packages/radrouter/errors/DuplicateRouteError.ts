@@ -26,6 +26,12 @@ export type DuplicateRouteErrorMeta = {
  *
  * @example
  * ```ts
+ * import { DuplicateRouteError, RadRouter } from '@tundralibs/radrouter';
+ *
+ * type MW = () => Promise<void>;
+ * const router = new RadRouter<MW>();
+ * const mw: MW = async () => {};
+ *
  * try {
  *   router.get('/users', [mw]);
  *   router.get('/users', [mw]); // duplicate
@@ -38,6 +44,12 @@ export type DuplicateRouteErrorMeta = {
  */
 export class DuplicateRouteError
   extends RadRouterError<DuplicateRouteErrorMeta> {
+  /**
+   * Composes the message from `meta`, so callers supply only the route
+   * that was registered twice.
+   *
+   * @param cause - Original error to chain, if any.
+   */
   constructor(meta: DuplicateRouteErrorMeta, cause?: Error) {
     const versionLabel = meta.version ? ` (version "${meta.version}")` : '';
     super(
