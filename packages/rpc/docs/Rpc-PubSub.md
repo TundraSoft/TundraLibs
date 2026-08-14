@@ -20,6 +20,8 @@ same contract.
 ## The Contract
 
 ```ts
+import type { AdapterCapabilities } from '@tundralibs/rpc';
+
 abstract class PubSubAdapter {
   abstract subscribe(
     topic: string,
@@ -76,9 +78,9 @@ Capabilities declare what the adapter does **beyond** the required
 minimum.
 
 > **Today they are adapter self-description, not framework-enforced.**
-> Hub does not currently gate any feature on these flags — it just
+> `Server` does not currently gate any feature on these flags — it just
 > calls `subscribe` / `publish` / `close`. The flags exist for _your_
-> code to inspect at startup (see below). When Hub gains pattern
+> code to inspect at startup (see below). When `Server` gains pattern
 > subscribe, presence, or replay features, the corresponding flags
 > will become enforced — adapters declaring `false` will refuse to
 > register the dependent features. Until then, treat the matrix as
@@ -100,7 +102,7 @@ if (
   process.env.CLUSTER_MODE === 'on' && !server.adapter.capabilities.crossProcess
 ) {
   console.warn(
-    'Hub: in-process adapter configured but CLUSTER_MODE=on — ' +
+    'rpc: in-process adapter configured but CLUSTER_MODE=on — ' +
       'subscribers on other instances will not receive publishes.',
   );
 }
@@ -114,9 +116,9 @@ if (!server.adapter.capabilities.guaranteedDelivery) {
 }
 ```
 
-Custom adapters that mis-declare are user error — Hub trusts what the
-adapter says. If you write a Redis pub/sub adapter and set
-`guaranteedDelivery: true`, Hub won't catch the lie; your downstream
+Custom adapters that mis-declare are user error — `Server` trusts what
+the adapter says. If you write a Redis pub/sub adapter and set
+`guaranteedDelivery: true`, `Server` won't catch the lie; your downstream
 code will.
 
 ## `MemoryPubSubAdapter`
@@ -178,10 +180,12 @@ class MyAdapter extends PubSubAdapter {
     handler: (data: unknown) => void,
   ): Subscription {
     // Register handler; return cleanup function
+    return { unsubscribe: () => {} };
   }
 
   override publish(topic: string, data: unknown): Promise<void> {
     // Send to all subscribers (possibly across processes)
+    return Promise.resolve();
   }
 
   override async close(): Promise<void> {
@@ -193,6 +197,11 @@ class MyAdapter extends PubSubAdapter {
 Pass an instance into the server:
 
 ```ts
+import { PubSubAdapter, Server } from '@tundralibs/rpc';
+
+// The subclass defined in the block above.
+declare const MyAdapter: new () => PubSubAdapter;
+
 const server = new Server({ pubsub: new MyAdapter() });
 ```
 
@@ -207,6 +216,16 @@ import {
   PubSubAdapter,
   type Subscription,
 } from '@tundralibs/rpc';
+
+// The surface your Redis client of choice has to provide.
+declare class RedisClient {
+  constructor(opts: { url: string });
+  on(event: 'message', cb: (topic: string, raw: string) => void): void;
+  subscribe(topic: string): void;
+  unsubscribe(topic: string): void;
+  publish(topic: string, payload: string): Promise<void>;
+  quit(): Promise<void>;
+}
 
 class RedisPubSubAdapter extends PubSubAdapter {
   override readonly capabilities: AdapterCapabilities = {
@@ -315,7 +334,10 @@ deliberately **not** re-exported from `@tundralibs/rpc` or
 ```ts
 import { describe } from '@tundralibs/compat/test';
 import { runAdapterConformance } from '@tundralibs/rpc/conformance';
-import { MyRedisAdapter } from './MyRedisAdapter.ts';
+import type { PubSubAdapter } from '@tundralibs/rpc';
+
+// Your adapter: `import { MyRedisAdapter } from './MyRedisAdapter.ts';`
+declare const MyRedisAdapter: new (opts: { url: string }) => PubSubAdapter;
 
 describe('MyRedisAdapter', () => {
   runAdapterConformance(() => new MyRedisAdapter({ url: 'redis://...' }));
@@ -355,6 +377,11 @@ yet — their assertions will land alongside framework-level support.
 ### Knobs
 
 ```ts
+import { runAdapterConformance } from '@tundralibs/rpc/conformance';
+import { MemoryPubSubAdapter } from '@tundralibs/rpc/pubsub';
+
+const factory = () => new MemoryPubSubAdapter();
+
 runAdapterConformance(factory, {
   deliveryTimeoutMs: 5_000, // default 1000; bump for slow transports
 });
@@ -449,9 +476,9 @@ with "no clients connected on this server."
 
 Both are useful but have outsized implementation costs in some
 backends. Don't claim them in `capabilities` unless you actually
-implement them — the framework checks at runtime and a false claim
-manifests as silently dropped messages or empty presence lists. Real
-test pressure helps catch this.
+implement them — nothing verifies the claim for you, so a false one
+manifests downstream as silently dropped messages or empty presence
+lists. Real test pressure helps catch this.
 
 ---
 

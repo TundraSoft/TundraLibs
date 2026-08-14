@@ -12,7 +12,10 @@
  * ```ts
  * import { runAdapterConformance } from '@tundralibs/rpc/conformance';
  * import { describe } from '@tundralibs/compat/test';
- * import { MyRedisAdapter } from './MyRedisAdapter.ts';
+ * import type { PubSubAdapter } from '@tundralibs/rpc';
+ *
+ * // Your adapter: `import { MyRedisAdapter } from './MyRedisAdapter.ts';`
+ * declare const MyRedisAdapter: new (o: { url: string }) => PubSubAdapter;
  *
  * describe('MyRedisAdapter', () => {
  *   runAdapterConformance(() => new MyRedisAdapter({ url: '...' }));
