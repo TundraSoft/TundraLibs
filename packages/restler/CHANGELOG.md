@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.1.1...restler-v1.1.2) (2026-08-14)
+
+
+### Documentation
+
+* **restler:** verify documentation examples and document the public API ([#247](https://github.com/TundraSoft/TundraLibs/issues/247)) ([cc50734](https://github.com/TundraSoft/TundraLibs/commit/cc507343e7eaf382d1c85a16e0f591fb34302673))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.1.0...restler-v1.1.1) (2026-08-12)
 
 

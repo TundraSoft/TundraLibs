@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.3...ambient-v0.2.4) (2026-08-14)
+
+
+### Documentation
+
+* **ambient:** verify documentation examples and document the public API ([#236](https://github.com/TundraSoft/TundraLibs/issues/236)) ([c498566](https://github.com/TundraSoft/TundraLibs/commit/c49856695662f22b516cc568709cb197d99e9c57))
+
 ## [0.2.3](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.2...ambient-v0.2.3) (2026-08-13)
 
 
