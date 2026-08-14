@@ -55,6 +55,10 @@ import type { NormErrorCode } from './NormErrorCodes.ts';
  * ```
  */
 export class NormDefinitionError extends NormError<DefinitionErrorMeta> {
+  /**
+   * Flattens every issue into one message, so a broken schema reports
+   * all of its faults in a single throw rather than one per compile.
+   */
   constructor(meta: DefinitionErrorMeta, cause?: Error) {
     const summary = meta.issues
       .map((i) => `  - ${i.model}.${i.path}: ${i.message}`)

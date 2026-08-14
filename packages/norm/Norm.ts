@@ -180,6 +180,9 @@ export class Norm extends Options<NormConfig, NormEvents> {
   };
 
   /**
+   * Resolves the engine and captures the crypto configuration; no
+   * connection is opened until {@link Norm.connect}.
+   *
    * @param cfg - Engine (`engine`) or a `database` dialect config to
    *   build one, the encryption `secret` and optional `algorithm` /
    *   `crypto` overrides, plus inline `_on<event>` handlers. The secret,
@@ -711,6 +714,14 @@ export class NormDb<R, Scope extends string = never> {
     return await this.__runtime.crypto.hash(plaintext, algorithm);
   }
 
+  /**
+   * The configured secret, or a `MISSING_SECRET` throw — crypto is
+   * opt-in, so every key use funnels through here.
+   *
+   * @throws {@link NormCryptoError} When no `secret` was supplied to
+   *   `new Norm({ secret })`.
+   * @internal
+   */
   private __requireSecret(op: 'encrypt' | 'decrypt'): string {
     const secret = this.__runtime.crypto.secret;
     if (secret === undefined) {

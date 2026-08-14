@@ -40,6 +40,10 @@ export type AdvisoryLockErrorMeta = {
  * ```
  */
 export class NormAdvisoryLockError extends NormError<AdvisoryLockErrorMeta> {
+  /**
+   * Always carries `code: 'LOCK_TIMEOUT'` — the code on `meta` is
+   * overwritten, since a timeout is the only way to get here.
+   */
   constructor(meta: AdvisoryLockErrorMeta, cause?: Error) {
     super(
       `advisory lock '${meta.key}' not acquired within ${meta.timeoutMs}ms`,

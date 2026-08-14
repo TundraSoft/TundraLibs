@@ -52,7 +52,6 @@ import { assertRegistry } from './asserts/registry.ts';
 import { NormCryptoError, NormDefinitionError } from './errors/mod.ts';
 import type { DefinitionIssue } from './errors/mod.ts';
 
-/** Metadata-only event surface. NEVER row data, plaintext, or secrets. */
 /** The operation descriptor a {@link Witness} receives. */
 export type WitnessInfo = {
   /** Span-style operation name, e.g. `norm.Users.find` or `norm.raw`. */
@@ -82,6 +81,14 @@ export type Witness = <T>(
   fn: () => Promise<T>,
 ) => Promise<T>;
 
+/**
+ * The `Norm` instance's event bus. Metadata-only by design: NEVER row
+ * data, plaintext, or secrets — the driver's own events carry the SQL
+ * text and params, and those never cross this bus.
+ *
+ * Handlers attach inline as `_on<event>` in the constructor, or later
+ * via `norm.on(...)`.
+ */
 export type NormEvents = {
   /** A repo/query operation executed. `id` is the SAME ULID returned
    * in the operation's NormResult envelope — correlate logs with it. */

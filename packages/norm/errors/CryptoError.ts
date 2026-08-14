@@ -73,6 +73,13 @@ function cryptoMessage(meta: CryptoErrorMeta): string {
  * ```
  */
 export class NormCryptoError extends NormError<CryptoErrorMeta> {
+  /**
+   * The message is derived from `meta.reason`; identifiers only, so it
+   * is safe to log.
+   *
+   * @param cause - The underlying decrypt/decode failure, when there
+   *   was one — absent for `missing-secret`.
+   */
   constructor(meta: CryptoErrorMeta, cause?: Error) {
     super(cryptoMessage(meta), meta, cause);
   }

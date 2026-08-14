@@ -37,6 +37,13 @@ import { NormError } from './Base.ts';
  * ```
  */
 export class NormHookError extends NormError<HookErrorMeta> {
+  /**
+   * Wraps whatever a user hook threw, labelled with the model and hook
+   * name.
+   *
+   * @param cause - Required: what the hook actually threw. Its message
+   *   is folded into this error's message.
+   */
   constructor(meta: HookErrorMeta, cause: Error) {
     super(
       `${meta.model}.${meta.hook} threw: ${cause.message}`,
