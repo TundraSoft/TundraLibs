@@ -53,6 +53,15 @@ export class BaseError<
   protected _baseMessage: string = '';
 
   /**
+   * Underlying error this one wraps, if any.
+   *
+   * Narrows the `unknown` that `Error.cause` carries in the standard
+   * lib: the constructor only ever accepts an `Error`, so consumers can
+   * read `err.cause?.message` without casting.
+   */
+  declare public readonly cause?: Error;
+
+  /**
    * @param message - Error text; `${ctxKey}` placeholders are substituted from `context`.
    * @param context - Values for substitution and to attach as `error.context`.
    * @param cause - Underlying error for chaining (walked by {@link getRootCause}).
@@ -108,7 +117,7 @@ export class BaseError<
       return this.cause.getCodeSnippet(contextLines);
     }
 
-    const stackTrace = this.cause ? (this.cause as Error).stack : this.stack;
+    const stackTrace = this.cause ? this.cause.stack : this.stack;
     if (!stackTrace) {
       return 'No stack trace available';
     }
@@ -170,7 +179,7 @@ export class BaseError<
     } else {
       return this.cause instanceof BaseError
         ? this.cause.getRootCause()
-        : this.cause as Error;
+        : this.cause;
     }
   }
 

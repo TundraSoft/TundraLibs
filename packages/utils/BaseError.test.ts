@@ -67,6 +67,38 @@ describe(
         asserts.assertEquals(error.cause, cause);
       });
 
+      // `Error.cause` is `unknown` in the standard lib; BaseError
+      // redeclares it as `Error | undefined` because the constructor
+      // accepts nothing else. These reads must compile with no cast —
+      // if the declaration is dropped, this test stops type-checking
+      // rather than merely failing an assertion.
+      it('exposes `cause` as an Error, readable without a cast', () => {
+        const cause = new Error('Original error');
+        const error = new BaseError('Test error', {}, cause);
+
+        asserts.assertEquals(error.cause?.message, 'Original error');
+        asserts.assertEquals(error.cause?.name, 'Error');
+        asserts.assert(error.cause?.stack !== undefined);
+
+        // Absent cause stays `undefined`, so optional chaining is the
+        // documented way to read it.
+        const noCause = new BaseError('No cause');
+        asserts.assertEquals(noCause.cause?.message, undefined);
+      });
+
+      it('getRootCause walks a mixed chain to the deepest error', () => {
+        const root = new Error('Root failure');
+        const middle = new BaseError('Middle', {}, root);
+        const top = new BaseError('Top', {}, middle);
+
+        asserts.assertEquals(top.getRootCause(), root);
+        asserts.assertEquals(top.getRootCause().message, 'Root failure');
+        asserts.assertEquals(middle.getRootCause(), root);
+        // No cause at all — the error is its own root.
+        const lone = new BaseError('Lone');
+        asserts.assertEquals(lone.getRootCause(), lone);
+      });
+
       it('should handle missing Error.captureStackTrace', () => {
         // Temporarily remove Error.captureStackTrace
         const originalCaptureStackTrace = Error.captureStackTrace;
