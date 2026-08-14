@@ -12,6 +12,7 @@ quietly breaking the pattern.
 - [Exported types live in a `types/` folder](#exported-types-live-in-a-types-folder)
 - [Custom errors live in an `errors/` folder](#custom-errors-live-in-an-errors-folder)
 - [Imports go through folder barrels](#imports-go-through-folder-barrels)
+- [Documentation examples use public specifiers](#documentation-examples-use-public-specifiers)
 - [Privacy prefixing](#privacy-prefixing)
 - [JSDoc: link custom types, declare throws](#jsdoc-link-custom-types-declare-throws)
 - [Module-level constants are `UPPER_SNAKE_CASE`](#module-level-constants-are-upper_snake_case)
@@ -308,6 +309,42 @@ Cycle care: when a barrel re-exports a runtime module that imports
 back across folders (the middleware runner importing the context
 base, say), keep that back-edge `import type` — a type-only import
 erases at compile time and cannot create a runtime cycle.
+
+## Documentation examples use public specifiers
+
+Code in `README.md` and `docs/*.md` is shipped: the published
+tarball carries every markdown file into the consumer's
+`node_modules`. Examples there are read by people and by coding
+agents, so they follow different import rules from source.
+
+- **Write the specifier a consumer would type.**
+  `@tundralibs/slogger`, or the subpath the symbol actually lives
+  behind (`@tundralibs/slogger/handlers`). Never a relative path —
+  a reader of the shipped copy has no `../mod.ts`, even though it
+  type-checks in-repo.
+- **Every fenced block stands alone.** `deno check --doc-only`
+  compiles each block as its own module; there is no shared scope
+  between blocks. A block that uses `logger` constructs `logger`.
+  Repeating an import across sibling blocks is intended, not
+  duplication to factor out.
+- **Blocks that aren't code get `ts ignore`.** Signatures, shell
+  commands, JSON, directory trees, deliberate pseudo-code. Never
+  use it to silence an example that was meant to work.
+
+JSDoc `@example` blocks are the exception: the documented module is
+already in scope, so they need no import — and adding one that names
+a symbol the specifier doesn't re-export introduces an error that
+wasn't there before.
+
+This is separate from [Imports go through folder barrels](#imports-go-through-folder-barrels), which governs source.
+Source imports are relative and go through barrels; documentation
+imports are public specifiers. Both are correct in their own
+context.
+
+Why: the import specifier is the one thing a reader cannot infer
+from the example body. Packages here expose 2–15 subpath exports,
+so a reader — or a model — working from an import-less example
+guesses the barrel, and guesses wrong often enough to matter.
 
 ## Privacy prefixing
 
