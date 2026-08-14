@@ -158,6 +158,8 @@ Uses a Memcached server as the cache backend.
 Creates or retrieves a named cache instance for the specified engine.
 
 ```typescript
+import { Cacher } from '@tundralibs/cacher';
+
 const cache = Cacher.create('MEMORY', 'my-cache', { defaultExpiry: 300 });
 ```
 
@@ -173,14 +175,25 @@ isolation guaranteed by `clear()`. The same rule is enforced by
 Registers a custom cache engine constructor.
 
 ```typescript
-import { AbstractEngine } from '@tundralibs/cacher';
+import { AbstractEngine, Cacher } from '@tundralibs/cacher';
+import type { CacherOptions, CacheValue } from '@tundralibs/cacher/types';
 
-class MyCustomEngine extends AbstractEngine {
-  // implementation
+class MyCustomEngine extends AbstractEngine<CacherOptions> {
+  public readonly Engine = 'CUSTOM';
+
+  protected _set(_key: string, _value: CacheValue): void {}
+  protected _get(_key: string): CacheValue | undefined {
+    return undefined;
+  }
+  protected _has(_key: string): boolean {
+    return false;
+  }
+  protected _delete(_key: string): void {}
+  protected _clear(): void {}
 }
 
 Cacher.addEngine('CUSTOM', MyCustomEngine);
-const cache = Cacher.create('CUSTOM', 'custom-cache', options);
+const cache = Cacher.create('CUSTOM', 'custom-cache', { defaultExpiry: 300 });
 ```
 
 ### `cache.set<T>(key, value, options?)`
@@ -235,6 +248,11 @@ data or writes invisible keys.
 Setting `window: true` when calling `set()` enables sliding expiry — the TTL is reset each time the value is accessed with `get()`.
 
 ```typescript
+import { Cacher } from '@tundralibs/cacher';
+
+const cache = Cacher.create('MEMORY', 'session-cache', {});
+const data = { userId: 42 };
+
 // Entry expires 5 minutes after the last access, not after creation
 await cache.set('active-session', data, { expiry: 300, window: true });
 ```
@@ -256,10 +274,12 @@ class FileEngine extends AbstractEngine<CacherOptions> {
 
   protected async _get(key: string): Promise<CacheValue | undefined> {
     // read from disk
+    return undefined;
   }
 
   protected async _has(key: string): Promise<boolean> {
     // check existence
+    return false;
   }
 
   protected async _delete(key: string): Promise<void> {
@@ -275,6 +295,7 @@ class FileEngine extends AbstractEngine<CacherOptions> {
 ## Error Handling
 
 ```typescript
+import { Cacher } from '@tundralibs/cacher';
 import { CacherError } from '@tundralibs/cacher/errors';
 
 try {

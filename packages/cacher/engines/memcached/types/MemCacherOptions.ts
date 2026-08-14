@@ -17,7 +17,6 @@ import type { CacherOptions } from '../../../types/mod.ts';
  * @example
  * ```ts
  * const options: MemCacherOptions = {
- *   engine: 'MEMCACHED',
  *   host: 'localhost',
  *   port: 11211,
  *   defaultExpiry: 600,

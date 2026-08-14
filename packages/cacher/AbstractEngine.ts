@@ -20,7 +20,7 @@ const MAX_EXPIRY_SECONDS = 2592000; // 30 days
  * @template O - The options type for the specific cacher implementation, extending {@link CacherOptions}
  * @see {@link CacherOptions} for common options available to all cachers
  * @example
- * ```ts
+ * ```ts ignore
  * // Custom implementation example
  * class MyCacher extends AbstractCacher<MyOptions> {
  *   // Implementation details
@@ -30,10 +30,33 @@ const MAX_EXPIRY_SECONDS = 2592000; // 30 days
 export abstract class AbstractEngine<
   O extends CacherOptions = CacherOptions,
 > extends Options<O> {
+  /**
+   * Uppercase engine discriminator (`'MEMORY'`, `'REDIS'`, `'MEMCACHED'`),
+   * used in error context and matching the key the engine registers under
+   * with {@link Cacher}.
+   */
   public abstract readonly Engine: string;
 
+  /**
+   * Namespace for this instance. Every key is stored as `${name}:${key}`, so
+   * two engines with different names never see each other's entries. Trimmed
+   * on construction and may not contain `':'`.
+   */
   public readonly name: string;
 
+  /**
+   * Creates an engine bound to the `name` namespace.
+   *
+   * `defaults` lets a subclass supply its own option defaults; `defaultExpiry`
+   * falls back to 300 seconds when neither the caller nor the subclass sets it.
+   *
+   * @param name - Namespace prefix for every key. Trimmed; must not contain `':'`.
+   * @param options - Engine options, validated through `_processOption`.
+   * @param defaults - Subclass-supplied defaults, merged under `options`.
+   *
+   * @throws {@link CacherEngineError} `CONFIG_INVALID` if `name` contains `':'`,
+   *   or if an option fails the subclass's validation.
+   */
   constructor(name: string, options: O, defaults?: Partial<O>) {
     super();
     this.name = name.trim();
@@ -103,6 +126,13 @@ export abstract class AbstractEngine<
    * @throws {@link CacherEngineError} if the expiry value is invalid
    * @example
    * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const cacher = new MemoryCacher('demo', {});
+   * const user = { name: 'Alice' };
+   * const session = { userId: 42 };
+   * const activity = { lastSeen: Date.now() };
+   *
    * // Set a value with default options
    * await cacher.set('user:1', user);
    *
@@ -164,6 +194,12 @@ export abstract class AbstractEngine<
    * @returns A promise that resolves to the cached value, or undefined if not found or expired
    * @example
    * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * type User = { name: string };
+   *
+   * const cacher = new MemoryCacher('demo', {});
+   *
    * // Get a string value
    * const username = await cacher.get<string>('user:1:username');
    *
@@ -191,6 +227,10 @@ export abstract class AbstractEngine<
    * @returns A promise that resolves to true if the key exists, false otherwise
    * @example
    * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const cacher = new MemoryCacher('demo', {});
+   *
    * if (await cacher.has('user:1')) {
    *   // Key exists in cache
    * }
@@ -208,6 +248,10 @@ export abstract class AbstractEngine<
    * @returns A promise that resolves when the key has been deleted
    * @example
    * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const cacher = new MemoryCacher('demo', {});
+   *
    * // Remove user from cache
    * await cacher.delete('user:1');
    * ```
@@ -223,6 +267,10 @@ export abstract class AbstractEngine<
    * @returns A promise that resolves when the cache has been cleared
    * @example
    * ```ts
+   * import { MemoryCacher } from '@tundralibs/cacher/engines';
+   *
+   * const userCacher = new MemoryCacher('users', {});
+   *
    * // Clear all cache entries for this cacher
    * await userCacher.clear();
    * ```
@@ -277,6 +325,18 @@ export abstract class AbstractEngine<
     return super._processOption(key, value) as O[K];
   }
 
+  /**
+   * Narrows `expiry` to a usable TTL in seconds.
+   *
+   * Accepts `0` (no expiry) through 2592000 (30 days). The upper bound exists
+   * because Memcached reinterprets anything above 30 days as an absolute Unix
+   * timestamp, silently storing the entry already-expired; the limit is applied
+   * across every engine so the behaviour stays uniform.
+   *
+   * @param expiry - Candidate value, typically straight from caller options.
+   * @returns `true` if `expiry` is a number within the accepted range.
+   * @protected
+   */
   protected _validateExpiry(expiry: unknown): expiry is number {
     if (
       typeof expiry !== 'number' || Number.isNaN(expiry) || expiry < 0 ||

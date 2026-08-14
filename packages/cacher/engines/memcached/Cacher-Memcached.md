@@ -47,7 +47,7 @@ npx jsr add @tundralibs/cacher
 
 ### `MemCacherOptions`
 
-```typescript
+```typescript ignore
 type MemCacherOptions = CacherOptions & {
   /** Memcached server hostname. Required. */
   host: string;

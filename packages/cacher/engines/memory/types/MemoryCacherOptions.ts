@@ -11,7 +11,6 @@ import type { CacherOptions } from '../../../types/mod.ts';
  * @example
  * ```ts
  * const options: MemoryCacherOptions = {
- *   engine: 'MEMORY',
  *   defaultExpiry: 600 // 10 minutes
  * };
  * ```
