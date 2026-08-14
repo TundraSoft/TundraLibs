@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.2...tracer-v0.5.3) (2026-08-14)
+
+
+### Documentation
+
+* **tracer:** verify documentation examples and document the public API ([#243](https://github.com/TundraSoft/TundraLibs/issues/243)) ([ea14ac9](https://github.com/TundraSoft/TundraLibs/commit/ea14ac9da6974dbf236587dcc381f0dc21e2137f))
+
 ## [0.5.2](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.1...tracer-v0.5.2) (2026-08-13)
 
 
