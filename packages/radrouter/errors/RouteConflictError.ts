@@ -42,6 +42,15 @@ export type RouteConflictErrorMeta = {
  * ```
  */
 export class RouteConflictError extends RadRouterError<RouteConflictErrorMeta> {
+  /**
+   * Raised by the router when a registration collides with an existing
+   * parameter binding; construct one directly only to re-raise that
+   * failure from wrapping code.
+   *
+   * @param message - `${var}` placeholders are substituted from `meta`.
+   * @param meta - Surfaced on `error.context`.
+   * @param cause - Original error to chain, if any.
+   */
   constructor(message: string, meta: RouteConflictErrorMeta, cause?: Error) {
     super(message, meta, cause);
   }
