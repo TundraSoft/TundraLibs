@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.2.0...norm-v1.2.1) (2026-08-14)
+
+
+### Documentation
+
+* **norm:** verify documentation examples and document the public API ([#252](https://github.com/TundraSoft/TundraLibs/issues/252)) ([5537dc5](https://github.com/TundraSoft/TundraLibs/commit/5537dc54fa5dc22823b85a8a4f7c06c5dad78f87))
+
 ## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.1.2...norm-v1.2.0) (2026-08-13)
 
 
