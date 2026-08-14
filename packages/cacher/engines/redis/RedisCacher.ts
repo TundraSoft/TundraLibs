@@ -239,6 +239,23 @@ export class RedisCacher extends AbstractEngine<RedisCacherOptions> {
 
   //#region Protected methods
 
+  /**
+   * Validates and normalises Redis-specific options.
+   *
+   * Defaults `port` to 6379, trims `username`/`password` (an all-whitespace
+   * value becomes `undefined`), and requires `host`. Unhandled keys fall
+   * through to {@link AbstractEngine._processOption}.
+   *
+   * @param key - The option key
+   * @param value - The option value
+   * @returns The processed option value
+   *
+   * @throws {@link CacherEngineError} `CONFIG_MISSING` if `host` is absent,
+   *   `CONFIG_INVALID` if `port` is outside 1-65535, `db` is not a
+   *   non-negative integer, or a credential is not a string.
+   * @protected
+   * @override
+   */
   protected override _processOption<K extends keyof RedisCacherOptions>( //NOSONAR
     key: K,
     value: RedisCacherOptions[K],

@@ -589,4 +589,22 @@ class Manager {
   }
 }
 
+/**
+ * The process-wide cache manager: registry of engine types plus the named
+ * instances built from them.
+ *
+ * `MEMORY`, `REDIS` and `MEMCACHED` are registered on first import. Reach for
+ * this instead of constructing engines directly when different parts of an
+ * application need to share one cache by name — {@link Manager.create} returns
+ * the existing instance for a name it has already built.
+ *
+ * @example
+ * ```ts
+ * const cache = Cacher.create('MEMORY', 'sessions', { defaultExpiry: 300 });
+ * await cache.set('user:1', { name: 'Alice' });
+ *
+ * // Anywhere else in the process, the same instance:
+ * const same = Cacher.getInstance('sessions');
+ * ```
+ */
 export const Cacher: Manager = new Manager();

@@ -30,10 +30,33 @@ const MAX_EXPIRY_SECONDS = 2592000; // 30 days
 export abstract class AbstractEngine<
   O extends CacherOptions = CacherOptions,
 > extends Options<O> {
+  /**
+   * Uppercase engine discriminator (`'MEMORY'`, `'REDIS'`, `'MEMCACHED'`),
+   * used in error context and matching the key the engine registers under
+   * with {@link Cacher}.
+   */
   public abstract readonly Engine: string;
 
+  /**
+   * Namespace for this instance. Every key is stored as `${name}:${key}`, so
+   * two engines with different names never see each other's entries. Trimmed
+   * on construction and may not contain `':'`.
+   */
   public readonly name: string;
 
+  /**
+   * Creates an engine bound to the `name` namespace.
+   *
+   * `defaults` lets a subclass supply its own option defaults; `defaultExpiry`
+   * falls back to 300 seconds when neither the caller nor the subclass sets it.
+   *
+   * @param name - Namespace prefix for every key. Trimmed; must not contain `':'`.
+   * @param options - Engine options, validated through `_processOption`.
+   * @param defaults - Subclass-supplied defaults, merged under `options`.
+   *
+   * @throws {@link CacherEngineError} `CONFIG_INVALID` if `name` contains `':'`,
+   *   or if an option fails the subclass's validation.
+   */
   constructor(name: string, options: O, defaults?: Partial<O>) {
     super();
     this.name = name.trim();
@@ -302,6 +325,18 @@ export abstract class AbstractEngine<
     return super._processOption(key, value) as O[K];
   }
 
+  /**
+   * Narrows `expiry` to a usable TTL in seconds.
+   *
+   * Accepts `0` (no expiry) through 2592000 (30 days). The upper bound exists
+   * because Memcached reinterprets anything above 30 days as an absolute Unix
+   * timestamp, silently storing the entry already-expired; the limit is applied
+   * across every engine so the behaviour stays uniform.
+   *
+   * @param expiry - Candidate value, typically straight from caller options.
+   * @returns `true` if `expiry` is a number within the accepted range.
+   * @protected
+   */
   protected _validateExpiry(expiry: unknown): expiry is number {
     if (
       typeof expiry !== 'number' || Number.isNaN(expiry) || expiry < 0 ||
