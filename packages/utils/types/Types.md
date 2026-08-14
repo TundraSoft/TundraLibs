@@ -33,8 +33,13 @@ npx jsr add @tundralibs/utils
 **Direct import (Deno):**
 
 ```typescript
-import type { DeepReadOnly, FlattenEntity } from 'jsr:@tundralibs/utils';
+import type { DeepReadOnly, FlattenEntity } from 'jsr:@tundralibs/utils/types';
 ```
+
+The `types` sub-path carries the whole type surface and nothing else —
+importing it never loads a runtime module. The same types are also
+re-exported from the package root (`@tundralibs/utils`) alongside the
+runtime helpers.
 
 ## Table of Contents
 
@@ -71,7 +76,7 @@ import type { DeepReadOnly, FlattenEntity } from 'jsr:@tundralibs/utils';
 Recursively applies readonly constraints to all properties of a type and its nested objects.
 
 ```typescript
-import type { DeepReadOnly } from '@tundralibs/utils';
+import type { DeepReadOnly } from '@tundralibs/utils/types';
 
 type User = {
   id: number;
@@ -102,7 +107,7 @@ type ImmutableUser = DeepReadOnly<User>;
 Recursively removes readonly constraints from all properties of a type and its nested objects.
 
 ```typescript
-import type { DeepWritable } from '@tundralibs/utils';
+import type { DeepWritable } from '@tundralibs/utils/types';
 
 type ReadonlyConfig = {
   readonly database: {
@@ -129,7 +134,7 @@ type MutableConfig = DeepWritable<ReadonlyConfig>;
 Makes all properties of an object type readonly at the top level (shallow).
 
 ```typescript
-import type { Immutable } from '@tundralibs/utils';
+import type { Immutable } from '@tundralibs/utils/types';
 
 type User = {
   id: number;
@@ -156,7 +161,7 @@ type ImmutableUser = Immutable<User>;
 Removes readonly modifiers from all properties of an object type at the top level (shallow).
 
 ```typescript
-import type { Mutable } from '@tundralibs/utils';
+import type { Mutable } from '@tundralibs/utils/types';
 
 type ReadonlyUser = {
   readonly id: number;
@@ -184,7 +189,7 @@ type MutableUser = Mutable<ReadonlyUser>;
 Makes only specified properties of an object readonly while leaving others mutable.
 
 ```typescript
-import type { MakeReadOnly } from '@tundralibs/utils';
+import type { MakeReadOnly } from '@tundralibs/utils/types';
 
 type User = {
   id: number;
@@ -218,7 +223,7 @@ type ProtectedUser = MakeReadOnly<User, 'id' | 'role'>;
 Makes only specified properties of an object required while leaving others as-is.
 
 ```typescript
-import type { MakeRequired } from '@tundralibs/utils';
+import type { MakeRequired } from '@tundralibs/utils/types';
 
 type FormData = {
   name?: string;
@@ -252,7 +257,7 @@ type RequiredForm = MakeRequired<FormData, 'name' | 'email'>;
 Makes only specified properties of an object optional while keeping others required.
 
 ```typescript
-import type { MakeOptional } from '@tundralibs/utils';
+import type { MakeOptional } from '@tundralibs/utils/types';
 
 type User = {
   id: number;
@@ -288,7 +293,7 @@ type CreateUserRequest = MakeOptional<User, 'phone'>;
 Recursively flattens nested objects to dot-notation keys with configurable identifier prefix.
 
 ```typescript
-import type { FlattenEntity } from '@tundralibs/utils';
+import type { FlattenEntity } from '@tundralibs/utils/types';
 
 type BlogPost = {
   title: string;
@@ -333,7 +338,7 @@ type FlatBlogPost = FlattenEntity<BlogPost>;
 **Examples:**
 
 ```typescript
-import type { FlattenEntity } from '@tundralibs/utils';
+import type { FlattenEntity } from '@tundralibs/utils/types';
 
 type Config = {
   server: {
@@ -359,7 +364,7 @@ const query = {
 Generates all possible paths through an object type using dot notation.
 
 ```typescript
-import type { Paths } from '@tundralibs/utils';
+import type { Paths } from '@tundralibs/utils/types';
 
 type Config = {
   database: {
@@ -395,7 +400,7 @@ type ConfigPaths = Paths<Config>;
 Extracts the type of a nested property from a dot-notation path.
 
 ```typescript
-import type { PathValue } from '@tundralibs/utils';
+import type { PathValue } from '@tundralibs/utils/types';
 
 type AppConfig = {
   server: {
@@ -435,7 +440,7 @@ type Invalid = PathValue<AppConfig, 'invalid.path'>; // never
 Flattens complex intersection types for better IntelliSense display.
 
 ```typescript
-import type { Simplify } from '@tundralibs/utils';
+import type { Simplify } from '@tundralibs/utils/types';
 
 type A = { x: number; y: string };
 type B = { z: boolean };
@@ -464,7 +469,7 @@ type SimplifiedC = Simplify<C>;
 Removes properties with a value type of `never` from object types.
 
 ```typescript
-import type { ExcludeNever } from '@tundralibs/utils';
+import type { ExcludeNever } from '@tundralibs/utils/types';
 
 type InputType = {
   validProp: string;
@@ -494,7 +499,7 @@ type CleanType = ExcludeNever<InputType>;
 Selects only properties from an object that match a specified value type.
 
 ```typescript
-import type { PickByType } from '@tundralibs/utils';
+import type { PickByType } from '@tundralibs/utils/types';
 
 type User = {
   id: number;
@@ -525,7 +530,7 @@ type NumericProps = PickByType<User, number>;
 Removes all properties from an object that match a specified value type.
 
 ```typescript
-import type { OmitByType } from '@tundralibs/utils';
+import type { OmitByType } from '@tundralibs/utils/types';
 
 type UserClass = {
   id: number;
@@ -555,7 +560,7 @@ type UserData = OmitByType<UserClass, Function>;
 Converts an object type to an array of `[key, value]` tuple types.
 
 ```typescript
-import type { Entries } from '@tundralibs/utils';
+import type { Entries } from '@tundralibs/utils/types';
 
 type User = {
   id: number;
@@ -578,7 +583,7 @@ type UserEntries = Entries<User>;
 **Example:**
 
 ```typescript
-import type { Entries } from '@tundralibs/utils';
+import type { Entries } from '@tundralibs/utils/types';
 
 type Config = {
   host: string;
@@ -601,7 +606,7 @@ function processConfig(config: Config): void {
 Extracts the element type from array types.
 
 ```typescript
-import type { UnArray } from '@tundralibs/utils';
+import type { UnArray } from '@tundralibs/utils/types';
 
 type StringArray = string[];
 type StringElement = UnArray<StringArray>; // string
@@ -641,7 +646,7 @@ type UnwrappedString = UnArray<SingleString>; // string
 Transforms union types into intersection types.
 
 ```typescript
-import type { UnionToIntersection } from '@tundralibs/utils';
+import type { UnionToIntersection } from '@tundralibs/utils/types';
 
 type A = { x: number };
 type B = { y: string };
@@ -666,7 +671,7 @@ Uses distributive conditional types and contravariance in function parameter pos
 **Example:**
 
 ```typescript
-import type { UnionToIntersection } from '@tundralibs/utils';
+import type { UnionToIntersection } from '@tundralibs/utils/types';
 
 // Type-safe object merging
 function mergeObjects<T extends Record<string, unknown>[]>(
