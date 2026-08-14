@@ -262,7 +262,7 @@ hostile for any analytical query that returns 100k+ rows.
 
 Shape we'd want:
 
-```ts
+```ts ignore
 const stream = engine.selectStream<R>(query);
 for await (const row of stream) { ... }
 ```
@@ -301,7 +301,7 @@ In `SQLEngine.commitTransaction` (and the symmetric rollback path), the
 state-machine transition runs **after** the underlying driver call
 awaits:
 
-```ts
+```ts ignore
 const tx = this._transactions.get(transactionId);
 if (!tx || tx.state !== 'ACTIVE') return;
 if (tx.timer) clearTimeout(tx.timer);
@@ -351,7 +351,7 @@ Original report kept below for historical context.
 `MemcachedEngine.get()` parses the server's `VALUE` reply via
 `response.lastIndexOf('\r\nEND')`:
 
-```ts
+```ts ignore
 const newline = response.indexOf('\r\n');
 const end = response.lastIndexOf('\r\nEND');
 if (newline < 0 || end < 0) return null;

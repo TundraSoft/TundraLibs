@@ -65,8 +65,13 @@ const MARIA_DEFAULTS: Partial<MariaEngineOptions> = {
 export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
   // Typed `string` (not the literal) so wire-compatible alias engines
   // (e.g. PlanetScaleEngine) can override it with their own identity.
+  /** `'MARIA'`; alias engines override it with their own identity. */
   public readonly Engine: string = 'MARIA';
 
+  /**
+   * Full relational feature set. `parameterReplacement` rewrites `:name:` to
+   * the driver's native `:name` form.
+   */
   public readonly Capabilities: SQLEngineCapabilities = {
     pooledConnections: true,
     transactions: true,
@@ -77,9 +82,12 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
     parameterReplacement: { prefix: ':', suffix: '' },
   };
 
+  /** Emits MariaDB/MySQL-dialect SQL. */
   protected readonly _translator: MariaTranslator = new MariaTranslator();
 
   /**
+   * Validates options and defaults `port` to 3306. No connection is opened here.
+   *
    * @throws {EngineError} `MISSING_CONFIG_VALUE` if `host`, `database`, or `username` is missing.
    */
   constructor(
@@ -123,6 +131,11 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
     }
   }
 
+  /**
+   * Liveness check on pool checkout. Prefers the driver's `isValid()` where
+   * present and otherwise falls back to a `ping()` round trip; any failure
+   * reports dead rather than throwing.
+   */
   protected override async _validateResource(
     conn: Connection,
   ): Promise<boolean> {
@@ -137,6 +150,7 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
     }
   }
 
+  /** Round-trips the driver's `ping()`; any failure reports dead. */
   protected async _ping(conn: Connection): Promise<boolean> {
     try {
       await conn.ping();
@@ -183,6 +197,11 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
 
   //#region SQLEngine hooks
 
+  /**
+   * Runs the query with named placeholders. A `SELECT` yields the row array
+   * and its length; a modification yields no rows and the driver's
+   * `affectedRows` as the count.
+   */
   protected async _execute<R extends Record<string, unknown>>(
     query: EngineQuery,
     client: Connection,
@@ -200,18 +219,25 @@ export class MariaEngine extends SQLEngine<Connection, MariaEngineOptions> {
     return { data: [], count: ok.affectedRows ?? 0 };
   }
 
+  /** Begins the transaction on its reserved connection. */
   protected async _beginTransaction(client: Connection): Promise<void> {
     await client.beginTransaction();
   }
 
+  /** Commits the transaction on its reserved connection. */
   protected async _commitTransaction(client: Connection): Promise<void> {
     await client.commit();
   }
 
+  /** Rolls back the transaction on its reserved connection. */
   protected async _rollbackTransaction(client: Connection): Promise<void> {
     await client.rollback();
   }
 
+  /**
+   * Maps a MariaDB/MySQL driver error onto the standard engine error codes,
+   * retaining `driverCode`, `driverErrno` and `sqlState` in the metadata.
+   */
   protected override _wrapDriverError(
     error: unknown,
     query: EngineQuery,

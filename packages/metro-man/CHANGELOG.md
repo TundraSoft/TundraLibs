@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.2...metro-man-v1.0.3) (2026-08-14)
+
+
+### Documentation
+
+* **metro-man:** verify documentation examples and document the public API ([#239](https://github.com/TundraSoft/TundraLibs/issues/239)) ([8492c50](https://github.com/TundraSoft/TundraLibs/commit/8492c50a648ad31824b2cecd076ab1d196dddc1b))
+
 ## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.1...metro-man-v1.0.2) (2026-08-12)
 
 

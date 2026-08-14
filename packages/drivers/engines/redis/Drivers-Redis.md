@@ -123,6 +123,10 @@ subsequent commands are unaffected.
   errors (a failed queue triggers `DISCARD`).
 
 ```typescript
+import { RedisEngine } from '@tundralibs/drivers/redis';
+
+const redis = new RedisEngine('cache', { host: 'localhost', port: 6379 });
+
 const replies = await redis.multi([
   ['SET', 'counter', '1'],
   ['INCR', 'counter'],
