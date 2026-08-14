@@ -29,6 +29,12 @@ export type MalformedPathErrorMeta = {
  *
  * @example
  * ```ts
+ * import { MalformedPathError, RadRouter } from '@tundralibs/radrouter';
+ *
+ * type MW = () => Promise<void>;
+ * const router = new RadRouter<MW>();
+ * const mw: MW = async () => {};
+ *
  * try {
  *   router.get('/users/:1bad:', [mw]);
  * } catch (e) {

@@ -31,6 +31,12 @@ export type RouteConflictErrorMeta = {
  *
  * @example
  * ```ts
+ * import { RadRouter, RouteConflictError } from '@tundralibs/radrouter';
+ *
+ * type MW = () => Promise<void>;
+ * const router = new RadRouter<MW>();
+ * const mw: MW = async () => {};
+ *
  * router.get('/users/:id:', [mw]);
  * try {
  *   router.get('/users/:userId:', [mw]); // same position, different name

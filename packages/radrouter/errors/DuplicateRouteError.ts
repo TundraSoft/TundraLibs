@@ -26,6 +26,12 @@ export type DuplicateRouteErrorMeta = {
  *
  * @example
  * ```ts
+ * import { DuplicateRouteError, RadRouter } from '@tundralibs/radrouter';
+ *
+ * type MW = () => Promise<void>;
+ * const router = new RadRouter<MW>();
+ * const mw: MW = async () => {};
+ *
  * try {
  *   router.get('/users', [mw]);
  *   router.get('/users', [mw]); // duplicate
