@@ -80,6 +80,7 @@ function ddlStatements(t: AnyTranslator, q: DdlQuery): string[] {
   }
 }
 
+/** A rendered per-dialect plan artifact plus its verification hash. */
 export type RenderedPlan = {
   /** Executable statements only (comments excluded) — the hash input. */
   readonly statements: string[];

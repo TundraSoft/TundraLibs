@@ -72,6 +72,7 @@ const ADVISORY_LOCK_KEY = 'norm:migrator';
 /** Rows per page/INSERT during a crypto-transforming rebuild copy. */
 const REBUILD_CHUNK = 500;
 
+/** Options for {@link Migrator}. */
 export type MigratorOptions = {
   /** Migrations directory (versioned snapshots + migrator.lock). */
   dir: string;
@@ -106,6 +107,7 @@ export type MigratorOptions = {
   transactionTimeoutMs?: number;
 };
 
+/** Outcome of a {@link Migrator.snapshot} call. */
 export type SnapshotResult = {
   version: number;
   path: string;
@@ -113,6 +115,7 @@ export type SnapshotResult = {
   written: boolean;
 };
 
+/** Applied-versus-disk migration state. */
 export type MigratorStatus = {
   /** Highest applied version (0 = fresh database). */
   dbVersion: number;
@@ -124,6 +127,7 @@ export type MigratorStatus = {
   hashOk: boolean;
 };
 
+/** One version's planned DDL, suppressed drops, and warnings. */
 export type PlannedStep = {
   version: number;
   queries: ReadonlyArray<MigrationAction>;
@@ -133,6 +137,7 @@ export type PlannedStep = {
   warnings: ReadonlyArray<string>;
 };
 
+/** Options for {@link Migrator.apply}. */
 export type ApplyOptions = {
   /** Emit DROP TABLE/COLUMN (default false — data-loss guard). */
   allowDrop?: boolean;
@@ -144,6 +149,7 @@ export type ApplyOptions = {
   dryRun?: boolean;
 };
 
+/** Outcome of a {@link Migrator.apply} call. */
 export type ApplyResult = {
   applied: ReadonlyArray<number>;
   durationMs: number;
@@ -189,7 +195,11 @@ export class Migrator {
    * writes a new version file. */
   #versionsCache: number[] | undefined;
 
-  /** @param db The handle returned by `norm.use(...)`. */
+  /**
+   * Bind a migrator to a `norm.use(...)` handle and migrations directory.
+   *
+   * @param db The handle returned by `norm.use(...)`.
+   */
   constructor(db: object, options: MigratorOptions) {
     this.#runtime = runtimeOf(db);
     // Trailing slashes are trimmed by scanning back from the end rather than
