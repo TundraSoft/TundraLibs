@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.5](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.4...drivers-v1.0.5) (2026-08-15)
+
+
+### Bug Fixes
+
+* **compat:** path fallback, barrel test leak, and the udpSocket hang on Workers ([#283](https://github.com/TundraSoft/TundraLibs/issues/283)) ([317fc0f](https://github.com/TundraSoft/TundraLibs/commit/317fc0fdbaae712ed913a40f70852188508f0e0f))
+* **drivers:** move engines off the root barrel onto their subpaths ([#286](https://github.com/TundraSoft/TundraLibs/issues/286)) ([02d9d34](https://github.com/TundraSoft/TundraLibs/commit/02d9d343c51ddcf567394698531a3c72e15b28f5))
+
+
+### Documentation
+
+* note the extra install on cross-package examples ([#298](https://github.com/TundraSoft/TundraLibs/issues/298)) ([44e1eff](https://github.com/TundraSoft/TundraLibs/commit/44e1effee2ae174946e2cdb0356fbc12d8c9ed4a))
+
 ## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.3...drivers-v1.0.4) (2026-08-14)
 
 
