@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.4](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.1.3...compat-v1.1.4) (2026-08-15)
+
+
+### Bug Fixes
+
+* **compat:** export InlineTLS and FileTLS so validateTLS stays callable ([#305](https://github.com/TundraSoft/TundraLibs/issues/305)) ([07decdc](https://github.com/TundraSoft/TundraLibs/commit/07decdc598b247f82d68167b3313b5b660e21f11))
+* **compat:** path fallback, barrel test leak, and the udpSocket hang on Workers ([#283](https://github.com/TundraSoft/TundraLibs/issues/283)) ([317fc0f](https://github.com/TundraSoft/TundraLibs/commit/317fc0fdbaae712ed913a40f70852188508f0e0f))
+
 ## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.1.2...compat-v1.1.3) (2026-08-14)
 
 

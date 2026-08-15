@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/rpc",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "type": "module",
   "description": "RPC + pub/sub framework over WebSocket — Server, Client, command router, channels, pluggable adapters",
   "exports": {
