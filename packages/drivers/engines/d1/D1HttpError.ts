@@ -57,6 +57,11 @@ export class D1HttpError extends DriverError<D1HttpErrorMeta> {
   /** HTTP status, when the error came from a non-2xx response. */
   public readonly status?: number;
 
+  /**
+   * Construct a D1 HTTP error.
+   *
+   * @param meta Cloudflare error `code` and HTTP `status`, when present.
+   */
   constructor(message: string, meta: D1HttpErrorMeta = {}, cause?: Error) {
     super(message, meta, cause);
     this.name = 'D1HttpError';

@@ -54,6 +54,11 @@ export class TursoHttpError extends DriverError<TursoHttpErrorMeta> {
   /** HTTP status, when the error came from a non-2xx response. */
   public readonly status?: number;
 
+  /**
+   * Construct a Turso HTTP error.
+   *
+   * @param meta SQLite `code` and HTTP `status`, when present.
+   */
   constructor(message: string, meta: TursoHttpErrorMeta = {}, cause?: Error) {
     super(message, meta, cause);
     this.name = 'TursoHttpError';

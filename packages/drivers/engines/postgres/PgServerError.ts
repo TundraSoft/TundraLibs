@@ -17,9 +17,16 @@ type PgServerErrorMeta = {
 
 /** Errors raised by `PgConnection` carrying the server's ErrorResponse fields. */
 export class PgServerError extends DriverError<PgServerErrorMeta> {
+  /** SQLSTATE code from the server ErrorResponse. */
   public readonly code: string;
+  /** Full server ErrorResponse field map. */
   public readonly fields: Map<string, string>;
 
+  /**
+   * Construct a Postgres server error from an ErrorResponse.
+   *
+   * @param fields Server ErrorResponse fields; the `M` field is the message.
+   */
   constructor(code: string, fields: Map<string, string>) {
     super(fields.get('M') ?? 'Postgres server error', { code, fields });
     this.name = 'PgServerError';
