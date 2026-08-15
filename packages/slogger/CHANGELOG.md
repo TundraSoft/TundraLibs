@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.1.6](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.5...slogger-v1.1.6) (2026-08-15)
+
+
+### Bug Fixes
+
+* **slogger:** mask pass and pwd by default, and stop the two docs disagreeing ([#282](https://github.com/TundraSoft/TundraLibs/issues/282)) ([a90413e](https://github.com/TundraSoft/TundraLibs/commit/a90413e382ab5eb9406a229f6ccd56886acbbcae))
+* **slogger:** warn when FileHandler writes to a filesystem that cannot persist ([#287](https://github.com/TundraSoft/TundraLibs/issues/287)) ([91a76b4](https://github.com/TundraSoft/TundraLibs/commit/91a76b484ae5004f28ab6b08290b7d5bc315273c))
+
+
+### Documentation
+
+* note the extra install on cross-package examples ([#298](https://github.com/TundraSoft/TundraLibs/issues/298)) ([44e1eff](https://github.com/TundraSoft/TundraLibs/commit/44e1effee2ae174946e2cdb0356fbc12d8c9ed4a))
+
 ## [1.1.5](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.4...slogger-v1.1.5) (2026-08-14)
 
 
