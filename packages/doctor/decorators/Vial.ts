@@ -34,6 +34,7 @@ import type { VialModes, VialOptions } from '../types/mod.ts';
  * ```
  */
 export function Vial(mode: VialModes): ClassDecorator;
+/** Register the class with explicit {@link VialOptions}. */
 export function Vial(options: VialOptions): ClassDecorator;
 export function Vial(arg: VialModes | VialOptions): ClassDecorator {
   // deno-lint-ignore no-explicit-any
