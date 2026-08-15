@@ -9,14 +9,17 @@
  * await db.repo('Users').insert({ email: 'a@b.c', ... });
  * ```
  *
- * This barrel is the batteries-included entry point: it registers every
- * dialect (`postgres`, `maria`, `sqlite`, `mongo`, `neon`, `turso`,
- * `d1`), so any `database` config works with no extra import — and every
- * driver, native SQLite binding included, is therefore in the bundle.
+ * **Server-only.** This barrel registers all seven dialects
+ * (`postgres`, `maria`, `sqlite`, `mongo`, `neon`, `turso`, `d1`) so
+ * that any `database` config constructs with no extra import. The price
+ * is the native SQLite adapter, whose per-runtime bindings
+ * (`$sqlite_deno` / `bun:sqlite` / `node:sqlite` / `better-sqlite3`) an
+ * edge bundler cannot resolve: importing this module means the bundle
+ * cannot be built for Cloudflare Workers or a browser.
  *
- * On an edge runtime import {@link module:core} (`@tundralibs/norm/core`)
- * plus the one `@tundralibs/norm/engines/<dialect>` module you need; the
- * export surface is otherwise identical.
+ * There, import {@link module:core} (`@tundralibs/norm/core`) plus the
+ * one `@tundralibs/norm/engines/<dialect>` module you need; the export
+ * surface is otherwise identical.
  *
  * @module
  */

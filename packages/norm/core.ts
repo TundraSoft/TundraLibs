@@ -2,18 +2,14 @@
  * `@tundralibs/norm/core` — norm's ENTIRE surface (definition layer +
  * runtime), with NO engine registered.
  *
- * Identical to the root `@tundralibs/norm` barrel except for one thing:
- * the root barrel also imports all seven `engines/<dialect>` modules, so
- * `new Norm({ database: { dialect } })` works out of the box for every
- * dialect — and, as a consequence, every driver (including the native
- * SQLite adapter and its `bun:sqlite` / `@db/sqlite` specifiers) is in
- * the bundle. That is fine on a server and fatal on an edge runtime.
- *
- * Import from here on Cloudflare Workers / Vercel Edge / Vite, and add
- * only the engine you actually use:
+ * Exports exactly what the root `@tundralibs/norm` barrel exports, minus
+ * that barrel's seven side-effect engine imports — so no driver reaches
+ * the bundle but the one you register yourself. That makes this the
+ * entry point for Cloudflare Workers / Vercel Edge / Vite: `core` plus
+ * the single `engines/<dialect>` module you actually use.
  *
  * ```ts ignore
- * import '@tundralibs/norm/engines/d1';
+ * import '@tundralibs/norm/engines/d1'; // or /neon, or /turso
  * import { Norm } from '@tundralibs/norm/core';
  *
  * const norm = new Norm({ database: { dialect: 'd1', accountId, databaseId, apiToken } });
