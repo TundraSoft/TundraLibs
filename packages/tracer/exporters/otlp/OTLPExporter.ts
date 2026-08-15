@@ -71,6 +71,8 @@ export class OTLPExporter extends RESTler<OTLPExporterOptions>
   ) => void;
 
   /**
+   * Construct an OTLP/HTTP span exporter.
+   *
    * @param options - See {@link OTLPExporterOptions}. `baseURL` is the
    *   collector root (e.g. `http://localhost:4318`), NOT the signal path.
    * @throws {Error} When `baseURL` is missing or invalid (raised by RESTler's
