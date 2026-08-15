@@ -73,6 +73,7 @@ import type {
   EngineEvents,
   EngineOptions,
 } from '@tundralibs/drivers/types';
+// Needs a separate install: deno add @tundralibs/utils
 import type { EventOptionKeys } from '@tundralibs/utils';
 
 // Whatever your protocol client looks like.
@@ -255,6 +256,7 @@ Subscribe via `engine.on('eventName', handler)` or supply via the
 ```typescript
 import type { EngineError } from '@tundralibs/drivers/errors';
 import type { EngineEvents, EngineOptions } from '@tundralibs/drivers/types';
+// Needs a separate install: deno add @tundralibs/utils
 import type { EventOptionKeys } from '@tundralibs/utils';
 
 // The engine from Quick Start above.

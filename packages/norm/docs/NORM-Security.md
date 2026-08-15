@@ -64,6 +64,7 @@ The secret and algorithm live on the `Norm` instance, not the schema:
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
+// Needs a separate install: deno add @tundralibs/drivers
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 const engine = new SQLiteEngine('app', { path: './data' });
@@ -409,6 +410,7 @@ another.
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
+// Needs a separate install: deno add @tundralibs/drivers
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 declare const kms: {
@@ -437,6 +439,7 @@ secret:
 
 ```typescript
 import { type HashAlgorithm, Norm } from '@tundralibs/norm';
+// Needs a separate install: deno add @tundralibs/drivers
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 declare function hmac(
@@ -507,6 +510,7 @@ decides what a read does with that one cell:
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
+// Needs a separate install: deno add @tundralibs/drivers
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 declare const metrics: {

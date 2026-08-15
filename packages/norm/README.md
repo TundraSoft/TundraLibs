@@ -35,55 +35,13 @@ dialects are exercised end-to-end by the live test suite.
 
 | Module                          | Import                               | Description                                                                                                |
 | ------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| Root                            | `@tundralibs/norm`                   | `Norm`, `NormDb`, repos, `Column`, `Entity`, `Schema`, `use` — plus every dialect.                         |
+| Root                            | `@tundralibs/norm`                   | `Norm`, `NormDb`, repos, `Column`, `Entity`, `Schema`, `use` — plus every dialect. Server-only.            |
 | [Core](core.ts)                 | `@tundralibs/norm/core`              | The same surface with NO dialect registered — the edge/serverless entry point.                             |
 | [Definition](definition/mod.ts) | `@tundralibs/norm/definition`        | Builders, entity/schema types, doc + snapshot emitters.                                                    |
 | [Migrations](migrations/mod.ts) | `@tundralibs/norm/migrations`        | The `Migrator` — snapshot / plan / apply / rollback.                                                       |
 | [Asserts](asserts/mod.ts)       | `@tundralibs/norm/asserts`           | Validate hand-built definitions with the same rules `Entity()` uses.                                       |
 | [Engines](engines/mod.ts)       | `@tundralibs/norm/engines`           | `registerEngine` / `resolveEngineFactory` — the dialect registry.                                          |
 | Engine (one per dialect)        | `@tundralibs/norm/engines/<dialect>` | Side-effect module registering one dialect: `postgres`, `maria`, `sqlite`, `mongo`, `neon`, `turso`, `d1`. |
-
-### Running on the edge
-
-`@tundralibs/norm` (the root barrel) registers all seven dialects, so
-any `database` config works with no extra import. The cost is that every
-driver — including the **native** SQLite adapter — is in the bundle, and
-its `bun:sqlite` / `@db/sqlite` specifiers cannot be resolved by an edge
-bundler.
-
-On Cloudflare Workers, Vercel Edge, or Vite, import `@tundralibs/norm/core`
-(identical exports, zero dialects registered) plus the one engine module
-you need:
-
-```typescript
-import '@tundralibs/norm/engines/d1'; // or /neon, or /turso
-import { Column, Entity, Norm, Schema } from '@tundralibs/norm/core';
-
-declare const env: Record<string, string>; // the Worker's bindings
-
-const norm = new Norm({
-  database: {
-    dialect: 'd1',
-    accountId: env.CF_ACCOUNT_ID,
-    databaseId: env.D1_DATABASE_ID,
-    apiToken: env.CF_API_TOKEN,
-  },
-});
-```
-
-A dialect whose module was never imported throws a `NormError`
-(`ENGINE_NOT_REGISTERED`) at construction, naming the import to add.
-That matters most for `sqlite`: Cloudflare's `unenv` polyfill _resolves_
-`node:sqlite` and even exposes `DatabaseSync`, but constructing one
-throws `Illegal constructor` on workerd — so without the registry a
-native-SQLite build would sail through CI and fail in production. Native
-SQLite cannot work on Workers at all; `d1` and `turso` (both SQLite over
-HTTP) are the supported paths, and `neon` is the Postgres one.
-
-The edge engines are one-shot HTTP: no pooling and no transactions, which
-`executor.capabilities` reports honestly. They reuse the same OQL
-translators as their self-hosted counterparts (`neon` → Postgres,
-`turso` / `d1` → SQLite), so the SQL norm generates is unchanged.
 
 ## Installation
 
@@ -105,10 +63,56 @@ bunx jsr add @tundralibs/norm
 npx jsr add @tundralibs/norm
 ```
 
+## Choosing an entry point
+
+**`@tundralibs/norm` — server (Deno, Bun, Node).** The root barrel
+registers all seven dialects, so any `database` config constructs with
+no extra import. The price is that it pulls the **native** SQLite
+adapter, whose per-runtime bindings no edge bundler can resolve: the
+barrel cannot be built for Cloudflare Workers or a browser.
+
+```typescript
+import { Norm } from '@tundralibs/norm';
+
+const norm = new Norm({
+  database: { dialect: 'sqlite', path: './data' },
+  secret: process.env.SECRET,
+});
+```
+
+**`@tundralibs/norm/core` — edge/serverless.** Identical exports with
+nothing registered; you import the one engine you need and no other
+driver enters the bundle. `core` + `engines/d1` is verified running on
+workerd.
+
+```typescript
+import '@tundralibs/norm/engines/d1'; // or /neon, or /turso
+import { Norm } from '@tundralibs/norm/core';
+
+declare const env: Record<string, string>; // the Worker's bindings
+
+const norm = new Norm({
+  database: {
+    dialect: 'd1',
+    accountId: env.CF_ACCOUNT_ID,
+    databaseId: env.D1_DATABASE_ID,
+    apiToken: env.CF_API_TOKEN,
+  },
+});
+```
+
+Only `neon` (Postgres over HTTP) and `turso` / `d1` (SQLite over HTTP)
+run on an edge runtime, and they are one-shot fetch calls — no pooling,
+no transactions, as `executor.capabilities` reports. A dialect whose
+module was never imported throws `ENGINE_NOT_REGISTERED` at
+construction, naming the import to add; the registry behind all of this
+is documented in [`engines/registry.ts`](engines/registry.ts).
+
 ## Quick Start
 
 ```typescript
 import { Column, Entity, Norm, Schema } from '@tundralibs/norm';
+// Needs a separate install: deno add @tundralibs/drivers
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 // 1. Define entities with the Column builders.
@@ -368,6 +372,7 @@ row data, plaintext, or secrets:
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
+// Needs a separate install: deno add @tundralibs/drivers
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 const engine = new SQLiteEngine('app', { path: './data' });

@@ -34,6 +34,7 @@ matching? Override `_handleSubscribe`:
 ```ts
 import { Server } from '@tundralibs/rpc';
 import type { ChannelOptions, InboundFrame } from '@tundralibs/rpc';
+// Needs a separate install: deno add @tundralibs/compat
 import type { ServerWebSocket } from '@tundralibs/compat/webserver';
 
 export class PatternServer<T = unknown> extends Server<T> {
@@ -133,6 +134,7 @@ matching `_handle*` method.
 ```ts
 import { Server } from '@tundralibs/rpc';
 import type { InboundFrame } from '@tundralibs/rpc';
+// Needs a separate install: deno add @tundralibs/compat
 import type { ServerWebSocket } from '@tundralibs/compat/webserver';
 
 class LoggingServer<T> extends Server<T> {
@@ -224,6 +226,7 @@ Want to inspect every outbound frame `Server` sends? Override `_send`:
 ```ts
 import { Server } from '@tundralibs/rpc';
 import type { OutboundFrame } from '@tundralibs/rpc';
+// Needs a separate install: deno add @tundralibs/compat
 import type { ServerWebSocket } from '@tundralibs/compat/webserver';
 
 class ObservedServer<T> extends Server<T> {

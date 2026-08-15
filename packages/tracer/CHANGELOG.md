@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.3...tracer-v0.5.4) (2026-08-15)
+
+
+### Documentation
+
+* note the extra install on cross-package examples ([#298](https://github.com/TundraSoft/TundraLibs/issues/298)) ([44e1eff](https://github.com/TundraSoft/TundraLibs/commit/44e1effee2ae174946e2cdb0356fbc12d8c9ed4a))
+
 ## [0.5.3](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.2...tracer-v0.5.3) (2026-08-14)
 
 

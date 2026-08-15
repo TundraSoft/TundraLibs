@@ -275,6 +275,7 @@ per-call argument:
 
 ```typescript
 import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
+// Needs a separate install: deno add @tundralibs/ambient
 import { ambient } from '@tundralibs/ambient';
 
 const log = LogManager.createSlogger({

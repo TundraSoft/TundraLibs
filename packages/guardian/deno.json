@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/guardian",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Schema validation for TypeScript — strict at compile time, forgiving at API boundaries",
   "license": "MIT",
   "exports": {

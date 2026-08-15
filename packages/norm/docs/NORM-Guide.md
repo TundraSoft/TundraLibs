@@ -30,6 +30,7 @@ deno add @tundralibs/norm       # or: bunx / npx jsr add @tundralibs/norm
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
+// Needs a separate install: deno add @tundralibs/drivers
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 const engine = new SQLiteEngine('shortly', { path: './data' });
@@ -56,12 +57,11 @@ const norm = new Norm({
 ```
 
 `dialect` is one of `postgres`, `maria`, `sqlite`, `mongo` (self-hosted)
-or `neon`, `turso`, `d1` (fetch-only, for edge/serverless runtimes). The
-root `@tundralibs/norm` barrel registers all seven. On an edge runtime,
-import `@tundralibs/norm/core` — the same surface with nothing registered
-— plus the single `@tundralibs/norm/engines/<dialect>` module you need, so
-no native driver ever enters the bundle. See the package README for the
-full rationale.
+or `neon`, `turso`, `d1` (fetch-only, for edge/serverless runtimes). This
+guide imports the root `@tundralibs/norm` barrel throughout, which
+registers all seven and is server-only; on an edge runtime import
+`@tundralibs/norm/core` plus the single engine module you need — see
+**[Choosing an entry point](../README.md#choosing-an-entry-point)**.
 
 ## 2. Model the schema
 
@@ -393,6 +393,7 @@ the real schema:
 
 ```typescript ignore
 import { Migrator } from '@tundralibs/norm/migrations';
+// Needs a separate install: deno add @tundralibs/drivers
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 const engine = new SQLiteEngine('test', { path: await Deno.makeTempDir() });

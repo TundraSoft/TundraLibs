@@ -140,6 +140,7 @@ outer `result.count` is the row count of the result set and is always `1`.
 
 ```typescript
 import { PostgresEngine } from '@tundralibs/drivers/postgres';
+// Needs a separate install: deno add @tundralibs/oql
 import type { Query } from '@tundralibs/oql/types';
 
 const engine = new PostgresEngine('app', {

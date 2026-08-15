@@ -2,6 +2,7 @@ import * as asserts from '@std/asserts';
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { SyslogSeverities, type SyslogSeverity } from '@tundralibs/utils';
 import { FileHandler, type FileHandlerOptions } from './mod.ts';
+import { isEphemeralFilesystem } from './FileHandler.ts';
 import { SlogObject } from '../../types/mod.ts';
 import * as path from '@tundralibs/compat/path';
 import {
@@ -81,6 +82,45 @@ async function getTestFileInfo(
   } catch {
     return null;
   }
+}
+
+// A `statfs` reading measured on real workerd (wrangler 4.123.0,
+// nodejs_compat, compat date 2026-08-04): every path, existing or not,
+// answers with this all-zero struct.
+const WORKERD_STATFS = () => ({
+  type: 0,
+  bsize: 0,
+  blocks: 0,
+  bfree: 0,
+  files: 0,
+  ffree: 0,
+});
+
+// The same call on a real filesystem (macOS, via Deno/Node/Bun
+// `node:fs.statfsSync`).
+const REAL_STATFS = () => ({
+  type: 26,
+  bsize: 4096,
+  blocks: 194009419,
+  bfree: 114557368,
+  files: 4584645274,
+  ffree: 4582076760,
+});
+
+// Capture the out-of-band console.error channel for the duration of
+// `fn` and return only what slogger itself reported.
+async function captureWarnings(fn: () => Promise<void>): Promise<string[]> {
+  const captured: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    captured.push(args.map((a) => String(a)).join(' '));
+  };
+  try {
+    await fn();
+  } finally {
+    console.error = original;
+  }
+  return captured.filter((m) => m.includes('[slogger]'));
 }
 
 // Helper to list files in test directory
@@ -706,6 +746,181 @@ describe({
 
       await asserts.assertRejects(() => handler.finalize());
       await remove(clashPath);
+    });
+  },
+});
+
+// Issue #280: on workerd a `/tmp` log file accepts writes, reads back,
+// and reports a non-zero size — then loses everything when the isolate
+// recycles. `statfs` is the one honest signal: it reports
+// `blocks: 0, bsize: 0` there, and non-zero on every real filesystem.
+describe({
+  name: 'slogger.handlers.fileHandler - ephemeral filesystem',
+  // `sys` is the permission Deno gates `statfs` behind. Granting it
+  // here is what lets the real probe actually run: without it the
+  // handler skips the check (silently, by design), and the
+  // "must not warn about a real filesystem" test below would pass for
+  // the wrong reason.
+  permissions: { write: true, read: true, sys: true },
+  fn: () => {
+    beforeAll(async () => {
+      await setup();
+    });
+
+    afterAll(async () => {
+      await teardown();
+    });
+
+    it('a zero-capacity filesystem is the only positive', () => {
+      asserts.assertEquals(
+        isEphemeralFilesystem('/tmp/app.log', WORKERD_STATFS),
+        true,
+      );
+    });
+
+    it('a real filesystem is never flagged', () => {
+      asserts.assertEquals(
+        isEphemeralFilesystem('/var/log/app.log', REAL_STATFS),
+        false,
+      );
+      // Only BOTH fields at zero is the ephemeral signature. A volume
+      // with no free blocks, or a runtime that fills in just one of the
+      // two, is a real filesystem and must stay silent.
+      asserts.assertEquals(
+        isEphemeralFilesystem('/x', () => ({ bsize: 4096, blocks: 0 })),
+        false,
+      );
+      asserts.assertEquals(
+        isEphemeralFilesystem('/x', () => ({ bsize: 0, blocks: 194009419 })),
+        false,
+      );
+      // Belt and braces: the runtime's own `statfs`, no fake in the
+      // way, against a directory that really exists.
+      asserts.assertEquals(isEphemeralFilesystem(TEST_DIR), false);
+    });
+
+    it('no statfs, or a failing statfs, warns about nothing', () => {
+      // `null` stands in for a runtime that exposes no `statfs` at all
+      // — a missing probe must never produce a warning.
+      asserts.assertEquals(isEphemeralFilesystem('/tmp/app.log', null), false);
+      asserts.assertEquals(
+        isEphemeralFilesystem('/tmp/gone.log', () => {
+          throw new Error('ENOENT: no such file or directory');
+        }),
+        false,
+      );
+    });
+
+    it('warns exactly once per handler, and still writes', async () => {
+      const filename = 'ephemeral.log';
+      await cleanupTestFile(filename);
+      for (const f of await listTestFiles('ephemeral.log')) {
+        await cleanupTestFile(f);
+      }
+
+      // The seam: pretend this handler's log file is on workerd's
+      // filesystem. Nothing else about the handler changes.
+      class EphemeralFileHandler extends FileHandler {
+        protected override _isEphemeralFilesystem(): boolean {
+          return isEphemeralFilesystem(this._logFile, WORKERD_STATFS);
+        }
+      }
+
+      const handler = new EphemeralFileHandler('ephemeralHandler', {
+        level: 5,
+        directory: TEST_DIR,
+        filenameTemplate: filename,
+        maxFileSizeBytes: 50, // tiny cap: a write forces a reopen
+        formatter: simpleFormatter('${message}'),
+      });
+
+      const warnings = await captureWarnings(async () => {
+        await handler.init();
+        await handler.handle(makeLogObject(5, 'first'));
+        // Overshoots the cap → rotation → a second `_openLogFile`.
+        await handler.handle(makeLogObject(5, 'X'.repeat(80)));
+        await handler.handle(makeLogObject(5, 'last'));
+        await handler.finalize();
+      });
+
+      asserts.assertEquals(
+        warnings.length,
+        1,
+        `expected exactly one warning, got: ${JSON.stringify(warnings)}`,
+      );
+      asserts.assertStringIncludes(warnings[0]!, 'ephemeralHandler');
+      asserts.assertStringIncludes(warnings[0]!, 'MemoryHandler');
+
+      // The warning changes nothing about the write path.
+      const content = await readTestFile(filename);
+      asserts.assertNotEquals(content, null);
+      asserts.assertStringIncludes(content!, 'last');
+
+      await cleanupTestFile(filename);
+      for (const f of await listTestFiles('ephemeral.log')) {
+        await cleanupTestFile(f);
+      }
+    });
+
+    it('says nothing on a real filesystem', async () => {
+      const filename = 'real-fs.log';
+      await cleanupTestFile(filename);
+
+      // No seam, no fake: the live runtime probe against the real
+      // test directory. A warning here is the failure mode that
+      // matters — a healthy log file called ephemeral.
+      const handler = new FileHandler('realFsHandler', {
+        level: 5,
+        directory: TEST_DIR,
+        filenameTemplate: filename,
+        formatter: simpleFormatter('${message}'),
+      });
+
+      const warnings = await captureWarnings(async () => {
+        await handler.init();
+        await handler.handle(makeLogObject(5, 'persisted'));
+        await handler.finalize();
+      });
+
+      asserts.assertEquals(
+        warnings.length,
+        0,
+        `real filesystem must not warn, got: ${JSON.stringify(warnings)}`,
+      );
+      const content = await readTestFile(filename);
+      asserts.assertNotEquals(content, null);
+      asserts.assertStringIncludes(content!, 'persisted');
+      await cleanupTestFile(filename);
+    });
+
+    it('says nothing when the runtime has no statfs', async () => {
+      const filename = 'no-statfs.log';
+      await cleanupTestFile(filename);
+
+      class NoStatfsFileHandler extends FileHandler {
+        protected override _isEphemeralFilesystem(): boolean {
+          return isEphemeralFilesystem(this._logFile, null);
+        }
+      }
+
+      const handler = new NoStatfsFileHandler('noStatfsHandler', {
+        level: 5,
+        directory: TEST_DIR,
+        filenameTemplate: filename,
+        formatter: simpleFormatter('${message}'),
+      });
+
+      const warnings = await captureWarnings(async () => {
+        await handler.init();
+        await handler.handle(makeLogObject(5, 'still-written'));
+        await handler.finalize();
+      });
+
+      asserts.assertEquals(warnings.length, 0);
+      const content = await readTestFile(filename);
+      asserts.assertNotEquals(content, null);
+      asserts.assertStringIncludes(content!, 'still-written');
+      await cleanupTestFile(filename);
     });
   },
 });
