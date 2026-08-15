@@ -1,3 +1,10 @@
+/**
+ * Error surface for `@tundralibs/metro-man` — the base
+ * {@link MetroManError} and the typed errors raised on duplicate or
+ * misconfigured metric registration.
+ *
+ * @module
+ */
 export { MetroManError } from './Base.ts';
 export {
   type DuplicateMetricContext,
