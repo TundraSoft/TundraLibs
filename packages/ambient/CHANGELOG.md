@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.4...ambient-v0.2.5) (2026-08-15)
+
+
+### Documentation
+
+* note the extra install on cross-package examples ([#298](https://github.com/TundraSoft/TundraLibs/issues/298)) ([44e1eff](https://github.com/TundraSoft/TundraLibs/commit/44e1effee2ae174946e2cdb0356fbc12d8c9ed4a))
+
 ## [0.2.4](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.3...ambient-v0.2.4) (2026-08-14)
 
 

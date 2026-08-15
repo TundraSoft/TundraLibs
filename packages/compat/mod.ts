@@ -59,6 +59,8 @@ export {
   FetchInvalidPEMError,
   FetchPathTraversalError,
   FetchTLSError,
+  type FileTLS,
+  type InlineTLS,
   type TLSOptions,
   type ValidatedTLS,
   validateTLS,

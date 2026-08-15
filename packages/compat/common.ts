@@ -82,8 +82,12 @@ export class FetchPathTraversalError extends CompatError {
   }
 }
 
-/** Inline PEM material. */
-type InlineTLS = {
+/**
+ * Inline PEM material. Exported so the published `.d.ts` for the exported
+ * {@link validateTLS} keeps a usable parameter type — a non-exported type in
+ * an exported signature degrades to `never` for consumers on the tarball.
+ */
+export type InlineTLS = {
   /** PEM-encoded certificate string. */
   cert?: string;
   /** PEM-encoded private key string. */
@@ -92,8 +96,8 @@ type InlineTLS = {
   ca?: string[];
 };
 
-/** Filesystem paths to PEM material. */
-type FileTLS = {
+/** Filesystem paths to PEM material. Exported for the same reason as {@link InlineTLS}. */
+export type FileTLS = {
   /** Path to PEM-encoded certificate file. */
   certFile?: string;
   /** Path to PEM-encoded private key file. */
