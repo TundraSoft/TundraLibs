@@ -203,9 +203,12 @@ async function _handleSql(
       // the engine maps `code` (SQLSTATE) → EngineError code.
       return _errorResponse(400, _pgErrorToNeonJson(error));
     }
-    return _errorResponse(500, {
-      message: error instanceof Error ? error.message : String(error),
-    });
+    // Unexpected (non-PgServerError) failure: log the real error to the test
+    // process's own console (the proxy runs in-process with the live test, so
+    // this reaches the same terminal/CI log) rather than echoing it back over
+    // HTTP.
+    console.error('[neon-pg-proxy] unexpected error handling /sql:', error);
+    return _errorResponse(500, { message: 'internal server error' });
   }
 }
 
