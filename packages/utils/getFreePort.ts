@@ -7,15 +7,22 @@
 
 import { listen } from '@tundralibs/compat/net';
 
-/** Range and exclusions for {@link getFreePort}. */
-interface GetFreePortOptions {
+/**
+ * Range and exclusions for {@link getFreePort}.
+ *
+ * Exported (and a `type`, not an `interface`) so it survives `.d.ts`
+ * generation — a non-exported interface referenced by an exported function
+ * degrades that function's parameter to `never` for consumers resolving via
+ * the published declarations.
+ */
+export type GetFreePortOptions = {
   /** Inclusive lower bound (0–65535). @default 1024 */
   min?: number;
   /** Inclusive upper bound (0–65535, ≥ `min`). @default 65535 */
   max?: number;
   /** Ports to skip even if they fall within the range. @default [] */
   exclude?: number[];
-}
+};
 
 /** Thrown by {@link getFreePort} for invalid ranges or exhausted attempts. */
 export class PortError extends Error {
