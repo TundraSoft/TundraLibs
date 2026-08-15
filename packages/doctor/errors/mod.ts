@@ -1,3 +1,9 @@
+/**
+ * Error surface for `@tundralibs/doctor` — the base {@link DoctorError}
+ * and the typed errors raised on circular or unresolved dependencies.
+ *
+ * @module
+ */
 export { DoctorError } from './Base.ts';
 export {
   type CircularDependencyContext,

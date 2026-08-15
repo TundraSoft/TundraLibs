@@ -19,6 +19,7 @@ import { BaseError } from '@tundralibs/utils';
 export class DoctorError<
   M extends Record<string, unknown> = Record<string, unknown>,
 > extends BaseError<M> {
+  /** Emit the message verbatim; Doctor errors are written whole at the throw site. */
   protected override get _messageTemplate(): string {
     return '${message}';
   }
