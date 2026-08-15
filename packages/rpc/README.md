@@ -25,6 +25,19 @@ Built on top of [`@tundralibs/compat/websocket`](../compat/websocket/Compat-WebS
 It is transport-agnostic: the same `Server` instance can be mounted
 via `server.handlers()` or run standalone via `server.listen()`.
 
+## Browser / Worker compatibility
+
+`@tundralibs/rpc` is a WebSocket-oriented server package. The runtime is
+intended for Deno, Bun, and Node server environments, and the
+conformance adapter test path is intentionally excluded from the public
+barrel because it pulls in a test framework that browser and edge-worker
+bundlers cannot resolve.
+
+The supported runtime shape is a server process with real WebSocket
+lifecycle and socket state. Browser and worker bundles should use the
+package only for non-test client-side integrations, and should not rely
+on the internal test adapter or server-only path in a worker script.
+
 ## Modules
 
 | Module           | Description                                                                            | Documentation                                              |
