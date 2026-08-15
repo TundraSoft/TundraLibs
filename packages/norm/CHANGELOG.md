@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.2](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.2.1...norm-v1.2.2) (2026-08-15)
+
+
+### Bug Fixes
+
+* **drivers:** move engines off the root barrel onto their subpaths ([#286](https://github.com/TundraSoft/TundraLibs/issues/286)) ([02d9d34](https://github.com/TundraSoft/TundraLibs/commit/02d9d343c51ddcf567394698531a3c72e15b28f5))
+
+
+### Documentation
+
+* **norm:** document the server-only barrel and the edge-safe core entry point ([#285](https://github.com/TundraSoft/TundraLibs/issues/285)) ([f7ad334](https://github.com/TundraSoft/TundraLibs/commit/f7ad334717210a9d940603a7305400f0ff7c0d5a))
+* note the extra install on cross-package examples ([#298](https://github.com/TundraSoft/TundraLibs/issues/298)) ([44e1eff](https://github.com/TundraSoft/TundraLibs/commit/44e1effee2ae174946e2cdb0356fbc12d8c9ed4a))
+
 ## [1.2.1](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.2.0...norm-v1.2.1) (2026-08-14)
 
 
