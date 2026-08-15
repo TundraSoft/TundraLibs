@@ -126,7 +126,10 @@ const main = () => {
         const suffix = anchor ? `#${anchor}` : '';
 
         const wiki = wikiNameOf(resolved);
-        if (wiki) return `](${wiki}${suffix})`;
+        // Drop the `.md`: a wiki page is served at `/wiki/<PageName>`, and a
+        // markdown link that keeps the extension (`](Ambient.md)`) resolves to
+        // the RAW file instead of the rendered page. Anchors still apply.
+        if (wiki) return `](${wiki.replace(/\.md$/, '')}${suffix})`;
 
         // Exists in the repo but is not a wiki page — deep-link to GitHub.
         try {
