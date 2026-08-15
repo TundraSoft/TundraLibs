@@ -13,7 +13,7 @@ import {
   removeDir,
   writeTextFile,
 } from '@tundralibs/compat/file';
-import { SQLiteEngine } from '@tundralibs/drivers';
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 import type { EngineQueryResult } from '@tundralibs/drivers';
 import { Column, Entity, Norm, Schema } from '../mod.ts';
 import { NormMigrationError } from '../errors/mod.ts';

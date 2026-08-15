@@ -17,7 +17,7 @@ import {
   PostgresEngine,
   SQLiteEngine,
   YugabyteEngine,
-} from '../mod.ts';
+} from './mod.ts';
 
 const PG = { host: 'h', database: 'd', username: 'u' } as const;
 const MY = { host: 'h', database: 'd', username: 'u' } as const;

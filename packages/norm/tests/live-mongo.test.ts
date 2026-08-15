@@ -13,7 +13,7 @@
  */
 
 import { describe, it } from '@tundralibs/compat/test';
-import { MongoEngine } from '@tundralibs/drivers';
+import { MongoEngine } from '@tundralibs/drivers/mongo';
 import { envArgs } from '@tundralibs/utils';
 import { type LiveEngine, runLiveSuite } from './suite.ts';
 import { ActiveLinks } from './models/shortener/mod.ts';

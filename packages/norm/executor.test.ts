@@ -7,7 +7,8 @@
 
 import { describe, it } from '@tundralibs/compat/test';
 import * as asserts from '@std/asserts';
-import { CockroachEngine, type MongoEngine } from '@tundralibs/drivers';
+import { CockroachEngine } from '@tundralibs/drivers/postgres';
+import type { MongoEngine } from '@tundralibs/drivers/mongo';
 import {
   type AnySQLEngine,
   bindTx,

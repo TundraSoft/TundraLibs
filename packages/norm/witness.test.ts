@@ -11,7 +11,7 @@
 import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { makeTempDir, removeDir } from '@tundralibs/compat/file';
 import * as asserts from '@std/asserts';
-import { SQLiteEngine } from '@tundralibs/drivers';
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 import {
   Column,
   Entity,

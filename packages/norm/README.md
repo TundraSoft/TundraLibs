@@ -109,7 +109,7 @@ npx jsr add @tundralibs/norm
 
 ```typescript
 import { Column, Entity, Norm, Schema } from '@tundralibs/norm';
-import { SQLiteEngine } from '@tundralibs/drivers';
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 // 1. Define entities with the Column builders.
 const Users = Entity('users', {
@@ -368,7 +368,7 @@ row data, plaintext, or secrets:
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
-import { SQLiteEngine } from '@tundralibs/drivers';
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 const engine = new SQLiteEngine('app', { path: './data' });
 const secret = process.env.SECRET;

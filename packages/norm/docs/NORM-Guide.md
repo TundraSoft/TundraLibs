@@ -30,7 +30,7 @@ deno add @tundralibs/norm       # or: bunx / npx jsr add @tundralibs/norm
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
-import { SQLiteEngine } from '@tundralibs/drivers';
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 const engine = new SQLiteEngine('shortly', { path: './data' });
 const norm = new Norm({ engine, secret: Deno.env.get('APP_SECRET') });
@@ -393,7 +393,7 @@ the real schema:
 
 ```typescript ignore
 import { Migrator } from '@tundralibs/norm/migrations';
-import { SQLiteEngine } from '@tundralibs/drivers';
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 const engine = new SQLiteEngine('test', { path: await Deno.makeTempDir() });
 const db = new Norm({ engine, secret: 'test' }).use(Identity, Shortener);

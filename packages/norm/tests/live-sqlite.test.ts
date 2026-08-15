@@ -15,7 +15,7 @@
  */
 
 import { makeTempDir, removeDir } from '@tundralibs/compat/file';
-import { SQLiteEngine } from '@tundralibs/drivers';
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 import { type LiveEngine, runLiveSuite } from './suite.ts';
 
 let dir = '';

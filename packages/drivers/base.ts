@@ -3,7 +3,7 @@
  * driver extends, plus the types needed to declare and configure one.
  *
  * **Why this exists as its own sub-path.** The bases used to be reachable only
- * from the package root (`@tundralibs/drivers`), and that barrel re-exports
+ * from the package root (`@tundralibs/drivers`), and that barrel re-exported
  * *every* concrete engine — including the native `SQLiteEngine`, whose adapter
  * loads a per-runtime native binding (`bun:sqlite`, `jsr:@db/sqlite`,
  * `better-sqlite3`). So anyone writing their own engine, and every doc teaching
@@ -13,12 +13,18 @@
  * (`@tundralibs/drivers/postgres`, `/neon`, `/turso`, …) were introduced to
  * avoid.
  *
- * This module closes that gap from the other side: it re-exports **only** the
+ * This module closed that gap from the other side: it re-exports **only** the
  * abstract layer — no concrete engine is reachable from here, at runtime or
  * otherwise — so `import { BaseEngine } from '@tundralibs/drivers/base'` costs
  * a subclasser nothing beyond the base classes they actually extend. It is the
  * complement of the per-engine sub-paths: those ship one engine each, this one
  * ships the scaffolding to write a new one.
+ *
+ * The root barrel has since been emptied of engines too, so it is no longer
+ * unsafe to import from — but this sub-path remains the narrower, more
+ * intention-revealing surface for engine authors, and it stays the one the
+ * docs teach. The engines now live at `@tundralibs/drivers/<engine>`, or all
+ * nine together at `@tundralibs/drivers/engines`.
  *
  * **Choosing a base.** The hierarchy splits on two axes — pooled vs. pool-free,
  * and generic vs. SQL:

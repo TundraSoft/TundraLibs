@@ -21,10 +21,14 @@
 import type {
   EngineQueryResult,
   EngineTransactionOptions,
-  MongoEngine,
   SQLConnectionEngine,
   TransactionScope,
 } from '@tundralibs/drivers';
+// TYPE-ONLY, and it must stay that way: `@tundralibs/drivers/mongo` is the
+// only specifier that carries `MongoEngine` now that the root barrel exports
+// no engine, and a VALUE import here would put `npm:mongodb` in the runtime
+// graph of every norm consumer — see the note on `Norm.ts`'s imports.
+import type { MongoEngine } from '@tundralibs/drivers/mongo';
 import type { Query } from '@tundralibs/oql/types';
 import { NormAdvisoryLockError, NormUnsupportedError } from './errors/mod.ts';
 

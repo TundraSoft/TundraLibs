@@ -40,12 +40,18 @@ still in place). Configure `pool: { min, max, ... }` for multi-connection.
 ### Where to import the bases from
 
 The abstract bases ship on their own sub-path, `@tundralibs/drivers/base`,
-alongside the types you need to declare an engine. Import them from there
-rather than from the package root: the root barrel re-exports every concrete
-engine, including the native `SQLiteEngine` whose adapter loads a per-runtime
-binding (`bun:sqlite`, `jsr:@db/sqlite`, `better-sqlite3`), and those
-specifiers will break a bundle aimed at an edge or browser runtime.
-`@tundralibs/drivers/base` reaches no concrete engine at all.
+alongside the types you need to declare an engine. Prefer it when all you
+are doing is subclassing: it is the narrowest surface that gets you there,
+and it reaches no concrete engine at all.
+
+The package root, `@tundralibs/drivers`, re-exports the same four bases (plus
+the errors and the shared types) and is equally safe to bundle — it carries no
+engine either. The barrel used to re-export all nine, including the native
+`SQLiteEngine` whose adapter loads a per-runtime binding (`bun:sqlite`,
+`jsr:@db/sqlite`, `better-sqlite3`); those specifiers broke any bundle aimed at
+an edge or browser runtime, which is why the engines now live one sub-path
+down. Concrete engines come from `@tundralibs/drivers/<engine>` — or, on a
+server where you want all of them at once, `@tundralibs/drivers/engines`.
 
 ```typescript
 import {

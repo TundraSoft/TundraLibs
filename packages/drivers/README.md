@@ -75,9 +75,9 @@ npx jsr add @tundralibs/drivers
 // concrete engine (and no native SQLite binding) enters your bundle.
 import { BaseEngine, SQLEngine } from '@tundralibs/drivers/base';
 
-// Every engine in one barrel. Convenient on a server; note that it pulls
-// in the native SQLite adapter, so edge/browser bundles should prefer the
-// per-engine subpaths below.
+// Every engine in one barrel — SERVER ONLY. It pulls in the native SQLite
+// adapter plus npm:mariadb and npm:mongodb, so an edge or browser bundle
+// cannot resolve it; use the per-engine subpaths below there.
 import {
   D1Engine,
   MariaEngine,
@@ -88,7 +88,13 @@ import {
   RedisEngine,
   SQLiteEngine,
   TursoEngine,
-} from '@tundralibs/drivers';
+} from '@tundralibs/drivers/engines';
+
+// The package root carries NO engine. It re-exports the same bases as
+// /base, the errors and the shared types — nothing that touches a socket
+// or a native binding — so it is safe to import from anywhere.
+import { EngineError } from '@tundralibs/drivers';
+import type { EngineQueryResult } from '@tundralibs/drivers';
 
 import { EngineError } from '@tundralibs/drivers/errors';
 import type { EngineOptions, EnginePoolStats } from '@tundralibs/drivers/types';

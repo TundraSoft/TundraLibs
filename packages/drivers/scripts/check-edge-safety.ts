@@ -1,6 +1,7 @@
 #!/usr/bin/env -S deno run -A
 /**
- * @fileoverview Edge-safety gate for the SQL-over-HTTP edge drivers.
+ * @fileoverview Edge-safety gate for the package root barrel and the
+ * SQL-over-HTTP edge drivers.
  *
  * The edge drivers (Neon → Postgres-over-HTTP, Turso and Cloudflare D1 →
  * SQLite-over-HTTP) target
@@ -10,6 +11,14 @@
  * if any edge module's **runtime** import graph reaches a module that would
  * drag in raw sockets, a database wire protocol, a native SQLite driver, or a
  * Node networking builtin.
+ *
+ * The root barrel (`drivers/mod.ts`) is gated by the SAME rules, because it is
+ * held to the same promise: it exports the abstract bases, the errors and the
+ * shared types, and NO engine, so importing `@tundralibs/drivers` must never be
+ * what puts a native SQLite binding or a wire protocol in a bundle. It is
+ * listed as an entry precisely so that re-adding an engine export — the exact
+ * regression this gate exists to catch — turns red here instead of in a
+ * consumer's build.
  *
  * Why the *runtime* graph and not the flat module list:
  *   `deno info --json` lists every statically-referenced module, including
@@ -27,6 +36,16 @@
  * may reuse only the pure, transport-free helpers explicitly carved out in
  * {@link forbiddenReason}.
  *
+ * No rule was relaxed to admit the barrel. The abstract bases it exports
+ * (`BaseEngine`, `ConnectionEngine`, `SQLConnectionEngine`, `SQLEngine`, and the
+ * `ConnectionPool` they own) live at the package root, not under
+ * `engines/postgres/` or `engines/sqlite/`, so they never matched a forbidden
+ * pattern in the first place — they are pure TypeScript over `@tundralibs/utils`
+ * and the compat shims, and reach a socket only when a concrete engine
+ * implements `_createResource`. "Reaches a base class" was always fine;
+ * "reaches a native binding or a socket" was always a failure. That is why the
+ * barrel passes today and fails the moment an engine is re-exported from it.
+ *
  * Run via: `deno task check:edge-safety` (from packages/drivers), or directly
  * `deno run -A packages/drivers/scripts/check-edge-safety.ts`.
  *
@@ -34,10 +53,18 @@
  */
 
 /**
- * Edge-engine entrypoints to gate, resolved relative to this script so CWD does
- * not matter. Add a future edge engine's `mod.ts` here.
+ * Entrypoints to gate, resolved relative to this script so CWD does not matter.
+ * Add a future edge engine's `mod.ts` here.
+ *
+ * `barrel` is the package root. It exports no engine — only the abstract bases,
+ * the errors and the types — and this entry is what keeps it that way: adding
+ * any engine back to `mod.ts` makes this gate fail.
  */
 const EDGE_ENTRIES: ReadonlyArray<{ name: string; url: string }> = [
+  {
+    name: 'barrel',
+    url: new URL('../mod.ts', import.meta.url).href,
+  },
   {
     name: 'neon',
     url: new URL('../engines/neon/mod.ts', import.meta.url).href,
@@ -129,6 +156,19 @@ function forbiddenReason(
       return null;
     }
     return `Node builtin '${spec}'`;
+  }
+
+  // Node-only npm database clients. `MariaEngine`/`PlanetScaleEngine` load
+  // `npm:mariadb` and `MongoEngine` loads `npm:mongodb`; both sit on the Node
+  // TCP/TLS stack and neither runs on an edge runtime. They are NOT caught by
+  // any rule below — they are neither a `node:` builtin nor one of this
+  // package's own wire modules — so without this they would slip through, as
+  // they did before the root barrel became an entry here. Deny is by package
+  // name (and by the `$maria`/`$mongo` import-map aliases, in case a specifier
+  // reaches the graph unresolved) rather than blanket-denying `npm:`, so a
+  // future edge engine can still reuse a genuinely fetch-only npm package.
+  if (/^(npm:|\$)(maria(db)?|mongo(db)?)(@|\/|$)/.test(spec)) {
+    return `Node-only npm database client '${spec}'`;
   }
 
   // Native SQLite bindings (the native `SQLiteEngine`'s adapter loads one of
@@ -274,7 +314,8 @@ async function main(): Promise<never> {
         `edge-safety OK (${name}): ${reachable} runtime modules reachable ` +
           `from ${short(url)}; none pull a disallowed node: builtin (only ` +
           `fs/os/path via the guarded compat shims), a native SQLite binding, ` +
-          `compat net/udp/webserver/websocket, or a database wire protocol.`,
+          `a Node-only npm database client, compat ` +
+          `net/udp/webserver/websocket, or a database wire protocol.`,
       );
       continue;
     }
