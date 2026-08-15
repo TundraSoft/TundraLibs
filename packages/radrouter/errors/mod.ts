@@ -1,3 +1,10 @@
+/**
+ * Error surface for `@tundralibs/radrouter` — the base
+ * {@link RadRouterError} and the typed errors raised on duplicate or
+ * invalid route registration.
+ *
+ * @module
+ */
 // Re-export every error class from one barrel. Consumers do
 // `import { DuplicateRouteError } from '@tundralibs/radrouter/errors'`.
 export { RadRouterError } from './Base.ts';
