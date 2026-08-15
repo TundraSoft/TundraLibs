@@ -1,3 +1,10 @@
+/**
+ * PostgreSQL engine for `@tundralibs/drivers` — {@link PostgresEngine},
+ * the Postgres-wire-compatible aliases (CockroachDB, YugabyteDB, and
+ * more), the {@link PgConnection} wrapper, and {@link PgServerError}.
+ *
+ * @module
+ */
 export { PostgresEngine } from './Engine.ts';
 // Alias engines for Postgres-wire-compatible distributed SQL (CockroachDB,
 // YugabyteDB — advisory locks off); Aurora/AlloyDB/Supabase/Timescale use

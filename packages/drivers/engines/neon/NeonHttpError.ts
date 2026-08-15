@@ -49,6 +49,11 @@ export class NeonHttpError extends DriverError<NeonHttpErrorMeta> {
   /** Postgres SQLSTATE code, when available. */
   public readonly code?: string;
 
+  /**
+   * Construct a Neon HTTP error.
+   *
+   * @param meta HTTP `status` and Postgres SQLSTATE `code`, when present.
+   */
   constructor(message: string, meta: NeonHttpErrorMeta, cause?: Error) {
     super(message, meta, cause);
     this.name = 'NeonHttpError';

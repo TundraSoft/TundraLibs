@@ -97,13 +97,16 @@ export class PgConnection {
   private __closed = false;
   /** Server-supplied parameters captured during startup. */
   public readonly serverParams: Map<string, string> = new Map();
-  /** Process id + secret key for cancel-request. */
+  /** Process id for cancel-request. */
   public processId = 0;
+  /** Secret key for cancel-request. */
   public secretKey = 0;
   /** Last-seen transaction status from ReadyForQuery: I/T/E. */
   public txStatus: 'I' | 'T' | 'E' = 'I';
 
   /**
+   * Wrap a raw TCP connection in the Postgres wire protocol.
+   *
    * @param __conn - The underlying TCP `Connection`.
    * @param __onNotice - Called for every backend NoticeResponse (NOT errors).
    * @param __instanceId - Engine instance id used in `EngineError` metadata.
@@ -114,6 +117,7 @@ export class PgConnection {
     private readonly __instanceId: string,
   ) {}
 
+  /** Whether this connection has been closed or poisoned. */
   get closed(): boolean {
     return this.__closed;
   }
@@ -558,6 +562,7 @@ export class PgConnection {
 
   //#region IO helpers
 
+  /** Write raw bytes; marks the connection closed on transport failure. */
   private async __write(bytes: Uint8Array): Promise<void> {
     if (this.__closed) {
       throw new EngineError('NO_CONNECTION', { instanceId: this.__instanceId });
@@ -576,6 +581,7 @@ export class PgConnection {
     }
   }
 
+  /** Read and decode the next backend message, buffering partial reads. */
   private async __read(): Promise<BackendMessage> {
     while (true) {
       if (this.__writeOff > this.__readOff) {
@@ -636,6 +642,7 @@ export class PgConnection {
     this.__writeOff += chunk.length;
   }
 
+  /** Forward a backend NoticeResponse to the notice callback. */
   private __emitNotice(fields: Map<string, string>): void {
     if (!this.__onNotice) return;
     const severity = fields.get('S') ?? 'NOTICE';
