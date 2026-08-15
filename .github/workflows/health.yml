@@ -187,30 +187,74 @@ jobs:
       - name: Audit (all severities)
         run: deno audit
 
+  consumer-docs:
+    name: Shipped doc examples (consumer install)
+    runs-on: ubuntu-latest
+    # Drift of a different kind: the repo's own `deno check --doc-only` resolves
+    # `@tundralibs/*` as workspace members, so a doc example importing a sibling
+    # package passes in CI and fails for anyone who installed only that package.
+    # This installs each package standalone from JSR and re-checks the docs that
+    # actually shipped. Tests the PUBLISHED version, so it lags the working tree
+    # by one release — that is the point.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
+        with:
+          deno-version: v2.x
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: '22'
+
+      - name: Check shipped docs from a consumer install
+        run: deno run -A .github/scripts/consumer-doc-check.ts
+
   report:
     name: File issue on failure
-    needs: [drift, audit]
+    needs: [drift, audit, consumer-docs]
     if: failure()
     runs-on: ubuntu-latest
     permissions:
       contents: read
       issues: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
       - name: Create or update health issue
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DRIFT: ${{ needs.drift.result }}
+          AUDIT: ${{ needs.audit.result }}
+          DOCS: ${{ needs.consumer-docs.result }}
         run: |
+          # Title must match the frontmatter `title` in the issue template.
           title="Weekly health check failed"
-          body="The scheduled health run failed (runtime drift and/or dependency audit).
+          # Body is the shared issue template with its frontmatter stripped —
+          # single source of truth in .github/ISSUE_TEMPLATE/ci_health.md.
+          template=".github/ISSUE_TEMPLATE/ci_health.md"
+          body="$(awk 'f>=2{print; next} /^---[[:space:]]*$/{f++}' "$template")"
 
-          Run: $RUN_URL
+          failing=""
+          [ "$DRIFT" = "failure" ] && failing="$failing runtime-drift"
+          [ "$AUDIT" = "failure" ] && failing="$failing dependency-audit"
+          [ "$DOCS" = "failure" ] && failing="$failing consumer-docs"
+          [ -z "$failing" ] && failing=" (see run)"
 
-          Check the failing jobs — either a runtime update broke compatibility or a new vulnerability was published for a dependency."
+          body="${body}
+
+          **Failing job(s):**${failing}
+          **Run:** ${RUN_URL}"
+
           existing=$(gh issue list --label ci-health --state open --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
-            gh issue comment "$existing" --body "Still failing: $RUN_URL"
+            gh issue comment "$existing" --body "Still failing —${failing}: ${RUN_URL}"
             echo "Updated issue #$existing"
           else
             gh issue create --title "$title" --body "$body" --label ci-health
