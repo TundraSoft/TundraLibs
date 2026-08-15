@@ -1,3 +1,18 @@
+/**
+ * @fileoverview `@tundralibs/cacher` entrypoint.
+ *
+ * Provides a unified cache abstraction over in-memory, Redis, and
+ * Memcached backends behind the same `Cacher` manager API. The package
+ * is designed for server runtimes and exposes the concrete engine
+ * constructors and option types needed to wire a cache into an app.
+ *
+ * Browser and worker bundles should only use the in-memory engine when
+ * the runtime supports equivalent process-local semantics; the networked
+ * Redis / Memcached engines depend on server-side socket lifecycles.
+ *
+ * @module
+ */
+
 // Core classes — canonical implementation files.
 export { AbstractEngine } from './AbstractEngine.ts';
 export { Cacher, type EngineConstructor } from './Cacher.ts';

@@ -10,6 +10,19 @@ A flexible caching library with support for Memory, Redis, and Memcached engines
 
 The Cacher package provides a unified caching abstraction that works with multiple backends. A singleton `Cacher` manager handles engine registration and instance lifecycle, while `AbstractEngine` defines the common API that all cache engines implement.
 
+## Browser / Worker compatibility
+
+`@tundralibs/cacher` is a server-side cache abstraction. The built-in
+Redis and Memcached engines, and the underlying socket / network
+lifecycle they rely on, are intended for Deno, Bun, and Node server
+runtimes. This package is not designed as a browser or worker-native
+cache runtime.
+
+Use the in-memory engine for local process-state caching in a browser
+or worker context only if the target environment supports the same
+runtime semantics; do not assume the networked engines are portable to
+edge or browser sandboxes.
+
 ## Modules
 
 | Module             | Description                                                           | Documentation                               |
