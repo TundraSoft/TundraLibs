@@ -1,3 +1,9 @@
+/**
+ * Public type surface for `@tundralibs/metro-man` — the option shapes for
+ * each metric kind (counter, gauge, histogram, and related).
+ *
+ * @module
+ */
 export type { CounterOptions } from './CounterOptions.ts';
 export type { GaugeOptions } from './GaugeOptions.ts';
 export type { HistogramOptions } from './HistogramOptions.ts';
