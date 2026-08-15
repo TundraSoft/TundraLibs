@@ -1,3 +1,9 @@
+/**
+ * Public type surface for `@tundralibs/radrouter` — route registration,
+ * HTTP method, match, and clear-option shapes used by the router API.
+ *
+ * @module
+ */
 // Export from individual type files
 export type { ClearOptions } from './ClearOptions.ts';
 export type { HTTPMethod } from './HTTPMethod.ts';
