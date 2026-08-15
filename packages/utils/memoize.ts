@@ -13,6 +13,8 @@
  * - Memory management and automatic cache cleanup
  * - Safe handling of non-serializable arguments
  * - TypeScript-first design with full type safety
+ *
+ * @module
  */
 
 /**

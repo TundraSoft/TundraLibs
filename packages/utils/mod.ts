@@ -1,3 +1,12 @@
+/**
+ * `@tundralibs/utils` — shared cross-runtime primitives used across the
+ * TundraLibs packages: the {@link BaseError} foundation, the
+ * {@link Options}/{@link Events} bases, config loading, memoization and
+ * throttling helpers, IP/subnet utilities, syslog parsing, and small
+ * decorators.
+ *
+ * @module
+ */
 export type {
   DeepReadOnly,
   DeepWritable,
