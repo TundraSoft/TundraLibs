@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/crypt",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "type": "module",
   "description": "A cryptography library with support for various algorithms and utilities",
   "license": "MIT",
