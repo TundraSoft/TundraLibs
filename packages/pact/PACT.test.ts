@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { generateRSAKeyPair } from '@tundralibs/crypt';
 import { issueJWT } from '@tundralibs/crypt/JWT';
 import { PACT } from './PACT.ts';

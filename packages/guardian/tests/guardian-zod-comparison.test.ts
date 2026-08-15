@@ -13,7 +13,7 @@
  */
 
 import { assertEquals, assertThrows } from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { Guardian } from '../mod.ts';
 
 // Dynamic import of zod with fallback

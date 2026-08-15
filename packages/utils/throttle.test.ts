@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { Throttle, throttle } from './throttle.ts';
 
 describe('utils.throttle', () => {

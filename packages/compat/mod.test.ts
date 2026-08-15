@@ -204,6 +204,74 @@ describe('compat.mod (root barrel)', () => {
 });
 
 // =============================================================================
+// Test helpers stay on the ./test subpath
+// -----------------------------------------------------------------------------
+// `test.ts` imports `bun:test` and `node:test` so it can hand each runtime its
+// native BDD functions. Neither specifier resolves under esbuild, so a barrel
+// that re-exported them failed EVERY wrangler build with "Could not resolve
+// bun:test / node:test" — the whole Worker, not just the test paths. Nothing
+// an application bundles may reach test.ts; consumers import the helpers from
+// `@tundralibs/compat/test`.
+// =============================================================================
+
+/** The BDD surface `test.ts` owns. */
+const TEST_HELPERS = [
+  'afterAll',
+  'afterEach',
+  'beforeAll',
+  'beforeEach',
+  'describe',
+  'it',
+  'test',
+] as const;
+
+describe('compat.mod (test helpers stay on the ./test subpath)', () => {
+  it('the root barrel does not re-export them', () => {
+    const barrel = compat as unknown as Record<string, unknown>;
+    for (const name of TEST_HELPERS) {
+      asserts.assertEquals(
+        barrel[name],
+        undefined,
+        `'${name}' must not be reachable from the package root — it drags bun:test/node:test into every consumer bundle`,
+      );
+    }
+  });
+
+  it('the ./test subpath still exports them', async () => {
+    // Dynamic so this file keeps a single static import of './test.ts'.
+    const testModule = await import('./test.ts') as Record<string, unknown>;
+    for (const name of TEST_HELPERS) {
+      asserts.assertEquals(
+        typeof testModule[name],
+        'function',
+        `'${name}' must stay available on @tundralibs/compat/test`,
+      );
+    }
+  });
+
+  it('no shipped module imports test.ts', () => {
+    // The runtime check above passes for a type-only re-export too, but a
+    // bundler still has to resolve the specifier. Only the absence of the
+    // import keeps the build green, so pin that instead.
+    const offenders = sourceFiles(PACKAGE_DIR)
+      .map((file) => file.slice(PACKAGE_DIR.length + 1))
+      .filter((name) =>
+        name !== 'test.ts' &&
+        /from\s+'[^']*\/test\.ts'/.test(
+          readTextFileSync(join(PACKAGE_DIR, name)),
+        )
+      );
+    asserts.assertEquals(
+      offenders,
+      [],
+      `these modules pull test.ts into the shipped graph and break esbuild: ${
+        offenders.join(', ')
+      }`,
+    );
+  });
+});
+
+// =============================================================================
 // No top-level await
 // -----------------------------------------------------------------------------
 // One top-level await anywhere in a module graph makes esbuild (wrangler)

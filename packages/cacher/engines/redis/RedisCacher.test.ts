@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { afterAll, beforeAll, describe, it } from '@tundralibs/compat';
+import { afterAll, beforeAll, describe, it } from '@tundralibs/compat/test';
 import { RedisCacher, type RedisCacherOptions } from './mod.ts';
 import { CacherEngineError } from '../../errors/mod.ts';
 import { envArgs } from '@tundralibs/utils';

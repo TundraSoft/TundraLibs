@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { JWTError, type JWTErrorCode, JWTErrorCodes } from './mod.ts';
 
 describe('crypt.JWT.Error', () => {

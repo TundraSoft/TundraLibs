@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { PooledConnectionEngine } from './ConnectionEngine.ts';
 import type { EngineCapabilities } from './types/mod.ts';
 import { EngineError } from './errors/mod.ts';

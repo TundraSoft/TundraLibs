@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 // Import the decorators from the package's PUBLIC entry point (mod.ts) — the
 // exact surface consumers get as `@tundralibs/utils`. If the decorators stop
 // being re-exported here, every documented decorator import

@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { AbstractEngine } from './AbstractEngine.ts';
 import { CacherEngineError } from './errors/mod.ts';
 import type { CacherOptions, CacheValue } from './types/mod.ts';

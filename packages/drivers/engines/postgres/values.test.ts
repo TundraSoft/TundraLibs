@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { decodeTextValue } from './values.ts';
 
 // OID constants used below (pg_type.oid).

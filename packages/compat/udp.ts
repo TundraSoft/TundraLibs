@@ -10,6 +10,10 @@
  * UDP is best-effort: a successful `send` only means the kernel
  * accepted the bytes, not that the datagram was delivered.
  *
+ * Deno, Bun and Node have datagram sockets; browsers and Cloudflare
+ * Workers do not, and there {@link udpSocket} rejects immediately with
+ * an {@link UnsupportedRuntimeError}.
+ *
  * @module
  *
  * @example
@@ -21,7 +25,7 @@
  * sock.close();
  * ```
  */
-import { isBun, isDeno, isNode } from './runtime.ts';
+import { isBun, isDeno, isNode, RUNTIME } from './runtime.ts';
 import { UnsupportedRuntimeError } from './Error.ts';
 import { Bun, loadBuiltin } from './_runtime-globals.ts';
 
@@ -32,6 +36,57 @@ const nodeDgram: typeof import('node:dgram') = loadBuiltin(
   'node:dgram',
   isNode,
 );
+
+/**
+ * Assert the runtime actually provides `node:dgram` before the Node path
+ * tries to use it. Without this the socket is created against `undefined`
+ * and the bind callback never fires, so the promise never settles — a hang
+ * rather than an error.
+ *
+ * Node >= 22.3 always supplies it, so the throw is unreachable on a real
+ * Node; it is Node < 22.3 (no `process.getBuiltinModule`) and Node-shaped
+ * edge runtimes that stub the module out entirely.
+ *
+ * Exported (but not re-exported from the package root, so not public API)
+ * only so the otherwise-unreachable guard is unit-testable via the
+ * `candidate` seam — the same arrangement `@tundralibs/ambient` uses for
+ * {@link https://jsr.io/@tundralibs/ambient | assertAsyncLocalStorage}.
+ *
+ * @internal
+ * @param candidate - The module to validate; defaults to the runtime's.
+ * @throws {UnsupportedRuntimeError} When no datagram backend is available.
+ */
+export function assertDatagramBackend(
+  candidate: unknown = nodeDgram,
+): void {
+  if (!candidate) {
+    throw new UnsupportedRuntimeError(
+      'udpSocket',
+      RUNTIME,
+      'node:dgram is unavailable in this runtime',
+    );
+  }
+}
+
+/** How workerd identifies itself. Cloudflare's documented detection. */
+const WORKERD_USER_AGENT = 'Cloudflare-Workers';
+
+/**
+ * Whether we are on workerd. `nodejs_compat` gives it
+ * `process.versions.node`, so {@link isNode} is true there and the Node
+ * branch below would be taken — but the `node:dgram` it gets back is a
+ * stand-in that accepts `bind()` and never calls back, so the bind
+ * `await` never settles. Workers have no UDP at all, and a hang is the
+ * worst possible failure inside a request, so this is checked first.
+ *
+ * Deliberately local to this module: the udp backend is the only place
+ * the misclassification bites today, and teaching `getRuntime()` about
+ * workerd would re-route every other module that branches on the
+ * runtime.
+ */
+const onWorkerd = (): boolean =>
+  (globalThis as { navigator?: { userAgent?: string } }).navigator
+    ?.userAgent === WORKERD_USER_AGENT;
 
 /**
  * Open UDP socket abstraction.
@@ -74,6 +129,11 @@ export type UdpSocketOptions = {
  * Open a UDP socket and return a sender-only handle. The local
  * binding (hostname/port) is incidental — most callers just want
  * `udpSocket()` and then `socket.send(...)`.
+ *
+ * @throws {@link UnsupportedRuntimeError} On any runtime without
+ *   datagram sockets — browsers and Cloudflare Workers among them. The
+ *   rejection is immediate; nothing here waits on a socket that cannot
+ *   exist.
  */
 export async function udpSocket(
   options: UdpSocketOptions = {},
@@ -85,6 +145,17 @@ export async function udpSocket(
   const port = options.port ?? 0;
 
   /* c8 ignore start */
+  // Before anything else — see {@link onWorkerd}. workerd passes the
+  // `isNode` test and then swallows the bind callback, so without this
+  // the call never settles and burns the whole request.
+  if (onWorkerd()) {
+    throw new UnsupportedRuntimeError(
+      'udpSocket',
+      RUNTIME,
+      'Cloudflare Workers has no UDP sockets',
+    );
+  }
+
   if (isDeno) {
     const sock = Deno.listenDatagram({
       transport: 'udp',
@@ -150,6 +221,7 @@ export async function udpSocket(
   }
 
   if (isNode) {
+    assertDatagramBackend();
     // Pick the socket family from the bind address: an IPv6 literal
     // (contains ':', e.g. '::') needs 'udp6', else 'udp4'. Hardcoding
     // 'udp4' made the documented '::' IPv6 hostname fail on Node.

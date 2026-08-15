@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import { type EventOptionKeys, Options } from './Options.ts';
 import type { EventCallback } from './Events.ts';
 

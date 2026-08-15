@@ -420,7 +420,10 @@ const canWrite = hasPermissionSync({ name: 'write', path: './output' });
 
 ### Test
 
-Cross-runtime testing utilities.
+Cross-runtime testing utilities. Available on the `./test` sub-path only —
+the package root does not re-export them, because the module imports
+`bun:test` and `node:test` and bundlers such as esbuild cannot resolve
+those, which would break every Cloudflare Workers build.
 
 ```typescript
 import { afterEach, beforeEach, describe, it } from '@tundralibs/compat/test';

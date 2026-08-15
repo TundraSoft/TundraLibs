@@ -19,7 +19,7 @@ import {
   SEPARATOR,
   SEPARATOR_PATTERN,
 } from './path.ts';
-import { OS } from './runtime.ts';
+import { isDeno, OS } from './runtime.ts';
 import * as asserts from '@std/asserts';
 
 // =============================================================================
@@ -414,5 +414,90 @@ describe({
         asserts.assertStrictEquals(formatted, original);
       });
     });
+
+    // =========================================================================
+    // Unknown runtime (browser / workerd)
+    // =========================================================================
+    // The backend is picked once, at import time. A browser is neither Deno,
+    // Bun nor Node, so the picker has to have a fallback — without one every
+    // helper here threw `Cannot read properties of undefined` on the first
+    // call, which took RESTler (and the drivers riding on it) down with it.
+    //
+    // The flags are module-level constants evaluated at import time, so the
+    // only way to observe that branch is a child process that deletes the
+    // runtime globals *before* importing the module. Deno-gated because it
+    // spawns that child with `Deno.Command`; the branch it covers is
+    // runtime-independent.
+    if (isDeno) {
+      describe('unknown runtime', () => {
+        it('should resolve paths with no Deno, Bun or Node global', async () => {
+          // `fixtures/` is git-ignored and excluded from fmt/lint/test, and
+          // the script has to live inside the package for `@std/path` to
+          // resolve through the workspace import map.
+          const script = `// deno-lint-ignore-file no-explicit-any
+const g = globalThis as any;
+delete g.Deno;
+delete g.process;
+const p = await import('../path.ts');
+console.log(JSON.stringify({
+  runtime: (await import('../runtime.ts')).RUNTIME,
+  join: p.join('a', 'b', 'c.txt'),
+  dirname: p.dirname('/a/b/c'),
+  basename: p.basename('/a/b/c.txt'),
+  extname: p.extname('a.tar.gz'),
+  isAbsolute: p.isAbsolute('/a'),
+  normalize: p.normalize('/a/b/../c'),
+  relative: p.relative('/a/b', '/a/c'),
+  base: p.parse('/a/b/c.txt').base,
+  format: p.format({ dir: '/a', base: 'c.txt' }),
+  resolve: p.resolve('/base', 'sub'),
+}));
+`;
+          const scriptPath = join(
+            import.meta.dirname!,
+            'fixtures',
+            'unknown-runtime-path.ts',
+          );
+          await Deno.writeTextFile(scriptPath, script);
+          let out;
+          try {
+            out = await new Deno.Command(Deno.execPath(), {
+              args: ['run', '--allow-read', scriptPath],
+              stdout: 'piped',
+              stderr: 'piped',
+            }).output();
+          } finally {
+            await Deno.remove(scriptPath);
+          }
+
+          const stderr = new TextDecoder().decode(out.stderr);
+          asserts.assertEquals(
+            out.code,
+            0,
+            `child process failed — path is broken on unknown runtimes:\n${stderr}`,
+          );
+
+          // Windows dev boxes still get `\` here (@std/path sniffs
+          // `navigator.platform`), so compare separator-agnostically.
+          const posix = (s: string) => s.replaceAll('\\', '/');
+          const result = JSON.parse(new TextDecoder().decode(out.stdout));
+          asserts.assertEquals(
+            result.runtime,
+            'UNKNOWN',
+            'the child must actually look like a browser to the detector',
+          );
+          asserts.assertEquals(posix(result.join), 'a/b/c.txt');
+          asserts.assertEquals(posix(result.dirname), '/a/b');
+          asserts.assertEquals(result.basename, 'c.txt');
+          asserts.assertEquals(result.extname, '.gz');
+          asserts.assertEquals(result.isAbsolute, true);
+          asserts.assertEquals(posix(result.normalize), '/a/c');
+          asserts.assertEquals(posix(result.relative), '../c');
+          asserts.assertEquals(result.base, 'c.txt');
+          asserts.assertEquals(posix(result.format), '/a/c.txt');
+          asserts.assertEquals(posix(result.resolve), '/base/sub');
+        });
+      });
+    }
   },
 });

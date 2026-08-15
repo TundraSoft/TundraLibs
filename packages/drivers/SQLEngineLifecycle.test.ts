@@ -1,5 +1,5 @@
 import * as asserts from '@std/asserts';
-import { describe, it } from '@tundralibs/compat';
+import { describe, it } from '@tundralibs/compat/test';
 import type { AbstractTranslator } from '@tundralibs/oql/translator';
 import { SQLEngine } from './SQLEngine.ts';
 import { EngineError } from './errors/mod.ts';
