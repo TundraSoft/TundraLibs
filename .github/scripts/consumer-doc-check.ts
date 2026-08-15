@@ -70,6 +70,8 @@ const DOC_PEERS: Record<string, string[]> = {
   // Validation and token recipes.
   id: ['guardian'],
   pact: ['crypt'],
+  // getFreePort's test-fixture examples import the compat test harness.
+  utils: ['compat'],
   // compat's webserver docs show the raw `ws` npm client as an alternative;
   // `ws` ships no types, so a reader following that snippet also needs @types/ws.
   compat: ['npm:ws', 'npm:@types/ws'],
