@@ -1082,4 +1082,157 @@ describe('slogger.formatters.maskingFormatter', () => {
       asserts.assert(!result.includes('LEAK_X_ID_TOKEN'));
     });
   });
+
+  // ---------------------------------------------------------------
+  // Round-8 (#275): the docs advertised `pass` and `pwd` as masked by
+  // default, but neither was in the defaults — a context of `{ pwd }`
+  // was written verbatim to every destination. Both are now defaults AND
+  // members of the whole-key-only generic set: bare `pass` is 4 chars, so
+  // as an ordinary term the concatenation-suffix tier would have matched
+  // the tail of `bypass`/`compass`/`surpass`/`encompass`.
+  // ---------------------------------------------------------------
+  describe('round-8: `pass` / `pwd` mask as whole keys only', () => {
+    const maskedTo = (parsed: string): boolean => /^\*+$/.test(parsed);
+
+    // The reproduction from the issue: all five password-family spellings
+    // must be redacted, not just the three that already were.
+    it('masks pass and pwd alongside the rest of the password family', () => {
+      const p = JSON.parse(
+        maskingFormatter()(makeLogObject('login', {
+          password: 'A',
+          passwd: 'B',
+          pass: 'C',
+          pwd: 'D',
+          secret: 'E',
+        })),
+      ).context;
+      asserts.assert(maskedTo(p.password), 'password must mask');
+      asserts.assert(maskedTo(p.passwd), 'passwd must mask');
+      asserts.assert(maskedTo(p.pass), 'pass must mask');
+      asserts.assert(maskedTo(p.pwd), 'pwd must mask');
+      asserts.assert(maskedTo(p.secret), 'secret must mask');
+    });
+
+    it('masks pass and pwd case-insensitively', () => {
+      const p = JSON.parse(
+        maskingFormatter()(makeLogObject('case', {
+          PASS: 'CAPS_LEAK',
+          Pwd: 'MIXED_LEAK',
+          PWD: 'CAPS_PWD_LEAK',
+        })),
+      ).context;
+      asserts.assert(maskedTo(p.PASS));
+      asserts.assert(maskedTo(p.Pwd));
+      asserts.assert(maskedTo(p.PWD));
+    });
+
+    // The regression that would make the fix worse than the bug: `pass`
+    // is a real English suffix. None of these may be touched, and their
+    // scalar type must survive intact (no string coercion).
+    it('does NOT mask benign words ending in pass/pwd', () => {
+      const p = JSON.parse(
+        maskingFormatter()(makeLogObject('benign', {
+          passenger: 'plane',
+          bypass: 'route',
+          compass: 'north',
+          passed: true,
+          passive: 'yes',
+          surpass: 'goal',
+          encompass: 'all',
+          overpass: 'bridge',
+          passable: 'yes',
+          passageway: 'hall',
+          cwd: '/srv/app',
+          fwd: 'onward',
+          passCount: 3, // number — must keep its type
+        })),
+      ).context;
+      asserts.assertEquals(p.passenger, 'plane');
+      asserts.assertEquals(p.bypass, 'route');
+      asserts.assertEquals(p.compass, 'north');
+      asserts.assertStrictEquals(p.passed, true);
+      asserts.assertEquals(p.passive, 'yes');
+      asserts.assertEquals(p.surpass, 'goal');
+      asserts.assertEquals(p.encompass, 'all');
+      asserts.assertEquals(p.overpass, 'bridge');
+      asserts.assertEquals(p.passable, 'yes');
+      asserts.assertEquals(p.passageway, 'hall');
+      asserts.assertEquals(p.cwd, '/srv/app');
+      asserts.assertEquals(p.fwd, 'onward');
+      asserts.assertStrictEquals(p.passCount, 3);
+    });
+
+    // Whole-key-only means the component-suffix tier is skipped too, so a
+    // qualified compound stays visible — same contract as `pin`/`key`.
+    // The longer `password`/`passwd` family still head-matches normally.
+    it('leaves qualified pass/pwd compounds to the caller, unlike password', () => {
+      const p = JSON.parse(
+        maskingFormatter()(makeLogObject('compounds', {
+          db_pass: 'DBPASS_VISIBLE',
+          userPwd: 'USERPWD_VISIBLE',
+          db_password: 'DBPW_LEAK',
+          dbpassword: 'CONCAT_LEAK',
+        })),
+      ).context;
+      asserts.assertEquals(p.db_pass, 'DBPASS_VISIBLE');
+      asserts.assertEquals(p.userPwd, 'USERPWD_VISIBLE');
+      asserts.assert(maskedTo(p.db_password), 'db_password must still mask');
+      asserts.assert(maskedTo(p.dbpassword), 'dbpassword must still mask');
+    });
+
+    // A caller naming the compound explicitly gets it masked — the
+    // documented escape hatch for the case above.
+    it('a caller naming the compound explicitly gets it masked', () => {
+      const fmt = maskingFormatter({ sensitiveFields: ['db_pass'] });
+      const p = JSON.parse(fmt(makeLogObject('custom', {
+        db_pass: 'DBPASS_LEAK',
+        compass: 'north',
+      }))).context;
+      asserts.assert(maskedTo(p.db_pass));
+      asserts.assertEquals(p.compass, 'north');
+    });
+
+    // Sibling sweep — the matcher runs before the base formatter, so the
+    // split must hold whichever formatter renders the record.
+    describe('round-8 split holds across all sibling base formatters', () => {
+      const secretVal = 'PWDSECRETLEAKVALUE';
+      const benignMarker = 'COMPASSBENIGNMARKER';
+      const ctx = {
+        pwd: secretVal, // must be masked
+        compass: benignMarker, // must survive
+      };
+      const cases: Array<[string, (log: SlogObject) => string]> = [
+        ['prettyJson (default)', maskingFormatter()],
+        ['json', maskingFormatter({ baseFormatter: jsonFormatter })],
+        ['logfmt', maskingFormatter({ baseFormatter: logfmtFormatter() })],
+        ['otel', maskingFormatter({ baseFormatter: otelLogFormatter() })],
+        [
+          'rfc5424',
+          maskingFormatter({
+            baseFormatter: rfc5424Formatter({
+              appendContext: (c) => JSON.stringify(c),
+            }),
+          }),
+        ],
+        [
+          'string',
+          maskingFormatter({
+            baseFormatter: simpleFormatter(
+              '${context.pwd}|${context.compass}',
+            ),
+          }),
+        ],
+      ];
+      for (const [name, fmt] of cases) {
+        it(`masks pwd and keeps compass under ${name}`, () => {
+          const out = fmt(makeLogObject('nav', { ...ctx }));
+          asserts.assert(!out.includes(secretVal), `pwd leaked under ${name}`);
+          asserts.assert(
+            out.includes(benignMarker),
+            `compass over-masked under ${name}`,
+          );
+        });
+      }
+    });
+  });
 });

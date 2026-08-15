@@ -369,20 +369,22 @@ interface MaskingFormatterOptions {
 
 ### Default Sensitive Fields
 
-The masking formatter includes common sensitive field names by default:
+When you do not pass `sensitiveFields`, the masking formatter applies a
+built-in list covering the password family (`password`, `passwd`,
+`passphrase`, `pass`, `pwd`), secrets and credentials (`secret`,
+`clientSecret`, `credential`), tokens (`token`, `authToken`,
+`accessToken`, `refreshToken`, …), crypto keys (`apiKey`, `secretKey`,
+`privateKey`, …) and PII/financial fields (`ssn`, `cvv`, `creditCard`,
+`cardNumber`).
 
-- `password`
-- `pass`
-- `pwd`
-- `secret`
-- `apiKey`
-- `api_key`
-- `token`
-- `accessToken`
-- `refreshToken`
-- `creditCard`
-- `ssn`
-- `email` (when PARTIAL)
+**The full list lives in one place:
+[Security → Default Sensitive Fields](../docs/Slogger-Security.md#default-sensitive-fields).**
+It is not repeated here — a list maintained in two documents drifts, and
+a stale copy of a security default is worse than no copy, because it
+tells you a field is redacted when it is not.
+
+Note that `sensitiveFields` **replaces** the defaults rather than adding
+to them; include the defaults you still want.
 
 Matching is **head-anchored** and case-insensitive: a field name masks a
 context key only when it names the key's **end (head)** — via a whole-key
@@ -390,17 +392,22 @@ match, a camelCase / `_`-`-`-`.` word-component suffix, or (for names of 4+
 characters) a concatenation suffix that begins at a word boundary. So
 `apiKey` masks `userApiKey`/`x-api-key`/`apikey` while `sortKey` and
 `creditCardBrand` are left untouched. The bare generic words `token`,
-`key`, `auth`, `private` and `pin` match **only** as a whole key, so
-benign compounds that merely end in one of them — `sortKey`, `pageToken`,
-`nextPageToken`, `continuationToken`, `csrfToken`, `authUrl`, `isPrivate`
-— are left untouched; the real secret `*Token`/`*Key` compounds
-(`authToken`, `accessToken`, `refreshToken`, `sessionToken`, `apiToken`,
-`bearerToken`, `idToken`; `apiKey`, `secretKey`, `privateKey`, …) are
-enumerated as their own default fields instead, and are themselves
-head-anchored (so `authToken` masks `session_auth_token`/`authtoken` but
-`androidToken`/`pageToken` stay visible). See
+`key`, `auth`, `private`, `pin`, `pass` and `pwd` match **only** as a
+whole key, so benign compounds that merely end in one of them —
+`sortKey`, `pageToken`, `nextPageToken`, `continuationToken`, `csrfToken`,
+`authUrl`, `isPrivate`, `bypass`, `compass` — are left untouched; the
+real secret `*Token`/`*Key` compounds (`authToken`, `accessToken`,
+`refreshToken`, `sessionToken`, `apiToken`, `bearerToken`, `idToken`;
+`apiKey`, `secretKey`, `privateKey`, …) are enumerated as their own
+default fields instead, and are themselves head-anchored (so `authToken`
+masks `session_auth_token`/`authtoken` but `androidToken`/`pageToken`
+stay visible). See
 [Security → Matching Semantics](../docs/Slogger-Security.md#matching-semantics)
 for the full contract.
+
+Masking a field name is not the same as masking a value inside the
+message string — an email address in the message text is caught by
+`sensitivePatterns`, not by this list.
 
 ### Custom Patterns
 

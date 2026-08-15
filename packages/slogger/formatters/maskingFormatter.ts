@@ -45,11 +45,12 @@ export type MaskingFormatterOptions = {
    * a qualifier (`creditCardBrand`, `creditCardLast4`, `tokenBucket`,
    * `nextTokenCount`, `passwordHash`, `secretary`, `tokenizer`) is NOT
    * masked and its scalar type is preserved. The bare generic words
-   * `key`, `token`, `auth`, `private` and `pin` are further restricted
-   * to whole-key matching only — see {@link GENERIC_WHOLE_KEY_ONLY} —
-   * so common benign compounds that merely end in one of them
-   * (`sortKey`, `cacheKey`, `pageToken`, `nextPageToken`,
-   * `continuationToken`, `csrfToken`) are left untouched; the real
+   * `key`, `token`, `auth`, `private`, `pin`, `pass` and `pwd` are
+   * further restricted to whole-key matching only — see
+   * {@link GENERIC_WHOLE_KEY_ONLY} — so common benign compounds that
+   * merely end in one of them (`sortKey`, `cacheKey`, `pageToken`,
+   * `nextPageToken`, `continuationToken`, `csrfToken`, `bypass`,
+   * `compass`) are left untouched; the real
    * secret `*Key`/`*Token` compounds are enumerated as their own default
    * fields instead. Replaces the default list when provided — include
    * the defaults you still want.
@@ -89,14 +90,17 @@ export type MaskingFormatterOptions = {
  * `awsAccessKey`, `x-auth-token`, `session_auth_token` and the
  * run-together `authtoken` are caught by component-/concatenation-suffix
  * matching, while benign cursors such as `pageToken`/`resetToken`/
- * `csrfToken` pass through untouched. The five bare generic words
- * (`auth`, `key`, `token`, `private`, `pin`) match only as a WHOLE key,
- * so they don't swallow `sortKey`/`authUrl`/`isPrivate`/`pageToken`.
+ * `csrfToken` pass through untouched. The seven bare generic words
+ * (`auth`, `key`, `token`, `private`, `pin`, `pass`, `pwd`) match only as
+ * a WHOLE key, so they don't swallow
+ * `sortKey`/`authUrl`/`isPrivate`/`pageToken`/`bypass`/`compass`.
  */
 const DEFAULT_SENSITIVE_FIELDS = [
   'password',
   'passwd',
   'passphrase',
+  'pass',
+  'pwd',
   'secret',
   'clientSecret',
   'client_secret',
@@ -149,20 +153,23 @@ const DEFAULT_SENSITIVE_FIELDS = [
  * Bare generic words that are the head of many unrelated context keys
  * (`sortKey`, `cacheKey`, `partitionKey`, `authUrl`, `authMethod`,
  * `isPrivate`, `privateIp`, `keyMetrics`, `spinner`, `pageToken`,
- * `nextPageToken`, `continuationToken`). Unlike other terms they match
- * ONLY as a whole key — never as a component suffix or concatenation
- * suffix — because even head-anchored matching on them would redact
- * large classes of benign keys and coerce their scalar values
- * (`sortKey`/`cacheKey` all end in the head `key`; `pageToken`,
+ * `nextPageToken`, `continuationToken`, `bypass`, `compass`). Unlike other
+ * terms they match ONLY as a whole key — never as a component suffix or
+ * concatenation suffix — because even head-anchored matching on them
+ * would redact large classes of benign keys and coerce their scalar
+ * values (`sortKey`/`cacheKey` all end in the head `key`; `pageToken`,
  * `nextPageToken`, `continuationToken`, `resetToken`, `csrfToken` all
  * end in the head `token` yet are non-secret pagination cursors /
- * anti-forgery tokens). Real secret compounds ending in one of these
- * generic heads are instead caught by enumerating the specific compound
- * as its own default (`apiKey`, `secretKey`, `accessKey`, …, and the
- * `*Token` secrets `authToken`, `accessToken`, `refreshToken`,
- * `sessionToken`, `apiToken`, `bearerToken`, `idToken`); a caller
- * wanting another (e.g. `symmetricKey`, `deployKey`, `webhookToken`)
- * adds it to `sensitiveFields`.
+ * anti-forgery tokens; `bypass`, `compass`, `surpass` and `encompass`
+ * all end in the run-together head `pass`). Real secret compounds ending
+ * in one of these generic heads are instead caught by enumerating the
+ * specific compound as its own default (`apiKey`, `secretKey`,
+ * `accessKey`, …, the `*Token` secrets `authToken`, `accessToken`,
+ * `refreshToken`, `sessionToken`, `apiToken`, `bearerToken`, `idToken`,
+ * and the password family `password`/`passwd`/`passphrase`, which are
+ * long enough to head-match safely); a caller wanting another (e.g.
+ * `symmetricKey`, `deployKey`, `webhookToken`, `dbPass`) adds it to
+ * `sensitiveFields`.
  */
 const GENERIC_WHOLE_KEY_ONLY: ReadonlySet<string> = new Set([
   'auth',
@@ -170,12 +177,15 @@ const GENERIC_WHOLE_KEY_ONLY: ReadonlySet<string> = new Set([
   'token',
   'private',
   'pin',
+  'pass',
+  'pwd',
 ]);
 
 /**
  * Shortest term eligible for concatenation-suffix matching. Terms of 3
  * characters or fewer (`otp`, `ssn`, `cvv`, `jwt`, and the generic
- * `key`/`pin`) match only as a whole key or a word-component suffix, so
+ * `key`/`pin`/`pwd`) match only as a whole key or a word-component
+ * suffix, so
  * a short term can never align to the tail of an unrelated run-together
  * word (`ssn` at the end of `businessName` — which it isn't).
  */
@@ -496,7 +506,7 @@ function isComponentSuffix(
  *
  * 1. **whole key** — `key` equals a term case-insensitively (every
  *    term, including the bare generic `key`/`token`/`auth`/`private`/
- *    `pin`);
+ *    `pin`/`pass`/`pwd`);
  * 2. **component suffix** — a non-generic term's word components are a
  *    SUFFIX of `key`'s camelCase / separator components (`authToken`
  *    masks `session_auth_token`, `apiKey` masks `userApiKey`/`x-api-key`)
@@ -515,10 +525,12 @@ function isComponentSuffix(
  * match: `creditCardBrand`, `creditCardLast4`, `tokenBucket`,
  * `nextTokenCount`, `passwordHash`, `secretary` and `tokenizer` all pass
  * through with their scalar types intact. And because the bare generic
- * `key`/`token` are whole-key only, benign compounds that merely end in
- * one of them (`sortKey`, `cacheKey`, `pageToken`, `nextPageToken`,
- * `continuationToken`, `resetToken`, `csrfToken`) are left untouched —
- * only the enumerated `*Key`/`*Token` secrets are masked.
+ * `key`/`token`/`pass` are whole-key only, benign compounds that merely
+ * end in one of them (`sortKey`, `cacheKey`, `pageToken`,
+ * `nextPageToken`, `continuationToken`, `resetToken`, `csrfToken`,
+ * `bypass`, `compass`) are left untouched — only the enumerated
+ * `*Key`/`*Token` secrets and the `password`/`passwd`/`passphrase`
+ * family are masked.
  *
  * @param key - The context key.
  * @param matcher - The compiled sensitive-key matcher.
@@ -593,8 +605,9 @@ function maskObject(
     // `authToken`/`userApiKey` and their run-together spellings
     // (`authtoken`) without masking benign qualifier-position keys
     // (`tokenBucket`, `creditCardBrand`, `pageToken`) or letting the bare
-    // generic words `key`/`token`/`auth`/`private`/`pin` over-mask
-    // `sortKey`/`pageToken`/`authUrl`. `forceMask` propagates a sensitive
+    // generic words `key`/`token`/`auth`/`private`/`pin`/`pass`/`pwd`
+    // over-mask `sortKey`/`pageToken`/`authUrl`/`bypass`. `forceMask`
+    // propagates a sensitive
     // ancestor's sensitivity onto every descendant key.
     const isSensitive = forceMask || isSensitiveKey(key, matcher);
 
