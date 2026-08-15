@@ -89,6 +89,16 @@ logger.info('Development server started', { port: 3000 });
 
 Writes logs to files with automatic rotation and buffering.
 
+> **A successful write is not persistence.** On Cloudflare Workers only
+> `/tmp` is writable, and it is an in-memory filesystem: writes succeed,
+> read back, and report a size — then vanish when the isolate recycles.
+> (Every other path there, `./app.log` or `/var/log/app.log`, fails loudly
+> at open instead.) When the handler opens its log file it asks the
+> filesystem for its capacity, and a filesystem that reports none gets one
+> `console.error` per handler. It is a warning, not an error: a scratch
+> path may well be deliberate. If in-process buffering is what you
+> actually want, use `MemoryHandler`.
+
 ### Configuration
 
 ```typescript ignore
