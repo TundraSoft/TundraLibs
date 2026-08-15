@@ -1,25 +1,21 @@
 /**
- * @tundralibs/norm — definition layer (builders, entities, named
- * schemas, docs, snapshots) + runtime (Norm facade, generated-Guardian
- * validation, repos over the executor seam).
+ * @fileoverview `@tundralibs/norm` entrypoint.
  *
- * ```ts ignore
- * const norm = new Norm({ database: {...}, secret });
- * const db = norm.use(Blog, Stats);
- * await db.repo('Users').insert({ email: 'a@b.c', ... });
- * ```
+ * This barrel exposes the full definition layer and runtime surface for
+ * the ORM: entity builders, schema declarations, generated Guardian
+ * validation, migration tooling, and repo/executor access over the
+ * configured database engine.
  *
- * **Server-only.** This barrel registers all seven dialects
- * (`postgres`, `maria`, `sqlite`, `mongo`, `neon`, `turso`, `d1`) so
- * that any `database` config constructs with no extra import. The price
- * is the native SQLite adapter, whose per-runtime bindings
- * (`$sqlite_deno` / `bun:sqlite` / `node:sqlite` / `better-sqlite3`) an
- * edge bundler cannot resolve: importing this module means the bundle
- * cannot be built for Cloudflare Workers or a browser.
+ * The root module is intentionally server-first. It registers all seven
+ * dialects (`postgres`, `maria`, `sqlite`, `mongo`, `neon`, `turso`,
+ * `d1`) so consumer code can construct a `Norm` instance with no extra
+ * import. That also loads the native SQLite bindings for local
+ * file-backed databases, which browser and Cloudflare Worker bundles
+ * cannot resolve.
  *
- * There, import {@link module:core} (`@tundralibs/norm/core`) plus the
- * one `@tundralibs/norm/engines/<dialect>` module you need; the export
- * surface is otherwise identical.
+ * For worker or browser targets, import `@tundralibs/norm/core` plus a
+ * single engine module such as `@tundralibs/norm/engines/d1` or
+ * `@tundralibs/norm/engines/neon` instead.
  *
  * @module
  */
