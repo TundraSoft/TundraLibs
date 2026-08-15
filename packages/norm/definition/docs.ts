@@ -34,16 +34,16 @@ function mmId(name: string): string {
  * sequence inside double quotes — substitute them, collapse every line-break
  * variant (a lone `\r` included, not just `\r\n`). */
 function mmText(v: string): string {
-  return v.replace(/"/g, "'").replace(/\r\n?|\n/g, ' ');
+  return v.replaceAll('"', "'").replaceAll(/\r\n?|\n/g, ' ');
 }
 
 /** Escape a value for a GFM table cell: backslash first (so it can't
  * collide with our own escape), then pipes, then every line-break variant. */
 function mdCell(v: string): string {
-  return v.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(
-    /\r\n?|\n/g,
-    ' ',
-  );
+  return v
+    .replaceAll('\\', String.raw`\\`)
+    .replaceAll('|', '\\|')
+    .replaceAll(/\r\n?|\n/g, ' ');
 }
 
 /** Render a column's SQL-ish type (`VARCHAR(255)`, `DECIMAL(12,2)`). */
