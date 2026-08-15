@@ -37,6 +37,37 @@ const nodeDgram: typeof import('node:dgram') = loadBuiltin(
   isNode,
 );
 
+/**
+ * Assert the runtime actually provides `node:dgram` before the Node path
+ * tries to use it. Without this the socket is created against `undefined`
+ * and the bind callback never fires, so the promise never settles — a hang
+ * rather than an error.
+ *
+ * Node >= 22.3 always supplies it, so the throw is unreachable on a real
+ * Node; it is Node < 22.3 (no `process.getBuiltinModule`) and Node-shaped
+ * edge runtimes that stub the module out entirely.
+ *
+ * Exported (but not re-exported from the package root, so not public API)
+ * only so the otherwise-unreachable guard is unit-testable via the
+ * `candidate` seam — the same arrangement `@tundralibs/ambient` uses for
+ * {@link https://jsr.io/@tundralibs/ambient | assertAsyncLocalStorage}.
+ *
+ * @internal
+ * @param candidate - The module to validate; defaults to the runtime's.
+ * @throws {UnsupportedRuntimeError} When no datagram backend is available.
+ */
+export function assertDatagramBackend(
+  candidate: unknown = nodeDgram,
+): void {
+  if (!candidate) {
+    throw new UnsupportedRuntimeError(
+      'udpSocket',
+      RUNTIME,
+      'node:dgram is unavailable in this runtime',
+    );
+  }
+}
+
 /** How workerd identifies itself. Cloudflare's documented detection. */
 const WORKERD_USER_AGENT = 'Cloudflare-Workers';
 
@@ -190,17 +221,7 @@ export async function udpSocket(
   }
 
   if (isNode) {
-    // No datagram backend means no socket — say so now rather than
-    // awaiting a bind that will never call back. Node < 22.3 has no
-    // `process.getBuiltinModule`, and Node-shaped edge runtimes stub the
-    // module out entirely.
-    if (!nodeDgram) {
-      throw new UnsupportedRuntimeError(
-        'udpSocket',
-        RUNTIME,
-        'node:dgram is unavailable in this runtime',
-      );
-    }
+    assertDatagramBackend();
     // Pick the socket family from the bind address: an IPv6 literal
     // (contains ':', e.g. '::') needs 'udp6', else 'udp4'. Hardcoding
     // 'udp4' made the documented '::' IPv6 hostname fail on Node.

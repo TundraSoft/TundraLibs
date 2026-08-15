@@ -13,8 +13,8 @@
 
 import { describe, it } from './test.ts';
 import * as asserts from '@std/asserts';
-import { udpSocket } from './udp.ts';
-import { isDeno } from './runtime.ts';
+import { assertDatagramBackend, udpSocket } from './udp.ts';
+import { isDeno, isNode } from './runtime.ts';
 import { join } from './path.ts';
 
 /**
@@ -195,5 +195,41 @@ console.log(JSON.stringify({
         );
       });
     }
+  });
+
+  describe('assertDatagramBackend', () => {
+    // The guard is unreachable on a real Node (>= 22.3 always supplies
+    // node:dgram), so it is exercised through its `candidate` seam. What
+    // it prevents is the hang: without it the Node path builds a socket
+    // on `undefined` and awaits a bind callback that never fires.
+    it('throws when the runtime supplies no datagram backend', () => {
+      for (const absent of [undefined, null]) {
+        asserts.assertThrows(
+          () => assertDatagramBackend(absent),
+          Error,
+          'node:dgram',
+        );
+      }
+    });
+
+    it('accepts a backend that is present', () => {
+      assertDatagramBackend({ createSocket: () => {} });
+    });
+
+    it('defaults to the runtime backend', () => {
+      // `loadBuiltin('node:dgram', isNode)` only resolves on Node, so the
+      // default candidate is the real module there and `undefined` on
+      // Deno and Bun (both have native datagram sockets and never reach
+      // this guard in practice).
+      if (isNode) {
+        assertDatagramBackend();
+      } else {
+        asserts.assertThrows(
+          () => assertDatagramBackend(),
+          Error,
+          'node:dgram',
+        );
+      }
+    });
   });
 });
