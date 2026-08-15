@@ -1,3 +1,10 @@
+/**
+ * Record formatters for `@tundralibs/slogger` — JSON, logfmt, OTEL,
+ * RFC 5424 syslog, masking, and the human-readable text layouts used by
+ * handlers to serialize a log record.
+ *
+ * @module
+ */
 export { jsonFormatter, prettyJsonFormatter } from './jsonFormatter.ts';
 export { logfmtFormatter, type LogfmtOptions } from './logfmt.ts';
 export { otelLogFormatter, type OtelLogOptions } from './otel.ts';

@@ -1,3 +1,10 @@
+/**
+ * Log transport handlers for `@tundralibs/slogger` — console, file, HTTP,
+ * TCP, syslog, stream, memory, and blackhole sinks, plus the
+ * {@link AbstractHandler} base and their option types.
+ *
+ * @module
+ */
 export {
   BlackholeHandler,
   type BlackholeHandlerOptions,
