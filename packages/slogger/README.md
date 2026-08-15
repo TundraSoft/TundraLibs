@@ -67,6 +67,19 @@ deployment.
 See [docs/Slogger-Performance.md](docs/Slogger-Performance.md) for the
 honest per-call cost breakdown.
 
+## Browser / Worker compatibility
+
+`@tundralibs/slogger` is designed for server-side application logging
+and is not a browser/worker-first runtime. TCP, syslog, file, HTTP
+transport handlers, and the socket-backed lifecycle depend on server
+runtime capabilities that are not available in a browser sandbox.
+
+This package is intended for Deno, Bun, and Node server environments,
+with the socket and file-backed handlers used in process-local or
+network-local deployments. Browser or worker bundles should restrict
+usage to the in-memory or console-style paths and avoid relying on the
+server transport handlers.
+
 ## Modules
 
 | Module                                         | Description                                 | Documentation                            |
