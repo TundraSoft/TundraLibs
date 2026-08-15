@@ -97,6 +97,8 @@ export class FileLock {
   #held = false;
 
   /**
+   * Bind a lock to a migrations directory's `migrator.lock` file.
+   *
    * @param dir - Migrations directory the `migrator.lock` file lives in.
    * @param staleMs - Age at which an untouched lock file is considered
    *   abandoned and may be reclaimed (default

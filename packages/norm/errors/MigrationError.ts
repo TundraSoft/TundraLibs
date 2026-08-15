@@ -27,6 +27,11 @@ export type MigrationErrorMeta = {
 
 /** A migration operation failed or was refused. */
 export class NormMigrationError extends NormError<MigrationErrorMeta> {
+  /**
+   * Construct a migration error.
+   *
+   * @param meta Migration context (dir, version, subject, code).
+   */
   constructor(message: string, meta: MigrationErrorMeta = {}, cause?: Error) {
     super(message, meta, cause);
   }

@@ -31,6 +31,21 @@ The same typed code runs against seven engines — four self-hosted
 edge/serverless runtimes (`neon`, `turso`, `d1`). The four self-hosted
 dialects are exercised end-to-end by the live test suite.
 
+## Browser / Worker compatibility
+
+This package is intentionally **server-side first**. The root barrel,
+`@tundralibs/norm`, registers all dialects and pulls in the native
+SQLite adapter for local file-backed databases; that is not a browser or
+worker-safe bundle target. Use `@tundralibs/norm/core` plus the single
+fetch-only engine you need (`neon`, `turso`, or `d1`) when targeting an
+edge worker or Cloudflare-style runtime, and avoid importing the root
+barrel in browser-only code.
+
+The self-hosted engines (`postgres`, `maria`, `sqlite`, `mongo`) are
+for Deno, Bun, and Node server runtimes and rely on native or networked
+connections. Only the fetch-only dialects are intended for the worker/
+edge footprint.
+
 ## Modules
 
 | Module                          | Import                               | Description                                                                                                |

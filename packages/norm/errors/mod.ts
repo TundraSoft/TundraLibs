@@ -1,3 +1,10 @@
+/**
+ * Error surface for `@tundralibs/norm` — the base {@link NormError} and
+ * the typed subclasses for definition, validation, query, crypto, hook,
+ * migration, advisory-lock, and unsupported-operation failures.
+ *
+ * @module
+ */
 export { NormError } from './Base.ts';
 export type { NormErrorCode } from './NormErrorCodes.ts';
 export {
