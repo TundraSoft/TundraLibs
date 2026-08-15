@@ -990,7 +990,8 @@ export class StringGuardian extends BaseGuardian<string> {
   }
 
   /**
-   * Validates that string does not contain common XSS patterns.
+   * Best-effort heuristic check for common XSS markers; rejects rather than
+   * cleans, and is not a substitute for context-aware output encoding.
    *
    * @param errorMessage - Optional custom error message
    * @returns A new StringGuardian with the validation applied (the receiver is never mutated)
@@ -998,14 +999,14 @@ export class StringGuardian extends BaseGuardian<string> {
   noXss(errorMessage?: string): this {
     return this.process((value: string) => {
       const xssPatterns = [
-        /<script[^>]*>.*?<\/script>/gi, // Script tags
-        /<iframe[^>]*>.*?<\/iframe>/gi, // Iframe tags
+        /<script\b[^>]*>/gi, // Script tag (opening tag alone is sufficient signal)
+        /<iframe\b[^>]*>/gi, // Iframe tag
         /on\w+\s*=\s*["'][^"']*["']/gi, // Event handlers
         /javascript:/gi, // JavaScript protocol
-        /<(img|svg)[^>]*on\w+/gi, // Image/SVG with events
+        /<(img|svg)\b[^>]*\bon\w+/gi, // Image/SVG with events
         /expression\s*\(/gi, // CSS expressions
-        /<\s*link[^>]*>/gi, // Link tags
-        /<\s*meta[^>]*>/gi, // Meta tags
+        /<\s*link\b[^>]*>/gi, // Link tags
+        /<\s*meta\b[^>]*>/gi, // Meta tags
       ];
 
       for (const pattern of xssPatterns) {
@@ -2134,7 +2135,9 @@ export class StringGuardian extends BaseGuardian<string> {
   }
 
   /**
-   * Sanitizes the string by removing/escaping dangerous characters.
+   * HTML-entity encodes `& < > " '`. Encoding, not tag-stripping, is the
+   * complete defense for HTML text/attribute context — a regex tag filter
+   * is trivially bypassed, so this method no longer attempts one.
    *
    * @returns A new StringGuardian with the validation applied (the receiver is never mutated)
    */
@@ -2142,15 +2145,6 @@ export class StringGuardian extends BaseGuardian<string> {
     return this.process(
       (value: string) =>
         value
-          // Remove script tags and their content
-          .replaceAll(/<script[^>]*>.*?<\/script>/gi, '')
-          // Remove iframe tags and their content
-          .replaceAll(/<iframe[^>]*>.*?<\/iframe>/gi, '')
-          // Remove event handlers
-          .replaceAll(/on\w+\s*=\s*["'][^"']*["']/gi, '')
-          // Remove javascript: protocol
-          .replaceAll(/javascript:/gi, '')
-          // Escape HTML entities
           .replaceAll('&', '&amp;')
           .replaceAll('<', '&lt;')
           .replaceAll('>', '&gt;')

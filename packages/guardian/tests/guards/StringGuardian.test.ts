@@ -876,12 +876,18 @@ describe('guardian.StringGuardian', () => {
       const schema = new StringGuardian().sanitize();
 
       asserts.assertEquals(schema.parse('normal text'), 'normal text');
-      asserts.assertEquals(schema.parse("<script>alert('bad')</script>"), '');
+      asserts.assertEquals(
+        schema.parse("<script>alert('bad')</script>"),
+        '&lt;script&gt;alert(&#x27;bad&#x27;)&lt;/script&gt;',
+      );
       asserts.assertEquals(
         schema.parse('Hello & <world>'),
         'Hello &amp; &lt;world&gt;',
       );
-      asserts.assertEquals(schema.parse('onclick="alert(1)"'), '');
+      asserts.assertEquals(
+        schema.parse('onclick="alert(1)"'),
+        'onclick=&quot;alert(1)&quot;',
+      );
     });
 
     it('normalizeSpace transformation', () => {
