@@ -112,6 +112,7 @@ is documented in [`engines/registry.ts`](engines/registry.ts).
 
 ```typescript
 import { Column, Entity, Norm, Schema } from '@tundralibs/norm';
+// Needs a separate install: deno add @tundralibs/drivers
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 // 1. Define entities with the Column builders.
@@ -371,6 +372,7 @@ row data, plaintext, or secrets:
 
 ```typescript
 import { Norm } from '@tundralibs/norm';
+// Needs a separate install: deno add @tundralibs/drivers
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 const engine = new SQLiteEngine('app', { path: './data' });

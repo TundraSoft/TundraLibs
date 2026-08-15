@@ -499,6 +499,7 @@ your own context type and read headers from wherever your context keeps them:
 
 ```typescript
 import { extract, SpanKind, Tracer } from '@tundralibs/tracer';
+// Needs a separate install: deno add @tundralibs/radrouter
 import { RadRouter } from '@tundralibs/radrouter';
 
 const tracer = new Tracer({ serviceName: 'orders' });
@@ -528,6 +529,7 @@ ambient store with no coupling in either direction:
 
 ```typescript
 import { Tracer } from '@tundralibs/tracer';
+// Needs a separate install: deno add @tundralibs/restler
 import type { RESTlerOptions } from '@tundralibs/restler';
 
 const tracer = new Tracer({ serviceName: 'orders' });
@@ -616,6 +618,7 @@ tracer never learns about drivers.
 
 ```typescript
 import { SemConv, SpanKind, SpanStatusCode, Tracer } from '@tundralibs/tracer';
+// Needs a separate install: deno add @tundralibs/drivers
 import type { EngineQueryResult } from '@tundralibs/drivers';
 
 const tracer = new Tracer({ serviceName: 'orders' });
@@ -683,6 +686,7 @@ spans that parent to whatever request span is active:
 
 ```typescript
 import { SpanKind, Tracer } from '@tundralibs/tracer';
+// Needs a separate install: deno add @tundralibs/norm
 import type { NormEvents } from '@tundralibs/norm';
 
 const tracer = new Tracer({ serviceName: 'orders' });
@@ -727,6 +731,7 @@ never _active_ while the operation runs. The witness closes exactly that gap:
 
 ```typescript
 import { Tracer } from '@tundralibs/tracer';
+// Needs a separate install: deno add @tundralibs/norm
 import { Norm, type NormConfig } from '@tundralibs/norm';
 
 const tracer = new Tracer({ serviceName: 'orders' });

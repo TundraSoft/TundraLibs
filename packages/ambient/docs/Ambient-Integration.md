@@ -73,6 +73,7 @@ thunk invoked per emitted record and merged **under** the call/scope context —
 explicit fields always win:
 
 ```typescript
+// Needs a separate install: deno add @tundralibs/slogger
 import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
 import { ambient } from '@tundralibs/ambient';
 
@@ -106,8 +107,10 @@ The correlation between logs and traces happens, again, at the composition
 root:
 
 ```typescript
+// Needs a separate install: deno add @tundralibs/slogger
 import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
 import { ambient } from '@tundralibs/ambient';
+// Needs a separate install: deno add @tundralibs/tracer
 import { Tracer } from '@tundralibs/tracer';
 
 const tracer = new Tracer({ serviceName: 'orders' });
