@@ -27,7 +27,11 @@ export {
 } from './Config.ts';
 export { envArgs } from './envArgs.ts';
 export { type EventCallback, Events } from './Events.ts';
-export { getFreePort, PortError } from './getFreePort.ts';
+export {
+  getFreePort,
+  type GetFreePortOptions,
+  PortError,
+} from './getFreePort.ts';
 export {
   expandIPv6,
   IPV4_BITS,
