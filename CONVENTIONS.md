@@ -331,6 +331,16 @@ agents, so they follow different import rules from source.
   commands, JSON, directory trees, deliberate pseudo-code. Never
   use it to silence an example that was meant to work.
 
+- **An example that imports a sibling package says so.** A recipe
+  that reaches for another `@tundralibs/*` package (tracer wiring
+  norm's event bus, norm's bring-your-own-engine path taking a
+  driver) compiles in the workspace but not for a reader who
+  installed only this one. Put the extra install next to the import
+  as a comment — `// Needs a separate install: deno add
+  @tundralibs/drivers` — so it travels with the block. The
+  consumer-doc check (`.github/scripts/consumer-doc-check.ts`)
+  enforces resolution; the comment is what tells the human.
+
 JSDoc `@example` blocks are the exception: the documented module is
 already in scope, so they need no import — and adding one that names
 a symbol the specifier doesn't re-export introduces an error that

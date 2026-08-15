@@ -115,6 +115,7 @@ any downstream middleware. The framework still acks the request with
 
 ```ts
 import { Server } from '@tundralibs/rpc';
+// Needs a separate install: deno add @tundralibs/compat
 import type { ServerWebSocket } from '@tundralibs/compat/webserver';
 
 const server = new Server();

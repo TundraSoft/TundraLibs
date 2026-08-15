@@ -123,6 +123,7 @@ the same millisecond.
 
 ```typescript
 import { cuid } from '@tundralibs/id';
+// Needs a separate install: deno add @tundralibs/guardian
 import { Guardian } from '@tundralibs/guardian';
 
 const CuidGuard = Guardian.string().cuid();

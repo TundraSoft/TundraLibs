@@ -332,6 +332,7 @@ deliberately **not** re-exported from `@tundralibs/rpc` or
 `@tundralibs/rpc/pubsub` — see [Why its own sub-path](#why-its-own-sub-path).
 
 ```ts
+// Needs a separate install: deno add @tundralibs/compat
 import { describe } from '@tundralibs/compat/test';
 import { runAdapterConformance } from '@tundralibs/rpc/conformance';
 import type { PubSubAdapter } from '@tundralibs/rpc';
