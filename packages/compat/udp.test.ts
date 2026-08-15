@@ -203,7 +203,11 @@ console.log(JSON.stringify({
     // it prevents is the hang: without it the Node path builds a socket
     // on `undefined` and awaits a bind callback that never fires.
     it('throws when the runtime supplies no datagram backend', () => {
-      for (const absent of [undefined, null]) {
+      // NOT `undefined` — that triggers the default parameter and
+      // resolves to the runtime's real module, so the call correctly
+      // does not throw on Node. `null` and the other falsy values are
+      // what an absent backend actually looks like through the seam.
+      for (const absent of [null, false, 0, '']) {
         asserts.assertThrows(
           () => assertDatagramBackend(absent),
           Error,
@@ -214,6 +218,30 @@ console.log(JSON.stringify({
 
     it('accepts a backend that is present', () => {
       assertDatagramBackend({ createSocket: () => {} });
+    });
+
+    it('an explicit undefined falls through to the runtime default', () => {
+      // Default parameters fire on `undefined`, so this is NOT a way to
+      // simulate an absent backend — it asks for the runtime's own. The
+      // outcome therefore has to match the no-argument call exactly.
+      const viaDefault = (() => {
+        try {
+          assertDatagramBackend();
+          return 'ok';
+        } catch {
+          return 'threw';
+        }
+      })();
+      const viaUndefined = (() => {
+        try {
+          assertDatagramBackend(undefined);
+          return 'ok';
+        } catch {
+          return 'threw';
+        }
+      })();
+      asserts.assertEquals(viaUndefined, viaDefault);
+      asserts.assertEquals(viaDefault, isNode ? 'ok' : 'threw');
     });
 
     it('defaults to the runtime backend', () => {
