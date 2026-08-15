@@ -167,7 +167,6 @@ logger.info('Request processed', {
 - Buffered writes for performance
 - Variable substitution in paths
 - Automatic directory creation
-- Graceful fallback to console on errors
 
 ### Performance
 
