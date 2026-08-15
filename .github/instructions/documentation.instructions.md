@@ -122,20 +122,20 @@ What this package does.
 **Deno:**
 
 ```bash
-deno add @tundrasoft/{package}
+deno add @tundralibs/{package}
 ```
 ````
 
 **Bun:**
 
 ```bash
-bunx jsr add @tundrasoft/{package}
+bunx jsr add @tundralibs/{package}
 ```
 
 **Node.js:**
 
 ```bash
-npx jsr add @tundrasoft/{package}
+npx jsr add @tundralibs/{package}
 ```
 
 ## Quick Start
@@ -262,26 +262,26 @@ Always use JSR format:
 **Deno:**
 
 ```bash
-deno add @tundrasoft/{package}
+deno add @tundralibs/{package}
 ```
 ````
 
 **Bun:**
 
 ```bash
-bunx jsr add @tundrasoft/{package}
+bunx jsr add @tundralibs/{package}
 ```
 
 **Node.js:**
 
 ```bash
-npx jsr add @tundrasoft/{package}
+npx jsr add @tundralibs/{package}
 ```
 
 **Direct import (Deno):**
 
 ```typescript
-import { Thing } from 'jsr:@tundrasoft/{package}/{module}';
+import { Thing } from 'jsr:@tundralibs/{package}/{module}';
 ```
 
 ````
@@ -313,30 +313,167 @@ Use checkmarks and X marks consistently:
 
 ## Code Examples
 
-1. **Always include imports** - Show where things come from
-2. **Use TypeScript** - This is a TypeScript project
-3. **Show practical usage** - Not just API signatures
-4. **Include error handling** - When relevant
+Documentation ships to consumers. `README.md` and `docs/*.md` are included in
+the published tarball — a `npx jsr add @tundralibs/id` install puts every
+`docs/*.md` file into the consumer's `node_modules`. Examples are therefore
+distributed code, and they are read by both humans and coding agents. Treat a
+wrong example as a bug, not a typo.
+
+1. **Every block carries its own imports** - see below, this is not optional
+2. **Use the public specifier** - never a relative path
+3. **Use TypeScript** - this is a TypeScript project
+4. **Show practical usage** - not just API signatures
+5. **Include error handling** - when relevant
+
+### Every block must stand alone
+
+`deno check --doc-only` compiles **each fenced block as its own module** — there
+is no shared scope between blocks in the same file. A block that uses `logger`
+must also construct `logger`.
+
+Repeating a one-line import across sibling blocks is **correct and intended**.
+Do not factor it out. A reader — or a model — who lands on one block in
+isolation must get everything needed to run it.
+
+Keep setup minimal: the import, plus the least construction that makes the
+demonstrated call legal.
+
+### Import specifiers
+
+| Specifier | Resolves? | Use in docs? |
+| --------- | --------- | ------------ |
+| `@tundralibs/{package}` | Yes | **Default choice** |
+| `@tundralibs/{package}/{subpath}` | Yes | **When the symbol lives there** |
+| `../mod.ts` or `./Thing.ts` | Yes | **Never.** Consumers cannot use it |
+| `@std/*` | Only if the package declares it | Avoid; do not add a dep for a doc |
+
+Relative imports type-check but are forbidden in documentation — a consumer
+reading the shipped copy has no `../mod.ts`. Always write the specifier a
+consumer would actually type.
+
+Pick the specifier from the package's `deno.json` `exports` map: if the symbol
+is re-exported from the root `mod.ts`, use the bare package specifier; if it is
+only reachable through a subpath (`./errors`, `./types`, `./handlers`,
+`./definition`), use that exact subpath. When both work, prefer the one the
+surrounding document is teaching.
+
+**This is the single most important rule in this file.** Packages here expose
+2–15 subpath exports, and the import specifier is the one thing a reader cannot
+infer from the example body.
 
 ```typescript
-// Good
-import { Server } from './Server.ts';
+// Good — public specifier, self-contained, runnable
+import { Slogger } from '@tundralibs/slogger';
 
-const server = new Server('API', {
-  mode: 'TCP',
-  port: 8080,
-  handler: (req) => new Response('OK'),
-});
+const logger = new Slogger('api');
+logger.info('server started', { port: 8080 });
 
-server.start();
+// Bad — relative import; consumers cannot use this path
+import { Slogger } from '../mod.ts';
 
-// Bad - missing import, no practical context
-new Server('API', options);
+// Bad — no import, no construction; `logger` is undefined
+logger.info('server started', { port: 8080 });
 ```
+
+### Blocks that are not runnable code
+
+Tag a block ` ```ts ignore ` when it is not meant to compile. `deno check
+--doc-only` skips those and checks everything tagged ` ```ts `.
+
+Use `ts ignore` for:
+
+- **Signatures and type declarations** — `new Slogger(options: SloggerOptions)`
+- **Shell commands, JSON, config fragments, directory trees** mistagged as `ts`
+- **Deliberate pseudo-code** with `...` elisions or placeholder identifiers
+
+Never use `ts ignore` to silence a block that was meant to be a working example.
+That defeats the purpose of the check.
+
+## Verification — run this, do not eyeball it
+
+Documentation in this repo is machine-checked. Both commands emit ANSI colour
+codes; pipe through `sed 's/\x1b\[[0-9;]*m//g'` before parsing output.
+
+### Markdown examples
+
+```bash
+deno check --doc-only packages/{package}/README.md packages/{package}/docs/*.md
+```
+
+Type-checks every ` ```ts ` block. Must exit clean before the work is done.
+Check each file as you edit it rather than batching — the failure output is
+per-block and easier to act on one file at a time.
+
+### JSDoc surface
+
+```bash
+deno doc --lint packages/{package}/mod.ts
+```
+
+Reports three categories on the public API:
+
+| Category | Meaning | Fix |
+| -------- | ------- | --- |
+| `missing-jsdoc` | Exported symbol has no JSDoc | Write it — see below |
+| `private-type-ref` | Exported signature references a non-exported type | Export the type, or stop exposing it. **API decision — raise it, don't guess** |
+| `missing-explicit-type` | Exported symbol has an inferred type | Annotate it |
+
+### JSDoc examples
+
+```bash
+deno check --doc packages/{package}/mod.ts
+```
+
+Type-checks the code inside `@example` blocks. An `@example` that does not
+compile is worse than no example.
+
+**`@example` blocks follow different scoping rules from markdown blocks.** The
+documented module's exports are already in scope, so an `@example` may call the
+symbol it documents with no import:
+
+```typescript
+/**
+ * Adds one.
+ *
+ * @example
+ * ```ts
+ * console.log(increment(1)); // 2
+ * ```
+ */
+export function increment(n: number): number {
+  return n + 1;
+}
+```
+
+That compiles. Undefined names are still caught (`TS2304`), so the check is
+real — it simply starts with the module in scope.
+
+Consequences:
+
+- **Do not add imports to existing `@example` blocks.** They are unnecessary,
+  and an import naming a symbol that is not actually re-exported from that
+  specifier will *introduce* a `TS2305` failure that was not there before.
+- **If an example genuinely needs a second package**, import that one only, by
+  public specifier, and only if the package already declares the dependency.
+- Everything else still applies: no relative imports, no `@std/*` unless
+  declared, and real TypeScript rather than pseudo-code.
+
+The markdown rule (every block carries its own imports) and the `@example` rule
+(module already in scope) are both correct. Do not apply one to the other.
+
+### Never trade one for the other
+
+Do not silence a `--doc-only` failure by deleting the example, and do not fix a
+doc by editing source behaviour. If an example cannot be made to compile because
+the API is genuinely wrong or awkward, leave it failing and report it — that is
+a real finding and more valuable than a green check.
 
 ## JSDoc Documentation
 
 All exported functions, classes, methods, and types MUST have JSDoc comments.
+
+`deno doc --lint packages/{package}/mod.ts` is the authority on what is missing.
+Run it before you start and after you finish; the count must go down, never up.
 
 ### Length budget (READ FIRST)
 

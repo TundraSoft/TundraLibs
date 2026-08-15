@@ -224,6 +224,7 @@ const server = new Server()
 
 ```ts
 import { Server } from '@tundralibs/rpc';
+// Needs a separate install: deno add @tundralibs/compat
 import type { WebSocketHandler } from '@tundralibs/compat/webserver';
 
 const server = new Server();
@@ -248,6 +249,7 @@ The most common shape — REST + realtime sharing one server, one port,
 one TLS config.
 
 ```ts
+// Needs a separate install: deno add @tundralibs/compat
 import { WebServer } from '@tundralibs/compat/webserver';
 import { Server } from '@tundralibs/rpc';
 
@@ -525,6 +527,7 @@ await server.listen({ port: 8080 });
 any validator that throws on invalid input fits.
 
 ```ts
+// Needs a separate install: deno add @tundralibs/guardian
 import { Guardian } from '@tundralibs/guardian';
 import { Server } from '@tundralibs/rpc';
 
@@ -618,6 +621,7 @@ Or short-circuit silently (returns `ok: true` with no data):
 
 ```ts
 import { Server } from '@tundralibs/rpc';
+// Needs a separate install: deno add @tundralibs/compat
 import type { ServerWebSocket } from '@tundralibs/compat/webserver';
 
 const server = new Server();

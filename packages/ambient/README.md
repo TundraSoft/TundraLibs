@@ -100,6 +100,7 @@ so hand it `ambient.get()` and every line carries whatever the request boundary
 set, no `reqId` argument in sight:
 
 ```typescript
+// Needs a separate install: deno add @tundralibs/slogger
 import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
 import { ambient } from '@tundralibs/ambient';
 

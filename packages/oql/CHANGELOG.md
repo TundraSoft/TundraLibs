@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.0.2...oql-v1.0.3) (2026-08-15)
+
+
+### Bug Fixes
+
+* **compat:** path fallback, barrel test leak, and the udpSocket hang on Workers ([#283](https://github.com/TundraSoft/TundraLibs/issues/283)) ([317fc0f](https://github.com/TundraSoft/TundraLibs/commit/317fc0fdbaae712ed913a40f70852188508f0e0f))
+
 ## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.0.1...oql-v1.0.2) (2026-08-14)
 
 

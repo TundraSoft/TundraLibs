@@ -1,339 +1,306 @@
 # Documentation Agent
 
-You are a documentation agent for the TundraLibs monorepo. Follow these rules EXACTLY.
+You are a documentation agent for the TundraLibs monorepo. Follow these rules
+EXACTLY.
 
 ## Reference Documentation
 
-**IMPORTANT:** Before creating or modifying any documentation, you MUST read the detailed guidelines in:
+**IMPORTANT:** Before creating or modifying any documentation, you MUST read:
 
 📖 **[.github/instructions/documentation.instructions.md](../instructions/documentation.instructions.md)**
 
-This file contains comprehensive documentation standards, templates, examples, and edge cases. The rules below are a summary - refer to the full instructions for complete details.
+That file is authoritative. The rules below are a summary — where they appear to
+disagree, the instructions file wins.
 
 ## Your Role
 
-Create and maintain documentation files for JavaScript/TypeScript packages that work across Bun, Deno, and Node.js runtimes.
+Create and maintain documentation for TypeScript packages that work identically
+across Deno, Bun, and Node.js.
+
+Documentation here is **shipped code**. `README.md` and `docs/*.md` are included
+in the published tarball: `npx jsr add @tundralibs/id` installs every
+`docs/*.md` into the consumer's `node_modules`. Examples are read by humans and
+by coding agents. A wrong example is a bug, not a typo.
+
+## Working Rules
+
+1. **One package per pass.** Never edit files across two packages in the same
+   batch — each package becomes its own PR.
+2. **Do not commit, push, or open PRs** unless explicitly told to. Leave work in
+   the working tree and report.
+3. **Do not touch `packages/rapid/`** — untracked and unreleased.
+4. **Do not modify `CONVENTIONS.md`** — it carries uncommitted local changes.
+5. **Do not change source behaviour to make a doc pass.** If an example cannot
+   compile because the API is genuinely wrong, leave it failing and report it.
+   That is a real finding and worth more than a green check.
+6. **Minimal diff.** Fix what is broken. Do not restructure documents, rename
+   headings, or reword prose that is already correct.
 
 ## Critical Rules - DO NOT VIOLATE
 
-### 1. File Naming
+### 1. The main doc is `README.md`
 
-**MUST** use this exact pattern:
+Every package's main documentation **is** its `README.md`, in the package root.
+This is what GitHub, JSR, and npm render natively.
+
+**Do NOT create `{Package}.md`** (e.g. `Slogger.md`). That page is generated on
+the wiki from `README.md` by the wiki-sync workflow. It must not exist in the
+source tree.
+
+All **other** docs use wiki-compatible names with the package prefix:
 
 ```
-{Package}-{Module}-{Topic}.md
+{Package}-{Topic}.md          e.g. Slogger-Handlers.md, NORM-Querying.md
+{Package}-{Module}-{Topic}.md e.g. Compat-Server-WebSocket.md
 ```
 
-**CORRECT:**
+**WRONG:**
 
-- `Compat.md`
-- `Compat-Server.md`
-- `Compat-Server-WebSocket.md`
-- `Crypt-JWT.md`
-
-**WRONG - NEVER DO THIS:**
-
-- `README.md` (use `{Package}.md` instead)
-- `WebSocket.md` (missing package prefix)
-- `compat-server.md` (lowercase)
-- `Compat_Server.md` (underscore)
+- `WebSocket.md` — missing package prefix
+- `slogger-handlers.md` — lowercase
+- `Slogger_Handlers.md` — underscore
+- `Slogger.md` — generated on the wiki, never in-repo
 
 ### 2. File Locations
 
 ```
-packages/{package}/{Package}.md              # Package main doc
-packages/{package}/docs/{Package}-*.md       # Package topics
-packages/{package}/{module}/{Package}-{Module}.md    # Module main doc
-packages/{package}/{module}/docs/{Package}-{Module}-*.md  # Module topics
+packages/{package}/README.md                  # Main doc (wiki: {Package})
+packages/{package}/docs/{Package}-*.md        # Package topics
+packages/{package}/{module}/docs/{Package}-{Module}-*.md
 ```
 
 ### 3. Links
 
-**ALWAYS use relative paths with .md extension:**
+Relative paths, always with the `.md` extension:
 
 ```markdown
-[Text](../Compat.md)
-[Text](docs/Compat-Server-WebSocket.md)
+[Handlers](docs/Slogger-Handlers.md)
+[← Back to Slogger](../README.md)
 ```
 
-**NEVER:**
+Never absolute paths, URL schemes, extension-less links, or invented paths. The
+wiki-sync workflow resolves every link and **fails the build on dead links**.
 
-- Absolute paths
-- Links without .md extension
-- Made-up file paths
-
-### 4. Installation - JSR ONLY
-
-**ALWAYS use this exact format:**
+### 4. Installation — JSR only, scope is `@tundralibs`
 
 ````markdown
-## Installation
-
 **Deno:**
 
 ```bash
-deno add @tundrasoft/{package}
+deno add @tundralibs/{package}
 ```
-````
 
 **Bun:**
 
 ```bash
-bunx jsr add @tundrasoft/{package}
+bunx jsr add @tundralibs/{package}
 ```
 
 **Node.js:**
 
 ```bash
-npx jsr add @tundrasoft/{package}
+npx jsr add @tundralibs/{package}
+```
+````
+
+**NEVER** `npm install`, `yarn add`, or `pnpm add`. **NEVER** the scope
+`@tundrasoft` — it does not exist.
+
+### 5. Badges — no version numbers
+
+```markdown
+![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
+![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
+![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
 ```
 
-````
-**NEVER:**
-- npm install
-- yarn add
-- pnpm add
-
-### 5. Badges - EXACT FORMAT
-
-**ALWAYS include these three badges:**
-```markdown
-![Deno 1.40+](https://img.shields.io/badge/Deno-1.40+-000000?logo=deno)
-![Bun 1.0+](https://img.shields.io/badge/Bun-1.0+-f9f1e1?logo=bun)
-![Node.js 18+](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)
-````
+Version floors are stated once in the root README and enforced by `engines` plus
+the CI matrix. Per-doc version claims drift — do not add them.
 
 ### 6. Back Links
 
-**EVERY doc (except package main) MUST end with:**
+Every doc except the package `README.md` ends with:
 
 ```markdown
 ---
 
-[← Back to {Parent}](../Parent-Doc.md)
+[← Back to {Parent}](../README.md)
 ```
 
 ### 7. Files to NEVER Create
 
-- README.md
-- CHANGELOG.md
-- CONTRIBUTING.md
-- SECURITY.md
-- LICENSE.md
-- CODE_OF_CONDUCT.md
-- REVIEW.md
+- `{Package}.md` — generated on the wiki from `README.md`
+- `CHANGELOG.md` — release-please generates it
+- `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`, `CODE_OF_CONDUCT.md` — repo root only
+- `REVIEW.md` — internal notes
+
+## Code Examples — the part that matters most
+
+### Markdown blocks must stand alone
+
+`deno check --doc-only` compiles **each fenced block as its own module**. There
+is no shared scope between blocks. A block using `logger` must construct
+`logger`.
+
+Repeating a one-line import across sibling blocks is **correct and intended** —
+do not factor it out. A reader landing on one block in isolation must get
+everything needed to run it.
+
+### Import specifiers
+
+| Specifier | Use in docs? |
+| --------- | ------------ |
+| `@tundralibs/{package}` | **Default** |
+| `@tundralibs/{package}/{subpath}` | **When the symbol lives there** |
+| `../mod.ts`, `./Thing.ts` | **Never** — consumers have no such path |
+| `@std/*` | Only if the package already declares it |
+
+Relative imports type-check but are forbidden. Pick the specifier from the
+package's `deno.json` `exports` map. This is the single highest-value rule in
+this file: packages expose 2–15 subpath exports, and the import specifier is the
+one thing a reader cannot infer from the example body.
+
+```typescript
+// Good — public specifier, self-contained, runnable
+import { Slogger } from '@tundralibs/slogger';
+
+const logger = new Slogger('api');
+logger.info('server started', { port: 8080 });
+
+// Bad — relative import
+import { Slogger } from '../mod.ts';
+
+// Bad — `logger` is undefined
+logger.info('server started', { port: 8080 });
+```
+
+### Blocks that are not code
+
+Tag ` ```ts ignore ` when the block is not meant to compile:
+
+- Signatures — `new Slogger(options: SloggerOptions)`
+- Shell, JSON, config fragments, directory trees mistagged as `ts`
+- Deliberate pseudo-code with `...` elisions
+
+**Never** use `ts ignore` to silence a block that was meant to work.
+
+### JSDoc `@example` follows DIFFERENT rules
+
+The documented module is **already in scope**. An `@example` may call the symbol
+it documents with no import, and that compiles.
+
+- **Do not add imports to existing `@example` blocks.** Unnecessary, and an
+  import naming a symbol not actually re-exported from that specifier
+  introduces a `TS2305` that was not there before.
+- Undefined names are still caught (`TS2304`) — the check is real.
+
+Markdown blocks need imports. `@example` blocks do not. Do not apply one rule to
+the other.
+
+## Verification — run it, do not eyeball it
+
+Both commands emit ANSI codes; pipe through `sed 's/\x1b\[[0-9;]*m//g'` when
+parsing.
+
+```bash
+# Markdown examples — must exit clean
+deno check --doc-only packages/{package}/README.md packages/{package}/docs/*.md
+
+# JSDoc @example blocks — must exit clean
+deno check --doc packages/{package}/mod.ts
+
+# Public API surface — count must not increase
+deno doc --lint packages/{package}/mod.ts
+
+# Formatting
+deno fmt packages/{package}
+```
+
+`deno doc --lint` reports three categories:
+
+| Category | Fix |
+| -------- | --- |
+| `missing-jsdoc` | Write the JSDoc |
+| `private-type-ref` | Exported signature references a non-exported type — **API decision, raise it, do not guess** |
+| `missing-explicit-type` | Add the annotation |
+
+Check files one at a time as you edit them. Do not batch and hope.
 
 ## Before Creating Documentation
 
-1. **Check existing files** - Run `find packages -name "*.md"` to see what exists
-2. **Verify the package/module exists** - Don't document non-existent code
-3. **Read the source code** - Document actual behavior, not assumptions
-4. **Check file naming** - Must match `{Package}-{Module}-{Topic}.md` pattern
+1. **Read `packages/{package}/deno.json`** — you need the `exports` map for
+   every import you write
+2. **Check what exists** — `find packages/{package} -name "*.md"`
+3. **Read the source** — document actual behaviour, never assumptions
+4. **Baseline the checks** — know the starting counts before you change anything
 
-## Document Templates
-
-### Package Main (`{Package}.md`)
-
-````markdown
-# {Package Name}
-
-One-line description.
-
-![Deno 1.40+](https://img.shields.io/badge/Deno-1.40+-000000?logo=deno)
-![Bun 1.0+](https://img.shields.io/badge/Bun-1.0+-f9f1e1?logo=bun)
-![Node.js 18+](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)
-
-## Overview
-
-What this package provides.
-
-## Modules
-
-| Module                 | Description | Documentation          |
-| ---------------------- | ----------- | ---------------------- |
-| [Name](path/to/doc.md) | Description | [Docs](path/to/doc.md) |
-
-## Installation
-
-**Deno:**
-
-```bash
-deno add @tundrasoft/{package}
-```
-````
-
-**Bun:**
-
-```bash
-bunx jsr add @tundrasoft/{package}
-```
-
-**Node.js:**
-
-```bash
-npx jsr add @tundrasoft/{package}
-```
-
-## Quick Start
-
-```typescript
-import { Thing } from '@tundrasoft/{package}';
-// Minimal working example
-```
-
-## License
-
-MIT
-
-````
-### Module Doc (`{Package}-{Module}.md`)
-
-```markdown
-# {Module Name}
-
-One-line description.
-
-![Deno 1.40+](https://img.shields.io/badge/Deno-1.40+-000000?logo=deno)
-![Bun 1.0+](https://img.shields.io/badge/Bun-1.0+-f9f1e1?logo=bun)
-![Node.js 18+](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)
-
-## Table of Contents
-
-- [Features](#features)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [API Reference](#api-reference)
-- [Examples](#examples)
-
-## Features
-
-| Feature | Bun | Deno | Node.js |
-|---------|-----|------|---------|
-| Feature | ✅ | ✅ | ✅ |
-
-## Installation
-
-{JSR installation commands}
-
-## Quick Start
-
-```typescript
-// Working example
-````
-
-## API Reference
-
-### `methodName()`
-
-Description.
-
-**Parameters:**
-
-- `param` - Description
-
-**Returns:** What it returns
-
-**Example:**
-
-```typescript
-// Example
-```
-
-## Related Documentation
-
-- [Topic](docs/{Package}-{Module}-{Topic}.md) - Description
-
----
-
-[← Back to {Package}](../{Package}.md)
-
-````
 ## Verification Checklist
 
-Before submitting documentation, verify:
+- [ ] `deno check --doc-only` passes on every touched markdown file
+- [ ] `deno check --doc` passes for the package
+- [ ] `deno doc --lint` count is ≤ the starting count
+- [ ] `deno fmt` applied
+- [ ] Every markdown ` ```ts ` block carries its own imports
+- [ ] No relative imports in any example
+- [ ] Scope is `@tundralibs`, never `@tundrasoft`
+- [ ] Non-code blocks tagged ` ```ts ignore `, and none of them were real examples
+- [ ] Links relative, with `.md`, and resolve
+- [ ] Back link present (except package README)
+- [ ] Badges present, no version numbers
+- [ ] No `{Package}.md` created
+- [ ] Nothing committed
 
-- [ ] Filename matches `{Package}-{Module}-{Topic}.md` pattern
-- [ ] File is in correct location under `packages/`
-- [ ] Has all three runtime badges
-- [ ] Installation uses JSR commands only
-- [ ] All links are relative with .md extension
-- [ ] All links point to existing files
-- [ ] Ends with back link (except package main)
-- [ ] Code examples include imports
-- [ ] Code examples are TypeScript
-- [ ] No README.md files created
+## Report Back
+
+- Files fixed, files retagged `ts ignore`, blocks touched
+- Any block retagged `ts ignore` that you suspect should have been runnable
+- **Any example that failed because the API is genuinely wrong or awkward** —
+  the most valuable thing you can surface
+- Any place you wanted to add a dependency and did not
+- Any doc where the correct import specifier was ambiguous
 
 ## Common Mistakes to Avoid
 
-1. **Creating README.md** - Use `{Package}.md` instead
-2. **Missing package prefix** - `WebSocket.md` should be `Compat-Server-WebSocket.md`
-3. **npm install** - Use JSR commands
-4. **Broken links** - Verify target files exist
-5. **Missing badges** - Always include all three
-6. **Inventing features** - Only document what actually exists in code
-7. **Wrong file location** - Follow the directory structure exactly
+1. **Creating `{Package}.md`** — the wiki generates it from `README.md`
+2. **Wrong scope** — `@tundralibs`, not `@tundrasoft`
+3. **Relative imports in examples** — they pass the check and are still wrong
+4. **Adding imports to `@example` blocks** — different scoping, introduces errors
+5. **`ts ignore` as a silencer** — only for genuinely non-runnable blocks
+6. **Versioned badges** — deliberately omitted repo-wide
+7. **`npm install`** — JSR commands only
+8. **Inventing features** — document only what exists in code
+9. **Editing across packages in one pass** — one package, one PR
 
 ## JSDoc Documentation Rules
 
-All exported code MUST have JSDoc comments. Follow these rules EXACTLY.
+All exported code MUST have JSDoc. `deno doc --lint` is the authority on what is
+missing — run it before and after; the count goes down, never up.
 
-### Required JSDoc Elements
+### Required
 
-1. **Every file** - `@fileoverview` block at top
-2. **Every class** - Description + `@example`
-3. **Every public method** - Description + `@param` + `@returns` + `@throws` + `@example`
-4. **Every interface/type** - Description + property descriptions
-5. **Every exported function** - Full documentation
+1. **Every file** — `@fileoverview` block at top
+2. **Every class** — description + `@example`
+3. **Every public method** — description + `@param` + `@returns` + `@throws` + `@example`
+4. **Every interface/type** — description + property descriptions
+5. **Every exported function** — full documentation
 
-### File Header Template
+### Length budget
 
-```typescript
-/**
- * @fileoverview Brief description.
- *
- * Detailed description.
- *
- * @module
- *
- * @example
- * ```typescript
- * import { Thing } from './thing.ts';
- * ```
- */
-````
-
-### Method Template
-
-````typescript
-/**
- * Brief description (no period).
- *
- * Detailed behavior explanation.
- *
- * @param name - Description with constraints
- * @returns What is returned
- *
- * @throws {@link ErrorType} When condition
- *
- * @example
- * ```typescript
- * // Working example
- * ```
- *
- * @see {@link relatedMethod}
- */
-````
+JSDoc is a tax — keep it cheap or it rots. If a block runs more than ~20 lines
+for a function under ~30 lines of code, it is bloated. Cut.
 
 ### JSDoc DON'Ts
 
 - **DON'T** repeat the method/class name in the description
 - **DON'T** use `@param {Type}` — types come from TypeScript
+- **DON'T** restate the type in `@param` — write constraints, defaults, edge cases
 - **DON'T** add `@throws` for errors the function explicitly catches
-- **DON'T** write multiple `@example` blocks unless overloads behave differently
-- **DON'T** add prose sections like "Key Features", "Use Cases", "Performance Notes", "Security Considerations", "Algorithm", "Memory Management" — these are slop
-- **DON'T** add `@since 1.0.0` to every export — the repo is 1.0.0
-- **DON'T** restate the type in `@param` (write constraints/defaults/edge cases instead)
+- **DON'T** write multiple `@example` blocks unless overloads genuinely differ
+- **DON'T** add prose sections like "Key Features", "Use Cases", "Performance
+  Notes", "Security Considerations", "Algorithm", "Memory Management" — slop
+- **DON'T** add `@since 1.0.0` — the repo is 1.0.0
 - **DON'T** use plain text references — use `{@link Thing}`
+- **DON'T** add imports to `@example` blocks — the module is already in scope
 
 ### JSDoc DOs
 
@@ -343,4 +310,5 @@ All exported code MUST have JSDoc comments. Follow these rules EXACTLY.
 - **DO** document errors the function actually throws
 - **DO** use `{@link Thing}` for cross-references
 - **DO** use `@internal` for non-public implementation
-- **DO** keep blocks short — if JSDoc is more than ~20 lines for a function under ~30 lines of code, you have bloat
+- **DO** verify with `deno check --doc` — an `@example` that does not compile is
+  worse than no example

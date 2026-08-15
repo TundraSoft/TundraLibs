@@ -145,7 +145,8 @@ All three are thrown as a plain `NormError`.
 
 `ENGINE_NOT_REGISTERED` is the one you meet on edge runtimes, where you
 deliberately import `@tundralibs/norm/core` plus a single engine module
-to keep the bundle small.
+because the root barrel will not bundle there — see
+**[Choosing an entry point](../README.md#choosing-an-entry-point)**.
 
 ## Definition and registry codes
 

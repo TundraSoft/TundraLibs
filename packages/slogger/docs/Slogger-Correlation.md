@@ -58,6 +58,7 @@ Two properties to rely on:
 carries the request's context, with no per-call argument:
 
 ```typescript ignore
+// Needs a separate install: deno add @tundralibs/ambient
 import { ambient } from '@tundralibs/ambient';
 
 contextProvider: () => ambient.get() ?? {},
@@ -122,7 +123,9 @@ provider, still zero coupling:
 
 ```typescript
 import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
+// Needs a separate install: deno add @tundralibs/ambient
 import { ambient } from '@tundralibs/ambient';
+// Needs a separate install: deno add @tundralibs/tracer
 import type { Tracer } from '@tundralibs/tracer';
 
 declare const tracer: Tracer; // your Tracer instance, e.g. './telemetry.ts'
