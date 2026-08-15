@@ -94,7 +94,7 @@ concern, kept out of the request path and out of your app bundle.
 ```typescript
 import { Column, Entity, Norm, Schema } from '@tundralibs/norm';
 import { Migrator } from '@tundralibs/norm/migrations';
-import { SQLiteEngine } from '@tundralibs/drivers';
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 
 const Users = Entity('users', {
   id: Column.integer(),

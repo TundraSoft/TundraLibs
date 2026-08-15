@@ -32,7 +32,7 @@ one or more schemas with `use`:
 
 ```typescript ignore
 import { Norm } from '@tundralibs/norm';
-import { SQLiteEngine } from '@tundralibs/drivers';
+import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 import { Identity, Shortener } from './models/mod.ts';
 
 const engine = new SQLiteEngine('shortly', { path: './data' });

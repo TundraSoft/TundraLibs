@@ -16,7 +16,7 @@
  */
 
 import { describe, it } from '@tundralibs/compat/test';
-import { PostgresEngine } from '@tundralibs/drivers';
+import { PostgresEngine } from '@tundralibs/drivers/postgres';
 import { envArgs } from '@tundralibs/utils';
 import { type LiveEngine, runLiveSuite } from './suite.ts';
 

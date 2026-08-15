@@ -3,6 +3,35 @@
  * key-value stores. Each engine speaks its target protocol natively
  * (no runtime-specific npm wrappers).
  *
+ * **This barrel carries no engine.** It re-exports only the abstract
+ * layer — the four base classes, the errors, and the shared types — all
+ * of which are pure TypeScript with nothing runtime-specific behind
+ * them. Engines live one subpath down, and the package exposes them at
+ * three levels of granularity:
+ *
+ * | Specifier                          | What you get                     |
+ * | ---------------------------------- | -------------------------------- |
+ * | `@tundralibs/drivers`              | bases + errors + types, no engine |
+ * | `@tundralibs/drivers/<engine>`     | exactly one engine               |
+ * | `@tundralibs/drivers/engines`      | all nine, server-only            |
+ *
+ * **Why the engines left.** `SQLiteEngine`'s adapter loads a per-runtime
+ * NATIVE binding (`bun:sqlite`, `jsr:@db/sqlite`, `better-sqlite3`), and
+ * `MariaEngine` / `MongoEngine` pull `npm:mariadb` / `npm:mongodb`. While
+ * this barrel re-exported them, naming so much as `EngineError` put all of
+ * that in the importer's runtime graph: esbuild and rolldown could not
+ * resolve the native SQLite specifiers at all, so bundling for Cloudflare
+ * Workers, Vite or a browser failed before a line ran — and a server
+ * consumer that only wanted Postgres still shipped the MariaDB and MongoDB
+ * clients. Now the barrel's runtime graph reaches no engine, and every
+ * consumer pays for exactly the engines it names.
+ *
+ * **Migrating off the barrel** is a one-line specifier change per import:
+ * point each engine at its own subpath (preferred — it is what keeps a
+ * bundle small), or move the whole statement to
+ * `@tundralibs/drivers/engines`, which still re-exports all nine.
+ * Type-only imports of the shared types stay here.
+ *
  * @module drivers
  *
  * @example
@@ -20,32 +49,6 @@ export {
 } from './ConnectionEngine.ts';
 export { BaseEngine } from './BaseEngine.ts';
 export { SQLConnectionEngine, SQLEngine } from './SQLEngine.ts';
-
-export {
-  AlloyDBEngine,
-  CitusEngine,
-  CockroachEngine,
-  D1Engine,
-  type D1EngineOptions,
-  MariaEngine,
-  type MariaEngineOptions,
-  MemcachedEngine,
-  type MemcachedEngineOptions,
-  MongoEngine,
-  type MongoEngineOptions,
-  NeonHttpEngine,
-  type NeonHttpEngineOptions,
-  PlanetScaleEngine,
-  PostgresEngine,
-  type PostgresEngineOptions,
-  RedisEngine,
-  type RedisEngineOptions,
-  SQLiteEngine,
-  type SQLiteEngineOptions,
-  TursoEngine,
-  type TursoEngineOptions,
-  YugabyteEngine,
-} from './engines/mod.ts';
 
 export { DriverError, EngineError, EngineErrorCodes } from './errors/mod.ts';
 export type { EngineErrorCode, EngineErrorMeta } from './errors/mod.ts';

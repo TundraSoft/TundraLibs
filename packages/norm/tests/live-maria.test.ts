@@ -16,7 +16,7 @@
  */
 
 import { describe, it } from '@tundralibs/compat/test';
-import { MariaEngine } from '@tundralibs/drivers';
+import { MariaEngine } from '@tundralibs/drivers/maria';
 import { envArgs } from '@tundralibs/utils';
 import { type LiveEngine, runLiveSuite } from './suite.ts';
 
