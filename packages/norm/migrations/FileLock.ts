@@ -84,6 +84,14 @@ function ownerLabel(): string {
   }
 }
 
+/** Cryptographically random suffix for the lock token (not a security
+ * boundary — just avoids the platform PRNG's predictability). */
+function randomSuffix(): string {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 /**
  * Cross-process advisory lock backed by an exclusive `migrator.lock`
  * file in the migrations directory, so two machines can't run `apply()`
@@ -105,9 +113,7 @@ export class FileLock {
    */
   constructor(dir: string, staleMs: number = DEFAULT_STALE_MS) {
     this.#path = `${dir}/${LOCK_FILE}`;
-    this.#token = `${Date.now().toString(36)}-${
-      Math.random().toString(36).slice(2, 10)
-    }`;
+    this.#token = `${Date.now().toString(36)}-${randomSuffix()}`;
     this.#owner = ownerLabel();
     this.#staleMs = staleMs;
   }
