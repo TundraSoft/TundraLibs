@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/pact",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Bitmask-based authentication & authorization engine with pluggable data-fetch hooks",
   "license": "MIT",
   "type": "module",
