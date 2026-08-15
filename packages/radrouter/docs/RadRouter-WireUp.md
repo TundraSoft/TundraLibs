@@ -20,8 +20,10 @@ look up on every request, run the resulting chain against a per-request
 context object you own.
 
 ```ts
+// Needs a separate install: deno add @tundralibs/compat
 import { WebServer } from '@tundralibs/compat/webserver';
 import { RadRouter } from '@tundralibs/radrouter';
+// Needs a separate install: deno add @tundralibs/compat
 import type { HTTPMethod } from '@tundralibs/compat/http';
 
 type AppCtx = {

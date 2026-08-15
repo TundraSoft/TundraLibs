@@ -122,6 +122,7 @@ const verificationCode = cuid2(28);
 
 ```typescript
 import { cuid2 } from '@tundralibs/id';
+// Needs a separate install: deno add @tundralibs/guardian
 import { Guardian } from '@tundralibs/guardian';
 
 const Cuid2Guard = Guardian.string().cuid2({ length: 24 });

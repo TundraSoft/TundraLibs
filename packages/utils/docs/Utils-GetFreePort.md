@@ -98,6 +98,7 @@ const ports = await Promise.all(services.map(async (service) => {
 ### Test Fixtures
 
 ```typescript
+// Needs a separate install: deno add @tundralibs/compat
 import { describe, it } from '@tundralibs/compat/test';
 import { getFreePort } from '@tundralibs/utils';
 
@@ -212,6 +213,7 @@ try {
 ✅ **Use in test setup/teardown:**
 
 ```typescript
+// Needs a separate install: deno add @tundralibs/compat
 import { beforeEach } from '@tundralibs/compat/test';
 import { getFreePort } from '@tundralibs/utils';
 

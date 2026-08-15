@@ -110,6 +110,7 @@ request's own span id:
 
 ```typescript
 import { Tracer } from '@tundralibs/tracer';
+// Needs a separate install: deno add @tundralibs/restler
 import type { RESTlerOptions } from '@tundralibs/restler';
 
 const tracer = new Tracer({ serviceName: 'orders' });
@@ -133,6 +134,7 @@ Slogger's `contextProvider` is called for every record, so trace ids land on
 every log line — click a log, jump to its trace:
 
 ```typescript
+// Needs a separate install: deno add @tundralibs/slogger
 import { LogManager, SyslogSeverities } from '@tundralibs/slogger';
 import { Tracer } from '@tundralibs/tracer';
 

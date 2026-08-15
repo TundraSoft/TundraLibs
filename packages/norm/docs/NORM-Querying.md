@@ -32,6 +32,7 @@ one or more schemas with `use`:
 
 ```typescript ignore
 import { Norm } from '@tundralibs/norm';
+// Needs a separate install: deno add @tundralibs/drivers
 import { SQLiteEngine } from '@tundralibs/drivers/sqlite';
 import { Identity, Shortener } from './models/mod.ts';
 

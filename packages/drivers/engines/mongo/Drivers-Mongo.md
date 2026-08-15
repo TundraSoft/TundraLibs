@@ -132,6 +132,7 @@ of rows in `data`).
 
 ```typescript
 import { MongoEngine } from '@tundralibs/drivers/mongo';
+// Needs a separate install: deno add @tundralibs/oql
 import type { Query } from '@tundralibs/oql/types';
 
 const m = new MongoEngine('app', { host: 'localhost', database: 'myapp' });

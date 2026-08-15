@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/radrouter",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Compressed radix-tree HTTP router — typed parameters, greedy patterns, versioned endpoints, generic middleware",
   "license": "MIT",
   "exports": {
