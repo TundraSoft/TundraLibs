@@ -1,3 +1,10 @@
+/**
+ * Concrete guard classes for `@tundralibs/guardian` — one per primitive
+ * and composite type (string, number, object, array, union, and more),
+ * each a chainable validator produced via the {@link Guardian} factory.
+ *
+ * @module
+ */
 export { ArrayGuardian } from './ArrayGuardian.ts';
 export { BigIntGuardian } from './BigIntGuardian.ts';
 export { BooleanGuardian } from './BooleanGuardian.ts';

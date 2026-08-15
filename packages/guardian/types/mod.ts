@@ -1,3 +1,10 @@
+/**
+ * Public type surface for `@tundralibs/guardian` — branding, inference
+ * helpers ({@link GuardianInfer}), transform and result shapes used to
+ * derive static types from a guard.
+ *
+ * @module
+ */
 // Export from individual type files
 export type { Brand } from './Brand.ts';
 export type { FinishedGuardian } from './FinishedGuardian.ts';
