@@ -1,3 +1,10 @@
+/**
+ * Typed option-store plus {@link Events} emitter base class — subclasses
+ * validate values through `_processOption` and expose specific getters
+ * over a private, credential-safe store.
+ *
+ * @module
+ */
 import { type EventCallback, Events } from './Events.ts';
 import { type PrivateObject, privateObject } from './privateObject.ts';
 

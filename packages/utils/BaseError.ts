@@ -1,3 +1,9 @@
+/**
+ * Structured, serializable base error with typed metadata and message
+ * templating, shared by every TundraLibs package's error hierarchy.
+ *
+ * @module
+ */
 import { readTextFileSync } from '@tundralibs/compat/file';
 import { variableReplacer } from './variableReplacer.ts';
 
