@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/cacher",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "description": "A flexible caching library with support for Memory, Redis, and Memcached engines",
   "exports": {

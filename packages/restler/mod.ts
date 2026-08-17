@@ -26,8 +26,10 @@ export type {
   RESTlerMethodPayload,
   RESTlerOptions,
   RESTlerRequest,
+  RESTlerRequestOptions,
   RESTlerResponse,
   RESTlerResponseHandler,
+  RESTlerResponseSchema,
   Witness,
   WitnessInfo,
 } from './types/mod.ts';
@@ -36,6 +38,7 @@ export {
   RESTlerError,
   type RESTlerErrorMeta,
   RESTlerRequestError,
+  RESTlerResponseValidationError,
   RESTlerTimeoutError,
 } from './errors/mod.ts';
 // Re-exported from `@tundralibs/compat/http` (the net-free subpath, not the

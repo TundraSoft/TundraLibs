@@ -9,7 +9,10 @@
  *
  * - `JSON` — `application/json`
  * - `XML` — `application/xml`
- * - `FORM` — multipart form data (`FormData`)
+ * - `FORM` — payload SHAPE decides the wire format: a `FormData` payload
+ *   sends `multipart/form-data` (fetch sets the boundary); a
+ *   `URLSearchParams` or plain object payload sends
+ *   `application/x-www-form-urlencoded` instead.
  * - `TEXT` — `text/plain`
  * - `BLOB` — binary data
  */

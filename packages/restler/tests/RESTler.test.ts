@@ -5,12 +5,14 @@ import { RESTler } from '../mod.ts';
 import {
   RESTlerConfigError,
   RESTlerRequestError,
+  RESTlerResponseValidationError,
   RESTlerTimeoutError,
 } from '../errors/mod.ts';
 import type {
   ResponseBody,
   RESTlerEndpoint,
   RESTlerOptions,
+  RESTlerRequestOptions,
   RESTlerResponseHandler,
 } from '../types/mod.ts';
 
@@ -29,11 +31,11 @@ class TestRESTler extends RESTler {
   }
 
   // Make protected methods public for testing
-  public makeRequest<T extends ResponseBody>(
+  public makeRequest<H = ResponseBody, B = H>(
     endpoint: RESTlerEndpoint,
-    responseHandler?: RESTlerResponseHandler,
+    options?: RESTlerRequestOptions<H, B>,
   ) {
-    return this._makeRequest<T>(endpoint, responseHandler);
+    return this._makeRequest<H, B>(endpoint, options);
   }
 
   public async processEndpoint(
@@ -104,6 +106,26 @@ class TestRESTler extends RESTler {
   // Expose the resolved (post-_processOption) option value for assertions.
   public readOption<K extends keyof RESTlerOptions>(key: K) {
     return this._getOption(key);
+  }
+
+  // #341: proves _base64Utf8 is reachable from a subclass (protected, not
+  // private) — a CUSTOM-auth override can reuse it instead of
+  // reimplementing UTF-8-correct base64.
+  public base64Utf8(value: string) {
+    return this._base64Utf8(value);
+  }
+}
+
+// CUSTOM auth injector that records the header set it saw — proves #338:
+// signing-based auth sees the FULL outbound set (defaults + headerProvider
+// + caller-explicit), not just whatever the caller passed to this one call.
+class SigningAuthTestRESTler extends TestRESTler {
+  public seenHeaders: Record<string, string> | undefined;
+
+  protected override _authInjector(endpoint: RESTlerEndpoint): void {
+    this.seenHeaders = { ...endpoint.headers };
+    endpoint.headers = endpoint.headers ?? {};
+    endpoint.headers['X-Signature'] = 'signed';
   }
 }
 
@@ -401,6 +423,25 @@ describe('restler.core', () => {
       asserts.assert(request.url.includes('apiVersion=2'));
     });
 
+    it('#339: query values are RFC 3986 percent-encoded (%20), not form-urlencoded (+)', async () => {
+      const request = await client.processEndpoint({
+        path: '/search',
+        method: 'GET',
+        query: {
+          q: 'two words',
+          'k&v': 'a=b',
+          reserved: '?/#',
+        },
+      });
+      asserts.assert(request.url.includes('q=two%20words'));
+      asserts.assert(!request.url.includes('+'));
+      asserts.assert(request.url.includes('k%26v=a%3Db'));
+      asserts.assert(request.url.includes('reserved=%3F%2F%23'));
+      // Round-trips correctly back to the original value:
+      const parsed = new URL(request.url);
+      asserts.assertEquals(parsed.searchParams.get('q'), 'two words');
+    });
+
     it('should handle bearer token auth', async () => {
       const request = await client.processEndpoint(
         {
@@ -464,6 +505,30 @@ describe('restler.core', () => {
       );
     });
 
+    it("#341: BASIC auth with an EMPTY password is valid (RFC 7617; e.g. Stripe's sk_live_...: pattern)", async () => {
+      const request = await client.processEndpoint({
+        path: '/users',
+        method: 'GET',
+        auth: { type: 'BASIC', username: 'sk_live_abc123', password: '' },
+      });
+      asserts.assertEquals(
+        request.headers!['Authorization'],
+        `Basic ${btoa('sk_live_abc123:')}`,
+      );
+    });
+
+    it('#341: _base64Utf8 is reachable from a subclass (protected)', () => {
+      // UTF-8 round-trip (a Latin1-only `btoa` would throw or corrupt this):
+      asserts.assertEquals(
+        client.base64Utf8('café:pass'),
+        btoa(
+          Array.from(new TextEncoder().encode('café:pass'))
+            .map((b) => String.fromCharCode(b))
+            .join(''),
+        ),
+      );
+    });
+
     it('should handle request-specific headers', async () => {
       const request = await client.processEndpoint(
         {
@@ -481,6 +546,47 @@ describe('restler.core', () => {
       asserts.assertEquals(request.headers!['X-Custom'], 'value');
       asserts.assertEquals(request.headers!['X-Version'], 'v2');
       asserts.assertEquals(request.headers!['X-API-Key'], 'default-key');
+    });
+
+    it('#338: a CUSTOM _authInjector sees defaults + headerProvider + explicit headers, not just what the caller passed', async () => {
+      const signingClient = new SigningAuthTestRESTler({
+        baseURL: 'https://api.example.com',
+        headers: { 'X-API-Key': 'default-key' },
+        headerProvider: () => ({ 'X-Trace': 'trace-123' }),
+      });
+      const request = await signingClient.processEndpoint({
+        path: '/orders',
+        method: 'GET',
+        headers: { 'X-Custom': 'explicit-value' },
+      });
+      // What _authInjector SAW, before it added its own signature header:
+      asserts.assertEquals(signingClient.seenHeaders, {
+        'X-API-Key': 'default-key',
+        'X-Trace': 'trace-123',
+        'X-Custom': 'explicit-value',
+      });
+      // And its signature made it onto the final outbound request too:
+      asserts.assertEquals(request.headers!['X-Signature'], 'signed');
+      asserts.assertEquals(request.headers!['X-API-Key'], 'default-key');
+      asserts.assertEquals(request.headers!['X-Trace'], 'trace-123');
+      asserts.assertEquals(request.headers!['X-Custom'], 'explicit-value');
+    });
+
+    it('#338: explicit endpoint headers still win over defaults after the reorder', async () => {
+      const signingClient = new SigningAuthTestRESTler({
+        baseURL: 'https://api.example.com',
+        headers: { 'X-API-Key': 'default-key' },
+      });
+      const request = await signingClient.processEndpoint({
+        path: '/orders',
+        method: 'GET',
+        headers: { 'X-API-Key': 'overridden-key' },
+      });
+      asserts.assertEquals(
+        signingClient.seenHeaders?.['X-API-Key'],
+        'overridden-key',
+      );
+      asserts.assertEquals(request.headers!['X-API-Key'], 'overridden-key');
     });
 
     it('should handle custom port', async () => {
@@ -1294,6 +1400,79 @@ describe('restler.core', () => {
       asserts.assertEquals(capturedBody instanceof FormData, true);
     });
 
+    it('#340: a URLSearchParams FORM payload sends application/x-www-form-urlencoded', async () => {
+      let capturedContentType: string | null = null;
+      let capturedBody = '';
+
+      const client = new TestRESTler({ baseURL: 'https://api.example.com' });
+      client.setFetch(async (_input, init) => {
+        await 1;
+        capturedContentType = new Headers(
+          init?.headers as HeadersInit | undefined,
+        ).get('Content-Type');
+        capturedBody = init?.body as string;
+        return new Response('{}', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+
+      await client.makeRequest({
+        path: '/oauth/token',
+        method: 'POST',
+        contentType: 'FORM',
+        payload: new URLSearchParams({
+          grant_type: 'client_credentials',
+          scope: 'read write',
+        }),
+      });
+
+      asserts.assertEquals(
+        capturedContentType,
+        'application/x-www-form-urlencoded',
+      );
+      // application/x-www-form-urlencoded's OWN convention is space -> `+`
+      // — correct here, unlike a URL query string (see #339's test).
+      asserts.assertEquals(
+        capturedBody,
+        'grant_type=client_credentials&scope=read+write',
+      );
+    });
+
+    it('#340: a plain-object FORM payload also sends application/x-www-form-urlencoded', async () => {
+      let capturedContentType: string | null = null;
+      let capturedBody = '';
+
+      const client = new TestRESTler({ baseURL: 'https://api.example.com' });
+      client.setFetch(async (_input, init) => {
+        await 1;
+        capturedContentType = new Headers(
+          init?.headers as HeadersInit | undefined,
+        ).get('Content-Type');
+        capturedBody = init?.body as string;
+        return new Response('{}', {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+
+      await client.makeRequest({
+        path: '/oauth/token',
+        method: 'POST',
+        contentType: 'FORM',
+        payload: { grant_type: 'refresh_token', refresh_token: 'abc123' },
+      });
+
+      asserts.assertEquals(
+        capturedContentType,
+        'application/x-www-form-urlencoded',
+      );
+      asserts.assertEquals(
+        capturedBody,
+        'grant_type=refresh_token&refresh_token=abc123',
+      );
+    });
+
     it('should make request with text payload', async () => {
       let capturedBody = '';
 
@@ -1460,9 +1639,11 @@ describe('restler.core', () => {
         client.validateAuth({ type: 'BASIC', username: '', password: 'pass' }),
         false,
       );
+      // #341: an EMPTY password is valid per RFC 7617 (e.g. Stripe's
+      // `sk_live_...:` pattern) — only username is required.
       asserts.assertEquals(
         client.validateAuth({ type: 'BASIC', username: 'user', password: '' }),
-        false,
+        true,
       );
       asserts.assertEquals(
         client.validateAuth({ type: 'BASIC', username: '', password: '' }),
@@ -1952,25 +2133,29 @@ describe('restler.responseHandler', () => {
           },
         );
       }
+      return response.body;
     };
     await asserts.assertRejects(
-      () => client.makeRequest({ path: '/pay', method: 'GET' }, handler),
+      () =>
+        client.makeRequest({ path: '/pay', method: 'GET' }, {
+          responseHandler: handler,
+        }),
       RESTlerRequestError,
       'Vendor error: insufficient funds',
     );
   });
 
-  it('unwraps an envelope by mutating response.body', async () => {
+  it('unwraps an envelope by RETURNING the unwrapped value', async () => {
     const client = new TestRESTler({ baseURL: 'https://api.example.com' });
     client.setFetch(
       envelopeFetch({ ok: true, data: { id: 7, name: 'thing' } }),
     );
     const unwrap: RESTlerResponseHandler = (response) => {
-      response.body = (response.body as { data: unknown }).data;
+      return (response.body as { data: unknown }).data;
     };
     const res = await client.makeRequest(
       { path: '/thing/7', method: 'GET' },
-      unwrap,
+      { responseHandler: unwrap },
     );
     asserts.assertEquals(res.body, { id: 7, name: 'thing' });
   });
@@ -1980,7 +2165,7 @@ describe('restler.responseHandler', () => {
       protected override _responseHandler: RESTlerResponseHandler = (
         response,
       ) => {
-        response.body = (response.body as { data: unknown }).data;
+        return (response.body as { data: unknown }).data;
       };
     }
     const client = new EnvelopeRESTler({ baseURL: 'https://api.example.com' });
@@ -1989,7 +2174,7 @@ describe('restler.responseHandler', () => {
     asserts.assertEquals(res.body, { id: 1 });
   });
 
-  it('per-call handler takes precedence over the class default', async () => {
+  it('per-call handler takes precedence over the class default (does not compose with it)', async () => {
     class EnvelopeRESTler extends TestRESTler {
       protected override _responseHandler: RESTlerResponseHandler = () => {
         throw new RESTlerRequestError('class default ran', {
@@ -2007,8 +2192,11 @@ describe('restler.responseHandler', () => {
     let perCallRan = false;
     const res = await client.makeRequest(
       { path: '/x', method: 'GET' },
-      () => {
-        perCallRan = true;
+      {
+        responseHandler: (response) => {
+          perCallRan = true;
+          return response.body;
+        },
       },
     );
     asserts.assert(perCallRan);
@@ -2020,8 +2208,10 @@ describe('restler.responseHandler', () => {
     client.setFetch(envelopeFetch({ ok: false }));
     const err = await asserts.assertRejects(
       () =>
-        client.makeRequest({ path: '/x', method: 'GET' }, () => {
-          throw new Error('plain vendor failure');
+        client.makeRequest({ path: '/x', method: 'GET' }, {
+          responseHandler: () => {
+            throw new Error('plain vendor failure');
+          },
         }),
       RESTlerRequestError,
       'Unknown error processing the request',
@@ -2035,9 +2225,12 @@ describe('restler.responseHandler', () => {
     client.setFetch(() => Promise.resolve(new Response(null, { status: 404 })));
     let sawStatus: number | null = null;
     let sawBody: unknown = 'unset';
-    await client.makeRequest({ path: '/gone', method: 'GET' }, (response) => {
-      sawStatus = response.status;
-      sawBody = response.body;
+    await client.makeRequest({ path: '/gone', method: 'GET' }, {
+      responseHandler: (response) => {
+        sawStatus = response.status;
+        sawBody = response.body;
+        return response.body;
+      },
     });
     asserts.assertEquals(sawStatus, 404);
     asserts.assertEquals(sawBody, undefined);
@@ -3178,6 +3371,172 @@ describe('restler.responseHandler', () => {
       asserts.assertEquals(
         client.replaceVersion('{version}', '$$'),
         '$$',
+      );
+    });
+  });
+});
+
+describe('restler.requestOptions (#342/#344: skipAuth, responseSchema)', () => {
+  const jsonFetch = (body: unknown): typeof fetch => () =>
+    Promise.resolve(
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+  describe('skipAuth', () => {
+    it('#342: skipAuth:true skips _authInjector entirely', async () => {
+      const client = new SigningAuthTestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+      client.setFetch(jsonFetch({ ok: true }));
+      const res = await client.makeRequest(
+        {
+          path: '/token',
+          method: 'POST',
+          auth: { type: 'BEARER', token: 'unused' },
+        },
+        { skipAuth: true },
+      );
+      // _authInjector never ran: seenHeaders stays unset, and its
+      // signature header never made it onto the request.
+      asserts.assertEquals(client.seenHeaders, undefined);
+      asserts.assertEquals(res.status, 200);
+    });
+
+    it('#342: skipAuth is false/absent by default — auth still runs', async () => {
+      const client = new SigningAuthTestRESTler({
+        baseURL: 'https://api.example.com',
+      });
+      client.setFetch(jsonFetch({ ok: true }));
+      await client.makeRequest({ path: '/x', method: 'GET' });
+      asserts.assertNotEquals(client.seenHeaders, undefined);
+    });
+
+    it("#342: a CUSTOM auth's own token-exchange request can skip auth to avoid recursing into itself", async () => {
+      // Simulates the OAuth2 token-exchange case from the issue: a
+      // token-fetch that itself goes through _makeRequest, with skipAuth
+      // so it does not recurse into _authInjector before the token exists
+      // — while still getting the timeout/event/error machinery every
+      // other request gets (unlike calling `_fetch` raw).
+      class TokenExchangeRESTler extends TestRESTler {
+        public tokenFetchCount = 0;
+        protected override async _authInjector(
+          endpoint: RESTlerEndpoint,
+        ): Promise<void> {
+          this.tokenFetchCount++;
+          const tokenResponse = await this.makeRequest<{ token: string }>(
+            { path: '/oauth/token', method: 'POST' },
+            { skipAuth: true },
+          );
+          endpoint.headers = endpoint.headers ?? {};
+          endpoint.headers['Authorization'] =
+            `Bearer ${tokenResponse.body?.token}`;
+        }
+      }
+      const client = new TokenExchangeRESTler({
+        baseURL: 'https://api.example.com',
+      });
+      client.setFetch(jsonFetch({ token: 'exchanged-token' }));
+      const res = await client.processEndpoint({
+        path: '/data',
+        method: 'GET',
+      });
+      // No infinite recursion — the token exchange ran exactly once.
+      asserts.assertEquals(client.tokenFetchCount, 1);
+      asserts.assertEquals(
+        res.headers!['Authorization'],
+        'Bearer exchanged-token',
+      );
+    });
+  });
+
+  describe('responseSchema', () => {
+    it('#344: responseSchema alone (no handler) validates the raw parsed body', async () => {
+      const client = new TestRESTler({ baseURL: 'https://api.example.com' });
+      client.setFetch(jsonFetch({ id: '7', name: 'Ada' }));
+      const res = await client.makeRequest(
+        { path: '/users/7', method: 'GET' },
+        {
+          responseSchema: (data) => {
+            const d = data as { id: string; name: string };
+            // A real caller would pass e.g. `(d) => UserSchema.parse(d)` —
+            // this hand-rolled check exercises the same contract without
+            // coupling restler's OWN tests to guardian either.
+            return { id: Number(d.id), name: d.name };
+          },
+        },
+      );
+      asserts.assertEquals(res.body, { id: 7, name: 'Ada' });
+    });
+
+    it('#344: responseHandler runs FIRST, its return value feeds responseSchema', async () => {
+      const client = new TestRESTler({ baseURL: 'https://api.example.com' });
+      client.setFetch(jsonFetch({ data: { id: '9', name: 'Grace' } }));
+      const res = await client.makeRequest(
+        { path: '/users/9', method: 'GET' },
+        {
+          responseHandler: (response) =>
+            (response.body as { data: unknown }).data,
+          responseSchema: (data) => {
+            const d = data as { id: string; name: string };
+            return { id: Number(d.id), name: d.name };
+          },
+        },
+      );
+      asserts.assertEquals(res.body, { id: 9, name: 'Grace' });
+    });
+
+    it('#344: a throwing responseSchema surfaces as RESTlerResponseValidationError, cause preserved', async () => {
+      const client = new TestRESTler({ baseURL: 'https://api.example.com' });
+      client.setFetch(jsonFetch({ id: 'not-a-number' }));
+      const err = await asserts.assertRejects(
+        () =>
+          client.makeRequest({ path: '/users/x', method: 'GET' }, {
+            responseSchema: () => {
+              throw new Error('id must be numeric');
+            },
+          }),
+        RESTlerResponseValidationError,
+        'Response failed schema validation',
+      );
+      asserts.assertEquals((err.cause as Error).message, 'id must be numeric');
+    });
+
+    it('#344: a schema-encoded "wrapped or not" envelope needs no responseHandler at all', async () => {
+      // The pattern from the design discussion: compose a discriminated
+      // shape yourself (a real caller would use
+      // `Guardian.discriminatedUnion`) and pass it alone.
+      type Envelope =
+        | { status: 'ok'; data: { id: number } }
+        | { status: 'error'; error: string };
+      const envelopeSchema = (data: unknown): Envelope => {
+        const d = data as Record<string, unknown>;
+        if (d.status === 'ok' || d.status === 'error') return d as Envelope;
+        throw new Error('does not match either envelope shape');
+      };
+
+      const okClient = new TestRESTler({ baseURL: 'https://api.example.com' });
+      okClient.setFetch(jsonFetch({ status: 'ok', data: { id: 3 } }));
+      const ok = await okClient.makeRequest({ path: '/x', method: 'GET' }, {
+        responseSchema: envelopeSchema,
+      });
+      // A non-throw no longer implies success — the caller narrows:
+      asserts.assertEquals(ok.body, { status: 'ok', data: { id: 3 } });
+
+      const errClient = new TestRESTler({ baseURL: 'https://api.example.com' });
+      errClient.setFetch(jsonFetch({ status: 'error', error: 'not found' }));
+      const errResult = await errClient.makeRequest({
+        path: '/x',
+        method: 'GET',
+      }, {
+        responseSchema: envelopeSchema,
+      });
+      // The error variant is a VALID parse, not a thrown rejection:
+      asserts.assertEquals(
+        errResult.body,
+        { status: 'error', error: 'not found' },
       );
     });
   });

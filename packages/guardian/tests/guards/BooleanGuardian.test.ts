@@ -480,4 +480,55 @@ describe('guardian.BooleanGuardian', () => {
       asserts.assertEquals(schema.nullable, true);
     });
   });
+
+  describe('strict (#337: coercion opt-out)', () => {
+    it('accepts an already-typed boolean, unaffected by strict', () => {
+      const schema = new BooleanGuardian().strict();
+      asserts.assertEquals(schema.parse(true), true);
+      asserts.assertEquals(schema.parse(false), false);
+    });
+
+    it('rejects inputs the default (coercing) transform would accept', () => {
+      const schema = new BooleanGuardian().strict();
+      asserts.assertThrows(() => schema.parse('true'), GuardianError);
+      asserts.assertThrows(() => schema.parse('yes'), GuardianError);
+      asserts.assertThrows(() => schema.parse(1), GuardianError);
+      asserts.assertThrows(() => schema.parse(0), GuardianError);
+    });
+
+    it('does not affect the default (non-strict) guardian — coercion still works', () => {
+      const schema = new BooleanGuardian();
+      asserts.assertEquals(schema.parse('yes'), true);
+    });
+
+    it('composes correctly when called BEFORE other chain steps', () => {
+      const schema = new BooleanGuardian().strict().true();
+      asserts.assertEquals(schema.parse(true), true);
+      asserts.assertThrows(() => schema.parse('true'), GuardianError);
+      asserts.assertThrows(() => schema.parse(false), GuardianError);
+    });
+
+    it('composes correctly when called AFTER other chain steps', () => {
+      const schema = new BooleanGuardian().true().strict();
+      asserts.assertEquals(schema.parse(true), true);
+      asserts.assertThrows(() => schema.parse('true'), GuardianError);
+    });
+
+    it('supports a custom error message', () => {
+      try {
+        new BooleanGuardian().strict('no strings allowed').parse('true');
+        throw new Error('expected parse to throw');
+      } catch (e) {
+        asserts.assert(e instanceof GuardianError);
+        asserts.assertEquals((e as Error).message, 'no strings allowed');
+      }
+    });
+
+    it('the receiver is never mutated by strict()', () => {
+      const loose = new BooleanGuardian();
+      const strict = loose.strict();
+      asserts.assertEquals(loose.parse('yes'), true);
+      asserts.assertThrows(() => strict.parse('yes'), GuardianError);
+    });
+  });
 });
