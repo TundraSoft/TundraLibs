@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.5](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.4...tracer-v0.5.5) (2026-08-17)
+
+
+### Documentation
+
+* **tracer:** describe OTLPExporter constructor ([#316](https://github.com/TundraSoft/TundraLibs/issues/316)) ([65089fc](https://github.com/TundraSoft/TundraLibs/commit/65089fcaaee73858836caf4136ba114001b6dec8))
+
 ## [0.5.4](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.3...tracer-v0.5.4) (2026-08-15)
 
 
