@@ -188,7 +188,9 @@ const vendorErrorFetch: typeof fetch = () =>
 class PerCallWeatherAPI extends WeatherAPI {
   getCurrentWeatherWith(
     city: string,
-    handler: RESTlerResponseHandler,
+    handler: RESTlerResponseHandler<
+      { cod?: number | string; message?: string }
+    >,
   ) {
     return this._makeRequest<{ cod?: number | string; message?: string }>(
       {
@@ -196,7 +198,7 @@ class PerCallWeatherAPI extends WeatherAPI {
         method: 'GET',
         query: { q: city, units: 'metric' },
       },
-      handler,
+      { responseHandler: handler },
     );
   }
 }
@@ -278,10 +280,13 @@ describe('restler.examples.weatherAPI', () => {
         const api = new PerCallWeatherAPI('test-api-key-12345');
         api.setFetch(vendorErrorFetch);
         let perCallRan = false;
-        // The no-op per-call handler overrides the vendor default — which
-        // would have thrown on cod >= 400 — so the request resolves.
-        const response = await api.getCurrentWeatherWith('Atlantis', () => {
+        // The per-call handler overrides the vendor default — which would
+        // have thrown on cod >= 400 — so the request resolves. It must
+        // explicitly return `response.body` to leave it unchanged; the
+        // return value IS the result now, there is no mutate-in-place path.
+        const response = await api.getCurrentWeatherWith('Atlantis', (r) => {
           perCallRan = true;
+          return r.body as { cod?: number | string; message?: string };
         });
         asserts.assert(perCallRan);
         asserts.assertEquals(response.status, 200);

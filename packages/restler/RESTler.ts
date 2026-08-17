@@ -18,6 +18,7 @@ import type {
   RESTlerEvents,
   RESTlerOptions,
   RESTlerRequest,
+  RESTlerRequestOptions,
   RESTlerResponse,
   RESTlerResponseHandler,
 } from './types/mod.ts';
@@ -25,6 +26,7 @@ import {
   RESTlerConfigError,
   RESTlerError,
   RESTlerRequestError,
+  RESTlerResponseValidationError,
   RESTlerTimeoutError,
 } from './errors/mod.ts';
 
@@ -102,10 +104,13 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
   protected _fetch: typeof globalThis.fetch = fetch;
 
   /**
-   * Vendor-wide default response handler, applied to every request unless a
-   * per-call handler is passed to {@link _makeRequest}. Use it when the
-   * vendor has one response convention (e.g. errors inside a 200 envelope)
-   * that every endpoint shares.
+   * Vendor-wide default response handler, applied to every request unless
+   * `options.responseHandler` is passed to {@link _makeRequest} (which
+   * takes precedence entirely — it does not compose with this default).
+   * Use it when the vendor has one response convention (e.g. errors inside
+   * a 200 envelope) that every endpoint shares. Must RETURN the value the
+   * request resolves to (see {@link RESTlerResponseHandler}) — return
+   * `response.body` unchanged if nothing needs transforming.
    */
   protected _responseHandler?: RESTlerResponseHandler;
 
@@ -367,6 +372,17 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * endpoint object. This is what keeps a shared or reused endpoint object
    * from accumulating one call's credentials and leaking them into the next.
    *
+   * By the time this runs, `endpoint.headers` already holds the FULL
+   * outbound header set — instance-level defaults, `headerProvider()`'s
+   * output, and the caller's own explicit headers, already merged (caller
+   * wins on a collision). A signing-based `CUSTOM` auth override (HMAC,
+   * SigV4-style) can read and sign the actual set that goes out, not just
+   * whatever the caller happened to pass on this one call. The one
+   * exception: the default `Content-Type` for JSON/XML/TEXT payloads is
+   * computed later, in `_buildBody` — a signature that must cover it still
+   * needs the caller to set `Content-Type` explicitly on `endpoint.headers`
+   * before calling `_makeRequest`.
+   *
    * @param endpoint - Per-request endpoint copy to mutate with auth headers
    *
    * @throws {@link RESTlerConfigError} If the endpoint's auth config is invalid
@@ -389,7 +405,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       endpoint.headers = endpoint.headers || {};
       if (auth.type === 'BASIC') {
         const { username, password } = auth;
-        const encoded = this.__base64Utf8(`${username}:${password}`);
+        const encoded = this._base64Utf8(`${username}:${password}`);
         endpoint.headers['Authorization'] = `Basic ${encoded}`;
       } else if (auth.type === 'BEARER') {
         const { token, prefix = 'BEARER' } = auth;
@@ -726,10 +742,15 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * its UTF-8 bytes via {@link TextEncoder} first, then mapping each byte into
    * the binary string `btoa` expects, avoids both problems.
    *
+   * PROTECTED (not private): a `CUSTOM`-auth subclass that wants
+   * Basic-style header encoding for some other purpose (a vendor's own
+   * non-standard Basic-shaped scheme) can reuse this rather than
+   * reimplementing UTF-8-correct base64 from scratch.
+   *
    * @param value - The string to encode.
    * @returns The base64 encoding of `value`'s UTF-8 bytes.
    */
-  private __base64Utf8(value: string): string {
+  protected _base64Utf8(value: string): string {
     const bytes = new TextEncoder().encode(value);
     let binary = '';
     for (const byte of bytes) {
@@ -797,12 +818,15 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * error, nor disables the listeners registered after it.
    *
    * @param endpoint - Endpoint configuration (path, method, baseURL, payload, etc.)
-   * @param responseHandler - Vendor hook that interprets the parsed response
-   *   (e.g. a 200 whose body carries an error envelope): throw to reject, or
-   *   mutate `response.body` to unwrap. Overrides {@link _responseHandler}.
+   * @param options - `responseHandler` overrides {@link _responseHandler};
+   *   `responseSchema` runs after it (or on the raw parsed body, if no
+   *   handler ran); `skipAuth` skips {@link _authInjector} for this one
+   *   request. See {@link RESTlerRequestOptions}.
    * @returns The response, with `status`, `headers`, parsed `body`, and `timeTaken`
    *
    * @throws {@link RESTlerTimeoutError} If the request exceeds its timeout
+   * @throws {@link RESTlerResponseValidationError} If `responseSchema`
+   *   rejects the response
    * @throws {@link RESTlerRequestError} If the request fails for any other
    *   reason, or wrapping (as `cause`) a non-{@link RESTlerError} thrown by
    *   the response handler
@@ -810,13 +834,13 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * @throws {@link RESTlerError} Subclasses thrown by the response handler
    *   surface unwrapped (with the `request` in their `context` redacted)
    */
-  protected _makeRequest<B = ResponseBody>(
+  protected _makeRequest<H = ResponseBody, B = H>(
     endpoint: RESTlerEndpoint,
-    responseHandler?: RESTlerResponseHandler,
+    options: RESTlerRequestOptions<H, B> = {},
   ): Promise<RESTlerResponse<B>> {
     const witness = this._getOption('witness');
     if (witness === undefined) {
-      return this.__request<B>(endpoint, responseHandler);
+      return this.__request<H, B>(endpoint, options);
     }
     // The whole request — endpoint resolution, headerProvider, fetch, body
     // parsing — runs inside the witnessed window, so a tracer's span is
@@ -833,17 +857,24 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
           'url.path': endpoint.path,
         },
       },
-      () => this.__request<B>(endpoint, responseHandler),
+      () => this.__request<H, B>(endpoint, options),
     );
   }
 
   /** The request pipeline {@link _makeRequest} runs (witnessed or not). */
-  private async __request<B = ResponseBody>(
+  private async __request<H = ResponseBody, B = H>(
     endpoint: RESTlerEndpoint,
-    responseHandler?: RESTlerResponseHandler,
+    options: RESTlerRequestOptions<H, B> = {},
   ): Promise<RESTlerResponse<B>> {
-    const handler = responseHandler ?? this._responseHandler;
-    const request = await this._processEndpoint(endpoint);
+    // The vendor-wide default is declared `RESTlerResponseHandler` (H =
+    // unknown) because a class field can't be parameterized per-call —
+    // this cast bridges that the same way `response.body = ... as B` casts
+    // already do throughout this method.
+    const handler = options.responseHandler ??
+      (this._responseHandler as RESTlerResponseHandler<H> | undefined);
+    const request = await this._processEndpoint(endpoint, {
+      skipAuth: options.skipAuth,
+    });
     const response: RESTlerResponse<B> = {
       url: request.url,
       status: null,
@@ -938,10 +969,34 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       }
 
       // Vendor response hook — runs on every response (any status, empty
-      // body included) so it can translate vendor conventions: throw on an
-      // error-in-body envelope, or mutate `response.body` to unwrap it.
+      // body included) so it can translate vendor conventions: throw to
+      // reject, or RETURN the value that becomes the request's result (raw
+      // `response.body` unchanged, or an unwrapped envelope). Its output
+      // feeds `responseSchema` next, if also given; if only one of the two
+      // is present, its result is final; if neither, the raw parsed body
+      // stands as `response.body` already does.
       if (handler) {
-        await handler(response);
+        response.body = await handler(
+          response as RESTlerResponse<unknown>,
+        ) as B;
+      }
+      if (options.responseSchema) {
+        try {
+          response.body = await options.responseSchema(
+            response.body as unknown as H,
+          ) as B;
+        } catch (schemaError) {
+          // Propagates to the catch below exactly like a vendor
+          // `responseHandler` throwing a `RESTlerError` directly does —
+          // `request` here is passed RAW (unredacted), relying on that
+          // catch's existing generic `__redactedError` handling.
+          throw new RESTlerResponseValidationError(
+            { vendor: this.vendor, request },
+            schemaError instanceof Error
+              ? schemaError
+              : new Error(String(schemaError)),
+          );
+        }
       }
 
       return response;
@@ -1041,14 +1096,38 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       case 'XML':
         if (!hasContentType) headers['Content-Type'] = 'application/xml';
         return XMLStringify(payload as Record<string, unknown>);
-      case 'FORM':
-        // Let fetch set multipart/form-data with the correct boundary.
-        Object.keys(headers).forEach((key) => {
-          if (key.toLowerCase() === 'content-type') {
-            delete headers[key];
-          }
-        });
-        return payload as FormData;
+      case 'FORM': {
+        if (payload instanceof FormData) {
+          // Let fetch set multipart/form-data with the correct boundary.
+          Object.keys(headers).forEach((key) => {
+            if (key.toLowerCase() === 'content-type') {
+              delete headers[key];
+            }
+          });
+          return payload;
+        }
+        // A `URLSearchParams` or plain object -> `application/x-www-form-
+        // urlencoded` — the wire format essentially every OAuth2 token
+        // exchange (and e.g. Stripe's whole API) requires, and multipart
+        // is the wrong shape for. `URLSearchParams`'s own serializer
+        // (space -> `+`) is CORRECT here — unlike a URL query string
+        // (see the query-building block above), `+` for space is the
+        // `application/x-www-form-urlencoded` media type's own convention
+        // for a request BODY, not something to route around.
+        if (!hasContentType) {
+          headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        }
+        const params = payload instanceof URLSearchParams
+          ? payload
+          : new URLSearchParams(
+            Object.fromEntries(
+              Object.entries(payload as Record<string, unknown>).map((
+                [key, value],
+              ) => [key, String(value)]),
+            ),
+          );
+        return params.toString();
+      }
       case 'TEXT':
         if (!hasContentType) headers['Content-Type'] = 'text/plain';
         return payload as string;
@@ -1141,7 +1220,13 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    * or query params written by {@link _authInjector} do not persist on it or
    * bleed into later requests that reuse the same object.
    *
+   * `endpoint.path` is joined onto the base URL's pathname via `path.join`,
+   * which normalizes it — see {@link RESTlerEndpoint.path} for what that
+   * means for a caller-controlled path segment.
+   *
    * @param endpoint - Endpoint configuration to process (not mutated)
+   * @param options - `skipAuth` skips the {@link _authInjector} call for
+   *   this one request — see `RESTlerRequestOptions.skipAuth`.
    * @returns A request ready to be sent
    *
    * @throws {@link RESTlerConfigError} If the endpoint's `baseURL`, `port`,
@@ -1150,6 +1235,7 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
    */
   protected async _processEndpoint(
     endpoint: RESTlerEndpoint,
+    options: { skipAuth?: boolean } = {},
   ): Promise<RESTlerRequest> {
     // Work on a copy — with its own `headers`/`query` objects — so neither the
     // base `_authInjector` nor a subclass override can mutate the caller's
@@ -1203,12 +1289,29 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         // contained by design — see the option's contract
       }
     }
-    // Handle auth (may be async — e.g. token refresh before the request)
-    await this._authInjector(endpoint);
+    // Fold the accumulated defaults+headerProvider set INTO endpoint.headers
+    // — the caller's own entries still win on a collision — BEFORE auth
+    // runs, not after. A signing-based CUSTOM `_authInjector` mutates
+    // `endpoint.headers` directly (see its default implementation below);
+    // running this merge first means that's now the FULL outbound set, so
+    // a signature computed over it covers everything actually sent, not
+    // just whatever the caller happened to pass on this one call.
+    endpoint.headers = {
+      ...headers,
+      ...Object.fromEntries(
+        Object.entries(endpoint.headers ?? {}).map((
+          [key, value],
+        ) => [key, this._replaceVersion(value, version)]),
+      ),
+    };
+    // Handle auth (may be async — e.g. token refresh before the request) —
+    // skipped for a CUSTOM auth's own token-exchange request, which would
+    // otherwise recurse into _authInjector before the token exists.
+    if (!options.skipAuth) {
+      await this._authInjector(endpoint);
+    }
     if (endpoint.headers) {
-      Object.entries(endpoint.headers).forEach(([key, value]) => {
-        headers[key] = this._replaceVersion(value, version);
-      });
+      Object.assign(headers, endpoint.headers);
     }
     const url = new URL(this._replaceVersion(baseURL, version));
     url.pathname = path.join(
@@ -1216,9 +1319,19 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
       this._replaceVersion(endpoint.path, version),
     );
     if (endpoint.query) {
-      Object.entries(endpoint.query).forEach(([key, value]) => {
-        url.searchParams.set(key, this._replaceVersion(value, version));
-      });
+      // Built manually with `encodeURIComponent` (RFC 3986: space -> `%20`)
+      // rather than `URLSearchParams.set`, which follows the WHATWG
+      // `application/x-www-form-urlencoded` serializer and encodes a space
+      // as `+` — real, verified platform behavior that breaks any
+      // signing-based auth re-deriving a canonical query string server-side
+      // (a `+` does not round-trip as a space there).
+      url.search = Object.entries(endpoint.query)
+        .map(([key, value]) =>
+          `${encodeURIComponent(key)}=${
+            encodeURIComponent(this._replaceVersion(value, version))
+          }`
+        )
+        .join('&');
     }
     if (port) {
       url.port = port.toString();
@@ -1593,8 +1706,11 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
     const v = value as Record<string, unknown>;
     switch (v.type) {
       case 'BASIC':
+        // An EMPTY password is valid per RFC 7617 — and a real, common
+        // pattern (Stripe's own documented primary auth is `sk_live_...:`
+        // with nothing after the colon). Only the username is required.
         return typeof v.username === 'string' && v.username.length > 0 &&
-          typeof v.password === 'string' && v.password.length > 0;
+          typeof v.password === 'string';
       case 'BEARER':
         return typeof v.token === 'string' && v.token.length > 0 &&
           (v.prefix === undefined || typeof v.prefix === 'string');

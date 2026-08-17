@@ -27,7 +27,21 @@ The five primitive guardians (`string`, `number`, `boolean`, `date`, `bigint`) c
 
 `null` and `undefined` are **never** coerced — chain `.nullable()` / `.optional()` if you want to accept them.
 
-To opt out of coercion, chain a `.test()` with your own typeof check, or write a `Guardian.unknown().process(...)` pipeline by hand.
+Coerce-by-default is right for the input-parsing case above, but wrong when you're validating a _response_ — a vendor API returning `age: "42"` where the contract promises a number is a schema violation you want to catch, not silently accept. `Guardian.number()` and `Guardian.boolean()` expose `.strict()` for that case: it requires the input's runtime `typeof` to already match, rejecting the value instead of coercing it. `.strict()` composes correctly no matter where it's called in the chain:
+
+```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+const StrictAge = Guardian.number().strict().min(0);
+StrictAge.parse(42); // 42
+StrictAge.parse('42'); // throws — no coercion in strict mode
+
+const StrictFlag = Guardian.boolean().strict();
+StrictFlag.parse(true); // true
+StrictFlag.parse('true'); // throws
+```
+
+For the other primitives (`string`, `date`, `bigint`), opt out of coercion by chaining a `.test()` with your own typeof check, or by writing a `Guardian.unknown().process(...)` pipeline by hand.
 
 ## `Guardian.string()`
 
@@ -140,22 +154,23 @@ Age.parse('42'); // 42  ← coerced
 
 ### Type checks
 
-| Method                                                    | Behaviour                                                                                       |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `.integer(msg?)`                                          | `Number.isInteger(input)`                                                                       |
-| `.finite(msg?)`                                           | rejects `Infinity` / `-Infinity`                                                                |
-| `.safeInteger(msg?)`                                      | within `Number.MIN_SAFE_INTEGER`…`MAX_SAFE_INTEGER`                                             |
-| `.odd(msg?)` / `.even(msg?)` / `.prime(msg?)`             | parity / primality                                                                              |
-| `.naturalNumber(msg?)`                                    | positive integer (`> 0`, no fractions)                                                          |
-| `.multipleOf(n, msg?)` / `.evenlyDivisible(n, msg?)`      | `input % n === 0` (alias)                                                                       |
-| `.power(base?, msg?)`                                     | perfect power (of given base or any base)                                                       |
-| `.validPort(msg?)` / `.port(msg?)`                        | 0–65535 integer                                                                                 |
-| `.timestamp(msg?)`                                        | valid Unix timestamp (non-negative integer)                                                     |
-| `.unixSeconds(msg?)` / `.unixMillis(msg?)`                | timestamp validation at second / millisecond resolution                                         |
-| `.fullYear(msg?)`                                         | 4-digit calendar year (1900–9999)                                                               |
-| `.percentage(msg?)` / `.probability(msg?)` / `.bps(msg?)` | `[0,100]` / `[0,1]` / basis-points `[0,10000]` ranges                                           |
-| `.bigDecimal(msg?)`                                       | finite number — alias for `.finite()` framed as "numeric value suitable for decimal accounting" |
-| `.latitude(msg?)` / `.longitude(msg?)`                    | geographic ranges                                                                               |
+| Method                                                    | Behaviour                                                                                         |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `.integer(msg?)`                                          | `Number.isInteger(input)`                                                                         |
+| `.finite(msg?)`                                           | rejects `Infinity` / `-Infinity`                                                                  |
+| `.safeInteger(msg?)`                                      | within `Number.MIN_SAFE_INTEGER`…`MAX_SAFE_INTEGER`                                               |
+| `.odd(msg?)` / `.even(msg?)` / `.prime(msg?)`             | parity / primality                                                                                |
+| `.naturalNumber(msg?)`                                    | positive integer (`> 0`, no fractions)                                                            |
+| `.multipleOf(n, msg?)` / `.evenlyDivisible(n, msg?)`      | `input % n === 0` (alias)                                                                         |
+| `.power(base?, msg?)`                                     | perfect power (of given base or any base)                                                         |
+| `.validPort(msg?)` / `.port(msg?)`                        | 0–65535 integer                                                                                   |
+| `.timestamp(msg?)`                                        | valid Unix timestamp (non-negative integer)                                                       |
+| `.unixSeconds(msg?)` / `.unixMillis(msg?)`                | timestamp validation at second / millisecond resolution                                           |
+| `.fullYear(msg?)`                                         | 4-digit calendar year (1900–9999)                                                                 |
+| `.percentage(msg?)` / `.probability(msg?)` / `.bps(msg?)` | `[0,100]` / `[0,1]` / basis-points `[0,10000]` ranges                                             |
+| `.bigDecimal(msg?)`                                       | finite number — alias for `.finite()` framed as "numeric value suitable for decimal accounting"   |
+| `.latitude(msg?)` / `.longitude(msg?)`                    | geographic ranges                                                                                 |
+| `.strict(msg?)`                                           | reject coercion — input must already be `typeof 'number'` (see [Coercion rules](#coercion-rules)) |
 
 ### Transforms
 
@@ -197,10 +212,11 @@ Accepted.parse(42); // throws — only 0/1 accepted
 
 ### Validators
 
-| Method         | Behaviour        |
-| -------------- | ---------------- |
-| `.true(msg?)`  | requires `true`  |
-| `.false(msg?)` | requires `false` |
+| Method          | Behaviour                                                                                          |
+| --------------- | -------------------------------------------------------------------------------------------------- |
+| `.true(msg?)`   | requires `true`                                                                                    |
+| `.false(msg?)`  | requires `false`                                                                                   |
+| `.strict(msg?)` | reject coercion — input must already be `typeof 'boolean'` (see [Coercion rules](#coercion-rules)) |
 
 ### Transforms
 

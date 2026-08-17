@@ -21,12 +21,14 @@ export type RESTlerContentTypePayload<
   /**
    * The payload data, typed according to the content type:
    * - JSON/XML: Record<string, unknown>
-   * - FORM: FormData
+   * - FORM: `FormData` (sends `multipart/form-data`) or a `URLSearchParams`/
+   *   plain object (sends `application/x-www-form-urlencoded`) — see
+   *   {@link RESTlerContentType}
    * - TEXT: string
    * - BLOB: Blob
    */
   payload?: P extends 'JSON' | 'XML' ? Record<string, unknown>
-    : P extends 'FORM' ? FormData
+    : P extends 'FORM' ? FormData | URLSearchParams | Record<string, unknown>
     : P extends 'TEXT' ? string
     : P extends 'BLOB' ? Blob
     : never;

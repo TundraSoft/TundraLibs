@@ -213,6 +213,29 @@ jobs:
       - name: Check shipped docs from a consumer install
         run: deno run -A .github/scripts/consumer-doc-check.ts
 
+  close-on-success:
+    name: Close health issue on a green run
+    needs: [drift, audit, consumer-docs]
+    if: success()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Close any open health issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing=$(gh issue list --label ci-health --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue close "$existing" --comment "Resolved — this run passed: ${RUN_URL}"
+            echo "Closed issue #$existing"
+          else
+            echo "No open health issue to close"
+          fi
+
   report:
     name: File issue on failure
     needs: [drift, audit, consumer-docs]
