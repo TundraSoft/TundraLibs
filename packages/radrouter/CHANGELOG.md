@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.0.3...radrouter-v1.0.4) (2026-08-17)
+
+
+### Documentation
+
+* **radrouter:** add module docs to ./types and ./errors ([#315](https://github.com/TundraSoft/TundraLibs/issues/315)) ([665044d](https://github.com/TundraSoft/TundraLibs/commit/665044dbb7613f07c881da6a437621e30bf90791))
+
 ## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.0.2...radrouter-v1.0.3) (2026-08-15)
 
 

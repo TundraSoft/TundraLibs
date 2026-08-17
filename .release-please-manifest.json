@@ -12,7 +12,7 @@
   "packages/norm": "1.2.2",
   "packages/oql": "1.0.3",
   "packages/pact": "0.4.6",
-  "packages/radrouter": "1.0.3",
+  "packages/radrouter": "1.0.4",
   "packages/restler": "1.1.2",
   "packages/rpc": "1.1.2",
   "packages/slogger": "1.1.6",
