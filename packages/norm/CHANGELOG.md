@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.3](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.2.2...norm-v1.2.3) (2026-08-17)
+
+
+### Bug Fixes
+
+* **norm:** harden doc-emitter escaping and use crypto RNG for lock token ([#320](https://github.com/TundraSoft/TundraLibs/issues/320)) ([fd3c51c](https://github.com/TundraSoft/TundraLibs/commit/fd3c51cd1bb526d0aa0469302b226f1479701d44))
+
+
+### Documentation
+
+* **norm:** document worker compatibility and module entry ([#307](https://github.com/TundraSoft/TundraLibs/issues/307)) ([f55b412](https://github.com/TundraSoft/TundraLibs/commit/f55b4129d2068986dc23c0b0164e6ddda528d82e))
+
 ## [1.2.2](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.2.1...norm-v1.2.2) (2026-08-15)
 
 
