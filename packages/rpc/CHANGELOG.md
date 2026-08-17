@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.1.2...rpc-v1.1.3) (2026-08-17)
+
+
+### Documentation
+
+* **rpc:** document worker compatibility ([#309](https://github.com/TundraSoft/TundraLibs/issues/309)) ([5bace94](https://github.com/TundraSoft/TundraLibs/commit/5bace943a5c69a5d6554a658efe98148c85490e7))
+
 ## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.1.1...rpc-v1.1.2) (2026-08-15)
 
 
