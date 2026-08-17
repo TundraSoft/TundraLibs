@@ -106,6 +106,54 @@ export class NumberGuardian extends BaseGuardian<number> {
     super(finalTransform, metaData);
   }
 
+  //#region Coercion Control
+
+  /**
+   * Rejects coercion — the input must already be `typeof 'number'`.
+   * Strings, bigints, booleans, and `Date`s that the default (coercing)
+   * behaviour would otherwise convert are rejected instead.
+   *
+   * Implemented as a wrapper around the chain built so far (not a
+   * rebuild from constructor parts, unlike {@link
+   * ObjectGuardian.strict}), so it composes correctly no matter where
+   * in the chain it's called — `Guardian.number().strict().min(0)` and
+   * `Guardian.number().min(0).strict()` both reject a coerced input the
+   * same way.
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns A new NumberGuardian with the validation applied (the receiver is never mutated)
+   * @throws {GuardianError} If the input is not already a `number`
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * const StrictAge = Guardian.number().strict().min(0);
+   * StrictAge.parse(42);   // 42
+   * StrictAge.parse('42'); // throws — no coercion in strict mode
+   * ```
+   */
+  strict(errorMessage?: string): this {
+    const previousTransform = this._composedTransform;
+    return this._cloneWith((input: unknown) => {
+      if (typeof input !== 'number') {
+        throw new GuardianError(
+          errorMessage ||
+            `Number must not be coerced (strict mode) — expected typeof "number", got ${typeof input}`,
+          {
+            expected: 'number (no coercion)',
+            got: typeof input,
+            comparison: 'strict',
+            type: 'number',
+          },
+        );
+      }
+      return previousTransform(input);
+    }, this._metaData) as this;
+  }
+
+  //#endregion
+
   //#region Range Validation Methods
 
   /**

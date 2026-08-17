@@ -51,6 +51,55 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
     super(initialTransform || defaultTransform, metaData);
   }
 
+  //#region Coercion Control
+
+  /**
+   * Rejects coercion — the input must already be `typeof 'boolean'`.
+   * Strings (`'true'`, `'yes'`, …) and numbers (`0`/`1`) that the
+   * default (coercing) behaviour would otherwise convert are rejected
+   * instead.
+   *
+   * Implemented as a wrapper around the chain built so far (not a
+   * rebuild from constructor parts, unlike {@link
+   * ObjectGuardian.strict}), so it composes correctly no matter where
+   * in the chain it's called — `Guardian.boolean().strict().true()` and
+   * `Guardian.boolean().true().strict()` both reject a coerced input
+   * the same way.
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns A new BooleanGuardian with the validation applied (the receiver is never mutated)
+   * @throws {GuardianError} If the input is not already a `boolean`
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * const StrictFlag = Guardian.boolean().strict();
+   * StrictFlag.parse(true);   // true
+   * StrictFlag.parse('true'); // throws — no coercion in strict mode
+   * ```
+   */
+  strict(errorMessage?: string): this {
+    const previousTransform = this._composedTransform;
+    return this._cloneWith((input: unknown) => {
+      if (typeof input !== 'boolean') {
+        throw new GuardianError(
+          errorMessage ||
+            `Boolean must not be coerced (strict mode) — expected typeof "boolean", got ${typeof input}`,
+          {
+            expected: 'boolean (no coercion)',
+            got: typeof input,
+            comparison: 'strict',
+            type: 'boolean',
+          },
+        );
+      }
+      return previousTransform(input);
+    }, this._metaData) as this;
+  }
+
+  //#endregion
+
   //#region Validation Methods
 
   /**
