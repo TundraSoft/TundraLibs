@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.0.1...doctor-v1.0.2) (2026-08-17)
+
+
+### Documentation
+
+* **doctor:** add module docs and symbol JSDoc to entrypoints ([#317](https://github.com/TundraSoft/TundraLibs/issues/317)) ([cd672f2](https://github.com/TundraSoft/TundraLibs/commit/cd672f296572dcd3def25199b8e54e60afa83126))
+
 ## [1.0.1](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.0.0...doctor-v1.0.1) (2026-08-12)
 
 
