@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.1.2...restler-v1.1.3) (2026-08-17)
+
+
+### Bug Fixes
+
+* **restler:** CUSTOM-auth signing, query encoding, FORM urlencoded, BASIC empty password, skipAuth, and responseSchema ([#345](https://github.com/TundraSoft/TundraLibs/issues/345)) ([3088a7d](https://github.com/TundraSoft/TundraLibs/commit/3088a7de9aebb5e97660fe18a80ed1a31d2f1d2f))
+
 ## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.1.1...restler-v1.1.2) (2026-08-14)
 
 

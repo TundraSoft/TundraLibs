@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.3...cacher-v1.0.4) (2026-08-17)
+
+
+### Documentation
+
+* **cacher:** document worker compatibility ([#308](https://github.com/TundraSoft/TundraLibs/issues/308)) ([7c57501](https://github.com/TundraSoft/TundraLibs/commit/7c575012eec1c00d39d33489fb48b2a1d83c974e))
+
 ## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.2...cacher-v1.0.3) (2026-08-15)
 
 
