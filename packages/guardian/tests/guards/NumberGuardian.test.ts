@@ -1265,4 +1265,64 @@ describe('guardian.NumberGuardian', () => {
       asserts.assertThrows(() => new NumberGuardian().evenlyDivisible([]));
     });
   });
+
+  describe('strict (#337: coercion opt-out)', () => {
+    it('accepts an already-typed number, unaffected by strict', () => {
+      const schema = new NumberGuardian().strict();
+      asserts.assertEquals(schema.parse(42), 42);
+      asserts.assertEquals(schema.parse(-3.14), -3.14);
+      asserts.assertEquals(schema.parse(0), 0);
+    });
+
+    it('rejects inputs the default (coercing) transform would accept', () => {
+      const schema = new NumberGuardian().strict();
+      asserts.assertThrows(() => schema.parse('42'), GuardianError);
+      asserts.assertThrows(() => schema.parse(true), GuardianError);
+      asserts.assertThrows(() => schema.parse(false), GuardianError);
+      asserts.assertThrows(() => schema.parse(42n), GuardianError);
+      asserts.assertThrows(() => schema.parse(new Date()), GuardianError);
+    });
+
+    it('still rejects non-finite values (NaN / Infinity) once typed', () => {
+      const schema = new NumberGuardian().strict();
+      asserts.assertThrows(() => schema.parse(Number.NaN), GuardianError);
+      asserts.assertThrows(() => schema.parse(Infinity), GuardianError);
+    });
+
+    it('does not affect the default (non-strict) guardian — coercion still works', () => {
+      const schema = new NumberGuardian();
+      asserts.assertEquals(schema.parse('42'), 42);
+    });
+
+    it('composes correctly when called BEFORE other chain steps', () => {
+      const schema = new NumberGuardian().strict().min(0).max(100);
+      asserts.assertEquals(schema.parse(50), 50);
+      asserts.assertThrows(() => schema.parse('50'), GuardianError);
+      asserts.assertThrows(() => schema.parse(150), GuardianError);
+    });
+
+    it('composes correctly when called AFTER other chain steps', () => {
+      const schema = new NumberGuardian().min(0).max(100).strict();
+      asserts.assertEquals(schema.parse(50), 50);
+      asserts.assertThrows(() => schema.parse('50'), GuardianError);
+      asserts.assertThrows(() => schema.parse(150), GuardianError);
+    });
+
+    it('supports a custom error message', () => {
+      try {
+        new NumberGuardian().strict('no strings allowed').parse('42');
+        throw new Error('expected parse to throw');
+      } catch (e) {
+        asserts.assert(e instanceof GuardianError);
+        asserts.assertEquals((e as Error).message, 'no strings allowed');
+      }
+    });
+
+    it('the receiver is never mutated by strict()', () => {
+      const loose = new NumberGuardian();
+      const strict = loose.strict();
+      asserts.assertEquals(loose.parse('42'), 42);
+      asserts.assertThrows(() => strict.parse('42'), GuardianError);
+    });
+  });
 });
