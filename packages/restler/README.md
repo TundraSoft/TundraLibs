@@ -223,16 +223,26 @@ Set `contentType` (and `payload`) on a body-bearing endpoint. The body is
 serialized and a default `Content-Type` header is set when you haven't
 provided one.
 
-| `contentType` | `payload` type            | Serialized as / `Content-Type`               |
-| ------------- | ------------------------- | -------------------------------------------- |
-| `JSON`        | `Record<string, unknown>` | `JSON.stringify` / `application/json`        |
-| `XML`         | `Record<string, unknown>` | XML string / `application/xml`               |
-| `FORM`        | `FormData`                | `FormData` (the runtime sets the boundary)\* |
-| `TEXT`        | `string`                  | raw string / `text/plain`                    |
-| `BLOB`        | `Blob`                    | the `Blob` as-is                             |
+| `contentType` | `payload` type                    | Serialized as / `Content-Type`                              |
+| ------------- | --------------------------------- | ----------------------------------------------------------- |
+| `JSON`        | `Record<string, unknown>`         | `JSON.stringify` / `application/json`                       |
+| `XML`         | `Record<string, unknown>`         | XML string / `application/xml`                              |
+| `FORM`        | `FormData`                        | `FormData` (the runtime sets the boundary)\*                |
+| `FORM`        | `URLSearchParams` or plain object | urlencoded string / `application/x-www-form-urlencoded`\*\* |
+| `TEXT`        | `string`                          | raw string / `text/plain`                                   |
+| `BLOB`        | `Blob`                            | the `Blob` as-is                                            |
 
-\* For `FORM`, any inherited `Content-Type` header is removed so `fetch` can
-set the correct `multipart/form-data` boundary.
+\* For a `FormData` payload, any inherited `Content-Type` header is removed
+so `fetch` can set the correct `multipart/form-data` boundary.
+
+\*\* `FORM`'s wire format is decided by the payload's SHAPE — a `URLSearchParams`
+or plain object sends `application/x-www-form-urlencoded`, the format
+essentially every OAuth2 token exchange (and Stripe's whole API) requires.
+`URLSearchParams`'s own serializer (space → `+`) is used here, which is
+correct for this media type — note this is DIFFERENT from `endpoint.query`
+(the URL's query string), which is percent-encoded per RFC 3986
+(space → `%20`) instead, since a `+` there breaks any signing-based auth
+that re-derives a canonical query string (e.g. AWS SigV4).
 
 The response body is parsed from its `Content-Type`: `*/json` → object,
 `*/xml` → object, `*/*text*` → string; an unknown/empty type is best-effort
@@ -275,8 +285,10 @@ console.log(res.body?.size, res.body?.type); // Blob size and MIME type
 `RESTlerOptions`) or per request (on the endpoint — the endpoint wins).
 
 ```typescript ignore
-// Basic — sends `Authorization: Basic base64(user:pass)`
+// Basic — sends `Authorization: Basic base64(user:pass)`. An EMPTY password
+// is valid (RFC 7617) — e.g. Stripe's `sk_live_...:` pattern.
 { type: 'BASIC', username: 'user', password: 'secret' }
+{ type: 'BASIC', username: 'sk_live_abc123', password: '' }
 
 // Bearer — sends `Authorization: <prefix> <token>` (prefix defaults to "BEARER")
 { type: 'BEARER', token: 'abc123' }
@@ -318,6 +330,94 @@ class WeatherAPI extends RESTler {
       method: 'GET',
       query: { q: city, units: 'metric' },
     });
+  }
+}
+```
+
+### Signing-based auth (HMAC, SigV4-style)
+
+By the time `_authInjector` runs, `endpoint.headers` already holds the
+**full** outbound header set — instance-level defaults, `headerProvider()`'s
+output, and the caller's own explicit headers, already merged (the caller's
+own entries win on a collision). A signature computed over `endpoint.headers`
+therefore covers everything actually sent, not just whatever the caller
+happened to pass to one particular call. The one exception: the default
+`Content-Type` for JSON/XML/TEXT payloads is computed later, in `_buildBody`
+— to sign it, set `Content-Type` explicitly on `endpoint.headers` yourself
+before calling `_makeRequest`.
+
+`_base64Utf8(value: string): string` is `protected`, not `private` — reuse
+it for Basic-style header encoding in your own scheme instead of
+reimplementing UTF-8-correct base64.
+
+```typescript
+import { RESTler } from '@tundralibs/restler';
+import type { RESTlerEndpoint } from '@tundralibs/restler';
+
+class SignedAPI extends RESTler {
+  public readonly vendor = 'signed-vendor';
+
+  constructor(private secret: string) {
+    super({ baseURL: 'https://api.example.com' });
+  }
+
+  protected override _authInjector(endpoint: RESTlerEndpoint): void {
+    // endpoint.headers is already the FULL set — sign it as-is.
+    const signature = this.sign(endpoint.headers ?? {}, this.secret);
+    endpoint.headers = { ...endpoint.headers, 'X-Signature': signature };
+  }
+
+  private sign(_headers: Record<string, string>, _secret: string): string {
+    return 'computed-signature'; // real HMAC/SigV4 canonicalization goes here
+  }
+}
+```
+
+### OAuth2 token exchange (`skipAuth`)
+
+A `CUSTOM` auth that fetches its own token needs to make a request as part
+of `_authInjector` — but `_authInjector` runs unconditionally on every
+`_makeRequest` call, so a token-fetch that itself called `_makeRequest`
+would recurse into its own `_authInjector` before the token exists.
+`skipAuth: true` on that ONE call breaks the recursion while keeping
+everything else `_makeRequest` normally provides — timeout/abort, the
+`call` event, error normalization, witness/tracing:
+
+```typescript
+import { RESTler } from '@tundralibs/restler';
+import type { RESTlerEndpoint } from '@tundralibs/restler';
+
+class OAuth2API extends RESTler {
+  public readonly vendor = 'oauth2-vendor';
+  private token: string | undefined;
+
+  constructor(private clientId: string, private clientSecret: string) {
+    super({ baseURL: 'https://api.example.com' });
+  }
+
+  protected override async _authInjector(
+    endpoint: RESTlerEndpoint,
+  ): Promise<void> {
+    if (this.token === undefined) {
+      const res = await this._makeRequest<{ access_token: string }>(
+        {
+          path: '/oauth/token',
+          method: 'POST',
+          contentType: 'FORM',
+          payload: {
+            grant_type: 'client_credentials',
+            client_id: this.clientId,
+            client_secret: this.clientSecret,
+          },
+        },
+        { skipAuth: true }, // <- breaks the recursion
+      );
+      this.token = res.body?.access_token;
+    }
+    endpoint.headers = {
+      ...endpoint.headers,
+      Authorization: `Bearer ${this.token}`,
+    };
   }
 }
 ```
@@ -557,19 +657,47 @@ RESTler — see
 
 Some APIs report failures inside a successful HTTP response — a `200` whose
 body is `{ "ok": false, "error": "…" }`, or a success envelope wrapping the
-real data. A **response handler** translates that vendor convention in one
-place. It runs after the body has been parsed (so it is independent of
-JSON/XML/TEXT handling), on every response — error statuses and empty bodies
-included. In the handler you can:
+real data. Others just don't guarantee their response actually matches what
+you expect — a vendor's contract can silently change. `_makeRequest`'s second
+argument is an OPTIONS bag with two independently optional hooks that compose
+into one pipeline, plus `skipAuth` (see
+[OAuth2 token exchange](#oauth2-token-exchange-skipauth)):
+
+```typescript ignore
+_makeRequest(endpoint, {
+  responseHandler?: (response) => H | Promise<H>,
+  responseSchema?: (data: H) => B | Promise<B>,
+  skipAuth?: boolean,
+})
+```
+
+```
+raw parsed body
+  → if responseHandler present: data = await responseHandler(response)   // full response — status/headers visible, not just body
+  → if responseSchema present:  data = await responseSchema(data)        // data = raw body if no handler ran, handler's output otherwise
+  → response.body = data
+```
+
+Neither present → today's default (the parsed body, untouched). Only one
+present → its result is final. Both present → the handler's output feeds the
+schema.
+
+### `responseHandler`
+
+Runs on every response — error statuses and empty bodies included — so it
+can translate a vendor convention. It receives the FULL `RESTlerResponse`
+(status/headers included, not just the body):
 
 - **throw** to reject the request (throw a `RESTlerError` subclass to surface
   it unwrapped; other errors are wrapped in `RESTlerRequestError` with the
   original as `cause`), or
-- **mutate `response.body`** to unwrap an envelope.
+- **return** the value the request resolves to — an unwrapped envelope, or
+  simply `response.body` unchanged if nothing needs transforming. There is
+  no mutate-in-place channel; the return value IS the result.
 
 Set a vendor-wide default via the protected `_responseHandler` field, or pass
-a handler per call as the second argument of `_makeRequest` (which takes
-precedence).
+`responseHandler` per call (which takes precedence entirely — it does not
+compose with the vendor default; only one of the two ever runs).
 
 ```typescript
 import { RESTler, RESTlerRequestError } from '@tundralibs/restler';
@@ -589,7 +717,7 @@ class PaymentAPI extends RESTler {
         request: { url: response.url, method: 'GET', timeout: 30 },
       });
     }
-    response.body = body?.data; // unwrap: callers see the payload directly
+    return body?.data; // unwrap: callers see the payload directly
   };
 
   constructor() {
@@ -604,31 +732,106 @@ class PaymentAPI extends RESTler {
   }
 
   // A per-call handler overrides the vendor default when one endpoint
-  // deviates from the convention.
+  // deviates from the convention. Must return `response.body` explicitly
+  // to leave it unchanged.
   rawHealth() {
-    return this._makeRequest({ path: '/health', method: 'GET' }, () => {});
+    return this._makeRequest({ path: '/health', method: 'GET' }, {
+      responseHandler: (response) => response.body,
+    });
   }
 }
 ```
+
+### `responseSchema`
+
+A plain runtime validator/parser — `(data: H) => B | Promise<B>` — for the
+value the request ultimately resolves to. `B` is INFERRED from the schema's
+return type, so you no longer separately write out (and manually keep in
+sync) a type argument that nothing actually checked against the wire.
+
+**No coupling to any particular validation library** — a
+[`@tundralibs/guardian`](https://jsr.io/@tundralibs/guardian) schema's own
+`.parse` satisfies the signature directly, and so does any hand-rolled
+function:
+
+```typescript
+import { RESTler } from '@tundralibs/restler';
+
+class UserAPI extends RESTler {
+  public readonly vendor = 'users';
+
+  constructor() {
+    super({ baseURL: 'https://api.example.com' });
+  }
+
+  getUser(id: string) {
+    return this._makeRequest(
+      { path: `/users/${id}`, method: 'GET' },
+      {
+        responseSchema: (data) => {
+          // A real schema would be e.g. `(d) => UserSchema.parse(d)`.
+          const d = data as { id: string; name: string };
+          if (typeof d.id !== 'string') throw new Error('missing id');
+          return { id: d.id, name: d.name };
+        },
+      },
+    );
+  }
+}
+```
+
+A thrown validation error (a `GuardianError`, or whatever your schema
+throws) surfaces as `RESTlerResponseValidationError` — distinct from a
+transport failure or timeout: the request SUCCEEDED, but what came back
+didn't match what you declared to expect. See
+[Error Handling](#error-handling).
+
+### Wrapped envelopes: a schema alone, no handler needed
+
+`responseHandler` is not required to unwrap an envelope — a schema that
+itself encodes the "wrapped or not" shape (e.g. via a discriminated union)
+can validate the RAW body directly:
+
+```typescript ignore
+import { Guardian } from '@tundralibs/guardian';
+
+const Envelope = <T>(inner: ReturnType<typeof Guardian.object>) =>
+  Guardian.discriminatedUnion('status', [
+    Guardian.object({ status: Guardian.literal('ok'), data: inner }),
+    Guardian.object({ status: Guardian.literal('error'), error: ErrorSchema }),
+  ]);
+
+this._makeRequest(endpoint, {
+  responseSchema: (data) => Envelope(UserSchema).parse(data),
+});
+```
+
+A non-throw no longer implies success here — it means the response matched
+ONE of the declared shapes. `response.body` is the real discriminated union;
+narrow on it afterward (`if (response.body.status === 'error')`) with full
+type safety, instead of being forced into exception-based control flow for
+an expected error shape.
 
 ## Error Handling
 
 `_makeRequest` rejects on transport failures (it attaches the error to
 `response.error` and re-throws it). HTTP error statuses do not reject —
 unless a [response handler](#vendor-response-handling) inspects the body and
-throws.
+throws, or a [response schema](#responseschema) rejects the response.
 
-| Error                 | Thrown when                                                                |
-| --------------------- | -------------------------------------------------------------------------- |
-| `RESTlerConfigError`  | Invalid client options or endpoint config (bad `baseURL`/`port`/`auth`/…). |
-| `RESTlerTimeoutError` | The request exceeded `timeout`.                                            |
-| `RESTlerRequestError` | Any other failure while making the request.                                |
-| `RESTlerError`        | Base class for all of the above.                                           |
+| Error                            | Thrown when                                                                                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `RESTlerConfigError`             | Invalid client options or endpoint config (bad `baseURL`/`port`/`auth`/…).                                                                             |
+| `RESTlerTimeoutError`            | The request exceeded `timeout`.                                                                                                                        |
+| `RESTlerResponseValidationError` | `responseSchema` threw — the request succeeded, but the response didn't match what you declared to expect. The original error is preserved as `cause`. |
+| `RESTlerRequestError`            | Any other failure while making the request. `RESTlerTimeoutError` and `RESTlerResponseValidationError` are both subclasses.                            |
+| `RESTlerError`                   | Base class for all of the above.                                                                                                                       |
 
 ```typescript
 import {
   RESTlerError,
   type RESTlerResponse,
+  RESTlerResponseValidationError,
   RESTlerTimeoutError,
 } from '@tundralibs/restler';
 
@@ -648,6 +851,12 @@ try {
 } catch (err) {
   if (err instanceof RESTlerTimeoutError) {
     console.error('timed out');
+  } else if (err instanceof RESTlerResponseValidationError) {
+    // Retrying won't fix this the way retrying a timeout might — the
+    // vendor's response no longer matches its declared contract.
+    console.error(
+      `response schema rejected it: ${(err.cause as Error)?.message}`,
+    );
   } else if (err instanceof RESTlerError) {
     console.error(`request failed: ${err.message}`);
   } else {
@@ -671,14 +880,22 @@ validates and stores options; `defaults` are applied where `options` omit them.
 
 **Protected members (used by / overridable in your subclass):**
 
-- `_makeRequest<T>(endpoint: RESTlerEndpoint, responseHandler?: RESTlerResponseHandler): Promise<RESTlerResponse<T>>`
-  — perform a request. Throws `RESTlerTimeoutError` / `RESTlerRequestError` /
-  `RESTlerConfigError`. The optional `responseHandler` interprets the parsed
-  response (see [Vendor Response Handling](#vendor-response-handling)).
+- `_makeRequest<H, B>(endpoint: RESTlerEndpoint, options?: RESTlerRequestOptions<H, B>): Promise<RESTlerResponse<B>>`
+  — perform a request. Throws `RESTlerTimeoutError` / `RESTlerResponseValidationError` /
+  `RESTlerRequestError` / `RESTlerConfigError`. `options.responseHandler` and
+  `options.responseSchema` compose into one pipeline; `options.skipAuth`
+  skips `_authInjector` for this one call (see
+  [Vendor Response Handling](#vendor-response-handling)).
 - `_responseHandler?: RESTlerResponseHandler` — vendor-wide default response
-  handler; a per-call handler overrides it.
+  handler; `options.responseHandler` overrides it entirely (the two do not
+  compose with each other).
 - `_authInjector(endpoint): void | Promise<void>` — inject auth. Override for
-  custom schemes; may be async.
+  custom schemes; may be async. By the time it runs, `endpoint.headers`
+  already holds the FULL outbound set (defaults + `headerProvider` +
+  caller-explicit), so a signing scheme can sign everything actually sent.
+- `_base64Utf8(value: string): string` — UTF-8-correct base64 encoding,
+  identical across Deno/Bun/Node; reuse it in a `CUSTOM` auth override
+  instead of reimplementing it.
 - `_fetch: typeof fetch` — the `fetch` implementation (compat's by default).
   Override to supply a custom transport or a stub; plain `fetch` works for any
   request that doesn't use `socketPath` or `tls`.
@@ -695,16 +912,26 @@ validates and stores options; `defaults` are applied where `options` omit them.
   optional `baseURL`, `port`, `version`, `auth`, `query`, `headers`, `timeout`,
   `responseType` (`'BLOB' | 'ARRAY_BUFFER'`, see
   [Binary Responses](#binary-responses)), and (for body methods)
-  `contentType` + `payload`.
+  `contentType` + `payload`. `path` is NORMALIZED via `path.join` against the
+  base URL (`//` collapses, `.`/`..` resolve) — percent-encode an opaque,
+  caller-controlled segment (an object-storage key, a filename) yourself
+  first if it could plausibly contain those sequences.
 - `RESTlerResponse<T>` — `{ url, status, statusText, headers?, body?, error?, timeTaken }`.
-- `RESTlerResponseHandler` —
-  `(response: RESTlerResponse<unknown>) => void | Promise<void>`; the vendor
-  hook described in [Vendor Response Handling](#vendor-response-handling).
+- `RESTlerRequestOptions<H, B>` — `_makeRequest`'s options bag:
+  `{ responseHandler?, responseSchema?, skipAuth? }`. See
+  [Vendor Response Handling](#vendor-response-handling).
+- `RESTlerResponseHandler<H>` —
+  `(response: RESTlerResponse<unknown>) => H | Promise<H>`; the vendor hook
+  described in [Vendor Response Handling](#vendor-response-handling).
+- `RESTlerResponseSchema<H, B>` — `(data: H) => B | Promise<B>`; the runtime
+  validator described in [`responseSchema`](#responseschema). Plain
+  function, no coupling to any particular validation library.
 - `RESTlerAuth` — `BASIC | BEARER | CUSTOM` discriminated union.
   `RESTlerAuthTypes` is the discriminator; `RESTlerAuthBasic`
-  (`{ username, password }`) and `RESTlerAuthBearer` (`{ token, prefix? }`)
-  are the per-scheme payloads.
-- `RESTlerContentType` — `'JSON' | 'XML' | 'FORM' | 'TEXT' | 'BLOB'`.
+  (`{ username, password }` — password may be empty, RFC 7617) and
+  `RESTlerAuthBearer` (`{ token, prefix? }`) are the per-scheme payloads.
+- `RESTlerContentType` — `'JSON' | 'XML' | 'FORM' | 'TEXT' | 'BLOB'`. `FORM`'s
+  wire format depends on the payload's shape — see [Content Types](#content-types).
 - `RESTlerMethod` — `'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS'`.
 - `RESTlerEvents` — the event handler signatures.
 - `RESTlerErrorMeta` — metadata carried by every `RESTlerError`: `vendor` plus
