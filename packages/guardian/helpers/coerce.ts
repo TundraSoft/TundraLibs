@@ -21,6 +21,16 @@
  * values upstream of the type validation — so an `.optional()` chain
  * still does what you'd expect.
  *
+ * Coerce-by-default is right for *input parsing* (the API/DB boundary
+ * this module targets) but wrong for *response validation* — a vendor
+ * API returning `age: "42"` where the contract promises a number is a
+ * schema violation you want to catch, not silently accept. There's no
+ * single default that serves both: `NumberGuardian` / `BooleanGuardian`
+ * bias toward the more common input-parsing case and expose `.strict()`
+ * as the opt-out for the response-validation case (see {@link
+ * NumberGuardian.strict} / {@link BooleanGuardian.strict}), rather than
+ * flipping the default and forcing input-parsing callers to opt in.
+ *
  * @module
  */
 

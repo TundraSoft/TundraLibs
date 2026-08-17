@@ -118,6 +118,16 @@ QuerySchema.parse({ page: '3', limit: '20', q: 'guardian' });
 
 See [Validators](docs/Guardian-Validators.md#coercion-rules) for the full coercion rules per type.
 
+Validating a vendor _response_ instead of parsing input? `Guardian.number()` / `Guardian.boolean()` expose `.strict()` to opt out of coercion — the input must already be the declared JS type, or it throws:
+
+```typescript
+import { Guardian } from '@tundralibs/guardian';
+
+const StrictAge = Guardian.number().strict();
+StrictAge.parse(42); // 42
+StrictAge.parse('42'); // throws — no coercion in strict mode
+```
+
 ### Discriminated unions
 
 ```typescript
