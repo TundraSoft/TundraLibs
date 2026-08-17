@@ -54,11 +54,17 @@ export class PortError extends Error {
  * const port = await getFreePort({ min: 3000, max: 3999 });
  * ```
  */
-export const getFreePort = async ({
-  min = 1024,
-  max = 65535,
-  exclude = [],
-}: GetFreePortOptions = {}): Promise<number> => {
+export const getFreePort = async (
+  options: GetFreePortOptions = {},
+): Promise<number> => {
+  // Destructured in the BODY, not the signature — JSR's npm-compat
+  // `.d.ts` generation degrades a signature-position destructuring
+  // pattern to an unusable `(_dts_1: never)`, even though the pattern
+  // is otherwise "fast-check" clean (`deno publish --dry-run` does not
+  // catch it — confirmed 2026-08-17 against a real consumer install of
+  // utils 1.0.5). A plain named parameter has no pattern to mis-emit.
+  const { min = 1024, max = 65535, exclude = [] } = options;
+
   // Validate input parameters
   if (min < 0 || min > 65535) {
     throw new PortError('Minimum port must be between 0 and 65535');
