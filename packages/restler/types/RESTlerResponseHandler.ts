@@ -10,19 +10,27 @@ import type { RESTlerResponse } from './RESTlerResponse.ts';
  *
  * Runs after the body has been parsed (so it is independent of the
  * JSON/XML/TEXT content handling) on every response, including error
- * statuses and empty bodies. Use it to translate vendor conventions —
- * e.g. a `200` whose body carries an error envelope:
+ * statuses and empty bodies. Receives the FULL response (status/headers
+ * included, not just the body) — a vendor convention like "errors are a
+ * `2xx` with an error envelope" needs more than the body to detect.
  *
  * - **throw** to signal the error (throw a {@link RESTlerError} subclass to
  *   surface it unwrapped; anything else is wrapped in a
  *   `RESTlerRequestError` with the original as `cause`), or
- * - **mutate** `response.body` to unwrap an envelope
- *   (`{ data, error } -> data`).
+ * - **return** the value that becomes the request's result — unwrap a
+ *   vendor envelope (`{ data, error } -> data`), or simply
+ *   `response.body` unchanged if nothing needs transforming.
+ *
+ * Composes with {@link RESTlerResponseSchema}: if both are given to
+ * `_makeRequest`, this handler's return value is what the schema then
+ * validates. Neither is required — a schema alone (encoding the full
+ * "wrapped or not" shape itself, e.g. via a discriminated union) is a
+ * complete, valid way to use `_makeRequest` with no handler at all.
  *
  * Set a vendor-wide default via the client's `_responseHandler` field, or
- * pass one per call as the second argument of `_makeRequest` (which takes
+ * pass one per call in {@link RESTlerRequestOptions} (which takes
  * precedence).
  */
-export type RESTlerResponseHandler = (
+export type RESTlerResponseHandler<H = unknown> = (
   response: RESTlerResponse<unknown>,
-) => void | Promise<void>;
+) => H | Promise<H>;

@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.0.3...guardian-v1.1.0) (2026-08-17)
+
+
+### Features
+
+* **guardian:** add .strict() coercion opt-out to NumberGuardian/BooleanGuardian ([#346](https://github.com/TundraSoft/TundraLibs/issues/346)) ([83d5aa0](https://github.com/TundraSoft/TundraLibs/commit/83d5aa041c8def1a43d49016989137cce778edd5)), closes [#337](https://github.com/TundraSoft/TundraLibs/issues/337)
+
+
+### Bug Fixes
+
+* **guardian:** encode instead of regex-strip in sanitize(), tighten noXss() ([#319](https://github.com/TundraSoft/TundraLibs/issues/319)) ([e2cf399](https://github.com/TundraSoft/TundraLibs/commit/e2cf399026315df4060fa1d6d3ba676480ea189b))
+
+
+### Documentation
+
+* **guardian:** add module docs to ./guards and ./types ([#312](https://github.com/TundraSoft/TundraLibs/issues/312)) ([e9c6b5d](https://github.com/TundraSoft/TundraLibs/commit/e9c6b5ddca80bbafaba8717b0afd532b0def1b9c))
+
 ## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.0.2...guardian-v1.0.3) (2026-08-15)
 
 

@@ -54,8 +54,10 @@ export class WeatherAPI extends RESTler {
    * OpenWeatherMap reports errors via a `cod` field inside the JSON body
    * (e.g. `{"cod":"404","message":"city not found"}`), so this vendor-wide
    * response handler translates that convention into a thrown
-   * {@link RESTlerRequestError}. It applies to every request unless a
-   * per-call handler is passed to `_makeRequest` (which takes precedence).
+   * {@link RESTlerRequestError}. It applies to every request unless
+   * `options.responseHandler` is passed to `_makeRequest` (which takes
+   * precedence entirely, not composed with this default). Must RETURN the
+   * body on the non-error path — there is no mutate-in-place channel.
    */
   protected override _responseHandler: RESTlerResponseHandler = (response) => {
     const body = response.body as
@@ -70,6 +72,7 @@ export class WeatherAPI extends RESTler {
         },
       );
     }
+    return response.body;
   };
 
   /**
