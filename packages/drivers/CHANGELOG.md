@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.5...drivers-v1.0.6) (2026-08-17)
+
+
+### Documentation
+
+* **drivers:** add module docs and symbol JSDoc to engine entrypoints ([#318](https://github.com/TundraSoft/TundraLibs/issues/318)) ([9a787a7](https://github.com/TundraSoft/TundraLibs/commit/9a787a7246cc3fd44c42ec67a3ba3a3873dbab18))
+
 ## [1.0.5](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.4...drivers-v1.0.5) (2026-08-15)
 
 
