@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.7](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.6...slogger-v1.1.7) (2026-08-17)
+
+
+### Documentation
+
+* **slogger:** document worker compatibility ([#310](https://github.com/TundraSoft/TundraLibs/issues/310)) ([18d63af](https://github.com/TundraSoft/TundraLibs/commit/18d63afc62f5caf628e90eccd5dbaf2005cc4a30))
+
 ## [1.1.6](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.5...slogger-v1.1.6) (2026-08-15)
 
 

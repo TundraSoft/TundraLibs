@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.0.3...oql-v1.0.4) (2026-08-17)
+
+
+### Documentation
+
+* **oql:** add module doc to ./errors entrypoint ([#314](https://github.com/TundraSoft/TundraLibs/issues/314)) ([bcb6dbd](https://github.com/TundraSoft/TundraLibs/commit/bcb6dbd52aaefe8d948c03348eff91f0f7c1d892))
+
 ## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.0.2...oql-v1.0.3) (2026-08-15)
 
 

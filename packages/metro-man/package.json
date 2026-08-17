@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/metro-man",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "description": "Prometheus-compatible in-process metrics: Counter, Gauge, Histogram, Summary, and a central registry (MetroMan).",
   "exports": {
