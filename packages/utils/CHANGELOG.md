@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.6](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.0.5...utils-v1.0.6) (2026-08-17)
+
+
+### Bug Fixes
+
+* **utils:** stop getFreePort's published .d.ts degrading to never ([#335](https://github.com/TundraSoft/TundraLibs/issues/335)) ([57aed80](https://github.com/TundraSoft/TundraLibs/commit/57aed80cd96393ebedaa22960e30b3cdd1d5d1d4))
+
+
+### Documentation
+
+* **utils:** add module docs to entrypoints ([#311](https://github.com/TundraSoft/TundraLibs/issues/311)) ([f52ae59](https://github.com/TundraSoft/TundraLibs/commit/f52ae597dce9b6a50699c6c5e3ab80178b7d952d))
+
 ## [1.0.5](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.0.4...utils-v1.0.5) (2026-08-15)
 
 
