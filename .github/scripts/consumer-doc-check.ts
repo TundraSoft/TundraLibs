@@ -26,8 +26,18 @@
  * generated `_dist/*.d.ts`, which the overlay does not regenerate. So a fix
  * whose only effect is in the emitted declaration (e.g. exporting a type that
  * was previously inlined, which stops a parameter degrading to `never`) will
- * NOT show green under `--local` even when correct — verify those with
- * `deno publish --dry-run` in the package instead.
+ * NOT show green under `--local` even when correct.
+ *
+ * ⚠️ `deno publish --dry-run` does NOT reliably catch this class of bug
+ * either — its "slow types" check verifies the package is fast-check
+ * COMPATIBLE, not that the emitted `.d.ts` is CORRECT. Confirmed
+ * 2026-08-17: `getFreePort`'s destructured-in-the-signature parameter
+ * passed `--dry-run` clean while the real published tarball (utils
+ * 1.0.5) still emitted `(_dts_1: never)` for it — a signature-position
+ * destructuring pattern JSR's npm-compat generator mishandles even when
+ * "slow types" has nothing to flag. The only fully reliable
+ * verification for a declaration-emission fix is: republish, then
+ * re-run this check (without `--local`) against the real thing.
  *
  * @module
  */
@@ -176,9 +186,10 @@ for (const pkg of packages) {
       // for) is exercised faithfully. But a symbol's TYPES still resolve through
       // the installed `_dist/*.d.ts`, which the overlay does not regenerate. A
       // fix whose only effect is in the emitted declaration therefore stays red
-      // under `--local` until the package republishes — verify that class with
-      // `deno publish --dry-run` in the package instead (it runs JSR's
-      // slow-type check, the exact thing that shapes the `.d.ts`).
+      // under `--local` until the package republishes — `deno publish --dry-run`
+      // is NOT a substitute (its slow-type check misses at least one real bug
+      // class; see the module docstring). Republish, then re-run this check
+      // WITHOUT `--local` to confirm.
       await overlay(`packages/${pkg}`, installed);
       version = `${version}+worktree`;
     }
