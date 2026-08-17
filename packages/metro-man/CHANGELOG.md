@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.3...metro-man-v1.0.4) (2026-08-17)
+
+
+### Documentation
+
+* **metro-man:** add module docs to ./errors and ./types ([#313](https://github.com/TundraSoft/TundraLibs/issues/313)) ([1208721](https://github.com/TundraSoft/TundraLibs/commit/1208721a6787d197d2e2de2c4324402836df01e7))
+
 ## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.2...metro-man-v1.0.3) (2026-08-14)
 
 
