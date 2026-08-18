@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.0.2...cronus-v1.0.3) (2026-08-18)
+
+
+### Documentation
+
+* **cronus:** document why there is no Browser/Workers badge, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/cronus-v1.0.1...cronus-v1.0.2) (2026-08-14)
 
 
