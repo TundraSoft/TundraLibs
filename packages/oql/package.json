@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/oql",
-  "version": "1.0.4",
+  "version": "2.0.0",
   "description": "Object Query Language — type-safe, database-agnostic query definitions",
   "license": "MIT",
   "type": "module",
