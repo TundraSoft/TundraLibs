@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.6](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.5...ambient-v0.2.6) (2026-08-18)
+
+
+### Documentation
+
+* **ambient:** add a Cloudflare Workers badge and a browser incompatibility note ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [0.2.5](https://github.com/TundraSoft/TundraLibs/compare/ambient-v0.2.4...ambient-v0.2.5) (2026-08-15)
 
 
