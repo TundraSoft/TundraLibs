@@ -6,7 +6,7 @@
  * @module
  */
 
-import { Singleton } from '@tundralibs/utils';
+import { Singleton } from '@tundralibs/utils/Singleton';
 
 import {
   CircularDependencyError,

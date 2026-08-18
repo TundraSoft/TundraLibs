@@ -121,6 +121,34 @@ ON; make sure the legacy flag is not turned on:
 (1.x required `emitDecoratorMetadata`, which tsx/esbuild can never
 emit — that row was a ❌. 2.0 removes the requirement.)
 
+### Bundling for the browser or a Worker (esbuild/Wrangler/Vite)
+
+**Pin a `target`.** "TC39 decorator" describes the _syntax_, not
+something browsers or workerd execute natively — no shipping runtime
+does yet, so a bundler must still lower it to plain JS. Left at its
+default, esbuild assumes native support and passes the syntax
+through unchanged, which is a hard `SyntaxError` at load time
+everywhere:
+
+```typescript ignore
+// esbuild — either the CLI flag or the JS API option
+esbuild.build({
+  target: 'es2022', // or your bundler's equivalent
+  // ...
+});
+```
+
+Verified directly: a `@Vial`/`inject()` consumer bundled with
+`--target=es2022` runs correctly in a real browser tab and in a
+workerd-shaped environment (`process`, `Bun`, `Deno`, `window`, and
+`document` all absent). Doctor itself has zero runtime dependencies
+beyond `@tundralibs/utils`'s `Singleton` — imported from its narrow
+`@tundralibs/utils/Singleton` subpath, not the full barrel, so
+`getFreePort`'s Node-builtin loading code (`node:net`/`tls`/…) never
+enters the bundle. Confirmed empirically: the barrel import pulled
+those strings in regardless of tree-shaking (they're module-level,
+so not provably side-effect-free), the narrow subpath doesn't.
+
 ## The three injection idioms
 
 ```typescript ignore
