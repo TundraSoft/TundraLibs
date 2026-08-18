@@ -1,7 +1,8 @@
 {
   "name": "@tundralibs/slogger",
   "version": "1.1.7",
-  "description": "Cross-runtime structured logging library — one log call fans out to console, JSON, syslog, file, HTTP, TCP, or any custom handler",
+  "description": "Cross-runtime structured logging that fans one record out to many formats in-process — console, JSON, syslog, file, HTTP, TCP, or any custom handler",
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": "./mod.ts",

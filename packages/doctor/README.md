@@ -1,40 +1,82 @@
 # Doctor
 
-Lightweight, decorator-driven dependency injection for Deno, Bun, and Node.js.
+Lightweight dependency injection for Deno, Bun, Node.js, Cloudflare
+Workers, and browsers — no `reflect-metadata`, no legacy decorators,
+no build flags.
 
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
 
 ## Overview
 
-Doctor is a small DI container built around three decorators:
+Doctor is a small DI container built around two primitives:
 
-- `@Vial(mode)` — register a class under a lifecycle (`SINGLETON`,
-  `SCOPED`, or `TRANSIENT`).
-- `@Dose()` — mark a property as injectable. Reads the runtime
-  type from `reflect-metadata`, so the consumer's TypeScript must
-  have `emitDecoratorMetadata: true`.
-- `@Inoculate(scope?)` — wrap a class so every `new` call fills
-  its `@Dose` properties automatically. The scope (if given) is
-  captured at decoration time and reused for every instance.
+- `@Vial(mode)` — class decorator that registers a class under a
+  lifecycle (`SINGLETON`, `SCOPED`, or `TRANSIENT`).
+- `inject('Token')` — typed, import-free resolution by class-name
+  token. Used as a **field initializer** or **constructor default
+  parameter**, it wires an instance while it constructs — that IS the
+  injection mechanism, there is no separate injection step.
 
-The registry is a process-wide singleton exported as
-`Doctor`. Decorators talk to it; consumers usually don't have to.
+```typescript
+import { inject, Vial } from '@tundralibs/doctor';
 
-## Modules
+declare module '@tundralibs/doctor' {
+  interface VialRegistry {
+    Logger: Logger;
+  }
+}
 
-| Module       | Description                                               | Documentation                                |
-| ------------ | --------------------------------------------------------- | -------------------------------------------- |
-| `Doctor`     | Process-wide injector instance (register, resolve, treat) | This page                                    |
-| `inject`     | Resolve a vial by token (class name), import-free         | [Doctor-Inject](docs/Doctor-Inject.md)       |
-| `@Vial`      | Class decorator — registers the class                     | [Doctor-Vial](docs/Doctor-Vial.md)           |
-| `@Dose`      | Property decorator — marks injectable                     | [Doctor-Dose](docs/Doctor-Dose.md)           |
-| `@Inoculate` | Class decorator — auto-inject on `new`                    | [Doctor-Inoculate](docs/Doctor-Inoculate.md) |
-| `./build`    | Codegen (Deno-only) — `VialRegistry` from `@Vial` classes | [Doctor-Build](docs/Doctor-Build.md)         |
-| `./errors`   | `DoctorError`, `UnregisteredVialError`, ...               | [Doctor-Errors](errors/Doctor-Errors.md)     |
-| `./types`    | `Prescription`, `Vial`, `VialModes`                       | —                                            |
-| `./examples` | Runnable multi-file example                               | [examples/](examples/)                       |
+@Vial('SINGLETON')
+class Logger {
+  log(msg: string) {
+    console.log(`[log] ${msg}`);
+  }
+}
+
+class App {
+  logger = inject('Logger'); // resolves while `new App()` runs
+
+  start() {
+    this.logger.log('app started');
+  }
+}
+
+new App().start(); // [log] app started
+```
+
+The registry is a process-wide singleton exported as `Doctor`.
+Decorators talk to it; consumers usually don't have to.
+
+**Design rule: decorators RECORD, they never SUPPLY VALUES.** `@Vial`
+only registers the class. There is deliberately no `@Dose`-style
+member decorator handing you the value, because Bun currently
+miscompiles value-supplying member decorators whenever a file contains
+more than one decorated class
+([oven-sh/bun#30326](https://github.com/oven-sh/bun/issues/30326)) —
+the last class's initializer silently replaces everyone else's.
+`inject()` initializers are plain expressions, immune by construction,
+and shorter anyway.
+
+## Migrating from 1.x
+
+Doctor 2.0 drops the legacy-decorator machinery — `experimentalDecorators`,
+`emitDecoratorMetadata`, and `reflect-metadata` — entirely:
+
+| 1.x                                              | 2.0                                                                                           |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `@Dose() logger!: Logger`                        | `logger = inject('Logger')`                                                                   |
+| `@Inoculate()` on the class                      | nothing — `inject()` fields wire themselves on `new`                                          |
+| `@Inoculate('scope')`                            | `inject('Db', 'scope')` per field, or `Doctor.resolve(Class, 'scope')`                        |
+| `Doctor.treat(instance)`                         | removed — injection happens during construction                                               |
+| `import 'reflect-metadata'`                      | removed — no runtime dependency                                                               |
+| `experimentalDecorators: true` (tsconfig)        | **must be off** — `@Vial` is a TC39 standard decorator                                        |
+| `MissingMetadataError`, `MissingDesignTypeError` | removed — their failure modes no longer exist                                                 |
+| SINGLETON ↔ SINGLETON cycles resolved            | eager cycles **throw** `CircularDependencyError`; break with a [lazy getter](#lazy-injection) |
+| `Prescription` type                              | removed                                                                                       |
 
 ## Installation
 
@@ -56,71 +98,100 @@ bunx jsr add @tundralibs/doctor
 npx jsr add @tundralibs/doctor
 ```
 
-`reflect-metadata` is a runtime dependency. Import it once at your
-entry point, before any decorator runs.
-
 ## TypeScript configuration
 
-Decorators and runtime type emission must both be enabled:
+`@Vial` is a TC39 (stage-3) standard decorator — the default in
+TypeScript 5+, Deno, Bun, esbuild, and tsx. There is nothing to turn
+ON; make sure the legacy flag is not turned on:
 
 ```jsonc
-// tsconfig.json
+// tsconfig.json — both flags absent or false
 {
   "compilerOptions": {
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "experimentalDecorators": false,
+    "emitDecoratorMetadata": false
   }
 }
 ```
 
-For Deno, the same flags live under `compilerOptions` in your `deno.json`.
-Recent Deno defaults to the TC39 (stage-3) decorator transform, which does
-**not** emit `design:type` — so these flags are required there too, not just on
-Node/Bun.
+| Toolchain                       | Works |
+| ------------------------------- | ----- |
+| **Deno**                        | ✅    |
+| **Bun**                         | ✅    |
+| **Node** — `tsc` / `ts-node`    | ✅    |
+| **Node + `tsx`, esbuild, Vite** | ✅    |
 
-`@Dose()` only works on toolchains that emit decorator metadata. Without it the
-decorator throws
-[`MissingDesignTypeError`](errors/Doctor-Errors.md#missingdesigntypeerror):
+(1.x required `emitDecoratorMetadata`, which tsx/esbuild can never
+emit — that row was a ❌. 2.0 removes the requirement.)
 
-| Toolchain                            | Works | How                               |
-| ------------------------------------ | ----- | --------------------------------- |
-| **Deno**                             | ✅    | set both flags in `deno.json`     |
-| **Bun**                              | ✅    | set both flags in `tsconfig.json` |
-| **Node** — `tsc` / `ts-node` / `swc` | ✅    | set both flags in `tsconfig.json` |
-| **Node + `tsx`, esbuild, Vite**      | ❌    | these do not emit `design:type`   |
+### Bundling for the browser or a Worker (esbuild/Wrangler/Vite)
 
-JSR consumers get the same rule: Deno reads the source, while Node/Bun get the
-transpiled package — every runtime must still emit metadata for **its own**
-decorated classes.
+**Pin a `target`.** "TC39 decorator" describes the _syntax_, not
+something browsers or workerd execute natively — no shipping runtime
+does yet, so a bundler must still lower it to plain JS. Left at its
+default, esbuild assumes native support and passes the syntax
+through unchanged, which is a hard `SyntaxError` at load time
+everywhere:
 
-The token-based [`inject`](docs/Doctor-Inject.md) API does not read
-`design:type`, so it is unaffected by the esbuild/`tsx` limitation (it still
-needs `experimentalDecorators` for `@Vial`).
-
-## Quick Start
-
-```typescript
-import 'reflect-metadata';
-import { Dose, Inoculate, Vial } from '@tundralibs/doctor';
-
-@Vial('SINGLETON')
-class Logger {
-  log(msg: string) {
-    console.log(`[log] ${msg}`);
-  }
-}
-
-@Inoculate()
-class App {
-  @Dose()
-  public logger!: Logger;
-  start() {
-    this.logger.log('app started');
-  }
-}
-
-new App().start(); // [log] app started
+```typescript ignore
+// esbuild — either the CLI flag or the JS API option
+esbuild.build({
+  target: 'es2022', // or your bundler's equivalent
+  // ...
+});
 ```
+
+Verified directly: a `@Vial`/`inject()` consumer bundled with
+`--target=es2022` runs correctly in a real browser tab and in a
+workerd-shaped environment (`process`, `Bun`, `Deno`, `window`, and
+`document` all absent). Doctor itself has zero runtime dependencies
+beyond `@tundralibs/utils`'s `Singleton` — imported from its narrow
+`@tundralibs/utils/Singleton` subpath, not the full barrel, so
+`getFreePort`'s Node-builtin loading code (`node:net`/`tls`/…) never
+enters the bundle. Confirmed empirically: the barrel import pulled
+those strings in regardless of tree-shaking (they're module-level,
+so not provably side-effect-free), the narrow subpath doesn't.
+
+## The three injection idioms
+
+```typescript ignore
+class Handler {
+  // EAGER — field initializer. Resolves while `new` runs; a missing
+  // registration fails loudly at construction.
+  logger = inject('Logger');
+
+  // EAGER — constructor default parameter. Same timing; handy when
+  // tests want to pass a double explicitly: new Handler(fakeDb).
+  constructor(private db = inject('Db')) {}
+
+  // LAZY — memoizing getter. Resolves on FIRST ACCESS.
+  private __audit?: Audit;
+  get audit(): Audit {
+    return this.__audit ??= inject('Audit', 'jobs');
+  }
+}
+```
+
+### Lazy injection
+
+Reach for the lazy-getter idiom when you need to:
+
+- **break a dependency cycle** — two eager `inject()`s pointing at
+  each other throw `CircularDependencyError` (each side re-enters the
+  other's still-running construction); a getter on one side defers
+  its resolution until both instances exist;
+- **register after construction** — the vial only has to exist by
+  first _access_, not by `new`;
+- **keep a dependency out of serialization** — a getter lives on the
+  prototype, so `JSON.stringify`/spread skip it; an eager field is an
+  ordinary enumerable property.
+
+Two rules come with lazy: give it an **explicit scope** when the
+dependency is SCOPED (first access usually happens outside any
+operation, where there is no [ambient scope](#scopes-and-the-ambient-operation-scope)
+to inherit), and call [`Doctor.checkup()`](#boot-time-preflight-checkup)
+at startup so a missing registration still fails at boot rather than
+on first use.
 
 ## Lifecycles
 
@@ -130,50 +201,66 @@ new App().start(); // [log] app started
 | `SCOPED`    | Named scope        | Per-request state: DB connections, sessions |
 | `TRANSIENT` | Resolution call    | Lightweight throwaway objects: validators   |
 
-Singletons are constructed lazily on first resolution and cached
-before property injection, so registration order never matters and
-singleton ↔ singleton cycles resolve. Depending on a **SCOPED** vial
-from a SINGLETON is a captive-dependency hazard, though: the
-singleton is built exactly once, under whichever scope its first
-resolution happens to carry — with no scope in flight that first
-resolution throws
-[`ScopeRequiredError`](errors/Doctor-Errors.md#scoperequirederror),
-and otherwise that scope's instance stays captive in the singleton
-for its whole lifetime. SCOPED resolutions themselves always require
-a scope — asking for a SCOPED vial without one throws the same
-error.
+Singletons are constructed lazily on first resolution and cached on
+**successful** construction — a failed construction caches nothing,
+so registering the missing dependency and retrying just works.
 
-## Constructing with a scope
+Depending on a **SCOPED** vial from a SINGLETON is a
+captive-dependency hazard: the singleton is built exactly once, under
+whichever scope its first resolution happens to carry, and that
+scope's instance stays captive in the singleton for its whole
+lifetime. SCOPED resolutions themselves always require a scope —
+asking for a SCOPED vial without one throws
+[`ScopeRequiredError`](errors/Doctor-Errors.md#scoperequirederror).
 
-Two ways to attach a scope to a class:
+## Scopes and the ambient operation scope
 
-- **Decoration-time default** — `@Inoculate('background-job')` bakes
-  the scope into the class. Every `new MyClass()` uses it, and a plain
-  subclass (`class Sub extends MyClass {}`, at any depth, with no `@Dose`
-  of its own) inherits it — the base wrapper treats the subclass instance
-  with the baked-in scope. Any level that adds its own `@Dose` fields —
-  leaf or intermediate — must carry its own `@Inoculate`, and that
-  decorator captures its **own** scope: repeat the argument
-  (`@Inoculate('background-job')`) or a SCOPED base dependency throws
-  `ScopeRequiredError` under a bare `@Inoculate()`. A `@Dose`-adding
-  level with no `@Inoculate` makes `new` all-or-nothing (never a silent
-  half-injection)
-  (see [@Inoculate → Subclassing](docs/Doctor-Inoculate.md#subclassing)).
-- **Per-call override** — `Doctor.resolve(MyClass, 'req-42')`
-  constructs and treats with a caller-supplied scope.
-  `Doctor.resolve` works on plain classes, on `@Inoculate`d
-  classes (it avoids double injection — directly by unwrapping the
-  wrapper, and for a subclass of an `@Inoculate`d base by suppressing
-  the wrapper's auto-treat for that exact construction only), and on
-  `@Vial`-registered classes — though for registered classes the
-  canonical lookup is `Doctor.dispense`.
+Every `Doctor.dispense(type, scope)` / `Doctor.resolve(type, scope)`
+call makes its `scope` the **ambient operation scope** while it
+constructs. Any `inject()` that runs during that construction — field
+initializers, constructor defaults, nested vials' own initializers —
+and names no scope of its own inherits it:
+
+```typescript ignore
+class UserHandler {
+  db = inject('Database'); // SCOPED — no scope named here
+  repo = inject('UserRepository'); // TRANSIENT, whose own fields inject 'Database'
+}
+
+const h = Doctor.resolve(UserHandler, `req-${id}`);
+h.db === h.repo.db; // true — both resolved under `req-${id}`
+```
+
+Precedence: an explicit argument always wins —
+`inject('Db', 'pinned')` resolves under `'pinned'` no matter what
+operation is in flight. Outside any operation there is no ambient
+scope, so a scope-less `inject()` of a SCOPED vial throws
+`ScopeRequiredError` — loudly, at `new`.
+
+End a request by dropping its scope:
+
+```typescript ignore
+Doctor.discharge(`req-${id}`); // drops every instance in that scope
+```
+
+## Boot-time preflight: checkup()
+
+```typescript ignore
+Doctor.checkup(); // eagerly dispenses every registered SINGLETON
+```
+
+Constructs every SINGLETON now, so a missing registration or a
+throwing factory fails at startup instead of deep inside the first
+request that touches it — the counterweight to lazy getters. SCOPED
+and TRANSIENT vials are skipped (no scope to resolve under; nothing
+to warm). Returns the number of singletons dispensed.
 
 ## Vials with constructor arguments
 
-Doctor constructs vials with a bare `new Klass()` by default — so
-any class needing arguments must register a `factory`:
+Doctor constructs vials with a bare `new Klass()` by default — a
+class needing arguments registers a `factory`:
 
-```typescript
+```typescript ignore
 class Database {
   constructor(public readonly url: string) {}
 }
@@ -186,7 +273,7 @@ Doctor.prescribe(Database, {
 
 The decorator form accepts the same options object:
 
-```typescript
+```typescript ignore
 @Vial({ mode: 'SCOPED', factory: () => new Database(env.URL) })
 class Database { ... }
 ```
@@ -197,13 +284,13 @@ class Database { ... }
 imports the dependency class. The return type comes from a `VialRegistry` you
 generate from your `@Vial` classes with `@tundralibs/doctor/build`:
 
-```typescript
+```typescript ignore
 // dev/CI step (Deno)
 import { build } from '@tundralibs/doctor/build';
 await build({ roots: ['./src'], out: './src/vial-registry.ts' });
 ```
 
-```typescript
+```typescript ignore
 import './vial-registry.ts'; // the generated type augmentation
 import { inject } from '@tundralibs/doctor';
 
@@ -219,54 +306,51 @@ The token is the class name, so names must be unique and survive minification.
 See [inject](docs/Doctor-Inject.md) and [build](docs/Doctor-Build.md) for the
 full API and caveats.
 
+## Modules
+
+| Module       | Description                                                  | Documentation                            |
+| ------------ | ------------------------------------------------------------ | ---------------------------------------- |
+| `Doctor`     | Process-wide injector (register, dispense, resolve, checkup) | This page                                |
+| `inject`     | Resolve a vial by token (class name), import-free            | [Doctor-Inject](docs/Doctor-Inject.md)   |
+| `@Vial`      | Class decorator — registers the class                        | [Doctor-Vial](docs/Doctor-Vial.md)       |
+| `./build`    | Codegen (Deno-only) — `VialRegistry` from `@Vial` classes    | [Doctor-Build](docs/Doctor-Build.md)     |
+| `./errors`   | `DoctorError`, `UnregisteredVialError`, ...                  | [Doctor-Errors](errors/Doctor-Errors.md) |
+| `./types`    | `Vial`, `VialModes`, `VialOptions`                           | —                                        |
+| `./examples` | Runnable multi-file examples                                 | [examples/](examples/)                   |
+
 ## Examples
 
 Two runnable multi-file examples live under
 [`packages/doctor/examples/`](examples/):
 
 - **[web-app/](examples/web-app/)** — `Doctor.resolve(Class, scope)`
-  for per-request scope variation. SINGLETON config + logger,
-  SCOPED database per request, TRANSIENT repository, plain handler
-  resolved per call. Demonstrates lazy singletons, cascade, scope
-  isolation, and cleanup via `discharge`.
-- **[cli-tool/](examples/cli-tool/)** — `@Inoculate()` for one-shot
-  CLIs where the scope is fixed (or absent). SINGLETON config +
-  logger + greeter shared by multiple command classes constructed
-  with plain `new`. Shows the smaller-shape pattern when you don't
-  need per-call scoping.
+  for per-request scope variation. SINGLETON config + logger, SCOPED
+  database per request, TRANSIENT repository, plain handler resolved
+  per call. Demonstrates lazy singletons, the ambient operation
+  scope, scope isolation, and cleanup via `discharge`.
+- **[cli-tool/](examples/cli-tool/)** — one-shot CLIs where every
+  dependency is a singleton: plain command classes wired by their
+  `inject()` fields on `new`, no per-call scoping.
 
-The web-app's file layout:
-
-| File                                                      | What it shows                                            |
-| --------------------------------------------------------- | -------------------------------------------------------- |
-| [`Config.ts`](examples/web-app/Config.ts)                 | A class with required constructor args                   |
-| [`registry.ts`](examples/web-app/registry.ts)             | Registering it with `Doctor.prescribe(..., { factory })` |
-| [`Logger.ts`](examples/web-app/Logger.ts)                 | `@Vial('SINGLETON')` with a `@Dose` dependency           |
-| [`Database.ts`](examples/web-app/Database.ts)             | `@Vial('SCOPED')` — one instance per scope               |
-| [`UserRepository.ts`](examples/web-app/UserRepository.ts) | `@Vial('TRANSIENT')` — fresh instance per resolve        |
-| [`UserHandler.ts`](examples/web-app/UserHandler.ts)       | Plain class injected via `Doctor.resolve`                |
-| [`main.ts`](examples/web-app/main.ts)                     | Lazy singletons, cascade, per-request scope, cleanup     |
-
-Run it:
+Run them:
 
 ```bash
 deno run packages/doctor/examples/web-app/main.ts
+deno run packages/doctor/examples/cli-tool/main.ts hello Alice
 ```
 
-See [examples/web-app/README.md](examples/web-app/README.md) for the
-walkthrough and expected output. The CLI tool's walkthrough is at
-[examples/cli-tool/README.md](examples/cli-tool/README.md).
+See [examples/web-app/README.md](examples/web-app/README.md) and
+[examples/cli-tool/README.md](examples/cli-tool/README.md) for
+walkthroughs and expected output.
 
 ## Related Documentation
 
 - [inject](docs/Doctor-Inject.md) — resolve a vial by token, import-free
 - [build](docs/Doctor-Build.md) — generate the `VialRegistry` from `@Vial` classes
 - [@Vial](docs/Doctor-Vial.md) — registration decorator
-- [@Dose](docs/Doctor-Dose.md) — property decorator
-- [@Inoculate](docs/Doctor-Inoculate.md) — class decorator
 - [Errors](errors/Doctor-Errors.md) — error classes and matching strategies
 - [web-app example](examples/web-app/) — per-request scoping via `Doctor.resolve`
-- [cli-tool example](examples/cli-tool/) — `@Inoculate()` for one-shot CLIs
+- [cli-tool example](examples/cli-tool/) — singleton wiring with plain `new`
 
 ## License
 

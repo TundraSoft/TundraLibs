@@ -1,7 +1,7 @@
 {
   "name": "@tundralibs/drivers",
   "version": "1.0.6",
-  "description": "Cross-runtime connection drivers for SQL (PostgreSQL, MariaDB/MySQL, SQLite), MongoDB, Redis, and Memcached",
+  "description": "Cross-runtime connection drivers for SQL (PostgreSQL, MariaDB/MySQL, SQLite), MongoDB, Redis, and Memcached — plus edge/serverless HTTP dialects (Neon, Turso, Cloudflare D1)",
   "license": "MIT",
   "tasks": {
     "check:edge-safety": "deno run -A scripts/check-edge-safety.ts"

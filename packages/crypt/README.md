@@ -5,10 +5,12 @@ Comprehensive cryptographic library providing encryption, hashing, key derivatio
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
 
 ## Overview
 
-The Crypt package provides battle-tested cryptographic operations using the native Web Crypto API. All functions are runtime-agnostic and work seamlessly across Deno, Bun, and Node.js.
+The Crypt package provides battle-tested cryptographic operations using the native Web Crypto API (`crypto.subtle`, `crypto.getRandomValues`) — no `node:crypto`, no native bindings. All functions are runtime-agnostic and work seamlessly across Deno, Bun, Node.js, Cloudflare Workers, and browsers.
 
 ## Modules
 

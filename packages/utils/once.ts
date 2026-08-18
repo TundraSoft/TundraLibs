@@ -55,37 +55,16 @@ export const once = <T extends (...args: any[]) => any>(fn: T): T => {
 };
 
 /**
- * Method decorator: each instance runs the decorated method at most once.
- *
- * State is stored per-instance in a non-enumerable `__once_state_<key>`
- * property, so two instances run the method independently. Both sync
- * and async methods are supported; a sync throw is cached and re-thrown
- * on later calls, while an async rejection is cached and returned as a
- * rejected Promise (so `.catch()` keeps working on later calls).
- *
- * @example
- * ```typescript
- * declare function connect(): Promise<void>;
- *
- * class Service {
- *   @Once
- *   async init() { await connect(); }
- * }
- * const s = new Service();
- * await s.init(); // runs
- * await s.init(); // no-op
- * ```
+ * Build the per-instance run-at-most-once wrapper around `original`,
+ * keyed by the member name. Shared by both decorator calling
+ * conventions (TC39 standard and legacy experimental).
  */
-export function Once(
-  _target: object,
-  _propertyKey: string | symbol,
-  descriptor: PropertyDescriptor,
-): PropertyDescriptor {
-  if (typeof descriptor.value !== 'function') return descriptor;
-
-  const original = descriptor.value;
-  descriptor.value = function (this: any, ...args: unknown[]) { // deno-lint-ignore no-explicit-any
-    const stateKey = `__once_state_${String(_propertyKey)}`;
+const wrapOnceMethod = (
+  original: (...args: unknown[]) => unknown,
+  keyName: string,
+) => {
+  return function (this: any, ...args: unknown[]) {
+    const stateKey = `__once_state_${keyName}`;
     let state = this[stateKey];
     if (!state) {
       state = {
@@ -155,5 +134,43 @@ export function Once(
     }
     return state.result;
   };
-  return descriptor;
+};
+
+/**
+ * Method decorator: each instance runs the decorated method at most once.
+ *
+ * State is stored per-instance in a non-enumerable `__once_state_<key>`
+ * property, so two instances run the method independently. Both sync
+ * and async methods are supported; a sync throw is cached and re-thrown
+ * on later calls, while an async rejection is cached and returned as a
+ * rejected Promise (so `.catch()` keeps working on later calls).
+ *
+ * TC39 STANDARD DECORATORS ONLY: requires the modern default compilation
+ * mode (no `experimentalDecorators`). Consumers still compiling with the
+ * legacy flag should use `once()` directly or stay on utils <= 1.0.6.
+ *
+ * @example
+ * ```typescript
+ * declare function connect(): Promise<void>;
+ *
+ * class Service {
+ *   @Once
+ *   async init() { await connect(); }
+ * }
+ * const s = new Service();
+ * await s.init(); // runs
+ * await s.init(); // no-op
+ * ```
+ */
+export function Once<This, A extends unknown[], R>(
+  target: (this: This, ...args: A) => R,
+  context: ClassMethodDecoratorContext<This, (this: This, ...args: A) => R>,
+): (this: This, ...args: A) => R {
+  // Runtime guard for untyped (plain-JS) callers; the types already
+  // restrict placement to methods.
+  if (context.kind !== 'method') return target;
+  return wrapOnceMethod(
+    target as (...args: unknown[]) => unknown,
+    String(context.name),
+  ) as (this: This, ...args: A) => R;
 }

@@ -70,15 +70,17 @@ honest per-call cost breakdown.
 ## Browser / Worker compatibility
 
 `@tundralibs/slogger` is designed for server-side application logging
-and is not a browser/worker-first runtime. TCP, syslog, file, HTTP
-transport handlers, and the socket-backed lifecycle depend on server
-runtime capabilities that are not available in a browser sandbox.
-
-This package is intended for Deno, Bun, and Node server environments,
-with the socket and file-backed handlers used in process-local or
-network-local deployments. Browser or worker bundles should restrict
-usage to the in-memory or console-style paths and avoid relying on the
-server transport handlers.
+and is not a browser/worker-first runtime, so there's no blanket
+badge — but the handler-level split is sharper than "server-only":
+`TCPHandler`, `SyslogHandler`, and `FileHandler` genuinely need a raw
+socket or real filesystem and won't work at the edge. `ConsoleHandler`,
+`MemoryHandler`, `BlackholeHandler`, and `StreamHandler` (any
+web-standard `WritableStream` — compose it with `CompressionStream`,
+a browser's own stdout-equivalent, or an in-memory sink) have no such
+dependency and are genuinely portable. `HTTPHandler` ships logs over
+`fetch`, so it's edge-safe too, modulo one Deno-specific pre-flight
+permission check that no-ops elsewhere. Restrict a browser/Worker
+bundle to those handlers and avoid the three server-only ones.
 
 ## Modules
 

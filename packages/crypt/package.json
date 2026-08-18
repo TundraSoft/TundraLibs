@@ -2,7 +2,7 @@
   "name": "@tundralibs/crypt",
   "version": "1.0.3",
   "type": "module",
-  "description": "A cryptography library with support for various algorithms and utilities",
+  "description": "Cross-runtime cryptography — hashing, AES/RSA encryption, HMAC/RSA signing, JWT, OTP, key derivation, and secure random",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",

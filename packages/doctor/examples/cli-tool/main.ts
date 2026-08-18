@@ -1,7 +1,7 @@
 /**
  * @fileoverview One-shot CLI dispatcher. Parses argv, picks a
- * command, lets `@Inoculate()` wire its dependencies via `new`,
- * then runs.
+ * command, and `new`s it — the command's `inject()` field
+ * initializers wire its dependencies during construction.
  *
  * Run with:
  *

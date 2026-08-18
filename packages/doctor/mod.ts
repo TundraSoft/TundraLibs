@@ -1,15 +1,16 @@
 /**
- * @fileoverview `@tundralibs/doctor` — dependency-health checks for
- * services: declare named checks (decorator or registration API), run
- * them with timeouts and consecutive-failure tracking, and expose the
- * aggregate as readiness/liveness results.
+ * @fileoverview `@tundralibs/doctor` — decorator-driven dependency
+ * injection: register classes as vials with SINGLETON / SCOPED /
+ * TRANSIENT lifecycles (`@Vial`), inject them through typed tokens
+ * (`inject`, as a field or constructor-default initializer), and
+ * resolve per-request instances with `Doctor.resolve`.
  *
  * @module
  */
 
 export { Doctor } from './Doctor.ts';
 export { inject, type VialRegistry } from './inject.ts';
-export { Dose, Inoculate, Vial } from './decorators/mod.ts';
+export { Vial, type VialDecorator } from './decorators/mod.ts';
 
 export {
   type CircularDependencyContext,
@@ -17,18 +18,10 @@ export {
   DoctorError,
   type DuplicateVialContext,
   DuplicateVialError,
-  type MissingDesignTypeContext,
-  MissingDesignTypeError,
-  MissingMetadataError,
   type ScopeRequiredContext,
   ScopeRequiredError,
   type UnregisteredVialContext,
   UnregisteredVialError,
 } from './errors/mod.ts';
 
-export type {
-  Prescription,
-  Vial as VialClass,
-  VialModes,
-  VialOptions,
-} from './types/mod.ts';
+export type { Vial as VialClass, VialModes, VialOptions } from './types/mod.ts';

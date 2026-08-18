@@ -2,7 +2,8 @@
   "name": "@tundralibs/rpc",
   "version": "1.1.3",
   "type": "module",
-  "description": "RPC + pub/sub framework over WebSocket — Server, Client, command router, channels, pluggable adapters",
+  "description": "Remote Procedure Call + pub/sub framework over WebSocket — typed request/response, channels, middleware, and pluggable adapters",
+  "license": "MIT",
   "exports": {
     ".": "./mod.ts",
     "./pubsub": "./pubsub/mod.ts",

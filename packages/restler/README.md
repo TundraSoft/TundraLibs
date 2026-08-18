@@ -9,6 +9,12 @@ TLS client authentication.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
+
+Built on the standard `fetch` global, so it runs unchanged on Workers
+and in the browser too — Unix-socket and TLS-client-auth transport is
+opt-in per endpoint and simply unused there.
 
 ## Table of Contents
 

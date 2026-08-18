@@ -287,17 +287,16 @@ describe('utils.throttle', () => {
     asserts.assertEquals(counter, 3);
   });
 
-  it('should handle decorator on non-function properties', () => {
-    const descriptor: PropertyDescriptor = {
-      value: 'not a function',
-      writable: true,
-      enumerable: true,
-      configurable: true,
-    };
-
-    // The decorator should not modify non-function properties
-    Throttle(1000)({}, 'test', descriptor);
-    asserts.assertEquals(descriptor.value, 'not a function');
+  it('should return the target unchanged for an unsupported placement', () => {
+    // Untyped (plain-JS) callers can hand the decorator a non-method,
+    // non-getter context; the runtime guard returns the target untouched.
+    const target = () => 'not throttled';
+    // deno-lint-ignore no-explicit-any
+    const result = (Throttle(1000) as any)(target, {
+      kind: 'setter',
+      name: 'test',
+    });
+    asserts.assertStrictEquals(result, target);
   });
 
   it(

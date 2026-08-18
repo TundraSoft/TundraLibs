@@ -7,6 +7,13 @@ threading them through every function signature.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+
+Built on `AsyncLocalStorage`, resolved at runtime via
+`process.getBuiltinModule('node:async_hooks')` — genuinely works on
+Cloudflare Workers, which expose it under the `nodejs_compat` flag.
+**Not supported in a plain browser tab**: there's no fallback, so
+`run()`/`child()` throw where no `AsyncLocalStorage` exists.
 
 ## The problem it solves
 

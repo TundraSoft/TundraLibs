@@ -7,7 +7,23 @@
  */
 
 import { Doctor } from '../Doctor.ts';
-import type { VialModes, VialOptions } from '../types/mod.ts';
+import type {
+  Vial as VialClass,
+  VialModes,
+  VialOptions,
+} from '../types/mod.ts';
+
+/**
+ * The decorator {@link Vial} returns. Registration needs only the
+ * class itself, so the decorator works under both TC39 standard
+ * decorators (which pass a context second) and the legacy
+ * `experimentalDecorators` convention (which doesn't) — the context
+ * is simply ignored.
+ */
+export type VialDecorator = (
+  target: VialClass,
+  context?: ClassDecoratorContext,
+) => void;
 
 /**
  * Register the decorated class as a vial.
@@ -33,12 +49,11 @@ import type { VialModes, VialOptions } from '../types/mod.ts';
  * }
  * ```
  */
-export function Vial(mode: VialModes): ClassDecorator;
+export function Vial(mode: VialModes): VialDecorator;
 /** Register the class with explicit {@link VialOptions}. */
-export function Vial(options: VialOptions): ClassDecorator;
-export function Vial(arg: VialModes | VialOptions): ClassDecorator {
-  // deno-lint-ignore no-explicit-any
-  return function (target: any) {
+export function Vial(options: VialOptions): VialDecorator;
+export function Vial(arg: VialModes | VialOptions): VialDecorator {
+  return function (target: VialClass): void {
     Doctor.prescribe(target, arg as VialModes);
   };
 }

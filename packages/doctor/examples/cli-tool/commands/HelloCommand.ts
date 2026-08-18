@@ -1,18 +1,15 @@
 /**
  * @fileoverview `hello <name>` — greets the named user via the
- * shared Greeter singleton. Uses `@Inoculate()` (no scope) because
- * the CLI is one-shot and all dependencies are singletons.
+ * shared Greeter singleton. A plain class: the `inject()` field
+ * initializer wires it on `new`, no decorator needed.
  *
  * @module
  */
 
-import { Dose, Inoculate } from '../../../mod.ts';
-import { Greeter } from '../Greeter.ts';
+import { inject } from '../../../mod.ts';
 
-@Inoculate()
 export class HelloCommand {
-  @Dose()
-  public greeter!: Greeter;
+  public greeter = inject('Greeter');
 
   public run(args: string[]): void {
     const name = args[0] ?? 'world';

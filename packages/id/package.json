@@ -2,7 +2,7 @@
   "name": "@tundralibs/id",
   "version": "1.0.5",
   "type": "module",
-  "description": "A library for generating unique identifiers",
+  "description": "Cross-runtime ID generators — NanoID, CUID/CUID2, ULID, MongoDB ObjectID, and sequential/simple IDs",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",

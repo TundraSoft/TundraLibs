@@ -4,7 +4,7 @@
  * @module
  */
 
-import { BaseError } from '@tundralibs/utils';
+import { BaseError } from '@tundralibs/utils/BaseError';
 
 /**
  * Base class for every error thrown by `@tundralibs/doctor`.

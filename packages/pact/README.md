@@ -10,6 +10,12 @@ orchestrates, and emits events.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
+
+Built on `crypt`'s Web Crypto primitives and a `fetch`-based OAuth
+client, with no filesystem or process assumptions of its own — runs
+unchanged on Workers and in the browser.
 
 ## Overview
 

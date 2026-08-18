@@ -13,15 +13,18 @@ The Cacher package provides a unified caching abstraction that works with multip
 ## Browser / Worker compatibility
 
 `@tundralibs/cacher` is a server-side cache abstraction. The built-in
-Redis and Memcached engines, and the underlying socket / network
-lifecycle they rely on, are intended for Deno, Bun, and Node server
-runtimes. This package is not designed as a browser or worker-native
-cache runtime.
-
-Use the in-memory engine for local process-state caching in a browser
-or worker context only if the target environment supports the same
-runtime semantics; do not assume the networked engines are portable to
-edge or browser sandboxes.
+Redis and Memcached engines need a real TCP connection to a cache
+server — meaningless in a browser or a standard Worker, though only at
+**connect time**: `RedisCacher`/`MemCacher` import
+`@tundralibs/drivers`' TCP-based engines, but those load lazily rather
+than at module top level, so merely importing `@tundralibs/cacher`
+(the `MemoryCacher` you'd actually want at the edge included) doesn't
+throw or fail to bundle — trying to _connect_ a Redis/Memcached engine
+is what breaks. No Browser/Workers badge regardless: the package's own
+`mod.ts` re-exports `MemCacher`/`RedisCacher` alongside `MemoryCacher`
+with no isolated subpath, so there's no way to import "just the
+edge-safe part" and have a bundler prove it by tree-shaking the rest
+away.
 
 ## Modules
 

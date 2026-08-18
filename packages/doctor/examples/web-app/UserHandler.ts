@@ -1,23 +1,19 @@
 /**
- * @fileoverview UserHandler — request entry point. Plain class
- * (not @Inoculate-wrapped) because we want the scope to be set
- * per-request via `Doctor.resolve(UserHandler, scope)`.
+ * @fileoverview UserHandler — request entry point. A plain,
+ * unregistered class: each request builds a fresh one via
+ * `Doctor.resolve(UserHandler, scope)`, whose scope becomes the
+ * ambient fallback for every `inject()` below — so `db` and
+ * `repo.db` land on the same per-request Database.
  *
  * @module
  */
 
-import { Dose } from '../../mod.ts';
-import { Database } from './Database.ts';
-import { Logger } from './Logger.ts';
-import { UserRepository } from './UserRepository.ts';
+import { inject } from '../../mod.ts';
 
 export class UserHandler {
-  @Dose()
-  public logger!: Logger;
-  @Dose()
-  public db!: Database;
-  @Dose()
-  public repo!: UserRepository;
+  public logger = inject('WebLogger');
+  public db = inject('Database');
+  public repo = inject('UserRepository');
 
   public handle(userId: number): { id: number; name: string } | undefined {
     this.logger.log(`UserHandler.handle(${userId})`);

@@ -1,20 +1,17 @@
 /**
  * @fileoverview Greeter — singleton business-logic service shared by
- * every command. Cascades Config + Logger from the Doctor.
+ * every command. Pulls CliConfig + CliLogger with `inject()` field
+ * initializers; the cascade resolves during construction.
  *
  * @module
  */
 
-import { Dose, Vial } from '../../mod.ts';
-import { Config } from './Config.ts';
-import { Logger } from './Logger.ts';
+import { inject, Vial } from '../../mod.ts';
 
 @Vial('SINGLETON')
 export class Greeter {
-  @Dose()
-  public config!: Config;
-  @Dose()
-  public logger!: Logger;
+  public config = inject('CliConfig');
+  public logger = inject('CliLogger');
 
   public greet(name: string, formal: boolean): string {
     const message = formal ? `Good day, ${name}.` : `Hey ${name}!`;

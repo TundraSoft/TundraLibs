@@ -10,6 +10,8 @@
  */
 
 // deno-lint-ignore-file no-explicit-any
+import type { MethodOrGetterDecorator } from './memoize.ts';
+
 //#region Compatibility Layer
 // Determine the appropriate time function based on the environment
 let getCurrentTime: () => number;
@@ -146,6 +148,10 @@ export const throttle = <T extends (...args: any[]) => any>(
  * Use `throttle()` directly if you instead need a single window shared across
  * all instances.
  *
+ * TC39 STANDARD DECORATORS ONLY: requires the modern default compilation
+ * mode (no `experimentalDecorators`). Consumers still compiling with the
+ * legacy flag should use `throttle()` directly or stay on utils <= 1.0.6.
+ *
  * @param delay - Minimum gap between executions, in ms.
  * @param ignoreArgs - When `true`, throttle globally; when `false`
  *   (default), throttle per unique argument set.
@@ -160,82 +166,87 @@ export const throttle = <T extends (...args: any[]) => any>(
  * }
  * ```
  */
-export const Throttle =
-  (delay: number, ignoreArgs = false): MethodDecorator =>
-  (
-    _target: object,
-    propertyKey: string | symbol,
-    descriptor: PropertyDescriptor,
-  ) => {
-    if (typeof descriptor.value === 'function') {
-      // Methods depend on `this`, so throttle PER-INSTANCE (mirroring the getter
-      // branch and `@Memoize`). A single `throttle()` closure on the prototype
-      // would share ONE result cache — keyed only by arguments — across every
-      // instance, so a second instance calling within the window would be served
-      // the first instance's cached return value and its own body (and any state
-      // mutation) would be skipped. Build (and cache) a throttled wrapper bound
-      // to the instance on first call, keyed in a non-enumerable per-instance
-      // map so it never leaks into JSON/serialization.
-      const original = descriptor.value;
-      descriptor.value = function (this: any, ...args: any[]) {
-        // Prefix the key with the member KIND ('method_') so it can never
-        // collide with the getter branch's ('getter_') key inside the shared
-        // per-instance `__throttled` map. Without a kind prefix, a method
-        // literally named `get_foo` (key `X_get_foo`) and a getter named `foo`
-        // (key `X_get_foo`) hash identically and silently swap throttle
-        // state/results. The two prefixes differ at char 0, so method and
-        // getter key-spaces are disjoint for every possible member name.
-        const instanceKey = this && this.constructor
-          ? `method_${this.constructor.name}_${String(propertyKey)}`
-          : `method_${String(propertyKey)}`;
-        if (!this.__throttled) {
-          Object.defineProperty(this, '__throttled', {
-            value: new Map(),
-            enumerable: false,
-            writable: true,
-            configurable: true,
-          });
-        }
-        if (!this.__throttled.has(instanceKey)) {
-          this.__throttled.set(
-            instanceKey,
-            throttle(
-              (...a: any[]) => original.apply(this, a),
-              delay,
-              ignoreArgs,
-            ),
-          );
-        }
-        return this.__throttled.get(instanceKey)(...args);
-      };
-    } else if (typeof descriptor.get === 'function') {
-      // Getters depend on `this`, so throttle per-instance: build (and cache)
-      // a throttled wrapper bound to the instance on first access, keyed in a
-      // non-enumerable per-instance map.
-      const originalGetter = descriptor.get;
-      descriptor.get = function (this: any) {
-        // Prefix with the member KIND ('getter_') — disjoint from the method
-        // branch's ('method_') prefix — so the two never share a cache slot in
-        // the per-instance `__throttled` map (see the method branch above).
-        const instanceKey = this && this.constructor
-          ? `getter_${this.constructor.name}_${String(propertyKey)}`
-          : `getter_${String(propertyKey)}`;
-        if (!this.__throttled) {
-          Object.defineProperty(this, '__throttled', {
-            value: new Map(),
-            enumerable: false,
-            writable: true,
-            configurable: true,
-          });
-        }
-        if (!this.__throttled.has(instanceKey)) {
-          this.__throttled.set(
-            instanceKey,
-            throttle(() => originalGetter.apply(this), delay, ignoreArgs),
-          );
-        }
-        return this.__throttled.get(instanceKey)();
-      };
-    }
-    return descriptor;
+export const Throttle = (
+  delay: number,
+  ignoreArgs = false,
+): MethodOrGetterDecorator => {
+  // Methods depend on `this`, so throttle PER-INSTANCE (mirroring the getter
+  // branch and `@Memoize`). A single `throttle()` closure on the prototype
+  // would share ONE result cache — keyed only by arguments — across every
+  // instance, so a second instance calling within the window would be served
+  // the first instance's cached return value and its own body (and any state
+  // mutation) would be skipped. Build (and cache) a throttled wrapper bound
+  // to the instance on first call, keyed in a non-enumerable per-instance
+  // map so it never leaks into JSON/serialization.
+  const wrapMethod = (original: (...args: any[]) => any, keyName: string) => {
+    return function (this: any, ...args: any[]) {
+      // Prefix the key with the member KIND ('method_') so it can never
+      // collide with the getter branch's ('getter_') key inside the shared
+      // per-instance `__throttled` map. Without a kind prefix, a method
+      // literally named `get_foo` (key `X_get_foo`) and a getter named `foo`
+      // (key `X_get_foo`) hash identically and silently swap throttle
+      // state/results. The two prefixes differ at char 0, so method and
+      // getter key-spaces are disjoint for every possible member name.
+      const instanceKey = this && this.constructor
+        ? `method_${this.constructor.name}_${keyName}`
+        : `method_${keyName}`;
+      if (!this.__throttled) {
+        Object.defineProperty(this, '__throttled', {
+          value: new Map(),
+          enumerable: false,
+          writable: true,
+          configurable: true,
+        });
+      }
+      if (!this.__throttled.has(instanceKey)) {
+        this.__throttled.set(
+          instanceKey,
+          throttle(
+            (...a: any[]) => original.apply(this, a),
+            delay,
+            ignoreArgs,
+          ),
+        );
+      }
+      return this.__throttled.get(instanceKey)(...args);
+    };
   };
+
+  // Getters depend on `this`, so throttle per-instance: build (and cache)
+  // a throttled wrapper bound to the instance on first access, keyed in a
+  // non-enumerable per-instance map.
+  const wrapGetter = (originalGetter: () => any, keyName: string) => {
+    return function (this: any) {
+      // Prefix with the member KIND ('getter_') — disjoint from the method
+      // branch's ('method_') prefix — so the two never share a cache slot in
+      // the per-instance `__throttled` map (see the method branch above).
+      const instanceKey = this && this.constructor
+        ? `getter_${this.constructor.name}_${keyName}`
+        : `getter_${keyName}`;
+      if (!this.__throttled) {
+        Object.defineProperty(this, '__throttled', {
+          value: new Map(),
+          enumerable: false,
+          writable: true,
+          configurable: true,
+        });
+      }
+      if (!this.__throttled.has(instanceKey)) {
+        this.__throttled.set(
+          instanceKey,
+          throttle(() => originalGetter.apply(this), delay, ignoreArgs),
+        );
+      }
+      return this.__throttled.get(instanceKey)();
+    };
+  };
+
+  return ((target: any, context: any): any => {
+    const keyName = String(context.name);
+    if (context.kind === 'method') return wrapMethod(target, keyName);
+    if (context.kind === 'getter') return wrapGetter(target, keyName);
+    // Runtime guard for untyped (plain-JS) callers on an unsupported
+    // placement; the types already restrict to method/getter.
+    return target;
+  }) as MethodOrGetterDecorator;
+};
