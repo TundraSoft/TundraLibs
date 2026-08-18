@@ -1,6 +1,7 @@
 /**
- * @fileoverview Walks through the same scenarios that previously
- * surfaced bugs, now against the fixed implementation.
+ * @fileoverview Walks through the request-handling scenarios:
+ * lazy singleton construction, per-request SCOPED isolation via the
+ * ambient operation scope, and end-of-request cleanup.
  *
  * Run with:
  *
@@ -15,7 +16,7 @@ import './registry.ts';
 
 import { Doctor } from '../../mod.ts';
 import { Database } from './Database.ts';
-import { Logger } from './Logger.ts';
+import { WebLogger } from './Logger.ts';
 import { UserHandler } from './UserHandler.ts';
 
 function section(title: string): void {
@@ -23,11 +24,11 @@ function section(title: string): void {
 }
 
 // ---------------------------------------------------------------
-// Scenario 1: Lazy singleton with cascade
+// Scenario 1: Lazy singleton, wired during construction
 // ---------------------------------------------------------------
 section('Scenario 1 — singleton injection');
 
-const logger = Doctor.dispense(Logger);
+const logger = Doctor.dispense(WebLogger);
 console.log(`Logger.config defined?      ${logger.config !== undefined}`);
 console.log(`Logger.config.appName:      ${logger.config.appName}`);
 
@@ -46,7 +47,7 @@ console.log(`Database.logger defined?    ${db.logger !== undefined}`);
 section('Scenario 3 — handle a request');
 
 const h = Doctor.resolve(UserHandler, 'req-handler-1');
-console.log(`handler.repo.db defined?    ${h.repo.db !== undefined}`);
+console.log(`handler.repo.db === handler.db? ${h.repo.db === h.db}`);
 h.handle(42);
 
 // ---------------------------------------------------------------

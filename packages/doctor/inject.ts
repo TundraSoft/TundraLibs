@@ -9,7 +9,7 @@
  * @module
  */
 
-import { Doctor } from './Doctor.ts';
+import { _ambientScope, Doctor } from './Doctor.ts';
 
 /**
  * Global token → type registry. Empty by default; augment it so `inject` is
@@ -35,8 +35,49 @@ export interface VialRegistry {}
  * The registry is empty until you augment it — run `@tundralibs/doctor/build`
  * (or hand-write the augmentation) first, otherwise every token is rejected.
  *
+ * `inject` is the ONE injection primitive — there is deliberately no
+ * value-supplying member decorator (Bun miscompiles those whenever a
+ * file holds more than one decorated class; see
+ * https://github.com/oven-sh/bun/issues/30326). The three idioms:
+ *
+ * ```ts
+ * class Handler {
+ *   // EAGER — field initializer, resolves while `new` runs.
+ *   logger = inject('Logger');
+ *
+ *   // EAGER — constructor default parameter, same timing.
+ *   constructor(private db = inject('Db')) {}
+ *
+ *   // LAZY — memoizing getter: resolves on first access. Use it to
+ *   // break a dependency cycle, defer registration past construction,
+ *   // or keep the dependency out of JSON.stringify/spread.
+ *   private __audit?: Audit;
+ *   get audit(): Audit {
+ *     return this.__audit ??= inject('Audit', 'jobs');
+ *   }
+ * }
+ * ```
+ *
+ * When `scope` is omitted, falls back to the **ambient operation scope**:
+ * the `scope` of the `Doctor.dispense`/`Doctor.resolve` call currently
+ * constructing an instance, if any. This is what makes both eager
+ * idioms scope-aware:
+ *
+ * ```ts
+ * Doctor.resolve(Handler, 'req-7'); // logger and db resolve under 'req-7'
+ * ```
+ *
+ * A lazy getter runs at first ACCESS — usually outside any operation,
+ * where there is no ambient scope. Name the scope explicitly in lazy
+ * getters (as `'jobs'` above does): inheriting whatever operation
+ * happens to be in flight at first touch would bind the memoized
+ * value to a nondeterministic scope. Pair lazy getters with
+ * {@link Doctor.checkup} at startup so missing registrations still
+ * fail at boot.
+ *
  * @param token - The registered class's name.
  * @param scope - Scope name, forwarded to {@link Doctor.dispenseByName}.
+ *   Defaults to the ambient operation scope when one is active.
  *
  * @throws {@link UnregisteredVialError} When nothing is registered under
  *   `token` at runtime.
@@ -50,5 +91,8 @@ export function inject<K extends keyof VialRegistry>(
   token: K,
   scope?: string,
 ): VialRegistry[K] {
-  return Doctor.dispenseByName(token as string, scope) as VialRegistry[K];
+  return Doctor.dispenseByName(
+    token as string,
+    scope ?? _ambientScope(),
+  ) as VialRegistry[K];
 }

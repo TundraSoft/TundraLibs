@@ -1,19 +1,18 @@
 /**
- * @fileoverview Logger — a singleton that pulls Config via @Dose.
- * Now correct: Doctor lazily constructs the singleton on first
- * resolution and inoculates it before caching, so `this.config` is
- * filled in by the time anyone calls `log`.
+ * @fileoverview WebLogger — a singleton that pulls WebConfig via an
+ * `inject()` field initializer. Doctor lazily constructs the
+ * singleton on first resolution; the field wires itself while the
+ * constructor runs, so `this.config` is set by the time anyone calls
+ * `log`.
  *
  * @module
  */
 
-import { Dose, Vial } from '../../mod.ts';
-import { Config } from './Config.ts';
+import { inject, Vial } from '../../mod.ts';
 
 @Vial('SINGLETON')
-export class Logger {
-  @Dose()
-  public config!: Config;
+export class WebLogger {
+  public config = inject('WebConfig');
 
   public log(msg: string): void {
     console.log(`[${this.config.appName}] ${msg}`);

@@ -1,20 +1,16 @@
 /**
- * @fileoverview `stats` — prints the current Config. Demonstrates
- * @Dose'ing two distinct services on the same handler.
+ * @fileoverview `stats` — prints the current CliConfig. Demonstrates
+ * injecting two distinct services on the same handler, again with
+ * plain `inject()` field initializers on an undecorated class.
  *
  * @module
  */
 
-import { Dose, Inoculate } from '../../../mod.ts';
-import { Config } from '../Config.ts';
-import { Logger } from '../Logger.ts';
+import { inject } from '../../../mod.ts';
 
-@Inoculate()
 export class StatsCommand {
-  @Dose()
-  public config!: Config;
-  @Dose()
-  public logger!: Logger;
+  public config = inject('CliConfig');
+  public logger = inject('CliLogger');
 
   public run(): void {
     this.logger.info('stats command invoked');

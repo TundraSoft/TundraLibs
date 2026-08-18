@@ -1,6 +1,6 @@
 /**
- * @fileoverview Config — singleton settings holder with required
- * constructor arguments. Doctor can't call `new Config()` itself,
+ * @fileoverview WebConfig — singleton settings holder with required
+ * constructor arguments. Doctor can't call `new WebConfig()` itself,
  * so the registration uses the `factory` hook in
  * [registry.ts](registry.ts) to construct it from env (with
  * defaults).
@@ -8,7 +8,7 @@
  * @module
  */
 
-export class Config {
+export class WebConfig {
   constructor(
     public readonly appName: string,
     public readonly dbUrl: string,

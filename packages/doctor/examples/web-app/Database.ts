@@ -1,36 +1,27 @@
 /**
- * @fileoverview Database — scoped-per-request, depends on Config
- * and Logger. This is where bug #1 (no DI cascade) shows up: when
- * a parent handler resolves `Database` via @Dose, Doctor calls
- * `new Database()` but never inoculates it, so `this.config` and
- * `this.logger` stay `undefined`.
+ * @fileoverview Database — scoped-per-request, depends on WebConfig
+ * and WebLogger. Its `inject()` fields resolve during construction,
+ * so however the instance is created — dispensed directly or pulled
+ * in by another vial — it is fully wired before use.
  *
  * @module
  */
 
-import { Dose, Vial } from '../../mod.ts';
-import { Config } from './Config.ts';
-import { Logger } from './Logger.ts';
+import { inject, Vial } from '../../mod.ts';
 
 type User = { id: number; name: string };
 
 @Vial('SCOPED')
 export class Database {
-  @Dose()
-  public config!: Config;
-  @Dose()
-  public logger!: Logger;
+  public config = inject('WebConfig');
+  public logger = inject('WebLogger');
 
   public connect(): void {
-    // Would normally use this.config.dbUrl; here it would throw
-    // because `this.config` is `undefined` when resolved via the
-    // injector (bug #1).
-    const url = this.config?.dbUrl ?? '<unknown>';
-    this.logger?.log(`db connect → ${url}`);
+    this.logger.log(`db connect → ${this.config.dbUrl}`);
   }
 
   public findUser(id: number): User {
-    this.logger?.log(`db.findUser(${id})`);
+    this.logger.log(`db.findUser(${id})`);
     return { id, name: `user-${id}` };
   }
 }

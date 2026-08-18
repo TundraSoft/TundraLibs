@@ -14,11 +14,6 @@ export {
   DuplicateVialError,
 } from './DuplicateVialError.ts';
 export {
-  type MissingDesignTypeContext,
-  MissingDesignTypeError,
-} from './MissingDesignTypeError.ts';
-export { MissingMetadataError } from './MissingMetadataError.ts';
-export {
   type ScopeRequiredContext,
   ScopeRequiredError,
 } from './ScopeRequiredError.ts';

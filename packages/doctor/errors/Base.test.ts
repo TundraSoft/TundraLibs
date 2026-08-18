@@ -7,10 +7,9 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { BaseError } from '@tundralibs/utils';
 import {
+  CircularDependencyError,
   DoctorError,
   DuplicateVialError,
-  MissingDesignTypeError,
-  MissingMetadataError,
   ScopeRequiredError,
   UnregisteredVialError,
 } from './mod.ts';
@@ -40,22 +39,15 @@ describe('errors', () => {
     });
   });
 
-  describe('MissingMetadataError', () => {
-    it('should derive from DoctorError', () => {
-      const err = new MissingMetadataError('reflect-metadata missing');
-      asserts.assert(err instanceof MissingMetadataError);
+  describe('CircularDependencyError', () => {
+    it('should derive from DoctorError and carry vialName context', () => {
+      const err = new CircularDependencyError(
+        "Circular dependency detected while resolving 'A'",
+        { vialName: 'A' },
+      );
+      asserts.assert(err instanceof CircularDependencyError);
       asserts.assert(err instanceof DoctorError);
-    });
-  });
-
-  describe('MissingDesignTypeError', () => {
-    it('should derive from DoctorError and carry property context', () => {
-      const err = new MissingDesignTypeError('no type for foo', {
-        property: 'foo',
-      });
-      asserts.assert(err instanceof MissingDesignTypeError);
-      asserts.assert(err instanceof DoctorError);
-      asserts.assertEquals(err.context.property, 'foo');
+      asserts.assertEquals(err.context.vialName, 'A');
     });
   });
 

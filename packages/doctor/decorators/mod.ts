@@ -1,10 +1,12 @@
 /**
  * Dependency-injection decorators for `@tundralibs/doctor` — {@link Vial}
- * to register a class with the container, plus {@link Dose} and
- * {@link Inoculate} for declaring and receiving injected dependencies.
+ * registers a class with the container. Injection itself is done with
+ * `inject()` (field or constructor-default initializers), not a
+ * decorator: decorators here RECORD, they never SUPPLY VALUES, because
+ * value-supplying member decorators are miscompiled by Bun when a file
+ * contains more than one decorated class
+ * (https://github.com/oven-sh/bun/issues/30326).
  *
  * @module
  */
-export { Dose } from './Dose.ts';
-export { Inoculate } from './Inoculate.ts';
-export { Vial } from './Vial.ts';
+export { Vial, type VialDecorator } from './Vial.ts';
