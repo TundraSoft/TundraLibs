@@ -255,6 +255,10 @@ request that touches it — the counterweight to lazy getters. SCOPED
 and TRANSIENT vials are skipped (no scope to resolve under; nothing
 to warm). Returns the number of singletons dispensed.
 
+See it catch a real missing dependency, then pass once the
+dependency registers, in the
+[lazy-and-cycles example](examples/lazy-and-cycles/) (Scenarios 1–2).
+
 ## Vials with constructor arguments
 
 Doctor constructs vials with a bare `new Klass()` by default — a

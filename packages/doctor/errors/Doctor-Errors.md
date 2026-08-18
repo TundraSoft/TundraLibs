@@ -133,6 +133,11 @@ class B {
 - `vialName: string` — Name of the vial whose resolution
   re-entered while it was already being resolved.
 
+The [lazy-and-cycles example](../examples/lazy-and-cycles/) runs both
+halves of this live: `JobLogger` breaks a real cycle with a lazy
+getter (Scenario 4), and `CycleA` / `CycleB` show what happens when
+neither side does (Scenario 5).
+
 ## DuplicateVialError
 
 Thrown by `Doctor.prescribe` (and the `@Vial` decorator that
