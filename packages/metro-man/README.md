@@ -1,10 +1,13 @@
 # MetroMan
 
-Prometheus-compatible in-process metrics for Deno, Bun, and Node.js.
+Prometheus-compatible in-process metrics for Deno, Bun, Node.js,
+Cloudflare Workers, and browsers.
 
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
 
 ## Overview
 
@@ -16,8 +19,10 @@ Prometheus text exposition format — via a single `dump(mode)` method.
 
 The package is intentionally small and dependency-light: it imports
 only `@tundralibs/utils` (for the base error class) and
-`@tundralibs/compat` (for cross-runtime tests). Storage is in-process;
-there is no scrape endpoint or HTTP server bundled in.
+`@tundralibs/compat` (for cross-runtime tests). Storage is in-process
+with no I/O — there is no scrape endpoint or HTTP server bundled in —
+so it runs unchanged on Workers and in the browser; wiring the
+`dump()` output to a scrape endpoint or a `fetch` call is left to you.
 
 ## Modules
 

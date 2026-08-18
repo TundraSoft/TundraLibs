@@ -7,6 +7,15 @@ Node.js.
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
 
+No Browser/Workers badge: the code is plain `setTimeout` and imports
+nothing server-only, so it would bundle and run without error, but a
+minute-resolution scheduler is only meaningful in a **long-lived
+process** — a browser tab can be closed anytime, and a standard
+Cloudflare Worker has no background execution between requests at all
+(only a Durable Object's Alarms API persists timers across
+invocations, which is a different scheduling model than Cronus's
+in-process tick loop). Deploy it on a real long-lived process instead.
+
 ## Overview
 
 Cronus runs jobs on standard 5-field cron expressions using a

@@ -8,6 +8,16 @@ channels with pluggable adapters, and a stable JSON wire protocol.
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
 
+No Browser/Workers badge for the package as a whole: `Server` depends
+on `@tundralibs/compat/websocket`, whose Node path loads the `ws` npm
+package — a hard bundler failure for a browser/Workers target, not
+just bloat. `Client` itself has no such dependency (it talks to the
+native global `WebSocket` directly) and would be genuinely edge-safe
+on its own, but `mod.ts` re-exports `Server` and `Client` from the
+same barrel with no separate `./client` subpath, so importing
+`@tundralibs/rpc` at all currently pulls `Server` in regardless of
+which one you use.
+
 ## Overview
 
 Built on top of [`@tundralibs/compat/websocket`](../compat/websocket/Compat-WebSocket.md)'s

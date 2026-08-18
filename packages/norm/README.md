@@ -34,17 +34,24 @@ dialects are exercised end-to-end by the live test suite.
 ## Browser / Worker compatibility
 
 This package is intentionally **server-side first**. The root barrel,
-`@tundralibs/norm`, registers all dialects and pulls in the native
-SQLite adapter for local file-backed databases; that is not a browser or
-worker-safe bundle target. Use `@tundralibs/norm/core` plus the single
-fetch-only engine you need (`neon`, `turso`, or `d1`) when targeting an
-edge worker or Cloudflare-style runtime, and avoid importing the root
-barrel in browser-only code.
+`@tundralibs/norm`, side-effect-registers all seven dialects for the
+convenience of a single import — including `maria` and `mongo` (real
+npm clients, `mariadb`/`mongodb`, with unconditional Node-builtin
+imports) and `sqlite` (needs `bun:sqlite` / a Deno-only dynamic
+import). None of those three resolve outside their own runtime —
+confirmed directly with esbuild — so the root barrel cannot be bundled
+for a browser or Worker.
 
-The self-hosted engines (`postgres`, `maria`, `sqlite`, `mongo`) are
-for Deno, Bun, and Node server runtimes and rely on native or networked
-connections. Only the fetch-only dialects are intended for the worker/
-edge footprint.
+Use `@tundralibs/norm/core` plus the single engine you need instead.
+`neon`, `turso`, and `d1` are the fetch-only dialects meant for the
+edge. `postgres` is worth calling out separately: it's a hand-rolled
+wire-protocol implementation over `@tundralibs/compat/net`, not a
+third-party client, so `core` + `engines/postgres` bundles and
+_imports_ cleanly everywhere too (verified in a workerd-shaped
+environment) — it just can't _connect_ anywhere without a real TCP
+socket, which a browser or standard Worker doesn't have. Only `maria`,
+`mongo`, and `sqlite` are genuinely npm/runtime-bound; reach for those
+on Deno/Bun/Node, not at the edge.
 
 ## Modules
 

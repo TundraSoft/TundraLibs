@@ -27,6 +27,24 @@ The `@tundralibs/compat` package provides unified APIs that work consistently ac
 | [Test](docs/Compat-Test.md)                      | Testing utilities                                                  | [Docs](docs/Compat-Test.md)                |
 | [Fetch](docs/Compat-Fetch.md)                    | HTTP client utilities                                              | [Docs](docs/Compat-Fetch.md)               |
 
+## Browser / Cloudflare Workers support
+
+No blanket badge — compat's whole job is smoothing over **Bun / Deno /
+Node.js**, and most of its modules wrap concepts (a listening TCP
+socket, a real filesystem, a terminal) that don't exist in a browser
+or a standard Worker, not something compat itself could paper over.
+Per module:
+
+| Module                        | Browser / Workers | Why                                                                                                                                                                                                                                                                                    |
+| ----------------------------- | :---------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fetch`                       |        ✅         | Wraps the native `fetch` global directly.                                                                                                                                                                                                                                              |
+| `path`                        |        ✅         | Pure string manipulation, no I/O.                                                                                                                                                                                                                                                      |
+| `common` (TLS types, errors)  |        ✅         | Types and error classes only.                                                                                                                                                                                                                                                          |
+| `runtime`                     |      partial      | `isBun`/`isDeno`/`isNode` correctly all report `false`; PID/env/cwd read as `undefined` rather than throwing, but return nothing useful.                                                                                                                                               |
+| `file`, `watch`, `net`, `udp` |        ❌         | Need a real filesystem or raw TCP/UDP socket — neither exists.                                                                                                                                                                                                                         |
+| `webserver`, `websocket`      |        ❌         | Server-side listeners; the Node path also loads the `ws` npm package, which hard-fails bundling for a browser/Workers target (unresolvable `stream`/`zlib`/`events`). A browser/Workers **client** should use the native `WebSocket` global directly rather than going through compat. |
+| `permissions`, `cli`          |        ❌         | Deno's permission system and terminal I/O are both meaningless outside a CLI process.                                                                                                                                                                                                  |
+
 ## Installation
 
 **Deno:**

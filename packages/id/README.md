@@ -5,10 +5,12 @@ Comprehensive ID generation library supporting multiple formats for different us
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
 
 ## Overview
 
-The ID package provides high-performance ID generators optimized for different scenarios: compact URLs (NanoID), distributed systems (ObjectID, ULID), sequential ordering (SequenceID), date-sequential IDs (SimpleID), and collision-resistant IDs with privacy-preserving format (CUID, CUID2). All generators are collision-resistant, cryptographically secure where appropriate, and work seamlessly across Deno, Bun, and Node.js.
+The ID package provides high-performance ID generators optimized for different scenarios: compact URLs (NanoID), distributed systems (ObjectID, ULID), sequential ordering (SequenceID), date-sequential IDs (SimpleID), and collision-resistant IDs with privacy-preserving format (CUID, CUID2). All generators are collision-resistant, cryptographically secure where appropriate, and work seamlessly across Deno, Bun, Node.js, Cloudflare Workers, and browsers — the process-identifier component that ObjectID/SequenceID mix in for cross-process uniqueness degrades to `0` where no process ID is exposed (Workers, browsers), which is documented, not a functional break.
 
 ## Key Features
 

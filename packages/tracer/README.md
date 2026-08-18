@@ -8,6 +8,16 @@ across functions, and across services. Completes the observability triad with
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
+
+The exporter path — create a span, end it, ship OTLP/JSON over `fetch`
+— runs unchanged on Workers and in the browser. One caveat: automatic
+context propagation (`startActiveSpan`, via `@tundralibs/ambient`'s
+`AsyncLocalStorage`) needs `node:async_hooks`, which Workers expose
+under the `nodejs_compat` flag but plain browsers do not — it throws
+there. Use `startSpan()` and thread the parent explicitly instead when
+targeting a browser.
 
 ## What it gives you
 

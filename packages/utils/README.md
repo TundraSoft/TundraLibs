@@ -5,10 +5,25 @@ Essential utility functions and patterns for TypeScript/JavaScript development.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
 
 ## Overview
 
 The Utils package provides a comprehensive collection of utility functions, decorators, and design patterns that address common development needs. From configuration management to performance optimization, these utilities are designed to enhance productivity and code quality.
+
+Most of the surface — `BaseError`, `Options`/`Events`, `Singleton`,
+`Once`/`Memoize`/`Throttle`, `variableReplacer`, IP/subnet helpers —
+is pure and runs unchanged on Workers and in the browser; importing
+the barrel never throws there. Two exceptions need a real OS to mean
+anything: `getFreePort()` binds a real socket to probe availability,
+and `Config`/`loadConfig()` reads real files from disk — neither
+concept exists in a Worker or a browser, so don't reach for them
+there. Prefer the narrow subpath imports (`@tundralibs/utils/BaseError`,
+`@tundralibs/utils/Singleton`, …) over the barrel when bundle size for
+an edge target matters — the barrel pulls in every module's inert
+`node:*` builtin references even when unused (harmless, since they
+resolve through a guarded lookup that never throws, but still bytes).
 
 ## Installation
 
