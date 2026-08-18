@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/crypt",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "type": "module",
   "description": "Cross-runtime cryptography — hashing, AES/RSA encryption, HMAC/RSA signing, JWT, OTP, key derivation, and secure random",
   "license": "MIT",
