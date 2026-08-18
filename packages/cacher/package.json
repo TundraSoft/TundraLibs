@@ -2,7 +2,8 @@
   "name": "@tundralibs/cacher",
   "version": "1.0.4",
   "type": "module",
-  "description": "A flexible caching library with support for Memory, Redis, and Memcached engines",
+  "description": "Cross-runtime caching with a unified API over Memory, Redis, and Memcached engines",
+  "license": "MIT",
   "exports": {
     ".": "./mod.ts",
     "./errors": "./errors/mod.ts",
