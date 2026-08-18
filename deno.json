@@ -21,9 +21,7 @@
       "deno.window",
       "deno.ns",
       "deno.unstable"
-    ],
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    ]
   },
   "workspace": [
     "./packages/*"

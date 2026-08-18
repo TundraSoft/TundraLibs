@@ -8,8 +8,6 @@
     "noErrorTruncation": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
     "target": "ESNext",
