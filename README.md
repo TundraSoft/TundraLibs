@@ -20,7 +20,7 @@ published to [JSR](https://jsr.io) under the `@tundralibs` scope.
 - **[compat](packages/compat/README.md)** — Compatibility layer smoothing API differences across Deno, Bun, and Node.js
 - **[Cronus](packages/cronus/README.md)** — Cross-runtime minute-resolution cron scheduler — tick-and-match (impossible expressions never crash), per-job overlap prevention, cron/run-once/run-now triggers.
 - **[crypt](packages/crypt/README.md)** — Cross-runtime cryptography — hashing, AES/RSA encryption, HMAC/RSA signing, JWT, OTP, key derivation, and secure random
-- **[Doctor](packages/doctor/README.md)** — Decorator-driven dependency injection with Singleton, Scoped, and Transient vial lifecycles. The Doctor prescribes vials, dispenses doses, and treats patients.
+- **[Doctor](packages/doctor/README.md)** — Lightweight dependency injection with Singleton, Scoped, and Transient vial lifecycles — TC39 decorators, typed inject() tokens, no reflect-metadata. The Doctor prescribes vials and dispenses them on demand.
 - **[drivers](packages/drivers/README.md)** — Cross-runtime connection drivers for SQL (PostgreSQL, MariaDB/MySQL, SQLite), MongoDB, Redis, and Memcached
 - **[Guardian](packages/guardian/README.md)** — Schema validation for TypeScript — strict at compile time, forgiving at API boundaries
 - **[ID](packages/id/README.md)** — Cross-runtime ID generators — CUID/CUID2, ULID, MongoDB ObjectID, and sequential/simple IDs
