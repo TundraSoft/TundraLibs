@@ -664,56 +664,52 @@ describe('utils.memoize', () => {
     asserts.assertEquals(TestClass.counter, 2);
   });
 
-  it('should handle decorator without constructor', () => {
-    // Test case where this.constructor might not exist
-    const descriptor: PropertyDescriptor = {
-      value: function (this: any, x: number) {
-        return x * 2;
-      },
-      writable: true,
-      enumerable: true,
-      configurable: true,
+  it('should handle a `this` without a constructor (method)', () => {
+    // The instance-key fallback branch: `this.constructor` is absent when
+    // the receiver was created with Object.create(null).
+    let runs = 0;
+    const method = function (this: any, x: number) {
+      runs++;
+      return x * 2;
     };
-
-    // Apply decorator to function without constructor context
-    Memoize(60)({}, 'testMethod', descriptor);
-
-    // Should not throw and descriptor should be modified
-    asserts.assert(typeof descriptor.value === 'function');
+    // deno-lint-ignore no-explicit-any
+    const wrapped = (Memoize(60) as any)(method, {
+      kind: 'method',
+      name: 'testMethod',
+    });
+    const bare = Object.create(null);
+    asserts.assertEquals(wrapped.call(bare, 5), 10);
+    asserts.assertEquals(wrapped.call(bare, 5), 10); // cached
+    asserts.assertEquals(runs, 1);
   });
 
-  it('should handle getter decorator without constructor', () => {
-    const descriptor: PropertyDescriptor = {
-      get: function (this: any) {
-        return 42;
-      },
-      enumerable: true,
-      configurable: true,
+  it('should handle a `this` without a constructor (getter)', () => {
+    let runs = 0;
+    const getter = function (this: any) {
+      runs++;
+      return 42;
     };
-
-    // Apply decorator to getter without constructor context
-    Memoize(60)({}, 'testGetter', descriptor);
-
-    // Should not throw and descriptor should be modified
-    asserts.assert(typeof descriptor.get === 'function');
+    // deno-lint-ignore no-explicit-any
+    const wrapped = (Memoize(60) as any)(getter, {
+      kind: 'getter',
+      name: 'testGetter',
+    });
+    const bare = Object.create(null);
+    asserts.assertEquals(wrapped.call(bare), 42);
+    asserts.assertEquals(wrapped.call(bare), 42); // cached
+    asserts.assertEquals(runs, 1);
   });
 
-  it('should handle neither value nor get descriptor', () => {
-    const descriptor: PropertyDescriptor = {
-      writable: true,
-      enumerable: true,
-      configurable: true,
-      // No value or get property
-    };
-
-    const originalDescriptor = { ...descriptor };
-
-    // Apply decorator - should not modify descriptor
-    Memoize(60)({}, 'testProperty', descriptor);
-
-    // Should return the same descriptor unchanged
-    asserts.assertEquals(descriptor.value, originalDescriptor.value);
-    asserts.assertEquals(descriptor.get, originalDescriptor.get);
+  it('should return the target unchanged for an unsupported placement', () => {
+    // Untyped (plain-JS) callers can hand the decorator a non-method,
+    // non-getter context; the runtime guard returns the target untouched.
+    const target = () => 1;
+    // deno-lint-ignore no-explicit-any
+    const result = (Memoize(60) as any)(target, {
+      kind: 'setter',
+      name: 'testProperty',
+    });
+    asserts.assertStrictEquals(result, target);
   });
 
   it('should cache args whose JSON contains the substring "null"', () => {

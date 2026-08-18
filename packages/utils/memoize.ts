@@ -202,10 +202,32 @@ export const memoize = <T extends (...args: any[]) => any>(
 };
 
 /**
+ * The decorator shape `Memoize` (and `Throttle`) hand back: a TC39
+ * standard decorator applicable to methods and getters.
+ */
+export type MethodOrGetterDecorator = {
+  /** Method placement. */
+  <This, A extends unknown[], R>(
+    target: (this: This, ...args: A) => R,
+    context: ClassMethodDecoratorContext<This, (this: This, ...args: A) => R>,
+  ): (this: This, ...args: A) => R;
+  /** Getter placement. */
+  <This, R>(
+    target: (this: This) => R,
+    context: ClassGetterDecoratorContext<This, R>,
+  ): (this: This) => R;
+};
+
+/**
  * A method decorator that memoizes the result of the decorated method.
+ * Applicable to methods and getters.
+ *
+ * TC39 STANDARD DECORATORS ONLY: requires the modern default compilation
+ * mode (no `experimentalDecorators`). Consumers still compiling with the
+ * legacy flag should use `memoize()` directly or stay on utils <= 1.0.6.
  *
  * @param timeout The cache timeout in seconds. Default is 30 minutes.
- * @returns The updated property descriptor.
+ * @returns The decorator.
  *
  * @example
  * ```ts
@@ -221,90 +243,89 @@ export const memoize = <T extends (...args: any[]) => any>(
  * console.log(calc.add(1, 2)); // Retrieves the result from the cache
  * ```
  */
-export function Memoize(timeout: number = 30 * 60): MethodDecorator {
-  return (
-    _target: object,
-    propertyKey: string | symbol,
-    descriptor: PropertyDescriptor,
+export function Memoize(timeout: number = 30 * 60): MethodOrGetterDecorator {
+  const wrapMethod = (
+    originalMethod: (...args: any[]) => any,
+    keyName: string,
   ) => {
-    if (typeof descriptor.value === 'function') {
-      // For normal methods
-      const originalMethod = descriptor.value;
+    return function (this: any, ...args: any[]) {
+      // Create a unique key for this instance. Prefix with the member KIND
+      // ('method_') so it can never collide with the getter branch's
+      // ('getter_') key in the shared per-instance `__memoized` map: without
+      // it, a method named `get_foo` (key `X_get_foo`) and a getter named
+      // `foo` (key `X_get_foo`) hash identically and silently swap cached
+      // results. The prefixes differ at char 0, so the two key-spaces are
+      // disjoint for every possible member name.
+      const instanceKey = this && this.constructor
+        ? `method_${this.constructor.name}_${keyName}`
+        : `method_${keyName}`;
 
-      // Create a new descriptor value that preserves the 'this' context
-      descriptor.value = function (this: any, ...args: any[]) {
-        // Create a unique key for this instance. Prefix with the member KIND
-        // ('method_') so it can never collide with the getter branch's
-        // ('getter_') key in the shared per-instance `__memoized` map: without
-        // it, a method named `get_foo` (key `X_get_foo`) and a getter named
-        // `foo` (key `X_get_foo`) hash identically and silently swap cached
-        // results. The prefixes differ at char 0, so the two key-spaces are
-        // disjoint for every possible member name.
-        const instanceKey = this && this.constructor
-          ? `method_${this.constructor.name}_${propertyKey.toString()}`
-          : `method_${propertyKey.toString()}`;
+      // Create a unique memoized function for this instance if it doesn't
+      // exist. Define the backing store non-enumerable so it never leaks
+      // into JSON.stringify / Object.keys / structured serialization.
+      if (!this.__memoized) {
+        Object.defineProperty(this, '__memoized', {
+          value: new Map(),
+          enumerable: false,
+          writable: true,
+          configurable: true,
+        });
+      }
 
-        // Create a unique memoized function for this instance if it doesn't
-        // exist. Define the backing store non-enumerable so it never leaks
-        // into JSON.stringify / Object.keys / structured serialization.
-        if (!this.__memoized) {
-          Object.defineProperty(this, '__memoized', {
-            value: new Map(),
-            enumerable: false,
-            writable: true,
-            configurable: true,
-          });
-        }
+      if (!this.__memoized.has(instanceKey)) {
+        this.__memoized.set(
+          instanceKey,
+          memoize(
+            (...args: any[]) => originalMethod.apply(this, args),
+            timeout,
+          ),
+        );
+      }
 
-        if (!this.__memoized.has(instanceKey)) {
-          this.__memoized.set(
-            instanceKey,
-            memoize(
-              (...args: any[]) => originalMethod.apply(this, args),
-              timeout,
-            ),
-          );
-        }
-
-        // Call the memoized function
-        return this.__memoized.get(instanceKey)(...args);
-      };
-    } else if (typeof descriptor.get === 'function') {
-      // For getters
-      const originalGetter = descriptor.get;
-
-      descriptor.get = function (this: any) {
-        // Create a unique key for this instance and getter. Prefix with the
-        // member KIND ('getter_') — disjoint from the method branch's
-        // ('method_') prefix — so the two never share a cache slot in the
-        // per-instance `__memoized` map (see the method branch above).
-        const instanceKey = this && this.constructor
-          ? `getter_${this.constructor.name}_${propertyKey.toString()}`
-          : `getter_${propertyKey.toString()}`;
-
-        // Create a unique memoized function for this instance if it doesn't
-        // exist. Non-enumerable so it stays out of serialization (see above).
-        if (!this.__memoized) {
-          Object.defineProperty(this, '__memoized', {
-            value: new Map(),
-            enumerable: false,
-            writable: true,
-            configurable: true,
-          });
-        }
-
-        if (!this.__memoized.has(instanceKey)) {
-          this.__memoized.set(
-            instanceKey,
-            memoize(() => originalGetter.apply(this), timeout),
-          );
-        }
-
-        // Call the memoized getter
-        return this.__memoized.get(instanceKey)();
-      };
-    }
-
-    return descriptor;
+      // Call the memoized function
+      return this.__memoized.get(instanceKey)(...args);
+    };
   };
+
+  const wrapGetter = (originalGetter: () => any, keyName: string) => {
+    return function (this: any) {
+      // Create a unique key for this instance and getter. Prefix with the
+      // member KIND ('getter_') — disjoint from the method branch's
+      // ('method_') prefix — so the two never share a cache slot in the
+      // per-instance `__memoized` map (see the method branch above).
+      const instanceKey = this && this.constructor
+        ? `getter_${this.constructor.name}_${keyName}`
+        : `getter_${keyName}`;
+
+      // Create a unique memoized function for this instance if it doesn't
+      // exist. Non-enumerable so it stays out of serialization (see above).
+      if (!this.__memoized) {
+        Object.defineProperty(this, '__memoized', {
+          value: new Map(),
+          enumerable: false,
+          writable: true,
+          configurable: true,
+        });
+      }
+
+      if (!this.__memoized.has(instanceKey)) {
+        this.__memoized.set(
+          instanceKey,
+          memoize(() => originalGetter.apply(this), timeout),
+        );
+      }
+
+      // Call the memoized getter
+      return this.__memoized.get(instanceKey)();
+    };
+  };
+
+  return ((target: any, context: any): any => {
+    const keyName = String(context.name);
+    if (context.kind === 'method') return wrapMethod(target, keyName);
+    if (context.kind === 'getter') return wrapGetter(target, keyName);
+    // Runtime guard for untyped (plain-JS) callers on an unsupported
+    // placement; the types already restrict to method/getter.
+    return target;
+  }) as MethodOrGetterDecorator;
 }

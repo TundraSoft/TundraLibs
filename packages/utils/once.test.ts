@@ -204,12 +204,13 @@ describe('utils.once', () => {
     asserts.assertEquals(runs, 1);
   });
 
-  it('should return descriptor unchanged when @Once applied to non-function property', () => {
-    // When descriptor.value is not a function, Once should return the original descriptor
-    const descriptor: PropertyDescriptor = { value: 42, writable: false };
-    const result = Once({}, 'myProp', descriptor);
-    asserts.assertStrictEquals(result, descriptor);
-    asserts.assertStrictEquals(result.value, 42);
+  it('should return the target unchanged when applied to an unsupported placement', () => {
+    // Untyped (plain-JS) callers can hand Once a non-method context; the
+    // runtime guard returns the target untouched instead of wrapping.
+    const target = () => 42;
+    // deno-lint-ignore no-explicit-any
+    const result = (Once as any)(target, { kind: 'getter', name: 'myProp' });
+    asserts.assertStrictEquals(result, target);
   });
 
   it('should rethrow sync error on re-call via @Once decorator', () => {
