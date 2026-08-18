@@ -320,7 +320,7 @@ full API and caveats.
 
 ## Examples
 
-Two runnable multi-file examples live under
+Three runnable multi-file examples live under
 [`packages/doctor/examples/`](examples/):
 
 - **[web-app/](examples/web-app/)** — `Doctor.resolve(Class, scope)`
@@ -331,17 +331,23 @@ Two runnable multi-file examples live under
 - **[cli-tool/](examples/cli-tool/)** — one-shot CLIs where every
   dependency is a singleton: plain command classes wired by their
   `inject()` fields on `new`, no per-call scoping.
+- **[lazy-and-cycles/](examples/lazy-and-cycles/)** — a lazy getter
+  breaking an eager/eager cycle, `Doctor.checkup()` catching a
+  missing dependency at boot, deferred vial registration, and a live
+  `CircularDependencyError` from a cycle nothing breaks.
 
 Run them:
 
 ```bash
 deno run packages/doctor/examples/web-app/main.ts
 deno run packages/doctor/examples/cli-tool/main.ts hello Alice
+deno run packages/doctor/examples/lazy-and-cycles/main.ts
 ```
 
-See [examples/web-app/README.md](examples/web-app/README.md) and
-[examples/cli-tool/README.md](examples/cli-tool/README.md) for
-walkthroughs and expected output.
+See [examples/web-app/README.md](examples/web-app/README.md),
+[examples/cli-tool/README.md](examples/cli-tool/README.md), and
+[examples/lazy-and-cycles/README.md](examples/lazy-and-cycles/README.md)
+for walkthroughs and expected output.
 
 ## Related Documentation
 
@@ -351,6 +357,7 @@ walkthroughs and expected output.
 - [Errors](errors/Doctor-Errors.md) — error classes and matching strategies
 - [web-app example](examples/web-app/) — per-request scoping via `Doctor.resolve`
 - [cli-tool example](examples/cli-tool/) — singleton wiring with plain `new`
+- [lazy-and-cycles example](examples/lazy-and-cycles/) — lazy getters, `checkup()`, deferred registration, `CircularDependencyError`
 
 ## License
 
