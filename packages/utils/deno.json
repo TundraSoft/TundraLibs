@@ -8,6 +8,7 @@
     "./types": "./types/mod.ts",
     "./BaseError": "./BaseError.ts",
     "./Options": "./Options.ts",
+    "./Singleton": "./singleton.ts",
     "./variableReplacer": "./variableReplacer.ts",
     "./memoize": "./memoize.ts",
     "./once": "./once.ts",
