@@ -12,6 +12,11 @@ Essential utility functions and patterns for TypeScript/JavaScript development.
 
 The Utils package provides a comprehensive collection of utility functions, decorators, and design patterns that address common development needs. From configuration management to performance optimization, these utilities are designed to enhance productivity and code quality.
 
+`Once`, `Memoize`, and `Throttle` are TC39 standard decorators (no
+`experimentalDecorators`), usable on methods and getters. `Singleton`
+is also available as its own subpath import
+(`@tundralibs/utils/Singleton`) for consumers who only need it.
+
 Most of the surface — `BaseError`, `Options`/`Events`, `Singleton`,
 `Once`/`Memoize`/`Throttle`, `variableReplacer`, IP/subnet helpers —
 is pure and runs unchanged on Workers and in the browser; importing
