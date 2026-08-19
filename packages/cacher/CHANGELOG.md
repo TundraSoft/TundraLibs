@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.5...cacher-v1.0.6) (2026-08-19)
+
+
+### Documentation
+
+* **cacher:** correct defaultExpiry max and finalize return type in docs ([#429](https://github.com/TundraSoft/TundraLibs/issues/429)) ([230443b](https://github.com/TundraSoft/TundraLibs/commit/230443b335dcfa1398f97bbb814cc539332998bd))
+
 ## [1.0.5](https://github.com/TundraSoft/TundraLibs/compare/cacher-v1.0.4...cacher-v1.0.5) (2026-08-18)
 
 
