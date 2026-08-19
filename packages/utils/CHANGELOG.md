@@ -1,5 +1,63 @@
 # Changelog
 
+## [2.0.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.1.0...utils-v2.0.0) (2026-08-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **doctor:** rebuild injection on TC39 decorators and inject initializers
+
+### Features
+
+* **doctor:** rebuild injection on TC39 decorators and inject initializers ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* TundraLibs 1.0.0 monorepo baseline (supersedes 0.8.x flat libraries) ([3512d64](https://github.com/TundraSoft/TundraLibs/commit/3512d646020b62dbae5442c921bfb086161d0402))
+
+
+### Bug Fixes
+
+* **compat:** export InlineTLS and FileTLS so validateTLS stays callable ([#305](https://github.com/TundraSoft/TundraLibs/issues/305)) ([07decdc](https://github.com/TundraSoft/TundraLibs/commit/07decdc598b247f82d68167b3313b5b660e21f11))
+* **compat:** path fallback, barrel test leak, and the udpSocket hang on Workers ([#283](https://github.com/TundraSoft/TundraLibs/issues/283)) ([317fc0f](https://github.com/TundraSoft/TundraLibs/commit/317fc0fdbaae712ed913a40f70852188508f0e0f))
+* **doctor:** resolve utils via narrow subpaths and document bundler targets ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **utils:** add a Singleton subpath export, mirroring BaseError ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **utils:** bound syslog field lengths to finish the ReDoS fix ([7e47c5a](https://github.com/TundraSoft/TundraLibs/commit/7e47c5a84bfbcba12a4465b14e01f39fba4fa9ea))
+* **utils:** export GetFreePortOptions so the published .d.ts stays callable ([#299](https://github.com/TundraSoft/TundraLibs/issues/299)) ([6bc7d76](https://github.com/TundraSoft/TundraLibs/commit/6bc7d760e4904b4d700aac3dbbdff4d4535a3836))
+* **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
+* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
+* **utils:** import compat via subpaths instead of the root barrel ([1ffae78](https://github.com/TundraSoft/TundraLibs/commit/1ffae78425c9a6ede1cb8ba5900f0531f858f835))
+* **utils:** import compat via subpaths instead of the root barrel ([e2c1645](https://github.com/TundraSoft/TundraLibs/commit/e2c164589c960ca8d4cc9b6524d35a95f02d783e))
+* **utils:** make the RFC3164 fields structurally disjoint ([3be4389](https://github.com/TundraSoft/TundraLibs/commit/3be438943f7c4e6b55f965ed43cff2d92a7e1524))
+* **utils:** migrate Once, Memoize and Throttle to TC39 standard decorators ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **utils:** remove polynomial-ReDoS backtracking from syslog and variableReplacer ([5909647](https://github.com/TundraSoft/TundraLibs/commit/59096470e9c825ec8ebb964954f5a10e57a3cf36))
+* **utils:** remove polynomial-ReDoS backtracking from syslog and variableReplacer ([3dc89bb](https://github.com/TundraSoft/TundraLibs/commit/3dc89bbcb40d107b88d20d429f00f9a8a2e0e247))
+* **utils:** stop getFreePort's published .d.ts degrading to never ([#335](https://github.com/TundraSoft/TundraLibs/issues/335)) ([57aed80](https://github.com/TundraSoft/TundraLibs/commit/57aed80cd96393ebedaa22960e30b3cdd1d5d1d4))
+
+
+### Documentation
+
+* **ambient:** add a Cloudflare Workers badge and a browser incompatibility note ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **cacher:** sharpen the Browser/Worker compatibility section, sync the package.json description, add a missing license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **compat:** add a per-module Browser/Workers compatibility table, fix a missing package.json description and license ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **cronus:** document why there is no Browser/Workers badge, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **crypt:** add Browser and Cloudflare Workers badges, sync the package.json description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **doctor:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **drivers:** mention the edge/serverless HTTP dialects in the package description, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **guardian:** sync the package.json description, add a missing license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **id:** add Browser and Cloudflare Workers badges, add NanoID to the description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **metro-man:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **norm:** correct the Browser/Worker compatibility section, fix a stale unpublished package.json description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **oql:** fix description punctuation, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **pact:** add Browser and Cloudflare Workers badges, sync the package.json description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **radrouter:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **restler:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **rpc:** document why there is no Browser/Workers badge, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **slogger:** sharpen the Browser/Worker compatibility section, merge description wording, add a missing license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **tracer:** add Browser and Cloudflare Workers badges with a startActiveSpan caveat ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **utils:** add Browser and Cloudflare Workers badges, mention Singleton in the description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **utils:** add module docs to entrypoints ([#311](https://github.com/TundraSoft/TundraLibs/issues/311)) ([f52ae59](https://github.com/TundraSoft/TundraLibs/commit/f52ae597dce9b6a50699c6c5e3ab80178b7d952d))
+* **utils:** mention TC39 decorators and the Singleton subpath in the overview ([f712929](https://github.com/TundraSoft/TundraLibs/commit/f712929a0b857c865d1ab7d06fba675175fae4a9))
+* **utils:** use the safe form in variableReplacer's pattern list ([2dd44ce](https://github.com/TundraSoft/TundraLibs/commit/2dd44ce5fd20042c1cb094e81c07f9349816d619))
+* **utils:** verify documentation examples and document the public API ([#248](https://github.com/TundraSoft/TundraLibs/issues/248)) ([d0d0210](https://github.com/TundraSoft/TundraLibs/commit/d0d021038538f2185e44fda28a3951f0f7d1c67e))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.0.6...utils-v1.1.0) (2026-08-18)
 
 
