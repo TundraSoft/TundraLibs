@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.7](https://github.com/TundraSoft/TundraLibs/compare/id-v1.0.6...id-v1.0.7) (2026-08-19)
+
+
+### Documentation
+
+* **id:** correct ObjectID format, SequenceID entropy, and module summary ([#434](https://github.com/TundraSoft/TundraLibs/issues/434)) ([456aeb7](https://github.com/TundraSoft/TundraLibs/commit/456aeb7ed3682425bf774a0f563f02a424804857))
+
 ## [1.0.6](https://github.com/TundraSoft/TundraLibs/compare/id-v1.0.5...id-v1.0.6) (2026-08-18)
 
 
