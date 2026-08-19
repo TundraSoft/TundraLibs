@@ -96,7 +96,7 @@ class Calculator {
     return await api.get(`/data/${id}`);
   }
 
-  @Memoize() // Infinite cache
+  @Memoize() // 30-minute cache (default)
   calculatePi(precision: number): number {
     console.log('Computing π...');
     return complexCalculation(precision);

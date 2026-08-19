@@ -272,6 +272,24 @@ export class SQLiteTranslator extends AbstractTranslator {
   ]);
 
   // ---------------------------------------------------------------------------
+  // Filters: JSON path extraction
+  // ---------------------------------------------------------------------------
+
+  /**
+   * JSON path extraction for a `@col.@key` filter key:
+   * `json_extract("col", '$.a.b')`. Unlike Postgres/MariaDB's text
+   * accessors, `json_extract` returns the value with its native SQLite
+   * type (INTEGER/REAL/TEXT) — one reason the ordered comparison
+   * operators are refused on JSON paths in v1.
+   */
+  protected override _renderJsonPath(
+    columnSql: string,
+    path: string[],
+  ): string {
+    return `json_extract(${columnSql}, '$.${path.join('.')}')`;
+  }
+
+  // ---------------------------------------------------------------------------
   // DML: INSERT — SQLite-specific value rendering
   // ---------------------------------------------------------------------------
 

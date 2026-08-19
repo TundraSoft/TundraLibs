@@ -45,9 +45,7 @@
 const MANIFEST = '.release-please-manifest.json';
 
 /** Packages deliberately not checked, with the reason. */
-const SKIP: Record<string, string> = {
-  doctor: 'pending revamp — docs will be rewritten with the package',
-};
+const SKIP: Record<string, string> = {};
 
 /**
  * Sibling packages whose presence a package's examples legitimately require —

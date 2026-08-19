@@ -403,8 +403,24 @@ export const assertSelectQuery: <
       expressionKeys.map((k) => k.substring(1)),
       joinedColumns,
     );
+    // Declared base columns are eligible as JSON-path roots
+    // (`@col.@key` → JSON extraction) — minus any name shadowed by a
+    // join alias or the base table itself, which take precedence and
+    // keep their existing qualified-column resolution.
+    const joinAliases = Object.keys(
+      (query.joins ?? {}) as Record<string, unknown>,
+    );
+    const jsonPathRoots = columnList.filter(
+      (c) => c !== query.table && !joinAliases.includes(c),
+    );
     try {
-      assertQueryFilter(query.where, whereAllowedKeys);
+      assertQueryFilter(
+        query.where,
+        whereAllowedKeys,
+        undefined,
+        undefined,
+        jsonPathRoots,
+      );
     } catch (error) {
       throw new TypeError(
         `Invalid SELECT query: 'where' is invalid - ${

@@ -630,7 +630,7 @@ const id = nanoID();
 
 ## Related Documentation
 
-- [ObjectID](ID-ObjectID.md) - MongoDB-compatible 12-byte identifiers
+- [ObjectID](ID-ObjectID.md) - MongoDB-style 26-char mixed-radix identifiers
 - [ULID](ID-ULID.md) - Sortable, timestamp-based IDs
 - [SequenceID](ID-SequenceID.md) - Sequential IDs with timestamp and counter
 - [SimpleID](ID-SimpleID.md) - Lightweight random string generator

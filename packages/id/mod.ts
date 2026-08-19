@@ -1,7 +1,7 @@
 /**
  * @fileoverview `@tundralibs/id` — cross-runtime unique-id generation:
  * ULID (lexicographically sortable), nanoID (compact, alphabet-tunable),
- * ObjectID (MongoDB-compatible), sequential ids, and OTP generation,
+ * ObjectID (MongoDB-compatible), and sequential ids,
  * plus the character-set constants they build on.
  *
  * @module

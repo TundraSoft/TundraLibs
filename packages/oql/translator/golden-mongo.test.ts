@@ -156,6 +156,126 @@ const CASES: Case[] = [
     },
     throws: true,
   },
+  // ---------------------------------------------------------------------------
+  // JSON path filtering — `@col.@key` emits Mongo's native dotted path
+  // ---------------------------------------------------------------------------
+  {
+    name: 'WHERE JSON path single-level $eq → dotted field path',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: { '@profile.@name': { $eq: 'bob' } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: { 'profile.name': { $eq: 'bob' } },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // Deep paths keep EVERY segment (`split('.@').join('.')`, not a
+    // single `replace`) — `@profile.@address.@city` → `profile.address.city`.
+    name: 'WHERE JSON path deep → dotted path keeps every segment',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: { '@profile.@address.@city': 'Berlin' },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: { 'profile.address.city': 'Berlin' },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    name: 'WHERE JSON path $like → anchored regex on the dotted path',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: { '@profile.@name': { $like: '%bo%' } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: { 'profile.name': { $regex: '^.*bo.*$' } },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    name: 'WHERE JSON path $null → null match on the dotted path',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: { '@profile.@deletedAt': { $null: true } },
+    },
+    expected: {
+      sql: 'find',
+      params: {
+        collection: 'users',
+        filter: { 'profile.deletedAt': null },
+        options: { projection: { id: 1 } },
+      },
+    },
+  },
+  {
+    // Disambiguation precedence: a join alias with the same name as a
+    // declared base column resolves as the JOIN ($lookup'd field, full
+    // operator set), not as a JSON path into the base column.
+    name: 'WHERE join alias wins over same-named JSON column',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      joins: {
+        profile: {
+          table: 'profiles',
+          columns: ['userId', 'name'],
+          on: { '@profile.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true },
+      where: { '@profile.@name': 'bob' },
+    },
+    expected: {
+      sql: 'aggregate',
+      params: {
+        collection: 'users',
+        pipeline: [
+          {
+            $lookup: {
+              from: 'profiles',
+              localField: 'id',
+              foreignField: 'userId',
+              as: 'profile',
+            },
+          },
+          { $match: { 'profile.name': 'bob' } },
+          { $project: { id: 1 } },
+        ],
+      },
+    },
+  },
   {
     name: 'SELECT with operators',
     method: 'select',
@@ -1694,6 +1814,28 @@ describe('oql.translator.MongoTranslator — round-3 regressions', () => {
       () => t.count(q as any),
       TypeError,
       "'having' is not supported",
+    );
+  });
+});
+
+describe('oql.translator.MongoTranslator — JSON path filters', () => {
+  it('rejects $gt on a JSON path at the asserts layer', () => {
+    // Extraction-type divergence is a SQL problem, but the restricted
+    // operator set applies uniformly so the same OQL query is accepted
+    // or rejected on every dialect. `select()` asserts first, so the
+    // TypeError surfaces before Mongo's own translate-time guard.
+    const q = {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: { '@profile.@age': { $gt: 5 } },
+    };
+    asserts.assertThrows(
+      // deno-lint-ignore no-explicit-any
+      () => t.select(q as any),
+      TypeError,
+      "Operator '$gt' is not supported on JSON path '@profile.@age'",
     );
   });
 });

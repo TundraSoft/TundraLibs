@@ -485,13 +485,13 @@ const canRead = hasPermissionSync({ name: 'read', path: './data' });
 
 ## Permission Descriptors
 
-| Permission | Properties          | Description                 |
-| ---------- | ------------------- | --------------------------- |
-| `read`     | `path?: string`     | File/directory read access  |
-| `write`    | `path?: string`     | File/directory write access |
-| `net`      | `host?: string`     | Network access              |
-| `env`      | `variable?: string` | Environment variable access |
-| `run`      | `command?: string`  | Subprocess execution        |
+| Permission | Properties             | Description                 |
+| ---------- | ---------------------- | --------------------------- |
+| `read`     | `path?: string`        | File/directory read access  |
+| `write`    | `path?: string`        | File/directory write access |
+| `net`      | `host?: string`        | Network access              |
+| `env`      | `variable?: string`    | Environment variable access |
+| `run`      | `path?: string \| URL` | Subprocess execution        |
 
 ## Runtime Behavior
 

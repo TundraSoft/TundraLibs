@@ -8,6 +8,12 @@
 
 export { assertOperators, isOperators } from './operators.ts';
 
+export {
+  findDisallowedJsonPathOperator,
+  JSON_PATH_ALLOWED_OPERATORS,
+  jsonPathRootOf,
+} from './jsonPath.ts';
+
 export { assertExistsFilter, isExistsFilter } from './exists.ts';
 
 export {

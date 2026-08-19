@@ -17,6 +17,7 @@ export type OqlErrorCode =
   | 'UNKNOWN'
   | 'DIALECT_UNSUPPORTED'
   | 'INVALID_COLUMN_REF'
+  | 'JSON_PATH_UNSUPPORTED_OPERATOR'
   | 'FILTER_DEPTH_EXCEEDED'
   | 'EXISTS_NO_OUTER_TABLE'
   | 'INSERT_COLUMN_NOT_IN_SCHEMA'
@@ -41,6 +42,9 @@ export const OqlErrorCodes: Record<OqlErrorCode, string> = {
   DIALECT_UNSUPPORTED: 'Dialect does not support the requested feature',
   /** A column reference did not start with the required `@` sigil. */
   INVALID_COLUMN_REF: 'Malformed column reference',
+  /** A JSON-path filter key carried an operator outside the allowed set. */
+  JSON_PATH_UNSUPPORTED_OPERATOR:
+    'Operator not supported on a JSON path filter key',
   /** A filter nested past the translator recursion limit. */
   FILTER_DEPTH_EXCEEDED: 'Filter recursion depth exceeded',
   /** An `$exists` correlation had no outer table to qualify against. */
