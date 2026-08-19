@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.1.0...doctor-v1.1.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* **doctor:** revert the accidental 1.1.1 bump, staying at 1.1.0 ([9ff7e80](https://github.com/TundraSoft/TundraLibs/commit/9ff7e804cdfe507966ce7d7e4071d9bee744cefa))
+
+
+### Documentation
+
+* **doctor:** trim the redundant second sentence from the description ([652ce82](https://github.com/TundraSoft/TundraLibs/commit/652ce821c62a26d087c52a2f1fc332938783885a))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.0.2...doctor-v1.1.0) (2026-08-19)
 
 
