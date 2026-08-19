@@ -161,9 +161,11 @@ const { sql, params } = translator.select(query);
 - JSON path comparisons (`@col.@key` filter keys → `->>` / `#>>` text
   extraction — see [JSON Path Filtering](#json-path-filtering))
 - Array operators
-- Full-text search
-- Window functions
 - RETURNING clause support
+
+Not yet supported (see [ROADMAP](../ROADMAP.md)): full-text search and
+window functions (`ROW_NUMBER`/`RANK`/`PARTITION BY`) — the target database
+has them, but OQL does not emit them.
 
 ### MariaTranslator
 

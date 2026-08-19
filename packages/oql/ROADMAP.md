@@ -33,6 +33,7 @@ built for.
   correlated `EXISTS` landed 2026-07-11 as the `$exists` / `$nexists`
   filter predicates (with SELECT `distinct` + `COUNT(DISTINCT col)`)
 - Window functions (`ROW_NUMBER`, `RANK`, `PARTITION BY`)
+- Full-text search
 - CTEs (`WITH`, including recursive)
 - Advanced joins (CROSS, NATURAL, self-joins, multi-condition with OR)
 
@@ -69,7 +70,7 @@ built for.
 | Schemas            | Full                          | Database-as-schema         | Emulated via ATTACH                     | Database-per-schema        |
 | Transactions       | Full                          | Full                       | Full                                    | Full                       |
 | CTEs               | Full                          | Full                       | Full                                    | None                       |
-| Window functions   | Full                          | Full                       | 3.25+                                   | None                       |
+| Window functions   | Planned                       | Planned                    | Planned                                 | None                       |
 
 See [docs/Compatibility.md](./docs/Compatibility.md) for precise
 per-dialect behaviour.
