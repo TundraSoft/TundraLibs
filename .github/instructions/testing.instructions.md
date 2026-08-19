@@ -7,6 +7,10 @@ description: 'Test and benchmark conventions for TundraLibs packages.'
 
 Guidelines for creating and maintaining tests in TundraLibs.
 
+Repo-wide conventions (test files mirror their source name, file/folder naming)
+live in [CONVENTIONS.md](../../CONVENTIONS.md) — this file adds the
+testing-specific detail on top.
+
 ## Testing Philosophy
 
 All code in TundraLibs MUST have comprehensive test coverage. Tests should:
