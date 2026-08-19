@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.7](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.6...drivers-v1.0.7) (2026-08-18)
+
+
+### Documentation
+
+* **drivers:** mention the edge/serverless HTTP dialects in the package description, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [1.0.6](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.5...drivers-v1.0.6) (2026-08-17)
 
 
