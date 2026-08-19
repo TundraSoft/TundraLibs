@@ -1,12 +1,16 @@
 # TundraLibs
 
 A suite of independent, cross-runtime TypeScript libraries — every
-package works identically on **Deno**, **Bun**, and **Node.js**, and is
-published to [JSR](https://jsr.io) under the `@tundralibs` scope.
+package works identically on **Deno**, **Bun** and **Node.js**, and most
+also run on **Cloudflare Workers** and in the **browser** (see
+[Runtime support](#runtime-support)). Published to
+[JSR](https://jsr.io) under the `@tundralibs` scope.
 
 ![Deno 2.0+](https://img.shields.io/badge/Deno-2.0+-000000?logo=deno)
 ![Bun 1.0+](https://img.shields.io/badge/Bun-1.0+-f9f1e1?logo=bun)
 ![Node.js 22+](https://img.shields.io/badge/Node.js-22+-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browser](https://img.shields.io/badge/Browser-4285F4?logo=googlechrome&logoColor=white)
 
 [![codecov](https://codecov.io/gh/TundraSoft/TundraLibs/graph/badge.svg)](https://codecov.io/gh/TundraSoft/TundraLibs)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=TundraSoft_TundraLibs&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=TundraSoft_TundraLibs)
@@ -39,6 +43,46 @@ published to [JSR](https://jsr.io) under the `@tundralibs` scope.
 
 Each package's README is its main documentation; deeper guides live in
 the [wiki](https://github.com/TundraSoft/TundraLibs/wiki).
+
+## Runtime support
+
+Every package runs on **Deno**, **Bun** and **Node.js**. Most also run on
+**Cloudflare Workers** and in a **browser** — the exceptions are listed
+below, along with exactly what is unavailable and why.
+
+Verified by running each package's real operations on
+`workerd 1.20260811.1` (`nodejs_compat`, compatibility date `2026-08-04`)
+and in Chrome via Vite, not by inspecting imports.
+
+| Package                                   | Deno | Bun | Node | Workers | Browser | Not available                                                                                                                                                                                                                                                                            |
+| ----------------------------------------- | :--: | :-: | :--: | :-----: | :-----: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [ambient](packages/ambient/README.md)     |  ✅  | ✅  |  ✅  |   ✅    |   ❌    | **Browser:** no `AsyncLocalStorage`, so `createContext()` throws. `ambient.get()` outside a scope returns `undefined` rather than throwing.                                                                                                                                              |
+| [cacher](packages/cacher/README.md)       |  ✅  | ✅  |  ✅  |   ✅    |   ⚠️    | **Browser:** Memory engine only — Redis and Memcached need TCP.                                                                                                                                                                                                                          |
+| [compat](packages/compat/README.md)       |  ✅  | ✅  |  ✅  |   ✅    |   ⚠️    | **Browser:** `./net`, `./file`, `./udp`, `./webserver`, `./websocket` and `./watch` throw `UnsupportedRuntimeError`. `./runtime`, `./fetch`, `./http`, `./path`, `./common`, `./permissions` and `./cli` all work. **Workers:** `./udp` is unsupported.                                  |
+| [cronus](packages/cronus/README.md)       |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                        |
+| [crypt](packages/crypt/README.md)         |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                        |
+| [doctor](packages/doctor/README.md)       |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                        |
+| [drivers](packages/drivers/README.md)     |  ✅  | ✅  |  ✅  |   ⚠️    |   ⚠️    | Import engines by subpath. **Workers:** every engine except `./sqlite` (no native binding); TCP engines need the target reachable under Cloudflare's outbound policy. **Browser:** `./d1`, `./neon` and `./turso` only — the rest need TCP, and `./mongo` / `./maria` need Node globals. |
+| [guardian](packages/guardian/README.md)   |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                        |
+| [id](packages/id/README.md)               |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                        |
+| [metro-man](packages/metro-man/README.md) |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                        |
+| [norm](packages/norm/README.md)           |  ✅  | ✅  |  ✅  |   ⚠️    |   ⚠️    | The root entry registers every dialect and is **server-only**. On Workers and in a browser use `@tundralibs/norm/core` plus one of `./engines/d1`, `./engines/neon` or `./engines/turso`.                                                                                                |
+| [oql](packages/oql/README.md)             |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                        |
+| [pact](packages/pact/README.md)           |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                        |
+| [radrouter](packages/radrouter/README.md) |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                        |
+| [restler](packages/restler/README.md)     |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                        |
+| [rpc](packages/rpc/README.md)             |  ✅  | ✅  |  ✅  |   ⚠️    |   ⚠️    | `Client` works everywhere. **`Server` needs a host runtime** — it cannot listen on Workers or in a browser. `./conformance` is test-only and never bundles.                                                                                                                              |
+| [slogger](packages/slogger/README.md)     |  ✅  | ✅  |  ✅  |   ⚠️    |   ⚠️    | Console, Memory and HTTP handlers work everywhere. **File, TCP and Syslog need a host runtime.** On Workers a `/tmp` file path writes to an ephemeral in-memory filesystem — records are lost when the isolate recycles, and the handler warns.                                          |
+| [tracer](packages/tracer/README.md)       |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                        |
+| [utils](packages/utils/README.md)         |  ✅  | ✅  |  ✅  |   ✅    |   ✅    | —                                                                                                                                                                                                                                                                                        |
+
+✅ everything works · ⚠️ works with the limits noted · ❌ not supported
+
+**Two things worth knowing.** Raw TCP _does_ work on Cloudflare Workers via
+`cloudflare:sockets`, so the Postgres, MariaDB, Redis and Memcached engines are
+usable there when the target is reachable under Cloudflare's outbound policy.
+And a browser has no filesystem, no TCP and no UDP — anything built on those
+throws `UnsupportedRuntimeError` rather than failing silently.
 
 ## Installation
 
