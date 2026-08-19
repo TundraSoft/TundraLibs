@@ -4,8 +4,8 @@
 > MariaDB, SQLite, and MongoDB are all in place and covered by 1640+
 > test steps. OQL is already wired into the
 > [drivers](../drivers) package (the successor to DAM). Remaining
-> items are mostly deferred-feature work tracked in
-> [TODO.md](./TODO.md).
+> items are the deferred-feature work in
+> [Intentionally deferred](#intentionally-deferred-phase-2) below.
 >
 > **Last updated:** 2026-05-12
 
@@ -53,6 +53,15 @@ built for.
   stores the bound value as a literal anyway. The translator inlines
   literals into view DDL bodies so every dialect produces the same
   stored shape.
+- **OQL has no live/DB tests — by design.** OQL is a pure translator
+  with no driver dependency; its tests are goldens (fixture-based, no
+  DB). Live coverage of the Query → translator → engine → real DB path
+  lives in drivers' `engines/*/Translator.live.test.ts`. Adding live
+  tests here would create a circular dep on `drivers` and gate OQL CI
+  on DB availability — and drivers' live suites already catch
+  translator/dialect drift (three real bugs surfaced that way:
+  CREATE_INDEX WHERE params, HAVING aggregate alias, joined-column
+  aggregate validation).
 
 ## Database compatibility matrix
 
