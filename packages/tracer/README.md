@@ -11,6 +11,8 @@ across functions, and across services. Completes the observability triad with
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
 ![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
 
+## Browser / Cloudflare Workers support
+
 The exporter path — create a span, end it, ship OTLP/JSON over `fetch`
 — runs unchanged on Workers and in the browser. One caveat: automatic
 context propagation (`startActiveSpan`, via `@tundralibs/ambient`'s
