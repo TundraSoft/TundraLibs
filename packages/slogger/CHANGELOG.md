@@ -1,5 +1,63 @@
 # Changelog
 
+## [2.0.0](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.8...slogger-v2.0.0) (2026-08-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **doctor:** rebuild injection on TC39 decorators and inject initializers
+
+### Features
+
+* **doctor:** rebuild injection on TC39 decorators and inject initializers ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **slogger:** add contextProvider for automatic context correlation ([47f4e6b](https://github.com/TundraSoft/TundraLibs/commit/47f4e6bede46de0c074c16108419eacc2b69123e))
+* **slogger:** add contextProvider hook for request-context correlation ([6a8cfd1](https://github.com/TundraSoft/TundraLibs/commit/6a8cfd1ffee38e9301aed31bf7aace2ba4d23b52))
+* TundraLibs 1.0.0 monorepo baseline (supersedes 0.8.x flat libraries) ([3512d64](https://github.com/TundraSoft/TundraLibs/commit/3512d646020b62dbae5442c921bfb086161d0402))
+
+
+### Bug Fixes
+
+* **doctor:** resolve utils via narrow subpaths and document bundler targets ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **slogger:** import compat via subpaths instead of the root barrel ([3456aeb](https://github.com/TundraSoft/TundraLibs/commit/3456aeb2f9caa49439f957340a661bf0434a5732))
+* **slogger:** import compat via subpaths instead of the root barrel ([09929a4](https://github.com/TundraSoft/TundraLibs/commit/09929a4b6abc1a416787997aaea3d31b5f5cfa46))
+* **slogger:** mask pass and pwd by default, and stop the two docs disagreeing ([#282](https://github.com/TundraSoft/TundraLibs/issues/282)) ([a90413e](https://github.com/TundraSoft/TundraLibs/commit/a90413e382ab5eb9406a229f6ccd56886acbbcae))
+* **slogger:** return a ScopedSlogger type instead of casting to Slogger ([#254](https://github.com/TundraSoft/TundraLibs/issues/254)) ([60c5b3f](https://github.com/TundraSoft/TundraLibs/commit/60c5b3fe4606d13a69558f7c1b9b29e2b4a24d0a))
+* **slogger:** warn when FileHandler writes to a filesystem that cannot persist ([#287](https://github.com/TundraSoft/TundraLibs/issues/287)) ([91a76b4](https://github.com/TundraSoft/TundraLibs/commit/91a76b484ae5004f28ab6b08290b7d5bc315273c))
+* **utils:** add a Singleton subpath export, mirroring BaseError ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
+* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
+* **utils:** migrate Once, Memoize and Throttle to TC39 standard decorators ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
+
+### Documentation
+
+* **ambient:** add a Cloudflare Workers badge and a browser incompatibility note ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **cacher:** sharpen the Browser/Worker compatibility section, sync the package.json description, add a missing license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **compat:** add a per-module Browser/Workers compatibility table, fix a missing package.json description and license ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **cronus:** document why there is no Browser/Workers badge, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **crypt:** add Browser and Cloudflare Workers badges, sync the package.json description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **doctor:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **drivers:** mention the edge/serverless HTTP dialects in the package description, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **guardian:** sync the package.json description, add a missing license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **id:** add Browser and Cloudflare Workers badges, add NanoID to the description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **metro-man:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **norm:** correct the Browser/Worker compatibility section, fix a stale unpublished package.json description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* note the extra install on cross-package examples ([#298](https://github.com/TundraSoft/TundraLibs/issues/298)) ([44e1eff](https://github.com/TundraSoft/TundraLibs/commit/44e1effee2ae174946e2cdb0356fbc12d8c9ed4a))
+* **oql:** fix description punctuation, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **pact:** add Browser and Cloudflare Workers badges, sync the package.json description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **radrouter:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **restler:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **rpc:** document why there is no Browser/Workers badge, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **slogger:** add the correlation guide ([6fb941d](https://github.com/TundraSoft/TundraLibs/commit/6fb941d0a6dbf1075a94878d0cbf680b4b9ce6d0))
+* **slogger:** adopt tracer.logContext in correlation guide ([562b3e7](https://github.com/TundraSoft/TundraLibs/commit/562b3e7fa3995fa97cd638f052ff6f2f6b320472))
+* **slogger:** adopt tracer.logContext in correlation guide ([0e6aad4](https://github.com/TundraSoft/TundraLibs/commit/0e6aad4529bb57da11c4b09b47a3128a9988187c))
+* **slogger:** document worker compatibility ([#310](https://github.com/TundraSoft/TundraLibs/issues/310)) ([18d63af](https://github.com/TundraSoft/TundraLibs/commit/18d63afc62f5caf628e90eccd5dbaf2005cc4a30))
+* **slogger:** make the recipes wiki-visible and link them from the README ([4142313](https://github.com/TundraSoft/TundraLibs/commit/414231368a953c86a3b0fb01aac9652a2f126b76))
+* **slogger:** sharpen the Browser/Worker compatibility section, merge description wording, add a missing license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **slogger:** wiki-visible recipes + the correlation guide ([3d13a85](https://github.com/TundraSoft/TundraLibs/commit/3d13a85f2d31ed4c2cf487d5361ca01b4b903d48))
+* **tracer:** add Browser and Cloudflare Workers badges with a startActiveSpan caveat ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **utils:** add Browser and Cloudflare Workers badges, mention Singleton in the description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [1.1.8](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.7...slogger-v1.1.8) (2026-08-18)
 
 
