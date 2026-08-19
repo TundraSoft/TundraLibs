@@ -85,5 +85,15 @@
     "node_modules",
     ".git",
     "backup"
-  ]
+  ],
+  "publish": {
+    "exclude": [
+      "**/REVIEW.md",
+      "**/TODO.md",
+      "**/todo.md",
+      "**/PROPOSED*.md",
+      "**/DESIGN.md",
+      "**/SCRATCH*.md"
+    ]
+  }
 }
