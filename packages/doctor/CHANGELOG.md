@@ -1,5 +1,54 @@
 # Changelog
 
+## [2.0.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.1.0...doctor-v2.0.0) (2026-08-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **doctor:** rebuild injection on TC39 decorators and inject initializers
+
+### Features
+
+* **doctor:** rebuild injection on TC39 decorators and inject initializers ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* TundraLibs 1.0.0 monorepo baseline (supersedes 0.8.x flat libraries) ([3512d64](https://github.com/TundraSoft/TundraLibs/commit/3512d646020b62dbae5442c921bfb086161d0402))
+
+
+### Bug Fixes
+
+* **doctor:** resolve utils via narrow subpaths and document bundler targets ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **doctor:** revert the accidental 1.1.1 bump, staying at 1.1.0 ([9ff7e80](https://github.com/TundraSoft/TundraLibs/commit/9ff7e804cdfe507966ce7d7e4071d9bee744cefa))
+* **utils:** add a Singleton subpath export, mirroring BaseError ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **utils:** harden Events and Options; adopt across the suite ([b32ffc4](https://github.com/TundraSoft/TundraLibs/commit/b32ffc4e9f9a4971070fd1a928141678d7cd4fce))
+* **utils:** harden Events and Options; adopt across the suite ([23d744c](https://github.com/TundraSoft/TundraLibs/commit/23d744c2025efd9735eec85627bcac04eb01ef3d))
+* **utils:** migrate Once, Memoize and Throttle to TC39 standard decorators ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
+
+### Documentation
+
+* **ambient:** add a Cloudflare Workers badge and a browser incompatibility note ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **cacher:** sharpen the Browser/Worker compatibility section, sync the package.json description, add a missing license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **compat:** add a per-module Browser/Workers compatibility table, fix a missing package.json description and license ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **cronus:** document why there is no Browser/Workers badge, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **crypt:** add Browser and Cloudflare Workers badges, sync the package.json description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **doctor:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **doctor:** add lazy-and-cycles example ([af973d8](https://github.com/TundraSoft/TundraLibs/commit/af973d82bcdad308dc604d54eaeb2508ead407ab))
+* **doctor:** add module docs and symbol JSDoc to entrypoints ([#317](https://github.com/TundraSoft/TundraLibs/issues/317)) ([cd672f2](https://github.com/TundraSoft/TundraLibs/commit/cd672f296572dcd3def25199b8e54e60afa83126))
+* **doctor:** cross-link the lazy-and-cycles example ([2793d6e](https://github.com/TundraSoft/TundraLibs/commit/2793d6edc919ba0920fc125b3caaa54eebcdba90))
+* **doctor:** trim the redundant second sentence from the description ([652ce82](https://github.com/TundraSoft/TundraLibs/commit/652ce821c62a26d087c52a2f1fc332938783885a))
+* **drivers:** mention the edge/serverless HTTP dialects in the package description, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **guardian:** sync the package.json description, add a missing license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **id:** add Browser and Cloudflare Workers badges, add NanoID to the description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **metro-man:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **norm:** correct the Browser/Worker compatibility section, fix a stale unpublished package.json description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **oql:** fix description punctuation, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **pact:** add Browser and Cloudflare Workers badges, sync the package.json description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **radrouter:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **restler:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **rpc:** document why there is no Browser/Workers badge, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **slogger:** sharpen the Browser/Worker compatibility section, merge description wording, add a missing license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **tracer:** add Browser and Cloudflare Workers badges with a startActiveSpan caveat ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+* **utils:** add Browser and Cloudflare Workers badges, mention Singleton in the description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.0.2...doctor-v1.1.0) (2026-08-19)
 
 
