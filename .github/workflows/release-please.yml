@@ -8,6 +8,15 @@ on:
 permissions:
   contents: read
 
+# Never run two "Maintain release PRs" jobs at once: a second run reading
+# repo state while a first run is mid-write races on the same git refs
+# (release-please's own tag/PR bookkeeping is not safe under concurrent
+# invocations). Queue instead of running in parallel; never cancel a run
+# that's already mutating state.
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
 jobs:
   release-please:
     name: Maintain release PRs
@@ -59,4 +68,19 @@ jobs:
 
       - name: Publish package
         working-directory: ${{ matrix.path }}
-        run: deno publish
+        # Packages in this matrix publish in parallel with no ordering, but
+        # several depend on each other in-repo (e.g. doctor/tracer on
+        # utils). If a dependency is still mid-publish, `deno publish` fails
+        # with "unresolvable 'jsr:' dependency" -- retry with a short
+        # backoff instead of a hard failure, giving the dependency time to
+        # land rather than requiring a manual rerun.
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if deno publish; then
+              exit 0
+            fi
+            echo "Publish attempt ${attempt} failed (possibly an in-repo dependency not live yet) -- retrying in 30s..."
+            sleep 30
+          done
+          echo "::error::deno publish failed after 5 attempts"
+          exit 1
