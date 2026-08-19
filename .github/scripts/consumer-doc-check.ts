@@ -96,6 +96,18 @@ const only = args.includes('--only')
 const keep = args.includes('--keep');
 const local = args.includes('--local');
 
+// Mirror the workspace's own compilerOptions rather than hardcoding them — the
+// suite's TC39-standard-vs-experimental decorator mode lives here, and forcing
+// the wrong one makes every decorator example fail for the wrong reason. Read
+// it once so the harness tracks the repo instead of drifting from it.
+const ROOT_COMPILER_OPTIONS: Record<string, unknown> = (() => {
+  try {
+    return JSON.parse(Deno.readTextFileSync('deno.json')).compilerOptions ?? {};
+  } catch {
+    return { lib: ['deno.window', 'deno.ns', 'deno.unstable'] };
+  }
+})();
+
 const manifest = JSON.parse(await Deno.readTextFile(MANIFEST)) as
   Record<string, string>;
 const packages = Object.keys(manifest)
@@ -157,11 +169,7 @@ for (const pkg of packages) {
         // version, and a run just after a release wave would otherwise fail on
         // every package with "blocked by the minimum dependency age policy".
         minimumDependencyAge: 'PT0S',
-        compilerOptions: {
-          lib: ['deno.window', 'deno.ns', 'deno.unstable'],
-          experimentalDecorators: true,
-          emitDecoratorMetadata: true,
-        },
+        compilerOptions: ROOT_COMPILER_OPTIONS,
       }),
     );
 
