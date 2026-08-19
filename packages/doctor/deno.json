@@ -1,7 +1,7 @@
 {
   "name": "@tundralibs/doctor",
-  "version": "1.1.0",
-  "description": "Lightweight dependency injection with Singleton, Scoped, and Transient vial lifecycles \u2014 TC39 decorators, typed inject() tokens, no reflect-metadata",
+  "version": "1.1.1",
+  "description": "Lightweight dependency injection with Singleton, Scoped, and Transient vial lifecycles — TC39 decorators, typed inject() tokens, no reflect-metadata",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
