@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.0.4...radrouter-v1.0.5) (2026-08-18)
+
+
+### Documentation
+
+* **radrouter:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/radrouter-v1.0.3...radrouter-v1.0.4) (2026-08-17)
 
 
