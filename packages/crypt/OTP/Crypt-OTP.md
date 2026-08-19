@@ -68,7 +68,7 @@ Verifies a time-based OTP.
 async function verifyTOTP(
   otp: string,
   key: string,
-  options?: TOTPOptions,
+  options?: TOTPVerifyOptions,
 ): Promise<boolean>;
 ```
 
