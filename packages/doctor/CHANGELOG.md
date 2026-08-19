@@ -1,13 +1,6 @@
 # Changelog
 
-## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.1.0...doctor-v1.1.1) (2026-08-19)
-
-
-### Documentation
-
-* **doctor:** trim the redundant second sentence from the description ([652ce821](https://github.com/TundraSoft/TundraLibs/commit/652ce821c62a26d087c52a2f1fc332938783885a))
-
-## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.0.2...doctor-v1.1.0) (2026-08-18)
+## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.0.2...doctor-v1.1.0) (2026-08-19)
 
 
 ### Features
@@ -18,6 +11,11 @@
 ### Bug Fixes
 
 * **doctor:** resolve utils via narrow subpaths and document bundler targets ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
+
+### Documentation
+
+* **doctor:** trim the redundant second sentence from the description ([652ce821](https://github.com/TundraSoft/TundraLibs/commit/652ce821c62a26d087c52a2f1fc332938783885a))
 
 
 ### Documentation
