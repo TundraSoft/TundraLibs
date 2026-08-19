@@ -24,6 +24,7 @@ import type {
   GuardianMetaData,
   GuardianSafeParseResult,
   GuardianTransform,
+  Refinement,
 } from './types/mod.ts';
 
 /**
@@ -845,6 +846,247 @@ export abstract class BaseGuardian<T> {
       result._metaData.isAsync = true;
     }
     return result;
+  }
+
+  /**
+   * Batch-refine: add a **single** chain step that runs every check in
+   * `refinements` and ACCUMULATES their failures before throwing —
+   * unlike a chain of `.refine()` calls, which adds N sequential
+   * throw-on-first-failure steps that short-circuit. Reach for it when
+   * you want every failing check surfaced in one aggregate error, e.g.
+   * a form flow that flags all the bad fields at once.
+   *
+   * Universal: defined here on {@link BaseGuardian} so **every** guardian
+   * inherits the same accumulating implementation — scalar guardians
+   * (string / number / …) and composites (object / array / record / …)
+   * alike. The machinery is generic in the guardian's output type `T`;
+   * each {@link Refinement}'s `path` is optional and the aggregate falls
+   * back to `refinement_N` when it's absent, so a refinement over a
+   * scalar (which has no field path) still works.
+   *
+   * Sync and async predicates are both supported: if any validator is an
+   * `async function` the whole step flips to async-aware composition and
+   * `parseAsync` becomes mandatory (`isAsync` metadata is set so
+   * {@link parse} refuses the chain up front).
+   *
+   * The thrown error follows the same shape `ObjectGuardian` used
+   * previously: no failures ⇒ `data` passes through; one failure without
+   * a path ⇒ that failure is thrown directly; otherwise an aggregate
+   * `GuardianError` whose `.message` joins the per-refinement messages
+   * and whose `.context.cause` keys each failure by its declared `path`
+   * (or `refinement_N`).
+   *
+   * @param refinements - The checks to run and accumulate.
+   * @returns A fresh guardian carrying the accumulating step. The
+   *   receiving instance is never mutated.
+   * @throws {GuardianError} If called after `.optional()` /
+   *   `.nullable()` (propagated from {@link process}).
+   *
+   * @example
+   * ```ts
+   * import { Guardian, GuardianError } from '@tundralibs/guardian';
+   *
+   * // Scalar: BOTH failing checks surface in one aggregate error.
+   * const Password = Guardian.string().superRefine([
+   *   { validator: (s) => s.length >= 8, message: 'too short' },
+   *   { validator: (s) => /\d/.test(s), message: 'needs a digit' },
+   * ]);
+   *
+   * const [err] = Password.safeParse('abc');
+   * if (err instanceof GuardianError) {
+   *   err.message; // '2 refinement error(s): too short; needs a digit'
+   * }
+   * ```
+   */
+  superRefine(refinements: Array<Refinement<T>>): this {
+    // Snapshot the checks so a later mutation of the caller's array
+    // can't retroactively change validation.
+    const checks = refinements.map((r) => ({ ...r }));
+    const hasAsync = checks.some((r) =>
+      (r.validator as { constructor?: { name?: string } }).constructor
+        ?.name === 'AsyncFunction'
+    );
+
+    const accumulator = (data: T): T | Promise<T> => {
+      if (!hasAsync) {
+        const failures = this.__collectRefinementFailuresSync(checks, data);
+        return this.__aggregateRefinementFailures(failures, data);
+      }
+      return this.__collectRefinementFailuresAsync(checks, data).then((f) =>
+        // `__aggregateRefinementFailures` returns `data` unchanged when
+        // every async predicate passes. Returning it straight out of this
+        // native `.then` would let promise adoption destroy a thenable-
+        // shaped value, so gate it at the shared choke point instead.
+        gateAsyncStepResult(this.__aggregateRefinementFailures(f, data))
+      );
+    };
+
+    const result = this.process(accumulator) as this;
+    if (hasAsync) {
+      // `accumulator` is a sync arrow that merely RETURNS a Promise on the
+      // async path — `process()`'s `AsyncFunction.name` check can't see
+      // through it, so flip the flag manually (exactly as `refine()` /
+      // `test()` do). Without this a failing async refinement would
+      // silently pass on the sync `parse()` path.
+      result._metaData ??= {};
+      result._metaData.isAsync = true;
+    }
+    return result;
+  }
+
+  /**
+   * Build a refinement-failure record for a single failed predicate.
+   * Kept as a method (not inlined in the accumulators) so the loop's
+   * cognitive complexity stays bounded.
+   *
+   * @internal
+   */
+  private __makeRefinementFailure(
+    refinement: Refinement<T>,
+    data: T,
+  ): { path: string | undefined; error: GuardianError } {
+    return {
+      path: refinement.path,
+      error: new GuardianError(refinement.message, {
+        expected: 'refinement validation to pass',
+        got: data,
+        comparison: 'refinement_validation',
+        type: 'refinement_failure',
+        // Carry the declared path on the leaf itself so `leafErrors()`
+        // reports the failing field, mirroring `refine()`'s
+        // `makeRefineError`. The aggregate keys its cause map by the
+        // same path.
+        ...(refinement.path !== undefined ? { path: [refinement.path] } : {}),
+      }),
+    };
+  }
+
+  /**
+   * Wrap a non-`GuardianError` thrown by a user-supplied validator into
+   * one. These are programmer errors (validator threw rather than
+   * returned false) and bubble immediately rather than accumulate.
+   *
+   * @internal
+   */
+  private __wrapValidatorThrow(err: unknown, data: T): GuardianError {
+    if (err instanceof GuardianError) return err;
+    return new GuardianError(`Refinement validation failed: ${err}`, {
+      expected: 'refinement validation to complete',
+      got: data,
+      comparison: 'refinement_validation',
+      type: 'refinement_error',
+    });
+  }
+
+  /**
+   * Run a list of refinement checks synchronously and collect every
+   * predicate that returned `false`. Throws on a programmer error
+   * (validator threw, or an async validator slipped into the sync path).
+   *
+   * @internal
+   */
+  private __collectRefinementFailuresSync(
+    checks: ReadonlyArray<Refinement<T>>,
+    data: T,
+  ): Array<{ path: string | undefined; error: GuardianError }> {
+    const failures: Array<{ path: string | undefined; error: GuardianError }> =
+      [];
+    for (const r of checks) {
+      let isValid: boolean | Promise<boolean>;
+      try {
+        isValid = r.validator(data);
+      } catch (err) {
+        throw this.__wrapValidatorThrow(err, data);
+      }
+      if (isValid instanceof Promise) {
+        throw new GuardianError(
+          'Cannot use parse() with async refinement. Use parseAsync().',
+          {
+            expected: 'synchronous validation',
+            got: 'async refinement',
+            comparison: 'refinement_validation',
+            type: 'async_validation',
+          },
+        );
+      }
+      if (!isValid) failures.push(this.__makeRefinementFailure(r, data));
+    }
+    return failures;
+  }
+
+  /**
+   * Async sibling of {@link __collectRefinementFailuresSync}. Awaits
+   * each predicate and otherwise applies the same semantics.
+   *
+   * @internal
+   */
+  private async __collectRefinementFailuresAsync(
+    checks: ReadonlyArray<Refinement<T>>,
+    data: T,
+  ): Promise<Array<{ path: string | undefined; error: GuardianError }>> {
+    const failures: Array<{ path: string | undefined; error: GuardianError }> =
+      [];
+    for (const r of checks) {
+      try {
+        const isValid = await r.validator(data);
+        if (!isValid) failures.push(this.__makeRefinementFailure(r, data));
+      } catch (err) {
+        throw this.__wrapValidatorThrow(err, data);
+      }
+    }
+    return failures;
+  }
+
+  /**
+   * Shared aggregator used by {@link superRefine}. Given the list of
+   * failures collected by the accumulator step, return `data` unchanged
+   * when there are none, throw the only error directly when there's one
+   * (and it declared no path), or throw an aggregate `GuardianError`
+   * carrying each failure as a path-keyed cause otherwise.
+   *
+   * The aggregate's `.message` joins the per-refinement messages so
+   * substring matching keeps working; `.context.cause` holds them keyed
+   * by their declared path (or `refinement_N` if no path).
+   *
+   * @internal
+   */
+  private __aggregateRefinementFailures(
+    failures: Array<{ path: string | undefined; error: GuardianError }>,
+    data: T,
+  ): T {
+    if (failures.length === 0) return data;
+    if (failures.length === 1) {
+      const only = failures[0]!;
+      // No declared path: nothing to key a cause on — throw the failure
+      // as-is (its message is the refinement message).
+      if (!only.path) throw only.error;
+      // Declared path: throw a DISTINCT parent that carries the failure
+      // as a child cause keyed by its path. Making the error its own
+      // cause would trip `leafErrors()`'s cycle guard and yield nothing.
+      const parent = new GuardianError(only.error.message, {
+        expected: 'all refinements to pass',
+        got: data,
+        comparison: 'refinement_validation',
+        type: 'refinement_failure',
+      });
+      parent.addCause(only.path, only.error);
+      throw parent;
+    }
+    const joined = failures.map((f) => f.error.message).join('; ');
+    const aggregate = new GuardianError(
+      `${failures.length} refinement error(s): ${joined}`,
+      {
+        expected: 'all refinements to pass',
+        got: data,
+        comparison: 'refinement_validation',
+        type: 'refinement_failure',
+      },
+    );
+    for (let i = 0; i < failures.length; i++) {
+      const f = failures[i]!;
+      aggregate.addCause(f.path ?? `refinement_${i}`, f.error);
+    }
+    throw aggregate;
   }
 
   /**

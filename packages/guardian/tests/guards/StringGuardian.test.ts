@@ -1922,4 +1922,92 @@ describe('guardian.StringGuardian', () => {
       asserts.assertThrows(() => guard.parse('   '), GuardianError);
     });
   });
+
+  describe('superRefine (universal, inherited from BaseGuardian)', () => {
+    it('accumulates ALL failing refinements on a scalar into one error', () => {
+      // Two independent checks on a single string. A value that fails
+      // BOTH must surface BOTH messages in one aggregate error rather
+      // than short-circuiting on the first — this is the universal
+      // accumulating behaviour, now available on scalar guardians.
+      const guard = new StringGuardian().superRefine([
+        { validator: (s) => s.length >= 8, message: 'too short' },
+        { validator: (s) => /\d/.test(s), message: 'needs a digit' },
+      ]);
+
+      asserts.assertEquals(guard.parse('abc12345'), 'abc12345');
+
+      const [err] = guard.safeParse('abc');
+      asserts.assertInstanceOf(err, GuardianError);
+      asserts.assertStringIncludes(err.message, 'too short');
+      asserts.assertStringIncludes(err.message, 'needs a digit');
+      asserts.assertEquals(
+        err.message.startsWith('2 refinement error(s)'),
+        true,
+      );
+      asserts.assertEquals(err.causeSize() > 0, true);
+    });
+
+    it('throws a single unpathed failure directly (message preserved)', () => {
+      const guard = new StringGuardian().superRefine([
+        { validator: (s) => s.length >= 8, message: 'too short' },
+        { validator: (s) => s.startsWith('a'), message: 'must start with a' },
+      ]);
+      // Only the first check fails → thrown as-is (its message).
+      asserts.assertThrows(() => guard.parse('a1'), GuardianError, 'too short');
+    });
+
+    it('keys causes by declared path on a scalar', () => {
+      const guard = new StringGuardian().superRefine([
+        { validator: (s) => s.length >= 8, message: 'too short', path: 'len' },
+        {
+          validator: (s) => /\d/.test(s),
+          message: 'needs a digit',
+          path: 'digit',
+        },
+      ]);
+      const [err] = guard.safeParse('abc');
+      asserts.assertInstanceOf(err, GuardianError);
+      const leaves = [...err.leafErrors()];
+      asserts.assertEquals(leaves.length, 2);
+      const paths = leaves.map((l) => l.path?.join('.')).sort();
+      asserts.assertEquals(paths, ['digit', 'len']);
+    });
+
+    it('supports async refinements off the base: parse() refuses, parseAsync accumulates', async () => {
+      const guard = new StringGuardian().superRefine([
+        // A plain arrow that RETURNS a promise …
+        {
+          validator: (s) => Promise.resolve(s.length >= 8),
+          message: 'too short',
+        },
+        // … and a genuine async function — the latter flips the whole
+        // step to the async path, and BOTH are awaited + accumulated.
+        {
+          validator: async (s) => {
+            await Promise.resolve();
+            return /\d/.test(s);
+          },
+          message: 'needs a digit',
+        },
+      ]);
+
+      // isAsync metadata is set off BaseGuardian, so the sync entry
+      // points refuse before running anything.
+      asserts.assertEquals(guard.metaData?.isAsync, true);
+      asserts.assertThrows(
+        () => guard.parse('abc'),
+        GuardianError,
+        'parseAsync',
+      );
+
+      // The async path accumulates BOTH failures in one aggregate error.
+      const [err] = await guard.safeParseAsync('abc');
+      asserts.assertInstanceOf(err, GuardianError);
+      asserts.assertStringIncludes(err.message, 'too short');
+      asserts.assertStringIncludes(err.message, 'needs a digit');
+
+      // A value that passes both flows through unchanged.
+      asserts.assertEquals(await guard.parseAsync('abc12345'), 'abc12345');
+    });
+  });
 });

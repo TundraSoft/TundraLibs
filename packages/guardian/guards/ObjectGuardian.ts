@@ -15,6 +15,7 @@ import type {
   FinishedGuardian,
   GuardianMetaData,
   GuardianTransform,
+  Refinement,
 } from '../types/mod.ts';
 import { EnumGuardian } from './EnumGuardian.ts';
 
@@ -73,13 +74,13 @@ export type ObjectValidationMode =
   | 'catchall';
 
 /**
- * Type for refinement validation functions
+ * Type for refinement validation functions.
+ *
+ * @deprecated Prefer the universal {@link Refinement} — this is now a
+ *   back-compat alias of it. `.superRefine([...])` lives on
+ *   {@link BaseGuardian} and accepts `Refinement<T>` on every guardian.
  */
-export type ObjectRefinement<T> = {
-  validator: (data: T) => boolean | Promise<boolean>;
-  message: string;
-  path?: string;
-};
+export type ObjectRefinement<T> = Refinement<T>;
 
 /**
  * Guardian for object validation with flexible schema definition and validation modes.
@@ -1055,78 +1056,13 @@ export class ObjectGuardian<
 
   //#region Refinement
 
-  // `.refine` is inherited from `BaseGuardian` — the implementation
-  // there does the same thing this override used to do (wrap the
-  // predicate, weave into `_composedTransform`, propagate async-ness).
-
-  /**
-   * Adds multiple refinements at once using superRefine.
-   * This is useful when you need to apply multiple complex validations.
-   *
-   * @param refinements - Array of refinement objects
-   * @returns New ObjectGuardian with all refinements added
-   *
-   * @example
-   * ```ts
-   * import { Guardian } from '@tundralibs/guardian';
-   *
-   * const complexSchema = Guardian.object({
-   *   email: Guardian.string().email(),
-   *   password: Guardian.string(),
-   *   confirmPassword: Guardian.string(),
-   *   age: Guardian.number()
-   * }).superRefine([
-   *   {
-   *     validator: (data) => data.password === data.confirmPassword,
-   *     message: 'Passwords must match',
-   *     path: 'confirmPassword'
-   *   },
-   *   {
-   *     validator: (data) => data.age >= 13,
-   *     message: 'Must be at least 13 years old',
-   *     path: 'age'
-   *   }
-   * ]);
-   * ```
-   */
-
-  superRefine(
-    refinements: Array<ObjectRefinement<TOutput>>,
-  ): this {
-    // Single chain step that runs all refinements and accumulates
-    // failures, vs `.refine()` which adds N sequential throw-on-fail
-    // steps. Use `superRefine` when you want every failing refinement
-    // surfaced in one error (e.g. forms where you want to flag all
-    // the bad fields at once). The step runs at its declaration
-    // position in the chain.
-    const checks = refinements.map((r) => ({ ...r }));
-    const hasAsync = checks.some((r) =>
-      (r.validator as { constructor?: { name?: string } }).constructor
-        ?.name === 'AsyncFunction'
-    );
-
-    const accumulator = (data: TOutput): TOutput | Promise<TOutput> => {
-      if (!hasAsync) {
-        const failures = this.__collectRefinementFailuresSync(checks, data);
-        return this.__aggregateRefinementFailures(failures, data);
-      }
-      return this.__collectRefinementFailuresAsync(checks, data).then((f) =>
-        // `__aggregateRefinementFailures` returns `data` unchanged when
-        // every async predicate passes. Returning it straight out of this
-        // native `.then` would let promise adoption destroy a thenable-
-        // shaped object (a passthrough/catchall result carrying a `then`
-        // key), so gate it at the shared choke point instead.
-        gateAsyncStepResult(this.__aggregateRefinementFailures(f, data))
-      );
-    };
-
-    const result = this.process(accumulator) as ObjectGuardian<TInput, TOutput>;
-    if (hasAsync) {
-      result._metaData ??= {};
-      result._metaData.isAsync = true;
-    }
-    return result as this;
-  }
+  // `.refine` and `.superRefine([...])` are both inherited from
+  // `BaseGuardian`. The base `superRefine` is the accumulating
+  // implementation this class used to define — it runs every check,
+  // collects the failures, handles sync AND async predicates, and
+  // throws a single aggregate `GuardianError` keyed by each declared
+  // `path`. Lifting it to the base made it universal (every guardian
+  // accumulates now) with no behaviour change for objects.
 
   //#endregion
 
@@ -1568,154 +1504,10 @@ export class ObjectGuardian<
     }
   }
 
-  /**
-   * Build a refinement-failure record for a single failed predicate.
-   * Kept as a method (not inlined in the accumulators) so the Sonar-
-   * flagged cognitive complexity of the loop stays bounded.
-   */
-  private __makeRefinementFailure(
-    refinement: ObjectRefinement<TOutput>,
-    data: TOutput,
-  ): { path: string | undefined; error: GuardianError } {
-    return {
-      path: refinement.path,
-      error: new GuardianError(refinement.message, {
-        expected: 'refinement validation to pass',
-        got: data,
-        comparison: 'refinement_validation',
-        type: 'refinement_failure',
-        // Carry the declared path on the leaf itself so `leafErrors()`
-        // reports the failing field, mirroring `refine()`'s
-        // `makeRefineError`. The aggregate keys its cause map by the
-        // same path.
-        ...(refinement.path !== undefined ? { path: [refinement.path] } : {}),
-      }),
-    };
-  }
-
-  /**
-   * Wrap a non-`GuardianError` thrown by a user-supplied validator
-   * into one. These are programmer errors (validator threw rather
-   * than returned false) and bubble immediately rather than
-   * accumulate.
-   */
-  private __wrapValidatorThrow(err: unknown, data: TOutput): GuardianError {
-    if (err instanceof GuardianError) return err;
-    return new GuardianError(`Refinement validation failed: ${err}`, {
-      expected: 'refinement validation to complete',
-      got: data,
-      comparison: 'refinement_validation',
-      type: 'refinement_error',
-    });
-  }
-
-  /**
-   * Run a list of refinement checks synchronously and collect every
-   * predicate that returned `false`. Throws on a programmer error
-   * (validator threw, or an async validator slipped into the sync
-   * path).
-   */
-  private __collectRefinementFailuresSync(
-    checks: ReadonlyArray<ObjectRefinement<TOutput>>,
-    data: TOutput,
-  ): Array<{ path: string | undefined; error: GuardianError }> {
-    const failures: Array<{ path: string | undefined; error: GuardianError }> =
-      [];
-    for (const r of checks) {
-      let isValid: boolean | Promise<boolean>;
-      try {
-        isValid = r.validator(data);
-      } catch (err) {
-        throw this.__wrapValidatorThrow(err, data);
-      }
-      if (isValid instanceof Promise) {
-        throw new GuardianError(
-          'Cannot use parse() with async refinement. Use parseAsync().',
-          {
-            expected: 'synchronous validation',
-            got: 'async refinement',
-            comparison: 'refinement_validation',
-            type: 'async_validation',
-          },
-        );
-      }
-      if (!isValid) failures.push(this.__makeRefinementFailure(r, data));
-    }
-    return failures;
-  }
-
-  /**
-   * Async sibling of {@link __collectRefinementFailuresSync}. Awaits
-   * each predicate and otherwise applies the same semantics.
-   */
-  private async __collectRefinementFailuresAsync(
-    checks: ReadonlyArray<ObjectRefinement<TOutput>>,
-    data: TOutput,
-  ): Promise<Array<{ path: string | undefined; error: GuardianError }>> {
-    const failures: Array<{ path: string | undefined; error: GuardianError }> =
-      [];
-    for (const r of checks) {
-      try {
-        const isValid = await r.validator(data);
-        if (!isValid) failures.push(this.__makeRefinementFailure(r, data));
-      } catch (err) {
-        throw this.__wrapValidatorThrow(err, data);
-      }
-    }
-    return failures;
-  }
-
-  /**
-   * Shared aggregator used by `.superRefine([...])`. Given the list
-   * of failures collected by the accumulator step, return `data`
-   * unchanged when there are none, throw the only error directly
-   * when there's one, or throw an aggregate `GuardianError` carrying
-   * each failure as a path-keyed cause when there are several.
-   *
-   * The aggregate's `.message` joins the per-refinement messages so
-   * substring matching keeps working; `.context.cause` holds them
-   * keyed by their declared path (or `refinement_N` if no path).
-   */
-  private __aggregateRefinementFailures(
-    failures: Array<{ path: string | undefined; error: GuardianError }>,
-    data: TOutput,
-  ): TOutput {
-    if (failures.length === 0) return data;
-    if (failures.length === 1) {
-      const only = failures[0]!;
-      // No declared path: nothing to key a cause on — throw the failure
-      // as-is (its message is the refinement message).
-      if (!only.path) throw only.error;
-      // Declared path: mirror the multi-failure branch — throw a
-      // DISTINCT parent that carries the failure as a child cause keyed
-      // by its path. The previous code did `only.error.addCause(path,
-      // only.error)`, making the error its OWN cause; `leafErrors()`
-      // then hit the cycle guard and yielded nothing.
-      const parent = new GuardianError(only.error.message, {
-        expected: 'all refinements to pass',
-        got: data,
-        comparison: 'refinement_validation',
-        type: 'refinement_failure',
-      });
-      parent.addCause(only.path, only.error);
-      throw parent;
-    }
-    const joined = failures.map((f) => f.error.message).join('; ');
-    const aggregate = new GuardianError(
-      `${failures.length} refinement error(s): ${joined}`,
-      {
-        expected: 'all refinements to pass',
-        got: data,
-        comparison: 'refinement_validation',
-        type: 'refinement_failure',
-      },
-    );
-    for (let i = 0; i < failures.length; i++) {
-      const f = failures[i]!;
-      aggregate.addCause(f.path ?? `refinement_${i}`, f.error);
-    }
-    throw aggregate;
-  }
+  // The refinement accumulation helpers (`__makeRefinementFailure`,
+  // `__wrapValidatorThrow`, `__collectRefinementFailures{Sync,Async}`,
+  // `__aggregateRefinementFailures`) that used to live here now live on
+  // `BaseGuardian`, backing the universal `superRefine([...])`.
 
   /**
    * Clone with a fresh schema-only transform. We intentionally do

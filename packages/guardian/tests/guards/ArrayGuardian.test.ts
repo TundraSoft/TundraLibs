@@ -1244,4 +1244,56 @@ describe('guardian.ArrayGuardian', () => {
       asserts.assertEquals(result.size, 0);
     });
   });
+
+  describe('superRefine (universal, inherited from BaseGuardian)', () => {
+    it('accumulates ALL failing array-level refinements into one error', () => {
+      const guard = Guardian.array(Guardian.number()).superRefine([
+        {
+          validator: (arr) => arr.length >= 3,
+          message: 'need at least 3 items',
+          path: 'length',
+        },
+        {
+          validator: (arr) => arr.every((n) => n > 0),
+          message: 'all items must be positive',
+          path: 'items',
+        },
+      ]);
+
+      asserts.assertEquals(guard.parse([1, 2, 3]), [1, 2, 3]);
+
+      // [-1] fails BOTH checks (too short AND holds a non-positive item),
+      // so both messages surface in one aggregate error.
+      const [err] = guard.safeParse([-1]);
+      asserts.assertInstanceOf(err, GuardianError);
+      asserts.assertStringIncludes(err.message, 'need at least 3 items');
+      asserts.assertStringIncludes(err.message, 'all items must be positive');
+      const leaves = [...err.leafErrors()];
+      asserts.assertEquals(leaves.length, 2);
+      const paths = leaves.map((l) => l.path?.join('.')).sort();
+      asserts.assertEquals(paths, ['items', 'length']);
+    });
+
+    it('supports async array refinements via parseAsync', async () => {
+      const guard = Guardian.array(Guardian.number()).superRefine([
+        {
+          validator: async (arr) => {
+            await Promise.resolve();
+            return arr.length > 0;
+          },
+          message: 'must not be empty',
+        },
+      ]);
+
+      // The async refinement flips the whole step async off the base.
+      asserts.assertEquals(guard.metaData?.isAsync, true);
+      asserts.assertThrows(() => guard.parse([1]), GuardianError, 'parseAsync');
+
+      asserts.assertEquals(await guard.parseAsync([1, 2]), [1, 2]);
+
+      const [err] = await guard.safeParseAsync([]);
+      asserts.assertInstanceOf(err, GuardianError);
+      asserts.assertStringIncludes(err.message, 'must not be empty');
+    });
+  });
 });
