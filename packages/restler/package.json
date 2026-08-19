@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/restler",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Cross-runtime REST API client base class for building typed per-vendor SDKs on Deno, Bun, and Node.js",
   "license": "MIT",
   "type": "module",
