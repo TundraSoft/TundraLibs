@@ -352,6 +352,70 @@ logger.info('User registered', {
 // Output: {"email":"u***@example.com","phone":"5***7"}
 ```
 
+#### PREFIX Strategy
+
+Shows the first few characters of the value and masks the rest. The number
+of characters kept is set by `visibleChars` (default 4); if the value is
+shorter than that, the whole value is shown. Useful for keeping a
+recognisable leading fragment of an identifier while hiding the remainder.
+
+```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+  MaskingStrategy,
+} from '@tundralibs/slogger/formatters';
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+
+maskingFormatter({
+  strategy: MaskingStrategy.PREFIX,
+  visibleChars: 4,
+  sensitiveFields: ['apiKey'],
+  baseFormatter: jsonFormatter,
+});
+
+logger.info('Request signed', {
+  apiKey: 'sk-1234567890abcdef',
+});
+
+// Shows the first 4 characters ("sk-1"), masks the rest.
+// Output: {"apiKey":"sk-1***"}
+```
+
+#### SUFFIX Strategy
+
+Masks the leading characters and shows the last few. The number of trailing
+characters kept is set by `visibleChars` (default 4); if the value is
+shorter than that, the whole value is shown. Handy for surfacing the last
+digits of a card or account number while hiding the rest.
+
+```typescript
+import {
+  jsonFormatter,
+  maskingFormatter,
+  MaskingStrategy,
+} from '@tundralibs/slogger/formatters';
+import type { Slogger } from '@tundralibs/slogger';
+
+declare const logger: Slogger;
+
+maskingFormatter({
+  strategy: MaskingStrategy.SUFFIX,
+  visibleChars: 4,
+  sensitiveFields: ['cardNumber'],
+  baseFormatter: jsonFormatter,
+});
+
+logger.info('Payment processed', {
+  cardNumber: '4111111111111234',
+});
+
+// Masks all but the last 4 characters ("1234").
+// Output: {"cardNumber":"***1234"}
+```
+
 ### Options
 
 ```typescript
@@ -361,6 +425,7 @@ import type { SloggerFormatter } from '@tundralibs/slogger/types';
 interface MaskingFormatterOptions {
   strategy?: MaskingStrategy; // FULL, PARTIAL, PREFIX or SUFFIX (default: FULL)
   maskChar?: string; // Character for masking (default: '*')
+  visibleChars?: number; // Chars shown for PREFIX/SUFFIX (default: 4)
   sensitiveFields?: string[]; // Field names to mask
   sensitivePatterns?: RegExp[]; // Regex patterns to match and mask
   baseFormatter?: SloggerFormatter; // Underlying formatter

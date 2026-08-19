@@ -17,6 +17,11 @@ import type {
 } from '../../types/mod.ts';
 import { assertColumnIdentifier } from '../columnIdentifier.ts';
 import { assertExistsFilter } from './exists.ts';
+import {
+  findDisallowedJsonPathOperator,
+  JSON_PATH_ALLOWED_OPERATORS,
+  jsonPathRootOf,
+} from './jsonPath.ts';
 import { isOperators } from './operators.ts';
 
 /**
@@ -25,9 +30,24 @@ import { isOperators } from './operators.ts';
  * FilterOperator maps column identifiers to their filter values using Operators.
  * Expressions are pre-declared in the query and referenced by `@expressionName`.
  *
+ * A key that is NOT in `columnList` may still be accepted as a **JSON path**
+ * (`@col.@key`, or deeper) when `jsonPathRoots` is supplied and the key's
+ * first segment names one of those roots. JSON-path keys are restricted to
+ * the {@link JSON_PATH_ALLOWED_OPERATORS} operator set — the ordered
+ * comparisons (`$gt`, `$gte`, `$lt`, `$lte`, `$between`) are rejected
+ * because JSON extraction yields dialect-dependent value types. Exact
+ * matches in `columnList` always win over the JSON-path interpretation and
+ * keep the full operator set.
+ *
  * @param x - The value to validate
  * @param columnList - Optional list of valid column names (without '@' prefix)
+ * @param jsonPathRoots - Optional list of declared base-table columns
+ *                        (without '@' prefix) eligible as JSON-path roots.
+ *                        Callers must exclude join aliases and the base
+ *                        table name so precedence matches the translators.
  * @throws {TypeError} If the value is not a valid FilterOperator
+ * @throws {TypeError} If a JSON-path key carries an operator outside
+ *                     {@link JSON_PATH_ALLOWED_OPERATORS}
  *
  * @example
  * ```ts
@@ -39,14 +59,23 @@ import { isOperators } from './operators.ts';
  *
  * // Expression reference (validated at query level)
  * assertFilterOperator({ '@fullName': { $like: 'John%' } }, ['fullName']);
+ *
+ * // JSON path on a declared column (restricted operator set)
+ * assertFilterOperator(
+ *   { '@profile.@name': { $eq: 'bob' } },
+ *   ['id', 'profile'],
+ *   ['id', 'profile'],
+ * );
  * ```
  */
 export const assertFilterOperator: <T extends TableType = TableType>(
   x: unknown,
   columnList?: string[],
+  jsonPathRoots?: string[],
 ) => asserts x is FilterOperator<T> = <T extends TableType = TableType>(
   x: unknown,
   columnList?: string[],
+  jsonPathRoots?: string[],
 ): asserts x is FilterOperator<T> => {
   if (typeof x !== 'object' || x === null || Array.isArray(x)) {
     throw new TypeError(
@@ -63,14 +92,24 @@ export const assertFilterOperator: <T extends TableType = TableType>(
 
   for (const [key, value] of Object.entries(obj)) {
     // Validate column identifier
+    let isJsonPath = false;
     try {
       assertColumnIdentifier(key, columnList);
     } catch (error) {
-      throw new TypeError(
-        `Invalid FilterOperator: Key '${key}' is not a valid column identifier - ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+      // Not an exact / qualified match. A syntactically valid dotted key
+      // whose FIRST segment names a declared JSON-path root is accepted
+      // as a JSON path extraction — this branch only fires where the key
+      // would previously have been rejected, so exact matches (join
+      // qualification) always take precedence.
+      if (jsonPathRootOf(key, jsonPathRoots) !== null) {
+        isJsonPath = true;
+      } else {
+        throw new TypeError(
+          `Invalid FilterOperator: Key '${key}' is not a valid column identifier - ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
     }
 
     // Value must be valid Operators
@@ -78,6 +117,19 @@ export const assertFilterOperator: <T extends TableType = TableType>(
       throw new TypeError(
         `Invalid FilterOperator: Value for '${key}' must be valid Operators (direct value, array, or operator object)`,
       );
+    }
+
+    // JSON-path keys take the restricted operator set only — see
+    // `JSON_PATH_ALLOWED_OPERATORS` for the rationale.
+    if (isJsonPath) {
+      const disallowed = findDisallowedJsonPathOperator(value);
+      if (disallowed !== null) {
+        throw new TypeError(
+          `Invalid FilterOperator: Operator '${disallowed}' is not supported on JSON path '${key}'. Allowed operators on JSON paths are: ${
+            [...JSON_PATH_ALLOWED_OPERATORS].join(', ')
+          }`,
+        );
+      }
     }
   }
 };
@@ -87,17 +139,21 @@ export const assertFilterOperator: <T extends TableType = TableType>(
  *
  * @param x - The value to check
  * @param columnList - Optional list of valid column names
+ * @param jsonPathRoots - Optional list of declared base-table columns
+ *                        eligible as JSON-path roots
  * @returns True if the value is a valid FilterOperator, false otherwise
  */
 export const isFilterOperator: <T extends TableType = TableType>(
   x: unknown,
   columnList?: string[],
+  jsonPathRoots?: string[],
 ) => x is FilterOperator<T> = <T extends TableType = TableType>(
   x: unknown,
   columnList?: string[],
+  jsonPathRoots?: string[],
 ): x is FilterOperator<T> => {
   try {
-    assertFilterOperator<T>(x, columnList);
+    assertFilterOperator<T>(x, columnList, jsonPathRoots);
     return true;
   } catch {
     return false;
@@ -123,8 +179,13 @@ const MAX_QUERY_FILTER_DEPTH = 10;
  * @param columnList - Optional list of valid column names (without '@' prefix)
  * @param depth - Current recursion depth (internal use, default: 0)
  * @param maxDepth - Maximum allowed recursion depth (default: 10)
+ * @param jsonPathRoots - Optional list of declared base-table columns
+ *                        eligible as JSON-path roots — see
+ *                        {@link assertFilterOperator}
  * @throws {TypeError} If the value is not a valid QueryFilter
  * @throws {TypeError} If maximum nesting depth is exceeded
+ * @throws {TypeError} If a JSON-path key carries an operator outside
+ *                     {@link JSON_PATH_ALLOWED_OPERATORS}
  *
  * @example
  * ```ts
@@ -162,11 +223,13 @@ export const assertQueryFilter: <T extends TableType = TableType>(
   columnList?: string[],
   depth?: number,
   maxDepth?: number,
+  jsonPathRoots?: string[],
 ) => asserts x is QueryFilter<T> = <T extends TableType = TableType>(
   x: unknown,
   columnList?: string[],
   depth = 0,
   maxDepth = MAX_QUERY_FILTER_DEPTH,
+  jsonPathRoots?: string[],
 ): asserts x is QueryFilter<T> => {
   // Check recursion depth limit
   if (depth > maxDepth) {
@@ -222,7 +285,13 @@ export const assertQueryFilter: <T extends TableType = TableType>(
     // Recursively validate each QueryFilter in the array
     for (let i = 0; i < value.length; i++) {
       try {
-        assertQueryFilter<T>(value[i], columnList, depth + 1, maxDepth);
+        assertQueryFilter<T>(
+          value[i],
+          columnList,
+          depth + 1,
+          maxDepth,
+          jsonPathRoots,
+        );
       } catch (error) {
         throw new TypeError(
           `Invalid QueryFilter: '${logicalKey}' element at index ${i} is invalid - ${
@@ -254,7 +323,7 @@ export const assertQueryFilter: <T extends TableType = TableType>(
     }
 
     try {
-      assertFilterOperator<T>(filterObj, columnList);
+      assertFilterOperator<T>(filterObj, columnList, jsonPathRoots);
     } catch (error) {
       throw new TypeError(
         `Invalid QueryFilter: Filter properties are invalid - ${
@@ -272,6 +341,8 @@ export const assertQueryFilter: <T extends TableType = TableType>(
  * @param columnList - Optional list of valid column names
  * @param depth - Current recursion depth (internal use, default: 0)
  * @param maxDepth - Maximum allowed recursion depth (default: 10)
+ * @param jsonPathRoots - Optional list of declared base-table columns
+ *                        eligible as JSON-path roots
  * @returns True if the value is a valid QueryFilter, false otherwise
  *
  * @example
@@ -289,14 +360,16 @@ export const isQueryFilter: <T extends TableType = TableType>(
   columnList?: string[],
   depth?: number,
   maxDepth?: number,
+  jsonPathRoots?: string[],
 ) => x is QueryFilter<T> = <T extends TableType = TableType>(
   x: unknown,
   columnList?: string[],
   depth = 0,
   maxDepth = MAX_QUERY_FILTER_DEPTH,
+  jsonPathRoots?: string[],
 ): x is QueryFilter<T> => {
   try {
-    assertQueryFilter<T>(x, columnList, depth, maxDepth);
+    assertQueryFilter<T>(x, columnList, depth, maxDepth, jsonPathRoots);
     return true;
   } catch {
     return false;

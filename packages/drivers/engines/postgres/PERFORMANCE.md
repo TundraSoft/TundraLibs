@@ -34,8 +34,8 @@ we hit it.
 
 **Concurrent workloads (16 ops over a pool of 8)** — TundraLibs is
 **1.92× faster than node-postgres**. The pool design (idle-eviction with
-in-flight `_pending` accounting, folded inline into `BaseEngine.ts` — the
-engine _is_ the pool) keeps
+in-flight `_pending` accounting, a composed `ConnectionPool<T>` helper the
+engine owns as `this._pool`) keeps
 contention down better under load. This is where the from-scratch
 approach pays off.
 

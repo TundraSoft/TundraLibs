@@ -399,7 +399,7 @@ Creates a new server instance. Validates all options during construction.
 
 ### Methods
 
-#### `start(): void`
+#### `async start(): Promise<void>`
 
 Starts the server and begins accepting connections.
 

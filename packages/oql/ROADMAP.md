@@ -55,21 +55,21 @@ built for.
 
 ## Database compatibility matrix
 
-| Feature            | PostgreSQL                    | MariaDB                    | SQLite                                      | MongoDB                    |
-| ------------------ | ----------------------------- | -------------------------- | ------------------------------------------- | -------------------------- |
-| Core DML           | Full                          | Full                       | Full                                        | Full                       |
-| Filters            | Full                          | Full                       | Full                                        | Full                       |
-| Aggregates         | Full                          | Full                       | Full                                        | Partial (no STRING_AGG)    |
-| Joins              | Full                          | RIGHT only (no FULL)       | Full                                        | `$lookup`                  |
-| Expressions        | Full                          | Full                       | Limited (no crypto, no LPAD/RPAD with fill) | Limited                    |
-| JSON columns       | JSONB native                  | JSON native                | json_extract                                | Native                     |
-| ENCRYPT / DECRYPT  | pgcrypto                      | AES\_\*                    | Passthrough                                 | Passthrough                |
-| Views              | Full                          | Full                       | Full (no ALTER VIEW: emits DROP+CREATE)     | Limited                    |
-| Materialized views | Full (REFRESH [CONCURRENTLY]) | Falls back to regular view | Falls back to regular view                  | Falls back to regular view |
-| Schemas            | Full                          | Database-as-schema         | Emulated via ATTACH                         | Database-per-schema        |
-| Transactions       | Full                          | Full                       | Full                                        | Full                       |
-| CTEs               | Full                          | Full                       | Full                                        | None                       |
-| Window functions   | Full                          | Full                       | 3.25+                                       | None                       |
+| Feature            | PostgreSQL                    | MariaDB                    | SQLite                                  | MongoDB                    |
+| ------------------ | ----------------------------- | -------------------------- | --------------------------------------- | -------------------------- |
+| Core DML           | Full                          | Full                       | Full                                    | Full                       |
+| Filters            | Full                          | Full                       | Full                                    | Full                       |
+| Aggregates         | Full                          | Full                       | Full                                    | Partial (no STRING_AGG)    |
+| Joins              | Full                          | RIGHT only (no FULL)       | Full                                    | `$lookup`                  |
+| Expressions        | Full                          | Full                       | Limited (no crypto)                     | Limited                    |
+| JSON columns       | JSONB native                  | JSON native                | json_extract                            | Native                     |
+| ENCRYPT / DECRYPT  | pgcrypto                      | AES\_\*                    | Passthrough                             | Passthrough                |
+| Views              | Full                          | Full                       | Full (no ALTER VIEW: emits DROP+CREATE) | Limited                    |
+| Materialized views | Full (REFRESH [CONCURRENTLY]) | Falls back to regular view | Falls back to regular view              | Falls back to regular view |
+| Schemas            | Full                          | Database-as-schema         | Emulated via ATTACH                     | Database-per-schema        |
+| Transactions       | Full                          | Full                       | Full                                    | Full                       |
+| CTEs               | Full                          | Full                       | Full                                    | None                       |
+| Window functions   | Full                          | Full                       | 3.25+                                   | None                       |
 
 See [docs/Compatibility.md](./docs/Compatibility.md) for precise
 per-dialect behaviour.

@@ -235,7 +235,8 @@ import { WebServer } from '@tundralibs/compat/webserver';
 ### Common
 
 Shared TLS types and error classes used by Fetch and Net. These are
-re-exported from the package root — there is no `./common` sub-path.
+available from the `./common` sub-path and re-exported from the package
+root.
 
 ```typescript
 import {

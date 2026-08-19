@@ -86,7 +86,8 @@ class Client extends Options<MyOptions> {
 - `_getOptions()`: Read a defensive copy of the whole bag (nested
   plain-object groups are copied too — mutating the result never
   writes into the store)
-- All Events methods (`on`, `emit`, etc.)
+- All public Events methods (`on`, `off`, `once`); emission is the
+  protected `_emit`, for subclasses
 
 ## Usage Examples
 
