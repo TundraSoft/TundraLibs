@@ -108,7 +108,7 @@ All methods are inherited from `AbstractEngine`. The connection is established l
 | Method                         | Returns                   | Description                                          |
 | ------------------------------ | ------------------------- | ---------------------------------------------------- |
 | `init()`                       | `Promise<void>`           | Connect to Memcached (lazy — called automatically)   |
-| `finalize()`                   | `Promise<void>`           | Disconnect from Memcached                            |
+| `finalize()`                   | `void`                    | Disconnect from Memcached                            |
 | `set<T>(key, value, options?)` | `Promise<void>`           | Store a value                                        |
 | `get<T>(key)`                  | `Promise<T \| undefined>` | Retrieve a value                                     |
 | `has(key)`                     | `Promise<boolean>`        | Check if a key exists                                |

@@ -51,7 +51,7 @@ type MemoryCacherOptions = CacherOptions;
 type CacherOptions = {
   /**
    * Default TTL in seconds.
-   * 0 = no expiry. Maximum 21600 (6 hours). Default: 300 (5 minutes).
+   * 0 = no expiry. Maximum 2592000 (30 days). Default: 300 (5 minutes).
    */
   defaultExpiry?: number;
 };
