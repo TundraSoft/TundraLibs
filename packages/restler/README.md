@@ -250,9 +250,11 @@ correct for this media type — note this is DIFFERENT from `endpoint.query`
 (space → `%20`) instead, since a `+` there breaks any signing-based auth
 that re-derives a canonical query string (e.g. AWS SigV4).
 
-The response body is parsed from its `Content-Type`: `*/json` → object,
-`*/xml` → object, `*/*text*` → string; an unknown/empty type is best-effort
-JSON, falling back to the raw string.
+The response body is parsed from its `Content-Type`, matched by substring —
+vendor suffixes like `application/vnd.api+json` or `application/atom+xml`
+route to their structured parser: `json` → object, `xml` → object,
+`text` → string. An unknown or missing type is parsed best-effort — JSON
+first, then XML — falling back to the raw string.
 
 ### Binary Responses
 
