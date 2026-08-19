@@ -4,7 +4,7 @@
   "packages/compat": "2.0.0",
   "packages/cronus": "1.0.3",
   "packages/crypt": "1.0.4",
-  "packages/doctor": "1.1.0",
+  "packages/doctor": "1.0.2",
   "packages/drivers": "1.0.7",
   "packages/guardian": "1.1.1",
   "packages/id": "1.0.6",
