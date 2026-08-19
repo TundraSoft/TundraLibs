@@ -8,6 +8,7 @@ Read those first.
 Task-specific guidance is auto-applied from `.github/instructions/*.instructions.md`
 by their `applyTo` scopes:
 
+- `development.instructions.md` — package source (`packages/**/*.ts`)
 - `documentation.instructions.md` — Markdown docs and JSDoc
 - `testing.instructions.md` — `*.test.ts` / `*.bench.ts`
 - `package-review.instructions.md` — code review and package audits

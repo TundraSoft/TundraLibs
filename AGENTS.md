@@ -58,6 +58,7 @@ When the task matches, read the matching file (Copilot auto-applies them via
 
 | Task                                     | Read                                                                                                       |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Writing/changing package source          | [.github/instructions/development.instructions.md](.github/instructions/development.instructions.md)       |
 | Writing/editing docs or JSDoc            | [.github/instructions/documentation.instructions.md](.github/instructions/documentation.instructions.md)   |
 | Writing/changing tests                   | [.github/instructions/testing.instructions.md](.github/instructions/testing.instructions.md)               |
 | Reviewing a change or auditing a package | [.github/instructions/package-review.instructions.md](.github/instructions/package-review.instructions.md) |
