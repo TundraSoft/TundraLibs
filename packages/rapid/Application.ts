@@ -1,5 +1,5 @@
 import { ambient } from '@tundralibs/ambient';
-import { makeTempDirSync } from '@tundralibs/compat/file';
+import { makeTempDirSync, remove, removeSync } from '@tundralibs/compat/file';
 import { Slogger, SyslogSeverities } from '@tundralibs/slogger';
 import { Tracer } from '@tundralibs/tracer';
 import {
@@ -83,10 +83,16 @@ export class Application<S extends RapidContextState = RapidContextState>
   private readonly __socketCommands: Map<string, RapidSocketEntry<S>> =
     new Map();
   /** Registered jobs, keyed by name. */
-  private readonly __jobs = new Map<string, RapidJobEntry>();
+  private readonly __jobs = new Map<string, RapidJobEntry<S>>();
 
   private __http?: HTTPTransport<S>;
   private __jobTransport?: JOBTransport<S>;
+  /**
+   * The upload temp dir THIS instance created (`uploads.path` left
+   * unset) — `undefined` when the caller supplied their own path, which
+   * this instance does not own and must not remove.
+   */
+  private readonly __ownedUploadPath?: string;
   /**
    * Lifecycle truth — never inferred from transport presence (a
    * one-shot triggerJob must not make the app look started).
@@ -115,59 +121,76 @@ export class Application<S extends RapidContextState = RapidContextState>
     config?: ConfigType,
   ) {
     super();
-    // Group defaults merge UNDER the user's partial groups BEFORE
-    // _setOptions — its top-level merge would otherwise let a partial
-    // user group clobber the defaulted keys. Callers never need to
-    // send complete groups.
-    this._setOptions({
-      ...options,
-      server: {
-        enabled: true,
-        requestIdHeader: 'x-request-id',
-        trustProxy: false, // secure by default — no proxy-header trust
-        socketPath: '/ws',
-        maxBodySize: 1_048_576, // 1 MB — 0 disables
-        ...options.server,
-        // Nested sub-groups merge EXPLICITLY — the one-level group
-        // spread above would let a partial user `paging`/`query`
-        // clobber the defaulted keys.
-        paging: {
-          pageHeader: 'x-page-number',
-          sizeHeader: 'x-page-size',
-          defaultSize: 10,
-          maxSize: 1000,
-          maxPage: 1000,
-          ...options.server?.paging,
+    // Created eagerly (regardless of whether the app ever registers an
+    // upload route) only when the caller didn't supply their own path —
+    // tracked so stop() can remove it, and so a constructor failure
+    // below doesn't strand it (see the catch block).
+    const ownedUploadPath = options.uploads?.path === undefined
+      ? makeTempDirSync({ prefix: 'rapid-' })
+      : undefined;
+    try {
+      // Group defaults merge UNDER the user's partial groups BEFORE
+      // _setOptions — its top-level merge would otherwise let a partial
+      // user group clobber the defaulted keys. Callers never need to
+      // send complete groups.
+      this._setOptions({
+        ...options,
+        server: {
+          enabled: true,
+          requestIdHeader: 'x-request-id',
+          trustProxy: false, // secure by default — no proxy-header trust
+          socketPath: '/ws',
+          maxBodySize: 1_048_576, // 1 MB — 0 disables
+          ...options.server,
+          // Nested sub-groups merge EXPLICITLY — the one-level group
+          // spread above would let a partial user `paging`/`query`
+          // clobber the defaulted keys.
+          paging: {
+            pageHeader: 'x-page-number',
+            sizeHeader: 'x-page-size',
+            defaultSize: 10,
+            maxSize: 1000,
+            maxPage: 1000,
+            ...options.server?.paging,
+          },
+          query: {
+            maxFilters: 50,
+            maxSorts: 5,
+            maxValueLength: 2048,
+            maxArrayItems: 100,
+            ...options.server?.query,
+          },
         },
-        query: {
-          maxFilters: 50,
-          maxSorts: 5,
-          maxValueLength: 2048,
-          maxArrayItems: 100,
-          ...options.server?.query,
+        jobs: {
+          enabled: true,
+          ...options.jobs,
         },
-      },
-      jobs: {
-        enabled: true,
-        ...options.jobs,
-      },
-      uploads: {
-        maxSize: 10_485_760, // 10 MB
-        allowedExtensions: [], // FAIL-SAFE: no uploads until declared
-        // The promised temp-dir default — created only when absent (no
-        // stray temp dirs for configured apps). uploads.path is ALWAYS
-        // set at runtime.
-        ...(options.uploads?.path === undefined
-          ? { path: makeTempDirSync({ prefix: 'rapid-' }) }
-          : {}),
-        ...options.uploads,
-      },
-    }, {
-      mode: 'PRODUCTION',
-      stateMode: 'CLONE',
-      shutdownTimeout: 25_000, // under Cloud Run's 30s SIGTERM window
-    });
-    this.__validate();
+        uploads: {
+          maxSize: 10_485_760, // 10 MB
+          allowedExtensions: [], // FAIL-SAFE: no uploads until declared
+          // The promised temp-dir default — uploads.path is ALWAYS set
+          // at runtime.
+          ...(ownedUploadPath !== undefined ? { path: ownedUploadPath } : {}),
+          ...options.uploads,
+        },
+      }, {
+        mode: 'PRODUCTION',
+        stateMode: 'CLONE',
+        shutdownTimeout: 25_000, // under Cloud Run's 30s SIGTERM window
+      });
+      this.__validate();
+    } catch (error) {
+      if (ownedUploadPath !== undefined) {
+        try {
+          removeSync(ownedUploadPath);
+        } catch {
+          // Best-effort — the original construction error is what
+          // matters; a stray temp dir beats masking it.
+        }
+      }
+      throw error;
+    }
+    this.__ownedUploadPath = ownedUploadPath;
     this._state = defaultState ?? ({} as S);
     this.config = config ?? Config({});
 
@@ -287,7 +310,7 @@ export class Application<S extends RapidContextState = RapidContextState>
   }
 
   /** The registered jobs (read-only view). */
-  public get jobs(): readonly RapidJobEntry[] {
+  public get jobs(): readonly RapidJobEntry<S>[] {
     return [...this.__jobs.values()];
   }
 
@@ -374,8 +397,8 @@ export class Application<S extends RapidContextState = RapidContextState>
    */
   public job(
     name: string,
-    schedule: RapidJobEntry['schedule'],
-    handler: RapidJobEntry['handler'],
+    schedule: RapidJobEntry<S>['schedule'],
+    handler: RapidJobEntry<S>['handler'],
     options: { args?: Readonly<Record<string, unknown>> } = {},
   ): this {
     if (this.__jobs.has(name)) {
@@ -455,9 +478,21 @@ export class Application<S extends RapidContextState = RapidContextState>
       // concurrency (last write wins, across unrelated invocations).
       // Unlike the removed R2-H3 heuristic, this is a deterministic
       // check — no false negatives to lie about — so it fails the
-      // boot outright rather than warning.
+      // boot outright rather than warning. Scans every place a
+      // middleware can be registered, not just app.use(): a
+      // route-scoped or socket-command-scoped chain is an equally
+      // normal, documented way to reach this hazard.
       if (this.option('stateMode') === 'SHARE') {
-        const offender = this.__middleware.find(middlewareUsesStateKey);
+        const candidates: RapidMiddleware[] = [
+          ...this.__middleware,
+          ...this.__routes.flatMap((r) =>
+            r.middlewares as unknown as RapidMiddleware[]
+          ),
+          ...[...this.__socketCommands.values()].flatMap((c) =>
+            c.middlewares as unknown as RapidMiddleware[]
+          ),
+        ];
+        const offender = candidates.find(middlewareUsesStateKey);
         if (offender !== undefined) {
           throw new RapidError('RAPID_CONFIG', {
             message:
@@ -505,6 +540,13 @@ export class Application<S extends RapidContextState = RapidContextState>
    * unref'd — it cannot hold the loop open) backstops a hung teardown.
    */
   public async stop(): Promise<this> {
+    // The upload temp dir is created at CONSTRUCTION, not start() — an
+    // instance that never started still owns one (e.g. a validation
+    // probe in tests), so this runs even when the early-return below
+    // fires. Idempotent: a second stop() finds nothing to remove.
+    if (this.__ownedUploadPath !== undefined) {
+      await remove(this.__ownedUploadPath).catch(() => {});
+    }
     if (!this.__started) return this;
     const deadline = this.option('shutdownTimeout')!;
     let timer: number | { unref?: () => void } | undefined;

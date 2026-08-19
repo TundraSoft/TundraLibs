@@ -1,1 +1,1 @@
-export { Module, Route, ModuleRegistry } from './Module.ts'
+export { Module, ModuleRegistry, Route } from './Module.ts';

@@ -77,8 +77,8 @@ So:
 
 ```ts
 // registry.ts — two tiers, both weak, neither enumerated
-const DECORATIONS = new WeakMap<object, RapidDecoration[]>();   // method fn → routes/commands/jobs
-const MODULES     = new WeakMap<object, RapidModuleMeta>();     // constructor → prefix/version/…
+const DECORATIONS = new WeakMap<object, RapidDecoration[]>(); // method fn → routes/commands/jobs
+const MODULES = new WeakMap<object, RapidModuleMeta>(); // constructor → prefix/version/…
 ```
 
 ## The API
@@ -105,9 +105,9 @@ Registration takes INSTANCES — you construct them however your module
 system does, rapid only binds them:
 
 ```ts
-app.module(new Users(db));                  // the plain case
-app.module(container.get(Users));           // a DI container built it
-app.module(usersInstance, ordersInstance);  // several at once
+app.module(new Users(db)); // the plain case
+app.module(container.get(Users)); // a DI container built it
+app.module(usersInstance, ordersInstance); // several at once
 ```
 
 Both funnel into one internal path: prototype-walk the instance → read
@@ -162,8 +162,8 @@ bypass the version dimension entirely and just be two paths.
 ```yaml
 server:
   versioning:
-    header: x-api-version   # default; `accept-version` also common
-    default: "1"            # → RadRouter's defaultVersion
+    header: x-api-version # default; `accept-version` also common
+    default: '1' # → RadRouter's defaultVersion
 ```
 
 - `@Module({ version })` sets the default for its routes.

@@ -101,7 +101,7 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
    *   for the outcome.
    */
   private async __run(
-    job: RapidJobEntry,
+    job: RapidJobEntry<S>,
     tick: JobTick,
     overrides?: Readonly<Record<string, unknown>>,
     holdDetached = false,
@@ -125,9 +125,7 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
       ) => Promise<void>)[],
       async () => {
         handlerRan = true;
-        // Job handlers operate on the base context (background work
-        // reads the untyped state bag, like middleware).
-        const returned = await job.handler(ctx as unknown as JOBContext);
+        const returned = await job.handler(ctx);
         if (returned !== undefined && ctx.response === null) {
           ctx.response = returned;
         }

@@ -4,16 +4,18 @@ abstract class BaseModule {
   public abstract _init(): void | Promise<void>;
 }
 
-@Module({ namespace: "Billing" })
+@Module({ namespace: 'Billing' })
 export class PaymentModule extends BaseModule {
-  public static readonly Name: string = "PaymentModule";
+  public static readonly Name: string = 'PaymentModule';
 
-  constructor() { super(); }
+  constructor() {
+    super();
+  }
 
-  @Route("/checkout")
+  @Route('/checkout')
   checkout() {}
 
   public override _init(): void {
-    console.log("Payment Gateway Running.");
+    console.log('Payment Gateway Running.');
   }
 }

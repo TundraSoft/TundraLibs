@@ -46,7 +46,7 @@ export type ModuleMountTarget<S extends RapidContextState> = {
   job(
     name: string,
     schedule: string,
-    handler: RapidJOBHandler,
+    handler: RapidJOBHandler<S>,
     options?: { args?: Readonly<Record<string, unknown>> },
   ): unknown;
 };
@@ -219,19 +219,10 @@ function registerDecoration<S extends RapidContextState>(
       );
       break;
     case 'JOB':
-      // RapidJOBHandler carries no `S` (job contexts are unparameterized —
-      // see Application.job()) — build against the base state, not the
-      // outer `S`, so the invoker's ctx type matches what target.job()
-      // actually expects.
       target.job(
         decoration.name,
         decoration.schedule,
-        buildInvoker<RapidContextState>(
-          fn,
-          decoration.binds,
-          instance,
-          label,
-        ),
+        buildInvoker<S>(fn, decoration.binds, instance, label),
         { args: decoration.args },
       );
       break;

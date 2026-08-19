@@ -83,6 +83,61 @@ describe('rapid.Application', () => {
     });
   });
 
+  describe("job handlers see the app's typed state, like HTTP/SOCKET (B11 gap)", () => {
+    it('ctx.state in a job handler is the declared S, not the untyped base bag', async () => {
+      const app = new Application<{ counter: number }>(
+        { name: 'typed-jobs', server: { enabled: false } },
+        { counter: 0 },
+      );
+      let seen = -1;
+      app.job('j', '0 6 * * *', (ctx) => {
+        // Compiles only because ctx: JOBContext<{counter:number}> — if
+        // RapidJOBHandler ever regresses to its old non-generic form,
+        // ctx.state.counter degrades to `unknown` and this line stops
+        // type-checking (no runtime signal would catch that regression).
+        const counter: number = ctx.state.counter;
+        seen = counter;
+        return { content: 'ran' };
+      });
+      await app.triggerJob('j');
+      asserts.assertEquals(seen, 0);
+    });
+  });
+
+  describe('upload temp dir ownership (resource leak)', () => {
+    it('a caller-supplied uploads.path is never removed by stop()', async () => {
+      const own = makeTempDirSync({ prefix: 'rapid-m-owned-' });
+      const app = new Application({
+        name: 'owned-path',
+        server: { enabled: false },
+        uploads: { path: own },
+      });
+      await app.stop(); // never started — still must not touch a path we don't own
+      asserts.assertEquals(await pathExists(own), true);
+      await remove(own).catch(() => {});
+    });
+
+    it('an auto-created uploads dir is removed by stop() even when never started', async () => {
+      const app = new Application({
+        name: 'auto-path',
+        server: { enabled: false },
+      });
+      const auto = app.option('uploads')!.path!;
+      asserts.assertEquals(await pathExists(auto), true);
+      await app.stop(); // no start() call — construction alone owns the dir
+      asserts.assertEquals(await pathExists(auto), false);
+    });
+
+    // A construction-failure-specific case (bad `name` etc.) is covered
+    // by code structure, not a filesystem-scan test: the constructor
+    // wraps exactly the `_setOptions`/`__validate()` span that can throw
+    // in a try/catch that removeSync()s `ownedUploadPath` before
+    // rethrowing (see Application.ts). A test proving "no stray dir
+    // survives" would need to scan the shared OS temp root, which is
+    // racy against every OTHER concurrently-running test file that also
+    // auto-creates a `rapid-*` dir — not worth trading determinism for.
+  });
+
   describe('route grammar (radrouter-native)', () => {
     it('a malformed path (express-style :id) fails LOUDLY at start()', async () => {
       // Grammar is radrouter's to enforce — its MalformedPathError

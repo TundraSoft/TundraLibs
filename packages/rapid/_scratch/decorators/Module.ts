@@ -33,15 +33,15 @@ export function Module(options: ModuleOptions) {
     target: Class,
     context: ClassDecoratorContext<Class>,
   ): void => {
-    
     // Defer registration so method decorators have finished collecting routes
     context.addInitializer(function (this: Class, bunTarget?: Class) {
       const classConstructor = this ?? bunTarget ?? target;
-      
+
       // Access the metadata object shared with method decorators
       const meta = context.metadata as CustomMetadata;
-      
-      const resolvedNamespace = options.namespace ?? meta.namespace ?? "Default";
+
+      const resolvedNamespace = options.namespace ?? meta.namespace ??
+        'Default';
       const resolvedRoutes = meta.routes ?? [];
 
       // Save everything into our single registry variable!
@@ -51,8 +51,10 @@ export function Module(options: ModuleOptions) {
         namespace: resolvedNamespace,
         routes: resolvedRoutes,
       });
-      
-      console.log(`[Registry] Successfully registered module: ${classConstructor.Name}`);
+
+      console.log(
+        `[Registry] Successfully registered module: ${classConstructor.Name}`,
+      );
     });
   };
 }
@@ -63,15 +65,13 @@ export function Route(path: string) {
     target: (...args: Args) => Return,
     context: ClassMethodDecoratorContext<This, (...args: Args) => Return>,
   ) => {
-    
     // context.metadata ??= {};
     const meta = context.metadata as CustomMetadata;
     meta.routes ??= [];
-    
+
     // Collect the method routes early
     meta.routes.push(path);
 
     return target;
   };
 }
-
