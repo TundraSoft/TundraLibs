@@ -18,7 +18,7 @@ Reference for WebServer module error types and handling patterns.
 ## Error Hierarchy
 
 ```
-BaseError
+CompatError
 └── ServerError
     ├── ServerConfigurationError
     ├── ServerPermissionError
@@ -26,7 +26,7 @@ BaseError
     └── ServerNotRunningError
 ```
 
-All server errors extend `ServerError`, which extends the base `BaseError` class. Each error includes:
+All server errors extend `ServerError`, which extends the base `CompatError` class. Each error includes:
 
 - `message` - Human-readable description
 - `mode` - Server mode ('TCP' or 'UNIX') when applicable
@@ -40,13 +40,13 @@ All server errors extend `ServerError`, which extends the base `BaseError` class
 Base class for all server-related errors.
 
 ```typescript ignore
-class ServerError extends BaseError {
-  readonly mode: ServerMode;
+class ServerError extends CompatError {
+  readonly mode: ServerMode | 'N/A';
   readonly operation: string;
 
   constructor(
     message: string,
-    mode: ServerMode,
+    mode: ServerMode | 'N/A',
     operation: string,
     cause?: Error,
   );

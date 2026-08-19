@@ -227,7 +227,9 @@ fetch(
 
 See [Compat-Common → TLSOptions](Compat-Common.md#tlsoptions) for the full type definition.
 
-All fields are optional and compose freely — supply only what your use case needs:
+The inline PEM form (`cert`/`key`/`ca`) and the file-path form
+(`certFile`/`keyFile`/`caFile`) are mutually exclusive — supply one style,
+not both. `validateTLS` throws if they are mixed:
 
 ```typescript ignore
 import type { TLSOptions } from '@tundralibs/compat';
@@ -258,7 +260,7 @@ type TLSOptions = {
 
 ### Error Classes
 
-All error classes are defined in the [Compat-Common](Compat-Common.md#error-classes) module and re-exported from `@tundralibs/compat/fetch` for convenience.
+All error classes are defined in the [Compat-Common](Compat-Common.md#error-classes) module and exported from `@tundralibs/compat/common` and the package root `@tundralibs/compat`.
 
 #### FetchTLSError
 
