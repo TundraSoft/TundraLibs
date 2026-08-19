@@ -10,3 +10,8 @@
  * @module
  */
 export { Vial, type VialDecorator } from './Vial.ts';
+export type {
+  Vial as VialClass,
+  VialModes,
+  VialOptions,
+} from '../types/mod.ts';
