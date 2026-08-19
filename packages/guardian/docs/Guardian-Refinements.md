@@ -185,7 +185,7 @@ For collecting all failures across multiple checks, use [`.superRefine()`](#supe
 
 ## `.superRefine()`
 
-Batch-refine. Adds a **single** chain step that runs every check in the array and accumulates failures before throwing.
+Batch-refine, available on **every** guardian — primitives (`string`, `number`, …) as well as composites (`object`, `array`, `tuple`, `record`, `set`, `map`, `lazy`). Adds a **single** chain step that runs every check in the array and accumulates failures before throwing. Because each check's `path` is optional and the aggregate falls back to `refinement_N`, it accumulates over a scalar (which has no field path) just as it does over an object.
 
 ```typescript
 import { Guardian, GuardianError } from '@tundralibs/guardian';

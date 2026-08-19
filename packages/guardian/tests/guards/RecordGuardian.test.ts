@@ -624,6 +624,57 @@ describe('guardian.RecordGuardian', () => {
       );
     });
 
+    it('superRefine ACCUMULATES all failures (bug fix: old stub short-circuited)', () => {
+      // Regression guard for the lift-to-BaseGuardian change. The old
+      // RecordGuardian.superRefine reduced over `.refine()`, so N
+      // sequential throw-on-first-failure steps short-circuited: an
+      // input failing BOTH checks only surfaced the FIRST message. The
+      // inherited universal implementation runs every check and reports
+      // them together.
+      const guard = new RecordGuardian(
+        new StringGuardian(),
+        new NumberGuardian(),
+      ).superRefine([
+        {
+          validator: (data: Record<string, number>) =>
+            Object.keys(data).length >= 3,
+          message: 'need at least 3 keys',
+          path: 'size',
+        },
+        {
+          validator: (data: Record<string, number>) =>
+            Object.values(data).every((v) => v >= 0),
+          message: 'all values must be non-negative',
+          path: 'values',
+        },
+      ]);
+
+      // { a: -1 } fails BOTH: fewer than 3 keys AND a negative value.
+      const [err] = guard.safeParse({ a: -1 });
+      asserts.assertInstanceOf(err, GuardianError);
+      // BOTH messages surface in the one aggregate error — the crux.
+      asserts.assertStringIncludes(err.message, 'need at least 3 keys');
+      asserts.assertStringIncludes(
+        err.message,
+        'all values must be non-negative',
+      );
+      asserts.assertEquals(
+        err.message.startsWith('2 refinement error(s)'),
+        true,
+      );
+      const leaves = [...err.leafErrors()];
+      asserts.assertEquals(leaves.length, 2);
+      const paths = leaves.map((l) => l.path?.join('.')).sort();
+      asserts.assertEquals(paths, ['size', 'values']);
+
+      // A record satisfying both passes through untouched.
+      asserts.assertEquals(guard.parse({ a: 1, b: 2, c: 3 }), {
+        a: 1,
+        b: 2,
+        c: 3,
+      });
+    });
+
     it('should handle async refinements', async () => {
       const guard = new RecordGuardian(
         new StringGuardian(),
