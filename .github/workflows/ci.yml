@@ -96,11 +96,17 @@ jobs:
     name: Test (${{ matrix.name }})
     # release-please branches only ever bump a version field and prepend a
     # CHANGELOG entry (see release-please.yml) -- the real source diff they
-    # represent was already fully tested when it merged to main. Skipping the
-    # matrix here (a skipped required check still satisfies branch
-    # protection, same as the fork-PR case below) avoids re-running the full
-    # 4-runtime/7-service suite on every one of release-please's own pushes.
-    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository) && !startsWith(github.ref_name, 'release-please--branches--')
+    # represent was already fully tested when it merged to main. The branch
+    # ruleset requires these exact check names to report, though, so the JOB
+    # must still run (a job skipped at the `if:` level never posts its
+    # matrix-expanded check names at all, which permanently blocks merging --
+    # unlike a *step* skipped inside a running job, which still reports).
+    # Every real step below is individually gated on IS_RELEASE_PLEASE_BRANCH
+    # instead, so the job completes in seconds and reports green without
+    # re-running the full 4-runtime/7-service suite on release-please's own
+    # pushes. Service containers still spin up (no per-service `if:` exists),
+    # but that's a health-check wait, not a multi-minute test run.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     # Live-DB fixtures (NORM + drivers) read these via envArgs, which merges
     # OS env. Services below are per-JOB, so each matrix runtime gets its own
@@ -108,6 +114,7 @@ jobs:
     # namespaces NORM vs drivers WITHIN a job (they run together under
     # `deno test --parallel`): each package targets `${DB_SCHEMA}_<pkg>`.
     env:
+      IS_RELEASE_PLEASE_BRANCH: ${{ startsWith(github.ref_name, 'release-please--branches--') }}
       DB_SCHEMA: ci
       POSTGRES_HOST: localhost
       POSTGRES_PORT: '5432'
@@ -226,29 +233,29 @@ jobs:
           # accurately -- shallow clones degrade new-code detection). The
           # bun/node legs never touch Sonar, so they get the default shallow
           # clone.
-          fetch-depth: ${{ matrix.runtime == 'deno' && '0' || '1' }}
+          fetch-depth: ${{ (matrix.runtime == 'deno' && env.IS_RELEASE_PLEASE_BRANCH != 'true') && '0' || '1' }}
 
       - name: Setup Deno
-        if: matrix.runtime == 'deno'
+        if: matrix.runtime == 'deno' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
         with:
           deno-version: v2.x
 
       # Bun installs node_modules for the bun and node runs.
       - name: Setup Bun
-        if: matrix.runtime != 'deno'
+        if: matrix.runtime != 'deno' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
 
       - name: Setup Node
-        if: matrix.runtime == 'node'
+        if: matrix.runtime == 'node' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
         with:
           node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies (bun)
-        if: matrix.runtime != 'deno'
+        if: matrix.runtime != 'deno' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         run: bun install
 
       # Postgres/MariaDB need the two per-package databases created up front
@@ -261,6 +268,7 @@ jobs:
       # Also block until memcached accepts connections — its image ships no
       # health-check client, so `services:` can't gate on it.
       - name: Prepare databases
+        if: env.IS_RELEASE_PLEASE_BRANCH != 'true'
         run: |
           pg_cid=$(docker ps -q --filter "publish=5432")
           maria_cid=$(docker ps -q --filter "publish=3306")
@@ -281,18 +289,18 @@ jobs:
       # 135/139) — no failing assertion, so it reads like a mystery crash.
       # Import it once, single-threaded, so the parallel run finds it cached.
       - name: Warm sqlite3 native library
-        if: matrix.runtime == 'deno'
+        if: matrix.runtime == 'deno' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         run: deno eval "await import('jsr:@db/sqlite@^0.13.0');"
 
       - name: Run tests (deno)
-        if: matrix.runtime == 'deno'
+        if: matrix.runtime == 'deno' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         run: deno test --allow-all --parallel --coverage=./coverage packages/
 
       # Coverage/analysis run only on the deno leg (native coverage) and only
       # on push events — same-repo PRs are covered by their branch push run,
       # and fork PRs lack the secrets these steps need.
       - name: Generate LCOV report
-        if: matrix.runtime == 'deno'
+        if: matrix.runtime == 'deno' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         run: |
           deno coverage ./coverage --lcov --output=coverage/report.lcov
           # Deno emits absolute SF: paths; relativize to the repo root so
@@ -306,7 +314,7 @@ jobs:
       # an upload/scan failure (e.g. a token/project not yet provisioned, or a
       # transient service error) must never fail the test job or block a merge.
       - name: Upload coverage to Codecov
-        if: matrix.runtime == 'deno' && github.event_name == 'push' && env.CODECOV_TOKEN != ''
+        if: matrix.runtime == 'deno' && github.event_name == 'push' && env.CODECOV_TOKEN != '' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         continue-on-error: true
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
@@ -317,14 +325,14 @@ jobs:
       - name: SonarQube Cloud scan
         # Per-package components come from sonar-project.properties; coverage
         # from the LCOV above. Reads SONAR_TOKEN / SONAR_HOST_URL from job env.
-        if: matrix.runtime == 'deno' && github.event_name == 'push' && env.SONAR_TOKEN != ''
+        if: matrix.runtime == 'deno' && github.event_name == 'push' && env.SONAR_TOKEN != '' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         continue-on-error: true
         uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
 
       - name: Run tests (bun)
-        if: matrix.runtime == 'bun'
+        if: matrix.runtime == 'bun' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         run: bun test packages/
 
       - name: Run tests (node)
-        if: matrix.runtime == 'node'
+        if: matrix.runtime == 'node' && env.IS_RELEASE_PLEASE_BRANCH != 'true'
         run: node --import tsx --test 'packages/**/*.test.ts'
