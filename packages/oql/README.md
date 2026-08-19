@@ -365,8 +365,35 @@ contains operator-shaped keys, wrap it explicitly in `$eq`:
 '@payload': { $eq: { $eq: 1, foo: 'bar' } }
 ```
 
-JSON-path operators (matching against `payload.kind`, etc.) are not
-currently part of OQL's typed filter surface.
+**JSON path filtering.** Matching against a value _inside_ the JSON
+document — `payload.kind`, etc. — is supported at runtime with the
+`@col.@key` key form (deeper paths allowed: `@col.@a.@b`), where `col`
+is a declared column of the base table:
+
+```typescript ignore
+const pathFilters: QueryFilter = {
+  '@payload.@kind': { $eq: 'invoice' },
+  '@payload.@meta.@region': { $in: ['EU', 'US'] },
+  '@payload.@customer': { $startsWith: 'ACME' },
+};
+```
+
+The SQL translators emit the dialect's native extraction
+(`"payload"->>'kind'` on Postgres, `json_extract(...)` on SQLite,
+`JSON_UNQUOTE(JSON_EXTRACT(...))` on MariaDB); MongoDB uses its native
+dotted path. JSON-path keys take a **restricted operator set** — `$eq`,
+`$ne`, `$null`, `$in`/`$nin`, and the LIKE/substring family; the ordered
+comparisons (`$gt`, `$lt`, `$between`, …) are rejected because extraction
+yields dialect-dependent value types. A join alias with the same name as
+a column always wins the dotted syntax, and only identifier-shaped JSON
+keys are expressible. See the
+[translator guide](translator/OQL-Translator.md#json-path-filtering) for
+the emitted SQL, precedence rules, and the full v1 limitation list.
+
+At the type level, path keys appear in the typed filter surface only when
+the JSON column's nested shape is itself typed; an open
+`Record<string, unknown>` column exposes just the whole-value keys shown
+above, so path filters on it are validated at runtime.
 
 ### Deduplication (`DISTINCT`)
 
@@ -445,7 +472,7 @@ const query: Query<'SELECT', Product> = {
 
 ### SQL Databases
 
-- **PostgreSQL** - Full support for all features including JSONB operators
+- **PostgreSQL** - Full support for all features including JSON path filters
 - **MariaDB/MySQL** - Full support with MariaDB-specific optimizations
 - **SQLite** - Full support with SQLite-specific syntax
 

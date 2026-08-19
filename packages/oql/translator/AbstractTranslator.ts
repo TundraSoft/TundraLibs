@@ -48,6 +48,10 @@ import {
 } from '../asserts/mod.ts';
 import { assertInsertFromQuery } from '../asserts/query/DML/mod.ts';
 import { assertRefreshMaterializedView } from '../asserts/query/DDL/mod.ts';
+import {
+  findDisallowedJsonPathOperator,
+  JSON_PATH_ALLOWED_OPERATORS,
+} from '../asserts/mod.ts';
 import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import { Parameters } from './Parameters.ts';
 import type {
@@ -106,6 +110,16 @@ const LIKE_ESCAPE_CHAR = '\\';
 
 /** LIKE wildcards (plus the escape char itself) that must be escaped. */
 const LIKE_WILDCARDS = /[\\%_]/g;
+
+/**
+ * Shape a JSON-path segment must have before it is spliced into a SQL
+ * string literal (`'$.a.b'`, `'{a,b}'`). Identical to the identifier
+ * pattern the asserts layer enforces on every `@`-segment — re-checked
+ * here as defence-in-depth for hand-built queries that bypass the
+ * asserts, since these segments land inside quoted literals rather than
+ * quoted identifiers.
+ */
+const JSON_PATH_SEGMENT_PATTERN = /^[a-zA-Z_]\w*$/;
 
 /**
  * Turns a validated {@link Query} into dialect SQL plus its bind params.
@@ -958,6 +972,41 @@ export abstract class AbstractTranslator {
         parts.push(`(${sub})`);
         continue;
       }
+      // JSON-path keys (`@col.@key` where `col` is a declared base
+      // column) are resolved BEFORE the plain column-ref path. The
+      // matcher applies the disambiguation precedence — join alias,
+      // then base table name, then declared column — so it only fires
+      // where the key would otherwise be an unknown qualified ref.
+      const jsonPath = this.__matchJsonPathKey(key, scope, hasJoins, context);
+      if (jsonPath !== null) {
+        const disallowed = findDisallowedJsonPathOperator(value);
+        if (disallowed !== null) {
+          throw new OqlError(
+            `Operator '${disallowed}' is not supported on JSON path '${key}' — extraction yields text on Postgres/MariaDB but native types on SQLite, so ordered comparisons would differ per dialect. Allowed: ${
+              [...JSON_PATH_ALLOWED_OPERATORS].join(', ')
+            }`,
+            {
+              code: 'JSON_PATH_UNSUPPORTED_OPERATOR',
+              operator: disallowed,
+              path: key,
+            },
+          );
+        }
+        const extractSql = this._renderJsonPath(
+          this._resolveColumnRef(`@${jsonPath.column}`, hasJoins),
+          jsonPath.path,
+        );
+        parts.push(
+          this.__translateColumnCondition(
+            extractSql,
+            value as Operators,
+            scope,
+            params,
+            hasJoins,
+          ),
+        );
+        continue;
+      }
       const colSql = this.__resolveFilterKey(
         key,
         scope,
@@ -1012,6 +1061,84 @@ export abstract class AbstractTranslator {
       }
     }
     return this._resolveColumnRef(key, hasJoins);
+  }
+
+  /**
+   * Decide whether a filter key is a JSON path extraction, applying the
+   * disambiguation precedence for multi-segment keys (`@a.@b`, deeper):
+   *
+   * 1. `a` is a join alias (any `a.<col>` entry in `scope`) → NOT a JSON
+   *    path — the existing qualified-column resolution applies.
+   * 2. `a` is the base table name (`context.outerTable`) → NOT a JSON
+   *    path — the existing table-qualified resolution applies.
+   * 3. `a` is a declared base column (in `scope`, with the
+   *    {@link BASE_ALIAS} prefix when joined) → JSON path: returns the
+   *    column plus the remaining path segments.
+   * 4. Anything else → `null`; the caller falls through to the existing
+   *    resolution (which the asserts layer has already policed).
+   *
+   * Path segments are re-validated against
+   * {@link JSON_PATH_SEGMENT_PATTERN} because they are spliced into SQL
+   * string literals by {@link _renderJsonPath}.
+   *
+   * @throws {@link OqlError} `INVALID_COLUMN_REF` when a matched path
+   *   carries a non-identifier segment (hand-built input only — the
+   *   asserts reject this earlier on the public path).
+   */
+  private __matchJsonPathKey(
+    key: string,
+    scope: string[],
+    hasJoins: boolean,
+    context?: FilterContext,
+  ): { column: string; path: string[] } | null {
+    if (!key.startsWith('@')) return null;
+    const stripped = key.slice(1);
+    if (!stripped.includes('.@')) return null;
+    const segments = stripped.split('.@');
+    const first = segments[0]!;
+    // Precedence 1: the full qualified name resolves in scope (a joined
+    // column, or an internal `__base__` / `__exists__` qualification),
+    // or the first segment is a join alias with declared columns.
+    if (this.__columnInScope(stripped, scope, hasJoins)) return null;
+    if (scope.some((c) => c.startsWith(`${first}.`))) return null;
+    // Precedence 2: base-table qualification keeps its meaning even when
+    // the table shares its name with a declared column.
+    if (context?.outerTable !== undefined && first === context.outerTable) {
+      return null;
+    }
+    // Precedence 3: first segment names a declared base column.
+    if (!this.__columnInScope(first, scope, hasJoins)) return null;
+    const path = segments.slice(1);
+    for (const seg of path) {
+      if (!JSON_PATH_SEGMENT_PATTERN.test(seg)) {
+        throw new OqlError(
+          `JSON path '${key}' has an invalid segment '${seg}' — segments must be identifier-shaped`,
+          { code: 'INVALID_COLUMN_REF', ref: key, segment: seg },
+        );
+      }
+    }
+    return { column: first, path };
+  }
+
+  /**
+   * Render a JSON path extraction over an already-qualified column.
+   * `columnSql` is the quoted (and, when joined, `__base__`-prefixed)
+   * column; `path` is the ordered list of JSON keys to descend
+   * (identifier-shaped, at least one — both guaranteed by
+   * {@link AbstractTranslator.__matchJsonPathKey}). The result is used
+   * as the LEFT-HAND SIDE of the standard filter-operator emitters, so
+   * every dialect returns an expression that compares as text.
+   *
+   * The base implementation refuses — each shipped SQL dialect overrides
+   * with its native accessor (`->>` / `#>>`, `json_extract`,
+   * `JSON_UNQUOTE(JSON_EXTRACT(…))`).
+   *
+   * @throws {@link DialectUnsupportedError} Always, in the base class.
+   */
+  protected _renderJsonPath(columnSql: string, path: string[]): string {
+    void columnSql;
+    void path;
+    throw new DialectUnsupportedError(this.Dialect, 'JSON path extraction');
   }
 
   /**

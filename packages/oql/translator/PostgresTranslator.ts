@@ -263,6 +263,27 @@ export class PostgresTranslator extends AbstractTranslator {
   ]);
 
   // ---------------------------------------------------------------------------
+  // Filters: JSON path extraction
+  // ---------------------------------------------------------------------------
+
+  /**
+   * JSON path extraction for a `@col.@key` filter key. A single-level
+   * path uses the text accessor (`"col"->>'key'`); deeper paths use the
+   * text path accessor (`"col"#>>'{a,b}'`). Both return `text`, which is
+   * what the restricted (equality / LIKE) operator set compares against.
+   * Works on `json` and `jsonb` columns alike.
+   */
+  protected override _renderJsonPath(
+    columnSql: string,
+    path: string[],
+  ): string {
+    if (path.length === 1) {
+      return `${columnSql}->>'${path[0]}'`;
+    }
+    return `${columnSql}#>>'{${path.join(',')}}'`;
+  }
+
+  // ---------------------------------------------------------------------------
   // DML: UPSERT
   // ---------------------------------------------------------------------------
 

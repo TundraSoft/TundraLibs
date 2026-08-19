@@ -45,7 +45,17 @@ export const assertDeleteQuery: <PT extends TableType = TableType>(
   const availableKeys = [...columnList, ...expressionKeys];
 
   if (query.where !== undefined) {
-    assertQueryFilter(query.where, availableKeys);
+    // Declared columns are eligible as JSON-path roots (`@col.@key`);
+    // the base table name takes precedence (qualified-column form) and
+    // is excluded. DELETE has no joins, so no alias exclusion is needed.
+    const jsonPathRoots = columnList.filter((c) => c !== query.table);
+    assertQueryFilter(
+      query.where,
+      availableKeys,
+      undefined,
+      undefined,
+      jsonPathRoots,
+    );
   }
 };
 

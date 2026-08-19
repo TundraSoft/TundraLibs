@@ -68,6 +68,8 @@ import {
   assertTruncate,
   assertUpdate,
   assertUpsert,
+  findDisallowedJsonPathOperator,
+  JSON_PATH_ALLOWED_OPERATORS,
 } from '../asserts/mod.ts';
 import { assertInsertFromQuery } from '../asserts/query/DML/mod.ts';
 import { assertRefreshMaterializedView } from '../asserts/query/DDL/mod.ts';
@@ -1508,8 +1510,11 @@ export class MongoTranslator {
         conditions.push({ $or: subs });
         continue;
       }
-      // Per-column condition; key looks like `@col` or `@Alias.@col`.
-      const fieldPath = key.slice(1).replace('.@', '.');
+      // Per-column condition; key looks like `@col`, `@Alias.@col`, or a
+      // JSON path `@col.@key` (deeper allowed). All resolve to Mongo's
+      // native dotted-path syntax; JSON paths additionally get the
+      // restricted operator set policed.
+      const fieldPath = this.#filterFieldPath(key, value, columns);
       const { spec, exprs: colExprs } = this.#translateColumnCondition(
         fieldPath,
         value as Operators,
@@ -1529,6 +1534,63 @@ export class MongoTranslator {
       return conditions[0]!;
     }
     return { ...merged, $and: conditions };
+  }
+
+  /**
+   * Resolve one filter key to its Mongo field path, enforcing the
+   * JSON-path operator restriction.
+   *
+   * A multi-segment key is a *qualified* reference (a `$lookup`'d join
+   * alias field) when its flat dotted path is a declared column, or when
+   * its first segment prefixes any declared `alias.col` entry — the
+   * join-alias interpretation always wins, mirroring the SQL
+   * translators' precedence. Otherwise, when the first segment names a
+   * declared base column, the key is a JSON path into that column's
+   * embedded document. Mongo's native dotted-path syntax covers both —
+   * `profile.name` — so the emitted path is identical either way; only
+   * the operator policing differs: JSON-path keys take the restricted
+   * {@link JSON_PATH_ALLOWED_OPERATORS} set so the same OQL query is
+   * accepted or rejected uniformly across dialects, even though Mongo
+   * itself could compare nested values natively.
+   *
+   * (The third SQL precedence rung — the base *table* name as first
+   * segment — has no Mongo find-filter meaning and is already rejected
+   * by the asserts layer, so it needs no handling here.)
+   *
+   * @throws {OqlError} `JSON_PATH_UNSUPPORTED_OPERATOR` when a JSON-path
+   *   key carries an operator outside the allowed set.
+   */
+  #filterFieldPath(
+    key: string,
+    rhs: unknown,
+    columns: ReadonlySet<string>,
+  ): string {
+    const stripped = key.slice(1);
+    if (!stripped.includes('.@')) return stripped;
+    // NOTE: `split('.@').join('.')` (not `replace`, which only rewrites
+    // the FIRST occurrence) so deep paths keep every segment.
+    const segments = stripped.split('.@');
+    const flat = segments.join('.');
+    const first = segments[0]!;
+    const isQualified = columns.has(flat) ||
+      [...columns].some((c) => c.startsWith(`${first}.`));
+    if (!isQualified && columns.has(first)) {
+      const disallowed = findDisallowedJsonPathOperator(rhs);
+      if (disallowed !== null) {
+        throw new OqlError(
+          `Operator '${disallowed}' is not supported on JSON path '${key}'. Allowed: ${
+            [...JSON_PATH_ALLOWED_OPERATORS].join(', ')
+          }`,
+          {
+            code: 'JSON_PATH_UNSUPPORTED_OPERATOR',
+            dialect: this.Dialect,
+            operator: disallowed,
+            path: key,
+          },
+        );
+      }
+    }
+    return flat;
   }
 
   /**
