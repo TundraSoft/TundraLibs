@@ -1,0 +1,107 @@
+/**
+ * @fileoverview `@tundralibs/rapid` — a config-driven API framework for
+ * Deno, Bun, and Node. Phase 1 assembles an application from FUNCTIONS
+ * (Oak-style route/middleware/job registration) with native
+ * observability (slogger always on, tracer opt-in) and a
+ * cronus-scheduled job transport.
+ *
+ * @module
+ */
+
+export { Application, rapid } from './Application.ts';
+export {
+  Context,
+  HTTPContext,
+  type HTTPContextInit,
+  JOBContext,
+  type JOBContextInit,
+  type JobTick,
+  type SOCKETConnection,
+  SOCKETContext,
+  type SOCKETContextInit,
+} from './context/mod.ts';
+export {
+  connection,
+  decorationsOf,
+  DELETE,
+  GET,
+  header,
+  JOB,
+  type JobDecoratorOptions,
+  Module,
+  type ModuleDecoratorOptions,
+  moduleMetaOf,
+  paging,
+  param,
+  PATCH,
+  payload,
+  POST,
+  PUT,
+  query,
+  type RouteDecoratorOptions,
+  SOCKET,
+  type SocketDecoratorOptions,
+} from './decorators/mod.ts';
+export { RAPID_ERROR_CODES, RapidError } from './errors/mod.ts';
+export {
+  cors,
+  type CorsOptions,
+  guardHTTP,
+  guardJOB,
+  guardSOCKET,
+  MemoryRateStore,
+  MIDDLEWARE_SCOPE,
+  middlewareScope,
+  onlyHTTP,
+  onlyJOB,
+  onlySOCKET,
+  rateLimit,
+  type RateLimitOptions,
+  type RateLimitStore,
+  requestId,
+  type RequestIdOptions,
+  requestLogger,
+  type RequestLoggerOptions,
+  responseTimer,
+  type ResponseTimerOptions,
+  secureHeaders,
+  type SecureHeadersOptions,
+  timeout,
+} from './middlewares/mod.ts';
+export type {
+  RapidApplicationEvents,
+  RapidApplicationExporterConfig,
+  RapidApplicationFactoryOptions,
+  RapidApplicationJobsOptions,
+  RapidApplicationOptions,
+  RapidApplicationPagingOptions,
+  RapidApplicationQueryOptions,
+  RapidApplicationServerOptions,
+  RapidApplicationUploadOptions,
+  RapidBinder,
+  RapidBinderSource,
+  RapidBinds,
+  RapidContext,
+  RapidContextArgs,
+  RapidContextPaging,
+  RapidContextQuery,
+  RapidContextQueryFilter,
+  RapidContextQuerySort,
+  RapidContextResponse,
+  RapidContextState,
+  RapidContextType,
+  RapidDecoration,
+  RapidHTTPHandler,
+  RapidHTTPMiddleware,
+  RapidHTTPRequestBody,
+  RapidJobEntry,
+  RapidJOBHandler,
+  RapidMiddleware,
+  RapidModuleMeta,
+  RapidModuleReply,
+  RapidRouteEntry,
+  RapidSocketEntry,
+  RapidSOCKETHandler,
+  RapidSOCKETMiddleware,
+  RapidUploadedFile,
+} from './types/mod.ts';

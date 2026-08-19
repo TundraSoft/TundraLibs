@@ -1,0 +1,15 @@
+{
+  "name": "@tundralibs/rapid",
+  "version": "0.0.0",
+  "description": "rAPId \u2014 config-driven API framework: Oak-style function assembly (routes, middleware, cron jobs) with native observability (slogger, tracer, ambient correlation). Early development.",
+  "license": "MIT",
+  "exports": {
+    ".": "./mod.ts",
+    "./context": "./context/mod.ts",
+    "./decorators": "./decorators/mod.ts",
+    "./errors": "./errors/mod.ts",
+    "./middlewares": "./middlewares/mod.ts",
+    "./types": "./types/mod.ts"
+  },
+  "imports": {}
+}

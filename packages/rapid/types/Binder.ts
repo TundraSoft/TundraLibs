@@ -1,0 +1,37 @@
+/**
+ * @fileoverview {@link RapidBinder} — one argument-binding descriptor:
+ * WHERE a decorated method's parameter comes from, and how it is
+ * validated on the way in.
+ *
+ * @module
+ */
+
+/** The extraction sources a binder can name. */
+export type RapidBinderSource =
+  | 'param'
+  | 'payload'
+  | 'query'
+  | 'paging'
+  | 'header'
+  | 'connection';
+
+/**
+ * One argument-binding descriptor, produced by the binder factories
+ * (`param()`, `payload()`, `query()`, …). PURE DATA: the decorator
+ * records it; extraction and validation run at MOUNT time, when the
+ * module tier builds the per-transport closures. `T` is the value the
+ * method parameter receives — the factories thread it so the bind
+ * tuple drives the method's compile-time parameter types.
+ */
+export type RapidBinder<T = unknown> = {
+  /** Where the value is extracted from. */
+  source: RapidBinderSource;
+  /** Key within the source (`param`/`header` need one). */
+  name?: string;
+  /**
+   * Validator/transformer — a guardian schema or any function; its
+   * return value IS what the method receives. Runs at mount-built
+   * invocation time, never at decoration time.
+   */
+  validate?: (value: unknown) => T | Promise<T>;
+};

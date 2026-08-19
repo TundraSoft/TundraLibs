@@ -1,0 +1,2 @@
+greeting: Hello from ${GREETING_SOURCE}
+farewell: Bye!

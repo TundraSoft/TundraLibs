@@ -1,0 +1,35 @@
+{
+  // STANDALONE on purpose — no "extends". Bun's tsconfig `extends`
+  // merging is broken (an extended parent's `experimentalDecorators:
+  // true` wins over this file's explicit `false`), which would silently
+  // compile rAPId's TC39 standard decorators in LEGACY mode (decorator
+  // args become prototype + string name — corruption, not an error).
+  // Bun and tsx also resolve tsconfig from the CWD, so bun/tsx
+  // invocations of this package must run from this directory.
+  "compilerOptions": {
+    "strict": true,
+    "useUnknownInCatchVariables": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "allowUnreachableCode": false,
+    "noErrorTruncation": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "experimentalDecorators": false,
+    "emitDecoratorMetadata": false,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ESNext",
+    "lib": [
+      "ESNext",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  },
+  "exclude": [
+    "node_modules"
+  ]
+}

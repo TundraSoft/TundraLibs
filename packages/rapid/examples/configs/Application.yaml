@@ -1,0 +1,12 @@
+name: rapid-example
+mode: DEVELOPMENT # real error messages + stacks; flip to PRODUCTION to see the ladder
+stateMode: SHARE # the /visits counter below needs one shared bag
+server:
+  port: 3000
+  hostname: localhost
+  paging: # ctx.args.paging — headers first, query params override
+    defaultSize: 10
+    maxSize: 100 # larger ?limit= values are CLAMPED, not rejected
+  query: # structural caps for the ?field=op:value grammar (DoS guards)
+    maxFilters: 25
+    maxSorts: 5

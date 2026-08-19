@@ -1,0 +1,33 @@
+{
+  "name": "@tundralibs/rapid",
+  "version": "0.0.0",
+  "description": "rAPId \u2014 config-driven API framework: Oak-style function assembly (routes, middleware, cron jobs) with native observability (slogger, tracer, ambient correlation). Early development.",
+  "license": "MIT",
+  "type": "module",
+  "main": "mod.ts",
+  "exports": {
+    ".": "./mod.ts",
+    "./context": "./context/mod.ts",
+    "./decorators": "./decorators/mod.ts",
+    "./errors": "./errors/mod.ts",
+    "./middlewares": "./middlewares/mod.ts",
+    "./types": "./types/mod.ts"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@tundralibs/ambient": "workspace:*",
+    "@tundralibs/compat": "workspace:*",
+    "@tundralibs/cronus": "workspace:*",
+    "@tundralibs/id": "workspace:*",
+    "@tundralibs/radrouter": "workspace:*",
+    "@tundralibs/rpc": "workspace:*",
+    "@tundralibs/slogger": "workspace:*",
+    "@tundralibs/tracer": "workspace:*",
+    "@tundralibs/utils": "workspace:*"
+  }
+}
