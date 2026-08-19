@@ -1141,6 +1141,11 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
   /**
    * Parses a response body based on its content type.
    *
+   * Content types are matched by substring, so vendor suffixes
+   * (`application/vnd.api+json`, `application/atom+xml`) route to their
+   * structured parser. A missing or unrecognized content type is parsed
+   * best-effort — JSON first, then XML — falling back to the raw text.
+   *
    * Lenient by design: when a structured (JSON/XML) parse fails, the raw text
    * is returned rather than throwing. The generic `B` is a cast, not a
    * guarantee — a malformed structured response yields a `string`.
@@ -1169,16 +1174,14 @@ export abstract class RESTler<O extends RESTlerOptions = RESTlerOptions>
         // Genuine text — return as-is (don't JSON-parse text/plain etc.).
         return body as unknown as B;
       }
-      if (ct === '') {
-        // No content type — best-effort JSON, falling back to raw text.
-        try {
-          return JSON.parse(body) as B;
-        } catch {
-          return body as unknown as B;
-        }
+      // Missing or unrecognized content type — best-effort structured parse:
+      // try JSON, then XML. The XML parser is strict (plain text and binary
+      // make it throw), so the outer catch returns those bodies raw.
+      try {
+        return JSON.parse(body) as B;
+      } catch {
+        return XMLParse(body) as unknown as B;
       }
-      // Any other content type — return raw.
-      return body as unknown as B;
     } catch {
       // Structured parse failed — return the raw text.
       return body as unknown as B;
