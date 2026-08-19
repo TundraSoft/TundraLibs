@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.9](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.8...slogger-v1.1.9) (2026-08-19)
+
+
+### Documentation
+
+* **slogger:** document the PREFIX and SUFFIX masking strategies ([#433](https://github.com/TundraSoft/TundraLibs/issues/433)) ([b466586](https://github.com/TundraSoft/TundraLibs/commit/b466586373666d1c8e971863f4277763e9ca116b))
+
 ## [1.1.8](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.7...slogger-v1.1.8) (2026-08-18)
 
 
