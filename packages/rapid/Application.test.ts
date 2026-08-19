@@ -8,7 +8,7 @@
 
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { makeTempDirSync } from '@tundralibs/compat/file';
+import { makeTempDirSync, pathExists, remove } from '@tundralibs/compat/file';
 import { Application } from './Application.ts';
 import { HTTPContext, JOBContext, SOCKETContext } from './context/mod.ts';
 import { Client } from '@tundralibs/rpc';
@@ -97,6 +97,66 @@ describe('rapid.Application', () => {
       );
       asserts.assertEquals(err.code, 'RAPID_CONFIG');
       asserts.assertEquals(app.running, false); // boot failure tore down
+    });
+  });
+
+  describe('stateMode SHARE vs. a stateKey-writing middleware', () => {
+    it('fails LOUDLY at start() rather than corrupting state under concurrency', async () => {
+      const { responseTimer } = await import('./middlewares/mod.ts');
+      const app = new Application({
+        name: 'share-conflict',
+        server: { port: 0 },
+        stateMode: 'SHARE',
+      });
+      app.use(responseTimer({ stateKey: 'tookMs' }));
+      app.get('/x', () => ({ content: 'ok' }));
+      const err = await asserts.assertRejects(
+        () => app.start(),
+        RapidError,
+        "stateMode: 'SHARE'",
+      );
+      asserts.assertEquals(err.code, 'RAPID_CONFIG');
+      asserts.assertEquals(app.running, false);
+    });
+
+    it('requestId({stateKey}) is caught the same way', async () => {
+      const { requestId } = await import('./middlewares/mod.ts');
+      const app = new Application({
+        name: 'share-conflict-2',
+        server: { port: 0 },
+        stateMode: 'SHARE',
+      });
+      app.use(requestId({ stateKey: 'rid' }));
+      app.get('/x', () => ({ content: 'ok' }));
+      await asserts.assertRejects(() => app.start(), RapidError);
+    });
+
+    it('a stateKey-writing middleware boots fine under CLONE/PROTOTYPE (the default)', async () => {
+      const { responseTimer } = await import('./middlewares/mod.ts');
+      const app = new Application({ name: 'share-ok', server: { port: 0 } });
+      app.use(responseTimer({ stateKey: 'tookMs' }));
+      app.get('/x', () => ({ content: 'ok' }));
+      await app.start();
+      try {
+        asserts.assertEquals(app.running, true);
+      } finally {
+        await app.stop();
+      }
+    });
+
+    it('SHARE with NO stateKey-writing middleware boots fine', async () => {
+      const app = new Application({
+        name: 'share-no-conflict',
+        server: { port: 0 },
+        stateMode: 'SHARE',
+      });
+      app.get('/x', () => ({ content: 'ok' }));
+      await app.start();
+      try {
+        asserts.assertEquals(app.running, true);
+      } finally {
+        await app.stop();
+      }
     });
   });
 
@@ -558,9 +618,9 @@ describe('rapid.Application', () => {
       // Every file the parse wrote is accounted for and gone.
       asserts.assert(ctx.files.length > 0, 'the parse did write a file');
       for (const file of ctx.files) {
-        await asserts.assertRejects(() => Deno.stat(file));
+        asserts.assertEquals(await pathExists(file), false);
       }
-      await Deno.remove(uploads, { recursive: true }).catch(() => {});
+      await remove(uploads).catch(() => {});
     });
   });
 

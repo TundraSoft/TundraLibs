@@ -9,6 +9,7 @@
  */
 
 import type { RapidMiddleware } from '../types/mod.ts';
+import { markStateKeyUser } from './stateKeyGuard.ts';
 
 /** Options for {@link responseTimer}. */
 export type ResponseTimerOptions = {
@@ -35,7 +36,7 @@ export function responseTimer(
   options: ResponseTimerOptions = {},
 ): RapidMiddleware {
   const header = options.header ?? 'x-response-time';
-  return async (ctx, next) => {
+  const middleware: RapidMiddleware = async (ctx, next) => {
     const started = performance.now();
     try {
       await next();
@@ -55,4 +56,7 @@ export function responseTimer(
       }
     }
   };
+  return options.stateKey !== undefined
+    ? markStateKeyUser(middleware)
+    : middleware;
 }

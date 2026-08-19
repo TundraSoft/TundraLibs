@@ -28,4 +28,9 @@ export {
   onlySOCKET,
 } from './scope.ts';
 export { secureHeaders, type SecureHeadersOptions } from './secureHeaders.ts';
+export {
+  markStateKeyUser,
+  MIDDLEWARE_STATE_KEY,
+  middlewareUsesStateKey,
+} from './stateKeyGuard.ts';
 export { timeout } from './timeout.ts';

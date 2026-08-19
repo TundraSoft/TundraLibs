@@ -11,6 +11,7 @@
  */
 
 import type { RapidMiddleware } from '../types/mod.ts';
+import { markStateKeyUser } from './stateKeyGuard.ts';
 
 /** Options for {@link requestId}. */
 export type RequestIdOptions = {
@@ -32,7 +33,7 @@ export type RequestIdOptions = {
 
 /** Build the propagation middleware. */
 export function requestId(options: RequestIdOptions = {}): RapidMiddleware {
-  return async (ctx, next) => {
+  const middleware: RapidMiddleware = async (ctx, next) => {
     if (options.stateKey !== undefined) {
       (ctx.state as Record<string, unknown>)[options.stateKey] = ctx.requestId;
     }
@@ -63,4 +64,7 @@ export function requestId(options: RequestIdOptions = {}): RapidMiddleware {
       }
     }
   };
+  return options.stateKey !== undefined
+    ? markStateKeyUser(middleware)
+    : middleware;
 }

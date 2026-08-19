@@ -13,6 +13,7 @@ import type { HTTPMethod } from '@tundralibs/compat/http';
 import { ulid } from '@tundralibs/id';
 import { parseSchedule } from '@tundralibs/cronus';
 import { RapidError } from './errors/mod.ts';
+import { middlewareUsesStateKey } from './middlewares/stateKeyGuard.ts';
 import { HTTPTransport, JOBTransport } from './transports/mod.ts';
 import { buildExporter, buildState, mountModule } from './utils/mod.ts';
 import type {
@@ -448,6 +449,23 @@ export class Application<S extends RapidContextState = RapidContextState>
     if (this.__started) return this;
     this.__started = true; // set FIRST so a boot failure can tear down
     try {
+      // `stateMode: 'SHARE'` hands every invocation the SAME state
+      // object; a middleware writing a per-invocation value there
+      // (responseTimer/requestId's `stateKey`) corrupts under
+      // concurrency (last write wins, across unrelated invocations).
+      // Unlike the removed R2-H3 heuristic, this is a deterministic
+      // check — no false negatives to lie about — so it fails the
+      // boot outright rather than warning.
+      if (this.option('stateMode') === 'SHARE') {
+        const offender = this.__middleware.find(middlewareUsesStateKey);
+        if (offender !== undefined) {
+          throw new RapidError('RAPID_CONFIG', {
+            message:
+              "stateMode: 'SHARE' is incompatible with a stateKey-writing middleware (responseTimer/requestId) — every invocation would read and write the SAME state object, corrupting per-invocation values (duration, correlation id) under concurrency",
+            details: { stateMode: 'SHARE' },
+          });
+        }
+      }
       if (this.option('server')!.enabled !== false) {
         // NOTE: a boot-time "socket commands are unguarded" warning
         // lived here and was REMOVED (adversarial review R2-H3). It
