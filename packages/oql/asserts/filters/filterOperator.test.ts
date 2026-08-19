@@ -465,6 +465,173 @@ describe('oql.asserts.Filters.FilterOperator', () => {
   });
 
   /*
+   * Runtime coverage for JSON-path filter keys (`@col.@key`): accepted
+   * when the first segment names a declared JSON-path root, restricted
+   * to the equality / null / membership / LIKE operator families, and
+   * always losing to an exact (join-qualified) column-list match.
+   */
+  describe('JSON path keys', () => {
+    const COLUMNS = ['id', 'profile'];
+    const ROOTS = ['id', 'profile'];
+
+    it('accepts a single-level JSON path with $eq', () => {
+      assertFilterOperator(
+        { '@profile.@name': { $eq: 'bob' } },
+        COLUMNS,
+        ROOTS,
+      );
+    });
+
+    it('accepts a deep JSON path', () => {
+      assertFilterOperator(
+        { '@profile.@address.@city': 'Berlin' },
+        COLUMNS,
+        ROOTS,
+      );
+    });
+
+    it('accepts direct value, array shorthand, and null on a JSON path', () => {
+      assertFilterOperator({ '@profile.@name': 'bob' }, COLUMNS, ROOTS);
+      assertFilterOperator({ '@profile.@tag': ['a', 'b'] }, COLUMNS, ROOTS);
+      assertFilterOperator({ '@profile.@gone': null }, COLUMNS, ROOTS);
+    });
+
+    it('accepts every allowed operator on a JSON path', () => {
+      assertFilterOperator(
+        {
+          '@profile.@name': {
+            $eq: 'a',
+            $ne: 'b',
+            $in: ['c'],
+            $nin: ['d'],
+            $like: 'e%',
+            $nlike: 'f%',
+            $ilike: 'g%',
+            $nilike: 'h%',
+            $startsWith: 'i',
+            $endsWith: 'j',
+            $contains: 'k',
+          },
+          '@profile.@gone': { $null: true },
+        },
+        COLUMNS,
+        ROOTS,
+      );
+    });
+
+    it('rejects $gt on a JSON path', () => {
+      asserts.assertThrows(
+        () =>
+          assertFilterOperator(
+            { '@profile.@age': { $gt: 5 } },
+            COLUMNS,
+            ROOTS,
+          ),
+        TypeError,
+        "Operator '$gt' is not supported on JSON path '@profile.@age'",
+      );
+    });
+
+    it('rejects $between on a JSON path', () => {
+      asserts.assertThrows(
+        () =>
+          assertFilterOperator(
+            { '@profile.@age': { $between: [1, 2] } },
+            COLUMNS,
+            ROOTS,
+          ),
+        TypeError,
+        "Operator '$between' is not supported on JSON path '@profile.@age'",
+      );
+    });
+
+    it('exact column-list match keeps the full operator set (join precedence)', () => {
+      // `user.age` is a joined column in the list — the exact match wins
+      // over the JSON-path interpretation even though `user` could also
+      // be read as a root, so $gt stays valid.
+      assertFilterOperator(
+        { '@user.@age': { $gt: 5 } },
+        ['id', 'user', 'user.age'],
+        ['id', 'user'],
+      );
+    });
+
+    it('still rejects dotted keys without jsonPathRoots (old behavior)', () => {
+      asserts.assertThrows(
+        () => assertFilterOperator({ '@profile.@name': 'bob' }, COLUMNS),
+        TypeError,
+        'not a valid column identifier',
+      );
+    });
+
+    it('rejects a first segment that is not a declared root', () => {
+      asserts.assertThrows(
+        () => assertFilterOperator({ '@ghost.@name': 'bob' }, COLUMNS, ROOTS),
+        TypeError,
+        'not a valid column identifier',
+      );
+    });
+
+    it('rejects a malformed JSON path even when the root matches', () => {
+      asserts.assertThrows(
+        () => assertFilterOperator({ '@profile.name': 'bob' }, COLUMNS, ROOTS),
+        TypeError,
+        'not a valid column identifier',
+      );
+    });
+
+    it('assertQueryFilter forwards roots into $and / $or branches', () => {
+      assertQueryFilter(
+        {
+          $and: [
+            { '@profile.@name': { $eq: 'bob' } },
+            { $or: [{ '@id': 1 }, { '@profile.@kind': 'x' }] },
+          ],
+        },
+        COLUMNS,
+        undefined,
+        undefined,
+        ROOTS,
+      );
+      asserts.assertThrows(
+        () =>
+          assertQueryFilter(
+            { $and: [{ '@profile.@age': { $lt: 3 } }] },
+            COLUMNS,
+            undefined,
+            undefined,
+            ROOTS,
+          ),
+        TypeError,
+        "Operator '$lt' is not supported on JSON path '@profile.@age'",
+      );
+    });
+
+    it('isQueryFilter mirrors the assert', () => {
+      asserts.assertEquals(
+        isQueryFilter(
+          { '@profile.@name': 'bob' },
+          COLUMNS,
+          undefined,
+          undefined,
+          ROOTS,
+        ),
+        true,
+      );
+      asserts.assertEquals(
+        isQueryFilter(
+          { '@profile.@age': { $gte: 1 } },
+          COLUMNS,
+          undefined,
+          undefined,
+          ROOTS,
+        ),
+        false,
+      );
+    });
+  });
+
+  /*
    * Type-level coverage for JSON (open-Record) column filtering.
    *
    * `Record<string, unknown>` (the underlying TS type for a JSON

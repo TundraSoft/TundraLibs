@@ -761,6 +761,359 @@ const CASES: Case[] = [
       },
     },
   },
+  // ---------------------------------------------------------------------------
+  // JSON path filtering — `@col.@key` where `col` is a declared base column
+  // ---------------------------------------------------------------------------
+  {
+    name: 'WHERE JSON path single-level $eq',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: { '@profile.@name': { $eq: 'bob' } },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE json_extract("profile", '$.name') = :p_0:`,
+        params: { p_0: 'bob' },
+      },
+      postgres: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' = :p_0:`,
+        params: { p_0: 'bob' },
+      },
+      maria: {
+        sql:
+          "SELECT `id` AS `id` FROM `users` WHERE JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.name')) = :p_0:",
+        params: { p_0: 'bob' },
+      },
+    },
+  },
+  {
+    // Deep paths take Postgres's `#>>` text-path accessor; SQLite/MariaDB
+    // just grow the '$.a.b' path. Shorthand scalar = implicit $eq.
+    name: 'WHERE JSON path deep (shorthand scalar)',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: { '@profile.@address.@city': 'Berlin' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE json_extract("profile", '$.address.city') = :p_0:`,
+        params: { p_0: 'Berlin' },
+      },
+      postgres: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE "profile"#>>'{address,city}' = :p_0:`,
+        params: { p_0: 'Berlin' },
+      },
+      maria: {
+        sql:
+          "SELECT `id` AS `id` FROM `users` WHERE JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.address.city')) = :p_0:",
+        params: { p_0: 'Berlin' },
+      },
+    },
+  },
+  {
+    name: 'WHERE JSON path $ne and $null',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: {
+        '@profile.@kind': { $ne: 'draft' },
+        '@profile.@deletedAt': { $null: true },
+      },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE json_extract("profile", '$.kind') <> :p_0: AND json_extract("profile", '$.deletedAt') IS NULL`,
+        params: { p_0: 'draft' },
+      },
+      postgres: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'kind' <> :p_0: AND "profile"->>'deletedAt' IS NULL`,
+        params: { p_0: 'draft' },
+      },
+      maria: {
+        sql:
+          "SELECT `id` AS `id` FROM `users` WHERE JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.kind')) <> :p_0: AND JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.deletedAt')) IS NULL",
+        params: { p_0: 'draft' },
+      },
+    },
+  },
+  {
+    // Scalar-array membership — operator form and the bare-array
+    // shorthand (implicit IN) both ride the extraction expression.
+    name: 'WHERE JSON path $in / $nin and array shorthand',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: {
+        '@profile.@kind': { $in: ['a', 'b'], $nin: ['c'] },
+        '@profile.@tag': ['x', 'y'],
+      },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE json_extract("profile", '$.kind') IN (:p_0:, :p_1:) AND json_extract("profile", '$.kind') NOT IN (:p_2:) AND json_extract("profile", '$.tag') IN (:p_3:, :p_4:)`,
+        params: { p_0: 'a', p_1: 'b', p_2: 'c', p_3: 'x', p_4: 'y' },
+      },
+      postgres: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'kind' IN (:p_0:, :p_1:) AND "profile"->>'kind' NOT IN (:p_2:) AND "profile"->>'tag' IN (:p_3:, :p_4:)`,
+        params: { p_0: 'a', p_1: 'b', p_2: 'c', p_3: 'x', p_4: 'y' },
+      },
+      maria: {
+        sql:
+          "SELECT `id` AS `id` FROM `users` WHERE JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.kind')) IN (:p_0:, :p_1:) AND JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.kind')) NOT IN (:p_2:) AND JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.tag')) IN (:p_3:, :p_4:)",
+        params: { p_0: 'a', p_1: 'b', p_2: 'c', p_3: 'x', p_4: 'y' },
+      },
+    },
+  },
+  {
+    // Postgres has a real ILIKE; SQLite/MariaDB degrade to LIKE — the
+    // same per-dialect behaviour plain columns get.
+    name: 'WHERE JSON path $like / $ilike',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: { '@profile.@name': { $like: '%bo%', $ilike: '%BO%' } },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE json_extract("profile", '$.name') LIKE :p_0: AND json_extract("profile", '$.name') LIKE :p_1:`,
+        params: { p_0: '%bo%', p_1: '%BO%' },
+      },
+      postgres: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' LIKE :p_0: AND "profile"->>'name' ILIKE :p_1:`,
+        params: { p_0: '%bo%', p_1: '%BO%' },
+      },
+      maria: {
+        sql:
+          "SELECT `id` AS `id` FROM `users` WHERE JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.name')) LIKE :p_0: AND JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.name')) LIKE :p_1:",
+        params: { p_0: '%bo%', p_1: '%BO%' },
+      },
+    },
+  },
+  {
+    // The LIKE ESCAPE machinery is fully reused: the bound value's `%`
+    // is escaped and the dialect's ESCAPE clause appended, exactly as
+    // for a plain column.
+    name: 'WHERE JSON path $startsWith escapes LIKE wildcards',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: { '@profile.@name': { $startsWith: 'bo%b' } },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE json_extract("profile", '$.name') LIKE (:p_0: || '%') ESCAPE '\\'`,
+        params: { p_0: 'bo\\%b' },
+      },
+      postgres: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' LIKE (:p_0: || '%') ESCAPE '\\'`,
+        params: { p_0: 'bo\\%b' },
+      },
+      maria: {
+        sql:
+          "SELECT `id` AS `id` FROM `users` WHERE JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.name')) LIKE CONCAT(:p_0:, '%') ESCAPE '\\\\'",
+        params: { p_0: 'bo\\%b' },
+      },
+    },
+  },
+  {
+    name: 'WHERE JSON path $nlike / $nilike / $endsWith / $contains',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: {
+        '@profile.@name': { $nlike: 'x%', $nilike: 'y%' },
+        '@profile.@bio': { $endsWith: 'end' },
+        '@profile.@tag': { $contains: 'mid' },
+      },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE json_extract("profile", '$.name') NOT LIKE :p_0: AND json_extract("profile", '$.name') NOT LIKE :p_1: AND json_extract("profile", '$.bio') LIKE ('%' || :p_2:) ESCAPE '\\' AND json_extract("profile", '$.tag') LIKE ('%' || :p_3: || '%') ESCAPE '\\'`,
+        params: { p_0: 'x%', p_1: 'y%', p_2: 'end', p_3: 'mid' },
+      },
+      postgres: {
+        sql:
+          `SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' NOT LIKE :p_0: AND "profile"->>'name' NOT ILIKE :p_1: AND "profile"->>'bio' LIKE ('%' || :p_2:) ESCAPE '\\' AND "profile"->>'tag' LIKE ('%' || :p_3: || '%') ESCAPE '\\'`,
+        params: { p_0: 'x%', p_1: 'y%', p_2: 'end', p_3: 'mid' },
+      },
+      maria: {
+        sql:
+          "SELECT `id` AS `id` FROM `users` WHERE JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.name')) NOT LIKE :p_0: AND JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.name')) NOT LIKE :p_1: AND JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.bio')) LIKE CONCAT('%', :p_2:) ESCAPE '\\\\' AND JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.tag')) LIKE CONCAT('%', :p_3:, '%') ESCAPE '\\\\'",
+        params: { p_0: 'x%', p_1: 'y%', p_2: 'end', p_3: 'mid' },
+      },
+    },
+  },
+  {
+    // Disambiguation precedence 1 over 3: a join alias with the same name
+    // as a declared base column resolves as the JOIN — the JSON path
+    // interpretation only fires where the key would otherwise error.
+    name: 'WHERE join alias wins over same-named JSON column',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      joins: {
+        profile: {
+          table: 'profiles',
+          columns: ['userId', 'name'],
+          on: { '@profile.@userId': '@id' },
+        },
+      },
+      projection: { '@id': true },
+      where: { '@profile.@name': { $eq: 'bob' } },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          'SELECT __base__."id" AS "id" FROM "users" AS __base__ INNER JOIN "profiles" AS "profile" ON "profile"."userId" = __base__."id" WHERE "profile"."name" = :p_0:',
+        params: { p_0: 'bob' },
+      },
+      postgres: {
+        sql:
+          'SELECT __base__."id" AS "id" FROM "users" AS __base__ INNER JOIN "profiles" AS "profile" ON "profile"."userId" = __base__."id" WHERE "profile"."name" = :p_0:',
+        params: { p_0: 'bob' },
+      },
+      maria: {
+        sql:
+          'SELECT __base__.`id` AS `id` FROM `users` AS __base__ INNER JOIN `profiles` AS `profile` ON `profile`.`userId` = __base__.`id` WHERE `profile`.`name` = :p_0:',
+        params: { p_0: 'bob' },
+      },
+    },
+  },
+  {
+    // A JSON path on a base column still works when joins are present —
+    // the extraction wraps the `__base__`-qualified column.
+    name: 'WHERE JSON path on base column alongside a join',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'meta'],
+      joins: {
+        Author: {
+          table: 'authors',
+          columns: ['name'],
+          on: { '@Author.@name': '@id' },
+        },
+      },
+      projection: { '@id': true },
+      where: { '@meta.@rank': { $eq: 'gold' } },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          `SELECT __base__."id" AS "id" FROM "users" AS __base__ INNER JOIN "authors" AS "Author" ON "Author"."name" = __base__."id" WHERE json_extract(__base__."meta", '$.rank') = :p_0:`,
+        params: { p_0: 'gold' },
+      },
+      postgres: {
+        sql:
+          `SELECT __base__."id" AS "id" FROM "users" AS __base__ INNER JOIN "authors" AS "Author" ON "Author"."name" = __base__."id" WHERE __base__."meta"->>'rank' = :p_0:`,
+        params: { p_0: 'gold' },
+      },
+      maria: {
+        sql:
+          "SELECT __base__.`id` AS `id` FROM `users` AS __base__ INNER JOIN `authors` AS `Author` ON `Author`.`name` = __base__.`id` WHERE JSON_UNQUOTE(JSON_EXTRACT(__base__.`meta`, '$.rank')) = :p_0:",
+        params: { p_0: 'gold' },
+      },
+    },
+  },
+  {
+    // JSON paths work in UPDATE WHERE too, sharing the same param stream
+    // as SET values.
+    name: 'UPDATE with a JSON path in WHERE',
+    method: 'update',
+    query: {
+      type: 'UPDATE',
+      table: 'users',
+      columns: ['id', 'name', 'profile'],
+      data: { name: 'x' },
+      where: { '@profile.@name': 'bob' },
+    },
+    expected: {
+      sqlite: {
+        sql:
+          `UPDATE "users" SET "name" = :p_0: WHERE json_extract("profile", '$.name') = :p_1:`,
+        params: { p_0: 'x', p_1: 'bob' },
+      },
+      postgres: {
+        sql:
+          `UPDATE "users" SET "name" = :p_0: WHERE "profile"->>'name' = :p_1:`,
+        params: { p_0: 'x', p_1: 'bob' },
+      },
+      maria: {
+        sql:
+          "UPDATE `users` SET `name` = :p_0: WHERE JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.name')) = :p_1:",
+        params: { p_0: 'x', p_1: 'bob' },
+      },
+    },
+  },
+  {
+    // Ordered comparisons are refused on JSON paths in v1 — extraction
+    // yields text on Postgres/MariaDB but native types on SQLite, so a
+    // numeric range would silently differ per dialect. Rejected at the
+    // asserts layer (and again defensively at translate time).
+    name: 'WHERE JSON path rejects $gt',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: { '@profile.@age': { $gt: 5 } },
+    },
+    throws: ['sqlite', 'postgres', 'maria'],
+  },
+  {
+    // An unknown first segment is still an error — the JSON-path branch
+    // only fires for declared base columns.
+    name: 'WHERE unknown first segment still errors',
+    method: 'select',
+    query: {
+      type: 'SELECT',
+      table: 'users',
+      columns: ['id', 'profile'],
+      projection: { '@id': true },
+      where: { '@ghost.@x': 1 },
+    },
+    throws: ['sqlite', 'postgres', 'maria'],
+  },
   {
     // Param dedup keys Dates by their epoch ms. A string that merely
     // LOOKS like one of those internal keys must still bind as a string
