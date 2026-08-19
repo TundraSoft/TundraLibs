@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.6](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.5...tracer-v0.5.6) (2026-08-18)
+
+
+### Documentation
+
+* **tracer:** add Browser and Cloudflare Workers badges with a startActiveSpan caveat ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [0.5.5](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.4...tracer-v0.5.5) (2026-08-17)
 
 
