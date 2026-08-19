@@ -66,10 +66,17 @@ export class JOBContext<S extends RapidContextState = RapidContextState>
    */
   public get args(): Readonly<RapidContextArgs> {
     this.__args ??= Object.freeze({
-      // Frozen so the advertised Readonly holds at runtime.
+      // Frozen — including query/paging's own nested collections, not
+      // just the top level — so the advertised Readonly holds at
+      // runtime for all of args, not just params (L4's original fix).
       params: Object.freeze(this.__params),
-      query: { filters: {}, sorting: [] },
-      paging: parsePaging(this.app.option('server')!.paging ?? {}),
+      query: Object.freeze({
+        filters: Object.freeze({}),
+        sorting: Object.freeze([]),
+      }),
+      paging: Object.freeze(
+        parsePaging(this.app.option('server')!.paging ?? {}),
+      ),
     });
     return this.__args;
   }

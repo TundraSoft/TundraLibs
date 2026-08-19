@@ -7,14 +7,27 @@
  */
 
 import type { StatusCode } from '@tundralibs/compat/http';
+import { RapidError } from '../errors/mod.ts';
 
 /**
  * Statuses the Fetch standard defines as NULL-BODY: constructing a
- * `Response` with a body and one of these THROWS. Handling only
- * 204/304 left 205 (and the 1xx informational pair) to explode inside
- * `respond()` and surface as a 500 — see the fileoverview note.
+ * `Response` with a body and one of these THROWS.
  */
-const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([101, 103, 204, 205]);
+const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([204, 205]);
+
+/**
+ * 1xx informational statuses `new Response()` cannot represent
+ * CONSISTENTLY: 103 throws on every runtime (Deno/Bun/Node all reject
+ * it), and 101 throws on Node specifically while succeeding on Deno/Bun
+ * — left to the native constructor, the SAME handler would 500 on one
+ * runtime and succeed on another, violating this package's golden rule
+ * ("every package runs identically on Deno, Bun, and Node"). Rejected
+ * explicitly, before either runtime's constructor is even called, so
+ * the outcome (a disclosure-mode 500 via `__finalize`'s catch) is
+ * identical everywhere. Not a `serializeResponse`-specific limitation:
+ * the Fetch `Response` type cannot express 1xx at all.
+ */
+const UNREPRESENTABLE_STATUSES: ReadonlySet<number> = new Set([101, 103]);
 
 /**
  * Serialise `content` into a `Response` with `status` and `headers`.
@@ -24,18 +37,28 @@ const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([101, 103, 204, 205]);
  * - `string` → `text/plain`, `Uint8Array` → `application/octet-stream`,
  *   any object → JSON (serialised exactly once here). A content type
  *   already on `headers` is never overwritten.
- * - NULL-BODY statuses (101, 103, 204, 205 and 304) carry no body and
- *   no content-type: the content is DROPPED rather than throwing, since
+ * - NULL-BODY statuses (204, 205, and 304) carry no body and no
+ *   content-type: the content is DROPPED rather than throwing, since
  *   the status is what the caller explicitly asked for.
  *
  * `headers` is mutated in place (content-type defaulting) — pass the
  * live outbound headers.
+ *
+ * @throws {RapidError} RAPID_RESPONSE_INVALID for status 101 or 103 —
+ *   see {@link UNREPRESENTABLE_STATUSES}.
  */
 export function serializeResponse(
   content: string | Record<string, unknown> | Uint8Array | null,
   status: StatusCode,
   headers: Headers,
 ): Response {
+  if (UNREPRESENTABLE_STATUSES.has(status)) {
+    throw new RapidError('RAPID_RESPONSE_INVALID', {
+      message:
+        `status ${status} cannot be represented by a Response on every runtime (Node rejects 101, every runtime rejects 103) — 1xx informational responses are not supported`,
+      details: { status },
+    });
+  }
   if (content === null) {
     const emptyStatus = status === 200 ? 204 : status;
     return new Response(null, { status: emptyStatus, headers });

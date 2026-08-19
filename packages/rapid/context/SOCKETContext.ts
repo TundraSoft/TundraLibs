@@ -107,7 +107,12 @@ export class SOCKETContext<S extends RapidContextState = RapidContextState>
       if (raw === undefined || raw === null) {
         params = {};
       } else if (isPlainObject(raw)) {
-        params = raw;
+        // A COPY, not `raw` itself — `raw` is `this.__framePayload`,
+        // the exact object `ctx.payload` returns. Freezing `params`
+        // below must not also freeze `ctx.payload` (undocumented,
+        // typed `unknown`, no Readonly promise) out from under a
+        // handler that reasonably expects to be able to mutate it.
+        params = { ...raw };
       } else {
         // Arrays, Date/Map/Set, class instances — all `typeof
         // 'object'`, none usable as a params bag (they spread to
@@ -123,15 +128,20 @@ export class SOCKETContext<S extends RapidContextState = RapidContextState>
         });
       }
       this.__args = Object.freeze({
-        // Frozen so the Readonly the type advertises is real at
-        // runtime too — `ctx.args.params.x = 'y'` throws instead of
-        // silently mutating the decoded frame.
+        // Frozen — including query/paging's own nested collections, not
+        // just params — so the Readonly the type advertises is real at
+        // runtime for all of args: `ctx.args.params.x = 'y'` throws
+        // instead of silently mutating the decoded frame, same as
+        // query.filters/query.sorting/paging.
         params: Object.freeze(params),
-        query: { filters: {}, sorting: [] },
-        paging: parsePaging(
+        query: Object.freeze({
+          filters: Object.freeze({}),
+          sorting: Object.freeze([]),
+        }),
+        paging: Object.freeze(parsePaging(
           this.app.option('server')!.paging ?? {},
           pagingFromRecord(params),
-        ),
+        )),
       });
     }
     return this.__args;

@@ -622,6 +622,73 @@ describe('rapid.Application', () => {
       asserts.assertEquals(ctx.args.params['a'], 1);
     });
 
+    it('L4 follow-up: freezing args.params does NOT also freeze ctx.payload (they were the same object)', () => {
+      // args.params used to alias ctx.__framePayload directly — freezing
+      // one froze both, even though ctx.payload is documented VERBATIM,
+      // typed unknown, with no Readonly promise. A handler mutating
+      // ctx.payload (a reasonable thing to do given its type) got a
+      // TypeError purely as a side effect of an UNRELATED freeze.
+      const app = new Application({
+        name: 'l4-alias',
+        server: { enabled: false },
+      });
+      const ctx = new SOCKETContext(app, {
+        connection: { id: 'c', query: {}, headers: new Headers() },
+        command: 'x',
+        payload: { a: 1 },
+      });
+      void ctx.args; // triggers the freeze, same as the transport's `void ctx.args`
+      asserts.assertEquals(Object.isFrozen(ctx.args.params), true);
+      asserts.assertEquals(Object.isFrozen(ctx.payload), false);
+      // deno-lint-ignore no-explicit-any
+      (ctx.payload as any).b = 2; // does not throw
+      asserts.assertEquals((ctx.payload as Record<string, unknown>)['b'], 2);
+    });
+
+    it('L4 follow-up: query/paging are frozen too, not just params', () => {
+      // The original L4 fix only froze args.params — a middleware
+      // mutating args.query.filters/sorting or args.paging silently
+      // changed what every LATER middleware in the same chain saw
+      // (args is memoized per-instance), despite the Readonly type.
+      const httpApp = new Application({
+        name: 'l4-http',
+        server: { enabled: false },
+      });
+      const httpCtx = new HTTPContext(httpApp, {
+        request: new Request('http://x/?filter=a:eq:1&sort=a'),
+        remoteAddress: '',
+      });
+      asserts.assertEquals(Object.isFrozen(httpCtx.args.query), true);
+      asserts.assertEquals(Object.isFrozen(httpCtx.args.query.filters), true);
+      asserts.assertEquals(Object.isFrozen(httpCtx.args.query.sorting), true);
+      asserts.assertEquals(Object.isFrozen(httpCtx.args.paging), true);
+
+      const jobApp = new Application({
+        name: 'l4-job',
+        server: { enabled: false },
+      });
+      const jobCtx = new JOBContext(jobApp, {
+        job: 'j',
+        tick: { scheduledAt: new Date(), firedAt: new Date(), count: 1 },
+      });
+      asserts.assertEquals(Object.isFrozen(jobCtx.args.query.filters), true);
+      asserts.assertEquals(Object.isFrozen(jobCtx.args.query.sorting), true);
+      asserts.assertEquals(Object.isFrozen(jobCtx.args.paging), true);
+
+      const socketApp = new Application({
+        name: 'l4-socket',
+        server: { enabled: false },
+      });
+      const socketCtx = new SOCKETContext(socketApp, {
+        connection: { id: 'c', query: {}, headers: new Headers() },
+        command: 'x',
+        payload: {},
+      });
+      asserts.assertEquals(Object.isFrozen(socketCtx.args.query.filters), true);
+      asserts.assertEquals(Object.isFrozen(socketCtx.args.query.sorting), true);
+      asserts.assertEquals(Object.isFrozen(socketCtx.args.paging), true);
+    });
+
     it('L10: exotic objects are rejected as socket params', () => {
       const app = new Application({ name: 'l10', server: { enabled: false } });
       for (const payload of [new Date(), new Map(), [1, 2]]) {

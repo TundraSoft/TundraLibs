@@ -5,6 +5,7 @@
  */
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
+import { RapidError } from '../errors/mod.ts';
 import { serializeResponse } from './serializeResponse.ts';
 
 describe('rapid.serializeResponse', () => {
@@ -17,6 +18,25 @@ describe('rapid.serializeResponse', () => {
       asserts.assertEquals(response.status, status);
       asserts.assertEquals(await response.text(), '');
       asserts.assertEquals(response.headers.get('content-type'), null);
+    }
+  });
+
+  it("101/103 are rejected EXPLICITLY, before either runtime's Response constructor runs", () => {
+    // M5 claimed the full {101,103,204,205}+304 set was handled — but
+    // left to the native constructor, 101 SUCCEEDS on Deno/Bun and
+    // THROWS on Node (only 103 throws everywhere), which would make
+    // the SAME handler behave differently per runtime. Both are
+    // rejected explicitly with a RapidError up front instead, so the
+    // outcome is identical on every runtime regardless of content.
+    for (const status of [101, 103] as const) {
+      const err = asserts.assertThrows(
+        () => serializeResponse(null, status, new Headers()),
+        RapidError,
+      );
+      asserts.assertEquals(err.code, 'RAPID_RESPONSE_INVALID');
+      asserts.assertThrows(() =>
+        serializeResponse({ a: 1 }, status, new Headers())
+      );
     }
   });
 

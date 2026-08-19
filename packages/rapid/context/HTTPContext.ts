@@ -119,15 +119,22 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     if (this.__args === undefined) {
       const server = this.app.option('server')!;
       const url = new URL(this.request.url);
+      const query = parseQueryFilters(url.searchParams, server.query);
+      const paging = parsePaging(
+        server.paging ?? {},
+        pagingFromHeaders(this.request.headers, server.paging ?? {}),
+        pagingFromQuery(url.searchParams),
+      );
       this.__args = Object.freeze({
-        // Frozen so the advertised Readonly holds at runtime.
+        // Frozen — including query/paging's own nested collections, not
+        // just the top level — so the advertised Readonly holds at
+        // runtime for all of args, not just params (L4's original fix).
         params: Object.freeze(this.params),
-        query: parseQueryFilters(url.searchParams, server.query),
-        paging: parsePaging(
-          server.paging ?? {},
-          pagingFromHeaders(this.request.headers, server.paging ?? {}),
-          pagingFromQuery(url.searchParams),
-        ),
+        query: Object.freeze({
+          filters: Object.freeze(query.filters),
+          sorting: Object.freeze(query.sorting),
+        }),
+        paging: Object.freeze(paging),
       });
     }
     return this.__args;

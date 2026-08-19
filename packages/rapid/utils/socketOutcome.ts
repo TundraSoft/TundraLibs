@@ -52,10 +52,16 @@ export function socketOutcome(
   status: StatusCode,
   content: unknown,
 ): SocketErrorEnvelope {
-  const disclosure =
-    typeof content === 'object' && content !== null && !Array.isArray(content)
-      ? content as { code?: unknown; message?: unknown }
-      : {};
+  const disclosure = typeof content === 'object' && content !== null &&
+      !Array.isArray(content)
+    ? content as {
+      code?: unknown;
+      message?: unknown;
+      details?: unknown;
+      debug?: unknown;
+      requestId?: unknown;
+    }
+    : {};
   const hasCode = typeof disclosure.code === 'string';
   const code = hasCode ? disclosure.code as string : STATUS_CODES.get(status) ??
     // No exact mapping (a 409, a 422 — statuses the framework has no
@@ -71,14 +77,30 @@ export function socketOutcome(
     ? disclosure.message
     : RAPID_ERROR_CODES[code as RapidErrorCode]?.message ??
       'Internal server error';
+  if (hasCode) {
+    // A framework disclosure payload is {code, message} PLUS whichever
+    // of details/debug/requestId RapidError.payload()/Transport._invoke
+    // actually attached (details rides on every 4xx, requestId on
+    // every framework failure — see errors/Base.ts and
+    // transports/Transport.ts). Dropping them here was the same class
+    // of cross-transport data loss M2 fixed for handler-authored
+    // content — HTTP gets the full body, SOCKET got {code,message}.
+    const extra: Record<string, unknown> = {};
+    if (disclosure.details !== undefined) extra.details = disclosure.details;
+    if (disclosure.debug !== undefined) extra.debug = disclosure.debug;
+    if (disclosure.requestId !== undefined) {
+      extra.requestId = disclosure.requestId;
+    }
+    return {
+      code,
+      message,
+      ...(Object.keys(extra).length > 0 ? { data: extra } : {}),
+    };
+  }
   return {
     code,
     message,
-    // A framework disclosure payload IS the code+message pair — there
-    // is nothing more to send. Handler-authored content is the whole
-    // point of `data`.
-    ...(hasCode || content === null || content === undefined
-      ? {}
-      : { data: content }),
+    // Handler-authored content is the whole point of `data`.
+    ...(content === null || content === undefined ? {} : { data: content }),
   };
 }

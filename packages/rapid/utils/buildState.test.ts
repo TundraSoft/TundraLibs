@@ -50,4 +50,25 @@ describe('rapid.buildState', () => {
     const s = buildState({ cb: fn }, 'CLONE');
     asserts.assert(s.cb === fn);
   });
+
+  it('a __proto__-named template key cannot pollute the clone (H1/H2 hole, missed here)', () => {
+    // Bracket assignment (clone[key] = value) treats a key literally
+    // named __proto__ as the prototype setter, not a normal own
+    // property — the exact hole H1/H2 closed in parseQueryFilters/
+    // parseBody via a define-semantics build. Same fix, applied here.
+    const template = JSON.parse(
+      '{"safe":1,"__proto__":{"polluted":true,"isAdmin":true}}',
+    );
+    const s = buildState(template, 'CLONE');
+    // deno-lint-ignore no-explicit-any
+    asserts.assertEquals((s as any).isAdmin, undefined); // no inherited pollution
+    asserts.assertEquals(Object.getPrototypeOf(s), Object.prototype);
+    asserts.assert(Object.hasOwn(s, '__proto__')); // survives as an own key
+    asserts.assertEquals(
+      // deno-lint-ignore no-explicit-any
+      (s as any).__proto__.polluted,
+      true,
+    );
+    asserts.assertEquals(Object.keys(s).sort(), ['__proto__', 'safe']);
+  });
 });

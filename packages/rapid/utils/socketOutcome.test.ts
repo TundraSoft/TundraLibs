@@ -16,6 +16,27 @@ describe('rapid.socketOutcome', () => {
     );
   });
 
+  it('a framework disclosure payload carrying details/requestId forwards them as data', () => {
+    // RapidError.payload() attaches `details` on every 4xx (both DEV
+    // and PRODUCTION — errors/Base.ts), and Transport._invoke stamps
+    // `requestId` onto every framework failure's body, matching the
+    // HTTP shape (Transport.ts:82-87). Treating `hasCode` as "nothing
+    // more to send" silently dropped both over the socket transport —
+    // the same class of cross-transport data loss M2 fixed for
+    // handler-authored content.
+    const envelope = socketOutcome(400, {
+      code: 'RAPID_VALIDATION_FAILED',
+      message: 'Invalid query',
+      details: { field: 'email' },
+      requestId: 'req-7',
+    });
+    asserts.assertEquals(envelope, {
+      code: 'RAPID_VALIDATION_FAILED',
+      message: 'Invalid query',
+      data: { details: { field: 'email' }, requestId: 'req-7' },
+    });
+  });
+
   it('R2-M2: a handler-authored error KEEPS its body as data', () => {
     // Previously: RAPID_UNHANDLED / "Internal server error", body lost.
     const envelope = socketOutcome(422, { fields: { email: 'taken' } });
