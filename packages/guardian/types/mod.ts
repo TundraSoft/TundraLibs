@@ -12,5 +12,6 @@ export type { GuardianErrorMeta } from './GuardianErrorMeta.ts';
 export type { GuardianInfer, GuardianInferInput } from './Infer.ts';
 export type { GuardianMetaData } from './GuardianMetaData.ts';
 export type { GuardianSafeParseResult } from './GuardianSafeParseResult.ts';
+export type { Refinement } from './Refinement.ts';
 export type { GuardianTransform } from './GuardianTransform.ts';
 export type { TupleOf } from './TupleOf.ts';

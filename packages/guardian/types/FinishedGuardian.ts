@@ -11,6 +11,7 @@ type FinisherForbiddenMethods =
   | 'process'
   | 'test'
   | 'refine'
+  | 'superRefine'
   | 'equals'
   | 'notEquals'
   | 'isIn'

@@ -196,5 +196,24 @@ export class BooleanGuardian extends BaseGuardian<boolean> {
     ) as NumberGuardian;
   }
 
+  /**
+   * Flips the boolean — `true` becomes `false` and vice versa.
+   *
+   * @returns A new BooleanGuardian with the transformation applied (the receiver is never mutated)
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * Guardian.boolean().negate().parse(true);  // false
+   * Guardian.boolean().negate().parse('no');  // true  ← coerced then flipped
+   * ```
+   */
+  negate(): this {
+    return this.process(
+      (value: boolean) => !value,
+    ) as this;
+  }
+
   //#endregion
 }

@@ -107,10 +107,13 @@ export {
   assertFilterOperator,
   assertOperators,
   assertQueryFilter,
+  findDisallowedJsonPathOperator,
   isExistsFilter,
   isFilterOperator,
   isOperators,
   isQueryFilter,
+  JSON_PATH_ALLOWED_OPERATORS,
+  jsonPathRootOf,
 } from './filters/mod.ts';
 
 // Join Validators

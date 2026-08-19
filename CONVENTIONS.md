@@ -39,6 +39,15 @@ quietly breaking the pattern.
   **not** a `docs/` topic guide, and there is no separate design doc:
   the "how it works" lives in `docs/`, the "what's not done yet" lives
   in `ROADMAP.md`.
+- **No `TODO.md`.** There are exactly two homes for unfinished work,
+  split by altitude. Durable, forward-looking planning — deferred
+  features, known limitations, architecture decisions worth remembering
+  — goes in `ROADMAP.md` (curated, low-churn, and shipped in the
+  tarball, so keep it consumer-honest). Tactical, granular work —
+  specific bugs, cleanups, one-off follow-ups — goes in **GitHub
+  Issues**, where it has a real lifecycle (assign, link to the fixing
+  PR, close). A checked-in `TODO.md` has neither audience nor
+  lifecycle, so it silently rots; do not add one.
 
 ## Exported types live in a `types/` folder
 

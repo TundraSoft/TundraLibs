@@ -11,7 +11,11 @@
 import { type AsyncProbeTarget, BaseGuardian } from '../BaseGuardian.ts';
 import { GuardianError } from '../errors/Base.ts';
 import { gateAsyncStepResult } from '../helpers/mod.ts';
-import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
+import type {
+  GuardianMetaData,
+  GuardianTransform,
+  Refinement,
+} from '../types/mod.ts';
 
 /**
  * Keys never copied onto a validated record output — assigning them as
@@ -26,13 +30,16 @@ const PROTO_POLLUTION_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Type for refinement validation functions
+ * Type for refinement validation functions.
+ *
+ * @deprecated Prefer the universal {@link Refinement} — this is now a
+ *   back-compat alias of `Refinement<Record<K, V>>`.
+ *   `.superRefine([...])` lives on {@link BaseGuardian} and accepts
+ *   `Refinement<T>` on every guardian.
  */
-export type RecordRefinement<K extends string | number, V> = {
-  validator: (data: Record<K, V>) => boolean | Promise<boolean>;
-  message: string;
-  path?: string;
-};
+export type RecordRefinement<K extends string | number, V> = Refinement<
+  Record<K, V>
+>;
 
 /**
  * Guardian for validating objects with arbitrary key-value pairs.
@@ -144,60 +151,16 @@ export class RecordGuardian<
     super._markAsync();
   }
 
-  // `.refine` is inherited from `BaseGuardian`. The old override
-  // stored refinements in a separate `_refinements` array and applied
-  // them in a `parse()` override after `super.parse()`. The new
-  // inherited implementation weaves refinements into
+  // `.refine` and `.superRefine([...])` are both inherited from
+  // `BaseGuardian`. The old `.refine` override stored refinements in a
+  // separate `_refinements` array and applied them in a `parse()`
+  // override; the inherited implementation weaves them into
   // `_composedTransform` at their declaration position (same as
-  // ObjectGuardian) — simpler, and aligns the call-order semantics
-  // across guards.
-
-  //#region Refinement
-
-  /**
-   * Adds multiple refinements at once using superRefine.
-   * This is useful when you need to apply multiple complex validations.
-   *
-   * @param refinements - Array of refinement objects
-   * @returns New RecordGuardian with all refinements added
-   *
-   * @example
-   * ```ts
-   * import { Guardian } from '@tundralibs/guardian';
-   *
-   * const validatedRecord = Guardian.record(
-   *   Guardian.string(),
-   *   Guardian.number()
-   * ).superRefine([
-   *   {
-   *     validator: (data) => Object.keys(data).length > 0,
-   *     message: 'Record must not be empty'
-   *   },
-   *   {
-   *     validator: (data) => Object.keys(data).length <= 10,
-   *     message: 'Record must not have more than 10 keys'
-   *   }
-   * ]);
-   * ```
-   */
-  superRefine(
-    refinements: Array<RecordRefinement<K, V>>,
-  ): this {
-    // The reducer accumulator is typed `RecordGuardian<K, V>` to keep
-    // TypeScript happy across the iteration; narrow back to `this`
-    // at the return so subclass types flow through.
-    return refinements.reduce(
-      (guardian: RecordGuardian<K, V>, refinement) =>
-        guardian.refine(
-          refinement.validator,
-          refinement.message,
-          refinement.path,
-        ),
-      this as RecordGuardian<K, V>,
-    ) as this;
-  }
-
-  //#endregion
+  // ObjectGuardian) — simpler, and aligns call-order semantics across
+  // guards. The base `superRefine` runs every check and ACCUMULATES the
+  // failures into one aggregate error, replacing the old stub here that
+  // reduced over `.refine()` and so short-circuited on the first
+  // failure instead of accumulating.
 
   //#region Helper Validations
 
@@ -225,6 +188,18 @@ export class RecordGuardian<
       (data) => Object.keys(data).length > 0,
       message ?? 'Record must not be empty',
     );
+  }
+
+  /**
+   * Alias for {@link notEmpty} — validates that the record has at least one
+   * property. `notEmpty` is the canonical name; `nonEmpty` exists for
+   * parity with the string/array guardians.
+   *
+   * @param message - Optional custom error message
+   * @returns A new RecordGuardian with the validation applied (the receiver is never mutated)
+   */
+  nonEmpty(message?: string): this {
+    return this.notEmpty(message);
   }
 
   /**

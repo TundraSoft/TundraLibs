@@ -76,5 +76,6 @@ export type {
   GuardianMetaData,
   GuardianSafeParseResult,
   GuardianTransform,
+  Refinement,
   TupleOf,
 } from './types/mod.ts';

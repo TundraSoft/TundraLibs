@@ -1,12 +1,12 @@
 {
   "packages/ambient": "0.2.6",
   "packages/cacher": "1.0.5",
-  "packages/compat": "2.0.0",
+  "packages/compat": "2.0.1",
   "packages/cronus": "1.0.3",
-  "packages/crypt": "1.0.4",
+  "packages/crypt": "1.0.5",
   "packages/doctor": "1.1.1",
   "packages/drivers": "1.0.7",
-  "packages/guardian": "1.1.1",
+  "packages/guardian": "1.2.0",
   "packages/id": "1.0.7",
   "packages/metro-man": "1.0.5",
   "packages/norm": "1.2.4",
@@ -17,5 +17,5 @@
   "packages/rpc": "1.1.4",
   "packages/slogger": "1.1.8",
   "packages/tracer": "0.5.6",
-  "packages/utils": "1.1.0"
+  "packages/utils": "1.1.1"
 }

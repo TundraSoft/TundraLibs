@@ -150,6 +150,16 @@ describe('guardian.ArrayGuardian', () => {
         'Array must not be empty',
       );
     });
+
+    it('notEmpty is the canonical name and behaves identically', () => {
+      const notEmptyGuard = Guardian.array().notEmpty();
+      asserts.assertEquals(notEmptyGuard.parse([1]), [1]);
+      asserts.assertThrows(
+        () => notEmptyGuard.parse([]),
+        GuardianError,
+        'Array must not be empty',
+      );
+    });
   });
 
   describe('array validations', () => {
@@ -1217,6 +1227,73 @@ describe('guardian.ArrayGuardian', () => {
         '',
       );
       asserts.assertEquals(guard.parse(['a', 'b', 'c']), 'abc');
+    });
+
+    it('toSet converts the array into a de-duplicated Set', () => {
+      const guard = Guardian.array(Guardian.number()).toSet();
+      const result = guard.parse([1, 2, 2, 3]);
+      asserts.assertInstanceOf(result, Set);
+      asserts.assertEquals([...result], [1, 2, 3]);
+      asserts.assertEquals(result.size, 3);
+    });
+
+    it('toSet on an empty array yields an empty Set', () => {
+      const guard = Guardian.array(Guardian.string()).toSet();
+      const result = guard.parse([]);
+      asserts.assertInstanceOf(result, Set);
+      asserts.assertEquals(result.size, 0);
+    });
+  });
+
+  describe('superRefine (universal, inherited from BaseGuardian)', () => {
+    it('accumulates ALL failing array-level refinements into one error', () => {
+      const guard = Guardian.array(Guardian.number()).superRefine([
+        {
+          validator: (arr) => arr.length >= 3,
+          message: 'need at least 3 items',
+          path: 'length',
+        },
+        {
+          validator: (arr) => arr.every((n) => n > 0),
+          message: 'all items must be positive',
+          path: 'items',
+        },
+      ]);
+
+      asserts.assertEquals(guard.parse([1, 2, 3]), [1, 2, 3]);
+
+      // [-1] fails BOTH checks (too short AND holds a non-positive item),
+      // so both messages surface in one aggregate error.
+      const [err] = guard.safeParse([-1]);
+      asserts.assertInstanceOf(err, GuardianError);
+      asserts.assertStringIncludes(err.message, 'need at least 3 items');
+      asserts.assertStringIncludes(err.message, 'all items must be positive');
+      const leaves = [...err.leafErrors()];
+      asserts.assertEquals(leaves.length, 2);
+      const paths = leaves.map((l) => l.path?.join('.')).sort();
+      asserts.assertEquals(paths, ['items', 'length']);
+    });
+
+    it('supports async array refinements via parseAsync', async () => {
+      const guard = Guardian.array(Guardian.number()).superRefine([
+        {
+          validator: async (arr) => {
+            await Promise.resolve();
+            return arr.length > 0;
+          },
+          message: 'must not be empty',
+        },
+      ]);
+
+      // The async refinement flips the whole step async off the base.
+      asserts.assertEquals(guard.metaData?.isAsync, true);
+      asserts.assertThrows(() => guard.parse([1]), GuardianError, 'parseAsync');
+
+      asserts.assertEquals(await guard.parseAsync([1, 2]), [1, 2]);
+
+      const [err] = await guard.safeParseAsync([]);
+      asserts.assertInstanceOf(err, GuardianError);
+      asserts.assertStringIncludes(err.message, 'must not be empty');
     });
   });
 });

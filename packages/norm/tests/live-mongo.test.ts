@@ -167,8 +167,9 @@ if (!available) {
       asJson: (v) => (typeof v === 'string' ? JSON.parse(v) : v),
     },
     // The CERTAIN dialect gaps (client-side facts — translator throws
-    // / capability flags). The live run may add readback-shaped ones;
-    // see TODO.md "Mongo gaps".
+    // / capability flags). The live run may add readback-shaped ones.
+    // The Mongo limitations ($exists/$nexists, transactions, migrations)
+    // are the skip reasons below.
     skip: {
       '18c': 'FK ON DELETE CASCADE — no foreign keys in MongoDB',
       '08r': 'raw SQL — db.raw throws NormUnsupportedError on Mongo ' +

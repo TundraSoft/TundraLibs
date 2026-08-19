@@ -47,6 +47,21 @@ type ConcreteColumnKeys<FT> = keyof {
  * declared one. Such a query has no concrete keys to protect, and
  * removing its only index signature would reject every filter key
  * outright.
+ *
+ * **JSON-path keys** (`@col.@key` where `col` is a declared JSON
+ * column with a *typed* nested shape) already appear in the flattened
+ * keyspace via `FlattenEntity`, typed by the leaf's value type. Note
+ * the runtime restriction is NOT expressed here: JSON-path keys accept
+ * only the equality / null / membership / LIKE operator families at
+ * runtime (no `$gt`/`$gte`/`$lt`/`$lte`/`$between` — extraction yields
+ * dialect-dependent value types), but the type level cannot
+ * distinguish a JSON path from a joined-column path (`@Alias.@col`,
+ * flattened identically, where ordered comparisons remain valid), so
+ * the typing stays permissive and the asserts/translators enforce the
+ * restriction. Open `Record<string, unknown>` columns contribute no
+ * path keys at all (FlattenEntity deliberately does not recurse into
+ * open records); their runtime JSON-path filters need an untyped
+ * `QueryFilter`.
  */
 export type FilterOperator<
   T extends TableType = TableType,
