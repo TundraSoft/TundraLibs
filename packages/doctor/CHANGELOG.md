@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.0.2...doctor-v1.1.0) (2026-08-18)
+
+
+### Features
+
+* **doctor:** rebuild injection on TC39 decorators and inject initializers ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
+
+### Bug Fixes
+
+* **doctor:** resolve utils via narrow subpaths and document bundler targets ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
+
+### Documentation
+
+* **doctor:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [1.0.2](https://github.com/TundraSoft/TundraLibs/compare/doctor-v1.0.1...doctor-v1.0.2) (2026-08-17)
 
 
