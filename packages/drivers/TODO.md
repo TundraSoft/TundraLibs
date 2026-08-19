@@ -12,7 +12,9 @@ Items are tagged:
 - **[gap]** — intentional deferral; the feature isn't built and won't
   be until there's a real use case driving the design.
 
-## [gap] Database compatibility via driver aliasing (2026-07-13)
+## [gap] ~~Database compatibility via driver aliasing~~ — **LANDED 2026-08-20** (2026-07-13)
+
+> Shipped: per-engine `aliases.ts` (postgres/maria) + alias-engine capabilities (`SQLEngineCapabilities.ts`). Analysis below kept for the design record.
 
 The four SQL/document engines speak standard wire protocols / official
 clients, so many managed and wire-compatible databases work **today** by
@@ -70,7 +72,9 @@ Remaining under this heading:
 **DONE** — the compatibility matrix is published as
 [`docs/Drivers-Compatibility.md`](docs/Drivers-Compatibility.md).
 
-## [gap] Edge / serverless HTTP drivers (2026-07-13)
+## [gap] ~~Edge / serverless HTTP drivers~~ — **LANDED 2026-08-20** (2026-07-13)
+
+> Shipped: `@tundralibs/drivers/{d1,neon,turso}` HTTP engines (dirs + subpath exports). The build plan below is done; kept for the design record.
 
 Current engines dial TCP; edge runtimes (Cloudflare Workers, Vercel
 Edge, Deno Deploy) forbid raw sockets, and the serverless DBs above are

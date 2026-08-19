@@ -360,11 +360,11 @@ capability**: unpublished, no CLI, no edge drivers, no introspection.
 
 **Ranked gaps — productization (dominant blockers, high sev / large effort):**
 
-- [ ] #1 Unpublished + zero ecosystem/docs-reach/LLM-familiarity
+- [ ] #1 ~~Unpublished~~ **PUBLISHED 2026-08-20 (JSR, norm 1.2.4)**; docs/JSDoc campaign landed. Ecosystem/LLM-reach still building — item stays open for that. Original note:
       (`1.0.0-dev0.0`, not on JSR/npm; no API reference, ~no runnable
       `@example`s). NORM's own "walk-away reason: nothing to read yet."
       Publishing is small; ecosystem is large + time-gated. Raised by ALL 6 lenses.
-- [ ] #2 No edge/serverless HTTP drivers (Neon/D1/Turso/PlanetScale) — see
+- [x] #2 ~~No edge/serverless HTTP drivers~~ **DONE 2026-08-20: `@tundralibs/norm/engines/{d1,neon,turso}` shipped** — see
       `drivers/TODO.md`; unblocked by drivers, no norm-core change.
 - [ ] #3 No introspection / db-pull / drift-vs-live-DB / baselining →
       greenfield-only (most adoption is brownfield). Migrator is
@@ -374,7 +374,7 @@ capability**: unpublished, no CLI, no edge drivers, no introspection.
 
 **Capability:**
 
-- [ ] #8 [high] Advanced SQL not expressible: arbitrary join predicates,
+- [x] #8 [high] ~~Advanced SQL not expressible~~ **ADDRESSED 2026-08-20: `db.raw<Res>()` typed escape hatch covers arbitrary SQL** (structured/typed forms of these remain in oql ROADMAP): arbitrary join predicates,
       CTEs/recursive, window functions, set ops, ad-hoc subqueries, CASE.
 - [x] #7 [high] Encryption key rotation — LANDED 2026-07-13. Ciphertext now
       carries a key-id envelope (`k1.<fp>.<body>`; un-stamped = legacy);
@@ -384,7 +384,7 @@ capability**: unpublished, no CLI, no edge drivers, no introspection.
       plaintext-derived → rotation-invariant. v1 downtime-first (no online
       keyring yet). Tests: `rotate.test.ts` ×3 runtimes. Docs: NORM-Security
       → "Key rotation".
-- [ ] #12 [medium] Thin column-type palette: no PG enum/array/tsvector/
+- [ ] #12 [medium] **BY DESIGN, not a gap:** norm ships the common cross-dialect palette (VARCHAR/INT/BIGINT/DECIMAL/BOOLEAN/DATE/DATETIME/TEXT/UUID/JSONB); DB-specific types are deliberately out of scope. Original: no PG enum/array/tsvector/
       geometry, no `customType`, no CHECK, no partial/expression indexes.
 - [ ] #16 [medium] Narrower hooks: no after-WRITE hooks (see persisted
       result) and no global/cross-entity subscribers.
@@ -394,10 +394,10 @@ capability**: unpublished, no CLI, no edge drivers, no introspection.
 
 **Ergonomics:**
 
-- [ ] #9 [high] Escape hatch weak: `raw()` untyped + crypto-blind (returns
+- [x] #9 [high] ~~`raw()` untyped~~ **`raw<Res>()` is typed (Norm.ts:573)**; crypto-blind is **by design** — a raw escape hatch below the decrypt/validate layer, warned at Norm.ts:588. (returns
       ciphertext); `query(IR)` capped at OQL. The out for gap #8 is unsafe.
 - [ ] #18 [medium] First-class M2M needs a junction VIEW (read-only ceremony).
-- [ ] #19 [medium] `@`-prefix string-keyed refs leak OQL through 5 option
+- [ ] #19 [medium] **NOT AN ISSUE (by design):** OQL is norm's query language; `@`-prefixed refs are the intended, typed way to reference columns. Kept for the record, not actionable. Original framing: `@`-prefix string-keyed refs "leak" OQL through 5 option
       positions (filter/projection/orderBy/aggregates/scope). Typed, but verbose.
 - [ ] #14 [medium] No seed/fixtures framework.
 - [ ] #15 [medium] No programmable `$extends` (custom methods, interception,
@@ -409,12 +409,12 @@ capability**: unpublished, no CLI, no edge drivers, no introspection.
 
 - [ ] #6 [high] PBKDF2-per-cell cliff (210k iters, per-cell salt, no cache) —
       envelope-encryption / key-caching redesign. [large]
-- [ ] #11 [medium] Zero benchmarks (see the Benchmarks section above).
+- [ ] #11 [medium] ~~Zero benchmarks~~ **1 `.bench.ts` exists**; remaining scope is narrow — `Norm.compare.bench.ts` (norm overhead vs raw driver) + per-cell crypto encrypt/decrypt (#6). oql/drivers are already benched.
 - [ ] #17 [medium] No user-facing prepared statements; recompiles IR→SQL/call.
 
 **Observability / tooling / maintainability:**
 
-- [ ] #13 [medium] No OpenTelemetry / metrics / traceparent bridge (additive —
+- [x] #13 [medium] ~~No OpenTelemetry / tracer bridge~~ **DONE 2026-08-20: `witness` hook (Norm.ts:134)** — every repo op and `raw()` runs through it; wire a tracer at the composition root. (additive —
       the bus stays metadata-only by design).
 - [ ] #24 [low] No Studio / GUI data browser.
 - [ ] #23 [low] Repo.ts = 2,533-line single class w/ scattered dialect-string
