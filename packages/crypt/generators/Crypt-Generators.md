@@ -55,8 +55,8 @@ async function generateRSAKeyPair(
 
 interface RSAKeyOptions {
   algorithm: 'RSA-OAEP' | 'RSA-PSS';
-  keySize: number;
-  hashAlgorithm: 'SHA-256' | 'SHA-384' | 'SHA-512'; // required
+  keySize?: number; // defaults to 2048
+  hashAlgorithm?: 'SHA-256' | 'SHA-384' | 'SHA-512'; // defaults to 'SHA-256'
   format?: 'PEM' | 'DER' | 'JWK';
   extractable?: boolean;
 }

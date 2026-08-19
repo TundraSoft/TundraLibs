@@ -174,7 +174,7 @@ interface ServerWebSocket<T = unknown> {
   ping(data?: WebSocketData): boolean;
   pong(data?: WebSocketData): boolean;
   readonly readyState: number;
-  readonly data: T;
+  data: T;
   readonly remoteAddress?: string;
 }
 ```

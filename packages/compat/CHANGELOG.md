@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.0.1](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.0.0...compat-v2.0.1) (2026-08-19)
+
+
+### Documentation
+
+* **compat:** correct runtime/webserver/file/permissions doc claims that contradicted source ([#436](https://github.com/TundraSoft/TundraLibs/issues/436)) ([3917517](https://github.com/TundraSoft/TundraLibs/commit/3917517e5f3c7921f2078243270629f1952ce78c))
+* **compat:** drop the phantom keyPassword TLS passphrase claim ([#442](https://github.com/TundraSoft/TundraLibs/issues/442)) ([de31897](https://github.com/TundraSoft/TundraLibs/commit/de31897a5fb759cb81e4882da3daa304409c504a))
+
 ## [2.0.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v1.1.4...compat-v2.0.0) (2026-08-18)
 
 

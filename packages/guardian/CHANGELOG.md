@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.1.1...guardian-v1.2.0) (2026-08-19)
+
+
+### Features
+
+* **guardian:** implement documented-but-missing validators, date/array methods, and notEmpty/nonEmpty aliases ([#438](https://github.com/TundraSoft/TundraLibs/issues/438)) ([45ae4ee](https://github.com/TundraSoft/TundraLibs/commit/45ae4ee80757750d77cc7c569946489889b676a0))
+* **guardian:** universal .superRefine() on BaseGuardian (fixes Record stub) ([#440](https://github.com/TundraSoft/TundraLibs/issues/440)) ([27312aa](https://github.com/TundraSoft/TundraLibs/commit/27312aa7ffec1db212b13f6928a24c2e30e34f51))
+
+
+### Documentation
+
+* **guardian:** correct wrong validator/date/array/record method names in docs ([#435](https://github.com/TundraSoft/TundraLibs/issues/435)) ([c556cac](https://github.com/TundraSoft/TundraLibs/commit/c556cac54b0dcd09bea0c5f7245930826759fa2b))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/guardian-v1.1.0...guardian-v1.1.1) (2026-08-18)
 
 

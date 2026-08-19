@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.0.4...crypt-v1.0.5) (2026-08-19)
+
+
+### Documentation
+
+* **crypt:** fix RSAKeyOptions optionality and verifyTOTP options type in docs ([#431](https://github.com/TundraSoft/TundraLibs/issues/431)) ([b0fe296](https://github.com/TundraSoft/TundraLibs/commit/b0fe2965d1a6ceba8c604098cc4d1bfb2dfab1ed))
+
 ## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.0.3...crypt-v1.0.4) (2026-08-18)
 
 

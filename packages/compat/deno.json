@@ -1,7 +1,7 @@
 {
   "name": "@tundralibs/compat",
   "description": "Compatibility layer smoothing API differences across Deno, Bun, and Node.js",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",

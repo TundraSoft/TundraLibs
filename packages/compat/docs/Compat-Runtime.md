@@ -939,12 +939,12 @@ import { isBun, isDeno, isNode, RUNTIME } from '@tundralibs/compat/runtime';
 
 ### Constants
 
-| Export    | Type                        | Description                |
-| --------- | --------------------------- | -------------------------- |
-| `RUNTIME` | `'DENO' \| 'BUN' \| 'NODE'` | Current runtime identifier |
-| `isDeno`  | `boolean`                   | True if running on Deno    |
-| `isBun`   | `boolean`                   | True if running on Bun     |
-| `isNode`  | `boolean`                   | True if running on Node.js |
+| Export    | Type                                     | Description                |
+| --------- | ---------------------------------------- | -------------------------- |
+| `RUNTIME` | `'DENO' \| 'BUN' \| 'NODE' \| 'UNKNOWN'` | Current runtime identifier |
+| `isDeno`  | `boolean`                                | True if running on Deno    |
+| `isBun`   | `boolean`                                | True if running on Bun     |
+| `isNode`  | `boolean`                                | True if running on Node.js |
 
 ## Examples
 
@@ -1005,7 +1005,8 @@ The runtime is detected in order:
 
 1. **Deno**: `globalThis.Deno` exists
 2. **Bun**: `globalThis.Bun` exists
-3. **Node.js**: Default fallback
+3. **Node.js**: `process.versions.node` exists (and not Deno/Bun)
+4. **`'UNKNOWN'`**: Default fallback (browsers, workerd, etc.)
 
 ---
 

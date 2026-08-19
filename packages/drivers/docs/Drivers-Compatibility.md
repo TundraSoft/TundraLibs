@@ -98,8 +98,8 @@ a socket (and, for Turso and D1, never loading a native SQLite driver), so they
 run unchanged on Cloudflare Workers, Vercel Edge, and Deno Deploy — only the
 transport differs from their socket/embedded siblings.
 
-Still **planned** (per `TODO.md` → _Edge / serverless HTTP drivers_), a thin
-transport swap over its existing translator:
+Still **planned** (see [`ROADMAP.md`](../ROADMAP.md) → _Planned / deferred_), a
+thin transport swap over its existing translator:
 
 | Driver           | Backend     | Transport                       | Reuses translator |
 | ---------------- | ----------- | ------------------------------- | ----------------- |

@@ -133,9 +133,23 @@ export const assertCountQuery: <PT extends TableType = TableType>(
 
   if (query.where !== undefined) {
     // `assertQueryFilter` expects a bare-name list (no `@` prefix).
-    // Mirrors SELECT's `whereAllowedKeys` construction.
+    // Mirrors SELECT's `whereAllowedKeys` construction — including the
+    // JSON-path roots (declared base columns minus join aliases and the
+    // base table name, which take precedence).
     const whereAllowedKeys = columnList.concat(expressionKeys, joinedColumns);
-    assertQueryFilter(query.where, whereAllowedKeys);
+    const joinAliases = Object.keys(
+      (query.joins ?? {}) as Record<string, unknown>,
+    );
+    const jsonPathRoots = columnList.filter(
+      (c) => c !== query.table && !joinAliases.includes(c),
+    );
+    assertQueryFilter(
+      query.where,
+      whereAllowedKeys,
+      undefined,
+      undefined,
+      jsonPathRoots,
+    );
   }
 };
 

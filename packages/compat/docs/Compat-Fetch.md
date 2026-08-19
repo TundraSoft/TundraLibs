@@ -20,16 +20,15 @@ Cross-runtime HTTP fetch with TLS client authentication and Unix socket support.
 
 ## Features
 
-| Feature                         | Deno | Bun | Node.js |
-| ------------------------------- | ---- | --- | ------- |
-| Basic fetch                     | ✅   | ✅  | ✅      |
-| TLS client authentication       | ✅   | ✅  | ❌*     |
-| Unix domain sockets             | ✅   | ✅  | ❌*     |
-| File-based TLS config           | ✅   | ✅  | ❌*     |
-| String-based TLS config         | ✅   | ✅  | ❌*     |
-| TLS passphrase (encrypted keys) | ❌   | ✅  | N/A     |
-| Path traversal protection       | ✅   | ✅  | N/A     |
-| PEM validation                  | ✅   | ✅  | N/A     |
+| Feature                   | Deno | Bun | Node.js |
+| ------------------------- | ---- | --- | ------- |
+| Basic fetch               | ✅   | ✅  | ✅      |
+| TLS client authentication | ✅   | ✅  | ❌*     |
+| Unix domain sockets       | ✅   | ✅  | ❌*     |
+| File-based TLS config     | ✅   | ✅  | ❌*     |
+| String-based TLS config   | ✅   | ✅  | ❌*     |
+| Path traversal protection | ✅   | ✅  | N/A     |
+| PEM validation            | ✅   | ✅  | N/A     |
 
 *Node.js requires the `undici` library for TLS client auth and Unix sockets.
 
@@ -135,28 +134,18 @@ Supported key types:
 - `RSA PRIVATE KEY` (PKCS#1)
 - `EC PRIVATE KEY` (Elliptic curve)
 
-### Passphrase Support
+### Encrypted Private Keys
 
-> **Note:** Deno does **not** support encrypted private keys with passphrase.
-> Only Bun supports the `keyPassword` option.
+Passphrase-protected (encrypted) private keys are not supported on any
+runtime — `TLSOptions` has no passphrase field. Decrypt the key before use:
 
-```typescript
-import { fetch } from '@tundralibs/compat/fetch';
-import { readTextFileSync } from '@tundralibs/compat/file';
-
-const url = 'https://secure.api.com/data';
-const certPem = readTextFileSync('/etc/ssl/client.crt');
-const encryptedKeyPem = readTextFileSync('/etc/ssl/client.key');
-
-// Bun only - will throw UnsupportedRuntimeError on Deno
-const response = await fetch(url, {
-  tls: {
-    cert: certPem,
-    key: encryptedKeyPem,
-    // keyPassword: 'secret',  // Not supported - remove passphrase from key
-  },
-});
+```bash
+# Works for PKCS#8, RSA, and EC keys
+openssl pkey -in encrypted.key -out decrypted.key
 ```
+
+> ⚠️ **Security Note**: Store decrypted keys with restrictive permissions
+> (`chmod 600`) and never commit them to version control.
 
 ## Unix Socket Connections
 
@@ -227,7 +216,9 @@ fetch(
 
 See [Compat-Common → TLSOptions](Compat-Common.md#tlsoptions) for the full type definition.
 
-All fields are optional and compose freely — supply only what your use case needs:
+The inline PEM form (`cert`/`key`/`ca`) and the file-path form
+(`certFile`/`keyFile`/`caFile`) are mutually exclusive — supply one style,
+not both. `validateTLS` throws if they are mixed:
 
 ```typescript ignore
 import type { TLSOptions } from '@tundralibs/compat';
@@ -258,7 +249,7 @@ type TLSOptions = {
 
 ### Error Classes
 
-All error classes are defined in the [Compat-Common](Compat-Common.md#error-classes) module and re-exported from `@tundralibs/compat/fetch` for convenience.
+All error classes are defined in the [Compat-Common](Compat-Common.md#error-classes) module and exported from `@tundralibs/compat/common` and the package root `@tundralibs/compat`.
 
 #### FetchTLSError
 
