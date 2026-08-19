@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.1.3...restler-v1.1.4) (2026-08-18)
+
+
+### Documentation
+
+* **restler:** add Browser and Cloudflare Workers badges, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.1.2...restler-v1.1.3) (2026-08-17)
 
 
