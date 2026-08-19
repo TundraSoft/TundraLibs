@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.8](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.7...slogger-v1.1.8) (2026-08-18)
+
+
+### Documentation
+
+* **slogger:** sharpen the Browser/Worker compatibility section, merge description wording, add a missing license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [1.1.7](https://github.com/TundraSoft/TundraLibs/compare/slogger-v1.1.6...slogger-v1.1.7) (2026-08-17)
 
 
