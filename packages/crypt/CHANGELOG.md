@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.0.3...crypt-v1.0.4) (2026-08-18)
+
+
+### Documentation
+
+* **crypt:** add Browser and Cloudflare Workers badges, sync the package.json description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [1.0.3](https://github.com/TundraSoft/TundraLibs/compare/crypt-v1.0.2...crypt-v1.0.3) (2026-08-15)
 
 
