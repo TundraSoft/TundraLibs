@@ -211,7 +211,7 @@ const { sql, params } = translator.select(query);
 - SQLite-specific functions
 - JSON support (SQLite 3.38+)
 - Limited DDL operations
-- No schema support
+- Schema support emulated via `ATTACH DATABASE`
 
 ## NoSQL Translators
 
