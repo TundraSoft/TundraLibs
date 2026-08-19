@@ -307,13 +307,26 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
    * ```ts
    * import { Guardian } from '@tundralibs/guardian';
    *
-   * const nonEmpty = Guardian.array().nonEmpty();
-   * nonEmpty.parse([1, 2, 3]); // [1, 2, 3]
-   * nonEmpty.parse([]); // throws GuardianError
+   * const notEmpty = Guardian.array().notEmpty();
+   * notEmpty.parse([1, 2, 3]); // [1, 2, 3]
+   * notEmpty.parse([]); // throws GuardianError
    * ```
    */
-  nonEmpty(message?: string): this {
+  notEmpty(message?: string): this {
     return this.minLength(1, message || 'Array must not be empty');
+  }
+
+  /**
+   * Alias for {@link notEmpty} — validates that the array is not empty.
+   * `notEmpty` is the canonical name; `nonEmpty` is retained for backwards
+   * compatibility and parity with the string/record guardians.
+   *
+   * @param message - Optional custom error message
+   * @returns A new ArrayGuardian with the validation applied (the receiver is never mutated)
+   * @throws {GuardianError} If array is empty
+   */
+  nonEmpty(message?: string): this {
+    return this.notEmpty(message);
   }
 
   //#endregion
@@ -957,6 +970,26 @@ export class ArrayGuardian<T = unknown> extends BaseGuardian<Array<T>> {
           initial,
         ),
     );
+  }
+
+  /**
+   * Converts the validated array into a `Set`, de-duplicating elements by
+   * strict-equality (`SameValueZero`). Crosses out of array validation —
+   * the result is a `BaseGuardian<Set<T>>`, so array validators are no
+   * longer chainable.
+   *
+   * @returns A new guardian carrying the transform; the receiver is never mutated.
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * Guardian.array(Guardian.number()).toSet().parse([1, 2, 2, 3]);
+   * // Set(3) { 1, 2, 3 }
+   * ```
+   */
+  toSet(): BaseGuardian<Set<T>> {
+    return this.process((value: Array<T>) => new Set<T>(value));
   }
 
   //#endregion

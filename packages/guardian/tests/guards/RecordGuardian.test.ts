@@ -226,6 +226,22 @@ describe('guardian.RecordGuardian', () => {
       });
     });
 
+    describe('nonEmpty() (alias of notEmpty)', () => {
+      it('should behave identically to notEmpty', () => {
+        const guard = new RecordGuardian(
+          new StringGuardian(),
+          new NumberGuardian(),
+        ).nonEmpty();
+
+        asserts.assertEquals(guard.parse({ a: 1 }).a, 1);
+        asserts.assertThrows(
+          () => guard.parse({}),
+          GuardianError,
+          'Record must not be empty',
+        );
+      });
+    });
+
     describe('minSize()', () => {
       it('should pass when record has minimum size', () => {
         const guard = new RecordGuardian(

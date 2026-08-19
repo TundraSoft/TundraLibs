@@ -205,7 +205,7 @@ Tags.parse(['guardian', 'validation']); // OK
 | Method                                                    | Description                                           |
 | --------------------------------------------------------- | ----------------------------------------------------- |
 | `.minLength(n)` / `.maxLength(n)` / `.length(n)`          | size constraints                                      |
-| `.nonEmpty()`                                             | sugar for `.minLength(1)`                             |
+| `.notEmpty(msg?)` / `.nonEmpty(msg?)`                     | sugar for `.minLength(1)` (`notEmpty` canonical)      |
 | `.unique(msg?)`                                           | reject duplicate elements                             |
 | `.includes(value, msg?)`                                  | array must contain `value`                            |
 | `.excludes(value, msg?)`                                  | array must NOT contain `value`                        |
@@ -344,11 +344,11 @@ EnvVars.parse({ API_KEY: 'abc', DB_HOST: 'localhost' });
 // throws: { api_key: 'lowercase' }
 ```
 
-| Method                                                | Description             |
-| ----------------------------------------------------- | ----------------------- |
-| `.minSize(n)` / `.maxSize(n)` / `.size(n)`            | key-count constraints   |
-| `.hasKeys(keys, msg?)` / `.forbiddenKeys(keys, msg?)` | key existence           |
-| `.notEmpty(msg?)`                                     | sugar for `.minSize(1)` |
+| Method                                                | Description                                    |
+| ----------------------------------------------------- | ---------------------------------------------- |
+| `.minSize(n)` / `.maxSize(n)` / `.size(n)`            | key-count constraints                          |
+| `.hasKeys(keys, msg?)` / `.forbiddenKeys(keys, msg?)` | key existence                                  |
+| `.notEmpty(msg?)` / `.nonEmpty(msg?)`                 | sugar for `.minSize(1)` (`notEmpty` canonical) |
 
 ## `Guardian.set`
 

@@ -150,6 +150,16 @@ describe('guardian.ArrayGuardian', () => {
         'Array must not be empty',
       );
     });
+
+    it('notEmpty is the canonical name and behaves identically', () => {
+      const notEmptyGuard = Guardian.array().notEmpty();
+      asserts.assertEquals(notEmptyGuard.parse([1]), [1]);
+      asserts.assertThrows(
+        () => notEmptyGuard.parse([]),
+        GuardianError,
+        'Array must not be empty',
+      );
+    });
   });
 
   describe('array validations', () => {
@@ -1217,6 +1227,21 @@ describe('guardian.ArrayGuardian', () => {
         '',
       );
       asserts.assertEquals(guard.parse(['a', 'b', 'c']), 'abc');
+    });
+
+    it('toSet converts the array into a de-duplicated Set', () => {
+      const guard = Guardian.array(Guardian.number()).toSet();
+      const result = guard.parse([1, 2, 2, 3]);
+      asserts.assertInstanceOf(result, Set);
+      asserts.assertEquals([...result], [1, 2, 3]);
+      asserts.assertEquals(result.size, 3);
+    });
+
+    it('toSet on an empty array yields an empty Set', () => {
+      const guard = Guardian.array(Guardian.string()).toSet();
+      const result = guard.parse([]);
+      asserts.assertInstanceOf(result, Set);
+      asserts.assertEquals(result.size, 0);
     });
   });
 });

@@ -34,6 +34,13 @@ type DateUnit =
 type DurationUnit = 'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days';
 
 /**
+ * Unit union accepted by the interval transforms `.add()` / `.subtract()`
+ * / `.startOf()` / `.endOf()`. Extends {@link DateUnit} with `'weeks'`.
+ * Weeks are treated as Sunday-started for `.startOf()` / `.endOf()`.
+ */
+type DateShiftUnit = DateUnit | 'weeks';
+
+/**
  * Date validator. Coerces parseable strings (ISO 8601, RFC 2822) and
  * ms-since-epoch numbers / bigints; rejects booleans, objects, and
  * unparseable strings. See {@link Guardian.date} for the standard
@@ -258,6 +265,79 @@ export class DateGuardian extends BaseGuardian<Date> {
       }
       return value;
     }) as this;
+  }
+
+  /**
+   * Validates that the date's full year equals `year`.
+   *
+   * @param year - Target full year (e.g. `2026`)
+   * @param errorMessage - Optional custom error message
+   * @returns A new DateGuardian with the validation applied (the receiver is never mutated)
+   * @throws {GuardianError} If the date's year does not equal `year`
+   */
+  year(year: number, errorMessage?: string): this {
+    return this.process((value: Date) => {
+      if (value.getFullYear() !== year) {
+        throw new GuardianError(
+          errorMessage || `Date must be in the year ${year}`,
+          {
+            expected: year,
+            got: value.getFullYear(),
+            comparison: 'year',
+            type: 'validation',
+          },
+        );
+      }
+      return value;
+    }) as this;
+  }
+
+  /**
+   * Validates that the date's month equals `month`. Months are **0-based**
+   * (`0` = January … `11` = December), matching `Date.prototype.getMonth`.
+   *
+   * @param month - Target month, 0-based (0 = January, 11 = December)
+   * @param errorMessage - Optional custom error message
+   * @returns A new DateGuardian with the validation applied (the receiver is never mutated)
+   * @throws {Error} If `month` is not an integer in the range 0..11 — a
+   *   config-time programming error.
+   * @throws {GuardianError} If the date's month does not equal `month`
+   */
+  month(month: number, errorMessage?: string): this {
+    if (!Number.isInteger(month) || month < 0 || month > 11) {
+      throw new Error(
+        'month must be an integer between 0 (January) and 11 (December)',
+      );
+    }
+    return this.process((value: Date) => {
+      if (value.getMonth() !== month) {
+        throw new GuardianError(
+          errorMessage || `Date must be in month ${month} (0-based)`,
+          {
+            expected: month,
+            got: value.getMonth(),
+            comparison: 'month',
+            type: 'validation',
+          },
+        );
+      }
+      return value;
+    }) as this;
+  }
+
+  /**
+   * Validates that the date falls on a specific day of the week. Days are
+   * **0-based** (`0` = Sunday … `6` = Saturday), matching
+   * `Date.prototype.getDay`. Alias-style companion to {@link weekday}.
+   *
+   * @param day - Target day of week, 0-based (0 = Sunday, 6 = Saturday)
+   * @param errorMessage - Optional custom error message
+   * @returns A new DateGuardian with the validation applied (the receiver is never mutated)
+   * @throws {Error} If `day` is not an integer in the range 0..6.
+   * @throws {GuardianError} If the date does not fall on the specified day
+   */
+  dayOfWeek(day: number, errorMessage?: string): this {
+    return this.weekday(day, errorMessage);
   }
 
   /**
@@ -1335,17 +1415,7 @@ export class DateGuardian extends BaseGuardian<Date> {
    * @param unit - Time unit
    * @returns A new DateGuardian with the validation applied (the receiver is never mutated)
    */
-  add(
-    amount: number,
-    unit:
-      | 'milliseconds'
-      | 'seconds'
-      | 'minutes'
-      | 'hours'
-      | 'days'
-      | 'months'
-      | 'years',
-  ): this {
+  add(amount: number, unit: DateShiftUnit): this {
     return this.process((date: Date) => {
       const result = new Date(date);
 
@@ -1365,6 +1435,9 @@ export class DateGuardian extends BaseGuardian<Date> {
         case 'days':
           result.setDate(result.getDate() + amount);
           break;
+        case 'weeks':
+          result.setDate(result.getDate() + (amount * 7));
+          break;
         case 'months':
           result.setMonth(result.getMonth() + amount);
           break;
@@ -1375,6 +1448,159 @@ export class DateGuardian extends BaseGuardian<Date> {
 
       return result;
     }) as this;
+  }
+
+  /**
+   * Subtracts time from the date — the inverse of {@link add}. Equivalent
+   * to `add(-amount, unit)` and accepts the same unit union.
+   *
+   * @param amount - Amount to subtract (can be negative to add)
+   * @param unit - Time unit
+   * @returns A new DateGuardian with the transformation applied (the receiver is never mutated)
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * Guardian.date().subtract(1, 'days').parse(new Date('2026-08-19T00:00:00Z'));
+   * // 2026-08-18T00:00:00.000Z
+   * ```
+   */
+  subtract(amount: number, unit: DateShiftUnit): this {
+    return this.add(-amount, unit);
+  }
+
+  /**
+   * Snaps the date **down** to the first instant of the given unit — e.g.
+   * `startOf('day')` zeroes the time-of-day, `startOf('month')` moves to
+   * the 1st at midnight, `startOf('year')` moves to Jan 1 at midnight.
+   *
+   * Boundaries use local time (matching `getFullYear` / `getMonth` / …).
+   * `startOf('weeks')` snaps back to the most recent **Sunday** at
+   * midnight (weeks are treated as Sunday-started). `startOf('milliseconds')`
+   * is a no-op.
+   *
+   * @param unit - Time unit whose start to snap to
+   * @returns A new DateGuardian with the transformation applied (the receiver is never mutated)
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * Guardian.date().startOf('month').parse(new Date('2026-08-19T13:45:00'));
+   * // 2026-08-01T00:00:00.000 (local)
+   * ```
+   */
+  startOf(unit: DateShiftUnit): this {
+    return this.process(
+      (date: Date) => DateGuardian.__snap(date, unit, 'start'),
+    ) as this;
+  }
+
+  /**
+   * Snaps the date **up** to the last instant of the given unit — e.g.
+   * `endOf('day')` sets the time to `23:59:59.999`, `endOf('month')` moves
+   * to the last day of the month at `23:59:59.999`, `endOf('year')` moves
+   * to Dec 31 at `23:59:59.999`.
+   *
+   * Boundaries use local time. `endOf('weeks')` snaps forward to the coming
+   * **Saturday** at `23:59:59.999` (weeks are treated as Sunday-started).
+   * `endOf('milliseconds')` is a no-op.
+   *
+   * @param unit - Time unit whose end to snap to
+   * @returns A new DateGuardian with the transformation applied (the receiver is never mutated)
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * Guardian.date().endOf('day').parse(new Date('2026-08-19T13:45:00'));
+   * // 2026-08-19T23:59:59.999 (local)
+   * ```
+   */
+  endOf(unit: DateShiftUnit): this {
+    return this.process(
+      (date: Date) => DateGuardian.__snap(date, unit, 'end'),
+    ) as this;
+  }
+
+  /**
+   * Shared implementation for {@link startOf} / {@link endOf}. Returns a
+   * fresh `Date` snapped to the start or end of `unit` in local time.
+   *
+   * Weeks are Sunday-started: `start` snaps to the most recent Sunday at
+   * `00:00:00.000`, `end` to the coming Saturday at `23:59:59.999`.
+   *
+   * @internal
+   */
+  private static __snap(
+    date: Date,
+    unit: DateShiftUnit,
+    edge: 'start' | 'end',
+  ): Date {
+    const result = new Date(date);
+    const atStart = edge === 'start';
+    // Zero the time-of-day for `start`, or push it to the last instant of
+    // the day (`23:59:59.999`) for `end`. Shared by day-or-coarser units.
+    const snapTimeOfDay = () => {
+      if (atStart) {
+        result.setHours(0, 0, 0, 0);
+      } else {
+        result.setHours(23, 59, 59, 999);
+      }
+    };
+    switch (unit) {
+      case 'years':
+        result.setMonth(atStart ? 0 : 11, atStart ? 1 : 31);
+        snapTimeOfDay();
+        break;
+      case 'months':
+        if (atStart) {
+          result.setDate(1);
+        } else {
+          // Day 0 of the next month is the last day of this month.
+          const lastDay = new Date(
+            result.getFullYear(),
+            result.getMonth() + 1,
+            0,
+          )
+            .getDate();
+          result.setDate(lastDay);
+        }
+        snapTimeOfDay();
+        break;
+      case 'weeks': {
+        // Sunday-started week: snap to Sunday (start) or Saturday (end).
+        const day = result.getDay();
+        result.setDate(result.getDate() + (atStart ? -day : 6 - day));
+        snapTimeOfDay();
+        break;
+      }
+      case 'days':
+        snapTimeOfDay();
+        break;
+      case 'hours':
+        if (atStart) {
+          result.setMinutes(0, 0, 0);
+        } else {
+          result.setMinutes(59, 59, 999);
+        }
+        break;
+      case 'minutes':
+        if (atStart) {
+          result.setSeconds(0, 0);
+        } else {
+          result.setSeconds(59, 999);
+        }
+        break;
+      case 'seconds':
+        result.setMilliseconds(atStart ? 0 : 999);
+        break;
+      case 'milliseconds':
+        // Already at millisecond granularity — nothing to snap.
+        break;
+    }
+    return result;
   }
 
   /**

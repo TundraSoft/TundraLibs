@@ -87,6 +87,23 @@ describe('guardian.BooleanGuardian', () => {
       asserts.assertEquals(guardian.parse(true), 1);
       asserts.assertEquals(guardian.parse(false), 0);
     });
+
+    it('negate flips the boolean', () => {
+      const guardian = new BooleanGuardian().negate();
+
+      asserts.assertEquals(guardian.parse(true), false);
+      asserts.assertEquals(guardian.parse(false), true);
+      // Coerces first, then flips.
+      asserts.assertEquals(guardian.parse('yes'), false);
+      asserts.assertEquals(guardian.parse('no'), true);
+    });
+
+    it('negate stays chainable on BooleanGuardian', () => {
+      // Double negation is identity; the result is still a BooleanGuardian.
+      const guardian = new BooleanGuardian().negate().negate();
+      asserts.assertEquals(guardian.parse(true), true);
+      asserts.assertEquals(guardian.negate().parse(true), false);
+    });
   });
 
   describe('chained validations', () => {
