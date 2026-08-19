@@ -155,7 +155,7 @@ const seq = sequenceID(); // ~8 bytes per ID (number)
 const simple = simpleID(0, 4); // ~16 bytes per ID (4-8 char string)
 
 // Standard Memory
-const oid = ObjectID(0); // ~24 bytes per ID (24 char hex string)
+const oid = ObjectID(0); // ~26 bytes per ID (26-char mixed-radix string)
 const nano = nanoID(10); // ~24 bytes per ID (10 char string)
 
 // Higher Memory
@@ -1271,7 +1271,7 @@ short.generate(); // ~1.5μs
 | Library                   | Type           | Time (μs) | Chars | Sortable | Notes                      |
 | ------------------------- | -------------- | --------- | ----- | -------- | -------------------------- |
 | **TundraLibs NanoID**     | Random         | 0.8       | 10-21 | ❌       | Fastest, customizable      |
-| **TundraLibs ObjectID**   | Time+Random    | 0.3       | 24    | ✅       | MongoDB compatible         |
+| **TundraLibs ObjectID**   | Time+Random    | 0.3       | 26    | ✅       | MongoDB compatible         |
 | **TundraLibs ULID**       | Time+Random    | 1.0       | 26    | ✅       | Lexicographically sortable |
 | **TundraLibs SequenceID** | Sequential     | 0.1       | 8-16  | ✅       | Ultra-fast counter         |
 | **TundraLibs SimpleID**   | Random+Counter | 0.5       | 6-8   | ❌       | Short, collision-resistant |
