@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.1.3...rpc-v1.1.4) (2026-08-18)
+
+
+### Documentation
+
+* **rpc:** document why there is no Browser/Workers badge, add a missing package.json license field ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [1.1.3](https://github.com/TundraSoft/TundraLibs/compare/rpc-v1.1.2...rpc-v1.1.3) (2026-08-17)
 
 
