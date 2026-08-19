@@ -55,34 +55,36 @@ Name.parse(42); // '42'  ← coerced
 
 ### Length
 
-| Method                | Behaviour                 |
-| --------------------- | ------------------------- |
-| `.minLength(n, msg?)` | string length ≥ n         |
-| `.maxLength(n, msg?)` | string length ≤ n         |
-| `.length(n, msg?)`    | exact length              |
-| `.nonEmpty(msg?)`     | sugar for `.minLength(1)` |
+| Method                                | Behaviour                                                         |
+| ------------------------------------- | ----------------------------------------------------------------- |
+| `.minLength(n, msg?)`                 | string length ≥ n                                                 |
+| `.maxLength(n, msg?)`                 | string length ≤ n                                                 |
+| `.length(n, msg?)`                    | exact length                                                      |
+| `.notEmpty(msg?)` / `.nonEmpty(msg?)` | non-empty after trimming (`notEmpty` canonical, `nonEmpty` alias) |
 
 ### Patterns + presets
 
-| Method                                                                                                  | Behaviour                                                                                                                    |
-| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `.pattern(re, msg?)`                                                                                    | input matches regex                                                                                                          |
-| `.email(msg?)`                                                                                          | matches RFC 5322-ish email shape                                                                                             |
-| `.url(msg?)`                                                                                            | matches HTTP/HTTPS URL                                                                                                       |
-| `.uuid(msg?)` / `.uuidv4(msg?)` / `.uuidv1(msg?)`                                                       | UUID by version                                                                                                              |
-| `.ulid(msg?)`                                                                                           | 26-char ULID (Crockford base32)                                                                                              |
-| `.cuid(msg?)` / `.cuid2(msg?)`                                                                          | Cuid v1 (`c` + 24 base36) / Cuid2 (cryptographically random, 24–32 chars)                                                    |
-| `.alpha(msg?)` / `.alphanumeric(msg?)` / `.numeric(msg?)`                                               | ASCII letter / letter-digit / digit-only                                                                                     |
-| `.ipv4(msg?)` / `.ipv6(msg?)`                                                                           | IP address                                                                                                                   |
-| `.phone(msg?)`                                                                                          | North American phone shape                                                                                                   |
-| `.macAddress(msg?)`                                                                                     | MAC address                                                                                                                  |
-| `.creditCard(msg?)` / `.creditCardVisa(msg?)` / `.creditCardMastercard(msg?)` / `.creditCardAmex(msg?)` | credit card patterns                                                                                                         |
-| `.hexColor(msg?)`                                                                                       | `#RRGGBB` or `#RGB`                                                                                                          |
-| `.slug(msg?)`                                                                                           | URL-safe slug                                                                                                                |
-| `.domain(msg?)`                                                                                         | domain name                                                                                                                  |
-| `.ascii(msg?)` / `.noWhitespace(msg?)`                                                                  | character-class checks                                                                                                       |
-| `.emoji({ onlyEmoji?, allowSpaces? }, msg?)`                                                            | input must contain (or consist entirely of) emoji                                                                            |
-| `.password(opts?, msg?)`                                                                                | configurable strength check — `minLength`, `requireUpper`, `requireLower`, `requireDigit`, `requireSymbol`, `disallowSpaces` |
+| Method                                                    | Behaviour                                                                                                                    |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `.pattern(re, msg?)`                                      | input matches regex                                                                                                          |
+| `.email(msg?)`                                            | matches RFC 5322-ish email shape                                                                                             |
+| `.url(msg?)`                                              | matches HTTP/HTTPS URL                                                                                                       |
+| `.uuid(msg?)` / `.uuidv4(msg?)` / `.uuidv1(msg?)`         | UUID by version                                                                                                              |
+| `.ulid(msg?)`                                             | 26-char ULID (Crockford base32)                                                                                              |
+| `.cuid(msg?)` / `.cuid2(msg?)`                            | Cuid v1 (`c` + 24 base36) / Cuid2 (cryptographically random, 24–32 chars)                                                    |
+| `.alpha(msg?)` / `.alphanumeric(msg?)` / `.numeric(msg?)` | ASCII letter / letter-digit / digit-only (`.numeric` = unsigned `/^\d+$/`)                                                   |
+| `.integer(msg?)`                                          | signed integer literal `/^[+-]?\d+$/` (no decimal, no `n`)                                                                   |
+| `.bigint(msg?)`                                           | signed integer with an optional trailing `n` — `/^[+-]?\d+n?$/`, accepts `234` and `234n`; pairs with `.toBigInt()`          |
+| `.ipv4(msg?)` / `.ipv6(msg?)`                             | IP address                                                                                                                   |
+| `.phone(msg?)`                                            | North American phone shape                                                                                                   |
+| `.macAddress(msg?)`                                       | MAC address                                                                                                                  |
+| `.creditCard(type?, msg?)`                                | credit card pattern; `type` is `'visa' \| 'mastercard' \| 'amex' \| 'any'` (default `'any'`)                                 |
+| `.hexColor(msg?)`                                         | `#RRGGBB` or `#RGB`                                                                                                          |
+| `.slug(msg?)`                                             | URL-safe slug                                                                                                                |
+| `.domain(msg?)`                                           | domain name                                                                                                                  |
+| `.ascii(msg?)` / `.noWhitespace(msg?)`                    | character-class checks                                                                                                       |
+| `.emoji({ onlyEmoji?, allowSpaces? }, msg?)`              | input must contain (or consist entirely of) emoji                                                                            |
+| `.password(opts?, msg?)`                                  | configurable strength check — `minLength`, `requireUpper`, `requireLower`, `requireDigit`, `requireSymbol`, `disallowSpaces` |
 
 ### Encodings + identifiers
 
@@ -101,18 +103,18 @@ Name.parse(42); // '42'  ← coerced
 
 ### Transforms
 
-| Method                              | Behaviour                                              |
-| ----------------------------------- | ------------------------------------------------------ |
-| `.trim()`                           | strip leading/trailing whitespace                      |
-| `.toLowerCase()` / `.toUpperCase()` | case transform                                         |
-| `.toNumber(msg?)`                   | parse as float; returns `NumberGuardian`               |
-| `.toInteger(msg?)`                  | parse as integer; returns `NumberGuardian`             |
-| `.toBigInt(msg?)`                   | parse integer string → `BigIntGuardian`                |
-| `.toDate(msg?)`                     | parse as Date; returns `DateGuardian`                  |
-| `.toBoolean(msg?)`                  | parse as boolean; returns `BooleanGuardian`            |
-| `.toJSON(msg?)`                     | `JSON.parse(input)`; returns `UnknownGuardian`         |
-| `.replace(search, replace)`         | regex replace                                          |
-| `.encodeUri()` / `.decodeUri()`     | `encodeURIComponent` / `decodeURIComponent` round-trip |
+| Method                              | Behaviour                                                                                                                                                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.trim()`                           | strip leading/trailing whitespace                                                                                                                                                                             |
+| `.toLowerCase()` / `.toUpperCase()` | case transform                                                                                                                                                                                                |
+| `.toNumber(msg?)`                   | parse as float; returns `NumberGuardian`                                                                                                                                                                      |
+| `.toInt(radix?, msg?)`              | parse as integer; returns `NumberGuardian`                                                                                                                                                                    |
+| `.toBigInt(opts?, msg?)`            | parse integer string → `BigIntGuardian`; strips a trailing `n` (so a `.bigint()`-valid string converts); `opts.hex` parses hex                                                                                |
+| `.toDate(msg?)`                     | parse as Date; returns `DateGuardian`                                                                                                                                                                         |
+| `.toBoolean(opts?, msg?)`           | parse as boolean → `BooleanGuardian`; trims + lowercases, then matches truthy `['true','1','yes','y','on','t']` / falsy `['false','0','no','n','off','f']` — override either via `opts.truthy` / `opts.falsy` |
+| `.toJSON(msg?)`                     | `JSON.parse(input)`; returns `UnknownGuardian`                                                                                                                                                                |
+| `.replace(search, replace)`         | regex replace                                                                                                                                                                                                 |
+| `.encodeUri()` / `.decodeUri()`     | `encodeURIComponent` / `decodeURIComponent` round-trip                                                                                                                                                        |
 
 ### Example: a username
 
@@ -161,7 +163,8 @@ Age.parse('42'); // 42  ← coerced
 | `.safeInteger(msg?)`                                      | within `Number.MIN_SAFE_INTEGER`…`MAX_SAFE_INTEGER`                                               |
 | `.odd(msg?)` / `.even(msg?)` / `.prime(msg?)`             | parity / primality                                                                                |
 | `.naturalNumber(msg?)`                                    | positive integer (`> 0`, no fractions)                                                            |
-| `.multipleOf(n, msg?)` / `.evenlyDivisible(n, msg?)`      | `input % n === 0` (alias)                                                                         |
+| `.multipleOf(n, msg?)`                                    | `input % n === 0`                                                                                 |
+| `.evenlyDivisible(divisors, msg?)`                        | divisible by **every** value in `divisors: number[]`                                              |
 | `.power(base?, msg?)`                                     | perfect power (of given base or any base)                                                         |
 | `.validPort(msg?)` / `.port(msg?)`                        | 0–65535 integer                                                                                   |
 | `.timestamp(msg?)`                                        | valid Unix timestamp (non-negative integer)                                                       |
@@ -261,24 +264,24 @@ Birthday.parse(802915200000); // Date  ← coerced from epoch ms
 
 ### Temporal queries
 
-| Method                              | Behaviour                  |
-| ----------------------------------- | -------------------------- |
-| `.year(y, msg?)`                    | year equals `y`            |
-| `.month(m, msg?)`                   | month equals `m` (0-based) |
-| `.dayOfWeek(d, msg?)`               | day equals `d` (0=Sunday)  |
-| `.weekday(msg?)` / `.weekend(msg?)` | Mon–Fri / Sat–Sun          |
+| Method                                | Behaviour                  |
+| ------------------------------------- | -------------------------- |
+| `.year(y, msg?)`                      | year equals `y`            |
+| `.month(m, msg?)`                     | month equals `m` (0-based) |
+| `.dayOfWeek(d, msg?)`                 | day equals `d` (0=Sunday)  |
+| `.weekdays(msg?)` / `.weekends(msg?)` | Mon–Fri / Sat–Sun          |
 
 ### Transforms
 
-| Method                                 | Behaviour                                    |
-| -------------------------------------- | -------------------------------------------- |
-| `.startOf(unit)` / `.endOf(unit)`      | snap to unit boundary                        |
-| `.add(n, unit)` / `.subtract(n, unit)` | shift by interval                            |
-| `.toTimestamp()`                       | epoch ms; returns `NumberGuardian`           |
-| `.toIsoString()`                       | ISO 8601; returns `StringGuardian`           |
-| `.diff(other, unit)`                   | difference in unit; returns `NumberGuardian` |
+| Method                                 | Behaviour                                          |
+| -------------------------------------- | -------------------------------------------------- |
+| `.startOf(unit)` / `.endOf(unit)`      | snap to unit boundary                              |
+| `.add(n, unit)` / `.subtract(n, unit)` | shift by interval                                  |
+| `.toTimestamp()`                       | epoch ms; returns `BaseGuardian<number>`           |
+| `.toISOString()`                       | ISO 8601; returns `StringGuardian`                 |
+| `.diff(other, unit)`                   | difference in unit; returns `BaseGuardian<number>` |
 
-`unit` is one of `'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'years'`.
+`unit` is one of `'milliseconds' | 'seconds' | 'minutes' | 'hours' | 'days' | 'weeks' | 'months' | 'years'`. `.subtract(n, unit)` is exactly `.add(-n, unit)`. For `.startOf('weeks')` / `.endOf('weeks')`, weeks are **Sunday-started**: `startOf` snaps back to the most recent Sunday at `00:00:00.000`, `endOf` forward to the coming Saturday at `23:59:59.999`. All snap boundaries use local time.
 
 ## `Guardian.bigint()`
 

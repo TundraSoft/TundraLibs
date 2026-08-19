@@ -32,8 +32,8 @@
 
 | Feature                | NanoID       | ObjectID        | ULID          | CUID            | CUID2             | SequenceID     | SimpleID       |
 | ---------------------- | ------------ | --------------- | ------------- | --------------- | ----------------- | -------------- | -------------- |
-| **Default Length**     | 21 chars     | 24 chars (hex)  | 26 chars      | 25 chars        | 24 chars          | 19 digits      | 12-18 digits   |
-| **Format**             | Base62-like  | Hexadecimal     | Base32        | `c` + base36    | Letter + base36   | BigInt         | BigInt         |
+| **Default Length**     | 21 chars     | 26 chars        | 26 chars      | 25 chars        | 24 chars          | 19 digits      | 12-18 digits   |
+| **Format**             | Base62-like  | Mixed-radix     | Base32        | `c` + base36    | Letter + base36   | BigInt         | BigInt         |
 | **Sortable**           | ❌ No        | ⚠️ Partial      | ✅ Yes        | ⚠️ Per-process  | ❌ No (by design) | ✅ Yes         | ✅ Yes         |
 | **URL-Safe**           | ✅ Yes       | ✅ Yes          | ✅ Yes        | ✅ Yes          | ✅ Yes            | ✅ Yes         | ✅ Yes         |
 | **Cryptographic**      | ✅ Yes       | ⚠️ Partial      | ✅ Yes        | ⚠️ Partial      | ✅ Yes            | ❌ No          | ❌ No          |
@@ -595,13 +595,13 @@ const refId = preciseGen();
 
 ### Cryptographic Strength
 
-| Generator  | Entropy Source     | Predictability | Brute Force Resistance | Recommended for Security |
-| ---------- | ------------------ | -------------- | ---------------------- | ------------------------ |
-| NanoID     | Web Crypto API     | Unpredictable  | ⭐⭐⭐⭐⭐ Excellent   | ✅ Yes                   |
-| ULID       | Crypto Random      | Unpredictable  | ⭐⭐⭐⭐⭐ Excellent   | ✅ Yes                   |
-| ObjectID   | Crypto + Counter   | Semi-predict   | ⭐⭐⭐⭐ Very Good     | ⚠️ With care             |
-| SequenceID | Math.random + Time | Semi-predict   | ⭐⭐⭐ Good            | ⚠️ Not for auth          |
-| SimpleID   | Sequential Counter | Predictable    | ⭐ Poor                | ❌ No                    |
+| Generator  | Entropy Source            | Predictability | Brute Force Resistance | Recommended for Security |
+| ---------- | ------------------------- | -------------- | ---------------------- | ------------------------ |
+| NanoID     | Web Crypto API            | Unpredictable  | ⭐⭐⭐⭐⭐ Excellent   | ✅ Yes                   |
+| ULID       | Crypto Random             | Unpredictable  | ⭐⭐⭐⭐⭐ Excellent   | ✅ Yes                   |
+| ObjectID   | Crypto + Counter          | Semi-predict   | ⭐⭐⭐⭐ Very Good     | ⚠️ With care             |
+| SequenceID | Time + ServerID + Counter | Semi-predict   | ⭐⭐⭐ Good            | ⚠️ Not for auth          |
+| SimpleID   | Sequential Counter        | Predictable    | ⭐ Poor                | ❌ No                    |
 
 ### Security Use Cases
 
@@ -681,7 +681,7 @@ const orderId = simpleID()();
 | Generator  | String Length | Bytes (UTF-8) | Database VARCHAR Size |
 | ---------- | ------------- | ------------- | --------------------- |
 | NanoID     | 21 chars      | 21 bytes      | VARCHAR(21)           |
-| ObjectID   | 24 chars      | 24 bytes      | VARCHAR(24) or BINARY |
+| ObjectID   | 26 chars      | 26 bytes      | VARCHAR(26) or BINARY |
 | ULID       | 26 chars      | 26 bytes      | VARCHAR(26)           |
 | SequenceID | 19 digits     | 8 bytes       | BIGINT                |
 | SimpleID   | 12-18 digits  | 8 bytes       | BIGINT                |

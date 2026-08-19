@@ -16,6 +16,7 @@ SQL and NoSQL query translators for OQL.
 - [NoSQL Translators](#nosql-translators)
 - [Parameters](#parameters)
 - [Usage Examples](#usage-examples)
+- [JSON Path Filtering](#json-path-filtering)
 
 ## Overview
 
@@ -53,7 +54,7 @@ npx jsr add @tundralibs/oql
 
 | Database   | Translator           | Parameter Style | Features                                 |
 | ---------- | -------------------- | --------------- | ---------------------------------------- |
-| PostgreSQL | `PostgresTranslator` | `:p_0:, :p_1:`  | Full support, JSONB operators, arrays    |
+| PostgreSQL | `PostgresTranslator` | `:p_0:, :p_1:`  | Full support, JSON path filters, arrays  |
 | MariaDB    | `MariaTranslator`    | `:p_0:, :p_1:`  | Full support, MariaDB-specific functions |
 | SQLite     | `SQLiteTranslator`   | `:p_0:, :p_1:`  | Full support, SQLite-specific syntax     |
 | MongoDB    | `MongoTranslator`    | N/A             | Aggregation pipeline, CRUD operations    |
@@ -157,11 +158,14 @@ const { sql, params } = translator.select(query);
 
 - Double-quote identifiers
 - Named parameters (:p_0:, :p_1:, ...) — the Postgres engine rewrites these to $1, $2, ... downstream
-- JSONB operators (@>, <@, ?, etc.)
+- JSON path comparisons (`@col.@key` filter keys → `->>` / `#>>` text
+  extraction — see [JSON Path Filtering](#json-path-filtering))
 - Array operators
-- Full-text search
-- Window functions
 - RETURNING clause support
+
+Not yet supported (see [ROADMAP](../ROADMAP.md)): full-text search and
+window functions (`ROW_NUMBER`/`RANK`/`PARTITION BY`) — the target database
+has them, but OQL does not emit them.
 
 ### MariaTranslator
 
@@ -184,7 +188,8 @@ const { sql, params } = translator.select(query);
 - Backtick identifiers
 - Named parameters (:p_0:, :p_1:, ...)
 - MariaDB-specific functions
-- JSON functions
+- JSON path comparisons (`@col.@key` filter keys →
+  `JSON_UNQUOTE(JSON_EXTRACT(…))` — MariaDB has no MySQL-style `->>`)
 - LIMIT/OFFSET support
 - ON DUPLICATE KEY UPDATE for UPSERT
 
@@ -209,9 +214,10 @@ const { sql, params } = translator.select(query);
 - Double-quote identifiers
 - Named parameters (:p_0:, :p_1:, ...)
 - SQLite-specific functions
-- JSON support (SQLite 3.38+)
+- JSON path comparisons (`@col.@key` filter keys → `json_extract()`,
+  SQLite 3.38+)
 - Limited DDL operations
-- No schema support
+- Schema support emulated via `ATTACH DATABASE`
 
 ## NoSQL Translators
 
@@ -531,6 +537,90 @@ const query: Query<'CREATE_TABLE'> = {
 const [{ sql }] = translator.createTable(query);
 // CREATE TABLE IF NOT EXISTS "public"."users" ("id" INTEGER NOT NULL, "email" VARCHAR(255) NOT NULL, "createdAt" TIMESTAMP, PRIMARY KEY ("id"), CONSTRAINT "uq_email" UNIQUE ("email"))
 ```
+
+## JSON Path Filtering
+
+A filter key of the form `@col.@key` — or deeper, `@col.@a.@b` — where
+`col` is a **declared column of the base table** compares against a value
+_inside_ that column's JSON document. The translators emit each dialect's
+native extraction as the predicate's left-hand side and reuse the standard
+operator machinery (parameter binding, LIKE `ESCAPE` handling) on top of
+it:
+
+| Dialect    | Single level (`@profile.@name`)                     | Deep (`@profile.@a.@b`)                            |
+| ---------- | --------------------------------------------------- | -------------------------------------------------- |
+| PostgreSQL | `"profile"->>'name'`                                | `"profile"#>>'{a,b}'`                              |
+| MariaDB    | ``JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.name'))`` | ``JSON_UNQUOTE(JSON_EXTRACT(`profile`, '$.a.b'))`` |
+| SQLite     | `json_extract("profile", '$.name')`                 | `json_extract("profile", '$.a.b')`                 |
+| MongoDB    | native dotted path `profile.name`                   | `profile.a.b`                                      |
+
+```typescript
+import type { Query } from '@tundralibs/oql';
+import { PostgresTranslator } from '@tundralibs/oql/translator';
+
+const translator = new PostgresTranslator();
+
+const query: Query<'SELECT'> = {
+  type: 'SELECT',
+  table: 'users',
+  columns: ['id', 'profile'],
+  projection: { '@id': true },
+  where: { '@profile.@name': { $eq: 'bob' } },
+};
+
+const { sql, params } = translator.select(query);
+// sql: SELECT "id" AS "id" FROM "users" WHERE "profile"->>'name' = :p_0:
+// params: { p_0: 'bob' }
+```
+
+### Disambiguation
+
+The same `@a.@b` syntax also spells join-alias and base-table
+qualification, so a multi-segment key resolves by precedence:
+
+1. First segment is a **declared join alias** → qualified joined column
+   (existing behavior, full operator set).
+2. First segment is the **base table name** → table-qualified column
+   (existing behavior).
+3. First segment is a **declared base column** → JSON path extraction.
+4. Anything else → error.
+
+A join alias that shares its name with a column therefore always resolves
+as the JOIN; the JSON-path interpretation only fires where the key would
+previously have been rejected, which is what keeps the feature fully
+backward compatible.
+
+### Supported operators
+
+JSON-path keys accept `$eq`, `$ne`, `$null`, `$in` / `$nin` (scalar
+arrays), the LIKE family (`$like`, `$nlike`, `$ilike`, `$nilike`), and the
+literal-substring operators (`$startsWith`, `$endsWith`, `$contains`) —
+plus the direct-value shorthands (`null`, scalar, array) that desugar to
+them.
+
+The ordered comparisons — `$gt`, `$gte`, `$lt`, `$lte`, `$between` — are
+**rejected** with a `JSON_PATH_UNSUPPORTED_OPERATOR` error: extraction
+yields _text_ on PostgreSQL/MariaDB but _natively typed_ values on SQLite,
+so a numeric range predicate would silently return different rows per
+dialect. OQL refuses rather than emitting wrong SQL.
+
+### v1 limitations
+
+- **No numeric ranges** — see above; compare for equality/membership or
+  pattern-match only. All comparisons are textual on PostgreSQL/MariaDB.
+- **No array indexes** — path segments are object keys only (`$.a.b`,
+  never `$[0]`).
+- **No containment operators** — Postgres's `@>` / `<@` / `?` are not
+  exposed.
+- **Identifier-safe keys only** — every path segment must match the
+  `@`-identifier pattern (letters, digits, underscore, not starting with
+  a digit). JSON keys with spaces, dashes, or other punctuation are not
+  expressible in v1.
+- **Join-alias precedence** — a join alias shadows a same-named column
+  (rule 1 above); rename the alias if you need a JSON path into that
+  column.
+- **Filter positions only** — `where` on SELECT / COUNT / UPDATE / DELETE.
+  JSON paths are not part of projections, ORDER BY, GROUP BY, or HAVING.
 
 ## Dialect Differences
 

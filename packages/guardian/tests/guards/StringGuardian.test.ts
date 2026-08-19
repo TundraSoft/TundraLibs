@@ -1734,6 +1734,20 @@ describe('guardian.StringGuardian', () => {
       const guard = new StringGuardian().toBigInt();
       asserts.assertThrows(() => guard.parse('not a number'), GuardianError);
     });
+
+    it('strips a trailing "n" so a .bigint()-valid string converts', () => {
+      const guard = new StringGuardian().toBigInt();
+      asserts.assertEquals(guard.parse('234234n'), 234234n);
+      asserts.assertEquals(guard.parse('  -5n  '), -5n);
+      // Plain decimal still works (regression guard).
+      asserts.assertEquals(guard.parse('42'), 42n);
+    });
+
+    it('accepts a chained .bigint().toBigInt() round-trip', () => {
+      const guard = new StringGuardian().bigint().toBigInt();
+      asserts.assertEquals(guard.parse('234234n'), 234234n);
+      asserts.assertEquals(guard.parse('234234'), 234234n);
+    });
   });
 
   describe('json', () => {
@@ -1781,6 +1795,219 @@ describe('guardian.StringGuardian', () => {
       // check.
       asserts.assertEquals(guard.parse('aGVsbG8-'), 'aGVsbG8-');
       asserts.assertEquals(guard.parse('aGVsbG8_'), 'aGVsbG8_');
+    });
+  });
+
+  describe('numeric / integer / bigint validators', () => {
+    it('numeric accepts digit-only strings, rejects sign/decimal/suffix', () => {
+      const guard = new StringGuardian().numeric();
+      asserts.assertEquals(guard.parse('123'), '123');
+      asserts.assertEquals(guard.parse('0'), '0');
+      asserts.assertThrows(() => guard.parse(''), GuardianError);
+      asserts.assertThrows(() => guard.parse('-1'), GuardianError);
+      asserts.assertThrows(() => guard.parse('1.5'), GuardianError);
+      asserts.assertThrows(() => guard.parse('12n'), GuardianError);
+      asserts.assertThrows(() => guard.parse('abc'), GuardianError);
+    });
+
+    it('integer accepts signed integers, rejects decimal/suffix', () => {
+      const guard = new StringGuardian().integer();
+      asserts.assertEquals(guard.parse('123'), '123');
+      asserts.assertEquals(guard.parse('-5'), '-5');
+      asserts.assertEquals(guard.parse('+7'), '+7');
+      asserts.assertThrows(() => guard.parse('1.5'), GuardianError);
+      asserts.assertThrows(() => guard.parse('12n'), GuardianError);
+      asserts.assertThrows(() => guard.parse('abc'), GuardianError);
+      asserts.assertThrows(() => guard.parse(''), GuardianError);
+    });
+
+    it('bigint accepts signed integers with optional trailing n', () => {
+      const guard = new StringGuardian().bigint();
+      asserts.assertEquals(guard.parse('234234'), '234234');
+      asserts.assertEquals(guard.parse('234234n'), '234234n');
+      asserts.assertEquals(guard.parse('-5'), '-5');
+      asserts.assertEquals(guard.parse('-5n'), '-5n');
+      asserts.assertEquals(guard.parse('+7n'), '+7n');
+      asserts.assertThrows(() => guard.parse('1.5'), GuardianError);
+      asserts.assertThrows(() => guard.parse('12nn'), GuardianError);
+      asserts.assertThrows(() => guard.parse('abc'), GuardianError);
+      asserts.assertThrows(() => guard.parse(''), GuardianError);
+    });
+
+    it('custom error messages are surfaced', () => {
+      const guard = new StringGuardian().numeric('digits please');
+      const err = asserts.assertThrows(
+        () => guard.parse('x'),
+        GuardianError,
+      ) as GuardianError;
+      asserts.assertStringIncludes(err.message, 'digits please');
+    });
+  });
+
+  describe('toBoolean', () => {
+    it('maps default truthy forms to true', () => {
+      const guard = new StringGuardian().toBoolean();
+      for (const truthy of ['true', 'TRUE', '1', 'yes', 'Y', 'on', 't']) {
+        asserts.assertEquals(guard.parse(truthy), true);
+      }
+    });
+
+    it('maps default falsy forms to false', () => {
+      const guard = new StringGuardian().toBoolean();
+      for (const falsy of ['false', 'FALSE', '0', 'no', 'N', 'off', 'f']) {
+        asserts.assertEquals(guard.parse(falsy), false);
+      }
+    });
+
+    it('trims surrounding whitespace before matching', () => {
+      const guard = new StringGuardian().toBoolean();
+      asserts.assertEquals(guard.parse('  yes  '), true);
+      asserts.assertEquals(guard.parse('\tno\n'), false);
+    });
+
+    it('throws on unmatched input', () => {
+      const guard = new StringGuardian().toBoolean();
+      asserts.assertThrows(() => guard.parse('maybe'), GuardianError);
+      asserts.assertThrows(() => guard.parse(''), GuardianError);
+    });
+
+    it('honours custom truthy/falsy sets (case-insensitive)', () => {
+      const guard = new StringGuardian().toBoolean({
+        truthy: ['si', 'oui'],
+        falsy: ['no', 'non'],
+      });
+      asserts.assertEquals(guard.parse('SI'), true);
+      asserts.assertEquals(guard.parse('Non'), false);
+      // A default form is no longer accepted once sets are overridden.
+      asserts.assertThrows(() => guard.parse('true'), GuardianError);
+    });
+
+    it('chains onto a BooleanGuardian (e.g. .negate())', () => {
+      const guard = new StringGuardian().toBoolean().negate();
+      asserts.assertEquals(guard.parse('yes'), false);
+      asserts.assertEquals(guard.parse('no'), true);
+    });
+  });
+
+  describe('toJSON', () => {
+    it('parses objects and arrays into the runtime value', () => {
+      const guard = new StringGuardian().toJSON();
+      asserts.assertEquals(guard.parse('{"a":1}'), { a: 1 });
+      asserts.assertEquals(guard.parse('[1,2,3]'), [1, 2, 3]);
+      asserts.assertEquals(guard.parse('"hi"'), 'hi');
+      asserts.assertEquals(guard.parse('null'), null);
+    });
+
+    it('throws on malformed JSON', () => {
+      const guard = new StringGuardian().toJSON();
+      asserts.assertThrows(() => guard.parse('{bad json}'), GuardianError);
+      asserts.assertThrows(() => guard.parse('not json'), GuardianError);
+    });
+
+    it('supports a custom error message', () => {
+      const guard = new StringGuardian().toJSON('bad payload');
+      const err = asserts.assertThrows(
+        () => guard.parse('{'),
+        GuardianError,
+      ) as GuardianError;
+      asserts.assertStringIncludes(err.message, 'bad payload');
+    });
+  });
+
+  describe('nonEmpty (alias of notEmpty)', () => {
+    it('accepts non-empty strings and rejects blank ones', () => {
+      const guard = new StringGuardian().nonEmpty();
+      asserts.assertEquals(guard.parse('a'), 'a');
+      asserts.assertThrows(() => guard.parse(''), GuardianError);
+      asserts.assertThrows(() => guard.parse('   '), GuardianError);
+    });
+  });
+
+  describe('superRefine (universal, inherited from BaseGuardian)', () => {
+    it('accumulates ALL failing refinements on a scalar into one error', () => {
+      // Two independent checks on a single string. A value that fails
+      // BOTH must surface BOTH messages in one aggregate error rather
+      // than short-circuiting on the first — this is the universal
+      // accumulating behaviour, now available on scalar guardians.
+      const guard = new StringGuardian().superRefine([
+        { validator: (s) => s.length >= 8, message: 'too short' },
+        { validator: (s) => /\d/.test(s), message: 'needs a digit' },
+      ]);
+
+      asserts.assertEquals(guard.parse('abc12345'), 'abc12345');
+
+      const [err] = guard.safeParse('abc');
+      asserts.assertInstanceOf(err, GuardianError);
+      asserts.assertStringIncludes(err.message, 'too short');
+      asserts.assertStringIncludes(err.message, 'needs a digit');
+      asserts.assertEquals(
+        err.message.startsWith('2 refinement error(s)'),
+        true,
+      );
+      asserts.assertEquals(err.causeSize() > 0, true);
+    });
+
+    it('throws a single unpathed failure directly (message preserved)', () => {
+      const guard = new StringGuardian().superRefine([
+        { validator: (s) => s.length >= 8, message: 'too short' },
+        { validator: (s) => s.startsWith('a'), message: 'must start with a' },
+      ]);
+      // Only the first check fails → thrown as-is (its message).
+      asserts.assertThrows(() => guard.parse('a1'), GuardianError, 'too short');
+    });
+
+    it('keys causes by declared path on a scalar', () => {
+      const guard = new StringGuardian().superRefine([
+        { validator: (s) => s.length >= 8, message: 'too short', path: 'len' },
+        {
+          validator: (s) => /\d/.test(s),
+          message: 'needs a digit',
+          path: 'digit',
+        },
+      ]);
+      const [err] = guard.safeParse('abc');
+      asserts.assertInstanceOf(err, GuardianError);
+      const leaves = [...err.leafErrors()];
+      asserts.assertEquals(leaves.length, 2);
+      const paths = leaves.map((l) => l.path?.join('.')).sort();
+      asserts.assertEquals(paths, ['digit', 'len']);
+    });
+
+    it('supports async refinements off the base: parse() refuses, parseAsync accumulates', async () => {
+      const guard = new StringGuardian().superRefine([
+        // A plain arrow that RETURNS a promise …
+        {
+          validator: (s) => Promise.resolve(s.length >= 8),
+          message: 'too short',
+        },
+        // … and a genuine async function — the latter flips the whole
+        // step to the async path, and BOTH are awaited + accumulated.
+        {
+          validator: async (s) => {
+            await Promise.resolve();
+            return /\d/.test(s);
+          },
+          message: 'needs a digit',
+        },
+      ]);
+
+      // isAsync metadata is set off BaseGuardian, so the sync entry
+      // points refuse before running anything.
+      asserts.assertEquals(guard.metaData?.isAsync, true);
+      asserts.assertThrows(
+        () => guard.parse('abc'),
+        GuardianError,
+        'parseAsync',
+      );
+
+      // The async path accumulates BOTH failures in one aggregate error.
+      const [err] = await guard.safeParseAsync('abc');
+      asserts.assertInstanceOf(err, GuardianError);
+      asserts.assertStringIncludes(err.message, 'too short');
+      asserts.assertStringIncludes(err.message, 'needs a digit');
+
+      // A value that passes both flows through unchanged.
+      asserts.assertEquals(await guard.parseAsync('abc12345'), 'abc12345');
     });
   });
 });

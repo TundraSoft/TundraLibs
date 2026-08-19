@@ -718,18 +718,12 @@ Copies a file.
 async function copyFile(
   src: string,
   dest: string,
-  options?: CopyOptions,
 ): Promise<void>;
 
 function copyFileSync(
   src: string,
   dest: string,
-  options?: CopyOptions,
 ): void;
-
-interface CopyOptions {
-  overwrite?: boolean;
-}
 ```
 
 **Example:**

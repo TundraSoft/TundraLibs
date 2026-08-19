@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.1.0...utils-v1.1.1) (2026-08-19)
+
+
+### Documentation
+
+* **utils:** correct Events emit visibility and memoize default in docs ([#428](https://github.com/TundraSoft/TundraLibs/issues/428)) ([d74ba82](https://github.com/TundraSoft/TundraLibs/commit/d74ba82316ae9f6a411f534cce8fb668c13f08ba))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/utils-v1.0.6...utils-v1.1.0) (2026-08-18)
 
 

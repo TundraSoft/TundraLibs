@@ -1177,10 +1177,51 @@ describe('restler.core', () => {
       asserts.assertEquals(result, invalidXml); // Returns raw text when parsing fails
     });
 
+    it('should parse vendor +json suffixes as JSON', () => {
+      const result = client.parseResponseBody<{ id: number; name: string }>(
+        '{"id":1,"name":"Test"}',
+        'application/vnd.api+json',
+      );
+      asserts.assertEquals(result.id, 1);
+      asserts.assertEquals(result.name, 'Test');
+    });
+
+    it('should parse vendor +xml suffixes as XML', () => {
+      const result = client.parseResponseBody<{ root: { item: string } }>(
+        '<root><item>Test</item></root>',
+        'application/atom+xml',
+      );
+      asserts.assertEquals(result.root.item, 'Test');
+    });
+
+    it('should best-effort parse JSON for unknown content types', () => {
+      const result = client.parseResponseBody<{ id: number }>(
+        '{"id":1}',
+        'application/octet-stream',
+      );
+      asserts.assertEquals(result.id, 1);
+    });
+
+    it('should best-effort parse XML for unknown content types', () => {
+      const result = client.parseResponseBody<{ root: { item: string } }>(
+        '<root><item>Test</item></root>',
+        'application/x-custom',
+      );
+      asserts.assertEquals(result.root.item, 'Test');
+    });
+
+    it('should best-effort parse XML when content type is missing', () => {
+      const result = client.parseResponseBody<{ root: string }>(
+        '<root>Test</root>',
+        null,
+      );
+      asserts.assertEquals(result.root, 'Test');
+    });
+
     it('should handle unknown content types', () => {
       const body = 'Binary or other content';
       const result = client.parseResponseBody(body, 'application/pdf');
-      asserts.assertEquals(result, body); // Returns as-is for unknown content types
+      asserts.assertEquals(result, body); // Raw when neither JSON nor XML parses
     });
   });
 

@@ -275,6 +275,26 @@ export class MariaTranslator extends AbstractTranslator {
   ]);
 
   // ---------------------------------------------------------------------------
+  // Filters: JSON path extraction
+  // ---------------------------------------------------------------------------
+
+  /**
+   * JSON path extraction for a `@col.@key` filter key:
+   * `JSON_UNQUOTE(JSON_EXTRACT(<quoted col>, '$.a.b'))`.
+   *
+   * MariaDB has NO `->>` shorthand — that operator is MySQL-only — so
+   * the explicit `JSON_UNQUOTE(JSON_EXTRACT(…))` composition is the
+   * portable spelling. `JSON_UNQUOTE` strips the JSON string quoting so
+   * the result compares as text, mirroring Postgres's `->>`.
+   */
+  protected override _renderJsonPath(
+    columnSql: string,
+    path: string[],
+  ): string {
+    return `JSON_UNQUOTE(JSON_EXTRACT(${columnSql}, '$.${path.join('.')}'))`;
+  }
+
+  // ---------------------------------------------------------------------------
   // DML: UPSERT — MariaDB uses `INSERT ... ON DUPLICATE KEY UPDATE`.
   // ---------------------------------------------------------------------------
 

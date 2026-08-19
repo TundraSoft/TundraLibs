@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.0.5...oql-v1.1.0) (2026-08-19)
+
+
+### Features
+
+* **oql:** JSON-path filtering in where clauses via [@col](https://github.com/col).[@key](https://github.com/key) ([#445](https://github.com/TundraSoft/TundraLibs/issues/445)) ([1ecb3e0](https://github.com/TundraSoft/TundraLibs/commit/1ecb3e0776cfdde70665d12bcb8d2fab91865350))
+
+
+### Documentation
+
+* **oql:** correct SQLite schema-support and LPAD/RPAD-fill claims ([#432](https://github.com/TundraSoft/TundraLibs/issues/432)) ([8b94675](https://github.com/TundraSoft/TundraLibs/commit/8b946755ee986c3475592dd833140df0dfcfcd6c))
+* **oql:** drop the redundant TODO.md, fold its unique note into ROADMAP ([#459](https://github.com/TundraSoft/TundraLibs/issues/459)) ([f2d4825](https://github.com/TundraSoft/TundraLibs/commit/f2d48255c044c88196f97a816139c77616be1e1d))
+* **oql:** retract unbuilt full-text-search and window-function claims ([#455](https://github.com/TundraSoft/TundraLibs/issues/455)) ([74b8c10](https://github.com/TundraSoft/TundraLibs/commit/74b8c10f4dfb50c445826acd8c0ca1f86890b2e6))
+
 ## [1.0.5](https://github.com/TundraSoft/TundraLibs/compare/oql-v1.0.4...oql-v1.0.5) (2026-08-18)
 
 

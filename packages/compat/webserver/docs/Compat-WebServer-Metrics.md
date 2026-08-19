@@ -185,7 +185,7 @@ console.log(`Avg: ${responseTime.average.toFixed(2)}ms`);
 | `connections.peakActive`     | `number` | Peak concurrent connections      |
 | `messages.received`          | `number` | Total messages received          |
 | `messages.sent`              | `number` | Total messages sent              |
-| `errors`                     | `number` | WebSocket errors (Deno only)     |
+| `errors`                     | `number` | WebSocket errors                 |
 | `connectionDuration.min`     | `number` | Shortest connection (ms)         |
 | `connectionDuration.max`     | `number` | Longest connection (ms)          |
 | `connectionDuration.average` | `number` | Average connection duration (ms) |
