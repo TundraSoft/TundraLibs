@@ -1,3 +1,8 @@
+---
+applyTo: '**/*.md'
+description: 'Documentation and JSDoc standards for TundraLibs packages.'
+---
+
 # Documentation Instructions
 
 Guidelines for creating and maintaining documentation in TundraLibs.

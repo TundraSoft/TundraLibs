@@ -1,3 +1,8 @@
+---
+applyTo: '**/*.test.ts,**/*.bench.ts'
+description: 'Test and benchmark conventions for TundraLibs packages.'
+---
+
 # Testing Instructions
 
 Guidelines for creating and maintaining tests in TundraLibs.
@@ -12,6 +17,32 @@ All code in TundraLibs MUST have comprehensive test coverage. Tests should:
 4. **Be deterministic** - No flaky tests, no random data
 5. **Be isolated** - No dependencies between tests
 6. **Be fast** - Use mocks for external services, no unnecessary delays
+
+## Anti-slop: every test must earn its place (READ FIRST)
+
+A test that cannot fail is worse than no test — it's a green light that means
+nothing, and it hides the gap it pretends to cover. Before writing a test, make
+it able to catch a real regression.
+
+- **A test must be able to fail.** If you can break the implementation and the
+  test still passes, the test asserts nothing. No `assertEquals(true, true)`, no
+  test whose only assertion is "it didn't throw" when throwing wasn't the point.
+- **Assert behavior, not that code ran.** Check the actual returned value / SQL
+  / error / state — not merely that a function was called or a line executed.
+- **Don't test the mock.** If the only thing a test exercises is the stub you
+  wrote, delete it. Mock the boundary, assert on your code's behavior.
+- **Coverage is a floor, never a target.** Do NOT add tests to move a percentage
+  — that produces line-touching tests with empty assertions. Cover the *behaviors
+  and failure modes*; the number follows. If a line is genuinely unreachable
+  (a defensive tripwire, a `default:` that can't hit), say so rather than
+  contorting a test to reach it.
+- **No redundant tests.** One test per distinct behavior. Ten near-identical
+  cases that differ only in an arg belong in a table-driven loop, not ten
+  copy-pasted blocks.
+- **Don't restate the type-checker.** TypeScript already proves the shape; a
+  runtime test that only re-asserts a type adds noise.
+- **Name the behavior, not the method.** `it('rejects an expired token')`, not
+  `it('tests verify()')` — a name that can't describe a failure is a smell.
 
 ## File Naming Convention
 
@@ -346,6 +377,10 @@ it('should read file', async () => {
 ## Coverage Goals
 
 ### Target Coverage
+
+These are **floors on meaningful tests, not goals to chase.** Reaching them with
+assertion-free line-touching tests is a defect, not a pass — see
+[Anti-slop](#anti-slop-every-test-must-earn-its-place-read-first).
 
 - **Line Coverage**: 90%+ for new code
 - **Branch Coverage**: 85%+ for new code
