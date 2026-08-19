@@ -94,7 +94,13 @@ jobs:
 
   test:
     name: Test (${{ matrix.name }})
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    # release-please branches only ever bump a version field and prepend a
+    # CHANGELOG entry (see release-please.yml) -- the real source diff they
+    # represent was already fully tested when it merged to main. Skipping the
+    # matrix here (a skipped required check still satisfies branch
+    # protection, same as the fork-PR case below) avoids re-running the full
+    # 4-runtime/7-service suite on every one of release-please's own pushes.
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository) && !startsWith(github.ref_name, 'release-please--branches--')
     runs-on: ubuntu-latest
     # Live-DB fixtures (NORM + drivers) read these via envArgs, which merges
     # OS env. Services below are per-JOB, so each matrix runtime gets its own
@@ -215,9 +221,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
-          # Full history so SonarQube can attribute new/changed code and
-          # blame accurately (shallow clones degrade new-code detection).
-          fetch-depth: 0
+          # Full history only on the deno leg, which is the one that runs
+          # SonarQube (needs it to attribute new/changed code and blame
+          # accurately -- shallow clones degrade new-code detection). The
+          # bun/node legs never touch Sonar, so they get the default shallow
+          # clone.
+          fetch-depth: ${{ matrix.runtime == 'deno' && '0' || '1' }}
 
       - name: Setup Deno
         if: matrix.runtime == 'deno'
@@ -244,15 +253,20 @@ jobs:
 
       # Postgres/MariaDB need the two per-package databases created up front
       # (the service `env` only seeds one). Mongo auto-creates on first write.
+      # Run the CREATE DATABASE calls via `docker exec` into the service
+      # containers themselves (the postgres/mariadb images already ship
+      # their own client -- their healthchecks use it) instead of
+      # apt-get-installing a separate copy on the runner: no package
+      # install, no apt mirror dependency.
       # Also block until memcached accepts connections — its image ships no
       # health-check client, so `services:` can't gate on it.
       - name: Prepare databases
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends postgresql-client mariadb-client
+          pg_cid=$(docker ps -q --filter "publish=5432")
+          maria_cid=$(docker ps -q --filter "publish=3306")
           for db in ${DB_SCHEMA}_norm ${DB_SCHEMA}_drivers; do
-            PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE ${db};"
-            mariadb -h 127.0.0.1 -uroot -pmariadb -e "CREATE DATABASE IF NOT EXISTS ${db};"
+            docker exec -e PGPASSWORD=postgres "$pg_cid" psql -U postgres -c "CREATE DATABASE ${db};"
+            docker exec "$maria_cid" mariadb -uroot -pmariadb -e "CREATE DATABASE IF NOT EXISTS ${db};"
           done
           for port in 11211 11212; do
             for _ in $(seq 1 30); do

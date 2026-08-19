@@ -133,14 +133,16 @@ jobs:
         run: bun install
 
       # Create the two per-package databases (see ci.yml) and wait for the
-      # health-check-less memcached instances.
+      # health-check-less memcached instances. Uses `docker exec` into the
+      # service containers themselves (see ci.yml) rather than
+      # apt-get-installing a separate client on the runner.
       - name: Prepare databases
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends postgresql-client mariadb-client
+          pg_cid=$(docker ps -q --filter "publish=5432")
+          maria_cid=$(docker ps -q --filter "publish=3306")
           for db in ${DB_SCHEMA}_norm ${DB_SCHEMA}_drivers; do
-            PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE ${db};"
-            mariadb -h 127.0.0.1 -uroot -pmariadb -e "CREATE DATABASE IF NOT EXISTS ${db};"
+            docker exec -e PGPASSWORD=postgres "$pg_cid" psql -U postgres -c "CREATE DATABASE ${db};"
+            docker exec "$maria_cid" mariadb -uroot -pmariadb -e "CREATE DATABASE IF NOT EXISTS ${db};"
           done
           for port in 11211 11212; do
             for _ in $(seq 1 30); do

@@ -21,9 +21,9 @@ jobs:
 
     steps:
       - name: Checkout Repository
+        # wiki-sync.ts never reads git history (--ref is only used to build
+        # a GitHub blob URL string) -- the default shallow clone is enough.
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - name: Checkout Wiki
         uses: actions/checkout@v7
