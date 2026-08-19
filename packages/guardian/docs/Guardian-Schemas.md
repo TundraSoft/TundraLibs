@@ -202,18 +202,18 @@ Tags.parse(['guardian', 'validation']); // OK
 
 ### Methods
 
-| Method                                                    | Description                                       |
-| --------------------------------------------------------- | ------------------------------------------------- |
-| `.minLength(n)` / `.maxLength(n)` / `.length(n)`          | size constraints                                  |
-| `.nonEmpty()`                                             | sugar for `.minLength(1)`                         |
-| `.unique(msg?)`                                           | reject duplicate elements                         |
-| `.includes(value, msg?)`                                  | array must contain `value`                        |
-| `.excludes(value, msg?)`                                  | array must NOT contain `value`                    |
-| `.distinctBy(keyFn, msg?)`                                | reject duplicates under a key-extraction function |
-| `.sorted(comparator?, msg?)`                              | reject unsorted inputs                            |
-| `.map(fn)` / `.filter(fn)` / `.sort(cmp?)` / `.reverse()` | post-validation transforms                        |
-| `.slice(start, end?)` / `.takeFirst(n)` / `.takeLast(n)`  | sub-array selection                               |
-| `.toSet()`                                                | convert to `Set`; returns `BaseGuardian<Set<T>>`  |
+| Method                                                    | Description                                           |
+| --------------------------------------------------------- | ----------------------------------------------------- |
+| `.minLength(n)` / `.maxLength(n)` / `.length(n)`          | size constraints                                      |
+| `.nonEmpty()`                                             | sugar for `.minLength(1)`                             |
+| `.unique(msg?)`                                           | reject duplicate elements                             |
+| `.includes(value, msg?)`                                  | array must contain `value`                            |
+| `.excludes(value, msg?)`                                  | array must NOT contain `value`                        |
+| `.distinctBy(keyFn, msg?)`                                | reject duplicates under a key-extraction function     |
+| `.sorted(comparator?, msg?)`                              | reject unsorted inputs                                |
+| `.map(fn)` / `.filter(fn)` / `.sort(cmp?)` / `.reverse()` | post-validation transforms                            |
+| `.take(n)` / `.skip(n)` / `.tail(n)`                      | sub-array selection (first n / drop first n / last n) |
+| `.toSet()`                                                | convert to `Set`; returns `BaseGuardian<Set<T>>`      |
 
 ### Without an element validator
 
@@ -344,11 +344,11 @@ EnvVars.parse({ API_KEY: 'abc', DB_HOST: 'localhost' });
 // throws: { api_key: 'lowercase' }
 ```
 
-| Method                                        | Description             |
-| --------------------------------------------- | ----------------------- |
-| `.minSize(n)` / `.maxSize(n)` / `.size(n)`    | key-count constraints   |
-| `.hasKey(key, msg?)` / `.lacksKey(key, msg?)` | key existence           |
-| `.nonEmpty(msg?)`                             | sugar for `.minSize(1)` |
+| Method                                                | Description             |
+| ----------------------------------------------------- | ----------------------- |
+| `.minSize(n)` / `.maxSize(n)` / `.size(n)`            | key-count constraints   |
+| `.hasKeys(keys, msg?)` / `.forbiddenKeys(keys, msg?)` | key existence           |
+| `.notEmpty(msg?)`                                     | sugar for `.minSize(1)` |
 
 ## `Guardian.set`
 
