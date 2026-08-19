@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.5](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.1.4...restler-v1.1.5) (2026-08-19)
+
+
+### Bug Fixes
+
+* **restler:** best-effort parse unknown content types as JSON, then XML ([#441](https://github.com/TundraSoft/TundraLibs/issues/441)) ([1f9bd1c](https://github.com/TundraSoft/TundraLibs/commit/1f9bd1c3bfbf187457420189876a599ede2a2d15))
+
 ## [1.1.4](https://github.com/TundraSoft/TundraLibs/compare/restler-v1.1.3...restler-v1.1.4) (2026-08-18)
 
 
