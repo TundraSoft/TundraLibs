@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.4](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.2.3...norm-v1.2.4) (2026-08-18)
+
+
+### Documentation
+
+* **norm:** correct the Browser/Worker compatibility section, fix a stale unpublished package.json description ([e585073](https://github.com/TundraSoft/TundraLibs/commit/e58507320570db77ed3e9d1cb5d5c45ef93f4600))
+
 ## [1.2.3](https://github.com/TundraSoft/TundraLibs/compare/norm-v1.2.2...norm-v1.2.3) (2026-08-17)
 
 
