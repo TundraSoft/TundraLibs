@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.8](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.7...drivers-v1.0.8) (2026-08-19)
+
+
+### Documentation
+
+* **drivers:** correct stale pool-design description in PERFORMANCE.md ([#430](https://github.com/TundraSoft/TundraLibs/issues/430)) ([17d23e7](https://github.com/TundraSoft/TundraLibs/commit/17d23e758a2a8b13e3dc400deb285bd2a1ded366))
+
 ## [1.0.7](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.6...drivers-v1.0.7) (2026-08-18)
 
 
