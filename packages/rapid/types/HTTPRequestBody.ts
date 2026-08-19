@@ -18,8 +18,11 @@ export type RapidUploadedFile = {
 };
 
 /**
- * The parsed request body: a JSON object, form fields, a raw string,
- * or `undefined` for an empty body.
+ * The parsed request body: a JSON value (object, array, string, number,
+ * boolean, or `null` — the parser passes `JSON.parse`'s result through
+ * verbatim for any syntactically valid top-level shape, per RFC 8259),
+ * form fields as an object, a raw string body, or `undefined` for an
+ * empty body.
  *
  * Uploaded files appear under THEIR OWN FIELD KEY as a
  * {@link RapidUploadedFile} (or an array of them when the field
@@ -29,5 +32,9 @@ export type RapidUploadedFile = {
  */
 export type RapidHTTPRequestBody =
   | Record<string, unknown>
+  | unknown[]
   | string
+  | number
+  | boolean
+  | null
   | undefined;

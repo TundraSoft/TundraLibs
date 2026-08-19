@@ -49,6 +49,29 @@ describe('rapid.parseBody', () => {
     asserts.assertEquals(value, {});
   });
 
+  it('a non-object top-level JSON value (array/number/boolean/null) passes through, typed correctly', async () => {
+    // RapidHTTPRequestBody used to claim Record<string,unknown> | string
+    // | undefined — every one of these is legal JSON per RFC 8259 and
+    // parseBody returns each verbatim (JSON.parse's return type is
+    // `any`, so nothing caught the mismatch at the call site). Widened
+    // to match reality rather than rejecting these at parse time — no
+    // observed consumer assumed Record-shaped payload, and rejecting
+    // would be a behavior change, not a type-accuracy fix.
+    const cases: [string, unknown][] = [
+      ['[1,2,3]', [1, 2, 3]],
+      ['42', 42],
+      ['true', true],
+      ['null', null],
+    ];
+    for (const [body, expected] of cases) {
+      const { value } = await parseBody(
+        req(body, 'application/json'),
+        opts(),
+      );
+      asserts.assertEquals(value, expected);
+    }
+  });
+
   it('malformed JSON → RAPID_VALIDATION_FAILED (client error)', async () => {
     await asserts.assertRejects(
       () => parseBody(req('{bad', 'application/json'), opts()),
