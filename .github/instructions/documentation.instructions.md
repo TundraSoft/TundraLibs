@@ -1,6 +1,17 @@
+---
+applyTo: '**/*.md'
+description: 'Documentation and JSDoc standards for TundraLibs packages.'
+---
+
 # Documentation Instructions
 
 Guidelines for creating and maintaining documentation in TundraLibs.
+
+The repo-wide coding conventions this builds on — public-specifier doc
+examples, `{@link}`/`@throws` JSDoc rules, imports through folder barrels — are
+the single source in [CONVENTIONS.md](../../CONVENTIONS.md). This file adds the
+documentation-specific detail (file naming, structure, length budget); where
+they touch the same rule, CONVENTIONS.md wins.
 
 ## File Naming Convention
 
