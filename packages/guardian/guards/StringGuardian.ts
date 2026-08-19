@@ -14,6 +14,8 @@ import type { GuardianMetaData, GuardianTransform } from '../types/mod.ts';
 import { NumberGuardian } from './NumberGuardian.ts';
 import { DateGuardian } from './DateGuardian.ts';
 import { BigIntGuardian } from './BigIntGuardian.ts';
+import { BooleanGuardian } from './BooleanGuardian.ts';
+import { UnknownGuardian } from './UnknownGuardian.ts';
 
 /**
  * String validator. Coerces primitives (number, bigint, boolean) and
@@ -49,6 +51,16 @@ export class StringGuardian extends BaseGuardian<string> {
     // and digits on at least one side. Rejects `1.2.3`, `.`, `...`
     // (the old `/^[0-9.]+$/` accepted all three).
     numeric: /^(?:\d+\.?\d*|\.\d+)$/,
+    // Unsigned decimal digits only (no sign, no decimal point). Backs the
+    // `.numeric()` validator, whose documented contract is "digit-only" —
+    // deliberately distinct from the `numeric` real-number matcher above.
+    digits: /^\d+$/,
+    // Signed integer literal — optional leading `+`/`-` then digits. Backs
+    // the `.integer()` validator. No decimal point, no `n` suffix.
+    integer: /^[+-]?\d+$/,
+    // Signed integer with an OPTIONAL trailing bigint marker `n` (accepts
+    // both `234` and `234n`). Backs the `.bigint()` validator.
+    bigint: /^[+-]?\d+n?$/,
     uuid:
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     uuidv1: /^[\da-f]{8}-[\da-f]{4}-1[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i,
@@ -337,6 +349,19 @@ export class StringGuardian extends BaseGuardian<string> {
   }
 
   /**
+   * Alias for {@link notEmpty} — validates the string is not empty (after
+   * trimming whitespace). `notEmpty` is the canonical name; `nonEmpty`
+   * exists for parity with the array/record guardians.
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns A new StringGuardian with the validation applied (the receiver is never mutated)
+   * @throws {GuardianError} If string is empty or contains only whitespace
+   */
+  nonEmpty(errorMessage?: string): this {
+    return this.notEmpty(errorMessage);
+  }
+
+  /**
    * Validates string is a valid email address.
    *
    * @param errorMessage - Optional custom error message
@@ -424,6 +449,55 @@ export class StringGuardian extends BaseGuardian<string> {
     // Pattern removed for format-specific validations
     delete result._metaData.pattern;
     return result;
+  }
+
+  /**
+   * Validates string contains only decimal digits (`0-9`) — an unsigned
+   * integer with no sign, decimal point, or separators.
+   *
+   * This is the "digit-only" contract advertised alongside `.alpha()` /
+   * `.alphanumeric()`. For the real-number matcher (accepts decimals like
+   * `1.5`), use `StringGuardian.patterns.numeric` directly, or `.integer()`
+   * for a signed integer.
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns A new StringGuardian with the validation applied (the receiver is never mutated)
+   */
+  numeric(errorMessage?: string): this {
+    return this.pattern(
+      StringGuardian.patterns.digits,
+      errorMessage || 'String must contain only digits',
+    );
+  }
+
+  /**
+   * Validates string is a signed integer literal — optional leading `+`
+   * or `-` followed by one or more digits. No decimal point and no `n`
+   * suffix (use `.bigint()` to allow the trailing `n`).
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns A new StringGuardian with the validation applied (the receiver is never mutated)
+   */
+  integer(errorMessage?: string): this {
+    return this.pattern(
+      StringGuardian.patterns.integer,
+      errorMessage || 'String must be a valid integer',
+    );
+  }
+
+  /**
+   * Validates string is a signed integer literal with an OPTIONAL trailing
+   * bigint marker `n` — accepts both `234234` and `234234n`. Pairs with
+   * `.toBigInt()`, which strips the trailing `n` before conversion.
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns A new StringGuardian with the validation applied (the receiver is never mutated)
+   */
+  bigint(errorMessage?: string): this {
+    return this.pattern(
+      StringGuardian.patterns.bigint,
+      errorMessage || 'String must be a valid bigint',
+    );
   }
 
   /**
@@ -2273,6 +2347,7 @@ export class StringGuardian extends BaseGuardian<string> {
    * import { Guardian } from '@tundralibs/guardian';
    *
    * Guardian.string().toBigInt().parse('12345');                 // 12345n
+   * Guardian.string().toBigInt().parse('12345n');                // 12345n  (trailing `n` stripped)
    * Guardian.string().toBigInt({ hex: true }).parse('0xdeadbeef'); // 3735928559n
    * ```
    */
@@ -2290,7 +2365,9 @@ export class StringGuardian extends BaseGuardian<string> {
             : `0x${trimmed}`;
           return BigInt(body);
         }
-        return BigInt(value.trim());
+        // Accept a `.bigint()`-valid literal: strip a single optional
+        // trailing `n` (`BigInt('234n')` throws) before constructing.
+        return BigInt(value.trim().replace(/n$/, ''));
       } catch {
         throw new GuardianError(
           errorMessage ||
@@ -2304,6 +2381,92 @@ export class StringGuardian extends BaseGuardian<string> {
         );
       }
     }, BigIntGuardian) as BigIntGuardian;
+  }
+
+  /**
+   * Parses the string as a boolean. The input is trimmed and lowercased,
+   * then matched against a truthy / falsy allow-list; anything else throws
+   * a validation error (no `Boolean('false') === true` footgun).
+   *
+   * Defaults — truthy: `true`, `1`, `yes`, `y`, `on`, `t`; falsy: `false`,
+   * `0`, `no`, `n`, `off`, `f`. Supply `opts.truthy` / `opts.falsy` to
+   * replace either set (values are compared case-insensitively).
+   *
+   * @param opts - Optional custom truthy / falsy string sets
+   * @param errorMessage - Optional custom error message
+   * @returns New BooleanGuardian with the boolean transformation
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * Guardian.string().toBoolean().parse('YES');   // true
+   * Guardian.string().toBoolean().parse('off');    // false
+   * Guardian.string().toBoolean({ truthy: ['si'], falsy: ['no'] }).parse('si'); // true
+   * ```
+   */
+  toBoolean(
+    opts?: { truthy?: string[]; falsy?: string[] },
+    errorMessage?: string,
+  ): BooleanGuardian {
+    const truthy = (opts?.truthy ?? ['true', '1', 'yes', 'y', 'on', 't'])
+      .map((entry) => entry.toLowerCase());
+    const falsy = (opts?.falsy ?? ['false', '0', 'no', 'n', 'off', 'f'])
+      .map((entry) => entry.toLowerCase());
+    return this.process((value: string) => {
+      const normalized = value.trim().toLowerCase();
+      if (truthy.includes(normalized)) {
+        return true;
+      }
+      if (falsy.includes(normalized)) {
+        return false;
+      }
+      throw new GuardianError(
+        errorMessage || 'Cannot convert string to boolean',
+        {
+          expected: `one of [${[...truthy, ...falsy].join(', ')}]`,
+          got: value,
+          comparison: 'conversion',
+          type: 'boolean',
+        },
+      );
+    }, BooleanGuardian) as BooleanGuardian;
+  }
+
+  /**
+   * Parses the string with `JSON.parse` and crosses into an
+   * {@link UnknownGuardian} carrying the parsed value. Throws a validation
+   * error if the input is not well-formed JSON. This is the parsing
+   * counterpart to the `.json()` validator (which only checks, keeping the
+   * raw string).
+   *
+   * @param errorMessage - Optional custom error message
+   * @returns New UnknownGuardian carrying the parsed value
+   *
+   * @example
+   * ```ts
+   * import { Guardian } from '@tundralibs/guardian';
+   *
+   * Guardian.string().toJSON().parse('{"a":1}'); // { a: 1 }
+   * Guardian.string().toJSON().parse('[1,2,3]'); // [1, 2, 3]
+   * ```
+   */
+  toJSON(errorMessage?: string): UnknownGuardian {
+    return this.process((value: string) => {
+      try {
+        return JSON.parse(value) as unknown;
+      } catch {
+        throw new GuardianError(
+          errorMessage || 'Cannot parse string as JSON',
+          {
+            expected: 'JSON string',
+            got: value,
+            comparison: 'conversion',
+            type: 'conversion',
+          },
+        );
+      }
+    }, UnknownGuardian) as UnknownGuardian;
   }
 
   //#endregion

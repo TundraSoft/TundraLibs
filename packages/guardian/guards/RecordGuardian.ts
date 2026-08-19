@@ -228,6 +228,18 @@ export class RecordGuardian<
   }
 
   /**
+   * Alias for {@link notEmpty} — validates that the record has at least one
+   * property. `notEmpty` is the canonical name; `nonEmpty` exists for
+   * parity with the string/array guardians.
+   *
+   * @param message - Optional custom error message
+   * @returns A new RecordGuardian with the validation applied (the receiver is never mutated)
+   */
+  nonEmpty(message?: string): this {
+    return this.notEmpty(message);
+  }
+
+  /**
    * Validates that the record has at least the specified number of properties.
    *
    * @param min - Minimum number of properties required

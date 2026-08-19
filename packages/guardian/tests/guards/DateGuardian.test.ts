@@ -1186,4 +1186,200 @@ describe('guardian.DateGuardian', () => {
       );
     });
   });
+
+  describe('year / month / dayOfWeek checks', () => {
+    // 2026-08-19 is a Wednesday (getDay() === 3). Constructed in local
+    // time so getFullYear/getMonth/getDay are deterministic per TZ.
+    const wednesday = new Date(2026, 7, 19, 13, 45);
+
+    it('year asserts getFullYear equality', () => {
+      asserts.assertEquals(
+        new DateGuardian().year(2026).parse(wednesday).getFullYear(),
+        2026,
+      );
+      asserts.assertThrows(
+        () => new DateGuardian().year(2025).parse(wednesday),
+        GuardianError,
+      );
+    });
+
+    it('month asserts 0-based getMonth equality', () => {
+      // Month 7 === August.
+      asserts.assertEquals(
+        new DateGuardian().month(7).parse(wednesday).getMonth(),
+        7,
+      );
+      asserts.assertThrows(
+        () => new DateGuardian().month(0).parse(wednesday),
+        GuardianError,
+      );
+    });
+
+    it('month rejects out-of-range config at construction', () => {
+      asserts.assertThrows(() => new DateGuardian().month(-1), Error);
+      asserts.assertThrows(() => new DateGuardian().month(12), Error);
+      asserts.assertThrows(() => new DateGuardian().month(1.5), Error);
+    });
+
+    it('dayOfWeek asserts 0-based getDay equality (0 = Sunday)', () => {
+      // Wednesday === 3.
+      asserts.assertEquals(
+        new DateGuardian().dayOfWeek(3).parse(wednesday).getDay(),
+        3,
+      );
+      asserts.assertThrows(
+        () => new DateGuardian().dayOfWeek(0).parse(wednesday),
+        GuardianError,
+      );
+    });
+  });
+
+  describe('subtract / add weeks / startOf / endOf transforms', () => {
+    it('subtract is the inverse of add', () => {
+      const date = new Date(2026, 7, 19, 10, 30, 0, 0);
+      const back = new DateGuardian().subtract(1, 'days').parse(date);
+      asserts.assertEquals(back.getDate(), 18);
+
+      const backHours = new DateGuardian().subtract(2, 'hours').parse(date);
+      asserts.assertEquals(backHours.getHours(), 8);
+
+      // subtract(-n) adds.
+      const forward = new DateGuardian().subtract(-1, 'days').parse(date);
+      asserts.assertEquals(forward.getDate(), 20);
+    });
+
+    it('add/subtract support weeks', () => {
+      const date = new Date(2026, 7, 19, 10, 30);
+      asserts.assertEquals(
+        new DateGuardian().add(1, 'weeks').parse(date).getDate(),
+        26,
+      );
+      asserts.assertEquals(
+        new DateGuardian().subtract(1, 'weeks').parse(date).getDate(),
+        12,
+      );
+    });
+
+    it('startOf snaps down for each supported unit', () => {
+      // 2026-08-19 (Wed) 13:45:30.123 local.
+      const date = new Date(2026, 7, 19, 13, 45, 30, 123);
+
+      const year = new DateGuardian().startOf('years').parse(date);
+      asserts.assertEquals(
+        [year.getMonth(), year.getDate(), year.getHours(), year.getMinutes()],
+        [0, 1, 0, 0],
+      );
+
+      const month = new DateGuardian().startOf('months').parse(date);
+      asserts.assertEquals([month.getDate(), month.getHours()], [1, 0]);
+
+      // Sunday-started week: 2026-08-19 (Wed) snaps back to 2026-08-16 (Sun).
+      const week = new DateGuardian().startOf('weeks').parse(date);
+      asserts.assertEquals([week.getDay(), week.getDate(), week.getHours()], [
+        0,
+        16,
+        0,
+      ]);
+
+      const day = new DateGuardian().startOf('days').parse(date);
+      asserts.assertEquals(
+        [
+          day.getHours(),
+          day.getMinutes(),
+          day.getSeconds(),
+          day
+            .getMilliseconds(),
+        ],
+        [0, 0, 0, 0],
+      );
+
+      const hour = new DateGuardian().startOf('hours').parse(date);
+      asserts.assertEquals([hour.getMinutes(), hour.getSeconds()], [0, 0]);
+
+      const minute = new DateGuardian().startOf('minutes').parse(date);
+      asserts.assertEquals(
+        [minute.getSeconds(), minute.getMilliseconds()],
+        [0, 0],
+      );
+
+      const second = new DateGuardian().startOf('seconds').parse(date);
+      asserts.assertEquals(second.getMilliseconds(), 0);
+
+      // milliseconds is a no-op.
+      const ms = new DateGuardian().startOf('milliseconds').parse(date);
+      asserts.assertEquals(ms.getTime(), date.getTime());
+    });
+
+    it('endOf snaps up for each supported unit', () => {
+      const date = new Date(2026, 7, 19, 13, 45, 30, 123);
+
+      const year = new DateGuardian().endOf('years').parse(date);
+      asserts.assertEquals(
+        [
+          year.getMonth(),
+          year.getDate(),
+          year.getHours(),
+          year
+            .getMilliseconds(),
+        ],
+        [11, 31, 23, 999],
+      );
+
+      // August has 31 days.
+      const month = new DateGuardian().endOf('months').parse(date);
+      asserts.assertEquals([month.getDate(), month.getHours()], [31, 23]);
+
+      // February 2026 has 28 days (last-day-of-month is computed).
+      const feb = new DateGuardian().endOf('months').parse(
+        new Date(2026, 1, 10),
+      );
+      asserts.assertEquals(feb.getDate(), 28);
+
+      // Sunday-started week: Wed snaps forward to 2026-08-22 (Sat).
+      const week = new DateGuardian().endOf('weeks').parse(date);
+      asserts.assertEquals([week.getDay(), week.getDate(), week.getHours()], [
+        6,
+        22,
+        23,
+      ]);
+
+      const day = new DateGuardian().endOf('days').parse(date);
+      asserts.assertEquals(
+        [
+          day.getHours(),
+          day.getMinutes(),
+          day.getSeconds(),
+          day
+            .getMilliseconds(),
+        ],
+        [23, 59, 59, 999],
+      );
+
+      const hour = new DateGuardian().endOf('hours').parse(date);
+      asserts.assertEquals(
+        [hour.getMinutes(), hour.getSeconds(), hour.getMilliseconds()],
+        [59, 59, 999],
+      );
+
+      const minute = new DateGuardian().endOf('minutes').parse(date);
+      asserts.assertEquals(
+        [minute.getSeconds(), minute.getMilliseconds()],
+        [59, 999],
+      );
+
+      const second = new DateGuardian().endOf('seconds').parse(date);
+      asserts.assertEquals(second.getMilliseconds(), 999);
+
+      const ms = new DateGuardian().endOf('milliseconds').parse(date);
+      asserts.assertEquals(ms.getTime(), date.getTime());
+    });
+
+    it('startOf/endOf do not mutate the input date', () => {
+      const date = new Date(2026, 7, 19, 13, 45, 30, 123);
+      const snapshot = date.getTime();
+      new DateGuardian().startOf('days').parse(date);
+      new DateGuardian().endOf('days').parse(date);
+      asserts.assertEquals(date.getTime(), snapshot);
+    });
+  });
 });
