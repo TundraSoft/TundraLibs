@@ -39,11 +39,27 @@ export function middlewareScope(
   ] as readonly RapidContextType[] | undefined;
 }
 
-/** Stamp the scope metadata onto a wrapper. */
+/**
+ * Stamp the scope metadata onto a wrapper — and carry forward every
+ * `rapid.middleware.*` metadata symbol already stamped on the middleware
+ * being wrapped (e.g. `MIDDLEWARE_STATE_KEY`, see `stateKeyGuard.ts`).
+ * The wrapper is a NEW closure, not the original function, so without
+ * this copy every boot-time check that reads a middleware's own-symbol
+ * metadata (`Application.__middleware.find(...)`) silently stops seeing
+ * it the moment the middleware is wrapped by `only*`/`guard*` — exactly
+ * the composition the framework documents as the normal way to scope a
+ * universal middleware to one transport.
+ */
 function mark(
   wrapper: RapidMiddleware,
+  wrapped: RapidMiddleware,
   scope: readonly RapidContextType[],
 ): RapidMiddleware {
+  for (const sym of Object.getOwnPropertySymbols(wrapped)) {
+    Object.assign(wrapper, {
+      [sym]: (wrapped as unknown as Record<symbol, unknown>)[sym],
+    });
+  }
   return Object.assign(wrapper, { [MIDDLEWARE_SCOPE]: scope });
 }
 
@@ -74,26 +90,38 @@ type JOBMw = (
 
 /** Run `middleware` on HTTP; SKIP (continue) on other transports. */
 export function onlyHTTP(middleware: HTTPMw): RapidMiddleware {
-  return mark(async (ctx, next) => {
-    if (ctx.type === 'HTTP') return await middleware(ctx, next);
-    return await next();
-  }, ['HTTP']);
+  return mark(
+    async (ctx, next) => {
+      if (ctx.type === 'HTTP') return await middleware(ctx, next);
+      return await next();
+    },
+    middleware as unknown as RapidMiddleware,
+    ['HTTP'],
+  );
 }
 
 /** Run `middleware` on SOCKET; SKIP (continue) on other transports. */
 export function onlySOCKET(middleware: SOCKETMw): RapidMiddleware {
-  return mark(async (ctx, next) => {
-    if (ctx.type === 'SOCKET') return await middleware(ctx, next);
-    return await next();
-  }, ['SOCKET']);
+  return mark(
+    async (ctx, next) => {
+      if (ctx.type === 'SOCKET') return await middleware(ctx, next);
+      return await next();
+    },
+    middleware as unknown as RapidMiddleware,
+    ['SOCKET'],
+  );
 }
 
 /** Run `middleware` on JOB; SKIP (continue) on other transports. */
 export function onlyJOB(middleware: JOBMw): RapidMiddleware {
-  return mark(async (ctx, next) => {
-    if (ctx.type === 'JOB') return await middleware(ctx, next);
-    return await next();
-  }, ['JOB']);
+  return mark(
+    async (ctx, next) => {
+      if (ctx.type === 'JOB') return await middleware(ctx, next);
+      return await next();
+    },
+    middleware as unknown as RapidMiddleware,
+    ['JOB'],
+  );
 }
 
 /**
@@ -104,10 +132,14 @@ export function onlyJOB(middleware: JOBMw): RapidMiddleware {
  *   middleware's promise) on non-HTTP transports.
  */
 export function guardHTTP(middleware: HTTPMw): RapidMiddleware {
-  return mark((ctx, next) => {
-    if (ctx.type === 'HTTP') return middleware(ctx, next);
-    return Promise.reject(failClosed(ctx.type, ['HTTP']));
-  }, ['HTTP']);
+  return mark(
+    (ctx, next) => {
+      if (ctx.type === 'HTTP') return middleware(ctx, next);
+      return Promise.reject(failClosed(ctx.type, ['HTTP']));
+    },
+    middleware as unknown as RapidMiddleware,
+    ['HTTP'],
+  );
 }
 
 /**
@@ -117,10 +149,14 @@ export function guardHTTP(middleware: HTTPMw): RapidMiddleware {
  *   non-SOCKET transports.
  */
 export function guardSOCKET(middleware: SOCKETMw): RapidMiddleware {
-  return mark((ctx, next) => {
-    if (ctx.type === 'SOCKET') return middleware(ctx, next);
-    return Promise.reject(failClosed(ctx.type, ['SOCKET']));
-  }, ['SOCKET']);
+  return mark(
+    (ctx, next) => {
+      if (ctx.type === 'SOCKET') return middleware(ctx, next);
+      return Promise.reject(failClosed(ctx.type, ['SOCKET']));
+    },
+    middleware as unknown as RapidMiddleware,
+    ['SOCKET'],
+  );
 }
 
 /**
@@ -130,8 +166,12 @@ export function guardSOCKET(middleware: SOCKETMw): RapidMiddleware {
  *   non-JOB transports.
  */
 export function guardJOB(middleware: JOBMw): RapidMiddleware {
-  return mark((ctx, next) => {
-    if (ctx.type === 'JOB') return middleware(ctx, next);
-    return Promise.reject(failClosed(ctx.type, ['JOB']));
-  }, ['JOB']);
+  return mark(
+    (ctx, next) => {
+      if (ctx.type === 'JOB') return middleware(ctx, next);
+      return Promise.reject(failClosed(ctx.type, ['JOB']));
+    },
+    middleware as unknown as RapidMiddleware,
+    ['JOB'],
+  );
 }

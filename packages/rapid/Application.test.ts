@@ -158,6 +158,33 @@ describe('rapid.Application', () => {
         await app.stop();
       }
     });
+
+    it('the boot guard SURVIVES onlyHTTP/guardHTTP wrapping, not just the bare middleware', async () => {
+      // scope.ts wraps a middleware in a brand-new closure — the guard
+      // must carry the MIDDLEWARE_STATE_KEY stamp across that wrap, or
+      // this documented, first-party composition
+      // (`use(onlyHTTP(responseTimer({stateKey})))`) silently defeats
+      // the boot check M9 exists to provide.
+      const { onlyHTTP, guardHTTP, responseTimer } = await import(
+        './middlewares/mod.ts'
+      );
+      const shareApp = () =>
+        new Application({
+          name: 'share-wrapped',
+          server: { port: 0 },
+          stateMode: 'SHARE',
+        });
+
+      const wrappedByOnly = shareApp();
+      wrappedByOnly.use(onlyHTTP(responseTimer({ stateKey: 'tookMs' })));
+      wrappedByOnly.get('/x', () => ({ content: 'ok' }));
+      await asserts.assertRejects(() => wrappedByOnly.start(), RapidError);
+
+      const wrappedByGuard = shareApp();
+      wrappedByGuard.use(guardHTTP(responseTimer({ stateKey: 'tookMs' })));
+      wrappedByGuard.get('/x', () => ({ content: 'ok' }));
+      await asserts.assertRejects(() => wrappedByGuard.start(), RapidError);
+    });
   });
 
   describe('HTTP request path (review security set)', () => {
