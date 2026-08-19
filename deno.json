@@ -93,7 +93,13 @@
       "**/todo.md",
       "**/PROPOSED*.md",
       "**/DESIGN.md",
-      "**/SCRATCH*.md"
+      "**/SCRATCH*.md",
+      "**/*.test.ts",
+      "**/*.bench.ts",
+      "**/fixtures/**",
+      "**/tests/**",
+      "**/test-fixtures/**",
+      "**/soak.ts"
     ]
   }
 }
