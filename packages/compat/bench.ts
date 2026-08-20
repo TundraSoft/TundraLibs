@@ -25,6 +25,11 @@
  * forgotten `only` cannot slip through CI. `ignore: true` skips a
  * bench unconditionally (the runtime/OS flags skip conditionally).
  *
+ * Set `BENCH_SMOKE=1` to shrink every bench to a compiles-and-runs
+ * check (1ms warmup, 5ms budget, fixed `n` capped) — the CI lane that
+ * keeps bench files from rotting; the report is stamped `smoke` and
+ * its numbers are meaningless by design.
+ *
  * A bench fn receives a {@link BenchContext}: call `b.start()` /
  * `b.end()` to measure only a section of each iteration (per-iteration
  * setup/teardown stays outside the numbers). Use it on EVERY call or
@@ -61,7 +66,7 @@
  * ```
  */
 
-import { OS, RUNTIME } from './runtime.ts';
+import { ARCH, cpus, OS, RUNTIME } from './runtime.ts';
 
 /**
  * Handed to every bench invocation. Ignoring it measures the whole
@@ -118,6 +123,13 @@ export type BenchOptions = {
   warmupMs?: number;
   /** Sampling time budget. Primarily a test/CI-smoke knob. */
   budgetMs?: number;
+  /**
+   * Fixed batch size: skips batch auto-calibration and runs exactly
+   * `n` iterations per sample. For operations where time-budget
+   * calibration is wrong (cache-warmup-sensitive, stateful). Sampling
+   * still repeats batches until the budget, so percentiles remain.
+   */
+  n?: number;
 };
 
 /** One bench's measured statistics (all times in nanoseconds). */
@@ -130,18 +142,34 @@ export type BenchStats = {
   itersPerSec: number;
   minNs: number;
   maxNs: number;
+  /** Median of the batch samples — robust against outlier batches. */
+  p50Ns: number;
   p75Ns: number;
   p99Ns: number;
+  /** Median absolute deviation of the samples (spread, outlier-robust). */
+  madNs: number;
   /** Batch samples the percentiles derive from. */
   samples: number;
   /** Total iterations executed across all measured batches. */
   iters: number;
 };
 
+/** Environment stamp so saved reports stay comparable-with-context. */
+export type BenchMeta = {
+  /** Deno/Bun/Node version string of the measuring process. */
+  runtimeVersion: string;
+  arch: string;
+  /** Logical CPU cores. */
+  cores: number;
+  /** Whether `BENCH_SMOKE` shrank the budgets (numbers meaningless). */
+  smoke?: boolean;
+};
+
 /** The full run's result — what {@link runBenches} resolves with. */
 export type BenchReport = {
   runtime: string;
   os: string;
+  meta: BenchMeta;
   benches: BenchStats[];
   /** Present (`true`) when `only` restricted this run. */
   only?: boolean;
@@ -155,6 +183,7 @@ type Registered = {
   only: boolean;
   warmupMs: number;
   budgetMs: number;
+  n?: number;
 };
 
 /** Warmup duration when the bench doesn't override it. */
@@ -174,6 +203,10 @@ const MIN_SAMPLES = 3;
  * to produce 2ms of measured time.
  */
 const CALIBRATION_WALL_CAP_MS = 50;
+/** Warmup extends (once) when consecutive probes diverge past this. */
+const WARMUP_CONVERGENCE = 0.1;
+/** `BENCH_SMOKE` caps a fixed `n` here so smoke runs stay fast. */
+const SMOKE_N_CAP = 10;
 
 const registry: Registered[] = [];
 let autoRunTimer: ReturnType<typeof setTimeout> | undefined;
@@ -212,10 +245,10 @@ const enabled = (o: BenchOptions): boolean => {
 };
 
 /**
- * Register a bench. Accepts the same three call shapes `Deno.bench`
- * does — `(name, fn)`, `(name, options, fn)`, and a single options
- * object carrying `name` and `fn` — so migrating an existing
- * `Deno.bench` file is the import line plus a rename.
+ * Register a bench. Accepts the same call shapes `Deno.bench` does —
+ * `(name, fn)`, `(name, options, fn)`, `(options-with-fn)`, and
+ * `(options, fn)` — so migrating an existing `Deno.bench` file is the
+ * import line plus a rename.
  *
  * Registration is synchronous and side-effect-light; measurement runs
  * after module evaluation (see the module docs) in registration order,
@@ -230,7 +263,11 @@ export function bench(
   options: BenchOptions & { name: string; fn: BenchFn },
 ): void;
 export function bench(
-  first: string | (BenchOptions & { name: string; fn: BenchFn }),
+  options: BenchOptions & { name: string },
+  fn: BenchFn,
+): void;
+export function bench(
+  first: string | (BenchOptions & { name: string; fn?: BenchFn }),
   second?: BenchOptions | BenchFn,
   third?: BenchFn,
 ): void {
@@ -248,8 +285,8 @@ export function bench(
     }
   } else {
     name = first.name;
-    fn = first.fn;
     options = first;
+    fn = typeof second === 'function' ? second : first.fn;
   }
   if (typeof name !== 'string' || name.length === 0) {
     throw new TypeError('bench() requires a non-empty name');
@@ -266,6 +303,7 @@ export function bench(
     only: options.only === true,
     warmupMs: options.warmupMs ?? DEFAULT_WARMUP_MS,
     budgetMs: options.budgetMs ?? DEFAULT_BUDGET_MS,
+    ...(options.n !== undefined ? { n: options.n } : {}),
   });
   // First registration arms the auto-run; it fires once module
   // evaluation (and thus all top-level registrations) has finished.
@@ -400,9 +438,40 @@ const timeAsyncBatch = async (
   return [measured, performance.now() - t0];
 };
 
+/** Is `BENCH_SMOKE` shrinking budgets to compiles-and-runs checks? */
+const smokeMode = (): boolean => {
+  const value = env('BENCH_SMOKE');
+  return value !== undefined && value !== '' && value !== '0';
+};
+
+/**
+ * Nudge the collector between samples where a hook exists (Bun's
+ * `Bun.gc`, V8's `--expose-gc` global on Deno/Node) so collection
+ * pauses land BETWEEN batches, not inside them. Silently a no-op
+ * elsewhere.
+ */
+const hintGC = (): void => {
+  const g = globalThis as {
+    Bun?: { gc?: (force: boolean) => void };
+    gc?: () => void;
+  };
+  try {
+    if (g.Bun?.gc !== undefined) g.Bun.gc(false);
+    else if (typeof g.gc === 'function') g.gc();
+  } catch {
+    // A hostile/partial gc hook must never break a run.
+  }
+};
+
 /** Measure one registered bench. */
 const measure = async (entry: Registered): Promise<BenchStats> => {
   const { fn } = entry;
+  const smoke = smokeMode();
+  const warmupMs = smoke ? 1 : entry.warmupMs;
+  const budgetMs = smoke ? 5 : entry.budgetMs;
+  const fixedN = entry.n !== undefined
+    ? Math.max(1, smoke ? Math.min(entry.n, SMOKE_N_CAP) : entry.n)
+    : undefined;
   const { ctx, state } = makeContext(entry.name);
   // Async detection on the first call: a thenable routes every later
   // call through the awaiting loop, so sync benches never pay for an
@@ -413,26 +482,47 @@ const measure = async (entry: Registered): Promise<BenchStats> => {
       typeof (probe as { then?: unknown }).then === 'function');
   sink = isAsync ? await probe : probe;
 
-  // Warmup: let the JIT tier up before anything is recorded.
-  const warmupEnd = performance.now() + entry.warmupMs;
-  do {
-    state.startAt = -1;
-    state.endAt = -1;
-    sink = isAsync ? await fn(ctx) : fn(ctx);
-  } while (performance.now() < warmupEnd);
-
   const batch = (n: number): BatchTime | Promise<BatchTime> =>
     isAsync
       ? timeAsyncBatch(fn, n, ctx, state)
       : timeSyncBatch(fn, n, ctx, state);
 
+  // Warmup: let the JIT tier up before anything is recorded, COUNTING
+  // iterations so the convergence probe below can size itself.
+  const warmupStart = performance.now();
+  const warmupEnd = warmupStart + warmupMs;
+  let warmupIters = 0;
+  do {
+    state.startAt = -1;
+    state.endAt = -1;
+    sink = isAsync ? await fn(ctx) : fn(ctx);
+    warmupIters++;
+  } while (performance.now() < warmupEnd);
+  // Convergence check: two equal probes still drifting apart past the
+  // threshold means the JIT is mid-tier-up — extend warmup ONCE.
+  if (!smoke && warmupIters >= 10) {
+    const probeN = Math.max(1, Math.ceil(warmupIters / 5));
+    const [a] = await batch(probeN);
+    const [b] = await batch(probeN);
+    if (Math.abs(a - b) / Math.max(a, b, 1e-9) > WARMUP_CONVERGENCE) {
+      const extendEnd = performance.now() + warmupMs;
+      do {
+        state.startAt = -1;
+        state.endAt = -1;
+        sink = isAsync ? await fn(ctx) : fn(ctx);
+      } while (performance.now() < extendEnd);
+    }
+  }
+
   // Batch calibration: double n until one batch's MEASURED time spans
   // MIN_BATCH_MS — per-call timing of nanosecond-scale operations only
   // measures the clock otherwise. The WALL cap keeps a sectioned bench
-  // with heavy unmeasured setup from growing n unboundedly.
-  let n = 1;
+  // with heavy unmeasured setup from growing n unboundedly. A fixed
+  // `n` skips calibration entirely.
+  let n = fixedN ?? 1;
   let [measuredMs, wallMs] = await batch(n);
   while (
+    fixedN === undefined &&
     measuredMs < MIN_BATCH_MS && wallMs < CALIBRATION_WALL_CAP_MS &&
     n < 1 << 28
   ) {
@@ -442,15 +532,16 @@ const measure = async (entry: Registered): Promise<BenchStats> => {
 
   // Sampling: per-batch per-iteration averages, until the WALL budget
   // is spent (never fewer than MIN_SAMPLES, never more than
-  // MAX_SAMPLES).
+  // MAX_SAMPLES). GC is nudged BETWEEN batches where a hook exists.
   const samples: number[] = [measuredMs / n];
   let totalMeasuredMs = measuredMs;
   let totalWallMs = wallMs;
   let totalIters = n;
   while (
     (samples.length < MIN_SAMPLES ||
-      (totalWallMs < entry.budgetMs && samples.length < MAX_SAMPLES))
+      (totalWallMs < budgetMs && samples.length < MAX_SAMPLES))
   ) {
+    hintGC();
     const [ms, wall] = await batch(n);
     samples.push(ms / n);
     totalMeasuredMs += ms;
@@ -462,6 +553,10 @@ const measure = async (entry: Registered): Promise<BenchStats> => {
   samples.sort((a, b) => a - b);
   const toNs = (ms: number): number => ms * 1e6;
   const avgNs = toNs(totalMeasuredMs) / totalIters;
+  const p50 = _percentile(samples, 50);
+  const deviations = samples.map((s) => Math.abs(s - p50)).sort((a, b) =>
+    a - b
+  );
   return {
     name: entry.name,
     ...(entry.group !== undefined ? { group: entry.group } : {}),
@@ -470,8 +565,10 @@ const measure = async (entry: Registered): Promise<BenchStats> => {
     itersPerSec: avgNs > 0 ? 1e9 / avgNs : 0,
     minNs: toNs(samples[0]!),
     maxNs: toNs(samples[samples.length - 1]!),
+    p50Ns: toNs(p50),
     p75Ns: toNs(_percentile(samples, 75)),
     p99Ns: toNs(_percentile(samples, 99)),
+    madNs: toNs(_percentile(deviations, 50)),
     samples: samples.length,
     iters: totalIters,
   };
@@ -515,7 +612,11 @@ const printReport = (report: BenchReport): void => {
       c,
       i,
     ) => (i === 0 ? c.padEnd(widths[i]!) : c.padStart(widths[i]!))).join('   ');
-  console.log(`runtime: ${report.runtime} (${report.os})`);
+  console.log(
+    `runtime: ${report.runtime} ${report.meta.runtimeVersion} ` +
+      `(${report.os}/${report.meta.arch}, ${report.meta.cores} cores)` +
+      (report.meta.smoke === true ? ' [SMOKE — numbers meaningless]' : ''),
+  );
   console.log(line(head));
   console.log(widths.map((w) => '-'.repeat(w)).join('   '));
   for (const row of rows) console.log(line(row));
@@ -586,6 +687,13 @@ export async function runBenches(
     clearTimeout(autoRunTimer);
     autoRunTimer = undefined;
   }
+  // Bun 1.3.14: a WebCrypto promise awaited inside a timer callback is
+  // ABANDONED once the event loop would otherwise drain — verified with
+  // a bare `setTimeout(async () => await crypto.subtle.digest(...))`
+  // (silent exit 0, promise never settles). An active interval keeps
+  // the loop alive for the whole run so those promises resolve.
+  // Harmless on Deno/Node.
+  const keepAlive = setInterval(() => {}, 250);
   try {
     let entries = [...registry];
     const onlyMode = entries.some((e) => e.only);
@@ -599,9 +707,21 @@ export async function runBenches(
     }
     // The sink escapes, making every benched call observable.
     (globalThis as Record<string, unknown>).__compatBenchSink = sink;
+    const g = globalThis as {
+      Deno?: { version: { deno: string } };
+      Bun?: { version: string };
+      process?: { versions: { node?: string } };
+    };
     const report: BenchReport = {
       runtime: RUNTIME,
       os: OS,
+      meta: {
+        runtimeVersion: g.Deno?.version.deno ?? g.Bun?.version ??
+          g.process?.versions.node ?? 'unknown',
+        arch: ARCH,
+        cores: cpus(),
+        ...(smokeMode() ? { smoke: true } : {}),
+      },
       benches,
       ...(onlyMode ? { only: true } : {}),
     };
@@ -614,6 +734,7 @@ export async function runBenches(
     }
     return report;
   } finally {
+    clearInterval(keepAlive);
     registry.length = 0;
     started = false;
   }

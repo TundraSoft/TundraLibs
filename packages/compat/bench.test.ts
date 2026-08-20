@@ -52,12 +52,14 @@ describe('compat.bench', () => {
         group: 'shapes',
         ...FAST,
       });
+      bench({ name: 'shape-object-then-fn', ...FAST }, () => 4 + 4);
       const report = await runBenches({ quiet: true });
       const names = report.benches.map((b) => b.name);
       asserts.assertEquals(names, [
         'shape-two-arg',
         'shape-three-arg',
         'shape-object',
+        'shape-object-then-fn',
       ]);
       asserts.assertEquals(report.benches[1]!.group, 'shapes');
     });
@@ -135,6 +137,64 @@ describe('compat.bench', () => {
       await runBenches({ quiet: true });
       const second = await runBenches({ quiet: true });
       asserts.assertEquals(second.benches.length, 0);
+    });
+  });
+
+  describe('meta and hardened stats', () => {
+    it('stamps runtime version, arch, and cores', async () => {
+      bench('stamped', { ...FAST }, () => 1);
+      const report = await runBenches({ quiet: true });
+      asserts.assert(report.meta.runtimeVersion.length > 0);
+      asserts.assert(report.meta.runtimeVersion !== 'unknown');
+      asserts.assert(report.meta.cores >= 1);
+      asserts.assert(report.meta.arch.length > 0);
+      asserts.assertEquals('smoke' in report.meta, false);
+    });
+
+    it('p50 sits inside [min, p75] and MAD is non-negative', async () => {
+      bench('median', { ...FAST }, () => Math.sqrt(42));
+      const report = await runBenches({ quiet: true });
+      const b = report.benches[0]!;
+      asserts.assert(b.minNs <= b.p50Ns, 'min <= p50');
+      asserts.assert(b.p50Ns <= b.p75Ns, 'p50 <= p75');
+      asserts.assert(b.madNs >= 0, 'MAD >= 0');
+    });
+  });
+
+  describe('fixed n and smoke', () => {
+    it('n fixes the batch size exactly', async () => {
+      bench('fixed-n', { n: 7, ...FAST }, () => 1);
+      const report = await runBenches({ quiet: true });
+      const b = report.benches[0]!;
+      asserts.assertEquals(
+        b.iters % 7,
+        0,
+        `iters (${b.iters}) must be whole batches of n=7`,
+      );
+      asserts.assertEquals(b.iters / 7, b.samples);
+    });
+
+    it('BENCH_SMOKE shrinks budgets, caps n, and stamps the report', async () => {
+      // Generous budgets that smoke must override — the wall-clock
+      // assertion below fails if it doesn't.
+      bench('smoked', { warmupMs: 2000, budgetMs: 4000, n: 5000 }, () => 1);
+      setEnv('BENCH_SMOKE', '1');
+      const t0 = performance.now();
+      try {
+        const report = await runBenches({ quiet: true });
+        asserts.assert(
+          performance.now() - t0 < 1000,
+          'smoke run must ignore the 6s of configured budgets',
+        );
+        asserts.assertEquals(report.meta.smoke, true);
+        const b = report.benches[0]!;
+        asserts.assert(
+          b.iters / b.samples <= 10,
+          `smoke must cap fixed n at 10, got ${b.iters / b.samples}`,
+        );
+      } finally {
+        setEnv('BENCH_SMOKE', undefined);
+      }
     });
   });
 
