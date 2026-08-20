@@ -283,3 +283,99 @@ is NOT explained by config/logging infrastructure being present; it's consistent
 with the Node Fetch-API translation tax (#4, still untouched) plus the Deno-side
 overhead that remains unaccounted for and would need deeper profiling (a
 flamegraph run, not more source-reading) to pin down further.
+
+## Parity plan: rapid == oak / express / fastify without losing features
+
+Question (2026-08-20): can rapid match or beat oak (Deno) and express/fastify
+(Node) while keeping everything built — ambient log correlation, requestId
+mint+echo, tracer seam, middleware onion, error disclosure, lazy args,
+per-invocation state? Answer: **oak parity on Deno yes; beating express on Node
+yes; fastify parity on Node no** (fastify measures ≈ raw `node:http` itself —
+see below — and matching that under the Fetch-standard request contract is not
+credible without dropping that contract, which IS a functionality loss).
+Everything below is measured, not inferred: `_scratch/perf-attribution.bench.ts`
+(in-process variants + component costs) and fresh autocannon runs including
+fastify.
+
+### The new E2E anchor: fastify ≈ raw
+
+Node lane, `autocannon -c 50 -d 10`, this machine (single-threaded, so µs/req =
+1/throughput):
+
+| server      | req/s (≈)  | µs/req | layer over raw |
+| ----------- | ---------- | ------ | -------------- |
+| raw http    | 62k        | 16.1   | —              |
+| **fastify** | **61-63k** | 16.2   | **≈ 0**        |
+| express     | 40.5k      | 24.7   | +8.6µs         |
+| compat-bare | 40.8k      | 24.5   | +8.4µs         |
+| rapid       | 33-37k     | ~28.6  | +12.5µs        |
+
+fastify is statistically indistinguishable from raw `node:http` at this payload
+size (an earlier 4-servers-up round showed fastify decaying 64k→50k across
+rounds — thermal/system drift, not fastify; the clean 2-server re-run pinned it
+at raw parity). express ≈ compat-bare exactly: the Fetch translation tax equals
+express's entire framework. Deno lane (prior runs): raw 83k (12.0µs),
+compat-bare 74.9k (13.4µs, +1.4), oak 71.4k (14.0µs, +2.0), rapid 55-62k
+(16.2-18.2µs, +4.2-6.2).
+
+### Attribution: where rapid's layer actually goes (measured)
+
+`perf-attribution.bench.ts` runs three variants of the identical request cycle —
+the real `__handle`, a **collapsed** prototype (same observable semantics:
+ambient scope open across handler+finalize, same requestId policy, correlation
+echo, disclosure, thenable branch for async handlers; but no async/await in the
+framework path and cleanup skipped when there is provably nothing to clean), and
+collapsed-minus-ambient. In-process, `GET /users/:id`, Deno/Bun/Node avg:
+
+| variant                       | DENO   | BUN   | NODE  |
+| ----------------------------- | ------ | ----- | ----- |
+| `__handle` current            | 4.4µs  | 3.4µs | 8.7µs |
+| collapsed (same features)     | 3.7µs  | 2.5µs | 7.7µs |
+| compat-bare `_processRequest` | 0.44µs | 1.1µs | 2.5µs |
+
+Components (DENO/BUN/NODE):
+
+- 8-deep async ladder under ALS: **677/557/536ns** vs 3.6ns sync — the frame
+  machinery is a real per-request cost, and the pipeline stacks ~8-9 async
+  frames today. This is what "collapsed" removes.
+- `ambient.run(seed, sync fn)` alone: 276/31/164ns — ALS entry itself is
+  cheap-to-affordable; the expensive part was OUR async closures around it, not
+  the feature.
+- `ulid()`: 473/505/**1300**ns → pooled+time-prefix-cached prototype (same
+  output format): 112/89/114ns = **4-11x**. The current impl does
+  `crypto.getRandomValues(new Uint8Array(10))` + full time re-encode per call.
+- `new URL(url)` for pathname only: 114/333/170ns → string scan: 38/34/74ns.
+- Non-issues, measured: state CLONE 21-45ns, `new Headers()` 30-123ns, radrouter
+  find ~100-200ns.
+- The full feature tax (ambient + requestId post-pooling + tracer check
+  - state clone + disclosure try/catch) prices out at **~0.4-0.5µs** — the 4-9µs
+    overhead today is machinery, not features. That is why parity without
+    feature loss is possible.
+
+### Ranked plan
+
+| #  | change                                                                                                                                                                                                                                              | where                               | measured/expected                                 | risk                                                                          |
+| -- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------- |
+| R1 | Collapse the async spine: rewrite `_invoke`/`__handle`/`__finalize` promise-free on the happy path (thenable checks; sync-through `ambient.run`; direct lane when zero-middleware + no tracer, onion lane unchanged otherwise; conditional cleanup) | rapid                               | −0.7/−0.9/−1.0µs per req (measured via prototype) | medium — core path rewrite, full 3-runtime suite + disclosure tests must hold |
+| R2 | Pooled ULID: batch `getRandomValues` into a pool, cache the time prefix per ms                                                                                                                                                                      | id (own PR)                         | −0.36µs Deno, −1.19µs Node per req (measured)     | low                                                                           |
+| R3 | Pathname scan instead of `new URL` in `__handle` (URL still built lazily for `args.query` — already lazy)                                                                                                                                           | rapid                               | −0.08/−0.3/−0.1µs (measured)                      | low                                                                           |
+| R4 | compat `_processRequest` slimming: skip `_LazyRequestInfo`+emit when unobserved, collapse its frames                                                                                                                                                | compat (feat/compat-webserver-perf) | Deno compat layer +1.4µs → target +0.5µs          | low-medium                                                                    |
+| R5 | compat Node Fetch-tax: lazy Request impersonation (hono/node-server precedent — serve method/url/headers from `IncomingMessage`, materialize undici only on body access)                                                                            | compat                              | +8.4µs → target +3µs over raw                     | high — biggest single win on Node, real design work                           |
+
+### Projected end state (E2E, this machine)
+
+- **Deno**: rapid layer 4.2-6.2µs → ~1.3-1.6µs (R1+R2+R3) + compat 1.4 → 0.5
+  (R4) ⇒ total ≈ 13.8-14.1µs ≈ **71-72k = oak parity**, with features oak
+  doesn't have (correlation, tracing seam, disclosure). R1-R3 alone lands
+  ~82-84% of oak (from 77%).
+- **Node vs express**: R1-R3 alone ⇒ ~36k = 89% of express; add R5 ⇒ ≈ 22.6µs ≈
+  **44k, decisively ahead of express (40.5k)**.
+- **Node vs fastify**: fastify IS raw-http speed. The honest ceiling for a
+  Fetch-contract framework with correlation is the hono-node-server ballpark:
+  **~80-90% of fastify** with R1-R5 all landed. Matching fastify would require
+  abandoning the Fetch-standard `ctx.request` — a functionality loss, rejected.
+- **Bun**: rapid collapsed is already 2.5µs in-process; no peer benched on the
+  Bun lane yet (hono/elysia would be the honest peers — future).
+
+Sequencing respects one-package-per-PR: R1+R3 on the rapid branch, R2 on an id
+branch, R4+R5 on feat/compat-webserver-perf.
