@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.1.0...compat-v2.1.1) (2026-08-20)
+
+
+### Bug Fixes
+
+* **compat:** Bun FileHandle GC leak and Deno missing-path existence checks ([98810d2](https://github.com/TundraSoft/TundraLibs/commit/98810d2d60b0fd57a7435febdf22dad2105785f8))
+
 ## [2.1.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.0.1...compat-v2.1.0) (2026-08-20)
 
 
