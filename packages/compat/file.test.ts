@@ -75,6 +75,36 @@ import {
 const fixturesDir = path.join(cwd(), 'packages/compat/fixtures');
 
 describe({
+  name: 'compat.file - Existence checks on a missing path',
+  fn: () => {
+    // Regression: on Deno these returned FileNotFound instead of false. The
+    // not-found branch checked `.code === 'NotFound'`, but Deno's error carries
+    // `.name === 'NotFound'` / `.code === 'ENOENT'`, so it never matched and
+    // fell through to throw. Every runtime must return false, never throw.
+    const missing = path.join(fixturesDir, 'definitely-missing-path-xyz-987');
+
+    it('isFile returns false, does not throw', async () => {
+      asserts.assertEquals(await isFile(missing), false);
+    });
+    it('isFileSync returns false, does not throw', () => {
+      asserts.assertEquals(isFileSync(missing), false);
+    });
+    it('isDirectory returns false, does not throw', async () => {
+      asserts.assertEquals(await isDirectory(missing), false);
+    });
+    it('isDirectorySync returns false, does not throw', () => {
+      asserts.assertEquals(isDirectorySync(missing), false);
+    });
+    it('pathExists returns false, does not throw', async () => {
+      asserts.assertEquals(await pathExists(missing), false);
+    });
+    it('pathExistsSync returns false, does not throw', () => {
+      asserts.assertEquals(pathExistsSync(missing), false);
+    });
+  },
+});
+
+describe({
   name: 'compat.file - Directory Operations',
   fn: () => {
     describe('makeDir / makeDirSync', () => {
@@ -1831,6 +1861,42 @@ describe({
           file.close();
           await deleteFile(testFile);
         }
+      });
+
+      // Regression: on Bun, openFile must not keep an fs.promises FileHandle
+      // object alive after close(). If it does, Bun's GC finalizer closes the
+      // descriptor and throws ERR_INVALID_STATE — which surfaces as a spurious
+      // failure in whatever unrelated test GC happens to run under. Closing
+      // several handles and forcing GC makes a leak fail here. Bun-only: Bun.gc
+      // and the finalizer-throws-on-collection semantics are Bun-specific.
+      it({
+        name: 'open/close leaves no FileHandle to close during GC (Bun)',
+        deno: false,
+        node: false,
+        fn: async () => {
+          await ensureDir(fixturesDir);
+          for (let i = 0; i < 15; i++) {
+            const testFile = path.join(
+              fixturesDir,
+              `file-handle-gc-${i}-${Date.now()}.txt`,
+            );
+            const file = await openFile(testFile, {
+              write: true,
+              create: true,
+            });
+            await file.write(new TextEncoder().encode('x'));
+            file.close();
+            asserts.assertEquals(file.closed, true, 'handle should be closed');
+            await deleteFile(testFile);
+          }
+          // A leaked FileHandle's finalizer would throw here under forced GC.
+          const gc = (globalThis as { Bun?: { gc(sync: boolean): void } }).Bun
+            ?.gc;
+          for (let i = 0; i < 8; i++) {
+            gc?.(true);
+            await new Promise((r) => setTimeout(r, 40));
+          }
+        },
       });
 
       it('should open file for writing and write data sync', () => {
