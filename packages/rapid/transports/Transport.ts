@@ -3,7 +3,6 @@ import { SpanKind } from '@tundralibs/tracer';
 import type { Application } from '../Application.ts';
 import type { Context } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
-import { compose } from '../utils/mod.ts';
 import type { RapidContextState } from '../types/mod.ts';
 
 /**
@@ -29,27 +28,41 @@ export abstract class Transport<
   /**
    * Run one invocation: ambient scope (log correlation) → optional
    * span (joins `parent` when the transport extracted one) → the
-   * middleware onion → `dispatch` innermost. Anything thrown lands as
-   * a response OVERRIDE under the disclosure mode — full detail is
-   * logged server-side, the context is ALWAYS respondable afterwards.
+   * middleware onion → `dispatch` innermost → optional `finalize`.
+   * Anything thrown lands as a response OVERRIDE under the disclosure
+   * mode — full detail is logged server-side, the context is ALWAYS
+   * respondable afterwards.
+   *
+   * `chain` is a PRE-COMPOSED onion (`compose(middlewares)`), not the
+   * raw middleware array — composing allocates a fresh runner closure
+   * per call, and the middleware LIST for a given route/command/job
+   * never changes between invocations, so every transport composes
+   * once (at registration) and passes the same runner every time.
+   *
+   * `finalize`, when given, runs LAST — still inside this call's ONE
+   * ambient scope, whether or not the onion threw — and its result
+   * becomes `_invoke`'s own return value. This exists so a transport
+   * whose finalization step (materializing a response, cleanup) also
+   * needs correlated logging doesn't have to open a SECOND
+   * `ambient.run()` around it after `_invoke` returns (HTTP used to;
+   * the two scopes always carried the identical, already-immutable
+   * `requestId`/`action`, so nesting inside one call is free of any
+   * behavior change). Callers that don't need this (JOB, SOCKET —
+   * their post-invoke logging isn't ambient-correlated today, and
+   * this doesn't change that) simply omit it.
    */
-  protected async _invoke<C extends Context<S, unknown>>(
+  protected async _invoke<C extends Context<S, unknown>, R = void>(
     ctx: C,
-    // Structural shape: universal middleware (context-union parameter)
-    // and transport-scoped middleware (exactly C) both fit one chain.
-    middlewares: readonly ((
-      ctx: C,
-      next: () => Promise<void>,
-    ) => Promise<void>)[],
+    chain: (ctx: C, next: () => Promise<void>) => Promise<void>,
     dispatch: () => Promise<void>,
     parent?: unknown,
     attributes?: Record<string, string | number | boolean>,
-  ): Promise<void> {
-    await ambient.run(
+    finalize?: () => Promise<R>,
+  ): Promise<R> {
+    return await ambient.run(
       { requestId: ctx.requestId, action: ctx.action },
       async () => {
         try {
-          const compose_ = compose<S, C>(middlewares);
           const tracer = this._app.tracer;
           if (tracer !== undefined) {
             await tracer.startActiveSpan(ctx.action, {
@@ -60,10 +73,10 @@ export abstract class Transport<
               // A named span alone is thin — stamp the low-cardinality
               // request attributes the recipes expect.
               if (attributes !== undefined) span.setAttributes(attributes);
-              await compose_(ctx, dispatch);
+              await chain(ctx, dispatch);
             });
           } else {
-            await compose_(ctx, dispatch);
+            await chain(ctx, dispatch);
           }
         } catch (error) {
           const err = RapidError.from(error);
@@ -91,6 +104,7 @@ export abstract class Transport<
             // nothing to override. The failure is already logged above.
           }
         }
+        return finalize !== undefined ? await finalize() : (undefined as R);
       },
     );
   }

@@ -8,6 +8,7 @@ import {
   parsePaging,
   parseQueryFilters,
   resolveClientAddress,
+  type ResolvedClientAddress,
   serializeResponse,
 } from '../utils/mod.ts';
 import type {
@@ -44,9 +45,15 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   extends Context<S, Response> {
   public readonly type = 'HTTP';
   public readonly request: Request;
-  public readonly remoteAddress: string;
-  /** The full observed address chain (socket peer + trusted XFF hops). */
-  public readonly remoteAddrList: readonly string[];
+  /** Transport-reported peer address, unresolved — see {@link remoteAddress}. */
+  private readonly __rawRemoteAddress: string;
+  /**
+   * Lazy cache for {@link remoteAddress}/{@link remoteAddrList} — the
+   * resolution (regex + a CIDR scan) runs on FIRST access of either,
+   * not unconditionally for every request, since most handlers never
+   * read the client address at all.
+   */
+  private __resolvedAddress: ResolvedClientAddress | undefined = undefined;
   /** Route params from the matched pattern (`/users/:id:` → `{ id }`). */
   public readonly params: Readonly<Record<string, string>>;
   /**
@@ -95,16 +102,30 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     this.request = request;
     this.params = init.params ?? {};
     this.matched = init.matched ?? false;
+    this.__rawRemoteAddress = remoteAddress;
+  }
 
-    // Client-address resolution (trustProxy hop count) — see
-    // resolveClientAddress for the security rationale.
-    const resolved = resolveClientAddress(
-      remoteAddress,
+  /**
+   * The resolved client address (trustProxy hop count) — see
+   * {@link resolveClientAddress} for the security rationale. Resolved
+   * on first access of either this or {@link remoteAddrList}, both
+   * from ONE cached call — most handlers never read either.
+   */
+  get remoteAddress(): string {
+    return this.__resolveAddress().address;
+  }
+
+  /** The full observed address chain (socket peer + trusted XFF hops). */
+  get remoteAddrList(): readonly string[] {
+    return this.__resolveAddress().chain;
+  }
+
+  private __resolveAddress(): ResolvedClientAddress {
+    return this.__resolvedAddress ??= resolveClientAddress(
+      this.__rawRemoteAddress,
       this.request.headers,
-      app.option('server')!.trustProxy,
+      this.app.option('server')!.trustProxy,
     );
-    this.remoteAddrList = resolved.chain;
-    this.remoteAddress = resolved.address;
   }
 
   /**

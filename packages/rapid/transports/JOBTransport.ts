@@ -1,6 +1,7 @@
 import { Cronus } from '@tundralibs/cronus';
 import { JOBContext, type JobTick } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
+import { compose } from '../utils/mod.ts';
 import type { RapidContextState, RapidJobEntry } from '../types/mod.ts';
 import { Transport } from './Transport.ts';
 
@@ -13,6 +14,16 @@ import { Transport } from './Transport.ts';
 export class JOBTransport<S extends RapidContextState = RapidContextState>
   extends Transport<S> {
   private __cronus?: Cronus;
+  /**
+   * The universal onion, composed ONCE (lazily — `triggerJob` can fire
+   * through a THROWAWAY transport before `start()` ever runs) and
+   * reused for every firing — there is no per-job chain (see `__run`),
+   * so one composition serves every job on this transport.
+   */
+  private __composedChain?: (
+    ctx: JOBContext<S>,
+    next: () => Promise<void>,
+  ) => Promise<void>;
 
   public start(): Promise<void> {
     // unref: the HTTP server (or the caller) owns the process
@@ -113,8 +124,7 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
       params: { ...job.args, ...overrides },
     });
     let handlerRan = false;
-    await this._invoke<JOBContext<S>>(
-      ctx,
+    this.__composedChain ??= compose<S, JOBContext<S>>(
       // The universal onion runs on job firings too — same chain, same
       // order as HTTP and sockets. Base-typed middleware fit the
       // S-typed context (same object at runtime); the cast bridges the
@@ -123,6 +133,10 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
         ctx: JOBContext<S>,
         next: () => Promise<void>,
       ) => Promise<void>)[],
+    );
+    await this._invoke<JOBContext<S>>(
+      ctx,
+      this.__composedChain,
       async () => {
         handlerRan = true;
         const returned = await job.handler(ctx);

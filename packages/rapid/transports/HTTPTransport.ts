@@ -4,12 +4,23 @@ import { ulid } from '@tundralibs/id';
 import { Server as RpcServer } from '@tundralibs/rpc';
 import { RadRouter } from '@tundralibs/radrouter';
 import { extract, SpanKind } from '@tundralibs/tracer';
-import { ambient } from '@tundralibs/ambient';
 import { HTTPContext, SOCKETContext } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
-import { socketOutcome } from '../utils/mod.ts';
+import { compose, socketOutcome } from '../utils/mod.ts';
 import type { RapidContextState, RapidRouteEntry } from '../types/mod.ts';
 import { Transport } from './Transport.ts';
+
+/** A pre-composed onion runner for an {@link HTTPContext}. */
+type ComposedHTTPChain<S extends RapidContextState> = (
+  ctx: HTTPContext<S>,
+  next: () => Promise<void>,
+) => Promise<void>;
+
+/** A pre-composed onion runner for a {@link SOCKETContext}. */
+type ComposedSocketChain<S extends RapidContextState> = (
+  ctx: SOCKETContext<S>,
+  next: () => Promise<void>,
+) => Promise<void>;
 
 /**
  * Per-connection websocket data, captured ONCE at upgrade — becomes the
@@ -34,6 +45,17 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
   protected override _spanKind = SpanKind.SERVER;
   private __server?: WebServer<SocketData>;
   private readonly __router = new RadRouter<RapidRouteEntry<S>>();
+  /**
+   * Per-route composed onion, keyed by the SAME entry object radrouter
+   * hands back on a match — the middleware list for a route never
+   * changes after `start()`, so composing per request is pure waste.
+   */
+  private readonly __composedRoutes = new Map<
+    RapidRouteEntry<S>,
+    ComposedHTTPChain<S>
+  >();
+  /** Composed onion for an unmatched request (global middleware only). */
+  private __composedNoMatch?: ComposedHTTPChain<S>;
 
   public get address(): string | null {
     return this.__server?.address ?? null;
@@ -53,10 +75,19 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     const server = this._app.option('server')!;
 
     // Routes registered on the app → the router. Collisions are
-    // radrouter's loud errors, wrapped into our taxonomy.
+    // radrouter's loud errors, wrapped into our taxonomy. Each route's
+    // onion (app middleware + its own) is composed ONCE here, keyed by
+    // the same entry object radrouter will hand back on a match.
     for (const entry of this._app.routes) {
       try {
         this.__router.addRoute(entry.method, entry.path, [entry]);
+        this.__composedRoutes.set(
+          entry,
+          compose<S, HTTPContext<S>>(
+            [...this._app.middlewares, ...entry.middlewares] as unknown as
+              readonly ComposedHTTPChain<S>[],
+          ),
+        );
       } catch (cause) {
         throw new RapidError('RAPID_CONFIG', {
           message: `Route registration failed: ${
@@ -71,6 +102,9 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         });
       }
     }
+    this.__composedNoMatch = compose<S, HTTPContext<S>>(
+      [...this._app.middlewares] as unknown as readonly ComposedHTTPChain<S>[],
+    );
 
     // Websocket commands mount the rpc server INTO this listener (one
     // server, one port, one TLS config) — only when commands exist.
@@ -119,6 +153,16 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       },
     });
     for (const entry of this._app.socketCommands) {
+      // Composed ONCE per command — the universal onion runs per
+      // FRAME, then the COMMAND'S own chain (same composition order
+      // as HTTP's route chains; base-typed, cast bridges S) — but the
+      // list itself never changes between frames on the same command.
+      const chain = compose<S, SOCKETContext<S>>(
+        [
+          ...this._app.middlewares,
+          ...entry.middlewares,
+        ] as unknown as readonly ComposedSocketChain<S>[],
+      );
       rpc.command(entry.command, undefined, async (c) => {
         const data = c.ws.data;
         const ctx = new SOCKETContext<S>(this._app, {
@@ -133,16 +177,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         });
         await this._invoke<SOCKETContext<S>>(
           ctx,
-          // The universal onion runs per FRAME, then the COMMAND'S own
-          // chain — same composition order as HTTP's route chains
-          // (base-typed; cast bridges S).
-          [
-            ...this._app.middlewares,
-            ...entry.middlewares,
-          ] as unknown as readonly ((
-            ctx: SOCKETContext<S>,
-            next: () => Promise<void>,
-          ) => Promise<void>)[],
+          chain,
           async () => {
             // Enforce the object-payload contract for EVERY command —
             // args validation throws inside the cycle (logged, error
@@ -246,30 +281,22 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         return Promise.resolve();
       };
 
-    await this._invoke(
+    const chain = entry !== undefined
+      ? this.__composedRoutes.get(entry)!
+      : this.__composedNoMatch!;
+
+    // Finalization (respond + cleanup) runs as `_invoke`'s `finalize`
+    // step — the SAME ambient scope as the onion, not a second one, so
+    // its logs stay correlated without a second AsyncLocalStorage entry.
+    return await this._invoke(
       ctx,
-      // Base-typed middleware operate on the untyped state bag; the cast
-      // fits them to the S-typed context (same object at runtime). The
-      // handler's own S-typing is preserved in `dispatch`.
-      [
-        ...this._app.middlewares,
-        ...(entry?.middlewares ?? []),
-      ] as unknown as readonly ((
-        ctx: HTTPContext<S>,
-        next: () => Promise<void>,
-      ) => Promise<void>)[],
+      chain,
       dispatch,
       this._app.tracer !== undefined ? extract(request.headers) : undefined,
       {
         'http.request.method': method,
         'http.route': entry?.path ?? pathname,
       },
-    );
-
-    // Finalization (respond + cleanup) runs inside an ambient scope too,
-    // so its logs stay correlated — the _invoke scope has already closed.
-    return await ambient.run(
-      { requestId: ctx.requestId, action: ctx.action },
       () => this.__finalize(ctx, requestIdHeader),
     );
   }
