@@ -45,3 +45,41 @@ three. Any optimization work here should target the Node code path
 specifically (`_startNodeServer`, `__nodeReqToFetchRequest` in
 `WebServer.ts`) — Deno and Bun are already at parity with their native
 servers and don't need it.
+
+## After the Node-lane optimizations (see OPTIMIZATION-NOTES.md)
+
+The three candidates landed (concat-URL + pairs-array inbound, lazy
+`requestId`/`requestTime`, single-write outbound fast path with
+Content-Length instead of chunked). Because this machine's run-to-run
+noise (~±5%) swallows a single before/after comparison, the honest
+measurement is a PAIRED A/B: the pre-change `WebServer` (extracted via
+`git show HEAD:...` into a sibling file so its relative imports still
+resolve) and the optimized one running SIMULTANEOUSLY on different
+ports, measured in alternating autocannon rounds
+(`-c 50 -d 8`, avg req/s per round):
+
+| Route            | Round | Baseline | Optimized | Delta |
+| ---------------- | ----- | -------: | --------: | ----: |
+| `GET /users/:id` | 1     |   40,084 |    40,168 | +0.2% |
+| `GET /users/:id` | 2     |   39,980 |    40,948 | +2.4% |
+| `GET /users/:id` | 3     |   39,984 |    41,720 | +4.3% |
+| `GET /`          | 1     |   39,600 |    40,668 | +2.7% |
+| `GET /`          | 2     |   40,100 |    42,196 | +5.2% |
+
+Baseline is rock-stable (±0.3%) while optimized trends upward across
+rounds (JIT warming) — read the aggregate as **+2-5% Node throughput**,
+plus a wire-format improvement autocannon doesn't fully credit:
+single-chunk responses now carry `Content-Length` instead of
+`Transfer-Encoding: chunked` (one socket write instead of two, no
+chunk framing — verified via curl header inspection and a live
+progressive-streaming check that real streams still stream).
+
+Why not more: micro-benchmarking (full table in OPTIMIZATION-NOTES.md)
+showed the dominant remaining cost is undici's `Request`/`Response`
+CONSTRUCTORS (~3.5µs/request combined; `new Response(str)` alone is
+~1.7µs, while draining its stream adds <300ns). That is the price of
+the Fetch contract on Node itself — not removable inside `WebServer`
+short of a Hono-node-server-style lightweight-Request scheme, and the
+Response-side internal shortcut is blocked on Node 26+ (undici's true
+`#private` fields, verified empirically). Deno/Bun remain untouched
+and at native parity.
