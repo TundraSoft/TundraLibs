@@ -75,6 +75,36 @@ import {
 const fixturesDir = path.join(cwd(), 'packages/compat/fixtures');
 
 describe({
+  name: 'compat.file - Existence checks on a missing path',
+  fn: () => {
+    // Regression: on Deno these returned FileNotFound instead of false. The
+    // not-found branch checked `.code === 'NotFound'`, but Deno's error carries
+    // `.name === 'NotFound'` / `.code === 'ENOENT'`, so it never matched and
+    // fell through to throw. Every runtime must return false, never throw.
+    const missing = path.join(fixturesDir, 'definitely-missing-path-xyz-987');
+
+    it('isFile returns false, does not throw', async () => {
+      asserts.assertEquals(await isFile(missing), false);
+    });
+    it('isFileSync returns false, does not throw', () => {
+      asserts.assertEquals(isFileSync(missing), false);
+    });
+    it('isDirectory returns false, does not throw', async () => {
+      asserts.assertEquals(await isDirectory(missing), false);
+    });
+    it('isDirectorySync returns false, does not throw', () => {
+      asserts.assertEquals(isDirectorySync(missing), false);
+    });
+    it('pathExists returns false, does not throw', async () => {
+      asserts.assertEquals(await pathExists(missing), false);
+    });
+    it('pathExistsSync returns false, does not throw', () => {
+      asserts.assertEquals(pathExistsSync(missing), false);
+    });
+  },
+});
+
+describe({
   name: 'compat.file - Directory Operations',
   fn: () => {
     describe('makeDir / makeDirSync', () => {

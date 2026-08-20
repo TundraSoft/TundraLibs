@@ -554,7 +554,13 @@ export const isFile: (path: string) => Promise<boolean> = async (
         const stat = await Deno.stat(path);
         return stat.isFile;
       } catch (error) {
-        if ((error as { code?: string }).code === 'NotFound') {
+        // Deno's NotFound error carries `.name === 'NotFound'` and
+        // `.code === 'ENOENT'` (Node-aligned) — NOT `.code === 'NotFound'`.
+        // Detect it canonically so a missing path returns false, not throws.
+        if (
+          error instanceof Deno.errors.NotFound ||
+          (error as { code?: string }).code === 'ENOENT'
+        ) {
           return false;
         }
         throw wrapFileError(error, path, 'isFile');
@@ -604,7 +610,13 @@ export const isFileSync: (path: string) => boolean = (
         const stat = Deno.statSync(path);
         return stat.isFile;
       } catch (error) {
-        if ((error as { code?: string }).code === 'NotFound') {
+        // Deno's NotFound error carries `.name === 'NotFound'` and
+        // `.code === 'ENOENT'` (Node-aligned) — NOT `.code === 'NotFound'`.
+        // Detect it canonically so a missing path returns false, not throws.
+        if (
+          error instanceof Deno.errors.NotFound ||
+          (error as { code?: string }).code === 'ENOENT'
+        ) {
           return false;
         }
         throw wrapFileError(error, path, 'isFileSync');
@@ -654,7 +666,13 @@ export const isDirectory: (path: string) => Promise<boolean> = async (
         const stat = await Deno.stat(path);
         return stat.isDirectory;
       } catch (error) {
-        if ((error as { code?: string }).code === 'NotFound') {
+        // Deno's NotFound error carries `.name === 'NotFound'` and
+        // `.code === 'ENOENT'` (Node-aligned) — NOT `.code === 'NotFound'`.
+        // Detect it canonically so a missing path returns false, not throws.
+        if (
+          error instanceof Deno.errors.NotFound ||
+          (error as { code?: string }).code === 'ENOENT'
+        ) {
           return false;
         }
         throw wrapFileError(error, path, 'isDirectory');
@@ -716,7 +734,13 @@ export const isDirectorySync: (path: string) => boolean = (
         const stat = Deno.statSync(path);
         return stat.isDirectory;
       } catch (error) {
-        if ((error as { code?: string }).code === 'NotFound') {
+        // Deno's NotFound error carries `.name === 'NotFound'` and
+        // `.code === 'ENOENT'` (Node-aligned) — NOT `.code === 'NotFound'`.
+        // Detect it canonically so a missing path returns false, not throws.
+        if (
+          error instanceof Deno.errors.NotFound ||
+          (error as { code?: string }).code === 'ENOENT'
+        ) {
           return false;
         }
         throw wrapFileError(error, path, 'isDirectorySync');
@@ -4207,10 +4231,18 @@ export const openFile: (
       // finalizer, so closeSync() in FileHandle.close() is the sole, correct
       // close. Node keeps the object (its async methods + a finalizer that
       // close() clears explicitly), which is why only Bun switches here.
-      const source = isBun
-        ? nodeFs.openSync(filePath, flags, options.mode)
-        : await nodeFs.promises.open(filePath, flags, options.mode);
+      // This branch is unreachable on the Deno lane that collects coverage, so
+      // the runtime-specific lines are excluded there. `c8 ignore` only affects
+      // SonarQube; Deno's own lcov (what Codecov reads) honours this directive.
+      // deno-coverage-ignore-start
+      let source: number | NodeFsHandle;
+      if (isBun) {
+        source = nodeFs.openSync(filePath, flags, options.mode);
+      } else {
+        source = await nodeFs.promises.open(filePath, flags, options.mode);
+      }
       const handle = new FileHandle(filePath, source);
+      // deno-coverage-ignore-stop
       return {
         path: handle.path,
         get closed() {
