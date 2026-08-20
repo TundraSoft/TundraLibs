@@ -14,6 +14,7 @@
  * all four implementations so the results sit side-by-side in the output.
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { envArgs } from '@tundralibs/utils';
 import { PostgresEngine } from './Engine.ts';
 import pg from 'npm:pg@^8.13.0';
@@ -115,7 +116,7 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   // SELECT 1 — bare round-trip
   // -----------------------------------------------------------------------
-  Deno.bench({
+  bench({
     name: 'SELECT 1',
     group: 'select-1',
     baseline: true,
@@ -123,21 +124,21 @@ if (serverAvailable) {
       await tundra.execute({ sql: 'SELECT 1' });
     },
   });
-  Deno.bench({
+  bench({
     name: 'SELECT 1',
     group: 'select-1',
     fn: async () => {
       await nodePg.query('SELECT 1');
     },
   });
-  Deno.bench({
+  bench({
     name: 'SELECT 1',
     group: 'select-1',
     fn: async () => {
       await postgresJsClient`SELECT 1`;
     },
   });
-  Deno.bench({
+  bench({
     name: 'SELECT 1',
     group: 'select-1',
     fn: async () => {
@@ -153,7 +154,7 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   // SELECT * by PK — single-row lookup with parameter binding
   // -----------------------------------------------------------------------
-  Deno.bench({
+  bench({
     name: 'SELECT by PK',
     group: 'select-pk',
     baseline: true,
@@ -164,14 +165,14 @@ if (serverAvailable) {
       });
     },
   });
-  Deno.bench({
+  bench({
     name: 'SELECT by PK',
     group: 'select-pk',
     fn: async () => {
       await nodePg.query(`SELECT * FROM ${TABLE} WHERE id = $1`, [42]);
     },
   });
-  Deno.bench({
+  bench({
     name: 'SELECT by PK',
     group: 'select-pk',
     fn: async () => {
@@ -180,7 +181,7 @@ if (serverAvailable) {
       } WHERE id = ${42}`;
     },
   });
-  Deno.bench({
+  bench({
     name: 'SELECT by PK',
     group: 'select-pk',
     fn: async () => {
@@ -199,7 +200,7 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   // SELECT 10 rows — small result set
   // -----------------------------------------------------------------------
-  Deno.bench({
+  bench({
     name: 'SELECT 10 rows',
     group: 'select-10',
     baseline: true,
@@ -210,7 +211,7 @@ if (serverAvailable) {
       });
     },
   });
-  Deno.bench({
+  bench({
     name: 'SELECT 10 rows',
     group: 'select-10',
     fn: async () => {
@@ -220,7 +221,7 @@ if (serverAvailable) {
       );
     },
   });
-  Deno.bench({
+  bench({
     name: 'SELECT 10 rows',
     group: 'select-10',
     fn: async () => {
@@ -229,7 +230,7 @@ if (serverAvailable) {
       } WHERE id BETWEEN ${0} AND ${9}`;
     },
   });
-  Deno.bench({
+  bench({
     name: 'SELECT 10 rows',
     group: 'select-10',
     fn: async () => {
@@ -248,7 +249,7 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   // INSERT + DELETE — write workload
   // -----------------------------------------------------------------------
-  Deno.bench({
+  bench({
     name: 'INSERT + DELETE',
     group: 'write',
     baseline: true,
@@ -263,7 +264,7 @@ if (serverAvailable) {
       });
     },
   });
-  Deno.bench({
+  bench({
     name: 'INSERT + DELETE',
     group: 'write',
     fn: async () => {
@@ -274,7 +275,7 @@ if (serverAvailable) {
       await nodePg.query(`DELETE FROM ${TABLE} WHERE id = $1`, [9999]);
     },
   });
-  Deno.bench({
+  bench({
     name: 'INSERT + DELETE',
     group: 'write',
     fn: async () => {
@@ -286,7 +287,7 @@ if (serverAvailable) {
       } WHERE id = ${9999}`;
     },
   });
-  Deno.bench({
+  bench({
     name: 'INSERT + DELETE',
     group: 'write',
     fn: async () => {
@@ -309,7 +310,7 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   // 16 concurrent SELECTs across pool of 8 — parallelism
   // -----------------------------------------------------------------------
-  Deno.bench({
+  bench({
     name: '16 concurrent SELECTs',
     group: 'concurrent',
     baseline: true,
@@ -325,7 +326,7 @@ if (serverAvailable) {
       await Promise.all(ops);
     },
   });
-  Deno.bench({
+  bench({
     name: '16 concurrent SELECTs',
     group: 'concurrent',
     fn: async () => {
@@ -340,7 +341,7 @@ if (serverAvailable) {
       await Promise.all(ops);
     },
   });
-  Deno.bench({
+  bench({
     name: '16 concurrent SELECTs',
     group: 'concurrent',
     fn: async () => {
@@ -354,7 +355,7 @@ if (serverAvailable) {
       await Promise.all(ops);
     },
   });
-  Deno.bench({
+  bench({
     name: '16 concurrent SELECTs',
     group: 'concurrent',
     fn: async () => {
@@ -376,7 +377,7 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   // Transaction round-trip
   // -----------------------------------------------------------------------
-  Deno.bench({
+  bench({
     name: 'Transaction (BEGIN+INSERT+COMMIT)',
     group: 'transaction',
     baseline: true,
@@ -393,7 +394,7 @@ if (serverAvailable) {
       });
     },
   });
-  Deno.bench({
+  bench({
     name: 'Transaction (BEGIN+INSERT+COMMIT)',
     group: 'transaction',
     fn: async () => {
@@ -411,7 +412,7 @@ if (serverAvailable) {
       await nodePg.query(`DELETE FROM ${TABLE} WHERE id = $1`, [10000]);
     },
   });
-  Deno.bench({
+  bench({
     name: 'Transaction (BEGIN+INSERT+COMMIT)',
     group: 'transaction',
     fn: async () => {
@@ -425,7 +426,7 @@ if (serverAvailable) {
       } WHERE id = ${10000}`;
     },
   });
-  Deno.bench({
+  bench({
     name: 'Transaction (BEGIN+INSERT+COMMIT)',
     group: 'transaction',
     fn: async () => {

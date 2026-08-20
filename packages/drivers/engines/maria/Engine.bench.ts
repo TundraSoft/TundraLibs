@@ -4,6 +4,7 @@
  * Run with: deno bench packages/drivers/engines/maria/Engine.bench.ts --allow-all
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { envArgs } from '@tundralibs/utils';
 import { MariaEngine } from './Engine.ts';
 
@@ -55,25 +56,25 @@ if (!serverAvailable) {
     });
   }
 
-  Deno.bench('Maria / SELECT 1 (1 conn)', async () => {
+  bench('Maria / SELECT 1 (1 conn)', async () => {
     await single.execute({ sql: 'SELECT 1 AS v' });
   });
 
-  Deno.bench('Maria / SELECT by PK (1 conn)', async () => {
+  bench('Maria / SELECT by PK (1 conn)', async () => {
     await single.execute({
       sql: `SELECT * FROM ${TABLE} WHERE id = :id:`,
       params: { id: 42 },
     });
   });
 
-  Deno.bench('Maria / SELECT 10 rows (1 conn)', async () => {
+  bench('Maria / SELECT 10 rows (1 conn)', async () => {
     await single.execute({
       sql: `SELECT * FROM ${TABLE} WHERE id BETWEEN :a: AND :b:`,
       params: { a: 0, b: 9 },
     });
   });
 
-  Deno.bench('Maria / INSERT + DELETE (1 conn)', async () => {
+  bench('Maria / INSERT + DELETE (1 conn)', async () => {
     await single.execute({
       sql: `INSERT INTO ${TABLE} (id, name) VALUES (:id:, :n:)`,
       params: { id: 9999, n: 'tmp' },
@@ -84,7 +85,7 @@ if (!serverAvailable) {
     });
   });
 
-  Deno.bench('Maria / Transaction (BEGIN+INSERT+COMMIT) (1 conn)', async () => {
+  bench('Maria / Transaction (BEGIN+INSERT+COMMIT) (1 conn)', async () => {
     const tx = await single.transaction();
     await tx.execute({
       sql: `INSERT INTO ${TABLE} (id, name) VALUES (:id:, :n:)`,
@@ -97,7 +98,7 @@ if (!serverAvailable) {
     });
   });
 
-  Deno.bench('Maria / 16 concurrent SELECTs (pool 8)', async () => {
+  bench('Maria / 16 concurrent SELECTs (pool 8)', async () => {
     const ops = Array.from(
       { length: 16 },
       () =>

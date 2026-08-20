@@ -4,6 +4,7 @@
  * Run with: deno bench packages/drivers/engines/postgres/Engine.bench.ts --allow-all
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { envArgs } from '@tundralibs/utils';
 import { PostgresEngine } from './Engine.ts';
 
@@ -55,25 +56,25 @@ if (!serverAvailable) {
     });
   }
 
-  Deno.bench('Postgres / SELECT 1 (1 conn)', async () => {
+  bench('Postgres / SELECT 1 (1 conn)', async () => {
     await single.execute({ sql: 'SELECT 1' });
   });
 
-  Deno.bench('Postgres / SELECT by PK (1 conn)', async () => {
+  bench('Postgres / SELECT by PK (1 conn)', async () => {
     await single.execute({
       sql: `SELECT * FROM ${TABLE} WHERE id = :id:`,
       params: { id: 42 },
     });
   });
 
-  Deno.bench('Postgres / SELECT 10 rows (1 conn)', async () => {
+  bench('Postgres / SELECT 10 rows (1 conn)', async () => {
     await single.execute({
       sql: `SELECT * FROM ${TABLE} WHERE id BETWEEN :a: AND :b:`,
       params: { a: 0, b: 9 },
     });
   });
 
-  Deno.bench('Postgres / INSERT + DELETE (1 conn)', async () => {
+  bench('Postgres / INSERT + DELETE (1 conn)', async () => {
     await single.execute({
       sql: `INSERT INTO ${TABLE} (id, name) VALUES (:id:, :n:)`,
       params: { id: 9999, n: 'tmp' },
@@ -84,7 +85,7 @@ if (!serverAvailable) {
     });
   });
 
-  Deno.bench(
+  bench(
     'Postgres / Transaction (BEGIN+INSERT+COMMIT) (1 conn)',
     async () => {
       const tx = await single.transaction();
@@ -100,7 +101,7 @@ if (!serverAvailable) {
     },
   );
 
-  Deno.bench('Postgres / 16 concurrent SELECTs (pool 8)', async () => {
+  bench('Postgres / 16 concurrent SELECTs (pool 8)', async () => {
     const ops = Array.from(
       { length: 16 },
       () =>
@@ -112,7 +113,7 @@ if (!serverAvailable) {
     await Promise.all(ops);
   });
 
-  Deno.bench('Postgres / type-decode mix (1 conn)', async () => {
+  bench('Postgres / type-decode mix (1 conn)', async () => {
     await single.execute({
       sql: `SELECT
         42::int AS i,
