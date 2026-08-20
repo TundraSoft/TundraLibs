@@ -34,6 +34,35 @@ describe('id.cuid', () => {
     asserts.assertEquals(ids, sorted);
   });
 
+  it('refills the random batch when it is exhausted by rejections', () => {
+    // Warm the per-process fingerprint cache first so the only getRandomValues
+    // calls during the stubbed generation below are for the random tail.
+    cuid();
+
+    const real = crypto.getRandomValues.bind(crypto);
+    let calls = 0;
+    // First draw returns all 0xFF — every byte is >= the 252 rejection limit,
+    // so the whole initial batch is rejected and the refill branch fires.
+    // Later draws delegate to the real CSPRNG so generation terminates with
+    // valid, unbiased bytes. A broken refill would splice `undefined` bytes
+    // into the tail and fail the format assertion below.
+    crypto.getRandomValues = ((array: Uint8Array) => {
+      calls++;
+      if (calls === 1) return array.fill(0xff);
+      return real(array);
+    }) as typeof crypto.getRandomValues;
+    try {
+      const id = cuid();
+      asserts.assertMatch(id, /^c[a-z0-9]{24}$/);
+      asserts.assert(
+        calls >= 2,
+        'refill draw did not fire after batch exhaustion',
+      );
+    } finally {
+      crypto.getRandomValues = real;
+    }
+  });
+
   it('random tail is unbiased (rejection sampling)', () => {
     // The trailing 8 chars are the crypto-random segment. A naive `byte % 36`
     // favours digits "0123"; rejection sampling removes that bias. Sample the

@@ -29,6 +29,31 @@ describe('id.cuid2', () => {
     }
   });
 
+  it('refills the random batch when it is exhausted by rejections', () => {
+    const real = crypto.getRandomValues.bind(crypto);
+    let calls = 0;
+    // First draw returns all 0xFF — every byte is >= both rejection limits
+    // (234 for the leading letter, 252 for the body), so the whole initial
+    // batch is rejected and the refill branch fires. Later draws delegate to
+    // the real CSPRNG so generation terminates. A broken refill would splice
+    // `undefined` bytes into the id and fail the format assertion below.
+    crypto.getRandomValues = ((array: Uint8Array) => {
+      calls++;
+      if (calls === 1) return array.fill(0xff);
+      return real(array);
+    }) as typeof crypto.getRandomValues;
+    try {
+      const id = cuid2();
+      asserts.assertMatch(id, /^[a-z][a-z0-9]{23}$/);
+      asserts.assert(
+        calls >= 2,
+        'refill draw did not fire after batch exhaustion',
+      );
+    } finally {
+      crypto.getRandomValues = real;
+    }
+  });
+
   it('does not collide on 10000 sequential generations', () => {
     const seen = new Set<string>();
     for (let i = 0; i < 10_000; i++) {
