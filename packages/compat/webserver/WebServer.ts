@@ -235,11 +235,12 @@ const _stringifyThrown = (err: unknown): string => {
  * *Node.js WebSocket is provided via the `ws` npm package, loaded
  * lazily on first use; Bun and Deno use their native implementations.
  *
- * @example TCP server with metrics monitoring
+ * @example TCP server with metrics monitoring (collection is opt-in)
  * ```typescript
  * const server: WebServer = new WebServer('API', {
  *   mode: 'TCP',
  *   port: 3000,
+ *   metrics: true,
  *   handler: async (req, info): Promise<Response> => {
  *     const url = new URL(req.url);
  *     if (url.pathname === '/metrics') {
@@ -272,6 +273,51 @@ const _stringifyThrown = (err: unknown): string => {
  * @see {@link ServerEvents} for available events
  * @see {@link ServerMetrics} for metrics structure
  */
+
+/**
+ * Per-request {@link RequestInfo} with LAZY `requestId`/`requestTime`.
+ * A CLASS, not an object literal: defining getters inside a literal
+ * builds a fresh accessor-bearing shape PER REQUEST (measured ~230ns);
+ * prototype getters make the instance a plain-field allocation (~10ns)
+ * with identical lazy semantics. `toJSON` keeps `JSON.stringify(info)`
+ * emitting the same four public fields the plain-object shape did —
+ * prototype getters are invisible to serialization on their own.
+ */
+class _LazyRequestInfo implements RequestInfo {
+  public readonly remoteAddress: string | null;
+  public readonly remotePort: number | null;
+  private __ms: number;
+  private __id?: string;
+  private __time?: Date;
+
+  constructor(
+    remoteAddress: string | null,
+    remotePort: number | null,
+    ms: number,
+  ) {
+    this.remoteAddress = remoteAddress;
+    this.remotePort = remotePort;
+    this.__ms = ms;
+  }
+
+  get requestId(): string {
+    return (this.__id ??= crypto.randomUUID());
+  }
+
+  get requestTime(): Date {
+    return (this.__time ??= new Date(this.__ms));
+  }
+
+  toJSON(): Record<string, unknown> {
+    return {
+      remoteAddress: this.remoteAddress,
+      remotePort: this.remotePort,
+      requestId: this.requestId,
+      requestTime: this.requestTime,
+    };
+  }
+}
+
 export class WebServer<T = unknown> {
   /**
    * The server's connection mode (TCP or UNIX).
@@ -313,6 +359,13 @@ export class WebServer<T = unknown> {
   public get state(): ServerState {
     return this._state;
   }
+
+  /**
+   * Whether metrics collection is enabled (`options.metrics === true`
+   * — collection is OPT-IN). When off, every collection site is
+   * skipped and {@link metrics} reads back the zeroed structure.
+   */
+  private readonly __collectMetrics: boolean;
 
   /**
    * Internal metrics storage.
@@ -383,6 +436,9 @@ export class WebServer<T = unknown> {
    *
    * Returns a deep copy of the metrics to prevent external mutation.
    * Includes request counts, status codes, response times, and WebSocket stats.
+   *
+   * Collection is OPT-IN: without `metrics: true` in the constructor
+   * options every counter reads back zero.
    *
    * @returns A copy of the current metrics
    * @see {@link ServerMetrics}
@@ -596,6 +652,7 @@ export class WebServer<T = unknown> {
     this.__validateOptions(options);
     this.mode = options.mode;
     this.name = name.trim();
+    this.__collectMetrics = options.metrics === true;
     // Apply defaults for TCP mode
     if (options.mode === 'TCP') {
       this.options = {
@@ -1121,6 +1178,7 @@ export class WebServer<T = unknown> {
    * @internal
    */
   protected _wsMetricOpen(): void {
+    if (!this.__collectMetrics) return;
     this._metrics.websocket.connections.total++;
     this._metrics.websocket.connections.active++;
     if (
@@ -1142,6 +1200,7 @@ export class WebServer<T = unknown> {
    * @internal
    */
   protected _wsMetricClose(startTime: number | null): void {
+    if (!this.__collectMetrics) return;
     this._metrics.websocket.connections.active--;
     if (startTime === null) return;
     const duration = performance.now() - startTime;
@@ -1162,6 +1221,7 @@ export class WebServer<T = unknown> {
    * @internal
    */
   protected _wsMetricMessage(): void {
+    if (!this.__collectMetrics) return;
     this._metrics.websocket.messages.received++;
   }
 
@@ -1170,7 +1230,25 @@ export class WebServer<T = unknown> {
    * @internal
    */
   protected _wsMetricError(): void {
+    if (!this.__collectMetrics) return;
     this._metrics.websocket.errors++;
+  }
+
+  /**
+   * Record the metric side of an outbound WebSocket message / an
+   * upgrade attempt — the inline counterparts of the `_wsMetric*`
+   * hooks, centralized so `metrics: false` gates every site.
+   * @internal
+   */
+  protected _wsMetricSent(): void {
+    if (!this.__collectMetrics) return;
+    this._metrics.websocket.messages.sent++;
+  }
+
+  /** @internal See {@link _wsMetricSent}. */
+  protected _wsMetricUpgrade(): void {
+    if (!this.__collectMetrics) return;
+    this._metrics.websocket.upgrades++;
   }
 
   /**
@@ -1245,17 +1323,25 @@ export class WebServer<T = unknown> {
     if (this._state !== 'RUNNING') {
       throw new ServerNotRunningError(this.mode, 'ProcessRequest');
     }
-    const startTime = performance.now();
-    this._metrics.requests.active++;
-    if (this._metrics.requests.active > this._metrics.requests.peakActive) {
-      this._metrics.requests.peakActive = this._metrics.requests.active;
+    const collect = this.__collectMetrics;
+    const startTime = collect ? performance.now() : 0;
+    if (collect) {
+      this._metrics.requests.active++;
+      if (this._metrics.requests.active > this._metrics.requests.peakActive) {
+        this._metrics.requests.peakActive = this._metrics.requests.active;
+      }
     }
-    const requestInfo: RequestInfo = {
-      remoteAddress: info.remoteAddress,
-      remotePort: info.remotePort,
-      requestId: crypto.randomUUID(),
-      requestTime: new Date(),
-    };
+    // requestId/requestTime are LAZY (minted on first access, then
+    // cached): no consumer that ignores `info` should pay for a UUID
+    // + Date allocation per request. `requestTime` still reflects
+    // request ENTRY — the epoch millis are captured here, only the
+    // Date object around them is deferred. See _LazyRequestInfo for
+    // why this is a class and not an object literal with getters.
+    const requestInfo: RequestInfo = new _LazyRequestInfo(
+      info.remoteAddress,
+      info.remotePort,
+      Date.now(),
+    );
     let response: Response | undefined;
     try {
       try {
@@ -1284,26 +1370,42 @@ export class WebServer<T = unknown> {
       }
       return response;
     } finally {
-      const responseTime = performance.now() - startTime;
-      this._metrics.requests.active--;
-      this._metrics.requests.total++;
-      if (response) {
-        const statusCategory = `${
-          Math.floor(response.status / 100)
-        }xx` as keyof typeof this._metrics.statusCodes;
-        this._metrics.statusCodes[statusCategory]++;
-      }
+      if (collect) {
+        const responseTime = performance.now() - startTime;
+        this._metrics.requests.active--;
+        this._metrics.requests.total++;
+        if (response) {
+          // A switch on the status class, not a template-string key —
+          // building `` `${n}xx` `` allocates a string per request.
+          switch ((response.status / 100) | 0) {
+            case 2:
+              this._metrics.statusCodes['2xx']++;
+              break;
+            case 3:
+              this._metrics.statusCodes['3xx']++;
+              break;
+            case 4:
+              this._metrics.statusCodes['4xx']++;
+              break;
+            case 5:
+              this._metrics.statusCodes['5xx']++;
+              break;
+            default:
+              this._metrics.statusCodes['1xx']++;
+          }
+        }
 
-      // Update response time metrics using accumulated sum for better precision
-      if (responseTime < this._metrics.responseTime.min) {
-        this._metrics.responseTime.min = responseTime;
+        // Update response time metrics using accumulated sum for better precision
+        if (responseTime < this._metrics.responseTime.min) {
+          this._metrics.responseTime.min = responseTime;
+        }
+        if (responseTime > this._metrics.responseTime.max) {
+          this._metrics.responseTime.max = responseTime;
+        }
+        this._totalResponseTime += responseTime;
+        this._metrics.responseTime.average = this._totalResponseTime /
+          this._metrics.requests.total;
       }
-      if (responseTime > this._metrics.responseTime.max) {
-        this._metrics.responseTime.max = responseTime;
-      }
-      this._totalResponseTime += responseTime;
-      this._metrics.responseTime.average = this._totalResponseTime /
-        this._metrics.requests.total;
     }
   }
 
@@ -1371,6 +1473,16 @@ export class WebServer<T = unknown> {
    */
   protected _startBunServer(): Promise<void> { // NOSONAR - Complexity acceptable for server start
     const wsHandler = this.options.websocket;
+    // Non-async twin for the no-websocket case — same rationale as
+    // `denoFastProcessor`: no upgrade branch, so hand the promise back
+    // without an extra async frame.
+    const bunFastProcessor = (request: Request, server: BunServer) => {
+      const requestIP = (server.requestIP) ? server.requestIP(request) : null;
+      return this._processRequest(request, {
+        remoteAddress: requestIP?.address || null,
+        remotePort: requestIP?.port || null,
+      });
+    };
     const bunProcessor = async (
       request: Request,
       server: BunServer,
@@ -1383,7 +1495,7 @@ export class WebServer<T = unknown> {
 
       // Check for WebSocket upgrade if handler is configured
       if (wsHandler && request.headers.get('upgrade') === 'websocket') {
-        this._metrics.websocket.upgrades++;
+        this._wsMetricUpgrade();
         const resolved = await this._resolveUpgrade(
           request,
           requestInfo.remoteAddress,
@@ -1424,7 +1536,7 @@ export class WebServer<T = unknown> {
     // Use Record type to avoid conflict with Bun's WebSocketHandler type
     const options: Record<string, unknown> = {
       development: false,
-      fetch: bunProcessor,
+      fetch: wsHandler ? bunProcessor : bunFastProcessor,
     };
 
     // Add WebSocket handlers if configured
@@ -1576,7 +1688,7 @@ export class WebServer<T = unknown> {
   ): ServerWebSocket<T> {
     return {
       send: (data: WebSocketData) => {
-        this._metrics.websocket.messages.sent++;
+        this._wsMetricSent();
         ws.send(data);
       },
       close: (code?: number, reason?: string) => ws.close(code, reason),
@@ -1646,6 +1758,22 @@ export class WebServer<T = unknown> {
   protected _startDenoServer(): Promise<void> { // NOSONAR - Complexity acceptable for server start
     const wsHandler = this.options.websocket;
     const options: Record<string, unknown> = {};
+    // With no websocket handler there is no upgrade branch and nothing
+    // to await — a NON-async processor hands `_processRequest`'s
+    // promise straight to `Deno.serve`, skipping one async frame per
+    // request (measured ~50-90ns).
+    const denoFastProcessor = (
+      request: Request,
+      info: DenoServeHandlerInfo,
+    ) =>
+      this._processRequest(request, {
+        remoteAddress: (info.remoteAddr.transport === 'tcp')
+          ? info.remoteAddr.hostname
+          : null,
+        remotePort: (info.remoteAddr.transport === 'tcp')
+          ? info.remoteAddr.port
+          : null,
+      });
     const denoProcessor = async (
       request: Request,
       info: DenoServeHandlerInfo,
@@ -1661,7 +1789,7 @@ export class WebServer<T = unknown> {
 
       // Check for WebSocket upgrade if handler is configured
       if (wsHandler && request.headers.get('upgrade') === 'websocket') {
-        this._metrics.websocket.upgrades++;
+        this._wsMetricUpgrade();
         const resolved = await this._resolveUpgrade(
           request,
           requestInfo.remoteAddress,
@@ -1762,7 +1890,10 @@ export class WebServer<T = unknown> {
         resolve();
       };
     });
-    this._client = Deno.serve(options, denoProcessor);
+    this._client = Deno.serve(
+      options,
+      wsHandler ? denoProcessor : denoFastProcessor,
+    );
     return ready;
   }
 
@@ -1820,7 +1951,7 @@ export class WebServer<T = unknown> {
     };
     const wrapper: ServerWebSocket<T> = {
       send: (data: WebSocketData) => {
-        this._metrics.websocket.messages.sent++;
+        this._wsMetricSent();
         // `WebSocketData`'s `Uint8Array` is `Uint8Array<ArrayBufferLike>` under
         // TS 5.7+, which the platform `send`'s `BufferSource` rejects; the
         // backing buffer is always a real `ArrayBuffer` here, so the cast is safe.
@@ -1899,27 +2030,47 @@ export class WebServer<T = unknown> {
       const responsePromise = this._processRequest(request, requestInfo);
       responsePromise.then(
         (response) => {
-          res.statusCode = response.status;
-          res.statusMessage = response.statusText;
-
-          // Copy headers, but emit Set-Cookie as a real multi-value
-          // header. Headers.forEach yields `set-cookie` once, comma-joined,
-          // which mangles multiple cookies into a single invalid header;
-          // getSetCookie() preserves each cookie as a separate line.
+          // Headers collect into ONE plain object for a single
+          // `writeHead` call (per-header `setHeader` re-enters Node's
+          // header-state machinery every time). Set-Cookie rides
+          // `getSetCookie()` as a real multi-value header —
+          // Headers.forEach yields `set-cookie` once, comma-joined,
+          // which mangles multiple cookies (keys iterate lowercased
+          // per the Fetch spec, so the literal compare is safe).
           const hdrs = response.headers as Headers & {
             getSetCookie?: () => string[];
           };
+          const outHeaders: Record<string, string | string[]> = {};
           hdrs.forEach((value, key) => {
-            if (key.toLowerCase() !== 'set-cookie') {
-              res.setHeader(key, value);
+            if (key !== 'set-cookie') {
+              outHeaders[key] = value;
             }
           });
           const setCookies = typeof hdrs.getSetCookie === 'function'
             ? hdrs.getSetCookie()
             : [];
           if (setCookies.length > 0) {
-            res.setHeader('Set-Cookie', setCookies);
+            outHeaders['set-cookie'] = setCookies;
           }
+          // `writeHead` flushes the header block, so it runs INSIDE
+          // each delivery branch — after the branch knows whether it
+          // can state an explicit Content-Length. `sendHead(n)` adds
+          // one when the response doesn't already carry length
+          // framing, the status allows a body (204/304 must not have
+          // one), and the request wasn't HEAD (Node suppresses the
+          // body there; a synthesized length would be a guess).
+          const explicitLengthOk = response.status !== 204 &&
+            response.status !== 304 && req.method !== 'HEAD' &&
+            !('content-length' in outHeaders) &&
+            !('transfer-encoding' in outHeaders);
+          const sendHead = (contentLength?: number): void => {
+            if (contentLength !== undefined && explicitLengthOk) {
+              outHeaders['content-length'] = String(contentLength);
+            }
+            // '' statusText falls through to Node's default reason
+            // phrase (statusMessage is only read truthy at store time).
+            res.writeHead(response.status, response.statusText, outHeaders);
+          };
 
           if (response.body) {
             const reader = response.body.getReader();
@@ -1933,14 +2084,19 @@ export class WebServer<T = unknown> {
               }
             });
 
-            const pump = (): void => {
-              reader.read().then(({ done, value }) => { // NOSONAR - Async streaming pattern requires nesting
+            // The general pump: consumes an ALREADY-ISSUED read (the
+            // fast path below may hand over a read it started), then
+            // write-and-read-on until done.
+            const pump = (
+              pending: Promise<ReadableStreamReadResult<Uint8Array>>,
+            ): void => {
+              pending.then(({ done, value }) => { // NOSONAR - Async streaming pattern requires nesting
                 if (done || cancelled) {
                   res.end();
                   return;
                 }
                 res.write(value);
-                pump();
+                pump(reader.read());
               }).catch((err) => { // NOSONAR - Error handling for stream
                 if (!cancelled) {
                   cancelled = true;
@@ -1948,8 +2104,64 @@ export class WebServer<T = unknown> {
                 }
               });
             };
-            pump();
+
+            // Fast path: a Response built from a string/buffer (the
+            // overwhelmingly common case) yields exactly ONE chunk.
+            // Holding it until the next read reports done sends the
+            // whole body as one `res.end(chunk)` — Node then derives
+            // Content-Length instead of chunked framing (one socket
+            // write, smaller wire format). A genuine stream's second
+            // read can take arbitrarily long, so it races a
+            // setImmediate: losing the race flushes the held chunk and
+            // hands off to the pump — at most one event-loop turn of
+            // added latency, only on the FIRST chunk of an actual
+            // streaming response (a materialized body's final read
+            // settles in a microtask, deterministically beating the
+            // macrotask setImmediate).
+            reader.read().then((first) => { // NOSONAR - Async streaming pattern requires nesting
+              if (cancelled) return;
+              if (first.done) {
+                sendHead(0);
+                res.end();
+                return;
+              }
+              const second = reader.read();
+              let handedOff = false;
+              const flush = setImmediate(() => { // NOSONAR - Race arm requires nesting
+                if (cancelled || handedOff) return;
+                handedOff = true;
+                sendHead(); // no known length — chunked framing
+                res.write(first.value!);
+                pump(second);
+              });
+              second.then((result) => { // NOSONAR - Race arm requires nesting
+                if (handedOff || cancelled) return; // pump owns it now
+                handedOff = true;
+                clearImmediate(flush);
+                if (result.done) {
+                  sendHead(first.value!.byteLength);
+                  res.end(first.value!);
+                  return;
+                }
+                sendHead(); // multi-chunk — chunked framing
+                res.write(first.value!);
+                res.write(result.value!);
+                pump(reader.read());
+              }, (err) => { // NOSONAR - Race arm requires nesting
+                if (handedOff || cancelled) return; // pump's catch handles it
+                handedOff = true;
+                clearImmediate(flush);
+                cancelled = true;
+                res.destroy(err);
+              });
+            }).catch((err) => { // NOSONAR - Error handling for stream
+              if (!cancelled) {
+                cancelled = true;
+                res.destroy(err);
+              }
+            });
           } else {
+            sendHead(0);
             res.end();
           }
         },
@@ -2043,7 +2255,7 @@ export class WebServer<T = unknown> {
     const wss = new nodeWs.WebSocketServer({ noServer: true });
 
     server.on('upgrade', (req, socket, head) => {
-      this._metrics.websocket.upgrades++;
+      this._wsMetricUpgrade();
 
       // WS upgrades are always GET, so the shared helper's body branch
       // skips and we get a header-only Request. The helper can still
@@ -2183,7 +2395,7 @@ export class WebServer<T = unknown> {
     let connectionData = userData;
     return {
       send: (data: WebSocketData) => {
-        this._metrics.websocket.messages.sent++;
+        this._wsMetricSent();
         ws.send(data);
       },
       close: (code?: number, reason?: string) => ws.close(code, reason),
@@ -2345,9 +2557,10 @@ export class WebServer<T = unknown> {
    * to share one implementation across both call sites.
    *
    * @throws {TypeError} If the client `Host` header (used as the URL
-   *   authority) cannot be parsed by `new URL` — e.g. an out-of-range
-   *   port. Both call sites catch this and reject the request rather
-   *   than letting the throw crash the process.
+   *   authority) yields an unparseable URL — e.g. an out-of-range
+   *   port. Raised by `new Request` (origin-form targets) or `new URL`
+   *   (absolute-/asterisk-form). Both call sites catch this and reject
+   *   the request rather than letting the throw crash the process.
    * @private
    */
   private __nodeReqToFetchRequest(
@@ -2357,14 +2570,30 @@ export class WebServer<T = unknown> {
       ? 'https'
       : 'http';
     const host = req.headers.host || 'localhost';
-    const url = new URL(req.url || '/', `${protocol}://${host}`);
-    const headers = new Headers();
-    for (const [key, value] of Object.entries(req.headers)) {
+    const rawUrl = req.url || '/';
+    // Origin-form targets ('/path?query' — effectively every real
+    // request) build the absolute URL by CONCATENATION: `new Request`
+    // parses and normalizes the string itself, so a separate `new URL`
+    // pass here parsed the same URL twice (measured ~450ns/request).
+    // Absolute-/asterisk-form targets (proxy-style requests,
+    // `OPTIONS *`) keep the original `new URL` resolution semantics.
+    // A malformed Host now throws inside `new Request` instead of
+    // `new URL` — the same call-site catches still turn it into a 400.
+    const url = rawUrl[0] === '/'
+      ? `${protocol}://${host}${rawUrl}`
+      : new URL(rawUrl, `${protocol}://${host}`).href;
+    // Header PAIRS go to `new Request` directly: one validation pass
+    // in its fill, instead of building an intermediate `Headers` whose
+    // per-append validation covered the same ground (measured
+    // ~750ns/request for a typical 5-header request).
+    const headers: [string, string][] = [];
+    for (const key in req.headers) {
+      const value = req.headers[key];
       if (value == null) continue;
       if (Array.isArray(value)) {
-        for (const v of value) headers.append(key, v);
+        for (const v of value) headers.push([key, v]);
       } else if (typeof value === 'string') {
-        headers.append(key, value);
+        headers.push([key, value]);
       }
     }
     let body: BodyInit | null | undefined = undefined;

@@ -1,3 +1,4 @@
+import { bench } from '@tundralibs/compat/bench';
 import { ConsoleHandler } from './ConsoleHandler.ts';
 import { SyslogSeverities } from '@tundralibs/utils';
 import { SlogObject } from '../../types/mod.ts';
@@ -22,10 +23,10 @@ const makeLogObject = (
 });
 
 // Benchmark ConsoleHandler with simple formatter
-Deno.bench({
+bench({
   name: 'slogger.ConsoleHandler Simple - Formatter',
   async fn() {
-    const c = console;
+    const log = console.log;
     console.log = () => {}; // Suppress console output during benchmark
     const handler = new ConsoleHandler('benchHandler', {
       level: 7,
@@ -37,15 +38,15 @@ Deno.bench({
       makeLogObject(SyslogSeverities.INFO, 'Benchmark message'),
     );
     await handler.finalize();
-    console.log = c.log; // Restore console output
+    console.log = log; // Restore console output
   },
 });
 
 // Benchmark ConsoleHandler with JSON formatter
-Deno.bench({
+bench({
   name: 'slogger.ConsoleHandler JSON - Formatter',
   async fn() {
-    const c = console;
+    const log = console.log;
     console.log = () => {}; // Suppress console output during benchmark
     const handler = new ConsoleHandler('benchHandler', {
       level: 7,
@@ -61,15 +62,15 @@ Deno.bench({
       }),
     );
     await handler.finalize();
-    console.log = c.log; // Restore console output
+    console.log = log; // Restore console output
   },
 });
 
 // Benchmark ConsoleHandler with large messages
-Deno.bench({
+bench({
   name: 'slogger.ConsoleHandler Large - Messages (1KB)',
   async fn() {
-    const c = console;
+    const log = console.log;
     console.log = () => {}; // Suppress console output during benchmark
     const handler = new ConsoleHandler('benchHandler', {
       level: 7,
@@ -80,15 +81,15 @@ Deno.bench({
     const largeMessage = 'X'.repeat(1024); // 1KB message
     await handler.handle(makeLogObject(SyslogSeverities.INFO, largeMessage));
     await handler.finalize();
-    console.log = c.log; // Restore console output
+    console.log = log; // Restore console output
   },
 });
 
 // Benchmark ConsoleHandler with different severity levels
-Deno.bench({
+bench({
   name: 'slogger.ConsoleHandler Emergency - Level',
   async fn() {
-    const c = console;
+    const log = console.log;
     console.log = () => {}; // Suppress console output during benchmark
     const handler = new ConsoleHandler('benchHandler', {
       level: 7,
@@ -100,15 +101,15 @@ Deno.bench({
       makeLogObject(SyslogSeverities.EMERGENCY, 'Emergency message'),
     );
     await handler.finalize();
-    console.log = c.log; // Restore console output
+    console.log = log; // Restore console output
   },
 });
 
 // Benchmark ConsoleHandler with debug level
-Deno.bench({
+bench({
   name: 'slogger.ConsoleHandler Debug - Level',
   async fn() {
-    const c = console;
+    const log = console.log;
     console.log = () => {}; // Suppress console output during benchmark
     const handler = new ConsoleHandler('benchHandler', {
       level: 7,
@@ -120,15 +121,15 @@ Deno.bench({
       makeLogObject(SyslogSeverities.DEBUG, 'Debug message'),
     );
     await handler.finalize();
-    console.log = c.log; // Restore console output
+    console.log = log; // Restore console output
   },
 });
 
 // Benchmark ConsoleHandler with structured data
-Deno.bench({
+bench({
   name: 'slogger.ConsoleHandler Structured Context - Data',
   async fn() {
-    const c = console;
+    const log = console.log;
     console.log = () => {}; // Suppress console output during benchmark
     const handler = new ConsoleHandler('benchHandler', {
       level: 7,
@@ -164,15 +165,15 @@ Deno.bench({
     ));
 
     await handler.finalize();
-    console.log = c.log; // Restore console output
+    console.log = log; // Restore console output
   },
 });
 
 // Benchmark ConsoleHandler initialization overhead
-Deno.bench({
+bench({
   name: 'slogger.ConsoleHandler - Init/Finalize Overhead',
   async fn() {
-    const c = console;
+    const log = console.log;
     console.log = () => {}; // Suppress console output during benchmark
     const handler = new ConsoleHandler('benchHandler', {
       level: 7,
@@ -181,6 +182,6 @@ Deno.bench({
 
     await handler.init();
     await handler.finalize();
-    console.log = c.log; // Restore console output
+    console.log = log; // Restore console output
   },
 });

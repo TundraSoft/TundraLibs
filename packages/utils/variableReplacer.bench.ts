@@ -1,6 +1,7 @@
+import { bench } from '@tundralibs/compat/bench';
 import { variableReplacer } from './variableReplacer.ts';
 
-Deno.bench({
+bench({
   name: 'utils.variableReplacer - Replace variables in string',
 }, () => {
   variableReplacer(
@@ -15,7 +16,7 @@ Deno.bench({
   );
 });
 
-Deno.bench({
+bench({
   name: 'utils.variableReplacer - Replace variables with nested objects',
 }, () => {
   variableReplacer(
@@ -36,7 +37,7 @@ Deno.bench({
 // Custom-delimiter path uses a hand-rolled regex scanner instead of
 // templatize. Bench separately so we can see the gap.
 const handlebarsRe = /\{\{([^{}]+)\}\}/g;
-Deno.bench({
+bench({
   name: 'utils.variableReplacer - Custom regex (handlebars {{...}})',
 }, () => {
   variableReplacer(

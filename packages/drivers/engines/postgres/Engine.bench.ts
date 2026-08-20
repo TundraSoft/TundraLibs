@@ -4,6 +4,7 @@
  * Run with: deno bench packages/drivers/engines/postgres/Engine.bench.ts --allow-all
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { envArgs } from '@tundralibs/utils';
 import { PostgresEngine } from './Engine.ts';
 
@@ -16,27 +17,42 @@ const TEST_CONFIG = {
   password: env.get('POSTGRES_PASSWORD') || '',
 };
 
-const single = new PostgresEngine('bench-single', {
-  ...TEST_CONFIG,
-  pool: { min: 1, max: 1 },
-});
-const pooled = new PostgresEngine('bench-pool', {
-  ...TEST_CONFIG,
-  pool: { min: 4, max: 8 },
-});
+// Engine CONSTRUCTION throws on missing config (empty password), so it
+// lives inside the guard too — unconfigured means skip, same contract
+// as the memcached/redis siblings, never a module-scope crash.
+const engines = (() => {
+  try {
+    return {
+      single: new PostgresEngine('bench-single', {
+        ...TEST_CONFIG,
+        pool: { min: 1, max: 1 },
+      }),
+      pooled: new PostgresEngine('bench-pool', {
+        ...TEST_CONFIG,
+        pool: { min: 4, max: 8 },
+      }),
+    };
+  } catch {
+    return undefined;
+  }
+})();
 
 let serverAvailable = false;
-try {
-  await single.connect();
-  await pooled.connect();
-  serverAvailable = await single.ping() && await pooled.ping();
-} catch {
-  serverAvailable = false;
+if (engines !== undefined) {
+  try {
+    await engines.single.connect();
+    await engines.pooled.connect();
+    serverAvailable = await engines.single.ping() &&
+      await engines.pooled.ping();
+  } catch {
+    serverAvailable = false;
+  }
 }
 
 if (!serverAvailable) {
-  console.warn('PostgreSQL unreachable; skipping benchmarks.');
+  console.warn('PostgreSQL unreachable or unconfigured; skipping benchmarks.');
 } else {
+  const { single, pooled } = engines!;
   const TABLE = 'tundra_bench_pg';
   await single.execute({
     sql: `CREATE TABLE IF NOT EXISTS ${TABLE} (
@@ -55,25 +71,25 @@ if (!serverAvailable) {
     });
   }
 
-  Deno.bench('Postgres / SELECT 1 (1 conn)', async () => {
+  bench('Postgres / SELECT 1 (1 conn)', async () => {
     await single.execute({ sql: 'SELECT 1' });
   });
 
-  Deno.bench('Postgres / SELECT by PK (1 conn)', async () => {
+  bench('Postgres / SELECT by PK (1 conn)', async () => {
     await single.execute({
       sql: `SELECT * FROM ${TABLE} WHERE id = :id:`,
       params: { id: 42 },
     });
   });
 
-  Deno.bench('Postgres / SELECT 10 rows (1 conn)', async () => {
+  bench('Postgres / SELECT 10 rows (1 conn)', async () => {
     await single.execute({
       sql: `SELECT * FROM ${TABLE} WHERE id BETWEEN :a: AND :b:`,
       params: { a: 0, b: 9 },
     });
   });
 
-  Deno.bench('Postgres / INSERT + DELETE (1 conn)', async () => {
+  bench('Postgres / INSERT + DELETE (1 conn)', async () => {
     await single.execute({
       sql: `INSERT INTO ${TABLE} (id, name) VALUES (:id:, :n:)`,
       params: { id: 9999, n: 'tmp' },
@@ -84,7 +100,7 @@ if (!serverAvailable) {
     });
   });
 
-  Deno.bench(
+  bench(
     'Postgres / Transaction (BEGIN+INSERT+COMMIT) (1 conn)',
     async () => {
       const tx = await single.transaction();
@@ -100,7 +116,7 @@ if (!serverAvailable) {
     },
   );
 
-  Deno.bench('Postgres / 16 concurrent SELECTs (pool 8)', async () => {
+  bench('Postgres / 16 concurrent SELECTs (pool 8)', async () => {
     const ops = Array.from(
       { length: 16 },
       () =>
@@ -112,7 +128,7 @@ if (!serverAvailable) {
     await Promise.all(ops);
   });
 
-  Deno.bench('Postgres / type-decode mix (1 conn)', async () => {
+  bench('Postgres / type-decode mix (1 conn)', async () => {
     await single.execute({
       sql: `SELECT
         42::int AS i,

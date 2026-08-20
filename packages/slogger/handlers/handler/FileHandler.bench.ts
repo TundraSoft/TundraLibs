@@ -1,3 +1,5 @@
+import { bench } from '@tundralibs/compat/bench';
+import { makeDir, removeDir } from '@tundralibs/compat/file';
 import { FileHandler } from './FileHandler.ts';
 import { SyslogSeverities } from '@tundralibs/utils';
 import { SlogObject } from '../../types/mod.ts';
@@ -27,7 +29,7 @@ const BENCH_DIR = './slogger/handlers/handler/fixtures/bench/';
 // Setup function
 async function setupBenchmarkDir() {
   try {
-    await Deno.mkdir(BENCH_DIR, { recursive: true });
+    await makeDir(BENCH_DIR, { recursive: true });
   } catch {
     // Directory might already exist
   }
@@ -36,16 +38,15 @@ async function setupBenchmarkDir() {
 // Cleanup function
 async function cleanupBenchmarkDir() {
   try {
-    await Deno.remove(BENCH_DIR, { recursive: true });
+    await removeDir(BENCH_DIR, { recursive: true });
   } catch {
     // Directory might not exist or have permission issues
   }
 }
 
 // Benchmark FileHandler with small messages
-Deno.bench({
+bench({
   name: 'slogger.FileHandler Small - Messages (100 chars)',
-  permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
 
@@ -68,9 +69,8 @@ Deno.bench({
 });
 
 // Benchmark FileHandler with large messages
-Deno.bench({
+bench({
   name: 'slogger.FileHandler Large - Messages (1KB)',
-  permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
 
@@ -93,9 +93,8 @@ Deno.bench({
 });
 
 // Benchmark FileHandler with JSON formatter
-Deno.bench({
+bench({
   name: 'slogger.FileHandler JSON - Formatter',
-  permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
 
@@ -122,9 +121,8 @@ Deno.bench({
 });
 
 // Benchmark FileHandler with high-severity auto-flush
-Deno.bench({
+bench({
   name: 'slogger.FileHandler Error - Level (Auto-Flush)',
-  permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
 
@@ -151,9 +149,8 @@ Deno.bench({
 });
 
 // Benchmark FileHandler with info level (buffered)
-Deno.bench({
+bench({
   name: 'slogger.FileHandler Info - Level (Buffered)',
-  permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
 
@@ -177,9 +174,8 @@ Deno.bench({
 });
 
 // Benchmark FileHandler with different buffer sizes
-Deno.bench({
+bench({
   name: 'slogger.FileHandler Small - Buffer (1KB)',
-  permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
 
@@ -198,9 +194,8 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'slogger.FileHandler Large - Buffer (64KB)',
-  permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
 
@@ -220,9 +215,8 @@ Deno.bench({
 });
 
 // Benchmark FileHandler initialization overhead
-Deno.bench({
+bench({
   name: 'slogger.FileHandler - Init/Finalize Overhead',
-  permissions: { read: true, write: true },
   async fn() {
     await setupBenchmarkDir();
 

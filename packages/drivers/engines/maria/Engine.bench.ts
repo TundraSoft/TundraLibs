@@ -4,6 +4,7 @@
  * Run with: deno bench packages/drivers/engines/maria/Engine.bench.ts --allow-all
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { envArgs } from '@tundralibs/utils';
 import { MariaEngine } from './Engine.ts';
 
@@ -16,27 +17,42 @@ const TEST_CONFIG = {
   password: env.get('MARIA_PASSWORD') || '',
 };
 
-const single = new MariaEngine('bench-single', {
-  ...TEST_CONFIG,
-  pool: { min: 1, max: 1 },
-});
-const pooled = new MariaEngine('bench-pool', {
-  ...TEST_CONFIG,
-  pool: { min: 4, max: 8 },
-});
+// Engine CONSTRUCTION throws on missing config (empty password), so it
+// lives inside the guard too — unconfigured means skip, same contract
+// as the memcached/redis siblings, never a module-scope crash.
+const engines = (() => {
+  try {
+    return {
+      single: new MariaEngine('bench-single', {
+        ...TEST_CONFIG,
+        pool: { min: 1, max: 1 },
+      }),
+      pooled: new MariaEngine('bench-pool', {
+        ...TEST_CONFIG,
+        pool: { min: 4, max: 8 },
+      }),
+    };
+  } catch {
+    return undefined;
+  }
+})();
 
 let serverAvailable = false;
-try {
-  await single.connect();
-  await pooled.connect();
-  serverAvailable = await single.ping() && await pooled.ping();
-} catch {
-  serverAvailable = false;
+if (engines !== undefined) {
+  try {
+    await engines.single.connect();
+    await engines.pooled.connect();
+    serverAvailable = await engines.single.ping() &&
+      await engines.pooled.ping();
+  } catch {
+    serverAvailable = false;
+  }
 }
 
 if (!serverAvailable) {
-  console.warn('MariaDB unreachable; skipping benchmarks.');
+  console.warn('MariaDB unreachable or unconfigured; skipping benchmarks.');
 } else {
+  const { single, pooled } = engines!;
   // Seed.
   const TABLE = 'tundra_bench_maria';
   await single.execute({
@@ -55,25 +71,25 @@ if (!serverAvailable) {
     });
   }
 
-  Deno.bench('Maria / SELECT 1 (1 conn)', async () => {
+  bench('Maria / SELECT 1 (1 conn)', async () => {
     await single.execute({ sql: 'SELECT 1 AS v' });
   });
 
-  Deno.bench('Maria / SELECT by PK (1 conn)', async () => {
+  bench('Maria / SELECT by PK (1 conn)', async () => {
     await single.execute({
       sql: `SELECT * FROM ${TABLE} WHERE id = :id:`,
       params: { id: 42 },
     });
   });
 
-  Deno.bench('Maria / SELECT 10 rows (1 conn)', async () => {
+  bench('Maria / SELECT 10 rows (1 conn)', async () => {
     await single.execute({
       sql: `SELECT * FROM ${TABLE} WHERE id BETWEEN :a: AND :b:`,
       params: { a: 0, b: 9 },
     });
   });
 
-  Deno.bench('Maria / INSERT + DELETE (1 conn)', async () => {
+  bench('Maria / INSERT + DELETE (1 conn)', async () => {
     await single.execute({
       sql: `INSERT INTO ${TABLE} (id, name) VALUES (:id:, :n:)`,
       params: { id: 9999, n: 'tmp' },
@@ -84,7 +100,7 @@ if (!serverAvailable) {
     });
   });
 
-  Deno.bench('Maria / Transaction (BEGIN+INSERT+COMMIT) (1 conn)', async () => {
+  bench('Maria / Transaction (BEGIN+INSERT+COMMIT) (1 conn)', async () => {
     const tx = await single.transaction();
     await tx.execute({
       sql: `INSERT INTO ${TABLE} (id, name) VALUES (:id:, :n:)`,
@@ -97,7 +113,7 @@ if (!serverAvailable) {
     });
   });
 
-  Deno.bench('Maria / 16 concurrent SELECTs (pool 8)', async () => {
+  bench('Maria / 16 concurrent SELECTs (pool 8)', async () => {
     const ops = Array.from(
       { length: 16 },
       () =>

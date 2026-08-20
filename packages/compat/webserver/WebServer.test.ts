@@ -1670,10 +1670,38 @@ h87g/qBXJrxZ7o+w+KxL/Q==
   // ===========================================================================
 
   describe('metrics', () => {
+    it('collection is OPT-IN: counters stay zeroed without metrics: true', async () => {
+      const port = getNextPort();
+
+      activeServer = new WebServer('Test', {
+        mode: 'TCP',
+        port,
+        hostname: 'localhost',
+        handler: () => new Response('OK'),
+      });
+
+      await activeServer.start();
+      await delay(100);
+
+      const response = await fetch(`http://localhost:${port}/`);
+      if (await response.text() !== 'OK') {
+        throw new Error('serving must be unaffected by metrics being off');
+      }
+      await delay(50);
+
+      const metrics = activeServer.metrics;
+      if (metrics.requests.total !== 0 || metrics.statusCodes['2xx'] !== 0) {
+        throw new Error(
+          `default must not collect: total=${metrics.requests.total}`,
+        );
+      }
+    });
+
     it('should track total requests', async () => {
       const port = getNextPort();
 
       activeServer = new WebServer('Test', {
+        metrics: true,
         mode: 'TCP',
         port,
         hostname: 'localhost',
@@ -1702,6 +1730,7 @@ h87g/qBXJrxZ7o+w+KxL/Q==
       const port = getNextPort();
 
       activeServer = new WebServer('Test', {
+        metrics: true,
         mode: 'TCP',
         port,
         hostname: 'localhost',
@@ -1754,6 +1783,7 @@ h87g/qBXJrxZ7o+w+KxL/Q==
       const port = getNextPort();
 
       activeServer = new WebServer('Test', {
+        metrics: true,
         mode: 'TCP',
         port,
         hostname: 'localhost',
@@ -1788,6 +1818,7 @@ h87g/qBXJrxZ7o+w+KxL/Q==
       let maxConcurrent = 0;
 
       activeServer = new WebServer('Test', {
+        metrics: true,
         mode: 'TCP',
         port,
         hostname: 'localhost',
@@ -1828,6 +1859,7 @@ h87g/qBXJrxZ7o+w+KxL/Q==
         const port = getNextPort();
 
         activeServer = new WebServer('Test', {
+          metrics: true,
           mode: 'TCP',
           port,
           hostname: 'localhost',
@@ -1908,6 +1940,7 @@ h87g/qBXJrxZ7o+w+KxL/Q==
       }
 
       const probe = new WsMetricProbe('WsMetricProbe', {
+        metrics: true,
         mode: 'TCP',
         port: getNextPort(),
         hostname: 'localhost',
@@ -2791,6 +2824,7 @@ h87g/qBXJrxZ7o+w+KxL/Q==
       let requestCount = 0;
 
       activeServer = new WebServer('Test', {
+        metrics: true,
         mode: 'TCP',
         port,
         hostname: 'localhost',
@@ -2862,6 +2896,7 @@ h87g/qBXJrxZ7o+w+KxL/Q==
         const port = getNextPort();
 
         activeServer = new WebServer('Test', {
+          metrics: true,
           mode: 'TCP',
           port,
           hostname: 'localhost',
@@ -3272,6 +3307,7 @@ h87g/qBXJrxZ7o+w+KxL/Q==
         const port = getNextPort();
 
         activeServer = new WebServer('Test', {
+          metrics: true,
           mode: 'TCP',
           port,
           hostname: 'localhost',

@@ -1,3 +1,4 @@
+import { bench } from '@tundralibs/compat/bench';
 import { SyslogSeverities } from '@tundralibs/utils';
 import { SlogObject } from '../types/mod.ts';
 import {
@@ -58,35 +59,35 @@ const complexLog = makeLogObject('Complex benchmark operation completed', {
 });
 
 // Benchmark simple string formatters
-Deno.bench({
+bench({
   name: 'slogger.String Formatter Standard - Format',
   fn() {
     standardFormat(simpleLog);
   },
 });
 
-Deno.bench({
+bench({
   name: 'slogger.String Formatter Detailed - Format',
   fn() {
     detailedFormat(simpleLog);
   },
 });
 
-Deno.bench({
+bench({
   name: 'slogger.String Formatter Compact - Format',
   fn() {
     compactFormat(simpleLog);
   },
 });
 
-Deno.bench({
+bench({
   name: 'slogger.String Formatter Minimalist - Format',
   fn() {
     minimalistFormat(simpleLog);
   },
 });
 
-Deno.bench({
+bench({
   name: 'slogger.String Formatter - Key-Value Format',
   fn() {
     keyValueFormat(simpleLog);
@@ -94,14 +95,14 @@ Deno.bench({
 });
 
 // Benchmark JSON formatter
-Deno.bench({
+bench({
   name: 'slogger.JSON Formatter Simple - Log',
   fn() {
     jsonFormatter(simpleLog);
   },
 });
 
-Deno.bench({
+bench({
   name: 'slogger.JSON Formatter Complex - Log',
   fn() {
     jsonFormatter(complexLog);
@@ -109,7 +110,7 @@ Deno.bench({
 });
 
 // Benchmark masking formatter
-Deno.bench({
+bench({
   name: 'slogger.Masking Formatter Default - Masking',
   fn() {
     const formatter = maskingFormatter();
@@ -117,7 +118,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'slogger.Masking Formatter Aggressive - Masking',
   fn() {
     const formatter = maskingFormatter({
@@ -129,7 +130,7 @@ Deno.bench({
 });
 
 // Benchmark with large string formatting
-Deno.bench({
+bench({
   name: 'slogger.String Formatter Large - Message (1KB)',
   fn() {
     const largeMessage = 'X'.repeat(1024); // 1KB message
@@ -139,7 +140,7 @@ Deno.bench({
 });
 
 // Benchmark template variable replacement performance
-Deno.bench({
+bench({
   name: 'slogger.String Formatter Complex - Template',
   fn() {
     const complexTemplate =
@@ -150,7 +151,7 @@ Deno.bench({
 });
 
 // Benchmark custom formatter function vs template
-Deno.bench({
+bench({
   name: 'slogger.Custom Formatter Function vs - Template',
   fn() {
     const customFormatter = (log: SlogObject): string => {
@@ -161,7 +162,7 @@ Deno.bench({
 });
 
 // Benchmark different formatter efficiency
-Deno.bench({
+bench({
   name: 'slogger.Binary vs JSON vs String Complex - Log',
   fn() {
     // Test each formatter type for comparison

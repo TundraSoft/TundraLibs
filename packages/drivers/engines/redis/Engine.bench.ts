@@ -7,6 +7,7 @@
  * packages/drivers/.env (REDIS_HOST / REDIS_PORT). Skipped if unreachable.
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { envArgs } from '@tundralibs/utils';
 import { RedisEngine } from './Engine.ts';
 
@@ -55,48 +56,48 @@ if (!serverAvailable) {
   // SINGLE CONNECTION
   // ===========================================================================
 
-  Deno.bench('Redis / SET (1 conn) - small string', async () => {
+  bench('Redis / SET (1 conn) - small string', async () => {
     await single.set('bench:set:small', 'value');
   });
 
-  Deno.bench('Redis / SET (1 conn) - 1KB payload', async () => {
+  bench('Redis / SET (1 conn) - 1KB payload', async () => {
     await single.set('bench:set:medium', padded);
   });
 
-  Deno.bench('Redis / SET (1 conn) - JSON object', async () => {
+  bench('Redis / SET (1 conn) - JSON object', async () => {
     await single.set('bench:set:json', sampleObject);
   });
 
-  Deno.bench('Redis / GET (1 conn) - hit', async () => {
+  bench('Redis / GET (1 conn) - hit', async () => {
     await single.get('bench:hit');
   });
 
-  Deno.bench('Redis / GET (1 conn) - miss', async () => {
+  bench('Redis / GET (1 conn) - miss', async () => {
     await single.get('bench:does-not-exist');
   });
 
-  Deno.bench('Redis / GET (1 conn) - 1KB payload', async () => {
+  bench('Redis / GET (1 conn) - 1KB payload', async () => {
     await single.get('bench:medium');
   });
 
-  Deno.bench('Redis / INCR (1 conn)', async () => {
+  bench('Redis / INCR (1 conn)', async () => {
     await single.incr('bench:counter');
   });
 
-  Deno.bench('Redis / SET + GET round trip (1 conn)', async () => {
+  bench('Redis / SET + GET round trip (1 conn)', async () => {
     await single.set('bench:rt', 'value');
     await single.get('bench:rt');
   });
 
-  Deno.bench('Redis / HSET multi-field (1 conn)', async () => {
+  bench('Redis / HSET multi-field (1 conn)', async () => {
     await single.hset('bench:hash', { a: '1', b: '2', c: '3' });
   });
 
-  Deno.bench('Redis / HGETALL (1 conn)', async () => {
+  bench('Redis / HGETALL (1 conn)', async () => {
     await single.hgetAll('bench:hash');
   });
 
-  Deno.bench('Redis / LPUSH+LRANGE 10 items (1 conn)', async () => {
+  bench('Redis / LPUSH+LRANGE 10 items (1 conn)', async () => {
     await single.del('bench:list');
     await single.rpush(
       'bench:list',
@@ -114,7 +115,7 @@ if (!serverAvailable) {
     await single.lrange('bench:list', 0, -1);
   });
 
-  Deno.bench('Redis / MULTI/EXEC 4 cmds (1 conn)', async () => {
+  bench('Redis / MULTI/EXEC 4 cmds (1 conn)', async () => {
     await single.multi([
       ['SET', 'bench:m:k1', 'v1'],
       ['INCR', 'bench:m:c'],
@@ -123,7 +124,7 @@ if (!serverAvailable) {
     ]);
   });
 
-  Deno.bench('Redis / PING (1 conn)', async () => {
+  bench('Redis / PING (1 conn)', async () => {
     await single.ping();
   });
 
@@ -131,20 +132,20 @@ if (!serverAvailable) {
   // POOL OF 8 — concurrency throughput
   // ===========================================================================
 
-  Deno.bench('Redis / SET (pool 8) - small string', async () => {
+  bench('Redis / SET (pool 8) - small string', async () => {
     await pooled.set('bench:set:small', 'value');
   });
 
-  Deno.bench('Redis / GET (pool 8) - hit', async () => {
+  bench('Redis / GET (pool 8) - hit', async () => {
     await pooled.get('bench:hit');
   });
 
-  Deno.bench('Redis / 16 concurrent GETs (pool 8)', async () => {
+  bench('Redis / 16 concurrent GETs (pool 8)', async () => {
     const ops = Array.from({ length: 16 }, () => pooled.get('bench:hit'));
     await Promise.all(ops);
   });
 
-  Deno.bench('Redis / 16 concurrent SETs (pool 8)', async () => {
+  bench('Redis / 16 concurrent SETs (pool 8)', async () => {
     const ops = Array.from(
       { length: 16 },
       (_, i) => pooled.set(`bench:set:concurrent:${i}`, 'value'),
@@ -152,7 +153,7 @@ if (!serverAvailable) {
     await Promise.all(ops);
   });
 
-  Deno.bench('Redis / 16 mixed ops (pool 8)', async () => {
+  bench('Redis / 16 mixed ops (pool 8)', async () => {
     const ops = Array.from({ length: 16 }, (_, i) => {
       if (i % 2 === 0) return pooled.set(`bench:mixed:${i}`, 'value');
       return pooled.get('bench:hit');

@@ -1,4 +1,3 @@
-/// <reference lib="deno.ns" />
 /**
  * @fileoverview The measurement behind the encoder's design.
  *
@@ -19,6 +18,7 @@
  * @module
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { encodeSpans, toKeyValues } from './mod.ts';
 import { SpanKind, SpanStatusCode } from '../../types/mod.ts';
 import type { Attributes, SpanData } from '../../types/mod.ts';
@@ -68,10 +68,10 @@ const BATCH: SpanData[] = Array.from({ length: 512 }, (_, i) => ({
   resource: { 'service.name': 'bench' },
 }));
 
-Deno.bench('otlp encode — Guardian transform (shipped)', () => {
+bench('otlp encode — Guardian transform (shipped)', () => {
   encodeSpans(BATCH);
 });
 
-Deno.bench('otlp encode — hand-rolled baseline', () => {
+bench('otlp encode — hand-rolled baseline', () => {
   BATCH.map(handRolled);
 });

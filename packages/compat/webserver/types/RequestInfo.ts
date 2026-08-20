@@ -14,11 +14,17 @@ export type RequestInfo = {
   remotePort: number | null;
 
   /**
-   * UUID-v4 generated at request entry. Use for log correlation
-   * and for forwarding as a trace header to downstream services.
+   * UUID-v4 for this request — minted on FIRST access, then stable
+   * for the request's lifetime (consumers that never read it don't
+   * pay for it). Use for log correlation and for forwarding as a
+   * trace header to downstream services.
    */
   requestId: string;
 
-  /** When the request was received. Subtract from `Date.now()` for duration. */
+  /**
+   * When the request was received (captured at entry; the Date object
+   * itself is built lazily on first access, then cached). Subtract
+   * from `Date.now()` for duration.
+   */
   requestTime: Date;
 };

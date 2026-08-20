@@ -61,6 +61,16 @@ export type ServerOptions<M extends ServerMode = ServerMode, T = unknown> = (
     /** Triggers graceful shutdown when aborted (no new connections). */
     abortSignal?: AbortSignal;
     /**
+     * OPT-IN runtime metrics (`server.metrics`): request counts,
+     * status-code tallies, response times, WebSocket counters. Off by
+     * default — collection costs per-request work (measured ~250ns;
+     * material against a fast native floor like `Deno.serve`) that
+     * consumers with their own observability stack shouldn't pay.
+     * Without `metrics: true` the counters simply stay zeroed.
+     * @default false
+     */
+    metrics?: boolean;
+    /**
      * WebSocket handler. Backends: native `Bun.serve` websocket on
      * Bun, `Deno.upgradeWebSocket` on Deno, `ws` package on Node.
      * Use {@link WebSocketHandler.upgrade} to gate or customise each

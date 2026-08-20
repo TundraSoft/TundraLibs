@@ -1,6 +1,7 @@
+import { bench } from '@tundralibs/compat/bench';
 import { getFreePort } from './getFreePort.ts';
 
-Deno.bench({
+bench({
   name: 'utils.getFreePort - Fetch an unused port number',
 }, () => {
   getFreePort();

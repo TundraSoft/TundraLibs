@@ -1,3 +1,4 @@
+import { bench } from '@tundralibs/compat/bench';
 import { isInSubnet } from './isInSubnet.ts';
 
 const subnets: Record<string, string> = {
@@ -10,7 +11,7 @@ const subnets: Record<string, string> = {
 };
 
 Object.entries(subnets).forEach(([ip, subnet]) => {
-  Deno.bench({
+  bench({
     name: `utils.isInSubnet ${ip} in ${subnet}`,
   }, () => {
     isInSubnet(ip, subnet);

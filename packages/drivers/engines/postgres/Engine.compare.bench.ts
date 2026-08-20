@@ -14,11 +14,11 @@
  * all four implementations so the results sit side-by-side in the output.
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { envArgs } from '@tundralibs/utils';
 import { PostgresEngine } from './Engine.ts';
-import pg from 'npm:pg@^8.13.0';
-import postgresJs from 'npm:postgres@^3.4.5';
-import { Pool as DenoPgPool } from 'jsr:@db/postgres@^0.19.5';
+import pg from 'pg';
+import postgresJs from 'postgres';
 
 const env = envArgs('./packages/drivers/');
 const HOST = env.get('POSTGRES_HOST') || 'localhost';
@@ -32,14 +32,22 @@ const TABLE = 'tundra_bench_compare';
 
 // --- Construct each client ------------------------------------------------
 
-const tundra = new PostgresEngine('bench-tundra', {
-  host: HOST,
-  port: PORT,
-  database: DB,
-  username: USER,
-  password: PASS,
-  pool: { min: POOL_SIZE, max: POOL_SIZE },
-});
+// Construction itself throws on missing config (empty password) — a
+// guarded skip, never a module-scope crash.
+const tundra = (() => {
+  try {
+    return new PostgresEngine('bench-tundra', {
+      host: HOST,
+      port: PORT,
+      database: DB,
+      username: USER,
+      password: PASS,
+      pool: { min: POOL_SIZE, max: POOL_SIZE },
+    });
+  } catch {
+    return undefined;
+  }
+})();
 
 const nodePg = new pg.Pool({
   host: HOST,
@@ -62,7 +70,19 @@ const postgresJsClient = postgresJs({
   prepare: true,
 });
 
-const denoPg = new DenoPgPool(
+// deno-postgres is a DENO-NATIVE comparator: its jsr: specifier does not
+// resolve on Bun/Node, so it loads dynamically and its benches register
+// with `ignore` when unavailable — the other three clients still compare.
+const DenoPgPool = await (async () => {
+  try {
+    const mod = await import('jsr:@db/postgres@^0.19.5');
+    return mod.Pool;
+  } catch {
+    return undefined;
+  }
+})();
+
+const denoPg = DenoPgPool === undefined ? undefined : new DenoPgPool(
   {
     hostname: HOST,
     port: PORT,
@@ -78,24 +98,27 @@ const denoPg = new DenoPgPool(
 
 let serverAvailable = false;
 try {
+  if (tundra === undefined) throw new Error('unconfigured');
   await tundra.connect();
   await nodePg.query('SELECT 1');
   // postgresJs lazy-connects; force a roundtrip
   await postgresJsClient`SELECT 1`;
-  const denoClient = await denoPg.connect();
-  await denoClient.queryArray('SELECT 1');
-  denoClient.release();
+  if (denoPg !== undefined) {
+    const denoClient = await denoPg.connect();
+    await denoClient.queryArray('SELECT 1');
+    denoClient.release();
+  }
   serverAvailable = true;
 } catch (e) {
   console.warn(
-    'Postgres unreachable; skipping comparison benchmarks.',
+    'Postgres unreachable or unconfigured; skipping comparison benchmarks.',
     (e as Error).message,
   );
 }
 
 if (serverAvailable) {
   // Set up the benchmark table.
-  await tundra.execute({
+  await tundra!.execute({
     sql: `CREATE TABLE IF NOT EXISTS ${TABLE} (
       id INT PRIMARY KEY,
       name TEXT,
@@ -103,9 +126,9 @@ if (serverAvailable) {
       ts TIMESTAMP DEFAULT NOW()
     )`,
   });
-  await tundra.execute({ sql: `TRUNCATE TABLE ${TABLE}` });
+  await tundra!.execute({ sql: `TRUNCATE TABLE ${TABLE}` });
   for (let i = 0; i < 100; i++) {
-    await tundra.execute({
+    await tundra!.execute({
       sql:
         `INSERT INTO ${TABLE} (id, name, payload) VALUES (:id:, :name:, :p:)`,
       params: { id: i, name: `name-${i}`, p: 'x'.repeat(64) },
@@ -115,33 +138,34 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   // SELECT 1 — bare round-trip
   // -----------------------------------------------------------------------
-  Deno.bench({
-    name: 'SELECT 1',
+  bench({
+    name: 'SELECT 1 — tundra PostgresEngine',
     group: 'select-1',
     baseline: true,
     fn: async () => {
-      await tundra.execute({ sql: 'SELECT 1' });
+      await tundra!.execute({ sql: 'SELECT 1' });
     },
   });
-  Deno.bench({
-    name: 'SELECT 1',
+  bench({
+    name: 'SELECT 1 — pg (node-postgres)',
     group: 'select-1',
     fn: async () => {
       await nodePg.query('SELECT 1');
     },
   });
-  Deno.bench({
-    name: 'SELECT 1',
+  bench({
+    name: 'SELECT 1 — postgres.js',
     group: 'select-1',
     fn: async () => {
       await postgresJsClient`SELECT 1`;
     },
   });
-  Deno.bench({
-    name: 'SELECT 1',
+  bench({
+    name: 'SELECT 1 — deno-postgres',
+    ignore: denoPg === undefined,
     group: 'select-1',
     fn: async () => {
-      const c = await denoPg.connect();
+      const c = await denoPg!.connect();
       try {
         await c.queryArray('SELECT 1');
       } finally {
@@ -153,26 +177,26 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   // SELECT * by PK — single-row lookup with parameter binding
   // -----------------------------------------------------------------------
-  Deno.bench({
-    name: 'SELECT by PK',
+  bench({
+    name: 'SELECT by PK — tundra PostgresEngine',
     group: 'select-pk',
     baseline: true,
     fn: async () => {
-      await tundra.execute({
+      await tundra!.execute({
         sql: `SELECT * FROM ${TABLE} WHERE id = :id:`,
         params: { id: 42 },
       });
     },
   });
-  Deno.bench({
-    name: 'SELECT by PK',
+  bench({
+    name: 'SELECT by PK — pg (node-postgres)',
     group: 'select-pk',
     fn: async () => {
       await nodePg.query(`SELECT * FROM ${TABLE} WHERE id = $1`, [42]);
     },
   });
-  Deno.bench({
-    name: 'SELECT by PK',
+  bench({
+    name: 'SELECT by PK — postgres.js',
     group: 'select-pk',
     fn: async () => {
       await postgresJsClient`SELECT * FROM ${
@@ -180,11 +204,12 @@ if (serverAvailable) {
       } WHERE id = ${42}`;
     },
   });
-  Deno.bench({
-    name: 'SELECT by PK',
+  bench({
+    name: 'SELECT by PK — deno-postgres',
+    ignore: denoPg === undefined,
     group: 'select-pk',
     fn: async () => {
-      const c = await denoPg.connect();
+      const c = await denoPg!.connect();
       try {
         await c.queryObject(
           `SELECT * FROM ${TABLE} WHERE id = $1`,
@@ -199,19 +224,19 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   // SELECT 10 rows — small result set
   // -----------------------------------------------------------------------
-  Deno.bench({
-    name: 'SELECT 10 rows',
+  bench({
+    name: 'SELECT 10 rows — tundra PostgresEngine',
     group: 'select-10',
     baseline: true,
     fn: async () => {
-      await tundra.execute({
+      await tundra!.execute({
         sql: `SELECT * FROM ${TABLE} WHERE id BETWEEN :a: AND :b:`,
         params: { a: 0, b: 9 },
       });
     },
   });
-  Deno.bench({
-    name: 'SELECT 10 rows',
+  bench({
+    name: 'SELECT 10 rows — pg (node-postgres)',
     group: 'select-10',
     fn: async () => {
       await nodePg.query(
@@ -220,8 +245,8 @@ if (serverAvailable) {
       );
     },
   });
-  Deno.bench({
-    name: 'SELECT 10 rows',
+  bench({
+    name: 'SELECT 10 rows — postgres.js',
     group: 'select-10',
     fn: async () => {
       await postgresJsClient`SELECT * FROM ${
@@ -229,11 +254,12 @@ if (serverAvailable) {
       } WHERE id BETWEEN ${0} AND ${9}`;
     },
   });
-  Deno.bench({
-    name: 'SELECT 10 rows',
+  bench({
+    name: 'SELECT 10 rows — deno-postgres',
+    ignore: denoPg === undefined,
     group: 'select-10',
     fn: async () => {
-      const c = await denoPg.connect();
+      const c = await denoPg!.connect();
       try {
         await c.queryObject(
           `SELECT * FROM ${TABLE} WHERE id BETWEEN $1 AND $2`,
@@ -248,23 +274,23 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   // INSERT + DELETE — write workload
   // -----------------------------------------------------------------------
-  Deno.bench({
-    name: 'INSERT + DELETE',
+  bench({
+    name: 'INSERT + DELETE — tundra PostgresEngine',
     group: 'write',
     baseline: true,
     fn: async () => {
-      await tundra.execute({
+      await tundra!.execute({
         sql: `INSERT INTO ${TABLE} (id, name) VALUES (:id:, :n:)`,
         params: { id: 9999, n: 'tmp' },
       });
-      await tundra.execute({
+      await tundra!.execute({
         sql: `DELETE FROM ${TABLE} WHERE id = :id:`,
         params: { id: 9999 },
       });
     },
   });
-  Deno.bench({
-    name: 'INSERT + DELETE',
+  bench({
+    name: 'INSERT + DELETE — pg (node-postgres)',
     group: 'write',
     fn: async () => {
       await nodePg.query(
@@ -274,8 +300,8 @@ if (serverAvailable) {
       await nodePg.query(`DELETE FROM ${TABLE} WHERE id = $1`, [9999]);
     },
   });
-  Deno.bench({
-    name: 'INSERT + DELETE',
+  bench({
+    name: 'INSERT + DELETE — postgres.js',
     group: 'write',
     fn: async () => {
       await postgresJsClient`INSERT INTO ${
@@ -286,11 +312,12 @@ if (serverAvailable) {
       } WHERE id = ${9999}`;
     },
   });
-  Deno.bench({
-    name: 'INSERT + DELETE',
+  bench({
+    name: 'INSERT + DELETE — deno-postgres',
+    ignore: denoPg === undefined,
     group: 'write',
     fn: async () => {
-      const c = await denoPg.connect();
+      const c = await denoPg!.connect();
       try {
         await c.queryArray(
           `INSERT INTO ${TABLE} (id, name) VALUES ($1, $2)`,
@@ -309,15 +336,15 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   // 16 concurrent SELECTs across pool of 8 — parallelism
   // -----------------------------------------------------------------------
-  Deno.bench({
-    name: '16 concurrent SELECTs',
+  bench({
+    name: '16 concurrent SELECTs — tundra PostgresEngine',
     group: 'concurrent',
     baseline: true,
     fn: async () => {
       const ops = Array.from(
         { length: 16 },
         () =>
-          tundra.execute({
+          tundra!.execute({
             sql: `SELECT * FROM ${TABLE} WHERE id = :id:`,
             params: { id: 1 },
           }),
@@ -325,8 +352,8 @@ if (serverAvailable) {
       await Promise.all(ops);
     },
   });
-  Deno.bench({
-    name: '16 concurrent SELECTs',
+  bench({
+    name: '16 concurrent SELECTs — pg (node-postgres)',
     group: 'concurrent',
     fn: async () => {
       const ops = Array.from(
@@ -340,8 +367,8 @@ if (serverAvailable) {
       await Promise.all(ops);
     },
   });
-  Deno.bench({
-    name: '16 concurrent SELECTs',
+  bench({
+    name: '16 concurrent SELECTs — postgres.js',
     group: 'concurrent',
     fn: async () => {
       const ops = Array.from(
@@ -354,12 +381,13 @@ if (serverAvailable) {
       await Promise.all(ops);
     },
   });
-  Deno.bench({
-    name: '16 concurrent SELECTs',
+  bench({
+    name: '16 concurrent SELECTs — deno-postgres',
+    ignore: denoPg === undefined,
     group: 'concurrent',
     fn: async () => {
       const ops = Array.from({ length: 16 }, async () => {
-        const c = await denoPg.connect();
+        const c = await denoPg!.connect();
         try {
           await c.queryObject(
             `SELECT * FROM ${TABLE} WHERE id = $1`,
@@ -376,25 +404,25 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   // Transaction round-trip
   // -----------------------------------------------------------------------
-  Deno.bench({
-    name: 'Transaction (BEGIN+INSERT+COMMIT)',
+  bench({
+    name: 'Transaction (BEGIN+INSERT+COMMIT) — tundra PostgresEngine',
     group: 'transaction',
     baseline: true,
     fn: async () => {
-      const tx = await tundra.transaction();
+      const tx = await tundra!.transaction();
       await tx.execute({
         sql: `INSERT INTO ${TABLE} (id, name) VALUES (:id:, :n:)`,
         params: { id: 10000, n: 'tx' },
       });
       await tx.commit();
-      await tundra.execute({
+      await tundra!.execute({
         sql: `DELETE FROM ${TABLE} WHERE id = :id:`,
         params: { id: 10000 },
       });
     },
   });
-  Deno.bench({
-    name: 'Transaction (BEGIN+INSERT+COMMIT)',
+  bench({
+    name: 'Transaction (BEGIN+INSERT+COMMIT) — pg (node-postgres)',
     group: 'transaction',
     fn: async () => {
       const c = await nodePg.connect();
@@ -411,8 +439,8 @@ if (serverAvailable) {
       await nodePg.query(`DELETE FROM ${TABLE} WHERE id = $1`, [10000]);
     },
   });
-  Deno.bench({
-    name: 'Transaction (BEGIN+INSERT+COMMIT)',
+  bench({
+    name: 'Transaction (BEGIN+INSERT+COMMIT) — postgres.js',
     group: 'transaction',
     fn: async () => {
       await postgresJsClient.begin(async (sql) => {
@@ -425,11 +453,12 @@ if (serverAvailable) {
       } WHERE id = ${10000}`;
     },
   });
-  Deno.bench({
-    name: 'Transaction (BEGIN+INSERT+COMMIT)',
+  bench({
+    name: 'Transaction (BEGIN+INSERT+COMMIT) — deno-postgres',
+    ignore: denoPg === undefined,
     group: 'transaction',
     fn: async () => {
-      const c = await denoPg.connect();
+      const c = await denoPg!.connect();
       try {
         const tx = c.createTransaction('bench-tx');
         await tx.begin();
@@ -441,7 +470,7 @@ if (serverAvailable) {
       } finally {
         c.release();
       }
-      const c2 = await denoPg.connect();
+      const c2 = await denoPg!.connect();
       try {
         await c2.queryArray(
           `DELETE FROM ${TABLE} WHERE id = $1`,
@@ -458,10 +487,10 @@ if (serverAvailable) {
   // -----------------------------------------------------------------------
   globalThis.addEventListener('unload', () => {
     Promise.allSettled([
-      tundra.disconnect(),
+      tundra!.disconnect(),
       nodePg.end(),
       postgresJsClient.end({ timeout: 1 }),
-      denoPg.end(),
+      denoPg!.end(),
     ]);
   });
 }
