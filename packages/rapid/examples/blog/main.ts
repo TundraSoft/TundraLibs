@@ -15,8 +15,7 @@
  *   main.ts            boot: wire db → repositories → modules → start
  *
  * rAPId never constructs a module — YOU build the repositories, inject
- * them, and hand rAPId the instances. Companion to `../main.ts` (plain
- * functions) and `../modules.ts` (a smaller decorator tour).
+ * them, and hand rAPId the instances.
  *
  * Run (from the repo root):
  *
