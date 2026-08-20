@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/id-v1.0.7...id-v1.1.0) (2026-08-20)
+
+
+### Features
+
+* **compat:** cross-runtime bench harness and WebServer performance pass ([22b5000](https://github.com/TundraSoft/TundraLibs/commit/22b500054e77359902577e03b7830f2b100d47b6))
+
 ## [1.0.7](https://github.com/TundraSoft/TundraLibs/compare/id-v1.0.6...id-v1.0.7) (2026-08-19)
 
 
