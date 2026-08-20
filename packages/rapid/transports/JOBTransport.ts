@@ -22,8 +22,8 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
    */
   private __composedChain?: (
     ctx: JOBContext<S>,
-    next: () => Promise<void>,
-  ) => Promise<void>;
+    next: () => void | Promise<void>,
+  ) => void | Promise<void>;
 
   public start(): Promise<void> {
     // unref: the HTTP server (or the caller) owns the process
@@ -131,8 +131,8 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
       // generic.
       this._app.middlewares as unknown as readonly ((
         ctx: JOBContext<S>,
-        next: () => Promise<void>,
-      ) => Promise<void>)[],
+        next: () => void | Promise<void>,
+      ) => void | Promise<void>)[],
     );
     await this._invoke<JOBContext<S>>(
       ctx,

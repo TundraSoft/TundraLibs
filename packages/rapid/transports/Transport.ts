@@ -51,34 +51,21 @@ export abstract class Transport<
    * their post-invoke logging isn't ambient-correlated today, and
    * this doesn't change that) simply omit it.
    */
-  protected async _invoke<C extends Context<S, unknown>, R = void>(
+  protected _invoke<C extends Context<S, unknown>, R = void>(
     ctx: C,
-    chain: (ctx: C, next: () => Promise<void>) => Promise<void>,
-    dispatch: () => Promise<void>,
+    chain: (ctx: C, next: () => void | Promise<void>) => void | Promise<void>,
+    dispatch: () => void | Promise<void>,
     parent?: unknown,
     attributes?: Record<string, string | number | boolean>,
-    finalize?: () => Promise<R>,
-  ): Promise<R> {
-    return await ambient.run(
+    finalize?: () => R | Promise<R>,
+  ): R | Promise<R> {
+    return ambient.run(
       { requestId: ctx.requestId, action: ctx.action },
-      async () => {
-        try {
-          const tracer = this._app.tracer;
-          if (tracer !== undefined) {
-            await tracer.startActiveSpan(ctx.action, {
-              kind: this._spanKind,
-              // deno-lint-ignore no-explicit-any
-              parent: parent as any,
-            }, async (span) => {
-              // A named span alone is thin — stamp the low-cardinality
-              // request attributes the recipes expect.
-              if (attributes !== undefined) span.setAttributes(attributes);
-              await chain(ctx, dispatch);
-            });
-          } else {
-            await chain(ctx, dispatch);
-          }
-        } catch (error) {
+      (): R | Promise<R> => {
+        // Turn any throw from the onion into the disclosure override —
+        // legal right up to respond(); echo headers survive. Synchronous
+        // (no await), so it runs on both the sync and async paths.
+        const disclose = (error: unknown): void => {
           const err = RapidError.from(error);
           this._app.log.error(err.message, {
             code: err.code,
@@ -86,10 +73,8 @@ export abstract class Transport<
             stack: err.stack,
             ...err.context.debug,
           });
-          // The error-override path the response model was built for —
-          // legal right up to respond(); echo headers survive. The
-          // payload carries `requestId` so it appears in the BODY too,
-          // consistent with the 404 shape (the header always has it).
+          // The payload carries `requestId` so it appears in the BODY
+          // too, consistent with the 404 shape (the header always has it).
           try {
             const payload = err.payload(this._app.mode);
             ctx.response = {
@@ -103,8 +88,52 @@ export abstract class Transport<
             // respond() early). The committed response stands; there is
             // nothing to override. The failure is already logged above.
           }
+        };
+        const finish = (): R | Promise<R> =>
+          finalize !== undefined ? finalize() : (undefined as R);
+
+        const tracer = this._app.tracer;
+        if (tracer !== undefined) {
+          // Tracing is not the hot path — keep it fully async (the span
+          // wraps ONLY the onion; finalize runs after, still in scope).
+          return (async () => {
+            try {
+              await tracer.startActiveSpan(ctx.action, {
+                kind: this._spanKind,
+                // deno-lint-ignore no-explicit-any
+                parent: parent as any,
+              }, async (span) => {
+                // A named span alone is thin — stamp the low-cardinality
+                // request attributes the recipes expect.
+                if (attributes !== undefined) span.setAttributes(attributes);
+                await chain(ctx, dispatch);
+              });
+            } catch (error) {
+              disclose(error);
+            }
+            return await finish();
+          })();
         }
-        return finalize !== undefined ? await finalize() : (undefined as R);
+
+        // No tracer: run the onion SYNCHRONOUSLY unless it (or the
+        // handler) actually returns a promise. A bare sync handler with
+        // no middleware finalizes without allocating a single request
+        // promise — the whole point of R1.
+        try {
+          const ran = chain(ctx, dispatch);
+          if (
+            ran !== undefined &&
+            typeof (ran as Promise<void>).then === 'function'
+          ) {
+            return (ran as Promise<void>).then(finish, (error) => {
+              disclose(error);
+              return finish();
+            });
+          }
+        } catch (error) {
+          disclose(error);
+        }
+        return finish();
       },
     );
   }

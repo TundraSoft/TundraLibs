@@ -7,20 +7,24 @@ import { extract, SpanKind } from '@tundralibs/tracer';
 import { HTTPContext, SOCKETContext } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import { compose, extractPathname, socketOutcome } from '../utils/mod.ts';
-import type { RapidContextState, RapidRouteEntry } from '../types/mod.ts';
+import type {
+  RapidContextResponse,
+  RapidContextState,
+  RapidRouteEntry,
+} from '../types/mod.ts';
 import { Transport } from './Transport.ts';
 
 /** A pre-composed onion runner for an {@link HTTPContext}. */
 type ComposedHTTPChain<S extends RapidContextState> = (
   ctx: HTTPContext<S>,
-  next: () => Promise<void>,
-) => Promise<void>;
+  next: () => void | Promise<void>,
+) => void | Promise<void>;
 
 /** A pre-composed onion runner for a {@link SOCKETContext}. */
 type ComposedSocketChain<S extends RapidContextState> = (
   ctx: SOCKETContext<S>,
-  next: () => Promise<void>,
-) => Promise<void>;
+  next: () => void | Promise<void>,
+) => void | Promise<void>;
 
 /**
  * Per-connection websocket data, captured ONCE at upgrade — becomes the
@@ -243,10 +247,10 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     if (server !== undefined) await server.stop(false);
   }
 
-  private async __handle(
+  private __handle(
     request: Request,
     remoteAddress: string | null,
-  ): Promise<Response> {
+  ): Response | Promise<Response> {
     const serverOptions = this._app.option('server')!;
     const method = request.method.trim().toUpperCase() as HTTPMethod;
     // Pathname by substring scan, NOT `new URL(...)` — `request.url` is
@@ -282,13 +286,26 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // including 404s and errors (framework-owned, no middleware needed).
     ctx.setHeader(requestIdHeader, ctx.requestId);
 
-    const dispatch = entry !== undefined
-      ? async () => {
-        const returned = await entry.handler(ctx);
-        // The return-value channel: applied only when nothing was set.
-        if (returned !== undefined && ctx.response === null) {
-          ctx.response = returned;
+    // The return-value channel: applied only when nothing was set. A
+    // SYNC handler stays sync (no await) — the whole request then
+    // finalizes without allocating a promise; an async handler takes
+    // the thenable branch, same behaviour as before.
+    const apply = (returned: RapidContextResponse | void): void => {
+      if (returned !== undefined && ctx.response === null) {
+        ctx.response = returned;
+      }
+    };
+    const dispatch: () => void | Promise<void> = entry !== undefined
+      ? () => {
+        const returned = entry.handler(ctx);
+        if (
+          returned !== undefined &&
+          typeof (returned as Promise<RapidContextResponse | void>).then ===
+            'function'
+        ) {
+          return (returned as Promise<RapidContextResponse | void>).then(apply);
         }
+        apply(returned as RapidContextResponse | void);
       }
       : () => {
         ctx.response ??= {
@@ -299,7 +316,6 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
             requestId: ctx.requestId,
           },
         };
-        return Promise.resolve();
       };
 
     const chain = entry !== undefined
@@ -309,7 +325,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // Finalization (respond + cleanup) runs as `_invoke`'s `finalize`
     // step — the SAME ambient scope as the onion, not a second one, so
     // its logs stay correlated without a second AsyncLocalStorage entry.
-    return await this._invoke(
+    return this._invoke(
       ctx,
       chain,
       dispatch,
@@ -322,10 +338,10 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     );
   }
 
-  private async __finalize(
+  private __finalize(
     ctx: HTTPContext<S>,
     requestIdHeader: string,
-  ): Promise<Response> {
+  ): Response | Promise<Response> {
     let response: Response;
     try {
       response = ctx.respond();
@@ -354,17 +370,22 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
           },
         },
       );
-    } finally {
-      try {
-        await ctx.cleanup();
-      } catch (error) {
+    }
+    // Cleanup runs AFTER the response is materialised (success or error),
+    // never blocking it. When there is nothing to clean — no body parse
+    // to settle, no upload temp files — skip the await entirely so a
+    // plain request finalizes fully synchronously.
+    if (!ctx.hasPendingCleanup) return response;
+    return ctx.cleanup().then(
+      () => response,
+      (error) => {
         // Cleanup must never break a response — log and move on.
         this._app.log.error('context cleanup failed', {
           requestId: ctx.requestId,
           error: error instanceof Error ? error.message : String(error),
         });
-      }
-    }
-    return response;
+        return response;
+      },
+    );
   }
 }

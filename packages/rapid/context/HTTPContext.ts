@@ -225,6 +225,16 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   }
 
   /**
+   * Whether {@link cleanup} has anything to do — a body parse still to
+   * settle, or upload temp files to delete. When `false` the transport
+   * skips awaiting cleanup entirely, so a request that never touched the
+   * body (the common case) finalizes without an extra microtask.
+   */
+  public get hasPendingCleanup(): boolean {
+    return this.__payloadPromise !== undefined || this._fileUploads.length > 0;
+  }
+
+  /**
    * HTTP interprets the full payload: `content` via the base, `status`
    * (preserved across body-only overrides — a transform middleware
    * re-setting `content` without a status does NOT reset a 404/500 to

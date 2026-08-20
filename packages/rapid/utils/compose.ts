@@ -15,8 +15,8 @@ import type { Context } from '../context/mod.ts';
  */
 type ComposableMiddleware<C> = (
   ctx: C,
-  next: () => Promise<void>,
-) => Promise<void>;
+  next: () => void | Promise<void>,
+) => void | Promise<void>;
 
 /**
  * Compose an onion of middleware into a single `(ctx, next)` runner. A
@@ -31,7 +31,7 @@ export const compose = <
   C extends Context<S, unknown>,
 >(
   middleware: readonly ComposableMiddleware<C>[],
-): (ctx: C, next: () => Promise<void>) => Promise<void> => {
+): (ctx: C, next: () => void | Promise<void>) => void | Promise<void> => {
   // Zero-middleware fast path: with no onion to run, the runner is just
   // "call the handler". Returning `next` directly avoids allocating the
   // per-call `dispatch`/`next` closures and the index bookkeeping the
@@ -40,9 +40,10 @@ export const compose = <
   // nothing. The transports already cache this runner per registration,
   // so the saving lands once per request.
   if (middleware.length === 0) {
-    return (_ctx: C, next: () => Promise<void>): Promise<void> => next();
+    return (_ctx: C, next: () => void | Promise<void>): void | Promise<void> =>
+      next();
   }
-  return async (ctx: C, next: () => Promise<void>) => {
+  return async (ctx: C, next: () => void | Promise<void>) => {
     let index = -1;
 
     const dispatch = async (i: number): Promise<void> => {
