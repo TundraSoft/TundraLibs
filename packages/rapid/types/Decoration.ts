@@ -26,6 +26,15 @@ export type RapidDecoration =
     binds: readonly RapidBinder[];
     /** The decorated method's name (diagnostics). */
     methodName: string;
+    /**
+     * Radrouter version slot for this ROUTE specifically — overrides
+     * the owning `@Module`'s `version` default, when both are set.
+     */
+    version?: string;
+    /** Free-text summary (future OpenAPI generator raw material — no runtime effect today). */
+    description?: string;
+    /** The response shape (future OpenAPI raw material — no runtime effect today). */
+    response?: { toOpenAPI?: () => unknown; toJSONSchema?: () => unknown };
   }
   | {
     kind: 'SOCKET';

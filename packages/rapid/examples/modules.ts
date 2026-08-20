@@ -3,11 +3,11 @@
  * `app.module()` — the counterpart to `main.ts` (which shows the
  * plain function-registration surface). Same config-driven boot, same
  * middleware engine underneath; the only difference is HOW routes get
- * declared. Shows `@Module`'s prefix, one class handling THREE
- * transports (HTTP + SOCKET + JOB), every binder source, a class with
- * no `@Module` at all (opt-in), and that rAPId never constructs
- * anything — `UserStore` is built and injected by THIS file, not by
- * the framework.
+ * declared. Shows `@Module`'s name/prefix/namespace/version, one class
+ * handling THREE transports (HTTP + SOCKET + JOB), every binder
+ * source, a class with no `@Module` at all (opt-in), and that rAPId
+ * never constructs anything — `UserStore` is built and injected by
+ * THIS file, not by the framework.
  *
  * Run (from the repo root):
  *
@@ -23,6 +23,9 @@
  * curl -s localhost:3000/users/ | jq                              # query()+paging() binders
  * curl -s localhost:3000/users/1                                  # param() binder
  * curl -s localhost:3000/users/1 -H 'x-trace: abc'                # header() binder
+ * curl -s localhost:3000/users/1 -H 'x-api-version: v1'           # find() is versioned...
+ * curl -si localhost:3000/users/1 -H 'x-api-version: v2'          # ...so an unregistered version 404s
+ * curl -si localhost:3000/users/1                                 # ...and so does no header — no default configured
  * curl -si localhost:3000/users/9                                 # 404 RAPID_NOT_FOUND
  * curl -s -X POST localhost:3000/users/ -H 'content-type: application/json' \
  *   -d '{"name":"Alan Turing"}' | jq                              # payload() binder
@@ -34,11 +37,15 @@
  * ```typescript
  * const ws = new Client({ url: 'ws://localhost:3000/ws' });
  * await ws.connect();
+ * // @Module's namespace ("users") joins onto the bare @SOCKET('get')
+ * // command declared on the class — the flat-namespace equivalent of
+ * // @Module's HTTP prefix.
  * await ws.command('users.get', { id: '1' }); // connection() binder in the reply
  * ```
  *
- * `users.sync` is a real cron job (`0 * * * *`) — see `main.ts` for
- * how to trigger a job on demand outside its schedule
+ * `users.sync` (the namespaced form of the bare `@JOB('sync')` below)
+ * is a real cron job (`0 * * * *`) — see `main.ts` for how to trigger
+ * a job on demand outside its schedule
  * (`app.triggerJob(name, argsOverride)`).
  */
 
@@ -92,10 +99,12 @@ class UserStore {
   }
 }
 
-// ── @Module: prefix joins onto HTTP paths only — /users/:id: below is
-//    reachable at "/users/:id:", but "users.get"/"users.sync" (SOCKET
-//    and JOB) stay flat namespaces, unaffected by the prefix. ────────
-@Module({ prefix: '/users' })
+// ── @Module: `prefix` joins onto HTTP paths only — /users/:id: below
+//    is reachable at "/users/:id:". `namespace` does the equivalent
+//    job for SOCKET/JOB, which are otherwise FLAT namespaces: `get`/
+//    `sync` below become "users.get"/"users.sync" on the wire, without
+//    the class hand-prefixing its own command/job strings. ──────────
+@Module('Users', { namespace: 'users', prefix: '/users' })
 class Users {
   // rAPId never calls `new` — YOU built this instance (see boot,
   // below), by hand or via a container; the framework only binds it.
@@ -111,7 +120,11 @@ class Users {
     return { content: { rows: this.store.list(), paging } };
   }
 
-  @GET('/:id:', { bind: [param('id'), header('x-trace')] })
+  @GET('/:id:', {
+    bind: [param('id'), header('x-trace')],
+    version: 'v1',
+    description: 'Fetch one user by id.',
+  })
   find(id: string, trace: string | null): RapidContextResponse {
     const row = this.store.find(id);
     if (row === undefined) {
@@ -134,7 +147,7 @@ class Users {
   // Same store, a DIFFERENT transport — one implementation, another
   // entry point. `connection()` is SOCKET-only; binding it on @GET/@JOB
   // is rejected at MOUNT time (see Application.module.test.ts).
-  @SOCKET('users.get', { bind: [param('id'), connection()] })
+  @SOCKET('get', { bind: [param('id'), connection()] })
   findViaSocket(id: string, conn: SOCKETConnection): RapidContextResponse {
     const row = this.store.find(id);
     return row === undefined
@@ -145,7 +158,7 @@ class Users {
   // Registration-default `args` flow through a param() binder exactly
   // like an inbound request param would — the job/HTTP/socket uniform
   // args contract, from `main.ts`'s `daily-report`, holds here too.
-  @JOB('users.sync', '0 * * * *', {
+  @JOB('sync', '0 * * * *', {
     args: { source: 'scheduled' },
     bind: [param('source')],
   })

@@ -160,6 +160,10 @@ export class Application<S extends RapidContextState = RapidContextState>
             maxArrayItems: 100,
             ...options.server?.query,
           },
+          versioning: {
+            header: 'x-api-version',
+            ...options.server?.versioning,
+          },
         },
         jobs: {
           enabled: true,
@@ -322,6 +326,12 @@ export class Application<S extends RapidContextState = RapidContextState>
    * radrouter's own precise error, wrapped as RAPID_CONFIG; collisions
    * surface there too.
    *
+   * An optional leading `{version}` options object (distinguished from
+   * a middleware at the call site by shape — a middleware is always a
+   * function) sets the route's radrouter version slot, a dimension
+   * separate from `path` — mainly for the `@GET`/etc. decorators,
+   * which always call this form; the plain fluent API may use it too.
+   *
    * @throws {RapidError} RAPID_CONFIG when `path` does not start with
    *   `/` or no handler was given.
    */
@@ -329,6 +339,17 @@ export class Application<S extends RapidContextState = RapidContextState>
     method: HTTPMethod,
     path: string,
     ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
+  ): this;
+  public route(
+    method: HTTPMethod,
+    path: string,
+    options: { version?: string },
+    ...chain: [...RapidHTTPMiddleware[], RapidHTTPHandler<S>]
+  ): this;
+  public route(
+    method: HTTPMethod,
+    path: string,
+    ...args: unknown[]
   ): this {
     if (typeof path !== 'string' || !path.startsWith('/')) {
       throw new RapidError('RAPID_CONFIG', {
@@ -336,6 +357,15 @@ export class Application<S extends RapidContextState = RapidContextState>
         details: { method, path },
       });
     }
+    const hasOptions = args.length > 0 && typeof args[0] === 'object' &&
+      args[0] !== null;
+    const version = hasOptions
+      ? (args[0] as { version?: string }).version
+      : undefined;
+    const chain = (hasOptions ? args.slice(1) : args) as [
+      ...RapidHTTPMiddleware[],
+      RapidHTTPHandler<S>,
+    ];
     if (chain.length === 0) {
       throw new RapidError('RAPID_CONFIG', {
         message: 'route needs a handler',
@@ -347,6 +377,7 @@ export class Application<S extends RapidContextState = RapidContextState>
       path,
       middlewares: chain.slice(0, -1) as RapidHTTPMiddleware[],
       handler: chain[chain.length - 1] as RapidHTTPHandler<S>,
+      ...(version !== undefined ? { version } : {}),
     });
     return this;
   }
@@ -424,8 +455,9 @@ export class Application<S extends RapidContextState = RapidContextState>
    * Mount one or more decorated INSTANCES: `@GET`/`@POST`/`@PUT`/
    * `@PATCH`/`@DELETE`/`@SOCKET`/`@JOB` methods anywhere on the
    * instance's prototype chain register through this SAME `route()`/
-   * `socket()`/`job()` core — a `@Module({ prefix })` class name gets
-   * its prefix joined onto HTTP paths only.
+   * `socket()`/`job()` core — a `@Module(name, { prefix })` class gets
+   * its prefix joined onto HTTP paths only (`namespace` does the same
+   * job for SOCKET/JOB's flat namespaces).
    *
    * rAPId never constructs the instance — `new Users(db)`, a DI
    * container, a factory, whatever your own module system does is

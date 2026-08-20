@@ -82,4 +82,18 @@ export type RapidApplicationServerOptions = {
    * Defaults fill missing keys.
    */
   query?: RapidApplicationQueryOptions;
+  /**
+   * Inbound API-version resolution for `@GET(path, {version})`-style
+   * versioned routes — a dimension separate from `path` (radrouter's
+   * own concept). A request's version resolves: the header's value,
+   * exact match → `default` → the unversioned slot. Leaving both unset
+   * makes every route effectively unversioned, regardless of whether
+   * individual routes declared a `version`.
+   */
+  versioning?: {
+    /** @default 'x-api-version' */
+    header?: string;
+    /** Version to use when the header is absent — NOT a fallback for an unrecognized one. */
+    default?: string;
+  };
 };

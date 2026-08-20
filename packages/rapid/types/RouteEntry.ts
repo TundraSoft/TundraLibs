@@ -18,4 +18,11 @@ export type RapidRouteEntry<S extends RapidContextState = RapidContextState> = {
   /** Route-scoped middleware (base-typed), running INSIDE the app onion. */
   middlewares: RapidHTTPMiddleware[];
   handler: RapidHTTPHandler<S>;
+  /**
+   * Version label, a dimension SEPARATE from `path` (radrouter's own
+   * concept — see `RadRouter.addRoute`). Omitted = the unversioned
+   * slot; a request's inbound version resolves exact → default →
+   * unversioned.
+   */
+  version?: string;
 };

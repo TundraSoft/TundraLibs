@@ -42,6 +42,12 @@ export type ModuleMountTarget<S extends RapidContextState> = {
     path: string,
     handler: RapidHTTPHandler<S>,
   ): unknown;
+  route(
+    method: HTTPMethod,
+    path: string,
+    options: { version?: string },
+    handler: RapidHTTPHandler<S>,
+  ): unknown;
   socket(command: string, handler: RapidSOCKETHandler<S>): unknown;
   job(
     name: string,
@@ -201,26 +207,39 @@ function registerDecoration<S extends RapidContextState>(
   fn: BoundMethod,
   instance: object,
   prefix: string,
+  namespace: string | undefined,
+  moduleVersion: string | undefined,
   label: string,
 ): void {
   assertBindableOnKind(decoration, label);
   switch (decoration.kind) {
-    case 'HTTP':
-      target.route(
-        decoration.method,
-        prefix + decoration.path,
-        buildInvoker<S>(fn, decoration.binds, instance, label),
-      );
+    case 'HTTP': {
+      // Per-route version wins; falls back to the owning @Module's
+      // default; either may be absent (an unversioned route).
+      const version = decoration.version ?? moduleVersion;
+      const invoker = buildInvoker<S>(fn, decoration.binds, instance, label);
+      if (version !== undefined) {
+        target.route(decoration.method, prefix + decoration.path, {
+          version,
+        }, invoker);
+      } else {
+        target.route(decoration.method, prefix + decoration.path, invoker);
+      }
       break;
+    }
     case 'SOCKET':
       target.socket(
-        decoration.command,
+        namespace !== undefined
+          ? `${namespace}.${decoration.command}`
+          : decoration.command,
         buildInvoker<S>(fn, decoration.binds, instance, label),
       );
       break;
     case 'JOB':
       target.job(
-        decoration.name,
+        namespace !== undefined
+          ? `${namespace}.${decoration.name}`
+          : decoration.name,
         decoration.schedule,
         buildInvoker<S>(fn, decoration.binds, instance, label),
         { args: decoration.args },
@@ -262,7 +281,10 @@ export function mountModule<S extends RapidContextState>(
   instance: object,
 ): void {
   const ctor = (instance as { constructor: object }).constructor;
-  const prefix = moduleMetaOf(ctor)?.prefix ?? '';
+  const meta = moduleMetaOf(ctor);
+  const prefix = meta?.prefix ?? '';
+  const namespace = meta?.namespace;
+  const moduleVersion = meta?.version;
   const ctorName = (ctor as { name?: string }).name ?? '(anonymous)';
 
   const seen = new Set<string>();
@@ -299,6 +321,8 @@ export function mountModule<S extends RapidContextState>(
           resolved as BoundMethod,
           instance,
           prefix,
+          namespace,
+          moduleVersion,
           label,
         );
         mounted++;

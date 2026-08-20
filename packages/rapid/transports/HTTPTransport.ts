@@ -44,7 +44,9 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
   extends Transport<S> {
   protected override _spanKind = SpanKind.SERVER;
   private __server?: WebServer<SocketData>;
-  private readonly __router = new RadRouter<RapidRouteEntry<S>>();
+  private readonly __router = new RadRouter<RapidRouteEntry<S>>({
+    defaultVersion: this._app.option('server')?.versioning?.default,
+  });
   /**
    * Per-route composed onion, keyed by the SAME entry object radrouter
    * hands back on a match — the middleware list for a route never
@@ -80,12 +82,19 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     // the same entry object radrouter will hand back on a match.
     for (const entry of this._app.routes) {
       try {
-        this.__router.addRoute(entry.method, entry.path, [entry]);
+        this.__router.addRoute(
+          entry.method,
+          entry.path,
+          [entry],
+          entry.version,
+        );
         this.__composedRoutes.set(
           entry,
           compose<S, HTTPContext<S>>(
-            [...this._app.middlewares, ...entry.middlewares] as unknown as
-              readonly ComposedHTTPChain<S>[],
+            [
+              ...this._app.middlewares,
+              ...entry.middlewares,
+            ] as unknown as readonly ComposedHTTPChain<S>[],
           ),
         );
       } catch (cause) {
@@ -241,7 +250,13 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     const serverOptions = this._app.option('server')!;
     const method = request.method.trim().toUpperCase() as HTTPMethod;
     const { pathname } = new URL(request.url);
-    const match = this.__router.find(method, pathname);
+    // Absent header → undefined, resolved by the router's own
+    // exact → defaultVersion → unversioned fallback (constructor
+    // option below) — NOT re-defaulted here, so an unrecognized
+    // version is a genuine miss rather than silently coerced.
+    const version = request.headers.get(serverOptions.versioning!.header!) ??
+      undefined;
+    const match = this.__router.find(method, pathname, version);
     const entry = match?.middlewares[0];
 
     const requestIdHeader = serverOptions.requestIdHeader!;

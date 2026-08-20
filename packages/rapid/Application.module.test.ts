@@ -28,7 +28,7 @@ import type { SOCKETConnection } from './context/mod.ts';
 
 describe('rapid.Application.module', () => {
   it('prefix joins HTTP paths only; SOCKET/JOB stay flat', async () => {
-    @Module({ prefix: '/api/v1' })
+    @Module('Users', { prefix: '/api/v1' })
     class Users {
       @GET('/:id:', { bind: [param('id')] })
       find(id: string): RapidContextResponse {
@@ -85,7 +85,7 @@ describe('rapid.Application.module', () => {
   });
 
   it('every binder source extracts correctly across all three transports', async () => {
-    @Module({ prefix: '/svc' })
+    @Module('Reports', { prefix: '/svc' })
     class Reports {
       @GET('/:id:', {
         bind: [param('id'), query(), paging(), header('x-trace')],

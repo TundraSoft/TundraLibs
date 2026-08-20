@@ -394,6 +394,76 @@ describe('rapid.Application', () => {
     });
   });
 
+  describe('route versioning (a dimension separate from path)', () => {
+    it('the same path resolves a DIFFERENT handler per x-api-version', async () => {
+      const app = new Application({ name: 'ver', server: { port: 0 } });
+      app.route('GET', '/x', { version: 'v1' }, () => ({ content: 'v1' }));
+      app.route('GET', '/x', { version: 'v2' }, () => ({ content: 'v2' }));
+      await app.start();
+      try {
+        const v1 = await fetch(`http://localhost:${app.port}/x`, {
+          headers: { 'x-api-version': 'v1' },
+        });
+        asserts.assertEquals(await v1.text(), 'v1');
+        const v2 = await fetch(`http://localhost:${app.port}/x`, {
+          headers: { 'x-api-version': 'v2' },
+        });
+        asserts.assertEquals(await v2.text(), 'v2');
+      } finally {
+        await app.stop();
+      }
+    });
+
+    it('an unversioned request falls back to server.versioning.default, then 404s with neither', async () => {
+      const withDefault = new Application({
+        name: 'ver-default',
+        server: { port: 0, versioning: { default: 'v1' } },
+      });
+      withDefault.route(
+        'GET',
+        '/x',
+        { version: 'v1' },
+        () => ({ content: 'v1' }),
+      );
+      await withDefault.start();
+      try {
+        const r = await fetch(`http://localhost:${withDefault.port}/x`); // no header at all
+        asserts.assertEquals(await r.text(), 'v1');
+      } finally {
+        await withDefault.stop();
+      }
+
+      const noDefault = new Application({
+        name: 'ver-404',
+        server: { port: 0 },
+      });
+      noDefault.route('GET', '/x', { version: 'v1' }, () => ({
+        content: 'v1',
+      }));
+      await noDefault.start();
+      try {
+        const r = await fetch(`http://localhost:${noDefault.port}/x`); // no header, no default configured
+        asserts.assertEquals(r.status, 404);
+      } finally {
+        await noDefault.stop();
+      }
+    });
+
+    it('an unversioned route is unaffected by versioning entirely', async () => {
+      const app = new Application({ name: 'ver-none', server: { port: 0 } });
+      app.get('/plain', () => ({ content: 'ok' })); // no version option
+      await app.start();
+      try {
+        const r = await fetch(`http://localhost:${app.port}/plain`, {
+          headers: { 'x-api-version': 'whatever' }, // ignored — no version was registered
+        });
+        asserts.assertEquals(await r.text(), 'ok');
+      } finally {
+        await app.stop();
+      }
+    });
+  });
+
   describe('websocket commands (rpc mounted on the HTTP listener)', () => {
     it('registration validates: duplicates and empty commands are loud', () => {
       const app = new Application({ name: 'w', server: { enabled: false } });

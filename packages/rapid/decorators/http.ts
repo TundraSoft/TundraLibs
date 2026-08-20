@@ -29,6 +29,27 @@ export type RouteDecoratorOptions<A extends readonly unknown[]> = {
    * the first parameter, and the tuple types the signature.
    */
   bind?: RapidBinds<A>;
+  /**
+   * Radrouter version slot for this route — overrides the owning
+   * `@Module`'s `version` default, when both are set. Optional, like
+   * `bind`: most routes need neither versioning nor an explicit bind
+   * tuple, and a REQUIRED version would force every route in an
+   * unversioned API to declare one for no benefit.
+   */
+  version?: string;
+  /** Free-text summary (future OpenAPI generator raw material — no runtime effect today). */
+  description?: string;
+  /**
+   * The response body's shape — METADATA ONLY, no runtime effect
+   * today (the method's actual return value is never checked against
+   * it). Raw material for a future OpenAPI generator: rapid takes NO
+   * dependency on `@tundralibs/guardian` for this — anything
+   * structurally shaped like a guardian schema (a `.toOpenAPI()` or
+   * `.toJSONSchema()` emitter) works, matching request validation's
+   * existing path (`bind: [payload(Schema.parse)]`, no NEW mechanism
+   * needed there).
+   */
+  response?: { toOpenAPI?: () => unknown; toJSONSchema?: () => unknown };
 };
 
 /** The decorator signature every route factory returns. */
@@ -75,6 +96,11 @@ function route<This, A extends readonly unknown[]>(
       path,
       binds: options.bind ?? [],
       methodName: String(context.name),
+      ...(options.version !== undefined ? { version: options.version } : {}),
+      ...(options.description !== undefined
+        ? { description: options.description }
+        : {}),
+      ...(options.response !== undefined ? { response: options.response } : {}),
     });
   };
 }

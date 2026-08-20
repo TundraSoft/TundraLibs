@@ -1,9 +1,11 @@
 /**
  * @fileoverview `@Module` — declare a class's `@GET`/`@SOCKET`/`@JOB`
- * methods as belonging together, with an optional HTTP path prefix.
- * METADATA-ONLY (TC39 standard): returns `undefined`, never replaces
- * the class. `@Module` is OPT-IN — a class with no `@Module` at all is
- * still mountable via `app.module()`; it just has no prefix.
+ * methods as belonging together, with an identity, an optional HTTP
+ * path prefix, an optional socket/job namespace, and an optional
+ * default route version. METADATA-ONLY (TC39 standard): returns
+ * `undefined`, never replaces the class. `@Module` is OPT-IN — a class
+ * with no `@Module` at all is still mountable via `app.module()`; it
+ * just has no name/prefix/namespace/version.
  *
  * Method decorators apply BEFORE the class decorator (TC39: elements
  * first, then the class), so by the time this runs, every decorated
@@ -20,14 +22,27 @@ import { assertClassContext, recordModule } from './registry.ts';
 /** Options for {@link Module}. */
 export type ModuleDecoratorOptions = {
   /**
+   * Joined onto every SOCKET command and JOB name declared in the
+   * class, `{namespace}.{command|name}` — the collision-avoidance
+   * mechanism for those two flat namespaces, mirroring what `prefix`
+   * already gives HTTP paths (which ignore this).
+   */
+  namespace?: string;
+  /**
    * Joined onto every HTTP path declared in the class — socket
-   * commands and job names are flat namespaces and ignore it. Must be
+   * commands and job names use {@link namespace} instead. Must be
    * empty or start with `/`; validated NOW (decoration time), same as
    * `@JOB`'s schedule — a bad prefix fails at import, the loudest
    * possible moment, rather than as a confusing joined-path error
    * later at `app.module()`.
    */
   prefix?: string;
+  /**
+   * Default `version` for every `@GET`/`@POST`/… in the class that
+   * doesn't declare its own — an explicit per-method `version` always
+   * wins.
+   */
+  version?: string;
 };
 
 /**
@@ -36,7 +51,7 @@ export type ModuleDecoratorOptions = {
  * `app.module()`.
  *
  * ```typescript
- * @Module({ prefix: '/users' })
+ * @Module('Users', { prefix: '/users' })
  * class Users {
  *   constructor(private readonly db: Db) {}
  *
@@ -47,25 +62,40 @@ export type ModuleDecoratorOptions = {
  * app.module(new Users(db));
  * ```
  *
- * @throws {RapidError} RAPID_CONFIG when `prefix` is non-empty and
- *   does not start with `/`, or at decoration time under legacy
- *   decorator compilation.
+ * @param name - The module's identity (diagnostics, future OpenAPI
+ *   tagging) — required, unlike everything in `options`.
+ * @throws {RapidError} RAPID_CONFIG when `name` is empty, `prefix` is
+ *   non-empty and does not start with `/`, or at decoration time
+ *   under legacy decorator compilation.
  */
 export function Module(
+  name: string,
   options: ModuleDecoratorOptions = {},
 ): <Class extends abstract new (...args: never[]) => unknown>(
   target: Class,
   context: ClassDecoratorContext<Class>,
 ) => void {
+  if (name.trim() === '') {
+    throw new RapidError('RAPID_CONFIG', {
+      message: '@Module name must be a non-empty string',
+    });
+  }
   const prefix = options.prefix ?? '';
   if (prefix !== '' && !prefix.startsWith('/')) {
     throw new RapidError('RAPID_CONFIG', {
       message:
         `@Module prefix must be empty or start with '/' — got '${prefix}'`,
-      details: { prefix },
+      details: { name, prefix },
     });
   }
-  const meta: RapidModuleMeta = { prefix };
+  const meta: RapidModuleMeta = {
+    name,
+    prefix,
+    ...(options.namespace !== undefined
+      ? { namespace: options.namespace }
+      : {}),
+    ...(options.version !== undefined ? { version: options.version } : {}),
+  };
   return (target, context): void => {
     assertClassContext(context, 'Module');
     recordModule(target, meta);

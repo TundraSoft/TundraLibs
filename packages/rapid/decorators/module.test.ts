@@ -12,23 +12,48 @@ import { Module } from './module.ts';
 import { moduleMetaOf } from './registry.ts';
 
 describe('rapid.decorators.module', () => {
-  it('records the prefix; the class itself is UNTOUCHED', () => {
-    @Module({ prefix: '/users' })
+  it('records name/prefix; the class itself is UNTOUCHED', () => {
+    @Module('Users', { prefix: '/users' })
     class Users {
       @GET('/:id:', { bind: [param('id')] })
       find(id: string): RapidContextResponse {
         return { content: { id } };
       }
     }
-    asserts.assertEquals(moduleMetaOf(Users), { prefix: '/users' });
+    asserts.assertEquals(moduleMetaOf(Users), {
+      name: 'Users',
+      prefix: '/users',
+    });
     // Metadata-only: construction and method dispatch are plain JS.
     asserts.assertEquals(new Users().find('7'), { content: { id: '7' } });
   });
 
-  it('no options -> empty-string prefix, not undefined', () => {
-    @Module()
+  it('records namespace and version alongside name/prefix', () => {
+    @Module('Users', { namespace: 'users', prefix: '/users', version: 'v1' })
+    class Users {}
+    asserts.assertEquals(moduleMetaOf(Users), {
+      name: 'Users',
+      namespace: 'users',
+      prefix: '/users',
+      version: 'v1',
+    });
+  });
+
+  it('no options -> empty-string prefix, no namespace/version', () => {
+    @Module('Bare')
     class Bare {}
-    asserts.assertEquals(moduleMetaOf(Bare), { prefix: '' });
+    asserts.assertEquals(moduleMetaOf(Bare), { name: 'Bare', prefix: '' });
+  });
+
+  it('an empty name is rejected NOW, not at mount', () => {
+    asserts.assertThrows(
+      () => {
+        @Module('')
+        class _Bad {}
+      },
+      Error,
+      'name must be a non-empty string',
+    );
   });
 
   it('a class with no @Module at all reads undefined (opt-in)', () => {
@@ -44,7 +69,7 @@ describe('rapid.decorators.module', () => {
   it('a non-empty prefix without a leading slash is rejected NOW, not at mount', () => {
     asserts.assertThrows(
       () => {
-        @Module({ prefix: 'users' })
+        @Module('Bad', { prefix: 'users' })
         class _Bad {}
       },
       Error,
