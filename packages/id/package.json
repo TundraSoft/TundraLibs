@@ -1,6 +1,6 @@
 {
   "name": "@tundralibs/id",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "Cross-runtime ID generators — NanoID, CUID/CUID2, ULID, MongoDB ObjectID, and sequential/simple IDs",
   "license": "MIT",
