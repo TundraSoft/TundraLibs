@@ -20,6 +20,7 @@ import { buildExporter, buildState, mountModule } from './utils/mod.ts';
 import type {
   RapidApplicationEvents,
   RapidApplicationFactoryOptions,
+  RapidApplicationJobMetrics,
   RapidApplicationOptions,
   RapidContextState,
   RapidHTTPHandler,
@@ -505,6 +506,26 @@ export class Application<S extends RapidContextState = RapidContextState>
    */
   public get metrics(): ServerMetrics | undefined {
     return this.__http?.metrics;
+  }
+
+  /**
+   * Live WebSocket connection metrics (upgrades, open/peak connections,
+   * messages, errors, connection duration) — the socket slice of the
+   * server counters. `undefined` when the HTTP listener is not up;
+   * populated only when `server.metrics` is enabled.
+   */
+  public get socketMetrics(): ServerMetrics['websocket'] | undefined {
+    return this.__http?.metrics?.websocket;
+  }
+
+  /**
+   * Live cron scheduler statistics (registered/running counts + per-job
+   * run count, last run, executing) — `undefined` when the job transport
+   * is not running. NOT gated on `server.metrics`; cronus always tracks
+   * these. A copy on every read, safe to serialize.
+   */
+  public get jobMetrics(): RapidApplicationJobMetrics | undefined {
+    return this.__jobTransport?.metrics;
   }
 
   /**

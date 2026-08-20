@@ -2,7 +2,11 @@ import { Cronus } from '@tundralibs/cronus';
 import { JOBContext, type JobTick } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
 import { compose } from '../utils/mod.ts';
-import type { RapidContextState, RapidJobEntry } from '../types/mod.ts';
+import type {
+  RapidApplicationJobMetrics,
+  RapidContextState,
+  RapidJobEntry,
+} from '../types/mod.ts';
 import { Transport } from './Transport.ts';
 
 /**
@@ -73,6 +77,21 @@ export class JOBTransport<S extends RapidContextState = RapidContextState>
   /** Scheduler observability passthrough (vitals later). */
   public jobs() {
     return this.__cronus?.list() ?? [];
+  }
+
+  /**
+   * Cron scheduler statistics — registered/running counts plus each
+   * job's snapshot (run count, last run, currently executing). Reflects
+   * live cronus state; not gated on `server.metrics` (cronus always
+   * tracks these).
+   */
+  public get metrics(): RapidApplicationJobMetrics {
+    const jobs = this.__cronus?.list() ?? [];
+    return {
+      total: jobs.length,
+      running: jobs.reduce((n, j) => n + (j.running ? 1 : 0), 0),
+      jobs,
+    };
   }
 
   /**

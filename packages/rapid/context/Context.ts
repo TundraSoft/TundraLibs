@@ -1,8 +1,10 @@
 import type { StatusCode } from '@tundralibs/compat/http';
+import type { ServerMetrics } from '@tundralibs/compat/webserver';
 import type { Slogger } from '@tundralibs/slogger';
 import type { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import type {
+  RapidApplicationJobMetrics,
   RapidContextArgs,
   RapidContextResponse,
   RapidContextState,
@@ -95,6 +97,27 @@ export abstract class Context<
    */
   public get status(): StatusCode {
     return this._status;
+  }
+
+  /**
+   * Live HTTP server metrics (request/status/latency + websocket
+   * counters) — the same object as {@link Application.metrics}, surfaced
+   * here so a middleware or handler can read or return them (e.g. a
+   * `/metrics` route) without reaching back to the app. `undefined`
+   * unless the HTTP listener is up and `server.metrics` is enabled.
+   */
+  public get metrics(): ServerMetrics | undefined {
+    return this.app.metrics;
+  }
+
+  /** Live WebSocket connection metrics — see {@link Application.socketMetrics}. */
+  public get socketMetrics(): ServerMetrics['websocket'] | undefined {
+    return this.app.socketMetrics;
+  }
+
+  /** Live cron scheduler statistics — see {@link Application.jobMetrics}. */
+  public get jobMetrics(): RapidApplicationJobMetrics | undefined {
+    return this.app.jobMetrics;
   }
 
   /**
