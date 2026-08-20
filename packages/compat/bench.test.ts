@@ -11,7 +11,7 @@
 import { describe, it } from './test.ts';
 import * as asserts from '@std/asserts';
 import { _percentile, bench, runBenches } from './bench.ts';
-import { RUNTIME } from './runtime.ts';
+import { OS, RUNTIME } from './runtime.ts';
 
 /** Tiny budgets: enough iterations to be meaningful, fast enough for CI. */
 const FAST = { warmupMs: 5, budgetMs: 20 };
@@ -38,6 +38,39 @@ const spinMs = (ms: number): void => {
   const until = performance.now() + ms;
   while (performance.now() < until) {
     // spin
+  }
+};
+
+/** Run `fn` with `console.log`/`console.error` captured; returns the lines. */
+const captureConsole = async (fn: () => Promise<void>): Promise<string[]> => {
+  const lines: string[] = [];
+  const collect = (...args: unknown[]): void => {
+    lines.push(args.map((a) => String(a)).join(' '));
+  };
+  const origLog = console.log;
+  const origErr = console.error;
+  console.log = collect;
+  console.error = collect;
+  try {
+    await fn();
+  } finally {
+    console.log = origLog;
+    console.error = origErr;
+  }
+  return lines;
+};
+
+/** Read/write the process exit code portably (Deno vs Node/Bun). */
+const exitCodeGlobal = globalThis as {
+  Deno?: { exitCode: number };
+  process?: { exitCode?: number };
+};
+const getExitCode = (): number | undefined =>
+  exitCodeGlobal.Deno?.exitCode ?? exitCodeGlobal.process?.exitCode;
+const setExitCodeRaw = (code: number): void => {
+  if (exitCodeGlobal.Deno !== undefined) exitCodeGlobal.Deno.exitCode = code;
+  if (exitCodeGlobal.process !== undefined) {
+    exitCodeGlobal.process.exitCode = code;
   }
 };
 
@@ -320,6 +353,198 @@ describe('compat.bench', () => {
     it('handles single-element and empty inputs', () => {
       asserts.assertEquals(_percentile([42], 75), 42);
       asserts.assertEquals(_percentile([], 75), 0);
+    });
+  });
+
+  describe('report printing (non-quiet)', () => {
+    it('prints a table plus per-group slower/faster summaries', async () => {
+      // Group A: light baseline vs a heavier member → deterministically
+      // "slower". Group B is the mirror → "faster". Both summary
+      // verdicts, plus the whole table printer, are exercised.
+      const heavy = () => {
+        let s = 0;
+        for (let i = 0; i < 3000; i++) s += i;
+        return s;
+      };
+      bench('A-base', { group: 'A', baseline: true, ...FAST }, () => 1 + 1);
+      bench('A-heavy', { group: 'A', ...FAST }, heavy);
+      bench('B-base', { group: 'B', baseline: true, ...FAST }, heavy);
+      bench('B-light', { group: 'B', ...FAST }, () => 1 + 1);
+      // A ~2ms section reaches fmtTime's millisecond unit.
+      bench('slow-ms', { warmupMs: 1, budgetMs: 12 }, (b) => {
+        b.start();
+        spinMs(2);
+        b.end();
+      });
+      const out = (await captureConsole(async () => void (await runBenches())))
+        .join('\n');
+      asserts.assertStringIncludes(out, 'benchmark');
+      asserts.assertStringIncludes(out, 'summary [A]');
+      asserts.assertStringIncludes(out, 'slower');
+      asserts.assertStringIncludes(out, 'summary [B]');
+      asserts.assertStringIncludes(out, 'faster');
+      asserts.assertStringIncludes(out, ' ms'); // slow-ms → fmtTime ms branch
+    });
+
+    it('emits a single JSON line under BENCH_FORMAT=json', async () => {
+      bench('json-one', { ...FAST }, () => 1);
+      setEnv('BENCH_FORMAT', 'json');
+      try {
+        const lines = await captureConsole(async () =>
+          void (await runBenches())
+        );
+        const parsed = JSON.parse(lines[lines.length - 1]!);
+        asserts.assertEquals(parsed.benches[0].name, 'json-one');
+        asserts.assertEquals(typeof parsed.meta.cores, 'number');
+      } finally {
+        setEnv('BENCH_FORMAT', undefined);
+      }
+    });
+  });
+
+  describe('b.start / b.end misuse (more)', () => {
+    it('b.start() twice in one iteration rejects', async () => {
+      bench('start-twice', { ...FAST }, (b) => {
+        b.start();
+        b.start();
+      });
+      await asserts.assertRejects(
+        () => runBenches({ quiet: true }),
+        TypeError,
+        'b.start() called twice',
+      );
+    });
+
+    it('b.end() twice in one iteration rejects', async () => {
+      bench('end-twice', { ...FAST }, (b) => {
+        b.start();
+        b.end();
+        b.end();
+      });
+      await asserts.assertRejects(
+        () => runBenches({ quiet: true }),
+        TypeError,
+        'b.end() called twice',
+      );
+    });
+
+    it('using b.start() then skipping it on a later call rejects', async () => {
+      let first = true;
+      bench('start-skip', { warmupMs: 1, budgetMs: 15 }, (b) => {
+        if (first) {
+          first = false;
+          b.start();
+          b.end();
+        }
+        // Later iterations omit b.start() → the harness must reject.
+      });
+      await asserts.assertRejects(
+        () => runBenches({ quiet: true }),
+        TypeError,
+        'was not called this iteration',
+      );
+    });
+
+    it('async sectioned timing runs (measures only the started span)', async () => {
+      bench('async-sectioned', { warmupMs: 1, budgetMs: 15 }, async (b) => {
+        await Promise.resolve();
+        b.start();
+        const x = Math.sqrt(2);
+        b.end();
+        return x;
+      });
+      const report = await runBenches({ quiet: true });
+      asserts.assert(report.benches[0]!.avgNs >= 0);
+    });
+
+    it('async bench skipping b.start() after use rejects', async () => {
+      let first = true;
+      bench('async-start-skip', { warmupMs: 1, budgetMs: 15 }, async (b) => {
+        await Promise.resolve();
+        if (first) {
+          first = false;
+          b.start();
+          b.end();
+        }
+      });
+      await asserts.assertRejects(
+        () => runBenches({ quiet: true }),
+        TypeError,
+        'was not called this iteration',
+      );
+    });
+  });
+
+  describe('OS gating', () => {
+    it('a bench disabled for the current OS is skipped', async () => {
+      if (OS !== 'DARWIN' && OS !== 'LINUX' && OS !== 'WINDOWS') return; // UNKNOWN: no option key to target
+      const key = OS.toLowerCase() as 'darwin' | 'linux' | 'windows';
+      bench('os-off', { [key]: false, ...FAST }, () => 1);
+      bench('os-on', { ...FAST }, () => 2);
+      const names = (await runBenches({ quiet: true })).benches.map((b) =>
+        b.name
+      );
+      asserts.assert(!names.includes('os-off'), 'os-off must be skipped');
+      asserts.assert(names.includes('os-on'));
+    });
+  });
+
+  describe('run guard', () => {
+    it('rejects a second runBenches while one is in progress', async () => {
+      bench('concurrent', { ...FAST }, () => 1);
+      const inFlight = runBenches({ quiet: true });
+      await asserts.assertRejects(
+        () => runBenches({ quiet: true }),
+        Error,
+        'already in progress',
+      );
+      await inFlight;
+    });
+  });
+
+  describe('auto-run entry point', () => {
+    // The armed setTimeout that fires after module evaluation. Covered
+    // in-process (a subprocess would run an UNINSTRUMENTED child): let
+    // the timer fire, poll until the async run settles, and save/restore
+    // the process exit code it flips.
+    const awaitAutoRun = async (expectCode: number): Promise<string> => {
+      const saved = getExitCode();
+      try {
+        const lines: string[] = [];
+        const collect = (...a: unknown[]): void => {
+          lines.push(a.map((x) => String(x)).join(' '));
+        };
+        const origLog = console.log;
+        const origErr = console.error;
+        console.log = collect;
+        console.error = collect;
+        try {
+          const deadline = performance.now() + 4000;
+          while (getExitCode() !== expectCode && performance.now() < deadline) {
+            await new Promise((r) => setTimeout(r, 20));
+          }
+        } finally {
+          console.log = origLog;
+          console.error = origErr;
+        }
+        return lines.join('\n');
+      } finally {
+        setExitCodeRaw(saved ?? 0);
+      }
+    };
+
+    it('only-mode flips the exit code and prints the CI tripwire', async () => {
+      bench('auto-only', { only: true, ...FAST }, () => 1);
+      const out = await awaitAutoRun(1);
+      asserts.assertStringIncludes(out, "'only'");
+    });
+
+    it('a thrown bench flips the exit code and logs the failure', async () => {
+      bench('auto-throw', { ...FAST }, () => {
+        throw new Error('boom');
+      });
+      const out = await awaitAutoRun(1);
+      asserts.assertStringIncludes(out, 'bench run failed');
     });
   });
 });
