@@ -239,23 +239,21 @@ gate — see the wiki/DESIGN.md for the "how it works" side.
 Features targeted for the 1.0.0 release. Additive unless flagged;
 store-injection is the one breaking change and must land before release.
 
-- **Store-injection refactor for stateful middleware. ⚠ BREAKING — before 1.0.**
-  The middlewares that keep state (rate-limit windows, and anything else
-  backed by an in-memory/redis/cacher store) should stop hard-coding a
-  store and instead take **read/write functions passed at middleware
-  initialization** — `rateLimit({ get, set })` rather than a baked
-  `MemoryRateStore`. The app supplies memory, redis, cacher, or any
-  backend by handing over two closures. Generalizes the existing
-  `RateLimitStore` seam into the standard shape for every stateful
-  middleware. Changing this contract after 1.0 breaks consumers, so it
-  lands in Phase E hardening.
-- **Grow the shipped middleware catalog.** Add the commonly-wanted
-  middleware beyond the current requestLogger/responseTimer/secureHeaders/
-  cors/rateLimit/requestId/timeout/scope set. Candidates: compression,
-  ETag/conditional requests, health/readiness. Each follows the
-  store-injection shape where it holds state. Body-size limit already
-  exists (`server.maxBodySize` + the parseBody gauntlet) — don't ship a
-  redundant one. (Static-file serving is its own item below.)
+- ✅ **Store-injection refactor — DONE (breaking).** Stateful middleware
+  take a `{ get, set }` `Store` (sync or async) instead of a baked store —
+  the app brings memory/redis/cacher by handing over two closures.
+  `middlewares/store.ts`: `Store<V>` + `memoryStore<V>()`. `rateLimit`
+  migrated (`options.store: Store<Window>`, default `memoryStore()`), with
+  a sync fast-path so the in-memory default stays race-free.
+  `MemoryRateStore`/`RateLimitStore` removed → `memoryStore`/`Store`.
+- ✅ **Middleware catalog — DONE (core three).** Added `healthCheck({path?,
+  check?})` (liveness/readiness, 200/503), `etag()` (SHA-1 content ETag +
+  304 conditional, GET/HEAD 200s), and `compress({threshold?})`
+  (gzip/deflate via CompressionStream, Accept-Encoding-negotiated,
+  compressible-type + threshold gated, Content-Encoding + Vary). Body-size
+  limit intentionally NOT shipped (already `server.maxBodySize`).
+  Further additions (CSRF, session, etc.) can follow the store-injection
+  shape as needed.
 - ✅ **Cookie support (HTTP) — DONE.** `ctx.cookies` (parsed inbound map),
   `ctx.setCookie(name, value, {maxAge/expires/path/domain/secure/httpOnly/
   sameSite})`, `ctx.deleteCookie(name, {path,domain})`, plus
