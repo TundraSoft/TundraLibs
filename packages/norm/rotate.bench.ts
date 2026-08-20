@@ -1,4 +1,3 @@
-/// <reference lib="Deno.ns" />
 //
 // Key-rotation cost model.
 //
@@ -15,6 +14,7 @@
 // multiply by your encrypted-cell count; the paging SELECT + per-row
 // UPDATE are dwarfed by PBKDF2 and don't move the estimate.
 
+import { bench } from '@tundralibs/compat/bench';
 import {
   DEFAULT_ENCRYPT_ALGORITHM,
   defaultDecrypt,
@@ -38,7 +38,7 @@ const stamped = await encStamped(PLAINTEXT, OLD, ALGO);
 const legacy = await defaultEncrypt(PLAINTEXT, OLD, ALGO);
 
 // ── Classification: the per-cell skip/rotate decision (rotation-only) ──
-Deno.bench({
+bench({
   name: 'norm.rotate - readKeyId (stamped)',
   group: 'classify',
   baseline: true,
@@ -46,14 +46,14 @@ Deno.bench({
     readKeyId(stamped);
   },
 });
-Deno.bench({
+bench({
   name: 'norm.rotate - readKeyId (legacy)',
   group: 'classify',
   fn: () => {
     readKeyId(legacy);
   },
 });
-Deno.bench({
+bench({
   name: 'norm.rotate - keyFingerprint (1x SHA-256)',
   group: 'classify',
   fn: async () => {
@@ -62,7 +62,7 @@ Deno.bench({
 });
 
 // ── Envelope overhead on the HOT path (every encrypted write / read) ──
-Deno.bench({
+bench({
   name: 'norm.crypto - encrypt cell (bare cipher)',
   group: 'encrypt',
   baseline: true,
@@ -70,14 +70,14 @@ Deno.bench({
     await defaultEncrypt(PLAINTEXT, NEW, ALGO);
   },
 });
-Deno.bench({
+bench({
   name: 'norm.crypto - encrypt cell (key-id stamped)',
   group: 'encrypt',
   fn: async () => {
     await encStamped(PLAINTEXT, NEW, ALGO);
   },
 });
-Deno.bench({
+bench({
   name: 'norm.crypto - decrypt cell (bare cipher)',
   group: 'decrypt',
   baseline: true,
@@ -85,7 +85,7 @@ Deno.bench({
     await defaultDecrypt(legacy, OLD, ALGO);
   },
 });
-Deno.bench({
+bench({
   name: 'norm.crypto - decrypt cell (key-id verified)',
   group: 'decrypt',
   fn: async () => {
@@ -94,7 +94,7 @@ Deno.bench({
 });
 
 // ── The per-cell rotation work: decrypt(old) → re-encrypt(new) ──
-Deno.bench({
+bench({
   name: 'norm.rotate - re-encrypt one cell (decrypt+encrypt)',
   group: 'rotate',
   fn: async () => {
