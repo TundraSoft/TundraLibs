@@ -234,6 +234,37 @@ gate — see the wiki/DESIGN.md for the "how it works" side.
 - First commit of the package (user gives the explicit go), release
   train (one release PR at a time), JSR publish verification.
 
+## Backlog — additional capabilities (post-ship)
+
+Additive feature work, not blocking the first ship. Each is independent.
+
+- **Store-injection refactor for stateful middleware.** The middlewares
+  that keep state (rate-limit windows, and anything else backed by an
+  in-memory/redis/cacher store) should stop hard-coding a store and
+  instead take **read/write functions passed at middleware
+  initialization** — `rateLimit({ get, set })` rather than a baked
+  `MemoryRateStore`. Maximum flexibility: the app supplies memory, redis,
+  cacher, or any backend by handing over two closures. Generalizes the
+  existing `RateLimitStore` seam into the standard shape for every
+  stateful middleware.
+- **Grow the shipped middleware catalog.** Add the commonly-wanted
+  middleware consumers expect out of the box (beyond the current
+  requestLogger/responseTimer/secureHeaders/cors/rateLimit/requestId/
+  timeout/scope set) — candidates: compression, ETag/conditional
+  requests, body-size limit, static-file serving, health/readiness. Each
+  follows the store-injection shape above where it holds state.
+- **CLI support.** A `rapid` CLI — scaffold an app/module, run the dev
+  server, and inspect the wired surface (list routes/socket commands/jobs
+  with their versions and bound params, straight off the decorator
+  registry).
+- **CLI output format.** A structured, readable output format for the CLI
+  (human-pretty by default, machine-readable — JSON — on request), shared
+  across its subcommands.
+- **Metrics collection.** First-class request/invocation metrics
+  (counts, latency histograms, in-flight, status classes) emitted per
+  transport — likely surfaced through `@tundralibs/metro-man`, correlated
+  the same way logs/traces already are via ambient.
+
 ## Parked
 
 - Multi-server/cluster coordination (Coordinator seam; peers-WS vs
