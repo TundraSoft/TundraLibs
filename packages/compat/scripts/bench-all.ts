@@ -80,7 +80,10 @@ const discover = (dir: string, found: string[] = []): string[] => {
     if (entry.isDirectory) discover(path, found);
     else if (entry.name.endsWith('.bench.ts')) found.push(path);
   }
-  return found.sort();
+  // Explicit comparator — a bare `.sort()` orders by UTF-16 code unit,
+  // which is locale-unaware and flagged as unreliable; discovery order
+  // should be stable and human-sensible.
+  return found.sort((a, b) => a.localeCompare(b));
 };
 
 const runLane = async (
