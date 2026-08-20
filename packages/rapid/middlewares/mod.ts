@@ -7,7 +7,10 @@
  * @module
  */
 
+export { compress, type CompressOptions } from './compress.ts';
 export { cors, type CorsOptions } from './cors.ts';
+export { etag } from './etag.ts';
+export { healthCheck, type HealthCheckOptions } from './healthCheck.ts';
 export { rateLimit, type RateLimitOptions } from './rateLimit.ts';
 export { memoryStore, type Store } from './store.ts';
 export { requestId, type RequestIdOptions } from './requestId.ts';
