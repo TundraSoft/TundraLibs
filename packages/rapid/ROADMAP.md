@@ -234,13 +234,12 @@ gate — see the wiki/DESIGN.md for the "how it works" side.
 - First commit of the package (user gives the explicit go), release
   train (one release PR at a time), JSR publish verification.
 
-## Backlog — additional capabilities (post-ship)
+## For 1.0.0 — capability scope
 
-Additive feature work. Each is independent unless noted. **One is NOT
-post-ship:** the store-injection refactor is API-breaking and must land
-BEFORE the first release — flagged inline.
+Features targeted for the 1.0.0 release. Additive unless flagged;
+store-injection is the one breaking change and must land before release.
 
-- **Store-injection refactor for stateful middleware. ⚠ PRE-SHIP (breaking).**
+- **Store-injection refactor for stateful middleware. ⚠ BREAKING — before 1.0.**
   The middlewares that keep state (rate-limit windows, and anything else
   backed by an in-memory/redis/cacher store) should stop hard-coding a
   store and instead take **read/write functions passed at middleware
@@ -249,16 +248,28 @@ BEFORE the first release — flagged inline.
   backend by handing over two closures. Generalizes the existing
   `RateLimitStore` seam into the standard shape for every stateful
   middleware. Changing this contract after 1.0 breaks consumers, so it
-  belongs in Phase E hardening, not the post-ship backlog.
+  lands in Phase E hardening.
 - **Grow the shipped middleware catalog.** Add the commonly-wanted
   middleware beyond the current requestLogger/responseTimer/secureHeaders/
-  cors/rateLimit/requestId/timeout/scope set. Solid candidates:
-  compression, ETag/conditional requests, health/readiness. Each follows
-  the store-injection shape where it holds state. Curate, don't dump:
-  body-size limit already exists (`server.maxBodySize` + the parseBody
-  gauntlet) so don't ship a redundant one; static-file serving is
-  deliberately DEBATABLE (range requests / caching / a job usually better
-  left to a CDN or reverse proxy) — decide in/out before building.
+  cors/rateLimit/requestId/timeout/scope set. Candidates: compression,
+  ETag/conditional requests, health/readiness. Each follows the
+  store-injection shape where it holds state. Body-size limit already
+  exists (`server.maxBodySize` + the parseBody gauntlet) — don't ship a
+  redundant one. (Static-file serving is its own item below.)
+- **Cookie support (HTTP).** First-class cookies: parse the inbound
+  `Cookie` header into a typed map on `ctx`, and a convenient set-cookie
+  API (name/value + `httpOnly`/`secure`/`sameSite`/`maxAge`/`path`/
+  `domain`), building on the existing `set-cookie` header-append the
+  response setter already does.
+- **Static content serving (HTTP).** Serve files from a directory with
+  correct content-types (see MIME types below), conditional / ETag +
+  caching headers, and range requests. (Was flagged debatable earlier —
+  now in scope for 1.0.)
+- **Proper MIME types.** A cross-runtime MIME-type resolver (by extension
+  - content-type helpers) feeding static serving and response shaping.
+    Reuse Deno's `@std/media-types` if it runs clean on Bun/Node (it's
+    pure — verify, or route through `@tundralibs/compat`) rather than
+    hand-rolling a table.
 - **CLI — project scaffolder + upgrade.** A `create`-style initializer,
   Fresh-flavoured: `deno run -Ar jsr:@tundralibs/rapid/init` lays down a
   new project's folder structure (app entry, config, a sample module,
@@ -290,13 +301,6 @@ BEFORE the first release — flagged inline.
   publish/subscribe frames + a pluggable `PubSubAdapter` for cross-process
   fan-out). Needed for any server-initiated broadcast (e.g. a "new
   comment" fan-out to subscribers).
-- **Distributed / exactly-once job coordination.** `jobs.enabled` is a
-  per-replica boolean, so N replicas of the same config fire every job N
-  times — fine for a single instance or idempotent jobs, a correctness
-  gap the moment a job must fire exactly once across a scaled fleet.
-  Needs leader-election / a distributed lock; the cross-replica lease is
-  the parked Coordinator/cluster seam below (this is the concrete cron
-  driver for building it).
 - **DI capability — register app-provided service instances cleanly.**
   A real capability, not example polish: an app needs to hand ready-built
   instances (a composed `norm.use(schema)` handle, the Application's
@@ -328,10 +332,6 @@ BEFORE the first release — flagged inline.
   Makes the "modules are unit-testable in isolation" story a shipped
   utility instead of hand-rolled per app (the blog example's fake-Norm
   test is the pattern to generalize).
-- **SSE / streaming responses (LOW priority).** Server-Sent Events and
-  streamed response bodies as a first-class response shape — the simpler
-  realtime path alongside the WebSocket pub/sub item; compat's
-  `WebServer` already streams, so this is mostly a response-shape surface.
 - **OpenAPI documentation — automatic + exposed.** Generate an OpenAPI
   spec straight from the decorator registry and serve it (e.g.
   `/openapi.json` + a docs UI). The raw material already exists: routes/
@@ -340,15 +340,38 @@ BEFORE the first release — flagged inline.
   (which already knows `.toOpenAPI()` / `.toJSONSchema()`) — the binders
   were designed as "the OpenAPI raw material." Needs the assembler +
   serving surface, plus a policy for error/response shapes.
-- **SDK generator (via RESTler).** Generate a typed client SDK from that
-  same OpenAPI/decorator metadata, built on `@tundralibs/restler` (the
-  REST client base) — one typed method per route, request/response types
-  reused from the schemas. Pairs with the OpenAPI item: one metadata
-  source, two outputs (human docs + machine client).
+- **Auth-context handoff. 🔶 DESIGN TBD — to discuss.** How a decorated
+  module method receives the authenticated principal. Today the binder
+  tier makes NO `state.principal` assumption (this was the Phase D
+  remainder deferral, now promoted to a 1.0 item). `@tundralibs/pact`
+  (bitmask authz + JWT/OAuth) is the intended plug-in. Design is
+  deliberately deferred — to be discussed before building.
+
+## Post-1.0.0
+
+- **SDK generator (via RESTler).** Generate a typed client SDK from the
+  OpenAPI/decorator metadata, built on `@tundralibs/restler` (the REST
+  client base) — one typed method per route, request/response types reused
+  from the schemas. One source, two outputs (human docs + machine client).
+  Downstream of the OpenAPI item; likely its own tool/package.
+- **SSE / streaming responses.** Server-Sent Events and streamed response
+  bodies as a first-class response shape — the simpler realtime path
+  alongside WebSocket pub/sub; compat's `WebServer` already streams, so
+  mostly a response-shape surface.
+- **Distributed deployment & management.** Exactly-once / leader-elected
+  cron across replicas (`jobs.enabled` is per-replica today, so a job
+  fires N× on N replicas), multi-server / cluster coordination (the
+  Coordinator seam; peers-WS vs cacher-lease via a `cluster.url` scheme),
+  and the fleet-management surface around it. The cross-replica lease is
+  the mechanism for exactly-once cron.
+- **Simple UI module.** A deliberately MINIMAL client-side UI helper,
+  served from the static layer — enough to make AJAX calls and wire basic
+  interactions. NOT a React/Vite-class framework: no reactive state, no
+  build step, no component model.
 
 ## Parked
 
-- Multi-server/cluster coordination (Coordinator seam; peers-WS vs
-  cacher-lease via `cluster.url` scheme) — parked by design.
-- Browser is permanently out of scope (no listener surface); Workers
-  support is a preserved option via the transport seam, not a target.
+- Browser as a rAPId LISTENER surface — permanently out of scope (no
+  server socket). (Distinct from the post-1.0 "Simple UI module", which
+  SERVES a UI to browsers.) Workers support is a preserved option via the
+  transport seam, not a target.
