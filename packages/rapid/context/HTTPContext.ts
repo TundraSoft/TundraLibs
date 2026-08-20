@@ -13,6 +13,8 @@ import {
 } from '../utils/mod.ts';
 import type {
   RapidContextArgs,
+  RapidContextPaging,
+  RapidContextQuery,
   RapidContextResponse,
   RapidContextState,
   RapidHTTPRequestBody,
@@ -130,33 +132,56 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
 
   /**
    * HTTP args: route params, the parsed query (filters + sorting), and
-   * the paging window (headers first, query params override). Built on
-   * first access.
+   * the paging window (headers first, query params override). `params`
+   * is immediate (known from the route match); `query` and `paging`
+   * parse LAZILY — each on first read, once — so a handler that touches
+   * only `params` pays for neither.
    *
    * @throws {RapidError} RAPID_QUERY_INVALID (400) when the query
-   *   exceeds a structural cap — first access only.
+   *   exceeds a structural cap — thrown on the FIRST read of `.query`
+   *   (deferred with the parse), not on `args`/`params` access.
    */
   public get args(): Readonly<RapidContextArgs> {
     if (this.__args === undefined) {
       const server = this.app.option('server')!;
-      const url = new URL(this.request.url);
-      const query = parseQueryFilters(url.searchParams, server.query);
-      const paging = parsePaging(
-        server.paging ?? {},
-        pagingFromHeaders(this.request.headers, server.paging ?? {}),
-        pagingFromQuery(url.searchParams),
-      );
+      const request = this.request;
+      // `query` and `paging` PARSE LAZILY, each on first read. A handler
+      // that only wants `args.params` — already known from the route
+      // match — never pays the query-filter/paging parse (the single
+      // biggest per-request cost) it didn't ask for. The URL is parsed
+      // once, shared, and only when query or paging is actually touched.
+      let query: RapidContextQuery | undefined;
+      let paging: RapidContextPaging | undefined;
+      let searchParams: URLSearchParams | undefined;
+      const getSearchParams =
+        (): URLSearchParams => (searchParams ??=
+          new URL(request.url).searchParams);
       this.__args = Object.freeze({
         // Frozen — including query/paging's own nested collections, not
         // just the top level — so the advertised Readonly holds at
         // runtime for all of args, not just params (L4's original fix).
         params: Object.freeze(this.params),
-        query: Object.freeze({
-          filters: Object.freeze(query.filters),
-          sorting: Object.freeze(query.sorting),
-        }),
-        paging: Object.freeze(paging),
-      });
+        get query(): RapidContextQuery {
+          if (query === undefined) {
+            const parsed = parseQueryFilters(getSearchParams(), server.query);
+            query = Object.freeze({
+              filters: Object.freeze(parsed.filters),
+              sorting: Object.freeze(parsed.sorting),
+            });
+          }
+          return query;
+        },
+        get paging(): RapidContextPaging {
+          if (paging === undefined) {
+            paging = Object.freeze(parsePaging(
+              server.paging ?? {},
+              pagingFromHeaders(request.headers, server.paging ?? {}),
+              pagingFromQuery(getSearchParams()),
+            ));
+          }
+          return paging;
+        },
+      }) as Readonly<RapidContextArgs>;
     }
     return this.__args;
   }

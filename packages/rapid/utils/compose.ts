@@ -32,6 +32,16 @@ export const compose = <
 >(
   middleware: readonly ComposableMiddleware<C>[],
 ): (ctx: C, next: () => Promise<void>) => Promise<void> => {
+  // Zero-middleware fast path: with no onion to run, the runner is just
+  // "call the handler". Returning `next` directly avoids allocating the
+  // per-call `dispatch`/`next` closures and the index bookkeeping the
+  // general runner sets up on EVERY invocation — a cost a route/command/
+  // job with no middleware (the common case) would otherwise pay for
+  // nothing. The transports already cache this runner per registration,
+  // so the saving lands once per request.
+  if (middleware.length === 0) {
+    return (_ctx: C, next: () => Promise<void>): Promise<void> => next();
+  }
   return async (ctx: C, next: () => Promise<void>) => {
     let index = -1;
 

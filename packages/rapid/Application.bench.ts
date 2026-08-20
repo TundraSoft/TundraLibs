@@ -34,7 +34,6 @@ for (const entry of app.routes) {
 // Pre-built Requests — building a Request is NOT rapid's cost, so it is
 // excluded from the measured section (reused across iterations; GET
 // bodies are never consumed).
-const reqRoot = new Request('http://localhost/');
 const reqUserPlain = new Request('http://localhost/users/42');
 const reqUserQuery = new Request(
   'http://localhost/users/42?status=active&role=admin&sort=name&page=2&size=25',
@@ -56,18 +55,16 @@ bench(
     }),
 );
 
-// --- the lazy per-request parse: query filters + paging + freezing ---
-// Grouped so the query-carrying vs bare cost is directly comparable.
-bench('ctx.args - no query', { group: 'ctx.args', baseline: true }, () => {
-  const ctx = new HTTPContext(app, {
-    request: reqRoot,
-    remoteAddress: '127.0.0.1',
-    matched: true,
-    requestId: FIXED_ID,
-  });
-  return ctx.args;
-});
-bench('ctx.args - 4 filters + paging', { group: 'ctx.args' }, () => {
+// --- args access: params are immediate (known from the route match);
+// query + paging parse LAZILY, each only when read. The two benches are
+// grouped so the fast path (a handler that reads only params) is directly
+// comparable to the full cost (a handler that reads the parsed query and
+// paging window) — the gap is exactly what a params-only handler no
+// longer pays.
+bench('ctx.args.params - fast path (no parse)', {
+  group: 'ctx.args',
+  baseline: true,
+}, () => {
   const ctx = new HTTPContext(app, {
     request: reqUserQuery,
     remoteAddress: '127.0.0.1',
@@ -75,7 +72,21 @@ bench('ctx.args - 4 filters + paging', { group: 'ctx.args' }, () => {
     matched: true,
     requestId: FIXED_ID,
   });
-  return ctx.args;
+  return ctx.args.params;
+});
+bench('ctx.args query+paging - 4 filters (full parse)', {
+  group: 'ctx.args',
+}, () => {
+  const ctx = new HTTPContext(app, {
+    request: reqUserQuery,
+    remoteAddress: '127.0.0.1',
+    params: { id: '42' },
+    matched: true,
+    requestId: FIXED_ID,
+  });
+  // Read both lazy fields to force the query-filter + paging parse.
+  const a = ctx.args;
+  return [a.query, a.paging];
 });
 
 // --- route matching (radrouter trie walk) ---
@@ -125,7 +136,7 @@ bench(
 // comparison — the framework-vs-framework question (rAPId vs oak vs
 // express) is end-to-end HTTP throughput and lives in the autocannon
 // scripts under `bench/`, which is where those deps belong.
-bench('SPINE - construct + args + serialize (param route)', () => {
+bench('SPINE - construct + args.params + serialize (param route)', () => {
   const ctx = new HTTPContext(app, {
     request: reqUserQuery,
     remoteAddress: '127.0.0.1',
@@ -134,6 +145,8 @@ bench('SPINE - construct + args + serialize (param route)', () => {
     matched: true,
     requestId: FIXED_ID,
   });
-  void ctx.args;
+  // The common handler shape reads only params (see the `/users/:id`
+  // handler above) — the fast path, no query/paging parse.
+  void ctx.args.params.id;
   return serializeResponse({ id: '42' }, 200, OUT_HEADERS);
 });
