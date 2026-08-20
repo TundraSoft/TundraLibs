@@ -198,3 +198,43 @@ Verified after the change: full compat suite green on Deno
 steps); live behavioral checks for Content-Length on single-chunk,
 progressive delivery on real streams, 204/null bodies, and lazy
 requestId stability.
+
+## ROUND 2 — the universal bookkeeping pass (Deno-gap hunt)
+
+The paired Deno measurement showed a real ~8-10% `WebServer` gap that
+is NOT translation (Deno.serve is Fetch-native). Micro-benchmarked the
+shared `_processRequest` path and landed four changes:
+
+| Cost found (Deno / Node)                                                                                                                                                                                   | Fix                                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| requestInfo object literal w/ inline getters: **234/269ns** — a getter-bearing literal builds a fresh accessor shape PER REQUEST (an own-goal from round 1's laziness fix; the eager original was ~170ns!) | `_LazyRequestInfo` class — prototype getters, ~10ns, plus `toJSON` so `JSON.stringify(info)` keeps its old shape                                                                                                                      |
+| metrics block: **250/184ns** (of which `performance.now()`×2 = 117/61ns, `` `${n}xx` `` template ~70ns)                                                                                                    | status tally → `switch` on constant keys; whole block gated behind new `metrics?: boolean` option (default `true`, non-breaking); WS counter sites gated by the same flag                                                             |
+| double async frame (processor + `_processRequest`): ~116/130ns vs ~20ns direct                                                                                                                             | non-async fast processors on Deno/Bun when NO websocket handler is configured (the async originals are used only when WS exists)                                                                                                      |
+| Node header delivery: per-header `res.setHeader` loop                                                                                                                                                      | one `writeHead(status, statusText, headersObj)` per response, moved inside the delivery branches so the single-chunk fast path states an explicit `Content-Length` (204/304/HEAD guarded — verified none of them gain a bogus length) |
+
+**Measured outcome — honest version.** Node paired (prev commit vs
+round 2): 39.8/40.1/41.8k vs 40.7/41.7/41.4k — no regression, flat to
+slightly ahead. Deno paired three-way (native vs compat vs compat
+`metrics:false`): native ~84k, compat ~75.5k, metrics:false
+indistinguishable from default — **the end-to-end Deno delta from
+this round is BELOW this machine's round-to-round scatter (±2-3%)**,
+even though every removed cost is individually real at the ns level
+(and fewer per-request allocations means less GC pressure under
+sustained load than a 8-second autocannon run shows). The ~8-10% Deno
+gap therefore PERSISTS after this round.
+
+**Ruled out:** the "async-handler floor" theory — a raw `Deno.serve`
+server with an `async` handler benches IDENTICAL to the sync one
+(81.2/78.4/83.7k vs 80.0/76.4/82.8k paired), so Deno.serve has no
+promise penalty and compat's promise-returning wrapper is not the
+explanation.
+
+**Where this leaves the Deno gap:** ~1.2-1.3µs/request of compat-layer
+cost whose micro-accounting (sum of everything measured above) covers
+only about half. Attributing the rest needs a real profiler
+(flamegraph over the live server, e.g. `deno bench`/`--v8-flags=--prof`
+or Samply), not more autocannon rounds — candidate suspects that
+micro-benches can't see: the `options.handler` megamorphic call site,
+IC pollution from the adapter indirection, and Deno.serve-internal
+fast paths a wrapping closure may defeat. Flagged as the stopping
+point for black-box measurement on this machine.
