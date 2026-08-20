@@ -36,19 +36,19 @@ call.
 
 ### Features
 
-| Feature                                    | Bun | Deno | Node.js |
-| ------------------------------------------ | --- | ---- | ------- |
-| `bench()` (all `Deno.bench` call shapes)   | ✅  | ✅   | ✅      |
-| `group` / `baseline` relative summaries    | ✅  | ✅   | ✅      |
-| `only` / `ignore` / runtime+OS skip flags  | ✅  | ✅   | ✅      |
-| `BENCH_FILTER` (substring or `/regex/`)    | ✅  | ✅   | ✅      |
-| `b.start()` / `b.end()` sectioned timing   | ✅  | ✅   | ✅      |
-| Fixed batch size (`n`)                     | ✅  | ✅   | ✅      |
-| async benches (auto-detected)              | ✅  | ✅   | ✅      |
-| stats: avg, iter/s, min/max, p50/p75/p99, MAD | ✅ | ✅ | ✅      |
-| JSON report (`BENCH_FORMAT=json`)          | ✅  | ✅   | ✅      |
-| smoke mode (`BENCH_SMOKE=1`)               | ✅  | ✅   | ✅      |
-| env stamp (runtime version, arch, cores)   | ✅  | ✅   | ✅      |
+| Feature                                       | Bun | Deno | Node.js |
+| --------------------------------------------- | --- | ---- | ------- |
+| `bench()` (all `Deno.bench` call shapes)      | ✅  | ✅   | ✅      |
+| `group` / `baseline` relative summaries       | ✅  | ✅   | ✅      |
+| `only` / `ignore` / runtime+OS skip flags     | ✅  | ✅   | ✅      |
+| `BENCH_FILTER` (substring or `/regex/`)       | ✅  | ✅   | ✅      |
+| `b.start()` / `b.end()` sectioned timing      | ✅  | ✅   | ✅      |
+| Fixed batch size (`n`)                        | ✅  | ✅   | ✅      |
+| async benches (auto-detected)                 | ✅  | ✅   | ✅      |
+| stats: avg, iter/s, min/max, p50/p75/p99, MAD | ✅  | ✅   | ✅      |
+| JSON report (`BENCH_FORMAT=json`)             | ✅  | ✅   | ✅      |
+| smoke mode (`BENCH_SMOKE=1`)                  | ✅  | ✅   | ✅      |
+| env stamp (runtime version, arch, cores)      | ✅  | ✅   | ✅      |
 
 ## Usage
 
@@ -93,10 +93,10 @@ console.log(report.benches[0]?.p50Ns);
 
 ### Environment variables
 
-| Variable       | Effect                                                                                  |
-| -------------- | --------------------------------------------------------------------------------------- |
-| `BENCH_FILTER` | Run only matching benches: plain value = substring, `/wrapped/` = regex                 |
-| `BENCH_FORMAT` | `json` → machine-readable report on stdout (consumed by `scripts/bench-all.ts`)         |
+| Variable       | Effect                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| `BENCH_FILTER` | Run only matching benches: plain value = substring, `/wrapped/` = regex                    |
+| `BENCH_FORMAT` | `json` → machine-readable report on stdout (consumed by `scripts/bench-all.ts`)            |
 | `BENCH_SMOKE`  | `1` → 1ms warmup / 5ms budget / capped `n`: a compiles-and-runs check, numbers meaningless |
 
 `only: true` restricts a run to the marked benches, and an auto-run that used
