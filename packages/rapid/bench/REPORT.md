@@ -379,3 +379,83 @@ Components (DENO/BUN/NODE):
 
 Sequencing respects one-package-per-PR: R1+R3 on the rapid branch, R2 on an id
 branch, R4+R5 on feat/compat-webserver-perf.
+
+## Parity middleware: is ULID / ambient the cost? (measured, not inferred)
+
+User's method (2026-08-20): rather than only stripping rapid down, load the
+PEERS up — give oak/express/fastify the same per-request features rapid ships (a
+sortable request-id echoed on the response; the ambient ALS correlation scope)
+and see where THEY land. Four modes per peer, switched by env, isolate each
+feature:
+
+- `plain` — the peer as shipped.
+- `idcheap` — a request-id from a counter + echo header (NO ULID) — isolates the
+  middleware-frame + header cost from the id algorithm.
+- `id` — ULID (same `@tundralibs/id`) + echo header.
+- `full` — ULID + echo + `ambient.run(...)` ALS wrap (rapid's correlation
+  feature, same package).
+
+Servers: `oak-parity-server.ts` (Deno), `express-parity-server.ts` /
+`fastify-parity-server.ts` (Node, bundled to `.mjs` so they run as plain node —
+4 concurrent `tsx` compiler services exhaust the process/fd budget). Load driven
+by `parity-driver.mjs` (autocannon's programmatic API from ONE node process —
+`npx | node` in a zsh `$(...)` subshell was unreliable here). `-c 50 -d 10`, avg
+of 3 rounds.
+
+### oak / Deno (very stable, low variance)
+
+| mode        | `/` req/s | µs/req | `/users` req/s | µs/req |
+| ----------- | --------- | ------ | -------------- | ------ |
+| plain       | 72.0k     | 13.88  | 69.9k          | 14.30  |
+| +id no-ULID | 63.5k     | 15.75  | 61.8k          | 16.18  |
+| +ULID       | 59.3k     | 16.86  | 57.4k          | 17.42  |
+| +full       | 59.2k     | 16.90  | 57.9k          | 17.27  |
+| **rapid**   | **60.7k** | 16.48  | **54.4k**      | 18.38  |
+
+Per-feature cost on Deno: middleware frame + echo ≈ **+1.9µs**; **ULID ≈
++1.1µs**; **ambient ≈ +0.04µs (free)**. rapid vs oak-full: **104% on `/`
+(faster), 96% on `/users`** — rapid is AT PARITY with oak once oak carries the
+same features. The gap vs _plain_ oak was oak doing less.
+
+### fastify / Node (sequential → "plain" runs coolest; slight bias
+
+### against later modes, effect sizes still clear)
+
+| mode        | `/` req/s | µs/req | `/users` req/s |
+| ----------- | --------- | ------ | -------------- |
+| plain       | ~62-65k   | ~15.9  | ~58k           |
+| +id no-ULID | 49.3k     | 20.3   | 48.5k          |
+| +ULID       | 43.3k     | 23.1   | 43.2k          |
+| +full       | 43.1k     | 23.2   | 42.7k          |
+| rapid       | ~35k      | ~28.6  | ~33k           |
+
+Per-feature cost on Node: **ULID ≈ +2.8µs** (49k→43k, a 12% drop from the id
+algorithm alone); **ambient ≈ +0.1µs (free)**. Node's ULID is heavier than
+Deno's (undici/V8 `crypto.getRandomValues` + base32 time encode = 1.3µs micro,
+~2.8µs amplified).
+
+### What this proves
+
+1. **Ambient/ALS correlation is NOT a perf liability** — ~0µs/req on both
+   runtimes. The feature you built is free; keep it.
+2. **ULID IS the dominant per-request feature cost** — +1.1µs Deno, +2.8µs Node.
+   It hits EVERY framework that adds a sortable correlation id (fastify-full
+   drops to 43k, oak-full to 58-59k). rapid is not uniquely slow because of it;
+   it is a shared cost. This promotes **R2 (pooled ULID) to the highest-value,
+   lowest-risk win**: the pooled prototype is 4-11x faster (112/89/114ns), which
+   recovers ~1µs Deno / ~2.5µs Node per request for rapid — and would help any
+   consumer of `@tundralibs/id`.
+3. **On Deno, rapid already ≈ oak-with-equivalent-features (96-104%).** There is
+   no rapid-specific Deno slowness to chase beyond R1-R3; the residual vs
+   _plain_ oak is the feature set, which is the point of the framework.
+4. **On Node, the residual rapid↔fastify-full gap (~6µs) is the compat
+   Fetch-translation transport tax (R5)** — fastify runs on raw `node:http`;
+   rapid runs on compat's undici Request/Response. That is a compat-package
+   item, not rapid logic.
+
+### Revised priority
+
+R2 (pooled ULID, `id` package) jumps to FIRST — it is the one change that moves
+BOTH runtimes for BOTH rapid and every other `@tundralibs/id` consumer, at low
+risk. Then R1 (collapse async spine, rapid) and R5 (Node Fetch tax, compat).
+R3/R4 are cleanup-tier.
