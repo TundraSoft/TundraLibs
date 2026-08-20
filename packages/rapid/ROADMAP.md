@@ -264,6 +264,22 @@ Additive feature work, not blocking the first ship. Each is independent.
   (counts, latency histograms, in-flight, status classes) emitted per
   transport — likely surfaced through `@tundralibs/metro-man`, correlated
   the same way logs/traces already are via ambient.
+- **WebSocket pub/sub — server-initiated push.** The SOCKET transport
+  wraps `@tundralibs/rpc`'s `Server` but exposes NONE of its pub/sub
+  (verified by grep: no publish/subscribe/broadcast/channel surface). A
+  module can only reply to the command that invoked it — it cannot push
+  to other connected clients. Add an `app.publish()`/`ctx.publish()`
+  surface wired to the underlying rpc instance (rpc already has
+  publish/subscribe frames + a pluggable `PubSubAdapter` for cross-process
+  fan-out). Needed for any server-initiated broadcast (e.g. a "new
+  comment" fan-out to subscribers).
+- **Distributed / exactly-once job coordination.** `jobs.enabled` is a
+  per-replica boolean, so N replicas of the same config fire every job N
+  times — fine for a single instance or idempotent jobs, a correctness
+  gap the moment a job must fire exactly once across a scaled fleet.
+  Needs leader-election / a distributed lock; the cross-replica lease is
+  the parked Coordinator/cluster seam below (this is the concrete cron
+  driver for building it).
 
 ## Parked
 
