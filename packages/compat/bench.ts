@@ -15,7 +15,22 @@
  *
  * Set `BENCH_FORMAT=json` to emit a machine-readable report on stdout
  * instead of the table — that is the contract the cross-runtime
- * aggregator (`scripts/bench-all.ts`) consumes.
+ * aggregator (`scripts/bench-all.ts`) consumes. Set `BENCH_FILTER` to
+ * run a subset by name: a plain value is a substring match, a
+ * `/wrapped/` value is a regular expression — the same convention as
+ * `deno bench --filter`.
+ *
+ * `only: true` restricts a run to the marked benches — and, exactly
+ * like `deno bench`, an auto-run that used `only` exits non-zero so a
+ * forgotten `only` cannot slip through CI. `ignore: true` skips a
+ * bench unconditionally (the runtime/OS flags skip conditionally).
+ *
+ * A bench fn receives a {@link BenchContext}: call `b.start()` /
+ * `b.end()` to measure only a section of each iteration (per-iteration
+ * setup/teardown stays outside the numbers). Use it on EVERY call or
+ * on none — and note that per-section timing reads the clock twice per
+ * ITERATION, so very short sections (≪1µs) re-expose the timer
+ * resolution that whole-call batching exists to hide.
  *
  * Methodology (per bench): warm up for `warmupMs`; auto-calibrate a
  * batch size so one measured batch spans ≥2ms (sub-µs operations
@@ -48,8 +63,30 @@
 
 import { OS, RUNTIME } from './runtime.ts';
 
+/**
+ * Handed to every bench invocation. Ignoring it measures the whole
+ * call; `start()`/`end()` bound the measured section instead —
+ * `end()` is implied at return when `start()` was called without it.
+ */
+export type BenchContext = {
+  /** The bench's registered name. */
+  readonly name: string;
+  /**
+   * Begin this iteration's measured section.
+   *
+   * @throws {TypeError} When called twice in one iteration.
+   */
+  start(): void;
+  /**
+   * End this iteration's measured section.
+   *
+   * @throws {TypeError} When called before {@link start}, or twice.
+   */
+  end(): void;
+};
+
 /** A benched operation. May be sync or async (detected at warmup). */
-export type BenchFn = () => unknown | Promise<unknown>;
+export type BenchFn = (b: BenchContext) => unknown | Promise<unknown>;
 
 /**
  * Bench config. Runtime/OS flags mirror `./test`'s `ItOptions`:
@@ -63,6 +100,14 @@ export type BenchOptions = {
   group?: string;
   /** Marks this bench as its group's 1.00x reference. */
   baseline?: boolean;
+  /** Skip unconditionally. Wins over `only`. */
+  ignore?: boolean;
+  /**
+   * When ANY registered bench sets this, only the marked benches run —
+   * and an auto-run exits non-zero afterwards (like `deno bench`), so
+   * a forgotten `only` cannot pass CI silently.
+   */
+  only?: boolean;
   deno?: boolean;
   bun?: boolean;
   node?: boolean;
@@ -98,6 +143,8 @@ export type BenchReport = {
   runtime: string;
   os: string;
   benches: BenchStats[];
+  /** Present (`true`) when `only` restricted this run. */
+  only?: boolean;
 };
 
 type Registered = {
@@ -105,6 +152,7 @@ type Registered = {
   fn: BenchFn;
   group?: string;
   baseline: boolean;
+  only: boolean;
   warmupMs: number;
   budgetMs: number;
 };
@@ -119,6 +167,13 @@ const MIN_BATCH_MS = 2;
 const MAX_SAMPLES = 200;
 /** Sampling never stops before this many batch samples. */
 const MIN_SAMPLES = 3;
+/**
+ * Batch calibration gives up growing once a batch COSTS this much
+ * wall time — a `b.start()`-sectioned bench with heavy unmeasured
+ * setup could otherwise double `n` toward a batch that takes minutes
+ * to produce 2ms of measured time.
+ */
+const CALIBRATION_WALL_CAP_MS = 50;
 
 const registry: Registered[] = [];
 let autoRunTimer: ReturnType<typeof setTimeout> | undefined;
@@ -202,12 +257,13 @@ export function bench(
   if (typeof fn !== 'function') {
     throw new TypeError(`bench('${name}') requires a function`);
   }
-  if (!enabled(options)) return;
+  if (!enabled(options) || options.ignore === true) return;
   registry.push({
     name,
     fn,
     group: options.group,
     baseline: options.baseline === true,
+    only: options.only === true,
     warmupMs: options.warmupMs ?? DEFAULT_WARMUP_MS,
     budgetMs: options.budgetMs ?? DEFAULT_BUDGET_MS,
   });
@@ -232,27 +288,126 @@ export function _percentile(sorted: readonly number[], p: number): number {
   return sorted[Math.min(Math.max(rank, 1), sorted.length) - 1]!;
 }
 
-/** Run `fn` `n` times (sync path), return elapsed milliseconds. */
-const timeSyncBatch = (fn: BenchFn, n: number): number => {
-  const t0 = performance.now();
-  for (let i = 0; i < n; i++) sink = fn();
-  return performance.now() - t0;
+/** Mutable span state behind one bench's {@link BenchContext}. */
+type SpanState = {
+  startAt: number;
+  endAt: number;
+  /** Whether the fn has EVER called `start()` — picks the timing path. */
+  used: boolean;
 };
 
-/** Run `fn` `n` times awaiting each (async path), return elapsed ms. */
-const timeAsyncBatch = async (fn: BenchFn, n: number): Promise<number> => {
+/** Build the context handed to a bench's invocations. */
+const makeContext = (
+  name: string,
+): { ctx: BenchContext; state: SpanState } => {
+  const state: SpanState = { startAt: -1, endAt: -1, used: false };
+  const ctx: BenchContext = {
+    name,
+    start() {
+      if (state.startAt !== -1) {
+        throw new TypeError(
+          `bench '${name}': b.start() called twice in one iteration ` +
+            `(b.start()/b.end() must be used on every call or on none)`,
+        );
+      }
+      state.used = true;
+      state.startAt = performance.now();
+    },
+    end() {
+      if (state.startAt === -1) {
+        throw new TypeError(`bench '${name}': b.end() called before b.start()`);
+      }
+      if (state.endAt !== -1) {
+        throw new TypeError(
+          `bench '${name}': b.end() called twice in one iteration`,
+        );
+      }
+      state.endAt = performance.now();
+    },
+  };
+  return { ctx, state };
+};
+
+/** `[measuredMs, wallMs]` for one batch of `n` iterations. */
+type BatchTime = [number, number];
+
+/**
+ * Run `fn` `n` times (sync path). Whole-call benches time the batch
+ * with two clock reads; `b.start()`-sectioned benches sum the
+ * per-iteration spans instead (`b.end()` implied at return).
+ *
+ * @throws {TypeError} When span usage turns inconsistent — an
+ *   iteration of a sectioned bench that never called `b.start()`.
+ */
+const timeSyncBatch = (
+  fn: BenchFn,
+  n: number,
+  ctx: BenchContext,
+  state: SpanState,
+): BatchTime => {
+  if (!state.used) {
+    const t0 = performance.now();
+    for (let i = 0; i < n; i++) sink = fn(ctx);
+    const wall = performance.now() - t0;
+    return [wall, wall];
+  }
+  let measured = 0;
   const t0 = performance.now();
-  for (let i = 0; i < n; i++) sink = await fn();
-  return performance.now() - t0;
+  for (let i = 0; i < n; i++) {
+    state.startAt = -1;
+    state.endAt = -1;
+    sink = fn(ctx);
+    if (state.startAt === -1) {
+      throw new TypeError(
+        `bench '${ctx.name}': b.start() was not called this iteration ` +
+          `(b.start()/b.end() must be used on every call or on none)`,
+      );
+    }
+    measured += (state.endAt !== -1 ? state.endAt : performance.now()) -
+      state.startAt;
+  }
+  return [measured, performance.now() - t0];
+};
+
+/** Async twin of {@link timeSyncBatch} — awaits every invocation. */
+const timeAsyncBatch = async (
+  fn: BenchFn,
+  n: number,
+  ctx: BenchContext,
+  state: SpanState,
+): Promise<BatchTime> => {
+  if (!state.used) {
+    const t0 = performance.now();
+    for (let i = 0; i < n; i++) sink = await fn(ctx);
+    const wall = performance.now() - t0;
+    return [wall, wall];
+  }
+  let measured = 0;
+  const t0 = performance.now();
+  for (let i = 0; i < n; i++) {
+    state.startAt = -1;
+    state.endAt = -1;
+    sink = await fn(ctx);
+    if (state.startAt === -1) {
+      throw new TypeError(
+        `bench '${ctx.name}': b.start() was not called this iteration ` +
+          `(b.start()/b.end() must be used on every call or on none)`,
+      );
+    }
+    measured += (state.endAt !== -1 ? state.endAt : performance.now()) -
+      state.startAt;
+  }
+  return [measured, performance.now() - t0];
 };
 
 /** Measure one registered bench. */
 const measure = async (entry: Registered): Promise<BenchStats> => {
   const { fn } = entry;
+  const { ctx, state } = makeContext(entry.name);
   // Async detection on the first call: a thenable routes every later
   // call through the awaiting loop, so sync benches never pay for an
-  // `await` they don't need.
-  const probe = fn();
+  // `await` they don't need. The same call reveals span usage.
+  const probe = fn(ctx);
   const isAsync = probe instanceof Promise ||
     (typeof probe === 'object' && probe !== null &&
       typeof (probe as { then?: unknown }).then === 'function');
@@ -261,38 +416,52 @@ const measure = async (entry: Registered): Promise<BenchStats> => {
   // Warmup: let the JIT tier up before anything is recorded.
   const warmupEnd = performance.now() + entry.warmupMs;
   do {
-    sink = isAsync ? await fn() : fn();
+    state.startAt = -1;
+    state.endAt = -1;
+    sink = isAsync ? await fn(ctx) : fn(ctx);
   } while (performance.now() < warmupEnd);
 
-  // Batch calibration: double n until one batch spans MIN_BATCH_MS —
-  // per-call timing of nanosecond-scale operations only measures the
-  // clock otherwise.
+  const batch = (n: number): BatchTime | Promise<BatchTime> =>
+    isAsync
+      ? timeAsyncBatch(fn, n, ctx, state)
+      : timeSyncBatch(fn, n, ctx, state);
+
+  // Batch calibration: double n until one batch's MEASURED time spans
+  // MIN_BATCH_MS — per-call timing of nanosecond-scale operations only
+  // measures the clock otherwise. The WALL cap keeps a sectioned bench
+  // with heavy unmeasured setup from growing n unboundedly.
   let n = 1;
-  let batchMs = isAsync ? await timeAsyncBatch(fn, n) : timeSyncBatch(fn, n);
-  while (batchMs < MIN_BATCH_MS && n < 1 << 28) {
+  let [measuredMs, wallMs] = await batch(n);
+  while (
+    measuredMs < MIN_BATCH_MS && wallMs < CALIBRATION_WALL_CAP_MS &&
+    n < 1 << 28
+  ) {
     n *= 2;
-    batchMs = isAsync ? await timeAsyncBatch(fn, n) : timeSyncBatch(fn, n);
+    [measuredMs, wallMs] = await batch(n);
   }
 
-  // Sampling: per-batch per-iteration averages, until the budget is
-  // spent (never fewer than MIN_SAMPLES, never more than MAX_SAMPLES).
-  const samples: number[] = [batchMs / n];
-  let totalMs = batchMs;
+  // Sampling: per-batch per-iteration averages, until the WALL budget
+  // is spent (never fewer than MIN_SAMPLES, never more than
+  // MAX_SAMPLES).
+  const samples: number[] = [measuredMs / n];
+  let totalMeasuredMs = measuredMs;
+  let totalWallMs = wallMs;
   let totalIters = n;
   while (
     (samples.length < MIN_SAMPLES ||
-      (totalMs < entry.budgetMs && samples.length < MAX_SAMPLES))
+      (totalWallMs < entry.budgetMs && samples.length < MAX_SAMPLES))
   ) {
-    const ms = isAsync ? await timeAsyncBatch(fn, n) : timeSyncBatch(fn, n);
+    const [ms, wall] = await batch(n);
     samples.push(ms / n);
-    totalMs += ms;
+    totalMeasuredMs += ms;
+    totalWallMs += wall;
     totalIters += n;
     if (samples.length >= MAX_SAMPLES) break;
   }
 
   samples.sort((a, b) => a - b);
   const toNs = (ms: number): number => ms * 1e6;
-  const avgNs = toNs(totalMs) / totalIters;
+  const avgNs = toNs(totalMeasuredMs) / totalIters;
   return {
     name: entry.name,
     ...(entry.group !== undefined ? { group: entry.group } : {}),
@@ -376,12 +545,35 @@ const printReport = (report: BenchReport): void => {
 };
 
 /**
+ * Build a name predicate from `BENCH_FILTER`: plain value = substring
+ * match, `/wrapped/` = regular expression (`deno bench --filter`'s
+ * convention).
+ *
+ * @throws {SyntaxError} When a `/wrapped/` value is not a valid
+ *   regular expression.
+ */
+const parseFilter = (
+  raw: string | undefined,
+): ((name: string) => boolean) | undefined => {
+  if (raw === undefined || raw === '') return undefined;
+  if (raw.length > 2 && raw.startsWith('/') && raw.endsWith('/')) {
+    const re = new RegExp(raw.slice(1, -1));
+    return (name) => re.test(name);
+  }
+  return (name) => name.includes(raw);
+};
+
+/**
  * Run every registered bench now, strictly sequentially, and resolve
- * with the report. Cancels the pending auto-run, so calling this
- * explicitly never double-runs. Prints the report unless
- * `quiet: true`; honours `BENCH_FORMAT=json` when printing.
+ * with the report. `only`-marked benches (when any exist) and the
+ * `BENCH_FILTER` selection are applied here. Cancels the pending
+ * auto-run, so calling this explicitly never double-runs. Prints the
+ * report unless `quiet: true`; honours `BENCH_FORMAT=json` when
+ * printing.
  *
  * @throws {Error} When called while a run is already in progress.
+ * @throws {SyntaxError} When `BENCH_FILTER` holds an invalid
+ *   `/regex/`.
  */
 export async function runBenches(
   options: { quiet?: boolean } = {},
@@ -395,13 +587,24 @@ export async function runBenches(
     autoRunTimer = undefined;
   }
   try {
+    let entries = [...registry];
+    const onlyMode = entries.some((e) => e.only);
+    if (onlyMode) entries = entries.filter((e) => e.only);
+    const filter = parseFilter(env('BENCH_FILTER'));
+    if (filter !== undefined) entries = entries.filter((e) => filter(e.name));
+
     const benches: BenchStats[] = [];
-    for (const entry of registry) {
+    for (const entry of entries) {
       benches.push(await measure(entry));
     }
     // The sink escapes, making every benched call observable.
     (globalThis as Record<string, unknown>).__compatBenchSink = sink;
-    const report: BenchReport = { runtime: RUNTIME, os: OS, benches };
+    const report: BenchReport = {
+      runtime: RUNTIME,
+      os: OS,
+      benches,
+      ...(onlyMode ? { only: true } : {}),
+    };
     if (options.quiet !== true) {
       if (env('BENCH_FORMAT') === 'json') {
         console.log(JSON.stringify(report));
@@ -416,16 +619,29 @@ export async function runBenches(
   }
 }
 
+/** Set the process exit code on whichever runtime this is. */
+const setExitCode = (code: number): void => {
+  const g = globalThis as {
+    Deno?: { exitCode: number };
+    process?: { exitCode?: number };
+  };
+  if (g.Deno !== undefined) g.Deno.exitCode = code;
+  else if (g.process !== undefined) g.process.exitCode = code;
+};
+
 /** The scheduled entry point — failures must not vanish silently. */
 const autoRun = (): void => {
   autoRunTimer = undefined;
-  runBenches().catch((error) => {
+  runBenches().then((report) => {
+    if (report.only === true) {
+      console.error(
+        "bench: the 'only' option was used — exiting non-zero so it " +
+          'cannot slip through CI',
+      );
+      setExitCode(1);
+    }
+  }).catch((error) => {
     console.error('bench run failed:', error);
-    const g = globalThis as {
-      Deno?: { exitCode: number };
-      process?: { exitCode?: number };
-    };
-    if (g.Deno !== undefined) g.Deno.exitCode = 1;
-    else if (g.process !== undefined) g.process.exitCode = 1;
+    setExitCode(1);
   });
 };

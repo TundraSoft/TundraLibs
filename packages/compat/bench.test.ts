@@ -16,6 +16,31 @@ import { RUNTIME } from './runtime.ts';
 /** Tiny budgets: enough iterations to be meaningful, fast enough for CI. */
 const FAST = { warmupMs: 5, budgetMs: 20 };
 
+/** Cross-runtime env set/unset for the BENCH_FILTER tests. */
+const setEnv = (key: string, value: string | undefined): void => {
+  const g = globalThis as {
+    Deno?: {
+      env: { set(k: string, v: string): void; delete(k: string): void };
+    };
+    process?: { env: Record<string, string | undefined> };
+  };
+  if (g.Deno !== undefined) {
+    if (value === undefined) g.Deno.env.delete(key);
+    else g.Deno.env.set(key, value);
+  } else if (g.process !== undefined) {
+    if (value === undefined) delete g.process.env[key];
+    else g.process.env[key] = value;
+  }
+};
+
+/** Busy-wait — deterministic wall-clock work for the context tests. */
+const spinMs = (ms: number): void => {
+  const until = performance.now() + ms;
+  while (performance.now() < until) {
+    // spin
+  }
+};
+
 describe('compat.bench', () => {
   describe('registration shapes', () => {
     it('accepts (name, fn), (name, options, fn), and the object form', async () => {
@@ -110,6 +135,116 @@ describe('compat.bench', () => {
       await runBenches({ quiet: true });
       const second = await runBenches({ quiet: true });
       asserts.assertEquals(second.benches.length, 0);
+    });
+  });
+
+  describe('ignore and only', () => {
+    it('ignore: true drops a bench unconditionally', async () => {
+      bench('ignored', { ignore: true, ...FAST }, () => 1);
+      bench('kept', { ...FAST }, () => 2);
+      const report = await runBenches({ quiet: true });
+      asserts.assertEquals(report.benches.map((b) => b.name), ['kept']);
+    });
+
+    it('only: true restricts the run and flags the report', async () => {
+      bench('not-marked-a', { ...FAST }, () => 1);
+      bench('marked', { only: true, ...FAST }, () => 2);
+      bench('not-marked-b', { ...FAST }, () => 3);
+      const report = await runBenches({ quiet: true });
+      asserts.assertEquals(report.benches.map((b) => b.name), ['marked']);
+      asserts.assertEquals(report.only, true);
+    });
+
+    it('a run without only carries no only flag', async () => {
+      bench('plain', { ...FAST }, () => 1);
+      const report = await runBenches({ quiet: true });
+      asserts.assertEquals('only' in report, false);
+    });
+
+    it('ignore wins over only', async () => {
+      bench('both-flags', { only: true, ignore: true, ...FAST }, () => 1);
+      bench('plain', { ...FAST }, () => 2);
+      const report = await runBenches({ quiet: true });
+      asserts.assertEquals(report.benches.map((b) => b.name), ['plain']);
+    });
+  });
+
+  describe('BENCH_FILTER', () => {
+    it('plain value is a substring match', async () => {
+      bench('alpha-one', { ...FAST }, () => 1);
+      bench('beta-two', { ...FAST }, () => 2);
+      bench('alpha-three', { ...FAST }, () => 3);
+      setEnv('BENCH_FILTER', 'alpha');
+      try {
+        const report = await runBenches({ quiet: true });
+        asserts.assertEquals(report.benches.map((b) => b.name), [
+          'alpha-one',
+          'alpha-three',
+        ]);
+      } finally {
+        setEnv('BENCH_FILTER', undefined);
+      }
+    });
+
+    it('a /wrapped/ value is a regular expression', async () => {
+      bench('alpha-one', { ...FAST }, () => 1);
+      bench('beta-two', { ...FAST }, () => 2);
+      setEnv('BENCH_FILTER', '/^beta-/');
+      try {
+        const report = await runBenches({ quiet: true });
+        asserts.assertEquals(report.benches.map((b) => b.name), ['beta-two']);
+      } finally {
+        setEnv('BENCH_FILTER', undefined);
+      }
+    });
+  });
+
+  describe('bench context (b.start / b.end)', () => {
+    it('measures only the started section, not per-iteration setup', async () => {
+      // 2ms unmeasured setup + a sub-µs measured section: if start/end
+      // were ignored, avg would be ≥2ms; sectioned, it must be far
+      // below the setup cost.
+      bench('sectioned', { warmupMs: 1, budgetMs: 15 }, (b) => {
+        spinMs(2);
+        b.start();
+        const x = Math.sqrt(98765.4321);
+        b.end();
+        return x;
+      });
+      const report = await runBenches({ quiet: true });
+      asserts.assert(
+        report.benches[0]!.avgNs < 1e6,
+        `sectioned avg should exclude the 2ms setup, got ${
+          report.benches[0]!.avgNs
+        }ns`,
+      );
+    });
+
+    it('b.end() is implied at return when omitted', async () => {
+      // Setup 1.5ms, measured tail ~0.4ms: implicit end at return must
+      // yield roughly the tail, never setup + tail.
+      bench('implicit-end', { warmupMs: 1, budgetMs: 15 }, (b) => {
+        spinMs(1.5);
+        b.start();
+        spinMs(0.4);
+      });
+      const report = await runBenches({ quiet: true });
+      const avg = report.benches[0]!.avgNs;
+      asserts.assert(
+        avg > 0.2e6 && avg < 1.2e6,
+        `implicit-end avg should be ~0.4ms, got ${avg}ns`,
+      );
+    });
+
+    it('b.end() before b.start() rejects the run', async () => {
+      bench('end-first', { ...FAST }, (b) => {
+        b.end();
+      });
+      await asserts.assertRejects(
+        () => runBenches({ quiet: true }),
+        TypeError,
+        'b.end() called before b.start()',
+      );
     });
   });
 

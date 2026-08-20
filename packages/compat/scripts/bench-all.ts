@@ -42,13 +42,17 @@ const fmtTime = (ns: number): string => {
 const runLane = async (
   lane: Lane,
   file: string,
+  filter: string | undefined,
 ): Promise<BenchReport | undefined> => {
   const cwd = lane.runtime === 'DENO' ? ROOT : packageDirOf(file);
   const rel = file.startsWith(cwd) ? file.slice(cwd.length + 1) : file;
   const command = new Deno.Command(lane.cmd, {
     args: [...lane.args, lane.runtime === 'DENO' ? file : rel],
     cwd,
-    env: { BENCH_FORMAT: 'json' },
+    env: {
+      BENCH_FORMAT: 'json',
+      ...(filter !== undefined ? { BENCH_FILTER: filter } : {}),
+    },
     stdout: 'piped',
     stderr: 'piped',
   });
@@ -73,10 +77,17 @@ const runLane = async (
 };
 
 const main = async (): Promise<void> => {
-  const files = Deno.args;
+  let filter: string | undefined;
+  const files = Deno.args.filter((arg) => {
+    if (arg.startsWith('--filter=')) {
+      filter = arg.slice('--filter='.length);
+      return false;
+    }
+    return true;
+  });
   if (files.length === 0) {
     console.error(
-      'usage: bench-all.ts <file.bench.ts> [more.bench.ts ...]',
+      'usage: bench-all.ts [--filter=<substr|/regex/>] <file.bench.ts> [more ...]',
     );
     Deno.exitCode = 1;
     return;
@@ -97,7 +108,7 @@ const main = async (): Promise<void> => {
     // and corrupt each other's numbers.
     const reports = new Map<string, BenchReport>();
     for (const lane of lanes) {
-      const report = await runLane(lane, file);
+      const report = await runLane(lane, file, filter);
       if (report) reports.set(lane.runtime, report);
     }
     if (reports.size === 0) continue;
