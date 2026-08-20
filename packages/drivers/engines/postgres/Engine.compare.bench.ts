@@ -17,8 +17,8 @@
 import { bench } from '@tundralibs/compat/bench';
 import { envArgs } from '@tundralibs/utils';
 import { PostgresEngine } from './Engine.ts';
-import pg from 'npm:pg@^8.13.0';
-import postgresJs from 'npm:postgres@^3.4.5';
+import pg from 'pg';
+import postgresJs from 'postgres';
 import { Pool as DenoPgPool } from 'jsr:@db/postgres@^0.19.5';
 
 const env = envArgs('./packages/drivers/');
