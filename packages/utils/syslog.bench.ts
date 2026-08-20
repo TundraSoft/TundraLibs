@@ -1,3 +1,4 @@
+import { bench } from '@tundralibs/compat/bench';
 import {
   parse,
   stringify,
@@ -5,19 +6,19 @@ import {
   SyslogSeverities,
 } from './syslog.ts';
 
-Deno.bench({
+bench({
   name: 'utils.syslog - Parse RFC5424 format',
 }, () => {
   parse('<34>1 2023-01-30T12:30:45Z myhostname myapp 8814 ID47 - message');
 });
 
-Deno.bench({
+bench({
   name: 'utils.syslog - Parse RFC3164 format',
 }, () => {
   parse('<34>Oct 11 22:14:15 myhostname app[123]: message');
 });
 
-Deno.bench({
+bench({
   name: 'utils.syslog - Stringify syslog object',
 }, () => {
   stringify({

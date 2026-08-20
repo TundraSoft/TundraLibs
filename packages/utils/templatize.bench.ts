@@ -1,23 +1,24 @@
+import { bench } from '@tundralibs/compat/bench';
 import { templatize } from './templatize.ts';
 
 // ============================================================
 // Compile cost — paid once at construction
 // ============================================================
-Deno.bench({
+bench({
   name: 'utils.templatize / compile — 2 vars',
   group: 'compile',
 }, () => {
   templatize('Hello, ${name}! Today is ${day}.');
 });
 
-Deno.bench({
+bench({
   name: 'utils.templatize / compile — no vars (all-literal fast path)',
   group: 'compile',
 }, () => {
   templatize('Static text with no variables at all');
 });
 
-Deno.bench({
+bench({
   name: 'utils.templatize / compile — 10 vars',
   group: 'compile',
 }, () => {
@@ -38,14 +39,14 @@ const tNested = templatize('${user.name} (${user.email}) ${msg}');
 const tLiteral = templatize('${present}/${missing}', { onMissing: 'literal' });
 const tEmpty = templatize('${present}/${missing}', { onMissing: 'empty' });
 
-Deno.bench({
+bench({
   name: 'utils.templatize / render — 2 vars',
   group: 'render',
 }, () => {
   t2({ name: 'Alice', day: 'Monday' });
 });
 
-Deno.bench({
+bench({
   name: 'utils.templatize / render — all-literal (constant function)',
   group: 'render',
 }, () => {
@@ -53,7 +54,7 @@ Deno.bench({
   tStatic({} as any);
 });
 
-Deno.bench({
+bench({
   name: 'utils.templatize / render — 10 vars',
   group: 'render',
 }, () => {
@@ -71,7 +72,7 @@ Deno.bench({
   });
 });
 
-Deno.bench({
+bench({
   name: 'utils.templatize / render — dot-path on nested values',
   group: 'render',
 }, () => {
@@ -83,7 +84,7 @@ Deno.bench({
   tNested(ctx);
 });
 
-Deno.bench({
+bench({
   name: 'utils.templatize / render — onMissing: "literal"',
   group: 'render',
 }, () => {
@@ -91,7 +92,7 @@ Deno.bench({
   tLiteral({ present: 'x' } as any);
 });
 
-Deno.bench({
+bench({
   name: 'utils.templatize / render — onMissing: "empty"',
   group: 'render',
 }, () => {

@@ -1,11 +1,11 @@
-/// <reference lib="deno.ns" />
+import { bench } from '@tundralibs/compat/bench';
 import { signHMAC, signRSA, verifyHMAC, verifyRSA } from './mod.ts';
 console.log(
   await signHMAC('abcdefghijklmnopqrstuvwx', 'my data', {
     hashAlgorithm: 'SHA-1',
   }),
 );
-Deno.bench({
+bench({
   name: 'crypt.Sign - HMAC:SHA-1',
   fn: async () => {
     await signHMAC('abcdefghijklmnopqrstuvwx', 'my data', {
@@ -14,7 +14,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Sign - HMAC:SHA-256',
   fn: async () => {
     await signHMAC('abcdefghijklmnopqrstuvwx', 'my data', {
@@ -23,7 +23,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Sign - HMAC:SHA-384',
   fn: async () => {
     await signHMAC('abcdefghijklmnopqrstuvwx', 'my data', {
@@ -32,7 +32,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Sign - HMAC:SHA-512',
   fn: async () => {
     await signHMAC('abcdefghijklmnopqrstuvwx', 'my data', {
@@ -41,7 +41,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Verify - HMAC:SHA-1',
   fn: async () => {
     await verifyHMAC(
@@ -53,7 +53,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Verify - HMAC:SHA-256',
   fn: async () => {
     await verifyHMAC(
@@ -65,7 +65,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Verify - HMAC:SHA-384',
   fn: async () => {
     await verifyHMAC(
@@ -77,7 +77,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Verify - HMAC:SHA-512',
   fn: async () => {
     await verifyHMAC(
@@ -134,7 +134,7 @@ const signature512 = await signRSA('my data', privateKeyPEM, {
   hashAlgorithm: 'SHA-512',
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Sign - RSA-PSS:SHA-256',
   fn: async () => {
     await signRSA('my data', privateKeyPEM, {
@@ -143,7 +143,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Sign - RSA-PSS:SHA-256',
   fn: async () => {
     await signRSA('my data', privateKeyPEM, {
@@ -152,7 +152,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Sign - RSA-PSS:SHA-256',
   fn: async () => {
     await signRSA('my data', privateKeyPEM, {
@@ -161,7 +161,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Verify - RSA-PSS:SHA-256',
   fn: async () => {
     await verifyRSA('my data', signature256, publicKeyPEM, {
@@ -170,7 +170,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Verify - RSA-PSS:SHA-384',
   fn: async () => {
     await verifyRSA('my data', signature384, publicKeyPEM, {
@@ -179,7 +179,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.Verify - RSA-PSS:SHA-512',
   fn: async () => {
     await verifyRSA('my data', signature512, publicKeyPEM, {

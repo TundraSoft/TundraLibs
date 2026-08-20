@@ -7,7 +7,8 @@
  * Run with: deno bench guardian/tests/guardian-vs-zod.bench.ts --allow-all
  */
 
-import { z } from 'npm:zod';
+import { bench } from '@tundralibs/compat/bench';
+import { z } from 'zod';
 import { Guardian } from '../mod.ts';
 
 // Sample data for benchmarks
@@ -33,52 +34,52 @@ const sampleDate = new Date('2023-06-15T10:30:00Z');
 // STRING VALIDATION COMPARISON
 // =============================================================================
 
-Deno.bench('String Basic - Guardian', () => {
+bench('String Basic - Guardian', () => {
   const guard = Guardian.string();
   guard.parse(sampleString);
 });
 
-Deno.bench('String Basic - Zod', () => {
+bench('String Basic - Zod', () => {
   const schema = z.string();
   schema.parse(sampleString);
 });
 
-Deno.bench('String with Length - Guardian', () => {
+bench('String with Length - Guardian', () => {
   const guard = Guardian.string().minLength(5).maxLength(100);
   guard.parse(sampleString);
 });
 
-Deno.bench('String with Length - Zod', () => {
+bench('String with Length - Zod', () => {
   const schema = z.string().min(5).max(100);
   schema.parse(sampleString);
 });
 
-Deno.bench('String Email - Guardian', () => {
+bench('String Email - Guardian', () => {
   const guard = Guardian.string().email();
   guard.parse('john.doe@example.com');
 });
 
-Deno.bench('String Email - Zod', () => {
+bench('String Email - Zod', () => {
   const schema = z.string().email();
   schema.parse('john.doe@example.com');
 });
 
-Deno.bench('String Pattern - Guardian', () => {
+bench('String Pattern - Guardian', () => {
   const guard = Guardian.string().pattern(/^[A-Za-z\s,!.]+$/);
   guard.parse(sampleString);
 });
 
-Deno.bench('String Pattern - Zod', () => {
+bench('String Pattern - Zod', () => {
   const schema = z.string().regex(/^[A-Za-z\s,!.]+$/);
   schema.parse(sampleString);
 });
 
-Deno.bench('String Transform - Guardian', () => {
+bench('String Transform - Guardian', () => {
   const guard = Guardian.string().trim().toLowerCase();
   guard.parse('  HELLO WORLD  ');
 });
 
-Deno.bench('String Transform - Zod', () => {
+bench('String Transform - Zod', () => {
   const schema = z.string().trim().toLowerCase();
   schema.parse('  HELLO WORLD  ');
 });
@@ -87,42 +88,42 @@ Deno.bench('String Transform - Zod', () => {
 // NUMBER VALIDATION COMPARISON
 // =============================================================================
 
-Deno.bench('Number Basic - Guardian', () => {
+bench('Number Basic - Guardian', () => {
   const guard = Guardian.number();
   guard.parse(sampleNumber);
 });
 
-Deno.bench('Number Basic - Zod', () => {
+bench('Number Basic - Zod', () => {
   const schema = z.number();
   schema.parse(sampleNumber);
 });
 
-Deno.bench('Number Range - Guardian', () => {
+bench('Number Range - Guardian', () => {
   const guard = Guardian.number().min(0).max(100);
   guard.parse(42);
 });
 
-Deno.bench('Number Range - Zod', () => {
+bench('Number Range - Zod', () => {
   const schema = z.number().min(0).max(100);
   schema.parse(42);
 });
 
-Deno.bench('Number Integer - Guardian', () => {
+bench('Number Integer - Guardian', () => {
   const guard = Guardian.number().integer();
   guard.parse(42);
 });
 
-Deno.bench('Number Integer - Zod', () => {
+bench('Number Integer - Zod', () => {
   const schema = z.number().int();
   schema.parse(42);
 });
 
-Deno.bench('Number Positive Integer - Guardian', () => {
+bench('Number Positive Integer - Guardian', () => {
   const guard = Guardian.number().positive().integer();
   guard.parse(42);
 });
 
-Deno.bench('Number Positive Integer - Zod', () => {
+bench('Number Positive Integer - Zod', () => {
   const schema = z.number().positive().int();
   schema.parse(42);
 });
@@ -131,12 +132,12 @@ Deno.bench('Number Positive Integer - Zod', () => {
 // BOOLEAN VALIDATION COMPARISON
 // =============================================================================
 
-Deno.bench('Boolean Basic - Guardian', () => {
+bench('Boolean Basic - Guardian', () => {
   const guard = Guardian.boolean();
   guard.parse(true);
 });
 
-Deno.bench('Boolean Basic - Zod', () => {
+bench('Boolean Basic - Zod', () => {
   const schema = z.boolean();
   schema.parse(true);
 });
@@ -145,32 +146,32 @@ Deno.bench('Boolean Basic - Zod', () => {
 // ARRAY VALIDATION COMPARISON
 // =============================================================================
 
-Deno.bench('Array Basic - Guardian', () => {
+bench('Array Basic - Guardian', () => {
   const guard = Guardian.array(Guardian.string());
   guard.parse(sampleArray);
 });
 
-Deno.bench('Array Basic - Zod', () => {
+bench('Array Basic - Zod', () => {
   const schema = z.array(z.string());
   schema.parse(sampleArray);
 });
 
-Deno.bench('Array with Length - Guardian', () => {
+bench('Array with Length - Guardian', () => {
   const guard = Guardian.array(Guardian.string()).minLength(1).maxLength(10);
   guard.parse(sampleArray);
 });
 
-Deno.bench('Array with Length - Zod', () => {
+bench('Array with Length - Zod', () => {
   const schema = z.array(z.string()).min(1).max(10);
   schema.parse(sampleArray);
 });
 
-Deno.bench('Array Numbers - Guardian', () => {
+bench('Array Numbers - Guardian', () => {
   const guard = Guardian.array(Guardian.number());
   guard.parse([1, 2, 3, 4, 5]);
 });
 
-Deno.bench('Array Numbers - Zod', () => {
+bench('Array Numbers - Zod', () => {
   const schema = z.array(z.number());
   schema.parse([1, 2, 3, 4, 5]);
 });
@@ -179,7 +180,7 @@ Deno.bench('Array Numbers - Zod', () => {
 // OBJECT VALIDATION COMPARISON
 // =============================================================================
 
-Deno.bench('Object Simple - Guardian', () => {
+bench('Object Simple - Guardian', () => {
   const guard = Guardian.object({
     id: Guardian.number(),
     name: Guardian.string(),
@@ -187,7 +188,7 @@ Deno.bench('Object Simple - Guardian', () => {
   guard.parse({ id: 1, name: 'Test' });
 });
 
-Deno.bench('Object Simple - Zod', () => {
+bench('Object Simple - Zod', () => {
   const schema = z.object({
     id: z.number(),
     name: z.string(),
@@ -195,7 +196,7 @@ Deno.bench('Object Simple - Zod', () => {
   schema.parse({ id: 1, name: 'Test' });
 });
 
-Deno.bench('Object Complex - Guardian', () => {
+bench('Object Complex - Guardian', () => {
   const guard = Guardian.object({
     id: Guardian.number().positive().integer(),
     name: Guardian.string().minLength(1).maxLength(100),
@@ -212,7 +213,7 @@ Deno.bench('Object Complex - Guardian', () => {
   guard.parse(sampleObject);
 });
 
-Deno.bench('Object Complex - Zod', () => {
+bench('Object Complex - Zod', () => {
   const schema = z.object({
     id: z.number().positive().int(),
     name: z.string().min(1).max(100),
@@ -229,7 +230,7 @@ Deno.bench('Object Complex - Zod', () => {
   schema.parse(sampleObject);
 });
 
-Deno.bench('Object Optional Fields - Guardian', () => {
+bench('Object Optional Fields - Guardian', () => {
   const guard = Guardian.object({
     id: Guardian.number(),
     name: Guardian.string(),
@@ -239,7 +240,7 @@ Deno.bench('Object Optional Fields - Guardian', () => {
   guard.parse({ id: 1, name: 'Test' });
 });
 
-Deno.bench('Object Optional Fields - Zod', () => {
+bench('Object Optional Fields - Zod', () => {
   const schema = z.object({
     id: z.number(),
     name: z.string(),
@@ -253,24 +254,24 @@ Deno.bench('Object Optional Fields - Zod', () => {
 // DATE VALIDATION COMPARISON
 // =============================================================================
 
-Deno.bench('Date Basic - Guardian', () => {
+bench('Date Basic - Guardian', () => {
   const guard = Guardian.date();
   guard.parse(sampleDate);
 });
 
-Deno.bench('Date Basic - Zod', () => {
+bench('Date Basic - Zod', () => {
   const schema = z.date();
   schema.parse(sampleDate);
 });
 
-Deno.bench('Date Range - Guardian', () => {
+bench('Date Range - Guardian', () => {
   const guard = Guardian.date()
     .min(new Date('2020-01-01'))
     .max(new Date('2030-12-31'));
   guard.parse(sampleDate);
 });
 
-Deno.bench('Date Range - Zod', () => {
+bench('Date Range - Zod', () => {
   const schema = z.date()
     .min(new Date('2020-01-01'))
     .max(new Date('2030-12-31'));
@@ -281,12 +282,12 @@ Deno.bench('Date Range - Zod', () => {
 // ENUM VALIDATION COMPARISON
 // =============================================================================
 
-Deno.bench('Enum String - Guardian', () => {
+bench('Enum String - Guardian', () => {
   const guard = Guardian.enum(['admin', 'user', 'guest']);
   guard.parse('admin');
 });
 
-Deno.bench('Enum String - Zod', () => {
+bench('Enum String - Zod', () => {
   const schema = z.enum(['admin', 'user', 'guest']);
   schema.parse('admin');
 });
@@ -295,7 +296,7 @@ Deno.bench('Enum String - Zod', () => {
 // UNION VALIDATION COMPARISON
 // =============================================================================
 
-Deno.bench('Union Simple - Guardian', () => {
+bench('Union Simple - Guardian', () => {
   const guard = Guardian.oneOf([
     Guardian.string(),
     Guardian.number(),
@@ -303,7 +304,7 @@ Deno.bench('Union Simple - Guardian', () => {
   guard.parse('hello');
 });
 
-Deno.bench('Union Simple - Zod', () => {
+bench('Union Simple - Zod', () => {
   const schema = z.union([z.string(), z.number()]);
   schema.parse('hello');
 });
@@ -312,17 +313,17 @@ Deno.bench('Union Simple - Zod', () => {
 // TRANSFORMATION COMPARISON
 // =============================================================================
 
-Deno.bench('Transform String to Number - Guardian', () => {
+bench('Transform String to Number - Guardian', () => {
   const guard = Guardian.string().process((s: string) => parseInt(s, 10));
   guard.parse('123');
 });
 
-Deno.bench('Transform String to Number - Zod', () => {
+bench('Transform String to Number - Zod', () => {
   const schema = z.string().transform((s) => parseInt(s, 10));
   schema.parse('123');
 });
 
-Deno.bench('Transform Chain - Guardian', () => {
+bench('Transform Chain - Guardian', () => {
   const guard = Guardian.string()
     .process((s: string) => s.trim())
     .process((s: string) => s.toLowerCase())
@@ -330,7 +331,7 @@ Deno.bench('Transform Chain - Guardian', () => {
   guard.parse('  Hello World  ');
 });
 
-Deno.bench('Transform Chain - Zod', () => {
+bench('Transform Chain - Zod', () => {
   const schema = z.string()
     .transform((s) => s.trim())
     .transform((s) => s.toLowerCase())
@@ -342,7 +343,7 @@ Deno.bench('Transform Chain - Zod', () => {
 // REFINEMENT COMPARISON
 // =============================================================================
 
-Deno.bench('Refine Simple - Guardian', () => {
+bench('Refine Simple - Guardian', () => {
   const guard = Guardian.string().test(
     (s: string) => s.includes('@'),
     'Must contain @',
@@ -350,12 +351,12 @@ Deno.bench('Refine Simple - Guardian', () => {
   guard.parse('user@domain.com');
 });
 
-Deno.bench('Refine Simple - Zod', () => {
+bench('Refine Simple - Zod', () => {
   const schema = z.string().refine((s) => s.includes('@'), 'Must contain @');
   schema.parse('user@domain.com');
 });
 
-Deno.bench('Refine Complex - Guardian', () => {
+bench('Refine Complex - Guardian', () => {
   const guard = Guardian.object({
     password: Guardian.string(),
     confirmPassword: Guardian.string(),
@@ -367,7 +368,7 @@ Deno.bench('Refine Complex - Guardian', () => {
   guard.parse({ password: 'secret', confirmPassword: 'secret' });
 });
 
-Deno.bench('Refine Complex - Zod', () => {
+bench('Refine Complex - Zod', () => {
   const schema = z.object({
     password: z.string(),
     confirmPassword: z.string(),
@@ -382,22 +383,22 @@ Deno.bench('Refine Complex - Zod', () => {
 // SAFE PARSING COMPARISON
 // =============================================================================
 
-Deno.bench('Safe Parse Success - Guardian', () => {
+bench('Safe Parse Success - Guardian', () => {
   const guard = Guardian.string();
   guard.safeParse(sampleString);
 });
 
-Deno.bench('Safe Parse Success - Zod', () => {
+bench('Safe Parse Success - Zod', () => {
   const schema = z.string();
   schema.safeParse(sampleString);
 });
 
-Deno.bench('Safe Parse Failure - Guardian', () => {
+bench('Safe Parse Failure - Guardian', () => {
   const guard = Guardian.string();
   guard.safeParse(123);
 });
 
-Deno.bench('Safe Parse Failure - Zod', () => {
+bench('Safe Parse Failure - Zod', () => {
   const schema = z.string();
   schema.safeParse(123);
 });
@@ -406,19 +407,19 @@ Deno.bench('Safe Parse Failure - Zod', () => {
 // SCALABILITY COMPARISON
 // =============================================================================
 
-Deno.bench('Large Array - Guardian', () => {
+bench('Large Array - Guardian', () => {
   const guard = Guardian.array(Guardian.number());
   const largeArray = Array.from({ length: 1000 }, (_, i) => i);
   guard.parse(largeArray);
 });
 
-Deno.bench('Large Array - Zod', () => {
+bench('Large Array - Zod', () => {
   const schema = z.array(z.number());
   const largeArray = Array.from({ length: 1000 }, (_, i) => i);
   schema.parse(largeArray);
 });
 
-Deno.bench('Large Object - Guardian', () => {
+bench('Large Object - Guardian', () => {
   const guard = Guardian.object(
     Object.fromEntries(
       Array.from({ length: 100 }, (_, i) => [`field${i}`, Guardian.string()]),
@@ -430,7 +431,7 @@ Deno.bench('Large Object - Guardian', () => {
   guard.parse(largeObject);
 });
 
-Deno.bench('Large Object - Zod', () => {
+bench('Large Object - Zod', () => {
   const schema = z.object(
     Object.fromEntries(
       Array.from({ length: 100 }, (_, i) => [`field${i}`, z.string()]),
@@ -446,7 +447,7 @@ Deno.bench('Large Object - Zod', () => {
 // REAL-WORLD SCENARIO COMPARISON
 // =============================================================================
 
-Deno.bench('User Registration - Guardian', () => {
+bench('User Registration - Guardian', () => {
   const guard = Guardian.object({
     username: Guardian.string()
       .trim()
@@ -477,7 +478,7 @@ Deno.bench('User Registration - Guardian', () => {
   });
 });
 
-Deno.bench('User Registration - Zod', () => {
+bench('User Registration - Zod', () => {
   const schema = z.object({
     username: z.string()
       .trim()

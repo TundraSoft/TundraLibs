@@ -1,7 +1,8 @@
 // Pre-built schemas vs in-loop schemas — isolates build cost from parse cost.
 // Both libraries are measured both ways for a fair head-to-head.
 
-import { z } from 'npm:zod';
+import { bench } from '@tundralibs/compat/bench';
+import { z } from 'zod';
 import { Guardian } from '../mod.ts';
 
 const sampleObject = {
@@ -66,37 +67,37 @@ const zLargeArr = z.array(z.number());
 
 // String
 
-Deno.bench('parse-only / String / Baseline (typeof)', {
+bench('parse-only / String / Baseline (typeof)', {
   group: 'string',
   baseline: true,
 }, () => {
   if (typeof sampleString !== 'string') throw new Error();
 });
-Deno.bench('parse-only / String / Guardian', { group: 'string' }, () => {
+bench('parse-only / String / Guardian', { group: 'string' }, () => {
   gStr.parse(sampleString);
 });
-Deno.bench('parse-only / String / Zod', { group: 'string' }, () => {
+bench('parse-only / String / Zod', { group: 'string' }, () => {
   zStr.parse(sampleString);
 });
 
 // Number
 
-Deno.bench('parse-only / Number / Baseline (typeof)', {
+bench('parse-only / Number / Baseline (typeof)', {
   group: 'number',
   baseline: true,
 }, () => {
   if (typeof 42 !== 'number') throw new Error();
 });
-Deno.bench('parse-only / Number / Guardian', { group: 'number' }, () => {
+bench('parse-only / Number / Guardian', { group: 'number' }, () => {
   gNum.parse(42);
 });
-Deno.bench('parse-only / Number / Zod', { group: 'number' }, () => {
+bench('parse-only / Number / Zod', { group: 'number' }, () => {
   zNum.parse(42);
 });
 
 // Object (the most representative real-world case)
 
-Deno.bench(
+bench(
   'parse-only / Object Complex / Baseline (manual)',
   { group: 'objComplex', baseline: true },
   () => {
@@ -126,20 +127,20 @@ Deno.bench(
     if (typeof o.metadata.version !== 'number') throw new Error();
   },
 );
-Deno.bench(
+bench(
   'parse-only / Object Complex / Guardian',
   { group: 'objComplex' },
   () => {
     gObj.parse(sampleObject);
   },
 );
-Deno.bench('parse-only / Object Complex / Zod', { group: 'objComplex' }, () => {
+bench('parse-only / Object Complex / Zod', { group: 'objComplex' }, () => {
   zObj.parse(sampleObject);
 });
 
 // Large array (1000 numbers)
 
-Deno.bench(
+bench(
   'parse-only / Large Array / Baseline (for-loop)',
   { group: 'largeArr', baseline: true },
   () => {
@@ -147,16 +148,16 @@ Deno.bench(
     for (const v of largeArray) if (typeof v !== 'number') throw new Error();
   },
 );
-Deno.bench('parse-only / Large Array / Guardian', { group: 'largeArr' }, () => {
+bench('parse-only / Large Array / Guardian', { group: 'largeArr' }, () => {
   gLargeArr.parse(largeArray);
 });
-Deno.bench('parse-only / Large Array / Zod', { group: 'largeArr' }, () => {
+bench('parse-only / Large Array / Zod', { group: 'largeArr' }, () => {
   zLargeArr.parse(largeArray);
 });
 
 // Sanity: failure path with pre-built schemas
 
-Deno.bench(
+bench(
   'parse-only / Bad Type Throws / Baseline (typeof)',
   { group: 'bad', baseline: true },
   () => {
@@ -165,12 +166,12 @@ Deno.bench(
     } catch { /* expected */ }
   },
 );
-Deno.bench('parse-only / Bad Type Throws / Guardian', { group: 'bad' }, () => {
+bench('parse-only / Bad Type Throws / Guardian', { group: 'bad' }, () => {
   try {
     gNum.parse('not a number');
   } catch { /* expected */ }
 });
-Deno.bench('parse-only / Bad Type Throws / Zod', { group: 'bad' }, () => {
+bench('parse-only / Bad Type Throws / Zod', { group: 'bad' }, () => {
   try {
     zNum.parse('not a number');
   } catch { /* expected */ }
@@ -178,7 +179,7 @@ Deno.bench('parse-only / Bad Type Throws / Zod', { group: 'bad' }, () => {
 
 // safeParse failure (no throw)
 
-Deno.bench(
+bench(
   'parse-only / Bad Type safeParse / Baseline (typeof)',
   { group: 'safeBad', baseline: true },
   () => {
@@ -189,14 +190,14 @@ Deno.bench(
       : [new Error(), undefined];
   },
 );
-Deno.bench(
+bench(
   'parse-only / Bad Type safeParse / Guardian',
   { group: 'safeBad' },
   () => {
     gNum.safeParse('not a number');
   },
 );
-Deno.bench(
+bench(
   'parse-only / Bad Type safeParse / Zod',
   { group: 'safeBad' },
   () => {

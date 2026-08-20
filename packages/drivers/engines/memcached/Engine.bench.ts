@@ -11,6 +11,7 @@
  * is unreachable the benchmark file exits early without running anything.
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { envArgs } from '@tundralibs/utils';
 import { MemcachedEngine } from './Engine.ts';
 
@@ -65,40 +66,40 @@ if (!serverAvailable) {
   // SINGLE-CONNECTION BENCHES (pool min=max=1)
   // ===========================================================================
 
-  Deno.bench('Memcached / set (1 conn) - small string', async () => {
+  bench('Memcached / set (1 conn) - small string', async () => {
     await single.set('bench:set:small', 'value', 60);
   });
 
-  Deno.bench('Memcached / set (1 conn) - 1KB payload', async () => {
+  bench('Memcached / set (1 conn) - 1KB payload', async () => {
     await single.set('bench:set:medium', padded, 60);
   });
 
-  Deno.bench('Memcached / set (1 conn) - JSON object', async () => {
+  bench('Memcached / set (1 conn) - JSON object', async () => {
     await single.set('bench:set:json', sampleObject, 60);
   });
 
-  Deno.bench('Memcached / get (1 conn) - hit', async () => {
+  bench('Memcached / get (1 conn) - hit', async () => {
     await single.get('bench:hit');
   });
 
-  Deno.bench('Memcached / get (1 conn) - miss', async () => {
+  bench('Memcached / get (1 conn) - miss', async () => {
     await single.get('bench:does-not-exist');
   });
 
-  Deno.bench('Memcached / get (1 conn) - 1KB payload', async () => {
+  bench('Memcached / get (1 conn) - 1KB payload', async () => {
     await single.get('bench:medium');
   });
 
-  Deno.bench('Memcached / incr (1 conn)', async () => {
+  bench('Memcached / incr (1 conn)', async () => {
     await single.incr('bench:counter', 1);
   });
 
-  Deno.bench('Memcached / set + get round trip (1 conn)', async () => {
+  bench('Memcached / set + get round trip (1 conn)', async () => {
     await single.set('bench:rt', 'value', 60);
     await single.get('bench:rt');
   });
 
-  Deno.bench('Memcached / version (1 conn)', async () => {
+  bench('Memcached / version (1 conn)', async () => {
     await single.version();
   });
 
@@ -106,15 +107,15 @@ if (!serverAvailable) {
   // POOLED BENCHES (min=4, max=8) — measures throughput under concurrency
   // ===========================================================================
 
-  Deno.bench('Memcached / set (pool 8) - small string', async () => {
+  bench('Memcached / set (pool 8) - small string', async () => {
     await pooled.set('bench:set:small', 'value', 60);
   });
 
-  Deno.bench('Memcached / get (pool 8) - hit', async () => {
+  bench('Memcached / get (pool 8) - hit', async () => {
     await pooled.get('bench:hit');
   });
 
-  Deno.bench(
+  bench(
     'Memcached / 16 concurrent gets (pool 8)',
     async () => {
       const ops = Array.from(
@@ -125,7 +126,7 @@ if (!serverAvailable) {
     },
   );
 
-  Deno.bench(
+  bench(
     'Memcached / 16 concurrent sets (pool 8)',
     async () => {
       const ops = Array.from(
@@ -136,7 +137,7 @@ if (!serverAvailable) {
     },
   );
 
-  Deno.bench(
+  bench(
     'Memcached / 16 mixed ops (pool 8)',
     async () => {
       const ops = Array.from({ length: 16 }, (_, i) => {

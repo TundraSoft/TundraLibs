@@ -1,34 +1,35 @@
+import { bench } from '@tundralibs/compat/bench';
 import { generateHOTP, generateTOTP } from './mod.ts';
 
-Deno.bench({
+bench({
   name: 'crypt.OTP - HOTP SHA-1',
   fn: async () => {
     await generateHOTP('12345678901234567890', 0, { algo: 'SHA-1' });
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.OTP - HOTP SHA-256',
   fn: async () => {
     await generateHOTP('12345678901234567890', 0, { algo: 'SHA-256' });
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.OTP - HOTP SHA-384',
   fn: async () => {
     await generateHOTP('12345678901234567890', 0, { algo: 'SHA-384' });
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.OTP - HOTP SHA-512',
   fn: async () => {
     await generateHOTP('12345678901234567890', 0, { algo: 'SHA-512' });
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.OTP - TOTP SHA-1',
   fn: async () => {
     await generateTOTP('12345678901234567890', {
@@ -39,7 +40,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.OTP - TOTP SHA-256',
   fn: async () => {
     await generateTOTP('12345678901234567890', {
@@ -50,7 +51,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.OTP - TOTP SHA-384',
   fn: async () => {
     await generateTOTP('12345678901234567890', {
@@ -61,7 +62,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.OTP - TOTP SHA-512',
   fn: async () => {
     await generateTOTP('12345678901234567890', {
@@ -73,7 +74,7 @@ Deno.bench({
 });
 
 const epoch = new Date('2021-01-01T00:00:00Z').getTime();
-Deno.bench({
+bench({
   name: 'crypt.OTP - TOTP Custom time SHA-1',
   fn: async () => {
     await generateTOTP('12345678901234567890', {
@@ -84,7 +85,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.OTP - TOTP Custom time SHA-256',
   fn: async () => {
     await generateTOTP('12345678901234567890', {
@@ -95,7 +96,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.OTP - TOTP Custom time SHA-384',
   fn: async () => {
     await generateTOTP('12345678901234567890', {
@@ -106,7 +107,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.OTP - TOTP Custom time SHA-512',
   fn: async () => {
     await generateTOTP('12345678901234567890', {

@@ -746,6 +746,7 @@ Create benchmark files for:
  * @module
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { functionToBench } from './module.ts';
 
 // =============================================================================
@@ -763,21 +764,21 @@ cachedFn(1);
 // Benchmarks
 // =============================================================================
 
-Deno.bench({
+bench({
   name: 'module.function - baseline case',
   fn: () => {
     functionToBench(TEST_DATA);
   },
 });
 
-Deno.bench({
+bench({
   name: 'module.function - large input',
   fn: () => {
     functionToBench(LARGE_DATA);
   },
 });
 
-Deno.bench({
+bench({
   name: 'module.function - async operation',
   fn: async () => {
     await asyncFunctionToBench(TEST_DATA);
@@ -796,12 +797,12 @@ Use this format:
 **Examples:**
 
 ```typescript
-Deno.bench({
+bench({
   name: 'utils.once - plain function call',
   fn: () => plainFn(10, 20),
 });
 
-Deno.bench({
+bench({
   name: 'utils.once - first invocation cost',
   fn: () => {
     const local = once((x: number) => x * 2);
@@ -809,12 +810,12 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'utils.once - cached invocation cost',
   fn: () => onceFn(10, 20),
 });
 
-Deno.bench({
+bench({
   name: 'crypt.digest - SHA-256',
   fn: async () => {
     await digest('hello world', { algorithm: 'SHA-256' });
@@ -838,25 +839,25 @@ Test multiple scenarios:
 
 ```typescript
 // Baseline
-Deno.bench({
+bench({
   name: 'utils.templatize - simple template',
   fn: () => templatize('Hello {{name}}', { name: 'World' }),
 });
 
 // Large input
-Deno.bench({
+bench({
   name: 'utils.templatize - large template',
   fn: () => templatize(largeTemplate, largeData),
 });
 
 // Multiple variables
-Deno.bench({
+bench({
   name: 'utils.templatize - many variables',
   fn: () => templatize(templateWithManyVars, manyVarData),
 });
 
 // Comparison
-Deno.bench({
+bench({
   name: 'utils.templatize - vs string concatenation',
   fn: () => `Hello ${data.name}`,
 });
@@ -871,7 +872,7 @@ Deno.bench({
 const cachedFn = memoize((x: number) => x * 2);
 cachedFn(1); // Don't measure this
 
-Deno.bench({
+bench({
   name: 'utils.memoize - cached invocation',
   fn: () => cachedFn(1), // Measure cached performance
 });
@@ -883,13 +884,13 @@ Deno.bench({
 // ✅ Good - data created once
 const testData = generateLargeData();
 
-Deno.bench({
+bench({
   name: 'process large data',
   fn: () => process(testData),
 });
 
 // ❌ Bad - data created each iteration
-Deno.bench({
+bench({
   name: 'process large data',
   fn: () => {
     const testData = generateLargeData(); // Measured!
@@ -901,7 +902,7 @@ Deno.bench({
 ### Async Benchmarks
 
 ```typescript
-Deno.bench({
+bench({
   name: 'async operation',
   fn: async () => {
     await asyncFunction();
@@ -909,7 +910,7 @@ Deno.bench({
 });
 
 // Multiple async operations
-Deno.bench({
+bench({
   name: 'parallel operations',
   fn: async () => {
     await Promise.all([
@@ -923,29 +924,30 @@ Deno.bench({
 
 ### Running Benchmarks
 
-**Single file:**
+Bench files are plain entry points — there is no runner command. One file,
+any runtime:
 
 ```bash
-deno bench packages/utils/once.bench.ts
+deno run --allow-env --allow-read packages/utils/once.bench.ts
+bun run packages/utils/once.bench.ts
+node --import tsx packages/utils/once.bench.ts
 ```
 
-**All benchmarks in package:**
+All three runtimes at once, merged into one table per bench (a column per
+runtime, fastest marked) via the aggregator:
 
 ```bash
-deno bench packages/utils/**/*.bench.ts
+deno task bench                        # every *.bench.ts, all three lanes
+deno task bench:deno                   # one lane (also :bun / :node)
+deno task bench:smoke                  # rot check — tiny budgets, meaningless numbers
+deno run --allow-run --allow-read --allow-env --allow-write \
+  packages/compat/scripts/bench-all.ts --filter=join packages/utils
 ```
 
-**All benchmarks in workspace:**
-
-```bash
-deno bench
-```
-
-**With permissions:**
-
-```bash
-deno bench -A packages/compat/file.bench.ts
-```
+`bench-all.ts` also takes `--format=md|csv`, `--save-baseline=<file>` /
+`--baseline=<file>` (regression compare on p50, ±10% flagged), and `--lanes=`.
+Extra Deno permissions a bench needs go on its `deno run` invocation — the
+`deno bench` `permissions` option has no equivalent.
 
 ### Benchmark Output
 
@@ -989,11 +991,17 @@ utils.once - cached invocation      4.17 ns/iter 239,808,153.5   (3.75 ns … 41
 
 ### Cross-Runtime Benchmarking
 
-**Current Status:** Deno only
+**Current Status:** Deno, Bun, and Node.js.
 
-Benchmarks currently use `Deno.bench` and only run on Deno. Cross-runtime benchmarking utilities are being developed.
-
-**Future:** When cross-runtime benchmarking is available, benchmarks will run on Deno, Bun, and Node.js for comparison.
+Benchmarks import `bench` from `@tundralibs/compat/bench` — one
+`Deno.bench`-compatible API, one dependency-free measurement engine on all
+three runtimes, so cross-runtime numbers compare the runtimes rather than two
+different harnesses. Features: `group`/`baseline` summaries, `only`/`ignore`,
+runtime/OS skip flags (`{ node: false }`), `BENCH_FILTER`
+(substring or `/regex/`), `b.start()`/`b.end()` sectioned timing, fixed batch
+size (`n`), async auto-detection, p50/p75/p99 + MAD stats, a JSON report
+(`BENCH_FORMAT=json`), and a smoke mode (`BENCH_SMOKE=1`) for CI rot checks.
+Full reference: [Compat-Bench](../../packages/compat/docs/Compat-Bench.md).
 
 ## Pre-Commit Checklist
 
@@ -1014,7 +1022,7 @@ Before committing test/benchmark files:
 **Benchmarks:**
 - [ ] Benchmark file created for performance-critical functions
 - [ ] File follows naming convention (`{module}.bench.ts`)
-- [ ] Benchmarks run successfully with `deno bench`
+- [ ] Benchmarks run successfully on all three runtimes (`deno task bench:smoke` covers this quickly)
 - [ ] Multiple scenarios tested (baseline, large input, edge cases)
 - [ ] Test data created outside benchmark functions
 - [ ] Cached functions primed before measuring

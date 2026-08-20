@@ -1,12 +1,13 @@
+import { bench } from '@tundralibs/compat/bench';
 import { sequenceID } from './mod.ts';
 
-Deno.bench({
+bench({
   name: `id.Generate sequenceId`,
 }, () => {
   sequenceID();
 });
 
-Deno.bench({
+bench({
   name: `id.Generate sequenceId Overriding`,
 }, () => {
   sequenceID(134);

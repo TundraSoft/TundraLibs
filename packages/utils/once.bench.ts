@@ -1,3 +1,4 @@
+import { bench } from '@tundralibs/compat/bench';
 import { once } from './once.ts';
 
 // Baseline plain function
@@ -6,13 +7,13 @@ const onceFn = once((a: number, b: number) => a + b);
 // Prime once function (first invocation performs real work)
 onceFn(1, 2);
 
-Deno.bench({
+bench({
   name: 'utils.once - plain function call',
 }, () => {
   plainFn(10, 20);
 });
 
-Deno.bench({
+bench({
   name: 'utils.once - first invocation cost',
 }, () => {
   // Create fresh once wrapper each iteration to measure initial overhead
@@ -20,7 +21,7 @@ Deno.bench({
   local(5);
 });
 
-Deno.bench({
+bench({
   name: 'utils.once - cached invocation cost',
 }, () => {
   // Subsequent calls should be minimal overhead

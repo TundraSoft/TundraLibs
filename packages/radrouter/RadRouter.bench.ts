@@ -1,5 +1,3 @@
-/// <reference lib="deno.ns" />
-
 /**
  * RadRouter performance benchmarks.
  *
@@ -16,6 +14,7 @@
  * Compare against find-my-way / radix3 in `RadRouter.compare.bench.ts`.
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { RadRouter } from './RadRouter.ts';
 
 type BenchCtx = { state: { processed?: boolean } };
@@ -49,7 +48,7 @@ const ciRouter = buildRouter({ caseSensitive: false });
 
 // ---------- lookup group: shape comparison on case-sensitive router ----------
 
-Deno.bench(
+bench(
   'static (versioned)',
   { group: 'lookup', baseline: true },
   () => {
@@ -57,29 +56,29 @@ Deno.bench(
   },
 );
 
-Deno.bench('static (deep, unversioned)', { group: 'lookup' }, () => {
+bench('static (deep, unversioned)', { group: 'lookup' }, () => {
   router.find('GET', '/api/v5/resource500/action');
 });
 
-Deno.bench('param (2 params)', { group: 'lookup' }, () => {
+bench('param (2 params)', { group: 'lookup' }, () => {
   router.find('GET', '/users/123/posts/456/comments/25');
 });
 
-Deno.bench('greedy (single segment)', { group: 'lookup' }, () => {
+bench('greedy (single segment)', { group: 'lookup' }, () => {
   router.find('GET', '/files/10/documents');
 });
 
-Deno.bench('greedy (multi segment)', { group: 'lookup' }, () => {
+bench('greedy (multi segment)', { group: 'lookup' }, () => {
   router.find('GET', '/files/25/a/b/c/d.txt');
 });
 
-Deno.bench('miss', { group: 'lookup' }, () => {
+bench('miss', { group: 'lookup' }, () => {
   router.find('GET', '/nonexistent/route');
 });
 
 // ---------- ci-overhead group: case-sensitive vs case-insensitive ----------
 
-Deno.bench(
+bench(
   'case-sensitive',
   { group: 'ci-overhead', baseline: true },
   () => {
@@ -87,6 +86,6 @@ Deno.bench(
   },
 );
 
-Deno.bench('case-insensitive', { group: 'ci-overhead' }, () => {
+bench('case-insensitive', { group: 'ci-overhead' }, () => {
   ciRouter.find('GET', '/API/V5/RESOURCE500/ACTION');
 });
