@@ -3,14 +3,17 @@ import type { HTTPMethod, StatusCode } from '@tundralibs/compat/http';
 import type { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
 import {
+  type CookieOptions,
   mimeTypeFor,
   pagingFromHeaders,
   pagingFromQuery,
   parseBody,
+  parseCookies,
   parsePaging,
   parseQueryFilters,
   resolveClientAddress,
   type ResolvedClientAddress,
+  serializeCookie,
   serializeResponse,
 } from '../utils/mod.ts';
 import type {
@@ -77,6 +80,8 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     undefined;
   /** Lazy args cache — see the base {@link Context.args} contract. */
   private __args: Readonly<RapidContextArgs> | undefined = undefined;
+  /** Lazy parsed inbound cookies — see {@link cookies}. */
+  private __cookies: Record<string, string> | undefined = undefined;
   protected readonly _fileUploads: string[] = [];
   protected readonly _headers: Headers = new Headers();
 
@@ -300,6 +305,60 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
       // Same casing @std/media-types uses, so serve()/html() agree.
       headers: { 'content-type': 'text/html; charset=UTF-8' },
     };
+  }
+
+  /**
+   * Build a redirect response: `302 Found` by default, `301 Moved
+   * Permanently` when `permanent` is true. Return it from a handler
+   * (`return ctx.redirect('/login')`).
+   */
+  public redirect(url: string, permanent = false): RapidContextResponse {
+    return {
+      status: permanent ? 301 : 302,
+      content: '',
+      headers: { location: url },
+    };
+  }
+
+  /**
+   * Inbound cookies as a name → value map (values percent-decoded),
+   * parsed once from the `Cookie` header on first access.
+   */
+  public get cookies(): Readonly<Record<string, string>> {
+    return this.__cookies ??= parseCookies(this.request.headers.get('cookie'));
+  }
+
+  /**
+   * Queue a `Set-Cookie` on the outbound response (appended, so multiple
+   * cookies coexist). Frozen after {@link respond}.
+   *
+   * @throws {RapidError} RAPID_RESPONSE_INVALID after {@link respond}.
+   * @throws {Error} When `name` is not a legal cookie name.
+   */
+  public setCookie(
+    name: string,
+    value: string,
+    options: CookieOptions = {},
+  ): void {
+    this.appendHeader('set-cookie', serializeCookie(name, value, options));
+  }
+
+  /**
+   * Expire a cookie on the client — a `Set-Cookie` with an epoch expiry.
+   * Pass the SAME `path`/`domain` the cookie was set with, or the
+   * browser won't match it.
+   *
+   * @throws {RapidError} RAPID_RESPONSE_INVALID after {@link respond}.
+   */
+  public deleteCookie(
+    name: string,
+    options: Pick<CookieOptions, 'path' | 'domain'> = {},
+  ): void {
+    this.setCookie(name, '', {
+      ...options,
+      expires: new Date(0),
+      maxAge: 0,
+    });
   }
 
   /**

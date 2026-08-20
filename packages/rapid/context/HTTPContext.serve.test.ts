@@ -69,4 +69,30 @@ describe('rapid.HTTPContext.serve / .html', () => {
       'text/html; charset=UTF-8',
     );
   });
+
+  it('redirect() → 302, permanent → 301, with a Location', () => {
+    const r = ctx().redirect('/login');
+    asserts.assertEquals(r.status, 302);
+    asserts.assertEquals(
+      (r.headers as Record<string, string>).location,
+      '/login',
+    );
+    asserts.assertEquals(ctx().redirect('/new', true).status, 301);
+  });
+
+  it('cookies: parse inbound, set/delete outbound', () => {
+    const c = new HTTPContext(app, {
+      request: new Request('http://localhost/', {
+        headers: { cookie: 'sid=abc; theme=dark' },
+      }),
+      remoteAddress: '127.0.0.1',
+    });
+    asserts.assertEquals(c.cookies, { sid: 'abc', theme: 'dark' });
+
+    c.setCookie('token', 'xyz', { httpOnly: true, path: '/' });
+    c.deleteCookie('sid', { path: '/' });
+    const setCookies = c.responseHeaders.getSetCookie();
+    asserts.assertEquals(setCookies[0], 'token=xyz; Path=/; HttpOnly');
+    asserts.assert(setCookies[1]!.startsWith('sid=; Max-Age=0;'));
+  });
 });

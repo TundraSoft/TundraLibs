@@ -10,6 +10,11 @@
 export { buildExporter } from './buildExporter.ts';
 export { buildState, type StateMode } from './buildState.ts';
 export { compose } from './compose.ts';
+export {
+  type CookieOptions,
+  parseCookies,
+  serializeCookie,
+} from './cookies.ts';
 export { mimeTypeFor } from './mimeTypeFor.ts';
 export { type ModuleMountTarget, mountModule } from './mountModule.ts';
 export {
