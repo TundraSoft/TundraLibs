@@ -6,7 +6,7 @@ import { RadRouter } from '@tundralibs/radrouter';
 import { extract, SpanKind } from '@tundralibs/tracer';
 import { HTTPContext, SOCKETContext } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
-import { compose, extractPathname, socketOutcome } from '../utils/mod.ts';
+import { compose, socketOutcome } from '../utils/mod.ts';
 import type {
   RapidContextResponse,
   RapidContextState,
@@ -253,11 +253,12 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
   ): Response | Promise<Response> {
     const serverOptions = this._app.option('server')!;
     const method = request.method.trim().toUpperCase() as HTTPMethod;
-    // Pathname by substring scan, NOT `new URL(...)` — `request.url` is
-    // already absolute + normalized, so this equals `.pathname` without
-    // parsing the query/hash/host the router never reads (the query is
-    // still parsed, but lazily, only if a handler reads `ctx.args`).
-    const pathname = extractPathname(request.url);
+    // `new URL(...).pathname` — NOT a raw substring scan: it also
+    // resolves dot-segments (`/a/../b` → `/b`). `Deno.serve` (unlike
+    // Bun/Node) delivers `request.url` UN-normalized, so scanning it
+    // would route `/a/../b` differently per runtime. The query is still
+    // parsed only lazily, when a handler reads `ctx.args`.
+    const pathname = new URL(request.url).pathname;
     // Absent header → undefined, resolved by the router's own
     // exact → defaultVersion → unversioned fallback (constructor
     // option below) — NOT re-defaulted here, so an unrecognized
@@ -298,8 +299,12 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
     const dispatch: () => void | Promise<void> = entry !== undefined
       ? () => {
         const returned = entry.handler(ctx);
+        // `!= null` (not `!== undefined`): a handler that returns `null`
+        // must NOT reach `.then` on it (that throws) — it falls through to
+        // `apply`, which clears to a 204 just like a `void`/`0`/`''`
+        // return. Only a real thenable takes the async branch.
         if (
-          returned !== undefined &&
+          returned != null &&
           typeof (returned as Promise<RapidContextResponse | void>).then ===
             'function'
         ) {

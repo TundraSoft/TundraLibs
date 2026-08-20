@@ -69,10 +69,21 @@ export class Posts {
       id: row.id,
       title: row.title,
       body: row.body,
-      tags: JSON.parse(row.tags) as string[],
+      // Every write path stores valid JSON, but never let one bad/out-of
+      // -band row 500 the whole list — fall back to no tags.
+      tags: this.#parseTags(row.tags),
       published: Boolean(row.published),
       createdAt: new Date(row.createdAt).toISOString(),
     };
+  }
+
+  #parseTags(raw: string): string[] {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed as string[] : [];
+    } catch {
+      return [];
+    }
   }
 
   @GET('/', {

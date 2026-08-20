@@ -38,11 +38,19 @@ function fakeNorm() {
       posts.set(stored.id as string, stored);
       return { data: [stored] };
     },
-    find: (filter?: { '@id'?: string }) => ({
-      data: filter?.['@id']
+    find: (
+      filter?: { '@id'?: string },
+      opts?: { limit?: number; offset?: number },
+    ) => {
+      const rows = filter?.['@id']
         ? [posts.get(filter['@id'])].filter(Boolean)
-        : [...posts.values()],
-    }),
+        : [...posts.values()];
+      // Honor LIMIT/OFFSET so the paging test can actually fail on an
+      // off-by-one in list()'s offset math.
+      const start = opts?.offset ?? 0;
+      const end = opts?.limit === undefined ? undefined : start + opts.limit;
+      return { data: rows.slice(start, end) };
+    },
     count: () => ({ count: posts.size }),
     update: (set: Record<string, unknown>, filter: { '@id': string }) => {
       const row = posts.get(filter['@id']);
@@ -104,13 +112,23 @@ describe('blog.Posts (unit — fake Norm via doctor, no server/DB)', () => {
     await posts.create({ title: 'one', body: 'b' });
     await posts.create({ title: 'two', body: 'b' });
 
-    const res = await posts.list(
+    // size:1 → one row per page but total:2. A wrong offset (e.g. page*size)
+    // returns the wrong row / an empty page, so this pins the paging math.
+    const p1 = await posts.list(
       {} as RapidContextQuery,
-      { page: 1, size: 10 } as RapidContextPaging,
+      { page: 1, size: 1 } as RapidContextPaging,
     );
-    const body = res.content as { rows: Post[]; total: number };
-    asserts.assertEquals(body.total, 2);
-    asserts.assertEquals(body.rows.length, 2);
+    const b1 = p1.content as { rows: Post[]; total: number };
+    asserts.assertEquals(b1.total, 2);
+    asserts.assertEquals(b1.rows.length, 1);
+
+    const p2 = await posts.list(
+      {} as RapidContextQuery,
+      { page: 2, size: 1 } as RapidContextPaging,
+    );
+    const b2 = p2.content as { rows: Post[]; total: number };
+    asserts.assertEquals(b2.rows.length, 1);
+    asserts.assert(b1.rows[0]!.id !== b2.rows[0]!.id); // distinct pages
     Doctor.reset();
   });
 });

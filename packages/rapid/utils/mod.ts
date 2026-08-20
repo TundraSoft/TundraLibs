@@ -10,7 +10,6 @@
 export { buildExporter } from './buildExporter.ts';
 export { buildState, type StateMode } from './buildState.ts';
 export { compose } from './compose.ts';
-export { extractPathname } from './extractPathname.ts';
 export { type ModuleMountTarget, mountModule } from './mountModule.ts';
 export {
   parseBody,
