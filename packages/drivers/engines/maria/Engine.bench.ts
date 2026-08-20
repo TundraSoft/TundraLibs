@@ -17,27 +17,42 @@ const TEST_CONFIG = {
   password: env.get('MARIA_PASSWORD') || '',
 };
 
-const single = new MariaEngine('bench-single', {
-  ...TEST_CONFIG,
-  pool: { min: 1, max: 1 },
-});
-const pooled = new MariaEngine('bench-pool', {
-  ...TEST_CONFIG,
-  pool: { min: 4, max: 8 },
-});
+// Engine CONSTRUCTION throws on missing config (empty password), so it
+// lives inside the guard too — unconfigured means skip, same contract
+// as the memcached/redis siblings, never a module-scope crash.
+const engines = (() => {
+  try {
+    return {
+      single: new MariaEngine('bench-single', {
+        ...TEST_CONFIG,
+        pool: { min: 1, max: 1 },
+      }),
+      pooled: new MariaEngine('bench-pool', {
+        ...TEST_CONFIG,
+        pool: { min: 4, max: 8 },
+      }),
+    };
+  } catch {
+    return undefined;
+  }
+})();
 
 let serverAvailable = false;
-try {
-  await single.connect();
-  await pooled.connect();
-  serverAvailable = await single.ping() && await pooled.ping();
-} catch {
-  serverAvailable = false;
+if (engines !== undefined) {
+  try {
+    await engines.single.connect();
+    await engines.pooled.connect();
+    serverAvailable = await engines.single.ping() &&
+      await engines.pooled.ping();
+  } catch {
+    serverAvailable = false;
+  }
 }
 
 if (!serverAvailable) {
-  console.warn('MariaDB unreachable; skipping benchmarks.');
+  console.warn('MariaDB unreachable or unconfigured; skipping benchmarks.');
 } else {
+  const { single, pooled } = engines!;
   // Seed.
   const TABLE = 'tundra_bench_maria';
   await single.execute({
