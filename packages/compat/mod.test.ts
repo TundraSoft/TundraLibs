@@ -164,7 +164,14 @@ const findTopLevelAwait = (src: string): number[] => {
 const sourceFiles = (dir: string, found: string[] = []): string[] => {
   for (const entry of readDirSync(dir)) {
     if (entry.isDirectory) {
-      if (entry.name === 'fixtures' || entry.name === 'docs') continue;
+      // `bench/` scripts are standalone entry points (like a would-be
+      // `examples/` dir) — never imported into the package's module
+      // graph, so a bench script's own top-level `await` can't poison a
+      // consumer's bundle the way a library module's would.
+      if (
+        entry.name === 'fixtures' || entry.name === 'docs' ||
+        entry.name === 'bench'
+      ) continue;
       sourceFiles(join(dir, entry.name), found);
     } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
       found.push(join(dir, entry.name));
