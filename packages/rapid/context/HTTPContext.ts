@@ -297,7 +297,8 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
     return {
       content,
       status,
-      headers: { 'content-type': 'text/html; charset=utf-8' },
+      // Same casing @std/media-types uses, so serve()/html() agree.
+      headers: { 'content-type': 'text/html; charset=UTF-8' },
     };
   }
 

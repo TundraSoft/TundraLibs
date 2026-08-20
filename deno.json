@@ -33,6 +33,7 @@
   "nodeModulesDir": "auto",
   "imports": {
     "@std/asserts": "jsr:@std/assert@^1.0.19",
+    "@std/media-types": "jsr:@std/media-types@^1.1.0",
     "@std/testing": "jsr:@std/testing@^1.0.20",
     "zod": "npm:zod@^4.4.3",
     "pg": "npm:pg@^8.13.0",

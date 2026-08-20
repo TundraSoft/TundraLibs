@@ -8,17 +8,17 @@ import { mimeTypeFor } from './mimeTypeFor.ts';
 
 describe('rapid.mimeTypeFor', () => {
   it('maps common web extensions (case-insensitive)', () => {
-    asserts.assertEquals(mimeTypeFor('index.html'), 'text/html; charset=utf-8');
+    asserts.assertEquals(mimeTypeFor('index.html'), 'text/html; charset=UTF-8');
     asserts.assertEquals(
       mimeTypeFor('a/b/app.JS'),
-      'text/javascript; charset=utf-8',
+      'text/javascript; charset=UTF-8',
     );
-    asserts.assertEquals(mimeTypeFor('style.css'), 'text/css; charset=utf-8');
+    asserts.assertEquals(mimeTypeFor('style.css'), 'text/css; charset=UTF-8');
     asserts.assertEquals(mimeTypeFor('logo.svg'), 'image/svg+xml');
     asserts.assertEquals(mimeTypeFor('photo.JPEG'), 'image/jpeg');
     asserts.assertEquals(
       mimeTypeFor('/deep/path/data.json'),
-      'application/json; charset=utf-8',
+      'application/json; charset=UTF-8',
     );
   });
 

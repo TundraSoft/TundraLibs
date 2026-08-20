@@ -35,7 +35,7 @@ describe('rapid.HTTPContext.serve / .html', () => {
     );
     asserts.assertEquals(
       (res.headers as Record<string, string>)['content-type'],
-      'text/html; charset=utf-8',
+      'text/html; charset=UTF-8',
     );
   });
 
@@ -66,7 +66,7 @@ describe('rapid.HTTPContext.serve / .html', () => {
     asserts.assertEquals(res.content, '<p>hi</p>');
     asserts.assertEquals(
       (res.headers as Record<string, string>)['content-type'],
-      'text/html; charset=utf-8',
+      'text/html; charset=UTF-8',
     );
   });
 });

@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@std/asserts": "npm:@jsr/std__assert@^1.0.0",
+    "@std/media-types": "npm:@jsr/std__media-types@^1.1.0",
     "@std/testing": "npm:@jsr/std__testing@^1.0.0"
   },
   "devDependencies": {

@@ -265,11 +265,13 @@ store-injection is the one breaking change and must land before release.
   correct content-types (see MIME types below), conditional / ETag +
   caching headers, and range requests. (Was flagged debatable earlier —
   now in scope for 1.0.)
-- **Proper MIME types.** A cross-runtime MIME-type resolver (by extension
-  - content-type helpers) feeding static serving and response shaping.
-    Reuse Deno's `@std/media-types` if it runs clean on Bun/Node (it's
-    pure — verify, or route through `@tundralibs/compat`) rather than
-    hand-rolling a table.
+- ✅ **Proper MIME types — DONE.** `utils/mimeTypeFor` resolves a file's
+  content-type by extension via `@std/media-types` (added to the workspace
+  import map + `package.json`; verified clean on Deno/Bun/Node — it's a
+  pure extension map). Used by `HTTPContext.serve()` AND the upload path
+  (the stored file's `type` is now server-derived from the validated
+  extension, not the client's unverified `value.type`). The comprehensive
+  resolver the static-serving item needs is now in place.
 - **CLI — project scaffolder + upgrade.** A `create`-style initializer,
   Fresh-flavoured: `deno run -Ar jsr:@tundralibs/rapid/init` lays down a
   new project's folder structure (app entry, config, a sample module,
