@@ -1,7 +1,9 @@
-import { deleteFile } from '@tundralibs/compat/file';
-import type { HTTPMethod } from '@tundralibs/compat/http';
+import { deleteFile, FileNotFound, readFile } from '@tundralibs/compat/file';
+import type { HTTPMethod, StatusCode } from '@tundralibs/compat/http';
 import type { Application } from '../Application.ts';
+import { RapidError } from '../errors/mod.ts';
 import {
+  mimeTypeFor,
   pagingFromHeaders,
   pagingFromQuery,
   parseBody,
@@ -232,6 +234,71 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
    */
   public get hasPendingCleanup(): boolean {
     return this.__payloadPromise !== undefined || this._fileUploads.length > 0;
+  }
+
+  /**
+   * Build a response that SERVES a file: read its bytes and set the
+   * content-type from the extension (HTML/CSS/JS/images/… via
+   * {@link mimeTypeFor}; unknown → `application/octet-stream`). Return it
+   * from a handler — `return await ctx.serve('./public/index.html')` — or
+   * assign it to {@link response}. `download` sends it as an attachment.
+   *
+   * Reads the whole file into memory (no range/streaming yet — that's the
+   * static-serving roadmap item). A missing or non-file path is a 404.
+   *
+   * @throws {RapidError} RAPID_NOT_FOUND when `path` is not an existing
+   *   regular file.
+   */
+  public async serve(
+    path: string,
+    options: {
+      status?: StatusCode;
+      /** Override the extension-derived content-type. */
+      contentType?: string;
+      /** `true` → attachment named after the file; a string → that name. */
+      download?: boolean | string;
+    } = {},
+  ): Promise<RapidContextResponse> {
+    let content: Uint8Array;
+    try {
+      content = await readFile(path);
+    } catch (error) {
+      // A missing path is a 404; a real read failure (permissions, I/O)
+      // propagates to the 500 disclosure path.
+      if (error instanceof FileNotFound) {
+        throw new RapidError('RAPID_NOT_FOUND', {
+          details: { path },
+          cause: error,
+        });
+      }
+      throw error;
+    }
+    const headers: Record<string, string> = {
+      'content-type': options.contentType ?? mimeTypeFor(path),
+    };
+    if (options.download !== undefined && options.download !== false) {
+      const raw = typeof options.download === 'string'
+        ? options.download
+        : path.slice(
+          Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1,
+        );
+      // Strip quotes/CR/LF so a filename can't break out of the header.
+      const name = raw.replace(/["\r\n]/g, '');
+      headers['content-disposition'] = `attachment; filename="${name}"`;
+    }
+    return { content, status: options.status ?? 200, headers };
+  }
+
+  /**
+   * Build an HTML response from an inline string (`content-type:
+   * text/html`). For a file on disk use {@link serve} instead.
+   */
+  public html(content: string, status: StatusCode = 200): RapidContextResponse {
+    return {
+      content,
+      status,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    };
   }
 
   /**
