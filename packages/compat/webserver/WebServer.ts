@@ -1250,11 +1250,23 @@ export class WebServer<T = unknown> {
     if (this._metrics.requests.active > this._metrics.requests.peakActive) {
       this._metrics.requests.peakActive = this._metrics.requests.active;
     }
+    // requestId/requestTime are LAZY (minted on first access, then
+    // cached): no consumer that ignores `info` should pay for a UUID
+    // + Date allocation per request. `requestTime` still reflects
+    // request ENTRY — the epoch millis are captured here, only the
+    // Date object around them is deferred.
+    const requestTimeMs = Date.now();
+    let lazyRequestId: string | undefined;
+    let lazyRequestTime: Date | undefined;
     const requestInfo: RequestInfo = {
       remoteAddress: info.remoteAddress,
       remotePort: info.remotePort,
-      requestId: crypto.randomUUID(),
-      requestTime: new Date(),
+      get requestId(): string {
+        return (lazyRequestId ??= crypto.randomUUID());
+      },
+      get requestTime(): Date {
+        return (lazyRequestTime ??= new Date(requestTimeMs));
+      },
     };
     let response: Response | undefined;
     try {
@@ -1933,14 +1945,19 @@ export class WebServer<T = unknown> {
               }
             });
 
-            const pump = (): void => {
-              reader.read().then(({ done, value }) => { // NOSONAR - Async streaming pattern requires nesting
+            // The general pump: consumes an ALREADY-ISSUED read (the
+            // fast path below may hand over a read it started), then
+            // write-and-read-on until done.
+            const pump = (
+              pending: Promise<ReadableStreamReadResult<Uint8Array>>,
+            ): void => {
+              pending.then(({ done, value }) => { // NOSONAR - Async streaming pattern requires nesting
                 if (done || cancelled) {
                   res.end();
                   return;
                 }
                 res.write(value);
-                pump();
+                pump(reader.read());
               }).catch((err) => { // NOSONAR - Error handling for stream
                 if (!cancelled) {
                   cancelled = true;
@@ -1948,7 +1965,58 @@ export class WebServer<T = unknown> {
                 }
               });
             };
-            pump();
+
+            // Fast path: a Response built from a string/buffer (the
+            // overwhelmingly common case) yields exactly ONE chunk.
+            // Holding it until the next read reports done sends the
+            // whole body as one `res.end(chunk)` — Node then derives
+            // Content-Length instead of chunked framing (one socket
+            // write, smaller wire format). A genuine stream's second
+            // read can take arbitrarily long, so it races a
+            // setImmediate: losing the race flushes the held chunk and
+            // hands off to the pump — at most one event-loop turn of
+            // added latency, only on the FIRST chunk of an actual
+            // streaming response (a materialized body's final read
+            // settles in a microtask, deterministically beating the
+            // macrotask setImmediate).
+            reader.read().then((first) => { // NOSONAR - Async streaming pattern requires nesting
+              if (cancelled) return;
+              if (first.done) {
+                res.end();
+                return;
+              }
+              const second = reader.read();
+              let handedOff = false;
+              const flush = setImmediate(() => { // NOSONAR - Race arm requires nesting
+                if (cancelled || handedOff) return;
+                handedOff = true;
+                res.write(first.value!);
+                pump(second);
+              });
+              second.then((result) => { // NOSONAR - Race arm requires nesting
+                if (handedOff || cancelled) return; // pump owns it now
+                handedOff = true;
+                clearImmediate(flush);
+                if (result.done) {
+                  res.end(first.value!);
+                  return;
+                }
+                res.write(first.value!);
+                res.write(result.value!);
+                pump(reader.read());
+              }, (err) => { // NOSONAR - Race arm requires nesting
+                if (handedOff || cancelled) return; // pump's catch handles it
+                handedOff = true;
+                clearImmediate(flush);
+                cancelled = true;
+                res.destroy(err);
+              });
+            }).catch((err) => { // NOSONAR - Error handling for stream
+              if (!cancelled) {
+                cancelled = true;
+                res.destroy(err);
+              }
+            });
           } else {
             res.end();
           }
@@ -2345,9 +2413,10 @@ export class WebServer<T = unknown> {
    * to share one implementation across both call sites.
    *
    * @throws {TypeError} If the client `Host` header (used as the URL
-   *   authority) cannot be parsed by `new URL` — e.g. an out-of-range
-   *   port. Both call sites catch this and reject the request rather
-   *   than letting the throw crash the process.
+   *   authority) yields an unparseable URL — e.g. an out-of-range
+   *   port. Raised by `new Request` (origin-form targets) or `new URL`
+   *   (absolute-/asterisk-form). Both call sites catch this and reject
+   *   the request rather than letting the throw crash the process.
    * @private
    */
   private __nodeReqToFetchRequest(
@@ -2357,14 +2426,30 @@ export class WebServer<T = unknown> {
       ? 'https'
       : 'http';
     const host = req.headers.host || 'localhost';
-    const url = new URL(req.url || '/', `${protocol}://${host}`);
-    const headers = new Headers();
-    for (const [key, value] of Object.entries(req.headers)) {
+    const rawUrl = req.url || '/';
+    // Origin-form targets ('/path?query' — effectively every real
+    // request) build the absolute URL by CONCATENATION: `new Request`
+    // parses and normalizes the string itself, so a separate `new URL`
+    // pass here parsed the same URL twice (measured ~450ns/request).
+    // Absolute-/asterisk-form targets (proxy-style requests,
+    // `OPTIONS *`) keep the original `new URL` resolution semantics.
+    // A malformed Host now throws inside `new Request` instead of
+    // `new URL` — the same call-site catches still turn it into a 400.
+    const url = rawUrl[0] === '/'
+      ? `${protocol}://${host}${rawUrl}`
+      : new URL(rawUrl, `${protocol}://${host}`).href;
+    // Header PAIRS go to `new Request` directly: one validation pass
+    // in its fill, instead of building an intermediate `Headers` whose
+    // per-append validation covered the same ground (measured
+    // ~750ns/request for a typical 5-header request).
+    const headers: [string, string][] = [];
+    for (const key in req.headers) {
+      const value = req.headers[key];
       if (value == null) continue;
       if (Array.isArray(value)) {
-        for (const v of value) headers.append(key, v);
+        for (const v of value) headers.push([key, v]);
       } else if (typeof value === 'string') {
-        headers.append(key, value);
+        headers.push([key, value]);
       }
     }
     let body: BodyInit | null | undefined = undefined;

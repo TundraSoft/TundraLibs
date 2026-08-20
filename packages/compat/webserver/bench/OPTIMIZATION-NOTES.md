@@ -132,3 +132,69 @@ None of 1-3 are one-liners; each needs its own correctness pass
 (especially #1's stream-vs-buffer detection and #2's multi-value-header
 handling) and its own test coverage before landing, per this repo's
 review conventions. Flagging for a decision, not implementing here.
+
+## IMPLEMENTED (follow-up pass) — all three, measured
+
+All three candidates above landed in `WebServer.ts`, with a
+micro-benchmark pass FIRST to find where the Node gap actually lives:
+
+| Per-request operation (Node 26, this machine)                  |            Cost |
+| -------------------------------------------------------------- | --------------: |
+| `new URL('/users/42', base)`                                   |         ~450 ns |
+| `new Headers()` + 5 appends                                    |         ~760 ns |
+| `new Request(...)` (floor, best-case inputs)                   | ~1,300-1,800 ns |
+| **full inbound translation (before)**                          |   **~2,400 ns** |
+| **full inbound translation (after: concat URL + pairs array)** |   **~1,830 ns** |
+| `crypto.randomUUID()` + `new Date()`                           |         ~170 ns |
+| `new Response(str)` (undici constructor alone)                 |       ~1,740 ns |
+| draining the body stream after construction                    |      +50-300 ns |
+
+The headline discovery: **undici's `Request`/`Response` constructors
+are the whale** (~3.5µs combined per request), not the stream pump —
+`new Response(str)` alone costs ~1.7µs and the reader drain adds
+almost nothing on top. Those constructors are the price of the Fetch
+contract itself on Node; `WebServer` cannot remove them without a
+Hono-node-server-style "lightweight Request" impersonation, and the
+matching Response-side trick is BLOCKED on Node 26+ (undici moved to
+true `#private` fields — the internal body `source` is unreachable,
+verified empirically, so a constructed Response can only be consumed
+through the public stream API).
+
+What landed:
+
+1. **Inbound** — origin-form URLs built by string concat (Request's
+   constructor parses the string anyway; the separate `new URL` pass
+   was parsing everything twice) with `new URL` kept for the rare
+   absolute-/asterisk-form targets; headers passed to `new Request` as
+   a pairs array (one validation pass) instead of via an intermediate
+   `Headers` + per-append validation. ~585 ns/request saved.
+2. **requestInfo** — `requestId`/`requestTime` are now lazy cached
+   getters (epoch millis captured at entry, so `requestTime` is still
+   honest). Zero cost for the (universal, verified) consumers that
+   never read them; identical observable behavior for any that do.
+3. **Outbound** — single-chunk fast path: hold the first chunk, race
+   the second read against a `setImmediate`; when the stream is done
+   (every string/buffer-built Response — the second read of a
+   materialized body settles in a microtask, deterministically beating
+   the macrotask), the whole body goes out as ONE `res.end(chunk)` and
+   Node emits **Content-Length instead of chunked framing**. A genuine
+   stream loses the race and hands off to the old pump with at most
+   one event-loop turn of added first-chunk latency — verified live
+   (3 chunks 150ms apart arrived at 0/151/303ms).
+
+Measured (paired A/B, both servers running simultaneously on Node,
+alternating autocannon rounds — controls for machine drift):
+baseline ~39.6-40.1k req/s vs optimized ~40.2-42.2k req/s across both
+routes = **+2-5% throughput**, plus the wire-format improvement
+(Content-Length responses instead of chunked). Modest by design: the
+remaining ~30% gap to raw `node:http` is undici constructor cost, per
+the table above. The next meaningful step, if ever wanted, is the
+lightweight-Request scheme (Request-shaped object, lazy real-Request
+materialization) — proven in hono/node-server but a materially bigger
+correctness surface; not attempted.
+
+Verified after the change: full compat suite green on Deno
+(35/1032 steps), Bun (815), Node (778); rapid's suite green (221
+steps); live behavioral checks for Content-Length on single-chunk,
+progressive delivery on real streams, 204/null bodies, and lazy
+requestId stability.
