@@ -295,6 +295,19 @@ Additive feature work, not blocking the first ship. Each is independent.
   re-declaring its `inject()` fields. Keep the decorated methods on the
   subclass; verify the metadata-only decorators still register through
   inheritance (they key on the method function).
+- **OpenAPI documentation — automatic + exposed.** Generate an OpenAPI
+  spec straight from the decorator registry and serve it (e.g.
+  `/openapi.json` + a docs UI). The raw material already exists: routes/
+  methods/versions from the registry, path/query/payload params from the
+  binder metadata, and response schemas from `@GET(..., { response })`
+  (which already knows `.toOpenAPI()` / `.toJSONSchema()`) — the binders
+  were designed as "the OpenAPI raw material." Needs the assembler +
+  serving surface, plus a policy for error/response shapes.
+- **SDK generator (via RESTler).** Generate a typed client SDK from that
+  same OpenAPI/decorator metadata, built on `@tundralibs/restler` (the
+  REST client base) — one typed method per route, request/response types
+  reused from the schemas. Pairs with the OpenAPI item: one metadata
+  source, two outputs (human docs + machine client).
 
 ## Parked
 
