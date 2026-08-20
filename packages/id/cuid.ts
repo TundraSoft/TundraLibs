@@ -102,17 +102,27 @@ function computeFingerprint(): string {
  * largest multiple of 36 that fits in a byte, i.e. 252) so every base36
  * digit is equally likely. The rejection rate is ~1.6% so this is fast.
  *
+ * All bytes are drawn in a single `getRandomValues` call rather than one call
+ * per character. The buffer is local to this call and dropped on return — no
+ * cross-call pool, so each segment still gets fresh CSPRNG bytes and nothing
+ * unused persists. The `+ 4` over-draw absorbs the rare rejected byte so the
+ * refill branch is virtually never taken; it stays as the correctness backstop.
+ *
  * @internal
  */
 function randomBase36(length: number): string {
   const limit = Math.floor(256 / BASE) * BASE; // 252
-  const buf = new Uint8Array(1);
+  let buf = crypto.getRandomValues(new Uint8Array(length + 4));
+  let pos = 0;
   let s = '';
   for (let i = 0; i < length; i++) {
     let byte: number;
     do {
-      crypto.getRandomValues(buf);
-      byte = buf[0]!;
+      if (pos >= buf.length) {
+        buf = crypto.getRandomValues(new Uint8Array(buf.length));
+        pos = 0;
+      }
+      byte = buf[pos++]!;
     } while (byte >= limit);
     s += ALPHA[byte % BASE];
   }

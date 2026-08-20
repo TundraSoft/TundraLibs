@@ -20,7 +20,7 @@
    - [When to Use CUID2](#when-to-use-cuid2)
    - [When to Use SequenceID](#when-to-use-sequenceid)
    - [When to Use SimpleID](#when-to-use-simpleid)
-4. [Performance Comparison](#performance-comparison)
+4. [Performance](#performance)
 5. [Security Comparison](#security-comparison)
 6. [Storage Size Comparison](#storage-size-comparison)
 7. [Decision Tree](#decision-tree)
@@ -30,31 +30,32 @@
 
 ## Feature Comparison Matrix
 
-| Feature                | NanoID       | ObjectID        | ULID          | CUID            | CUID2             | SequenceID     | SimpleID       |
-| ---------------------- | ------------ | --------------- | ------------- | --------------- | ----------------- | -------------- | -------------- |
-| **Default Length**     | 21 chars     | 26 chars        | 26 chars      | 25 chars        | 24 chars          | 19 digits      | 12-18 digits   |
-| **Format**             | Base62-like  | Mixed-radix     | Base32        | `c` + base36    | Letter + base36   | BigInt         | BigInt         |
-| **Sortable**           | ❌ No        | ⚠️ Partial      | ✅ Yes        | ⚠️ Per-process  | ❌ No (by design) | ✅ Yes         | ✅ Yes         |
-| **URL-Safe**           | ✅ Yes       | ✅ Yes          | ✅ Yes        | ✅ Yes          | ✅ Yes            | ✅ Yes         | ✅ Yes         |
-| **Cryptographic**      | ✅ Yes       | ⚠️ Partial      | ✅ Yes        | ⚠️ Partial      | ✅ Yes            | ❌ No          | ❌ No          |
-| **Customizable**       | ✅ High      | ⚠️ Medium       | ❌ Low        | ❌ Fixed        | ⚠️ Length only    | ⚠️ Medium      | ⚠️ Medium      |
-| **Timestamp Embedded** | ❌ No        | ✅ Yes          | ✅ Yes        | ✅ Yes          | ❌ No             | ✅ Yes         | ✅ Yes         |
-| **Privacy-Preserving** | ✅ Yes       | ❌ Leaks time   | ❌ Leaks time | ❌ Leaks time   | ✅ Yes            | ❌ Leaks time  | ❌ Leaks time  |
-| **Human-Readable**     | ⚠️ Partial   | ❌ No           | ⚠️ Partial    | ⚠️ Partial      | ⚠️ Partial        | ⚠️ Partial     | ✅ Yes         |
-| **Database-Friendly**  | ✅ Yes       | ✅ Yes          | ✅ Yes        | ✅ Yes          | ✅ Yes            | ✅ Excellent   | ✅ Excellent   |
-| **Distributed-Safe**   | ✅ Yes       | ✅ Yes          | ✅ Yes        | ✅ Yes          | ✅ Yes            | ⚠️ Limited     | ⚠️ Limited     |
-| **Sequential**         | ❌ No        | ⚠️ Counter only | ⚠️ Time-based | ⚠️ Process-only | ❌ No             | ✅ Yes         | ✅ Yes         |
-| **Extract Timestamp**  | ❌ No        | ✅ Yes          | ✅ Yes        | ❌ Not exposed  | ❌ N/A            | ✅ Yes         | ✅ Yes         |
-| **Collision Risk**     | Very Low     | Very Low        | Very Low      | Very Low        | Very Low          | Very Low       | Low            |
-| **Generation Speed**   | ⚡ Very Fast | ⚡ Fast         | ⚡ Fast       | ⚡ Fast         | ⚡ Fast           | ⚡⚡ Very Fast | ⚡⚡⚡ Fastest |
-| **Memory Usage**       | Low          | Medium          | Low           | Low             | Low               | Very Low       | Very Low       |
+| Feature                | NanoID      | ObjectID        | ULID          | CUID            | CUID2             | SequenceID     | SimpleID       |
+| ---------------------- | ----------- | --------------- | ------------- | --------------- | ----------------- | -------------- | -------------- |
+| **Default Length**     | 21 chars    | 26 chars        | 26 chars      | 25 chars        | 24 chars          | 19 digits      | 12-18 digits   |
+| **Format**             | Base62-like | Mixed-radix     | Base32        | `c` + base36    | Letter + base36   | BigInt         | BigInt         |
+| **Sortable**           | ❌ No       | ⚠️ Partial      | ✅ Yes        | ⚠️ Per-process  | ❌ No (by design) | ✅ Yes         | ✅ Yes         |
+| **URL-Safe**           | ✅ Yes      | ✅ Yes          | ✅ Yes        | ✅ Yes          | ✅ Yes            | ✅ Yes         | ✅ Yes         |
+| **Cryptographic**      | ✅ Yes      | ⚠️ Partial      | ✅ Yes        | ⚠️ Partial      | ✅ Yes            | ❌ No          | ❌ No          |
+| **Customizable**       | ✅ High     | ⚠️ Medium       | ❌ Low        | ❌ Fixed        | ⚠️ Length only    | ⚠️ Medium      | ⚠️ Medium      |
+| **Timestamp Embedded** | ❌ No       | ✅ Yes          | ✅ Yes        | ✅ Yes          | ❌ No             | ✅ Yes         | ✅ Yes         |
+| **Privacy-Preserving** | ✅ Yes      | ❌ Leaks time   | ❌ Leaks time | ❌ Leaks time   | ✅ Yes            | ❌ Leaks time  | ❌ Leaks time  |
+| **Human-Readable**     | ⚠️ Partial  | ❌ No           | ⚠️ Partial    | ⚠️ Partial      | ⚠️ Partial        | ⚠️ Partial     | ✅ Yes         |
+| **Database-Friendly**  | ✅ Yes      | ✅ Yes          | ✅ Yes        | ✅ Yes          | ✅ Yes            | ✅ Excellent   | ✅ Excellent   |
+| **Distributed-Safe**   | ✅ Yes      | ✅ Yes          | ✅ Yes        | ✅ Yes          | ✅ Yes            | ⚠️ Limited     | ⚠️ Limited     |
+| **Sequential**         | ❌ No       | ⚠️ Counter only | ⚠️ Time-based | ⚠️ Process-only | ❌ No             | ✅ Yes         | ✅ Yes         |
+| **Extract Timestamp**  | ❌ No       | ✅ Yes          | ✅ Yes        | ❌ Not exposed  | ❌ N/A            | ✅ Yes         | ✅ Yes         |
+| **Collision Risk**     | Very Low    | Very Low        | Very Low      | Very Low        | Very Low          | Very Low       | Low            |
+| **Generation Speed**   | ⚡ Fast     | ⚡⚡ Very Fast  | ⚡ Fast       | ⚡ Fast         | ⚡ Fast           | ⚡⚡⚡ Fastest | ⚡⚡ Very Fast |
+| **Memory Usage**       | Low         | Medium          | Low           | Low             | Low               | Very Low       | Very Low       |
 
 ### Legend
 
 - ✅ **Yes**: Fully supported
 - ⚠️ **Partial**: Partially supported or with limitations
 - ❌ **No**: Not supported
-- ⚡ Performance indicator (more = faster)
+- ⚡ Relative generation speed (more = faster) — for measured per-runtime
+  numbers see [Performance](ID-Performance.md)
 
 ---
 
@@ -169,7 +170,7 @@ nanoID(32, ALPHA_NUMERIC_CASE);
 - ✅ **Customizable**: Choose alphabet and length
 - ✅ **Cryptographically secure**: Uses Web Crypto API
 - ✅ **Dependency-light**: only the `@tundralibs/compat` and `@tundralibs/utils` workspace siblings, no third-party runtime deps (CUID needs neither; nanoID/CUID2/ULID pull in only the shared `@tundralibs/utils` error base)
-- ✅ **Collision resistant**: ~1 million years to 1% collision probability
+- ✅ **Collision resistant**: ~110 bits of entropy at the default 21-char length (21 × log2(38)); collisions are negligible at realistic volumes
 
 **Trade-offs:**
 
@@ -526,68 +527,21 @@ const refId = preciseGen();
 
 ---
 
-## Performance Comparison
+## Performance
 
-### Generation Speed Benchmarks
+All seven generators are fast — roughly 57 ns (`sequenceID`) to 1.5 µs
+(`nanoID(32)` on Node) per ID — so generation is rarely a bottleneck next to
+the I/O it usually accompanies. The relative ordering is stable across runtimes:
 
-> Based on Deno benchmarks (operations per second, higher is better)
+- **Counter / time-based** (`sequenceID`, `ObjectID`, `simpleID`) are the
+  fastest. They touch no CSPRNG on the hot path, so their cost stays flat
+  across Deno, Bun, and Node.
+- **CSPRNG-backed** (`cuid2`, `ulid`, `nanoID`, `cuid`) each draw from
+  `crypto.getRandomValues` once per ID — a little slower, and most visible on
+  Node, whose per-call crypto cost is the highest of the three runtimes.
 
-| Generator   | Ops/sec (approx) | Relative Speed | Use Case        |
-| ----------- | ---------------- | -------------- | --------------- |
-| SimpleID    | ~5,000,000       | ⚡⚡⚡ Fastest | Maximum speed   |
-| SequenceID  | ~4,500,000       | ⚡⚡⚡ Fastest | Database keys   |
-| NanoID (10) | ~2,000,000       | ⚡⚡ Very Fast | Compact IDs     |
-| NanoID (21) | ~1,500,000       | ⚡⚡ Very Fast | Default length  |
-| ObjectID    | ~1,200,000       | ⚡ Fast        | MongoDB         |
-| ULID        | ~1,000,000       | ⚡ Fast        | Sortable IDs    |
-| Monotonic   | ~900,000         | ⚡ Fast        | Strict ordering |
-
-### Performance Characteristics
-
-#### 🏆 **Fastest (5M+ ops/sec)**
-
-- **SimpleID**: Minimal computation (date + counter)
-- **SequenceID**: Simple BigInt operations
-- **Best for**: High-throughput systems, real-time applications
-
-#### ⚡ **Very Fast (1-2M ops/sec)**
-
-- **NanoID**: Crypto random with optimized buffer
-- **Best for**: Balanced performance and security
-
-#### 🔧 **Fast (900K-1.2M ops/sec)**
-
-- **ObjectID**: Multiple components assembly
-- **ULID**: Base32 encoding overhead
-- **Monotonic ULID**: State tracking
-- **Best for**: Most applications (still very fast)
-
-### Memory Usage
-
-| Generator  | Memory per ID | Garbage Collection Impact |
-| ---------- | ------------- | ------------------------- |
-| SequenceID | ~8 bytes      | ⭐⭐⭐ Minimal            |
-| SimpleID   | ~8 bytes      | ⭐⭐⭐ Minimal            |
-| NanoID     | ~21 bytes     | ⭐⭐ Low                  |
-| ObjectID   | ~24 bytes     | ⭐⭐ Low                  |
-| ULID       | ~26 bytes     | ⭐⭐ Low                  |
-
-### Scalability Considerations
-
-```typescript
-// High-throughput scenario (100K IDs/sec)
-// ✅ All generators handle this easily
-
-// Extreme throughput (1M+ IDs/sec)
-// ✅ SimpleID, SequenceID (best)
-// ✅ NanoID (excellent)
-// ⚠️ ObjectID, ULID (good, may need optimization)
-
-// Distributed generation (multiple servers)
-// ✅ ULID, ObjectID, NanoID (no coordination)
-// ⚠️ SequenceID (server-specific)
-// ❌ SimpleID (not recommended)
-```
+For the measured per-generator numbers across all three runtimes — and the
+commands to reproduce them — see [Performance](ID-Performance.md).
 
 ---
 
@@ -654,22 +608,16 @@ const orderId = simpleID()();
 
 ### Collision Probability
 
-```typescript
-// NanoID (21 chars, 64 alphabet)
-// ~265 years needed to have 1% probability of collision
-// at 1,000 IDs per hour
-
-// ULID (128-bit)
-// ~2.5 x 10^18 IDs before 50% collision probability
-
-// ObjectID (counter + random)
-// ~16 million IDs per second before collision risk
-
-// SequenceID (counter-based)
-// No collisions within same server instance
-
-// SimpleID (date + counter)
-// No collisions within same day per instance
+```typescript ignore
+// nanoID   — ~110 bits of entropy at the default 21-char WEB_SAFE length
+//            (21 × log2(38)); collision-free at any realistic volume.
+// ulid     — 80 bits of randomness per millisecond, plus the 48-bit timestamp.
+// cuid2    — whole body from crypto.getRandomValues; length 24..32 tunes it.
+// ObjectID — timestamp + machine/process/worker prefix + counter; the counter
+//            wraps at 1,000,000 within a millisecond.
+// sequenceID — no collisions within one generator (monotonic counter). Across
+//              generators/processes, see its uniqueness caveats.
+// simpleID   — no collisions within one generator per day (daily counter).
 ```
 
 ---

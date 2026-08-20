@@ -65,40 +65,41 @@ export function cuid2(length: number = DEFAULT_LENGTH): string {
       { generator: 'cuid2', option: 'length', value: length },
     );
   }
+  // Draw every random byte this ID needs in ONE getRandomValues call instead
+  // of one call per character. The buffer is local to this invocation and
+  // dropped on return — there is no cross-call pool, so each ID still gets
+  // fresh CSPRNG bytes and nothing unused survives for a fork/snapshot to
+  // clone. Over-drawing slightly past `length` absorbs the rare rejected byte
+  // (see nextIndex) so the refill branch is virtually never taken; it remains
+  // as the correctness backstop.
+  let buf = crypto.getRandomValues(new Uint8Array(Math.ceil(length * 1.3)));
+  let pos = 0;
+
+  // Returns a uniformly distributed integer in `[0, n)` consumed from `buf`.
+  // A naive `byte % n` is biased whenever `n` does not divide 256 evenly (the
+  // low residues occur more often), so we rejection-sample — skip any byte at
+  // or above the largest multiple of `n` that fits in a byte. For `n <= 36`
+  // (our alphabets) the rejection rate is tiny (<= ~9%). Refills `buf` in the
+  // unlikely event the batch is exhausted by rejections.
+  const nextIndex = (n: number): number => {
+    const limit = Math.floor(256 / n) * n;
+    for (;;) {
+      if (pos >= buf.length) {
+        buf = crypto.getRandomValues(new Uint8Array(buf.length));
+        pos = 0;
+      }
+      const byte = buf[pos++]!;
+      if (byte < limit) return byte % n;
+    }
+  };
+
   // First char: a letter. Body: alphanumeric. Initialise `out` as an
   // explicit empty string so TS-strict's `noUncheckedIndexedAccess`
   // doesn't infer `string | undefined` from the first lookup.
   let out = '';
-  out += LETTERS[randomIndex(LETTERS.length)];
+  out += LETTERS[nextIndex(LETTERS.length)];
   for (let i = 1; i < length; i++) {
-    out += ALPHA[randomIndex(ALPHA.length)];
+    out += ALPHA[nextIndex(ALPHA.length)];
   }
   return out;
-}
-
-/**
- * Returns a uniformly distributed integer in `[0, n)` drawn from
- * `crypto.getRandomValues`.
- *
- * A naive `byte % n` is biased whenever `n` does not divide 256 evenly: the
- * low residues occur more often. We rejection-sample — discard any byte at or
- * above the largest multiple of `n` that fits in a byte — so every value in
- * `[0, n)` is equally likely. For `n <= 36` (our alphabets) the rejection rate
- * is tiny (<= ~9%), so this terminates quickly.
- *
- * @param n - Exclusive upper bound; must be in `1..256`.
- * @returns An unbiased integer in `[0, n)`.
- *
- * @internal
- */
-function randomIndex(n: number): number {
-  // Largest multiple of n that is <= 256; bytes >= limit would bias the result.
-  const limit = Math.floor(256 / n) * n;
-  const buf = new Uint8Array(1);
-  let byte: number;
-  do {
-    crypto.getRandomValues(buf);
-    byte = buf[0]!;
-  } while (byte >= limit);
-  return byte % n;
 }
