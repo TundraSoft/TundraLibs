@@ -6,7 +6,7 @@ import { RadRouter } from '@tundralibs/radrouter';
 import { extract, SpanKind } from '@tundralibs/tracer';
 import { HTTPContext, SOCKETContext } from '../context/mod.ts';
 import { RapidError } from '../errors/mod.ts';
-import { compose, socketOutcome } from '../utils/mod.ts';
+import { compose, extractPathname, socketOutcome } from '../utils/mod.ts';
 import type { RapidContextState, RapidRouteEntry } from '../types/mod.ts';
 import { Transport } from './Transport.ts';
 
@@ -249,7 +249,11 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
   ): Promise<Response> {
     const serverOptions = this._app.option('server')!;
     const method = request.method.trim().toUpperCase() as HTTPMethod;
-    const { pathname } = new URL(request.url);
+    // Pathname by substring scan, NOT `new URL(...)` — `request.url` is
+    // already absolute + normalized, so this equals `.pathname` without
+    // parsing the query/hash/host the router never reads (the query is
+    // still parsed, but lazily, only if a handler reads `ctx.args`).
+    const pathname = extractPathname(request.url);
     // Absent header → undefined, resolved by the router's own
     // exact → defaultVersion → unversioned fallback (constructor
     // option below) — NOT re-defaulted here, so an unrecognized
@@ -265,8 +269,10 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       remoteAddress: remoteAddress ?? '',
       params: match?.params ?? {},
       // Matched route PATTERN as identity (low cardinality); the raw
-      // pathname only when nothing matched.
-      action: entry !== undefined ? `${method} ${entry.path}` : undefined,
+      // pathname only when nothing matched. Supplied for BOTH cases from
+      // the pathname already in hand, so the context ctor's no-match
+      // fallback (a second `new URL`) never runs.
+      action: `${method} ${entry !== undefined ? entry.path : pathname}`,
       matched: entry !== undefined,
       // The transport knows WHERE to look; the app owns the POLICY.
       requestId: this._app.newRequestId(request.headers.get(requestIdHeader)),
