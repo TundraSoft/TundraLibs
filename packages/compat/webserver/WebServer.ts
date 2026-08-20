@@ -235,11 +235,12 @@ const _stringifyThrown = (err: unknown): string => {
  * *Node.js WebSocket is provided via the `ws` npm package, loaded
  * lazily on first use; Bun and Deno use their native implementations.
  *
- * @example TCP server with metrics monitoring
+ * @example TCP server with metrics monitoring (collection is opt-in)
  * ```typescript
  * const server: WebServer = new WebServer('API', {
  *   mode: 'TCP',
  *   port: 3000,
+ *   metrics: true,
  *   handler: async (req, info): Promise<Response> => {
  *     const url = new URL(req.url);
  *     if (url.pathname === '/metrics') {
@@ -360,9 +361,9 @@ export class WebServer<T = unknown> {
   }
 
   /**
-   * Whether metrics collection is enabled (`options.metrics !== false`).
-   * When off, every collection site is skipped and {@link metrics}
-   * reads back the zeroed structure.
+   * Whether metrics collection is enabled (`options.metrics === true`
+   * — collection is OPT-IN). When off, every collection site is
+   * skipped and {@link metrics} reads back the zeroed structure.
    */
   private readonly __collectMetrics: boolean;
 
@@ -435,6 +436,9 @@ export class WebServer<T = unknown> {
    *
    * Returns a deep copy of the metrics to prevent external mutation.
    * Includes request counts, status codes, response times, and WebSocket stats.
+   *
+   * Collection is OPT-IN: without `metrics: true` in the constructor
+   * options every counter reads back zero.
    *
    * @returns A copy of the current metrics
    * @see {@link ServerMetrics}
@@ -648,7 +652,7 @@ export class WebServer<T = unknown> {
     this.__validateOptions(options);
     this.mode = options.mode;
     this.name = name.trim();
-    this.__collectMetrics = options.metrics !== false;
+    this.__collectMetrics = options.metrics === true;
     // Apply defaults for TCP mode
     if (options.mode === 'TCP') {
       this.options = {

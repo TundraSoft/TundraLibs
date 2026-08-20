@@ -133,6 +133,7 @@ const server = new WebServer('API', {
 | `tls`         | `TLSOptions`       | -             | TLS configuration                |
 | `websocket`   | `WebSocketHandler` | -             | WebSocket handlers               |
 | `abortSignal` | `AbortSignal`      | -             | Signal for graceful shutdown     |
+| `metrics`     | `boolean`          | `false`       | Opt-in metrics collection        |
 
 ### UNIX Mode
 
@@ -532,10 +533,15 @@ server.on('onError', (name, error, req, info) => {
 
 ## Metrics
 
+Collection is **opt-in**: pass `metrics: true` in the constructor
+options. Without it every counter reads back zero (the collection work
+is skipped entirely — consumers with their own observability stack
+shouldn't pay for it per request).
+
 ```typescript
 import type { WebServer } from '@tundralibs/compat/webserver';
 
-declare const server: WebServer;
+declare const server: WebServer; // constructed with `metrics: true`
 
 const metrics = server.metrics;
 
@@ -618,6 +624,7 @@ import { WebServer } from '@tundralibs/compat/webserver';
 const server: WebServer = new WebServer('API', {
   mode: 'TCP',
   port: 8080,
+  metrics: true, // collection is opt-in
   handler: (req, info): Response => {
     const url = new URL(req.url);
 
