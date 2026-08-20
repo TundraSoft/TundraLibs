@@ -1,5 +1,9 @@
 import type { HTTPMethod, StatusCode } from '@tundralibs/compat/http';
-import { WebServer, type WebSocketHandler } from '@tundralibs/compat/webserver';
+import {
+  type ServerMetrics,
+  WebServer,
+  type WebSocketHandler,
+} from '@tundralibs/compat/webserver';
 import { ulid } from '@tundralibs/id';
 import { Server as RpcServer } from '@tundralibs/rpc';
 import { RadRouter } from '@tundralibs/radrouter';
@@ -72,6 +76,16 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
   }
 
   /**
+   * Per-request server metrics (request/status/latency + websocket
+   * counters), or `undefined` before the listener is up. Populated only
+   * when `server.metrics` is enabled — otherwise the compat server hands
+   * back a zeroed structure.
+   */
+  public get metrics(): ServerMetrics | undefined {
+    return this.__server?.metrics;
+  }
+
+  /**
    * Register routes on the router and start the listener.
    *
    * @throws {RapidError} RAPID_CONFIG when a route collides or is
@@ -129,6 +143,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       ? new WebServer(this._app.option('name'), {
         mode: 'UNIX',
         unixSocketPath: server.unixSocketPath,
+        metrics: server.metrics,
         handler: (request, info) => this.__handle(request, info.remoteAddress),
         websocket,
       })
@@ -137,6 +152,7 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
         port: server.port,
         hostname: server.hostname,
         tls: server.tls,
+        metrics: server.metrics,
         handler: (request, info) => this.__handle(request, info.remoteAddress),
         websocket,
       });

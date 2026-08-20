@@ -10,6 +10,7 @@ import {
   Options,
 } from '@tundralibs/utils';
 import type { HTTPMethod } from '@tundralibs/compat/http';
+import type { ServerMetrics } from '@tundralibs/compat/webserver';
 import { ulid } from '@tundralibs/id';
 import { parseSchedule } from '@tundralibs/cronus';
 import { RapidError } from './errors/mod.ts';
@@ -141,6 +142,7 @@ export class Application<S extends RapidContextState = RapidContextState>
           trustProxy: false, // secure by default — no proxy-header trust
           socketPath: '/ws',
           maxBodySize: 1_048_576, // 1 MB — 0 disables
+          metrics: false, // opt-in — the request path pays nothing off
           ...options.server,
           // Nested sub-groups merge EXPLICITLY — the one-level group
           // spread above would let a partial user `paging`/`query`
@@ -492,6 +494,17 @@ export class Application<S extends RapidContextState = RapidContextState>
   /** ACTUAL bound TCP port (port 0 friendly); `null` when not listening. */
   public get port(): number | null {
     return this.__http?.port ?? null;
+  }
+
+  /**
+   * Live server metrics (request/status/latency + websocket counters) —
+   * `undefined` when the HTTP listener is not up. Populated only when
+   * `server.metrics` is enabled; otherwise a zeroed structure. A copy on
+   * every read, safe to serialize (e.g. a `/metrics` route, the dev
+   * dashboard).
+   */
+  public get metrics(): ServerMetrics | undefined {
+    return this.__http?.metrics;
   }
 
   /**

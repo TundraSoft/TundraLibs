@@ -66,6 +66,14 @@ export type RapidApplicationServerOptions = {
    */
   maxBodySize?: number;
   /**
+   * Collect per-request server metrics (request/status/latency counters,
+   * websocket counters) — read back via {@link Application.metrics}.
+   * OPT-IN: off by default so the request path pays nothing for
+   * bookkeeping no one reads.
+   * @default false
+   */
+  metrics?: boolean;
+  /**
    * Path that accepts websocket upgrades for `app.socket()` commands
    * (the socket shares the HTTP listener). Upgrades on other paths are
    * rejected and fall through to HTTP routing.
