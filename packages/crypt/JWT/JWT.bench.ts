@@ -6,6 +6,7 @@
  * token refresh, and decoding operations.
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import {
   issueJWT,
   type JWTAlgorithm,
@@ -141,35 +142,35 @@ await setupTokens();
 // JWT Creation Benchmarks
 // ============================================================================
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Issue HS256 (small payload)',
   fn: async () => {
     await issueJWT('HS256', SMALL_PAYLOAD, BENCH_SECRET);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Issue HS384 (small payload)',
   fn: async () => {
     await issueJWT('HS384', SMALL_PAYLOAD, BENCH_SECRET);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Issue HS512 (small payload)',
   fn: async () => {
     await issueJWT('HS512', SMALL_PAYLOAD, BENCH_SECRET);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Issue HS256 (medium payload)',
   fn: async () => {
     await issueJWT('HS256', MEDIUM_PAYLOAD, BENCH_SECRET);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Issue HS256 (large payload)',
   fn: async () => {
     await issueJWT('HS256', LARGE_PAYLOAD, BENCH_SECRET);
@@ -180,35 +181,35 @@ Deno.bench({
 // JWT Verification Benchmarks
 // ============================================================================
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Verify HS256 (small payload)',
   fn: async () => {
     await verifyJWT(smallTokenHS256, BENCH_SECRET);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Verify HS384 (small payload)',
   fn: async () => {
     await verifyJWT(smallTokenHS384, BENCH_SECRET);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Verify HS512 (small payload)',
   fn: async () => {
     await verifyJWT(smallTokenHS512, BENCH_SECRET);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Verify HS256 (medium payload)',
   fn: async () => {
     await verifyJWT(mediumTokenHS256, BENCH_SECRET);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Verify HS256 (large payload)',
   fn: async () => {
     await verifyJWT(largeTokenHS256, BENCH_SECRET);
@@ -219,7 +220,7 @@ Deno.bench({
 // JWT Verification with Options Benchmarks
 // ============================================================================
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Verify with audience validation',
   fn: async () => {
     await verifyJWT(smallTokenHS256, BENCH_SECRET, {
@@ -228,7 +229,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Verify with issuer validation',
   fn: async () => {
     await verifyJWT(smallTokenHS256, BENCH_SECRET, {
@@ -237,7 +238,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Verify with full validation',
   fn: async () => {
     await verifyJWT(smallTokenHS256, BENCH_SECRET, {
@@ -253,7 +254,7 @@ Deno.bench({
 // Round-trip Benchmarks (Issue + Verify)
 // ============================================================================
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Round-trip HS256 (small)',
   fn: async () => {
     const token = await issueJWT('HS256', SMALL_PAYLOAD, BENCH_SECRET);
@@ -261,7 +262,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Round-trip HS384 (small)',
   fn: async () => {
     const token = await issueJWT('HS384', SMALL_PAYLOAD, BENCH_SECRET);
@@ -269,7 +270,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Round-trip HS512 (small)',
   fn: async () => {
     const token = await issueJWT('HS512', SMALL_PAYLOAD, BENCH_SECRET);
@@ -277,7 +278,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Round-trip HS256 (medium)',
   fn: async () => {
     const token = await issueJWT('HS256', MEDIUM_PAYLOAD, BENCH_SECRET);
@@ -285,7 +286,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Round-trip HS256 (large)',
   fn: async () => {
     const token = await issueJWT('HS256', LARGE_PAYLOAD, BENCH_SECRET);
@@ -300,7 +301,7 @@ Deno.bench({
 const algorithms: JWTAlgorithm[] = ['HS256', 'HS384', 'HS512'];
 
 for (const algorithm of algorithms) {
-  Deno.bench({
+  bench({
     name: `crypt.JWT - Algorithm comparison: ${algorithm}`,
     fn: async () => {
       const token = await issueJWT(algorithm, SMALL_PAYLOAD, BENCH_SECRET);
@@ -313,7 +314,7 @@ for (const algorithm of algorithms) {
 // Stress Test Benchmarks
 // ============================================================================
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Batch create 10 tokens',
   fn: async () => {
     const promises = [];
@@ -326,7 +327,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Batch verify 10 tokens',
   fn: async () => {
     const promises = [];
@@ -358,35 +359,35 @@ const analyzeTokenSizes = async () => {
 // RSA Algorithm Benchmarks
 // ============================================================================
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Issue RS256 (small payload)',
   fn: async () => {
     await issueJWT('RS256', SMALL_PAYLOAD, RSA_PRIVATE_KEY);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Issue RS384 (small payload)',
   fn: async () => {
     await issueJWT('RS384', SMALL_PAYLOAD, RSA_PRIVATE_KEY);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Issue RS512 (small payload)',
   fn: async () => {
     await issueJWT('RS512', SMALL_PAYLOAD, RSA_PRIVATE_KEY);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Verify RS256 (small payload)',
   fn: async () => {
     await verifyJWT(smallTokenRS256, RSA_PUBLIC_KEY);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Round-trip RS256 (small)',
   fn: async () => {
     const token = await issueJWT('RS256', SMALL_PAYLOAD, RSA_PRIVATE_KEY);
@@ -398,28 +399,28 @@ Deno.bench({
 // Decode JWT Benchmarks
 // ============================================================================
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Decode HS256 (small payload)',
   fn: () => {
     decodeJWT(smallTokenHS256);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Decode HS256 (medium payload)',
   fn: () => {
     decodeJWT(mediumTokenHS256);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Decode HS256 (large payload)',
   fn: () => {
     decodeJWT(largeTokenHS256);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Decode RS256 (small payload)',
   fn: () => {
     decodeJWT(smallTokenRS256);
@@ -430,14 +431,14 @@ Deno.bench({
 // Refresh JWT Benchmarks
 // ============================================================================
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Refresh HS256 token',
   fn: async () => {
     await refreshJWT(smallTokenHS256, BENCH_SECRET, 3600);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Refresh RS256 token',
   fn: async () => {
     await refreshJWT(smallTokenRS256, {
@@ -447,7 +448,7 @@ Deno.bench({
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - Refresh with custom expiry',
   fn: async () => {
     await refreshJWT(smallTokenHS256, BENCH_SECRET, 7200);
@@ -458,28 +459,28 @@ Deno.bench({
 // HMAC vs RSA Comparison
 // ============================================================================
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - HMAC vs RSA: HS256 create',
   fn: async () => {
     await issueJWT('HS256', SMALL_PAYLOAD, BENCH_SECRET);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - HMAC vs RSA: RS256 create',
   fn: async () => {
     await issueJWT('RS256', SMALL_PAYLOAD, RSA_PRIVATE_KEY);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - HMAC vs RSA: HS256 verify',
   fn: async () => {
     await verifyJWT(smallTokenHS256, BENCH_SECRET);
   },
 });
 
-Deno.bench({
+bench({
   name: 'crypt.JWT - HMAC vs RSA: RS256 verify',
   fn: async () => {
     await verifyJWT(smallTokenRS256, RSA_PUBLIC_KEY);
