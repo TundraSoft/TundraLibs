@@ -108,6 +108,9 @@
       "**/fixtures/**",
       "**/tests/**",
       "**/test-fixtures/**",
+      "**/examples/**",
+      "**/_scratch/**",
+      "**/bench/**",
       "**/soak.ts"
     ]
   }
