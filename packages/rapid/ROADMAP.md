@@ -280,6 +280,21 @@ Additive feature work, not blocking the first ship. Each is independent.
   Needs leader-election / a distributed lock; the cross-replica lease is
   the parked Coordinator/cluster seam below (this is the concrete cron
   driver for building it).
+- **Module DI ergonomics — inject the composed handle, not the ORM.**
+  The example currently injects the `Norm` instance and each module calls
+  `norm.use(schema)` (which recompiles the registry per module). Settle
+  the recommended pattern: compose `norm.use(schema)` ONCE at a single
+  location and register that ready handle in doctor, so modules inject
+  `Db` and call `.repo(...)` directly — one compile, no per-module
+  `use()`.
+- **Module DI ergonomics — abstract base module for shared deps.**
+  Provide/recommend an abstract class modules extend that holds the
+  common injected dependencies via `protected` accessors — the db handle,
+  a **request-scoped logger inherited from the Application** (not a
+  doctor singleton), and other basic helpers — so each module stops
+  re-declaring its `inject()` fields. Keep the decorated methods on the
+  subclass; verify the metadata-only decorators still register through
+  inheritance (they key on the method function).
 
 ## Parked
 
