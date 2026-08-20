@@ -4197,12 +4197,20 @@ export const openFile: (
       if (options.create) flags |= C.O_CREAT;
       if (options.truncate) flags |= C.O_TRUNC;
 
-      const fd = await nodeFs.promises.open(filePath, flags, options.mode);
-      // Bun: Extract numeric fd (uses callbacks in write/sync operations)
-      // Node.js: Keep FileHandle object (has async methods and proper finalizer)
-      // This prevents garbage collection issues in Node.js where extracting fd.fd
-      // leaves the finalizer trying to close an already-closed descriptor
-      const handle = new FileHandle(filePath, isBun ? fd.fd : fd);
+      // Bun: open to a RAW fd (no fs.promises FileHandle wrapper); Node: keep
+      // the FileHandle object. `fs.promises.open()` returns a FileHandle whose
+      // GC finalizer closes the descriptor on collection. Extracting `.fd` and
+      // then closing that descriptor directly (as the Bun write/sync/close path
+      // does) leaves the finalizer to close an already-closed fd — which newer
+      // Bun throws on (ERR_INVALID_STATE), surfacing as a spurious failure in
+      // whatever unrelated test GC happens to run under. A raw fd has no
+      // finalizer, so closeSync() in FileHandle.close() is the sole, correct
+      // close. Node keeps the object (its async methods + a finalizer that
+      // close() clears explicitly), which is why only Bun switches here.
+      const source = isBun
+        ? nodeFs.openSync(filePath, flags, options.mode)
+        : await nodeFs.promises.open(filePath, flags, options.mode);
+      const handle = new FileHandle(filePath, source);
       return {
         path: handle.path,
         get closed() {

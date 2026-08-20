@@ -1833,6 +1833,42 @@ describe({
         }
       });
 
+      // Regression: on Bun, openFile must not keep an fs.promises FileHandle
+      // object alive after close(). If it does, Bun's GC finalizer closes the
+      // descriptor and throws ERR_INVALID_STATE — which surfaces as a spurious
+      // failure in whatever unrelated test GC happens to run under. Closing
+      // several handles and forcing GC makes a leak fail here. Bun-only: Bun.gc
+      // and the finalizer-throws-on-collection semantics are Bun-specific.
+      it({
+        name: 'open/close leaves no FileHandle to close during GC (Bun)',
+        deno: false,
+        node: false,
+        fn: async () => {
+          await ensureDir(fixturesDir);
+          for (let i = 0; i < 15; i++) {
+            const testFile = path.join(
+              fixturesDir,
+              `file-handle-gc-${i}-${Date.now()}.txt`,
+            );
+            const file = await openFile(testFile, {
+              write: true,
+              create: true,
+            });
+            await file.write(new TextEncoder().encode('x'));
+            file.close();
+            asserts.assertEquals(file.closed, true, 'handle should be closed');
+            await deleteFile(testFile);
+          }
+          // A leaked FileHandle's finalizer would throw here under forced GC.
+          const gc = (globalThis as { Bun?: { gc(sync: boolean): void } }).Bun
+            ?.gc;
+          for (let i = 0; i < 8; i++) {
+            gc?.(true);
+            await new Promise((r) => setTimeout(r, 40));
+          }
+        },
+      });
+
       it('should open file for writing and write data sync', () => {
         const testFile = path.join(
           fixturesDir,
