@@ -8,8 +8,17 @@ Copilot (via `.github/copilot-instructions.md`, which points here).
 
 ## Golden rules
 
-- **Every package runs identically on Deno, Bun, and Node.** Never use a
-  runtime-only global directly — go through `@tundralibs/compat`.
+- **Deno, Bun, and Node are the three first-class targets — every package
+  runs identically on all three.** Never use a runtime-only global directly;
+  go through `@tundralibs/compat`. **Cloudflare Workers and the browser are
+  secondary, best-effort targets** — not top priority and never
+  release-blocking, but make a genuine effort to stay compatible: portable
+  code, side-effect-free imports so a package at least _loads_ there. Some
+  capabilities fundamentally can't run in those environments — raw TCP/UNIX
+  sockets, the filesystem, `process`, a port-listening HTTP server won't work
+  in the browser, and only the Fetch-style subset runs on Workers — so
+  **degrade gracefully**: feature-detect and reject with a clear error (as
+  `compat`'s `udpSocket` and `WebServer` already do), never assume they exist.
 - **One package per PR.** A change spanning packages needs the `multi-package`
   label and a clear reason. Conventional-commit PR titles (`feat(oql): …`,
   `docs(guardian): …`, `fix(compat): …`).
