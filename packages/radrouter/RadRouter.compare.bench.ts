@@ -1,5 +1,3 @@
-/// <reference lib="deno.ns" />
-
 /**
  * Comparison benchmark: RadRouter vs popular Node.js routers.
  *
@@ -27,6 +25,7 @@
  *     cannot be fetched.
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { RadRouter } from './RadRouter.ts';
 import { assertEquals, assertExists } from '@std/asserts';
 
@@ -150,7 +149,8 @@ try {
 let radix3: any = null;
 try {
   const mod = await import('npm:radix3@1.1.2');
-  const createRouter = mod.createRouter ?? mod.default?.createRouter;
+  const createRouter = mod.createRouter ??
+    (mod as { default?: typeof mod }).default?.createRouter;
   radix3 = timeSetup('radix3', () => {
     const r = createRouter();
     const handler = { handler: () => {} };
@@ -173,7 +173,7 @@ console.log('');
 
 // ---------- benchmarks ----------
 
-Deno.bench(
+bench(
   'RadRouter (CS)',
   { group: 'comparison', baseline: true },
   () => {
@@ -181,18 +181,18 @@ Deno.bench(
   },
 );
 
-Deno.bench('RadRouter (CI)', { group: 'comparison' }, () => {
+bench('RadRouter (CI)', { group: 'comparison' }, () => {
   radRouterCI.find('GET', nextPath());
 });
 
 if (findMyWay) {
-  Deno.bench('find-my-way (Fastify)', { group: 'comparison' }, () => {
+  bench('find-my-way (Fastify)', { group: 'comparison' }, () => {
     findMyWay.find('GET', nextPath());
   });
 }
 
 if (radix3) {
-  Deno.bench('radix3 (Nitro)', { group: 'comparison' }, () => {
+  bench('radix3 (Nitro)', { group: 'comparison' }, () => {
     radix3.lookup(nextPath());
   });
 }
