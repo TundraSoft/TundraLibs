@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>rAPId Blog Example</title>
+    <link rel="stylesheet" href="/public/style.css" />
+  </head>
+  <body>
+    <main>
+      <h1>rAPId Blog</h1>
+      <p>
+        This page is a <strong>static file</strong> served straight from
+        <code>examples/blog/public/</code> by the <code>serveStatic</code>
+        middleware — no route, no handler. The stylesheet and this HTML come
+        through the same middleware, each with the right content-type resolved
+        from its extension.
+      </p>
+
+      <h2>Try the API</h2>
+      <ul>
+        <li><a href="/posts">GET /posts</a> — list posts (paged)</li>
+        <li><code>POST /posts</code> — create a post (JSON body)</li>
+        <li><code>GET /posts/:id</code> — one post (add <code>x-api-version:
+          v2</code> for hypermedia links)</li>
+        <li><code>GET /posts/:id/comments</code> — a post's comments</li>
+      </ul>
+
+      <p class="muted">
+        You reached this page because <code>GET /</code> redirects here.
+      </p>
+    </main>
+  </body>
+</html>

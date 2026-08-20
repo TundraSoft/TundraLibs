@@ -4,6 +4,7 @@
  * `@tundralibs/norm`, with dependencies wired by `@tundralibs/doctor`.
  * Split into files the way a real app would be — MODULES ARE FILES:
  *
+ *   public/            static assets (index.html + style.css) served as-is
  *   models/            norm entities (one per file) + the Blog schema
  *   db.ts              Norm + SQLite + the Migrator that owns the DDL
  *   di.ts              doctor: register the Norm + logger singletons
@@ -29,7 +30,9 @@
  * Ids are UUIDs (norm generates them), so LIST first to grab one:
  *
  * ```bash
- * curl -s localhost:3100/posts | jq                      # list, paged (LIMIT/OFFSET in SQLite)
+ * curl -sL localhost:3100/                               # GET / → 302 → the static landing page
+ * curl -s  localhost:3100/public/style.css               # a static file (text/css)
+ * curl -s  localhost:3100/posts | jq                     # list, paged (LIMIT/OFFSET in SQLite)
  * ID=$(curl -s localhost:3100/posts | jq -r '.rows[0].id')
  * curl -s localhost:3100/posts/$ID | jq                  # no header → server.versioning.default (v1)
  * curl -s localhost:3100/posts/$ID -H 'x-api-version: v2' | jq   # findV2() — same path, adds _links
@@ -72,6 +75,7 @@ import {
   requestLogger,
   responseTimer,
   secureHeaders,
+  serveStatic,
 } from '../../middlewares/mod.ts';
 import { openBlogDatabase } from './db.ts';
 import { registerBlogServices } from './di.ts';
@@ -90,7 +94,20 @@ app.use(
   secureHeaders(),
   cors(),
   requestId({ socketEcho: true }),
+  // Serve examples/blog/public/ (a landing page + stylesheet) at
+  // /public/* — no route/handler; content-types come from the file
+  // extensions. A missing file falls through to routing/404.
+  serveStatic({
+    root: new URL('./public', import.meta.url).pathname,
+    prefix: '/public',
+    maxAge: 3600,
+  }),
 );
+
+// A plain function route alongside the modules: GET / redirects to the
+// static landing page (302). Shows `ctx.redirect` and that function-API
+// and module-API routes coexist.
+app.get('/', (ctx) => ctx.redirect('/public/'));
 
 // Register the two singletons the modules inject(), THEN construct the
 // modules — the inject() field initializers resolve during `new`, so the
