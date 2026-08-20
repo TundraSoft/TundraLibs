@@ -1,3 +1,4 @@
+import { bench } from '@tundralibs/compat/bench';
 import { isSubnet } from './isSubnet.ts';
 
 const subnets: string[] = [
@@ -12,7 +13,7 @@ const subnets: string[] = [
 ];
 
 for (const subnet of subnets) {
-  Deno.bench({
+  bench({
     name: `utils.isSubnet ${subnet}`,
   }, () => {
     isSubnet(subnet);

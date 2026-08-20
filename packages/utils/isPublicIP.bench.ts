@@ -1,3 +1,4 @@
+import { bench } from '@tundralibs/compat/bench';
 import { isPublicIP } from './isPublicIP.ts';
 
 const ips: string[] = [
@@ -18,7 +19,7 @@ const ips: string[] = [
   '2001:0db8:85a3:0000:0000:8a2e:0370:7334',
 ];
 
-Deno.bench({
+bench({
   name: 'utils.isPublicIP - Check public ip addresses',
 }, () => {
   isPublicIP(ips[Math.floor(Math.random() * ips.length)]!); // NOSONAR
