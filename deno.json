@@ -36,7 +36,9 @@
     "@std/testing": "jsr:@std/testing@^1.0.20",
     "zod": "npm:zod@^4.4.3",
     "pg": "npm:pg@^8.13.0",
-    "postgres": "npm:postgres@^3.4.5"
+    "postgres": "npm:postgres@^3.4.5",
+    "find-my-way": "npm:find-my-way@^8.2.2",
+    "radix3": "npm:radix3@^1.1.2"
   },
   "fmt": {
     "indentWidth": 2,

@@ -124,7 +124,7 @@ const radRouterCI = timeSetup('RadRouter (CI)', () => {
 // deno-lint-ignore no-explicit-any
 let findMyWay: any = null;
 try {
-  const mod = await import('npm:find-my-way@8.2.2');
+  const mod = await import('find-my-way');
   const Ctor = mod.default ?? mod;
   findMyWay = timeSetup('find-my-way', () => {
     const fmw = Ctor({ defaultRoute: () => {} });
@@ -148,7 +148,7 @@ try {
 // deno-lint-ignore no-explicit-any
 let radix3: any = null;
 try {
-  const mod = await import('npm:radix3@1.1.2');
+  const mod = await import('radix3');
   const createRouter = mod.createRouter ??
     (mod as { default?: typeof mod }).default?.createRouter;
   radix3 = timeSetup('radix3', () => {
