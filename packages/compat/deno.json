@@ -5,6 +5,7 @@
   "license": "MIT",
   "exports": {
     ".": "./mod.ts",
+    "./bench": "./bench.ts",
     "./cli": "./cli/mod.ts",
     "./common": "./common.ts",
     "./fetch": "./fetch.ts",
