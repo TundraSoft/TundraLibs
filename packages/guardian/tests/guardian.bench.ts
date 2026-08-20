@@ -7,6 +7,7 @@
  * Run with: deno bench guardian/tests/guardian.bench.ts --allow-all
  */
 
+import { bench } from '@tundralibs/compat/bench';
 import { Guardian } from '../mod.ts';
 
 // Sample data for benchmarks
@@ -33,32 +34,32 @@ const sampleBigInt = BigInt('123456789012345678901234567890');
 // STRING GUARDIAN BENCHMARKS
 // =============================================================================
 
-Deno.bench('String Guardian - Basic Validation', () => {
+bench('String Guardian - Basic Validation', () => {
   const guard = Guardian.string();
   guard.parse(sampleString);
 });
 
-Deno.bench('String Guardian - With Length Constraints', () => {
+bench('String Guardian - With Length Constraints', () => {
   const guard = Guardian.string().minLength(5).maxLength(100);
   guard.parse(sampleString);
 });
 
-Deno.bench('String Guardian - With Pattern Matching', () => {
+bench('String Guardian - With Pattern Matching', () => {
   const guard = Guardian.string().pattern(/^[A-Za-z\s,!.]+$/);
   guard.parse(sampleString);
 });
 
-Deno.bench('String Guardian - Email Validation', () => {
+bench('String Guardian - Email Validation', () => {
   const guard = Guardian.string().email();
   guard.parse('john.doe@example.com');
 });
 
-Deno.bench('String Guardian - With Transformations', () => {
+bench('String Guardian - With Transformations', () => {
   const guard = Guardian.string().trim().toLowerCase();
   guard.parse('  HELLO WORLD  ');
 });
 
-Deno.bench('String Guardian - Complex Chain', () => {
+bench('String Guardian - Complex Chain', () => {
   const guard = Guardian.string()
     .trim()
     .minLength(3)
@@ -72,34 +73,34 @@ Deno.bench('String Guardian - Complex Chain', () => {
 // NUMBER GUARDIAN BENCHMARKS
 // =============================================================================
 
-Deno.bench('Number Guardian - Basic Validation', () => {
+bench('Number Guardian - Basic Validation', () => {
   const guard = Guardian.number();
   guard.parse(sampleNumber);
 });
 
-Deno.bench('Number Guardian - With Range', () => {
+bench('Number Guardian - With Range', () => {
   const guard = Guardian.number().min(0).max(100);
   guard.parse(sampleNumber);
 });
 
-Deno.bench('Number Guardian - Integer Validation', () => {
+bench('Number Guardian - Integer Validation', () => {
   const guard = Guardian.number().integer();
   guard.parse(42);
 });
 
-Deno.bench('Number Guardian - Positive Integer', () => {
+bench('Number Guardian - Positive Integer', () => {
   const guard = Guardian.number().positive().integer();
   guard.parse(42);
 });
 
-Deno.bench('Number Guardian - With Transformations', () => {
+bench('Number Guardian - With Transformations', () => {
   const guard = Guardian.number().process((n: number) =>
     Math.round(n * 100) / 100
   );
   guard.parse(sampleNumber);
 });
 
-Deno.bench('Number Guardian - Complex Chain', () => {
+bench('Number Guardian - Complex Chain', () => {
   const guard = Guardian.number()
     .min(0)
     .max(1000)
@@ -112,12 +113,12 @@ Deno.bench('Number Guardian - Complex Chain', () => {
 // BOOLEAN GUARDIAN BENCHMARKS
 // =============================================================================
 
-Deno.bench('Boolean Guardian - Basic Validation', () => {
+bench('Boolean Guardian - Basic Validation', () => {
   const guard = Guardian.boolean();
   guard.parse(true);
 });
 
-Deno.bench('Boolean Guardian - With Transformation', () => {
+bench('Boolean Guardian - With Transformation', () => {
   const guard = Guardian.string().process((s: string) => s === 'true');
   guard.parse('true');
 });
@@ -126,29 +127,29 @@ Deno.bench('Boolean Guardian - With Transformation', () => {
 // ARRAY GUARDIAN BENCHMARKS
 // =============================================================================
 
-Deno.bench('Array Guardian - Basic Validation', () => {
+bench('Array Guardian - Basic Validation', () => {
   const guard = Guardian.array(Guardian.string());
   guard.parse(sampleArray);
 });
 
-Deno.bench('Array Guardian - With Length Constraints', () => {
+bench('Array Guardian - With Length Constraints', () => {
   const guard = Guardian.array(Guardian.string()).minLength(1).maxLength(10);
   guard.parse(sampleArray);
 });
 
-Deno.bench('Array Guardian - Number Array', () => {
+bench('Array Guardian - Number Array', () => {
   const guard = Guardian.array(Guardian.number());
   guard.parse([1, 2, 3, 4, 5]);
 });
 
-Deno.bench('Array Guardian - Complex Element Validation', () => {
+bench('Array Guardian - Complex Element Validation', () => {
   const guard = Guardian.array(
     Guardian.string().minLength(3).maxLength(20),
   );
   guard.parse(sampleArray);
 });
 
-Deno.bench('Array Guardian - With Transformations', () => {
+bench('Array Guardian - With Transformations', () => {
   const guard = Guardian.array(Guardian.string())
     .process((arr: string[]) => arr.sort())
     .process((arr: string[]) => arr.slice(0, 3));
@@ -159,7 +160,7 @@ Deno.bench('Array Guardian - With Transformations', () => {
 // OBJECT GUARDIAN BENCHMARKS
 // =============================================================================
 
-Deno.bench('Object Guardian - Simple Schema', () => {
+bench('Object Guardian - Simple Schema', () => {
   const guard = Guardian.object({
     id: Guardian.number(),
     name: Guardian.string(),
@@ -167,7 +168,7 @@ Deno.bench('Object Guardian - Simple Schema', () => {
   guard.parse({ id: 1, name: 'Test' });
 });
 
-Deno.bench('Object Guardian - Complex Schema', () => {
+bench('Object Guardian - Complex Schema', () => {
   const guard = Guardian.object({
     id: Guardian.number().positive().integer(),
     name: Guardian.string().minLength(1).maxLength(100),
@@ -184,7 +185,7 @@ Deno.bench('Object Guardian - Complex Schema', () => {
   guard.parse(sampleObject);
 });
 
-Deno.bench('Object Guardian - Optional Fields', () => {
+bench('Object Guardian - Optional Fields', () => {
   const guard = Guardian.object({
     id: Guardian.number(),
     name: Guardian.string(),
@@ -194,7 +195,7 @@ Deno.bench('Object Guardian - Optional Fields', () => {
   guard.parse({ id: 1, name: 'Test' });
 });
 
-Deno.bench('Object Guardian - With Processing', () => {
+bench('Object Guardian - With Processing', () => {
   const guard = Guardian.object({
     id: Guardian.number(),
     name: Guardian.string(),
@@ -204,7 +205,7 @@ Deno.bench('Object Guardian - With Processing', () => {
   guard.parse({ id: 1, name: 'Test' });
 });
 
-Deno.bench('Object Guardian - Nested Objects', () => {
+bench('Object Guardian - Nested Objects', () => {
   const guard = Guardian.object({
     user: Guardian.object({
       profile: Guardian.object({
@@ -229,19 +230,19 @@ Deno.bench('Object Guardian - Nested Objects', () => {
 // DATE GUARDIAN BENCHMARKS
 // =============================================================================
 
-Deno.bench('Date Guardian - Basic Validation', () => {
+bench('Date Guardian - Basic Validation', () => {
   const guard = Guardian.date();
   guard.parse(sampleDate);
 });
 
-Deno.bench('Date Guardian - With Range', () => {
+bench('Date Guardian - With Range', () => {
   const guard = Guardian.date()
     .min(new Date('2020-01-01'))
     .max(new Date('2030-12-31'));
   guard.parse(sampleDate);
 });
 
-Deno.bench('Date Guardian - String Parsing', () => {
+bench('Date Guardian - String Parsing', () => {
   const guard = Guardian.string().process((s: string) => new Date(s));
   guard.parse('2023-06-15T10:30:00Z');
 });
@@ -250,12 +251,12 @@ Deno.bench('Date Guardian - String Parsing', () => {
 // BIGINT GUARDIAN BENCHMARKS
 // =============================================================================
 
-Deno.bench('BigInt Guardian - Basic Validation', () => {
+bench('BigInt Guardian - Basic Validation', () => {
   const guard = Guardian.bigint();
   guard.parse(sampleBigInt);
 });
 
-Deno.bench('BigInt Guardian - With Constraints', () => {
+bench('BigInt Guardian - With Constraints', () => {
   const guard = Guardian.bigint().positive();
   guard.parse(sampleBigInt);
 });
@@ -264,12 +265,12 @@ Deno.bench('BigInt Guardian - With Constraints', () => {
 // ENUM GUARDIAN BENCHMARKS
 // =============================================================================
 
-Deno.bench('Enum Guardian - String Enum', () => {
+bench('Enum Guardian - String Enum', () => {
   const guard = Guardian.enum(['admin', 'user', 'guest']);
   guard.parse('admin');
 });
 
-Deno.bench('Enum Guardian - Number Enum', () => {
+bench('Enum Guardian - Number Enum', () => {
   const guard = Guardian.enum([1, 2, 3, 4, 5]);
   guard.parse(3);
 });
@@ -278,7 +279,7 @@ Deno.bench('Enum Guardian - Number Enum', () => {
 // UNION AND INTERSECTION BENCHMARKS
 // =============================================================================
 
-Deno.bench('Union Guardian - Simple Union', () => {
+bench('Union Guardian - Simple Union', () => {
   const guard = Guardian.oneOf([
     Guardian.string(),
     Guardian.number(),
@@ -286,7 +287,7 @@ Deno.bench('Union Guardian - Simple Union', () => {
   guard.parse('hello');
 });
 
-Deno.bench('Union Guardian - Complex Union', () => {
+bench('Union Guardian - Complex Union', () => {
   const guard = Guardian.oneOf([
     Guardian.object({
       type: Guardian.string().equals('user'),
@@ -304,12 +305,12 @@ Deno.bench('Union Guardian - Complex Union', () => {
 // TRANSFORMATION BENCHMARKS
 // =============================================================================
 
-Deno.bench('Transform - String to Number', () => {
+bench('Transform - String to Number', () => {
   const guard = Guardian.string().process((s: string) => parseInt(s, 10));
   guard.parse('123');
 });
 
-Deno.bench('Transform - Chain Multiple', () => {
+bench('Transform - Chain Multiple', () => {
   const guard = Guardian.string()
     .process((s: string) => s.trim())
     .process((s: string) => s.toLowerCase())
@@ -317,7 +318,7 @@ Deno.bench('Transform - Chain Multiple', () => {
   guard.parse('  Hello World  ');
 });
 
-Deno.bench('Transform - Object Transformation', () => {
+bench('Transform - Object Transformation', () => {
   const guard = Guardian.object({
     firstName: Guardian.string(),
     lastName: Guardian.string(),
@@ -334,7 +335,7 @@ Deno.bench('Transform - Object Transformation', () => {
 // REFINEMENT BENCHMARKS
 // =============================================================================
 
-Deno.bench('Refine - Simple Refinement', () => {
+bench('Refine - Simple Refinement', () => {
   const guard = Guardian.string().test(
     (s: string) => s.includes('@'),
     'Must contain @',
@@ -342,7 +343,7 @@ Deno.bench('Refine - Simple Refinement', () => {
   guard.parse('user@domain.com');
 });
 
-Deno.bench('Refine - Complex Refinement', () => {
+bench('Refine - Complex Refinement', () => {
   const guard = Guardian.object({
     password: Guardian.string(),
     confirmPassword: Guardian.string(),
@@ -358,17 +359,17 @@ Deno.bench('Refine - Complex Refinement', () => {
 // SAFE PARSING BENCHMARKS
 // =============================================================================
 
-Deno.bench('Safe Parse - Success', () => {
+bench('Safe Parse - Success', () => {
   const guard = Guardian.string();
   guard.safeParse(sampleString);
 });
 
-Deno.bench('Safe Parse - Failure', () => {
+bench('Safe Parse - Failure', () => {
   const guard = Guardian.string();
   guard.safeParse(123);
 });
 
-Deno.bench('Safe Parse - Complex Schema Success', () => {
+bench('Safe Parse - Complex Schema Success', () => {
   const guard = Guardian.object({
     id: Guardian.number(),
     name: Guardian.string(),
@@ -377,7 +378,7 @@ Deno.bench('Safe Parse - Complex Schema Success', () => {
   guard.safeParse({ id: 1, name: 'John', email: 'john@example.com' });
 });
 
-Deno.bench('Safe Parse - Complex Schema Failure', () => {
+bench('Safe Parse - Complex Schema Failure', () => {
   const guard = Guardian.object({
     id: Guardian.number(),
     name: Guardian.string(),
@@ -390,17 +391,17 @@ Deno.bench('Safe Parse - Complex Schema Failure', () => {
 // TYPE CONVERSION BENCHMARKS
 // =============================================================================
 
-Deno.bench('Convert - String to Number', () => {
+bench('Convert - String to Number', () => {
   const guard = Guardian.string().process((s: string) => parseFloat(s));
   guard.parse('123.45');
 });
 
-Deno.bench('Convert - String to Boolean', () => {
+bench('Convert - String to Boolean', () => {
   const guard = Guardian.string().process((s: string) => s === 'true');
   guard.parse('true');
 });
 
-Deno.bench('Convert - String to Date', () => {
+bench('Convert - String to Date', () => {
   const guard = Guardian.string().process((s: string) => new Date(s));
   guard.parse('2023-06-15');
 });
@@ -409,7 +410,7 @@ Deno.bench('Convert - String to Date', () => {
 // LAZY EVALUATION BENCHMARKS
 // =============================================================================
 
-Deno.bench('Lazy Guardian - Recursive Schema', () => {
+bench('Lazy Guardian - Recursive Schema', () => {
   interface Node {
     value: string;
     children?: Node[];
@@ -436,13 +437,13 @@ Deno.bench('Lazy Guardian - Recursive Schema', () => {
 // MEMORY AND SCALABILITY BENCHMARKS
 // =============================================================================
 
-Deno.bench('Scalability - Large Array', () => {
+bench('Scalability - Large Array', () => {
   const guard = Guardian.array(Guardian.number());
   const largeArray = Array.from({ length: 1000 }, (_, i) => i);
   guard.parse(largeArray);
 });
 
-Deno.bench('Scalability - Large Object', () => {
+bench('Scalability - Large Object', () => {
   const guard = Guardian.object(
     Object.fromEntries(
       Array.from({ length: 100 }, (_, i) => [`field${i}`, Guardian.string()]),
@@ -454,7 +455,7 @@ Deno.bench('Scalability - Large Object', () => {
   guard.parse(largeObject);
 });
 
-Deno.bench('Scalability - Deep Nesting', () => {
+bench('Scalability - Deep Nesting', () => {
   const guard = Guardian.object({
     level1: Guardian.object({
       level2: Guardian.object({
@@ -488,7 +489,7 @@ Deno.bench('Scalability - Deep Nesting', () => {
 // REUSABILITY BENCHMARKS
 // =============================================================================
 
-Deno.bench('Reusability - Guard Reuse vs Recreation', () => {
+bench('Reusability - Guard Reuse vs Recreation', () => {
   // This benchmark shows the benefit of reusing guards
   const reusableGuard = Guardian.string().minLength(3).maxLength(10);
 
@@ -498,7 +499,7 @@ Deno.bench('Reusability - Guard Reuse vs Recreation', () => {
   }
 });
 
-Deno.bench('Reusability - Guard Recreation (Anti-pattern)', () => {
+bench('Reusability - Guard Recreation (Anti-pattern)', () => {
   // This shows the cost of recreating guards
   for (let i = 0; i < 100; i++) {
     const guard = Guardian.string().minLength(3).maxLength(10);
