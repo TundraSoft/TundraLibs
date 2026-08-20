@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.6...tracer-v0.6.0) (2026-08-20)
+
+
+### Features
+
+* **compat:** cross-runtime bench harness and WebServer performance pass ([22b5000](https://github.com/TundraSoft/TundraLibs/commit/22b500054e77359902577e03b7830f2b100d47b6))
+
 ## [0.5.6](https://github.com/TundraSoft/TundraLibs/compare/tracer-v0.5.5...tracer-v0.5.6) (2026-08-18)
 
 
