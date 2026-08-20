@@ -257,9 +257,13 @@ Additive feature work, not blocking the first ship. Each is independent.
   server, and inspect the wired surface (list routes/socket commands/jobs
   with their versions and bound params, straight off the decorator
   registry).
-- **CLI output format.** A structured, readable output format for the CLI
-  (human-pretty by default, machine-readable — JSON — on request), shared
-  across its subcommands.
+- **Dev-mode console output / boot display.** When the app is run
+  directly (`deno run -A main.ts`), the console output should be a nice,
+  readable display — a startup banner with name / mode / host:port and a
+  table of the wired surface (routes, socket commands, jobs with their
+  versions and bound params), plus a dev-friendly log format. Pretty by
+  default in `DEVELOPMENT`; lean/structured (JSON lines) in `PRODUCTION`.
+  Driven off the same decorator registry the OpenAPI/inspect items read.
 - **Metrics collection.** First-class request/invocation metrics
   (counts, latency histograms, in-flight, status classes) emitted per
   transport — likely surfaced through `@tundralibs/metro-man`, correlated
