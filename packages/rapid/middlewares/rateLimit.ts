@@ -2,37 +2,19 @@
  * @fileoverview `rateLimit` — fixed-window rate limiting with
  * transport-aware keying: client address on HTTP, connection id on
  * sockets, and jobs pass through untouched (schedulers don't get rate
- * limited). Ships an in-memory store; the {@link RateLimitStore}
- * interface is the seam for a shared store (cacher) in clustered
- * deployments.
+ * limited). Counting runs over an injected {@link Store} (`{ get, set }`)
+ * — the default is per-process memory; hand over redis/cacher-backed
+ * closures for a shared window across replicas.
  *
  * @module
  */
 
 import { RapidError } from '../errors/mod.ts';
 import type { RapidContext, RapidMiddleware } from '../types/mod.ts';
+import { memoryStore, type Store } from './store.ts';
 
-/** Prune the in-memory store's expired windows every N hits. */
-const PRUNE_EVERY = 256;
-
-/**
- * The counting seam — implement over a shared backend (cacher/redis)
- * for multi-replica deployments; the default is per-process memory.
- */
-export type RateLimitStore = {
-  /**
-   * Record one hit for `key` and return the hit count of the CURRENT
-   * window plus the window's reset time (epoch ms). Implementations
-   * own window bookkeeping.
-   */
-  hit(
-    key: string,
-    windowMs: number,
-  ): Promise<{ count: number; resetAt: number }> | {
-    count: number;
-    resetAt: number;
-  };
-};
+/** One fixed-window counter for a key. */
+type Window = { count: number; resetAt: number };
 
 /** Options for {@link rateLimit}. */
 export type RateLimitOptions = {
@@ -52,8 +34,13 @@ export type RateLimitOptions = {
    * connection id on SOCKET (per-connection budget), `null` on JOB.
    */
   key?: (ctx: RapidContext) => string | null;
-  /** Counting backend. @default in-process {@link MemoryRateStore} */
-  store?: RateLimitStore;
+  /**
+   * Counting backend — a {@link Store} of window counters. Hand over
+   * redis/cacher `{ get, set }` closures to share the window across
+   * replicas.
+   * @default an in-process {@link memoryStore}
+   */
+  store?: Store<Window>;
   /**
    * Stamp `x-ratelimit-limit/-remaining/-reset` (and `retry-after` on
    * rejection) on HTTP responses.
@@ -62,35 +49,33 @@ export type RateLimitOptions = {
   headers?: boolean;
 };
 
-/** The default per-process fixed-window store. */
-export class MemoryRateStore implements RateLimitStore {
-  private readonly __windows = new Map<
-    string,
-    { count: number; resetAt: number }
-  >();
-  private __hits = 0;
+const isThenable = (v: unknown): v is Promise<unknown> =>
+  v !== null && typeof v === 'object' &&
+  typeof (v as { then?: unknown }).then === 'function';
 
-  public hit(
-    key: string,
-    windowMs: number,
-  ): { count: number; resetAt: number } {
+/**
+ * One fixed-window hit: read the current window, increment (or start a
+ * fresh one), write it back. With a SYNCHRONOUS store the whole
+ * read-modify-write runs without an await gap, so the in-memory default
+ * stays race-free. With an async store there is a small window between
+ * read and write (best-effort — acceptable for a fixed-window limiter;
+ * a store with atomic increment removes it).
+ */
+function hitWindow(
+  store: Store<Window>,
+  key: string,
+  windowMs: number,
+): Window | Promise<Window> {
+  const write = (current: Window | undefined): Window | Promise<Window> => {
     const now = Date.now();
-    // Amortised cleanup — expired windows would otherwise accumulate
-    // one entry per distinct key forever.
-    if (++this.__hits % PRUNE_EVERY === 0) {
-      for (const [k, w] of this.__windows) {
-        if (w.resetAt <= now) this.__windows.delete(k);
-      }
-    }
-    const current = this.__windows.get(key);
-    if (current === undefined || current.resetAt <= now) {
-      const fresh = { count: 1, resetAt: now + windowMs };
-      this.__windows.set(key, fresh);
-      return fresh;
-    }
-    current.count += 1;
-    return current;
-  }
+    const next: Window = current === undefined || current.resetAt <= now
+      ? { count: 1, resetAt: now + windowMs }
+      : { count: current.count + 1, resetAt: current.resetAt };
+    const set = store.set(key, next, next.resetAt - now);
+    return isThenable(set) ? set.then(() => next) : next;
+  };
+  const got = store.get(key);
+  return isThenable(got) ? got.then(write) : write(got);
 }
 
 /** The default transport-aware key (see {@link RateLimitOptions.key}). */
@@ -121,14 +106,14 @@ export function rateLimit(options: RateLimitOptions = {}): RapidMiddleware {
       });
     }
   }
-  const store = options.store ?? new MemoryRateStore();
+  const store = options.store ?? memoryStore<Window>();
   const key = options.key ?? defaultKey;
   const headers = options.headers ?? true;
 
   return async (ctx, next) => {
     const bucket = key(ctx);
     if (bucket === null) return await next();
-    const { count, resetAt } = await store.hit(bucket, windowMs);
+    const { count, resetAt } = await hitWindow(store, bucket, windowMs);
     if (ctx.type === 'HTTP' && headers) {
       ctx.setHeader('x-ratelimit-limit', String(max));
       ctx.setHeader('x-ratelimit-remaining', String(Math.max(0, max - count)));

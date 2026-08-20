@@ -8,12 +8,8 @@
  */
 
 export { cors, type CorsOptions } from './cors.ts';
-export { rateLimit } from './rateLimit.ts';
-export {
-  MemoryRateStore,
-  type RateLimitOptions,
-  type RateLimitStore,
-} from './rateLimit.ts';
+export { rateLimit, type RateLimitOptions } from './rateLimit.ts';
+export { memoryStore, type Store } from './store.ts';
 export { requestId, type RequestIdOptions } from './requestId.ts';
 export { requestLogger, type RequestLoggerOptions } from './requestLogger.ts';
 export { responseTimer, type ResponseTimerOptions } from './responseTimer.ts';

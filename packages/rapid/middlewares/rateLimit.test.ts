@@ -7,7 +7,8 @@ import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Application } from '../Application.ts';
 import { RapidError } from '../errors/mod.ts';
-import { MemoryRateStore, rateLimit } from './rateLimit.ts';
+import { rateLimit } from './rateLimit.ts';
+import { memoryStore, type Store } from './store.ts';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -69,11 +70,39 @@ describe('rapid.middlewares.rateLimit', () => {
     }
   });
 
-  it('MemoryRateStore: fixed windows reset after windowMs', async () => {
-    const store = new MemoryRateStore();
-    asserts.assertEquals(store.hit('k', 30).count, 1);
-    asserts.assertEquals(store.hit('k', 30).count, 2);
+  it('memoryStore: get/set round-trip with TTL expiry', async () => {
+    const store = memoryStore<{ n: number }>();
+    asserts.assertEquals(store.get('k'), undefined);
+    store.set('k', { n: 1 }, 30);
+    asserts.assertEquals(store.get('k'), { n: 1 });
     await sleep(40);
-    asserts.assertEquals(store.hit('k', 30).count, 1); // fresh window
+    asserts.assertEquals(store.get('k'), undefined); // expired
+  });
+
+  it('accepts an injected { get, set } store (async, e.g. redis-shaped)', async () => {
+    const backing = new Map<string, { count: number; resetAt: number }>();
+    const store: Store<{ count: number; resetAt: number }> = {
+      get: (k) => Promise.resolve(backing.get(k)),
+      set: (k, v) => {
+        backing.set(k, v);
+        return Promise.resolve();
+      },
+    };
+    const app = new Application({ name: 'rl-store', server: { port: 0 } });
+    app.use(rateLimit({ max: 1, windowMs: 10_000, store, key: () => 'k' }));
+    app.get('/', () => ({ content: {} }));
+    await app.start();
+    try {
+      asserts.assertEquals(
+        (await fetch(`http://localhost:${app.port}/`)).status,
+        200,
+      );
+      const r2 = await fetch(`http://localhost:${app.port}/`);
+      asserts.assertEquals(r2.status, 429); // budget of 1 exhausted
+      await r2.text();
+      asserts.assertEquals(backing.get('k')?.count, 2); // the injected store saw both
+    } finally {
+      await app.stop();
+    }
   });
 });

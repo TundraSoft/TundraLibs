@@ -49,7 +49,7 @@ export {
   guardHTTP,
   guardJOB,
   guardSOCKET,
-  MemoryRateStore,
+  memoryStore,
   MIDDLEWARE_SCOPE,
   middlewareScope,
   onlyHTTP,
@@ -57,7 +57,6 @@ export {
   onlySOCKET,
   rateLimit,
   type RateLimitOptions,
-  type RateLimitStore,
   requestId,
   type RequestIdOptions,
   requestLogger,
@@ -66,6 +65,7 @@ export {
   type ResponseTimerOptions,
   secureHeaders,
   type SecureHeadersOptions,
+  type Store,
   timeout,
 } from './middlewares/mod.ts';
 export type {
