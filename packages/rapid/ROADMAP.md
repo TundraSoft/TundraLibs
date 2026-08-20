@@ -236,38 +236,51 @@ gate — see the wiki/DESIGN.md for the "how it works" side.
 
 ## Backlog — additional capabilities (post-ship)
 
-Additive feature work, not blocking the first ship. Each is independent.
+Additive feature work. Each is independent unless noted. **One is NOT
+post-ship:** the store-injection refactor is API-breaking and must land
+BEFORE the first release — flagged inline.
 
-- **Store-injection refactor for stateful middleware.** The middlewares
-  that keep state (rate-limit windows, and anything else backed by an
-  in-memory/redis/cacher store) should stop hard-coding a store and
-  instead take **read/write functions passed at middleware
+- **Store-injection refactor for stateful middleware. ⚠ PRE-SHIP (breaking).**
+  The middlewares that keep state (rate-limit windows, and anything else
+  backed by an in-memory/redis/cacher store) should stop hard-coding a
+  store and instead take **read/write functions passed at middleware
   initialization** — `rateLimit({ get, set })` rather than a baked
-  `MemoryRateStore`. Maximum flexibility: the app supplies memory, redis,
-  cacher, or any backend by handing over two closures. Generalizes the
-  existing `RateLimitStore` seam into the standard shape for every
-  stateful middleware.
+  `MemoryRateStore`. The app supplies memory, redis, cacher, or any
+  backend by handing over two closures. Generalizes the existing
+  `RateLimitStore` seam into the standard shape for every stateful
+  middleware. Changing this contract after 1.0 breaks consumers, so it
+  belongs in Phase E hardening, not the post-ship backlog.
 - **Grow the shipped middleware catalog.** Add the commonly-wanted
-  middleware consumers expect out of the box (beyond the current
-  requestLogger/responseTimer/secureHeaders/cors/rateLimit/requestId/
-  timeout/scope set) — candidates: compression, ETag/conditional
-  requests, body-size limit, static-file serving, health/readiness. Each
-  follows the store-injection shape above where it holds state.
-- **CLI support.** A `rapid` CLI — scaffold an app/module, run the dev
-  server, and inspect the wired surface (list routes/socket commands/jobs
-  with their versions and bound params, straight off the decorator
-  registry).
-- **Dev-mode console output / boot display.** When the app is run
-  directly (`deno run -A main.ts`), the console output should be a nice,
-  readable display — a startup banner with name / mode / host:port and a
-  table of the wired surface (routes, socket commands, jobs with their
-  versions and bound params), plus a dev-friendly log format. Pretty by
-  default in `DEVELOPMENT`; lean/structured (JSON lines) in `PRODUCTION`.
-  Driven off the same decorator registry the OpenAPI/inspect items read.
+  middleware beyond the current requestLogger/responseTimer/secureHeaders/
+  cors/rateLimit/requestId/timeout/scope set. Solid candidates:
+  compression, ETag/conditional requests, health/readiness. Each follows
+  the store-injection shape where it holds state. Curate, don't dump:
+  body-size limit already exists (`server.maxBodySize` + the parseBody
+  gauntlet) so don't ship a redundant one; static-file serving is
+  deliberately DEBATABLE (range requests / caching / a job usually better
+  left to a CDN or reverse proxy) — decide in/out before building.
+- **CLI — project scaffolder + upgrade.** A `create`-style initializer,
+  Fresh-flavoured: `deno run -Ar jsr:@tundralibs/rapid/init` lays down a
+  new project's folder structure (app entry, config, a sample module,
+  tasks), and an `upgrade` command bumps the rapid version / migrates
+  scaffolding. This is a scaffolding tool, NOT a route inspector — the
+  live wired-surface view lives in the dashboard item below.
+- **Live dev dashboard (TUI).** When the app runs directly in
+  `DEVELOPMENT`, replace the plain log spew with a live terminal
+  dashboard: an ASCII rAPId banner; a header strip (host:port, total
+  routes, total crons, total open socket connections); a live metrics
+  strip below it (throughput, latency, in-flight, status classes); a live
+  activity window (current/recent API calls with time-taken); and a
+  bottom log pane showing only the last ~10–20 lines (a rolling tail, not
+  the full stream) so the window stays legible. `PRODUCTION` keeps plain
+  structured (JSON-line) logs — no TUI. Consumes the metrics item's live
+  feed and the decorator registry for the counts.
 - **Metrics collection.** First-class request/invocation metrics
-  (counts, latency histograms, in-flight, status classes) emitted per
-  transport — likely surfaced through `@tundralibs/metro-man`, correlated
-  the same way logs/traces already are via ambient.
+  (counts, latency histograms, in-flight, status classes) per transport.
+  WIRE, don't reinvent: compat's `WebServer` already tracks
+  `requests.active/total/peakActive` and `metro-man` owns metrics — this
+  is a clean rapid surface over the existing counters, ambient-correlated
+  like logs/traces, and the live feed the dashboard renders.
 - **WebSocket pub/sub — server-initiated push.** The SOCKET transport
   wraps `@tundralibs/rpc`'s `Server` but exposes NONE of its pub/sub
   (verified by grep: no publish/subscribe/broadcast/channel surface). A
@@ -284,21 +297,41 @@ Additive feature work, not blocking the first ship. Each is independent.
   Needs leader-election / a distributed lock; the cross-replica lease is
   the parked Coordinator/cluster seam below (this is the concrete cron
   driver for building it).
-- **Module DI ergonomics — inject the composed handle, not the ORM.**
-  The example currently injects the `Norm` instance and each module calls
-  `norm.use(schema)` (which recompiles the registry per module). Settle
-  the recommended pattern: compose `norm.use(schema)` ONCE at a single
-  location and register that ready handle in doctor, so modules inject
-  `Db` and call `.repo(...)` directly — one compile, no per-module
-  `use()`.
-- **Module DI ergonomics — abstract base module for shared deps.**
-  Provide/recommend an abstract class modules extend that holds the
-  common injected dependencies via `protected` accessors — the db handle,
-  a **request-scoped logger inherited from the Application** (not a
-  doctor singleton), and other basic helpers — so each module stops
-  re-declaring its `inject()` fields. Keep the decorated methods on the
-  subclass; verify the metadata-only decorators still register through
-  inheritance (they key on the method function).
+- **DI capability — register app-provided service instances cleanly.**
+  A real capability, not example polish: an app needs to hand ready-built
+  instances (a composed `norm.use(schema)` handle, the Application's
+  logger, config, cache, …) to modules via `inject()`, and any of them is
+  OPTIONAL (an app may not use norm; may not want the Application's
+  Slogger). Today doctor registers CLASSES (`prescribe(Class, {factory})`
+  with a marker class for a value token) — this smooths that into a
+  first-class "register THIS instance under this token" path. Also the
+  norm angle: compose `norm.use(schema)` ONCE and inject the ready handle
+  (not the `Norm` instance + per-module `use()`, which recompiles the
+  registry each call). Likely a small `@tundralibs/doctor` addition, not
+  rapid-only.
+- **Standard base module — canonical module authoring pattern.** An
+  (opt-in) abstract class modules extend that standardizes how a module
+  is written and wired: the shared injected dependencies exposed via
+  `protected` accessors — the db handle, a **request-scoped logger
+  inherited from the Application** (not a doctor singleton), config, and
+  common helpers — so every module is authored the same way instead of
+  re-declaring `inject()` fields. Grew out of the `_scratch` module
+  experiments. Opt-in: rapid still accepts any instance with decorated
+  methods, so the base is a convenience/standard, not a requirement —
+  keep the decorated methods on the subclass and verify metadata-only
+  decorators still register through inheritance (they key on the method
+  function).
+- **Testing helper (`@tundralibs/rapid/testing`).** First-class module/
+  route testing without a socket or a bound port: register fakes for the
+  injected services and drive a module method or a route through the
+  invocation cycle directly, asserting on the `RapidContextResponse`.
+  Makes the "modules are unit-testable in isolation" story a shipped
+  utility instead of hand-rolled per app (the blog example's fake-Norm
+  test is the pattern to generalize).
+- **SSE / streaming responses (LOW priority).** Server-Sent Events and
+  streamed response bodies as a first-class response shape — the simpler
+  realtime path alongside the WebSocket pub/sub item; compat's
+  `WebServer` already streams, so this is mostly a response-shape surface.
 - **OpenAPI documentation — automatic + exposed.** Generate an OpenAPI
   spec straight from the decorator registry and serve it (e.g.
   `/openapi.json` + a docs UI). The raw material already exists: routes/
