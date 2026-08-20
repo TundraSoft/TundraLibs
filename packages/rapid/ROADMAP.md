@@ -256,15 +256,20 @@ store-injection is the one breaking change and must land before release.
   store-injection shape where it holds state. Body-size limit already
   exists (`server.maxBodySize` + the parseBody gauntlet) — don't ship a
   redundant one. (Static-file serving is its own item below.)
-- **Cookie support (HTTP).** First-class cookies: parse the inbound
-  `Cookie` header into a typed map on `ctx`, and a convenient set-cookie
-  API (name/value + `httpOnly`/`secure`/`sameSite`/`maxAge`/`path`/
-  `domain`), building on the existing `set-cookie` header-append the
-  response setter already does.
-- **Static content serving (HTTP).** Serve files from a directory with
-  correct content-types (see MIME types below), conditional / ETag +
-  caching headers, and range requests. (Was flagged debatable earlier —
-  now in scope for 1.0.)
+- ✅ **Cookie support (HTTP) — DONE.** `ctx.cookies` (parsed inbound map),
+  `ctx.setCookie(name, value, {maxAge/expires/path/domain/secure/httpOnly/
+  sameSite})`, `ctx.deleteCookie(name, {path,domain})`, plus
+  `ctx.redirect(url, permanent?)` (302/301). Value percent-encoded (no
+  header injection); illegal names throw. `utils/cookies.ts`.
+- ✅ **Static content serving (HTTP) — MOSTLY DONE.** `serveStatic({root,
+  prefix?, index?, maxAge?})` middleware (`./middlewares`) — directory
+  serving, extension content-types (mimeTypeFor), directory index,
+  Cache-Control, and a path-traversal guard (blocks `../` and `%2e%2e`
+  /`%2f`); falls through for non-matches so routing/404 still work. Shown
+  in the blog example (public/ + `GET /` redirect). REMAINING (follow-ups,
+  not blocking): ETag/conditional (If-None-Match/If-Modified-Since → 304),
+  Range requests, and streaming large files (v1 reads whole file into
+  memory — the response model is content-only, would need a stream body).
 - ✅ **Proper MIME types — DONE.** `utils/mimeTypeFor` resolves a file's
   content-type by extension via `@std/media-types` (added to the workspace
   import map + `package.json`; verified clean on Deno/Bun/Node — it's a
