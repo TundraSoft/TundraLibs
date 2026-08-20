@@ -1,21 +1,24 @@
 /**
- * A full-blown rAPId example: a tiny blog API (posts + nested comments)
- * built on the decorator/module tier, backed by a real SQLite database
- * through `@tundralibs/norm`. Everything is split into files the way a
- * real app would be — MODULES ARE FILES:
+ * A full-blown rAPId example: a tiny blog API (posts + nested comments) on
+ * the decorator/module tier, backed by a real SQLite database through
+ * `@tundralibs/norm`, with dependencies wired by `@tundralibs/doctor`.
+ * Split into files the way a real app would be — MODULES ARE FILES:
  *
  *   models/            norm entities (one per file) + the Blog schema
  *   db.ts              Norm + SQLite + the Migrator that owns the DDL
- *   repositories/      the only norm-aware layer; rows ↔ domain types
- *   modules/Posts.ts   HTTP + JOB module (its own file)
- *   modules/CommentsSocket.ts   SOCKET-only module (its own file)
+ *   di.ts              doctor: register the Norm + logger singletons
+ *   modules/Posts.ts   HTTP + JOB module (own file) — inject()s its deps,
+ *                      owns its data actions on norm (no repository hop)
+ *   modules/CommentsSocket.ts   SOCKET-only module (own file)
  *   schemas.ts         guardian request schemas
  *   validated.ts       GuardianError → RapidError bridge
  *   types.ts           domain types
- *   main.ts            boot: wire db → repositories → modules → start
+ *   main.ts            boot: open db → register deps → mount modules
  *
- * rAPId never constructs a module — YOU build the repositories, inject
- * them, and hand rAPId the instances.
+ * The modules take NO constructor args — they pull `Norm` and the logger
+ * with `inject()` field initializers, so boot just registers those two
+ * singletons and hands rAPId the module INSTANCES. rAPId never constructs
+ * a module; doctor supplies what the module asks for as it constructs.
  *
  * Run (from the repo root):
  *
@@ -71,18 +74,13 @@ import {
   secureHeaders,
 } from '../../middlewares/mod.ts';
 import { openBlogDatabase } from './db.ts';
-import { PostRepository } from './repositories/PostRepository.ts';
-import { CommentRepository } from './repositories/CommentRepository.ts';
+import { registerBlogServices } from './di.ts';
 import { Posts } from './modules/Posts.ts';
 import { CommentsSocket } from './modules/CommentsSocket.ts';
 
-// ── database → repositories ───────────────────────────────────────────
+// ── app + database ────────────────────────────────────────────────────
 const database = await openBlogDatabase();
-const postRepo = new PostRepository(database.db);
-const commentRepo = new CommentRepository(database.db);
-await postRepo.seedIfEmpty();
 
-// ── app ───────────────────────────────────────────────────────────────
 const configDir = new URL('./configs', import.meta.url).pathname;
 const app = await rapid(configDir, {});
 
@@ -94,12 +92,11 @@ app.use(
   requestId({ socketEcho: true }),
 );
 
-// Both modules share the SAME repository instances — construction is the
-// app's job, never rAPId's.
-app.module(
-  new Posts(postRepo, commentRepo),
-  new CommentsSocket(postRepo, commentRepo),
-);
+// Register the two singletons the modules inject(), THEN construct the
+// modules — the inject() field initializers resolve during `new`, so the
+// tokens must be bound first. rAPId only receives the instances.
+registerBlogServices(database.norm, app.log);
+app.module(new Posts(), new CommentsSocket());
 
 await app.start();
 app.log.info(
