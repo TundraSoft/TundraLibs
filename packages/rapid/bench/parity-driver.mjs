@@ -2,12 +2,12 @@
 // programmatic API), so there is no shell-function-in-subshell PATH
 // flakiness. Prints a table of avg req/s. Targets are passed as a JSON
 // arg: [{label, url}, ...]; rounds/connections/duration via env.
-import autocannon from "autocannon";
+import autocannon from 'autocannon';
 
-const targets = JSON.parse(process.argv[2] ?? "[]");
-const ROUNDS = Number(process.env.ROUNDS ?? "3");
-const CONN = Number(process.env.CONN ?? "50");
-const DUR = Number(process.env.DUR ?? "10");
+const targets = JSON.parse(process.argv[2] ?? '[]');
+const ROUNDS = Number(process.env.ROUNDS ?? '3');
+const CONN = Number(process.env.CONN ?? '50');
+const DUR = Number(process.env.DUR ?? '10');
 
 const run = (url) =>
   new Promise((resolve, reject) => {

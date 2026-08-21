@@ -10,23 +10,23 @@ import {
   Module,
   moduleMetaOf,
   POST,
-} from "../decorators/mod.ts";
-import type { RapidContextResponse } from "../types/mod.ts";
+} from '../decorators/mod.ts';
+import type { RapidContextResponse } from '../types/mod.ts';
 
-@Module("Widgets", { namespace: "widgets", prefix: "/widgets" })
+@Module('Widgets', { namespace: 'widgets', prefix: '/widgets' })
 class Widgets {
   private readonly store = new Map<string, { id: string; name: string }>();
 
-  @GET("/:id:")
+  @GET('/:id:')
   find(id: string): RapidContextResponse {
     const widget = this.store.get(id);
     if (widget === undefined) {
-      return { status: 404, content: { error: "not found" } };
+      return { status: 404, content: { error: 'not found' } };
     }
     return { content: widget };
   }
 
-  @POST("/")
+  @POST('/')
   create(name: string): RapidContextResponse {
     const id = String(this.store.size + 1);
     const widget = { id, name };
@@ -38,16 +38,16 @@ class Widgets {
 // --- 1. Direct instantiation + direct method calls, no server at all ---
 const widgets = new Widgets();
 
-const created = widgets.create("gizmo");
-console.log("create():", JSON.stringify(created));
+const created = widgets.create('gizmo');
+console.log('create():', JSON.stringify(created));
 assertEqual(created.status, 201);
 
 const found = widgets.find((created.content as { id: string }).id);
-console.log("find() [hit]:", JSON.stringify(found));
-assertEqual((found.content as { name: string }).name, "gizmo");
+console.log('find() [hit]:', JSON.stringify(found));
+assertEqual((found.content as { name: string }).name, 'gizmo');
 
-const missing = widgets.find("nope");
-console.log("find() [miss]:", JSON.stringify(missing));
+const missing = widgets.find('nope');
+console.log('find() [miss]:', JSON.stringify(missing));
 assertEqual(missing.status, 404);
 
 // --- 2. The `bind`/`payload`/`param` binder tuple is INVISIBLE here ---
@@ -62,17 +62,17 @@ assertEqual(missing.status, 404);
 // prototype (metadata keys on the function object, per TC39 semantics).
 const proto = Object.getPrototypeOf(widgets) as Record<string, unknown>;
 const findDecorations = decorationsOf(proto.find as object);
-console.log("find() decorations:", JSON.stringify(findDecorations));
+console.log('find() decorations:', JSON.stringify(findDecorations));
 assertEqual(findDecorations?.length, 1);
-assertEqual((findDecorations?.[0] as { kind: string }).kind, "HTTP");
+assertEqual((findDecorations?.[0] as { kind: string }).kind, 'HTTP');
 
 const meta = moduleMetaOf(Widgets);
-console.log("@Module metadata:", JSON.stringify(meta));
-assertEqual(meta?.namespace, "widgets");
+console.log('@Module metadata:', JSON.stringify(meta));
+assertEqual(meta?.namespace, 'widgets');
 
-console.log("\nAll assertions passed — modules are plain classes; the");
-console.log("decorators only add SIDE-TABLE metadata for mount(), never");
-console.log("wrap the method, so unit tests need zero server/transport.");
+console.log('\nAll assertions passed — modules are plain classes; the');
+console.log('decorators only add SIDE-TABLE metadata for mount(), never');
+console.log('wrap the method, so unit tests need zero server/transport.');
 
 function assertEqual(actual: unknown, expected: unknown): void {
   if (actual !== expected) {

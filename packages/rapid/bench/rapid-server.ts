@@ -3,15 +3,15 @@
 // baseline overhead, not example-app logic. Runs identically under
 // `deno run` and `node --import tsx` (same file, no changes) — the
 // cross-runtime story is itself part of what's being measured.
-import { Application } from "../Application.ts";
+import { Application } from '../Application.ts';
 
 const app = new Application({
-  name: "bench",
-  mode: "PRODUCTION",
+  name: 'bench',
+  mode: 'PRODUCTION',
   server: { port: 4001 },
 });
-app.get("/", () => ({ content: { ok: true } }));
-app.get("/users/:id:", (ctx) => ({
+app.get('/', () => ({ content: { ok: true } }));
+app.get('/users/:id:', (ctx) => ({
   content: { id: ctx.args.params.id },
 }));
 await app.start();
