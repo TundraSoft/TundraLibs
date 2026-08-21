@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.1.0...drivers-v1.1.1) (2026-08-21)
+
+
+### Refactoring
+
+* **drivers:** align with repo conventions ([6374049](https://github.com/TundraSoft/TundraLibs/commit/6374049c7ea27bdff675aae0248ce3549d9be276))
+
 ## [1.1.0](https://github.com/TundraSoft/TundraLibs/compare/drivers-v1.0.8...drivers-v1.1.0) (2026-08-20)
 
 
