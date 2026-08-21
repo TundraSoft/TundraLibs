@@ -18,4 +18,9 @@ export type Label<T = unknown> = {
   readonly name: string;
   /** Phantom carrier for `T`; exists in the type only, never set. */
   readonly __type?: T;
+  /**
+   * Keeps classes out: a constructor also carries a `.name`, but its
+   * `prototype` can never be `never`. Exists in the type only.
+   */
+  readonly prototype?: never;
 };

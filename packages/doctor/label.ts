@@ -18,9 +18,13 @@ import type { Label } from './types/mod.ts';
  *   and `Doctor.dispenseByName('name')` resolve.
  *
  * @example
- * ```typescript
- * export const Db = label<BlogDb>('Db');
+ * ```ts
+ * import { Doctor, inject } from '@tundralibs/doctor';
  *
+ * type BlogDb = { repo(name: string): unknown };
+ * declare const db: BlogDb;
+ *
+ * export const Db = label<BlogDb>('Db');
  * Doctor.stock(Db, db); // a ready-made value
  *
  * class Posts {

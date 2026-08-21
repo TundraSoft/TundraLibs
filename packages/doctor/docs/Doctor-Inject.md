@@ -101,9 +101,10 @@ write `inject(Db)`.
 
 ## Doctor.dispenseByName
 
-`inject` delegates to `Doctor.dispenseByName(name, scope?)`, which looks the
-class up in a name index kept in sync by `prescribe` / `revoke` / `reset`. Use
-it directly when you need the loosely-typed (`unknown`) form:
+The string form delegates to `Doctor.dispenseByName(name, scope?)`, which
+looks the class or label up in a name index kept in sync by `prescribe` /
+`stock` / `revoke` / `reset`. Use it directly when you need the
+loosely-typed (`unknown`) form:
 
 ```typescript ignore
 const config = Doctor.dispenseByName<Config>('Config');

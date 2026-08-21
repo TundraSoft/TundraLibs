@@ -213,16 +213,26 @@ class Injector {
    *
    * @throws {@link DuplicateVialError} When the name is already taken —
    *   by an earlier `stock`, or by a prescribed class of that name.
+   * @throws {TypeError} When a class is passed where a label or name is
+   *   expected (TypeScript rejects this; the guard is for JavaScript
+   *   callers) — `prescribe` the class instead.
    */
-  public stock<T>(labelOrName: Label<T> | string, value: T): void;
+  public stock<T>(labelOrName: Label<T> | string, value: NoInfer<T>): void;
   public stock<T>(
     labelOrName: Label<T> | string,
-    options: StockOptions<T>,
+    options: StockOptions<NoInfer<T>>,
   ): void;
   public stock<T>(
     labelOrName: Label<T> | string,
     valueOrOptions: T | StockOptions<T>,
   ): void {
+    if (typeof labelOrName === 'function') {
+      throw new TypeError(
+        `stock() takes a label or a name, not a class — prescribe '${
+          (labelOrName as Vial).name
+        }' instead`,
+      );
+    }
     const name = this.__nameOf(labelOrName);
     const holder = this.__byName.get(name);
     if (holder !== undefined) {
@@ -248,7 +258,7 @@ class Injector {
    * removed.
    *
    * This is how a test swaps in a fake without {@link reset}:
-   * `Doctor.revoke(Db); Doctor.stock(Db, fakeDb);`.
+   * `Doctor.revoke(Db); Doctor.stock(Db, fakeDb);` (`Db` a label).
    */
   public revoke(target: Vial | Label | string): boolean {
     const key = typeof target === 'function'
@@ -266,8 +276,9 @@ class Injector {
   }
 
   /**
-   * Hand out an instance of a registered vial — or the item stocked
-   * under a label — honouring its mode.
+   * Hand out an instance of a registered vial — or whatever is stocked
+   * under a label — honouring its mode. A label is a **typed name**: it
+   * resolves exactly what {@link dispenseByName} would for that name.
    *
    * The instance wires itself while constructing: its `inject()`
    * field initializers and constructor default parameters resolve
@@ -291,8 +302,8 @@ class Injector {
    *   for SINGLETON; becomes the ambient fallback for the
    *   dependencies of whatever this call constructs.
    *
-   * @throws {@link UnregisteredVialError} When `vialOrLabel` was never
-   *   registered / stocked.
+   * @throws {@link UnregisteredVialError} When the class was never
+   *   registered, or nothing is registered under the label's name.
    * @throws {@link ScopeRequiredError} When the entry is SCOPED and
    *   no `scope` was provided.
    * @throws {@link CircularDependencyError} When resolving the entry
@@ -305,7 +316,17 @@ class Injector {
     vialOrLabel: Vial<T> | Label<T>,
     scope?: string,
   ): T {
-    return this.__dispenseKey<T>(this.__keyOf(vialOrLabel), scope);
+    if (typeof vialOrLabel === 'function') {
+      return this.__dispenseKey<T>(vialOrLabel, scope);
+    }
+    const key = this.__byName.get(vialOrLabel.name);
+    if (key === undefined) {
+      throw new UnregisteredVialError(
+        `Nothing stocked under label '${vialOrLabel.name}'`,
+        { vialName: vialOrLabel.name },
+      );
+    }
+    return this.__dispenseKey<T>(key, scope);
   }
 
   /**
@@ -491,11 +512,11 @@ class Injector {
   private __dispense<T>(key: Key, scope?: string): T {
     const reg = this.__services.get(key);
     const name = this.__nameOf(key);
+    // Only a class key can miss here: string keys always arrive via
+    // the name index, which is kept in sync with the registrations.
     if (!reg) {
       throw new UnregisteredVialError(
-        typeof key === 'string'
-          ? `Nothing stocked under label '${key}'`
-          : `No service registered for ${name}`,
+        `No service registered for ${name}`,
         { vialName: name },
       );
     }
@@ -584,11 +605,6 @@ class Injector {
         { vialName: name },
       );
     }
-  }
-
-  /** The registry key for a class (itself) or a label (its name). */
-  private __keyOf(vialOrLabel: Vial | Label): Key {
-    return typeof vialOrLabel === 'function' ? vialOrLabel : vialOrLabel.name;
   }
 
   /** The display / index name of a key or label. */

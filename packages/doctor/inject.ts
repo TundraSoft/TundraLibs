@@ -58,7 +58,7 @@ export interface VialRegistry {}
  *   logger = inject('Logger');
  *
  *   // EAGER — constructor default parameter, same timing.
- *   constructor(private db = inject(Db)) {}
+ *   constructor(private db = inject('Db')) {}
  *
  *   // LAZY — memoizing getter: resolves on first access. Use it to
  *   // break a dependency cycle, defer registration past construction,
@@ -102,11 +102,19 @@ export interface VialRegistry {}
  *
  * @example
  * ```ts
- * const db = inject(Db); // typed by the label: label<BlogDb>('Db')
- * const config = inject('Config'); // typed via VialRegistry, no import
+ * import { label } from '@tundralibs/doctor';
+ *
+ * type BlogDb = { repo(name: string): unknown };
+ * const Db = label<BlogDb>('Db');
+ *
+ * const db = inject(Db); // typed BlogDb — by the label alone
  * ```
  */
 export function inject<T>(target: Vial<T> | Label<T>, scope?: string): T;
+/**
+ * Resolve by string token — the class name — typed by
+ * {@link VialRegistry}. See the overload above for the full contract.
+ */
 export function inject<K extends keyof VialRegistry>(
   token: K,
   scope?: string,

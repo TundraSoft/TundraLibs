@@ -1,6 +1,7 @@
 /**
  * @fileoverview Error thrown when a class is registered with `@Vial`
- * (or `Doctor.prescribe`) more than once.
+ * (or `Doctor.prescribe`) more than once, or a name is contested
+ * between a class and a stocked label.
  *
  * @module
  */

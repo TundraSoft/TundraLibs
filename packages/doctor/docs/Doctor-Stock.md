@@ -25,8 +25,9 @@ Doctor.dispense<T>(vialOrLabel: Vial<T> | Label<T>, scope?: string): T;
 ```
 
 `Label<T>` is `{ readonly name: string }` with a phantom `T`: the name
-is the registry key, `T` exists only at compile time. `StockOptions<T>`
-is `{ mode: VialModes; factory: () => T }`.
+is the registry key, `T` exists only at compile time. A class — which
+also carries a `.name` — is deliberately not a `Label`; `prescribe` it.
+`StockOptions<T>` is `{ mode: VialModes; factory: () => T }`.
 
 ## Value form
 
@@ -87,7 +88,9 @@ function — is read as the factory form.
 
 Labels are keyed by **name**, not by object identity: two
 `label<T>('Db')` calls address the same entry, and so do the string
-paths.
+paths. A label is a typed name — `inject(label<Logger>('Logger'))`
+resolves exactly what `inject('Logger')` would, be that a stocked value
+or a prescribed class of that name.
 
 ```typescript ignore
 Doctor.stock(label<BlogDb>('Db'), db);

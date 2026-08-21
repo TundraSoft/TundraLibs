@@ -18,10 +18,29 @@ describe('label', () => {
     Doctor.reset();
     // @ts-expect-error — a string is not a number
     Doctor.stock(label<number>('n'), 'str');
+    // @ts-expect-error — a widened literal is not the label's union
+    Doctor.stock(label<'a' | 'b'>('mode'), 'c');
+    const partial = { a: 1 } as { a: number };
+    // @ts-expect-error — a supertype of the label's type is not enough
+    Doctor.stock(label<{ a: number; b: string }>('s'), partial);
+    // @ts-expect-error — nor is a factory that produces one
+    Doctor.stock(label<{ a: number; b: string }>('s2'), {
+      mode: 'SINGLETON',
+      factory: () => partial,
+    });
     // A subtype is fine: the label names the contract, not the exact shape.
     const Db = label<{ q(): number }>('Db');
     const impl = { q: () => 1, extra: true };
     Doctor.stock(Db, impl);
     asserts.assertEquals(inject(Db).q(), 1);
+  });
+
+  it('should refuse a class in place of a label, at compile time and at runtime', () => {
+    Doctor.reset();
+    asserts.assertThrows(
+      // @ts-expect-error — a class is not a label: prescribe it instead
+      () => Doctor.stock(class Db {}, {}),
+      TypeError,
+    );
   });
 });

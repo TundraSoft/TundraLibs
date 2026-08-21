@@ -93,9 +93,16 @@ describe('inject / dispenseByName', () => {
     it('inject(label) is typed by the label, not unknown', () => {
       Doctor.reset();
       Doctor.stock(label<number>('n'), 1);
-      // @ts-expect-error — a number label never yields a string
-      const wrong: string = inject(label<number>('n'));
-      asserts.assertEquals<unknown>(wrong, 1);
+      const n: number = inject(label<number>('n')); // unknown would not compile
+      asserts.assertEquals(n, 1);
+    });
+
+    it('inject(label) is a typed name: it reaches a prescribed class of that name', () => {
+      Doctor.reset();
+      Doctor.prescribe(Config, 'SINGLETON');
+      const Cfg = label<Config>('Config');
+      asserts.assertEquals(Doctor.has(Cfg), true);
+      asserts.assertStrictEquals(inject(Cfg), Doctor.dispense(Config));
     });
 
     it('throws UnregisteredVialError for an unstocked label', () => {

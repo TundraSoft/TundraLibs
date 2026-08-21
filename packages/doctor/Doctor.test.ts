@@ -606,7 +606,18 @@ describe('Doctor', () => {
       );
     });
 
+    it('should keep a value whose shape only resembles the factory form as a value', () => {
+      Doctor.reset();
+      const theme = { mode: 'dark', factory: () => 'x' }; // not a vial mode
+      const odd = { mode: 'SINGLETON', factory: 'not-a-fn' }; // not a function
+      Doctor.stock('theme', theme);
+      Doctor.stock('odd', odd);
+      asserts.assertStrictEquals(Doctor.dispenseByName('theme'), theme);
+      asserts.assertStrictEquals(Doctor.dispenseByName('odd'), odd);
+    });
+
     it('should be cleared by reset()', () => {
+      Doctor.reset();
       Doctor.stock('Db', {});
       Doctor.reset();
       asserts.assertEquals(Doctor.has('Db'), false);
