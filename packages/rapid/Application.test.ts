@@ -1134,4 +1134,62 @@ describe('rapid.Application', () => {
       }
     });
   });
+
+  describe('triggerJob / fetch / newRequestId guards', () => {
+    it('triggerJob() for an unregistered name rejects with RAPID_CONFIG', async () => {
+      const app = new Application({ name: 'tj', server: { enabled: false } });
+      const err = await asserts.assertRejects(
+        () => app.triggerJob('does-not-exist'),
+        RapidError,
+        'No job registered',
+      );
+      asserts.assertEquals(err.code, 'RAPID_CONFIG');
+    });
+
+    it('fetch() with socket commands throws RAPID_CONFIG synchronously', () => {
+      // fetch has no socket owner; the guard fires on the first call
+      // (before any listener), SYNCHRONOUSLY out of __prepareFetch.
+      const app = new Application({ name: 'f', server: { enabled: false } });
+      app.socket('cmd', () => ({ content: 'x' }));
+      const err = asserts.assertThrows(
+        () => app.fetch(new Request('http://x/')),
+        RapidError,
+        'serves HTTP only',
+      ) as RapidError;
+      asserts.assertEquals(err.code, 'RAPID_CONFIG');
+    });
+
+    it('newRequestId adopts a safe inbound id and rejects unsafe ones', () => {
+      const app = new Application({ name: 'ri', server: { enabled: false } });
+      // Safe charset within the 64-char cap → adopted verbatim (trusted edge).
+      asserts.assertEquals(app.newRequestId('abc_1.2-3'), 'abc_1.2-3');
+      // Illegal characters → a fresh ULID, never the tainted value.
+      asserts.assertNotEquals(app.newRequestId('bad id!'), 'bad id!');
+      // Over the 64-char cap → a fresh ULID too.
+      const long = 'x'.repeat(65);
+      asserts.assertNotEquals(app.newRequestId(long), long);
+      // Absent inbound → still a fresh, non-empty id.
+      asserts.assert(app.newRequestId(null).length > 0);
+    });
+
+    it('ctx.detach absorbs a rejection (no unhandled rejection on the HTTP path)', async () => {
+      // settleDetached() only runs for the JOB slot-hold; on the HTTP path
+      // nothing awaits detached work, so detach() itself must swallow the
+      // rejection. If that regressed, the test runner would flag an
+      // unhandled rejection from the line below.
+      const app = new Application({
+        name: 'detach',
+        server: { port: 0, hostname: '127.0.0.1' },
+      });
+      app.get('/fire', (ctx) => {
+        ctx.detach(Promise.reject(new Error('fire-and-forget boom')));
+        return { content: { ok: true } };
+      });
+      const res = await app.fetch(new Request('http://x/fire'));
+      asserts.assertEquals(res.status, 200);
+      await res.text();
+      // Let the rejected microtask reach the unhandled-rejection checkpoint.
+      await new Promise((r) => setTimeout(r, 20));
+    });
+  });
 });

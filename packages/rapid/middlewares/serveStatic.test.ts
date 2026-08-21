@@ -13,6 +13,7 @@ import {
 } from '@tundralibs/compat/file';
 import { Application } from '../Application.ts';
 import { serveStatic } from './serveStatic.ts';
+import { middlewareScope } from './scope.ts';
 
 describe('rapid.serveStatic (live)', () => {
   let base = '';
@@ -89,5 +90,46 @@ describe('rapid.serveStatic (live)', () => {
       asserts.assertNotEquals(r.status, 200, `${p} must not 200`);
       asserts.assert(!body.includes('TOP-SECRET'), `${p} leaked the secret`);
     }
+  });
+
+  it('malformed percent-encoding falls through (decode catch → next)', async () => {
+    // `%zz` is not a valid escape → decodeURIComponent throws → next().
+    const r = await fetch(`${url}/s/%zz`);
+    await r.text();
+    asserts.assertEquals(r.status, 404);
+    // A real route is still reachable — the chain wasn't broken.
+    const api = await fetch(`${url}/api`);
+    asserts.assertEquals(api.status, 200);
+    asserts.assertEquals((await api.json()).ok, true);
+  });
+
+  it('index:false does not serve a directory request', async () => {
+    const app2 = new Application({
+      name: 'static-noindex',
+      server: { port: 0, hostname: '127.0.0.1' },
+    });
+    app2.use(serveStatic({ root: `${base}/pub`, prefix: '/s', index: false }));
+    app2.get('/api', () => ({ content: { ok: true } }));
+    await app2.start();
+    const u = `http://127.0.0.1:${app2.port}`;
+    try {
+      // Directory request → no index → falls through to 404.
+      const dir = await fetch(`${u}/s/`);
+      asserts.assertEquals(dir.status, 404);
+      await dir.text();
+      // A named file under the same prefix still serves.
+      const file = await fetch(`${u}/s/app.css`);
+      asserts.assertEquals(file.status, 200);
+      asserts.assertEquals(await file.text(), 'body{color:red}');
+    } finally {
+      await app2.stop();
+    }
+  });
+
+  it('is HTTP-scoped', () => {
+    asserts.assertEquals(
+      middlewareScope(serveStatic({ root: '.', prefix: '/s' })),
+      ['HTTP'],
+    );
   });
 });

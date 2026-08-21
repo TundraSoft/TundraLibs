@@ -45,29 +45,6 @@ export type ModuleDecoratorOptions = {
   version?: string;
 };
 
-/**
- * Declare the decorated class a module: its `@GET`/`@SOCKET`/`@JOB`
- * methods mount together when an instance is passed to
- * `app.module()`.
- *
- * ```typescript
- * @Module('Users', { prefix: '/users' })
- * class Users {
- *   constructor(private readonly db: Db) {}
- *
- *   @GET('/:id:', { bind: [param('id')] })
- *   find(id: string): RapidContextResponse { ... }
- * }
- *
- * app.module(new Users(db));
- * ```
- *
- * @param name - The module's identity (diagnostics, future OpenAPI
- *   tagging) — required, unlike everything in `options`.
- * @throws {RapidError} RAPID_CONFIG when `name` is empty, `prefix` is
- *   non-empty and does not start with `/`, or at decoration time
- *   under legacy decorator compilation.
- */
 /** The options-only form's options: identity comes from the module's fields. */
 export type ModuleMountOptions = Pick<
   ModuleDecoratorOptions,
@@ -89,8 +66,28 @@ type ModuleClassDecorator = <
  */
 export function Module(options?: ModuleMountOptions): ModuleClassDecorator;
 /**
- * Named form, for plain decorated classes: `name` + optional `namespace`
- * (flat SOCKET/JOB names), `prefix` (HTTP paths only), `version`.
+ * Named form, for plain decorated classes: declare the class a module
+ * whose `@GET`/`@SOCKET`/`@JOB` methods mount together when an instance
+ * is passed to `app.module()`. `name` + optional `namespace` (flat
+ * SOCKET/JOB names), `prefix` (HTTP paths only), `version`.
+ *
+ * ```typescript
+ * import { GET, Module, param, type RapidContextResponse } from '@tundralibs/rapid';
+ *
+ * @Module('Users', { prefix: '/users' })
+ * class Users {
+ *   @GET('/:id:', { bind: [param('id')] })
+ *   find(id: string): RapidContextResponse {
+ *     return { content: { id } };
+ *   }
+ * }
+ * ```
+ *
+ * @param name - The module's identity (diagnostics, future OpenAPI
+ *   tagging) — required, unlike everything in `options`.
+ * @throws {RapidError} RAPID_CONFIG when `name` is empty, `prefix` is
+ *   non-empty and does not start with `/`, or at decoration time
+ *   under legacy decorator compilation.
  */
 export function Module(
   name: string,

@@ -14,8 +14,11 @@ import type { RapidModuleInvokeResult } from '../types/mod.ts';
 
 /** The envelope `invoke` resolves to. Construct with {@link reply}. */
 export class Reply<C = unknown> implements RapidModuleInvokeResult<C> {
+  /** Build an envelope directly; prefer the {@link reply} factory. */
   constructor(
+    /** The invocation outcome status. */
     public readonly status: StatusCode,
+    /** The envelope body. */
     public readonly content: C,
   ) {}
 }

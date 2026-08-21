@@ -79,6 +79,13 @@ describe('rapid.middlewares.rateLimit', () => {
     asserts.assertEquals(store.get('k'), undefined); // expired
   });
 
+  it('memoryStore: set WITHOUT a ttl persists (expiresAt = Infinity)', async () => {
+    const store = memoryStore<{ n: number }>();
+    store.set('k', { n: 7 }); // no ttl → never expires
+    await sleep(20);
+    asserts.assertEquals(store.get('k'), { n: 7 }); // still there after a tick
+  });
+
   it('accepts an injected { get, set } store (async, e.g. redis-shaped)', async () => {
     const backing = new Map<string, { count: number; resetAt: number }>();
     const store: Store<{ count: number; resetAt: number }> = {

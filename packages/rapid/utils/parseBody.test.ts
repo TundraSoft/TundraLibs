@@ -7,7 +7,7 @@
 
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
-import { makeTempDirSync } from '@tundralibs/compat/file';
+import { makeTempDirSync, readDir } from '@tundralibs/compat/file';
 import { parseBody } from './parseBody.ts';
 import { RapidError } from '../errors/mod.ts';
 
@@ -167,5 +167,35 @@ describe('rapid.parseBody', () => {
     );
     asserts.assertEquals(value, { title: 'hi', tag: ['a', 'b'] });
     asserts.assertEquals(files, []);
+  });
+
+  it('cleans up already-written files when a LATER multipart part is rejected', async () => {
+    const uploadDir = makeTempDirSync({ prefix: 'pb-leak-' });
+    const form = new FormData();
+    // First part is accepted and WRITTEN to disk; the second fails the
+    // extension gauntlet, so parseBody throws — the first file must be
+    // cleaned up, not stranded (repeatable → disk-fill DoS).
+    form.append('good', new File(['hello world'], 'good.txt'));
+    form.append('bad', new File(['x'], 'evil.exe'));
+    const cfg = {
+      maxBodySize: 1_048_576,
+      uploads: {
+        maxSize: 10_485_760,
+        allowedExtensions: ['.txt'],
+        path: uploadDir,
+      },
+    };
+    await asserts.assertRejects(
+      () =>
+        parseBody(
+          new Request('http://x/', { method: 'POST', body: form }),
+          cfg,
+        ),
+      RapidError,
+      'not allowed',
+    );
+    const left: string[] = [];
+    for await (const entry of readDir(uploadDir)) left.push(entry.name);
+    asserts.assertEquals(left, [], 'a rejected upload left an orphaned file');
   });
 });

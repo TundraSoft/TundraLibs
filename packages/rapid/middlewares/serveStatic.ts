@@ -11,6 +11,7 @@ import { readFile } from '@tundralibs/compat/file';
 import * as path from '@tundralibs/compat/path';
 import { mimeTypeFor } from '../utils/mod.ts';
 import type { RapidMiddleware } from '../types/mod.ts';
+import { MIDDLEWARE_SCOPE } from './scope.ts';
 
 /** Options for {@link serveStatic}. */
 export type ServeStaticOptions = {
@@ -51,7 +52,7 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
     ? undefined
     : `public, max-age=${Math.floor(options.maxAge)}`;
 
-  return async (ctx, next) => {
+  const middleware: RapidMiddleware = async (ctx, next) => {
     if (ctx.type !== 'HTTP') return next();
     if (ctx.method !== 'GET' && ctx.method !== 'HEAD') return next();
 
@@ -95,4 +96,5 @@ export function serveStatic(options: ServeStaticOptions): RapidMiddleware {
     ctx.response = { content: bytes, headers };
     // Served — do NOT call next(): short-circuit the chain.
   };
+  return Object.assign(middleware, { [MIDDLEWARE_SCOPE]: ['HTTP'] });
 }

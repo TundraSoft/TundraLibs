@@ -109,12 +109,18 @@ function route<This, A extends readonly unknown[]>(
  * Declare the decorated method as a GET route.
  *
  * ```typescript
+ * import { GET, param, type RapidContextResponse } from '@tundralibs/rapid';
+ *
  * class Users {
  *   @GET('/users/:id:', { bind: [param('id')] })
- *   find(id: string): RapidContextResponse { ... }
+ *   find(id: string): RapidContextResponse {
+ *     return { content: { id } };
+ *   }
  *
- *   @GET('/health')            // no bind → the method takes NO params
- *   health(): RapidContextResponse { ... }
+ *   @GET('/health') // no bind → the method takes NO params
+ *   health(): RapidContextResponse {
+ *     return { content: 'ok' };
+ *   }
  * }
  * ```
  *

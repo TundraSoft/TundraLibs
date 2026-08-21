@@ -125,7 +125,9 @@ const compose = (
 };
 
 export class ModuleRuntime {
+  /** The host's logger (ambient-correlated at emit time). */
   public readonly log: Slogger;
+  /** The host's configuration. */
   public readonly config: ConfigType;
   private readonly __events: RapidEvents;
   private readonly __mode: 'DEVELOPMENT' | 'PRODUCTION';

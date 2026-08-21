@@ -35,6 +35,17 @@ export async function initCommand(
     })).trim() || 'my-rapid-app';
   }
 
+  // A project name is a single non-empty directory name — reject an empty /
+  // whitespace name (a bare `""` arg skips the default above and would make
+  // `root` the filesystem root) and any path separators / `..` so it can't
+  // write outside `base` (e.g. `../../etc`, `/abs`).
+  if (
+    name.trim() === '' || /[/\\]/.test(name) || name === '.' || name === '..'
+  ) {
+    console.error(`✗ invalid project name '${name}'`);
+    return 1;
+  }
+
   const pick = async (
     flag: string,
     q: string,

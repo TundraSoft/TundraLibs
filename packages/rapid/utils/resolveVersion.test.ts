@@ -52,6 +52,45 @@ describe('rapid.resolveVersion', () => {
     });
   });
 
+  it('path mode only matches a WHOLE leading segment (no partial /v1abc)', () => {
+    const cfg = { mode: 'path' as const };
+    // `/v1abc` is not the segment `v1` — must NOT be read as v1, must NOT
+    // strip to `/abc` (the pre-fix bug matched `/v1` inside `/v1abc`).
+    asserts.assertEquals(resolveVersion(h(), '/v1abc/users', cfg), {
+      version: undefined,
+      pathname: '/v1abc/users',
+    });
+    // `/v2users` likewise is one non-version segment — untouched.
+    asserts.assertEquals(resolveVersion(h(), '/v2users', cfg), {
+      version: undefined,
+      pathname: '/v2users',
+    });
+  });
+
+  it('path mode strips from the match INDEX, not position 0', () => {
+    // A non-anchored custom identifier matching mid-path must slice from the
+    // match's own start (pre-fix: slice(match[0].length) produced garbage
+    // like `pi/v2/users`).
+    const cfg = { mode: 'path' as const, identifier: '(v[0-9]+)' };
+    const out = resolveVersion(h(), '/api/v2/users', cfg);
+    asserts.assertEquals(out.version, 'v2');
+    // The matched span (and the prefix before it) is removed cleanly, and
+    // the result is a valid rooted path — never a mangled `pi/...`.
+    asserts.assert(out.pathname.startsWith('/'));
+    asserts.assertEquals(out.pathname, '/users');
+  });
+
+  it('accept mode with no identifier configured yields no version', () => {
+    asserts.assertEquals(
+      resolveVersion(
+        h({ accept: 'application/vnd.example.v3+json' }),
+        '/x',
+        { mode: 'accept' as const },
+      ).version,
+      undefined,
+    );
+  });
+
   it('defaults to header mode with x-api-version when nothing is configured', () => {
     asserts.assertEquals(
       resolveVersion(h({ 'x-api-version': 'v1' }), '/x', {}).version,

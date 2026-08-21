@@ -104,7 +104,7 @@ export abstract class RapidModule<
   /** `kebab-case` grouping: `posts`. Events qualify as `namespace:Name:Event`. */
   public abstract readonly namespace: string;
   /**
-   * The events this module EMITS, declared with {@link payload}. Protected:
+   * The events this module EMITS, declared with {@link event}. Protected:
    * it is the module's own declaration, not API. The runtime reads it at
    * mount and validates every `@On` subscriber against the union of
    * mounted declarations.

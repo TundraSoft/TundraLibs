@@ -11,6 +11,7 @@ import type { RapidApplicationJobsOptions } from './JobsOptions.ts';
 import type { RapidApplicationServerOptions } from './ServerOptions.ts';
 import type { RapidApplicationUploadOptions } from './UploadOptions.ts';
 
+/** The `Application` constructor options — every field but `name` optional and defaulted. */
 export type RapidApplicationOptions = {
   /**
    * name is the name of the application. It is used for logging and error reporting.

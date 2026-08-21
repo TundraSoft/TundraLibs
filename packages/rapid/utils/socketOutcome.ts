@@ -62,7 +62,13 @@ export function socketOutcome(
       requestId?: unknown;
     }
     : {};
-  const hasCode = typeof disclosure.code === 'string';
+  // Only a REGISTERED framework code marks this as a disclosure payload (the
+  // {code,message,details?,requestId} shape). A handler-authored error body
+  // that merely happens to carry a `code` (e.g. a REST `{code:'CONFLICT',
+  // current}`) is NOT a disclosure — it must fall through to the handler
+  // branch below so ALL its keys ride `data`, not just details/debug/reqId.
+  const hasCode = typeof disclosure.code === 'string' &&
+    disclosure.code in RAPID_ERROR_CODES;
   const code = hasCode ? disclosure.code as string : STATUS_CODES.get(status) ??
     // No exact mapping (a 409, a 422 — statuses the framework has no
     // code for). Fall back by CLASS rather than to RAPID_UNHANDLED:

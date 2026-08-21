@@ -426,7 +426,12 @@ export class HTTPTransport<S extends RapidContextState = RapidContextState>
       this._app.tracer !== undefined ? extract(request.headers) : undefined,
       {
         'http.request.method': method,
-        'http.route': entry?.path ?? pathname,
+        // The route TEMPLATE when matched; a constant otherwise — never the
+        // raw (attacker-controlled) path, which would put unbounded-
+        // cardinality/attacker input into `http.route` (OTel semconv wants
+        // the template, low-cardinality when unmatched). Mirrors the span
+        // name + metric label collapse in Transport.__identity.
+        'http.route': entry !== undefined ? entry.path : '<unmatched>',
       },
       () => this.__finalize(ctx, requestIdHeader),
     );

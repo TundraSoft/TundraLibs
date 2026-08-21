@@ -15,7 +15,7 @@
  * a rAPId decorator must sit ABOVE any wrapper (further from the
  * method), so it records the function that actually lands:
  *
- * ```typescript
+ * ```typescript ignore
  * class Ok {
  *   @GET('/x')     // ← applied LAST: records the wrapper. Works.
  *   @Measure       // ← applied first: returns the replacement

@@ -148,4 +148,136 @@ describe('rapid.middlewares.cors', () => {
       await app.stop();
     }
   });
+
+  it('exact-STRING origin allows the match; a mismatch gets no allow-origin', async () => {
+    const { app, base } = await spin({ origin: 'https://ok.example' });
+    try {
+      const good = await fetch(`${base}/r`, {
+        headers: { origin: 'https://ok.example' },
+      });
+      await good.text();
+      asserts.assertEquals(
+        good.headers.get('access-control-allow-origin'),
+        'https://ok.example',
+      );
+      const bad = await fetch(`${base}/r`, {
+        headers: { origin: 'https://ok.example.evil' },
+      });
+      await bad.text();
+      asserts.assertEquals(
+        bad.headers.get('access-control-allow-origin'),
+        null,
+      );
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it('PREDICATE origin allows/denies by the function', async () => {
+    const { app, base } = await spin({
+      origin: (o) => o.endsWith('.trusted'),
+    });
+    try {
+      const good = await fetch(`${base}/r`, {
+        headers: { origin: 'https://a.trusted' },
+      });
+      await good.text();
+      asserts.assertEquals(
+        good.headers.get('access-control-allow-origin'),
+        'https://a.trusted',
+      );
+      const bad = await fetch(`${base}/r`, {
+        headers: { origin: 'https://a.untrusted' },
+      });
+      await bad.text();
+      asserts.assertEquals(
+        bad.headers.get('access-control-allow-origin'),
+        null,
+      );
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it('exposedHeaders → access-control-expose-headers on the actual response', async () => {
+    const { app, base } = await spin({
+      origin: ['https://ok.example'],
+      exposedHeaders: ['x-total-count', 'x-page'],
+    });
+    try {
+      const r = await fetch(`${base}/r`, {
+        headers: { origin: 'https://ok.example' },
+      });
+      await r.text();
+      asserts.assertEquals(
+        r.headers.get('access-control-expose-headers'),
+        'x-total-count, x-page',
+      );
+      // A disallowed origin gets no expose-headers.
+      const bad = await fetch(`${base}/r`, {
+        headers: { origin: 'https://evil.example' },
+      });
+      await bad.text();
+      asserts.assertEquals(
+        bad.headers.get('access-control-expose-headers'),
+        null,
+      );
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it('appends origin to a pre-existing Vary without clobbering it', async () => {
+    const app = new Application({ name: 'cors-vary', server: { port: 0 } });
+    // A middleware BEFORE cors stamps the app's own Vary; cors must append,
+    // not replace, so the shared cache still keys on both.
+    app.use((ctx, next) => {
+      if (ctx.type === 'HTTP') ctx.setHeader('vary', 'accept-encoding');
+      return next();
+    });
+    app.use(cors({ origin: ['https://ok.example'] }));
+    app.get('/r', () => ({ content: 'ok' }));
+    await app.start();
+    const base = `http://localhost:${app.port}`;
+    try {
+      const r = await fetch(`${base}/r`, {
+        headers: { origin: 'https://ok.example' },
+      });
+      await r.text();
+      asserts.assertEquals(
+        r.headers.get('vary'),
+        'accept-encoding, origin',
+      );
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it('does not duplicate origin when Vary already lists it', async () => {
+    const app = new Application({ name: 'cors-vary2', server: { port: 0 } });
+    // A prior middleware already listed origin (any casing) → cors leaves
+    // the Vary untouched (no dup).
+    app.use((ctx, next) => {
+      if (ctx.type === 'HTTP') ctx.setHeader('vary', 'Origin');
+      return next();
+    });
+    app.use(cors({ origin: ['https://ok.example'] }));
+    app.get('/r', () => ({ content: 'ok' }));
+    await app.start();
+    const base = `http://localhost:${app.port}`;
+    try {
+      const r = await fetch(`${base}/r`, {
+        headers: { origin: 'https://ok.example' },
+      });
+      await r.text();
+      const vary = r.headers.get('vary')!;
+      asserts.assertEquals(
+        vary.split(',').filter((p) => p.trim().toLowerCase() === 'origin')
+          .length,
+        1,
+      );
+    } finally {
+      await app.stop();
+    }
+  });
 });

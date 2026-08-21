@@ -40,6 +40,7 @@ export type JOBContextInit = {
  */
 export class JOBContext<S extends RapidContextState = RapidContextState>
   extends Context<S, { status: StatusCode; content: unknown }> {
+  /** The transport discriminator — always `'JOB'`. */
   public readonly type = 'JOB';
   /** The job's registered name. */
   public readonly job: string;
@@ -50,6 +51,7 @@ export class JOBContext<S extends RapidContextState = RapidContextState>
   /** Lazy args cache — see the base {@link Context.args} contract. */
   private __args: Readonly<RapidContextArgs> | undefined = undefined;
 
+  /** Carry the job name, tick metadata, and merged params; {@link Context.action} is the job name. */
   constructor(app: Application<S>, init: JOBContextInit) {
     super(app, { action: init.job });
     this.job = init.job;
@@ -109,6 +111,7 @@ export class JOBContext<S extends RapidContextState = RapidContextState>
     if (response.status !== undefined) this._status = response.status;
   }
 
+  /** The interpreted response — `content` plus the outcome `status` (no `headers`). */
   public override get response(): Readonly<RapidContextResponse> | null {
     const base = super.response;
     return base === null

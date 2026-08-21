@@ -25,13 +25,13 @@ export function health<S extends RapidContextState = RapidContextState>(
       try {
         await options.check(ctx);
       } catch (error) {
-        return {
-          status: 503,
-          content: {
-            status: 'unhealthy',
-            reason: error instanceof Error ? error.message : String(error),
-          },
-        };
+        // Log the cause server-side — NEVER put it on the wire. A readiness
+        // `check` typically touches a DB/downstream whose error message can
+        // embed DSNs, hostnames, or credentials; `/healthz` is public.
+        ctx.app.log.warn('readiness check failed', {
+          reason: error instanceof Error ? error.message : String(error),
+        });
+        return { status: 503, content: { status: 'unhealthy' } };
       }
     }
     return { content: { status: 'ok', instance: ctx.app.instanceId } };

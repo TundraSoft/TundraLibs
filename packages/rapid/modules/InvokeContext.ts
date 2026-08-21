@@ -20,8 +20,11 @@ export type InvokeContextInit = {
 };
 
 export class InvokeContext {
+  /** The context discriminator — always `'INVOKE'`. */
   public readonly type = 'INVOKE' as const;
+  /** The invocation's correlation id — inherited from the caller, the seed, or minted. */
   public readonly requestId: string;
+  /** Uniform invocation identity — `invoke <namespace:Module>.<method>`. */
   public readonly action: string;
   /**
    * A SHALLOW COPY of the caller's state (or the seed): middleware and
@@ -31,13 +34,16 @@ export class InvokeContext {
   public readonly state: Record<string, unknown>;
   /** `namespace:Module` of the target. */
   public readonly target: string;
+  /** The invoked method name. */
   public readonly method: string;
+  /** The positional arguments passed to the method. */
   public readonly args: readonly unknown[];
   /** The caller's authenticated identity, flowed in via the seed. */
   public readonly auth?: Record<string, unknown>;
   /** Set by dispatch, or by middleware to short-circuit. */
   public response: Reply | null = null;
 
+  /** Populate the invocation's identity, copied-in state, target, method, args, and auth. */
   constructor(init: InvokeContextInit) {
     this.requestId = init.requestId;
     this.action = init.action;

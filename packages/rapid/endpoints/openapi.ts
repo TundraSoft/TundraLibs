@@ -35,15 +35,19 @@ export function openapi(options: OpenApiOptions = {}): RapidHTTPHandler {
       };
     }
     const version = new URL(ctx.request.url).searchParams.get('version') ?? '';
-    let doc = cache.get(version);
-    if (doc === undefined) {
-      doc = buildOpenApi(ctx.app.routes, {
-        info: { title: ctx.app.option('name'), ...options.info },
-        ...(options.servers !== undefined ? { servers: options.servers } : {}),
-        ...(version !== '' ? { version } : {}),
-      });
-      cache.set(version, doc);
-    }
+    const cached = cache.get(version);
+    if (cached !== undefined) return { content: cached };
+    const doc = buildOpenApi(ctx.app.routes, {
+      info: { title: ctx.app.option('name'), ...options.info },
+      ...(options.servers !== undefined ? { servers: options.servers } : {}),
+      ...(version !== '' ? { version } : {}),
+    });
+    // Cache ONLY real versions. `?version=` is client-controlled and
+    // unbounded, so caching every distinct value (each a full doc) is a
+    // memory-exhaustion vector — an unknown version is built fresh, uncached.
+    const known = version === '' ||
+      ctx.app.routes.some((r) => r.version === version);
+    if (known) cache.set(version, doc);
     return { content: doc };
   };
 }

@@ -10,7 +10,7 @@
  * @module
  */
 
-import { writeFile } from '@tundralibs/compat/file';
+import { deleteFile, writeFile } from '@tundralibs/compat/file';
 import { ulid } from '@tundralibs/id';
 import * as path from '@tundralibs/compat/path';
 import { RapidError } from '../errors/mod.ts';
@@ -226,10 +226,19 @@ export async function parseBody(
       rawContentType ? { headers: { 'content-type': rawContentType } } : {},
     );
     const data = await response.formData();
-    return {
-      value: await collectFormData(data, options.uploads, files),
-      files,
-    };
+    try {
+      return {
+        value: await collectFormData(data, options.uploads, files),
+        files,
+      };
+    } catch (error) {
+      // The gauntlet rejected a later part AFTER earlier files were already
+      // written to disk. `files` never reaches the caller on this throw, so
+      // clean up here — otherwise a partial multipart strands temp files
+      // (repeatable → disk-fill DoS). Best-effort; the throw still wins.
+      await Promise.all(files.map((f) => deleteFile(f).catch(() => {})));
+      throw error;
+    }
   }
 
   const text = new TextDecoder().decode(bytes);

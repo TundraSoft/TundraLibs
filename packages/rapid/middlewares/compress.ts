@@ -10,6 +10,7 @@
 
 import type { HTTPContext } from '../context/mod.ts';
 import type { RapidContextState, RapidMiddleware } from '../types/mod.ts';
+import { MIDDLEWARE_SCOPE } from './scope.ts';
 
 /** Options for {@link compress}. */
 export type CompressOptions = {
@@ -24,11 +25,13 @@ export type CompressOptions = {
 const encoder = new TextEncoder();
 const NO_BODY = new Set([204, 205, 304]);
 
-/** Pick gzip (preferred) or deflate from `Accept-Encoding`, else null. */
+/** Pick gzip (preferred) or deflate from `Accept-Encoding`, else null. The
+ * `q=0` exclusion matches ONLY a true zero (`q=0`, `q=0.0`), not a high
+ * priority like `q=0.9` — `(?![.\d])` stops `q=0` matching the `0` prefix. */
 const pickEncoding = (accept: string): 'gzip' | 'deflate' | null => {
   const a = accept.toLowerCase();
-  if (/\bgzip\b(?!\s*;\s*q=0)/.test(a)) return 'gzip';
-  if (/\bdeflate\b(?!\s*;\s*q=0)/.test(a)) return 'deflate';
+  if (/\bgzip\b(?!\s*;\s*q=0(?:\.0+)?(?![.\d]))/.test(a)) return 'gzip';
+  if (/\bdeflate\b(?!\s*;\s*q=0(?:\.0+)?(?![.\d]))/.test(a)) return 'deflate';
   return null;
 };
 
@@ -75,13 +78,14 @@ const compressBytes = async (
 
 /**
  * Compress the response body when the client accepts gzip/deflate, the
- * body is over `threshold` bytes, is a compressible type, and isn't
- * already encoded. Sets `Content-Encoding` + `Vary: Accept-Encoding`.
+ * body is at least `threshold` bytes, is a compressible type, and isn't
+ * already encoded. Sets `Content-Encoding` and merges `Accept-Encoding`
+ * into `Vary`.
  */
 export function compress(options: CompressOptions = {}): RapidMiddleware {
   const threshold = options.threshold ?? 1024;
 
-  return async (ctx, next) => {
+  const middleware: RapidMiddleware = async (ctx, next) => {
     await next();
     if (ctx.type !== 'HTTP' || ctx.method === 'HEAD') return;
     if (ctx.response === null) return;
@@ -94,6 +98,17 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
     const { bytes, contentType } = bodyOf(ctx);
     if (bytes.length < threshold || !isCompressible(contentType)) return;
 
+    // MERGE into any existing Vary rather than replacing it — the response
+    // setter overwrites per-key, so a bare `Vary: Accept-Encoding` would
+    // drop `cors()`'s `Vary: Origin` and make a shared cache serve one
+    // origin's response to another.
+    const priorVary = ctx.responseHeaders.get('vary');
+    const vary = priorVary === null
+      ? 'Accept-Encoding'
+      : /\baccept-encoding\b/i.test(priorVary)
+      ? priorVary
+      : `${priorVary}, Accept-Encoding`;
+
     ctx.response = {
       content: await compressBytes(bytes, encoding),
       // content-type must be re-stated (we're handing bytes now, which
@@ -101,8 +116,9 @@ export function compress(options: CompressOptions = {}): RapidMiddleware {
       headers: {
         'content-type': contentType,
         'content-encoding': encoding,
-        'vary': 'Accept-Encoding',
+        'vary': vary,
       },
     };
   };
+  return Object.assign(middleware, { [MIDDLEWARE_SCOPE]: ['HTTP'] });
 }

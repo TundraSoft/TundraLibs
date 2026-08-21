@@ -133,6 +133,46 @@ describe('rapid.cli init scaffold', () => {
       await removeDir(base, { recursive: true });
     }
   });
+
+  it('initCommand refuses to overwrite an existing project', async () => {
+    const base = await makeTempDir({ prefix: 'rapid-init-dup-' });
+    try {
+      const args = { _: ['twice'], git: false, yes: true };
+      asserts.assertEquals(await initCommand(args, base), 0);
+      // Second run into the same base with the same name hits the guard.
+      asserts.assertEquals(await initCommand(args, base), 1);
+    } finally {
+      await removeDir(base, { recursive: true });
+    }
+  });
+
+  it('initCommand rejects a name with path separators (no escape write)', async () => {
+    const base = await makeTempDir({ prefix: 'rapid-init-esc-' });
+    try {
+      asserts.assertEquals(
+        await initCommand({ _: ['../escape'], git: false, yes: true }, base),
+        1,
+      );
+      // The guard fires before any write — base stays empty of the escape.
+      asserts.assert(!(await pathExists(`${base}/../escape`)));
+    } finally {
+      await removeDir(base, { recursive: true });
+    }
+  });
+
+  it('initCommand rejects an empty name (would write to the filesystem root)', async () => {
+    const base = await makeTempDir({ prefix: 'rapid-init-empty-' });
+    try {
+      // A bare `""` positional skips the default and, unguarded, makes `root`
+      // empty → writes at `/`. The guard must reject it.
+      asserts.assertEquals(
+        await initCommand({ _: [''], git: false, yes: true }, base),
+        1,
+      );
+    } finally {
+      await removeDir(base, { recursive: true });
+    }
+  });
 });
 
 describe('rapid.cli health', () => {
@@ -152,5 +192,13 @@ describe('rapid.cli health', () => {
     } finally {
       await app.stop();
     }
+  });
+
+  it('returns 1 when the app is unreachable (fetch throws)', async () => {
+    // Nothing listens on port 1 — the fetch rejects, hitting the catch.
+    asserts.assertEquals(
+      await healthCommand('http://127.0.0.1:1', { path: '/health' }),
+      1,
+    );
   });
 });

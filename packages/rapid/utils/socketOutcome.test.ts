@@ -85,4 +85,31 @@ describe('rapid.socketOutcome', () => {
     asserts.assertEquals(socketOutcome(400, 'plain text').data, 'plain text');
     asserts.assertEquals(socketOutcome(400, [1, 2]).data, [1, 2]);
   });
+
+  it('handler content with a NON-framework code is preserved whole (not stripped)', () => {
+    // A REST-style error body that happens to carry a `code` is handler
+    // content, NOT a framework disclosure — every key must survive as `data`
+    // (the same cross-transport parity a framework disclosure gets).
+    const out = socketOutcome(409, {
+      code: 'CONFLICT',
+      message: 'stale',
+      current: { v: 2 },
+    });
+    asserts.assertEquals(out.data, {
+      code: 'CONFLICT',
+      message: 'stale',
+      current: { v: 2 },
+    });
+  });
+
+  it('a REGISTERED framework code still takes the disclosure branch', () => {
+    // Only details/debug/requestId ride `data` for a real framework payload.
+    const out = socketOutcome(400, {
+      code: 'RAPID_VALIDATION_FAILED',
+      message: 'bad',
+      details: { field: 'x' },
+    });
+    asserts.assertEquals(out.code, 'RAPID_VALIDATION_FAILED');
+    asserts.assertEquals(out.data, { details: { field: 'x' } });
+  });
 });

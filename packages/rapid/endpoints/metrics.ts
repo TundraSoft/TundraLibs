@@ -20,11 +20,14 @@ export function metrics(options: MetricsOptions = {}): RapidHTTPHandler {
   return (ctx) => {
     const meter = ctx.meter;
     if (meter === undefined) {
+      // A plain operational 503 (like `health`) — NOT a framework
+      // RapidError code: an off-registry `code` here would also leak into
+      // socketOutcome's status→code reverse map.
       return {
         status: 503,
         content: {
-          code: 'RAPID_METRICS_DISABLED',
-          message: 'set server.metrics to enable',
+          status: 'disabled',
+          message: 'metrics collection is not enabled (set server.metrics)',
         },
       };
     }

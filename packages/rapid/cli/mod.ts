@@ -28,7 +28,7 @@ const HELP = `rapid <command>
 `;
 
 /** Parse args and dispatch. Returns the exit code. */
-export function run(args = argv()): Promise<number> {
+export function run(args: ParsedArgs = argv()): Promise<number> {
   const cmd = args._[0] as string | undefined;
   const rest: ParsedArgs = { ...args, _: args._.slice(1) };
   switch (cmd) {

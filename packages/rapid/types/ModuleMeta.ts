@@ -16,9 +16,9 @@ export type RapidModuleMeta = {
   /**
    * The module's identity — for diagnostics (mount-time error
    * messages) and future OpenAPI tagging. Purely a label; does not
-   * affect routing.
+   * affect routing. Absent for a `RapidModule` subclass — its `name`
+   * field is canonical.
    */
-  /** Absent for a `RapidModule` subclass — its `name` field is canonical. */
   name?: string;
   /**
    * Joined onto every SOCKET command and JOB name declared in the

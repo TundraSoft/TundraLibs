@@ -39,6 +39,27 @@ describe('rapid.Application metrics', () => {
     }
   });
 
+  it('collapses unmatched (404) routes to one low-cardinality meter series', async () => {
+    // The metro-man Meter labels by `action`; an unmatched request's action
+    // is the raw (attacker-controlled) path. Distinct 404 URLs must NOT each
+    // mint a new time-series — they collapse to `<METHOD> <unmatched>`.
+    const app = new Application({
+      name: 'meter-cardinality',
+      server: { port: 0, hostname: '127.0.0.1', metrics: true },
+    });
+    app.get('/ok', () => ({ content: 'ok' }));
+    await app.fetch(new Request('http://app/wp-admin'));
+    await app.fetch(new Request('http://app/.env-secret-xyz'));
+    const text = app.meter!.collect('PROMETHEUS');
+    asserts.assertStringIncludes(text, 'action="GET <unmatched>"');
+    // The raw scan paths must NEVER appear as label values.
+    asserts.assert(!text.includes('wp-admin'), 'raw 404 path leaked to labels');
+    asserts.assert(
+      !text.includes('.env-secret'),
+      'raw 404 path leaked to labels',
+    );
+  });
+
   it('stays zeroed (no collection) when not enabled', async () => {
     const app = new Application({
       name: 'metrics-off',

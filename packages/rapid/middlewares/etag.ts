@@ -11,6 +11,7 @@
  */
 
 import type { RapidContextResponse, RapidMiddleware } from '../types/mod.ts';
+import { MIDDLEWARE_SCOPE } from './scope.ts';
 
 const encoder = new TextEncoder();
 
@@ -41,7 +42,7 @@ const ifNoneMatches = (header: string, tag: string): boolean => {
  * only (GET/HEAD, `200`); leaves everything else untouched.
  */
 export function etag(): RapidMiddleware {
-  return async (ctx, next) => {
+  const middleware: RapidMiddleware = async (ctx, next) => {
     await next();
     if (ctx.type !== 'HTTP') return;
     if (ctx.method !== 'GET' && ctx.method !== 'HEAD') return;
@@ -62,4 +63,5 @@ export function etag(): RapidMiddleware {
       ctx.response = { status: 304, content: '' };
     }
   };
+  return Object.assign(middleware, { [MIDDLEWARE_SCOPE]: ['HTTP'] });
 }

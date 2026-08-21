@@ -1,3 +1,14 @@
+/**
+ * @fileoverview `HTTPContext` — the HTTP transport's per-request context.
+ * Wraps the inbound Fetch `Request`, exposes headers/method/url and the
+ * lazily-parsed query, cookies, and body, resolves the client address,
+ * and interprets the full `status`/`headers` response — materializing a
+ * Fetch `Response` at {@link HTTPContext.respond}. Also carries the
+ * file-serving, redirect, and cookie helpers.
+ *
+ * @module
+ */
+
 import { deleteFile, FileNotFound, readFile } from '@tundralibs/compat/file';
 import type { HTTPMethod, StatusCode } from '@tundralibs/compat/http';
 import type { Application } from '../Application.ts';
@@ -48,9 +59,18 @@ export type HTTPContextInit = {
   requestId?: string;
 };
 
+/**
+ * The HTTP transport context — one per request. Adopts the inbound
+ * request's correlation header, parses body/query/cookies/client-address
+ * lazily (most requests touch few of them), and interprets the full
+ * `status`/`headers` response, emitting a Fetch `Response` at
+ * {@link respond}.
+ */
 export class HTTPContext<S extends RapidContextState = RapidContextState>
   extends Context<S, Response> {
+  /** The transport discriminator — always `'HTTP'`. */
   public readonly type = 'HTTP';
+  /** The inbound Fetch-standard request. */
   public readonly request: Request;
   /** Transport-reported peer address, unresolved — see {@link remoteAddress}. */
   private readonly __rawRemoteAddress: string;
@@ -85,20 +105,24 @@ export class HTTPContext<S extends RapidContextState = RapidContextState>
   protected readonly _fileUploads: string[] = [];
   protected readonly _headers: Headers = new Headers();
 
+  /** The inbound request headers. */
   get headers(): Headers {
     return this.request.headers;
   }
 
+  /** The request method, uppercased and narrowed to the compat {@link HTTPMethod} union. */
   get method(): HTTPMethod {
     // Uppercased at read; the fetch layer guarantees a valid verb, so
     // the assertion narrows string → the compat union.
     return this.request.method.trim().toUpperCase() as HTTPMethod;
   }
 
+  /** The full request URL. */
   get url(): string {
     return this.request.url;
   }
 
+  /** Wrap the inbound request; default {@link Context.action} to method + pathname when unmatched. */
   constructor(app: Application<S>, init: HTTPContextInit) {
     const { request, remoteAddress } = init;
     super(app, {

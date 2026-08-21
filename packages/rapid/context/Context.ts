@@ -29,6 +29,7 @@ export abstract class Context<
   S extends RapidContextState = RapidContextState,
   R = unknown,
 > {
+  /** The owning application — config, publish, metrics, and the id factory flow through it. */
   public readonly app: Application<S>;
   /** The invocation's state bag, loaded from {@link Application.state}. */
   public state: S;
@@ -48,6 +49,7 @@ export abstract class Context<
    * — attacker-controlled; treat accordingly in log pipelines.
    */
   public readonly action: string;
+  /** The transport discriminator (`'HTTP' | 'SOCKET' | 'JOB'`) — each subtype fixes it. */
   public abstract readonly type: RapidContextType;
   /**
    * The uniform invocation arguments — one shape on every transport
@@ -79,6 +81,7 @@ export abstract class Context<
     return this.app.log;
   }
 
+  /** Bind the application, load the per-invocation state, and adopt or mint the requestId. */
   constructor(app: Application<S>, init: ContextInit) {
     this.app = app;
     // The app is the state factory (stateMode: CLONE/EMPTY/SHARE).
@@ -193,6 +196,12 @@ export abstract class Context<
    *   need no separate unhandled-rejection guard.
    */
   public detach(work: Promise<unknown>): void {
+    // Absorb the rejection NOW, not just in settleDetached() — that only
+    // runs for the JOB slot-hold (scheduled firings), so on HTTP / SOCKET /
+    // triggerJob a rejected detached promise would otherwise be an
+    // unhandled rejection (process-fatal on Node/Deno), breaking the
+    // "callers need no guard" contract above. allSettled still awaits it.
+    work.catch(() => {});
     this.__detached.push(work);
   }
 
@@ -207,9 +216,9 @@ export abstract class Context<
   }
 
   /**
-   * cleanup
-   *
-   * Cleanup action
+   * Post-response cleanup — free the per-invocation resources a transport
+   * tracked (HTTP deletes the body parse's upload temp files). The base is
+   * a no-op; only transports with something to release override it.
    */
   public cleanup(): void;
   public cleanup(): Promise<void>;
@@ -243,19 +252,15 @@ export abstract class Context<
   }
 
   /**
-   * This will return the response information basis the context type.
-   * in HTTP context, it would be a Response object, in SOCKET context
-   * it would be a message to send back, in CLI context it would be
-   * a string to print to the console, and in JOB context it would be
-   * a status of the job.
+   * Materialize the response for this context's transport: a `Response`
+   * object for HTTP, a `{ status, content }` frame for SOCKET, and the
+   * `{ status, content }` job outcome for JOB.
    *
    * Materializing is the point of no return — and the BASE owns it
    * (template method): the freeze happens here, unconditionally, before
    * delegating to the subtype's {@link _respond}. A context type cannot
    * forget to freeze. After this, the `response` setter (and any
    * subtype mutators) throw, and a second `respond()` throws too.
-   *
-   * This will be handled by the rAPId class
    *
    * @throws {RapidError} RAPID_RESPONSE_INVALID on a second call —
    *   respond() is once-only.

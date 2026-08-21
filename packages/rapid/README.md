@@ -1,10 +1,24 @@
 # rAPId
 
-TODO: brief description of what this package does and why it exists.
+A cross-runtime API framework for Deno, Bun, Node.js, Cloudflare Workers, and
+the browser. One application object registers HTTP routes, WebSocket (RPC)
+commands, and cron jobs, and runs them through a single universal
+middleware/context cycle — assembled either Oak-style from functions
+(`app.get(...)`, `app.use(...)`, `app.job(...)`) or from decorated classes
+(`@Module`/`@GET`/`@SOCKET`/`@JOB`). Observability is built in: structured
+logging (`@tundralibs/slogger`) is always on with per-request correlation,
+distributed tracing (`@tundralibs/tracer`) and metrics (`@tundralibs/metro-man`)
+are opt-in, and the transport layer is an adapter so the same app serves from a
+listening server (`app.start()`) or a fetch handler (`app.fetch(request)`).
 
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
+![Browsers](https://img.shields.io/badge/Browsers-4285F4?logo=googlechrome&logoColor=white)
+
+> Early development (`0.0.0`). The API described here is real and verified
+> against source, but pre-1.0 — expect movement.
 
 ## Installation
 
@@ -26,13 +40,285 @@ bunx jsr add @tundralibs/rapid
 npx jsr add @tundralibs/rapid
 ```
 
-## Quick Start
+## Quick start
 
-```typescript
-import {} from '@tundralibs/rapid';
+Construct an `Application` directly (no config files needed), register a couple
+of routes, and start the listener:
 
-// TODO: usage example
+```ts
+import { Application } from '@tundralibs/rapid';
+
+const app = new Application({ name: 'hello' });
+
+// A handler either RETURNS the response payload or sets `ctx.response`.
+app.get('/', () => ({ content: { message: 'hello world' } }));
+app.get('/users/:id:', (ctx) => ({ content: { id: ctx.params.id } }));
+
+await app.start();
+console.log(`listening on ${app.address}`);
 ```
+
+`new Application(options)` is the programmatic/test entry point. The config-driven
+factory `rapid()` loads options from a config directory (env-interpolated) and
+returns the same `Application` — every other config set stays readable via
+`app.config`:
+
+```ts ignore
+import { rapid } from '@tundralibs/rapid';
+
+// Reads ./configs/Application.{yaml,json,…} into the application options.
+const app = await rapid('./configs');
+app.config.get('database.host'); // other sets, as loaded
+await app.start();
+```
+
+`name` is required (it is also the logging `appName`, max 30 chars). Common
+options: `mode` (`'DEVELOPMENT'` | `'PRODUCTION'`, default `'PRODUCTION'` —
+controls error disclosure and log level), `server`, `jobs`, `uploads`, `logger`,
+`tracer`, `stateMode`, and `shutdownTimeout`.
+
+## Routing
+
+Paths are [`@tundralibs/radrouter`](https://jsr.io/@tundralibs/radrouter)-native:
+route parameters are **colon-wrapped** (`/users/:id:`, not express-style
+`:id`). The five verb helpers (`get`/`post`/`put`/`patch`/`delete`) and the
+generic `route(method, path, ...)` all take an optional chain of route-scoped
+middleware followed by the handler last.
+
+### Versioning
+
+API versioning is a dimension separate from the path. Configure how the inbound
+version is resolved on `server.versioning`, then tag routes with a `version`:
+
+```ts
+import { Application } from '@tundralibs/rapid';
+
+const app = new Application({
+  name: 'api',
+  server: {
+    // mode: 'header' | 'accept' | 'path'
+    versioning: { mode: 'header', identifier: 'x-api-version', default: 'v1' },
+  },
+});
+
+// A request with no version header resolves to the `default` (v1).
+app.route('GET', '/report', () => ({ content: { shape: 'v1' } }));
+// Same path, explicit version slot — matched only for v2.
+app.route('GET', '/report', { version: 'v2' }, () => ({
+  content: { shape: 'v2', _new: true },
+}));
+```
+
+`mode: 'header'` reads the `identifier` header; `'accept'` matches an
+`application/vnd.<identifier>.<version>+…` media type; `'path'` treats
+`identifier` as a capture regex over a leading path segment (stripped before
+routing). On the decorator API the same slot is set with `@GET(path, { version })`
+(and a module-wide default via `@Module({ version })`).
+
+## Middleware
+
+`app.use(...)` registers **universal** middleware — the outer onion, in order,
+on every transport's invocation cycle (HTTP requests, socket frames, and job
+firings alike). Narrow to a transport inside the middleware via `ctx.type`, or
+use the scope helpers. Route- and command-scoped middleware are passed inline
+before the handler.
+
+```ts
+import { Application } from '@tundralibs/rapid';
+import {
+  cors,
+  requestId,
+  requestLogger,
+  responseTimer,
+  secureHeaders,
+} from '@tundralibs/rapid';
+
+const app = new Application({ name: 'api' });
+
+app.use(
+  requestLogger(),
+  responseTimer(),
+  secureHeaders(),
+  cors(),
+  requestId(),
+);
+```
+
+Shipped middleware factories (all exported from the root and from
+`@tundralibs/rapid/middlewares`): `cors`, `secureHeaders`, `compress`, `etag`,
+`rateLimit`, `requestId`, `requestLogger`, `responseTimer`, `serveStatic`,
+`timeout`, and `healthCheck`.
+
+Scope helpers turn a transport-specific middleware into a universal one:
+`onlyHTTP` / `onlySOCKET` / `onlyJOB` run it only on that transport (a no-op
+elsewhere), while `guardHTTP` / `guardSOCKET` / `guardJOB` run it there and
+**block** other transports (fail-closed — the right choice for auth):
+
+```ts
+import { Application } from '@tundralibs/rapid';
+import { guardHTTP, timeout } from '@tundralibs/rapid';
+
+const app = new Application({ name: 'api' });
+app.use(guardHTTP(timeout(5000)));
+```
+
+## Modules
+
+For larger apps, group routes/commands/jobs on decorated classes. Decorators are
+metadata-only (TC39 standard) — they never wrap the method. Mount a decorated
+instance with `app.module(instance)`:
+
+```ts
+import { Application } from '@tundralibs/rapid';
+import { GET, Module, param } from '@tundralibs/rapid/decorators';
+import type { RapidContextResponse } from '@tundralibs/rapid';
+
+@Module('Users', { prefix: '/users' })
+class Users {
+  @GET('/:id:', { bind: [param('id')] })
+  find(id: string): RapidContextResponse {
+    return { content: { id } };
+  }
+}
+
+const app = new Application({ name: 'demo' });
+app.module(new Users());
+```
+
+`@Module` adds an HTTP `prefix` (paths only), a `namespace` (joined onto the flat
+`@SOCKET`/`@JOB` names), and a default route `version`. Argument binders
+(`param`, `query`, `payload`, `paging`, `header`, `connection`) type the method
+signature via the decorator's `bind` tuple.
+
+The richer `RapidModule` tier adds a lifecycle, a scoped logger, typed
+`emit`/`invoke`, and event wiring. Boot it **once** with
+`app.modules({ modules: [...] })` (before `start()`/`fetch()`); `stop()` disposes
+it in reverse order. See `examples/` for a full module-based app.
+
+## Endpoints
+
+Ready-made handlers you mount where you like — nothing is auto-registered:
+
+```ts
+import { Application } from '@tundralibs/rapid';
+import { health, metrics, openapi } from '@tundralibs/rapid/endpoints';
+
+const app = new Application({ name: 'api', server: { metrics: true } });
+
+app.get('/healthz', health({ check: () => Promise.resolve() }));
+app.get('/metrics', metrics()); // 503 unless server.metrics is on
+app.get('/openapi.json', openapi());
+```
+
+- `health({ check })` — liveness/readiness; the `check` throws/rejects to report
+  503, else 200.
+- `metrics({ format })` — serves `app.meter` as Prometheus text (default) or
+  JSON; returns 503 when `server.metrics` is off.
+- `openapi({ info, servers, expose })` — the assembled OpenAPI 3.0.3 document
+  built from the mounted routes (cached per version).
+- `login({ pact, strategy })` — logs a user in through a `@tundralibs/pact`
+  instance and returns the token + principal (pact is a type-only import, so it
+  adds no runtime dependency until you pass an instance):
+
+```ts ignore
+import { login } from '@tundralibs/rapid/endpoints';
+app.post('/login', login({ pact: myPactInstance }));
+```
+
+## Auth
+
+rAPId owns only the auth bag (`ctx.auth`); the auth middleware are optional and
+take your own logic. `authenticate({ verify })` identifies the caller and fills
+`ctx.auth` (it never rejects — anonymous requests flow through); `authorize(check)`
+enforces (401 when `ctx.auth` is absent, 403 when `check` returns falsy):
+
+```ts
+import { Application } from '@tundralibs/rapid';
+import { authenticate, authorize } from '@tundralibs/rapid';
+
+const app = new Application({ name: 'api' });
+
+app.use(
+  authenticate({
+    verify: (token) => token === 'secret' ? { id: 'u1', role: 'admin' } : null,
+  }),
+);
+
+app.get(
+  '/admin',
+  authorize((auth) => auth.role === 'admin'),
+  () => ({ content: { ok: true } }),
+);
+```
+
+The `jwt(pact)` and `permission(perms, module, perm)` helpers build a `verify`
+and an `authorize` check from a `@tundralibs/pact` instance (again type-only —
+no runtime dependency until passed).
+
+## Observability
+
+- **Logging is always on.** `app.log` is a `@tundralibs/slogger` instance whose
+  `appName` is your `name`; the framework owns the context provider so every log
+  line carries the per-request correlation id (via `@tundralibs/ambient`).
+  Default level is `INFO` in production, `DEBUG` in development.
+- **Tracing is opt-in.** Pass a `tracer` option and rAPId emits a SERVER span per
+  request (honouring an inbound `traceparent`), propagates on outbound calls, and
+  composes trace ids onto every log line. Read it via `app.tracer`.
+- **Metrics are opt-in.** Set `server.metrics: true` and the invocation cycle
+  records into a `@tundralibs/metro-man` meter (`app.meter`) plus server counters
+  (`app.metrics`, `app.socketMetrics`); serve them with the `metrics()` endpoint.
+  Cron statistics (`app.jobMetrics`) are tracked unconditionally.
+
+## Testing
+
+`@tundralibs/rapid/testing` re-exports the `@tundralibs/compat/test` lifecycle
+(`describe`/`it`/`beforeAll`/…) and adds `client()` — a JSON-in/out client that
+drives routes through `app.fetch` with no port — and `harness()`, which boots the
+module system with stubbed dependencies and restores them on dispose.
+
+```ts
+import { Application } from '@tundralibs/rapid';
+import { client } from '@tundralibs/rapid/testing';
+
+const app = new Application({ name: 'test', mode: 'DEVELOPMENT' });
+app.get('/ping', () => ({ content: { ok: true } }));
+
+const api = client(app);
+const res = await api.get('/ping');
+console.log(res.status, res.body);
+```
+
+## Runtime support
+
+Every target **loads** the package cleanly. What runs depends on the target's
+capabilities:
+
+- **Deno / Bun / Node.js** — full support: `app.start()` opens a listening
+  server (TCP or Unix socket), cron jobs are scheduled, WebSocket commands and
+  file uploads work.
+- **Cloudflare Workers / browser** — no listening socket, filesystem, or
+  scheduler. Serve requests through the fetch handler instead of `start()`:
+
+  ```ts ignore
+  export default { fetch: (request: Request) => app.fetch(request) };
+  ```
+
+  `fetch()` serves HTTP only — socket commands need a listener (and error if
+  registered), jobs are not scheduled (fire them from a cron trigger with
+  `app.triggerJob(name)`), and file uploads degrade gracefully: they are rejected
+  with a typed `RAPID_UPLOADS_UNAVAILABLE` (501) rather than crashing.
+
+## Examples & docs
+
+A full module-based blog API (posts + nested comments over `@tundralibs/norm`,
+DI via `@tundralibs/doctor`, versioning, a cron digest job, a WebSocket module,
+and the endpoint + auth catalog) lives in
+[`examples/`](./examples/) — run it with
+`deno run -A packages/rapid/examples/main.ts`.
+
+Every public symbol carries JSDoc; the subpath exports are `.` (root),
+`./cli`, `./context`, `./decorators`, `./endpoints`, `./errors`,
+`./middlewares`, `./modules`, `./testing`, and `./types`.
 
 ## License
 

@@ -82,13 +82,22 @@ export async function harness<
     Doctor.stock(token as any, value as any);
     stubbed.push(token);
   }
-  const result = await initModules(
-    options.context ?? { name: 'rapid-test', logger: { handlers: [] } },
-    {
-      modules: options.modules,
-      ...(options.instances ? { instances: options.instances } : {}),
-    } as RapidModuleSources<M, I>,
-  );
+  let result: RapidModuleInitResult<M, I>;
+  try {
+    result = await initModules(
+      options.context ?? { name: 'rapid-test', logger: { handlers: [] } },
+      {
+        modules: options.modules,
+        ...(options.instances ? { instances: options.instances } : {}),
+      } as RapidModuleSources<M, I>,
+    );
+  } catch (error) {
+    // Boot failure is a common thing a test exercises — revoke the stubs we
+    // stocked so they don't bleed into the process-wide Doctor for the next
+    // test (dispose() isn't returned on this path).
+    for (const token of stubbed) Doctor.revoke(token);
+    throw error;
+  }
   const dispose = async (): Promise<void> => {
     await result.runtime.dispose();
     for (const token of stubbed) Doctor.revoke(token);

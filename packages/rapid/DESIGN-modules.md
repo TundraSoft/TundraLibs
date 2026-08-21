@@ -80,7 +80,7 @@ three (`scratchpad/nsprobe`):
 
 So:
 
-```ts
+```ts ignore
 // registry.ts — two tiers, both weak, neither enumerated
 const DECORATIONS = new WeakMap<object, RapidDecoration[]>(); // method fn → routes/commands/jobs
 const MODULES = new WeakMap<object, RapidModuleMeta>(); // constructor → prefix/version/…
@@ -88,11 +88,11 @@ const MODULES = new WeakMap<object, RapidModuleMeta>(); // constructor → prefi
 
 ## The API
 
-Shipped exactly as below MINUS `version` — `@Module`/`@GET` only take
-`prefix` today; the versioning half of this example is the design this
-round scoped out (see "What was open here").
+Shipped as below. `version` (on `@Module`/`@GET`) landed in a later pass
+— see "Versioning (radrouter's, unlocked)" below and `server.versioning`
+in `ServerOptions.ts`; this example shows the final shape.
 
-```ts
+```ts ignore
 @Module({ prefix: '/users', version: '2' })
 class Users {
   constructor(private readonly db: Db) {}
@@ -109,7 +109,7 @@ class Users {
 Registration takes INSTANCES — you construct them however your module
 system does, rapid only binds them:
 
-```ts
+```ts ignore
 app.module(new Users(db)); // the plain case
 app.module(container.get(Users)); // a DI container built it
 app.module(usersInstance, ordersInstance); // several at once
@@ -240,12 +240,12 @@ runtime import.)
 - **Error-registry extension — DEFERRED**, not built: plain throws
   already become a generic 500 through the framework's existing
   disclosure envelope, so shipping the mount tier didn't need it.
-- **Auth-context handoff — still genuinely undesigned.** The binder
-  tier makes no assumption about `state.principal`; nothing added in
-  this round references it.
-- **Versioning** (`@Module({ version })` / `@GET(path, { version })`)
-  was scoped OUT of this pass entirely — it is additive on top of the
-  mount mechanism, not a prerequisite for it, and needs its own design
-  round (new `server.versioning` config, a request-side version-header
-  read, threading a version param through `route()`/radrouter). No
-  `version` option exists on `@Module`/`@GET` today.
+- **Auth-context handoff — RESOLVED in a later pass.** `ctx.auth` (a
+  set-once, read-only bag) now rides the invoke seed; `authenticate`/
+  `authorize`/`permission`/`jwt` are optional catalog middleware. Not
+  `state.principal`, as anticipated here.
+- **Versioning — SHIPPED in a later pass.** `@Module({ version })` /
+  `@GET(path, { version })` and `server.versioning`
+  (`{ mode: 'header'|'accept'|'path', identifier?, default? }`) are live;
+  `resolveVersion()` reads the inbound version and `route()` threads it
+  through to radrouter. See the "Versioning" section above.

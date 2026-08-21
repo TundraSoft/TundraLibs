@@ -6,7 +6,16 @@
 import * as asserts from '@std/asserts';
 import { describe, it } from '@tundralibs/compat/test';
 import { Application } from '../Application.ts';
-import { guardHTTP, middlewareScope, onlyHTTP, onlyJOB } from './scope.ts';
+import type { RapidContext, RapidMiddleware } from '../types/mod.ts';
+import {
+  guardHTTP,
+  guardJOB,
+  guardSOCKET,
+  middlewareScope,
+  onlyHTTP,
+  onlyJOB,
+  onlySOCKET,
+} from './scope.ts';
 
 describe('rapid.middlewares.scope', () => {
   it('onlyHTTP runs on HTTP and SKIPS jobs (chain continues)', async () => {
@@ -73,6 +82,111 @@ describe('rapid.middlewares.scope', () => {
       middlewareScope(async (_ctx, next) => await next()),
       undefined,
     );
+  });
+
+  it('guardSOCKET REJECTS a job invocation (fail-closed); wrapped never runs', async () => {
+    const app = new Application({ name: 'sc4', server: { enabled: false } });
+    let wrappedRan = false;
+    app.use(guardSOCKET(async (_ctx, next) => {
+      wrappedRan = true;
+      await next();
+    }));
+    app.job('j', '0 6 * * *', () => ({ content: 'ran' }));
+    const outcome = await app.triggerJob('j');
+    asserts.assertEquals(outcome.status, 403);
+    asserts.assertEquals(outcome.handlerRan, false);
+    asserts.assertEquals(
+      (outcome.content as Record<string, unknown>)['code'],
+      'RAPID_ACCESS_DENIED',
+    );
+    asserts.assertEquals(wrappedRan, false);
+  });
+
+  it('guardSOCKET REJECTS an HTTP invocation with a 403', async () => {
+    const app = new Application({
+      name: 'sc5',
+      server: { port: 0, hostname: '127.0.0.1' },
+    });
+    let wrappedRan = false;
+    app.use(guardSOCKET(async (_ctx, next) => {
+      wrappedRan = true;
+      await next();
+    }));
+    app.get('/s', () => ({ content: 'ok' }));
+    const r = await app.fetch(new Request('http://app/s'));
+    await r.text();
+    asserts.assertEquals(r.status, 403);
+    asserts.assertEquals(wrappedRan, false);
+    await app.stop();
+  });
+
+  it('guardJOB REJECTS an HTTP invocation with a 403 (fail-closed)', async () => {
+    const app = new Application({
+      name: 'sc6',
+      server: { port: 0, hostname: '127.0.0.1' },
+    });
+    let wrappedRan = false;
+    app.use(guardJOB(async (_ctx, next) => {
+      wrappedRan = true;
+      await next();
+    }));
+    app.get('/s', () => ({ content: 'ok' }));
+    const r = await app.fetch(new Request('http://app/s'));
+    const body = await r.json();
+    asserts.assertEquals(r.status, 403);
+    asserts.assertEquals(body.code, 'RAPID_ACCESS_DENIED');
+    asserts.assertEquals(wrappedRan, false);
+    await app.stop();
+  });
+
+  it('onlySOCKET SKIPS HTTP and JOB (chain continues) and RUNS on SOCKET', async () => {
+    const app = new Application({
+      name: 'sc7',
+      server: { port: 0, hostname: '127.0.0.1' },
+    });
+    let httpJobRuns = 0;
+    app.use(onlySOCKET(async (_ctx, next) => {
+      httpJobRuns++;
+      await next();
+    }));
+    app.get('/s', () => ({ content: 'ok' }));
+    app.job('j', '0 6 * * *', () => ({ content: 'ran' }));
+    // HTTP → wrapper skipped, handler still runs.
+    const http = await app.fetch(new Request('http://app/s'));
+    asserts.assertEquals(await http.text(), 'ok');
+    asserts.assertEquals(http.status, 200);
+    // JOB → wrapper skipped, handler still runs.
+    const job = await app.triggerJob('j');
+    asserts.assertEquals(job.status, 200);
+    asserts.assertEquals(job.handlerRan, true);
+    asserts.assertEquals(httpJobRuns, 0);
+    await app.stop();
+
+    // SOCKET → the wrapped middleware actually runs.
+    let socketRan = false;
+    let continued = false;
+    const wrapped = onlySOCKET(async (_ctx, next) => {
+      socketRan = true;
+      await next();
+    });
+    await wrapped(
+      { type: 'SOCKET' } as unknown as RapidContext,
+      () => {
+        continued = true;
+        return Promise.resolve();
+      },
+    );
+    asserts.assertEquals(socketRan, true);
+    asserts.assertEquals(continued, true);
+  });
+
+  it('guardSOCKET / guardJOB carry their transport scope metadata', () => {
+    const noop: RapidMiddleware = async (_ctx, next) => await next();
+    asserts.assertEquals(
+      middlewareScope(guardSOCKET(noop as never)),
+      ['SOCKET'],
+    );
+    asserts.assertEquals(middlewareScope(guardJOB(noop as never)), ['JOB']);
   });
 
   it('R2-H3: boot emits NO scope-coverage warning (removed by design)', async () => {

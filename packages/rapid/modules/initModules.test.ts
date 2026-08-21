@@ -543,4 +543,37 @@ describe('rapid.modules', () => {
     );
     asserts.assertEquals(log, ['open', 'close']);
   });
+
+  it('mount() after finalize() is rejected — every module must mount before finalize', async () => {
+    const { runtime } = await boot(); // initModules finalizes the runtime
+    class Late extends RapidModule {
+      readonly name = 'Late';
+      readonly namespace = 'late';
+      protected readonly events = {};
+    }
+    asserts.assertThrows(
+      () => runtime.mount(new Late()),
+      RapidError,
+      'finalize',
+    );
+    await runtime.dispose();
+  });
+
+  it("two classes claiming the same 'namespace:Name' collide at mount", async () => {
+    class One extends RapidModule {
+      readonly name = 'X';
+      readonly namespace = 'x';
+      protected readonly events = {};
+    }
+    class Two extends RapidModule {
+      readonly name = 'X';
+      readonly namespace = 'x';
+      protected readonly events = {};
+    }
+    await asserts.assertRejects(
+      () => initModules(QUIET, { modules: [{ One, Two }] }),
+      RapidError,
+      "identify as 'x:X'",
+    );
+  });
 });

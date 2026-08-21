@@ -72,7 +72,11 @@ describe('rapid.endpoints', () => {
     asserts.assertEquals(ok.instance, app.instanceId);
     const bad = await app.fetch(new Request('http://app/ready'));
     asserts.assertEquals(bad.status, 503);
-    asserts.assertEquals((await bad.json()).reason, 'db down');
+    const badBody = await bad.json();
+    asserts.assertEquals(badBody.status, 'unhealthy');
+    // The check's error message must NOT leak to the client (it can carry
+    // DSNs/hostnames/creds); it is logged server-side instead.
+    asserts.assertEquals(badBody.reason, undefined);
     await app.stop();
   });
 
@@ -163,6 +167,39 @@ describe('rapid.endpoints', () => {
       (await app.fetch(new Request('http://app/hidden.json'))).status,
       404,
     );
+    await app.stop();
+  });
+
+  it('openapi(): ?version filters per version, plain serves all, cache-hit is byte-identical', async () => {
+    const app = make();
+    app.route('GET', '/v1/thing', { version: 'v1' }, () => ({ content: {} }));
+    app.route('GET', '/v2/thing', { version: 'v2' }, () => ({ content: {} }));
+    app.get('/openapi.json', openapi());
+    const get = (q = '') =>
+      app.fetch(new Request(`http://app/openapi.json${q}`));
+
+    const v2 = await (await get('?version=v2')).json();
+    asserts.assertEquals(v2.openapi, '3.0.3');
+    asserts.assert('/v2/thing' in v2.paths, 'v2 route present');
+    asserts.assert(!('/v1/thing' in v2.paths), 'v1 route filtered out');
+
+    // Second identical request hits the per-version cache — same bytes.
+    const v2Again = await (await get('?version=v2')).text();
+    asserts.assertEquals(JSON.stringify(v2), v2Again);
+
+    const v1 = await (await get('?version=v1')).json();
+    asserts.assertEquals(v1.openapi, '3.0.3');
+    asserts.assert('/v1/thing' in v1.paths, 'v1 route present');
+    asserts.assert(!('/v2/thing' in v1.paths), 'v2 route filtered out');
+
+    const all = await (await get()).json();
+    asserts.assertEquals(all.openapi, '3.0.3');
+    asserts.assert('/v1/thing' in all.paths && '/v2/thing' in all.paths);
+
+    // An unknown version must not crash and still yields a valid doc.
+    const unknown = await get('?version=nope');
+    asserts.assertEquals(unknown.status, 200);
+    asserts.assertEquals((await unknown.json()).openapi, '3.0.3');
     await app.stop();
   });
 });

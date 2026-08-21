@@ -79,15 +79,29 @@ export abstract class Transport<
     const transport = ctx.type;
     const start = meter.begin(transport);
     const close = (): void =>
-      meter.end({ transport, action: ctx.action, status: ctx.status, start });
-    const result = this.__runInvoke<C, R>(
-      ctx,
-      chain,
-      dispatch,
-      parent,
-      attributes,
-      finalize,
-    );
+      meter.end({
+        transport,
+        action: this.__identity(ctx),
+        status: ctx.status,
+        start,
+      });
+    let result: R | Promise<R>;
+    try {
+      result = this.__runInvoke<C, R>(
+        ctx,
+        chain,
+        dispatch,
+        parent,
+        attributes,
+        finalize,
+      );
+    } catch (error) {
+      // A synchronous throw from `__runInvoke` (e.g. a logging handler in
+      // `disclose` that itself throws) must still close the in-flight
+      // gauge — `begin()` already incremented it.
+      close();
+      throw error;
+    }
     if (
       result !== undefined && typeof (result as Promise<R>).then === 'function'
     ) {
@@ -104,6 +118,26 @@ export abstract class Transport<
     }
     close();
     return result;
+  }
+
+  /**
+   * The low-cardinality identity used for metric labels and the span name.
+   * An unmatched HTTP request's `action` is the raw request path — which is
+   * attacker-controlled (see `HTTPContext.matched`) and would mint a fresh
+   * metric time-series per distinct 404 URL (a memory-exhaustion vector).
+   * Collapse it to `<METHOD> <unmatched>` so metric cardinality stays
+   * bounded by real routes. SOCKET/JOB actions are already bounded (command
+   * / job names), so they pass through unchanged.
+   */
+  private __identity(ctx: Context<S, unknown>): string {
+    if (
+      ctx.type === 'HTTP' && (ctx as { matched?: boolean }).matched === false
+    ) {
+      const sp = ctx.action.indexOf(' ');
+      const method = sp === -1 ? ctx.action : ctx.action.slice(0, sp);
+      return `${method} <unmatched>`;
+    }
+    return ctx.action;
   }
 
   private __runInvoke<C extends Context<S, unknown>, R = void>(
@@ -153,7 +187,7 @@ export abstract class Transport<
           // wraps ONLY the onion; finalize runs after, still in scope).
           return (async () => {
             try {
-              await tracer.startActiveSpan(ctx.action, {
+              await tracer.startActiveSpan(this.__identity(ctx), {
                 kind: this._spanKind,
                 // deno-lint-ignore no-explicit-any
                 parent: parent as any,

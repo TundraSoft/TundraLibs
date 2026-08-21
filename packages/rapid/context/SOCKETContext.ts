@@ -10,12 +10,6 @@ import { RapidError } from '../errors/mod.ts';
 import { pagingFromRecord, parsePaging } from '../utils/mod.ts';
 
 /**
- * The websocket transport context — one per inbound frame/command, NOT
- * per connection (connections are long-lived; invocations are not).
- * The frame id/command mirror the rpc wire protocol so a later
- * `@tundralibs/rpc` composition maps 1:1.
- */
-/**
  * Is `value` a PLAIN object — an object literal or null-prototype bag,
  * as opposed to an array, `Date`, `Map`, or class instance? Only these
  * can serve as an invocation params bag.
@@ -48,8 +42,15 @@ export type SOCKETContextInit = {
   frameId?: string;
 };
 
+/**
+ * The websocket transport context — one per inbound frame/command, NOT
+ * per connection (connections are long-lived; invocations are not).
+ * The frame id/command mirror the rpc wire protocol so a later
+ * `@tundralibs/rpc` composition maps 1:1.
+ */
 export class SOCKETContext<S extends RapidContextState = RapidContextState>
   extends Context<S, { status: StatusCode; content: unknown }> {
+  /** The transport discriminator — always `'SOCKET'`. */
   public readonly type = 'SOCKET';
   /**
    * Connection scope — upgrade-time identity (id, upgrade query,
@@ -66,6 +67,7 @@ export class SOCKETContext<S extends RapidContextState = RapidContextState>
   /** Lazy args cache — see the base {@link Context.args} contract. */
   private __args: Readonly<RapidContextArgs> | undefined = undefined;
 
+  /** Carry the connection envelope, command, frame payload, and echo id; {@link Context.action} is the command. */
   constructor(app: Application<S>, init: SOCKETContextInit) {
     super(app, { action: init.command });
     this.connection = init.connection;
@@ -174,6 +176,7 @@ export class SOCKETContext<S extends RapidContextState = RapidContextState>
     if (response.status !== undefined) this._status = response.status;
   }
 
+  /** The interpreted response — `content` plus the ok/error `status` (no `headers`). */
   public override get response(): Readonly<RapidContextResponse> | null {
     const base = super.response;
     return base === null

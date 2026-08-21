@@ -6,6 +6,7 @@
  */
 
 import type { RapidMiddleware } from '../types/mod.ts';
+import { MIDDLEWARE_SCOPE } from './scope.ts';
 
 /** Options for {@link healthCheck}. */
 export type HealthCheckOptions = {
@@ -35,7 +36,7 @@ export function healthCheck(options: HealthCheckOptions = {}): RapidMiddleware {
   const path = options.path ?? '/health';
   const check = options.check;
 
-  return async (ctx, next) => {
+  const middleware: RapidMiddleware = async (ctx, next) => {
     if (ctx.type !== 'HTTP' || ctx.method !== 'GET') return next();
     if (new URL(ctx.url).pathname !== path) return next();
 
@@ -49,4 +50,5 @@ export function healthCheck(options: HealthCheckOptions = {}): RapidMiddleware {
       ctx.response = { status: 503, content: { status: 'unhealthy' } };
     }
   };
+  return Object.assign(middleware, { [MIDDLEWARE_SCOPE]: ['HTTP'] });
 }
