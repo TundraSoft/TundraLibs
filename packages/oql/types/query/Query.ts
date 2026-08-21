@@ -9,7 +9,9 @@ import type { GetExpressionByType } from '../expressions/GetExpressionByType.ts'
 import type { Joins } from '../filter/Joins.ts';
 import type { QueryFilter } from '../filter/QueryFilter.ts';
 import type { ColumnDefinition } from './ColumnDefinition.ts';
-import type { DDLQueries, DMLQueries, QueryTypes } from './QueryTypes.ts';
+import type { DDLQueries } from './DDLQueries.ts';
+import type { DMLQueries } from './DMLQueries.ts';
+import type { QueryTypes } from './QueryTypes.ts';
 
 /**
  * Each property can be its original type OR an expression returning

@@ -45,13 +45,11 @@ import {
   assertTruncate,
   assertUpdate,
   assertUpsert,
-} from '../asserts/mod.ts';
-import { assertInsertFromQuery } from '../asserts/query/DML/mod.ts';
-import { assertRefreshMaterializedView } from '../asserts/query/DDL/mod.ts';
-import {
   findDisallowedJsonPathOperator,
   JSON_PATH_ALLOWED_OPERATORS,
 } from '../asserts/mod.ts';
+import { assertInsertFromQuery } from '../asserts/query/DML/mod.ts';
+import { assertRefreshMaterializedView } from '../asserts/query/DDL/mod.ts';
 import { DialectUnsupportedError, OqlError } from '../errors/mod.ts';
 import { Parameters } from './Parameters.ts';
 import type {
@@ -194,21 +192,33 @@ export abstract class AbstractTranslator {
   // Public API — one method per query type
   // =========================================================================
 
-  /** Translate a `SELECT` query. */
+  /**
+   * Translate a `SELECT` query.
+   *
+   * @throws {TypeError} When `q` is not a valid `SELECT` query.
+   */
   public select(q: Query<'SELECT'>): TranslatedQuery {
     assertSelect(q);
     const params = new Parameters();
     return { sql: this._buildSelect(q, params), params: params.asRecord() };
   }
 
-  /** Translate an `INSERT` query. Includes a `RETURNING` clause. */
+  /**
+   * Translate an `INSERT` query. Includes a `RETURNING` clause.
+   *
+   * @throws {TypeError} When `q` is not a valid `INSERT` query.
+   */
   public insert(q: Query<'INSERT'>): TranslatedQuery {
     assertInsert(q);
     const params = new Parameters();
     return { sql: this._buildInsert(q, params), params: params.asRecord() };
   }
 
-  /** Translate an `INSERT ... SELECT ...` query. */
+  /**
+   * Translate an `INSERT ... SELECT ...` query.
+   *
+   * @throws {TypeError} When `q` is not a valid `INSERT_FROM_QUERY` query.
+   */
   public insertQuery(q: Query<'INSERT_FROM_QUERY'>): TranslatedQuery {
     assertInsertFromQuery(q);
     const params = new Parameters();
@@ -218,21 +228,33 @@ export abstract class AbstractTranslator {
     };
   }
 
-  /** Translate an `UPDATE` query. Includes `RETURNING` where supported. */
+  /**
+   * Translate an `UPDATE` query. Includes `RETURNING` where supported.
+   *
+   * @throws {TypeError} When `q` is not a valid `UPDATE` query.
+   */
   public update(q: Query<'UPDATE'>): TranslatedQuery {
     assertUpdate(q);
     const params = new Parameters();
     return { sql: this._buildUpdate(q, params), params: params.asRecord() };
   }
 
-  /** Translate a `DELETE` query. Includes `RETURNING` where supported. */
+  /**
+   * Translate a `DELETE` query. Includes `RETURNING` where supported.
+   *
+   * @throws {TypeError} When `q` is not a valid `DELETE` query.
+   */
   public delete(q: Query<'DELETE'>): TranslatedQuery {
     assertDelete(q);
     const params = new Parameters();
     return { sql: this._buildDelete(q, params), params: params.asRecord() };
   }
 
-  /** Translate an `UPSERT` query. Includes `RETURNING` where supported. */
+  /**
+   * Translate an `UPSERT` query. Includes `RETURNING` where supported.
+   *
+   * @throws {TypeError} When `q` is not a valid `UPSERT` query.
+   */
   public upsert(q: Query<'UPSERT'>): TranslatedQuery {
     assertUpsert(q);
     const params = new Parameters();
@@ -247,6 +269,8 @@ export abstract class AbstractTranslator {
    * `q.distinct` (a single-element column tuple, enforced upstream)
    * rewrites the aggregate to `COUNT(DISTINCT <col>)` instead — the
    * deduplicating form for queries whose joins fan the base rows out.
+   *
+   * @throws {TypeError} When `q` is not a valid `COUNT` query.
    */
   public count(q: Query<'COUNT'>): TranslatedQuery {
     assertCount(q);
@@ -274,7 +298,13 @@ export abstract class AbstractTranslator {
     return this.select(rewritten);
   }
 
-  /** Translate a `CREATE_SCHEMA`. Throws on dialects without schemas. */
+  /**
+   * Translate a `CREATE_SCHEMA`. Throws on dialects without schemas.
+   *
+   * @throws {TypeError} When `q` is not a valid `CREATE_SCHEMA` query.
+   * @throws {@link DialectUnsupportedError} When the dialect does not
+   *   support schemas.
+   */
   public createSchema(q: Query<'CREATE_SCHEMA'>): TranslatedQuery {
     assertCreateSchema(q);
     if (!this._support.schema) {
@@ -283,7 +313,13 @@ export abstract class AbstractTranslator {
     return { sql: this._buildCreateSchema(q), params: {} };
   }
 
-  /** Translate a `DROP_SCHEMA`. Throws on dialects without schemas. */
+  /**
+   * Translate a `DROP_SCHEMA`. Throws on dialects without schemas.
+   *
+   * @throws {TypeError} When `q` is not a valid `DROP_SCHEMA` query.
+   * @throws {@link DialectUnsupportedError} When the dialect does not
+   *   support schemas.
+   */
   public dropSchema(q: Query<'DROP_SCHEMA'>): TranslatedQuery {
     assertDropSchema(q);
     if (!this._support.schema) {
@@ -296,6 +332,8 @@ export abstract class AbstractTranslator {
    * Translate a `CREATE_TABLE`. Returns an array because a dialect may
    * need to emit the table plus separate index/constraint statements that
    * can't go inline.
+   *
+   * @throws {TypeError} When `q` is not a valid `CREATE_TABLE` query.
    */
   public createTable(q: Query<'CREATE_TABLE'>): TranslatedQuery[] {
     assertCreateTable(q);
@@ -306,19 +344,31 @@ export abstract class AbstractTranslator {
    * Translate an `ALTER_TABLE`. Returns an array — SQLite splits each op
    * into its own statement; even Postgres/MariaDB sometimes prefer
    * sequential statements over one combined ALTER.
+   *
+   * @throws {TypeError} When `q` is not a valid `ALTER_TABLE` query.
    */
   public alterTable(q: Query<'ALTER_TABLE'>): TranslatedQuery[] {
     assertAlterTable(q);
     return this._buildAlterTable(q).map((sql) => ({ sql, params: {} }));
   }
 
-  /** Translate a `DROP_TABLE`. */
+  /**
+   * Translate a `DROP_TABLE`.
+   *
+   * @throws {TypeError} When `q` is not a valid `DROP_TABLE` query.
+   */
   public dropTable(q: Query<'DROP_TABLE'>): TranslatedQuery {
     assertDropTable(q);
     return { sql: this._buildDropTable(q), params: {} };
   }
 
-  /** Translate a `TRUNCATE`. Throws on dialects without TRUNCATE. */
+  /**
+   * Translate a `TRUNCATE`. Throws on dialects without TRUNCATE.
+   *
+   * @throws {TypeError} When `q` is not a valid `TRUNCATE` query.
+   * @throws {@link DialectUnsupportedError} When the dialect does not
+   *   support `TRUNCATE`.
+   */
   public truncate(q: Query<'TRUNCATE'>): TranslatedQuery {
     assertTruncate(q);
     if (!this._support.truncate) {
@@ -337,6 +387,8 @@ export abstract class AbstractTranslator {
    * is set. The translator therefore inlines any params into the
    * predicate body the same way it does for {@link createView}, and
    * returns `params: {}`.
+   *
+   * @throws {TypeError} When `q` is not a valid `CREATE_INDEX` query.
    */
   public createIndex(q: Query<'CREATE_INDEX'>): TranslatedQuery {
     assertCreateIndex(q);
@@ -345,7 +397,11 @@ export abstract class AbstractTranslator {
     return { sql: this._inlineParams(sql, params), params: {} };
   }
 
-  /** Translate a `DROP_INDEX`. */
+  /**
+   * Translate a `DROP_INDEX`.
+   *
+   * @throws {TypeError} When `q` is not a valid `DROP_INDEX` query.
+   */
   public dropIndex(q: Query<'DROP_INDEX'>): TranslatedQuery {
     assertDropIndex(q);
     return { sql: this._buildDropIndex(q), params: {} };
@@ -362,6 +418,8 @@ export abstract class AbstractTranslator {
    * anyway. Inlining at translation time gives every dialect the same
    * stored body, makes views deterministic, and means {@link createView}
    * always returns `params: {}`.
+   *
+   * @throws {TypeError} When `q` is not a valid `CREATE_VIEW` query.
    */
   public createView(q: Query<'CREATE_VIEW'>): TranslatedQuery {
     assertCreateView(q);
@@ -370,7 +428,11 @@ export abstract class AbstractTranslator {
     return { sql: this._inlineParams(sql, params), params: {} };
   }
 
-  /** Translate a `DROP_VIEW`. */
+  /**
+   * Translate a `DROP_VIEW`.
+   *
+   * @throws {TypeError} When `q` is not a valid `DROP_VIEW` query.
+   */
   public dropView(q: Query<'DROP_VIEW'>): TranslatedQuery {
     assertDropView(q);
     return { sql: this._buildDropView(q), params: {} };
@@ -382,6 +444,8 @@ export abstract class AbstractTranslator {
    *
    * Same param-inlining rule as {@link createView}: the CREATE VIEW
    * statement(s) embedded in the result must not carry placeholders.
+   *
+   * @throws {TypeError} When `q` is not a valid `ALTER_VIEW` query.
    */
   public alterView(q: Query<'ALTER_VIEW'>): TranslatedQuery[] {
     assertAlterView(q);
@@ -399,6 +463,9 @@ export abstract class AbstractTranslator {
    * decide what to do when they don't have real materialized views
    * (typically a no-op `SELECT 1` since `CREATE_VIEW { materialized:
    * true }` falls back to a regular view there too).
+   *
+   * @throws {TypeError} When `q` is not a valid `REFRESH_MATERIALIZED_VIEW`
+   *   query.
    */
   public refreshMaterializedView(
     q: Query<'REFRESH_MATERIALIZED_VIEW'>,
