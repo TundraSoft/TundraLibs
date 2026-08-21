@@ -17,7 +17,7 @@
  * warmed pool, the `_draining` re-check before flipping to `READY`, the emit
  * sequence, and `CONNECTION_FAILED` / `DISCONNECTION_FAILED` wrapping) lives
  * here exactly once. Both engine classes reduce to thin delegators
- * (`connect() { return poolConnect(this._host); }`), so a future lifecycle fix
+ * (`connect() { return poolConnect(this.__host); }`), so a future lifecycle fix
  * touches one function and can never diverge again.
  *
  * The helpers operate on a minimal {@link PooledHost} surface rather than a
@@ -126,6 +126,9 @@ export function poolStatsSnapshot<T>(host: PooledHost<T>): EnginePoolStats {
  * Idempotent: returns immediately if not `CLOSED`. On failure, status is reset
  * to `CLOSED` and a `CONNECTION_FAILED` {@link EngineError} is thrown.
  *
+ * @throws {@link EngineError} With code `CONNECTION_FAILED` when warming the
+ *   pool (`_ensureMin`) fails; a non-{@link EngineError} cause is wrapped, an
+ *   error that is already an {@link EngineError} is rethrown as-is.
  * @emits connect - On successful connection.
  * @emits connectionFailed - On connection failure.
  */
@@ -180,6 +183,9 @@ export async function poolConnect<T>(host: PooledHost<T>): Promise<void> {
  * teardown *before* the idempotency guard (e.g. a SQL engine rolling back
  * active transactions) do that in their own method before delegating here.
  *
+ * @throws {@link EngineError} With code `DISCONNECTION_FAILED` when draining
+ *   the pool (`_drain`) fails; a non-{@link EngineError} cause is wrapped, an
+ *   error that is already an {@link EngineError} is rethrown as-is.
  * @emits disconnect - On successful disconnection.
  * @emits error - On disconnection failure.
  */

@@ -274,19 +274,36 @@ export class MongoEngine
 
   //#region Public API
 
-  /** The underlying `MongoClient`. Auto-connects if not yet connected. */
+  /**
+   * The underlying `MongoClient`. Auto-connects if not yet connected.
+   *
+   * @throws {@link EngineError} `CONNECTION_FAILED` if the connection cannot
+   *   be established.
+   */
   public async client(): Promise<MongoClient> {
     await this.connect();
     return this.__client!;
   }
 
-  /** Get the default database (named via the `database` option). */
+  /**
+   * Get the default database (named via the `database` option).
+   *
+   * @throws {@link EngineError} `CONNECTION_FAILED` if the connection cannot
+   *   be established, or `MISSING_CONFIG_VALUE` if no `database` is
+   *   configured.
+   */
   public async db(name?: string): Promise<Db> {
     await this.connect();
     return this.__client!.db(name ?? this.__defaultDb());
   }
 
-  /** Get a collection by name (uses the default database). */
+  /**
+   * Get a collection by name (uses the default database).
+   *
+   * @throws {@link EngineError} `CONNECTION_FAILED` if the connection cannot
+   *   be established, or `MISSING_CONFIG_VALUE` if no `database` is
+   *   configured.
+   */
   public async collection<
     T extends Record<string, unknown> = Record<string, unknown>,
   >(
@@ -298,7 +315,14 @@ export class MongoEngine
     return d.collection<any>(name) as Collection<T>;
   }
 
-  /** Insert a single document. Returns the inserted id. */
+  /**
+   * Insert a single document. Returns the inserted id.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or a mapped driver code
+   *   such as `DUPLICATE_KEY` / `TABLE_NOT_FOUND`) on a driver error;
+   *   `CONNECTION_FAILED` / `NO_CONNECTION` if not connected; or
+   *   `MISSING_CONFIG_VALUE` if `database` is unset.
+   */
   public async insertOne<T extends Record<string, unknown>>(
     collection: string,
     document: T,
@@ -315,7 +339,14 @@ export class MongoEngine
     );
   }
 
-  /** Insert many documents. Returns the inserted ids. */
+  /**
+   * Insert many documents. Returns the inserted ids.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or a mapped driver code
+   *   such as `DUPLICATE_KEY` / `TABLE_NOT_FOUND`) on a driver error;
+   *   `CONNECTION_FAILED` / `NO_CONNECTION` if not connected; or
+   *   `MISSING_CONFIG_VALUE` if `database` is unset.
+   */
   public async insertMany<T extends Record<string, unknown>>(
     collection: string,
     documents: T[],
@@ -332,7 +363,14 @@ export class MongoEngine
     );
   }
 
-  /** Find one document by filter. Returns `null` if no match. */
+  /**
+   * Find one document by filter. Returns `null` if no match.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or a mapped driver code
+   *   such as `DUPLICATE_KEY` / `TABLE_NOT_FOUND`) on a driver error;
+   *   `CONNECTION_FAILED` / `NO_CONNECTION` if not connected; or
+   *   `MISSING_CONFIG_VALUE` if `database` is unset.
+   */
   public async findOne<T extends Record<string, unknown> = Document>(
     collection: string,
     filter: Record<string, unknown> = {},
@@ -350,6 +388,11 @@ export class MongoEngine
    * Find documents matching `filter`.
    *
    * @param opts - `limit` / `skip` / `sort` / `projection` to forward to the cursor.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or a mapped driver code
+   *   such as `DUPLICATE_KEY` / `TABLE_NOT_FOUND`) on a driver error;
+   *   `CONNECTION_FAILED` / `NO_CONNECTION` if not connected; or
+   *   `MISSING_CONFIG_VALUE` if `database` is unset.
    */
   public async find<T extends Record<string, unknown> = Document>(
     collection: string,
@@ -378,6 +421,11 @@ export class MongoEngine
    * `$set` values already equal the stored values reports 1 (Postgres
    * `rowCount` / SQLite `sqlite3_changes()` / Maria CLIENT_FOUND_ROWS), where
    * Mongo's `modifiedCount` would report 0.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or a mapped driver code
+   *   such as `DUPLICATE_KEY` / `TABLE_NOT_FOUND`) on a driver error;
+   *   `CONNECTION_FAILED` / `NO_CONNECTION` if not connected; or
+   *   `MISSING_CONFIG_VALUE` if `database` is unset.
    */
   public async updateOne(
     collection: string,
@@ -399,6 +447,11 @@ export class MongoEngine
    * Update all matching documents. Returns the count of matched (found)
    * documents (`matchedCount`), NOT `modifiedCount` — see {@link updateOne}
    * for why matched-rows is the SQL-consistent choice.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or a mapped driver code
+   *   such as `DUPLICATE_KEY` / `TABLE_NOT_FOUND`) on a driver error;
+   *   `CONNECTION_FAILED` / `NO_CONNECTION` if not connected; or
+   *   `MISSING_CONFIG_VALUE` if `database` is unset.
    */
   public async updateMany(
     collection: string,
@@ -420,6 +473,11 @@ export class MongoEngine
    * documents across every op (`matchedCount + upsertedCount`) — matched,
    * not modified, to stay consistent with SQL affected-rows (see
    * {@link updateOne}).
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or a mapped driver code
+   *   such as `DUPLICATE_KEY` / `TABLE_NOT_FOUND`) on a driver error;
+   *   `CONNECTION_FAILED` / `NO_CONNECTION` if not connected; or
+   *   `MISSING_CONFIG_VALUE` if `database` is unset.
    */
   public async bulkUpsert(
     collection: string,
@@ -442,7 +500,14 @@ export class MongoEngine
     });
   }
 
-  /** Delete at most one matching document. Returns the count actually deleted. */
+  /**
+   * Delete at most one matching document. Returns the count actually deleted.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or a mapped driver code
+   *   such as `DUPLICATE_KEY` / `TABLE_NOT_FOUND`) on a driver error;
+   *   `CONNECTION_FAILED` / `NO_CONNECTION` if not connected; or
+   *   `MISSING_CONFIG_VALUE` if `database` is unset.
+   */
   public async deleteOne(
     collection: string,
     filter: Record<string, unknown>,
@@ -453,7 +518,14 @@ export class MongoEngine
     });
   }
 
-  /** Delete all matching documents. Returns the count actually deleted. */
+  /**
+   * Delete all matching documents. Returns the count actually deleted.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or a mapped driver code
+   *   such as `DUPLICATE_KEY` / `TABLE_NOT_FOUND`) on a driver error;
+   *   `CONNECTION_FAILED` / `NO_CONNECTION` if not connected; or
+   *   `MISSING_CONFIG_VALUE` if `database` is unset.
+   */
   public async deleteMany(
     collection: string,
     filter: Record<string, unknown>,
@@ -464,7 +536,14 @@ export class MongoEngine
     });
   }
 
-  /** Count documents matching `filter`. */
+  /**
+   * Count documents matching `filter`.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or a mapped driver code
+   *   such as `DUPLICATE_KEY` / `TABLE_NOT_FOUND`) on a driver error;
+   *   `CONNECTION_FAILED` / `NO_CONNECTION` if not connected; or
+   *   `MISSING_CONFIG_VALUE` if `database` is unset.
+   */
   public async countDocuments(
     collection: string,
     filter: Record<string, unknown> = {},
@@ -474,7 +553,14 @@ export class MongoEngine
     });
   }
 
-  /** Run an aggregation pipeline. */
+  /**
+   * Run an aggregation pipeline.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or a mapped driver code
+   *   such as `DUPLICATE_KEY` / `TABLE_NOT_FOUND`) on a driver error;
+   *   `CONNECTION_FAILED` / `NO_CONNECTION` if not connected; or
+   *   `MISSING_CONFIG_VALUE` if `database` is unset.
+   */
   public async aggregate<T = Record<string, unknown>>(
     collection: string,
     pipeline: Record<string, unknown>[],

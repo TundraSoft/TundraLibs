@@ -1,5 +1,5 @@
 /**
- * @fileoverview Cloudflare D1 REST error / message envelope entries.
+ * @fileoverview Cloudflare D1 REST `errors` envelope entry.
  *
  * @module
  */
@@ -19,19 +19,5 @@ export type D1Error = {
   code?: number;
 
   /** Human-readable (SQLite-style, for query failures) error message. */
-  message: string;
-};
-
-/**
- * An entry of the `messages` array in a Cloudflare D1 REST response.
- *
- * Shares the `{ code, message }` shape of {@link D1Error} but carries
- * informational messages rather than failures; the client does not act on it.
- */
-export type D1Message = {
-  /** Cloudflare numeric message code. */
-  code?: number;
-
-  /** Human-readable message text. */
   message: string;
 };
