@@ -381,14 +381,25 @@ store-injection is the one breaking change and must land before release.
   (which already knows `.toOpenAPI()` / `.toJSONSchema()`) — the binders
   were designed as "the OpenAPI raw material." Needs the assembler +
   serving surface, plus a policy for error/response shapes.
-- **Auth-context handoff. 🔶 DESIGN TBD — to discuss.** How a decorated
-  module method receives the authenticated principal. Today the binder
-  tier makes NO `state.principal` assumption (this was the Phase D
-  remainder deferral, now promoted to a 1.0 item). `@tundralibs/pact`
-  (bitmask authz + JWT/OAuth) is the intended plug-in. Design is
-  deliberately deferred — to be discussed before building.
+- **Auth — DECIDED 2026-08-21: no "auth handoff" in rapid core.** Ship a
+  first-party `pact`-backed middleware in the catalog, store-injection
+  shaped like `rateLimit`: the caller passes the functions that verify a
+  token / load a subject / persist a session (rapid never owns the DB
+  call), plus bitmask guards (`requirePermission(mask)`) usable in route
+  chains and module `@Use`. Authenticated credentials live in a STRICT
+  per-invocation slot on the context (set once by the middleware,
+  read-only after, `undefined` when anonymous) — NOT `ctx.state`, which
+  `stateMode: 'SHARE'` shares across invocations — and the same slot
+  rides the module `invoke` seed so module guards read one thing. Design
+  details when we build it.
 
 ## Post-1.0.0
+
+- **Streaming responses (1.x) — DECIDED 2026-08-21: not a 1.0 item.** A
+  stream-body response model would unlock SSE, Range requests, and
+  large-file static serving; today `content` is string | Record |
+  Uint8Array and `serveStatic` reads whole files into memory. Few
+  use cases justify it before 1.0.
 
 - **SDK generator (via RESTler).** Generate a typed client SDK from the
   OpenAPI/decorator metadata, built on `@tundralibs/restler` (the REST
