@@ -654,8 +654,12 @@ export async function listen(options: ListenOptions): Promise<Listener> {
 
   /* c8 ignore start */
   if (isBun || isNode) {
+    // deno-coverage-ignore-start
     assertBuiltin(nodeNet, 'node:net', 'listen');
+    // deno-coverage-ignore-stop
+    // deno-coverage-ignore-start
     assertBuiltin(nodeTls, 'node:tls', 'listen');
+    // deno-coverage-ignore-stop
     // For both Bun and Node.js, use Node.js-compatible API
     // Bun's Bun.listen() doesn't easily support the accept() pattern
     // Using Node.js API provides consistency and works well
@@ -1207,8 +1211,12 @@ export async function connect(options: ConnectOptions): Promise<Connection> {
 
   /* c8 ignore start */
   if (isBun || isNode) {
+    // deno-coverage-ignore-start
     assertBuiltin(nodeNet, 'node:net', 'connect');
+    // deno-coverage-ignore-stop
+    // deno-coverage-ignore-start
     assertBuiltin(nodeTls, 'node:tls', 'connect');
+    // deno-coverage-ignore-stop
     // Both Bun and Node.js use Node.js-compatible socket API
     return new Promise((resolve, reject) => {
       // Check if already aborted
@@ -1460,7 +1468,9 @@ export async function upgradeTls(
 
   /* c8 ignore start */
   if (isBun || isNode) {
+    // deno-coverage-ignore-start
     assertBuiltin(nodeTls, 'node:tls', 'upgradeTls');
+    // deno-coverage-ignore-stop
     return await new Promise((resolve, reject) => {
       const tlsOptions: Record<string, unknown> = {
         socket: raw,

@@ -130,11 +130,13 @@ export async function udpSocket(
   // the whole request. (Before the runtime detector learned about
   // workerd this had to be a local `navigator.userAgent` check.)
   if (isWorkers) {
+    // deno-coverage-ignore-start
     throw new UnsupportedRuntimeError(
       'udpSocket',
       RUNTIME,
       'Cloudflare Workers has no UDP sockets',
     );
+    // deno-coverage-ignore-stop
   }
 
   if (isDeno) {

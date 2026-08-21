@@ -223,9 +223,11 @@ export const getEnv = (): Record<string, string> => {
     /* c8 ignore start */
     // workerd populates `process.env` under `nodejs_compat`; use it when
     // it is a real object, otherwise fall through to the empty default.
+    // deno-coverage-ignore-start
     if (isWorkers && g.process?.env && typeof g.process.env === 'object') {
       __env__ = g.process.env;
     }
+    // deno-coverage-ignore-stop
     /* c8 ignore stop */
     __env__ ??= {};
   }

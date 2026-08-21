@@ -75,7 +75,9 @@ const _setRaw = (enabled: boolean): boolean => {
 };
 
 const _writeStdout = (s: string): void => {
+  // deno-coverage-ignore-start
   nodeProcess?.stdout?.write?.(s);
+  // deno-coverage-ignore-stop
 };
 
 /**
@@ -189,8 +191,10 @@ export const prompt = (
 ): Promise<string> => {
   // Don't fake a terminal on a runtime with no line input (workerd,
   // browsers): throw rather than silently returning the default.
+  // deno-coverage-ignore-start
   assertBuiltin(nodeReadline, 'node:readline', 'prompt');
   assertBuiltin(nodeProcess, 'node:process', 'prompt');
+  // deno-coverage-ignore-stop
   if (options.password) {
     const echo = options.password === 'silent' ? 'silent' : 'masked';
     return _readSecretLine(message, echo);
@@ -263,8 +267,10 @@ export const choose = async (
   }
   // No line input available (workerd, browsers): throw rather than
   // rendering a menu nobody can answer.
+  // deno-coverage-ignore-start
   assertBuiltin(nodeReadline, 'node:readline', 'choose');
   assertBuiltin(nodeProcess, 'node:process', 'choose');
+  // deno-coverage-ignore-stop
   const defaultIdx = options.default !== undefined &&
       options.default >= 0 &&
       options.default < choices.length

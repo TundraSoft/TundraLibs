@@ -975,11 +975,13 @@ export class WebServer<T = unknown> {
       this._emit('onStart', this.name, this.mode);
     } catch (error) {
       this._state = 'STOPPED';
+      // deno-coverage-ignore-start
       // A runtime that cannot host a server (Workers, browser, unknown)
       // surfaces as itself — parity with file.ts — so callers can branch
       // on `instanceof UnsupportedRuntimeError` rather than digging a
       // wrapped cause out of a ServerError.
       if (error instanceof UnsupportedRuntimeError) throw error;
+      // deno-coverage-ignore-stop
       const e = this.__wrapServerError(error, 'start', 'Failed to start');
       this._emit('onError', this.name, e);
       throw e;
@@ -2194,7 +2196,9 @@ export class WebServer<T = unknown> {
       | InstanceType<typeof nodeHttp.Server>
       | InstanceType<typeof nodeHttps.Server>;
 
+    // deno-coverage-ignore-start
     assertBuiltin(nodeHttp, 'node:http', 'WebServer.start');
+    // deno-coverage-ignore-stop
 
     const validated = this.__resolveTLS();
     if (validated) {
@@ -2203,7 +2207,9 @@ export class WebServer<T = unknown> {
         key: validated.key,
       };
       if (validated.ca) httpsOptions.ca = validated.ca;
+      // deno-coverage-ignore-start
       assertBuiltin(nodeHttps, 'node:https', 'WebServer.start');
+      // deno-coverage-ignore-stop
       server = nodeHttps.createServer(httpsOptions, processNodeRequest);
     } else {
       // Create HTTP server
@@ -2530,11 +2536,13 @@ export class WebServer<T = unknown> {
           unref: () => this.__nodeClient().unref(),
         };
       default:
+        // deno-coverage-ignore-start
         throw new UnsupportedRuntimeError(
           'WebServer.start',
           RUNTIME,
           'a port-listening HTTP server is unavailable in this runtime',
         );
+        // deno-coverage-ignore-stop
     }
   }
 

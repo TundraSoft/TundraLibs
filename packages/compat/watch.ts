@@ -313,14 +313,18 @@ export const watch = (
   if (isDeno) return DenoWatcher.start(list, options);
   /* c8 ignore stop */
   /* c8 ignore start */
+  // deno-coverage-ignore-start
   if (isBun || isNode) {
     assertBuiltin(nodeFs, 'node:fs', 'watch');
     return new NodeWatcher(list, options);
   }
+  // deno-coverage-ignore-stop
   /* c8 ignore stop */
+  // deno-coverage-ignore-start
   throw new UnsupportedRuntimeError(
     'watch',
     RUNTIME,
     'file watching is unavailable in this runtime',
   );
+  // deno-coverage-ignore-stop
 };
