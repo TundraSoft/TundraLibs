@@ -423,17 +423,31 @@ store-injection is the one breaking change and must land before release.
   and text-only multipart still parses; `serveStatic`/`ctx.serve`/
   FileHandler surface compat's `UnsupportedRuntimeError` directly.
   Verified on real workerd: construct + GET via `app.fetch`, upload → 501.
-- **Auth — DECIDED 2026-08-21: no "auth handoff" in rapid core.** Ship a
-  first-party `pact`-backed middleware in the catalog, store-injection
-  shaped like `rateLimit`: the caller passes the functions that verify a
-  token / load a subject / persist a session (rapid never owns the DB
-  call), plus bitmask guards (`requirePermission(mask)`) usable in route
-  chains and module `@Use`. Authenticated credentials live in a STRICT
-  per-invocation slot on the context (set once by the middleware,
-  read-only after, `undefined` when anonymous) — NOT `ctx.state`, which
-  `stateMode: 'SHARE'` shares across invocations — and the same slot
-  rides the module `invoke` seed so module guards read one thing. Design
-  details when we build it.
+- **Auth — DECIDED 2026-08-22 (refines the 2026-08-21 call): an auth bag
+  seam + an OPTIONAL pact middleware, not a framework flow.**
+  - **The seam — `ctx.auth`.** A per-invocation, **set-once, read-only**
+    auth bag holding the authenticated identity (id, grants, whatever the
+    app puts there). Typed via a **second optional `Application` generic**
+    — `Application<S, A = Record<string, unknown>>` — threaded like `S`
+    through context / middleware / handlers: typed when the app specifies
+    `A`, frictionless when it doesn't (the default keeps every existing
+    `Application<S>` / `Context<S>` signature working). **Not `ctx.state`**
+    (which `stateMode: 'SHARE'` shares across invocations); it **rides the
+    module `invoke` seed**, so a guard reads the same identity on an HTTP
+    route and inside `invoke`. This bag is the **only** framework seam —
+    rapid never verifies a token or touches a session.
+  - **The convenience — optional catalog middleware.** A shipped
+    authentication + authorization middleware, `pact`-backed and
+    **store/hook-injection shaped like `rateLimit`/cacher**: the app passes
+    the hooks (extract/verify a token, load the user + grants); the
+    authentication middleware populates `ctx.auth`, the authorization
+    middleware (`requirePermission(...)`, usable in route chains and module
+    `@Use`) reads its grants via `pact`. Import and use them, or **write
+    your own** middleware against the same bag — the framework doesn't care
+    which.
+  - **Out of scope:** login / token issuance / logout stay app routes
+    (`crypt` to sign). rapid may ship thin `crypt` issue/verify helpers,
+    separate from the auth middleware.
 
 ## Post-1.0.0
 
