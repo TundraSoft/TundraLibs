@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.5...metro-man-v1.0.6) (2026-08-21)
+
+
+### Refactoring
+
+* **metro-man:** surface Series types and document Workers/browser support ([#500](https://github.com/TundraSoft/TundraLibs/issues/500)) ([e87481c](https://github.com/TundraSoft/TundraLibs/commit/e87481c1e55404a2fde588f6251907644e1488b3))
+
 ## [1.0.5](https://github.com/TundraSoft/TundraLibs/compare/metro-man-v1.0.4...metro-man-v1.0.5) (2026-08-18)
 
 

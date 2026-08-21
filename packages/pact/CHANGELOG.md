@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.8](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.4.7...pact-v0.4.8) (2026-08-21)
+
+
+### Refactoring
+
+* **pact:** route timer unref through compat and align error-file naming ([#509](https://github.com/TundraSoft/TundraLibs/issues/509)) ([b384925](https://github.com/TundraSoft/TundraLibs/commit/b384925db4189d71b8b3275ff8ff266f0c563e84))
+
 ## [0.4.7](https://github.com/TundraSoft/TundraLibs/compare/pact-v0.4.6...pact-v0.4.7) (2026-08-18)
 
 
