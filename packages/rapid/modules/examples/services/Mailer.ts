@@ -12,7 +12,9 @@ export type Mail = { to: string; subject: string };
 @Vial('SINGLETON')
 export class Mailer {
   readonly sent: Mail[] = [];
-  send(to: string, subject: string): void {
+  /** Simulated I/O: the mail is "sent" on a later tick, like a real client. */
+  async send(to: string, subject: string): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 1));
     this.sent.push({ to, subject });
   }
 }

@@ -4,9 +4,9 @@
  * abstract members, and gives the module its host-provided `log` and
  * `config` plus the two communication channels, `emit` and `invoke`.
  *
- * Nothing is stored ON the instance: the host context lives in a
- * WeakMap side table (like the decoration registry), so the module
- * object stays clean and there is no framework handle to reach into.
+ * Nothing is stored ON the instance: the host context lives in a WeakMap
+ * side table (like the decoration registry), so the module object stays
+ * clean and there is no framework handle to reach into.
  *
  * @module
  */
@@ -16,8 +16,10 @@ import type { ConfigType } from '@tundralibs/utils';
 import { RapidError } from '../errors/mod.ts';
 import type { ModuleRuntime } from './ModuleRuntime.ts';
 import type {
+  RapidModuleClass,
   RapidModuleEventMap,
-  RapidModuleInvokeResult,
+  RapidModuleInvokeResultOf,
+  RapidModuleMethodKeys,
   RapidModulePayloadOf,
 } from './types/mod.ts';
 
@@ -37,28 +39,27 @@ const ATTACHED = new WeakMap<object, ModuleAttachment>();
  * @internal Called by `ModuleRuntime.mount`.
  * @throws {RapidError} RAPID_CONFIG when the instance is already bound to
  *   a DIFFERENT runtime (one instance, one host — silent last-wins would
- *   misroute its logs and events).
+ *   misroute its logs and events). `dispose()` unbinds.
  */
 export function _attach(instance: object, attachment: ModuleAttachment): void {
   const prior = ATTACHED.get(instance);
   if (prior !== undefined && prior.runtime !== attachment.runtime) {
     throw new RapidError('RAPID_CONFIG', {
       message: `${instance.constructor.name} is already initialized by ` +
-        `another runtime — a module instance belongs to ONE host`,
+        `another runtime — a module instance belongs to ONE host (dispose ` +
+        `that runtime first)`,
       details: { module: instance.constructor.name },
     });
   }
   ATTACHED.set(instance, attachment);
 }
 
-/** @internal */
-export const _attachmentOf = (instance: object): ModuleAttachment | undefined =>
-  ATTACHED.get(instance);
+/** Unbind on dispose, so the instance can be hosted again. @internal */
+export function _detach(instance: object): void {
+  ATTACHED.delete(instance);
+}
 
-/**
- * The attachment, or a loud RAPID_CONFIG when the module was never
- * initialized (constructed with `new` and never mounted).
- */
+/** The attachment, or a loud RAPID_CONFIG for a never-initialized module. */
 const attachmentOf = (instance: object, member: string): ModuleAttachment => {
   const attachment = ATTACHED.get(instance);
   if (attachment === undefined) {
@@ -87,24 +88,16 @@ export interface RapidModuleLifecycle {
 // deno-lint-ignore no-explicit-any
 type AnyFn = (...args: any[]) => unknown;
 
-/** The public method names of `T` (what `invoke` accepts). */
-export type ModuleMethodKeys<T> =
-  & {
-    [K in keyof T]: T[K] extends AnyFn ? K : never;
-  }[keyof T]
-  & string;
-
-/** A module class reference (abstract bases allowed as a TYPE target). */
-export type ModuleClass<T> = abstract new (...args: never[]) => T;
-
 /**
- * @typeParam E - The module's event map — declare it once as a const and
+ * @typeParam E - The module's event map. Declare it once as a const and
  *   pass `typeof`: `const EVENTS = { PostCreated: payload<{ id: string }>() };`
  *   `class Posts extends RapidModule<typeof EVENTS> { protected readonly
- *   events = EVENTS; … }`. Modules that emit nothing omit it.
+ *   events = EVENTS; … }`. Modules that emit nothing omit it — and a
+ *   non-empty `events` WITHOUT the generic is a compile error at the field
+ *   (the default forbids keys), not a mystery at the first `emit`.
  */
 export abstract class RapidModule<
-  E extends RapidModuleEventMap = Record<never, never>,
+  E extends RapidModuleEventMap = Record<string, never>,
 > {
   /** `PascalCase` identity, unique within its namespace: `Posts`. */
   public abstract readonly name: string;
@@ -154,22 +147,24 @@ export abstract class RapidModule<
   }
 
   /**
-   * Call another module's method THROUGH the cycle: this invocation's
-   * state flows to it, its `@Use` middleware runs, and the outcome comes
-   * back as an envelope (a denied guard is a 403 envelope, not a throw).
-   * For plain collaboration, inject a service and call it directly.
+   * Call another module's method THROUGH the cycle: a copy of this
+   * invocation's state flows to it, its `@Use` middleware runs, and the
+   * outcome comes back as an envelope (a denied guard is a 403 envelope,
+   * not a throw). For plain collaboration, inject a service and call it.
    *
-   * @throws {RapidError} RAPID_CONFIG when the target is not mounted in
-   *   this runtime or has no such method, or this module is not initialized.
+   * @returns Rejects with RAPID_CONFIG when the target is not mounted in
+   *   this runtime or has no such method; failures INSIDE the invocation
+   *   never reject — they are the envelope.
+   * @throws {RapidError} RAPID_CONFIG when this module is not initialized.
    */
   protected invoke<
     T extends RapidModule<RapidModuleEventMap>,
-    K extends ModuleMethodKeys<T>,
+    K extends RapidModuleMethodKeys<T>,
   >(
-    target: ModuleClass<T>,
+    target: RapidModuleClass<T>,
     method: K,
     args: Parameters<Extract<T[K], AnyFn>>,
-  ): Promise<RapidModuleInvokeResult> {
+  ): Promise<RapidModuleInvokeResultOf<ReturnType<Extract<T[K], AnyFn>>>> {
     return attachmentOf(this, 'invoke').runtime.invoke(target, method, args);
   }
 }

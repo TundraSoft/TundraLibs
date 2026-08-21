@@ -2,7 +2,7 @@
 // with an explicit token (no reflect-metadata / design:type)? And once
 // TC39-native, is @Inoculate even still needed, or can a field decorator
 // inject itself via its returned initializer?
-import { Doctor, inject, Vial } from '@tundralibs/doctor';
+import { inject, Vial } from '@tundralibs/doctor';
 
 // --- TC39 field decorator version of @Dose, explicit token ---
 function DoseTC39<This, V>(token: string, scope?: string) {

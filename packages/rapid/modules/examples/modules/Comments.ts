@@ -6,7 +6,7 @@
  * @module
  */
 import { RapidError } from '../../../errors/mod.ts';
-import { payload } from '../../mod.ts';
+import { payload, reply } from '../../mod.ts';
 import { AppModule } from '../AppModule.ts';
 import { Posts } from './Posts.ts';
 
@@ -42,14 +42,16 @@ export class Comments extends AppModule<typeof EVENTS> {
     return this.__rows.filter((c) => c.postId === postId);
   }
 
-  /** ② invoke: delegation that HONORS Posts.remove's admin guard. */
-  async purgeThread(
-    postId: string,
-  ): Promise<{ status: number; purged: number }> {
+  /**
+   * ② invoke: delegation that HONORS Posts.remove's admin guard — and
+   * PROPAGATES its status: a denied purge is a 403 envelope, not a 200
+   * with a refusal tucked inside the content.
+   */
+  async purgeThread(postId: string) {
     const outcome = await this.invoke(Posts, 'remove', [postId]);
-    if (outcome.status !== 200) return { status: outcome.status, purged: 0 };
+    if (outcome.status !== 200) return reply(outcome.status, { purged: 0 });
     const before = this.__rows.length;
     this.__rows = this.__rows.filter((c) => c.postId !== postId);
-    return { status: 200, purged: before - this.__rows.length };
+    return { purged: before - this.__rows.length };
   }
 }

@@ -19,8 +19,11 @@ deno test -A packages/rapid/modules/                     # core + example tests
 | `modules/Audit.ts`         | multi-event `@On`; correlation ids; `@Vial` module (single-instance rule); `init`/`dispose`         |
 | `modules/Search.ts`        | index from events; **module → module** direct dependency (safe: doctor-held instance)               |
 | `modules/mod.ts`           | the hand-written barrel — the one input `initModules` takes (typed, Workers-safe)                   |
-| `testing.ts` + `*.test.ts` | the standard test shape: fresh services (`revoke` + `prescribe`), fake Mailer via `stock`           |
+| `testing.ts` + `*.test.ts` | the standard test shape: fresh services (`revoke` + `prescribe`), a Mailer instance via `stock`     |
 
 Rules the example embodies: `namespace:Module:EventName` names · events declared **on the publisher** (`const EVENTS = {…}` + `extends AppModule<typeof EVENTS>`, `protected`) · an
 event carries **correlation only, never authority** (auth ⇒ `invoke`, not an event) · plain calls run no
 middleware · `stock` the async roots, `@Vial` everything downstream.
+
+**Guards are request-boundary policy, not an in-process security boundary.** `@Use` runs only through `invoke`; a
+plain method call (including a module reached via `inject`) is trusted code calling trusted code and runs no guard.

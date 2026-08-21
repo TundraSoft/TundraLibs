@@ -1,9 +1,9 @@
 /**
  * @fileoverview The event bus — `@tundralibs/utils` `Events` as the
  * ENGINE (listener storage, snapshot-per-emission, per-listener
- * isolation, `once`/`off`) under a thin publish/subscribe facade, plus
- * the name grammar every event must satisfy and the `payload()` marker
- * modules declare events with.
+ * isolation) under a thin publish/subscribe facade — plus the name
+ * grammar every event must satisfy and the `payload()` marker modules
+ * declare events with.
  *
  * @module
  */
@@ -24,20 +24,21 @@ const PAYLOAD: RapidModulePayload<unknown> = Object.freeze({});
 
 /**
  * Declare an event's payload type on a module:
- * `readonly events = { PostCreated: payload<{ id: string }>() }`. Pure
- * type carrier — one shared frozen object at runtime, no allocation.
+ * `const EVENTS = { PostCreated: payload<{ id: string }>() }`. Pure type
+ * carrier — one shared frozen object at runtime.
  */
 export function payload<T>(): RapidModulePayload<T> {
   return PAYLOAD as RapidModulePayload<T>;
 }
 
 /**
- * What the runtime registers per subscriber: receives the payload and a
- * per-emission tracker to push its settlement promise into, so
- * `publish()` can resolve when every subscriber has settled.
+ * What the runtime registers per subscriber: the payload, the
+ * correlation id resolved ONCE for the whole emission, and a tracker to
+ * push its settlement promise into. @internal
  */
 export type EventSubscriber = (
   payload: unknown,
+  requestId: string,
   tracker: Promise<unknown>[],
 ) => void;
 
@@ -45,14 +46,14 @@ const RESOLVED: Promise<void> = Promise.resolve();
 const NOOP = (): void => {};
 
 /**
- * The module event bus. Subscribers are the runtime's delivery wrappers
- * (each delivery runs through the invocation cycle, so a throwing
- * subscriber is disclosed + isolated there); the engine's own isolation
- * is a backstop routed to the logger.
+ * The module event bus. @internal — the runtime is its only client;
+ * modules publish through `this.emit`, which validates the declaration.
  */
 export class RapidEvents extends Events<Record<string, EventSubscriber>> {
-  /** The shared already-resolved promise `publish` returns for a no-op emission. */
+  /** The shared already-resolved promise a no-op emission returns. */
   public static readonly RESOLVED: Promise<void> = RESOLVED;
+  /** Subscriber count per event — lets a no-subscriber publish skip every allocation. */
+  private readonly __counts = new Map<string, number>();
 
   constructor(private readonly __log: Slogger) {
     super();
@@ -60,16 +61,27 @@ export class RapidEvents extends Events<Record<string, EventSubscriber>> {
 
   public subscribe(event: string, subscriber: EventSubscriber): void {
     this.on(event, subscriber);
+    this.__counts.set(event, (this.__counts.get(event) ?? 0) + 1);
+  }
+
+  public unsubscribe(event: string, subscriber: EventSubscriber): void {
+    this.off(event, subscriber);
+    this.__counts.set(event, Math.max(0, (this.__counts.get(event) ?? 1) - 1));
   }
 
   /**
    * Fan out to a snapshot of the subscribers; resolves when all have
-   * settled. Never rejects (subscriber failures are handled per delivery).
-   * Zero subscribers → the shared {@link RapidEvents.RESOLVED}, no allocation.
+   * settled. Never rejects (failures are disclosed per delivery). With no
+   * subscribers returns {@link RapidEvents.RESOLVED} and allocates nothing.
    */
-  public publish(event: string, payload: unknown): Promise<void> {
+  public publish(
+    event: string,
+    payload: unknown,
+    requestId: string,
+  ): Promise<void> {
+    if ((this.__counts.get(event) ?? 0) === 0) return RESOLVED;
     const tracker: Promise<unknown>[] = [];
-    this._emitRaw(event, payload, tracker);
+    this._emitRaw(event, payload, requestId, tracker);
     return tracker.length === 0
       ? RESOLVED
       : Promise.allSettled(tracker).then(NOOP);

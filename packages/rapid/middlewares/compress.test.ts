@@ -28,7 +28,9 @@ describe('rapid.middlewares.compress', () => {
     await app.start();
     base = `http://127.0.0.1:${app.port}`;
   });
-  afterAll(() => app.stop());
+  afterAll(async () => {
+    await app.stop();
+  });
 
   it('gzips a large compressible body and sets Vary', async () => {
     const r = await fetch(`${base}/big`, {

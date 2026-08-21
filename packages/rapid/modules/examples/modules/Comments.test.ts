@@ -13,12 +13,11 @@ describe('example.Comments', () => {
     freshServices();
   });
 
-  it('purgeThread delegates to Posts.remove and is refused for a non-admin caller', async () => {
+  it('purgeThread delegates to Posts.remove; a non-admin caller gets a 403 ENVELOPE, an admin purges', async () => {
     const { modules: { Users, Posts, Comments }, runtime } = await initModules(
       TEST,
       { modules: [mods] },
     );
-    (runtime.log as unknown as { error: () => void }).error = () => {};
     const post = Posts.create(Users.register('a@b.c').id, 'Thread');
     await Comments.add(post.id, 'bob', 'hi');
 
@@ -27,7 +26,9 @@ describe('example.Comments', () => {
     ], {
       state: { principal: { id: 'm', role: 'member' } },
     });
-    asserts.assertEquals(asMember.content, { status: 403, purged: 0 });
+    asserts.assertEquals([asMember.status, asMember.content], [403, {
+      purged: 0,
+    }]);
     asserts.assertEquals(Comments.forPost(post.id).length, 1); // untouched
 
     const asAdmin = await runtime.invoke(mods.Comments, 'purgeThread', [
@@ -35,17 +36,22 @@ describe('example.Comments', () => {
     ], {
       state: { principal: { id: 'a', role: 'admin' } },
     });
-    asserts.assertEquals(asAdmin.content, { status: 200, purged: 1 });
+    asserts.assertEquals([asAdmin.status, asAdmin.content], [200, {
+      purged: 1,
+    }]);
     asserts.assertEquals(Comments.forPost(post.id).length, 0);
+    await runtime.dispose();
   });
 
   it('add() on a missing post is a 404 envelope when invoked, a throw when called', async () => {
     const { modules: { Comments }, runtime } = await initModules(TEST, {
       modules: [mods],
     });
-    (runtime.log as unknown as { error: () => void }).error = () => {};
-    const res = await runtime.invoke(mods.Comments, 'add', ['nope', 'x', 'y']);
-    asserts.assertEquals(res.status, 404);
+    asserts.assertEquals(
+      (await runtime.invoke(mods.Comments, 'add', ['nope', 'x', 'y'])).status,
+      404,
+    );
     await asserts.assertRejects(() => Comments.add('nope', 'x', 'y'));
+    await runtime.dispose();
   });
 });

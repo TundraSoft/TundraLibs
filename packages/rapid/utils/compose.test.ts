@@ -39,7 +39,8 @@ describe('rapid.compose', () => {
       },
     ]);
     await asserts.assertRejects(
-      () => run({}, () => Promise.resolve()),
+      // compose's runner may return void | Promise<void>; assertRejects needs a PromiseLike
+      () => Promise.resolve(run({}, () => Promise.resolve())),
       Error,
       'next() called multiple times',
     );
@@ -80,7 +81,8 @@ describe('rapid.compose', () => {
       },
     ]);
     await asserts.assertRejects(
-      () => run({}, () => Promise.resolve()),
+      // compose's runner may return void | Promise<void>; assertRejects needs a PromiseLike
+      () => Promise.resolve(run({}, () => Promise.resolve())),
       Error,
       'boom',
     );

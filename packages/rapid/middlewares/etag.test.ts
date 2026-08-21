@@ -21,7 +21,9 @@ describe('rapid.middlewares.etag', () => {
     await app.start();
     base = `http://127.0.0.1:${app.port}`;
   });
-  afterAll(() => app.stop());
+  afterAll(async () => {
+    await app.stop();
+  });
 
   it('stamps a strong ETag on a 200 GET', async () => {
     const r = await fetch(`${base}/x`);

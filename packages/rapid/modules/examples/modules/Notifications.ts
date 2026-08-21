@@ -19,12 +19,12 @@ export class Notifications extends AppModule {
 
   @On('users:Users:UserRegistered')
   welcome({ email }: RapidModuleEventPayload<Users, 'UserRegistered'>) {
-    this.mailer.send(email, 'Welcome!');
+    return this.mailer.send(email, 'Welcome!');
   }
 
   @On('posts:Posts:PostPublished')
   announce({ title }: RapidModuleEventPayload<Posts, 'PostPublished'>) {
-    this.mailer.send('followers@example.com', `New post: ${title}`);
+    return this.mailer.send('followers@example.com', `New post: ${title}`);
   }
 
   @On('comments:Comments:CommentAdded')
@@ -32,6 +32,6 @@ export class Notifications extends AppModule {
     { author, postId }: RapidModuleEventPayload<Comments, 'CommentAdded'>,
   ) {
     if (author === 'troll') throw new Error('moderation service unavailable');
-    this.mailer.send('author@example.com', `New comment on ${postId}`);
+    return this.mailer.send('author@example.com', `New comment on ${postId}`);
   }
 }

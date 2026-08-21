@@ -1,26 +1,17 @@
 /**
  * @fileoverview The module system (POC, self-contained under `modules/`):
  * `RapidModule` base · `initModules` bootstrap · `ModuleRuntime` ·
- * `@On`/`@Use` · typed event declaration via `payload()`.
+ * `@On`/`@Use` · `payload()` event declaration · `reply()` envelopes.
  *
  * @module
  */
 
-export { EventContext, InvokeContext } from './contexts.ts';
-export { middlewareOf, On, onEventsOf, Use } from './decorators.ts';
-export {
-  EVENT_NAME_PATTERN,
-  NAME_PATTERN,
-  NAMESPACE_PATTERN,
-  payload,
-  RapidEvents,
-} from './events.ts';
+export { On, Use } from './decorators.ts';
+export { EventContext } from './EventContext.ts';
+export { payload } from './events.ts';
 export { buildModuleContext, initModules } from './initModules.ts';
+export { InvokeContext } from './InvokeContext.ts';
 export { ModuleRuntime } from './ModuleRuntime.ts';
-export {
-  type ModuleClass,
-  type ModuleMethodKeys,
-  RapidModule,
-  type RapidModuleLifecycle,
-} from './RapidModule.ts';
+export { RapidModule, type RapidModuleLifecycle } from './RapidModule.ts';
+export { Reply, reply } from './reply.ts';
 export type * from './types/mod.ts';

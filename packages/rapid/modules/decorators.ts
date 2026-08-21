@@ -11,15 +11,13 @@
 import { assertMethodContext } from '../decorators/registry.ts';
 import { RapidError } from '../errors/mod.ts';
 import { EVENT_NAME_PATTERN } from './events.ts';
-import type { RapidModuleInvokeMiddleware } from './types/mod.ts';
+import type {
+  RapidModuleInvokeMiddleware,
+  RapidModuleMethodDecorator,
+} from './types/mod.ts';
 
 const ON = new WeakMap<object, string[]>();
 const USE = new WeakMap<object, RapidModuleInvokeMiddleware[]>();
-
-type MethodDecorator = (
-  target: object,
-  context: ClassMethodDecoratorContext,
-) => void;
 
 /**
  * Subscribe the method to one or more events (fully qualified
@@ -32,7 +30,7 @@ type MethodDecorator = (
  * @throws {RapidError} RAPID_CONFIG on a malformed event name, no names,
  *   or an illegal placement (legacy decorator mode, static/private).
  */
-export function On(...events: string[]): MethodDecorator {
+export function On(...events: string[]): RapidModuleMethodDecorator {
   if (events.length === 0) {
     throw new RapidError('RAPID_CONFIG', {
       message: '@On needs at least one event name',
@@ -58,13 +56,15 @@ export function On(...events: string[]): MethodDecorator {
 /**
  * Attach middleware that runs when the method is INVOKED through the
  * runtime (`this.invoke(...)` / `runtime.invoke(...)`) — auth guards and
- * the like. Source order is execution order when stacked.
+ * the like. Source order is execution order when stacked. NOT valid on an
+ * `@On` handler (events carry no state, so a guard there is meaningless —
+ * the runtime rejects the combination at mount).
  *
  * @throws {RapidError} RAPID_CONFIG on an illegal placement.
  */
 export function Use(
   ...middleware: RapidModuleInvokeMiddleware[]
-): MethodDecorator {
+): RapidModuleMethodDecorator {
   return (target, context) => {
     assertMethodContext(context, 'Use');
     // Decorators apply bottom-up; prepend so the top-most @Use runs first.
@@ -73,11 +73,11 @@ export function Use(
   };
 }
 
-/** Mount-time reader: the events a method subscribes to. */
+/** Mount-time reader: the events a method subscribes to. @internal */
 export const onEventsOf = (method: object): readonly string[] | undefined =>
   ON.get(method);
 
-/** Mount-time reader: the invoke middleware attached to a method. */
+/** Mount-time reader: the invoke middleware attached to a method. @internal */
 export const middlewareOf = (
   method: object,
 ): readonly RapidModuleInvokeMiddleware[] | undefined => USE.get(method);

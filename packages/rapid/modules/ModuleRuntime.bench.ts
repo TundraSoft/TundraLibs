@@ -63,10 +63,13 @@ const { modules, runtime } = await initModules(
   { modules: [{ Emitter, Silent, Listener }] },
 );
 
+// The honest floor: what you'd write INSTEAD of invoke — a call whose
+// result is wrapped in a promise, like invoke's contract. (A bare call
+// gets optimized to ~0.5ns and says nothing.)
 bench(
-  'plain method call (floor)',
+  'Promise.resolve(plain call) (floor)',
   { group: 'invoke', baseline: true },
-  () => modules.Emitter.plain(1),
+  () => Promise.resolve(modules.Emitter.plain(1)),
 );
 bench(
   'runtime.invoke — no middleware',
@@ -93,7 +96,9 @@ bench(
 // Inside a request (how modules are actually called): the invocation
 // INHERITS the ambient requestId, so no ULID is minted per call. This is
 // the real hot path; the top-level numbers above include a ~0.5-1.3µs
-// mint per call that production traffic doesn't pay.
+// mint per call that production traffic doesn't pay. These rows ALSO pay
+// one `ambient.run` wrapper per iteration that production doesn't — the
+// last row measures that wrapper alone, so subtract it.
 import { ambient } from '@tundralibs/ambient';
 const SCOPE = { requestId: '01BENCHREQUESTID000000000', action: 'bench' };
 bench(
@@ -105,4 +110,9 @@ bench(
   'emit — 2 subscribers, INSIDE a request scope',
   { group: 'emit' },
   () => ambient.run(SCOPE, () => modules.Emitter.tick(1)),
+);
+bench(
+  'ambient.run wrapper alone (subtract from the rows above)',
+  { group: 'emit' },
+  () => ambient.run(SCOPE, () => 1),
 );

@@ -25,7 +25,7 @@ const { modules, runtime } = await initModules(
   {
     name: 'poc',
     mode: 'DEVELOPMENT',
-    logger: { level: SyslogSeverities.WARNING },
+    logger: { level: SyslogSeverities.INFO },
   },
   { modules: [mods] },
 );
@@ -69,11 +69,14 @@ const asEditor = await runtime.invoke(mods.Comments, 'purgeThread', [post.id], {
 const asAdmin = await runtime.invoke(mods.Comments, 'purgeThread', [post.id], {
   state: { principal: { id: admin.id, role: 'admin' } },
 });
-say('4. purgeThread → invoke(Posts.remove) honors requireRole(admin)', {
-  asMember: asEditor.content,
-  asAdmin: asAdmin.content,
-  postGone: Search.query('events'),
-});
+say(
+  '4. purgeThread → invoke(Posts.remove) honors requireRole(admin); the status PROPAGATES',
+  {
+    asMember: { status: asEditor.status, ...(asEditor.content as object) },
+    asAdmin: { status: asAdmin.status, ...(asAdmin.content as object) },
+    postGone: Search.query('events'),
+  },
+);
 
 // 5 ─ correlation: subscribers carry the originating requestId ───────────
 await ambient.run({ requestId: 'req-42' }, async () => {
@@ -96,10 +99,15 @@ say(
 );
 
 // 7 ─ single-instance rule ──────────────────────────────────────────────
-say('7. Search.inject(Audit) is the mounted Audit', {
-  sameInstance: Search.auditedEvents() === Audit.entries.length,
-});
+say(
+  '7. Search.inject(Audit) is the mounted Audit (identity, not a lookalike)',
+  {
+    sameInstance: Search.usesAudit(Audit),
+  },
+);
 
 // 8 ─ lifecycle ─────────────────────────────────────────────────────────
 await runtime.dispose();
-say('8. dispose ran (init was in mount order, dispose in reverse — see logs)');
+say(
+  '8. dispose ran — the INFO lines above show init in mount order and dispose in reverse',
+);

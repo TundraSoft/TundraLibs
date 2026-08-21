@@ -1,6 +1,6 @@
 /**
- * Notifications — swap the Mailer for the recording fake and assert on
- * it; show that one failing subscriber never breaks the emitter.
+ * Notifications — assert on the stocked Mailer; one failing subscriber
+ * never breaks the emitter.
  * @module
  */
 import { beforeEach, describe, it } from '@tundralibs/compat/test';
@@ -15,16 +15,18 @@ describe('example.Notifications', () => {
     ({ mailer } = freshServices());
   });
 
-  it('sends a welcome mail on UserRegistered', async () => {
+  it('sends a welcome mail on UserRegistered (fire-and-forget → drain)', async () => {
     const { modules: { Users }, runtime } = await initModules(TEST, {
       modules: [mods],
     });
     Users.register('new@example.com');
+    asserts.assertEquals(mailer.sent, []); // async send — not yet
     await runtime.drain();
     asserts.assertEquals(mailer.sent, [{
       to: 'new@example.com',
       subject: 'Welcome!',
     }]);
+    await runtime.dispose();
   });
 
   it('a throwing handler is isolated: the comment is saved, audit still records, failure is logged', async () => {
@@ -41,6 +43,8 @@ describe('example.Notifications', () => {
       Audit.entries.some((e) => e.event === 'comments:Comments:CommentAdded'),
     );
     asserts.assertEquals(logged, ['moderation service unavailable']);
+    await runtime.drain();
     asserts.assertEquals(mailer.sent.length, 1); // only the welcome mail — onComment never sent
+    await runtime.dispose();
   });
 });

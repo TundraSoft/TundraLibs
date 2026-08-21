@@ -28,7 +28,11 @@ import type {
   RapidModuleSources,
 } from './types/mod.ts';
 
-type ModuleCtor = new () => RapidModule<RapidModuleEventMap>;
+type AnyModule = RapidModule<RapidModuleEventMap>;
+type ModuleCtor = new () => AnyModule;
+
+const reasonOf = (cause: unknown): string =>
+  cause instanceof Error ? cause.message : String(cause);
 
 /** A concrete (constructible) RapidModule subclass — what a namespace export must be to mount. */
 const isModuleClass = (value: unknown): value is ModuleCtor =>
@@ -38,30 +42,48 @@ const isModuleClass = (value: unknown): value is ModuleCtor =>
 /**
  * Resolve a module class to its ONE instance: dispensed from doctor when
  * the class is registered there (so a module another module `inject()`s
- * is the same object that gets mounted), else constructed with no args.
+ * is the same object that gets mounted — register modules as
+ * SINGLETON), else constructed with no arguments.
  *
- * @throws {RapidError} RAPID_CONFIG when the class needs constructor
- *   arguments — pass an instance via `sources.instances` instead.
+ * @throws {RapidError} RAPID_CONFIG when doctor cannot dispense it, or
+ *   construction throws (a class needing constructor arguments — pass an
+ *   instance via `sources.instances` — or an abstract base exported from
+ *   the barrel whose field initializers fail).
  */
-const resolveInstance = (
-  ctor: ModuleCtor,
-): RapidModule<RapidModuleEventMap> => {
-  if (Doctor.has(ctor)) return Doctor.dispense(ctor);
-  if (ctor.length > 0) {
+const resolveInstance = (ctor: ModuleCtor): AnyModule => {
+  if (Doctor.has(ctor)) {
+    try {
+      return Doctor.dispense(ctor);
+    } catch (cause) {
+      throw new RapidError('RAPID_CONFIG', {
+        message: `${ctor.name} is registered with doctor but could not be ` +
+          `dispensed (${reasonOf(cause)}) — register modules as SINGLETON, ` +
+          `or leave them unregistered and let initModules construct them`,
+        details: { module: ctor.name },
+        cause: cause instanceof Error ? cause : undefined,
+      });
+    }
+  }
+  try {
+    return new ctor();
+  } catch (cause) {
     throw new RapidError('RAPID_CONFIG', {
-      message: `${ctor.name} needs constructor arguments — register it with ` +
-        `doctor, or pass an instance via sources.instances`,
-      details: { module: ctor.name, arity: ctor.length },
+      message: `${ctor.name} could not be constructed (${reasonOf(cause)}) — ` +
+        `modules are constructed with NO arguments (pass an instance via ` +
+        `sources.instances); an abstract base exported from the barrel ` +
+        `fails here too`,
+      details: { module: ctor.name },
+      cause: cause instanceof Error ? cause : undefined,
     });
   }
-  return new ctor();
 };
 
 /**
  * Build a standalone runtime context from plain options, through the
  * SAME shape `Application` uses for its logger (appName, level by mode,
  * console handler, ambient-correlated) — so a module initialized outside
- * an app logs exactly like one inside.
+ * an app logs exactly like one inside. The runtime that receives it owns
+ * the logger and finalizes it on dispose.
  */
 export function buildModuleContext(
   options: RapidModuleInitOptions,
@@ -92,44 +114,61 @@ const isContext = (
  * Bootstrap modules: `context` is either a ready `{ log, config }` (what
  * an app passes) or plain options (`{ name, mode?, logger? }`) for
  * standalone use. Returns the instances, keyed by EXPORT name and typed,
- * plus the runtime.
+ * plus the runtime. On any failure the partially-built runtime is
+ * disposed before the error propagates.
  *
- * @throws {RapidError} RAPID_CONFIG for any mount/finalize validation
- *   failure (see `ModuleRuntime.mount` / `.finalize`).
+ * @throws {RapidError} RAPID_CONFIG for any resolve/mount/finalize
+ *   validation failure, including an `instances` key that collides with a
+ *   namespace export.
  */
 export async function initModules<
   const M extends readonly object[],
-  I extends Record<string, RapidModule<RapidModuleEventMap>> = Record<
-    never,
-    RapidModule<RapidModuleEventMap>
-  >,
+  I extends Record<string, AnyModule> = Record<never, AnyModule>,
 >(
   context: RapidModuleContext | RapidModuleInitOptions,
   sources: RapidModuleSources<M, I>,
 ): Promise<RapidModuleInitResult<M, I>> {
+  const ownsLog = !isContext(context);
   const runtime = new ModuleRuntime(
-    isContext(context) ? context : buildModuleContext(context),
+    ownsLog ? buildModuleContext(context) : context,
+    ownsLog,
   );
-  const record: Record<string, RapidModule<RapidModuleEventMap>> = {};
-  const seen = new Map<ModuleCtor, RapidModule<RapidModuleEventMap>>();
-  for (const namespace of sources.modules) {
-    for (const [exportName, value] of Object.entries(namespace)) {
-      if (!isModuleClass(value)) continue;
-      let instance = seen.get(value);
-      if (instance === undefined) {
-        instance = resolveInstance(value);
-        seen.set(value, instance);
-        runtime.mount(instance);
+  try {
+    const record: Record<string, AnyModule> = {};
+    const seen = new Map<ModuleCtor, AnyModule>();
+    const claim = (key: string, instance: AnyModule): void => {
+      const prior = record[key];
+      if (prior !== undefined && prior !== instance) {
+        throw new RapidError('RAPID_CONFIG', {
+          message: `Two different modules would be keyed '${key}' ` +
+            `(${prior.constructor.name} and ${instance.constructor.name})`,
+          details: { key },
+        });
       }
-      record[exportName] = instance; // a re-export maps to the same instance
-    }
-  }
-  if (sources.instances !== undefined) {
-    for (const [key, instance] of Object.entries(sources.instances)) {
-      runtime.mount(instance);
       record[key] = instance;
+    };
+    for (const namespace of sources.modules) {
+      for (const [exportName, value] of Object.entries(namespace)) {
+        if (!isModuleClass(value)) continue;
+        let instance = seen.get(value);
+        if (instance === undefined) {
+          instance = resolveInstance(value);
+          seen.set(value, instance);
+          runtime.mount(instance);
+        }
+        claim(exportName, instance); // a re-export maps to the same instance
+      }
     }
+    if (sources.instances !== undefined) {
+      for (const [key, instance] of Object.entries(sources.instances)) {
+        runtime.mount(instance);
+        claim(key, instance);
+      }
+    }
+    await runtime.finalize();
+    return { modules: record as RapidModuleInstances<M, I>, runtime };
+  } catch (error) {
+    await runtime.dispose();
+    throw error;
   }
-  await runtime.finalize();
-  return { modules: record as RapidModuleInstances<M, I>, runtime };
 }

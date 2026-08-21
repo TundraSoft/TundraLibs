@@ -18,7 +18,8 @@ export class Search extends AppModule {
   private readonly __audit = inject(Audit);
 
   @On('posts:Posts:PostPublished')
-  index({ id, title }: RapidModuleEventPayload<Posts, 'PostPublished'>) {
+  async index({ id, title }: RapidModuleEventPayload<Posts, 'PostPublished'>) {
+    await new Promise((resolve) => setTimeout(resolve, 1)); // simulated index I/O
     this.__index.set(id, title.toLowerCase());
   }
 
@@ -34,8 +35,8 @@ export class Search extends AppModule {
     ) => id);
   }
 
-  /** Proves the injected Audit IS the mounted one. */
-  auditedEvents(): number {
-    return this.__audit.entries.length;
+  /** Identity check: is the injected Audit THE mounted instance? */
+  usesAudit(audit: Audit): boolean {
+    return this.__audit === audit;
   }
 }
