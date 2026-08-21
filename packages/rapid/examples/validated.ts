@@ -13,7 +13,7 @@
  */
 
 import { GuardianError } from '@tundralibs/guardian';
-import { RapidError } from '../../errors/mod.ts';
+import { RapidError } from '../errors/mod.ts';
 
 /** Wrap a guardian schema's `.parse` so a rejection 400s (not 500s). */
 export function validated<T>(schema: { parse: (value: unknown) => T }) {

@@ -1,22 +1,19 @@
 /**
- * The payoff of injecting dependencies and booting through `initModules`:
- * the Posts module is testable IN ISOLATION — no HTTP server, no
- * database. A fake `Norm` is stocked under the label `BlogModule`
- * injects, the module is booted standalone, and its methods are driven
- * directly (plain calls — guards and envelopes belong to `invoke`).
+ * The payoff of injecting dependencies and booting through the module
+ * system: the Posts module is testable IN ISOLATION — no HTTP server, no
+ * database. This uses the `@tundralibs/rapid/testing` harness: a fake
+ * `Norm` is `stub`bed under the label `BlogModule` injects, `harness()`
+ * boots the modules, and `await using` disposes them (and revokes the
+ * stub) at the end of each test. Methods are driven directly — plain
+ * calls; guards and envelopes belong to `invoke`.
  *
  * @module
  */
-import { describe, it } from '@tundralibs/compat/test';
+import { describe, harness, it } from '../../testing/mod.ts';
 import * as asserts from '@std/asserts';
-import { Doctor } from '@tundralibs/doctor';
 import type { Norm } from '@tundralibs/norm';
-import { RapidError } from '../../../errors/mod.ts';
-import { initModules } from '../../../modules/mod.ts';
-import type {
-  RapidContextPaging,
-  RapidContextQuery,
-} from '../../../types/mod.ts';
+import { RapidError } from '../../errors/mod.ts';
+import type { RapidContextPaging, RapidContextQuery } from '../../types/mod.ts';
 import { NORM } from '../di.ts';
 import type { Post } from '../types.ts';
 import { Audit } from './Audit.ts';
@@ -72,18 +69,22 @@ function fakeNorm() {
 }
 
 const fake = fakeNorm();
-Doctor.stock(NORM, fake.norm); // stocked ONCE; reset between tests
+/** Empty the fake, then boot Posts+Audit with it stubbed under `NORM`. The
+ * harness revokes the stub on dispose, so `await using` keeps the
+ * process-wide doctor clean between tests. */
 const boot = () => {
   fake.reset();
-  return initModules({ name: 'blog-test', logger: { handlers: [] } }, {
+  return harness({
     modules: [{ Posts, Audit }],
+    stub: [[NORM, fake.norm]],
+    context: { name: 'blog-test', logger: { handlers: [] } },
   });
 };
 
-describe('blog.Posts (unit — fake Norm via doctor, no server/DB)', () => {
+describe('blog.Posts (unit — fake Norm via the testing harness)', () => {
   it('create → find round-trips, tags parsed, 201 status, PostCreated reaches Audit', async () => {
-    const { modules, runtime } = await boot();
-    const created = await modules.Posts.create({
+    await using h = await boot();
+    const created = await h.modules.Posts.create({
       title: 'Hello',
       body: 'B',
       tags: ['a', 'b'],
@@ -92,48 +93,45 @@ describe('blog.Posts (unit — fake Norm via doctor, no server/DB)', () => {
     const post = created.content as Post;
     asserts.assertEquals(post.tags, ['a', 'b']); // stored JSON → array
     asserts.assertEquals(typeof post.createdAt, 'string'); // Date → ISO
-    const found = await modules.Posts.find(post.id);
+    const found = await h.modules.Posts.find(post.id);
     asserts.assertEquals((found.content as Post).title, 'Hello');
-    asserts.assertEquals(modules.Audit.trail.map((t) => [t.event, t.id]), [
+    asserts.assertEquals(h.modules.Audit.trail.map((t) => [t.event, t.id]), [
       ['posts:Posts:PostCreated', post.id],
     ]);
-    await runtime.dispose();
   });
 
   it('find() on a missing id throws the framework 404; through invoke it is a 404 envelope', async () => {
-    const { modules, runtime } = await boot();
+    await using h = await boot();
     await asserts.assertRejects(
-      () => modules.Posts.find('nope'),
+      () => h.modules.Posts.find('nope'),
       RapidError,
       'Not found',
     );
     asserts.assertEquals(
-      (await runtime.invoke(Posts, 'get', ['nope'])).status,
+      (await h.invoke(Posts, 'get', ['nope'])).status,
       404,
     );
-    await runtime.dispose();
   });
 
   it('list() pages and reports the total', async () => {
-    const { modules, runtime } = await boot();
-    await modules.Posts.create({ title: 'one', body: 'b' });
-    await modules.Posts.create({ title: 'two', body: 'b' });
+    await using h = await boot();
+    await h.modules.Posts.create({ title: 'one', body: 'b' });
+    await h.modules.Posts.create({ title: 'two', body: 'b' });
     // size:1 → one row per page but total:2. A wrong offset (e.g. page*size)
     // returns the wrong row / an empty page, so this pins the paging math.
-    const p1 = await modules.Posts.list(
+    const p1 = await h.modules.Posts.list(
       {} as RapidContextQuery,
       { page: 1, size: 1 } as RapidContextPaging,
     );
     const b1 = p1.content as { rows: Post[]; total: number };
     asserts.assertEquals(b1.total, 2);
     asserts.assertEquals(b1.rows.length, 1);
-    const p2 = await modules.Posts.list(
+    const p2 = await h.modules.Posts.list(
       {} as RapidContextQuery,
       { page: 2, size: 1 } as RapidContextPaging,
     );
     const b2 = p2.content as { rows: Post[]; total: number };
     asserts.assertEquals(b2.rows.length, 1);
     asserts.assert(b1.rows[0]!.id !== b2.rows[0]!.id); // distinct pages
-    await runtime.dispose();
   });
 });

@@ -15,8 +15,14 @@
  *   modules/mod.ts     the static barrel app.modules() boots from
  *   schemas.ts         guardian request schemas
  *   validated.ts       GuardianError → RapidError bridge
+ *   auth.ts            a stand-in for pact — login service + token verify
  *   types.ts           domain types
- *   main.ts            boot: open db → register deps → mount modules
+ *   main.ts            boot: open db → mount endpoints + modules
+ *
+ * Beyond the modules it also mounts the `./endpoints` catalog —
+ * `health`, `metrics` (metro-man), `openapi` (the assembled 3.0.3 doc),
+ * and `login` — plus the `authenticate`/`authorize` middleware on a
+ * protected `/admin/summary` route. See the curl block below.
  *
  * The modules take NO constructor args — `BlogModule` pulls `Norm` with an
  * `inject()` field initializer, so boot stocks that one label and hands
@@ -26,7 +32,7 @@
  * Run (from the repo root):
  *
  * ```bash
- * deno run -A packages/rapid/examples/blog/main.ts
+ * deno run -A packages/rapid/examples/main.ts
  * ```
  *
  * Ids are UUIDs (norm generates them), so LIST first to grab one:
@@ -51,6 +57,18 @@
  *   -d '{"author":"Ada","body":"Nice post!"}' | jq
  * ```
  *
+ * Platform endpoints (the `./endpoints` catalog + auth middleware):
+ *
+ * ```bash
+ * curl -s  localhost:3100/healthz | jq        # readiness — pings the DB
+ * curl -s  localhost:3100/metrics             # Prometheus text (server.metrics)
+ * curl -s  localhost:3100/openapi.json | jq   # the assembled OpenAPI 3.0.3 doc
+ * curl -si localhost:3100/admin/summary       # 401 — needs an author token
+ * TOKEN=$(curl -s -X POST localhost:3100/login -H 'content-type: application/json' \
+ *   -d '{"username":"ada","password":"lovelace"}' | jq -r .token)
+ * curl -s localhost:3100/admin/summary -H "authorization: Bearer $TOKEN" | jq
+ * ```
+ *
  * Websocket (same port, rpc protocol on /ws) — the module's `namespace`
  * field ("comments") joins onto the bare command name:
  *
@@ -70,17 +88,22 @@
  * @module
  */
 
-import { rapid } from '../../mod.ts';
+import { rapid } from '../mod.ts';
 import {
+  authenticate,
+  authorize,
   cors,
   requestId,
   requestLogger,
   responseTimer,
   secureHeaders,
   serveStatic,
-} from '../../middlewares/mod.ts';
+} from '../middlewares/mod.ts';
+import { health, login, metrics, openapi } from '../endpoints/mod.ts';
 import { openBlogDatabase } from './db.ts';
 import { registerBlogServices } from './di.ts';
+import { authService, type BlogAuth, verifyToken } from './auth.ts';
+import { BlogSchema } from './models/mod.ts';
 import * as blog from './modules/mod.ts';
 
 // ── app + database ────────────────────────────────────────────────────
@@ -95,7 +118,7 @@ app.use(
   secureHeaders(),
   cors(),
   requestId({ socketEcho: true }),
-  // Serve examples/blog/public/ (a landing page + stylesheet) at
+  // Serve examples/public/ (a landing page + stylesheet) at
   // /public/* — no route/handler; content-types come from the file
   // extensions. A missing file falls through to routing/404.
   serveStatic({
@@ -109,6 +132,44 @@ app.use(
 // static landing page (302). Shows `ctx.redirect` and that function-API
 // and module-API routes coexist.
 app.get('/', (ctx) => ctx.redirect('/public/'));
+
+// ── platform endpoints (the ./endpoints catalog) ─────────────────────
+// Each is a plain handler you mount where you like — nothing here is
+// magic, and none of it costs anything on the hot path.
+
+// Liveness/readiness: the check queries the DB (throws → 503 unhealthy).
+app.get(
+  '/healthz',
+  health({ check: () => database.norm.use(BlogSchema).repo('Posts').count() }),
+);
+
+// Prometheus scrape target — the Meter (server.metrics: true) collected
+// every invocation; this just serializes it. Try `curl :3100/metrics`.
+app.get('/metrics', metrics());
+
+// The assembled OpenAPI 3.0.3 document, built from the mounted routes
+// (module routes included) and cached. `?version=v2` selects a version.
+app.get(
+  '/openapi.json',
+  openapi({
+    info: { description: 'A tiny blog API — posts + nested comments.' },
+    servers: [{ url: 'http://localhost:3100', description: 'local dev' }],
+  }),
+);
+
+// Auth: POST /login runs the (stand-in) auth service and returns a token;
+// authenticate() fills ctx.auth from the bearer token, authorize() gates.
+// A real app swaps auth.ts for `@tundralibs/pact` — see login({ pact }).
+app.post('/login', login({ pact: authService }));
+app.get(
+  '/admin/summary',
+  authenticate({ verify: verifyToken }),
+  authorize((auth) => (auth as BlogAuth).roles.includes('author')),
+  async (ctx) => {
+    const { count } = await database.norm.use(BlogSchema).repo('Posts').count();
+    return { content: { posts: count, you: ctx.auth } };
+  },
+);
 
 // Stock the label the modules inject(), THEN boot them — the inject()
 // field initializers resolve during construction, so the label must be

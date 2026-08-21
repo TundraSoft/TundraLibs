@@ -23,14 +23,14 @@ import {
   payload,
   POST,
   query,
-} from '../../../decorators/mod.ts';
-import { RapidError } from '../../../errors/mod.ts';
-import { event } from '../../../modules/mod.ts';
+} from '../../decorators/mod.ts';
+import { RapidError } from '../../errors/mod.ts';
+import { event } from '../../modules/mod.ts';
 import type {
   RapidContextPaging,
   RapidContextQuery,
   RapidContextResponse,
-} from '../../../types/mod.ts';
+} from '../../types/mod.ts';
 import type { Post } from '../types.ts';
 import {
   CreateCommentBody,

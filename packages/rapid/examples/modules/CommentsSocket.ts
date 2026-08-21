@@ -8,8 +8,8 @@
  *
  * @module
  */
-import { payload, SOCKET } from '../../../decorators/mod.ts';
-import type { RapidContextResponse } from '../../../types/mod.ts';
+import { payload, SOCKET } from '../../decorators/mod.ts';
+import type { RapidContextResponse } from '../../types/mod.ts';
 import { CreateCommentViaSocketBody } from '../schemas.ts';
 import { validated } from '../validated.ts';
 import { BlogModule } from './BlogModule.ts';

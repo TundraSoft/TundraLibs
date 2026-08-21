@@ -1,0 +1,18 @@
+name: rapid-blog-example
+mode: DEVELOPMENT
+server:
+  port: 3100
+  hostname: localhost
+  paging:
+    defaultSize: 10
+    maxSize: 50
+  query:
+    maxFilters: 10
+    maxSorts: 3
+  # Turn on the metro-man Meter — every invocation is recorded and served
+  # at /metrics (see main.ts). Off by default; zero cost when off.
+  metrics: true
+  versioning:
+    mode: header # one of: header | accept | path
+    identifier: x-api-version # header name (accept: vnd.<id>.; path: first segment)
+    default: v1 # a plain request (no header) resolves here — find() also has a v2
