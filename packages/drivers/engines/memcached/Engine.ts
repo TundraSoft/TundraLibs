@@ -299,6 +299,9 @@ export class MemcachedEngine extends BaseEngine<
    * Retrieve the value stored at `key`.
    *
    * @returns The raw stored value, or `null` if the key is missing / expired.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` if `key` is not
+   *   protocol-safe, or `OPERATION_FAILED` on a malformed / oversized server
+   *   reply.
    */
   public async get(key: string): Promise<string | null> {
     this.__validateKey(key);
@@ -320,6 +323,9 @@ export class MemcachedEngine extends BaseEngine<
    * changed in between, `cas` returns `false` and you can retry.
    *
    * @returns `{ value, cas }` on hit, `null` if the key is missing / expired.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` if `key` is not
+   *   protocol-safe, or `OPERATION_FAILED` on a malformed / oversized server
+   *   reply.
    */
   public async gets(
     key: string,
@@ -342,6 +348,9 @@ export class MemcachedEngine extends BaseEngine<
    * @param ttl - Time-to-live in seconds (default 30). `0` means **never
    *   expire** (permanent); values over 2592000 are treated by Memcached as
    *   an absolute Unix timestamp; negative/invalid values clamp to 1 second.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` if `key` is not
+   *   protocol-safe, `OPERATION_FAILED` on an unexpected server reply, or
+   *   `CONNECTION_LOST` if the connection drops mid-reply.
    */
   public async set(
     key: string,
@@ -357,6 +366,9 @@ export class MemcachedEngine extends BaseEngine<
    *
    * @returns `true` on successful store; `false` if the key already
    *   exists (server returned `NOT_STORED`).
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` if `key` is not
+   *   protocol-safe, `OPERATION_FAILED` on an unexpected server reply, or
+   *   `CONNECTION_LOST` if the connection drops mid-reply.
    */
   public async add(
     key: string,
@@ -372,6 +384,9 @@ export class MemcachedEngine extends BaseEngine<
    *
    * @returns `true` on successful store; `false` if the key does not
    *   exist (server returned `NOT_STORED`).
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` if `key` is not
+   *   protocol-safe, `OPERATION_FAILED` on an unexpected server reply, or
+   *   `CONNECTION_LOST` if the connection drops mid-reply.
    */
   public async replace(
     key: string,
@@ -450,6 +465,9 @@ export class MemcachedEngine extends BaseEngine<
    *   (permanent); negative/invalid values clamp to 1 second.
    * @returns `true` if the key existed and its TTL was updated; `false` if
    *   the key did not exist.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` if `key` is not
+   *   protocol-safe, `OPERATION_FAILED` on an unexpected server reply, or
+   *   `CONNECTION_LOST` if the connection drops mid-reply.
    */
   public async touch(key: string, ttl: number): Promise<boolean> {
     this.__validateKey(key);
@@ -477,6 +495,9 @@ export class MemcachedEngine extends BaseEngine<
    * Delete `key` from the cache.
    *
    * @returns `true` if the key was deleted, `false` if it did not exist.
+   * @throws {@link EngineError} `INVALID_CONFIG_VALUE` if `key` is not
+   *   protocol-safe, `OPERATION_FAILED` on an unexpected server reply, or
+   *   `CONNECTION_LOST` if the connection drops mid-reply.
    */
   public async delete(key: string): Promise<boolean> {
     this.__validateKey(key);
@@ -527,6 +548,9 @@ export class MemcachedEngine extends BaseEngine<
    *   effect on the server. The command returns `OK` immediately; existing
    *   entries are then expired after the delay. Useful for staggered
    *   invalidation across a fleet of clients.
+   * @throws {@link EngineError} `OPERATION_FAILED` if the server does not
+   *   acknowledge the flush, or `CONNECTION_LOST` if the connection drops
+   *   mid-reply.
    */
   public async flush(delaySeconds?: number): Promise<boolean> {
     await this.connect();
@@ -549,6 +573,9 @@ export class MemcachedEngine extends BaseEngine<
 
   /**
    * Retrieve server statistics as raw lines (excluding the trailing `END`).
+   *
+   * @throws {@link EngineError} `CONNECTION_LOST` if the connection drops
+   *   mid-reply, or `OPERATION_FAILED` if the reply exceeds the buffer limit.
    */
   public async stats(): Promise<string[]> {
     await this.connect();
@@ -565,6 +592,9 @@ export class MemcachedEngine extends BaseEngine<
 
   /**
    * Retrieve the server version string.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` if the server reply is not
+   *   a version string, or `CONNECTION_LOST` if the connection drops mid-reply.
    */
   public async version(): Promise<string> {
     await this.connect();

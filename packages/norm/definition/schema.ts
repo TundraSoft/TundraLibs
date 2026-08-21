@@ -123,6 +123,10 @@ function validateRegistry(
  * Define a named schema — a collection of entities an application
  * exposes. Non-entity values in the input (helper exports from a
  * barrel / namespace import) are ignored.
+ *
+ * @throws {Error} When `name` is empty or whitespace-only.
+ * @throws {@link NormDefinitionError} When the collected entities fail
+ *   registry validation (delegated to {@link assertRegistry}).
  */
 export function Schema<
   N extends string,
@@ -145,6 +149,11 @@ export function Schema<
  * Compose schemas into the flat registry a Norm instance exposes.
  * Registry keys must be unique across the composed schemas; all
  * deferred FK names must resolve here.
+ *
+ * @throws {@link NormDefinitionError} When a registry key is provided by more
+ *   than one schema (`DUPLICATE_ENTITY`), or when whole-graph validation
+ *   fails — unresolved foreign keys or reverse-name collisions (delegated to
+ *   {@link assertRegistry}).
  */
 export function use<const S extends readonly SchemaValue[]>(
   ...schemas: S

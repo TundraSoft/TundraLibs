@@ -87,4 +87,6 @@ export type { Aggregates } from './aggregates/Aggregates.ts';
 // query/
 export type { ColumnDefinition } from './query/ColumnDefinition.ts';
 export type { Query } from './query/Query.ts';
-export type { DDLQueries, DMLQueries, QueryTypes } from './query/QueryTypes.ts';
+export type { DDLQueries } from './query/DDLQueries.ts';
+export type { DMLQueries } from './query/DMLQueries.ts';
+export type { QueryTypes } from './query/QueryTypes.ts';

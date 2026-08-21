@@ -98,11 +98,11 @@ function randomSuffix(): string {
  * concurrently. Complements the engine's server-side advisory lock.
  */
 export class FileLock {
-  readonly #path: string;
-  readonly #token: string;
-  readonly #owner: string;
-  readonly #staleMs: number;
-  #held = false;
+  private readonly __path: string;
+  private readonly __token: string;
+  private readonly __owner: string;
+  private readonly __staleMs: number;
+  private __held = false;
 
   /**
    * Bind a lock to a migrations directory's `migrator.lock` file.
@@ -114,15 +114,15 @@ export class FileLock {
    *   reclaim entirely.
    */
   constructor(dir: string, staleMs: number = DEFAULT_STALE_MS) {
-    this.#path = `${dir}/${LOCK_FILE}`;
-    this.#token = `${Date.now().toString(36)}-${randomSuffix()}`;
-    this.#owner = ownerLabel();
-    this.#staleMs = staleMs;
+    this.__path = `${dir}/${LOCK_FILE}`;
+    this.__token = `${Date.now().toString(36)}-${randomSuffix()}`;
+    this.__owner = ownerLabel();
+    this.__staleMs = staleMs;
   }
 
   /** Whether THIS instance currently holds the lock. */
   get held(): boolean {
-    return this.#held;
+    return this.__held;
   }
 
   /**
@@ -137,19 +137,19 @@ export class FileLock {
     const deadline = Date.now() + timeoutMs;
     let holder = 'another process';
     while (true) {
-      if (!(await pathExists(this.#path))) {
-        await this.#write();
+      if (!(await pathExists(this.__path))) {
+        await this.__write();
         // Read-back closes the write/write race window: whoever's
         // token SURVIVED owns the lock. The short settle delay keeps
         // an interleaved write-write/read-read sequence from letting
         // BOTH contenders read their own token.
         await new Promise((r) => setTimeout(r, SETTLE_MS));
-        if (await this.#isOurs()) {
-          this.#held = true;
+        if (await this.__isOurs()) {
+          this.__held = true;
           return;
         }
       } else {
-        const owner = await this.#reclaimIfStale();
+        const owner = await this.__reclaimIfStale();
         // Reclaimed (file deleted) — retry the write immediately.
         if (owner === null) continue;
         holder = owner;
@@ -159,8 +159,8 @@ export class FileLock {
           `Could not acquire ${LOCK_FILE} within ${timeoutMs}ms — ` +
             `held by ${holder}. A live migration keeps its lock fresh; ` +
             `an abandoned one is reclaimed automatically after ` +
-            `${this.#staleMs}ms.`,
-          { subject: this.#path, code: 'LOCK_TIMEOUT' },
+            `${this.__staleMs}ms.`,
+          { subject: this.__path, code: 'LOCK_TIMEOUT' },
         );
       }
       await new Promise((r) => setTimeout(r, POLL_MS));
@@ -174,9 +174,9 @@ export class FileLock {
    * migration over it would be worse.
    */
   async touch(): Promise<void> {
-    if (!this.#held) return;
+    if (!this.__held) return;
     try {
-      if (await this.#isOurs()) await this.#write();
+      if (await this.__isOurs()) await this.__write();
     } catch {
       // Best effort — see above.
     }
@@ -185,33 +185,33 @@ export class FileLock {
   /** Release if held by US; a foreign holder's lock is left alone.
    * Idempotent. */
   async release(): Promise<void> {
-    if (!this.#held) return;
-    this.#held = false;
+    if (!this.__held) return;
+    this.__held = false;
     try {
-      if (await this.#isOurs()) await deleteFile(this.#path);
+      if (await this.__isOurs()) await deleteFile(this.__path);
     } catch {
       // Already gone.
     }
   }
 
   /** Write (or re-stamp) the lock file with our token and NOW. */
-  #write(): Promise<void> {
+  private __write(): Promise<void> {
     const payload: LockPayload = {
-      token: this.#token,
+      token: this.__token,
       stampedAt: Date.now(),
-      owner: this.#owner,
+      owner: this.__owner,
     };
-    return writeTextFile(this.#path, JSON.stringify(payload));
+    return writeTextFile(this.__path, JSON.stringify(payload));
   }
 
   /** Does the file on disk still carry OUR token? */
-  async #isOurs(): Promise<boolean> {
+  private async __isOurs(): Promise<boolean> {
     try {
-      const text = await readTextFile(this.#path);
+      const text = await readTextFile(this.__path);
       const payload = parsePayload(text);
       // A pre-JSON lock file held the bare token.
-      return payload === null ? text === this.#token : payload.token ===
-        this.#token;
+      return payload === null ? text === this.__token : payload.token ===
+        this.__token;
     } catch {
       return false;
     }
@@ -223,11 +223,11 @@ export class FileLock {
    * @returns `null` when the file was reclaimed (caller should retry),
    *   otherwise a label for the live holder.
    */
-  async #reclaimIfStale(): Promise<string | null> {
-    if (!Number.isFinite(this.#staleMs)) return 'another process';
+  private async __reclaimIfStale(): Promise<string | null> {
+    if (!Number.isFinite(this.__staleMs)) return 'another process';
     let text: string;
     try {
-      text = await readTextFile(this.#path);
+      text = await readTextFile(this.__path);
     } catch {
       // Vanished between pathExists and read — treat as reclaimed.
       return null;
@@ -235,13 +235,13 @@ export class FileLock {
     const payload = parsePayload(text);
     // Unparseable (pre-JSON or truncated) — fall back to the file's own
     // mtime so a legacy leaked lock still self-heals.
-    const stampedAt = payload?.stampedAt ?? await this.#mtimeMs();
+    const stampedAt = payload?.stampedAt ?? await this.__mtimeMs();
     const owner = payload?.owner ?? 'another process';
-    if (stampedAt === null || Date.now() - stampedAt < this.#staleMs) {
+    if (stampedAt === null || Date.now() - stampedAt < this.__staleMs) {
       return owner;
     }
     try {
-      await deleteFile(this.#path);
+      await deleteFile(this.__path);
     } catch {
       // Someone else reclaimed it first — either way it is gone.
     }
@@ -249,9 +249,9 @@ export class FileLock {
   }
 
   /** Lock file mtime in epoch ms, or `null` when unavailable. */
-  async #mtimeMs(): Promise<number | null> {
+  private async __mtimeMs(): Promise<number | null> {
     try {
-      const info = await stat(this.#path);
+      const info = await stat(this.__path);
       return info.mtime === null ? null : info.mtime.getTime();
     } catch {
       return null;

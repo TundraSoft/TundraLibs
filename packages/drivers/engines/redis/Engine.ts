@@ -306,6 +306,10 @@ export class RedisEngine
 
   /**
    * Get the value at `key`. Returns `null` if the key does not exist.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
    */
   public async get(key: string): Promise<string | null> {
     const reply = await this.__command(['GET', key]);
@@ -322,6 +326,10 @@ export class RedisEngine
    *   - `xx`: only set if key already exists
    *   - `keepTtl`: preserve existing TTL
    * @returns `'OK'` on success; `null` if `nx`/`xx` was set and the precondition failed.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
    */
   public async set(
     key: string,
@@ -347,24 +355,48 @@ export class RedisEngine
     throw _unexpected(reply, 'SET');
   }
 
-  /** Delete one or more keys. Returns the number of keys actually removed. */
+  /**
+   * Delete one or more keys. Returns the number of keys actually removed.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async del(...keys: string[]): Promise<number | bigint> {
     if (keys.length === 0) return 0;
     return _expectInteger(await this.__command(['DEL', ...keys]));
   }
 
-  /** Count how many of the given keys exist. */
+  /**
+   * Count how many of the given keys exist.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async exists(...keys: string[]): Promise<number | bigint> {
     if (keys.length === 0) return 0;
     return _expectInteger(await this.__command(['EXISTS', ...keys]));
   }
 
-  /** Set the TTL on `key` to `seconds`. Returns `true` if the TTL was set. */
+  /**
+   * Set the TTL on `key` to `seconds`. Returns `true` if the TTL was set.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async expire(key: string, seconds: number): Promise<boolean> {
     return _expectInteger(await this.__command(['EXPIRE', key, seconds])) === 1;
   }
 
-  /** Set the TTL on `key` in milliseconds. */
+  /**
+   * Set the TTL on `key` in milliseconds.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async pexpire(key: string, ms: number): Promise<boolean> {
     return _expectInteger(await this.__command(['PEXPIRE', key, ms])) === 1;
   }
@@ -373,37 +405,77 @@ export class RedisEngine
    * TTL of `key` in seconds.
    *
    * Returns `-2` if the key does not exist, `-1` if the key has no TTL.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
    */
   public async ttl(key: string): Promise<number | bigint> {
     return _expectInteger(await this.__command(['TTL', key]));
   }
 
-  /** Remove the TTL from `key`. Returns `true` if a TTL was actually removed. */
+  /**
+   * Remove the TTL from `key`. Returns `true` if a TTL was actually removed.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async persist(key: string): Promise<boolean> {
     return _expectInteger(await this.__command(['PERSIST', key])) === 1;
   }
 
-  /** Atomically increment the integer at `key` by 1. */
+  /**
+   * Atomically increment the integer at `key` by 1.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async incr(key: string): Promise<number | bigint> {
     return _expectInteger(await this.__command(['INCR', key]));
   }
 
-  /** Atomically increment the integer at `key` by `delta`. */
+  /**
+   * Atomically increment the integer at `key` by `delta`.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async incrBy(key: string, delta: number): Promise<number | bigint> {
     return _expectInteger(await this.__command(['INCRBY', key, delta]));
   }
 
-  /** Atomically decrement the integer at `key` by 1. */
+  /**
+   * Atomically decrement the integer at `key` by 1.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async decr(key: string): Promise<number | bigint> {
     return _expectInteger(await this.__command(['DECR', key]));
   }
 
-  /** Atomically decrement the integer at `key` by `delta`. */
+  /**
+   * Atomically decrement the integer at `key` by `delta`.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async decrBy(key: string, delta: number): Promise<number | bigint> {
     return _expectInteger(await this.__command(['DECRBY', key, delta]));
   }
 
-  /** Multi-get: returns an array of values, with `null` entries for missing keys. */
+  /**
+   * Multi-get: returns an array of values, with `null` entries for missing keys.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async mget(...keys: string[]): Promise<(string | null)[]> {
     if (keys.length === 0) return [];
     const reply = await this.__command(['MGET', ...keys]);
@@ -413,19 +485,37 @@ export class RedisEngine
     return reply.value.map((v) => _expectBulkOrNull(v));
   }
 
-  /** Multi-set: takes a `Record<key, value>` and stores all atomically. */
+  /**
+   * Multi-set: takes a `Record<key, value>` and stores all atomically.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async mset(pairs: Record<string, string>): Promise<string> {
     const flat: string[] = [];
     for (const [k, v] of Object.entries(pairs)) flat.push(k, v);
     return _expectSimple(await this.__command(['MSET', ...flat]));
   }
 
-  /** Append `value` to the existing string at `key`. Returns the new length. */
+  /**
+   * Append `value` to the existing string at `key`. Returns the new length.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async append(key: string, value: string): Promise<number | bigint> {
     return _expectInteger(await this.__command(['APPEND', key, value]));
   }
 
-  /** Length of the string at `key` (0 if missing). */
+  /**
+   * Length of the string at `key` (0 if missing).
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async strlen(key: string): Promise<number | bigint> {
     return _expectInteger(await this.__command(['STRLEN', key]));
   }
@@ -438,6 +528,10 @@ export class RedisEngine
    * Find keys matching `pattern`.
    *
    * Avoid in production — `KEYS` blocks the server. Use `SCAN` for large databases.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
    */
   public async keys(pattern: string): Promise<string[]> {
     const reply = await this.__command(['KEYS', pattern]);
@@ -455,6 +549,10 @@ export class RedisEngine
    *
    * @returns `{ cursor, keys }`. Pass the returned cursor to the next call;
    * iteration is complete when cursor === '0'.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
    */
   public async scan(
     cursor: string = '0',
@@ -485,12 +583,24 @@ export class RedisEngine
     return { cursor: nextCursor, keys };
   }
 
-  /** Type of the value at `key` (`'none'`/`'string'`/`'list'`/.../`'stream'`). */
+  /**
+   * Type of the value at `key` (`'none'`/`'string'`/`'list'`/.../`'stream'`).
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async type(key: string): Promise<string> {
     return _expectSimple(await this.__command(['TYPE', key]));
   }
 
-  /** Rename `key` to `newKey`. Throws if the source key does not exist. */
+  /**
+   * Rename `key` to `newKey`. Throws if the source key does not exist.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async rename(key: string, newKey: string): Promise<string> {
     return _expectSimple(await this.__command(['RENAME', key, newKey]));
   }
@@ -499,7 +609,13 @@ export class RedisEngine
 
   //#region Public command API — hashes
 
-  /** Get the value of a hash field. */
+  /**
+   * Get the value of a hash field.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async hget(key: string, field: string): Promise<string | null> {
     return _expectBulkOrNull(await this.__command(['HGET', key, field]));
   }
@@ -507,6 +623,10 @@ export class RedisEngine
   /**
    * Set a field in the hash. Returns the number of NEW fields created
    * (existing fields updated still return 0).
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
    */
   public async hset(
     key: string,
@@ -516,6 +636,10 @@ export class RedisEngine
   /**
    * Set several fields in the hash at once. Returns the number of NEW fields
    * created (existing fields updated still return 0).
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
    */
   public async hset(
     key: string,
@@ -535,7 +659,13 @@ export class RedisEngine
     return _expectInteger(await this.__command(args));
   }
 
-  /** Get multiple hash fields at once. Missing fields return `null`. */
+  /**
+   * Get multiple hash fields at once. Missing fields return `null`.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async hmget(
     key: string,
     ...fields: string[]
@@ -548,7 +678,13 @@ export class RedisEngine
     return reply.value.map((v) => _expectBulkOrNull(v));
   }
 
-  /** Get all fields and values of a hash. */
+  /**
+   * Get all fields and values of a hash.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async hgetAll(key: string): Promise<Record<string, string>> {
     const reply = await this.__command(['HGETALL', key]);
     const out: Record<string, string> = {};
@@ -576,7 +712,13 @@ export class RedisEngine
     throw _unexpected(reply, 'HGETALL');
   }
 
-  /** Delete one or more hash fields. Returns the number deleted. */
+  /**
+   * Delete one or more hash fields. Returns the number deleted.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async hdel(
     key: string,
     ...fields: string[]
@@ -585,27 +727,57 @@ export class RedisEngine
     return _expectInteger(await this.__command(['HDEL', key, ...fields]));
   }
 
-  /** True if the field exists in the hash. */
+  /**
+   * True if the field exists in the hash.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async hexists(key: string, field: string): Promise<boolean> {
     return _expectInteger(await this.__command(['HEXISTS', key, field])) === 1;
   }
 
-  /** Number of fields in the hash. */
+  /**
+   * Number of fields in the hash.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async hlen(key: string): Promise<number | bigint> {
     return _expectInteger(await this.__command(['HLEN', key]));
   }
 
-  /** All field names in the hash. */
+  /**
+   * All field names in the hash.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async hkeys(key: string): Promise<string[]> {
     return _expectStringArray(await this.__command(['HKEYS', key]), 'HKEYS');
   }
 
-  /** All values in the hash. */
+  /**
+   * All values in the hash.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async hvals(key: string): Promise<string[]> {
     return _expectStringArray(await this.__command(['HVALS', key]), 'HVALS');
   }
 
-  /** Atomically increment a hash field by `delta`. */
+  /**
+   * Atomically increment a hash field by `delta`.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async hincrBy(
     key: string,
     field: string,
@@ -620,7 +792,13 @@ export class RedisEngine
 
   //#region Public command API — lists
 
-  /** Push values to the head of a list. Returns the new list length. */
+  /**
+   * Push values to the head of a list. Returns the new list length.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async lpush(
     key: string,
     ...values: string[]
@@ -628,7 +806,13 @@ export class RedisEngine
     return _expectInteger(await this.__command(['LPUSH', key, ...values]));
   }
 
-  /** Push values to the tail of a list. Returns the new list length. */
+  /**
+   * Push values to the tail of a list. Returns the new list length.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async rpush(
     key: string,
     ...values: string[]
@@ -636,17 +820,35 @@ export class RedisEngine
     return _expectInteger(await this.__command(['RPUSH', key, ...values]));
   }
 
-  /** Pop one element from the head of the list. Returns `null` if empty. */
+  /**
+   * Pop one element from the head of the list. Returns `null` if empty.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async lpop(key: string): Promise<string | null> {
     return _expectBulkOrNull(await this.__command(['LPOP', key]));
   }
 
-  /** Pop one element from the tail of the list. Returns `null` if empty. */
+  /**
+   * Pop one element from the tail of the list. Returns `null` if empty.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async rpop(key: string): Promise<string | null> {
     return _expectBulkOrNull(await this.__command(['RPOP', key]));
   }
 
-  /** Range of elements from the list. Use `-1` to refer to the last element. */
+  /**
+   * Range of elements from the list. Use `-1` to refer to the last element.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async lrange(
     key: string,
     start: number,
@@ -658,7 +860,13 @@ export class RedisEngine
     );
   }
 
-  /** List length. */
+  /**
+   * List length.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async llen(key: string): Promise<number | bigint> {
     return _expectInteger(await this.__command(['LLEN', key]));
   }
@@ -667,7 +875,13 @@ export class RedisEngine
 
   //#region Public command API — sets
 
-  /** Add members to a set. Returns the number of new members. */
+  /**
+   * Add members to a set. Returns the number of new members.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async sadd(
     key: string,
     ...members: string[]
@@ -676,7 +890,13 @@ export class RedisEngine
     return _expectInteger(await this.__command(['SADD', key, ...members]));
   }
 
-  /** Remove members from a set. Returns the number actually removed. */
+  /**
+   * Remove members from a set. Returns the number actually removed.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async srem(
     key: string,
     ...members: string[]
@@ -685,7 +905,13 @@ export class RedisEngine
     return _expectInteger(await this.__command(['SREM', key, ...members]));
   }
 
-  /** Get all members of a set. */
+  /**
+   * Get all members of a set.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async smembers(key: string): Promise<string[]> {
     const reply = await this.__command(['SMEMBERS', key]);
     if (reply.kind === 'set' || reply.kind === 'array') {
@@ -699,14 +925,26 @@ export class RedisEngine
     throw _unexpected(reply, 'SMEMBERS');
   }
 
-  /** True if `member` is in the set. */
+  /**
+   * True if `member` is in the set.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async sismember(key: string, member: string): Promise<boolean> {
     return _expectInteger(
       await this.__command(['SISMEMBER', key, member]),
     ) === 1;
   }
 
-  /** Number of members in the set. */
+  /**
+   * Number of members in the set.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async scard(key: string): Promise<number | bigint> {
     return _expectInteger(await this.__command(['SCARD', key]));
   }
@@ -718,6 +956,10 @@ export class RedisEngine
   /**
    * Add `member` with `score` to the sorted set. Returns the number of NEW
    * elements added (existing members with updated scores still return 0).
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
    */
   public async zadd(
     key: string,
@@ -727,7 +969,13 @@ export class RedisEngine
     return _expectInteger(await this.__command(['ZADD', key, score, member]));
   }
 
-  /** Remove members from the sorted set. Returns the number actually removed. */
+  /**
+   * Remove members from the sorted set. Returns the number actually removed.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async zrem(
     key: string,
     ...members: string[]
@@ -736,7 +984,13 @@ export class RedisEngine
     return _expectInteger(await this.__command(['ZREM', key, ...members]));
   }
 
-  /** Range of members ordered by score (ascending). */
+  /**
+   * Range of members ordered by score (ascending).
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async zrange(
     key: string,
     start: number,
@@ -748,7 +1002,13 @@ export class RedisEngine
     );
   }
 
-  /** Score of `member` in the sorted set, or `null` if absent. */
+  /**
+   * Score of `member` in the sorted set, or `null` if absent.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async zscore(key: string, member: string): Promise<number | null> {
     const reply = await this.__command(['ZSCORE', key, member]);
     if (reply.kind === 'bulk' && reply.value === null) return null;
@@ -760,7 +1020,13 @@ export class RedisEngine
     throw _unexpected(reply, 'ZSCORE');
   }
 
-  /** Number of members in the sorted set. */
+  /**
+   * Number of members in the sorted set.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async zcard(key: string): Promise<number | bigint> {
     return _expectInteger(await this.__command(['ZCARD', key]));
   }
@@ -775,6 +1041,10 @@ export class RedisEngine
    *
    * Note: subscribing requires a dedicated, mode-locked connection. That
    * support will land in v1.x; for now this driver only publishes.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
    */
   public async publish(
     channel: string,
@@ -800,6 +1070,10 @@ export class RedisEngine
    *
    * @returns The array of replies from the EXEC, one per queued command,
    * unwrapped to plain JS values.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
    */
   public async multi(
     commands: ReadonlyArray<ReadonlyArray<string | number>>,
@@ -871,7 +1145,13 @@ export class RedisEngine
 
   //#region Public command API — server
 
-  /** Server `INFO` (full or section-scoped). */
+  /**
+   * Server `INFO` (full or section-scoped).
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async info(section?: string): Promise<string> {
     const reply = section
       ? await this.__command(['INFO', section])
@@ -950,22 +1230,46 @@ export class RedisEngine
     }
   }
 
-  /** Flush the currently-selected database. */
+  /**
+   * Flush the currently-selected database.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async flushDb(): Promise<string> {
     return _expectSimple(await this.__command(['FLUSHDB']));
   }
 
-  /** Flush ALL databases. Use with care. */
+  /**
+   * Flush ALL databases. Use with care.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async flushAll(): Promise<string> {
     return _expectSimple(await this.__command(['FLUSHALL']));
   }
 
-  /** Number of keys in the current database. */
+  /**
+   * Number of keys in the current database.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async dbsize(): Promise<number | bigint> {
     return _expectInteger(await this.__command(['DBSIZE']));
   }
 
-  /** Echo a message back. */
+  /**
+   * Echo a message back.
+   *
+   * @throws {@link EngineError} `OPERATION_FAILED` (or `INVALID_AUTH` /
+   *   `PERMISSION_DENIED`) on a Redis error reply or connection failure.
+   * @throws {Error} If Redis returns an unexpected reply shape.
+   */
   public async echo(message: string): Promise<string> {
     const reply = await this.__command(['ECHO', message]);
     if (reply.kind === 'bulk' && reply.value !== null) return reply.value;

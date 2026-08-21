@@ -554,7 +554,7 @@ export abstract class PooledConnectionEngine<
    * stays `protected` on the class. See `poolLifecycle.ts` for why the pooled
    * `connect` / `disconnect` / `ping` logic is single-sourced there.
    */
-  private readonly _host: PooledHost<T> = this as unknown as PooledHost<T>;
+  private readonly __host: PooledHost<T> = this as unknown as PooledHost<T>;
 
   //#endregion Pool
 
@@ -592,7 +592,7 @@ export abstract class PooledConnectionEngine<
 
   /** Snapshot of pool statistics. */
   public override get poolStats(): EnginePoolStats {
-    return poolStatsSnapshot(this._host);
+    return poolStatsSnapshot(this.__host);
   }
 
   /**
@@ -607,7 +607,7 @@ export abstract class PooledConnectionEngine<
    * @emits connectionFailed - On connection failure
    */
   public override connect(): Promise<void> {
-    return poolConnect(this._host);
+    return poolConnect(this.__host);
   }
 
   /**
@@ -620,7 +620,7 @@ export abstract class PooledConnectionEngine<
    * @emits error - On disconnection failure
    */
   public override disconnect(): Promise<void> {
-    return poolDisconnect(this._host);
+    return poolDisconnect(this.__host);
   }
 
   /**
@@ -630,7 +630,7 @@ export abstract class PooledConnectionEngine<
    * ping itself fails — callers can poll without try/catch ceremony.
    */
   public override ping(): Promise<boolean> {
-    return poolPing(this._host);
+    return poolPing(this.__host);
   }
 
   //#endregion Public API

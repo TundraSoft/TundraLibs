@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.1.1...compat-v2.2.0) (2026-08-21)
+
+
+### Features
+
+* **compat:** detect Cloudflare Workers and browsers; explicit UnsupportedRuntimeError on unavailable paths ([fadb7a8](https://github.com/TundraSoft/TundraLibs/commit/fadb7a8e2521f975d7bc810a6d06a7c23e4aa927))
+
 ## [2.1.1](https://github.com/TundraSoft/TundraLibs/compare/compat-v2.1.0...compat-v2.1.1) (2026-08-20)
 
 

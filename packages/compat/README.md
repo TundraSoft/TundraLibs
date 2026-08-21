@@ -34,17 +34,23 @@ No blanket badge — compat's whole job is smoothing over **Bun / Deno /
 Node.js**, and most of its modules wrap concepts (a listening TCP
 socket, a real filesystem, a terminal) that don't exist in a browser
 or a standard Worker, not something compat itself could paper over.
-Per module:
 
-| Module                        | Browser / Workers | Why                                                                                                                                                                                                                                                                                    |
-| ----------------------------- | :---------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fetch`                       |        ✅         | Wraps the native `fetch` global directly.                                                                                                                                                                                                                                              |
-| `path`                        |        ✅         | Pure string manipulation, no I/O.                                                                                                                                                                                                                                                      |
-| `common` (TLS types, errors)  |        ✅         | Types and error classes only.                                                                                                                                                                                                                                                          |
-| `runtime`                     |      partial      | `isBun`/`isDeno`/`isNode` correctly all report `false`; PID/env/cwd read as `undefined` rather than throwing, but return nothing useful.                                                                                                                                               |
-| `file`, `watch`, `net`, `udp` |        ❌         | Need a real filesystem or raw TCP/UDP socket — neither exists.                                                                                                                                                                                                                         |
-| `webserver`, `websocket`      |        ❌         | Server-side listeners; the Node path also loads the `ws` npm package, which hard-fails bundling for a browser/Workers target (unresolvable `stream`/`zlib`/`events`). A browser/Workers **client** should use the native `WebSocket` global directly rather than going through compat. |
-| `permissions`, `cli`          |        ❌         | Deno's permission system and terminal I/O are both meaningless outside a CLI process.                                                                                                                                                                                                  |
+`runtime` detects both targets: `RUNTIME` reports `'WORKERS'` (Cloudflare
+Workers / workerd) and `'BROWSER'`, with `isWorkers` / `isBrowser` flags.
+Cloudflare Workers under `nodejs_compat` exposes `process.versions.node`,
+so `isNode` deliberately **excludes** it — every module either works,
+returns a documented safe fallback, or throws `UnsupportedRuntimeError`;
+none TypeErrors on a missing built-in. Per module:
+
+| Module                        | Browser / Workers | Why                                                                                                                                                                                                                                                                                   |
+| ----------------------------- | :---------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fetch`                       |        ✅         | Wraps the native `fetch` global directly.                                                                                                                                                                                                                                             |
+| `path`                        |        ✅         | Pure string manipulation, no I/O.                                                                                                                                                                                                                                                     |
+| `common` (TLS types, errors)  |        ✅         | Types and error classes only.                                                                                                                                                                                                                                                         |
+| `runtime`                     |        ✅         | Detects `'WORKERS'` / `'BROWSER'`; `isWorkers` / `isBrowser` flags. Informational helpers return safe fallbacks (`cpus() → 1`, `cwd() → ''`, `getEnv() → {}` or `process.env` on Workers, `on*` no-op); `exit()` throws.                                                              |
+| `file`, `watch`, `net`, `udp` |      throws       | Need a real filesystem or raw TCP/UDP socket. Each public entry throws `UnsupportedRuntimeError` (not a `TypeError`) when the backing built-in is absent.                                                                                                                             |
+| `webserver`, `websocket`      |      throws       | `new WebServer(...)` constructs fine; `start()` throws `UnsupportedRuntimeError`. The Node path loads the `ws` npm package lazily on start (never at import), so importing the module is bundle-safe. A browser/Workers **client** should use the native `WebSocket` global directly. |
+| `permissions`, `cli`          |       mixed       | `cli` prompts (`prompt`/`choose`) throw `UnsupportedRuntimeError` rather than fake a terminal; `permissions` reports `'GRANTED'` (no permission system to consult).                                                                                                                   |
 
 ## Installation
 

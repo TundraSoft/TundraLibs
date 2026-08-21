@@ -12,7 +12,7 @@ import type { Label } from './types/mod.ts';
  * stocked under it. The name is the key — two labels with the same
  * name address the same entry — and `T` travels only at compile time,
  * so `Doctor.stock(label, value)` and `inject(label)` are fully typed
- * with no `VialRegistry` augmentation.
+ * with no module augmentation.
  *
  * @param name - The name to stock under; also what `inject('name')`
  *   and `Doctor.dispenseByName('name')` resolve.

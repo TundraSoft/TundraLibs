@@ -31,18 +31,6 @@ class DDb {
   constructor(public readonly conn: string = 'default') {}
 }
 
-// Stand in for the generated registry so `inject('...')` is typed.
-declare module './mod.ts' {
-  interface VialRegistry {
-    DLogger: DLogger;
-    DDb: DDb;
-    DCyA: unknown;
-    DCyB: unknown;
-    DMissing: unknown;
-    DGoodScoped: unknown;
-  }
-}
-
 describe('Doctor', () => {
   describe('Basic lifecycle', () => {
     it('should cache SINGLETON, isolate SCOPED per scope, and rebuild TRANSIENT', () => {

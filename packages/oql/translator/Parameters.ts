@@ -44,12 +44,12 @@ type ParamEntry = {
 export class Parameters {
   /**
    * Dedup key → entry. The key is a *derived* lookup token
-   * ({@link Parameters.#dedupKey}); the value to bind is carried
+   * ({@link Parameters.__dedupKey}); the value to bind is carried
    * separately on the entry, so the keying scheme can never round-trip
    * back into a caller-visible value.
    */
-  readonly #params: Map<unknown, ParamEntry> = new Map();
-  readonly #prefix: string;
+  private readonly __params: Map<unknown, ParamEntry> = new Map();
+  private readonly __prefix: string;
 
   /**
    * Names are allocated as `<prefix><n>` from a counter that starts at 0.
@@ -57,25 +57,25 @@ export class Parameters {
    * @param prefix - Param-name prefix. Trailing `_` is added if absent.
    */
   constructor(prefix = 'p') {
-    this.#prefix = prefix.endsWith('_') ? prefix : `${prefix}_`;
+    this.__prefix = prefix.endsWith('_') ? prefix : `${prefix}_`;
   }
 
   /**
    * Register `value` and return its param name. Same value → same name.
    */
   public add(value: unknown): string {
-    const key = this.#dedupKey(value);
-    const existing = this.#params.get(key);
+    const key = this.__dedupKey(value);
+    const existing = this.__params.get(key);
     if (existing !== undefined) return existing.name;
-    const name = `${this.#prefix}${this.#params.size}`;
-    this.#params.set(key, { name, value });
+    const name = `${this.__prefix}${this.__params.size}`;
+    this.__params.set(key, { name, value });
     return name;
   }
 
   /** Snapshot of all params as a `Record<name, value>`. */
   public asRecord(): Record<string, unknown> {
     const out: Record<string, unknown> = {};
-    for (const { name, value } of this.#params.values()) {
+    for (const { name, value } of this.__params.values()) {
       out[name] = value;
     }
     return out;
@@ -83,7 +83,7 @@ export class Parameters {
 
   /** Distinct params registered so far — post-dedup, so ≤ the `add` count. */
   public get size(): number {
-    return this.#params.size;
+    return this.__params.size;
   }
 
   /**
@@ -95,7 +95,7 @@ export class Parameters {
    * {@link DATE_KEY_TAG}. Everything else keys as itself (Map identity /
    * SameValueZero).
    */
-  #dedupKey(value: unknown): unknown {
+  private __dedupKey(value: unknown): unknown {
     if (value instanceof Date) return `${DATE_KEY_TAG}${value.getTime()}`;
     if (typeof value === 'bigint') {
       return `${BIGINT_KEY_TAG}${value.toString()}`;

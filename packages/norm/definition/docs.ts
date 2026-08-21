@@ -23,7 +23,7 @@ import {
   entitiesOf,
   qualifiedName as qualified,
   type RegistryInput as DocInput,
-} from './registry-view.ts';
+} from './registryView.ts';
 
 /** Mermaid-safe identifier (collapsed separators, no trailing junk). */
 function mmId(name: string): string {

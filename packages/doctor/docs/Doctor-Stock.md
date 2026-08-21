@@ -2,7 +2,7 @@
 
 Register **ready-made values** — and non-class factories with a
 lifecycle — under typed labels, and `inject` them with full typing and
-no `VialRegistry` augmentation. A vial is made to order from a class
+no module augmentation. A vial is made to order from a class
 (`@Vial` / `prescribe`); a stocked item arrives already built.
 
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
@@ -128,13 +128,12 @@ or a prescribed class of that name.
 ```typescript ignore
 Doctor.stock(label<BlogDb>('Db'), db);
 Doctor.dispenseByName('Db'); // db, typed unknown
-inject('Db'); // db — typed only once `Db: BlogDb` is declared in VialRegistry
+inject('Db'); // db, typed unknown — the string form
 ```
 
-The string form of `inject` keeps its compile-time guarantee: a token
-not in `VialRegistry` is a compile error, never `unknown`. Prefer
-`inject(Db)` — typed by the label alone, and immune to minification
-(the name is an explicit string, not a class name).
+Prefer `inject(Db)` — typed by the label alone, and immune to
+minification (the name is an explicit string, not a class name); the
+string forms return `unknown`.
 
 A name is held exclusively between labels and classes: stocking a name
 a prescribed class already holds, or prescribing a class whose name a

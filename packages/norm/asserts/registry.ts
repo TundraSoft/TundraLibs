@@ -13,7 +13,7 @@
 
 import type { ColumnSpec } from '../definition/Column.ts';
 import type { AnyDefinition } from '../definition/schema.ts';
-import { qualifiedName } from '../definition/registry-view.ts';
+import { qualifiedName } from '../definition/registryView.ts';
 import { NormDefinitionError, type NormErrorCode } from '../errors/mod.ts';
 import { definitionIssues } from './definition.ts';
 
@@ -51,6 +51,10 @@ export type RegistryAssertOptions = {
  * coded {@linkcode NormDefinitionError} (with the historical
  * `use()`/`Schema()` messages); per-definition failures (when
  * `definitions: true`) throw an aggregated {@linkcode NormDefinitionError}.
+ *
+ * @throws {@link NormDefinitionError} When a cross-entity rule fails
+ *   (duplicate entity name, unresolved relation, and the like) or — with
+ *   `definitions: true` — when any single definition is invalid.
  */
 export function assertRegistry(
   entities: Record<string, AnyDefinition>,
