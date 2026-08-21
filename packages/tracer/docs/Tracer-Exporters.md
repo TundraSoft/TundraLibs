@@ -5,6 +5,7 @@ Where finished spans go, and how batching keeps that off the request path.
 ![Deno](https://img.shields.io/badge/Deno-000000?logo=deno)
 ![Bun](https://img.shields.io/badge/Bun-f9f1e1?logo=bun)
 ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=node.js&logoColor=white)
+![Cloudflare Workers](https://img.shields.io/badge/Cloudflare%20Workers-F38020?logo=cloudflare&logoColor=white)
 
 ## Table of Contents
 
@@ -156,11 +157,17 @@ a test double:
 ```typescript
 import type { SpanData, SpanExporter } from '@tundralibs/tracer';
 
+// A minimal byte sink — a Deno.FsFile, a wrapped Node write stream, anything.
+interface ByteSink {
+  write(bytes: Uint8Array): Promise<number>;
+  close(): void;
+}
+
 class FileExporter implements SpanExporter {
-  #handle: Deno.FsFile;
+  #handle: ByteSink;
   #onError?: (err: unknown) => void;
 
-  constructor(handle: Deno.FsFile) {
+  constructor(handle: ByteSink) {
     this.#handle = handle;
   }
 
