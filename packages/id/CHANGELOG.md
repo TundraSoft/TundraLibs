@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/TundraSoft/TundraLibs/compare/id-v1.1.1...id-v1.1.2) (2026-08-21)
+
+
+### Documentation
+
+* **id:** fix process-id wording and document Workers/browser support ([#502](https://github.com/TundraSoft/TundraLibs/issues/502)) ([ce4c018](https://github.com/TundraSoft/TundraLibs/commit/ce4c0187cc765575c41f795b9629df1b0e28ac5c))
+
 ## [1.1.1](https://github.com/TundraSoft/TundraLibs/compare/id-v1.1.0...id-v1.1.1) (2026-08-20)
 
 
