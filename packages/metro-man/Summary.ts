@@ -7,22 +7,17 @@
 
 import { BaseMetric } from './BaseMetric.ts';
 import { InvalidLabelError, InvalidMetricOptionsError } from './errors/mod.ts';
-import type { MetricOutput, SummaryOptions } from './types/mod.ts';
+import type {
+  MetricOutput,
+  SummaryOptions,
+  SummarySeries,
+} from './types/mod.ts';
 
 const DEFAULT_QUANTILES: ReadonlyArray<number> = [0.5, 0.9, 0.99];
 const MIN_WINDOW_SECONDS = 1;
 const MAX_WINDOW_SECONDS = 600;
 const DEFAULT_WINDOW_SECONDS = MAX_WINDOW_SECONDS;
 const RESERVED_LABEL = 'quantile';
-
-/**
- * Per-series payload carried by a Summary.
- */
-export type SummarySeries = {
-  quantile: Record<number, number>;
-  count: number;
-  sum: number;
-};
 
 /**
  * Quantile-based distribution metric. Each observation feeds two
